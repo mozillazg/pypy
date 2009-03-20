@@ -174,7 +174,7 @@ def compile_fresh_bridge(metainterp, bridge, old_loops, endliveboxes):
     bridge.jump_to = old_loop
     if newboxlist:
         # recompile loop
-        optimize.update_loop(metainterp, old_loop, bridge, newboxlist, storage,
-                             old_loop)
+        optimize.update_loop(old_loop, bridge, newboxlist, storage, old_loop)
+        metainterp.cpu.update_tree(old_loop)
     finish_loop_or_bridge(metainterp, bridge, old_loop, guard_op)
     return bridge
