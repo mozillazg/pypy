@@ -901,7 +901,7 @@ def rename_ops(ops, renaming):
             res.append(op)
     return res
 
-def update_loop(metainterp, loop, bridge, newboxlist, newrebuildops, orig_loop):
+def update_loop(loop, bridge, newboxlist, newrebuildops, orig_loop):
     mp = loop.operations[0]
     mp.args += newboxlist
     jump = loop.operations[-1]
@@ -914,11 +914,10 @@ def update_loop(metainterp, loop, bridge, newboxlist, newrebuildops, orig_loop):
     for op in loop.operations:
         if op.is_guard():
             if op.jump_target is not None:
-                update_loop(metainterp, op.jump_target, bridge, newboxlist,
+                update_loop(op.jump_target, bridge, newboxlist,
                             newrebuildops, loop)
             op.liveboxes += newboxlist
             op.rebuild_ops += rename_ops(newrebuildops, renaming)
-    metainterp.cpu.update_loop(loop, mp, newboxlist)
 
 # ----------------------------------------------------------------------
 
