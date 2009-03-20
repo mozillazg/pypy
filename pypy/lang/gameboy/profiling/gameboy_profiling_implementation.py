@@ -30,7 +30,7 @@ class GameBoyProfiler(GameBoy):
     def mainLoop(self, execution_seconds):
         self.reset()
         self.is_running = True
-        for i in range(execution_seconds * FPS):
+        for i in range(int(execution_seconds * FPS)):
             self.emulate_cycle()
     
     def emulate_cycle(self):
