@@ -27,6 +27,9 @@ class FixedClass(Const):
         assert isinstance(other, FixedClass)
         return True
 
+    def _getrepr_(self):
+        return "FixedClass"
+
 class CancelInefficientLoop(Exception):
     pass
 
@@ -48,6 +51,8 @@ class AllocationStorage(object):
         # the same as above, but for lists and for running setitem
         self.list_allocations = []
         self.setitems = []
+        # used for merging
+        self.extras = []
 
     def deal_with_box(self, box, nodes, liveboxes, memo):
         if isinstance(box, Const) or box not in nodes:
@@ -281,13 +286,13 @@ def optimize_bridge(options, old_loops, bridge, cpu=None):
     for old_loop in old_loops:
         if perfect_specializer.match(old_loop.operations):
             num = len(old_loop.extensions)
-            newlist, newspecnodes = perfect_specializer.adapt_for_match(
+            newlist, newspecnodes, s = perfect_specializer.adapt_for_match(
                 old_loop.operations, num)
             if newlist:
                 old_loop.extensions.append(newspecnodes)
             perfect_specializer.loop.operations[0].args.extend(newlist)
             perfect_specializer.optimize_loop()
-            return old_loop, newlist
+            return old_loop, newlist, s
     return None     # no loop matches
 
 class PerfectSpecializer(object):
@@ -831,12 +836,14 @@ class PerfectSpecializer(object):
         jump_op = self.loop.operations[-1]
         self.specnodes = old_mp.specnodes
         newboxlist = BoxRetriever()
+        storage = AllocationStorage()
         extensions = []
         for i in range(len(old_mp.specnodes)):
             old_specnode = old_mp.specnodes[i]
             new_instnode = self.nodes[jump_op.args[i]]
-            old_specnode.adapt_to(new_instnode, newboxlist, extensions, num)
-        return newboxlist.flatten(), extensions
+            old_specnode.adapt_to(new_instnode, newboxlist, extensions, num,
+                                  storage)
+        return newboxlist.flatten(), extensions, storage
 
 class Chooser(object):
     def __init__(self, boxes_from_frame, allocated_boxes, allocated_lists):
@@ -894,6 +901,19 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
 
     return newboxes
 
+
+def update_loop(metainterp, loop, newboxlist, add_storage):
+    mp = loop.operations[0]
+    mp.args += newboxlist
+    jump = loop.operations[-1]
+    jump.args += newboxlist
+    for op in loop.operations:
+        if op.is_guard():
+            import pdb
+            pdb.set_trace()
+    metainterp.cpu.update_loop(loop, mp, newboxlist)
+
+# ----------------------------------------------------------------------
 
 def partition(array, left, right):
     last_item = array[right]
