@@ -35,9 +35,14 @@ class AppTestUnicodeStringStdOnly:
         assert not (u'a' == 5)
         assert u'a' != 5
         assert u'a' < 5 or u'a' > 5
-        assert not chr(128) == unichr(128) # UnicodeWarning
-        assert chr(128) != unichr(128)
 
+        s = chr(128)
+        u = unichr(128)
+        assert not s == u # UnicodeWarning
+        assert s != u
+        assert not u == s
+        assert u != s
+        
 
 class AppTestUnicodeString:
     def setup_class(cls):
