@@ -378,7 +378,7 @@ class Graph(object):
                 assert box not in seen
                 seen[box] = True
         assert operations[-1].opnum == rop.JUMP
-        assert operations[-1].jump_target.opnum == rop.MERGE_POINT
+        assert operations[-1].jump_target.operations[0].opnum == rop.MERGE_POINT
 
     def __repr__(self):
         return '<%s>' % (self.name,)

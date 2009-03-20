@@ -897,7 +897,7 @@ class OOMetaInterp(object):
         if not we_are_translated():
             bridge._call_history = self._debug_history
             self.debug_history = []
-        guard_failure.guard_op.jump_target = bridge.operations[0]
+        guard_failure.guard_op.jump_target = bridge
         return bridge
 
     def get_residual_args(self, loop, args):
