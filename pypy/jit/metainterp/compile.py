@@ -112,6 +112,7 @@ def create_empty_loop(metainterp):
     else:
         name = 'Loop #%d' % len(metainterp.stats.loops)
     graph = Graph(name, '#f084c2')
+    graph.extensions = [None]
     return graph
 
 def create_empty_bridge(metainterp):
@@ -120,6 +121,7 @@ def create_empty_bridge(metainterp):
     else:
         name = 'Bridge #%d' % len(metainterp.stats.loops)
     graph = Graph(name, '#84f0c2')
+    graph.extensions = [None]
     return graph
 
 # ____________________________________________________________
@@ -165,10 +167,14 @@ def compile_fresh_bridge(metainterp, bridge, old_loops, endliveboxes):
     op = ResOperation(rop.JUMP, endliveboxes, None)
     operations.append(op)
     #
-    old_loop = optimize.optimize_bridge(metainterp.options, old_loops, bridge,
-                                        metainterp.cpu)
+    res = optimize.optimize_bridge(metainterp.options, old_loops, bridge,
+                                   metainterp.cpu)
+    old_loop, newboxlist, storage = res
     if old_loop is None:
         return None
     bridge.jump_to = old_loop
+    if newboxlist:
+        # recompile loop
+        optimize.update_loop(metainterp, old_loop, bridge, newboxlist, storage)
     finish_loop_or_bridge(metainterp, bridge, old_loop.operations[0], guard_op)
     return bridge
