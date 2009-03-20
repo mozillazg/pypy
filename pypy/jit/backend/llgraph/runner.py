@@ -37,6 +37,11 @@ class Descr(history.AbstractDescr):
     def sort_key(self):
         return self.ofs
 
+    def equals(self, other):
+        if not isinstance(other, Descr):
+            return False
+        return self.sort_key() == other.sort_key()
+
     def __lt__(self, other):
         raise TypeError("cannot use comparison on Descrs")
     def __le__(self, other):
@@ -74,6 +79,19 @@ class CPU(object):
     def set_meta_interp(self, metainterp):
         self.metainterp = metainterp    # to handle guard failures
 
+    def compile_arg(self, x, c, op, var2index):
+        if isinstance(x, history.Box):
+            llimpl.compile_add_var(c, var2index[x])
+        elif isinstance(x, history.ConstInt):
+            llimpl.compile_add_int_const(c, x.value)
+        elif isinstance(x, history.ConstPtr):
+            llimpl.compile_add_ptr_const(c, x.value)
+        elif isinstance(x, history.ConstAddr):
+            llimpl.compile_add_int_const(c, x.getint())
+        else:
+            raise Exception("%s args contain: %r" % (op.getopname(),
+                                                     x))
+
     def compile_operations(self, operations, from_guard=None):
         """In a real assembler backend, this should assemble the given
         list of operations.  Here we just generate a similar LoopOrBridge
@@ -105,17 +123,7 @@ class CPU(object):
             if op.descr is not None:
                 llimpl.compile_add_descr(c, op.descr.ofs, op.descr.type)
             for x in op.args:
-                if isinstance(x, history.Box):
-                    llimpl.compile_add_var(c, var2index[x])
-                elif isinstance(x, history.ConstInt):
-                    llimpl.compile_add_int_const(c, x.value)
-                elif isinstance(x, history.ConstPtr):
-                    llimpl.compile_add_ptr_const(c, x.value)
-                elif isinstance(x, history.ConstAddr):
-                    llimpl.compile_add_int_const(c, x.getint())
-                else:
-                    raise Exception("%s args contain: %r" % (op.getopname(),
-                                                             x))
+                self.compile_arg(x, c, op, var2index)
             x = op.result
             if x is not None:
                 if isinstance(x, history.BoxInt):
@@ -141,6 +149,9 @@ class CPU(object):
         if from_guard is not None:
             llimpl.compile_from_guard(c, from_guard._compiled,
                                          from_guard._opindex)
+
+    def update_loop(self, loop, mp, newboxlist):
+        self.compile_operations(loop.operations)
 
     def execute_operations_in_new_frame(self, name, operations, valueboxes):
         """Perform a 'call' to the given merge point, i.e. create
