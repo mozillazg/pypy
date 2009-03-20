@@ -48,10 +48,12 @@ class ResOpGen(object):
                 for attrname, delta in [('jump_target', 0),
                                         ('_jump_target_prev', 1)]:
                     tgt = getattr(op, attrname, None)
-                    if tgt is not None and tgt in self.all_operations:
-                        tgt_g, tgt_i = self.all_operations[tgt]
-                        self.mark_starter(tgt_g, tgt_i+delta)
-                        self.mark_starter(graphindex, i+1)
+                    if tgt is not None:
+                        tgt = tgt.operations[0]
+                        if tgt in self.all_operations:
+                            tgt_g, tgt_i = self.all_operations[tgt]
+                            self.mark_starter(tgt_g, tgt_i+delta)
+                            self.mark_starter(graphindex, i+1)
                 if (op in self.highlightops) != (prevop in self.highlightops):
                     self.mark_starter(graphindex, i)
                 prevop = op
@@ -134,17 +136,19 @@ class ResOpGen(object):
             for attrname, delta in [('jump_target', 0),
                                     ('_jump_target_prev', 1)]:
                 tgt = getattr(op, attrname, None)
-                if tgt is not None and tgt in self.all_operations:
-                    tgt_g, tgt_i = self.all_operations[tgt]
-                    kwds = {}
-                    #if op.opname == 'jump':
-                    #    #kwds['constraint'] = 'false'
-                    #    #kwds['headport'] = ':n'
-                    #    pass
-                    self.genedge((graphindex, opstartindex),
-                                 (tgt_g, tgt_i+delta),
-                                 color='red',
-                                 **kwds)
+                if tgt is not None:
+                    tgt = tgt.operations[0]
+                    if tgt in self.all_operations:
+                        tgt_g, tgt_i = self.all_operations[tgt]
+                        kwds = {}
+                        #if op.opname == 'jump':
+                        #    #kwds['constraint'] = 'false'
+                        #    #kwds['headport'] = ':n'
+                        #    pass
+                        self.genedge((graphindex, opstartindex),
+                                     (tgt_g, tgt_i+delta),
+                                     color='red',
+                                     **kwds)
             opindex += 1
             if opindex >= len(operations):
                 break

@@ -129,25 +129,24 @@ def create_empty_bridge(metainterp):
 def compile_fresh_loop(metainterp, loop, old_loops, endliveboxes):
     history = metainterp.history
     loop.operations = history.operations
-    close_loop(loop, loop.operations[0], endliveboxes)
+    close_loop(loop, endliveboxes)
     old_loop = optimize.optimize_loop(metainterp.options, old_loops, loop,
                                       metainterp.cpu)
     if old_loop is not None:
         return old_loop
-    finish_loop_or_bridge(metainterp, loop, loop.operations[0])
+    finish_loop_or_bridge(metainterp, loop, loop)
     old_loops.append(loop)
     return loop
 
-def close_loop(loop, targetmp, endliveboxes):
-    assert targetmp.opnum == rop.MERGE_POINT
+def close_loop(loop, endliveboxes):
     op = ResOperation(rop.JUMP, endliveboxes, None)
-    op.jump_target = targetmp
+    op.jump_target = loop
     loop.operations.append(op)
 
-def finish_loop_or_bridge(metainterp, loop, targetmp, guard_op=None):
-    assert targetmp.opnum == rop.MERGE_POINT
+def finish_loop_or_bridge(metainterp, loop, target, guard_op=None):
+    assert target.operations[0].opnum == rop.MERGE_POINT
     assert loop.operations[-1].opnum == rop.JUMP
-    loop.operations[-1].jump_target = targetmp
+    loop.operations[-1].jump_target = target
     metainterp.cpu.compile_operations(loop.operations, guard_op)
     metainterp.stats.loops.append(loop)
 
@@ -175,6 +174,7 @@ def compile_fresh_bridge(metainterp, bridge, old_loops, endliveboxes):
     bridge.jump_to = old_loop
     if newboxlist:
         # recompile loop
-        optimize.update_loop(metainterp, old_loop, bridge, newboxlist, storage)
-    finish_loop_or_bridge(metainterp, bridge, old_loop.operations[0], guard_op)
+        optimize.update_loop(metainterp, old_loop, bridge, newboxlist, storage,
+                             old_loop)
+    finish_loop_or_bridge(metainterp, bridge, old_loop, guard_op)
     return bridge

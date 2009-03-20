@@ -85,7 +85,7 @@ class NotSpecNode(SpecNode):
     def equals(self, other):
         if type(other) is NotSpecNode:
             return True
-        return False
+        return other.equals(self)
 
     def matches(self, other):
         # NotSpecNode matches everything
@@ -317,6 +317,8 @@ class VirtualizedSpecNode(VirtualizedOrDelayedSpecNode):
 class VirtualizableSpecNode(VirtualizedSpecNode):
 
     def equals(self, other):
+        if type(other) is NotSpecNode:
+            return True
         if not isinstance(other, VirtualizableSpecNode):
             return False
         return VirtualizedSpecNode.equals(self, other)
@@ -331,6 +333,8 @@ class VirtualizableListSpecNode(VirtualizedSpecNode):
                             self.known_class.arraydescr)
 
     def equals(self, other):
+        if type(other) is NotSpecNode:
+            return True
         if not isinstance(other, VirtualizableListSpecNode):
             return False
         return VirtualizedSpecNode.equals(self, other)
