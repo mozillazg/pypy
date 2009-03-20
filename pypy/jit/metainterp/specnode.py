@@ -266,6 +266,15 @@ class DelayedFixedListSpecNode(DelayedSpecNode):
 
 class VirtualizedSpecNode(VirtualizedOrDelayedSpecNode):
 
+    def matches(self, instnode):
+        for key, value in self.fields:
+            if not isinstance(value, MatchEverythingSpecNode):
+                if key not in instnode.curfields:
+                    return False
+                if value is not None and not value.matches(instnode.curfields[key]):
+                    return False
+        return True
+
     def equals(self, other):
         if not self.known_class.equals(other.known_class):
             return False

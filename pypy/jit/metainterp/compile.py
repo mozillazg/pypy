@@ -169,9 +169,9 @@ def compile_fresh_bridge(metainterp, bridge, old_loops, endliveboxes):
     #
     res = optimize.optimize_bridge(metainterp.options, old_loops, bridge,
                                    metainterp.cpu)
-    old_loop, newboxlist, storage = res
-    if old_loop is None:
+    if res is None:
         return None
+    old_loop, newboxlist, storage = res
     bridge.jump_to = old_loop
     if newboxlist:
         # recompile loop
