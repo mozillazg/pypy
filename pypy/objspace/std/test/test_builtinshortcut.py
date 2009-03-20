@@ -62,7 +62,6 @@ class AppTestBug:
         assert 5 + 6.5 == 11.5
 
     def test_unicode_string_compares(self):
-        skip("FAILING")
         assert u'a' == 'a'
         assert 'a' == u'a'
         assert not u'a' == 'b'
