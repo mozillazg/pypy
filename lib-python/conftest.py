@@ -21,7 +21,8 @@ from pypy.tool.pytest import appsupport
 from pypy.tool.pytest.confpath import pypydir, libpythondir, \
                                       regrtestdir, modregrtestdir, testresultdir
 
-dist_rsync_roots = ['.', '../pypy', '../py']
+pytest_plugins = "resultlog",
+rsyncdirs = ['.', '../pypy']
     
 # 
 # Interfacing/Integrating with py.test's collection process 
