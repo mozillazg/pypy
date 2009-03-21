@@ -12,8 +12,8 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.llinterp import LLException
 
 log = log.runtest
-use_browsertest = py.test.config.option.browser
-use_tg = py.test.config.option.tg
+use_browsertest = False # XXX py.test currently has no py.test.config.option.browser
+use_tg = False # XXX py.test.config.option.tg
 use_view = py.test.config.option.view
 
 port = 8080
