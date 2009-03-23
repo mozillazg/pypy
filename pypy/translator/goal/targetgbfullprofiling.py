@@ -1,28 +1,28 @@
 #!/usr/bin/env python
-import os, py, pdb, sys
-from pypy.lang.gameboy.gameboy_implementation import GameBoyImplementation
+import os, py, pdb, sys, time
+from pypy.lang.gameboy.profiling.gameboy_profiling_implementation import GameBoyProfiler
+from pypy.jit.metainterp.policy import JitPolicy
 
 
 ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy/rom"
 
-print ROM_PATH
-
 def entry_point(argv=None):
     if argv is not None and len(argv) > 1:
         filename = argv[1]
+        execution_seconds = float(argv[2])
     else:
         pos = str(9)
         filename = ROM_PATH+"/rom"+pos+"/rom"+pos+".gb"
-    print "loading rom: ", str(filename)
-    gameBoy = GameBoyImplementation()
+        execution_seconds = 600
+    gameBoy = GameBoyProfiler()
     try:
         gameBoy.load_cartridge_file(str(filename))
     except:
-        print "Corrupt Cartridge"
         gameBoy.load_cartridge_file(str(filename), verify=False)
 
-    gameBoy.open_window()
-    gameBoy.mainLoop()
+    start = time.time()
+    gameBoy.mainLoop(execution_seconds)
+    print time.time() - start
 
     return 0
     
@@ -42,9 +42,4 @@ def jitpolicy(self, driver):
 # STARTPOINT ===================================================================
 
 if __name__ == '__main__':
-    use_rsdl = False
-    if use_rsdl and sys.platform == 'darwin':
-        from AppKit import NSApplication
-        NSApplication.sharedApplication()
-        
     test_target()
