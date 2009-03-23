@@ -411,9 +411,9 @@ if _POSIX:
         should not be relied on"""
 
         c_tzset()
-        
+
         # reset timezone, altzone, daylight and tzname
-        timezone, daylight, tzname, altzone = _init_timezone(space)
+        _init_timezone(space)
     tzset.unwrap_spec = [ObjSpace]
 
 def strftime(space, format, w_tup=None):
