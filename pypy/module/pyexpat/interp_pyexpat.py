@@ -6,7 +6,6 @@ from pypy.interpreter.error import OperationError
 from pypy.objspace.descroperation import object_setattr
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.rarithmetic import r_uint
 
 from pypy.rpython.tool import rffi_platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -169,7 +168,7 @@ for index, (name, params) in enumerate(HANDLERS.items()):
         result_error = "None"
 
     if name == 'CharacterDataHandler':
-        pre_code = 'if parser.buffer_string(space, w_arg0, r_uint(arg1)): return'
+        pre_code = 'if parser.buffer_string(space, w_arg0, arg1): return'
     else:
         pre_code = 'parser.flush_character_buffer(space)'
 
@@ -339,8 +338,9 @@ getting the advantage of providing document type information to the parser.
             return space.w_None
 
     def w_convert_charp_n(self, space, data, length):
+        ll_length = rffi.cast(lltype.Signed, length)
         if data:
-            return self.w_convert(space, rffi.charp2strn(data, r_uint(length)))
+            return self.w_convert(space, rffi.charp2strn(data, ll_length))
         else:
             return space.w_None
 
@@ -376,16 +376,17 @@ getting the advantage of providing document type information to the parser.
             space.newtuple(children)])
 
     def buffer_string(self, space, w_string, length):
+        ll_length = rffi.cast(lltype.Signed, length)
         if self.buffer_w is not None:
-            if self.buffer_used + length > self.buffer_size:
+            if self.buffer_used + ll_length > self.buffer_size:
                 self.flush_character_buffer(space)
                 # handler might have changed; drop the rest on the floor
                 # if there isn't a handler anymore
                 if self.w_character_data_handler is None:
                     return True
-            if length <= self.buffer_size:
+            if ll_length <= self.buffer_size:
                 self.buffer_w.append(w_string)
-                self.buffer_used += length
+                self.buffer_used += ll_length
                 return True
             else:
                 self.buffer_w = []
