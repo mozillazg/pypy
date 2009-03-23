@@ -6,6 +6,7 @@ from pypy.interpreter.error import OperationError
 from pypy.objspace.descroperation import object_setattr
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.rarithmetic import r_uint
 
 from pypy.rpython.tool import rffi_platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -168,7 +169,7 @@ for index, (name, params) in enumerate(HANDLERS.items()):
         result_error = "None"
 
     if name == 'CharacterDataHandler':
-        pre_code = 'if parser.buffer_string(space, w_arg0, arg1): return'
+        pre_code = 'if parser.buffer_string(space, w_arg0, r_uint(arg1)): return'
     else:
         pre_code = 'parser.flush_character_buffer(space)'
 
@@ -339,7 +340,7 @@ getting the advantage of providing document type information to the parser.
 
     def w_convert_charp_n(self, space, data, length):
         if data:
-            return self.w_convert(space, rffi.charp2strn(data, length))
+            return self.w_convert(space, rffi.charp2strn(data, r_uint(length)))
         else:
             return space.w_None
 
