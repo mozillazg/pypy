@@ -4,6 +4,7 @@ from pypy.lang.gameboy.interrupt import Interrupt
 from pypy.lang.gameboy.cpu_register import Register, DoubleRegister,\
                                            ReservedDoubleRegister,\
                                            FlagRegister, ImmediatePseudoRegister
+from pypy.rlib.jit import JitDriver
 
 # ---------------------------------------------------------------------------
 
@@ -19,6 +20,7 @@ def process_2s_complement(value):
 
 
 DEBUG_INSTRUCTION_COUNTER = 1
+jitdriver = JitDriver(greens = ['pc'], reds=['af', 'bc', 'de', 'hl', 'sp'])
 
 class CPU(object):
     """
@@ -174,7 +176,9 @@ class CPU(object):
         self.cycles += ticks
         self.handle_pending_interrupts()
         while self.cycles > 0:
-            self.execute(self.fetch(use_cycles=False))
+            opcode = self.fetch(use_cycles=False)
+            jitdriver.jit_merge_point(pc=self.pc.value)
+            self.execute(opcode)
             
     def emulate_step(self):
         self.handle_pending_interrupts()
@@ -286,6 +290,7 @@ class CPU(object):
         self.pc.set(address, use_cycles=use_cycles)       # 1 cycle
         if use_cycles:
             self.cycles += 1
+        jitdriver.can_enter_jit(pc=self.pc.value)
         
     def load(self, getCaller, setCaller):
         # 1 cycle
@@ -656,6 +661,7 @@ class CPU(object):
         # JP nnnn, 4 cycles
         self.pc.set(self.fetch_double_address()) # 1+2 cycles
         self.cycles -= 1
+        jitdriver.can_enter_jit(pc=self.pc.value)
 
     def conditional_jump(self, cc):
         # JP cc,nnnn 3,4 cycles
@@ -668,6 +674,7 @@ class CPU(object):
         # JR +nn, 3 cycles
         self.pc.add(process_2s_complement(self.fetch())) # 3 + 1 cycles
         self.cycles += 1
+        jitdriver.can_enter_jit(pc=self.pc.value)
 
     def relative_conditional_jump(self, cc):
         # JR cc,+nn, 2,3 cycles
@@ -690,6 +697,7 @@ class CPU(object):
     def ret(self):
         # RET 4 cycles
         self.double_register_inverse_call(CPUPopCaller(self), self.pc)
+        jitdriver.can_enter_jit(pc=self.pc.value)
 
     def conditional_return(self, cc):
         # RET cc 2,5 cycles
