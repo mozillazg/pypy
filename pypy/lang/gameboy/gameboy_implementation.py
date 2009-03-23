@@ -12,16 +12,18 @@ from pypy.lang.gameboy.video_meta import TileDataWindow, SpriteWindow,\
 from pypy.lang.gameboy import constants
 import time
 
-show_metadata = False # Extends the window with windows visualizing meta-data
+show_metadata = True # Extends the window with windows visualizing meta-data
 
 if constants.USE_RSDL:
-    from pypy.rlib.rsdl import RSDL, RSDL_helper, RMix
+    from pypy.rlib.rsdl import RSDL, RSDL_helper #, RMix
     from pypy.rpython.lltypesystem import lltype, rffi
     delay = RSDL.Delay
     get_ticks = RSDL.GetTicks
 else:
     delay = time.sleep
 
+FPS = 1<<6 # About 1<<6 to make sure we have a clean distrubution of about
+           # 1<<6 frames per second
 
 from pypy.rlib.objectmodel import specialize
 
@@ -65,13 +67,11 @@ class GameBoyImplementation(GameBoy):
         return 0
     
     def emulate_cycle(self):
-        X = 1<<6 # About 1<<6 to make sure we have a clean distrubution of about
-                 # 1<<6 frames per second
         self.handle_events()
-        # Come back to this cycle every 1/X seconds
-        self.emulate(constants.GAMEBOY_CLOCK / X)
+        # Come back to this cycle every 1/FPS seconds
+        self.emulate(constants.GAMEBOY_CLOCK / FPS)
         spent = int(time.time()) - self.sync_time
-        left = int(1000.0/X) + self.penalty - spent
+        left = int(1000.0/FPS) + self.penalty - spent
         if left > 0:
             delay(left)
             self.penalty = 0
@@ -260,18 +260,20 @@ class SoundDriverImplementation(SoundDriver):
         SoundDriver.__init__(self)
         self.enabled       = False
         self.sampleRate    = 44100
-        self.chunksize     = 1024
+        self.buffersize    = 512
         self.channelCount  = 2
         self.bitsPerSample = 4
+        self.sampleSize    = self.bitsPerSample * self.channelCount
         self.create_sound_driver()
 
     def create_sound_driver(self):
-        if RMix.OpenAudio(self.sampleRate, RSDL.AUDIO_U8, 
-                          self.channelCount, self.chunksize) != 0:
-            error = rffi.charp2str(RSDL.GetError())
-            raise Exception(error)
-        else:
-            self.enabled = True
+        #if RMix.OpenAudio(self.sampleRate, RSDL.AUDIO_U8, 
+        #                  self.channelCount, self.chunksize) != 0:
+        #    error = rffi.charp2str(RSDL.GetError())
+        #    raise Exception(error)
+        #else:
+        #    self.enabled = True
+        pass
     
     def start(self):
         pass
