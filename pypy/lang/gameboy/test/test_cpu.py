@@ -71,7 +71,7 @@ def test_fetch():
     value           = 0x12
     # in rom
     cpu.pc.set(address)
-    cpu.rom[address] = value
+    cpu._change_rom(address, value)
     startCycles      = cpu.cycles
     assert cpu.fetch()            == value
     assert startCycles-cpu.cycles == 1
@@ -104,7 +104,7 @@ def test_relative_conditional_jump():
     cpu         = get_cpu()
     pc          = cpu.pc.get()
     value       = 0x12
-    cpu.rom[constants.RESET_PC] = value
+    cpu._change_rom(constants.RESET_PC, value)
     # test jr_nn
     startCycles = cpu.cycles
     cpu.relative_conditional_jump(True)
@@ -141,7 +141,7 @@ def test_flags_memory_access():
     prepare_for_fetch(cpu, 0x12, 0x12)
     cpu.memory.write(0x1234, 0x12)
     assert cpu.is_z() == True
-    cpu.rom[0x1234] = 0x12
+    cpu._change_rom(0x1234, 0x12)
     assert cpu.is_z() == True
    
 
@@ -249,10 +249,10 @@ def assert_flags(cpu, z_flag=None, n_flag=None, h_flag=None, c_flag=None, p_flag
 def prepare_for_fetch(cpu, value, valueLo=None):
     pc = cpu.pc.get()
     if valueLo is not None:
-        cpu.rom[pc] = valueLo & 0xFF
+        cpu._change_rom(pc, valueLo & 0xFF)
         cpu.memory.write(pc, valueLo & 0xFF)
         pc += 1
-    cpu.rom[pc] = value & 0xFF
+    cpu._change_rom(pc, value & 0xFF)
     cpu.memory.write(pc, value & 0xFF)
     
 def test_prepare_for_fetch():

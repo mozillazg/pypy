@@ -91,10 +91,10 @@ def prepare_for_double_fetch(cpu, value):
 def prepare_for_fetch(cpu, value, valueLo=None):
     pc = cpu.pc.get()
     if valueLo is not None:
-        cpu.rom[pc] = valueLo & 0xFF
+        cpu._change_rom(pc, valueLo & 0xFF)
         cpu.memory.write(pc, valueLo & 0xFF)
         pc += 1
-    cpu.rom[pc] = value & 0xFF
+    cpu._change_rom(pc, value & 0xFF)
     cpu.memory.write(pc, value & 0xFF)
     
 def test_prepare_for_fetch():
