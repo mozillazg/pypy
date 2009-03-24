@@ -88,7 +88,11 @@ class MsvcPlatform(Platform):
         returncode, stdout, stderr = _run_subprocess(self.cc, '',
                                                      env=self.c_environ)
         r = re.search('Version ([0-9]+)\.([0-9]+)', stderr)
-        self.version = int(''.join(r.groups())) / 10 - 60
+        if r is not None:
+            self.version = int(''.join(r.groups())) / 10 - 60
+        else:
+            # Probably not a msvc compiler...
+            self.version = 0
 
         # Install debug options only when interpreter is in debug mode
         if sys.executable.lower().endswith('_d.exe'):
