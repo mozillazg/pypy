@@ -2,8 +2,9 @@ import sys
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.translator.platform import platform as compiler
 
-if sys.platform == "win32":
+if compiler.name == "win32":
     libname = 'zlib'
 else:
     libname = 'z'
