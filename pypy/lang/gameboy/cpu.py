@@ -4,7 +4,7 @@ from pypy.lang.gameboy.interrupt import Interrupt
 from pypy.lang.gameboy.cpu_register import Register, DoubleRegister,\
                                            ReservedDoubleRegister,\
                                            FlagRegister, ImmediatePseudoRegister
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, hint
 
 # ---------------------------------------------------------------------------
 
@@ -39,7 +39,7 @@ class CPU(object):
         self.halted    = False
         self.cycles    = 0
         self.ini_registers()
-        self.rom       = [0]
+        self.rom       = "\x00"
         self.reset()
 
     def ini_registers(self):
@@ -171,8 +171,16 @@ class CPU(object):
         return not self.is_n()
 
     def set_rom(self, banks):
-        self.rom = banks       
+        rom = []
+        for i in banks:
+            rom.append(chr(i))
+        self.rom = "".join(rom) 
     
+    def _change_rom(self, address, value):
+        """NOT_RPYTHON: only for tests"""
+        rom = self.rom
+        self.rom = rom[:address] + chr(value) + rom[address + 1:]
+
     # ---------------------------------------------------------------
     
     def emulate(self, ticks):
@@ -220,7 +228,6 @@ class CPU(object):
         self.last_op_code = op_code
         OP_CODES[op_code](self)
         
-        
     # -------------------------------------------------------------------
         
     def debug(self):
@@ -246,7 +253,7 @@ class CPU(object):
             self.cycles += 1
         pc = self.pc.get(use_cycles)
         if pc <= 0x3FFF:
-            data =  self.rom[self.pc.get(use_cycles)]
+            data = ord(self.rom[self.pc.get(use_cycles)])
         else:
             data = self.memory.read(self.pc.get(use_cycles))
         self.pc.inc(use_cycles) # 2 cycles
@@ -681,7 +688,8 @@ class CPU(object):
         self.pc.add(increment) # 3 + 1 cycles
         self.cycles += 1
         if increment <= 0:
-            jitdriver.can_enter_jit(pc=self.pc.value, self=self)
+            pc = self.pc.value
+            jitdriver.can_enter_jit(pc=pc, self=self)
 
     def relative_conditional_jump(self, cc):
         # JR cc,+nn, 2,3 cycles
