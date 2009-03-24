@@ -8,10 +8,12 @@ from pypy.interpreter.typedef import interp_attrproperty
 from pypy.interpreter.gateway import ObjSpace, W_Root, NoneNotWrapped, interp2app, Arguments
 from pypy.rlib.streamio import Stream
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.translator.platform import platform as compiler
 from pypy.rlib.rarithmetic import intmask, r_longlong
 import sys
 
-if sys.platform == "win32":
+
+if compiler.name == "win32":
     libname = 'libbz2'
 else:
     libname = 'bz2'
