@@ -272,3 +272,10 @@ class MingwPlatform(posix.BasePosix):
     def _args_for_shared(self, args):
         return ['-shared'] + args
 
+    def include_dirs_for_libffi(self):
+        return []
+
+    def library_dirs_for_libffi(self):
+        return []
+
+
