@@ -31,6 +31,7 @@ def create_bank_controller(self, cartridge_type, rom, ram, clock):
             return constants.CATRIDGE_TYPE_MAPPING[cartridge_type](rom, ram, clock)
         else:
             raise InvalidMemoryBankTypeError("Unsupported memory bank controller (0x"+hex(cartridge_type)+")")
+create_bank_controller._look_inside_me_ = False
 
 def map_to_byte( string):
     mapped = [0]*len(string)
@@ -307,6 +308,7 @@ class MBC(iMemory):
                              hex(self.max_rom_bank_size)))
         self.rom      = buffer
         self.rom_size = self.rom_bank_size * banks - 1
+    set_rom._look_inside_me_ = False
 
 
     def set_ram(self, buffer):
@@ -317,6 +319,7 @@ class MBC(iMemory):
                              hex(self.max_ram_bank_size)))
         self.ram      = buffer
         self.ram_size = constants.RAM_BANK_SIZE * banks - 1
+    set_rom._look_inside_me_ = False
         
         
     def read(self, address):
@@ -334,8 +337,8 @@ class MBC(iMemory):
                 #return 0xFF
                 raise Exception("RAM is not Enabled")
         #return 0xFF
-        raise InvalidMemoryAccessException("MBC: Invalid address, out of range: %s" 
-                                           % hex(address))
+        raise InvalidMemoryAccessException#("MBC: Invalid address, out of range: %s" 
+                                          # % hex(address))
     
     def write(self, address, data):
         raise InvalidMemoryAccessException("MBC: Invalid write access")

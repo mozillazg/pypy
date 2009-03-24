@@ -20,7 +20,7 @@ def process_2s_complement(value):
 
 
 DEBUG_INSTRUCTION_COUNTER = 1
-jitdriver = JitDriver(greens = ['pc'], reds=['af', 'bc', 'de', 'hl', 'sp'])
+jitdriver = JitDriver(greens = ['pc'], reds=['self'], virtualizables=['self'])
 
 class CPU(object):
     """
@@ -28,6 +28,9 @@ class CPU(object):
     
     Central Unit Processor_a (Sharp LR35902 CPU)
     """
+    _virtualizable2_ = True
+    _always_virtual_ = 'b c bc d e de h l hl hli pc sp a flag af interrupt rom'.split()
+
     def __init__(self, interrupt, memory):
         assert isinstance(interrupt, Interrupt)
         self.interrupt = interrupt
@@ -176,8 +179,8 @@ class CPU(object):
         self.cycles += ticks
         self.handle_pending_interrupts()
         while self.cycles > 0:
+            jitdriver.jit_merge_point(pc=self.pc.value, self=self)
             opcode = self.fetch(use_cycles=False)
-            jitdriver.jit_merge_point(pc=self.pc.value)
             self.execute(opcode)
             
     def emulate_step(self):
@@ -290,7 +293,6 @@ class CPU(object):
         self.pc.set(address, use_cycles=use_cycles)       # 1 cycle
         if use_cycles:
             self.cycles += 1
-        jitdriver.can_enter_jit(pc=self.pc.value)
         
     def load(self, getCaller, setCaller):
         # 1 cycle
@@ -659,9 +661,12 @@ class CPU(object):
 
     def jump(self):
         # JP nnnn, 4 cycles
-        self.pc.set(self.fetch_double_address()) # 1+2 cycles
+        oldpc = self.pc.value
+        newpc = self.fetch_double_address()
+        self.pc.set(newpc) # 1+2 cycles
         self.cycles -= 1
-        jitdriver.can_enter_jit(pc=self.pc.value)
+        if oldpc >= newpc:
+            jitdriver.can_enter_jit(pc=self.pc.value, self=self)
 
     def conditional_jump(self, cc):
         # JP cc,nnnn 3,4 cycles
@@ -672,9 +677,11 @@ class CPU(object):
 
     def relative_jump(self):
         # JR +nn, 3 cycles
-        self.pc.add(process_2s_complement(self.fetch())) # 3 + 1 cycles
+        increment = process_2s_complement(self.fetch())
+        self.pc.add(increment) # 3 + 1 cycles
         self.cycles += 1
-        jitdriver.can_enter_jit(pc=self.pc.value)
+        if increment <= 0:
+            jitdriver.can_enter_jit(pc=self.pc.value, self=self)
 
     def relative_conditional_jump(self, cc):
         # JR cc,+nn, 2,3 cycles
@@ -697,7 +704,6 @@ class CPU(object):
     def ret(self):
         # RET 4 cycles
         self.double_register_inverse_call(CPUPopCaller(self), self.pc)
-        jitdriver.can_enter_jit(pc=self.pc.value)
 
     def conditional_return(self, cc):
         # RET cc 2,5 cycles
