@@ -420,7 +420,7 @@ try:
     # see if we have space.builtin in this context
     space.builtin
 except AttributeError:
-    print "didn't get", %(bltin)r
+    print "didn\'t get", %(bltin)r
     def %(name)s(space, __args__):
         w_func = space.builtin.get(%(bltin)r)
         return space.call_args(w_func, __args__)
@@ -974,10 +974,10 @@ else:
 
     def nameof_property(self, prop):
         origin = prop.__doc__ # XXX quite a hack
-        name = self.uniquename('gprop_' + origin)
         if not origin:
             raise ValueError("sorry, cannot build properties"
                              " without a helper in __doc__")
+        name = self.uniquename('gprop_' + origin)
         # property is lazy loaded app-level as well, trigger it*s creation
         self.initcode.append1('space.builtin.get("property") # pull it in')
         globname = self.nameof(self.moddict)
