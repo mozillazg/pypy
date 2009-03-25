@@ -250,13 +250,16 @@ class CPU(object):
     def fetch(self, use_cycles=True):
         # Fetching  1 cycle
         if use_cycles:
-            self.cycles += 1
+            self.cycles -= 1 # upate cycles manually
         pc = self.pc.get(use_cycles)
+        pc = hint(pc, promote=True)
         if pc <= 0x3FFF:
-            data = ord(self.rom[self.pc.get(use_cycles)])
+            rom = hint(self.rom, promote=True)
+            data = ord(rom[pc])
+            data = hint(data, promote=True)
         else:
-            data = self.memory.read(self.pc.get(use_cycles))
-        self.pc.inc(use_cycles) # 2 cycles
+            data = self.memory.read(pc)
+        self.pc.value = pc + 1 # do the update manually to help the jit
         return data
     
     def fetch_double_address(self):
