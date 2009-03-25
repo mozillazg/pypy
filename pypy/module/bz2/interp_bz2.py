@@ -13,7 +13,7 @@ from pypy.rlib.rarithmetic import intmask, r_longlong
 import sys
 
 
-if compiler.name == "win32":
+if compiler.name == "msvc":
     libname = 'libbz2'
 else:
     libname = 'bz2'
