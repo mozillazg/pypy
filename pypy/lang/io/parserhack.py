@@ -1,32 +1,20 @@
 import py
 import os
-
-implicit = "implicit"
+from pypy.lang.io.model import W_Number, parse_literal, W_Message
+from pypy.lang.io.objspace import ObjSpace
 
 io_file = py.magic.autopath().dirpath().join("parserhack.io")
 
-class Ast(object):
-    def __init__(self, receiver, name, arguments = None):
-        self.receiver = receiver
-        self.name = name
-        if arguments is None:
-            arguments = []
-        self.arguments = arguments
-        
-    def __repr__(self):
-        return "Ast(%r, %r, %r)" % (self.receiver, self.name, self.arguments)
-
-    def __eq__(self, other):
-        return (self.__class__ is other.__class__ and 
-                self.__dict__ == other.__dict__)
-        
-    def __ne__(self, other):
-        return not self == other
-        
-def parse(input):
+def parse(input, space=None):
     child_in, child_out_err = os.popen4("osxvm %s" % io_file)
     child_in.write(input)
     child_in.close()
     s = child_out_err.read().strip()
+    print s
     return eval(s)
+
+def interpret(code):
+    space = ObjSpace()
+    ast = parse(code, space)
+    return ast.eval(None)
     
