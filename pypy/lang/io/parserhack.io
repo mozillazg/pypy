@@ -1,22 +1,20 @@
-nil addAst := nil
-nil addTail := nil
-Message addAst := method(
-    "Ast(" print
-    next addAst
-)
+nil addArguments := nil
+nil pythonize := nil
+
 Message pythonize := method(
-    addAst
-    "implicit" print
-    addTail
+    "W_Message(space," print
+    addArguments
+    next pythonize
+    ")" print 
+    
 )
-Message addTail := method(
-    ", \"" print
+Message addArguments := method(
+    "\"" print
     name print
     "\"" print
     ", [" print 
     arguments foreach(i, argument, argument pythonize; ", " print)
-    "])" print
-    next addTail
+    "]," print
 )
 
 in := File standardInput
