@@ -17,7 +17,7 @@ from Queue import Queue
 from pygreen.greensock2 import autogreenlet, Timer, Interrupted,\
      meetingpoint
 from pygreen.pipe.fd import FDInput
-from py.magic import greenlet
+from greenlet import greenlet
 import time
 
 class Killed(Exception):

@@ -16,7 +16,7 @@ import sys
 try:
     from _stackless import coroutine, greenlet
 except ImportError: # we are running from CPython
-    from py.magic import greenlet
+    from greenlet import greenlet
     try:
         from functools import partial
     except ImportError: # we are not running python 2.5
