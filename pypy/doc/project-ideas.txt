@@ -23,7 +23,7 @@ JIT back-ends
 PyPy's Just-In-Time compiler relies on backends for actual code
 generation.  Right now we are working on the ``pyjitpl5`` branch, which
 is not stable.  Working on the JIT backends should be soon possible.
-Open ideas are to write a backend for AMD64 (Intel IA-64); or .NET or
+Open ideas are to write a backend for AMD64 (Intel 64); or .NET or
 Java (requires porting the JIT frontend to ootype too, which is not too
 hard); or trying to use LLVM-JIT.
 
