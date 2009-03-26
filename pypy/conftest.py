@@ -43,7 +43,7 @@ class PyPyTestPlugin:
                default="host", callback=_set_platform,
                help="set up tests to use specified platform as compile/run target")
 
-    def pytest_pyfuncarg_space(self, pyfuncitem):
+    def pytest_funcarg_space(self, pyfuncitem):
         return gettestobjspace()
         
 ConftestPlugin = PyPyTestPlugin
