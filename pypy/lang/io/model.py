@@ -5,6 +5,13 @@ class W_Object(object):
         self.protos = list(protos)
         self.space = space
     
+    def __eq__(self, other):
+        return (self.__class__ is other.__class__ and 
+                self.__dict__ == other.__dict__)
+
+    def __ne__(self, other):
+        return not self == other
+
     def lookup(self, name):
         try:
             return self.slots[name]
@@ -19,19 +26,14 @@ class W_Number(W_Object):
     """Number"""
     def __init__(self, space, value):
         self.value = value
-        W_Object.__init__(self, space, [space.w_number])
-    
-    def __eq__(self, other):
-        return (self.__class__ is other.__class__ and 
-                self.__dict__ == other.__dict__)
-
-    def __ne__(self, other):
-        return not self == other    
+        W_Object.__init__(self, space, [space.w_number]) 
 
 class W_List(W_Object):
     pass
-class W_Sequence(W_Object):
-    pass
+class W_ImmutableSequence(W_Object):
+    def __init__(self, space, string):
+        self.value = string
+    
 
 class W_CFunction(W_Object):
     def __init__(self, space, function):
@@ -52,12 +54,7 @@ class W_Message(W_Object):
     def __repr__(self):
         return "Message(%r, %r, %r)" % (self.name, self.arguments, self.next)
 
-    def __eq__(self, other):
-        return (self.__class__ is other.__class__ and 
-                self.__dict__ == other.__dict__)
-
-    def __ne__(self, other):
-        return not self == other
+    
     def eval(self, w_receiver):
         if self.literal_value is not None:
             w_result = self.literal_value
@@ -76,4 +73,7 @@ def parse_literal(space, literal):
             return W_Number(space, t(literal))
         except ValueError:
             pass
+    if literal.startswith('"') and literal.endswith('"'):
+        return W_ImmutableSequence(space, literal[1:-1])
+        
     

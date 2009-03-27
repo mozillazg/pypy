@@ -6,6 +6,7 @@ def test_parse_literal():
     assert parse_literal(space, "2").value == 2
     assert parse_literal(space, "0xFF").value == 255
     assert parse_literal(space, "2.3").value == 2.3
+    assert parse_literal(space, '"a"').value == 'a'
     
 def test_lookup():
     obj = W_Object(None, )
