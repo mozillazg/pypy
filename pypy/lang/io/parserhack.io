@@ -10,7 +10,7 @@ Message pythonize := method(
 )
 Message addArguments := method(
     "\"" print
-    name print
+    name asMutable escape print
     "\"" print
     ", [" print 
     arguments foreach(i, argument, argument pythonize; ", " print)
