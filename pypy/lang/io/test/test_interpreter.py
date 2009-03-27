@@ -14,4 +14,7 @@ def test_simple_minus():
     
 def test_set_slot():
     x, space = interpret("a := 1")
-    assert space.w_lobby.slots['a'] == W_Number(space, 1)
+    w_number = W_Number(space, 1)
+    assert space.w_lobby.slots['a'] == w_number
+    assert x == w_number
+    assert space.w_lobby.slots['a'] is x

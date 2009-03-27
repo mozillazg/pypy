@@ -21,6 +21,9 @@ class W_Object(object):
             t = x.lookup(name)
             if t is not None:
                 return t
+
+    def apply(self, space, w_receiver, w_message, w_context):
+        return self
         
 class W_Number(W_Object):
     """Number"""
@@ -30,6 +33,7 @@ class W_Number(W_Object):
 
 class W_List(W_Object):
     pass
+    
 class W_ImmutableSequence(W_Object):
     def __init__(self, space, string):
         self.value = string
@@ -40,8 +44,8 @@ class W_CFunction(W_Object):
         self.function = function
         W_Object.__init__(self, space)
         
-    def apply(self, w_receiver, w_message):
-        return self.function(w_receiver, w_message, None)
+    def apply(self, space, w_receiver, w_message, w_context):
+        return self.function(space, w_receiver, w_message, w_context)
     
 class W_Message(W_Object):
     def __init__(self, space, name, arguments, next = None):
@@ -55,25 +59,41 @@ class W_Message(W_Object):
         return "Message(%r, %r, %r)" % (self.name, self.arguments, self.next)
 
     
-    def eval(self, w_receiver):
-        if self.literal_value is not None:
+    def eval(self, space, w_receiver, w_context):
+        if self.name == ';':
+            # xxx is this correct?
+            w_result = w_context
+        elif self.literal_value is not None:
             w_result = self.literal_value
         else:
             w_method = w_receiver.lookup(self.name)
-            w_result = w_method.apply(w_receiver, self)
+            w_result = w_method.apply(space, w_receiver, self, w_context)
         if self.next:
             #TODO: optimize
-            return self.next.eval(w_result)
+            return self.next.eval(space, w_result, w_context)
         else:
             return w_result
-                
+  
+class W_Block(W_Object):
+    def __init__(self, space, arguments, body):
+        self.arguments = arguments
+        self.body = body
+        W_Object.__init__(self, space)
+        
+    def apply(self, space, w_receiver, w_message, w_context):
+        assert not self.arguments
+        return self.body.eval(space, w_receiver, w_context)
+        
+        
+def parse_hex(string):
+    if not string.startswith("0x"):
+        raise ValueError
+    return int(string, 16) 
 def parse_literal(space, literal):
-    for t in [int, float, lambda x: int(x, 16)]:
+    for t in [int, float, parse_hex]:
         try:
             return W_Number(space, t(literal))
         except ValueError:
             pass
     if literal.startswith('"') and literal.endswith('"'):
         return W_ImmutableSequence(space, literal[1:-1])
-        
-    
