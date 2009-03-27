@@ -16,5 +16,5 @@ def parse(input, space=None):
 def interpret(code):
     space = ObjSpace()
     ast = parse(code, space)
-    return ast.eval(space.w_lobby), space
+    return ast.eval(space, space.w_lobby, space.w_lobby), space
     

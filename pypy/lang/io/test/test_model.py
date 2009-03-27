@@ -7,7 +7,8 @@ def test_parse_literal():
     assert parse_literal(space, "0xFF").value == 255
     assert parse_literal(space, "2.3").value == 2.3
     assert parse_literal(space, '"a"').value == 'a'
-    
+    assert parse_literal(space, 'a') is None
+
 def test_lookup():
     obj = W_Object(None, )
     assert obj.lookup("fail") is None
@@ -25,3 +26,4 @@ def test_protos():
     space = ObjSpace()
     x = W_Number(space, 2)
     assert x.protos == [space.w_number]
+    
