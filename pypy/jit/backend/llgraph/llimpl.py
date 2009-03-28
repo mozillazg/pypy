@@ -243,6 +243,14 @@ def compile_start():
     del _variables[:]
     return _to_opaque(CompiledLoop())
 
+def compile_restart(fail_position):
+    fail_op = _from_opaque(fail_position)
+    del _variables[:]
+    c = CompiledLoop()
+    assert fail_op.is_guard()
+    fail_op.subloop = c
+    return _to_opaque(c)
+
 def compile_start_int_var(loop):
     loop = _from_opaque(loop)
     assert not loop.operations
@@ -320,16 +328,13 @@ def compile_add_jump_target(loop, loop_target):
     op.jump_target = loop_target
     assert op.opnum == rop.JUMP
     assert len(op.args) == len(loop_target.inputargs)
-    if loop_target == loop:
-        log.info("compiling new loop")
-    else:
-        log.info("compiling new bridge")
 
 def compile_add_fail(loop, fail_index):
     loop = _from_opaque(loop)
     op = loop.operations[-1]
     assert op.opnum == rop.FAIL
     op.fail_index = fail_index
+    return _to_opaque(op)
 
 def compile_suboperations(loop):
     loop = _from_opaque(loop)
@@ -926,18 +931,22 @@ def setannotation(func, annotation, specialize_as_constant=False):
 
 
 COMPILEDLOOP = lltype.Ptr(lltype.OpaqueType("CompiledLoop"))
+OPERATION = lltype.Ptr(lltype.OpaqueType("Operation"))
 FRAME = lltype.Ptr(lltype.OpaqueType("Frame"))
 MEMOCAST = lltype.Ptr(lltype.OpaqueType("MemoCast"))
 
 _TO_OPAQUE[CompiledLoop] = COMPILEDLOOP.TO
+_TO_OPAQUE[Operation] = OPERATION.TO
 _TO_OPAQUE[Frame] = FRAME.TO
 _TO_OPAQUE[MemoCast] = MEMOCAST.TO
 
 s_CompiledLoop = annmodel.SomePtr(COMPILEDLOOP)
+s_Operation = annmodel.SomePtr(OPERATION)
 s_Frame = annmodel.SomePtr(FRAME)
 s_MemoCast = annmodel.SomePtr(MEMOCAST)
 
 setannotation(compile_start, s_CompiledLoop)
+setannotation(compile_restart, s_CompiledLoop)
 setannotation(compile_start_int_var, annmodel.SomeInteger())
 setannotation(compile_start_ptr_var, annmodel.SomeInteger())
 setannotation(compile_add, annmodel.s_None)
@@ -948,7 +957,7 @@ setannotation(compile_add_ptr_const, annmodel.s_None)
 setannotation(compile_add_int_result, annmodel.SomeInteger())
 setannotation(compile_add_ptr_result, annmodel.SomeInteger())
 setannotation(compile_add_jump_target, annmodel.s_None)
-setannotation(compile_add_fail, annmodel.s_None)
+setannotation(compile_add_fail, s_Operation)
 setannotation(compile_suboperations, s_CompiledLoop)
 
 setannotation(new_frame, s_Frame)
