@@ -75,14 +75,29 @@ class CPU(object):
             self.mixlevelann = annmixlevel
         self.fielddescrof_vtable = self.fielddescrof(rclass.OBJECT, 'typeptr')
 
-    def compile_operations(self, loop):
+    def compile_loop(self, loop):
         """In a real assembler backend, this should assemble the given
         list of operations.  Here we just generate a similar CompiledLoop
         instance.  The code here is RPython, whereas the code in llimpl
-        is not.
+        is not.  Returns the compiled loop instance (a black box passed
+        back to execute_operations()).
         """
         c = llimpl.compile_start()
-        loop._compiled_version = c
+        var2index = self._get_loop_args(c, loop)
+        self._compile_branch(c, loop.operations, var2index, rop.JUMP)
+        return c
+
+    def compile_bridge(self, fail_op, bridge):
+        """Like compile_loop, but produce the bridge operations going from
+        the guard that precedes the given FAIL operation.  It should patch
+        the conditional jump on this guard to now execute the given bridge.
+        """
+        c = llimpl.compile_restart(fail_op._fail_position)
+        var2index = self._get_loop_args(c, bridge)
+        self._compile_branch(c, bridge.operations, var2index, rop.JUMP)
+        return c
+
+    def _get_loop_args(self, c, loop):
         var2index = {}
         for box in loop.inputargs:
             if isinstance(box, history.BoxInt):
@@ -91,9 +106,9 @@ class CPU(object):
                 var2index[box] = llimpl.compile_start_ptr_var(c)
             else:
                 raise Exception("box is: %r" % (box,))
-        self._compile_branch(c, loop.operations, var2index)
+        return var2index
 
-    def _compile_branch(self, c, operations, var2index):
+    def _compile_branch(self, c, operations, var2index, expected_end):
         for op in operations:
             llimpl.compile_add(c, op.opnum)
             if op.descr is not None:
@@ -112,7 +127,8 @@ class CPU(object):
                                                              x))
             if op.is_guard():
                 c2 = llimpl.compile_suboperations(c)
-                self._compile_branch(c2, op.suboperations, var2index.copy())
+                self._compile_branch(c2, op.suboperations, var2index.copy(),
+                                     rop.FAIL)
             x = op.result
             if x is not None:
                 if isinstance(x, history.BoxInt):
@@ -124,10 +140,11 @@ class CPU(object):
                                                                x))
         op = operations[-1]
         assert op.is_final()
+        assert op.opnum == expected_end
         if op.opnum == rop.JUMP:
             llimpl.compile_add_jump_target(c, op.jump_target._compiled_version)
         elif op.opnum == rop.FAIL:
-            llimpl.compile_add_fail(c, len(self.fail_ops))
+            op._fail_position = llimpl.compile_add_fail(c, len(self.fail_ops))
             self.fail_ops.append(op)
 
     def execute_operations(self, loop, valueboxes):
