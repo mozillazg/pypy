@@ -798,58 +798,6 @@ class PerfectSpecializer(object):
                 return False
         return True
 
-    def _patch(self, origargs, newargs):
-        i = 0
-        res = []
-        for arg in newargs:
-            if arg is None:
-                res.append(origargs[i])
-                i += 1
-            else:
-                res.append(arg)
-        return res
-
-    def _patch_loop(self, operations, inpargs, rebuild_ops, loop):
-        for op in operations:
-            if op.is_guard():
-                if op.suboperations[-1].opnum == rop.FAIL:
-                    op.suboperations = (op.suboperations[:-1] + rebuild_ops +
-                                        [op.suboperations[-1]])
-                else:
-                    self._patch_loop(op.suboperations, inpargs, rebuild_ops,
-                                     loop)
-        jump = operations[-1]
-        if jump.opnum == rop.JUMP and jump.jump_target is loop:
-            jump.args = self._patch(jump.args, inpargs)
-
-    def update_loop(self, offsets, loop):
-        j = 0
-        new_inputargs = []
-        prev_ofs = 0
-        rebuild_ops = []
-        memo = {}
-        for i in range(len(offsets)):
-            for specnode, descr, parentnode, rel_ofs, node in offsets[i]:
-                while parentnode.source != loop.inputargs[j]:
-                    j += 1
-                ofs = j + rel_ofs + 1
-                new_inputargs.extend([None] * (ofs - prev_ofs))
-                prev_ofs = ofs
-                boxlist = []
-                specnode.expand_boxlist(node, boxlist)
-                new_inputargs.extend(boxlist)
-                box = self.prepare_rebuild_ops(node, rebuild_ops, memo)
-                if (parentnode.cls and
-                    isinstance(parentnode.cls.source, FixedList)):
-                    rebuild_ops.append(ResOperation(rop.SETARRAYITEM_GC,
-                      [parentnode.source, descr, box], None,
-                      parentnode.cls.source.arraydescr))
-                else:
-                    rebuild_ops.append(ResOperation(rop.SETFIELD_GC,
-                      [parentnode.source, box], None, descr))
-        new_inputargs.extend([None] * (len(loop.inputargs) - prev_ofs))
-        loop.inputargs = self._patch(loop.inputargs, new_inputargs)
-        self._patch_loop(loop.operations, new_inputargs, rebuild_ops, loop)
 
 def get_in_list(dict, boxes_or_consts):
     result = []
