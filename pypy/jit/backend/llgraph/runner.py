@@ -98,6 +98,20 @@ class CPU(object):
         return c
 
     def _get_loop_args(self, c, loop):
+        var2index = self._get_loop_args(c, loop)
+        self._compile_branch(c, loop.operations, var2index, rop.JUMP)
+
+    def compile_bridge(self, fail_op, bridge):
+        """Like compile_loop, but produce the bridge operations going from
+        the guard that precedes the given FAIL operation.  It should patch
+        the conditional jump on this guard to now execute the given bridge.
+        """
+        c = llimpl.compile_restart(fail_op._fail_position)
+        bridge._compiled_version = c
+        var2index = self._get_loop_args(c, bridge)
+        self._compile_branch(c, bridge.operations, var2index, rop.JUMP)
+
+    def _get_loop_args(self, c, loop):
         var2index = {}
         for box in loop.inputargs:
             if isinstance(box, history.BoxInt):

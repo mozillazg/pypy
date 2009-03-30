@@ -113,7 +113,7 @@ def compile_fresh_loop(metainterp, old_loops):
     loop.operations = history.operations
     loop.operations[-1].jump_target = loop
     mark_keys_in_loop(loop, loop.operations)
-    send_loop_to_backend(metainterp, loop, True)
+    send_loop_to_backend(metainterp, loop)
     metainterp.stats.loops.append(loop)
     old_loops.append(loop)
     return loop
@@ -126,14 +126,11 @@ def mark_keys_in_loop(loop, operations):
     if op.opnum == rop.FAIL:
         op.key.loop = loop
 
-def send_loop_to_backend(metainterp, loop, is_loop):
-    metainterp.cpu.compile_operations(loop)
+def send_loop_to_backend(metainterp, loop):
+    metainterp.cpu.compile_loop(loop)
     metainterp.stats.compiled_count += 1
     if not we_are_translated():
-        if is_loop:
-            log.info("compiling new loop")
-        else:
-            log.info("compiling new bridge")
+        log.info("compiling new loop")
 
 # ____________________________________________________________
 
@@ -153,3 +150,8 @@ def compile_fresh_bridge(metainterp, old_loops, resumekey):
     mark_keys_in_loop(source_loop, guard_op.suboperations)
     send_loop_to_backend(metainterp, source_loop, False)
     return target_loop
+
+def send_bridge_to_backend(metainterp, bridge):
+    xxx
+    if not we_are_translated():
+        log.info("compiling new bridge")

@@ -338,7 +338,7 @@ class TreeLoop(object):
         # self.inputargs = list of distinct Boxes
         # self.operations = list of ResOperations
         #   ops of the kind 'guard_xxx' contain a further list of operations,
-        #   which may itself contain 'guard_xxx' and so on, making a tree.
+        #   which must end with a FAIL.
 
     def _all_operations(self, omit_fails=False):
         "NOT_RPYTHON"
