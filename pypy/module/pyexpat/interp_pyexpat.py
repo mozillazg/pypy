@@ -454,10 +454,15 @@ Parse XML data from file-like object."""
         XML_SetBase(self.itself, base)
     SetBase.unwrap_spec = ['self', ObjSpace, str]
 
-    def ExternalEntityParserCreate(self, space, context, w_encoding=None):
+    def ExternalEntityParserCreate(self, space, w_context, w_encoding=None):
         """ExternalEntityParserCreate(context[, encoding])
 Create a parser for parsing an external entity based on the
 information passed to the ExternalEntityRefHandler."""
+        if space.is_w(w_context, space.w_None):
+            context = None
+        else:
+            context = space.str_w(w_context)
+
         if space.is_w(w_encoding, space.w_None):
             encoding = None
         else:
@@ -477,7 +482,7 @@ information passed to the ExternalEntityRefHandler."""
             parser.handlers[i] = self.handlers[i]
 
         return space.wrap(parser)
-    ExternalEntityParserCreate.unwrap_spec = ['self', ObjSpace, str, W_Root]
+    ExternalEntityParserCreate.unwrap_spec = ['self', ObjSpace, W_Root, W_Root]
 
     def flush_character_buffer(self, space):
         if not self.buffer_w:
