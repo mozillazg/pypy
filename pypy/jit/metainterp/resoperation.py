@@ -5,9 +5,6 @@ class ResOperation(object):
     # for 'jump': points to the target loop
     jump_target = None
 
-    # for 'fail'
-    key = None
-
     # for 'guard_*'
     suboperations = None
 
@@ -34,7 +31,6 @@ class ResOperation(object):
     def clone(self):
         res = ResOperation(self.opnum, self.args, self.result, self.descr)
         res.jump_target = self.jump_target
-        res.key = self.key
         res.vdesc = self.vdesc
         return res
 

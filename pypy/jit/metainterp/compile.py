@@ -103,28 +103,18 @@ def create_empty_loop(metainterp):
 
 def compile_fresh_loop(metainterp, old_loops):
     history = metainterp.history
-    old_loop = optimize.optimize_loop(metainterp.options, old_loops,
-                                      history, metainterp.cpu)
-    if old_loop is not None:
-        return old_loop
     loop = create_empty_loop(metainterp)
     loop.inputargs = history.inputargs
-    loop.specnodes = history.specnodes
     loop.operations = history.operations
     loop.operations[-1].jump_target = loop
-    mark_keys_in_loop(loop, loop.operations)
+    old_loop = optimize.optimize_loop(metainterp.options, old_loops,
+                                      loop, metainterp.cpu)
+    if old_loop is not None:
+        return old_loop
     send_loop_to_backend(metainterp, loop)
     metainterp.stats.loops.append(loop)
     old_loops.append(loop)
     return loop
-
-def mark_keys_in_loop(loop, operations):
-    for op in operations:
-        if op.is_guard():
-            mark_keys_in_loop(loop, op.suboperations)
-    op = operations[-1]
-    if op.opnum == rop.FAIL:
-        op.key.loop = loop
 
 def send_loop_to_backend(metainterp, loop):
     metainterp.cpu.compile_loop(loop)
@@ -138,6 +128,8 @@ def compile_fresh_bridge(metainterp, old_loops, resumekey):
     #temp = TreeLoop('temp')
     #temp.operations = metainterp.history.operations
     #metainterp.stats.view(extraloops=[temp])
+    history = metainterp.history
+    xxx
     target_loop = optimize.optimize_bridge(metainterp.options, old_loops,
                                            metainterp.history, metainterp.cpu)
     if target_loop is None:

@@ -403,11 +403,19 @@ def _list_all_operations(result, operations, omit_fails=True):
         if op.is_guard():
             _list_all_operations(result, op.suboperations, omit_fails)
 
+
+class ResumeDescr(AbstractDescr):
+    def __init__(self, guard_op, resume_info, history, history_guard_index):
+        self.resume_info = resume_info
+        self.guard_op = guard_op
+        self.counter = 0
+        self.history = history
+        self.history_guard_index = history_guard_index
+
 # ____________________________________________________________
 
 
 class RunningMatcher(object):
-    specnodes = None
     def __init__(self, cpu):
         self.cpu = cpu
         self.inputargs = None

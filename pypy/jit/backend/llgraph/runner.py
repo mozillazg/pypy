@@ -83,6 +83,7 @@ class CPU(object):
         back to execute_operations()).
         """
         c = llimpl.compile_start()
+        loop._compiled_version = c
         var2index = self._get_loop_args(c, loop)
         self._compile_branch(c, loop.operations, var2index, rop.JUMP)
         return c
@@ -111,7 +112,7 @@ class CPU(object):
     def _compile_branch(self, c, operations, var2index, expected_end):
         for op in operations:
             llimpl.compile_add(c, op.opnum)
-            if op.descr is not None:
+            if isinstance(op.descr, Descr):
                 llimpl.compile_add_descr(c, op.descr.ofs, op.descr.type)
             for x in op.args:
                 if isinstance(x, history.Box):
