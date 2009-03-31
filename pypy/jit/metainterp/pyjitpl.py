@@ -651,8 +651,9 @@ class MIFrame(object):
         if box is not None:
             extraargs = [box] + extraargs
         guard_op = self.metainterp.history.record(opnum, extraargs, None)
-        op = history.ResOperation(rop.FAIL, liveboxes, None)
-        op.key = ResumeKey(guard_op, resume_info)
+        resumedescr = history.ResumeDescr(guard_op, resume_info,
+            self.metainterp.history, len(self.metainterp.history.operations)-1)
+        op = history.ResOperation(rop.FAIL, liveboxes, None, descr=resumedescr)
         guard_op.suboperations = [op]
         self.pc = saved_pc
         return guard_op
@@ -829,7 +830,8 @@ class OOMetaInterp(object):
 
     def handle_guard_failure(self, guard_failure):
         self.initialize_state_from_guard_failure(guard_failure)
-        key = guard_failure.key
+        key = guard_failure.descr
+        assert isinstance(key, history.ResumeDescr)
         try:
             if key.guard_op.opnum in (rop.GUARD_NO_EXCEPTION,
                                       rop.GUARD_EXCEPTION):
@@ -929,16 +931,18 @@ class OOMetaInterp(object):
 
     def initialize_state_from_guard_failure(self, guard_failure):
         # guard failure: rebuild a complete MIFrame stack
-        if self.state.must_compile_from_failure(guard_failure.key):
+        resumedescr = guard_failure.descr
+        assert isinstance(resumedescr, history.ResumeDescr)
+        if self.state.must_compile_from_failure(resumedescr):
             self.history = history.History(self.cpu)
-            suboperations = guard_failure.key.guard_op.suboperations
+            suboperations = resumedescr.guard_op.suboperations
             for i in range(len(suboperations)-1):
                 self.history.operations.append(suboperations[i])
         else:
             self.history = history.BlackHole(self.cpu)
             # the BlackHole is invalid because it doesn't start with
             # guard_failure.key.guard_op.suboperations, but that's fine
-        self.rebuild_state_after_failure(guard_failure.key.resume_info,
+        self.rebuild_state_after_failure(resumedescr.resume_info,
                                          guard_failure.args)
 
     def handle_exception(self):
@@ -991,10 +995,3 @@ class OOMetaInterp(object):
 class GenerateMergePoint(Exception):
     def __init__(self, args):
         self.argboxes = args
-
-class ResumeKey(object):
-    def __init__(self, guard_op, resume_info):
-        self.resume_info = resume_info
-        self.guard_op = guard_op
-        self.counter = 0
-        # self.loop = ... set in compile.py
