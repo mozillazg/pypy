@@ -52,7 +52,9 @@ class GDBM(Wrappable):
         return self.space.wrap(res_gdbm)
 
     def gdbm_fetch(self, key):
-        return self.space.wrap(fetch_gdbm(self.struct_gdbm, key))
+        c_key = str2charp(key)
+        res = fetch_gdbm(self.struct_gdbm, c_key)
+        return self.space.wrap(res)
 
     def gdbm_close(self):
         close_gdbm(self.struct_gdbm)
