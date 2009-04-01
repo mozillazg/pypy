@@ -17,7 +17,6 @@ _compilation_info_ = ExternalCompilationInfo(
                          libraries=['gdbm']
 )
 
-
 datum = GcStruct('datum',('dptr',CCHARP), ('dsize', lltype.Signed))
 err_func = lltype.Ptr(lltype.FuncType([], lltype.Void))
 GDBM_FILE = rffi.COpaquePtr('GDBM_FILE', compilation_info=_compilation_info_)
@@ -32,7 +31,8 @@ class GDBM(Wrappable):
         self.space = space
 
     def gdbm_open(self, name, blocksize, read_write, mode):
-        self.struct_gdbm = open_gdbm(name, blocksize, read_write, mode, 0) 
+        c_name = rffi.str2charp(name)
+        self.struct_gdbm = open_gdbm(c_name, blocksize, read_write, mode, 0) 
 
         if not self.struct_gdbm:
             return False
@@ -45,8 +45,8 @@ class GDBM(Wrappable):
         s.dsize = len(key)
 
         s2 = malloc(datum, zero=True)
-        s.dptr = rffi.str2charp(content)
-        s.dsize = len(content)
+        s2.dptr = rffi.str2charp(content)
+        s2.dsize = len(content)
     
         res_gdbm = store_gdbm(self.struct_gdbm, s, s2, flag)
         return self.space.wrap(res_gdbm)
