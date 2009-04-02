@@ -1,7 +1,7 @@
 import py
 
 # XXX importing/inheriting from an internal py lib class is hackish
-from py.__.doc.confrest import Project, Page, relpath
+from confrest_oldpy import Project, Page, relpath
 html = py.xml.html
 
 class PyPyPage(Page): 
