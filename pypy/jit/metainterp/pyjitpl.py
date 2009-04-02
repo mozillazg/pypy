@@ -13,7 +13,7 @@ from pypy.jit.metainterp.history import (Const, ConstInt, ConstPtr, Box,
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
                                              populate_type_cache)
-from pypy.jit.metainterp import codewriter, optimize, executor
+from pypy.jit.metainterp import codewriter, executor
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 
@@ -705,11 +705,14 @@ class MIFrame(object):
 
 # ____________________________________________________________
 
+class Optimizer(object):
+    pass
 
 class OOMetaInterp(object):
     num_green_args = 0
 
-    def __init__(self, portal_graph, graphs, cpu, stats, options):
+    def __init__(self, portal_graph, graphs, cpu, stats, options,
+                 optimizer=None):
         self.portal_graph = portal_graph
         self.cpu = cpu
         self.stats = stats
@@ -727,6 +730,13 @@ class OOMetaInterp(object):
             self.cpu.class_sizes = None
         self._virtualizabledescs = {}
         self._debug_history = []
+        if optimizer is not None:
+            self.optimize_loop = optimizer.optimize_loop
+            self.optimize_bridge = optimizer.optimize_bridge
+        else:
+            from pypy.jit.metainterp import optimize
+            self.optimize_loop = optimize.optimize_loop
+            self.optimize_bridge = optimize.optimize_bridge
 
     def _recompute_class_sizes(self):
         if self.cpu.class_sizes is None:
