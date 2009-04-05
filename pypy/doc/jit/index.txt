@@ -17,29 +17,7 @@
 Content
 ------------------------------------------------------------
 
-- Overview_: motivating our approach
+As the JIT is in intense development, please follow the
+`documentation from the trunk`__.
 
-- Status_: using a pypy-c with a JIT
-
-- `How-to`_: make your own JIT compilers, with examples for tiny languages
-
-- Theory_: partial evaluation
-
-- How it all works: the Rainbow_ interpreter
-
-- Machine code Backends_
-
-- Current work and prototype in Prolog (!): see `this blog post`__.
-
-*(work and documentation in progress!)*
-
-.. __: http://morepypy.blogspot.com/2008/06/hi-all-some-news-from-jit-front.html
-
-------------------------------------------------------------
-
-.. _Overview: overview.html
-.. _Status: status.html
-.. _`How-to`: howto.html
-.. _Theory: theory.html
-.. _Rainbow: rainbow.html
-.. _Backends: backend.html
+.. __: http://codespeak.net/pypy/trunk/pypy/doc/jit/index.html
