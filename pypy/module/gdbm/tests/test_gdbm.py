@@ -11,13 +11,16 @@ class AppTestGDBM(object):
     def test_gdbm_new(self):
         gdbm = self.gdbm
         d = gdbm.new()
-        assert isinstance(d, gdbm.gdbm) 
+        assert isinstance(d, gdbm.gdbm)
 
     def test_gdbm_store(self):
         gdbm = self.gdbm
         d = gdbm.new()
-        
+
         b = d.open('file2', 60, 2, 0777)
         assert(b, True)
+
         i = d.store("one","aaaa", 0)
         assert (i, 0)
+        c = d.fetch('one')
+        d.close()
