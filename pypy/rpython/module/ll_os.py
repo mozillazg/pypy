@@ -523,7 +523,7 @@ class RegisterOs(BaseLazyRegistering):
     @registering_if(os, 'setpgrp')
     def register_os_setpgrp(self):
         name = 'setpgrp'
-        if sys.platform.startswith('freebsd'):
+        if sys.platform.startswith('freebsd') or sys.platform == 'darwin':
             c_func = self.llexternal(name, [rffi.INT, rffi.INT], rffi.INT)
             def c_func_llimpl():
                 res = rffi.cast(rffi.LONG, c_func(0, 0))
