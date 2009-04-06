@@ -608,6 +608,20 @@ class my_class: pass
         exec prog in ns
         assert ns["record"] == ["one", "two"]
 
+    def test_call(self):
+        prog = """def dec(arg):
+    assert arg == 1
+    def x(cls):
+        cls.testing = True
+        return cls
+    return x
+@dec(1)
+class my_class: pass
+"""
+        ns = {}
+        exec prog in ns
+        assert ns["my_class"].testing
+
     def test_attribute(self):
         prog = """def my_deco(cls):
     cls.testing = True
@@ -621,6 +635,25 @@ class myclass: pass
         ns = {}
         exec prog in ns
         assert ns["myclass"].testing
+
+    def test_invalidness(self):
+        def check(source):
+            try:
+                exec source in {}
+            except SyntaxError:
+                pass
+            else:
+                assert False, "invalid syntax didn't raise"
+
+        prog = """@2
+class my_class: pass
+"""
+        check(prog)
+
+        prog = """@{'hi' : 3}
+class my_class: pass
+"""
+        check(prog)
 
 
 class AppTestSyntaxError:
