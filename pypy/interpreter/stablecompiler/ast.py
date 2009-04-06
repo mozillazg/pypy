@@ -524,19 +524,20 @@ class For(Node):
         return "For(%s, %s, %s, %s)" % (repr(self.assign), repr(self.list), repr(self.body), repr(self.else_))
 
 class From(Node):
-    def __init__(self, modname, names, lineno=None):
+    def __init__(self, modname, names, level, lineno=None):
         self.modname = modname
         self.names = names
+        self.level = level
         self.lineno = lineno
 
     def getChildren(self):
-        return self.modname, self.names
+        return self.modname, self.names, self.level
 
     def getChildNodes(self):
         return ()
 
     def __repr__(self):
-        return "From(%s, %s)" % (repr(self.modname), repr(self.names))
+        return "From(%s, %s, %d)" % (repr(self.modname), repr(self.names), self.level)
 
 class Function(Node):
     def __init__(self, decorators, name, argnames, defaults, flags, doc, code, lineno=None):
