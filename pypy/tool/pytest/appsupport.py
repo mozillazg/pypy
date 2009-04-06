@@ -26,7 +26,10 @@ class AppCode(object):
         try:
             return self.space.str_w(self.w_file).__source__
         except AttributeError:
-            return py.code.Source(self.path.read(mode="rU"))
+            try:
+                return py.code.Source(self.path.read(mode="rU"))
+            except py.error.Error:
+                return "????"
     fullsource = property(fullsource, None, None, "Full source of AppCode")
 
     def getargs(self):
