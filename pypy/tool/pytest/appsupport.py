@@ -29,7 +29,7 @@ class AppCode(object):
             try:
                 return py.code.Source(self.path.read(mode="rU"))
             except py.error.Error:
-                return "????"
+                return None
     fullsource = property(fullsource, None, None, "Full source of AppCode")
 
     def getargs(self):
