@@ -1351,7 +1351,8 @@ class AbstractFunctionCode(CodeGenerator):
     def __init__(self, space, scope, func, isLambda, mod, initialnode=None):
         assert scope is not None
         self.scope = scope
-        self.localsfullyknown = self.scope.locals_fully_known()
+        self.localsfullyknown = self.scope.locals_fully_known() and \
+            not self.scope.has_exec
         self.module = mod
         if isLambda:
             name = "<lambda>"
