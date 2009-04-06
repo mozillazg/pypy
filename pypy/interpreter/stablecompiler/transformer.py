@@ -484,7 +484,7 @@ class Transformer:
         fromname = self.com_dotted_name(nodelist[1])
         if nodelist[3][0] == stable_parser.tokens['STAR']:
             return From(fromname, [('*', None)],
-                        lineno=nodelist[0][2])
+                        0, lineno=nodelist[0][2])
         else:
             if nodelist[3][0] == stable_parser.tokens['LPAR']:
                 node = nodelist[4]
@@ -493,7 +493,7 @@ class Transformer:
                 if node[-1][0] == stable_parser.tokens['COMMA']:
                     self.syntaxerror("trailing comma not allowed without surrounding parentheses", node)
             return From(fromname, self.com_import_as_names(node),
-                        lineno=nodelist[0][2])
+                        0, lineno=nodelist[0][2])
 
     def global_stmt(self, nodelist):
         # global: NAME (',' NAME)*
