@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
+import py
 from pypy.conftest import gettestobjspace
 
 import sys
 
 class AppTestLocaleTrivia:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['_locale'])
+        cls.space = space = gettestobjspace(usemodules=['_locale'])
         if sys.platform != 'win32':
             cls.w_language_en = cls.space.wrap("en_US")
             cls.w_language_utf8 = cls.space.wrap("en_US.UTF-8")
@@ -14,6 +15,19 @@ class AppTestLocaleTrivia:
             cls.w_language_en = cls.space.wrap("English_US")
             cls.w_language_utf8 = cls.space.wrap("English_US.65001")
             cls.w_language_pl = cls.space.wrap("Polish_Poland")
+        import _locale
+        # check whether used locales are installed, otherwise the tests will
+        # fail
+        current = _locale.setlocale(_locale.LC_ALL)
+        try:
+            try:
+                _locale.setlocale(_locale.LC_ALL, space.str_w(cls.w_language_en))
+                _locale.setlocale(_locale.LC_ALL, space.str_w(cls.w_language_utf8))
+                _locale.setlocale(_locale.LC_ALL, space.str_w(cls.w_language_pl))
+            except _locale.Error:
+                py.test.skip("necessary locales not installed")
+        finally:
+            _locale.setlocale(_locale.LC_ALL, current)
 
     def test_import(self):
         import _locale
