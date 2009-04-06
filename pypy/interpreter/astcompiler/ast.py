@@ -2485,7 +2485,7 @@ class From(Node):
 
     def getChildren(self):
         "NOT_RPYTHON"
-        return self.modname, self.names
+        return self.modname, self.names, self.level
 
     def getChildNodes(self):
         return []
@@ -2508,7 +2508,7 @@ class From(Node):
     
 
     def __repr__(self):
-        return "From(%s, %s, %d)" % (self.modname.__repr__(), self.names.__repr__(), self.level)
+        return "From(%s, %s, %s)" % (self.modname.__repr__(), self.names.__repr__(), self.level.__repr__())
 
     def accept(self, visitor):
         return visitor.visitFrom(self)
@@ -2520,8 +2520,12 @@ class From(Node):
         return space.wrap(self.modname)
     def fset_modname( space, self, w_arg):
         self.modname = space.str_w(w_arg)
+    def fget_level( space, self):
+        return space.wrap(self.level)
+    def fset_level( space, self, w_arg):
+        self.level = space.int_w(w_arg)
 
-def descr_From_new(space, w_subtype, w_modname, w_names, lineno=-1):
+def descr_From_new(space, w_subtype, w_modname, w_names, w_level, lineno=-1):
     self = space.allocate_instance(From, w_subtype)
     modname = space.str_w(w_modname)
     self.modname = modname
@@ -2535,6 +2539,7 @@ def descr_From_new(space, w_subtype, w_modname, w_names, lineno=-1):
             as_name = space.str_w(w_as_name)
         names.append((name, as_name))
     self.names = names
+    self.level = space.int_w(w_level)
     self.lineno = lineno
     return space.wrap(self)
 
@@ -2548,11 +2553,12 @@ def descr_From_mutate(space, w_self, w_visitor):
     return space.call_method(w_visitor, "visitFrom", w_self)
 
 From.typedef = TypeDef('From', Node.typedef, 
-                     __new__ = interp2app(descr_From_new, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root, int]),
+                     __new__ = interp2app(descr_From_new, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root, W_Root, int]),
                      accept=interp2app(descr_From_accept, unwrap_spec=[ObjSpace, W_Root, W_Root] ),
                      mutate=interp2app(descr_From_mutate, unwrap_spec=[ObjSpace, W_Root, W_Root] ),
                     modname=GetSetProperty(From.fget_modname, From.fset_modname ),
                     names=GetSetProperty(From.fget_names, From.fset_names ),
+                    level=GetSetProperty(From.fget_level, From.fset_level ),
                     )
 From.typedef.acceptable_as_base_class = False
 
