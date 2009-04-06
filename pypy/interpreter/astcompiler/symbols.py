@@ -440,6 +440,8 @@ class SymbolVisitor(ast.ASTVisitor):
     def visitClass(self, node):
         parent = self.cur_scope()
         parent.add_def(node.name)
+        if node.decorators:
+            node.decorators.accept(self)
         for n in node.bases:
             n.accept(self)
         scope = ClassScope(node.name, parent)

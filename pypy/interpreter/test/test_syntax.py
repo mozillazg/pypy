@@ -578,6 +578,51 @@ if 1:
         """
         exec s
 
+
+class AppTestClassDecorators:
+
+    def test_applied(self):
+        prog = """def my_dec(cls):
+    cls.testing = True
+    return cls
+@my_dec
+class my_class: pass
+"""
+        ns = {}
+        exec prog in ns
+        assert ns["my_class"].testing
+
+    def test_stacked(self):
+        prog = """def one(cls):
+    record.append("one")
+    return cls
+def two(cls):
+    record.append("two")
+    return cls
+record = []
+@two
+@one
+class my_class: pass
+"""
+        ns = {}
+        exec prog in ns
+        assert ns["record"] == ["one", "two"]
+
+    def test_attribute(self):
+        prog = """def my_deco(cls):
+    cls.testing = True
+    return cls
+class fake_mod: pass
+x = fake_mod()
+x.dec = my_deco
+@x.dec
+class myclass: pass
+"""
+        ns = {}
+        exec prog in ns
+        assert ns["myclass"].testing
+
+
 class AppTestSyntaxError:
 
     def test_tokenizer_error_location(self):

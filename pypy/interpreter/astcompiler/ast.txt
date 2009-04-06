@@ -22,7 +22,7 @@ Decorators: nodes!
 AbstractFunction:
 Function(AbstractFunction): decorators&, name*str, argnames!, defaults!, flags*int, w_doc%, code
 Lambda(AbstractFunction): argnames!, defaults!, flags*int, code
-Class: name*str, bases!, w_doc%, code
+Class: decorators&, name*str, bases!, w_doc%, code
 Pass:
 Break:
 Continue:
