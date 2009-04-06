@@ -327,6 +327,12 @@ class CodeGenerator(ast.ASTVisitor):
             self.emitop_int('MAKE_FUNCTION', args)
 
     def visitClass(self, node):
+        if node.decorators:
+            for dec in node.decorators.nodes:
+                dec.accept(self)
+            ndecorators = len(node.decorators.nodes)
+        else:
+            ndecorators = 0
         gen = ClassCodeGenerator(self.space, node,
                                  self.get_module())
         node.code.accept( gen )
@@ -339,6 +345,8 @@ class CodeGenerator(ast.ASTVisitor):
         self._makeClosure(gen, 0)
         self.emitop_int('CALL_FUNCTION', 0)
         self.emit('BUILD_CLASS')
+        for i in range(ndecorators):
+            self.emitop_int('CALL_FUNCTION', 1)
         self.storeName(node.name, node.lineno)
 
     # The rest are standard visitor methods

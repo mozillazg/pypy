@@ -1498,8 +1498,9 @@ CallFunc.typedef = TypeDef('CallFunc', Node.typedef,
 CallFunc.typedef.acceptable_as_base_class = False
 
 class Class(Node):
-    def __init__(self, name, bases, w_doc, code, lineno=-1):
+    def __init__(self, decorators, name, bases, w_doc, code, lineno=-1):
         Node.__init__(self, lineno)
+        self.decorators = decorators
         self.name = name
         self.bases = bases
         self.w_doc = w_doc
@@ -1508,6 +1509,7 @@ class Class(Node):
     def getChildren(self):
         "NOT_RPYTHON"
         children = []
+        children.append(self.decorators)
         children.append(self.name)
         children.extend(flatten(self.bases))
         children.append(self.w_doc)
@@ -1516,21 +1518,32 @@ class Class(Node):
 
     def getChildNodes(self):
         nodelist = []
+        if self.decorators is not None:
+            nodelist.append(self.decorators)
         nodelist.extend(self.bases)
         nodelist.append(self.code)
         return nodelist
 
     def __repr__(self):
-        return "Class(%s, %s, %s, %s)" % (self.name.__repr__(), self.bases.__repr__(), self.w_doc.__repr__(), self.code.__repr__())
+        return "Class(%s, %s, %s, %s, %s)" % (self.decorators.__repr__(), self.name.__repr__(), self.bases.__repr__(), self.w_doc.__repr__(), self.code.__repr__())
 
     def accept(self, visitor):
         return visitor.visitClass(self)
 
     def mutate(self, visitor):
+        if self.decorators is not None:
+            self.decorators = self.decorators.mutate(visitor)
         visitor._mutate_list(self.bases)
         self.code = self.code.mutate(visitor)
         return visitor.visitClass(self)
 
+    def fget_decorators( space, self):
+        if self.decorators is None:
+            return space.w_None
+        else:
+            return space.wrap(self.decorators)
+    def fset_decorators( space, self, w_arg):
+        self.decorators = space.interp_w(Node, w_arg, can_be_None=True)
     def fget_name( space, self):
         return space.wrap(self.name)
     def fset_name( space, self, w_arg):
@@ -1550,8 +1563,10 @@ class Class(Node):
     def fset_code( space, self, w_arg):
         self.code = space.interp_w(Node, w_arg, can_be_None=False)
 
-def descr_Class_new(space, w_subtype, w_name, w_bases, w_w_doc, w_code, lineno=-1):
+def descr_Class_new(space, w_subtype, w_decorators, w_name, w_bases, w_w_doc, w_code, lineno=-1):
     self = space.allocate_instance(Class, w_subtype)
+    decorators = space.interp_w(Node, w_decorators, can_be_None=True)
+    self.decorators = decorators
     name = space.str_w(w_name)
     self.name = name
     bases = [space.interp_w(Node, w_node) for w_node in space.unpackiterable(w_bases)]
@@ -1568,6 +1583,12 @@ def descr_Class_accept( space, w_self, w_visitor):
     return space.call_method(w_visitor, 'visitClass', w_self)
 
 def descr_Class_mutate(space, w_self, w_visitor): 
+    w_decorators = space.getattr(w_self, space.wrap("decorators"))
+    if not space.is_w(w_decorators, space.w_None):
+        space.setattr(w_decorators, space.wrap("parent"), w_self)
+        w_new_decorators = space.call_method(w_decorators, "mutate", w_visitor)
+        space.setattr(w_self, space.wrap("decorators"), w_new_decorators)
+
     w_list = space.getattr(w_self, space.wrap("bases"))
     list_w = space.unpackiterable(w_list)
     newlist_w = []
@@ -1586,9 +1607,10 @@ def descr_Class_mutate(space, w_self, w_visitor):
     return space.call_method(w_visitor, "visitClass", w_self)
 
 Class.typedef = TypeDef('Class', Node.typedef, 
-                     __new__ = interp2app(descr_Class_new, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root, W_Root, W_Root, int]),
+                     __new__ = interp2app(descr_Class_new, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root, W_Root, W_Root, W_Root, int]),
                      accept=interp2app(descr_Class_accept, unwrap_spec=[ObjSpace, W_Root, W_Root] ),
                      mutate=interp2app(descr_Class_mutate, unwrap_spec=[ObjSpace, W_Root, W_Root] ),
+                    decorators=GetSetProperty(Class.fget_decorators, Class.fset_decorators ),
                     name=GetSetProperty(Class.fget_name, Class.fset_name ),
                     bases=GetSetProperty(Class.fget_bases, Class.fset_bases ),
                     w_doc=GetSetProperty(Class.fget_w_doc, Class.fset_w_doc ),

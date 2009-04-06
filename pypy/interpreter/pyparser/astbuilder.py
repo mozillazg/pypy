@@ -588,26 +588,9 @@ def build_decorator(builder, nb):
     builder.push(obj)
 
 def build_funcdef(builder, nb):
-    """funcdef: [decorators] 'def' NAME parameters ':' suite
+    """funcdef: 'def' NAME parameters ':' suite
     """
     atoms = get_atoms(builder, nb)
-    index = 0
-    decorators = []
-    decorator_node = None
-    lineno = atoms[0].lineno
-    # the original loop was:
-    # while not (isinstance(atoms[index], TokenObject) and atoms[index].get_value() == 'def'):
-    #     decorators.append(atoms[index])
-    #     index += 1
-    while index < len(atoms):
-        atom = atoms[index]
-        if isinstance(atom, TokenObject) and atom.get_value() == 'def':
-            break
-        decorators.append(atoms[index])
-        index += 1
-    if decorators:
-        decorator_node = ast.Decorators(decorators, lineno)
-    atoms = atoms[index:]
     funcname = atoms[1]
     lineno = funcname.lineno
     arglist = []
@@ -621,8 +604,17 @@ def build_funcdef(builder, nb):
     arglist = atoms[2]
     code = atoms[-1]
     doc = get_docstring(builder, code)
-    builder.push(ast.Function(decorator_node, funcname, names, default, flags, doc, code, lineno))
+    builder.push(ast.Function(None, funcname, names, default, flags, doc, code, lineno))
 
+def build_decorators(builder, nb):
+    builder.push(ast.Decorators(get_atoms(builder, nb)))
+
+def build_decoratored(builder, nb):
+    """ decoratored: decorators (classdef | funcdef)
+    """
+    decorators, decorated = get_atoms(builder, nb)
+    decorated.decorators = decorators
+    builder.push(decorated)
 
 def build_classdef(builder, nb):
     """classdef: 'class' NAME ['(' [testlist] ')'] ':' suite"""
@@ -649,7 +641,7 @@ def build_classdef(builder, nb):
         else:
             basenames.append(base)
     doc = get_docstring(builder,body)
-    builder.push(ast.Class(classname, basenames, doc, body, lineno))
+    builder.push(ast.Class(None, classname, basenames, doc, body, lineno))
 
 def build_suite(builder, nb):
     """suite: simple_stmt | NEWLINE INDENT stmt+ DEDENT"""
@@ -1061,6 +1053,8 @@ ASTRULES_Template = {
     'arglist' : build_arglist,
     'subscript' : build_subscript,
     'listmaker' : build_listmaker,
+    'decorated' : build_decoratored,
+    'decorators' : build_decorators,
     'funcdef' : build_funcdef,
     'classdef' : build_classdef,
     'return_stmt' : build_return_stmt,
