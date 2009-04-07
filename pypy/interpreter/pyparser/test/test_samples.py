@@ -6,9 +6,9 @@ from pprint import pprint
 
 import py
 
-#def setup_module(mod):
-#    if sys.version > '2.5':
-#        py.test.skip("Fails on top of cpy 2.5 for messy reasons, investigate")
+def setup_module(mod):
+    if sys.version > '2.6':
+        py.test.skip("Fails on top of cpy 2.6 because class decorators changed the ast")
 
 from pypy.interpreter.pyparser.pythonutil import python_parsefile, \
     pypy_parsefile, pypy_parse, python_parse, get_grammar_file, PYTHON_VERSION
