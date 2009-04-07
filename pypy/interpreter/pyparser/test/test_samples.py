@@ -6,9 +6,9 @@ from pprint import pprint
 
 import py
 
-def setup_module(mod):
-    if sys.version > '2.5':
-        py.test.skip("Fails on top of cpy 2.5 for messy reasons, investigate")
+#def setup_module(mod):
+#    if sys.version > '2.5':
+#        py.test.skip("Fails on top of cpy 2.5 for messy reasons, investigate")
 
 from pypy.interpreter.pyparser.pythonutil import python_parsefile, \
     pypy_parsefile, pypy_parse, python_parse, get_grammar_file, PYTHON_VERSION
@@ -31,13 +31,14 @@ SKIP_ALWAYS = [
     "snippet_decorators_2.py",
 ]
 REAL_EXPECTED_OUTPUT = {
-    # for snippets that show bugs of Python's compiler package
     "snippet_transformer_bug.py":
         "Module('This module does nothing', Stmt([Printnl([Const(1)], None)]))",
     "snippet_import_statements.py":
         "Module(None, Stmt([Import([('os', None)]), Import([('os.path', 'osp')]), From('sets', [('Set', None), ('ImmutableSet', None)], 0)]))",
     "snippet_multiline.py":
         "Module(None, Stmt([From('foo', [('bar', None), ('baz', None)], 0), If([(And([Name('True'), Name('False'), Name('True')]), Stmt([Printnl([Const('excellent !')], None)]))], None)]))",
+    "snippet_generator.py":
+        "Module(None, Stmt([Function(None, 'f', ['n'], (), 0, None, Stmt([For(AssName('i', 0), CallFunc(Name('range'), [Name('n')], None, None), Stmt([Yield(Name('n'))]), None)]))]))",
     }
 
 
