@@ -34,6 +34,10 @@ REAL_EXPECTED_OUTPUT = {
     # for snippets that show bugs of Python's compiler package
     "snippet_transformer_bug.py":
         "Module('This module does nothing', Stmt([Printnl([Const(1)], None)]))",
+    "snippet_import_statements.py":
+        "Module(None, Stmt([Import([('os', None)]), Import([('os.path', 'osp')]), From('sets', [('Set', None), ('ImmutableSet', None)], 0)]))",
+    "snippet_multiline.py":
+        "Module(None, Stmt([From('foo', [('bar', None), ('baz', None)], 0), If([(And([Name('True'), Name('False'), Name('True')]), Stmt([Printnl([Const('excellent !')], None)]))], None)]))",
     }
 
 
