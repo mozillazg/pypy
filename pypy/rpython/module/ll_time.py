@@ -138,6 +138,7 @@ class RegisterTime(BaseLazyRegistering):
                 pass
             state = State()
             state.divisor = 0.0
+            state.counter_start = 0
             def time_clock_llimpl():
                 a = lltype.malloc(A, flavor='raw')
                 if state.divisor == 0.0:
