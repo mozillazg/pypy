@@ -135,6 +135,13 @@ def test_rptr_array():
     assert f1(5, 123) == 123
     assert f1(12, "hello") == "hello"
 
+def test_empty_string():
+    A = Array(Char, hints={'nolength': True})
+    p = malloc(A, 1, immortal=True)
+    def f():
+        return p[0]
+    f1 = compile(f, [])
+    assert f1() == '\x00'
 
 def test_runtime_type_info():
     S = GcStruct('s', ('is_actually_s1', Bool))
