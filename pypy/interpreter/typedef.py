@@ -3,7 +3,7 @@
 
 """
 import py
-from pypy.interpreter.gateway import interp2app
+from pypy.interpreter.gateway import interp2app, BuiltinCode
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.baseobjspace import Wrappable, W_Root, ObjSpace, \
     DescrMismatch
@@ -653,6 +653,18 @@ Code.typedef = TypeDef('internal-code',
     co_consts = GetSetProperty(fget_co_consts, cls=Code),
     )
 Code.typedef.acceptable_as_base_class = False
+
+BuiltinCode.typedef = TypeDef('builtin-code',
+    __reduce__   = interp2app(BuiltinCode.descr__reduce__,
+                              unwrap_spec=['self', ObjSpace]),
+    co_name = interp_attrproperty('co_name', cls=BuiltinCode),
+    co_varnames = GetSetProperty(fget_co_varnames, cls=BuiltinCode),
+    co_argcount = GetSetProperty(fget_co_argcount, cls=BuiltinCode),
+    co_flags = GetSetProperty(fget_co_flags, cls=BuiltinCode),
+    co_consts = GetSetProperty(fget_co_consts, cls=BuiltinCode),
+    )
+BuiltinCode.typedef.acceptable_as_base_class = False
+
 
 Frame.typedef = TypeDef('internal-frame',
     f_code = GetSetProperty(Frame.fget_code),

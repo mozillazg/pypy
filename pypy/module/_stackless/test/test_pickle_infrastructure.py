@@ -1,6 +1,23 @@
 from pypy.conftest import gettestobjspace
 from py.test import skip
 
+
+class AppTestPicklePrerequisites(object):
+    def setup_class(cls):
+        space = gettestobjspace(usemodules=('_stackless',))
+        cls.space = space
+
+    def test_pickle_switch_function(object):
+        import _stackless, pickle
+
+        sw = _stackless.coroutine.switch.im_func
+        dump = pickle.dumps(sw)
+        res = pickle.loads(dump)
+
+        # xxx identity preservation for the function would be better
+        assert res.func_code == sw.func_code
+        
+
 class FrameCheck(object):
 
     def __init__(self, name):
@@ -42,8 +59,11 @@ class BaseTestReconstructFrameChain(object):
 
         opmap = space.unwrap(w_opmap)
         cls.CALL_FUNCTION = opmap['CALL_FUNCTION']
-        cls.CALL_FUNCTION_VAR = opmap['CALL_FUNCTION_VAR']        
-        
+        cls.CALL_FUNCTION_VAR = opmap['CALL_FUNCTION_VAR']
+        cls.CALL_METHOD = opmap['CALL_METHOD']
+
+        cls.callmethod = getattr(cls, cls.callmethod_label)
+
     def teardown_class(cls):
         from pypy.rlib import rstack
         rstack.resume_state_create = cls.old_resume_state_create
@@ -115,8 +135,8 @@ def g(x):
         e('dispatch', FrameCheck('g'), gcode, ec)
         e('handle_bytecode', FrameCheck('g'), gcode, ec)
         e('dispatch_call', FrameCheck('g'), gcode,
-          BytecodeCheck(gcode, self.CALL_FUNCTION, 0), ec)
-        e('CALL_FUNCTION', FrameCheck('g'), 0)
+          BytecodeCheck(gcode, self.callmethod, 0), ec)
+        e(self.callmethod_label, FrameCheck('g'), 0)
         e('w_switch', w_co.costate, space)
         e('coroutine_switch', w_co.costate)
         self.end()
@@ -174,8 +194,8 @@ def g(a, b, c, d):
         e('dispatch', FrameCheck('g'), gcode, ec)
         e('handle_bytecode', FrameCheck('g'), gcode, ec)
         e('dispatch_call', FrameCheck('g'), gcode,
-          BytecodeCheck(gcode, self.CALL_FUNCTION, 0), ec)
-        e('CALL_FUNCTION', FrameCheck('g'), 0)
+          BytecodeCheck(gcode, self.callmethod, 0), ec)
+        e(self.callmethod_label, FrameCheck('g'), 0)
         e('w_switch', w_co.costate, space)
         e('coroutine_switch', w_co.costate)
         self.end()        
@@ -239,26 +259,26 @@ class A(object):
         e('dispatch', FrameCheck('f'), fcode, ec)
         e('handle_bytecode', FrameCheck('f'), fcode, ec)
         e('dispatch_call', FrameCheck('f'), fcode,
-          BytecodeCheck(fcode, self.CALL_FUNCTION, 1), ec)
-        e('CALL_FUNCTION', FrameCheck('f'), 1)
+          BytecodeCheck(fcode, self.callmethod, 1), ec)
+        e(self.callmethod_label, FrameCheck('f'), 1)
         # g
         e('execute_frame', FrameCheck('g'), ec)
         e('dispatch', FrameCheck('g'), gcode, ec)
         e('handle_bytecode', FrameCheck('g'), gcode, ec)
         e('dispatch_call', FrameCheck('g'), gcode,
-          BytecodeCheck(gcode, self.CALL_FUNCTION, 0), ec)
-        e('CALL_FUNCTION', FrameCheck('g'), 0)
+          BytecodeCheck(gcode, self.callmethod, 0), ec)
+        e(self.callmethod_label, FrameCheck('g'), 0)
         e('w_switch', w_co.costate, space)
         e('coroutine_switch', w_co.costate)
         self.end()
 
 class TestReconstructFrameChain(BaseTestReconstructFrameChain):
-    pass
+    callmethod_label = 'CALL_FUNCTION'
 
 class TestReconstructFrameChain_CALL_METHOD(BaseTestReconstructFrameChain):
-    OPTIONS = {"objspace.opcodes.CALL_METHOD": True}
+    OPTIONS = {"objspace.opcodes.CALL_METHOD": True,
+               }
 
-    def setup_class(cls):
-        skip("this needs special casing in Function reduce for BuiltinCodes like in Method as first thing")
+    callmethod_label = 'CALL_METHOD'
 
                 

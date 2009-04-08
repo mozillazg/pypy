@@ -405,6 +405,10 @@ class BuiltinCode(eval.Code):
         eval.Code.__init__(self, func.__name__)
         self.docstring = func.__doc__
 
+        # xxx not unique right now
+        self.identifier = "%s-%s-%s" % (func.__module__, func.__name__,
+                                        getattr(self_type, '__name__', '*'))
+
         # unwrap_spec can be passed to interp2app or
         # attached as an attribute to the function.
         # It is a list of types or singleton objects:
@@ -478,6 +482,27 @@ class BuiltinCode(eval.Code):
             else:
                 self.__class__ = globals()['BuiltinCode%d' % arity]
                 setattr(self, 'fastfunc_%d' % arity, fastfunc)
+
+    def descr__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        builtin_code = mod.get('builtin_code')
+        return space.newtuple([builtin_code,
+                               space.newtuple([space.wrap(self.identifier)])])
+
+    # delicate   
+    _all = {'': None}
+
+    def _freeze_(self):
+        # we have been seen by other means so rtyping should not choke
+        # on us
+        BuiltinCode._all[self.identifier] = self
+        return False
+
+    def find(indentifier):
+        return BuiltinCode._all[indentifier]
+    find = staticmethod(find)
 
     def signature(self):
         return self.sig
@@ -757,6 +782,8 @@ class GatewayCache(SpaceCache):
         space = cache.space
         defs = gateway._getdefaults(space) # needs to be implemented by subclass
         code = gateway._code
+        if not space.config.translating: # for tests and py.py
+            code._freeze_()
         fn = Function(space, code, None, defs, forcename = gateway.name)
         if gateway.as_classmethod:
             fn = ClassMethod(space.wrap(fn))
