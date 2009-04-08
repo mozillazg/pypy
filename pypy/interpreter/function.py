@@ -229,7 +229,7 @@ class Function(Wrappable):
         self.space = space
         self.name = space.str_w(w_name)
         self.w_doc = w_doc
-        self.code = space.interp_w(PyCode, w_code)
+        self.code = space.interp_w(Code, w_code)
         self.w_func_globals = w_func_globals
         if w_closure is not space.w_None:
             from pypy.interpreter.nestedscope import Cell

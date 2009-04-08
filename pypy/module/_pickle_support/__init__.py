@@ -20,4 +20,5 @@ class Module(MixedModule):
         'traceback_new' : 'maker.traceback_new',
         'generator_new' : 'maker.generator_new',
         'xrangeiter_new': 'maker.xrangeiter_new',
+        'builtin_code': 'maker.builtin_code'
     }
