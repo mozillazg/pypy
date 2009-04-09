@@ -62,7 +62,6 @@ class AppTestConnectedSSL:
     def setup_method(self, method):
         # https://connect.sigen-ca.si/index-en.html
         ADDR = "connect.sigen-ca.si", 443
-        ADDR = "intranet", 443
 
         self.w_s = self.space.appexec([self.space.wrap(ADDR)], """(ADDR):
             import socket
