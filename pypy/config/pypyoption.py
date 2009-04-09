@@ -28,7 +28,7 @@ working_modules.update(dict.fromkeys(
       "rctime" , "select", "zipimport", "_lsprof",
      "crypt", "signal", "dyngram", "_rawffi", "termios", "zlib",
      "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO",
-     "thread", "itertools", "pyexpat"]
+     "thread", "itertools", "pyexpat", "_ssl"]
 ))
 
 working_oo_modules = default_modules.copy()
@@ -71,6 +71,7 @@ module_import_dependencies = {
     "zlib"      : ["pypy.rlib.rzlib"],
     "bz2"       : ["pypy.module.bz2.interp_bz2"],
     "pyexpat"   : ["pypy.module.pyexpat.interp_pyexpat"],
+    "_ssl"      : ["pypy.module._ssl.interp_ssl"],
     }
 
 def get_module_validator(modname):
