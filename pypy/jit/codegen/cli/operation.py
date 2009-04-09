@@ -38,6 +38,9 @@ class Operation(object):
     def storeExcFlag(self):
         self.gv_excflag().store(self.meth)
 
+    def getname(self):
+        return None
+
 
 class UnaryOp(Operation):
     def __init__(self, meth, gv_x):
@@ -48,6 +51,9 @@ class UnaryOp(Operation):
         self.gv_x.load(self.meth)
 
     def emit(self):
+        name = self.getname()
+        if name is not None:
+            self.meth.il.EmitWriteLine(name)
         self.pushAllArgs()
         self.meth.il.Emit(self.getOpCode())
         self.storeResult()
@@ -66,6 +72,9 @@ class BinaryOp(Operation):
         self.gv_y.load(self.meth)
 
     def emit(self):
+        name = self.getname()
+        if name is not None:
+            self.meth.il.EmitWriteLine(name)
         self.pushAllArgs()
         self.meth.il.Emit(self.getOpCode())
         self.storeResult()
@@ -433,12 +442,18 @@ def renderOp(baseclass, opname, value, out):
         out[opname].restype = globals()[funcname]
 
 
+TRACE_OPERATIONS=False
+
 def renderSimpleOp(baseclass, opname, value, out):
     attrname = opcode2attrname(value)
     source = py.code.Source("""
     class %(opname)s (%(baseclass)s):
         def getOpCode(self):
             return OpCodes.%(attrname)s
+
+        if TRACE_OPERATIONS:
+            def getname(self):
+                return "%(opname)s"
     """ % locals())
     code = source.compile()
     exec code in globals(), out
