@@ -276,24 +276,3 @@ class ExternalCompilationInfo(object):
         d['separate_module_files'] = ()
         d['separate_module_sources'] = ()
         return ExternalCompilationInfo(**d)
-
-def check_under_under_thread():
-    xxx
-    from pypy.tool.udir import udir
-    cfile = py.path.local(autopath.this_dir).join('__thread_test.c')
-    fsource = cfile.open('r')
-    source = fsource.read()
-    fsource.close()
-    cfile = udir.join('__thread_test.c')
-    fsource = cfile.open('w')
-    fsource.write(source)
-    fsource.close()
-    try:
-       exe = build_executable([str(cfile)], ExternalCompilationInfo(),
-                              noerr=True)
-       py.process.cmdexec(exe)
-    except (CompilationError,
-            py.error.Error):
-        return False
-    else:
-        return True
