@@ -19,21 +19,12 @@ _compilation_info_ = ExternalCompilationInfo(
 )
 
 c_source = py.code.Source("""
-     #include <python/Python.h>
      #include <string.h>
 
-     char * fetch(GDBM_FILE name, char *key)
+     char * fetch(GDBM_FILE name, datum key)
      {
-         datum data, d_key;
-
-         d_key.dsize = strlen(key) + 1;
-         d_key.dptr = (char *) malloc(d_key.dsize);
-         if(d_key.dptr == NULL)
-            return NULL;
-         strcpy(d_key.dptr, key);
-
-         data = gdbm_fetch(name, d_key);
-         free(d_key.dptr);
+         datum data;
+         data = gdbm_fetch(name, key);
 
          return data.dptr;
      }
@@ -52,8 +43,8 @@ GDBM_FILE = rffi.COpaquePtr('GDBM_FILE', compilation_info=_compilation_info_)
 
 open_gdbm = rffi.llexternal('gdbm_open', [CCHARP, INT, INT, INT, err_func], GDBM_FILE, compilation_info = _compilation_info_)
 store_gdbm = rffi.llexternal('gdbm_store', [GDBM_FILE, datum, datum, INT], INT, compilation_info = _compilation_info_)
-fetch_gdbm = rffi.llexternal('fetch', [GDBM_FILE, CCHARP], CCHARP, compilation_info = eci)
-close_gdbm = rffi.llexternal('gdbm_close', [GDBM_FILE], Void, compilation_info = _compilation_info_)
+fetch_gdbm = rffi.llexternal('fetch', [GDBM_FILE, datum], CCHARP, compilation_info = eci)
+close_gdbm = rffi.llexternal('gdbm_close', [GDBM_FILE], lltype.Void, compilation_info = _compilation_info_)
 
 class GDBM(Wrappable):
     def __init__(self, space):
@@ -61,7 +52,8 @@ class GDBM(Wrappable):
 
     def gdbm_open(self, name, blocksize, read_write, mode):
         c_name = rffi.str2charp(name)
-        self.struct_gdbm = open_gdbm(c_name, blocksize, read_write, mode, 0)
+        self.struct_gdbm = open_gdbm(name, blocksize, read_write, mode,
+lltype.nullptr(err_func.TO))
 
         if not self.struct_gdbm:
             return False
@@ -82,15 +74,18 @@ class GDBM(Wrappable):
 
     def gdbm_fetch(self, key):
         c_key = rffi.str2charp(key)
+        a = malloc(datum, zero=True)
+        a.dptr = rffi.str2charp(key)
+        a.dsize = len(key)
 
-        res = fetch_gdbm(self.struct_gdbm, c_key)
+        res = fetch_gdbm(self.struct_gdbm, a)
         str_res = rffi.charp2str(res)
         return self.space.wrap(str_res)
 
     def gdbm_close(self):
         close_gdbm(self.struct_gdbm)
 
-def GDBM_new(space, w_subtype, args= ''):
+def GDBM_new(space, w_subtype, initialdata= ''):
     w_gdbm = space.allocate_instance(GDBM, w_subtype)
 
     gdbm = space.interp_w(GDBM, w_gdbm)
@@ -100,9 +95,9 @@ def GDBM_new(space, w_subtype, args= ''):
 
 GDBM.typedef = TypeDef(
      'GDBMType',
-     __new__  = interp2app(GDBM_new, unwrap_spec=[ObjSpace, W_Root]),
+     __new__  = interp2app(GDBM_new, unwrap_spec=[ObjSpace, W_Root, str]),
      open     = interp2app(GDBM.gdbm_open, unwrap_spec=['self', str, int, int, int]),
      store    = interp2app(GDBM.gdbm_store, unwrap_spec=['self', str, str, int]),
      fetch    = interp2app(GDBM.gdbm_fetch, unwrap_spec=['self', str]),
-     close    = interp2app(GDBM.gdbm_open, unwrap_spec=['self'])
+     close    = interp2app(GDBM.gdbm_close, unwrap_spec=['self'])
 )
