@@ -2,6 +2,7 @@
 Character categories and charsets.
 """
 import sys
+from pypy.rlib.rsre._rsre_platform import tolower
 
 # Note: the unicode parts of this module require you to call
 # rsre.set_unicode_db() first, to select one of the modules
@@ -45,9 +46,10 @@ MAXREPEAT = 65535
 
 
 def getlower(char_ord, flags):
-    # XXX no platform-dependent locale support for now
     if flags & SRE_FLAG_UNICODE:
         char_ord = unicodedb.tolower(char_ord)
+    elif flags & SRE_FLAG_LOCALE:
+        return tolower(char_ord)
     else:
         if ord('A') <= char_ord <= ord('Z'):   # ASCII lower
             char_ord += ord('a') - ord('A')
