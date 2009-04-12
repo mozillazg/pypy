@@ -72,7 +72,11 @@ def setup_directory_structure(space):
     # create compiled/x.py and a corresponding pyc file
     p = setuppkg("compiled", x = "x = 84")
     if conftest.option.runappdirect:
-        pass
+        import marshal, stat, struct, os, imp
+        code = py.code.Source(p.join("x.py").read()).compile()
+        s3 = marshal.dumps(code)
+        s2 = struct.pack("i", os.stat(str(p.join("x.py")))[stat.ST_MTIME])
+        p.join("x.pyc").write(imp.get_magic() + s2 + s3)
     else:
         w = space.wrap
         w_modname = w("compiled.x")
