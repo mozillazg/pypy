@@ -311,7 +311,7 @@ class AppTestGetlower:
                 sre_constants.SRE_FLAG_LOCALE)
         except locale.Error:
             # skip test
-            pass
+            skip("unsupported locale de_DE")
 
     def test_getlower_unicode(self):
         import sre_constants
