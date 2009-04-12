@@ -265,7 +265,6 @@ SNIPPETS = [
     'snippet_simple_in_expr.py',
     'snippet_slice.py',
     'snippet_whitespaces.py',
-    'snippet_samples.py',
     'snippet_decorators.py',
     'snippet_decorators_2.py',
     'snippet_listlinenos.py',
