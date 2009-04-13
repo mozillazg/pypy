@@ -159,7 +159,7 @@ class ExternalCompilationInfo(object):
         Return a new ExternalCompilationInfo instance by executing
         the 'llvmconfig' with --cflags, --ldflags and '--libs all' arguments.
         """
-        path = py.path.local.sysfind(execonfigtool)
+        path = py.path.local.sysfind(llvmconfig)
         if not path:
             raise ImportError("cannot find %r" % (execonfigtool,))
             # we raise ImportError to be nice to the pypy.config.pypyoption
