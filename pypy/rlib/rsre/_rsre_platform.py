@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 eci = ExternalCompilationInfo(
-    includes = ['ctypes.h']
+    includes = ['ctype.h']
 )
 
 def external(name, args, result):
