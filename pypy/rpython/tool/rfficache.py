@@ -13,7 +13,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.tool.gcc_cache import build_executable_cache
 
 def ask_gcc(question, add_source=""):
-    includes = ['stdlib.h', 'sys/types.h']
+    includes = ['stdlib.h', 'stdio.h', 'sys/types.h']
     include_string = "\n".join(["#include <%s>" % i for i in includes])
     c_source = py.code.Source('''
     // includes
