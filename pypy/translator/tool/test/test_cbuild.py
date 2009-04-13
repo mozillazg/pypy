@@ -121,9 +121,9 @@ class TestEci:
         llvmconfig = py.path.local.sysfind('llvm-config')
         if not llvmconfig:
             py.test.skip("llvm-config not installed")
-        eci = ExternalCompilationInfo.from_config_tool(
-                '/home/xsx/_usr/llvm/bin/llvm-config',
-                )
+        eci = ExternalCompilationInfo.from_llvm_config()
+        assert 'LLVMCore' in eci.libraries
+        eci = ExternalCompilationInfo.from_llvm_config('llvm-config')
         assert 'LLVMCore' in eci.libraries
 
     def test_from_missing_config_tool(self):
