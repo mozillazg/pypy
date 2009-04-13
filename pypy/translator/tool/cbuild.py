@@ -154,6 +154,25 @@ class ExternalCompilationInfo(object):
         return eci1.merge(eci2)
     from_config_tool = classmethod(from_config_tool)
 
+    def from_llvm_config(cls, llvmconfig='llvm-config'):
+        """
+        Return a new ExternalCompilationInfo instance by executing
+        the 'llvmconfig' with --cflags, --ldflags and '--libs all' arguments.
+        """
+        path = py.path.local.sysfind(execonfigtool)
+        if not path:
+            raise ImportError("cannot find %r" % (execonfigtool,))
+            # we raise ImportError to be nice to the pypy.config.pypyoption
+            # logic of skipping modules depending on non-installed libs
+        cflags = py.process.cmdexec('"%s" --cflags' % (str(path),))
+        eci1 = cls.from_compiler_flags(cflags)
+        libs = py.process.cmdexec('"%s" --ldflags' % (str(path),))
+        eci2 = cls.from_linker_flags(libs)
+        libs = py.process.cmdexec('"%s" --libs all' % (str(path),))
+        eci3 = cls.from_linker_flags(libs)
+        return eci1.merge(eci2.merge(eci3))
+    from_llvm_config = classmethod(from_llvm_config)
+
     def _value(self):
         return tuple([getattr(self, x) for x in self._ATTRIBUTES]
                      + [self.platform])

@@ -117,6 +117,15 @@ class TestEci:
         eci = ExternalCompilationInfo.from_config_tool('sdl-config')
         assert 'SDL' in eci.libraries
 
+    def test_from_config_tool_llvm(self):
+        llvmconfig = py.path.local.sysfind('llvm-config')
+        if not llvmconfig:
+            py.test.skip("llvm-config not installed")
+        eci = ExternalCompilationInfo.from_config_tool(
+                '/home/xsx/_usr/llvm/bin/llvm-config',
+                )
+        assert 'LLVMCore' in eci.libraries
+
     def test_from_missing_config_tool(self):
         py.test.raises(ImportError,
                        ExternalCompilationInfo.from_config_tool,
