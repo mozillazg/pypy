@@ -97,10 +97,10 @@ def eval_helper(self, typename, expr):
         'def %s(expr):\n'
         '    dic = space.newdict()\n'
         '    if "types." in expr:\n'
-        '        space.exec_("import types", dic, dic)\n'
+        '        space.exec_("import types", dic, dic, hidden_applevel=True)\n'
         '    else:\n'
-        '        space.exec_("", dic, dic)\n'
-        '    return space.eval(expr, dic, dic)' % (unique, ))
+        '        space.exec_("", dic, dic, hidden_applevel=True)\n'
+        '    return space.eval(expr, dic, dic, hidden_applevel=True)' % (unique, ))
     self.initcode.append1('%s = %s(%r)' % (name, unique, expr))
     return name
 
@@ -109,8 +109,8 @@ def unpickle_helper(self, name, value):
     self.initcode.append1(
         'def %s(value):\n'
         '    dic = space.newdict()\n'
-        '    space.exec_("import cPickle as pickle", dic, dic)\n'
-        '    return space.eval("pickle.loads(%%r)" %% value, dic, dic)' % unique)
+        '    space.exec_("import cPickle as pickle", dic, dic, hidden_applevel=True)\n'
+        '    return space.eval("pickle.loads(%%r)" %% value, dic, dic, hidden_applevel=True)' % unique)
     self.initcode.append1('%s = %s(%r)' % (
         name, unique, pickle.dumps(value, 2)) )
 
@@ -120,8 +120,8 @@ def long_helper(self, name, value):
     self.initcode.append1(
         'def %s(value):\n'
         '    dic = space.newdict()\n'
-        '    space.exec_("", dic, dic) # init __builtins__\n'
-        '    return space.eval(value, dic, dic)' % unique)
+        '    space.exec_("", dic, dic, hidden_applevel=True) # init __builtins__\n'
+        '    return space.eval(value, dic, dic, hidden_applevel=True)' % unique)
     self.initcode.append1('%s = %s(%r)' % (
         name, unique, repr(value) ) )
 
@@ -131,8 +131,8 @@ def bltinmod_helper(self, mod):
     self.initcode.append1(
         'def %s(name):\n'
         '    dic = space.newdict()\n'
-        '    space.exec_("import %%s" %% name, dic, dic)\n'
-        '    return space.eval("%%s" %% name, dic, dic)' % (unique, ))
+        '    space.exec_("import %%s" %% name, dic, dic, hidden_applevel=True)\n'
+        '    return space.eval("%%s" %% name, dic, dic, hidden_applevel=True)' % (unique, ))
     self.initcode.append1('%s = %s(%r)' % (name, unique, mod.__name__))
     return name
 
@@ -983,7 +983,7 @@ else:
         globname = self.nameof(self.moddict)
         self.initcode.append('space.setitem(%s, space.new_interned_str("__builtins__"), '
                              'space.builtin.w_dict)' % globname)
-        self.initcode.append('%s = space.eval("property(%s)", %s, %s)' %(
+        self.initcode.append('%s = space.eval("property(%s)", %s, %s. hidden_applevel=True)' %(
             name, origin, globname, globname) )
         self.initcode.append('space.delitem(%s, space.new_interned_str("__builtins__"))'
                              % globname)
