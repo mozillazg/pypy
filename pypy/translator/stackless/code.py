@@ -1,3 +1,4 @@
+import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib import rarithmetic
@@ -285,6 +286,14 @@ for _lltype, typename in STORAGE_TYPES_AND_FIELDS:
 
 # ____________________________________________________________
 
+def ll_get_stack_depth_limit():
+    return global_state.stack_depth_limit
+
+def ll_set_stack_depth_limit(limit):
+    global_state.stack_depth_limit = limit
+
+# ____________________________________________________________
+
 class StacklessData:
     def __init__(self):
         self.top = frame.null_state
@@ -297,6 +306,7 @@ class StacklessData:
         self.exception = None
         self.masterarray = lltype.malloc(frame.FRAME_INFO_ARRAY, 0,
                                          immortal=True)
+        self.stack_depth_limit = sys.maxint
 
 global_state = StacklessData()
 
@@ -360,33 +370,42 @@ def slp_main_loop(depth):
     """
     slp_main_loop() keeps resuming...
     """
-    pending = global_state.top
-    pending.f_depth = depth        # this starts after the first Unwind
-    
     while True:
-        prevdepth = pending.f_depth - 1
-        back = pending.f_back
-        decoded = frame.decodestate(pending.f_restart)
-        (fn, global_state.restart_substate, signature_index) = decoded
-        try:
-            call_function(fn, signature_index)
-        except UnwindException, u:   #XXX annotation support needed
-            u.frame_bottom.f_back = back
-            pending = global_state.top
-            pending.f_depth = prevdepth + u.depth
-            continue
-        except SwitchException:
-            pending = global_state.top
-            continue
-        except Exception, e:
-            if not back:
-                raise
+        pending = global_state.top
+        pending.f_depth = depth        # this starts after the first Unwind
+        if pending.f_depth > global_state.stack_depth_limit:
+            # uncommon case: exceed the limit
+            pending = pending.f_back
+            pending.f_depth = depth - 1
+            e = RuntimeError()
+            if not pending:
+                raise e
             global_state.exception = e
-        else:
-            if not back:
-                return
-        global_state.top = pending = back
-        pending.f_depth = prevdepth
+            global_state.top = pending
+
+        while True:
+            prevdepth = pending.f_depth - 1
+            back = pending.f_back
+            decoded = frame.decodestate(pending.f_restart)
+            (fn, global_state.restart_substate, signature_index) = decoded
+            try:
+                call_function(fn, signature_index)
+            except UnwindException, u:   #XXX annotation support needed
+                u.frame_bottom.f_back = back
+                depth = prevdepth + u.depth
+                break
+            except SwitchException:
+                pending = global_state.top
+                continue
+            except Exception, e:
+                if not back:
+                    raise
+                global_state.exception = e
+            else:
+                if not back:
+                    return
+            global_state.top = pending = back
+            pending.f_depth = prevdepth
 
 slp_main_loop.stackless_explicit = True
 
