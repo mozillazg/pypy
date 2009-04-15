@@ -35,10 +35,11 @@ def ll_frame_switch(targetstate):
         sourcestate = lltype.malloc(EMPTY_STATE).header
         sourcestate.f_back = mystate.f_back
         sourcestate.f_restart = INDEX_SWITCH + 1
+        sourcestate.f_depth = mystate.f_depth
         global_state.top = targetstate
         global_state.retval_ref = lltype.cast_opaque_ptr(SAVED_REFERENCE,
                                                          sourcestate)
-        raise UnwindException()   # this jumps to targetstate
+        raise SwitchException()   # this jumps to targetstate
     else:
         # STATE 1: switching back into a tasklet suspended by
         # a call to switch()
@@ -71,15 +72,17 @@ def yield_current_frame_to_caller():
         ycftc_state = global_state.top
         our_caller_state = ycftc_state.f_back
         caller_state = our_caller_state.f_back
+        caller_state.f_depth = ycftc_state.f_depth - 2
         # when our immediate caller finishes (which is later, when the
         # tasklet finishes), then we will jump to 'STATE 1' below
         endstate = lltype.malloc(EMPTY_STATE).header
         endstate.f_restart = INDEX_YCFTC + 1
         our_caller_state.f_back = endstate
+        our_caller_state.f_depth = 1
         global_state.top = caller_state
         global_state.retval_ref = lltype.cast_opaque_ptr(SAVED_REFERENCE,
                                                          our_caller_state)
-        raise UnwindException()  # this goes to the caller's caller
+        raise SwitchException()  # this goes to the caller's caller
 
     elif global_state.restart_substate == 1:
         # STATE 1: this is a slight abuse of yield_current_frame_to_caller(),
@@ -91,7 +94,7 @@ def yield_current_frame_to_caller():
         # return a NULL state pointer to the target of the implicit switch
         global_state.top = next_state
         global_state.retval_ref = frame.null_saved_ref
-        raise UnwindException()  # this goes to the switch target given by
+        raise SwitchException()  # this goes to the switch target given by
                                  # the 'return' at the end of our caller
 
     else:
@@ -123,11 +126,7 @@ def stack_frames_depth():
         cur = global_state.top
         global_state.top = frame.null_state
         global_state.restart_substate = -1
-        depth = 0
-        while cur:
-            depth += 1
-            cur = cur.f_back
-        return depth
+        return cur.f_depth
 stack_frames_depth.stackless_explicit = True
 
 INDEX_DEPTH = frame.RestartInfo.add_prebuilt(stack_frames_depth,
@@ -205,7 +204,7 @@ def resume_after_void(state, retvalue):
              resume_bottom = resume_bottom.f_back
         resume_bottom.f_back = mystate.f_back
         global_state.top = targetstate
-        raise UnwindException()
+        raise SwitchException()
 
 resume_after_void.stackless_explicit = True
 INDEX_RESUME_AFTER_VOID = frame.RestartInfo.add_prebuilt(resume_after_void,
@@ -238,7 +237,7 @@ def resume_after_raising(state, exception):
              resume_bottom = resume_bottom.f_back
         resume_bottom.f_back = mystate.f_back
         global_state.top = targetstate
-        raise UnwindException()
+        raise SwitchException()
 
 resume_after_raising.stackless_explicit = True
 INDEX_RESUME_AFTER_RAISING = frame.RestartInfo.add_prebuilt(resume_after_raising,
@@ -271,7 +270,7 @@ def resume_after_%(typename)s(state, retvalue):
              resume_bottom = resume_bottom.f_back
         resume_bottom.f_back = mystate.f_back
         global_state.top = targetstate
-        raise UnwindException()
+        raise SwitchException()
 
 
 resume_after_%(typename)s.stackless_explicit = True
@@ -351,23 +350,32 @@ class UnwindException(lloperation.StackException):
         # UnwindException first, to empty the C stack, and then issues a
         # (XXX complete this comment)
         self.frame_bottom = frame.null_state
+        self.depth = 0
     __init__.stackless_explicit = True
 
-def slp_main_loop():
+class SwitchException(lloperation.StackException):
+    pass
+
+def slp_main_loop(depth):
     """
     slp_main_loop() keeps resuming...
     """
     pending = global_state.top
+    pending.f_depth = depth        # this starts after the first Unwind
     
     while True:
+        prevdepth = pending.f_depth - 1
         back = pending.f_back
         decoded = frame.decodestate(pending.f_restart)
         (fn, global_state.restart_substate, signature_index) = decoded
         try:
             call_function(fn, signature_index)
         except UnwindException, u:   #XXX annotation support needed
-            if u.frame_bottom:
-                u.frame_bottom.f_back = back
+            u.frame_bottom.f_back = back
+            pending = global_state.top
+            pending.f_depth = prevdepth + u.depth
+            continue
+        except SwitchException:
             pending = global_state.top
             continue
         except Exception, e:
@@ -378,6 +386,7 @@ def slp_main_loop():
             if not back:
                 return
         global_state.top = pending = back
+        pending.f_depth = prevdepth
 
 slp_main_loop.stackless_explicit = True
 
@@ -387,6 +396,7 @@ def add_frame_state(u, frame_state):
     else:
         u.frame_bottom.f_back = frame_state
         u.frame_bottom = frame_state
+    u.depth += 1
 add_frame_state.stackless_explicit = True
 
 def fetch_retval_void():
