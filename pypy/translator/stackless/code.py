@@ -310,7 +310,7 @@ class StacklessData:
         self.exception = None
         self.masterarray = lltype.malloc(frame.FRAME_INFO_ARRAY, 0,
                                          immortal=True)
-        self.stack_depth_limit = sys.maxint
+        self.stack_depth_limit = 100000    # default limit
 
 global_state = StacklessData()
 
