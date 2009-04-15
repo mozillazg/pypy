@@ -1234,7 +1234,8 @@ class RegisterOs(BaseLazyRegistering):
         eci = self.gcc_profiling_bug_workaround('pid_t _noprof_fork(void)',
                                                 'return fork();')
         os_fork = self.llexternal('_noprof_fork', [], rffi.PID_T,
-                                  compilation_info = eci)
+                                  compilation_info = eci,
+                                  threadsafe = False)
 
         def fork_llimpl():
             childpid = rffi.cast(lltype.Signed, os_fork())
