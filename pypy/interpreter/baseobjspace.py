@@ -840,14 +840,15 @@ class ObjSpace(object):
         # module when it is loaded.
         return self.type(w_obj)
 
-    def eval(self, expression, w_globals, w_locals):
+    def eval(self, expression, w_globals, w_locals, hidden_applevel=False):
         "NOT_RPYTHON: For internal debugging."
         import types
         from pypy.interpreter.pycode import PyCode
         if isinstance(expression, str):
             expression = compile(expression, '?', 'eval')
         if isinstance(expression, types.CodeType):
-            expression = PyCode._from_code(self, expression)
+            expression = PyCode._from_code(self, expression,
+                                          hidden_applevel=hidden_applevel)
         if not isinstance(expression, PyCode):
             raise TypeError, 'space.eval(): expected a string, code or PyCode object'
         return expression.exec_code(self, w_globals, w_locals)
