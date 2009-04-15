@@ -15,7 +15,7 @@ class AppTestPicklePrerequisites(object):
         res = pickle.loads(dump)
 
         # xxx identity preservation for the function would be better
-        assert res.func_code == sw.func_code
+        assert res.func_code is sw.func_code
         
 
 class FrameCheck(object):
