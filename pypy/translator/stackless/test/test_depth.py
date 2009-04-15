@@ -180,7 +180,6 @@ def test_depth_along_yield_frame():
 
 def test_get_set_stack_depth_limit():
     def f():
-        assert rstack.get_stack_depth_limit() == sys.maxint
         rstack.set_stack_depth_limit(12321)
         return rstack.get_stack_depth_limit()
     data = llinterp_stackless_function(f, assert_unwind=False)
