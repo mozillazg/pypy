@@ -495,6 +495,9 @@ class BuiltinCode(eval.Code):
     _all = {'': None}
 
     def _freeze_(self):
+        if BuiltinCode._all.get(self.identifier, self) is not self:
+            print "builtin code identifier %s used twice: %s and %s" % (
+                self.identifier, self, BuiltinCode._all[self.identifier])
         # we have been seen by other means so rtyping should not choke
         # on us
         BuiltinCode._all[self.identifier] = self
@@ -727,11 +730,13 @@ class interp2app(Wrappable):
     # Takes optionally an unwrap_spec, see BuiltinCode
 
     NOT_RPYTHON_ATTRIBUTES = ['_staticdefs']
+
+    instancecache = {}
     
-    def __init__(self, f, app_name=None, unwrap_spec = None,
-                 descrmismatch=None, as_classmethod=False):
+    def __new__(cls, f, app_name=None, unwrap_spec = None,
+                descrmismatch=None, as_classmethod=False):
+
         "NOT_RPYTHON"
-        Wrappable.__init__(self)
         # f must be a function whose name does NOT start with 'app_'
         self_type = None
         if hasattr(f, 'im_func'):
@@ -744,6 +749,18 @@ class interp2app(Wrappable):
                 raise ValueError, ("function name %r suspiciously starts "
                                    "with 'app_'" % f.func_name)
             app_name = f.func_name
+
+        if unwrap_spec is not None:
+            unwrap_spec_key = tuple(unwrap_spec)
+        else:
+            unwrap_spec_key = None
+        key = (f, unwrap_spec_key, descrmismatch, as_classmethod)
+        if key in cls.instancecache:
+            result = cls.instancecache[key]
+            assert result.__class__ is cls
+            return result
+        self = Wrappable.__new__(cls)
+        cls.instancecache[key] = self
         self._code = BuiltinCode(f, unwrap_spec=unwrap_spec,
                                  self_type = self_type,
                                  descrmismatch=descrmismatch)
@@ -751,6 +768,7 @@ class interp2app(Wrappable):
         self.name = app_name
         self.as_classmethod = as_classmethod
         self._staticdefs = list(f.func_defaults or ())
+        return self
 
     def _getdefaults(self, space):
         "NOT_RPYTHON"

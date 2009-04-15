@@ -752,7 +752,7 @@ getset_func_name = GetSetProperty(Function.fget_func_name,
 getset_func_dict = GetSetProperty(descr_get_dict, descr_set_dict, cls=Function)
 
 Function.typedef = TypeDef("function",
-    __new__ = interp2app(Function.descr_method__new__.im_func),
+    __new__ = interp2app(Function.descr_function__new__.im_func),
     __call__ = interp2app(Function.descr_function_call,
                           unwrap_spec=['self', Arguments],
                           descrmismatch='__call__'),
@@ -843,7 +843,7 @@ def always_none(self, obj):
     return None
 BuiltinFunction.typedef = TypeDef("builtin_function",**Function.typedef.rawdict)
 BuiltinFunction.typedef.rawdict.update({
-    '__new__': interp2app(BuiltinFunction.descr_method__new__.im_func),
+    '__new__': interp2app(BuiltinFunction.descr_builtinfunction__new__.im_func),
     '__self__': GetSetProperty(always_none, cls=BuiltinFunction),
     '__repr__': interp2app(BuiltinFunction.descr_function_repr),
     })
