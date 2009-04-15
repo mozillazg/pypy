@@ -17,6 +17,8 @@ class BaseAppTestPicklePrerequisites(object):
 
         # xxx identity preservation for the function would be better
         assert res.func_code is sw.func_code
+        assert res.func_doc is sw.func_doc
+        assert res.func_globals is sw.func_globals
         
 class AppTestPicklePrerequisites(BaseAppTestPicklePrerequisites):
     pass
