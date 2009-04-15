@@ -215,6 +215,8 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
             if after:
                 after()
             # from now on we hold the GIL
+            if aroundstate is not None:
+                aroundstate.callback_counter += 1
             try:
                 result = callable(%s)
             except Exception, e:
@@ -225,6 +227,8 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
                     import traceback
                     traceback.print_exc()
                 result = errorcode
+            if aroundstate is not None:
+                aroundstate.callback_counter -= 1
             if before:
                 before()
             # here we don't hold the GIL any more. As in the wrapper() produced
@@ -245,6 +249,7 @@ class AroundState:
     def _freeze_(self):
         self.before = None    # or a regular RPython function
         self.after = None     # or a regular RPython function
+        self.callback_counter = 0
         return False
 aroundstate = AroundState()
 aroundstate._freeze_()
