@@ -2,9 +2,10 @@ from pypy.conftest import gettestobjspace
 from py.test import skip
 
 
-class AppTestPicklePrerequisites(object):
+class BaseAppTestPicklePrerequisites(object):
+    OPTIONS = {}
     def setup_class(cls):
-        space = gettestobjspace(usemodules=('_stackless',))
+        space = gettestobjspace(usemodules=('_stackless',), **cls.OPTIONS)
         cls.space = space
 
     def test_pickle_switch_function(object):
@@ -17,6 +18,11 @@ class AppTestPicklePrerequisites(object):
         # xxx identity preservation for the function would be better
         assert res.func_code is sw.func_code
         
+class AppTestPicklePrerequisites(BaseAppTestPicklePrerequisites):
+    pass
+
+class AppTestPicklePrerequisitesBuiltinShortcut(BaseAppTestPicklePrerequisites):
+    OPTIONS = {"builtinshortcut": True}
 
 class FrameCheck(object):
 
