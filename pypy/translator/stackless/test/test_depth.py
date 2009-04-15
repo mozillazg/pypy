@@ -2,7 +2,7 @@ from pypy.translator.stackless.test.test_transform import \
      llinterp_stackless_function, run_stackless_function
 from pypy.rlib import rstack
 import py
-import os
+import os, sys
 
 
 def test_simple():
@@ -177,3 +177,36 @@ def test_depth_along_yield_frame():
 
     res = run_stackless_function(entrypoint)
     assert res == 7874837
+
+def test_get_set_stack_depth_limit():
+    def f():
+        assert rstack.get_stack_depth_limit() == sys.maxint
+        rstack.set_stack_depth_limit(12321)
+        return rstack.get_stack_depth_limit()
+    data = llinterp_stackless_function(f, assert_unwind=False)
+    assert data == 12321
+
+def test_stack_limit():
+    def g():
+        return rstack.stack_frames_depth()
+    def f():
+        rstack.set_stack_depth_limit(1)
+        try:
+            return g()
+        except RuntimeError:
+            return -123
+    data = llinterp_stackless_function(f)
+    assert data == -123
+
+def test_stack_limit_2():
+    def g():
+        return rstack.stack_frames_depth()
+    def f():
+        rstack.stack_frames_depth()
+        rstack.set_stack_depth_limit(1)
+        try:
+            return g()
+        except RuntimeError:
+            return -123
+    data = llinterp_stackless_function(f)
+    assert data == -123

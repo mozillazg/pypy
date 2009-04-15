@@ -250,7 +250,8 @@ class StacklessAnalyzer(graphanalyze.GraphAnalyzer):
     def operation_is_true(self, op):
         if op.opname in ('yield_current_frame_to_caller', 'resume_point',
                 'resume_state_invoke', 'resume_state_create', 'stack_frames_depth',
-                'stack_switch', 'stack_unwind', 'stack_capture'):
+                'stack_switch', 'stack_unwind', 'stack_capture',
+                'get_stack_depth_limit', 'set_stack_depth_limit'):
             return True
         if self.stackless_gc:
             if op.opname in ('malloc', 'malloc_varsize'):
@@ -379,6 +380,11 @@ class StacklessTransformer(object):
                     code.ll_stack_unwind, [], annmodel.s_None),
                 'stack_capture': mixlevelannotator.constfunc(
                     code.ll_stack_capture, [], s_StatePtr),
+                'get_stack_depth_limit': mixlevelannotator.constfunc(
+                    code.ll_get_stack_depth_limit, [], annmodel.SomeInteger()),
+                'set_stack_depth_limit': mixlevelannotator.constfunc(
+                    code.ll_set_stack_depth_limit, [annmodel.SomeInteger()],
+                    annmodel.s_None),
         }
 
 
