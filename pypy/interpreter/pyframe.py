@@ -109,6 +109,7 @@ class PyFrame(eval.Frame):
         assert isinstance(self, self.space.FrameClass)
         executioncontext = self.space.getexecutioncontext()
         executioncontext.enter(self)
+        w_exitvalue = self.space.w_None
         try:
             executioncontext.call_trace(self)
             # Execution starts just after the last_instr.  Initially,
@@ -118,12 +119,14 @@ class PyFrame(eval.Frame):
             w_exitvalue = self.dispatch(self.pycode, next_instr,
                                         executioncontext)
             rstack.resume_point("execute_frame", self, executioncontext, returns=w_exitvalue)
-            executioncontext.return_trace(self, w_exitvalue)
             # on exit, we try to release self.last_exception -- breaks an
             # obvious reference cycle, so it helps refcounting implementations
             self.last_exception = None
         finally:
-            executioncontext.leave(self)
+            try:
+                executioncontext.return_trace(self, w_exitvalue)
+            finally:
+                executioncontext.leave(self)
         return w_exitvalue
     execute_frame.insert_stack_check_here = True
 
