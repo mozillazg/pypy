@@ -1,4 +1,4 @@
-from pypy.conftest import gettestobjspace
+from pypy.conftest import gettestobjspace, option
 from py.test import skip
 
 
@@ -115,3 +115,24 @@ class AppTest_Coroutine:
             pass
         co.bind(f)
         raises(ValueError, co.bind, f)
+
+
+class AppTestDirect:
+    def setup_class(cls):
+        if not option.runappdirect:
+            skip('pure appdirect test (run with -A)')
+        cls.space = gettestobjspace(usemodules=('_stackless',))
+
+    def test_stack_depth_limit(self):
+        import _stackless as stackless
+        assert stackless.get_stack_depth_limit() == sys.maxint    # for now
+        stackless.set_stack_depth_limit(1)
+        assert stackless.get_stack_depth_limit() == 1
+        try:
+            co = stackless.coroutine()
+            def f():
+                pass
+            co.bind(f)
+            co.switch()
+        except RuntimeError:
+            pass
