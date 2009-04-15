@@ -1,7 +1,11 @@
+import py, sys
 from pypy.conftest import gettestobjspace
 
 class AppTestFork(object):
     def setup_class(cls):
+        if sys.platform == 'win32':
+            py.test.skip("No fork on Windows")
+
         space = gettestobjspace(usemodules=('thread', 'time'))
         cls.space = space
 
