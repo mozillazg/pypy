@@ -167,6 +167,8 @@ class TestStandalone(object):
         assert int(out) == 500*501/2
 
     def test_profopt_mac_osx_bug(self):
+        if sys.platform == 'win32':
+            py.test.skip("no profopt on win32")
         def entry_point(argv):
             import os
             pid = os.fork()
