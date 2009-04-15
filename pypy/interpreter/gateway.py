@@ -405,7 +405,6 @@ class BuiltinCode(eval.Code):
         eval.Code.__init__(self, func.__name__)
         self.docstring = func.__doc__
 
-        # xxx not unique right now
         self.identifier = "%s-%s-%s" % (func.__module__, func.__name__,
                                         getattr(self_type, '__name__', '*'))
 
