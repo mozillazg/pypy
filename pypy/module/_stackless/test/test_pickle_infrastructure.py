@@ -24,7 +24,7 @@ class AppTestPicklePrerequisites(BaseAppTestPicklePrerequisites):
     pass
 
 class AppTestPicklePrerequisitesBuiltinShortcut(BaseAppTestPicklePrerequisites):
-    OPTIONS = {"builtinshortcut": True}
+    OPTIONS = {"objspace.std.builtinshortcut": True}
 
 class FrameCheck(object):
 
