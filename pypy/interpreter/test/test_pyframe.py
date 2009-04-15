@@ -140,6 +140,49 @@ class AppTestPyFrame:
         assert len(l) == 1
         assert isinstance(l[0][1], Exception)
 
+    def test_trace_return_exc(self):
+        import sys
+        l = []
+        def trace(a,b,c): 
+            if b in ('exception', 'return'):
+                l.append((b, c))
+            return trace
+
+        def g():
+            raise Exception            
+        def f():
+            try:
+                g()
+            except:
+                pass
+        sys.settrace(trace)
+        f()
+        sys.settrace(None)
+        assert len(l) == 4
+        assert l[0][0] == 'exception'
+        assert isinstance(l[0][1][1], Exception)
+        assert l[1] == ('return', None)
+        assert l[2][0] == 'exception'
+        assert isinstance(l[2][1][1], Exception)
+        assert l[3] == ('return', None)
+
+    def test_trace_raises_on_return(self):
+        import sys
+        def trace(frame, event, arg):
+            if event == 'return':
+                raise ValueError
+            else:
+                return trace
+
+        def f(): return 1
+
+        for i in xrange(sys.getrecursionlimit() + 1):
+            sys.settrace(trace)
+            try:
+                f()
+            except ValueError:
+                pass
+
     def test_dont_trace_on_reraise(self):
         import sys
         l = []
