@@ -1,11 +1,15 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rlib import rarithmetic
+from pypy.rlib import rarithmetic, objectmodel
 from pypy.translator.stackless import frame
 from pypy.translator.stackless.frame import STATE_HEADER, SAVED_REFERENCE, STORAGE_TYPES_AND_FIELDS
 
 EMPTY_STATE = frame.make_state_header_type('empty_state')
+
+def check_can_raise_unwind():
+    if objectmodel.is_in_callback():
+        raise RuntimeError
 
 # ____________________________________________________________
 
@@ -359,6 +363,7 @@ class UnwindException(lloperation.StackException):
         # To switch manually to a different frame, code issues a regular
         # UnwindException first, to empty the C stack, and then issues a
         # (XXX complete this comment)
+        check_can_raise_unwind()
         self.frame_bottom = frame.null_state
         self.depth = 0
     __init__.stackless_explicit = True

@@ -219,6 +219,10 @@ def invoke_around_extcall(before, after):
     llhelper(rffi.AroundFnPtr, before)
     llhelper(rffi.AroundFnPtr, after)
 
+def is_in_callback():
+    from pypy.rpython.lltypesystem import rffi
+    return rffi.aroundstate.callback_counter > 0
+
 
 class UnboxedValue(object):
     """A mixin class to use for classes that have exactly one field which
