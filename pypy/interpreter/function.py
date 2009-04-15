@@ -155,7 +155,7 @@ class Function(Wrappable):
 
     # unwrapping is done through unwrap_specs in typedef.py
 
-    def descr_method__new__(space, w_subtype, w_code, w_globals, 
+    def descr_function__new__(space, w_subtype, w_code, w_globals, 
                             w_name=None, w_argdefs=None, w_closure=None):
         code = space.interp_w(Code, w_code)
         if not space.is_true(space.isinstance(w_globals, space.w_dict)):
@@ -532,7 +532,7 @@ class BuiltinFunction(Function):
         self.w_func_dict = func.w_func_dict
         self.w_module = func.w_module
 
-    def descr_method__new__(space, w_subtype, w_func):
+    def descr_builtinfunction__new__(space, w_subtype, w_func):
         func = space.interp_w(Function, w_func)
         bltin = space.allocate_instance(BuiltinFunction, w_subtype)
         BuiltinFunction.__init__(bltin, func)

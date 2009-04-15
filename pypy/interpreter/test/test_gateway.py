@@ -161,6 +161,8 @@ class TestGateway:
         def g(space, b):
             return space.wrap(b)
         app_g = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, bool])
+        app_g2 = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, bool])
+        assert app_g is app_g2
         w_app_g = space.wrap(app_g)
         assert self.space.eq_w(space.call_function(w_app_g, space.wrap(True)),
                                space.wrap(True))
@@ -172,6 +174,9 @@ class TestGateway:
             return space.wrap(x * 6)
         app_g = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace,
                                                    'nonnegint'])
+        app_g2 = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace,
+                                                   'nonnegint'])
+        assert app_g is app_g2
         w_app_g = space.wrap(app_g)
         assert self.space.eq_w(space.call_function(w_app_g, space.wrap(7)),
                                space.wrap(42))
