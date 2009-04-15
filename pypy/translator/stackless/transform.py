@@ -243,9 +243,8 @@ class FrameTyper:
 
 
 class StacklessAnalyzer(graphanalyze.GraphAnalyzer):
-    def __init__(self, translator, unwindtype, stackless_gc):
+    def __init__(self, translator, stackless_gc):
         graphanalyze.GraphAnalyzer.__init__(self, translator)
-        self.unwindtype = unwindtype
         self.stackless_gc = stackless_gc
 
     def operation_is_true(self, op):
@@ -303,9 +302,7 @@ class StacklessTransformer(object):
         self.unwind_exception_type = getinstancerepr(
             self.translator.rtyper,
             bk.getuniqueclassdef(code.UnwindException)).lowleveltype
-        self.analyzer = StacklessAnalyzer(translator,
-                                          self.unwind_exception_type,
-                                          stackless_gc)
+        self.analyzer = StacklessAnalyzer(translator, stackless_gc)
 
         # the point of this little dance is to not annotate
         # code.global_state.masterarray as a constant.
@@ -322,7 +319,7 @@ class StacklessTransformer(object):
                 try:
                     r = entrypoint(argv)
                 except code.UnwindException, u:
-                    code.slp_main_loop()
+                    code.slp_main_loop(u.depth)
                     return code.global_state.retval_long
                 else:
                     assert False, "entrypoint never unwound the stack"
@@ -333,7 +330,7 @@ class StacklessTransformer(object):
                 try:
                     r = entrypoint(argv)
                 except code.UnwindException, u:
-                    code.slp_main_loop()
+                    code.slp_main_loop(u.depth)
                     return code.global_state.retval_long
                 return r
             slp_entry_point.stackless_explicit = True
@@ -422,6 +419,17 @@ class StacklessTransformer(object):
             annmodel.s_None)
         self.exception_type = getinstancerepr(
             self.translator.rtyper, exception_def).lowleveltype
+
+        def set_back_pointer(frame, back):
+            frame.f_back = back
+            if back:
+                frame.f_depth = back.f_depth + 1
+            else:
+                frame.f_depth = 0
+        self.set_back_pointer_ptr = mixlevelannotator.constfunc(
+            set_back_pointer,
+            [s_hdrptr, s_hdrptr],
+            annmodel.s_None)
 
         mixlevelannotator.finish()
 
@@ -653,6 +661,9 @@ class StacklessTransformer(object):
         c_flags = model.Constant({'flavor': 'gc'}, lltype.Void)
         v_exc = llops.genop('malloc', [c_EXC, c_flags],
                             resulttype = self.unwind_exception_type)
+        llops.genop('setfield', [v_exc,
+                                 model.Constant('inst_depth', lltype.Void),
+                                 model.Constant(0, lltype.Signed)])
 
         realvarsforcall = []
         for v in varsforcall:
@@ -672,9 +683,8 @@ class StacklessTransformer(object):
                     [self.ll_global_state, self.c_inst_top_name, self.c_null_state])
 
         v_prevstate = gen_cast(llops, lltype.Ptr(frame.STATE_HEADER), op.args[0])
-        llops.genop('setfield', [v_state_hdr,
-                                 model.Constant('f_back', lltype.Void),
-                                 v_prevstate])
+        llops.genop('direct_call', [self.set_back_pointer_ptr,
+                                    v_state_hdr, v_prevstate])
         llops.append(model.SpaceOperation('cast_opaque_ptr', [v_state_hdr], op.result))
         block.operations[i:i+1] = llops
 
