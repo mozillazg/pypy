@@ -132,7 +132,10 @@ class Buffer(Wrappable):
             info = 'read-write buffer'
         else:
             info = 'read-only buffer'
-        return self.getrepr(space, info)
+        addrstring = self.getaddrstring(space)
+        
+        return space.wrap("<%s for 0x%s, size %d>" %
+                          (info, addrstring, self.getlength()))
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
 
