@@ -118,7 +118,7 @@ long RPyThreadSetStackSize(long newsize)
 	}
 
 	/* check the range */
-	if (newsize >= THREAD_MIN_STACKSIZE && size < THREAD_MAX_STACKSIZE) {
+	if (newsize >= THREAD_MIN_STACKSIZE && newsize < THREAD_MAX_STACKSIZE) {
 		_pypythread_stacksize = newsize;
 		return 0;
 	}
