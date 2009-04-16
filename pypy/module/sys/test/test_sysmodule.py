@@ -417,4 +417,4 @@ class AppTestSysModulePortedFromCPython:
         except IOError:
             pass
         sys.settrace(None)
-        assert found == ['call', 'line', 'exception']
+        assert found == ['call', 'line', 'exception', 'return']
