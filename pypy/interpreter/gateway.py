@@ -742,7 +742,7 @@ class interp2app(Wrappable):
             unwrap_spec_key = tuple(unwrap_spec)
         else:
             unwrap_spec_key = None
-        key = (f, unwrap_spec_key, descrmismatch, as_classmethod)
+        key = (f, self_type, unwrap_spec_key, descrmismatch, as_classmethod)
         if key in cls.instancecache:
             result = cls.instancecache[key]
             assert result.__class__ is cls
