@@ -26,7 +26,6 @@ def callback(ll_args, ll_res, ll_userdata):
     userdata = rffi.cast(USERDATA_P, ll_userdata)
     callback_ptr = global_counter.CallbackPtr_by_number[userdata.addarg]
     w_callable = callback_ptr.w_callable
-    res = rffi.cast(rffi.VOIDPP, ll_res)
     argtypes = callback_ptr.args
     space = callback_ptr.space
     try:
@@ -35,7 +34,7 @@ def callback(ll_args, ll_res, ll_userdata):
         w_res = space.call(w_callable, w_args)
         if callback_ptr.result != 'O': # don't return void
             unwrap_value(space, push_elem, ll_res, 0,
-                         letter2tp(space, callback_ptr.result), w_res)
+                         callback_ptr.result, w_res)
     except OperationError, e:
         tbprint(space, space.wrap(e.application_traceback),
                 space.wrap(e.errorstr(space)))
