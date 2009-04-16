@@ -499,7 +499,7 @@ result as a string over stdout. Therefore, the interface works best
 with simple types like integers and strings.
 
 If you prefer to run the compiled code directly, you will find it in
-one of the ``/tmp/usession-*`` directories.  You can run it like so:
+one of the ``/tmp/usession-*`` directories.  You can run it like so::
 
     $java -cp /tmp/usession-<username>/pypy/ pypy.Main 4 5
     9
@@ -509,14 +509,14 @@ Note that the main entrypoint is always ``pypy.Main``.
 To successfully use the JVM you will need to have both a `JDK`_
 installed (at least version 5), and the `Jasmin assembler`_.
 Furthermore, you need a script on your path called ``jasmin`` which
-runs the Jasmin jar file, something like the following:
-
-.. _`JDK`: http://java.sun.com/javase/downloads/
-.. _`Jasmin assembler`: http://jasmin.sourceforge.net/
+runs the Jasmin jar file, something like the following::
 
     $ cat `which jasmin`
     #!/bin/bash
     java -jar $PATH_TO_JASMIN_JAR "$@"
+
+.. _`JDK`: http://java.sun.com/javase/downloads/
+.. _`Jasmin assembler`: http://jasmin.sourceforge.net/
 
 A slightly larger example
 +++++++++++++++++++++++++
