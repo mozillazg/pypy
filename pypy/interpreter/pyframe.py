@@ -120,9 +120,9 @@ class PyFrame(eval.Frame):
                                             executioncontext)
                 rstack.resume_point("execute_frame", self, executioncontext,
                                     returns=w_exitvalue)
-            except Exception, e:
+            except Exception:
                 executioncontext.return_trace(self, self.space.w_None)
-                raise e
+                raise
             executioncontext.return_trace(self, w_exitvalue)
             # on exit, we try to release self.last_exception -- breaks an
             # obvious reference cycle, so it helps refcounting implementations
