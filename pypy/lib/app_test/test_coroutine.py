@@ -18,7 +18,7 @@ class Test_Coroutine:
         co.switch()
         assert not co.is_zombie
 
-    def test_is_zombie_del(self):
+    def test_is_zombie_del_without_frame(self):
         import gc
         res = []
         class MyCoroutine(coroutine):
@@ -30,12 +30,36 @@ class Test_Coroutine:
         co.bind(f)
         co.switch()
         del co
-        for i in range(5):
+        for i in range(10):
             gc.collect()
             if res:
                 break
-        if not res:
-            skip("MyCoroutine object not garbage-collected yet?")
+        co = coroutine()
+        co.bind(f)
+        co.switch()
+        assert res[0], "is_zombie was False in __del__"
+
+    def test_is_zombie_del_with_frame(self):
+        import gc
+        res = []
+        class MyCoroutine(coroutine):
+            def __del__(self):
+                res.append(self.is_zombie)
+        main = coroutine.getcurrent()
+        def f():
+            print 'in coro'
+            main.switch()
+        co = MyCoroutine()
+        co.bind(f)
+        co.switch()
+        del co
+        for i in range(10):
+            gc.collect()
+            if res:
+                break
+        co = coroutine()
+        co.bind(f)
+        co.switch()
         assert res[0], "is_zombie was False in __del__"
 
     def test_raise_propagate(self):

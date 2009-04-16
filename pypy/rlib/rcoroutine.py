@@ -282,15 +282,13 @@ class Coroutine(Wrappable):
         self.kill()
 
     def __del__(self):
-        # provide the necessary clean-up if this coro is left
-        # with a frame.
+        # provide the necessary clean-up
         # note that AppCoroutine has to take care about this
         # as well, including a check for user-supplied __del__.
         # Additionally note that in the context of __del__, we are
         # not in the position to issue a switch.
         # we defer it completely.
-        if self.frame is not None and syncstate is not None:
-            syncstate.postpone_deletion(self)
+        syncstate.postpone_deletion(self)
 
     # coroutines need complete control over their __del__ behaviour. In
     # particular they need to care about calling space.userdel themselves
