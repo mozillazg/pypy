@@ -575,6 +575,7 @@ class AppTestFfi:
             val = err.getvalue()
             assert 'ZeroDivisionError' in val
             assert 'callback' in val
+            assert res[0] == 0L
         finally:
             sys.stderr = orig
 

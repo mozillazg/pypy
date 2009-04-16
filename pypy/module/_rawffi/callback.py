@@ -38,6 +38,11 @@ def callback(ll_args, ll_res, ll_userdata):
     except OperationError, e:
         tbprint(space, space.wrap(e.application_traceback),
                 space.wrap(e.errorstr(space)))
+        # force the result to be zero
+        if callback_ptr.result != 'O':
+            _, size, _ = letter2tp(space, callback_ptr.result)
+            for i in range(size):
+                ll_res[i] = '\x00'
 
 # XXX some weird hackery to be able to recover W_CallbackPtr object
 #     out of number    
