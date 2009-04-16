@@ -123,7 +123,7 @@ class AppTestDirect:
             skip('pure appdirect test (run with -A)')
         cls.space = gettestobjspace(usemodules=('_stackless',))
 
-    def Xtest_stack_depth_limit(self):
+    def test_stack_depth_limit(self):
         import sys
         import _stackless as stackless
         st = stackless.get_stack_depth_limit()
