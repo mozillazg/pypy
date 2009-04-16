@@ -2,14 +2,9 @@
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.tool import rffi_platform as platform
-from pypy.rpython.extfunc import genericcallable
-from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.rpython.lltypesystem import llmemory
 import py, os
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.annotation import model as annmodel
-from pypy.rpython.lltypesystem.lltype import typeOf
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem.lloperation import llop
