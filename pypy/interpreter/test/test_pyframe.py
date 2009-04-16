@@ -198,6 +198,91 @@ class AppTestPyFrame:
             except ValueError:
                 pass
 
+    def test_trace_try_finally(self):
+        import sys
+        l = []
+        def trace(frame, event, arg):
+            if event == 'exception':
+                l.append(arg)
+            return trace
+
+        def g():
+            try:
+                raise Exception
+            finally:
+                pass
+
+        def f():
+            try:
+                g()
+            except:
+                pass
+
+        sys.settrace(trace)
+        f()
+        sys.settrace(None)
+        assert len(l) == 2
+        assert issubclass(l[0][0], Exception)
+        assert issubclass(l[1][0], Exception)
+
+    def test_trace_raise_three_arg(self):
+        import sys
+        l = []
+        def trace(frame, event, arg):
+            if event == 'exception':
+                l.append(arg)
+            return trace
+
+        def g():
+            try:
+                raise Exception
+            except Exception, e:
+                import sys
+                raise Exception, e, sys.exc_info()[2]
+
+        def f():
+            try:
+                g()
+            except:
+                pass
+
+        sys.settrace(trace)
+        f()
+        sys.settrace(None)
+        assert len(l) == 2
+        assert issubclass(l[0][0], Exception)
+        assert issubclass(l[1][0], Exception)
+        
+
+    def test_trace_generator_finalisation(self):
+        # XXX expand to check more aspects
+        import sys
+        l = []
+        def trace(frame, event, arg):
+            if event == 'exception':
+                l.append(arg)
+            return trace
+
+        def g():
+            try:
+                yield True
+            finally:
+                pass
+
+        def f():
+            try:
+                gen = g()
+                gen.next()
+                gen.close()
+            except:
+                pass
+
+        sys.settrace(trace)
+        f()
+        sys.settrace(None)
+        assert len(l) == 1
+        assert issubclass(l[0][0], GeneratorExit)
+
     def test_dont_trace_on_reraise(self):
         import sys
         l = []
