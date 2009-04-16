@@ -88,8 +88,6 @@ in the base directory. Then compile::
     ms\do_ms.bat
     nmake -f ms\ntdll.mak install
 
-XXX This does not work
-
 Using the mingw compiler
 ------------------------
 
