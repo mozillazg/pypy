@@ -2,7 +2,7 @@
 Character categories and charsets.
 """
 import sys
-from pypy.rlib.rsre._rsre_platform import tolower
+from pypy.rlib.rsre._rsre_platform import tolower, isalnum
 
 # Note: the unicode parts of this module require you to call
 # rsre.set_unicode_db() first, to select one of the modules
@@ -103,7 +103,11 @@ def is_word(code):
 def is_uni_word(code):
     return unicodedb.isalnum(code) or code == underline
 
-is_loc_word = is_word      # XXX no support for platform locales anyway
+def is_loc_alnum(code):
+    return code < 256 and isalnum(code)
+
+def is_loc_word(code):
+    return code == underline or is_loc_alnum(code)
 
 def is_linebreak(code):
     return code == linebreak
