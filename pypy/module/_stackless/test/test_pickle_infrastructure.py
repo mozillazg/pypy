@@ -15,10 +15,19 @@ class BaseAppTestPicklePrerequisites(object):
         dump = pickle.dumps(sw)
         res = pickle.loads(dump)
 
-        # xxx identity preservation for the function would be better
+        assert res is sw
         assert res.func_code is sw.func_code
         assert res.func_doc is sw.func_doc
         assert res.func_globals is sw.func_globals
+
+    def test_pickle_switch_function_code(object):
+        import _stackless, pickle
+
+        sw = _stackless.coroutine.switch.im_func.func_code
+        dump = pickle.dumps(sw)
+        res = pickle.loads(dump)
+
+        assert res is sw
         
 class AppTestPicklePrerequisites(BaseAppTestPicklePrerequisites):
     pass

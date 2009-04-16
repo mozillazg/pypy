@@ -490,20 +490,9 @@ class BuiltinCode(eval.Code):
         return space.newtuple([builtin_code,
                                space.newtuple([space.wrap(self.identifier)])])
 
-    # delicate   
-    _all = {'': None}
-
-    def _freeze_(self):
-        if BuiltinCode._all.get(self.identifier, self) is not self:
-            print "builtin code identifier %s used twice: %s and %s" % (
-                self.identifier, self, BuiltinCode._all[self.identifier])
-        # we have been seen by other means so rtyping should not choke
-        # on us
-        BuiltinCode._all[self.identifier] = self
-        return False
-
     def find(indentifier):
-        return BuiltinCode._all[indentifier]
+        from pypy.interpreter.function import Function
+        return Function._all[indentifier].code
     find = staticmethod(find)
 
     def signature(self):
@@ -799,9 +788,9 @@ class GatewayCache(SpaceCache):
         space = cache.space
         defs = gateway._getdefaults(space) # needs to be implemented by subclass
         code = gateway._code
-        if not space.config.translating: # for tests and py.py
-            code._freeze_()
         fn = Function(space, code, None, defs, forcename = gateway.name)
+        if not space.config.translating: # for tests and py.py
+            fn._freeze_()
         if gateway.as_classmethod:
             fn = ClassMethod(space.wrap(fn))
         return fn

@@ -89,6 +89,15 @@ def builtin_code(space, identifier):
                                         identifier))
 builtin_code.unwrap_spec = [ObjSpace, str]
         
+def builtin_function(space, identifier):
+    from pypy.interpreter import function
+    try:
+        return function.Function.find(identifier)
+    except KeyError:
+        raise OperationError(space.w_RuntimeError, 
+                             space.wrap("cannot unpickle builtin function: "+
+                                        identifier))
+builtin_function.unwrap_spec = [ObjSpace, str]
 
 
 # ___________________________________________________________________
