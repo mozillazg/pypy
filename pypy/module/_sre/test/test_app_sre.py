@@ -2,6 +2,7 @@
 import autopath
 from py.test import raises, skip
 from pypy.interpreter.gateway import app2interp_temp
+from pypy.conftest import gettestobjspace
 
 def init_globals_hack(space):
     space.appexec([space.wrap(autopath.this_dir)], """(this_dir):
@@ -284,6 +285,7 @@ class AppTestGetlower:
 
     def setup_class(cls):
         # This imports support_test_sre as the global "s"
+        cls.space = gettestobjspace(usemodules=('_locale',))
         init_globals_hack(cls.space)
 
     def setup_method(self, method):
@@ -541,6 +543,7 @@ class AppTestOpcodes:
 
     def setup_class(cls):
         # This imports support_test_sre as the global "s"
+        cls.space = gettestobjspace(usemodules=('_locale',))
         init_globals_hack(cls.space)
 
     def test_length_optimization(self):
@@ -628,7 +631,7 @@ class AppTestOpcodes:
             locale.resetlocale() # is this the right way to rest the locale?
         except locale.Error:
             # skip test
-            pass
+            skip("locale error")
 
     def test_at_uni_boundary(self):
         UPPER_PI = u"\u03a0"
@@ -722,7 +725,7 @@ class AppTestOpcodes:
             s.void_locale()
         except locale.Error:
             # skip test
-            pass
+            skip("locale error")
 
     def test_any(self):
         opcodes = s.encode_literal("b") + [s.OPCODES["any"]] \
