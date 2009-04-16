@@ -106,6 +106,7 @@ class Buffer(Wrappable):
             str2 = other.as_str()
             return space.wrap(getattr(operator, name)(str1, str2))
         descr__cmp.unwrap_spec = ['self', ObjSpace, W_Root]
+        descr__cmp.func_name = name
         return descr__cmp
 
     descr_eq = _make_descr__cmp('eq')

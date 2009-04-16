@@ -1231,6 +1231,7 @@ else:
         def install_func(f_name, name):
             yield ''
             yield '  %s = %s' % (f_name, name)
+            yield '  %s.__name__ = %r' % (f_name, f_name)
             #import __builtin__
             #dic = __builtin__.__dict__
             #if dic.get(name):
@@ -1403,7 +1404,7 @@ else:
     RPY_SEP = "#*************************************************************"
 
     RPY_INIT_HEADER = RPY_SEP + '''
-#__name__ = %(modname)r
+__name__ = "_geninterp_"+%(modname)r
 _geninterp_ = True
 
 def init%(modname)s(space):
@@ -1536,7 +1537,7 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
     newsrc = f.read()
     f.close()
     code = py.code.Source(newsrc).compile()
-    dic = {'__name__': modname}
+    dic = {}
     exec code in dic
     # now we just need to return the init function,
     # which then needs to be called with the space to return the dict.

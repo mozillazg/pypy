@@ -99,6 +99,7 @@ def really_build_fake_type(cpy_type):
         w_obj = space.allocate_instance(W_Fake, w_type)
         W_Fake.__init__(w_obj, space, r)
         return w_obj
+    fake__new__.func_name = "fake__new__" + cpy_type.__name__
 
     kw['__new__'] = gateway.interp2app(fake__new__,
                                        unwrap_spec=[baseobjspace.ObjSpace,
