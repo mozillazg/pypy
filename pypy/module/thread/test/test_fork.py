@@ -1,14 +1,8 @@
 import py, sys
 from pypy.conftest import gettestobjspace
+from pypy.module.thread.test.support import GenericTestThread
 
-class AppTestFork(object):
-    def setup_class(cls):
-        if sys.platform == 'win32':
-            py.test.skip("No fork on Windows")
-
-        space = gettestobjspace(usemodules=('thread', 'time'))
-        cls.space = space
-
+class AppTestFork(GenericTestThread):
     def test_fork(self):
         # XXX This test depends on a multicore machine, as busy_thread must
         # aquire the GIL the instant that the main thread releases it.
@@ -16,19 +10,29 @@ class AppTestFork(object):
         import thread
         import os
         import time
-        
+
+        if not hasattr(os, 'fork'):
+            skip("No fork on this platform")
+
+        run = True
+        done = []
         def busy_thread():
-            while True:
+            while run:
                 time.sleep(0)
+            done.append(None)
 
-        thread.start_new(busy_thread, ())
+        try:
+            thread.start_new(busy_thread, ())
 
-        pid = os.fork()
+            pid = os.fork()
 
-        if pid == 0:
-            os._exit(0)
+            if pid == 0:
+                os._exit(0)
 
-        else:
-            time.sleep(1)
-            spid, status = os.waitpid(pid, os.WNOHANG)
-            assert spid == pid
+            else:
+                time.sleep(1)
+                spid, status = os.waitpid(pid, os.WNOHANG)
+                assert spid == pid
+        finally:
+            run = False
+            self.waitfor(lambda: done)
