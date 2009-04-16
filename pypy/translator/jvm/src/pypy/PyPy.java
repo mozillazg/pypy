@@ -1148,6 +1148,10 @@ public class PyPy implements Constants {
             interlink.throwOverflowError();
         return v;
     }
+    
+    public int tolower(int c) {
+        return Character.toLowerCase(c);
+    }
 
     // ----------------------------------------------------------------------
     // Self Test
