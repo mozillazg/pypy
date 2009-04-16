@@ -73,6 +73,7 @@ def test_simple_source():
     py.test.raises(Exception, "t.source()")
 
 def test_simple_source_llvm():
+    py.test.skip("we have no more llvm backend for now")
     from pypy.translator.llvm.test.runtest import llvm_test
     llvm_test()
 

@@ -5,7 +5,6 @@ from pypy.rpython.lltypesystem.rffi import *
 from pypy.rpython.lltypesystem.rffi import _keeper_for_type # crap
 from pypy.rlib.rposix import get_errno, set_errno
 from pypy.translator.c.test.test_genc import compile as compile_c
-from pypy.translator.llvm.test.runtest import compile_function as compile_llvm
 from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
 from pypy.rpython.lltypesystem.rstr import STR
 from pypy.rpython.lltypesystem import lltype
@@ -744,11 +743,15 @@ class TestCRffi(BaseTestRffi):
         py.test.skip("GenC does not handle char return values correctly")
 
 class TestLLVMRffi(BaseTestRffi):
+    def setup_class(cls):
+        py.test.skip("llvm backend removed for now")
+
     def compile(self, func, args, **kwds):
         # pfff....
         if 'backendopt' in kwds:
             kwds['optimize'] = kwds['backendopt']
             del kwds['backendopt']
+        from pypy.translator.llvm.test.runtest import compile_function as compile_llvm
         return compile_llvm(func, args, **kwds)
 
     def test_nonmovingbuffer(self):
