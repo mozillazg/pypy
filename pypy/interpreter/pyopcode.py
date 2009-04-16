@@ -1077,7 +1077,7 @@ class SApplicationException(SuspendedUnroller):
     def __init__(self, operr):
         self.operr = operr
     def nomoreblocks(self):
-        raise self.operr
+        raise RaiseWithExplicitTraceback(self.operr)
 
     def state_unpack_variables(self, space):
         return [self.operr.w_type, self.operr.w_value]
