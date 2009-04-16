@@ -451,10 +451,16 @@ class _Call(MicroInstruction):
 
     def _get_primitive_name(self, callee):
         try:
-            graph = callee.graph
+            callee.graph
+            return None
         except AttributeError:
-            return callee._name.rsplit('.', 1)
-
+            pass
+        try:
+            return 'rffi', callee._obj.oo_primitive
+        except AttributeError:
+            pass
+        return callee._name.rsplit('.', 1)
+        
     def render(self, generator, op):
         callee = op.args[0].value
         is_primitive = self._get_primitive_name(callee)

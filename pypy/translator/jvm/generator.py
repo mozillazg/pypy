@@ -592,9 +592,11 @@ class JVMGenerator(Generator):
             jvm.PYPYOS.load(self)
         
     def call_primitive(self, op, module, name):
+        from pypy.translator.simplify import get_functype
         callee = op.args[0].value
-        jargtypes, jrettype = self.db.types_for_signature(
-            callee._TYPE.ARGS, callee._TYPE.RESULT)
+        # it could be an rffi lltype, see test_primitive.test_rffi_ooprimitive
+        TYPE = get_functype(callee._TYPE)
+        jargtypes, jrettype = self.db.types_for_signature(TYPE.ARGS, TYPE.RESULT)
 
         # Determine what class the primitive is implemented in:
         if module == 'll_os':
