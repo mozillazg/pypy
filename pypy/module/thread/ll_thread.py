@@ -119,6 +119,14 @@ class Lock(object):
 
 # ____________________________________________________________
 #
+# Stack size
+
+get_stacksize = llexternal('RPyThreadGetStackSize', [], lltype.Signed)
+set_stacksize = llexternal('RPyThreadSetStackSize', [lltype.Signed],
+                           lltype.Signed)
+
+# ____________________________________________________________
+#
 # GIL support wrappers
 
 null_ll_lock = lltype.nullptr(TLOCKP.TO)
