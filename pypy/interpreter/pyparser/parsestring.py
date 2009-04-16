@@ -88,7 +88,7 @@ def parsestr(space, encoding, s):
         if need_encoding:
             w_u = unicodehelper.PyUnicode_DecodeUTF8(space, space.wrap(substr))
             #w_v = space.wrap(space.unwrap(w_u).encode(encoding)) this works
-            w_v = Punicodehelper.yUnicode_AsEncodedString(space, w_u, space.wrap(encoding))
+            w_v = unicodehelper.PyUnicode_AsEncodedString(space, w_u, space.wrap(encoding))
             return w_v
         else:
             return space.wrap(substr)
