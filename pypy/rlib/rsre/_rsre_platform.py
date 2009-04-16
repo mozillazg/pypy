@@ -6,8 +6,9 @@ eci = ExternalCompilationInfo(
     includes = ['ctype.h']
 )
 
-def external(name, args, result):
-    return rffi.llexternal(name, args, result, compilation_info=eci)
+def external(name, args, result, **kwds):
+        return rffi.llexternal(name, args, result, compilation_info=eci, **kwds)
 
-tolower = external('tolower', [lltype.Signed], lltype.Signed)
+tolower = external('tolower', [lltype.Signed], lltype.Signed,
+                                      oo_primitive='tolower')
 
