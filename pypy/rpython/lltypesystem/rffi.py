@@ -57,7 +57,8 @@ class _IsLLPtrEntry(ExtRegistryEntry):
 def llexternal(name, args, result, _callable=None,
                compilation_info=ExternalCompilationInfo(),
                sandboxsafe=False, threadsafe='auto',
-               canraise=False, _nowrapper=False, calling_conv='c'):
+               canraise=False, _nowrapper=False, calling_conv='c',
+               oo_primitive=None):
     """Build an external function that will invoke the C function 'name'
     with the given 'args' types and 'result' type.
 
@@ -78,12 +79,16 @@ def llexternal(name, args, result, _callable=None,
     ext_type = lltype.FuncType(args, result)
     if _callable is None:
         _callable = ll2ctypes.LL2CtypesCallable(ext_type, calling_conv)
+    kwds = {}
+    if oo_primitive:
+        kwds['oo_primitive'] = oo_primitive
     funcptr = lltype.functionptr(ext_type, name, external='C',
                                  compilation_info=compilation_info,
                                  _callable=_callable,
                                  _safe_not_sandboxed=sandboxsafe,
                                  _debugexc=True, # on top of llinterp
-                                 canraise=canraise)
+                                 canraise=canraise,
+                                 **kwds)
     if isinstance(_callable, ll2ctypes.LL2CtypesCallable):
         _callable.funcptr = funcptr
 
