@@ -40,11 +40,6 @@ class Database(OODatabase):
 
         self._constants = {}      # flowmodel.Variable --> jvm.Const
 
-#        # Special fields for the Object class, see _translate_Object
-#        self._object_interf = None
-#        self._object_impl = None
-#        self._object_exc_impl = None
-#
         # Create information about the Main class we will build:
         #
         #    It will have two static fields, 'ilink' and 'pypy'.  The
@@ -97,9 +92,6 @@ class Database(OODatabase):
     def jasmin_files(self):
         """ Returns list of files we need to run jasmin on """
         return self._jasmin_files
-
-    def is_Object(self, OOTYPE):
-        return isinstance(OOTYPE, ootype.Instance) and OOTYPE._name == "Object"
 
     # _________________________________________________________________
     # Node Creation
@@ -185,8 +177,8 @@ class Database(OODatabase):
     def _translate_superclass_of(self, OOSUB):
         """
         Invoked to translate OOSUB's super class.  Normally just invokes
-        pending_class, but we treat "Object" differently so that we can
-        make all exceptions descend from Throwable.
+        pending_class, but we in the case of exceptions.Exception we
+        need to return Throwable to please the JVM.
         """
         OOSUPER = OOSUB._superclass
         if OOSUB._name == "exceptions.Exception":
@@ -465,8 +457,6 @@ class Database(OODatabase):
 
         # Handle non-built-in-types:
         if isinstance(OOT, ootype.Instance):
-            if self.is_Object(OOT):
-                return self._translate_Object(OOT)
             return self._translate_instance(OOT)
         if isinstance(OOT, ootype.Record):
             return self._translate_record(OOT)
