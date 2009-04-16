@@ -195,10 +195,37 @@ class Function(Wrappable):
     def descr_function_repr(self):
         return self.getrepr(self.space, 'function %s' % (self.name,))
 
+
+    # delicate   
+    _all = {'': None}
+
+    def _freeze_(self):
+        from pypy.interpreter.gateway import BuiltinCode
+        if isinstance(self.code, BuiltinCode):
+            identifier = self.code.identifier
+            if Function._all.get(identifier, self) is not self:
+                print "builtin code identifier %s used twice: %s and %s" % (
+                    identifier, self, Function._all[identifier])
+            # we have been seen by other means so rtyping should not choke
+            # on us
+            Function._all[identifier] = self
+        return False
+
+    def find(identifier):
+        return Function._all[identifier]
+    find = staticmethod(find)
+
     def descr_function__reduce__(self, space):
+        from pypy.interpreter.gateway import BuiltinCode
         from pypy.interpreter.mixedmodule import MixedModule
         w_mod    = space.getbuiltinmodule('_pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
+        code = self.code
+        if isinstance(code, BuiltinCode):
+            new_inst = mod.get('builtin_function')
+            return space.newtuple([new_inst,
+                                   space.newtuple([space.wrap(code.identifier)])])
+            
         new_inst = mod.get('func_new')
         w        = space.wrap
         if self.closure is None:
