@@ -144,7 +144,12 @@ class __extend__(pyframe.PyFrame):
                 # dispatch_bytecode(), causing the real exception to be
                 # raised after the exception handler block was popped.
                 try:
-                    ec.bytecode_trace(self)
+                    trace = self.w_f_trace
+                    self.w_f_trace = None
+                    try:
+                        ec.bytecode_trace(self)
+                    finally:
+                        self.w_f_trace = trace
                 except OperationError, e:
                     operr = e
             pytraceback.record_application_traceback(
