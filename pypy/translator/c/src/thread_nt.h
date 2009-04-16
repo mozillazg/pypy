@@ -42,6 +42,8 @@ BOOL LeaveNonRecursiveMutex(PNRMUTEX mutex);
 void RPyOpaqueDealloc_ThreadLock(struct RPyOpaque_ThreadLock *lock);
 int RPyThreadAcquireLock(struct RPyOpaque_ThreadLock *lock, int waitflag);
 void RPyThreadReleaseLock(struct RPyOpaque_ThreadLock *lock);
+long RPyThreadGetStackSize(void);
+long RPyThreadSetStackSize(long);
 
 
 /* implementations */

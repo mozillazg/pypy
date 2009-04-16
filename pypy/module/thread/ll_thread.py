@@ -24,7 +24,8 @@ eci = ExternalCompilationInfo(
     include_dirs = [str(py.path.local(autopath.pypydir).join('translator', 'c'))],
     export_symbols = ['RPyThreadGetIdent', 'RPyThreadLockInit',
                       'RPyThreadAcquireLock', 'RPyThreadReleaseLock',
-                      'RPyThreadYield']
+                      'RPyThreadYield',
+                      'RPyThreadGetStackSize', 'RPyThreadSetStackSize']
 )
 
 def llexternal(name, args, result, **kwds):
