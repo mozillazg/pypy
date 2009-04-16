@@ -765,4 +765,13 @@ namespace pypy.builtin
             System.Threading.Thread.Sleep((int)(seconds*1000));
         }
     }
+
+    public class rffi
+    {
+      public static int tolower(int chr)
+      {
+        return (int)Char.ToLower((char)chr);
+      }
+    }
+
 }
