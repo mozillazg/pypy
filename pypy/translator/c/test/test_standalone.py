@@ -268,3 +268,54 @@ class TestMaemo(TestStandalone):
 
     def test_prof_inline(self):
         py.test.skip("Unsupported")
+
+
+class TestThread(object):
+    def test_stack_size(self):
+        from pypy.module.thread import ll_thread
+
+        class State:
+            pass
+        state = State()
+
+        def recurse(n):
+            if n > 0:
+                return recurse(n-1)+1
+            else:
+                return 0
+
+        def bootstrap():
+            # recurse a lot, like 10000 times
+            recurse(10000)
+            state.ll_lock.release()
+
+        def entry_point(argv):
+            os.write(1, "hello world\n")
+            error = ll_thread.set_stacksize(int(argv[1]))
+            assert error == 0
+            # start a new thread
+            state.ll_lock = ll_thread.Lock(ll_thread.allocate_ll_lock())
+            state.ll_lock.acquire(True)
+            ident = ll_thread.start_new_thread(bootstrap, ())
+            # wait for the thread to finish
+            state.ll_lock.acquire(True)
+            os.write(1, "done\n")
+            return 0
+
+        t = TranslationContext()
+        t.buildannotator().build_types(entry_point, [s_list_of_strings])
+        t.buildrtyper().specialize()
+
+        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
+        cbuilder.generate_source()
+        cbuilder.compile()
+
+        # this should work
+        data = cbuilder.cmdexec(str(2*1024*1024))   # 2 MB: should work
+        assert data == 'hello world\ndone\n'
+
+        # this should crash
+        exc_info = py.test.raises(Exception,
+                                  cbuilder.cmdexec,
+                                  str(32*1024))   # 32 KB: crash
+        assert exc_info.type is Exception    # segfault!
