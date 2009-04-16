@@ -11,4 +11,6 @@ def external(name, args, result, **kwds):
 
 tolower = external('tolower', [lltype.Signed], lltype.Signed,
                                       oo_primitive='tolower')
-
+isalnum = external('isalnum', [lltype.Signed], lltype.Signed,
+                   oo_primitive='isalnum')
+                   
