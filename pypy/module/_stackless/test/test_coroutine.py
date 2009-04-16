@@ -140,3 +140,25 @@ class AppTestDirect:
                 pass
         finally:
             stackless.set_stack_depth_limit(st)
+
+class TestRandomThings:
+    def setup_class(cls):
+        cls.space = gettestobjspace(usemodules=('_stackless',))
+    
+    def test___del___handling(self):
+        space = self.space
+        w_l = space.newlist([])
+        coro = space.appexec([w_l], """(l):
+            from _stackless import coroutine
+            class MyCoroutine(coroutine):
+                def __del__(self):
+                    l.append(self.is_zombie)
+            return MyCoroutine()
+        """)
+        coro.__del__()
+        space.user_del_action.perform(space.getexecutioncontext(), None)
+        coro._kill_finally()
+        assert space.int_w(space.len(w_l)) == 1
+        res = space.is_true(space.getitem(w_l, space.wrap(0)))
+        assert res
+

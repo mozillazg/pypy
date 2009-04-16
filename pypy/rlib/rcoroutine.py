@@ -292,6 +292,10 @@ class Coroutine(Wrappable):
         if self.frame is not None and syncstate is not None:
             syncstate.postpone_deletion(self)
 
+    # coroutines need complete control over their __del__ behaviour. In
+    # particular they need to care about calling space.userdel themselves
+    handle_del_manually = True
+
     def _userdel(self):
         # override this for exposed coros
         pass

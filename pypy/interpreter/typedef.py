@@ -133,7 +133,9 @@ no_hash_descr = interp2app(descr__hash__unhashable)
 
 def get_unique_interplevel_subclass(cls, hasdict, wants_slots, needsdel=False,
                                     weakrefable=False):
-    "NOT_RPYTHON: initialization-time only"    
+    "NOT_RPYTHON: initialization-time only"
+    if hasattr(cls, '__del__') and getattr(cls, "handle_del_manually", False):
+        needsdel = False
     assert cls.typedef.acceptable_as_base_class
     key = cls, hasdict, wants_slots, needsdel, weakrefable
     try:
