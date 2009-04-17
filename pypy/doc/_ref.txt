@@ -31,6 +31,7 @@
 .. _`interpreter/pyparser/`:
 .. _`pypy/interpreter/pyparser`: ../../pypy/interpreter/pyparser
 .. _`pypy/interpreter/typedef.py`: ../../pypy/interpreter/typedef.py
+.. _`jit/`: ../../pypy/jit
 .. _`lang/`: ../../pypy/lang
 .. _`lang/js/`: ../../pypy/lang/js
 .. _`lang/prolog/`: ../../pypy/lang/prolog
@@ -95,9 +96,7 @@
 .. _`translator/goal/`: ../../pypy/translator/goal
 .. _`pypy/translator/goal/targetnopstandalone.py`: ../../pypy/translator/goal/targetnopstandalone.py
 .. _`pypy/translator/goal/targetprologstandalone.py`: ../../pypy/translator/goal/targetprologstandalone.py
-.. _`translator/js/`: ../../pypy/translator/js
 .. _`translator/jvm/`: ../../pypy/translator/jvm
-.. _`translator/llvm/`: ../../pypy/translator/llvm
 .. _`translator/stackless/`: ../../pypy/translator/stackless
 .. _`translator/tool/`: ../../pypy/translator/tool
-.. _`jit/`: http://codespeak.net/svn/pypy/branch/oo-jit/pypy/jit/
+.. _`translator/js/`: http://codespeak.net/svn/pypy/branch/oo-jit/pypy/translator/js/

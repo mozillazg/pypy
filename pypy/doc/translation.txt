@@ -28,7 +28,7 @@ this task into several steps, and the purpose of this document is to
 introduce them.
 
 As of the 1.0 release, RPython_ programs can be translated into the following
-languages/platforms: C/POSIX, LLVM/POSIX, CLI/.NET, Javascript
+languages/platforms: C/POSIX, CLI/.NET, Javascript
 and Java/JVM (in addition, there's `a backend`_ that translates
 `application-level`_ into `interpreter-level`_ code, but this is a special
 case in several ways).
@@ -691,53 +691,12 @@ recently, the fact that preparing the graphs for source generation
 ("databasing") and actually generating the source are best considered
 separately has become clear.
 
-This process is reflected in the source somewhat; for example, the LLVM
-and C backends use different implementations of the graph preparation
-code, although there is no real reason for this.
-
 
 Other backends
 ==============
 
-.. _LLVM:
-
 Use the :config:`translation.backend` option to choose which backend to use.
 
-The LLVM Back-End
------------------
-
-http://codespeak.net/pypy/trunk/pypy/translator/llvm/
-
-For information on getting started on the LLVM (`low level virtual machine`_)
-backend - please see `here`_. 
-
-Similar to the task of GenC, GenLLVM translates a flow graph to low level LLVM
-bytecode.  LLVM's memory model is pretty similar to that of GenC's, and so the
-LLVM backend uses the same stages of the tool chain -- the annotator, the
-RTyper (targeting the low-level type system) and subsequent transformations,
-although the final preparations are done by different code (for historical,
-rather than fundamental, reasons).
-
-One of the reasons for targeting LLVM bytecodes is that the LLVM tools include
-excellent optimizers -- RPython programs, including the Standard Interpreter,
-compiled via LLVM are generally faster than when compiled via C.
-
-The LLVM backend is pretty well maintained, although fewer people have the
-necessary tools installed so it can take a bit longer to be fixed when a
-refactoring causes it to stop working.  It doesn't support all the features of
-GenC -- in particular it only supports the Boehm GC.
-
-The LLVM backend would not have been possible without all the people
-contributing to PyPy. Carl Friedrich did an amazing amount of groundwork during
-the first half of 2005. Carl Friedrich and Holger then initiated a revamped
-version based on the new `RPython Typer`_ flow graph. Significant progress was
-made during the Gothenburg sprint - and then the following 6 weeks Eric and
-Richard worked on it, achieving a standalone executable just prior to the
-Heidelberg sprint.  During the Heidelberg sprint Eric and Richard mainly
-worked on sharing the backend external code with GenC.
-
-.. _`low level virtual machine`: http://llvm.org/
-.. _`here`: getting-started.html#translating-the-flow-graph-to-llvm-code
 
 
 The Object-Oriented Backends
