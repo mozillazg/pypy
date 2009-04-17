@@ -289,9 +289,9 @@ class TestThread(object):
                 return 0
 
         def bootstrap():
-            # recurse a lot, like 20000 times
+            # recurse a lot, like 10000 times
             state.ll_lock.acquire(True)
-            recurse(20000)
+            recurse(10000)
             state.count += 1
             state.ll_lock.release()
 
