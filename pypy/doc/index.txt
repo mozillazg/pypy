@@ -10,7 +10,7 @@ Getting into PyPy ...
 
 * `PyPy Blog`_: news and status info about PyPy 
 
-* `Documentation`_: extensive documentation about PyPy.  
+* `Documentation`_: extensive documentation and papers_ about PyPy.  
 
 * `Getting Started`_: Getting started and playing with PyPy. 
 
@@ -48,3 +48,4 @@ anyone interested in the project.  Watch out for sprint announcements.
 .. _`FAQ`: faq.html
 .. _`Documentation`: docindex.html 
 .. _`Getting Started`: getting-started.html
+.. _papers: extradoc.html
