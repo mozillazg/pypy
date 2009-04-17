@@ -76,6 +76,12 @@ CPython).  It can be changed with ``sys.setrecursionlimit()``.  With a
 stackless PyPy, any value is acceptable - use ``sys.maxint`` for
 unlimited.
 
+In some cases, you can write Python code that causes interpreter-level
+infinite recursion -- i.e. infinite recursion without going via
+application-level function calls.  It is possible to limit that too,
+with ``_stackless.set_stack_depth_limit()``, or to unlimit it completely
+by setting it to ``sys.maxint``.
+
 
 Coroutines
 ++++++++++
