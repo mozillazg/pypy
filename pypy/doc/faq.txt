@@ -136,11 +136,11 @@ of 2000. Obtaining good measurements for the performance when run on the CLI or
 JVM is difficult, but it is safe to say that PyPy currently runs slower than
 IronPython (CLI) or Jython (JVM) for most tests.
 
-The integration of the work on the Just-In-Time compiler has just
-started; it is not yet ready enough to give useful speed-ups.  See
-status__.
+The work on the Just-In-Time compiler is currently at its fifth revision,
+but it looks like this revision is finally going to make it.  It is work
+in progress; see the `JIT documentation`_.
 
-.. __: jit/status.html
+.. _`JIT documentation`: jit/index.html
 
 
 .. _`prolog and javascript`:
