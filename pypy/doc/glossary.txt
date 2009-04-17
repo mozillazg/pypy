@@ -79,7 +79,7 @@ links to more information.
 **lltypesystem**
    A `C-like type model <rtyper.html#low-level-types>`__ that contains
    structs and pointers.  A backend_ that uses this type system is also
-   called a low-level backend.  The C and LLVM backends use this
+   called a low-level backend.  The C backend uses this
    typesystem.
 
 .. _`low-level helper`:

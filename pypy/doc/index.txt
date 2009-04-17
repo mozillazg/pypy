@@ -87,10 +87,8 @@ them.  Linux 64-bit machines are supported (though it may also take some
 time before we notice and fix bugs).
 
 PyPy's own tests `summary`_, daily updated, run through BuildBot infrastructure.
-
-`Nightly builds and benchmarks`_ of PyPy to C, CLI and LLVM (PowerPC machine).
-
-`Nightly compliance test runs for compiled pypy-c`_.
+You can also find CPython's compliance tests run with compiled ``pypy-c``
+exeuctables there.
 
 information dating from early 2007: 
 
@@ -159,8 +157,6 @@ from our Python interpreter.
 .. _`sprint reports`: sprint-reports.html
 .. _`talks and related projects`: extradoc.html
 .. _`license`: ../../LICENSE
-.. _`Nightly compliance test runs for compiled pypy-c`: http://www2.openend.se/~pedronis/pypy-c-test/
-.. _`compliance test status`: http://codespeak.net/~hpk/pypy-testresult/
 .. _`PyPy LOC statistics`: http://codespeak.net/~hpk/pypy-stat/
 .. _`PyPy statistics`: http://codespeak.net/pypy/trunk/pypy/doc/statistic
 .. _`object spaces`: objspace.html 
@@ -283,9 +279,6 @@ Directory                      explanation/links
 
 `translator/jvm/`_             the Java backend
 
-`translator/llvm/`_            contains the `LLVM backend`_ producing LLVM assembler 
-                               from fully annotated RPython programs 
-
 `translator/stackless/`_       the `Stackless Transform`_
 
 `translator/tool/`_            helper tools for translation, including the Pygame
@@ -321,7 +314,6 @@ Directory                      explanation/links
 .. _`testing methods`: coding-guide.html#testing-in-pypy
 .. _`translation`: translation.html 
 .. _`GenC backend`: translation.html#genc 
-.. _`LLVM backend`: translation.html#llvm
 .. _`CLI backend`: cli-backend.html
 .. _`py.py`: getting-started.html#main-entry-point
 .. _`translatorshell.py`: getting-started.html#try-out-the-translator
