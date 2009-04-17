@@ -199,7 +199,7 @@ testmap = [
 
     RegrTest('test_curses.py', skip="unsupported extension module"),
     RegrTest('test_datetime.py'),
-    RegrTest('test_dbm.py', skip="unsupported extension module"),
+    RegrTest('test_dbm.py'),
     RegrTest('test_decimal.py'),
     RegrTest('test_decorators.py', core=True),
     RegrTest('test_deque.py', core=True),
