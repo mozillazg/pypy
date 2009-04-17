@@ -560,16 +560,6 @@ class Bookkeeper:
             access_sets = map[attrname] = UnionFind(description.ClassAttrFamily)
         return access_sets
     
-    def getexternaldesc(self, class_):
-        try:
-            return self.external_class_cache[class_]
-        except KeyError:
-            from  pypy.rpython.ootypesystem import bltregistry
-            next = bltregistry.ExternalInstanceDesc(class_)
-            self.external_class_cache[class_] = next
-            next.setup()
-            return next
-
     def pbc_getattr(self, pbc, s_attr):
         assert s_attr.is_constant()
         attr = s_attr.const

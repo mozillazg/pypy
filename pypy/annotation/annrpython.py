@@ -23,7 +23,6 @@ class RPythonAnnotator(object):
 
     def __init__(self, translator=None, policy=None, bookkeeper=None):
         import pypy.rpython.ootypesystem.ooregistry # has side effects
-        import pypy.rpython.ootypesystem.bltregistry # has side effects
         import pypy.rpython.extfuncregistry # has side effects
         import pypy.rlib.nonconst # has side effects
 
