@@ -30,7 +30,7 @@ the _stackless module by running it as follows::
     py.py --withmod-_stackless
 
 This is implemented internally using greenlets, so it only works on a
-platform where `Py lib greenlets`_ are supported.  A few features do
+platform where `greenlets`_ are supported.  A few features do
 not work this way, though, and really require a translated
 ``pypy-c``.
 
@@ -259,10 +259,10 @@ to Coroutines, with a slightly different interface: greenlets put more
 emphasis on a tree structure.  The various greenlets of a program form a
 precise tree, which fully determines their order of execution.
 
-For usage reference, see the documentation of the `Py lib greenlets`_.
-The PyPy interface is identical.  You should use ``py.magic.greenlet``
-instead of ``stackless.greenlet`` directly, because the Py lib can now
-give you the latter when you ask for the former on top of PyPy.
+For usage reference, see the documentation of the `greenlets`_.
+The PyPy interface is identical.  You should use ``greenlet.greenlet``
+instead of ``stackless.greenlet`` directly, because the greenlet library
+can give you the latter when you ask for the former on top of PyPy.
 
 PyPy's greenlets do not suffer from the cyclic GC limitation that the
 CPython greenlets have: greenlets referencing each other via local
@@ -685,7 +685,7 @@ scale automatically to larger programs.
 
 
 .. _`Stackless Python`: http://www.stackless.com
-.. _`Py lib greenlets`: http://codespeak.net/py/current/doc/greenlet.html
+.. _`greenlets`: http://codespeak.net/svn/greenlet/trunk/doc/greenlet.txt
 .. _`Stackless Transform`: translation.html#the-stackless-transform
 
 .. include:: _ref.txt
