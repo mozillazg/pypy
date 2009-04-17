@@ -13,7 +13,7 @@ Declaring low-level external function
 -------------------------------------
 
 Declaring external C function in RPython is easy, but one needs to
-remember that low level functions eat low level types (like
+remember that low level functions eat `low level types`_ (like
 lltype.Signed or lltype.Array) and memory management must be done
 by hand. To declare a function, we write::
 
@@ -42,6 +42,7 @@ parameter::
 
 See cbuild_ for more info on ExternalCompilationInfo.
 
+.. _`low level types`: rtyper.html#low-level-type
 .. _cbuild: http://codespeak.net/svn/pypy/trunk/pypy/translator/tool/cbuild.py
 
 
