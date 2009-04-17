@@ -1,7 +1,6 @@
 These tests currently fail on win32:
 
 test_cmd_line
-test_dumbdbm
 test_file
 test_hashlib
 test_hmac
@@ -16,7 +15,6 @@ test_os             - test_1565150: rewrite utime() to use SetFileTime
                     - test_access: this test seems flaky
 test_popen2         missing os.popen2
 test_random
-test_repr           [Done] probably
 test_runpy          [Done]
 test_shutil         - when os.utime uses SetFileTime, raise WindowsError instead of OSError.
 test_site
