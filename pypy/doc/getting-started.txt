@@ -562,13 +562,12 @@ The executable and all its dependecies will be stored in the
 ./pypy-cli-data/main.exe. If you are using Linux or Mac, you can use
 the convenience ./pypy-cli script::
 
-  $ ./pypy-cli
-  Python 2.5.2 (pypy 1.0.0 build 5xxxx) on linux2
-  Type "help", "copyright", "credits" or "license" for more information.
-  (InteractiveConsole)
-   >>>> 1 + 1
-   2
-   >>>>
+    $ ./pypy-cli
+    Python 2.5.2 (64219, Apr 17 2009, 13:54:38)
+    [PyPy 1.0.0] on linux2
+    Type "help", "copyright", "credits" or "license" for more information.
+    And now for something completely different: ``distopian and utopian chairs''
+    >>>> 
 
 Moreover, at the moment it's not possible to do the full translation
 using only the tools provided by the Microsoft .NET SDK, since
