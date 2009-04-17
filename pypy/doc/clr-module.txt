@@ -29,6 +29,8 @@ they exist in both worlds:
 
   - .NET indexers are mapped to Python __getitem__ and __setitem__;
 
+  - .NET enumerators are mapped to Python iterators.
+
 Moreover, all the usual Python features such as bound and unbound
 methods are available as well.
 
@@ -89,6 +91,27 @@ in the second one we call the method ``System.Math.Abs(float64)``.
 
 If the system can't find a best overload for the given parameters, a
 TypeError exception is raised.
+
+
+Generic classes
+================
+
+Generic classes are fully supported.  To instantiate a generic class, you need
+to use the ``[]`` notation::
+
+    >>>> from System.Collections.Generic import List
+    >>>> mylist = List[int]()
+    >>>> mylist.Add(42)
+    >>>> mylist.Add(43)
+    >>>> mylist.Add("foo")
+    Traceback (most recent call last):
+      File "<console>", line 1, in <interactive>
+    TypeError: No overloads for Add could match
+    >>>> mylist[0]
+    42
+    >>>> for item in mylist: print item
+    42
+    43
 
 
 External assemblies and Windows Forms
