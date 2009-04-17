@@ -425,7 +425,7 @@ getting the advantage of providing document type information to the parser.
 
     # Parse methods
 
-    def Parse(self, space, data, isfinal=True):
+    def Parse(self, space, data, isfinal=False):
         """Parse(data[, isfinal])
 Parse XML data.  `isfinal' should be true at end of input."""
 
