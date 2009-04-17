@@ -257,7 +257,6 @@ class Function(Wrappable):
             w_func_dict,
             self.w_module,
         ]
-        print tup_state
         return nt([new_inst, nt(tup_base), nt(tup_state)])
 
     def descr_function__setstate__(self, space, w_args):
