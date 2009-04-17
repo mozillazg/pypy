@@ -4,26 +4,26 @@ test_cmd_line
 test_file
 test_hashlib
 test_hmac
-test_import
+test_import         TODO: implement import case check
 test_locale
 test_mmap
-test_netrc
+test_netrc          [Done]
 test_old_mailbox    [unlink failures corrected]
                     - test_from_regex fails probably because of seek() and tell() issues
                       (test passes if file is opened in binary mode)
-test_os             - test_1565150: rewrite utime() to use SetFileTime
+test_os             - TODO: test_1565150: rewrite utime() to use SetFileTime
                     - test_access: this test seems flaky
-test_popen2         missing os.popen2
+test_popen2         TODO: implement os.popen2
 test_random
 test_runpy          [Done]
 test_shutil         - when os.utime uses SetFileTime, raise WindowsError instead of OSError.
-test_site
+test_site           TODO: implement _locale at interp_level
 test_socket
 test_subprocess
-test_tarfile
-test_unicode_file
+test_tarfile        [Done]
+test_unicode_file   TODO: implement unicode filesystem.
 test_unicodedata    objspace/std/unicodeobject.py uses unicodedb_3_2_0 ?? How does this work on Linux??
-test_univnewlines   big mess in rlib/streamio.py; first try to fix
+test_univnewlines   TODO: big mess in rlib/streamio.py; first try to fix
                     test_readline_mixed_with_read() in pypy/module/_file/test/test_file.py
 test_xdrlib
 test_zipimport      '/' '\\' mismatch
