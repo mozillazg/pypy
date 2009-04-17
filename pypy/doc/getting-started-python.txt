@@ -76,7 +76,7 @@ executable. The executable behaves mostly like a normal Python interpreter::
 
     $ ./pypy-c
     Python 2.5.2 (64177, Apr 16 2009, 16:33:13)
-    [PyPy 1.0.0] on linux2
+    [PyPy 1.1.0] on linux2
     Type "help", "copyright", "credits" or "license" for more information.
     And now for something completely different: ``this sentence is false''
     >>>> 46 - 4
@@ -177,7 +177,7 @@ the convenience ./pypy-cli script::
 
     $ ./pypy-cli
     Python 2.5.2 (64219, Apr 17 2009, 13:54:38)
-    [PyPy 1.0.0] on linux2
+    [PyPy 1.1.0] on linux2
     Type "help", "copyright", "credits" or "license" for more information.
     And now for something completely different: ``distopian and utopian chairs''
     >>>> 
@@ -212,7 +212,7 @@ script ``pypy-jvm`` for executing it.  To try it out, simply run
 
     $ ./pypy-jvm 
     Python 2.5.2 (64214, Apr 17 2009, 08:11:23)
-    [PyPy 1.0.0] on darwin
+    [PyPy 1.1.0] on darwin
     Type "help", "copyright", "credits" or "license" for more information.
     And now for something completely different: ``# assert did not crash''
     >>>> 
@@ -240,11 +240,11 @@ to find a ``PREFIX`` from which the directories
 ``PREFIX/pypy/lib`` can all be found.  The prefixes that are tried are::
 
     .
-    ./share/pypy-1.0
+    ./share/pypy-1.1
     ..
-    ../share/pypy-1.0
+    ../share/pypy-1.1
     ../..
-    ../../share/pypy-1.0
+    ../../share/pypy-1.1
     ../../..
     etc.
 
