@@ -27,6 +27,7 @@ For further details see our `goal and architecture document`_ .
 
 
 .. _`drop in replacement`:
+.. _`extension modules`:
 
 ------------------------------------------
 Is PyPy a drop in replacement for CPython?
@@ -35,13 +36,69 @@ Is PyPy a drop in replacement for CPython?
 Not completely, at least not yet.
 
 The mostly likely stumbling block for any given project is support for
-`extension modules`_.  PyPy supports a small but continually growing
-number of extension modules, so far mostly those found in the standard
-library.  The `threading`_ support is also not perfectly complete.
+extension modules.  PyPy supports a continually growing
+number of extension modules, but so far mostly only those found in the
+standard library.
 
 The language features (including builtin types and functions) are very
 complete and well tested, so if your project does not use many
 extension modules there is a good chance that it will work with PyPy.
+
+------------------------------------------------
+
+List of extension modules:
+
+* Supported as built-in modules (in ``pypy/module/*``)
+  (``_minimal_curses`` is a custom subset of curses;
+  ``_rawffi`` is a custom module for ctypes integration;
+  ``dyngram`` is a custom module for grammar tricks):
+
+    __builtin__
+    __pypy__
+    _codecs
+    _lsprof
+    _minimal_curses
+    _random
+    _rawffi
+    _socket
+    _sre
+    _ssl
+    _weakref
+    bz2
+    cStringIO
+    crypt
+    dyngram
+    errno
+    exceptions
+    fcntl
+    gc
+    itertools
+    marshal
+    math
+    md5
+    mmap
+    operator
+    posix
+    pyexpat
+    recparser
+    select
+    sha
+    signal
+    struct
+    symbol
+    sys
+    termios
+    thread
+    time
+    unicodedata
+    zipimport
+    zlib
+
+* Supported by being rewritten in pure Python (possibly using ``ctypes``):
+  see the `pypy/lib/`_ directory.  Note that some modules are both in there
+  and in the list above; by default, the built-in module is used (but can
+  be disabled at translation time).
+
 
 --------------------------------
 On what platforms does PyPy run?
@@ -92,8 +149,6 @@ modules can be found as follows:
 
 .. _`stackless-like microthreads`: stackless.html
 
-
-.. _`extension modules`:
 
 ------------------------------------
 Can I use CPython extension modules?
