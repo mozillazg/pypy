@@ -36,17 +36,10 @@ translation_optiondescription = OptionDescription(
                  ["c", "cli", "jvm"], default="c",
                  requires={
                      "c":      [("translation.type_system", "lltype")],
-                     #"llvm":   [("translation.type_system", "lltype"),
-                     #           ("translation.backendopt.raisingop2direct_call", True),
-                     #           ],
                      "cli":    [("translation.type_system", "ootype")],
                      "jvm":    [("translation.type_system", "ootype")],
-                     #"js":     [("translation.type_system", "ootype")],
                      },
                  cmdline="-b --backend"),
-    #BoolOption("llvm_via_c", "compile llvm via C",
-    #           default=False, cmdline="--llvm-via-c",
-    #           requires=[("translation.backend", "llvm")]),
 
     # gc
     ChoiceOption("gc", "Garbage Collection Strategy",
@@ -85,16 +78,12 @@ translation_optiondescription = OptionDescription(
                  cmdline="--gcrootfinder",
                  requires={
                      "shadowstack": [("translation.gctransformer", "framework")],
-                     #"llvmgc": [("translation.gctransformer", "framework"),
-                     #           ("translation.backend", "llvm"),
-                     #           ("translation.thread", False)],
                      "asmgcc": [("translation.gctransformer", "framework"),
                                 ("translation.backend", "c"),
                                 ("translation.thread", False)],
                     },
                  suggests={
                      "shadowstack": [("translation.gc", "generation")],
-                     #"llvmgc": [("translation.gc", "generation")],
                      "asmgcc": [("translation.gc", "generation")],
                  }),
 
@@ -254,14 +243,6 @@ translation_optiondescription = OptionDescription(
                              ('translation.backendopt.mallocs', False),
                              ('translation.backendopt.constfold', False)])
     ]),
-
-    #OptionDescription("llvm", "GenLLVM options", [
-    #    BoolOption("debug", "Include the llops in the source as comments", default=False),
-    #    BoolOption("logging", "Log how long the various parts of llvm generation take", default=False),
-    #    BoolOption("isolate", "Perform an isolated import", default=True),
-    #    StrOption("opt_options", "Options passed to opt (influences level of optimization in LLVM)",
-    #                 default="-std-compile-opts"),
-    #]),
 
     OptionDescription("cli", "GenCLI options", [
         BoolOption("trace_calls", "Trace function calls", default=False,
