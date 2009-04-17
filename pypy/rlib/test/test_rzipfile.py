@@ -8,7 +8,7 @@ import os
 import time
 
 try:
-    from pypy.rlib import rzip
+    from pypy.rlib import rzlib
 except ImportError, e:
     py.test.skip("zlib not installed: %s " % (e, ))
 
