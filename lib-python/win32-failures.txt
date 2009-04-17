@@ -1,6 +1,6 @@
 These tests currently fail on win32:
 
-test_cmd_line
+test_cmd_line       TODO: implement os.popen4
 test_file
 test_hashlib
 test_hmac
