@@ -32,34 +32,40 @@ Just the facts
 Svn-check out & run the latest PyPy as a two-liner
 --------------------------------------------------
 
-If you want to play with the stable development PyPy version 
-you can check it out from the repository using subversion.
-(Here are `old links`_ to the PyPy release 1.0 -- but don't
-use it, it is too far out of date.)
+Before you can play with PyPy, you will need to obtain a copy
+of the sources.  This can be done either by `downloading them
+from the download page`_ or by checking them out from the
+repository using subversion.  We suggest using subversion as it
+offers access to the most recent versions.
 
-.. _`old links`: download.html
+.. _`downloading them from the download page`: download.html
 
-Download and install subversion_ if you don't already have it.  We have
-some `help on installing subversion`_ for PyPy.  Then you can issue on
-the command line (DOS box or terminal)::
+If you choose to use subversion_, you must first install it
+if you don't already have it.  We have
+some `help on installing subversion`_ for PyPy.  Once it is installed,
+you can then issue the following command on your command line,
+DOS box, or terminal::
 
-    svn co http://codespeak.net/svn/pypy/trunk pypy-dist 
+    svn co http://codespeak.net/svn/pypy/dist pypy-dist
 
-This will create a directory named ``pypy-dist``, and will get you the PyPy
+This will check out the most recent stable release from subversion and
+place it into a directory named ``pypy-dist``, and will get you the PyPy
 source in ``pypy-dist/pypy`` and documentation files in
-``pypy-dist/pypy/doc``.
+``pypy-dist/pypy/doc``.  If you would prefer to check out the "cutting edge"
+version of PyPy - which may not always be stable! - then check out
+from ``http://codespeak.net/svn/pypy/trunk`` intead.
 
-After checkout you can get a PyPy interpreter via:: 
+After checkout you can start the PyPy interpreter via:: 
 
-    python pypy-dist/pypy/bin/py.py
+    python pypy-svn/pypy/bin/py.py
 
-have fun :-) 
+Have fun :-) 
 Note that you will need a C compiler that is supported by CPython's distutils.
 This gives you a PyPy prompt, i.e. a very compliant Python
 interpreter implemented in Python.  PyPy passes around `98% of
-CPythons core language regression tests`_.  Because this invocation of
-PyPy still runs on top of CPython, it runs around 2000 times slower
-than the original CPython.
+CPythons core language regression tests`_.  When starting this way,
+the PyPy interpreter is running on top of CPython, and as such it
+runs around 2000 times slower than CPython itself.
 Many extension modules are not enabled by default; to use them you need
 to pass ``--withmod-NAME`` arguments (for example, ``--withmod-_rawffi``
 is required to import our version of ctypes).
@@ -67,10 +73,10 @@ is required to import our version of ctypes).
 This is probably not something you want to play with for too long,
 though, as it is really slow.  Instead, you should use PyPy to `translate
 itself to lower level languages`_ after which it runs standalone, is not
-dependant on CPython anymore and becomes faster (within the same speed
-magnitude as CPython itself).
+dependant on CPython anymore and becomes faster (its performance is within 
+the same order of magnitude as CPython itself).
 
-.. _`98% of CPythons core language regression tests`: http://www2.openend.se/~pedronis/pypy-c-test/allworkingmodules/summary.html
+.. _`98% of CPythons core language regression tests`: http://codespeak.net:8099/summary?category=lib-python&branch=%3Ctrunk%3E
 
 Have a look at `interesting starting points`_ 
 for some guidance on how to continue. 
@@ -103,9 +109,7 @@ testing tool that we are using and enhancing for PyPy.
 enormous amounts of memory if you are trying to run them all
 in the same process; test_all.py is only suitable to run a
 subset of them at a time.**  To run them all daily we have a BuildBot based
-setup, a summary of its results can be seen at:
-
-    http://codespeak.net:8099/summary
+setup, a summary of its results can be seen at http://codespeak.net:8099/summary.
 
 .. _`if PyPy works on your machine/platform`: index.html#status
 .. _`autotest driver`: http://codespeak.net/pipermail/pypy-dev/2006q3/003273.html
@@ -124,9 +128,6 @@ more detailed information on specific features of the tracker.
 
 Interesting Starting Points in PyPy 
 ===================================
-
-*The following assumes that you have successfully checked out PyPy using
-svn.  Some of the following examples don't work in the release 1.0.*
 
 To get started with PyPy, you can either play with `the py.py
 interpreter`_ and the `special PyPy features`_, or directly proceed to
@@ -393,130 +394,53 @@ compiled version::
    >>> f(6)
    True
 
-.. _LLVM:
-
-Translating the flow graph to LLVM code
-+++++++++++++++++++++++++++++++++++++++
-
-The LLVM or `low level virtual machine`_ project has, among other things,
-defined a statically typed portable assembly language and a set of tools that
-optimize and compile this assembly for a variety of platforms.  As such, this
-assembly is a natural target for PyPy's translator.
-
-To translate to LLVM assembly you must first have `LLVM version 1.9 installed`_
-- the `how to install LLVM`_ page provides some helpful hints.
-
-The LLVM backend is not as flexible as the C backend, and for example only
-supports one garbage collection strategy.  Calling compiled LLVM code from
-CPython is more restrictive than the C backend - the return type and the
-arguments of the entry function must be ints, floats or bools - as the emphasis
-of the LLVM backend is to compile standalone executables.
-
-Here is a simple example to try::
-
-   >>> t = Translation(snippet.my_gcd)
-   >>> a = t.annotate([int, int])
-   >>> t.rtype()
-   >>> f = t.compile_llvm()
-   >>> f(15, 10)
-   5
-
-
-Translating the flow graph to JavaScript code
+Translating the flow graph to CLI or JVM code
 +++++++++++++++++++++++++++++++++++++++++++++
 
-The JavaScript backend is still experimental but was heavily improved
-during 2006
-`Google summer of code`_. It contains support
-for the document object model and a good integration with PyPy's unittesting
-framework. Code can be tested with the `Spidermonkey`_ commandline JavaScript
-interpreter in addition to a multitude of JavaScript capable browsers. 
-The emphasis of the JavaScript backend is to compile RPython code into
-JavaScript snippets that can be used in a range of browsers. The goal is
-to make it more and more capable to produce full featured web applications.
-Please see the pypy/translator/js/test directory for example unittests.
-
-Here is a simple example to try::
-
-   >>> t = Translation(snippet.my_gcd)
-   >>> a = t.annotate([int, int])
-   >>> source = t.source_js()
-
-If you want to know more about the JavaScript backend please refer to the
-`JavaScript docs`_.
-
-.. _`JavaScript docs`: js/whatis.html
-
-Translating the flow graph to CLI code
-++++++++++++++++++++++++++++++++++++++
-
-Use the `CLI backend`_ to translate the flow graphs into .NET executables:
-``gencli`` is quite mature now and can also compile the whole
-interpreter. You can try out the `CLI backend`_ from the interactive
-translator shell::
+PyPy also contains a `CLI backend`_ and JVM backend which
+can translate flow graphs into .NET executables or a JVM jar
+file respectively.  Both are able to translate the entire
+interpreter.  You can try out the CLI and JVM backends
+from the interactive translator shells as follows::
 
     >>> def myfunc(a, b): return a+b
     ... 
     >>> t = Translation(myfunc)
     >>> t.annotate([int, int])
-    >>> f = t.compile_cli()
+    >>> f = t.compile_cli() # or compile_jvm()
     >>> f(4, 5)
     9
 
-The object returned by ``compile_cli`` is a wrapper around the real
+The object returned by ``compile_cli`` or ``compile_jvm``
+is a wrapper around the real
 executable: the parameters are passed as command line arguments, and
-the returned value is read from the standard output.
+the returned value is read from the standard output.  
 
 Once you have compiled the snippet, you can also try to launch the
-executable directly from the shell; you can find the executable in one
-of the ``/tmp/usession-*`` directories::
+executable directly from the shell. You will find the 
+executable in one of the ``/tmp/usession-*`` directories::
 
-    $ mono /tmp/usession-<username>/main.exe 4 5
+    # For CLI:
+    $ mono /tmp/usession-dist-<username>/main.exe 4 5
     9
 
-To translate and run for CLI you must have the SDK installed: Windows
+    # For JVM:
+    $ java -cp /tmp/usession-dist-<username>/pypy pypy.Main 4 5
+    9
+
+To translate and run for the CLI you must have the SDK installed: Windows
 users need the `.NET Framework SDK 2.0`_, while Linux and Mac users
 can use Mono_.
 
-Translating RPystone to JVM code
-++++++++++++++++++++++++++++++++
+To translate and run for the JVM you must have a JDK installed (at 
+least version 5) as well as the `Jasmin JVM assembler`_.  In particular,
+you need a script in your path called ``jasmin`` which will execute
+the assembler.  For example, the contents might be:
 
-Using the interactive shell with the JVM is basically the same as any
-other backend.  For example, you might enter:
+	#!/bin/bash
+	java -jar $PATH_TO_JASMIN_JAR "$@"
 
-    >>> def myfunc(a, b):
-    ...     return a+b
-    >>> t = Translation(myfunc)
-    >>> t.annotate([int, int])
-    >>> f = t.compile_jvm()
-    >>> f(4, 5)
-    9
-
-As with the CLI, the object returned by ``compile_jvm`` is a wrapper
-around the real executable.  When invoked, it actually starts a JVM
-process, passing the parameters as command line arguments and the
-result as a string over stdout. Therefore, the interface works best
-with simple types like integers and strings.
-
-If you prefer to run the compiled code directly, you will find it in
-one of the ``/tmp/usession-*`` directories.  You can run it like so::
-
-    $java -cp /tmp/usession-<username>/pypy/ pypy.Main 4 5
-    9
-
-Note that the main entrypoint is always ``pypy.Main``.
-
-To successfully use the JVM you will need to have both a `JDK`_
-installed (at least version 5), and the `Jasmin assembler`_.
-Furthermore, you need a script on your path called ``jasmin`` which
-runs the Jasmin jar file, something like the following::
-
-    $ cat `which jasmin`
-    #!/bin/bash
-    java -jar $PATH_TO_JASMIN_JAR "$@"
-
-.. _`JDK`: http://java.sun.com/javase/downloads/
-.. _`Jasmin assembler`: http://jasmin.sourceforge.net/
+.. _`Jasmin JVM assembler`: http://jasmin.sourceforge.net/
 
 A slightly larger example
 +++++++++++++++++++++++++
@@ -545,9 +469,9 @@ Windows, see the `windows document`_)
 
 .. _`windows document`: windows.html
 
-You can translate the whole of PyPy's Python interpreter to low level C
-code.  (This is the largest and ultimate example of RPython program that
-our translation toolchain can process.)
+You can translate the whole of PyPy's Python interpreter to low level C code,
+`CLI code`_, or `JVM code`_. (This is the largest and ultimate example of
+RPython program that our translation toolchain can process.)
 
 1. Install dependencies.  You need (these are Debian package names,
    adapt as needed):
@@ -631,14 +555,7 @@ the "thunk" object space::
 the examples in `lazily computed objects`_ should work in the translated
 result.
 
-Translating using the LLVM backend
-++++++++++++++++++++++++++++++++++
-
-
-To create a standalone executable using the experimental LLVM_ compiler
-infrastructure::
-
-    ./translate.py --batch --backend=llvm targetpypystandalone.py
+.. _`CLI code`: 
 
 Translating using the CLI backend
 +++++++++++++++++++++++++++++++++
@@ -663,10 +580,6 @@ the convenience ./pypy-cli script::
    >>>> 1 + 1
    2
    >>>>
-
-Unfortunately the interactive interpreter will not work with Mono
-versions older than 1.1.17.2 due to a Mono bug. Everything else will
-work fine, but not the interactive shell.
 
 Moreover, at the moment it's not possible to do the full translation
 using only the tools provided by the Microsoft .NET SDK, since
@@ -709,6 +622,28 @@ At the moment the only way to load a .NET class is to explicitly use
 ``clr.load_cli_class``; in the future they will be automatically
 loaded when accessing .NET namespaces as they were Python modules, as
 IronPython does.
+
+.. _`JVM code`: 
+
+Translating using the JVM backend
++++++++++++++++++++++++++++++++++
+
+To create a standalone JVM executable::
+
+    ./translate.py --backend=jvm targetpypystandalone.py
+
+This will create a jar file ``pypy-jvm.jar`` as well as a convenience
+script ``pypy-jvm`` for executing it.  To try it out, simply run
+``./pypy-jvm``::
+
+    $ ./pypy-jvm 
+    Python 2.5.2 (64214, Apr 17 2009, 08:11:23)
+    [PyPy 1.0.0] on darwin
+    Type "help", "copyright", "credits" or "license" for more information.
+    And now for something completely different: ``# assert did not crash''
+    >>>> 
+
+Alternatively, you can run it using ``java -jar pypy-jvm.jar``.
 
 Installation
 ++++++++++++
@@ -838,7 +773,7 @@ path, you might like to visit:
     http://codespeak.net/py/dist/download.html
 
 Getting involved 
-================================== 
+================
 
 PyPy employs an open development process.  You are invited to join our
 `pypy-dev mailing list`_ or look at the other `contact
