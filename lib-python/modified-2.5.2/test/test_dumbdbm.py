@@ -90,7 +90,6 @@ class DumbDBMTestCase(unittest.TestCase):
         f = open(_fname + '.dir', 'wb')
         f.write(data)
         f.close()
-        data.close()
 
         f = dumbdbm.open(_fname)
         self.assertEqual(f['1'], 'hello')
