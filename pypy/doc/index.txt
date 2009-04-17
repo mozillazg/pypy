@@ -212,8 +212,6 @@ Directory                      explanation/links
 `interpreter/astcompiler/`_    interpreter-level bytecode compiler, via an AST
                                representation
 
-`jit/`_                        the `just-in-time compiler generator`_
-
 `lang/`_                       interpreters for non-Python languages, written in RPython_
 
 `lang/js/`_                    a JavaScript interpreter (in-progress)
@@ -320,9 +318,6 @@ Directory                      explanation/links
 .. _JIT: jit/index.html
 .. _`JIT Generation in PyPy`: jit/index.html
 .. _`just-in-time compiler generator`: jit/index.html
-.. _`jit backends`: jit/backend.html
-.. _`hint-annotator`: jit/theory.html#hint-annotator
-.. _`timeshifter`: jit/theory.html#timeshifter
 .. _rtyper: rtyper.html
 .. _`low-level type system`: rtyper.html#low-level-type
 .. _`object-oriented type system`: rtyper.html#oo-type
