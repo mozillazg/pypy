@@ -72,7 +72,10 @@ http://sourceforge.net/projects/expat/ and extract it in the base
 directory.  Then open the project file ``expat.dsw`` with Visual
 Studio; follow the instruction for converting the project files,
 switch to the "Release" configuration, and build the solution (the
-``expat_static`` project is actually enough for pypy).
+``expat`` project is actually enough for pypy).
+
+Then, copy the file ``win32\bin\release\libexpat.dll`` somewhere in
+your PATH.
 
 The OpenSSL library
 ~~~~~~~~~~~~~~~~~~~
