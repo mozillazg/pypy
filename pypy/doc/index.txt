@@ -26,9 +26,6 @@ Translation Framework:
   * `JIT Generation in PyPy`_ 
   * `Sandboxing Python code`_
 
-`JavaScript backend`_ describes how to use the JavaScript backend to create
-AJAX-based web pages.
-
 `PyPy Prolog Interpreter`_ describes an implementation of 
 Prolog that makes use of our Translation Tool chain. 
 
@@ -168,7 +165,6 @@ from our Python interpreter.
 .. _`configuration documentation`: config/
 .. _`coding guide`: coding-guide.html 
 .. _`architecture`: architecture.html 
-.. _`JavaScript backend` : js/using.html
 .. _`getting started`: getting-started.html 
 .. _`theory`: theory.html
 .. _`bytecode interpreter`: interpreter.html 
@@ -272,8 +268,6 @@ Directory                      explanation/links
 `translator/cli/`_             the `CLI backend`_ for `.NET`_ (Microsoft CLR or Mono_)
 
 `translator/goal/`_            our `main PyPy-translation scripts`_ live here
-
-`translator/js/`_              the `JavaScript backend`_
 
 `translator/jvm/`_             the Java backend
 

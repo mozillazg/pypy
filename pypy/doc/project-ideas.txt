@@ -63,8 +63,6 @@ uses several processes and uses transparent proxies to share object views.
 Various Ideas
 -------------
 
-- work on and improve the JavaScript backend
-
 - improve one of the existing interpreters (e.g. the Prolog, the Scheme or
   the JavaScript interpreter or the Smalltalk VM), or start a new one
 
