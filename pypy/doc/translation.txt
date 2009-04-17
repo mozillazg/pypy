@@ -28,7 +28,7 @@ this task into several steps, and the purpose of this document is to
 introduce them.
 
 As of the 1.0 release, RPython_ programs can be translated into the following
-languages/platforms: C/POSIX, CLI/.NET, Javascript
+languages/platforms: C/POSIX, CLI/.NET
 and Java/JVM (in addition, there's `a backend`_ that translates
 `application-level`_ into `interpreter-level`_ code, but this is a special
 case in several ways).
