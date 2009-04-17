@@ -7,14 +7,14 @@ Papers
 
 *Articles about PyPy published so far, most recent first:* (bibtex_ file)
 
-* `How to *not* write Virtual Machines for Dynamic Languages`_,
-  C.F. Bolz and A. Rigo
-
 * `Automatic JIT Compiler Generation with Runtime Partial Evaluation`_
   (Master Thesis), C.F. Bolz
 
 * `RPython: A Step towards Reconciling Dynamically and Statically Typed
   OO Languages`_, D. Ancona, M. Ancona, A. Cuni and N.D. Matsakis
+
+* `How to *not* write Virtual Machines for Dynamic Languages`_,
+  C.F. Bolz and A. Rigo
 
 * `PyPy's approach to virtual machine construction`_, A. Rigo and S. Pedroni
 
