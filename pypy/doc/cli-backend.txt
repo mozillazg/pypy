@@ -343,7 +343,7 @@ As we saw previously, the semantic of ootypesystem classes
 is very similar to the .NET one, so the translation is mostly
 straightforward.
 
-The related code is located in the module class_.py.  Rendered classes
+The related code is located in the module class\_.py.  Rendered classes
 are composed of four parts:
 
   - fields;
