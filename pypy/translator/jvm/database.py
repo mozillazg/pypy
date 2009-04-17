@@ -11,7 +11,6 @@ from pypy.translator.jvm import node, methods
 from pypy.translator.jvm.option import getoption
 from pypy.translator.jvm.builtin import JvmBuiltInType
 from pypy.translator.oosupport.database import Database as OODatabase
-from pypy.rpython.ootypesystem.bltregistry import ExternalType
 from pypy.annotation.signature import annotation
 from pypy.annotation.model import annotation_to_lltype
 import pypy.translator.jvm.constant as jvmconst
@@ -463,10 +462,6 @@ class Database(OODatabase):
         if isinstance(OOT, ootype.StaticMethod):
             return self.record_delegate(OOT)
 
-        # handle externals
-        if isinstance(OOT, ExternalType):
-            return jvm.JvmNativeClass(self, OOT)
-        
         assert False, "Untranslatable type %s!" % OOT
 
     ooitemtype_to_array = {
