@@ -288,7 +288,12 @@ class Coroutine(Wrappable):
         # Additionally note that in the context of __del__, we are
         # not in the position to issue a switch.
         # we defer it completely.
-        syncstate.postpone_deletion(self)
+        
+        # it is necessary to check whether syncstate is None because CPython
+        # sets it to None when it cleans up the modules, which will lead to
+        # very strange effects
+        if syncstate is None:
+            syncstate.postpone_deletion(self)
 
     # coroutines need complete control over their __del__ behaviour. In
     # particular they need to care about calling space.userdel themselves
