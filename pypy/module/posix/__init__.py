@@ -104,13 +104,6 @@ corresponding Unix manual entries for more information on calls."""
         if hasattr(os, name):
             interpleveldefs[name] = 'interp_posix.' + name
 
-    def setup_after_space_initialization(self):
-        """NOT_RPYTHON"""
-        space = self.space
-        config = space.config
-        if config.translating and config.translation.backend == "llvm":
-            space.delattr(self, space.wrap("execv"))
-
     def startup(self, space):
         from pypy.module.posix import interp_posix
         interp_posix.get(space).startup(space)

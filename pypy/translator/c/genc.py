@@ -179,9 +179,7 @@ class CBuilder(object):
     def get_gcpolicyclass(self):
         if self.gcpolicy is None:
             name = self.config.translation.gctransformer
-            if self.config.translation.gcrootfinder == "llvmgc":
-                name = "%s+llvmgcroot" % (name,)
-            elif self.config.translation.gcrootfinder == "asmgcc":
+            if self.config.translation.gcrootfinder == "asmgcc":
                 name = "%s+asmgcroot" % (name,)
             return gc.name_to_gcpolicy[name]
         return self.gcpolicy
