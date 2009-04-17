@@ -133,7 +133,7 @@ To get started with PyPy, you can either play with `the py.py
 interpreter`_ and the `special PyPy features`_, or directly proceed to
 `translating the PyPy Python interpreter`_.  This allows you to try out
 real Python applications in a fast version of PyPy, compiled via C,
-LLVM, .NET or Java, with or without special features included.
+.NET or Java, with or without special features included.
 
 Main entry point  
 ------------------------------------------
@@ -787,11 +787,6 @@ plan where to meet with us.
 .. _`contact possibilities`: home.html
 
 .. _`py library`: http://codespeak.net/py 
-.. _`PyPy/LLVM backend`: translation.html#llvm 
-.. _`low level virtual machine`: http://llvm.org/
-.. _`how to install LLVM`: http://llvm.org/docs/GettingStarted.html
-.. _`LLVM mailing list`: http://mail.cs.uiuc.edu/mailman/listinfo/llvmdev
-.. _`LLVM version 1.9 installed`: http://llvm.org/releases
 
 .. _`Spidermonkey`: http://www.mozilla.org/js/spidermonkey/
 .. _`Google summer of code`: http://code.google.com/soc

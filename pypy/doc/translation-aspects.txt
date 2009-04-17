@@ -158,8 +158,8 @@ management, e.g. automatic reclamation of memory that is no longer used. The
 whole analysis toolchain also assumes that memory management is being taken
 care of -- only the backends have to concern themselves with that issue. For
 backends that target environments that have their own garbage collector, like
-Smalltalk or Javascript, this is not an issue. For other targets like C and
-LLVM the backend has to produce code that uses some sort of garbage collection.
+Smalltalk or Javascript, this is not an issue. For other targets like C
+the backend has to produce code that uses some sort of garbage collection.
 
 This approach has several advantages. It makes it possible to target different
 platforms, with and without integrated garbage collection. Furthermore, the
