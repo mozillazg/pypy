@@ -746,33 +746,6 @@ richards benchmarks.
 GenJVM is almost entirely the work of Niko Matsakis, who worked on it
 also as part of the Summer of PyPy program.
 
-GenJS
-+++++
-
-GenJS targets JavaScript, or more properly ECMAScript.
-
-It is a little different to the other backends, in that it is not really a
-goal to ever translate the entire PyPy interpreter -- the most important JS
-implementations are browsers, and they probably wouldn't be too happy with the
-100+ megabyte JavaScript file that would result...
-
-Instead, the goal of GenJS is more directed towards allowing one to write
-Ajax_ web applications entirely in Python (the client side would have to be
-restricted to RPython_), and this was the subject of Maciej Fijalkowski's
-Summer Of Code 2006 project.
-
-.. _Ajax: http://en.wikipedia.org/wiki/Ajax
-
-The first version of GenJS was written by Eric van Riet Paap (Maciej's mentor
-for the Summer Of Code project) and now he and Maciej are collaborating on its
-further development.
-
-To read more about JS backend there is a `whatis document`_ and
-a `using document`_.
-
-.. _`whatis document`: js/whatis.html
-.. _`using document`: js/using.html
-
 .. _`Python again`:
 .. _`Python back-end`:
 
