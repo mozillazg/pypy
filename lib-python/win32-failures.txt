@@ -9,13 +9,15 @@ test_import
 test_locale
 test_mmap
 test_netrc
-test_old_mailbox
+test_old_mailbox    [unlink failures corrected]
+                    - test_from_regex fails probably because of seek() and tell() issues
+                      (test passes if file is opened in binary mode)
 test_os             - test_1565150: rewrite utime() to use SetFileTime
-                    - test_access: ??
-test_popen2
+                    - test_access: this test seems flaky
+test_popen2         missing os.popen2
 test_random
 test_repr           [Done] probably
-test_runpy
+test_runpy          [Done]
 test_shutil         - when os.utime uses SetFileTime, raise WindowsError instead of OSError.
 test_site
 test_socket
