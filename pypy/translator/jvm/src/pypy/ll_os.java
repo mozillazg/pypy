@@ -170,6 +170,7 @@ public class ll_os implements Constants {
     static public interface Libc extends Library {
         public int getpid();
         public int symlink(String path1, String path2);
+        public int access(String path, int mode);
     }
     static final Libc libc;
     static {
@@ -297,7 +298,7 @@ public class ll_os implements Constants {
         //if ((mode & X_OK) != 0 && !file.canExecute())
         //    return false;
         
-        return true;
+        return libc.access(path, mode) == 0; // note that 0==success
     }
 
     public int ll_os_open(String name, int flags, int mode)
