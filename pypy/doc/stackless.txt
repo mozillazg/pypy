@@ -259,7 +259,7 @@ to Coroutines, with a slightly different interface: greenlets put more
 emphasis on a tree structure.  The various greenlets of a program form a
 precise tree, which fully determines their order of execution.
 
-For usage reference, see the documentation of the `greenlets`_.
+For usage reference, see the `documentation of the greenlets`_.
 The PyPy interface is identical.  You should use ``greenlet.greenlet``
 instead of ``stackless.greenlet`` directly, because the greenlet library
 can give you the latter when you ask for the former on top of PyPy.
@@ -685,7 +685,7 @@ scale automatically to larger programs.
 
 
 .. _`Stackless Python`: http://www.stackless.com
-.. _`greenlets`: http://codespeak.net/svn/greenlet/trunk/doc/greenlet.txt
+.. _`documentation of the greenlets`: http://codespeak.net/svn/greenlet/trunk/doc/greenlet.txt
 .. _`Stackless Transform`: translation.html#the-stackless-transform
 
 .. include:: _ref.txt
