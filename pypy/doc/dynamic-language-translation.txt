@@ -321,7 +321,7 @@ the claimed goals):
   target language.  This part depends strongly on the details of the
   target language, so little code can be shared between the different
   back-ends (even between back-ends taking as input the same low-level
-  flow graphs, e.g. the C and the LLVM_ back-ends).  The back-end is
+  flow graphs, e.g. the C and the LLVM back-ends).  The back-end is
   also responsible for integrating with some of the most
   platform-dependent aspects like memory management and exception
   model, as well as for generating alternate styles of code for
@@ -2048,7 +2048,7 @@ The approach eventually selected is different.  We proceed in two steps:
   based on the low-level flow graphs thus obtained.
 
 We can currently generate C-like low-level flow graphs and turn them
-into either C or LLVM_ code; or experimentally, PowerPC machine code or
+into either C or LLVM code; or experimentally, PowerPC machine code or
 JavaScript_.  If we go through slightly less low-level flow graphs
 instead, we can also interface with back-ends generating bytecode for
 JVM, CLI/.NET and even Javascript.
@@ -2171,7 +2171,7 @@ management and exception model, as well as for generating alternate
 styles of code for different execution models like coroutines.
 
 We will give as an example an overview of the `GenC back-end`_.  The
-`LLVM back-end`_ works at the same level.  The CLI and JVM
+LLVM back-end works at the same level.  The CLI and JVM
 back-ends take ootyped graphs instead, as described above, and faces
 different problems.
 
@@ -2319,8 +2319,6 @@ Glossary and links mentioned in the text:
 
 * Lattice: http://en.wikipedia.org/wiki/Lattice_%28order%29
 
-* LLVM (Low-Level Virtual Machine): http://llvm.org/
-
 * Low-level Types: see [TR]_.
 
 * Object Space: http://codespeak.net/pypy/trunk/pypy/doc/objspace.html
@@ -2346,10 +2344,8 @@ Glossary and links mentioned in the text:
 .. _`ACM SIGPLAN 2004 paper`: http://psyco.sourceforge.net/psyco-pepm-a.ps.gz
 .. _`Hindley-Milner`: http://en.wikipedia.org/wiki/Hindley-Milner_type_inference
 .. _SSA: http://en.wikipedia.org/wiki/Static_single_assignment_form
-.. _LLVM: http://llvm.org/
 .. _`RTyper reference`: rtyper.html
 .. _`GenC back-end`: translation.html#genc
-.. _`LLVM back-end`: translation.html#llvm
 .. _JavaScript: http://www.ecma-international.org/publications/standards/Ecma-262.htm
 .. _lltype: rtyper.html#low-level-types
 .. _`post on the Perl 6 compiler mailing list`: http://www.nntp.perl.org/group/perl.perl6.compiler/1107
