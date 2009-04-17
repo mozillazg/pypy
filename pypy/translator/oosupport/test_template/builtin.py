@@ -126,23 +126,41 @@ class BaseTestBuiltin(BaseTestRbuiltin):
         
     ACCESS_FLAGS = [os.F_OK, os.R_OK, os.W_OK, os.X_OK]
     
-    def test_os_access_nonexisting(self):
-        def nonexisting(flag):
-            return os.access('some_file_that_does_not_exist', flag)
-        for flag in self.ACCESS_FLAGS:
-            assert self.interpret(nonexisting, [flag]) == nonexisting(flag)
+    def test_os_access(self):
+        def create_fn(filenm):
+            return lambda flag: os.access(filenm, flag)
+        def try_file(filenm):
+            for flag in self.ACCESS_FLAGS:
+                print filenm, flag
+                fn = create_fn(filenm)
+                act = self.interpret(fn, [flag])
+                assert act == fn(flag)
+        assert not os.access('some_file_that_does_not_exist', os.F_OK) # shouldn't exist
+        try_file('some_file_that_does_not_exist')
+        try_file('.')
+        
+        open('some_file_that_DID_not_exist', 'w').close()
+        os.chmod('some_file_that_DID_not_exist', 0)
+        assert os.access('some_file_that_DID_not_exist', os.F_OK) # should exist now
+        assert not os.access('some_file_that_DID_not_exist', os.W_OK) # should not be writable
+        try_file('some_file_that_DID_not_exist')
+        os.remove('some_file_that_DID_not_exist')
 
-    def test_os_access_allowed(self):
-        def dot(flag):
-            return os.access('.', flag)
-        for flag in self.ACCESS_FLAGS:
-            assert self.interpret(dot, [flag]) == dot(flag)
-
-    def test_os_access_denied(self):
-        def slash(flag):
-            return os.access('/', flag)
-        for flag in self.ACCESS_FLAGS:
-            assert self.interpret(slash, [flag]) == slash(flag)
+    #def test_os_access_allowed(self):
+    #    def fn(flag):
+    #        return os.access('.', flag)
+    #    for flag in self.ACCESS_FLAGS:
+    #        print flag
+    #        act = self.interpret(fn, [flag])
+    #        assert act == fn(flag)
+    #
+    #def test_os_access_denied(self):
+    #    
+    #    def fn(flag):
+    #        return os.access('/', flag)
+    #    for flag in self.ACCESS_FLAGS:
+    #        act = self.interpret(fn, [flag])
+    #        assert act == fn(flag)
 
     def test_os_stat_oserror(self):
         def fn():
