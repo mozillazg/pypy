@@ -14,7 +14,7 @@ import sys
 import py
 
 if sys.platform == "win32":
-    libname = 'libexpat'
+    libname = 'libexpatMT'
 else:
     libname = 'expat'
 eci = ExternalCompilationInfo(
