@@ -2737,30 +2737,6 @@ class TestAnnotateTestCase:
         s = a.build_types(fun, [bool])
         assert isinstance(s, annmodel.SomeInteger)
 
-    def test_unionof_some_external_builtin(self):
-        from pypy.rpython.ootypesystem.bltregistry import BasicExternal
-        
-        class A(BasicExternal):
-            pass
-
-        class B(A):
-            pass
-
-        class C(A):
-            pass
-
-        def f(x):
-            if x:
-                return B()
-            else:
-                return C()
-
-        P = policy.AnnotatorPolicy()
-        P.allow_someobjects = False
-        a = self.RPythonAnnotator(policy=P)
-        s = a.build_types(f, [bool])
-        assert isinstance(s, annmodel.SomeExternalInstance)        
-
     def test_instance_with_flags(self):
         py.test.skip("not supported any more")
         from pypy.rlib.jit import hint
