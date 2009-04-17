@@ -98,7 +98,7 @@ By default, you can only import .NET namespaces that belongs to already loaded
 assemblies.  To load additional .NET assemblies, you can use
 ``clr.AddReferenceByPartialName``.  The following example loads
 ``System.Windows.Forms`` and ``System.Drawing`` to display a simple Windows
-Form displaying the usual "Hello World" message:
+Form displaying the usual "Hello World" message::
 
     >>>> import clr
     >>>> clr.AddReferenceByPartialName("System.Windows.Forms")
