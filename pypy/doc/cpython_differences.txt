@@ -16,7 +16,7 @@ Extension modules
 
 List of extension modules that we support:
 
-* Supported as built-in modules (in ``pypy/module/*``)
+* Supported as built-in modules (in `pypy/module/`_)
   (``_minimal_curses`` is a custom subset of curses;
   ``_rawffi`` is a custom module for ctypes integration;
   ``dyngram`` is a custom module for grammar tricks):
