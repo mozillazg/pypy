@@ -93,6 +93,5 @@ You can also have a look around our documentation_.
 .. _documentation: index.html
 .. _home: home.html
 .. _`pypy-dev mailing list`: http://codespeak.net/mailman/listinfo/pypy-dev
-.. _`Summer of PyPy`: summer-of-pypy.html
 .. _`ZODB's Persistent class`: http://www.zope.org/Documentation/Books/ZDG/current/Persistence.stx
 .. _`transparent proxy`: objspace-proxies.html#tproxy
