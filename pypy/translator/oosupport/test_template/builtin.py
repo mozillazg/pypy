@@ -123,6 +123,26 @@ class BaseTestBuiltin(BaseTestRbuiltin):
         assert stat.S_ISDIR(mode)
         mode = self.interpret(fn, [1])
         assert stat.S_ISDIR(mode)
+        
+    ACCESS_FLAGS = [os.F_OK, os.R_OK, os.W_OK, os.X_OK]
+    
+    def test_os_access_nonexisting(self):
+        def nonexisting(flag):
+            return os.access('some_file_that_does_not_exist', flag)
+        for flag in self.ACCESS_FLAGS:
+            assert self.interpret(nonexisting, [flag]) == nonexisting(flag)
+
+    def test_os_access_allowed(self):
+        def dot(flag):
+            return os.access('.', flag)
+        for flag in self.ACCESS_FLAGS:
+            assert self.interpret(dot, [flag]) == dot(flag)
+
+    def test_os_access_denied(self):
+        def slash(flag):
+            return os.access('/', flag)
+        for flag in self.ACCESS_FLAGS:
+            assert self.interpret(slash, [flag]) == slash(flag)
 
     def test_os_stat_oserror(self):
         def fn():
