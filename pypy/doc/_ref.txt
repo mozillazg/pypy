@@ -31,7 +31,6 @@
 .. _`interpreter/pyparser/`:
 .. _`pypy/interpreter/pyparser`: ../../pypy/interpreter/pyparser
 .. _`pypy/interpreter/typedef.py`: ../../pypy/interpreter/typedef.py
-.. _`jit/`: ../../pypy/jit
 .. _`lang/`: ../../pypy/lang
 .. _`lang/js/`: ../../pypy/lang/js
 .. _`lang/prolog/`: ../../pypy/lang/prolog
