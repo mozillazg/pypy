@@ -46,12 +46,22 @@ The built-in function ``id()`` returns numbers that are not addresses
 for most of PyPy's garbage collectors.
 This is most visible in the default repr: a typical PyPy object can
 pretend to be located ``at 0x00000009``.  This is just its ``id()``, not
-its real address (because the physical address can change).
+its real address (because the physical address can change for some GCs). Calling
+``id`` a lot can lead to performance problem.
 
 Note that if you have a long chain of objects, each with a reference to
 the next one, and each with a __del__, PyPy's GC will perform badly.  On
 the bright side, in most other cases, benchmarks have shown that PyPy's
 GCs perform much better than CPython's.
+
+Another difference is that if you add a ``__del__`` to an existing class it will
+not be called::
+
+    >>>> class A(object):
+    ....     pass
+    ....
+    >>>> A.__del__ = lambda self: None
+    __main__:1: RuntimeWarning: a __del__ method added to an existing type will not be called
 
 
 Subclasses of built-in types
