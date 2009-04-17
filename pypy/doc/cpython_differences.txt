@@ -16,18 +16,15 @@ Extension modules
 
 List of extension modules that we support:
 
-* Supported as built-in modules (in `pypy/module/`_)
-  (``_minimal_curses`` is a custom subset of curses;
-  ``_rawffi`` is a custom module for ctypes integration;
-  ``dyngram`` is a custom module for grammar tricks):
+* Supported as built-in modules (in `pypy/module/`_):
 
     __builtin__
-    __pypy__
+    `__pypy__`_
     _codecs
     _lsprof
-    _minimal_curses
+    `_minimal_curses`_
     _random
-    _rawffi
+    `_rawffi`_
     _socket
     _sre
     _ssl
@@ -35,7 +32,7 @@ List of extension modules that we support:
     bz2
     cStringIO
     crypt
-    dyngram
+    `dyngram`_
     errno
     exceptions
     fcntl
@@ -69,6 +66,12 @@ List of extension modules that we support:
 
 The extension modules (i.e. modules written in C, in the standard CPython)
 that are not mentioned above are not available in PyPy.
+
+.. the nonstandard modules are listed below...
+.. _`__pypy__`: __pypy__-module.html
+.. _`_rawffi`: ctypes-implementation.html
+.. _`_minimal_curses`: config/objspace.usemodules._minimal_curses.html
+.. _`dyngram`: config/objspace.usemodules.dyngram.html
 
 
 Differences related to garbage collection strategies
