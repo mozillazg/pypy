@@ -83,7 +83,7 @@ class RegisterOs(BaseLazyRegistering):
     def __init__(self):
         self.configure(CConfig)
 
-        # we need an indirection via c functions to get macro calls working on llvm
+        # we need an indirection via c functions to get macro calls working on llvm XXX still?
         if hasattr(os, 'WCOREDUMP'):
             decl_snippet = """
             %(ret_type)s pypy_macro_wrapper_%(name)s (int status);
