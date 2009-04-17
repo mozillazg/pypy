@@ -33,7 +33,6 @@ def taskdef(taskfunc, deps, title, new_state=None, expected_states=[],
 
 _BACKEND_TO_TYPESYSTEM = {
     'c': 'lltype',
-    'llvm': 'lltype'
 }
 
 def backend_to_typesystem(backend):
@@ -520,62 +519,6 @@ class TranslationDriver(SimpleTaskEngine):
     task_llinterpret_lltype = taskdef(task_llinterpret_lltype, 
                                       [STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE], 
                                       "LLInterpreting")
-
-    def task_source_llvm(self):
-        translator = self.translator
-        if translator.annotator is None:
-            raise ValueError, "llvm requires annotation."
-
-        from pypy.translator.llvm import genllvm
-
-        self.llvmgen = genllvm.GenLLVM(translator, self.standalone)
-
-        llvm_filename = self.llvmgen.gen_source(self.entry_point)
-        self.log.info("written: %s" % (llvm_filename,))
-    #
-    task_source_llvm = taskdef(task_source_llvm, 
-                               [STACKCHECKINSERTION, BACKENDOPT, RTYPE], 
-                               "Generating llvm source")
-
-    def task_compile_llvm(self):
-        gen = self.llvmgen
-        if self.standalone:
-            exe_name = (self.exe_name or 'testing') % self.get_info()
-            self.c_entryp = gen.compile_standalone(exe_name)
-            self.create_exe()
-        else:
-            self.c_module, self.c_entryp = gen.compile_module()
-    #
-    task_compile_llvm = taskdef(task_compile_llvm, 
-                                ['source_llvm'], 
-                                "Compiling llvm source")
-
-    def task_run_llvm(self):
-        self.backend_run('llvm')
-    #
-    task_run_llvm = taskdef(task_run_llvm, ['compile_llvm'], 
-                            "Running compiled llvm source",
-                            idemp=True)
-
-    def task_source_js(self):
-        from pypy.translator.js.js import JS
-        self.gen = JS(self.translator, functions=[self.entry_point],
-                      stackless=self.config.translation.stackless)
-        filename = self.gen.write_source()
-        self.log.info("Wrote %s" % (filename,))
-    task_source_js = taskdef(task_source_js, 
-                        [OOTYPE],
-                        'Generating Javascript source')
-
-    def task_compile_js(self):
-        pass
-    task_compile_js = taskdef(task_compile_js, ['source_js'],
-                              'Skipping Javascript compilation')
-
-    def task_run_js(self):
-        pass
-    task_run_js = taskdef(task_run_js, ['compile_js'],
-                              'Please manually run the generated code')
 
     def task_source_cli(self):
         from pypy.translator.cli.gencli import GenCli
