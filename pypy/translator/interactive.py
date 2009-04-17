@@ -132,12 +132,6 @@ class Translation(object):
         self.ensure_backend('c')
         self.driver.source_c()
 
-    def source_js(self, argtypes=None, **kwds):
-        self.update_options(argtypes, kwds)
-        self.ensure_backend('js')
-        self.driver.source_js()
-        return open(str(self.driver.gen.filename)).read()
-
     def source_cl(self, argtypes=None, **kwds):
         self.update_options(argtypes, kwds)
         self.ensure_backend('cl')
