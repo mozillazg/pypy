@@ -272,6 +272,7 @@ class TestMaemo(TestStandalone):
 
 class TestThread(object):
     def test_stack_size(self):
+        import time
         from pypy.module.thread import ll_thread
 
         class State:
@@ -282,23 +283,42 @@ class TestThread(object):
             if n > 0:
                 return recurse(n-1)+1
             else:
+                state.ll_lock.release()
+                time.sleep(0.2)
+                state.ll_lock.acquire(True)
                 return 0
 
         def bootstrap():
-            # recurse a lot, like 10000 times
-            recurse(10000)
+            # recurse a lot, like 20000 times
+            state.ll_lock.acquire(True)
+            recurse(20000)
+            state.count += 1
             state.ll_lock.release()
 
         def entry_point(argv):
             os.write(1, "hello world\n")
             error = ll_thread.set_stacksize(int(argv[1]))
             assert error == 0
-            # start a new thread
+            # malloc a bit
+            s1 = State(); s2 = State(); s3 = State()
+            s1.x = 0x11111111; s2.x = 0x22222222; s3.x = 0x33333333
+            # start 3 new threads
             state.ll_lock = ll_thread.Lock(ll_thread.allocate_ll_lock())
-            state.ll_lock.acquire(True)
-            ident = ll_thread.start_new_thread(bootstrap, ())
-            # wait for the thread to finish
-            state.ll_lock.acquire(True)
+            state.count = 0
+            ident1 = ll_thread.start_new_thread(bootstrap, ())
+            ident2 = ll_thread.start_new_thread(bootstrap, ())
+            ident3 = ll_thread.start_new_thread(bootstrap, ())
+            # wait for the 3 threads to finish
+            while True:
+                state.ll_lock.acquire(True)
+                if state.count == 3:
+                    break
+                state.ll_lock.release()
+                time.sleep(0.1)
+            # check that the malloced structures were not overwritten
+            assert s1.x == 0x11111111
+            assert s2.x == 0x22222222
+            assert s3.x == 0x33333333
             os.write(1, "done\n")
             return 0
 
