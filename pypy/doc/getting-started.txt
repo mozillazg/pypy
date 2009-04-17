@@ -92,7 +92,7 @@ head over to the `documentation section`_ where you'll find lots of
 interesting information.  Additionally, in true hacker spirit, you 
 may just `start reading sources`_ . 
 
-.. _`documentation section`: index.html 
+.. _`documentation section`: docindex.html 
 
 Running all of PyPy's tests  
 ---------------------------
@@ -111,7 +111,7 @@ in the same process; test_all.py is only suitable to run a
 subset of them at a time.**  To run them all daily we have a BuildBot based
 setup, a summary of its results can be seen at http://codespeak.net:8099/summary.
 
-.. _`if PyPy works on your machine/platform`: index.html#status
+.. _`if PyPy works on your machine/platform`: docindex.html#status
 .. _`autotest driver`: http://codespeak.net/pipermail/pypy-dev/2006q3/003273.html
 
 Filing bugs or feature requests 
@@ -746,7 +746,7 @@ plan where to meet with us.
 
 .. _events: http://codespeak.net/pypy/trunk/pypy/doc/news.html
 .. _`pypy-dev mailing list`: http://codespeak.net/mailman/listinfo/pypy-dev
-.. _`contact possibilities`: home.html
+.. _`contact possibilities`: index.html
 
 .. _`py library`: http://codespeak.net/py 
 
@@ -775,12 +775,12 @@ plan where to meet with us.
 .. _trace:                  ../../pypy/objspace/trace.py
 .. _flow:                   ../../pypy/objspace/flow/
 .. _translator.py:          ../../pypy/translator/translator.py
-.. _mailing lists:          home.html
-.. _documentation:          index.html 
+.. _mailing lists:          index.html
+.. _documentation:          docindex.html 
 .. _unit tests:             coding-guide.html#test-design
 .. _bug reports:            https://codespeak.net/issue/pypy-dev/
 
-.. _`directory reference`: index.html#directory-reference
+.. _`directory reference`: docindex.html#directory-reference
 .. _`Boehm-Demers-Weiser garbage collector`: http://www.hpl.hp.com/personal/Hans_Boehm/gc/
 
 .. include:: _ref.txt

@@ -189,7 +189,7 @@ many PyPy developers are in Europe) and the `mailing list`_ is better for long
 discussions.
 
 .. _`project suggestions`: project-ideas.html
-.. _`contact us`: home.html
+.. _`contact us`: index.html
 .. _`mailing list`: http://codespeak.net/mailman/listinfo/pypy-dev
 
 ----------------------------------------------------------------------
