@@ -88,8 +88,8 @@ You can also have a look around our documentation_.
 .. _`object spaces`: objspace.html
 .. _`code templating solution`: http://codespeak.net/svn/pypy/extradoc/soc-2006/code-templating.txt
 
-.. _documentation: index.html
-.. _home: home.html
+.. _documentation: docindex.html
+.. _home: index.html
 .. _`pypy-dev mailing list`: http://codespeak.net/mailman/listinfo/pypy-dev
 .. _`ZODB's Persistent class`: http://www.zope.org/Documentation/Books/ZDG/current/Persistence.stx
 .. _`transparent proxy`: objspace-proxies.html#tproxy
