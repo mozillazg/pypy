@@ -48,8 +48,8 @@ coding in RPython a bit).
 `sprint reports`_ lists reports written at most of our sprints, from
 2003 to the present.
 
-`talks and related projects`_ lists presentations 
-and related projects. 
+`papers, talks and related projects`_ lists presentations 
+and related projects as well as our published papers.
 
 `ideas for PyPy related projects`_ which might be a good way to get
 into PyPy.
@@ -152,7 +152,7 @@ from our Python interpreter.
 .. _parser: parser.html
 .. _`development methodology`: dev_method.html
 .. _`sprint reports`: sprint-reports.html
-.. _`talks and related projects`: extradoc.html
+.. _`papers, talks and related projects`: extradoc.html
 .. _`license`: ../../LICENSE
 .. _`PyPy LOC statistics`: http://codespeak.net/~hpk/pypy-stat/
 .. _`PyPy statistics`: http://codespeak.net/pypy/trunk/pypy/doc/statistic
