@@ -106,7 +106,7 @@ The following figure gives a simplified overview (`PDF color version`_):
 .. _`bytecode evaluator`: interpreter.html
 .. _`abstract interpretation`: theory.html#abstract-interpretation
 .. _`Flow Object Space`: objspace.html#the-flow-object-space
-.. _`interactive interface`: getting-started.html#try-out-the-translator
+.. _`interactive interface`: getting-started-translation.html#try-out-the-translator
 .. _`translatorshell.py`: ../../pypy/bin/translatorshell.py
 
 .. _`flow model`:
@@ -704,8 +704,8 @@ The Object-Oriented Backends
 
 The Object-Oriented backends target platforms that are less C-like and support
 classes, instance etc. If such a platform is targetted, the `OO type system` is
-used while rtyping. Of the OO backends, currently only gencli can translate the
-full PyPy, but the Java backend is getting close.
+used while rtyping. Of the OO backends, both gencli and genjava can translate
+the full Python interpreter.
 
 .. _`oo type system`: rtyper.html#oo-type
 

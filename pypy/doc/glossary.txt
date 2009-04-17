@@ -217,14 +217,14 @@ links to more information.
    in the `annotator pass`_ section.
 
 .. _applevel: coding-guide.html#application-level
-.. _`target language`: getting-started.html#trying-out-the-translator
+.. _`target language`: getting-started-translation.html#trying-out-the-translator
 .. _`just in time compiler`: jit/index.html
 .. _`the jit docs`: jit/index.html
 .. _`type inference article on Wikipedia`: http://en.wikipedia.org/wiki/Type_inference
 .. _`annotator pass`: translation.html#the-annotation-pass
 .. _`The RPython Typer`: translation.html#the-rpython-typer
-.. _`backends`: getting-started.html#trying-out-the-translator
-.. _Tool: getting-started.html#trying-out-the-translator
+.. _`backends`: getting-started-translation.html#trying-out-the-translator
+.. _Tool: getting-started-translation.html#trying-out-the-translator
 .. _`translation-aspects`: translation-aspects.html
 .. _`PyPy's garbage collectors`: garbage_collection.html
 .. _`Restricted Python`: coding-guide.html#restricted-python
