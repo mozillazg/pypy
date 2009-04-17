@@ -147,6 +147,9 @@ else:
 
         Open a pipe to/from a command returning a file object."""
 
+        if isinstance(cmd, unicode):
+            cmd = cmd.encode('ascii')
+
         if not isinstance(cmd, str):
             raise TypeError("invalid cmd type (%s, expected string)" %
                             (type(cmd),))
