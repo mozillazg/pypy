@@ -1,0 +1,30 @@
+These tests currently fail on win32:
+
+test_cmd_line
+test_dbm            [DONE] skipped
+test_dumbdbm
+test_file
+test_hashlib
+test_hmac
+test_import
+test_locale
+test_mmap
+test_netrc
+test_old_mailbox
+test_os
+test_popen2
+test_random
+test_repr
+test_runpy
+test_shutil
+test_site
+test_socket
+test_subprocess
+test_tarfile
+test_unicode_file
+test_unicodedata    objspace/std/unicodeobject.py uses unicodedb_3_2_0 ?? How does this work on Linux??
+test_univnewlines   big mess in rlib/streamio.py
+test_uuid           [DONE] fixed
+test_xdrlib
+test_zipimport      '/' '\\' mismatch
+
