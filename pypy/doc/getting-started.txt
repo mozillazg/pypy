@@ -316,13 +316,6 @@ run like this (this will take hours and hours and hours)::
     cd lib-python/2.5.2/test 
     python ../../../pypy/test_all.py
 
-or if you have `installed py.test`_ then you simply say::
-
-    py.test -E
-
-from the lib-python/2.5.2/test directory. Running one of the above
-commands tells you how to proceed.
-
 .. _`installed py.test`: https://codespeak.net/py/current/doc/download.html
 
 Demos
@@ -562,7 +555,7 @@ Translating using the CLI backend
 
 To create a standalone .NET executable using the `CLI backend`_::
 
-    ./translate.py --batch --backend=cli targetpypystandalone.py
+    ./translate.py --backend=cli targetpypystandalone.py
 
 The executable and all its dependecies will be stored in the
 ./pypy-cli-data directory. To run pypy.NET, you can run
@@ -570,10 +563,6 @@ The executable and all its dependecies will be stored in the
 the convenience ./pypy-cli script::
 
   $ ./pypy-cli
-  debug: entry point starting
-  debug:  argv ->
-  debug: importing code
-  debug: calling code.interact()
   Python 2.5.2 (pypy 1.0.0 build 5xxxx) on linux2
   Type "help", "copyright", "credits" or "license" for more information.
   (InteractiveConsole)
@@ -593,35 +582,8 @@ Mono_: if a Mono installation is detected the translation toolchain
 will automatically use its ``ilasm2`` tool to assemble the
 executables.
 
-Trying the experimental .NET integration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-You can also try the still very experimental clr_ module that
-enables integration with the surrounding .NET environment.
-
-You can dynamically load .NET classes using the ``clr.load_cli_class``
-method. After a class has been loaded, you can instantiate and use it
-as it were a normal Python class. Special methods such as indexers and
-properties are supported using the usual Python syntax::
-
-    >>>> import clr
-    >>>> ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
-    >>>> obj = ArrayList()
-    >>>> obj.Add(1)
-    0
-    >>>> obj.Add(2)
-    1
-    >>>> obj.Add("foo")
-    2
-    >>>> print obj[0], obj[1], obj[2]
-    1 2 foo
-    >>>> print obj.Count
-    3
-
-At the moment the only way to load a .NET class is to explicitly use
-``clr.load_cli_class``; in the future they will be automatically
-loaded when accessing .NET namespaces as they were Python modules, as
-IronPython does.
+To try out the experimental .NET integration, check the documentation of the
+clr_ module.
 
 .. _`JVM code`: 
 
@@ -752,8 +714,9 @@ want to look at generated flow graphs:
 CTypes (highly recommended)
 ++++++++++++++++++++++++++++
 
-`ctypes`_ (version 0.9.9.6 or later) is required if you want to run low-level
-tests. See the `download page of ctypes`_.
+`ctypes`_ is included in CPython 2.5 and higher.  CPython 2.4 users needs to
+install it (version 0.9.9.6 or later) if they want to run low-level tests. See
+the `download page of ctypes`_.
 
 .. _`download page of ctypes`: http://sourceforge.net/project/showfiles.php?group_id=71702
 .. _`ctypes`: http://starship.python.net/crew/theller/ctypes/
