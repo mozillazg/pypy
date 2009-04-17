@@ -263,6 +263,8 @@ class AppTestPyFrame:
                 l.append(arg)
             return trace
 
+        d = {}
+        exec """if 1:
         def g():
             try:
                 yield True
@@ -276,6 +278,8 @@ class AppTestPyFrame:
                 gen.close()
             except:
                 pass
+        """ in d
+        f = d['f']
 
         sys.settrace(trace)
         f()
