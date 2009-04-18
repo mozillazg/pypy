@@ -1,5 +1,3 @@
-from __future__ import generators
-
 from types import FunctionType
 from pypy.tool.ansi_print import ansi_log, raise_nicer_exception
 from pypy.annotation import model as annmodel

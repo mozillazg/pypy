@@ -43,7 +43,6 @@ There are no longer hand-generated source
 pieces in pypy svn.
 """
 
-from __future__ import generators
 import autopath, os, sys, types
 import inspect
 import cPickle as pickle, __builtin__
