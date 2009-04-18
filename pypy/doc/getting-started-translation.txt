@@ -103,17 +103,8 @@ executable in one of the ``/tmp/usession-*`` directories::
 
 To translate and run for the CLI you must have the SDK installed: Windows
 users need the `.NET Framework SDK 2.0`_, while Linux and Mac users
-can use Mono_.
-
-To translate and run for the JVM you must have a JDK installed (at 
-least version 5) as well as the `Jasmin JVM assembler`_.  In particular,
-you need a script in your path called ``jasmin`` which will execute
-the assembler.  For example, the contents might be:
-
-	#!/bin/bash
-	java -jar $PATH_TO_JASMIN_JAR "$@"
-
-.. _`Jasmin JVM assembler`: http://jasmin.sourceforge.net/
+can use Mono_.  To translate and run for the JVM you must have a JDK 
+installed (at least version 5) and ``java``/``javac`` on your path.
 
 A slightly larger example
 +++++++++++++++++++++++++
