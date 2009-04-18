@@ -119,7 +119,7 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([], int, llimpl=c_func_llimpl,
                       export_name='ll_os.ll_os_' + name)
 
-    def extdef_for_function_accepting_int(self, name, **kwds):
+    def extdef_for_os_function_accepting_int(self, name, **kwds):
         c_func = self.llexternal(name, [rffi.INT], rffi.INT, **kwds)
         def c_func_llimpl(arg):
             res = rffi.cast(rffi.LONG, c_func(arg))
@@ -131,7 +131,7 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([int], None, llimpl=c_func_llimpl,
                       export_name='ll_os.ll_os_' + name)
 
-    def extdef_for_function_accepting_2int(self, name, **kwds):
+    def extdef_for_os_function_accepting_2int(self, name, **kwds):
         c_func = self.llexternal(name, [rffi.INT, rffi.INT], rffi.INT, **kwds)
         def c_func_llimpl(arg, arg2):
             res = rffi.cast(rffi.LONG, c_func(arg, arg2))
@@ -143,7 +143,7 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([int, int], None, llimpl=c_func_llimpl,
                       export_name='ll_os.ll_os_' + name)        
 
-    def extdef_for_function_accepting_0int(self, name, **kwds):
+    def extdef_for_os_function_accepting_0int(self, name, **kwds):
         c_func = self.llexternal(name, [], rffi.INT, **kwds)
         def c_func_llimpl():
             res = rffi.cast(rffi.LONG, c_func())
@@ -155,7 +155,7 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([], None, llimpl=c_func_llimpl,
                       export_name='ll_os.ll_os_' + name)        
 
-    def extdef_for_function_int_to_int(self, name, **kwds):
+    def extdef_for_os_function_int_to_int(self, name, **kwds):
         c_func = self.llexternal(name, [rffi.INT], rffi.INT, **kwds)
         def c_func_llimpl(arg):
             res = rffi.cast(rffi.LONG, c_func(arg))
@@ -502,19 +502,19 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'setuid')
     def register_os_setuid(self):
-        return self.extdef_for_function_accepting_int('setuid')
+        return self.extdef_for_os_function_accepting_int('setuid')
 
     @registering_if(os, 'seteuid')
     def register_os_seteuid(self):
-        return self.extdef_for_function_accepting_int('seteuid')
+        return self.extdef_for_os_function_accepting_int('seteuid')
 
     @registering_if(os, 'setgid')
     def register_os_setgid(self):
-        return self.extdef_for_function_accepting_int('setgid')
+        return self.extdef_for_os_function_accepting_int('setgid')
 
     @registering_if(os, 'setegid')
     def register_os_setegid(self):
-        return self.extdef_for_function_accepting_int('setegid')
+        return self.extdef_for_os_function_accepting_int('setegid')
 
     @registering_if(os, 'getpid')
     def register_os_getpid(self):
@@ -547,7 +547,7 @@ class RegisterOs(BaseLazyRegistering):
             return extdef([], None, llimpl=c_func_llimpl,
                           export_name='ll_os.ll_os_' + name)
         else:
-            return self.extdef_for_os_function_accepting_0int(name)
+            return self.extdef_for_os_function_accepting_int(name)
 
     @registering_if(os, 'getppid')
     def register_os_getppid(self):
@@ -555,23 +555,23 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'getpgid')
     def register_os_getpgid(self):
-        return self.extdef_for_function_int_to_int('getpgid')
+        return self.extdef_for_os_function_int_to_int('getpgid')
 
     @registering_if(os, 'setpgid')
     def register_os_setpgid(self):
-        return self.extdef_for_function_accepting_2int('setpgid')
+        return self.extdef_for_os_function_accepting_2int('setpgid')
 
     @registering_if(os, 'setreuid')
     def register_os_setreuid(self):
-        return self.extdef_for_function_accepting_2int('setreuid')
+        return self.extdef_for_os_function_accepting_2int('setreuid')
 
     @registering_if(os, 'setregid')
     def register_os_setregid(self):
-        return self.extdef_for_function_accepting_2int('setregid')
+        return self.extdef_for_os_function_accepting_2int('setregid')
 
     @registering_if(os, 'getsid')
     def register_os_getsid(self):
-        return self.extdef_for_function_int_to_int('getsid')
+        return self.extdef_for_os_function_int_to_int('getsid')
 
     @registering_if(os, 'setsid')
     def register_os_setsid(self):
