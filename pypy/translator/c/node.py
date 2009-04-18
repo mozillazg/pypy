@@ -1,4 +1,3 @@
-from __future__ import generators
 from pypy.rpython.lltypesystem.lltype import \
      Struct, Array, FixedSizeArray, FuncType, PyObjectType, typeOf, \
      GcStruct, GcArray, RttiStruct, ContainerType, \

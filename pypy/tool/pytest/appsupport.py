@@ -1,4 +1,3 @@
-from __future__ import generators 
 import autopath
 import py
 from py.__.magic import exprinfo

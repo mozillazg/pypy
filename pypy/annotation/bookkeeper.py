@@ -1,8 +1,6 @@
 """
 The Bookkeeper class.
 """
-
-from __future__ import generators
 import sys, types, inspect, weakref
 
 from pypy.objspace.flow.model import Constant
