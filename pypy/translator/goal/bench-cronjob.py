@@ -26,7 +26,7 @@ def run(cmd):
     return result
 
 def update_pypy():
-    os.chdir(homedir + '/projects/pypy-dist')
+    os.chdir(homedir + '/projects/pypy-trunk')
     run('/usr/local/bin/svn up 2>&1')
 
 def compile(backend):
@@ -49,15 +49,15 @@ def compile(backend):
         return f
     features = '--'.join([normalize(f) for f in features.split('--')])
 
-    os.chdir(homedir + '/projects/pypy-dist/pypy/translator/goal')
+    os.chdir(homedir + '/projects/pypy-trunk/pypy/translator/goal')
     run('/usr/local/bin/python translate.py --backend=%(backend)s%(featureoptions)s%(translateoptions)s --batch targetpypystandalone.py %(targetoptions)s 2>&1' % locals())
 
-    os.chdir(homedir + '/projects/pypy-dist')
+    os.chdir(homedir + '/projects/pypy-trunk')
     try:
         revision = '%d' % (py.path.svnwc('.').info().rev,)
     except:
         revision = 'unknown'
-    basename = homedir + '/projects/pypy-dist/pypy/translator/goal/' + 'pypy-' + backend
+    basename = homedir + '/projects/pypy-trunk/pypy/translator/goal/' + 'pypy-' + backend
     realname = basename + '-' + revision
     if features:
         realname += "-" + features
@@ -85,7 +85,7 @@ def get_load():
     return buf
 
 def benchmark():
-    os.chdir(homedir + '/projects/pypy-dist/pypy/translator/goal')
+    os.chdir(homedir + '/projects/pypy-trunk/pypy/translator/goal')
     uname = os.popen('uname -a', 'r').read()
     startload = get_load()
 #    result = run('/usr/local/bin/withlock /tmp/cpu_cycles_lock /usr/local/bin/python bench-unix.py 2>&1 | tee benchmark.txt' % locals())
