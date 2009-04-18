@@ -106,7 +106,7 @@ class RegisterOs(BaseLazyRegistering):
                 separate_module_sources = ["\n".join(defs)]
             ))
 
-    # a simple, yet usefull factory
+    # a simple, yet useful factory
     def extdef_for_os_function_returning_int(self, name, **kwds):
         c_func = self.llexternal(name, [], rffi.INT, **kwds)
         def c_func_llimpl():
