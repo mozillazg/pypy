@@ -143,6 +143,18 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([int, int], None, llimpl=c_func_llimpl,
                       export_name='ll_os.ll_os_' + name)        
 
+    def extdef_for_function_accepting_0int(self, name, **kwds):
+        c_func = self.llexternal(name, [], rffi.INT, **kwds)
+        def c_func_llimpl():
+            res = rffi.cast(rffi.LONG, c_func())
+            if res == -1:
+                raise OSError(rposix.get_errno(), "%s failed" % name)
+        
+        c_func_llimpl.func_name = name + '_llimpl'
+
+        return extdef([], None, llimpl=c_func_llimpl,
+                      export_name='ll_os.ll_os_' + name)        
+
     def extdef_for_function_int_to_int(self, name, **kwds):
         c_func = self.llexternal(name, [rffi.INT], rffi.INT, **kwds)
         def c_func_llimpl(arg):
@@ -535,7 +547,7 @@ class RegisterOs(BaseLazyRegistering):
             return extdef([], None, llimpl=c_func_llimpl,
                           export_name='ll_os.ll_os_' + name)
         else:
-            return self.extdef_for_os_function_returning_int(name)
+            return self.extdef_for_os_function_accepting_0int(name)
 
     @registering_if(os, 'getppid')
     def register_os_getppid(self):
