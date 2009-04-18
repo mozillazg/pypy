@@ -2,7 +2,8 @@
 import autopath
 from py.test import raises, skip
 from pypy.interpreter.gateway import app2interp_temp
-from pypy.conftest import gettestobjspace
+from pypy.conftest import gettestobjspace, option
+from py.__.test.outcome import Skipped
 
 def init_globals_hack(space):
     space.appexec([space.wrap(autopath.this_dir)], """(this_dir):
@@ -285,7 +286,10 @@ class AppTestGetlower:
 
     def setup_class(cls):
         # This imports support_test_sre as the global "s"
-        cls.space = gettestobjspace(usemodules=('_locale',))
+        try:
+            cls.space = gettestobjspace(usemodules=('_locale',))
+        except Skipped:
+            cls.space = gettestobjspace(usemodules=('_rawffi',))
         init_globals_hack(cls.space)
 
     def setup_method(self, method):
@@ -542,8 +546,11 @@ class AppTestMarksStack:
 class AppTestOpcodes:
 
     def setup_class(cls):
+        try:
+            cls.space = gettestobjspace(usemodules=('_locale',))
+        except Skipped:
+            cls.space = gettestobjspace(usemodules=('_rawffi',))
         # This imports support_test_sre as the global "s"
-        cls.space = gettestobjspace(usemodules=('_locale',))
         init_globals_hack(cls.space)
 
     def test_length_optimization(self):
