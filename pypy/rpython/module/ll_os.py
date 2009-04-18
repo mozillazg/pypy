@@ -547,7 +547,7 @@ class RegisterOs(BaseLazyRegistering):
             return extdef([], None, llimpl=c_func_llimpl,
                           export_name='ll_os.ll_os_' + name)
         else:
-            return self.extdef_for_os_function_accepting_int(name)
+            return self.extdef_for_os_function_accepting_0int(name)
 
     @registering_if(os, 'getppid')
     def register_os_getppid(self):
