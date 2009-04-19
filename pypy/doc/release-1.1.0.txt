@@ -59,7 +59,7 @@ Other Changes
     interface with .NET libraries when translating the Python
     interpreter to the CLI.
 
-    http://codespeak.net/pypy/trunk/pypy/doc/clr-module.html
+    http://codespeak.net/pypy/dist/pypy/doc/clr-module.html
     http://morepypy.blogspot.com/2008/01/pypynet-goes-windows-forms.html
     http://morepypy.blogspot.com/2008/01/improve-net-integration.html
 
