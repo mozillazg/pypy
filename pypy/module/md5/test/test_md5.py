@@ -38,11 +38,11 @@ class AppTestMD5(object):
         """
         md5 = self.md5
         d = md5.md5()
-        if hasattr(md5, 'MD5Type'):    # not on CPython 2.5
-            assert isinstance(d, md5.MD5Type)
+        if not hasattr(md5, 'MD5Type'):
+            skip("no md5.MD5Type on CPython")
+        assert isinstance(d, md5.MD5Type)
         d = md5.new()
-        if hasattr(md5, 'MD5Type'):    # not on CPython 2.5
-            assert isinstance(d, md5.MD5Type)
+        assert isinstance(d, md5.MD5Type)
 
 
     def test_md5object(self):
