@@ -277,6 +277,9 @@ class RegisterOs(BaseLazyRegistering):
             HAVE_UTIMES = platform.Has('utimes')
         config = platform.configure(CConfig)
 
+        # XXX note that on Windows, calls to os.utime() are ignored on
+        # directories.  Remove that hack over there once it's fixed here!
+
         if config['HAVE_UTIMES']:
             class CConfig:
                 _compilation_info_ = ExternalCompilationInfo(
