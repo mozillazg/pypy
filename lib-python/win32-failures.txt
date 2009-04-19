@@ -16,7 +16,9 @@ test_os             - TODO: test_1565150: rewrite utime() to use SetFileTime
 test_popen2         TODO: implement os.popen2
 test_random
 test_runpy          [Done]
-test_shutil         - when os.utime uses SetFileTime, raise WindowsError instead of OSError.
+test_shutil         msvcrt utime() returns permission denied for directories
+                    CPython uses SetFileTime instead to be able to set times
+                    for directories.
 test_site           TODO: implement _locale at interp_level
 test_socket
 test_subprocess
@@ -28,3 +30,7 @@ test_univnewlines   TODO: big mess in rlib/streamio.py; first try to fix
 test_xdrlib
 test_zipimport      '/' '\\' mismatch
 
+General:
+- Windows os modules raises WindowsError instead of OSError for most errors.
+  To do this, we need to know the Windows error number to set in th
+  WindowsError
