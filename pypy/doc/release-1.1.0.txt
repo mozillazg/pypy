@@ -44,6 +44,7 @@ Highlights of This Release
     interpreter in a special way so that the result is fully sandboxed.
     
     http://codespeak.net/pypy/dist/pypy/doc/sandbox.html
+    http://blog.sandbox.lt/en/WSGI%20and%20PyPy%20sandbox
 
 
 Other Changes
