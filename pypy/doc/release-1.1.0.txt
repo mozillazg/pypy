@@ -1,0 +1,63 @@
+what we removed
+================
+
+  - JIT
+
+  - LLVM backend
+
+  - JS backend
+
+  - Aspect oriented programming
+
+  - Logic objspace
+
+  - CPython extension compiler
+
+
+what we added
+==============
+
+  - 2.5.2
+
+  - ctypes
+
+  - more modules: pysqlite & co.
+
+  - new garbage collectors: moving GCs, e.g. generational, hybrid, etc., threads+gc work
+
+  - memory wise optimizations (check it): mark-compact GC, shared instance
+    dictionaries also for instances of old-style classes; user class instances
+    often 50% of CPython size!
+
+  - performance improvements: between 0.8-2x (and in some corner case 3-4x)
+    the time spent by CPython
+
+  - pypy-jvm
+
+  - improved pypy-cli clr module
+
+  - compilation to maemo
+
+  - reflective objspace (???)
+
+  - mention new jit developments, even if they are not included (???)
+
+  - check more what we did in the cleanup sprint
+
+  - testing infrastructure
+
+  - classic classes are by default now
+
+  - examples of external libraries/app we run: pyglet, django, pylons,
+    bittorrent, nevow, pynax, twisted, sympy
+
+  - more windows support
+
+  - PyPy's stackless module more complete: we added channel preferences which
+    change details of the scheduling semantics.
+
+  - better profiling support for PyPy
+
+  - sandboxing
+
+  - easy_install/distutils support
