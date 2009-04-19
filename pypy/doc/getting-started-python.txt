@@ -69,7 +69,7 @@ You can translate the whole of PyPy's Python interpreter to low level C code,
 
 If everything works correctly this will create an executable
 ``pypy-c`` in the current directory.  Type ``pypy-c --help``
-to see the options it supports – mainly the same basic
+to see the options it supports - mainly the same basic
 options as CPython.  In addition, ``pypy-c --info`` prints the
 translation options that where used to produce this particular
 executable. The executable behaves mostly like a normal Python interpreter::
