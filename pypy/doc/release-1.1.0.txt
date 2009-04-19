@@ -4,7 +4,7 @@ PyPy 1.1: Compatibility & Consolidation
 
 Welcome to the PyPy 1.1 release - the first release after the end of EU
 funding. This release focuses on making PyPy's Python interpreter more
-compatible with CPython (we are currently targetting CPython 2.5).
+compatible with CPython (currently CPython 2.5).
 
 PyPy's Getting Started lives at:
 
@@ -13,12 +13,12 @@ PyPy's Getting Started lives at:
 Highlights of This Release
 ==========================
 
-  - More of CPython's standard-library extension modules are supported,
-    among them ctypes, sqlite3, csv. Most of these modules extension are
-    fully supported under Windows as well.
+  - More of CPython's standard library extension modules are supported,
+    among them ctypes, sqlite3, csv, and many more. Most of these modules 
+    extension are fully supported under Windows as well.
 
-    http://morepypy.blogspot.com/2008/06/pypy-improvements.html
     http://codespeak.net/pypy/dist/pypy/doc/cpython_differences.html
+    http://morepypy.blogspot.com/2008/06/pypy-improvements.html
 
   - performance improvements: between 0.8-2x (and in some corner case 3-4x)
     the time spent by CPython XXX we should measure 1.0 and compare
@@ -81,10 +81,10 @@ Other Changes
 
   - The support for the trace hook in the Python interpreter was
     improved to be able to trace the execution of builtin functions and
-    methods. In addition we implemented the ``_lsprof`` module, which is
-    equivalent to CPython's ``cProfile`` module.
+    methods. With this, we implemented the ``_lsprof`` module, which is
+    the core of the ``cProfile`` module.
 
-  - A number of rarely used features of PyPy were removed since the last
+  - A number of rarely used features of PyPy were removed since the previous
     release because they were unmaintained and/or buggy. Those are: The
     LLVM and the JS backends, the aspect-oriented programming features,
     the logic object space, the extension compiler and the first
