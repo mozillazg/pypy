@@ -137,16 +137,10 @@ class W_ZipImporter(Wrappable):
             filename = filename.replace(os.path.sep, ZIPSEP)
         return filename
 
-    def corr_zname(self, fname):
-        if ZIPSEP != os.path.sep:
-            return fname.replace(ZIPSEP, os.path.sep)
-        else:
-            return fname
-
     def import_py_file(self, space, modname, filename, buf, pkgpath):
         w = space.wrap
         w_mod = w(Module(space, w(modname)))
-        real_name = self.name + os.path.sep + self.corr_zname(filename)
+        real_name = self.name + os.path.sep + filename
         space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
         result = importing.load_source_module(space, w(modname), w_mod,
@@ -193,7 +187,7 @@ class W_ZipImporter(Wrappable):
                                        pkgpath)
         buf = buf[8:] # XXX ugly copy, should use sequential read instead
         w_mod = w(Module(space, w(modname)))
-        real_name = self.name + os.path.sep + self.corr_zname(filename)
+        real_name = self.name + os.path.sep + filename
         space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
         result = importing.load_compiled_module(space, w(modname), w_mod,
