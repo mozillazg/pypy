@@ -458,7 +458,7 @@ References
 .. _`Boehm-Demers-Weiser garbage collector`: http://www.hpl.hp.com/personal/Hans_Boehm/gc/
 
 .. [GREENLET] `Lightweight concurrent programming`_, py-lib Documentation 2003-2005
-.. _`Lightweight concurrent programming`: http://codespeak.net/py/current/doc/greenlet.html
+.. _`Lightweight concurrent programming`: http://codespeak.net/svn/greenlet/trunk/doc/greenlet.txt
 
 .. [STK] `Stackless Python`_, a Python implementation that does not use
          the C stack, Christian Tismer, 1999-2004
