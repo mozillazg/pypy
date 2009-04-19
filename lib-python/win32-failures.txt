@@ -15,9 +15,10 @@ test_old_mailbox    [unlink failures corrected]
 test_os             - TODO: test_1565150: rewrite utime() to use SetFileTime
                     - test_access: this test seems flaky
 test_popen2         TODO: implement os.popen2
-test_random         seed uses to low granularity time
+test_random         [Done]
 test_runpy          [Done]
-test_shutil         msvcrt utime() returns permission denied for directories
+test_shutil         [utime() hacked to do nothin for dirs]
+                    msvcrt utime() returns permission denied for directories
                     CPython uses SetFileTime instead to be able to set times
                     for directories.
 test_site           TODO: implement _locale at interp_level
