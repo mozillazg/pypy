@@ -77,7 +77,7 @@ class UnicodeDatabaseTest(unittest.TestCase):
 class UnicodeFunctionsTest(UnicodeDatabaseTest):
 
     # update this, if the database changes
-    expectedchecksum = 'e5eaebf2eba2221e8b8ad0201edc179516fd322f'
+    expectedchecksum = '351aef336ecc9c454759a6514b0171e1df71f6e9'
 
     def test_function_checksum(self):
         data = []
@@ -88,7 +88,9 @@ class UnicodeFunctionsTest(UnicodeDatabaseTest):
             data = [
                 # Properties
                 str(self.db.digit(char, -1)),
-                str(self.db.numeric(char, -1)),
+                # PyPy comment: we use repr here, because str(<float>) is
+                # platform dependant
+                repr(self.db.numeric(char, -1)),
                 str(self.db.decimal(char, -1)),
                 self.db.category(char),
                 self.db.bidirectional(char),
