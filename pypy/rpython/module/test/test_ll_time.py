@@ -10,9 +10,10 @@ class BaseTestTime(BaseRtypingTest):
             return time.time()
         
         t0 = time.time()
-        res = self.interpret(fn, [])
+        res0 = self.interpret(fn, [])
         t1 = time.time()
-        assert t0 <= res <= t1
+        res1 = self.interpret(fn, [])
+        assert t0 <= res0 <= t1 <= res1
 
     def test_time_clock(self):
         def f():
@@ -40,16 +41,6 @@ class BaseTestTime(BaseRtypingTest):
         t1 = time.time()
         assert t0 <= t1
         assert t1 - t0 >= 0.15
-
-    if sys.platform == "win32":
-        def test_time_is_a_float(self):
-            def fn():
-                r1 = time.time()
-                time.sleep(0.01)
-                r2 = time.time()
-                return r1 < r2 < r1 + 1
-            res = self.interpret(fn, [])
-            assert res == True
 
 class TestLLType(BaseTestTime, LLRtypeMixin):
     pass
