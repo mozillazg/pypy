@@ -21,7 +21,7 @@ test_shutil         msvcrt utime() returns permission denied for directories
                     CPython uses SetFileTime instead to be able to set times
                     for directories.
 test_site           TODO: implement _locale at interp_level
-test_socket
+test_socket         connect() fail if settimeout() has been called on the socket
 test_subprocess
 test_tarfile        [Done]
 test_unicode_file   TODO: implement unicode filesystem.
