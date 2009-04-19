@@ -176,7 +176,7 @@ if sys.platform == "win32":
             # Truncate.  Note that this may grow the file!
             handle = _get_osfhandle(fd)
             if handle == -1:
-                raise IOError(errno.EBADF, "Invalid file handle")
+                raise OSError(errno.EBADF, "Invalid file handle")
             if not SetEndOfFile(handle):
                 raise WindowsError(rwin32.GetLastError(),
                                    "Could not truncate file")
