@@ -292,7 +292,7 @@ class Coroutine(Wrappable):
         # it is necessary to check whether syncstate is None because CPython
         # sets it to None when it cleans up the modules, which will lead to
         # very strange effects
-        if syncstate is None:
+        if syncstate is not None:
             syncstate.postpone_deletion(self)
 
     # coroutines need complete control over their __del__ behaviour. In
