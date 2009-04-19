@@ -7,7 +7,7 @@ PyPy 1.1 Sources:
 
 * `pypy-1.1.0beta.tar.bz2`_ (sources, unix line endings) or
 * `pypy-1.1.0beta.tar.gz`_ (sources, unix line endings) or
-* `pypy-1.1.0beta.zip`_ (sources, windows line-endings) or
+* `pypy-1.1.0beta.zip`_ (sources, windows line-endings)
 
 .. _`pypy-1.1.0beta.tar.bz2`: http://codespeak.net/download/pypy/pypy-1.1.0beta.tar.bz2
 .. _`pypy-1.1.0beta.zip`: http://codespeak.net/download/pypy/pypy-1.1.0beta.zip
