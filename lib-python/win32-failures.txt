@@ -7,7 +7,7 @@ test_hashlib        Runs in ~350 seconds when run manually
 test_hmac
 test_import         TODO: implement import case check
 test_locale
-test_mmap
+test_mmap           Same ftruncate bug as test_file
 test_netrc          [Done]
 test_old_mailbox    [unlink failures corrected]
                     - test_from_regex fails probably because of seek() and tell() issues
