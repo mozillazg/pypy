@@ -1,3 +1,11 @@
+Today we are releasing a beta of the upcoming PyPy 1.1 release. There
+are some Windows and OS X issues left that we would like to address
+between now and the final release but apart from this things should be
+working. We would appreciate feedback.
+
+The PyPy development team.
+
+
 ==========================================
 PyPy 1.1: Compatibility & Consolidation
 ==========================================
