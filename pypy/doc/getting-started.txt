@@ -80,10 +80,10 @@ Filing bugs or feature requests
 
 You may file `bug reports`_ on our issue tracker which is
 also accessible through the 'issues' top menu of 
-the PyPy website.  `using the development tracker`_ has 
+the PyPy website.  `Using the development tracker`_ has 
 more detailed information on specific features of the tracker. 
 
-.. _`using the development tracker`: coding-guide.html#using-development-tracker
+.. _`Using the development tracker`: coding-guide.html#using-development-tracker
 .. _bug reports:            https://codespeak.net/issue/pypy-dev/
 
 
