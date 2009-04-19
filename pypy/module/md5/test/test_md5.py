@@ -2,7 +2,7 @@
 Tests for the md5 module implemented at interp-level in pypy/module/md5.
 """
 
-import py
+import py, sys
 from pypy.conftest import gettestobjspace
 
 
@@ -25,6 +25,11 @@ class AppTestMD5(object):
         md5.digest_size should be 16.
         """
         assert self.md5.digest_size == 16
+        #assert self.md5.digestsize == 16        -- not on CPython
+        assert self.md5.md5().digest_size == 16
+        if sys.version >= (2, 5):
+            assert self.md5.blocksize == 1
+            assert self.md5.md5().digestsize == 16
 
 
     def test_MD5Type(self):
@@ -33,9 +38,11 @@ class AppTestMD5(object):
         """
         md5 = self.md5
         d = md5.md5()
-        assert isinstance(d, md5.MD5Type)
+        if hasattr(md5, 'MD5Type'):    # not on CPython 2.5
+            assert isinstance(d, md5.MD5Type)
         d = md5.new()
-        assert isinstance(d, md5.MD5Type)
+        if hasattr(md5, 'MD5Type'):    # not on CPython 2.5
+            assert isinstance(d, md5.MD5Type)
 
 
     def test_md5object(self):
