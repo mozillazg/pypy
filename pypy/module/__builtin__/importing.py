@@ -25,7 +25,7 @@ def find_modtype(space, filepart):
     """
     # check the .py file
     pyfile = filepart + ".py"
-    if os.path.exists(pyfile):
+    if os.path.exists(pyfile) and case_ok(pyfile):
         pyfile_ts = os.stat(pyfile)[stat.ST_MTIME]
         pyfile_exists = True
     else:
@@ -40,14 +40,32 @@ def find_modtype(space, filepart):
     # check the .pyc file
     if space.config.objspace.usepycfiles:
         pycfile = filepart + ".pyc"    
-        if check_compiled_module(space, pycfile, pyfile_ts):
-            return PYCFILE     # existing and up-to-date .pyc file
+        if case_ok(pycfile):
+            if check_compiled_module(space, pycfile, pyfile_ts):
+                return PYCFILE     # existing and up-to-date .pyc file
 
     # no .pyc file, use the .py file if it exists
     if pyfile_exists:
         return PYFILE
     else:
         return NOFILE
+
+if sys.platform in ['linux2', 'freebsd']:
+    def case_ok(filename):
+        return True
+else:
+    # XXX that's slow
+    def case_ok(filename):
+        index = filename.rfind(os.sep)
+        if index < 0:
+            directory = os.curdir
+        else:
+            directory = filename[:index+1]
+            filename = filename[index+1:]
+        try:
+            return filename in os.listdir(directory)
+        except OSError:
+            return False
 
 def _prepare_module(space, w_mod, filename, pkgdir):
     w = space.wrap
@@ -276,8 +294,9 @@ def load_part(space, w_path, prefix, partname, w_parent, tentative):
 
         if w_path is not None:
             for path in space.unpackiterable(w_path):
-                dir = os.path.join(space.str_w(path), partname)
-                if os.path.isdir(dir):
+                path = space.str_w(path)
+                dir = os.path.join(path, partname)
+                if os.path.isdir(dir) and case_ok(dir):
                     fn = os.path.join(dir, '__init__')
                     w_mod = try_import_mod(space, w_modulename, fn,
                                            w_parent, w(partname),
@@ -288,7 +307,7 @@ def load_part(space, w_path, prefix, partname, w_parent, tentative):
                         msg = "Not importing directory " +\
                                 "'%s' missing __init__.py" % dir
                         space.warn(msg, space.w_ImportWarning)
-                fn = os.path.join(space.str_w(path), partname)
+                fn = dir
                 w_mod = try_import_mod(space, w_modulename, fn, w_parent,
                                        w(partname))
                 if w_mod is not None:
