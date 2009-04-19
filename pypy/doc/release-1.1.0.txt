@@ -4,7 +4,8 @@ PyPy 1.1: Compatibility & Consolidation
 
 Welcome to the PyPy 1.1 release - the first release after the end of EU
 funding. This release focuses on making PyPy's Python interpreter more
-compatible with CPython (currently CPython 2.5).
+compatible with CPython (currently CPython 2.5) and on making the
+interpreter more stable and bug-free.
 
 PyPy's Getting Started lives at:
 
@@ -20,9 +21,13 @@ Highlights of This Release
     http://codespeak.net/pypy/dist/pypy/doc/cpython_differences.html
     http://morepypy.blogspot.com/2008/06/pypy-improvements.html
 
-  - performance improvements: between 0.8-2x (and in some corner case 3-4x)
-    the time spent by CPython XXX we should measure 1.0 and compare
-  - new garbage collectors: moving GCs, e.g. generational, hybrid, etc., threads+gc work
+  - Through a large number of tweaks, performance has been improved by
+    10%-50% since the 1.0 release. The Python interpreter is now between
+    0.8-2x (and in some corner case 3-4x) of the speed of CPython. A large
+    part of these speed-ups come from our new generational garbage
+    collectors.
+
+    http://codespeak.net/pypy/dist/pypy/doc/garbage_collection.html
 
   - Our Python interpreter now supports distutils as well as
     easy_install for pure-Python modules.
@@ -49,10 +54,6 @@ Highlights of This Release
 
 Other Changes
 =============
-
-  - memory wise optimizations (check it): mark-compact GC, shared instance
-    dictionaries also for instances of old-style classes; user class instances
-    often 50% of CPython size!
 
   - The ``clr`` module was greatly improved. This module is used to
     interface with .NET libraries when translating the Python
@@ -82,6 +83,15 @@ Other Changes
 
     http://codespeak.net/pypy/dist/pypy/doc/maemo.html
 
+  - Some effort was spent to make the Python interpreter more
+    memory-efficient. This includes the implementation of a mark-compact
+    GC which uses less memory than other GCs during collection.
+    Additionally there were various optimizations that make Python
+    objects smaller, e.g. class instances are often only 50% of the size
+    of CPython.
+
+    http://morepypy.blogspot.com/2008/10/dsseldorf-sprint-report-days-1-3.html
+
   - The support for the trace hook in the Python interpreter was
     improved to be able to trace the execution of builtin functions and
     methods. With this, we implemented the ``_lsprof`` module, which is
@@ -98,13 +108,35 @@ Other Changes
     http://morepypy.blogspot.com/2009/03/good-news-everyone.html
     http://morepypy.blogspot.com/2009/03/jit-bit-of-look-inside.html
 
+
+What is PyPy?
+=============
+
+Technically, PyPy is both a Python interpreter implementation and an
+advanced compiler, or more precisely a framework for implementing dynamic
+languages and generating virtual machines for them.
+
+The framework allows for alternative frontends and for alternative
+backends, currently C, Java and .NET.  For our main target "C", we can
+can "mix in" different garbage collectors and threading models,
+including micro-threads aka "Stackless".  The inherent complexity that
+arises from this ambitious approach is mostly kept away from the Python
+interpreter implementation, our main frontend.
+
+Socially, PyPy is a collaborative effort of many individuals working
+together in a distributed and sprint-driven way since 2003.  PyPy would
+not have gotten as far as it has without the coding, feedback and
+general support from numerous people.
+
+
+
 Have fun,
 
     the PyPy release team, [in alphabetical order]
     
-    Anders Hammerquist, Antonio Cuni, Armin Rigo, Carl Friedrich Bolz,
-    Christian Tismer, Holger Krekel, Maciek Fijalkowski,
-    Samuele Pedroni
+    Amaury Forgeot d'Arc, Anders Hammerquist, Antonio Cuni, Armin Rigo,
+    Carl Friedrich Bolz, Christian Tismer, Holger Krekel,
+    Maciek Fijalkowski, Samuele Pedroni
 
     and many others:
     http://codespeak.net/pypy/dist/pypy/doc/contributor.html
