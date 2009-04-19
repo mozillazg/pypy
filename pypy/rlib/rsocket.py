@@ -670,12 +670,17 @@ class RSocket(object):
         address.unlock()
         if self.timeout > 0.0:
             errno = _c.geterrno()
-            if res < 0 and errno == _c.EINPROGRESS:
+            if res < 0 and (errno == _c.EINPROGRESS or
+                            (_c.WIN32 and errno == _c.EWOULDBLOCK)):
                 timeout = self._select(True)
                 if timeout == 0:
                     addr = address.lock()
                     res = _c.socketconnect(self.fd, addr, address.addrlen)
                     address.unlock()
+                    if res < 0:
+                        errno = _c.geterrno()
+                        if errno == _c.EISCONN:
+                            res = 0
                 elif timeout == -1:
                     raise self.error_handler()
                 else:
