@@ -32,7 +32,7 @@ import time
 import autopath
 from pypy.rlib import rrandom
 
-PRINT_IT = False
+PRINT_IT = True
 
 random = rrandom.Random(1)
 
@@ -207,5 +207,5 @@ def target(*args):
     return entry_point, None
 
 if __name__ == '__main__':
-    #demo()
+    demo()
     print __doc__
