@@ -16,7 +16,9 @@ encoding = 'utf-8'
 class UnicodeMethodsTest(unittest.TestCase):
 
     # update this, if the database changes
-    expectedchecksum = '9f6a3e76196a8327ccf95d2d6404880be2ab5c2f'
+    # (PyPy comment: the reason why we have a different checksum from CPython
+    # is that CPython is buggy! See http://bugs.python.org/issue4971
+    expectedchecksum = '6e487361ad9d178a58006cbab5b176a090bcd792'
 
     def test_method_checksum(self):
         h = hashlib.sha1()
