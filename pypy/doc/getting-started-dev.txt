@@ -94,11 +94,11 @@ executable directly from the shell. You will find the
 executable in one of the ``/tmp/usession-*`` directories::
 
     # For CLI:
-    $ mono /tmp/usession-dist-<username>/main.exe 4 5
+    $ mono /tmp/usession-trunk-<username>/main.exe 4 5
     9
 
     # For JVM:
-    $ java -cp /tmp/usession-dist-<username>/pypy pypy.Main 4 5
+    $ java -cp /tmp/usession-trunk-<username>/pypy pypy.Main 4 5
     9
 
 To translate and run for the CLI you must have the SDK installed: Windows

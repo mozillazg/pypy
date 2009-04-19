@@ -287,8 +287,8 @@ discover the types of the objects.  This annotation pass is a form of type
 inference.  It operates on the control flow graphs built by the Flow
 Object Space.
 
-For a more comprehensive description of the annotation process, see section 4
-of `Compiling Dynamic Language Implementations`_.
+For a more comprehensive description of the annotation process, see the
+corresponding section of our `EU report about translation`_.
 
 The major goal of the annotator is to "annotate" each variable that
 appears in a flow graph.  An "annotation" describes all the possible
@@ -384,8 +384,6 @@ subclasses can have attributes of the same names with different,
 unrelated annotations if they are not used in a general way through the
 parent class.
 
-
-.. _`Compiling Dynamic Language Implementations`: dynamic-language-translation.html
 
 .. _`RPython typer`:
 
@@ -670,13 +668,13 @@ http://codespeak.net/pypy/trunk/pypy/translator/c/
 
 GenC is not really documented at the moment.  The basic principle of creating
 code from flow graphs is similar to the `Python back-end`_.  See also
-`Generating C code`_ in another draft.
+"Generating C code" in our `EU report about translation`_.
 
 GenC is usually the most actively maintained backend -- everyone working on
 PyPy has a C compiler, for one thing -- and is usually where new features are
 implemented first.
 
-.. _`Generating C code`: dynamic-language-translation.html#generating-c-code
+.. _`EU report about translation`: http://codespeak.net/svn/pypy/extradoc/eu-report/D05.1_Publish_on_translating_a_very-high-level_description.pdf
 
 
 A Historical Note
