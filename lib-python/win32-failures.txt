@@ -22,10 +22,10 @@ test_shutil         msvcrt utime() returns permission denied for directories
                     for directories.
 test_site           TODO: implement _locale at interp_level
 test_socket         connect() fail if settimeout() has been called on the socket
-test_subprocess     NoneType failure fixed, remaining newline failures
+test_subprocess     [Done]
 test_tarfile        [Done]
 test_unicode_file   TODO: implement unicode filesystem.
-test_unicodedata    objspace/std/unicodeobject.py uses unicodedb_3_2_0 ?? How does this work on Linux??
+test_unicodedata    [Done]
 test_univnewlines   TODO: big mess in rlib/streamio.py; first try to fix
                     test_readline_mixed_with_read() in pypy/module/_file/test/test_file.py
 test_xdrlib         [Done]
