@@ -41,6 +41,13 @@ class BaseTestTime(BaseRtypingTest):
         assert t0 <= t1
         assert t1 - t0 >= 0.15
 
+    if sys.platform == "win32":
+        def test_time_is_a_float(self):
+            r1 = time.time()
+            time.sleep(0.01)
+            r2 = time.time()
+            assert r1 < r2 < r1 + 1
+
 class TestLLType(BaseTestTime, LLRtypeMixin):
     pass
 
