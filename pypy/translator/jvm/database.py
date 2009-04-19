@@ -229,6 +229,9 @@ class Database(OODatabase):
                 if not ootype.isSubclass(OOTYPE, SELF): continue
                 mobj = self._function_for_graph(
                     clsobj, mname, False, mimpl.graph)
+                graphs = OOTYPE._lookup_graphs(mname)
+                if len(graphs) == 1:
+                    mobj.is_final = True
                 clsobj.add_method(mobj)
 
         # currently, we always include a special "dump" method for debugging
