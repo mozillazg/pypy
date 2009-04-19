@@ -2,7 +2,7 @@
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 #from pypy.translator.c.test.test_genc import compile
 
-import time
+import time, sys
 
 class BaseTestTime(BaseRtypingTest):
     def test_time_time(self):
@@ -43,10 +43,13 @@ class BaseTestTime(BaseRtypingTest):
 
     if sys.platform == "win32":
         def test_time_is_a_float(self):
-            r1 = time.time()
-            time.sleep(0.01)
-            r2 = time.time()
-            assert r1 < r2 < r1 + 1
+            def fn():
+                r1 = time.time()
+                time.sleep(0.01)
+                r2 = time.time()
+                return r1 < r2 < r1 + 1
+            res = self.interpret(fn, [])
+            assert res == True
 
 class TestLLType(BaseTestTime, LLRtypeMixin):
     pass
