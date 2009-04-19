@@ -157,6 +157,28 @@ class StreamError(Exception):
 StreamErrors = (OSError, StreamError)     # errors that can generally be raised
 
 
+if sys.platform == "win32":
+    from pypy.rlib import rwin32
+    _eci = ExternalCompilationInfo()
+    _get_osfhandle = rffi.llexternal('_get_osfhandle', [rffi.INT], rffi.LONG,
+                                     compilation_info=_eci)
+    SetEndOfFile = rffi.llexternal('SetEndOfFile', [rffi.LONG], rwin32.BOOL,
+                                   compilation_info=_eci)
+    def ftruncate_win32(fd, size):
+        curpos = os.lseek(fd, 0, 1)
+        try:
+            # move to the position to be truncated
+            os.lseek(fd, size, 0)
+            # Truncate.  Note that this may grow the file!
+            handle = _get_osfhandle(fd)
+            if handle == -1:
+                raise StreamError("Invalid file handle")
+            if not SetEndOfFile(handle):
+                raise StreamError("Could not truncate file")
+        finally:
+            os.lseek(fd, curpos, 0)
+
+
 class Stream(object):
 
     """Base class for streams.  Provides a default implementation of
@@ -253,8 +275,7 @@ class DiskFile(Stream):
 
     if sys.platform == "win32":
         def truncate(self, size):
-            from pypy.rlib.rposix import ftruncate
-            ftruncate(self.fd, size)
+            ftruncate_win32(self.fd, size)
     else:
         def truncate(self, size):
             os.ftruncate(self.fd, size)
