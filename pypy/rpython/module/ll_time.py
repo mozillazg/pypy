@@ -14,10 +14,12 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 if sys.platform == 'win32':
     TIME_H = 'time.h'
     FTIME = '_ftime64'
+    STRUCT_TIMEB = 'struct __timeb64'
     includes = [TIME_H, 'windows.h', 'sys/types.h', 'sys/timeb.h']
 else:
     TIME_H = 'sys/time.h'
     FTIME = 'ftime'
+    STRUCT_TIMEB = 'struct timeb'
     includes = [TIME_H, 'time.h', 'errno.h', 'sys/select.h',
                 'sys/types.h', 'unistd.h', 'sys/timeb.h']
 
@@ -43,8 +45,8 @@ class CConfigForFTime:
         includes=[TIME_H, 'sys/timeb.h'],
         libraries=libraries
     )
-    TIMEB = platform.Struct('struct timeb', [('time', rffi.INT),
-                                             ('millitm', rffi.INT)])
+    TIMEB = platform.Struct(STRUCT_TIMEB, [('time', rffi.INT),
+                                           ('millitm', rffi.INT)])
 
 constant_names = ['CLOCKS_PER_SEC', 'CLK_TCK', 'EINTR']
 for const in constant_names:
