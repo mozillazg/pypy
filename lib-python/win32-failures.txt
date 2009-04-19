@@ -22,7 +22,7 @@ test_shutil         msvcrt utime() returns permission denied for directories
                     for directories.
 test_site           TODO: implement _locale at interp_level
 test_socket         connect() fail if settimeout() has been called on the socket
-test_subprocess
+test_subprocess     NoneType failure fixed, remaining newline failures
 test_tarfile        [Done]
 test_unicode_file   TODO: implement unicode filesystem.
 test_unicodedata    objspace/std/unicodeobject.py uses unicodedb_3_2_0 ?? How does this work on Linux??
