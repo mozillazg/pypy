@@ -28,7 +28,7 @@ test_unicode_file   TODO: implement unicode filesystem.
 test_unicodedata    objspace/std/unicodeobject.py uses unicodedb_3_2_0 ?? How does this work on Linux??
 test_univnewlines   TODO: big mess in rlib/streamio.py; first try to fix
                     test_readline_mixed_with_read() in pypy/module/_file/test/test_file.py
-test_xdrlib
+test_xdrlib         [Done]
 test_zipimport      '/' '\\' mismatch
 
 General:
