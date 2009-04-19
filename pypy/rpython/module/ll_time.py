@@ -14,7 +14,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 if sys.platform == 'win32':
     TIME_H = 'time.h'
     FTIME = '_ftime64'
-    includes = [TIME_H, 'windows.h', 'sys/timeb.h']
+    includes = [TIME_H, 'windows.h', 'sys/types.h', 'sys/timeb.h']
 else:
     TIME_H = 'sys/time.h'
     FTIME = 'ftime'
