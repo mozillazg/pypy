@@ -61,7 +61,7 @@ After you succesfully managed to get PyPy's source you can read more about:
  - `Learning more about the translation toolchain and how to develop (with) PyPy`_
 
 .. _`Building and using PyPy's Python interpreter`: getting-started-python.html
-.. _`Learning more about the translation toolchain and how to develop (with) PyPy`: getting-started-translation.html
+.. _`Learning more about the translation toolchain and how to develop (with) PyPy`: getting-started-dev.html
 
 
 Understanding PyPy's architecture
@@ -73,7 +73,7 @@ interesting information.  Additionally, in true hacker spirit, you
 may just `start reading sources`_ . 
 
 .. _`documentation section`: docindex.html 
-.. _`start reading sources`: getting-started-translation.html#start-reading-sources
+.. _`start reading sources`: getting-started-dev.html#start-reading-sources
 
 Filing bugs or feature requests 
 -------------------------------

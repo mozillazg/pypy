@@ -307,7 +307,7 @@ Directory                      explanation/links
 .. _`GenC backend`: translation.html#genc 
 .. _`CLI backend`: cli-backend.html
 .. _`py.py`: getting-started-python.html#the-py.py-interpreter
-.. _`translatorshell.py`: getting-started-translation.html#try-out-the-translator
+.. _`translatorshell.py`: getting-started-dev.html#try-out-the-translator
 .. _JIT: jit/index.html
 .. _`JIT Generation in PyPy`: jit/index.html
 .. _`just-in-time compiler generator`: jit/index.html
@@ -322,7 +322,7 @@ Directory                      explanation/links
 .. _`.NET`: http://www.microsoft.com/net/
 .. _Mono: http://www.mono-project.com/
 .. _`"standard library"`: rlib.html
-.. _`graph viewer`: getting-started-translation.html#try-out-the-translator
+.. _`graph viewer`: getting-started-dev.html#try-out-the-translator
 .. _`compatibility matrix`: image/compat-matrix.png
 
 .. include:: _ref.txt
