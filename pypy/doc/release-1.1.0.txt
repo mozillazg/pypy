@@ -2,15 +2,16 @@
 PyPy 1.1: Compatibility & Consolidation
 ==========================================
 
-Welcome to the PyPy 1.1 release – the first release after the end of EU
+Welcome to the PyPy 1.1 release - the first release after the end of EU
 funding. This release focuses on making PyPy's Python interpreter more
 compatible with CPython (we are currently targetting CPython 2.5).
 
+PyPy's Getting Started lives at:
+
+   http://codespeak.net/pypy/dist/pypy/doc/getting-started.html
 
 Highlights of This Release
 ==========================
-
-.. Improvements to the Python Interpreter
 
   - More of CPython's standard-library extension modules are supported,
     among them ctypes, sqlite3, csv. Most of these modules extension are
@@ -93,3 +94,5 @@ Other Changes
     http://codespeak.net/pipermail/pypy-dev/2009q2/005143.html
     http://morepypy.blogspot.com/2009/03/good-news-everyone.html
     http://morepypy.blogspot.com/2009/03/jit-bit-of-look-inside.html
+
+XXX ack
