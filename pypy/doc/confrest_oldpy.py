@@ -108,6 +108,7 @@ class Project:
     title = "py lib"
     prefix_title = ""  # we have a logo already containing "py lib"
     encoding = 'latin1' 
+    stylesheet = None
     logo = html.div(
         html.a(
             html.img(alt="py lib", id='pyimg', height=114, width=154, 
@@ -130,7 +131,7 @@ class Project:
             apigenpath = docpath
         self.apigenpath = apigenpath
         if stylesheet is None:
-            p = sourcepath.join("style.css")
+            p = sourcepath.join(self.stylesheet or "style.css")
             if p.check():
                 self.stylesheet = p
             else:
@@ -159,8 +160,8 @@ class Project:
         stylesheet = self.stylesheet
         if isinstance(stylesheet, py.path.local):
             if not self.docpath.join(stylesheet.basename).check():
-                docpath.ensure(dir=True)
-                stylesheet.copy(docpath)
+                self.docpath.ensure(dir=True)
+                stylesheet.copy(self.docpath)
             stylesheet = relpath(outputpath.strpath,
                                  self.docpath.join(stylesheet.basename).strpath)
 
