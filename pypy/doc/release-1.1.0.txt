@@ -74,7 +74,7 @@ Other Changes
 
   - PyPy's Python interpreter can be translated to Java bytecode now to
     produce a pypy-jvm. At the moment there is no integration with
-    Java libraries, so this is not really useful yet.
+    Java libraries yet, so this is not really useful.
 
   - We added cross-compilation machinery to our translation toolchain to
     make it possible to cross-compile our Python interpreter to Nokia's
@@ -98,4 +98,13 @@ Other Changes
     http://morepypy.blogspot.com/2009/03/good-news-everyone.html
     http://morepypy.blogspot.com/2009/03/jit-bit-of-look-inside.html
 
-XXX ack
+Have fun,
+
+    the PyPy release team, [in alphabetical order]
+    
+    Anders Hammerquist, Antonio Cuni, Armin Rigo, Carl Friedrich Bolz,
+    Christian Tismer, Holger Krekel, Maciek Fijalkowski,
+    Samuele Pedroni
+
+    and many others:
+    http://codespeak.net/pypy/dist/pypy/doc/contributor.html
