@@ -8,6 +8,7 @@ from pypy.rpython.module import ll_os_stat
 from pypy.rpython.lltypesystem import lltype
 
 import os, sys
+_WIN = sys.platform == 'win32'
                           
 def open(space, fname, flag, mode=0777):
     """Open a file (for low level IO).
@@ -545,7 +546,7 @@ second form is used, set the access and modified times to the current time.
     """
     # XXX for now, ignore calls on directories on Windows,
     # just because they always give EACCES so far
-    if sys.platform == 'win32':
+    if _WIN:
         if os.path.isdir(path):
             return
 
