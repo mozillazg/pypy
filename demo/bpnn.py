@@ -11,8 +11,6 @@
     Insert '--help' before 'bpnn.py' for a list of translation options,
     or see the Overview of Command Line Options for translation at
     http://codespeak.net/pypy/dist/pypy/doc/config/commandline.html
-
-    Use '--text' before 'bpnn.py' if you don't have Pygame installed.
 """
 # Back-Propagation Neural Networks
 # 
