@@ -205,6 +205,8 @@ def sha_final(sha_info):
     return ''.join([chr(i) for i in dig])
 
 class sha256:
+    digest_size = digestsize = 32
+
     def __init__(self, s=None):
         self._sha = sha_init()
         if s:
@@ -220,6 +222,8 @@ class sha256:
         return ''.join(['%.2x' % ord(i) for i in self.digest()])
 
 class sha224(sha256):
+    digest_size = digestsize = 28
+
     def __init__(self, s=None):
         self._sha = sha224_init()
         if s:
