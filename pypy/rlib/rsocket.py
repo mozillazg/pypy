@@ -663,16 +663,16 @@ class RSocket(object):
             if res != 0:
                 raise self.error_handler()
 
-    def connect(self, address):
+    def _connect(self, address):
         """Connect the socket to a remote address."""
         addr = address.lock()
         res = _c.socketconnect(self.fd, addr, address.addrlen)
         address.unlock()
+        errno = _c.geterrno()
         if self.timeout > 0.0:
-            errno = _c.geterrno()
-            if res < 0 and (errno == _c.EINPROGRESS or
-                            (_c.WIN32 and errno == _c.EWOULDBLOCK)):
+            if res < 0 and errno == _c.EINPROGRESS:
                 timeout = self._select(True)
+                errno = _c.geterrno()
                 if timeout == 0:
                     addr = address.lock()
                     res = _c.socketconnect(self.fd, addr, address.addrlen)
@@ -682,35 +682,27 @@ class RSocket(object):
                         if errno == _c.EISCONN:
                             res = 0
                 elif timeout == -1:
-                    raise self.error_handler()
+                    return (errno, False)
                 else:
-                    raise SocketTimeout
-                
-        if res != 0:
-            raise self.error_handler()
+                    return (_c.EWOULDBLOCK, True)
 
+        if res == 0:
+            errno = 0
+        return (errno, False)
+        
+    def connect(self, address):
+        """Connect the socket to a remote address."""
+        err, timeout = self._connect(address)
+        if timeout:
+            raise SocketTimeout
+        if err:
+            raise CSocketError(err)
+        
     def connect_ex(self, address):
         """This is like connect(address), but returns an error code (the errno
         value) instead of raising an exception when an error occurs."""
-        addr = address.lock()
-        res = _c.socketconnect(self.fd, addr, address.addrlen)
-        address.unlock()
-        if self.timeout > 0.0:
-            errno = _c.geterrno()
-            if res < 0 and errno == _c.EINPROGRESS:
-                timeout = self._select(True)
-                if timeout == 0:
-                    addr = address.lock()
-                    res = _c.socketconnect(self.fd, addr, address.addrlen)
-                    address.unlock()
-                elif timeout == -1:
-                    return _c.geterrno()
-                else:
-                    return _c.EWOULDBLOCK
-                
-        if res != 0:
-            return _c.geterrno()
-        return res
+        err, timeout = self._connect(address)
+        return err
 
     if hasattr(_c, 'dup'):
         def dup(self, SocketClass=None):
