@@ -23,15 +23,15 @@ Highlights of This Release
 ==========================
 
   - More of CPython's standard library extension modules are supported,
-    among them ctypes, sqlite3, csv, and many more. Most of these modules 
-    extension are fully supported under Windows as well.
+    among them ctypes, sqlite3, csv, and many more. Most of these extension 
+    modules are fully supported under Windows as well.
 
     http://codespeak.net/pypy/dist/pypy/doc/cpython_differences.html
     http://morepypy.blogspot.com/2008/06/pypy-improvements.html
 
   - Through a large number of tweaks, performance has been improved by
     10%-50% since the 1.0 release. The Python interpreter is now between
-    0.8-2x (and in some corner case 3-4x) of the speed of CPython. A large
+    0.8-2x (and in some corner case 3-4x) slower than CPython. A large
     part of these speed-ups come from our new generational garbage
     collectors.
 
@@ -126,7 +126,7 @@ languages and generating virtual machines for them.
 
 The framework allows for alternative frontends and for alternative
 backends, currently C, Java and .NET.  For our main target "C", we can
-can "mix in" different garbage collectors and threading models,
+"mix in" different garbage collectors and threading models,
 including micro-threads aka "Stackless".  The inherent complexity that
 arises from this ambitious approach is mostly kept away from the Python
 interpreter implementation, our main frontend.
