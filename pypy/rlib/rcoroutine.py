@@ -300,6 +300,10 @@ class Coroutine(Wrappable):
         # very strange effects
 
         if not we_are_translated():
+            # we need to make sure that we postpone each coroutine only once on
+            # top of CPython, because this resurrects the coroutine and CPython
+            # calls __del__ again, thus postponing and resurrecting the
+            # coroutine once more :-(
             if self.__already_postponed:
                 return
             self.__already_postponed = True
