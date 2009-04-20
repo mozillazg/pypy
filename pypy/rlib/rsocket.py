@@ -663,14 +663,60 @@ class RSocket(object):
             if res != 0:
                 raise self.error_handler()
 
-    def _connect(self, address):
-        """Connect the socket to a remote address."""
-        addr = address.lock()
-        res = _c.socketconnect(self.fd, addr, address.addrlen)
-        address.unlock()
-        errno = _c.geterrno()
-        if self.timeout > 0.0:
-            if res < 0 and errno == _c.EINPROGRESS:
+    if _c.WIN32:
+        def _connect(self, address):
+            """Connect the socket to a remote address."""
+            addr = address.lock()
+            res = _c.socketconnect(self.fd, addr, address.addrlen)
+            address.unlock()
+            errno = _c.geterrno()
+            timeout = self.timeout
+            if timeout > 0.0 and res < 0 and errno == _c.EWOULDBLOCK:
+                tv = rffi.make(_c.timeval)
+                rffi.setintfield(tv, 'c_tv_sec', int(timeout))
+                rffi.setintfield(tv, 'c_tv_usec',
+                                 int((timeout-int(timeout)) * 1000000))
+                fds = lltype.malloc(_c.fd_set.TO, flavor='raw')
+                _c.FD_ZERO(fds)
+                _c.FD_SET(self.fd, fds)
+                fds_exc = lltype.malloc(_c.fd_set.TO, flavor='raw')
+                _c.FD_ZERO(fds_exc)
+                _c.FD_SET(self.fd, fds_exc)
+                null = lltype.nullptr(_c.fd_set.TO)
+
+                try:
+                    n = _c.select(self.fd + 1, null, fds, fds_exc, tv)
+
+                    if n > 0:
+                        if _c.FD_ISSET(self.fd, fds):
+                            # socket writable == connected
+                            return (0, False)
+                        else:
+                            # per MS docs, call getsockopt() to get error
+                            assert _c.FD_ISSET(self.fd, fds_exc)
+                            return (self.getsockopt_int(_c.SOL_SOCKET,
+                                                        _c.SO_ERROR), False)
+                    elif n == 0:
+                        return (_c.EWOULDBLOCK, True)
+                    else:
+                        return (_c.geterrno(), False)
+
+                finally:
+                    lltype.free(fds, flavor='raw')
+                    lltype.free(fds_exc, flavor='raw')
+                    lltype.free(tv, flavor='raw')
+
+            if res == 0:
+                errno = 0
+            return (errno, False)
+    else:
+        def _connect(self, address):
+            """Connect the socket to a remote address."""
+            addr = address.lock()
+            res = _c.socketconnect(self.fd, addr, address.addrlen)
+            address.unlock()
+            errno = _c.geterrno()
+            if self.timeout > 0.0 and res < 0 and errno == _c.EINPROGRESS:
                 timeout = self._select(True)
                 errno = _c.geterrno()
                 if timeout == 0:
@@ -686,9 +732,9 @@ class RSocket(object):
                 else:
                     return (_c.EWOULDBLOCK, True)
 
-        if res == 0:
-            errno = 0
-        return (errno, False)
+            if res == 0:
+                errno = 0
+            return (errno, False)
         
     def connect(self, address):
         """Connect the socket to a remote address."""
