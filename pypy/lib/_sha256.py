@@ -204,7 +204,7 @@ def sha_final(sha_info):
         dig.extend([ ((i>>24) & 0xff), ((i>>16) & 0xff), ((i>>8) & 0xff), (i & 0xff) ])
     return ''.join([chr(i) for i in dig])
 
-class sha256:
+class sha256(object):
     digest_size = digestsize = 32
 
     def __init__(self, s=None):
@@ -221,6 +221,11 @@ class sha256:
     def hexdigest(self):
         return ''.join(['%.2x' % ord(i) for i in self.digest()])
 
+    def copy(self):
+        new = sha256.__new__(sha256)
+        new._sha = self._sha.copy()
+        return new
+
 class sha224(sha256):
     digest_size = digestsize = 28
 
@@ -228,6 +233,11 @@ class sha224(sha256):
         self._sha = sha224_init()
         if s:
             sha_update(self._sha, s)
+
+    def copy(self):
+        new = sha224.__new__(sha224)
+        new._sha = self._sha.copy()
+        return new
 
 def test():
     a_str = "just a test string"
