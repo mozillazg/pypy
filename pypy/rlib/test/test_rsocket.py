@@ -69,7 +69,8 @@ def test_gethostbyaddr():
     allnames = [name] + aliases
     for n in allnames:
         assert isinstance(n, str)
-    assert 'localhost' in allnames
+    if sys.platform != 'win32':
+        assert 'localhost' in allnames
     for a in address_list:
         if isinstance(a, INETAddress) and a.get_host() == "127.0.0.1":
             break  # ok
