@@ -83,6 +83,11 @@ class RegisterOs(BaseLazyRegistering):
     def __init__(self):
         self.configure(CConfig)
 
+        if hasattr(os, 'getpgrp'):
+            self.GETPGRP_HAVE_ARG = platform.checkcompiles("getpgrp(0)", "#include <unistd.h>")
+        if hasattr(os, 'setpgrp'):
+            self.SETPGRP_HAVE_ARG = platform.checkcompiles("setpgrp(0,0)", "#include <unistd.h>")
+
         # we need an indirection via c functions to get macro calls working on llvm XXX still?
         if hasattr(os, 'WCOREDUMP'):
             decl_snippet = """
@@ -533,12 +538,26 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'getpgrp')
     def register_os_getpgrp(self):
-        return self.extdef_for_os_function_returning_int('getpgrp')
+        name = 'getpgrp'
+        if self.GETPGRP_HAVE_ARG:
+            c_func = self.llexternal(name, [rffi.INT], rffi.INT)
+            def c_func_llimpl():
+                res = rffi.cast(rffi.LONG, c_func(0))
+                if res == -1:
+                    raise OSError(rposix.get_errno(), "%s failed" % name)
+                return res
+
+            c_func_llimpl.func_name = name + '_llimpl'
+
+            return extdef([], int, llimpl=c_func_llimpl,
+                          export_name='ll_os.ll_os_' + name)
+        else:
+            return self.extdef_for_os_function_returning_int('getpgrp')
 
     @registering_if(os, 'setpgrp')
     def register_os_setpgrp(self):
         name = 'setpgrp'
-        if sys.platform.startswith('freebsd') or sys.platform == 'darwin':
+        if self.SETPGRP_HAVE_ARG:
             c_func = self.llexternal(name, [rffi.INT, rffi.INT], rffi.INT)
             def c_func_llimpl():
                 res = rffi.cast(rffi.LONG, c_func(0, 0))
