@@ -435,6 +435,15 @@ class AppTestPosix:
         for fd in range(start, stop):
             raises(OSError, os.fstat, fd)   # should have been closed
 
+    if hasattr(os, 'chown'):
+        def test_chown(self):
+            os = self.posix
+            os.unlink(self.path)
+            raises(OSError, os.chown, self.path, os.getuid(), os.getgid())
+            f = open(self.path, "w")
+            f.write("this is a test")
+            f.close()
+            os.chown(self.path, os.getuid(), os.getgid())
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

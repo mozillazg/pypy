@@ -96,6 +96,22 @@ class BaseTestPosix(BaseRtypingTest):
         res = self.interpret(f,[fi,20])
         assert self.ll_to_string(res) == text
 
+    if hasattr(os, 'chown'):
+        def test_chown(self):
+            f = open(path, "w")
+            f.write("xyz")
+            f.close()
+            def f():
+                try:
+                    posix.chown(path, os.getuid(), os.getgid())
+                    return 1
+                except OSError:
+                    return 2
+            
+            assert self.interpret(f, []) == 1
+            os.unlink(path)
+            assert self.interpret(f, []) == 2
+    
     def test_close(self):
         def f(fi):
             return posix.close(fi)
@@ -171,3 +187,6 @@ class TestOOtype(BaseTestPosix, OORtypeMixin):
 
     def test_os_chroot(self):
         py.test.skip("ootypesystem does not support os.chroot")
+
+    def test_chown(self):
+        py.test.skip("ootypesystem does not support os.chown")

@@ -55,6 +55,7 @@ corresponding Unix manual entries for more information on calls."""
     'strerror'  : 'interp_posix.strerror',
     'pipe'      : 'interp_posix.pipe',
     'chmod'     : 'interp_posix.chmod',
+    'chown'     : 'interp_posix.chown',
     'rename'    : 'interp_posix.rename',
     'umask'     : 'interp_posix.umask',
     '_exit'     : 'interp_posix._exit',
