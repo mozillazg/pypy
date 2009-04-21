@@ -161,6 +161,7 @@ if sys.platform == "win32":
     from pypy.rlib import rwin32
     from pypy.translator.tool.cbuild import ExternalCompilationInfo
     from pypy.rpython.lltypesystem import rffi
+    import errno
 
     _eci = ExternalCompilationInfo()
     _get_osfhandle = rffi.llexternal('_get_osfhandle', [rffi.INT], rffi.LONG,
@@ -175,9 +176,10 @@ if sys.platform == "win32":
             # Truncate.  Note that this may grow the file!
             handle = _get_osfhandle(fd)
             if handle == -1:
-                raise StreamError("Invalid file handle")
+                raise OSError(errno.EBADF, "Invalid file handle")
             if not SetEndOfFile(handle):
-                raise StreamError("Could not truncate file")
+                raise WindowsError(rwin32.GetLastError(),
+                                   "Could not truncate file")
         finally:
             os.lseek(fd, curpos, 0)
 

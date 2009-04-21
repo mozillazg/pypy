@@ -134,6 +134,10 @@ class SyncState(object):
         else:
             self.things_to_do = False
 
+    def _freeze_(self):
+        self.reset()
+        return False
+
 syncstate = SyncState()
 
 
@@ -281,6 +285,8 @@ class Coroutine(Wrappable):
             pass # maybe print a warning?
         self.kill()
 
+    __already_postponed = False
+    
     def __del__(self):
         # provide the necessary clean-up
         # note that AppCoroutine has to take care about this
@@ -292,6 +298,15 @@ class Coroutine(Wrappable):
         # it is necessary to check whether syncstate is None because CPython
         # sets it to None when it cleans up the modules, which will lead to
         # very strange effects
+
+        if not we_are_translated():
+            # we need to make sure that we postpone each coroutine only once on
+            # top of CPython, because this resurrects the coroutine and CPython
+            # calls __del__ again, thus postponing and resurrecting the
+            # coroutine once more :-(
+            if self.__already_postponed:
+                return
+            self.__already_postponed = True
         if syncstate is not None:
             syncstate.postpone_deletion(self)
 

@@ -24,6 +24,7 @@ class AppTestMD5(object):
         """
         md5.digest_size should be 16.
         """
+        import sys
         assert self.md5.digest_size == 16
         #assert self.md5.digestsize == 16        -- not on CPython
         assert self.md5.md5().digest_size == 16

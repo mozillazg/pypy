@@ -31,7 +31,7 @@ class LibPythonPlugin:
     def pytest_addoption(self, parser):
         group = parser.addgroup("complicance testing options") 
         group.addoption('-T', '--timeout', action="store", type="string", 
-           default="100mp", dest="timeout", 
+           default="1000", dest="timeout", 
            help="fail a test module after the given timeout. "
                 "specify in seconds or 'NUMmp' aka Mega-Pystones")
         group.addoption('--pypy', action="store", type="string",
