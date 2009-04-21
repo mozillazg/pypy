@@ -182,7 +182,7 @@ else:
                              universal_newlines=(mode =='t'))
         return (_wrap_close(p.stdin, p), _wrap_close(p.stdout, p))
 
-    def popen3():
+    def popen3(cmd, mode="t", bufsize=-1):
         ""
 
         cmd = _makecmd_string(cmd)
@@ -200,7 +200,7 @@ else:
         return (_wrap_close(p.stdin, p), _wrap_close(p.stdout, p),
                 _wrap_close(p.stderr, p))
 
-    def popen4():
+    def popen4(cmd, mode="t", bufsize=-1):
         ""
 
         cmd = _makecmd_string(cmd)
