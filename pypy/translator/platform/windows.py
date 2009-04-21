@@ -176,9 +176,9 @@ class MsvcPlatform(Platform):
             errorfile = outname.new(ext='errors')
             errorfile.write(stderr)
             stderrlines = stderr.splitlines()
-            for line in stderrlines[:5]:
+            for line in stderrlines[:20]:
                 log.ERROR(line)
-            if len(stderrlines) > 5:
+            if len(stderrlines) > 20:
                 log.ERROR('...')
             raise CompilationError(stdout, stderr)
 

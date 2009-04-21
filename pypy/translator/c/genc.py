@@ -778,9 +778,9 @@ def gen_source_standalone(database, modulename, targetdir, eci,
 
     print >> fi, '#define Py_BUILD_CORE  /* for Windows: avoid pulling libs in */'
     print >> fi, '#include "pyconfig.h"'
+    print >> fi, '#include "src/g_prerequisite.h"'
 
     eci.write_c_header(fi)
-    print >> fi, '#include "src/g_prerequisite.h"'
 
     fi.close()
 
@@ -830,9 +830,9 @@ def gen_source(database, modulename, targetdir, eci, defines={}):
         print >> fi, '#define %s %s' % (key, value)
 
     print >> fi, '#include "pyconfig.h"'
+    print >> fi, '#include "src/g_prerequisite.h"'
 
     eci.write_c_header(fi)
-    print >> fi, '#include "src/g_prerequisite.h"'
 
     fi.close()
 
