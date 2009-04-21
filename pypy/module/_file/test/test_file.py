@@ -145,7 +145,9 @@ Delivered-To: gkj@sundance.gregorykjohnson.com'''
         f = self.file(self.temppath, "r")
         f.seek(0L)
         f.readline()
-        assert f.tell() == 44L
+        pos = f.tell()
+        assert f.read(12L) == 'From: foo\n\n0'
+        f.seek(pos)
         assert f.read(12L) == 'From: foo\n\n0'
         f.close()
 
