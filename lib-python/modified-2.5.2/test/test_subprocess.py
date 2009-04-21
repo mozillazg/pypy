@@ -371,8 +371,8 @@ class ProcessTestCase(unittest.TestCase):
 
     def test_universal_newlines_communicate(self):
         # universal newlines through communicate()
-        p = subprocess.Popen([sys.executable, "-c",
-                          'import sys,os;' + SETBINARY +
+        p = subprocess.Popen([sys.executable, "-u", "-c",
+                          'import sys,os;'
                           'sys.stdout.write("line1\\n");'
                           'sys.stdout.flush();'
                           'sys.stdout.write("line2\\r");'
