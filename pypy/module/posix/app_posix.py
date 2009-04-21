@@ -147,12 +147,7 @@ else:
 
         Open a pipe to/from a command returning a file object."""
 
-        if isinstance(cmd, unicode):
-            cmd = cmd.encode('ascii')
-
-        if not isinstance(cmd, str):
-            raise TypeError("invalid cmd type (%s, expected string)" %
-                            (type(cmd),))
+        cmd = _makecmd_string(cmd)
 
         if not mode.startswith('r') and not mode.startswith('w'):
             raise ValueError("invalid mode %r" % (mode,))
@@ -171,6 +166,67 @@ else:
                                     bufsize=bufsize)
             return _wrap_close(proc.stdin, proc)
 
+    def popen2(cmd, mode="t", bufsize=-1):
+        ""
+
+        cmd = _makecmd_string(cmd)
+
+        if mode not in ('b', 't'):
+            raise ValueError("invalid mode %r" % (mode,))
+
+        import subprocess
+        
+        p = subprocess.Popen(cmd, shell=True, bufsize=bufsize,
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             universal_newlines=(mode =='t'))
+        return (_wrap_close(p.stdin, p), _wrap_close(p.stdout, p))
+
+    def popen3():
+        ""
+
+        cmd = _makecmd_string(cmd)
+
+        if mode not in ('b', 't'):
+            raise ValueError("invalid mode %r" % (mode,))
+
+        import subprocess
+        
+        p = subprocess.Popen(cmd, shell=True, bufsize=bufsize,
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE,
+                             universal_newlines=(mode =='t'))
+        return (_wrap_close(p.stdin, p), _wrap_close(p.stdout, p),
+                _wrap_close(p.stderr, p))
+
+    def popen4():
+        ""
+
+        cmd = _makecmd_string(cmd)
+
+        if mode not in ('b', 't'):
+            raise ValueError("invalid mode %r" % (mode,))
+
+        import subprocess
+        
+        p = subprocess.Popen(cmd, shell=True, bufsize=bufsize,
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT,
+                             universal_newlines=(mode =='t'))
+        return (_wrap_close(p.stdin, p), _wrap_close(p.stdout, p))
+
+    # helper for making popen cmd a string object
+    def _makecmd_string(cmd):
+        if isinstance(cmd, unicode):
+            cmd = cmd.encode('ascii')
+
+        if not isinstance(cmd, str):
+            raise TypeError("invalid cmd type (%s, expected string)" %
+                            (type(cmd),))
+        return cmd
+        
     # A proxy for a file whose close waits for the process
     class _wrap_close(object):
         def __init__(self, stream, proc):
