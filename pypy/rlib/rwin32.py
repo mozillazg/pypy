@@ -32,6 +32,7 @@ class CConfig:
         PLONG = rffi_platform.SimpleType("PLONG", rffi.LONGP)
         LPVOID = rffi_platform.SimpleType("LPVOID", rffi.INTP)
         LPCVOID = rffi_platform.SimpleType("LPCVOID", rffi.VOIDP)
+        LPSTR = rffi_platform.SimpleType("LPSTR", rffi.CCHARP)
         LPCSTR = rffi_platform.SimpleType("LPCSTR", rffi.CCHARP)
         LPDWORD = rffi_platform.SimpleType("LPDWORD", rffi.INTP)
         SIZE_T = rffi_platform.SimpleType("SIZE_T", rffi.SIZE_T)
