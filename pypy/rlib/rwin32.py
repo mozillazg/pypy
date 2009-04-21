@@ -42,6 +42,8 @@ class CConfig:
         FILETIME = rffi_platform.Struct('FILETIME',
                                         [('dwLowDateTime', rffi.UINT),
                                          ('dwHighDateTime', rffi.UINT)])
+        SYSTEMTIME = rffi_platform.Struct('SYSTEMTIME',
+                                          [])
 
         LPSECURITY_ATTRIBUTES = rffi_platform.SimpleType(
             "LPSECURITY_ATTRIBUTES", rffi.CCHARP)
@@ -76,6 +78,7 @@ if WIN32:
     FreeLibrary = winexternal('FreeLibrary', [rffi.VOIDP], BOOL)
 
     LocalFree = winexternal('LocalFree', [HLOCAL], DWORD)
+    CloseHandle = winexternal('CloseHandle', [HANDLE], lltype.Void)
 
     FormatMessage = winexternal(
         'FormatMessageA',

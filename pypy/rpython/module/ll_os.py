@@ -31,12 +31,17 @@ from pypy.rlib.objectmodel import keepalive_until_here
 posix = __import__(os.name)
 
 if sys.platform.startswith('win'):
+    _WIN32 = True
+else:
+    _WIN32 = False
+
+if _WIN32:
     underscore_on_windows = '_'
 else:
     underscore_on_windows = ''
 
 includes = []
-if not sys.platform.startswith('win'):
+if not _WIN32:
     # XXX many of these includes are not portable at all
     includes += ['dirent.h', 'sys/stat.h',
                  'sys/times.h', 'utime.h', 'sys/types.h', 'unistd.h',
@@ -60,7 +65,7 @@ class CConfig:
     _compilation_info_ = ExternalCompilationInfo(
         includes=includes
     )
-    if not sys.platform.startswith('win'):
+    if not _WIN32:
         CLOCK_T = platform.SimpleType('clock_t', rffi.INT)
 
         TMS = platform.Struct(
@@ -320,18 +325,97 @@ class RegisterOs(BaseLazyRegistering):
                 lltype.free(l_utimbuf, flavor='raw')
                 return error
 
-        def os_utime_llimpl(path, tp):
-            # NB. this function is specialized; we get one version where
-            # tp is known to be None, and one version where it is known
-            # to be a tuple of 2 floats.
-            if tp is None:
-                error = os_utime(path, lltype.nullptr(UTIMBUFP.TO))
-            else:
-                actime, modtime = tp
-                error = os_utime_platform(path, actime, modtime)
-            error = rffi.cast(lltype.Signed, error)
-            if error == -1:
-                raise OSError(rposix.get_errno(), "os_utime failed")
+        # NB. this function is specialized; we get one version where
+        # tp is known to be None, and one version where it is known
+        # to be a tuple of 2 floats.
+        if not _WIN32:
+            def os_utime_llimpl(path, tp):
+                if tp is None:
+                    error = os_utime(path, lltype.nullptr(UTIMBUFP.TO))
+                else:
+                    actime, modtime = tp
+                    error = os_utime_platform(path, actime, modtime)
+                    error = rffi.cast(lltype.Signed, error)
+                if error == -1:
+                    raise OSError(rposix.get_errno(), "os_utime failed")
+        else:
+            from pypy.rlib import rwin32
+            from pypy.rpython.module.ll_os_stat import time_t_to_FILE_TIME
+
+            class CConfig:
+                _compilation_info_ = ExternalCompilationInfo(
+                    includes = ['windows.h'],
+                    )
+
+                FILE_WRITE_ATTRIBUTES = platform.ConstantInteger(
+                    'FILE_WRITE_ATTRIBUTES')
+                OPEN_EXISTING = platform.ConstantInteger(
+                    'OPEN_EXISTING')
+                FILE_FLAG_BACKUP_SEMANTICS = platform.ConstantInteger(
+                    'FILE_FLAG_BACKUP_SEMANTICS')
+            globals().update(platform.configure(CConfig))
+
+            CreateFile = rffi.llexternal(
+                'CreateFileA',
+                [rwin32.LPCSTR, rwin32.DWORD, rwin32.DWORD,
+                 rwin32.LPSECURITY_ATTRIBUTES, rwin32.DWORD, rwin32.DWORD,
+                 rwin32.HANDLE],
+                rwin32.HANDLE,
+                calling_conv='win')
+
+            GetSystemTime = rffi.llexternal(
+                'GetSystemTime',
+                [lltype.Ptr(rwin32.SYSTEMTIME)],
+                lltype.Void,
+                calling_conv='win')
+
+            SystemTimeToFileTime = rffi.llexternal(
+                'SystemTimeToFileTime',
+                [lltype.Ptr(rwin32.SYSTEMTIME),
+                 lltype.Ptr(rwin32.FILETIME)],
+                rwin32.BOOL,
+                calling_conv='win')
+
+            SetFileTime = rffi.llexternal(
+                'SetFileTime',
+                [rwin32.HANDLE,
+                 lltype.Ptr(rwin32.FILETIME),
+                 lltype.Ptr(rwin32.FILETIME),
+                 lltype.Ptr(rwin32.FILETIME)],
+                rwin32.BOOL,
+                calling_conv = 'win')
+
+            def os_utime_llimpl(path, tp):
+                hFile = CreateFile(path, 
+                                   FILE_WRITE_ATTRIBUTES, 0, 
+                                   None, OPEN_EXISTING,
+                                   FILE_FLAG_BACKUP_SEMANTICS, 0)
+                if hFile == rwin32.INVALID_HANDLE_VALUE:
+                    raise rwin32.lastWindowsError()
+                ctime = lltype.nullptr(rwin32.FILETIME)
+                atime = lltype.malloc(rwin32.FILETIME, flavor='raw')
+                mtime = lltype.malloc(rwin32.FILETIME, flavor='raw')
+                try:
+                    if tp is None:
+                        now = lltype.malloc(lltype.Ptr(rwin32.SYSTEMTIME),
+                                            flavor='raw')
+                        try:
+                            GetSystemTime(now)
+                            if (not SystemTimeToFileTime(now, atime) or
+                                not SystemTimeToFileTime(now, mtime)):
+                                raise rwin32.lastWindowsError()
+                        finally:
+                            lltype.free(now, flavor='raw')
+                    else:
+                        actime, modtime = tp
+                        time_t_to_FILE_TIME(actime, atime)
+                        time_t_to_FILE_TIME(modtime, mtime)
+                    if not SetFileTime(hFile, ctime, atime, mtime):
+                        raise rwin32.lastWindowsError()
+                finally:
+                    rwin32.CloseHandle(hFile)
+                    lltype.free(atime, flavor='raw')
+                    lltype.free(mtime, flavor='raw')
         os_utime_llimpl._annspecialcase_ = 'specialize:argtype(1)'
 
         s_string = SomeString()

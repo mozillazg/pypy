@@ -35,6 +35,19 @@ def test_times():
     for value in times:
         assert isinstance(value, float)
 
+def test_utimes():
+    if os.name != 'nt':
+        py.test.skip('Windows specific feature')
+    # Windows support centiseconds
+    def f(fname, t1):
+        os.utime(fname, (t1, t1))
+
+    fname = udir.join('test_utimes.txt')
+    fname.ensure()
+    t1 = 1159195039.25
+    compile(f, (str, float))(str(fname), t1)
+    assert t1 == os.stat(str(fname)).st_mtime
+
 def test__getfullpathname():
     if os.name != 'nt':
         py.test.skip('nt specific function')
