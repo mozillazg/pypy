@@ -154,7 +154,7 @@ class _CWriter(object):
     def ask_gcc(self, question):
         self.start_main()
         self.f.write(question + "\n")
-        self.close()	
+        self.close()
         eci = self.config._compilation_info_
         try_compile_cache([self.path], eci)
 
