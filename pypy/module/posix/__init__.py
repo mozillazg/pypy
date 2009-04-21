@@ -55,13 +55,14 @@ corresponding Unix manual entries for more information on calls."""
     'strerror'  : 'interp_posix.strerror',
     'pipe'      : 'interp_posix.pipe',
     'chmod'     : 'interp_posix.chmod',
-    'chown'     : 'interp_posix.chown',
     'rename'    : 'interp_posix.rename',
     'umask'     : 'interp_posix.umask',
     '_exit'     : 'interp_posix._exit',
     'utime'     : 'interp_posix.utime',
     '_statfields': 'interp_posix.getstatfields(space)',
     }
+    if hasattr(os, 'chown'):
+        interpleveldefs['chown'] = 'interp_posix.chown'
     if hasattr(os, 'ftruncate'):
         interpleveldefs['ftruncate'] = 'interp_posix.ftruncate'
     if hasattr(os, 'putenv'):
