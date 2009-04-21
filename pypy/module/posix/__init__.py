@@ -20,7 +20,13 @@ corresponding Unix manual entries for more information on calls."""
     'tmpfile'    : 'app_posix.tmpfile',
     'popen'      : 'app_posix.popen',
     }
-    
+    if os.name == 'nt':
+        appleveldefs.update({
+                'popen2' : 'app_posix.popen2',
+                'popen3' : 'app_posix.popen3',
+                'popen4' : 'app_posix.popen4',
+                })
+        
     interpleveldefs = {
     'open'      : 'interp_posix.open',
     'lseek'     : 'interp_posix.lseek',
