@@ -16,6 +16,8 @@ class CConfig:
     includes = ['locale.h', 'limits.h']
     if HAVE_LANGINFO:
         includes += ['langinfo.h']
+    if sys.platform == 'win32':
+        includes += ['windows.h']
     _compilation_info_ = ExternalCompilationInfo(
         includes=includes,
     )
@@ -89,7 +91,10 @@ for name in constant_names:
 
 
 langinfo_names = ('CODESET D_T_FMT D_FMT T_FMT RADIXCHAR THOUSEP '
-                  'YESEXPR NOEXPR CRNCYSTR AM_STR PM_STR').split(" ")
+                  'YESEXPR NOEXPR CRNCYSTR AM_STR PM_STR '
+                  'LOCALE_USER_DEFAULT LOCALE_SISO639LANGNAME '
+                  'LOCALE_SISO3166CTRYNAME LOCALE_IDEFAULTLANGUAGE '
+                  '').split()
 for i in range(1, 8):
     langinfo_names.append("DAY_%d" % i)
     langinfo_names.append("ABDAY_%d" % i)
@@ -119,8 +124,10 @@ for name in langinfo_names:
 
 locals().update(constants)
 
-def external(name, args, result):
-    return rffi.llexternal(name, args, result, compilation_info=CConfig._compilation_info_)
+def external(name, args, result, calling_conv='c'):
+    return rffi.llexternal(name, args, result,
+                           compilation_info=CConfig._compilation_info_,
+                           calling_conv=calling_conv)
 
 def make_error(space, msg):
     w_module = space.getbuiltinmodule('_locale')
@@ -353,10 +360,56 @@ def bind_textdomain_codeset(space, domain, w_codeset):
         codeset = space.str_w(w_codeset)
         result = _bind_textdomain_codeset(rffi.str2charp(domain),
                                         rffi.str2charp(codeset))
-    
+
     if not result:
         return space.w_None
     else:
         return space.wrap(rffi.charp2str(result))
 
 bind_textdomain_codeset.unwrap_spec = [ObjSpace, str, W_Root]
+
+#___________________________________________________________________
+# getdefaultlocale() implementation for Windows
+
+if sys.platform == 'win32':
+    from pypy.rlib import rwin32
+    LCID = LCTYPE = rwin32.DWORD
+    GetACP = external('GetACP',
+                      [], rffi.INT,
+                      calling_conv='win')
+    GetLocaleInfo = external('GetLocaleInfoA',
+                             [LCID, LCTYPE, rwin32.LPSTR, rffi.INT], rffi.INT,
+                             calling_conv='win')
+
+    def getdefaultlocale(space):
+        encoding = "cp%d" % GetACP()
+
+        BUFSIZE = 50
+        buf_lang = lltype.malloc(rffi.CCHARP.TO, BUFSIZE, flavor='raw')
+        buf_country = lltype.malloc(rffi.CCHARP.TO, BUFSIZE, flavor='raw')
+
+        try:
+            if (GetLocaleInfo(LOCALE_USER_DEFAULT,
+                              LOCALE_SISO639LANGNAME,
+                              buf_lang, BUFSIZE) and
+                GetLocaleInfo(LOCALE_USER_DEFAULT,
+                              LOCALE_SISO3166CTRYNAME,
+                              buf_country, BUFSIZE)):
+                lang = rffi.charp2str(buf_lang)
+                country = rffi.charp2str(buf_country)
+                return space.newtuple([space.wrap("%s_%s" % (lang, country)),
+                                       space.wrap(encoding)])
+
+            # If we end up here, this windows version didn't know about
+            # ISO639/ISO3166 names (it's probably Windows 95).  Return the
+            # Windows language identifier instead (a hexadecimal number)
+            elif GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_IDEFAULTLANGUAGE,
+                               buf_lang, BUFSIZE):
+                lang = rffi.charp2str(buf_lang)
+                return space.newtuple([space.swrap("0x%s" % lang),
+                                       space.wrap(encoding)])
+            else:
+                return space.newtuple([space.w_None, space.wrap(encoding)])
+        finally:
+            lltype.free(buf_lang, flavor='raw')
+            lltype.free(buf_country, flavor='raw')
