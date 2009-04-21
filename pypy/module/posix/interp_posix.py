@@ -809,3 +809,11 @@ def sysconf(space, w_num_or_name):
         num = space.int_w(w_num_or_name)
     return space.wrap(os.sysconf(num))
 sysconf.unwrap_spec = [ObjSpace, W_Root]
+
+def chown(space, path, uid, gid):
+    try:
+        os.chown(path, uid, gid)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+    return space.w_None
+chown.unwrap_spec = [ObjSpace, str, int, int]
