@@ -544,12 +544,6 @@ utime(path, None)
 Set the access and modified time of the file to the given values.  If the
 second form is used, set the access and modified times to the current time.
     """
-    # XXX for now, ignore calls on directories on Windows,
-    # just because they always give EACCES so far
-    if _WIN:
-        if os.path.isdir(path):
-            return
-
     if space.is_w(w_tuple, space.w_None):
         try:
             os.utime(path, None)

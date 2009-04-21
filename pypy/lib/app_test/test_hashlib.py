@@ -14,8 +14,28 @@ def test_attributes():
         h = hashlib.new(name)
         assert h.digest_size == expected_size
         assert h.digestsize == expected_size
+        #
+        h.update('abc')
+        h2 = h.copy()
+        h.update('def')
+        digest = h.digest()
+        hexdigest = h.hexdigest()
+        h2.update('d')
+        h2.update('ef')
+        assert digest == h.digest()
+        assert hexdigest == h.hexdigest()
 
         # also test the pure Python implementation
         h = hashlib.__get_builtin_constructor(name)('')
         assert h.digest_size == expected_size
         assert h.digestsize == expected_size
+        #
+        h.update('abc')
+        h2 = h.copy()
+        h.update('def')
+        digest = h.digest()
+        hexdigest = h.hexdigest()
+        h2.update('d')
+        h2.update('ef')
+        assert digest == h.digest()
+        assert hexdigest == h.hexdigest()
