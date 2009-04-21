@@ -1017,6 +1017,11 @@ class ObjSpace(object):
             warnings.warn(msg, warningcls, stacklevel=2)
         """)
 
+    def resolve_target(self, w_obj):
+        """ A space method that can be used by special object spaces (like
+        thunk) to replace an object by another. """
+        return w_obj
+
 
 class AppExecCache(SpaceCache):
     def build(cache, source):
