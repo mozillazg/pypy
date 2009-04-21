@@ -1,13 +1,12 @@
 These tests currently fail on win32:
 
-test_cmd_line       TODO: implement os.popen4
+test_cmd_line       [Done]
 test_hmac           [done]
 test_locale
 test_old_mailbox    test_from_regex fails probably because of seek() and tell() issues
                       (test passes if file is opened in binary mode)
-test_os             - TODO: test_1565150: rewrite utime() to use SetFileTime
-                    - test_access: this test seems flaky
-test_popen2         TODO: implement os.popen2
+test_os             - test_access: this test seems flaky
+test_popen2         [Done]
 test_site           TODO: implement _locale at interp_level
 test_unicode_file   TODO: implement unicode filesystem.
 test_univnewlines   TODO: big mess in rlib/streamio.py; first try to fix
