@@ -164,10 +164,9 @@ class AppTest_Thunk:
 class AppTest_ThunkCallMethod(AppTest_Thunk):
 
     def setup_class(cls):
-        cls.space = gettestobjspace('thunk', CALL_METHOD=True)
+        cls.space = gettestobjspace('thunk', CALL_METHOD=True, multimethods='doubledispatch')
 
     def test_method_call(self):
-        skip('fix me')
         from __pypy__ import thunk
         d = {}
         # need the method to use the pypy compiler
@@ -180,3 +179,9 @@ class AppTest_ThunkCallMethod(AppTest_Thunk):
         l = thunk(d['f'], 10)
         d['g'](l)
         assert l == [10, 1] 
+
+
+class AppTest_ThunkCallMethodMRD(AppTest_ThunkCallMethod):
+
+    def setup_class(cls):
+        cls.space = gettestobjspace('thunk', CALL_METHOD=True, multimethods='mrd')
