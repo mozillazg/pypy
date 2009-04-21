@@ -39,6 +39,7 @@ class AppTestPosix:
     def setup_class(cls): 
         cls.space = space 
         cls.w_posix = space.appexec([], "(): import %s as m ; return m" % os.name)
+        print "AFA W_POSIX", cls.w_posix
         cls.w_path = space.wrap(str(path))
         cls.w_path2 = space.wrap(str(path2))
         cls.w_pdir = space.wrap(str(pdir))
@@ -280,9 +281,9 @@ class AppTestPosix:
 
     def test_utime(self):
         os = self.posix
-        import os.path
+        from os.path import join
         # XXX utimes & float support
-        path = os.path.join(self.pdir, "test_utime.txt")
+        path = join(self.pdir, "test_utime.txt")
         fh = open(path, "w")
         fh.write("x")
         fh.close()

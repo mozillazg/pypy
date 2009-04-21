@@ -94,4 +94,9 @@ in the base directory. Then compile::
 Using the mingw compiler
 ------------------------
 
-XXX Write me
+I installed a minimal version of mingw, containing the following
+components: mingwrt, w32api, binutils, gcc-core.  Be sure to add the
+``c:\mingw\bin`` directory in your PATH environment variable, and add
+the ``--cc=mingw32`` .
+
+XXX extension modules
