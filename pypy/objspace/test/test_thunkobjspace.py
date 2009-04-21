@@ -160,3 +160,23 @@ class AppTest_Thunk:
         x = thunk(lambda : 42)
         assert 1 .__add__(x) == 43
         
+
+class AppTest_ThunkCallMethod(AppTest_Thunk):
+
+    def setup_class(cls):
+        cls.space = gettestobjspace('thunk', CALL_METHOD=True)
+
+    def test_method_call(self):
+        skip('fix me')
+        from __pypy__ import thunk
+        d = {}
+        # need the method to use the pypy compiler
+        exec """if 1:
+        def f(x):
+            return [x]
+        def g(l):
+            l.append(1)
+        """ in d
+        l = thunk(d['f'], 10)
+        d['g'](l)
+        assert l == [10, 1] 
