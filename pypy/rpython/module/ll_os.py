@@ -397,8 +397,7 @@ class RegisterOs(BaseLazyRegistering):
                 mtime = lltype.malloc(rwin32.FILETIME, flavor='raw')
                 try:
                     if tp is None:
-                        now = lltype.malloc(lltype.Ptr(rwin32.SYSTEMTIME),
-                                            flavor='raw')
+                        now = lltype.malloc(rwin32.SYSTEMTIME, flavor='raw')
                         try:
                             GetSystemTime(now)
                             if (not SystemTimeToFileTime(now, atime) or
