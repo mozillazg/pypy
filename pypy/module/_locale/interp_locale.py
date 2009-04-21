@@ -164,38 +164,57 @@ setlocale.unwrap_spec = [ObjSpace, int, W_Root]
 _lconv = lltype.Ptr(cConfig.lconv)
 _localeconv = external('localeconv', [], _lconv)
 
-def _copy_grouping(text):
-    groups = [ ord(group) for group in text ]
+def _w_copy_grouping(space, text):
+    groups = [ space.wrap(ord(group)) for group in text ]
     if groups:
-        groups.append(0)
-    return groups
+        groups.append(space.wrap(0))
+    return space.newlist(groups)
 
 def localeconv(space):
     "() -> dict. Returns numeric and monetary locale-specific parameters."
     lp = _localeconv()
 
     # Numeric information
-    result = {
-        "decimal_point": rffi.charp2str(lp.c_decimal_point),
-        "thousands_sep": rffi.charp2str(lp.c_thousands_sep),
-        "grouping": _copy_grouping(rffi.charp2str(lp.c_grouping)),
-        "int_curr_symbol": rffi.charp2str(lp.c_int_curr_symbol),
-        "currency_symbol": rffi.charp2str(lp.c_currency_symbol),
-        "mon_decimal_point": rffi.charp2str(lp.c_mon_decimal_point),
-        "mon_thousands_sep": rffi.charp2str(lp.c_mon_thousands_sep),
-        "mon_grouping": _copy_grouping(rffi.charp2str(lp.c_mon_grouping)),
-        "positive_sign": rffi.charp2str(lp.c_positive_sign),
-        "negative_sign": rffi.charp2str(lp.c_negative_sign),
-        "int_frac_digits": lp.c_int_frac_digits,
-        "frac_digits": lp.c_frac_digits,
-        "p_cs_precedes": lp.c_p_cs_precedes,
-        "p_sep_by_space": lp.c_p_sep_by_space,
-        "n_cs_precedes": lp.c_n_cs_precedes,
-        "n_sep_by_space": lp.c_n_sep_by_space,
-        "p_sign_posn": lp.c_p_sign_posn,
-        "n_sign_posn": lp.c_n_sign_posn,
-    }
-    return space.wrap(result)
+    w_result = space.newdict()
+    w = space.wrap
+    space.setitem(w_result, w("decimal_point"),
+                  w(rffi.charp2str(lp.c_decimal_point)))
+    space.setitem(w_result, w("thousands_sep"),
+                  w(rffi.charp2str(lp.c_thousands_sep)))
+    space.setitem(w_result, w("grouping"),
+                  _w_copy_grouping(space, rffi.charp2str(lp.c_grouping)))
+    space.setitem(w_result, w("int_curr_symbol"),
+                  w(rffi.charp2str(lp.c_int_curr_symbol)))
+    space.setitem(w_result, w("currency_symbol"),
+                  w(rffi.charp2str(lp.c_currency_symbol)))
+    space.setitem(w_result, w("mon_decimal_point"),
+                  w(rffi.charp2str(lp.c_mon_decimal_point)))
+    space.setitem(w_result, w("mon_thousands_sep"),
+                  w(rffi.charp2str(lp.c_mon_thousands_sep)))
+    space.setitem(w_result, w("mon_grouping"),
+                  _w_copy_grouping(space, rffi.charp2str(lp.c_mon_grouping)))
+    space.setitem(w_result, w("positive_sign"),
+                  w(rffi.charp2str(lp.c_positive_sign)))
+    space.setitem(w_result, w("negative_sign"),
+                  w(rffi.charp2str(lp.c_negative_sign)))
+    space.setitem(w_result, w("int_frac_digits"),
+                  w(lp.c_int_frac_digits))
+    space.setitem(w_result, w("frac_digits"),
+                  w(lp.c_frac_digits))
+    space.setitem(w_result, w("p_cs_precedes"),
+                  w(lp.c_p_cs_precedes))
+    space.setitem(w_result, w("p_sep_by_space"),
+                  w(lp.c_p_sep_by_space))
+    space.setitem(w_result, w("n_cs_precedes"),
+                  w(lp.c_n_cs_precedes))
+    space.setitem(w_result, w("n_sep_by_space"),
+                  w(lp.c_n_sep_by_space))
+    space.setitem(w_result, w("p_sign_posn"),
+                  w(lp.c_p_sign_posn))
+    space.setitem(w_result, w("n_sign_posn"),
+                  w(lp.c_n_sign_posn))
+
+    return w_result
 
 localeconv.unwrap_spec = [ObjSpace]
 
@@ -237,7 +256,7 @@ def strxfrm(space, s):
     if n2 > n1:
         # more space needed
         lltype.free(buf, flavor="raw")
-        buf = lltype.malloc(rffi.CCHARP.TO, int(n2), flavor="raw", zero=True)
+        buf = lltype.malloc(rffi.CCHARP.TO, n2, flavor="raw", zero=True)
         _strxfrm(buf, rffi.str2charp(s), n2)
 
     val = rffi.charp2str(buf)
@@ -320,7 +339,8 @@ def nl_langinfo(space, key):
     if key in constants.values():
         result = _nl_langinfo(rffi.cast(nl_item, key))
         return space.wrap(rffi.charp2str(result))
-    raise OperationError(space.w_ValueError, "unsupported langinfo constant")
+    raise OperationError(space.w_ValueError,
+                         space.wrap("unsupported langinfo constant"))
 
 nl_langinfo.unwrap_spec = [ObjSpace, int]
 
@@ -340,7 +360,7 @@ def bindtextdomain(space, domain, w_dir):
 
     if not dirname:
         errno = rposix.get_errno()
-        raise OperationError(space.w_OSError, errno)
+        raise OperationError(space.w_OSError, space.wrap(errno))
     return space.wrap(rffi.charp2str(dirname))
 
 bindtextdomain.unwrap_spec = [ObjSpace, str, W_Root]
@@ -406,7 +426,7 @@ if sys.platform == 'win32':
             elif GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_IDEFAULTLANGUAGE,
                                buf_lang, BUFSIZE):
                 lang = rffi.charp2str(buf_lang)
-                return space.newtuple([space.swrap("0x%s" % lang),
+                return space.newtuple([space.wrap("0x%s" % lang),
                                        space.wrap(encoding)])
             else:
                 return space.newtuple([space.w_None, space.wrap(encoding)])
