@@ -796,6 +796,9 @@ class Assembler386(object):
         if (guard_op.opnum == rop.GUARD_EXCEPTION or
             guard_op.opnum == rop.GUARD_NO_EXCEPTION):
             exc = True
+        # XXX this is a heuristics to detect whether we're handling this
+        # exception or not. We should have a bit better interface to deal
+        # with that I fear
         if (exc and (guard_op.suboperations[0].opnum == rop.GUARD_EXCEPTION or
                     guard_op.suboperations[0].opnum == rop.GUARD_NO_EXCEPTION)):
             exc = False
