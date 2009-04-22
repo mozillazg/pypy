@@ -49,6 +49,19 @@ class stat_result:
     if "st_flags" in posix._statfields:
         st_flags = structseqfield(23, "user defined flags for file")
 
+    def __init__(self, *args, **kw):
+        super(stat_result, self).__init__(*args, **kw)
+
+        # If we have been initialized from a tuple,
+        # st_?time might be set to None. Initialize it
+        # from the int slots.
+        if self.st_atime is None:
+            self.__dict__['st_atime'] = self[7]
+        if self.st_mtime is None:
+            self.__dict__['st_mtime'] = self[8]
+        if self.st_ctime is None:
+            self.__dict__['st_ctime'] = self[9]
+
 
 def fdopen(fd, mode='r', buffering=-1):
     """fdopen(fd [, mode='r' [, buffering]]) -> file_object

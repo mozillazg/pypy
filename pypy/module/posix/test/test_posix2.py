@@ -123,6 +123,12 @@ class AppTestPosix:
         finally:
             posix.stat_float_times(current)
 
+    def test_stat_result(self):
+        st = self.posix.stat_result((0, 0, 0, 0, 0, 0, 0, 41, 42.1, 43))
+        assert st.st_atime == 41
+        assert st.st_mtime == 42.1
+        assert st.st_ctime == 43
+
     def test_pickle(self):
         import pickle, os
         st = self.posix.stat(os.curdir)
