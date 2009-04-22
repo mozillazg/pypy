@@ -1,6 +1,7 @@
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib import rposix
+from pypy.rlib.rarithmetic import intmask
 
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, W_Root
@@ -244,8 +245,8 @@ def strcoll(space, w_s1, w_s2):
 
 strcoll.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
-_strxfrm = external('strxfrm', [rffi.CCHARP, rffi.CCHARP, rffi.SIZE_T],
-                                                                rffi.SIZE_T)
+_strxfrm = external('strxfrm',
+                    [rffi.CCHARP, rffi.CCHARP, rffi.SIZE_T], rffi.SIZE_T)
 
 def strxfrm(space, s):
     "string -> string. Returns a string that behaves for cmp locale-aware."
@@ -256,7 +257,8 @@ def strxfrm(space, s):
     if n2 > n1:
         # more space needed
         lltype.free(buf, flavor="raw")
-        buf = lltype.malloc(rffi.CCHARP.TO, n2, flavor="raw", zero=True)
+        buf = lltype.malloc(rffi.CCHARP.TO, intmask(n2),
+                            flavor="raw", zero=True)
         _strxfrm(buf, rffi.str2charp(s), n2)
 
     val = rffi.charp2str(buf)
