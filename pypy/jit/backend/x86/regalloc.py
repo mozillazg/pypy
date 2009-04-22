@@ -44,7 +44,6 @@ def convert_to_imm(c):
         raise ValueError("convert_to_imm: got a %s" % c)
 
 class RegAlloc(object):
-    guard_index = -1
     max_stack_depth = 0
     exc = False
     
@@ -267,6 +266,9 @@ class RegAlloc(object):
         self._walk_operations(operations)
 
     def _walk_operations(self, operations):
+        fop = operations[-1]
+        if fop.opnum == rop.FAIL:
+            self.guard_index = self.assembler.cpu.make_guard_index(fop)
         i = 0
         while i < len(operations):
             op = operations[i]
@@ -616,11 +618,7 @@ class RegAlloc(object):
         self.eventually_free_vars(inputargs)
 
     def regalloc_for_guard(self, guard_op):
-        regalloc = self.copy(guard_op)
-        fop = guard_op.suboperations[-1]
-        if fop.opnum == rop.FAIL:
-            regalloc.guard_index = self.assembler.cpu.make_guard_index(fop)
-        return regalloc
+        return self.copy(guard_op)
 
     def _consider_guard(self, op, ignored):
         loc = self.make_sure_var_in_reg(op.args[0], [])
