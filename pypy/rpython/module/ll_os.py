@@ -1238,12 +1238,19 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering(os.chdir)
     def register_os_chdir(self):
-        os_chdir = self.llexternal(underscore_on_windows+'chdir', [rffi.CCHARP], rffi.INT)
+        os_chdir = self.llexternal(underscore_on_windows+'chdir', 
+                                   [rffi.CCHARP], rffi.INT)
+        os_wchdir = self.llexternal(underscore_on_windows+'wchdir', 
+                                   [rffi.CWCHARP], rffi.INT)
 
         def chdir_llimpl(path):
-            res = rffi.cast(lltype.Signed, os_chdir(path))
+            if isinstance(path, str):
+                res = rffi.cast(lltype.Signed, os_chdir(path))
+            else:
+                res = rffi.cast(lltype.Signed, os_wchdir(path))
             if res < 0:
                 raise OSError(rposix.get_errno(), "os_chdir failed")
+        chdir_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         return extdef([str], s_None, llimpl=chdir_llimpl,
                       export_name="ll_os.ll_os_chdir")
@@ -1256,16 +1263,23 @@ class RegisterOs(BaseLazyRegistering):
             ARG2 = [rffi.MODE_T]
         os_mkdir = self.llexternal(underscore_on_windows+'mkdir',
                                    [rffi.CCHARP]+ARG2, rffi.INT)
+        os_wmkdir = self.llexternal(underscore_on_windows+'wmkdir',
+                                   [rffi.CWCHARP]+ARG2, rffi.INT)
         IGNORE_MODE = len(ARG2) == 0
 
         def mkdir_llimpl(pathname, mode):
-            if IGNORE_MODE:
-                res = os_mkdir(pathname)
+            if isinstance(pathname, str):
+                mkdir = os_mkdir
             else:
-                res = os_mkdir(pathname, mode)
+                mkdir = os_wmkdir
+            if IGNORE_MODE:
+                res = mkdir(pathname)
+            else:
+                res = mkdir(pathname, mode)
             res = rffi.cast(lltype.Signed, res)
             if res < 0:
                 raise OSError(rposix.get_errno(), "os_mkdir failed")
+        mkdir_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         return extdef([str, int], s_None, llimpl=mkdir_llimpl,
                       export_name="ll_os.ll_os_mkdir")

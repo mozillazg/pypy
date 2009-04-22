@@ -6,10 +6,11 @@ from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.rpython.module.ll_os import RegisterOs
 from pypy.rpython.module import ll_os_stat
 from pypy.rpython.lltypesystem import lltype
+from pypy.rpython import extregistry
 
 import os, sys
 _WIN = sys.platform == 'win32'
-                          
+
 def open(space, fname, flag, mode=0777):
     """Open a file (for low level IO).
 Return a file descriptor (a small integer)."""
@@ -143,7 +144,23 @@ file descriptor."""
         return build_stat_result(space, st)
 fstat.unwrap_spec = [ObjSpace, int]
 
-def stat(space, path):
+if _WIN:
+    def wrapper(fn):
+        impl = extregistry.lookup(fn).lltypeimpl
+        def f(space, w_path, args):
+            if space.is_true(space.isinstance(w_path, space.w_unicode)):
+                return impl(space.unicode_w(w_path), *args)
+            else:
+                return impl(space.str_w(w_path), *args)
+        return f
+else:
+    def wrapper(fn):
+        def f(space, w_path, args):
+            return fn(space.str_w(w_path), *args)
+        return f
+wrapper._annspecialcase_ = 'specialize:memo'
+
+def stat(space, w_path):
     """Perform a stat system call on the given path.  Return an object
 with (at least) the following attributes:
     st_mode
@@ -159,22 +176,22 @@ with (at least) the following attributes:
 """
 
     try:
-        st = os.stat(path)
+        st = wrapper(os.stat)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
     else: 
         return build_stat_result(space, st)
-stat.unwrap_spec = [ObjSpace, str]
+stat.unwrap_spec = [ObjSpace, W_Root]
 
-def lstat(space, path):
+def lstat(space, w_path):
     "Like stat(path), but do no follow symbolic links."
     try:
-        st = os.lstat(path)
+        st = wrapper(os.lstat)(space, w_path, ())
     except OSError, e:
         raise wrap_oserror(space, e)
     else:
         return build_stat_result(space, st)
-lstat.unwrap_spec = [ObjSpace, str]
+lstat.unwrap_spec = [ObjSpace, W_Root]
 
 class StatState(object):
     def __init__(self, space):
@@ -299,21 +316,21 @@ def getcwd(space):
         return space.wrap(cur)
 getcwd.unwrap_spec = [ObjSpace]
 
-def chdir(space, path):
+def chdir(space, w_path):
     """Change the current working directory to the specified path."""
     try:
-        os.chdir(path)
+        wrapper(os.chdir)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
-chdir.unwrap_spec = [ObjSpace, str]
+chdir.unwrap_spec = [ObjSpace, W_Root]
 
-def mkdir(space, path, mode=0777):
+def mkdir(space, w_path, mode=0777):
     """Create a directory."""
     try:
-        os.mkdir(path, mode)
+        wrapper(os.mkdir)(space, w_path, (mode,))
     except OSError, e: 
         raise wrap_oserror(space, e) 
-mkdir.unwrap_spec = [ObjSpace, str, int]
+mkdir.unwrap_spec = [ObjSpace, W_Root, int]
 
 def rmdir(space, path):
     """Remove a directory."""
