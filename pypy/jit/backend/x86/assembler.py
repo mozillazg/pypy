@@ -391,6 +391,7 @@ class Assembler386(object):
     def call(self, addr, args, res):
         for i in range(len(args)):
             arg = args[i]
+            assert not isinstance(arg, MODRM)
             self.mc.PUSH(arg)
         self.mc.CALL(rel32(addr))
         self.mc.ADD(esp, imm(len(args) * WORD))
@@ -795,6 +796,9 @@ class Assembler386(object):
         if (guard_op.opnum == rop.GUARD_EXCEPTION or
             guard_op.opnum == rop.GUARD_NO_EXCEPTION):
             exc = True
+        if (exc and (guard_op.suboperations[0].opnum == rop.GUARD_EXCEPTION or
+                    guard_op.suboperations[0].opnum == rop.GUARD_NO_EXCEPTION)):
+            exc = False
         regalloc.walk_guard_ops(guard_op.inputargs, guard_op.suboperations, exc)
         self.mcstack.give_mc_back(self.mc2)
         self.mc2 = self.mc
