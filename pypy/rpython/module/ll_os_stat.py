@@ -345,12 +345,29 @@ if sys.platform == 'win32':
              ('ftLastAccessTime', rwin32.FILETIME),
              ('ftLastWriteTime', rwin32.FILETIME)])
 
+        WIN32_FIND_DATAW = platform.Struct(
+            'WIN32_FIND_DATAW',
+            # Only interesting fields
+            [('dwFileAttributes', rwin32.DWORD),
+             ('nFileSizeHigh', rwin32.DWORD),
+             ('nFileSizeLow', rwin32.DWORD),
+             ('ftCreationTime', rwin32.FILETIME),
+             ('ftLastAccessTime', rwin32.FILETIME),
+             ('ftLastWriteTime', rwin32.FILETIME)])
+
     globals().update(platform.configure(CConfig))
     GET_FILEEX_INFO_LEVELS = rffi.ULONG # an enumeration
 
     GetFileAttributesEx = rffi.llexternal(
         'GetFileAttributesExA',
         [rffi.CCHARP, GET_FILEEX_INFO_LEVELS,
+         lltype.Ptr(WIN32_FILE_ATTRIBUTE_DATA)],
+        rwin32.BOOL,
+        calling_conv='win')
+
+    GetFileAttributesExW = rffi.llexternal(
+        'GetFileAttributesExW',
+        [rffi.CWCHARP, GET_FILEEX_INFO_LEVELS,
          lltype.Ptr(WIN32_FILE_ATTRIBUTE_DATA)],
         rwin32.BOOL,
         calling_conv='win')
@@ -364,6 +381,12 @@ if sys.platform == 'win32':
     FindFirstFile = rffi.llexternal(
         'FindFirstFileA',
         [rffi.CCHARP, lltype.Ptr(WIN32_FIND_DATA)],
+        rwin32.HANDLE,
+        calling_conv='win')
+
+    FindFirstFileW = rffi.llexternal(
+        'FindFirstFileW',
+        [rffi.CWCHARP, lltype.Ptr(WIN32_FIND_DATAW)],
         rwin32.HANDLE,
         calling_conv='win')
 
@@ -440,9 +463,13 @@ if sys.platform == 'win32':
 
         return make_stat_result(result)
 
-    def attributes_from_dir(l_path, data):
-        filedata = lltype.malloc(WIN32_FIND_DATA, flavor='raw')
-        hFindFile = FindFirstFile(l_path, filedata)
+    def attributes_from_dir(TP, l_path, data):
+        if TP is str:
+            filedata = lltype.malloc(WIN32_FIND_DATA, flavor='raw')
+            hFindFile = FindFirstFile(l_path, filedata)
+        else:
+            filedata = lltype.malloc(WIN32_FIND_DATAW, flavor='raw')
+            hFindFile = FindFirstFileW(l_path, filedata)
         if hFindFile == rwin32.INVALID_HANDLE_VALUE:
             return 0
         FindClose(hFindFile)
@@ -453,23 +480,37 @@ if sys.platform == 'win32':
         data.c_nFileSizeHigh    = filedata.c_nFileSizeHigh
         data.c_nFileSizeLow     = filedata.c_nFileSizeLow
         return 1
+    attributes_from_dir._annspecialcase_ = 'specialize:arg(0)'
 
     def win32_stat_llimpl(path):
+        if isinstance(path, str):
+            TP = str
+        else:
+            TP = unicode
         data = lltype.malloc(WIN32_FILE_ATTRIBUTE_DATA, flavor='raw')
         try:
-            l_path = rffi.str2charp(path)
-            res = GetFileAttributesEx(l_path, GetFileExInfoStandard, data)
+            if TP is str:
+                l_path = rffi.str2charp(path)
+                fn = GetFileAttributesEx
+            else:
+                l_path = rffi.unicode2wcharp(path)
+                fn = GetFileAttributesExW
+            res = fn(l_path, GetFileExInfoStandard, data)
             errcode = rwin32.GetLastError()
             if res == 0:
                 if errcode == ERROR_SHARING_VIOLATION:
-                    res = attributes_from_dir(l_path, data)
+                    res = attributes_from_dir(TP, l_path, data)
                     errcode = rwin32.GetLastError()
-            rffi.free_charp(l_path)
+            if TP is str:
+                rffi.free_charp(l_path)
+            else:
+                rffi.free_wcharp(l_path)
             if res == 0:
                 raise WindowsError(errcode, "os_stat failed")
             return attribute_data_to_stat(data)
         finally:
             lltype.free(data, flavor='raw')
+    win32_stat_llimpl._annspecialcase_ = 'specialize:argtype(0)'
     win32_lstat_llimpl = win32_stat_llimpl
 
     def win32_fstat_llimpl(fd):
