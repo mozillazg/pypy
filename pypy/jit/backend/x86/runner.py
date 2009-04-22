@@ -2,7 +2,7 @@ import sys
 import ctypes
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, ll2ctypes, rffi, rstr
-from pypy.rpython.llinterp import LLInterpreter, LLException
+from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import CDefinedIntSymbolic, specialize, Symbolic
 from pypy.rlib.objectmodel import we_are_translated, keepalive_until_here
