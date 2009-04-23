@@ -76,6 +76,7 @@ def open_file_as_stream(path, mode="r", buffering=-1):
     stream = open_path_helper(path, os_flags, basemode == "a")
     return construct_stream_tower(stream, buffering, universal, reading,
                                   writing, binary)
+open_file_as_stream._annspecialcase_ = 'specialize:argtype(0)'
 
 def _setfd_binary(fd):
     pass
@@ -99,6 +100,7 @@ def open_path_helper(path, os_flags, append):
             # XXX does this pass make sense?
             pass
     return DiskFile(fd)
+open_path_helper._annspecialcase_ = 'specialize:argtype(0)'
 
 def decode_mode(mode):
     if mode[0] == 'U':
