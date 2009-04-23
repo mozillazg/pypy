@@ -23,5 +23,9 @@ class RandomRunnerPlugin:
                         dest="n_vars",
                         help="supply this many randomly-valued arguments to "
                              "the function")
+        group.addoption('--repeat', action="store", type="int",
+                        default=15,
+                        dest="repeat",
+                        help="run the test this many times"),
 
 ConftestPlugin = RandomRunnerPlugin

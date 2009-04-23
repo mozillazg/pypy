@@ -161,8 +161,7 @@ def get_cpu():
 
 # ____________________________________________________________
 
-def test_random_function():
-    r = Random()
+def check_random_function(r):
     block_length = demo_conftest.option.block_length
     vars = [BoxInt(r.random_integer())
             for i in range(demo_conftest.option.n_vars)]
@@ -200,3 +199,12 @@ def test_random_function():
 
     for v in endvars:
         assert v.value == expected[v]
+
+    print '        # passed.'
+    print
+
+
+def test_random_function():
+    r = Random()
+    for i in range(demo_conftest.option.repeat):
+        check_random_function(r)
