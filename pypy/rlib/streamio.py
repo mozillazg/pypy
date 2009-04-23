@@ -40,6 +40,8 @@ an outout-buffering stream.
 import os, sys
 from pypy.rlib.rarithmetic import r_longlong, intmask
 
+_WIN32 = sys.platform == 'win32'
+
 from os import O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_TRUNC
 O_BINARY = getattr(os, "O_BINARY", 0)
 
@@ -92,7 +94,10 @@ def fdopen_as_stream(fd, mode, buffering):
 
 def open_path_helper(path, os_flags, append):
     # XXX for now always return DiskFile
-    fd = os.open(path, os_flags, 0666)
+    if _WIN32 and isinstance(path, unicode):
+        fd = ll_os.os_wopen(path, os_flags, 0666)
+    else:
+        fd = os.open(path, os_flags, 0666)
     if append:
         try:
             os.lseek(fd, 0, 2)
@@ -165,10 +170,11 @@ class StreamError(Exception):
 StreamErrors = (OSError, StreamError)     # errors that can generally be raised
 
 
-if sys.platform == "win32":
+if _WIN32:
     from pypy.rlib import rwin32
     from pypy.translator.tool.cbuild import ExternalCompilationInfo
     from pypy.rpython.lltypesystem import rffi
+    from pypy.rpython.module import ll_os
     import errno
 
     _eci = ExternalCompilationInfo()
