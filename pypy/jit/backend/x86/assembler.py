@@ -448,30 +448,34 @@ class Assembler386(object):
         self.mc.XOR(arglocs[0], imm8(1))
 
     def genop_int_lshift(self, op, arglocs, resloc):
-        loc = arglocs[0]
-        assert arglocs[1] is ecx
-        self.mc.SHL(loc, cl)
+        loc, loc2 = arglocs
+        if loc2 is ecx:
+            loc2 = cl
+        self.mc.SHL(loc, loc2)
 
     def genop_int_rshift(self, op, arglocs, resloc):
-        loc = arglocs[0]
-        assert arglocs[1] is ecx
-        self.mc.SAR(loc, cl)
+        loc, loc2 = arglocs
+        if loc2 is ecx:
+            loc2 = cl
+        self.mc.SAR(loc, loc2)
 
     def genop_uint_rshift(self, op, arglocs, resloc):
-        loc = arglocs[0]
-        assert arglocs[1] is ecx
-        self.mc.SHR(loc, cl)
+        loc, loc2 = arglocs
+        if loc2 is ecx:
+            loc2 = cl
+        self.mc.SHR(loc, loc2)
 
     def genop_guard_int_lshift_ovf(self, op, guard_op, addr, arglocs, resloc):
-        loc = arglocs[0]
-        tmploc = arglocs[2]
+        loc, loc2, tmploc = arglocs
+        if loc2 is ecx:
+            loc2 = cl
         # xxx a bit inefficient
         self.mc.MOV(tmploc, loc)
-        self.mc.SHL(tmploc, cl)
-        self.mc.SAR(tmploc, cl)
+        self.mc.SHL(tmploc, loc2)
+        self.mc.SAR(tmploc, loc2)
         self.mc.CMP(tmploc, loc)
         self.mc.JNE(rel32(addr))
-        self.mc.SHL(loc, cl)
+        self.mc.SHL(loc, loc2)
 
     def genop_int_is_true(self, op, arglocs, resloc):
         argloc = arglocs[0]
