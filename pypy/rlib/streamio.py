@@ -75,7 +75,13 @@ def replace_char_with_str(string, c, s):
 
 def open_file_as_stream(path, mode="r", buffering=-1):
     os_flags, universal, reading, writing, basemode, binary = decode_mode(mode)
-    stream = open_path_helper(path, os_flags, basemode == "a")
+    stream = open_path_helper(path, os_flags)
+    if basemode == "a":
+        try:
+            stream.seek(0, 2)
+        except OSError:
+            # XXX does this pass make sense?
+            pass
     return construct_stream_tower(stream, buffering, universal, reading,
                                   writing, binary)
 open_file_as_stream._annspecialcase_ = 'specialize:argtype(0)'
@@ -92,20 +98,20 @@ def fdopen_as_stream(fd, mode, buffering):
     return construct_stream_tower(stream, buffering, universal, reading,
                                   writing, binary)
 
-def open_path_helper(path, os_flags, append):
-    # XXX for now always return DiskFile
-    if _WIN32 and isinstance(path, unicode):
-        fd = ll_os.os_wopen(path, os_flags, 0666)
-    else:
+if _WIN32:
+    def open_path_helper(path, os_flags):
+        # XXX for now always return DiskFile
+        if isinstance(path, unicode):
+            fd = ll_os.os_wopen(path, os_flags, 0666)
+        else:
+            fd = os.open(path, os_flags, 0666)
+        return DiskFile(fd)
+    open_path_helper._annspecialcase_ = 'specialize:argtype(0)'
+else:
+    def open_path_helper(path, os_flags):
+        # XXX for now always return DiskFile
         fd = os.open(path, os_flags, 0666)
-    if append:
-        try:
-            os.lseek(fd, 0, 2)
-        except OSError:
-            # XXX does this pass make sense?
-            pass
-    return DiskFile(fd)
-open_path_helper._annspecialcase_ = 'specialize:argtype(0)'
+        return DiskFile(fd)
 
 def decode_mode(mode):
     if mode[0] == 'U':
