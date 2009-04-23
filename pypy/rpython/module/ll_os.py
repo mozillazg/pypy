@@ -724,7 +724,7 @@ class RegisterOs(BaseLazyRegistering):
         def os_wopen_oofakeimpl(o_path, flags, mode):
             return os.open(o_path._str, flags, mode)
 
-        return extdef([str, int, int], int, "ll_os.ll_os_wopen",
+        return extdef([unicode, int, int], int, "ll_os.ll_os_wopen",
                       llimpl=os_wopen_llimpl, oofakeimpl=os_wopen_oofakeimpl)
 
 # ------------------------------- os.read -------------------------------
@@ -862,13 +862,20 @@ class RegisterOs(BaseLazyRegistering):
         os_access = self.llexternal(underscore_on_windows + 'access',
                                     [rffi.CCHARP, rffi.INT],
                                     rffi.INT)
+        os_waccess = self.llexternal(underscore_on_windows + 'waccess',
+                                    [rffi.CWCHARP, rffi.INT],
+                                    rffi.INT)
 
         if sys.platform.startswith('win'):
             # All files are executable on Windows
             def access_llimpl(path, mode):
                 mode = mode & ~os.X_OK
-                error = rffi.cast(lltype.Signed, os_access(path, mode))
+                if isinstance(path, str):
+                    error = rffi.cast(lltype.Signed, os_access(path, mode))
+                else:
+                    error = rffi.cast(lltype.Signed, os_waccess(path, mode))
                 return error == 0
+            access_llimpl._annspecialcase_ = 'specialize:argtype(0)'
         else:
             def access_llimpl(path, mode):
                 error = rffi.cast(lltype.Signed, os_access(path, mode))
@@ -1254,11 +1261,16 @@ class RegisterOs(BaseLazyRegistering):
     @registering(os.unlink)
     def register_os_unlink(self):
         os_unlink = self.llexternal(underscore_on_windows+'unlink', [rffi.CCHARP], rffi.INT)
+        os_wunlink = self.llexternal(underscore_on_windows+'wunlink', [rffi.CWCHARP], rffi.INT)
 
         def unlink_llimpl(pathname):
-            res = rffi.cast(lltype.Signed, os_unlink(pathname))
+            if isinstance(pathname, str):
+                res = rffi.cast(lltype.Signed, os_unlink(pathname))
+            else:
+                res = rffi.cast(lltype.Signed, os_wunlink(pathname))
             if res < 0:
                 raise OSError(rposix.get_errno(), "os_unlink failed")
+        unlink_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         return extdef([str], s_None, llimpl=unlink_llimpl,
                       export_name="ll_os.ll_os_unlink")
@@ -1327,11 +1339,17 @@ class RegisterOs(BaseLazyRegistering):
     def register_os_chmod(self):
         os_chmod = self.llexternal(underscore_on_windows+'chmod', [rffi.CCHARP, rffi.MODE_T],
                                    rffi.INT)
+        os_wchmod = self.llexternal(underscore_on_windows+'wchmod', [rffi.CWCHARP, rffi.MODE_T],
+                                   rffi.INT)
 
         def chmod_llimpl(path, mode):
-            res = rffi.cast(lltype.Signed, os_chmod(path, rffi.cast(rffi.MODE_T, mode)))
+            if isinstance(path, str):
+                res = rffi.cast(lltype.Signed, os_chmod(path, rffi.cast(rffi.MODE_T, mode)))
+            else:
+                res = rffi.cast(lltype.Signed, os_wchmod(path, rffi.cast(rffi.MODE_T, mode)))
             if res < 0:
                 raise OSError(rposix.get_errno(), "os_chmod failed")
+        chmod_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         return extdef([str, int], s_None, llimpl=chmod_llimpl,
                       export_name="ll_os.ll_os_chmod")
@@ -1340,11 +1358,17 @@ class RegisterOs(BaseLazyRegistering):
     def register_os_rename(self):
         os_rename = self.llexternal('rename', [rffi.CCHARP, rffi.CCHARP],
                                     rffi.INT)
+        os_wrename = self.llexternal('wrename', [rffi.CWCHARP, rffi.CWCHARP],
+                                    rffi.INT)
 
         def rename_llimpl(oldpath, newpath):
-            res = rffi.cast(lltype.Signed, os_rename(oldpath, newpath))
+            if isinstance(oldpath, str):
+                res = rffi.cast(lltype.Signed, os_rename(oldpath, newpath))
+            else:
+                res = rffi.cast(lltype.Signed, os_wrename(oldpath, newpath))
             if res < 0:
                 raise OSError(rposix.get_errno(), "os_rename failed")
+        rename_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         return extdef([str, str], s_None, llimpl=rename_llimpl,
                       export_name="ll_os.ll_os_rename")

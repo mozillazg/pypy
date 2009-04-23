@@ -154,12 +154,27 @@ if WIDE_FILENAMES:
             else:
                 return impl(space.str_w(w_path), *args)
         return f
+    def wrapper2(fn):
+        impl = extregistry.lookup(fn).lltypeimpl
+        def f(space, w_path1, w_path2, args):
+            if (space.is_true(space.isinstance(w_path1, space.w_unicode)) and
+                space.is_true(space.isinstance(w_path2, space.w_unicode))):
+                return impl(space.unicode_w(w_path1), 
+                            space.unicode_w(w_path2), *args)
+            else:
+                return impl(space.str_w(w_path1), space.str_w(w_path2), *args)
+        return f
 else:
     def wrapper(fn):
         def f(space, w_path, args):
             return fn(space.str_w(w_path), *args)
         return f
+    def wrapper2(fn):
+        def f(space, w_path1, w_path2, args):
+            return fn(space.str_w(w_path1), space.str_w(w_path2), *args)
+        return f
 wrapper._annspecialcase_ = 'specialize:memo'
+wrapper2._annspecialcase_ = 'specialize:memo'
 
 def stat(space, w_path):
     """Perform a stat system call on the given path.  Return an object
@@ -233,7 +248,7 @@ def dup2(space, old_fd, new_fd):
         raise wrap_oserror(space, e) 
 dup2.unwrap_spec = [ObjSpace, int, int]
 
-def access(space, path, mode):
+def access(space, w_path, mode):
     """
     access(path, mode) -> 1 if granted, 0 otherwise
 
@@ -244,12 +259,12 @@ def access(space, path, mode):
     existence, or the inclusive-OR of R_OK, W_OK, and X_OK.
     """
     try:
-        ok = os.access(path, mode)
+        ok = wrapper(os.access)(space, w_path, (mode,))
     except OSError, e: 
         raise wrap_oserror(space, e) 
     else:
         return space.wrap(ok)
-access.unwrap_spec = [ObjSpace, str, int]
+access.unwrap_spec = [ObjSpace, W_Root, int]
 
 
 def times(space):
@@ -280,21 +295,21 @@ def system(space, cmd):
         return space.wrap(rc)
 system.unwrap_spec = [ObjSpace, str]
 
-def unlink(space, path):
+def unlink(space, w_path):
     """Remove a file (same as remove(path))."""
     try:
-        os.unlink(path)
+        wrapper(os.unlink)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
-unlink.unwrap_spec = [ObjSpace, str]
+unlink.unwrap_spec = [ObjSpace, W_Root]
 
-def remove(space, path):
+def remove(space, w_path):
     """Remove a file (same as unlink(path))."""
     try:
-        os.unlink(path)
+        wrapper(os.unlink)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
-remove.unwrap_spec = [ObjSpace, str]
+remove.unwrap_spec = [ObjSpace, W_Root]
 
 def _getfullpathname(space, path):
     """helper for ntpath.abspath """
@@ -425,21 +440,21 @@ def pipe(space):
     return space.newtuple([space.wrap(fd1), space.wrap(fd2)])
 pipe.unwrap_spec = [ObjSpace]
 
-def chmod(space, path, mode):
+def chmod(space, w_path, mode):
     "Change the access permissions of a file."
     try: 
-        os.chmod(path, mode)
+        wrapper(os.chmod)(space, w_path, (mode,))
     except OSError, e: 
         raise wrap_oserror(space, e) 
-chmod.unwrap_spec = [ObjSpace, str, int]
+chmod.unwrap_spec = [ObjSpace, W_Root, int]
 
-def rename(space, old, new):
+def rename(space, w_old, w_new):
     "Rename a file or directory."
-    try: 
-        os.rename(old, new)
+    try:
+        wrapper2(os.rename)(space, w_old, w_new, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
-rename.unwrap_spec = [ObjSpace, str, str]
+rename.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
 def umask(space, mask):
     "Set the current numeric umask and return the previous umask."
