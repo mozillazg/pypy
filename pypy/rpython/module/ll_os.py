@@ -82,6 +82,8 @@ class CConfig:
                                   [('actime', rffi.INT),
                                    ('modtime', rffi.INT)])
 
+def os_wopen(path, flags, mode):
+    return os.open(path, flags, mode)
 
 class RegisterOs(BaseLazyRegistering):
 
@@ -687,18 +689,43 @@ class RegisterOs(BaseLazyRegistering):
         os_open = self.llexternal(underscore_on_windows+'open',
                                   [rffi.CCHARP, rffi.INT, rffi.MODE_T],
                                   rffi.INT)
+        os_wopen = self.llexternal(underscore_on_windows+'wopen',
+                                   [rffi.CWCHARP, rffi.INT, rffi.MODE_T],
+                                   rffi.INT)
 
         def os_open_llimpl(path, flags, mode):
-            result = rffi.cast(rffi.LONG, os_open(path, flags, mode))
+            if isinstance(path, str):
+                result = rffi.cast(rffi.LONG, os_open(path, flags, mode))
+            else:
+                result = rffi.cast(rffi.LONG, os_wopen(path, flags, mode))
             if result == -1:
                 raise OSError(rposix.get_errno(), "os_open failed")
             return result
+        os_open_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         def os_open_oofakeimpl(o_path, flags, mode):
             return os.open(o_path._str, flags, mode)
 
         return extdef([str, int, int], int, "ll_os.ll_os_open",
                       llimpl=os_open_llimpl, oofakeimpl=os_open_oofakeimpl)
+
+    @registering(os_wopen)
+    def register_os_wopen(self):
+        os_wopen = self.llexternal(underscore_on_windows+'wopen',
+                                   [rffi.CWCHARP, rffi.INT, rffi.MODE_T],
+                                   rffi.INT)
+
+        def os_wopen_llimpl(path, flags, mode):
+            result = rffi.cast(rffi.LONG, os_wopen(path, flags, mode))
+            if result == -1:
+                raise OSError(rposix.get_errno(), "os_wopen failed")
+            return result
+
+        def os_wopen_oofakeimpl(o_path, flags, mode):
+            return os.open(o_path._str, flags, mode)
+
+        return extdef([str, int, int], int, "ll_os.ll_os_wopen",
+                      llimpl=os_wopen_llimpl, oofakeimpl=os_wopen_oofakeimpl)
 
 # ------------------------------- os.read -------------------------------
 

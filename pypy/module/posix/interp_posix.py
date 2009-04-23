@@ -12,15 +12,15 @@ import os, sys
 _WIN = sys.platform == 'win32'
 WIDE_FILENAMES = _WIN
 
-def open(space, fname, flag, mode=0777):
+def open(space, w_path, flag, mode=0777):
     """Open a file (for low level IO).
 Return a file descriptor (a small integer)."""
     try: 
-        fd = os.open(fname, flag, mode)
+        fd = wrapper(os.open)(space, w_path, (flag, mode))
     except OSError, e: 
         raise wrap_oserror(space, e) 
     return space.wrap(fd)
-open.unwrap_spec = [ObjSpace, str, int, int]
+open.unwrap_spec = [ObjSpace, W_Root, int, int]
 
 def lseek(space, fd, pos, how):
     """Set the current position of a file descriptor.  Return the new position.
