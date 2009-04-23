@@ -61,6 +61,10 @@ corresponding Unix manual entries for more information on calls."""
     'utime'     : 'interp_posix.utime',
     '_statfields': 'interp_posix.getstatfields(space)',
     }
+
+    if os.name == 'nt':
+        interpleveldefs['urandom'] = 'interp_posix.win32_urandom'
+
     if hasattr(os, 'chown'):
         interpleveldefs['chown'] = 'interp_posix.chown'
     if hasattr(os, 'ftruncate'):
