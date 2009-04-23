@@ -552,7 +552,9 @@ class VideoDriver(object):
                 self.draw_gb_pixel(x, y, 0)
 
     def draw_gb_pixel(self, x, y, color):
+        old = self.pixels[y][x]
         self.pixels[y][x] = color
+        self.changed[y][x] = old != color
 
     def update_gb_display(self):
         self.update_display()
@@ -562,5 +564,9 @@ class VideoDriver(object):
         pass
 
     def create_pixels(self):
-        self.pixels = [[0] * self.width
+        # any non-valid color is fine
+        self.pixels = [[255] * self.width
                         for i in range(self.height)]
+        self.changed = [[True] * self.width
+                         for i in range(self.height)]
+                        

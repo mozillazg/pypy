@@ -73,14 +73,12 @@ class GameBoyImplementation(GameBoy):
         self.emulate(constants.GAMEBOY_CLOCK / FPS)
         spent = time.time() - self.sync_time
         left = 1.0/FPS + self.penalty - spent
-        print "left", left
         if left > 0:
             delay(left)
             self.penalty = 0.0
         else:
             # Fade out penalties over time.
             self.penalty = left - self.penalty / 2
-            print self.penalty
         self.sync_time = time.time()
         
     
@@ -189,7 +187,9 @@ class VideoDriverImplementation(VideoDriver):
     def draw_pixels(self):
         for y in range(constants.GAMEBOY_SCREEN_HEIGHT):
             for x in range(constants.GAMEBOY_SCREEN_WIDTH):
-                self.draw_pixel(x, y, self.pixels[y][x])
+                if self.changed[y][x]:
+                    self.draw_pixel(x, y, self.pixels[y][x])
+                    self.changed[y][x] = False
 
     def draw_ascii_pixels(self):
             str = []
