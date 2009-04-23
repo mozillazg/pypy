@@ -5,7 +5,7 @@ option = py.test.config.option
 class RandomRunnerPlugin:
     def pytest_addoption(self, parser):
         group = parser.addgroup('random test options')
-        group.addoption('--seed', action="store", type="int",
+        group.addoption('--random-seed', action="store", type="int",
                         default=random.randrange(0, 10000),
                         dest="randomseed",
                         help="choose a fixed random seed")
