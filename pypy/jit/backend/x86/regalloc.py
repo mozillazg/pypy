@@ -1024,8 +1024,8 @@ class RegAlloc(object):
     def consider_int_abs(self, op, ignored):
         argloc = self.force_allocate_reg(op.args[0], [])
         tmpvar = TempBox()
-        tmploc = self.force_allocate_reg(tmpvar, [])
-        resloc = self.force_allocate_reg(op.result, [])
+        tmploc = self.force_allocate_reg(tmpvar, [op.args[0]])
+        resloc = self.force_allocate_reg(op.result, [op.args[0], tmpvar])
         self.Perform(op, [argloc, tmploc], resloc)
         self.eventually_free_var(op.args[0])
         self.eventually_free_var(tmpvar)
@@ -1033,8 +1033,8 @@ class RegAlloc(object):
     def consider_int_abs_ovf(self, op, guard_op):
         argloc = self.force_allocate_reg(op.args[0], [])
         tmpvar = TempBox()
-        tmploc = self.force_allocate_reg(tmpvar, [])
-        resloc = self.force_allocate_reg(op.result, [])
+        tmploc = self.force_allocate_reg(tmpvar, [op.args[0]])
+        resloc = self.force_allocate_reg(op.result, [op.args[0], tmpvar])
         self.position += 1
         regalloc = self.regalloc_for_guard(guard_op)
         self.perform_with_guard(op, guard_op, regalloc, [argloc, tmploc],
