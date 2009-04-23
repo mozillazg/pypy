@@ -339,10 +339,13 @@ class Box(AbstractValue):
 
     def __str__(self):
         if not hasattr(self, '_str'):
-            if self.type == INT:
-                t = 'i'
-            else:
-                t = 'p'
+            try:
+                if self.type == INT:
+                    t = 'i'
+                else:
+                    t = 'p'
+            except AttributeError:
+                t = 'b'
             self._str = '%s%d' % (t, Box._counter)
             Box._counter += 1
         return self._str
