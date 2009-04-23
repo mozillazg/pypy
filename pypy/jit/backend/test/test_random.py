@@ -31,6 +31,8 @@ class OperationBuilder:
                 print '        %s = BoxInt()' % (names[v],)
         print '        inputargs = [%s]' % (
             ', '.join([names[v] for v in self.loop.inputargs]))
+        print '        inputvalues = [%s]' % (
+            ', '.join(str(v.value) for v in self.loop.inputargs))
         from pypy.jit.metainterp.resoperation import opname
         print '        operations = ['
         for op in self.loop.operations:
@@ -40,6 +42,7 @@ class OperationBuilder:
                            for v in op.args]),
                 names[op.result])
         print '            ]'
+        self.names = names
 
 class AbstractOperation:
     def __init__(self, opnum, boolres=False):
@@ -137,10 +140,10 @@ def Random():
     r = random.Random(seed)
     def get_random_integer():
         while True:
-            result = int(random.expovariate(0.05))
+            result = int(r.expovariate(0.05))
             if result <= sys.maxint:
                 break
-        if random.randrange(0, 5) <= 1:
+        if r.randrange(0, 5) <= 1:
             result = -result
         return result
     r.random_integer = get_random_integer
@@ -198,7 +201,11 @@ def check_random_function(r):
     cpu.execute_operations(loop, valueboxes)
 
     for v in endvars:
-        assert v.value == expected[v]
+        assert v.value == expected[v], (
+            "Got %d, expected %d, in the variable %s" % (v.value,
+                                                         expected[v],
+                                                         builder.names[v])
+            )
 
     print '        # passed.'
     print
