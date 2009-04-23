@@ -10,6 +10,7 @@ from pypy.rpython import extregistry
 
 import os, sys
 _WIN = sys.platform == 'win32'
+WIDE_FILENAMES = _WIN
 
 def open(space, fname, flag, mode=0777):
     """Open a file (for low level IO).
@@ -144,7 +145,7 @@ file descriptor."""
         return build_stat_result(space, st)
 fstat.unwrap_spec = [ObjSpace, int]
 
-if _WIN:
+if WIDE_FILENAMES:
     def wrapper(fn):
         impl = extregistry.lookup(fn).lltypeimpl
         def f(space, w_path, args):

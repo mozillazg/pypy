@@ -1,5 +1,5 @@
 import py
-import os
+import os, sys
 from pypy.rlib import streamio
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.module._file.interp_stream import W_AbstractStream
@@ -11,6 +11,7 @@ from pypy.interpreter.typedef import interp_attrproperty, make_weakref_descr
 from pypy.interpreter.typedef import interp_attrproperty_w
 from pypy.interpreter.gateway import interp2app
 
+WIDE_FILENAMES = sys.platform == 'win32'
 
 class W_File(W_AbstractStream):
     """An interp-level file object.  This implements the same interface than
@@ -81,10 +82,18 @@ class W_File(W_AbstractStream):
     # file lock.  They don't convert StreamErrors to OperationErrors, too.
 
     def direct___init__(self, w_name, mode='r', buffering=-1):
-        name = self.space.str_w(w_name)
-        self.direct_close()
-        self.check_mode_ok(mode)
-        stream = streamio.open_file_as_stream(name, mode, buffering)
+        if WIDE_FILENAMES and self.space.is_true(
+            self.space.isinstance(w_name, self.space.w_unicode)):
+
+            name_u = self.space.unicode_w(w_name)
+            self.direct_close()
+            self.check_mode_ok(mode)
+            stream = streamio.open_file_as_stream(name_u, mode, buffering)
+        else:
+            name = self.space.str_w(w_name)
+            self.direct_close()
+            self.check_mode_ok(mode)
+            stream = streamio.open_file_as_stream(name, mode, buffering)
         fd = stream.try_to_find_file_descriptor()
         self.fdopenstream(stream, fd, mode, w_name)
 
