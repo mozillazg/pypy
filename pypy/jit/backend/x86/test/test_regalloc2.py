@@ -24,7 +24,6 @@ def test_bug_rshift():
     assert v3.value == (~18)
 
 def test_bug_int_is_true_1():
-    py.test.skip('fix me')
     v1 = BoxInt()
     v2 = BoxInt()
     v3 = BoxInt()
