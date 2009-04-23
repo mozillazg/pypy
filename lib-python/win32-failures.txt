@@ -1,6 +1,5 @@
 These tests currently fail on win32:
 
-test_threaded_import TODO: implement nt.urandom with CryptGenRandom()
 test_unicode_file    IN-PROGRESS: implement unicode filesystem.
                      (see branch/unicode_filename)
 test_univnewlines    INCORRECT FIX: os.popen('echo 1') should not return
