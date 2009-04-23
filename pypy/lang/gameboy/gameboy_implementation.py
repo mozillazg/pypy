@@ -12,13 +12,14 @@ from pypy.lang.gameboy.video_meta import TileDataWindow, SpriteWindow,\
 from pypy.lang.gameboy import constants
 import time
 
-show_metadata = True # Extends the window with windows visualizing meta-data
+show_metadata = False # Extends the window with windows visualizing meta-data
 
 if constants.USE_RSDL:
     from pypy.rlib.rsdl import RSDL, RSDL_helper #, RMix
     from pypy.rpython.lltypesystem import lltype, rffi
-    delay = RSDL.Delay
     get_ticks = RSDL.GetTicks
+    def delay(secs):
+        return RSDL.Delay(int(secs * 1000))
 else:
     delay = time.sleep
 
@@ -70,15 +71,17 @@ class GameBoyImplementation(GameBoy):
         self.handle_events()
         # Come back to this cycle every 1/FPS seconds
         self.emulate(constants.GAMEBOY_CLOCK / FPS)
-        spent = int(time.time()) - self.sync_time
-        left = int(1000.0/FPS) + self.penalty - spent
+        spent = time.time() - self.sync_time
+        left = 1.0/FPS + self.penalty - spent
+        print "left", left
         if left > 0:
             delay(left)
-            self.penalty = 0
+            self.penalty = 0.0
         else:
             # Fade out penalties over time.
             self.penalty = left - self.penalty / 2
-        self.sync_time = int(time.time())
+            print self.penalty
+        self.sync_time = time.time()
         
     
     def handle_execution_error(self, error): 
@@ -117,11 +120,11 @@ class GameBoyImplementation(GameBoy):
 
 class VideoDriverImplementation(VideoDriver):
     
-    COLOR_MAP = [0xFFFFFF, 0xCCCCCC, 0x666666, 0x000000]
+    COLOR_MAP = [(0xff, 0xff, 0xff), (0xCC, 0xCC, 0xCC), (0x66, 0x66, 0x66), (0, 0, 0)]
     
     def __init__(self, gameboy):
         VideoDriver.__init__(self)
-        self.scale = 2
+        self.scale = 4
 
         if show_metadata:
             self.create_meta_windows(gameboy)
@@ -129,6 +132,12 @@ class VideoDriverImplementation(VideoDriver):
     def create_screen(self):
         if constants.USE_RSDL:
             self.screen = RSDL.SetVideoMode(self.width*self.scale, self.height*self.scale, 32, 0)
+            fmt = self.screen.c_format
+            self.colors = []
+            for color in self.COLOR_MAP:
+                color = RSDL.MapRGB(fmt, *color)
+                self.colors.append(color)
+            self.blit_rect = RSDL_helper.mallocrect(0, 0, self.scale, self.scale)
  
     def create_meta_windows(self, gameboy):
         upper_meta_windows = [SpritesWindow(gameboy),
@@ -169,17 +178,13 @@ class VideoDriverImplementation(VideoDriver):
             self.draw_ascii_pixels()
 
     def draw_pixel(self, x, y, color):
-        color = self.COLOR_MAP[color]
+        color = self.colors[color]
         start_x = x * self.scale
         start_y = y * self.scale
-
-        if self.scale > 1:
-            for x in range(self.scale):
-                for y in range(self.scale):
-                    RSDL_helper.set_pixel(self.screen, start_x + x,
-                                          start_y + y, color)
-        else:
-            RSDL_helper.set_pixel(self.screen, start_x, start_y, color)
+        dstrect = self.blit_rect
+        rffi.setintfield(dstrect, 'c_x',  start_x)
+        rffi.setintfield(dstrect, 'c_y',  start_y)
+        RSDL.FillRect(self.screen, dstrect, color)
 
     def draw_pixels(self):
         for y in range(constants.GAMEBOY_SCREEN_HEIGHT):
