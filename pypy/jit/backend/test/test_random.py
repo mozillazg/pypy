@@ -19,6 +19,28 @@ class OperationBuilder:
         self.loop.operations.append(ResOperation(opnum, argboxes, v_result))
         return v_result
 
+    def print_loop(self):
+        names = {None: 'None'}
+        for v in self.vars:
+            names[v] = 'v%d' % len(names)
+            print '        %s = BoxInt()' % (names[v],)
+        for op in self.loop.operations:
+            v = op.result
+            if v not in names:
+                names[v] = 'tmp%d' % len(names)
+                print '        %s = BoxInt()' % (names[v],)
+        print '        inputargs = [%s]' % (
+            ', '.join([names[v] for v in self.loop.inputargs]))
+        from pypy.jit.metainterp.resoperation import opname
+        print '        operations = ['
+        for op in self.loop.operations:
+            print '            ResOperation(rop.%s, [%s], %s),' % (
+                opname[op.opnum],
+                ', '.join([names.get(v, 'ConstInt(%d)' % v.value)
+                           for v in op.args]),
+                names[op.result])
+        print '            ]'
+
 class AbstractOperation:
     def __init__(self, opnum, boolres=False):
         self.opnum = opnum
@@ -58,7 +80,7 @@ class BinaryOperation(AbstractOperation):
             v_second = ConstInt((value & self.and_mask) | self.or_mask)
         else:
             v = r.choice(builder.vars)
-            if self.and_mask != 1:
+            if self.and_mask != -1:
                 v = builder.do(rop.INT_AND, [v, ConstInt(self.and_mask)])
             if self.or_mask != 0:
                 v = builder.do(rop.INT_OR, [v, ConstInt(self.or_mask)])
@@ -165,6 +187,7 @@ def test_random_function():
             endvars.append(v)
     r.shuffle(endvars)
     loop.operations.append(ResOperation(rop.FAIL, endvars, None))
+    builder.print_loop()
 
     cpu.compile_operations(loop)
 
