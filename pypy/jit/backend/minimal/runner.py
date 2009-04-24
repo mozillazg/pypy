@@ -6,6 +6,7 @@ from pypy.jit.metainterp.history import AbstractDescr, Box, BoxInt, BoxPtr
 from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.resoperation import rop, opname
 
+DEBUG = False
 
 class CPU(object):
     is_oo = False    # XXX for now
@@ -39,9 +40,10 @@ class CPU(object):
         pass
 
     def execute_operations(self, loop, valueboxes):
-        #debug_print("execute_operations: starting", loop)
-        #for box in valueboxes:
-        #    debug_print("\t", box, "\t", box.get_())
+        if DEBUG:
+            print "execute_operations: starting", loop
+            for box in valueboxes:
+                print "\t", box, "\t", box.get_()
         valueboxes = [box.clonebox() for box in valueboxes]
         self.clear_exception()
         self._guard_failed = False
@@ -60,20 +62,24 @@ class CPU(object):
                 op = operations[i]
                 i += 1
                 argboxes = []
-                #lst = [' %s ' % opname[op.opnum]]
+                if DEBUG:
+                    lst = [' %s ' % opname[op.opnum]]
                 for box in op.args:
                     if isinstance(box, Box):
                         box = env[box]
                     argboxes.append(box)
-                    #lst.append(str(box.get_()))
-                #debug_print(' '.join(lst))
+                    if DEBUG:
+                        lst.append(str(box.get_()))
+                if DEBUG:
+                    print ' '.join(lst)
                 if op.is_final():
                     break
                 if op.is_guard():
                     try:
                         resbox = self.execute_guard(op.opnum, argboxes)
                     except GuardFailed:
-                        #debug_print("\t*guard failed*")
+                        if DEBUG:
+                            print "\t*guard failed (%s)*" % op.getopname()
                         self._guard_failed = True
                         operations = op.suboperations
                         i = 0
@@ -85,7 +91,8 @@ class CPU(object):
                 if op.result is not None:
                     ll_assert(resbox is not None,
                               "execute_operations: unexpectedly got None")
-                    #debug_print('\t-->', resbox.get_())
+                    if DEBUG:
+                        print '\t-->', resbox.get_()
                     env[op.result] = resbox
                 else:
                     ll_assert(resbox is None,
@@ -98,8 +105,9 @@ class CPU(object):
             if op.opnum == rop.FAIL:
                 break
             ll_assert(False, "execute_operations: bad opnum")
-        #
-        #debug_print("execute_operations: leaving", loop)
+
+        if DEBUG:
+            print "execute_operations: leaving", loop
         for i in range(len(op.args)):
             box = op.args[i]
             if isinstance(box, BoxInt):
@@ -108,7 +116,8 @@ class CPU(object):
             elif isinstance(box, BoxPtr):
                 value = env[box].getptr_base()
                 box.changevalue_ptr(value)
-            #debug_print("\t", box, "\t", box.get_())
+            if DEBUG:
+                print "\t", box, "\t", box.get_()
         return op
 
     def execute_guard(self, opnum, argboxes):
@@ -363,12 +372,14 @@ class CPU(object):
         except Exception, e:
             from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
             self.current_exc_inst = cast_instance_to_base_ptr(e)
-            #debug_print('\tcall raised!', self.current_exc_inst)
+            if DEBUG:
+                print '\tcall raised!', self.current_exc_inst
             box = calldescr.errbox
             if box:
                 box = box.clonebox()
-        #else:
-            #debug_print('\tcall did not raise')
+        else:
+            if DEBUG:
+                print '\tcall did not raise'
         return box
 
     # ----------
