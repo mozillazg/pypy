@@ -104,9 +104,9 @@ class BinaryOperation(AbstractOperation):
             v_second = ConstInt((value & self.and_mask) | self.or_mask)
         else:
             v = r.choice(builder.vars)
-            if self.and_mask != -1:
+            if (v.value & self.and_mask) != v.value:
                 v = builder.do(rop.INT_AND, [v, ConstInt(self.and_mask)])
-            if self.or_mask != 0:
+            if (v.value | self.or_mask) != v.value:
                 v = builder.do(rop.INT_OR, [v, ConstInt(self.or_mask)])
             v_second = v
         self.put(builder, [v_first, v_second])
@@ -153,8 +153,8 @@ for _op in [rop.INT_LT,
             ]:
     OPERATIONS.append(BinaryOperation(_op, boolres=True))
 
-OPERATIONS.append(BinaryOperation(rop.INT_FLOORDIV, ~3, 1))
-OPERATIONS.append(BinaryOperation(rop.INT_MOD, ~3, 1))
+OPERATIONS.append(BinaryOperation(rop.INT_FLOORDIV, ~3, 2))
+OPERATIONS.append(BinaryOperation(rop.INT_MOD, ~3, 2))
 OPERATIONS.append(BinaryOperation(rop.INT_RSHIFT, LONG_BIT-1))
 OPERATIONS.append(BinaryOperation(rop.INT_LSHIFT, LONG_BIT-1))
 OPERATIONS.append(BinaryOperation(rop.UINT_RSHIFT, LONG_BIT-1))
