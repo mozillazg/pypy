@@ -1,5 +1,4 @@
 import py
-py.test.skip("fixme")
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr, rclass
 from pypy.jit.metainterp.history import ResOperation, TreeLoop
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
@@ -304,16 +303,6 @@ class TestX86(BaseBackendTest):
 
     def test_uint_ops(self):
         from pypy.rlib.rarithmetic import r_uint, intmask
-
-        arg0 = BoxInt(intmask(r_uint(sys.maxint + 3)))
-        arg1 = BoxInt(intmask(r_uint(4)))
-        res = self.execute_operation(rop.UINT_ADD, [arg0, arg1], 'int')
-        assert res.value == intmask(r_uint(sys.maxint + 3) + r_uint(4))
-
-        arg0 = BoxInt(intmask(sys.maxint + 10))
-        arg1 = BoxInt(10)
-        res = self.execute_operation(rop.UINT_MUL, [arg0, arg1], 'int')
-        assert res.value == intmask((sys.maxint + 10) * 10)
 
         arg0 = BoxInt(intmask(r_uint(sys.maxint + 3)))
         arg1 = BoxInt(intmask(r_uint(4)))
