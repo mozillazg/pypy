@@ -36,9 +36,17 @@ else:
     _WIN32 = False
 
 if _WIN32:
+    from pypy.rlib import rwin32
+
     underscore_on_windows = '_'
+
+    def llos_exception(context):
+        return rwin32.lastWindowsError(context)
 else:
     underscore_on_windows = ''
+
+    def llos_exception(context):
+        return OSError(rposix.get_errno(), context + " failed")
 
 includes = []
 if not _WIN32:
@@ -289,9 +297,6 @@ class RegisterOs(BaseLazyRegistering):
             HAVE_UTIMES = platform.Has('utimes')
         config = platform.configure(CConfig)
 
-        # XXX note that on Windows, calls to os.utime() are ignored on
-        # directories.  Remove that hack over there once it's fixed here!
-
         if config['HAVE_UTIMES']:
             class CConfig:
                 _compilation_info_ = ExternalCompilationInfo(
@@ -341,7 +346,6 @@ class RegisterOs(BaseLazyRegistering):
                 if error == -1:
                     raise OSError(rposix.get_errno(), "os_utime failed")
         else:
-            from pypy.rlib import rwin32
             from pypy.rpython.module.ll_os_stat import time_t_to_FILE_TIME
 
             class CConfig:
@@ -357,9 +361,17 @@ class RegisterOs(BaseLazyRegistering):
                     'FILE_FLAG_BACKUP_SEMANTICS')
             globals().update(platform.configure(CConfig))
 
-            CreateFile = rffi.llexternal(
+            CreateFileA = rffi.llexternal(
                 'CreateFileA',
                 [rwin32.LPCSTR, rwin32.DWORD, rwin32.DWORD,
+                 rwin32.LPSECURITY_ATTRIBUTES, rwin32.DWORD, rwin32.DWORD,
+                 rwin32.HANDLE],
+                rwin32.HANDLE,
+                calling_conv='win')
+
+            CreateFileW = rffi.llexternal(
+                'CreateFileW',
+                [rwin32.LPCWSTR, rwin32.DWORD, rwin32.DWORD,
                  rwin32.LPSECURITY_ATTRIBUTES, rwin32.DWORD, rwin32.DWORD,
                  rwin32.HANDLE],
                 rwin32.HANDLE,
@@ -388,6 +400,10 @@ class RegisterOs(BaseLazyRegistering):
                 calling_conv = 'win')
 
             def os_utime_llimpl(path, tp):
+                if isinstance(path, str):
+                    CreateFile = CreateFileA
+                else:
+                    CreateFile = CreateFileW
                 hFile = CreateFile(path, 
                                    FILE_WRITE_ATTRIBUTES, 0, 
                                    None, OPEN_EXISTING,
@@ -417,7 +433,7 @@ class RegisterOs(BaseLazyRegistering):
                     rwin32.CloseHandle(hFile)
                     lltype.free(atime, flavor='raw')
                     lltype.free(mtime, flavor='raw')
-        os_utime_llimpl._annspecialcase_ = 'specialize:argtype(1)'
+        os_utime_llimpl._annspecialcase_ = 'specialize:argtype(0,1)'
 
         s_string = SomeString()
         s_tuple_of_2_floats = SomeTuple([SomeFloat(), SomeFloat()])
@@ -890,51 +906,40 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(posix, '_getfullpathname')
     def register_posix__getfullpathname(self):
-        # this nt function is not exposed via os, but needed
-        # to get a correct implementation of os.abspath
-        # XXX why do we ignore WINAPI conventions everywhere?
-        class CConfig:
-            _compilation_info_ = ExternalCompilationInfo(
-                includes = ['Windows.h']
-            )
-            MAX_PATH = platform.ConstantInteger('MAX_PATH')
-            DWORD    = platform.SimpleType("DWORD", rffi.ULONG)
-            LPCTSTR  = platform.SimpleType("LPCTSTR", rffi.CCHARP)
-            LPTSTR   = platform.SimpleType("LPTSTR", rffi.CCHARP)
-            LPTSTRP  = platform.SimpleType("LPTSTR*", rffi.CCHARPP)
-
-        config = platform.configure(CConfig)
-        MAX_PATH = config['MAX_PATH']
-        DWORD    = config['DWORD']
-        LPCTSTR  = config['LPCTSTR']
-        LPTSTR   = config['LPTSTR']
-        LPTSTRP  = config['LPTSTRP']
-        # XXX unicode?
-        GetFullPathName = self.llexternal('GetFullPathNameA',
-                         [LPCTSTR, DWORD, LPTSTR, LPTSTRP], DWORD)
-        GetLastError = self.llexternal('GetLastError', [], DWORD)
-        ##DWORD WINAPI GetFullPathName(
-        ##  __in          LPCTSTR lpFileName,
-        ##  __in          DWORD nBufferLength,
-        ##  __out         LPTSTR lpBuffer,
-        ##  __out         LPTSTR* lpFilePart
-        ##);
+        GetFullPathNameA = self.llexternal(
+            'GetFullPathNameA',
+            [rffi.CCHARP, rwin32.DWORD, rffi.CCHARP, rffi.CCHARPP],
+            rwin32.DWORD)
+        GetFullPathNameW = self.llexternal(
+            'GetFullPathNameW',
+            [rffi.CWCHARP, rwin32.DWORD, rffi.CWCHARP, rffi.CWCHARPP],
+            rwin32.DWORD)
 
         def _getfullpathname_llimpl(lpFileName):
-            nBufferLength = MAX_PATH + 1
+            if isinstance(lpFileName, str):
+                LPTSTR = rffi.CCHARP
+                LPTSTRP = rffi.CCHARPP
+                GetFullPathName = GetFullPathNameA
+                charp2str = rffi.charp2str
+            else:
+                LPTSTR = rffi.CWCHARP
+                LPTSTRP = rffi.CWCHARPP
+                GetFullPathName = GetFullPathNameW
+                charp2str = rffi.wcharp2unicode
+            nBufferLength = rwin32.MAX_PATH + 1
             lpBuffer = lltype.malloc(LPTSTR.TO, nBufferLength, flavor='raw')
             try:
                 res = GetFullPathName(
-                    lpFileName, rffi.cast(DWORD, nBufferLength),
+                    lpFileName, rffi.cast(rwin32.DWORD, nBufferLength),
                     lpBuffer, lltype.nullptr(LPTSTRP.TO))
                 if res == 0:
-                    error = GetLastError()
-                    raise OSError(error, "_getfullpathname failed")
+                    raise rwin32.lastWindowsError("_getfullpathname")
                 # XXX ntpath expects WindowsError :-(
-                result = rffi.charp2str(lpBuffer)
+                result = charp2str(lpBuffer)
                 return result
             finally:
                 lltype.free(lpBuffer, flavor='raw')
+        _getfullpathname_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         return extdef([str],  # a single argument which is a str
                       str,    # returns a string
@@ -946,9 +951,11 @@ class RegisterOs(BaseLazyRegistering):
         if unicodepath:
             tp = unicode
             TP = rffi.CWCHARP
+            charp2str = rffi.charp2str
         else:
             tp = str
             TP = rffi.CCHARP
+            charp2str = rffi.wcharp2unicode
         os_getcwd = self.llexternal(underscore_on_windows + 'getcwd',
                                     [TP, rffi.SIZE_T],
                                     TP)
@@ -968,10 +975,7 @@ class RegisterOs(BaseLazyRegistering):
                 bufsize *= 4
                 if bufsize > 1024*1024:  # xxx hard-coded upper limit
                     raise OSError(error, "getcwd result too large")
-            if tp is str:
-                result = rffi.charp2str(res)
-            else:
-                result = rffi.wcharp2unicode(res)
+            result = charp2str(res)
             lltype.free(buf, flavor='raw')
             return result
 
@@ -1374,7 +1378,8 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering(os.rename)
     def register_os_rename(self):
-        os_rename = self.llexternal(underscore_on_windows+'rename', [rffi.CCHARP, rffi.CCHARP],
+        # On windows the functions are: rename and _wrename
+        os_rename = self.llexternal('rename', [rffi.CCHARP, rffi.CCHARP],
                                     rffi.INT)
         os_wrename = self.llexternal(underscore_on_windows+'wrename', [rffi.CWCHARP, rffi.CWCHARP],
                                     rffi.INT)
@@ -1385,7 +1390,7 @@ class RegisterOs(BaseLazyRegistering):
             else:
                 res = rffi.cast(lltype.Signed, os_wrename(oldpath, newpath))
             if res < 0:
-                raise OSError(rposix.get_errno(), "os_rename failed")
+                raise llos_exception("os_rename")
         rename_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         return extdef([str, str], s_None, llimpl=rename_llimpl,

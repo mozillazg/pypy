@@ -691,6 +691,9 @@ def make_string_mappings(strtype):
 # char**
 CCHARPP = lltype.Ptr(lltype.Array(CCHARP, hints={'nolength': True}))
 
+# wchar_t**
+CWCHARPP = lltype.Ptr(lltype.Array(CWCHARP, hints={'nolength': True}))
+
 def liststr2charpp(l):
     """ list[str] -> char**, NULL terminated
     """

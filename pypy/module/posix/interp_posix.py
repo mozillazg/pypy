@@ -16,10 +16,9 @@ def open(space, w_path, flag, mode=0777):
     """Open a file (for low level IO).
 Return a file descriptor (a small integer)."""
     try: 
-        fd = wrapper(os.open)(space, w_path, (flag, mode))
+        return unicodepath_wrapper(os.open)(space, w_path, (flag, mode))
     except OSError, e: 
         raise wrap_oserror(space, e) 
-    return space.wrap(fd)
 open.unwrap_spec = [ObjSpace, W_Root, int, int]
 
 def lseek(space, fd, pos, how):
@@ -146,15 +145,24 @@ file descriptor."""
 fstat.unwrap_spec = [ObjSpace, int]
 
 if WIDE_FILENAMES:
-    def wrapper(fn):
-        impl = extregistry.lookup(fn).lltypeimpl
+    def unicodepath_wrapper(fn, wrap=None):
+        extfunc = extregistry.lookup(fn)
+        impl = extfunc.lltypeimpl
+
+        def w(space, result):
+            if wrap is None:
+                return space.wrap(result)
+            else:
+                return wrap(space, result)
+
         def f(space, w_path, args):
             if space.is_true(space.isinstance(w_path, space.w_unicode)):
-                return impl(space.unicode_w(w_path), *args)
+                return w(space, impl(space.unicode_w(w_path), *args))
             else:
-                return impl(space.str_w(w_path), *args)
+                return w(space, impl(space.str_w(w_path), *args))
+
         return f
-    def wrapper2(fn):
+    def unicodepath_wrapper2(fn):
         impl = extregistry.lookup(fn).lltypeimpl
 
         from pypy.objspace.std.unicodetype import decode_object
@@ -177,16 +185,22 @@ if WIDE_FILENAMES:
             return impl(space.str_w(w_path1), space.str_w(w_path2), *args)
         return f
 else:
-    def wrapper(fn):
+    def unicodepath_wrapper(fn, wrap=None):
+        def w(space, result):
+            if wrap is None:
+                return space.wrap(result)
+            else:
+                return wrap(space, result)
+
         def f(space, w_path, args):
-            return fn(space.str_w(w_path), *args)
+            return w(space, fn(space.str_w(w_path), *args))
         return f
-    def wrapper2(fn):
+    def unicodepath_wrapper2(fn):
         def f(space, w_path1, w_path2, args):
             return fn(space.str_w(w_path1), space.str_w(w_path2), *args)
         return f
-wrapper._annspecialcase_ = 'specialize:memo'
-wrapper2._annspecialcase_ = 'specialize:memo'
+unicodepath_wrapper._annspecialcase_ = 'specialize:memo'
+unicodepath_wrapper2._annspecialcase_ = 'specialize:memo'
 
 def stat(space, w_path):
     """Perform a stat system call on the given path.  Return an object
@@ -204,21 +218,19 @@ with (at least) the following attributes:
 """
 
     try:
-        st = wrapper(os.stat)(space, w_path, ())
+        return unicodepath_wrapper(os.stat, wrap=build_stat_result)(
+            space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
-    else: 
-        return build_stat_result(space, st)
 stat.unwrap_spec = [ObjSpace, W_Root]
 
 def lstat(space, w_path):
     "Like stat(path), but do no follow symbolic links."
     try:
-        st = wrapper(os.lstat)(space, w_path, ())
+        return unicodepath_wrapper(os.lstat, wrap=build_stat_result)(
+            space, w_path, ())
     except OSError, e:
         raise wrap_oserror(space, e)
-    else:
-        return build_stat_result(space, st)
 lstat.unwrap_spec = [ObjSpace, W_Root]
 
 class StatState(object):
@@ -271,11 +283,9 @@ def access(space, w_path, mode):
     existence, or the inclusive-OR of R_OK, W_OK, and X_OK.
     """
     try:
-        ok = wrapper(os.access)(space, w_path, (mode,))
+        return unicodepath_wrapper(os.access)(space, w_path, (mode,))
     except OSError, e: 
         raise wrap_oserror(space, e) 
-    else:
-        return space.wrap(ok)
 access.unwrap_spec = [ObjSpace, W_Root, int]
 
 
@@ -310,7 +320,7 @@ system.unwrap_spec = [ObjSpace, str]
 def unlink(space, w_path):
     """Remove a file (same as remove(path))."""
     try:
-        wrapper(os.unlink)(space, w_path, ())
+        return unicodepath_wrapper(os.unlink)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
 unlink.unwrap_spec = [ObjSpace, W_Root]
@@ -318,21 +328,19 @@ unlink.unwrap_spec = [ObjSpace, W_Root]
 def remove(space, w_path):
     """Remove a file (same as unlink(path))."""
     try:
-        wrapper(os.unlink)(space, w_path, ())
+        return unicodepath_wrapper(os.unlink)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
 remove.unwrap_spec = [ObjSpace, W_Root]
 
-def _getfullpathname(space, path):
+def _getfullpathname(space, w_path):
     """helper for ntpath.abspath """
     posix = __import__(os.name) # nt specific
     try:
-        fullpath = posix._getfullpathname(path)
+        return unicodepath_wrapper(posix._getfullpathname)(space, w_path, ())
     except OSError, e:
         raise wrap_oserror(space, e) 
-    else: 
-        return space.wrap(fullpath)
-_getfullpathname.unwrap_spec = [ObjSpace, str]
+_getfullpathname.unwrap_spec = [ObjSpace, W_Root]
 
 def getcwd(space):
     """Return the current working directory."""
@@ -357,7 +365,7 @@ getcwd.unwrap_spec = [ObjSpace]
 def chdir(space, w_path):
     """Change the current working directory to the specified path."""
     try:
-        wrapper(os.chdir)(space, w_path, ())
+        return unicodepath_wrapper(os.chdir)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
 chdir.unwrap_spec = [ObjSpace, W_Root]
@@ -365,7 +373,7 @@ chdir.unwrap_spec = [ObjSpace, W_Root]
 def mkdir(space, w_path, mode=0777):
     """Create a directory."""
     try:
-        wrapper(os.mkdir)(space, w_path, (mode,))
+        return unicodepath_wrapper(os.mkdir)(space, w_path, (mode,))
     except OSError, e: 
         raise wrap_oserror(space, e) 
 mkdir.unwrap_spec = [ObjSpace, W_Root, int]
@@ -373,7 +381,7 @@ mkdir.unwrap_spec = [ObjSpace, W_Root, int]
 def rmdir(space, w_path):
     """Remove a directory."""
     try:
-        wrapper(os.rmdir)(space, w_path, ())
+        return unicodepath_wrapper(os.rmdir)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
 rmdir.unwrap_spec = [ObjSpace, W_Root]
@@ -465,7 +473,7 @@ pipe.unwrap_spec = [ObjSpace]
 def chmod(space, w_path, mode):
     "Change the access permissions of a file."
     try: 
-        wrapper(os.chmod)(space, w_path, (mode,))
+        return unicodepath_wrapper(os.chmod)(space, w_path, (mode,))
     except OSError, e: 
         raise wrap_oserror(space, e) 
 chmod.unwrap_spec = [ObjSpace, W_Root, int]
@@ -473,8 +481,8 @@ chmod.unwrap_spec = [ObjSpace, W_Root, int]
 def rename(space, w_old, w_new):
     "Rename a file or directory."
     try:
-        wrapper2(os.rename)(space, w_old, w_new, ())
-    except OSError, e: 
+        unicodepath_wrapper2(os.rename)(space, w_old, w_new, ())
+    except OSError, e:
         raise wrap_oserror(space, e) 
 rename.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
@@ -592,7 +600,7 @@ Execute a path with arguments and environment, replacing current process.
         raise wrap_oserror(space, e)
 execve.unwrap_spec = [ObjSpace, str, W_Root, W_Root]
 
-def utime(space, path, w_tuple):
+def utime(space, w_path, w_tuple):
     """ utime(path, (atime, mtime))
 utime(path, None)
 
@@ -601,8 +609,7 @@ second form is used, set the access and modified times to the current time.
     """
     if space.is_w(w_tuple, space.w_None):
         try:
-            os.utime(path, None)
-            return
+            return unicodepath_wrapper(os.utime)(space, w_path, (None,))
         except OSError, e:
             raise wrap_oserror(space, e)
     try:
@@ -612,14 +619,14 @@ second form is used, set the access and modified times to the current time.
             raise OperationError(space.w_TypeError, space.wrap(msg))
         actime = space.float_w(args_w[0])
         modtime = space.float_w(args_w[1])
-        os.utime(path, (actime, modtime))
+        return unicodepath_wrapper(os.utime)(space, w_path, ((actime, modtime),))
     except OSError, e:
         raise wrap_oserror(space, e)
     except OperationError, e:
         if not e.match(space, space.w_TypeError):
             raise
         raise OperationError(space.w_TypeError, space.wrap(msg))
-utime.unwrap_spec = [ObjSpace, str, W_Root]
+utime.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
 def setsid(space):
     """setsid() -> pid

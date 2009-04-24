@@ -4,6 +4,8 @@ from pypy.rlib.objectmodel import we_are_translated
 AUTO_DEBUG = os.getenv('PYPY_DEBUG')
 RECORD_INTERPLEVEL_TRACEBACK = True
 
+_WIN32 = sys.platform == 'win32'
+
 
 class OperationError(Exception):
     """Interpreter-level exception that signals an exception that should be
@@ -262,16 +264,21 @@ def debug_print(text, file=None, newline=True):
     # 31: ANSI color code "red"
     ansi_print(text, esc="31", file=file, newline=newline)
 
-def wrap_oserror(space, e, exception_name='w_OSError'): 
-    assert isinstance(e, OSError) 
-    errno = e.errno
-    try:
-        msg = os.strerror(errno)
-    except ValueError:
-        msg = 'error %d' % errno
-    exc = getattr(space, exception_name)
+def wrap_oserror(space, e, exception_name='w_OSError'):
+    assert isinstance(e, OSError)
+    if _WIN32 and isinstance(e, WindowsError):
+        error = e.winerror
+        msg = e.strerror
+        exc = space.w_WindowsError
+    else:
+        error = e.errno
+        try:
+            msg = os.strerror(error)
+        except ValueError:
+            msg = 'error %d' % error
+        exc = getattr(space, exception_name)
     w_error = space.call_function(exc,
-                                  space.wrap(errno),
+                                  space.wrap(error),
                                   space.wrap(msg))
     return OperationError(exc, w_error)
 wrap_oserror._annspecialcase_ = 'specialize:arg(2)'
