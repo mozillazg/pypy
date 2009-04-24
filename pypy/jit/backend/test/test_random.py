@@ -224,5 +224,9 @@ def check_random_function(r):
 
 def test_random_function():
     r = Random()
-    for i in range(demo_conftest.option.repeat):
-        check_random_function(r)
+    if demo_conftest.option.repeat == -1:
+        while 1: 
+            check_random_function(r)
+    else:
+        for i in range(demo_conftest.option.repeat):
+            check_random_function(r)
