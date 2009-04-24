@@ -1174,6 +1174,13 @@ ObjSpace.ExceptionTable = [
     'ZeroDivisionError',
     ]
 
+try:
+    WindowsError
+except NameError:
+    pass
+else:
+    ObjSpace.ExceptionTable.append('WindowsError')
+
 ## Irregular part of the interface:
 #
 #                                   wrap(x) -> w_x
