@@ -17,6 +17,7 @@ def optimize_loop(options, old_loops, loop, cpu=None):
 
 def optimize_bridge(options, old_loops, loop, cpu=None):
     optimize_loop(options, [], loop, cpu)
+    assert len(old_loops) == 1
     return old_loops[0]
 
 class Optimizer:
