@@ -357,8 +357,9 @@ class CPU(object):
         assert isinstance(calldescr, CallDescr)
         assert calldescr.call is not None
         self.clear_exception()
+        addr_self = args[0].getaddr(self)
         try:
-            box = calldescr.call(self, args[0].getaddr(self), args[1:])
+            box = calldescr.call(self, addr_self, args[1:])
         except Exception, e:
             from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
             self.current_exc_inst = cast_instance_to_base_ptr(e)
