@@ -106,7 +106,8 @@ def compile_fresh_loop(metainterp, old_loops, greenkey, start):
     history.source_link = loop
     send_loop_to_backend(metainterp, loop, "loop")
     metainterp.staticdata.stats.loops.append(loop)
-    old_loops.append(loop)
+    if loop not in map_loop2descr:
+        old_loops.append(loop)
     return loop
 
 def send_loop_to_backend(metainterp, loop, type):
