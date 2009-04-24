@@ -241,7 +241,7 @@ class Assembler386(object):
         self.mc2.done()
         tree._x86_stack_depth = regalloc.max_stack_depth
         for place in self.places_to_patch_framesize:
-            mc = codebuf.InMemoryCodeBuilder(place, 128)
+            mc = codebuf.InMemoryCodeBuilder(place, place + 128)
             mc.ADD(esp, imm32(tree._x86_stack_depth * WORD))
             mc.done()
         for op, pos in self.jumps_to_look_at:
@@ -711,7 +711,8 @@ class Assembler386(object):
             self.mcstack.give_mc_back(mc2)
         else:
             pos = new_pos
-        mc = codebuf.InMemoryCodeBuilder(old_pos, MachineCodeBlockWrapper.MC_SIZE)
+        mc = codebuf.InMemoryCodeBuilder(old_pos, old_pos +
+                                         MachineCodeBlockWrapper.MC_SIZE)
         mc.JMP(rel32(pos))
         mc.done()
 
