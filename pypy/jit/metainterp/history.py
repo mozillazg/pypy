@@ -370,6 +370,9 @@ class BoxInt(Box):
     def getint(self):
         return self.value
 
+    def getaddr(self, cpu):
+        return cpu.cast_int_to_adr(self.value)
+
     def get_(self):
         return self.value
 
@@ -394,6 +397,9 @@ class BoxPtr(Box):
 
     def getptr_base(self):
         return self.value
+
+    def getaddr(self, cpu):
+        return llmemory.cast_ptr_to_adr(self.value)
 
     def get_(self):
         return lltype.cast_ptr_to_int(self.value)
