@@ -167,7 +167,7 @@ _loop.inputargs = [BoxPtr()]
 loops_exit_frame_with_exception = [_loop]
 map_loop2descr[_loop] = exit_frame_with_exception_descr
 del _loop
-
+map_loop2descr = {}
 
 class ResumeGuardDescr(AbstractDescr):
     def __init__(self, resume_info, consts, history, history_guard_index):
