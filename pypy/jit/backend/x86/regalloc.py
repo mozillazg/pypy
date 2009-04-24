@@ -707,8 +707,12 @@ class RegAlloc(object):
             self.Load(x, self.loc(x), res)
             return res, argloc
         loc = self.force_result_in_reg(op.result, x, op.args)
-        argloc = self.loc(op.args[1])
-        self.eventually_free_var(op.args[1])
+        if op.args[1] is x:
+            # this one is already gone by now
+            argloc = loc
+        else:
+            argloc = self.loc(op.args[1])
+            self.eventually_free_var(op.args[1])
         return loc, argloc
 
     def _consider_binop(self, op, ignored):
