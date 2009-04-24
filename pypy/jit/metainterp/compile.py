@@ -106,7 +106,6 @@ def compile_fresh_loop(metainterp, old_loops, greenkey, start):
     history.source_link = loop
     send_loop_to_backend(metainterp, loop, "loop")
     metainterp.staticdata.stats.loops.append(loop)
-    assert len(old_loops) == 0
     old_loops.append(loop)
     return loop
 
@@ -168,6 +167,7 @@ _loop.inputargs = [BoxPtr()]
 loops_exit_frame_with_exception = [_loop]
 map_loop2descr[_loop] = exit_frame_with_exception_descr
 del _loop
+
 
 class ResumeGuardDescr(AbstractDescr):
     def __init__(self, resume_info, consts, history, history_guard_index):
@@ -244,7 +244,9 @@ class ResumeFromInterpDescr(AbstractDescr):
         # store the new_loop in compiled_merge_points too
         # XXX it's probably useless to do so when optimizing
         glob = metainterp_sd.globaldata
-        glob.compiled_merge_points[greenkey] = [new_loop]
+        old_loops = glob.compiled_merge_points.setdefault(greenkey, [])
+        old_loops.append(new_loop)
+
 
 def compile_fresh_bridge(metainterp, old_loops, resumekey):
     # The history contains new operations to attach as the code for the
