@@ -1,6 +1,7 @@
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib import rposix
+from pypy.rlib.rarithmetic import intmask
 
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, W_Root
@@ -16,6 +17,8 @@ class CConfig:
     includes = ['locale.h', 'limits.h']
     if HAVE_LANGINFO:
         includes += ['langinfo.h']
+    if sys.platform == 'win32':
+        includes += ['windows.h']
     _compilation_info_ = ExternalCompilationInfo(
         includes=includes,
     )
@@ -89,7 +92,10 @@ for name in constant_names:
 
 
 langinfo_names = ('CODESET D_T_FMT D_FMT T_FMT RADIXCHAR THOUSEP '
-                  'YESEXPR NOEXPR CRNCYSTR AM_STR PM_STR').split(" ")
+                  'YESEXPR NOEXPR CRNCYSTR AM_STR PM_STR '
+                  'LOCALE_USER_DEFAULT LOCALE_SISO639LANGNAME '
+                  'LOCALE_SISO3166CTRYNAME LOCALE_IDEFAULTLANGUAGE '
+                  '').split()
 for i in range(1, 8):
     langinfo_names.append("DAY_%d" % i)
     langinfo_names.append("ABDAY_%d" % i)
@@ -119,8 +125,10 @@ for name in langinfo_names:
 
 locals().update(constants)
 
-def external(name, args, result):
-    return rffi.llexternal(name, args, result, compilation_info=CConfig._compilation_info_)
+def external(name, args, result, calling_conv='c'):
+    return rffi.llexternal(name, args, result,
+                           compilation_info=CConfig._compilation_info_,
+                           calling_conv=calling_conv)
 
 def make_error(space, msg):
     w_module = space.getbuiltinmodule('_locale')
@@ -157,38 +165,57 @@ setlocale.unwrap_spec = [ObjSpace, int, W_Root]
 _lconv = lltype.Ptr(cConfig.lconv)
 _localeconv = external('localeconv', [], _lconv)
 
-def _copy_grouping(text):
-    groups = [ ord(group) for group in text ]
+def _w_copy_grouping(space, text):
+    groups = [ space.wrap(ord(group)) for group in text ]
     if groups:
-        groups.append(0)
-    return groups
+        groups.append(space.wrap(0))
+    return space.newlist(groups)
 
 def localeconv(space):
     "() -> dict. Returns numeric and monetary locale-specific parameters."
     lp = _localeconv()
 
     # Numeric information
-    result = {
-        "decimal_point": rffi.charp2str(lp.c_decimal_point),
-        "thousands_sep": rffi.charp2str(lp.c_thousands_sep),
-        "grouping": _copy_grouping(rffi.charp2str(lp.c_grouping)),
-        "int_curr_symbol": rffi.charp2str(lp.c_int_curr_symbol),
-        "currency_symbol": rffi.charp2str(lp.c_currency_symbol),
-        "mon_decimal_point": rffi.charp2str(lp.c_mon_decimal_point),
-        "mon_thousands_sep": rffi.charp2str(lp.c_mon_thousands_sep),
-        "mon_grouping": _copy_grouping(rffi.charp2str(lp.c_mon_grouping)),
-        "positive_sign": rffi.charp2str(lp.c_positive_sign),
-        "negative_sign": rffi.charp2str(lp.c_negative_sign),
-        "int_frac_digits": lp.c_int_frac_digits,
-        "frac_digits": lp.c_frac_digits,
-        "p_cs_precedes": lp.c_p_cs_precedes,
-        "p_sep_by_space": lp.c_p_sep_by_space,
-        "n_cs_precedes": lp.c_n_cs_precedes,
-        "n_sep_by_space": lp.c_n_sep_by_space,
-        "p_sign_posn": lp.c_p_sign_posn,
-        "n_sign_posn": lp.c_n_sign_posn,
-    }
-    return space.wrap(result)
+    w_result = space.newdict()
+    w = space.wrap
+    space.setitem(w_result, w("decimal_point"),
+                  w(rffi.charp2str(lp.c_decimal_point)))
+    space.setitem(w_result, w("thousands_sep"),
+                  w(rffi.charp2str(lp.c_thousands_sep)))
+    space.setitem(w_result, w("grouping"),
+                  _w_copy_grouping(space, rffi.charp2str(lp.c_grouping)))
+    space.setitem(w_result, w("int_curr_symbol"),
+                  w(rffi.charp2str(lp.c_int_curr_symbol)))
+    space.setitem(w_result, w("currency_symbol"),
+                  w(rffi.charp2str(lp.c_currency_symbol)))
+    space.setitem(w_result, w("mon_decimal_point"),
+                  w(rffi.charp2str(lp.c_mon_decimal_point)))
+    space.setitem(w_result, w("mon_thousands_sep"),
+                  w(rffi.charp2str(lp.c_mon_thousands_sep)))
+    space.setitem(w_result, w("mon_grouping"),
+                  _w_copy_grouping(space, rffi.charp2str(lp.c_mon_grouping)))
+    space.setitem(w_result, w("positive_sign"),
+                  w(rffi.charp2str(lp.c_positive_sign)))
+    space.setitem(w_result, w("negative_sign"),
+                  w(rffi.charp2str(lp.c_negative_sign)))
+    space.setitem(w_result, w("int_frac_digits"),
+                  w(lp.c_int_frac_digits))
+    space.setitem(w_result, w("frac_digits"),
+                  w(lp.c_frac_digits))
+    space.setitem(w_result, w("p_cs_precedes"),
+                  w(lp.c_p_cs_precedes))
+    space.setitem(w_result, w("p_sep_by_space"),
+                  w(lp.c_p_sep_by_space))
+    space.setitem(w_result, w("n_cs_precedes"),
+                  w(lp.c_n_cs_precedes))
+    space.setitem(w_result, w("n_sep_by_space"),
+                  w(lp.c_n_sep_by_space))
+    space.setitem(w_result, w("p_sign_posn"),
+                  w(lp.c_p_sign_posn))
+    space.setitem(w_result, w("n_sign_posn"),
+                  w(lp.c_n_sign_posn))
+
+    return w_result
 
 localeconv.unwrap_spec = [ObjSpace]
 
@@ -218,8 +245,8 @@ def strcoll(space, w_s1, w_s2):
 
 strcoll.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
-_strxfrm = external('strxfrm', [rffi.CCHARP, rffi.CCHARP, rffi.SIZE_T],
-                                                                rffi.SIZE_T)
+_strxfrm = external('strxfrm',
+                    [rffi.CCHARP, rffi.CCHARP, rffi.SIZE_T], rffi.SIZE_T)
 
 def strxfrm(space, s):
     "string -> string. Returns a string that behaves for cmp locale-aware."
@@ -230,7 +257,8 @@ def strxfrm(space, s):
     if n2 > n1:
         # more space needed
         lltype.free(buf, flavor="raw")
-        buf = lltype.malloc(rffi.CCHARP.TO, int(n2), flavor="raw", zero=True)
+        buf = lltype.malloc(rffi.CCHARP.TO, intmask(n2),
+                            flavor="raw", zero=True)
         _strxfrm(buf, rffi.str2charp(s), n2)
 
     val = rffi.charp2str(buf)
@@ -313,7 +341,8 @@ def nl_langinfo(space, key):
     if key in constants.values():
         result = _nl_langinfo(rffi.cast(nl_item, key))
         return space.wrap(rffi.charp2str(result))
-    raise OperationError(space.w_ValueError, "unsupported langinfo constant")
+    raise OperationError(space.w_ValueError,
+                         space.wrap("unsupported langinfo constant"))
 
 nl_langinfo.unwrap_spec = [ObjSpace, int]
 
@@ -333,7 +362,7 @@ def bindtextdomain(space, domain, w_dir):
 
     if not dirname:
         errno = rposix.get_errno()
-        raise OperationError(space.w_OSError, errno)
+        raise OperationError(space.w_OSError, space.wrap(errno))
     return space.wrap(rffi.charp2str(dirname))
 
 bindtextdomain.unwrap_spec = [ObjSpace, str, W_Root]
@@ -353,10 +382,56 @@ def bind_textdomain_codeset(space, domain, w_codeset):
         codeset = space.str_w(w_codeset)
         result = _bind_textdomain_codeset(rffi.str2charp(domain),
                                         rffi.str2charp(codeset))
-    
+
     if not result:
         return space.w_None
     else:
         return space.wrap(rffi.charp2str(result))
 
 bind_textdomain_codeset.unwrap_spec = [ObjSpace, str, W_Root]
+
+#___________________________________________________________________
+# getdefaultlocale() implementation for Windows
+
+if sys.platform == 'win32':
+    from pypy.rlib import rwin32
+    LCID = LCTYPE = rwin32.DWORD
+    GetACP = external('GetACP',
+                      [], rffi.INT,
+                      calling_conv='win')
+    GetLocaleInfo = external('GetLocaleInfoA',
+                             [LCID, LCTYPE, rwin32.LPSTR, rffi.INT], rffi.INT,
+                             calling_conv='win')
+
+    def getdefaultlocale(space):
+        encoding = "cp%d" % GetACP()
+
+        BUFSIZE = 50
+        buf_lang = lltype.malloc(rffi.CCHARP.TO, BUFSIZE, flavor='raw')
+        buf_country = lltype.malloc(rffi.CCHARP.TO, BUFSIZE, flavor='raw')
+
+        try:
+            if (GetLocaleInfo(LOCALE_USER_DEFAULT,
+                              LOCALE_SISO639LANGNAME,
+                              buf_lang, BUFSIZE) and
+                GetLocaleInfo(LOCALE_USER_DEFAULT,
+                              LOCALE_SISO3166CTRYNAME,
+                              buf_country, BUFSIZE)):
+                lang = rffi.charp2str(buf_lang)
+                country = rffi.charp2str(buf_country)
+                return space.newtuple([space.wrap("%s_%s" % (lang, country)),
+                                       space.wrap(encoding)])
+
+            # If we end up here, this windows version didn't know about
+            # ISO639/ISO3166 names (it's probably Windows 95).  Return the
+            # Windows language identifier instead (a hexadecimal number)
+            elif GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_IDEFAULTLANGUAGE,
+                               buf_lang, BUFSIZE):
+                lang = rffi.charp2str(buf_lang)
+                return space.newtuple([space.wrap("0x%s" % lang),
+                                       space.wrap(encoding)])
+            else:
+                return space.newtuple([space.w_None, space.wrap(encoding)])
+        finally:
+            lltype.free(buf_lang, flavor='raw')
+            lltype.free(buf_country, flavor='raw')

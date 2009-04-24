@@ -1104,6 +1104,19 @@ class RegisterOs(BaseLazyRegistering):
                       "ll_os.ll_os_pipe",
                       llimpl=os_pipe_llimpl)
 
+    @registering_if(os, 'chown')
+    def register_os_chown(self):
+        os_chown = self.llexternal('chown', [rffi.CCHARP, rffi.INT, rffi.INT],
+                                   rffi.INT)
+
+        def os_chown_llimpl(path, uid, gid):
+            res = os_chown(path, uid, gid)
+            if res == -1:
+                raise OSError(rposix.get_errno(), "os_chown failed")
+
+        return extdef([str, int, int], None, "ll_os.ll_os_chown",
+                      llimpl=os_chown_llimpl)
+
     @registering_if(os, 'readlink')
     def register_os_readlink(self):
         os_readlink = self.llexternal('readlink',

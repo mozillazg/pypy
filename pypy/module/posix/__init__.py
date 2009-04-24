@@ -20,7 +20,13 @@ corresponding Unix manual entries for more information on calls."""
     'tmpfile'    : 'app_posix.tmpfile',
     'popen'      : 'app_posix.popen',
     }
-    
+    if os.name == 'nt':
+        appleveldefs.update({
+                'popen2' : 'app_posix.popen2',
+                'popen3' : 'app_posix.popen3',
+                'popen4' : 'app_posix.popen4',
+                })
+        
     interpleveldefs = {
     'open'      : 'interp_posix.open',
     'lseek'     : 'interp_posix.lseek',
@@ -55,6 +61,12 @@ corresponding Unix manual entries for more information on calls."""
     'utime'     : 'interp_posix.utime',
     '_statfields': 'interp_posix.getstatfields(space)',
     }
+
+    if os.name == 'nt':
+        interpleveldefs['urandom'] = 'interp_posix.win32_urandom'
+
+    if hasattr(os, 'chown'):
+        interpleveldefs['chown'] = 'interp_posix.chown'
     if hasattr(os, 'ftruncate'):
         interpleveldefs['ftruncate'] = 'interp_posix.ftruncate'
     if hasattr(os, 'putenv'):
