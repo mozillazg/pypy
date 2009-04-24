@@ -36,11 +36,12 @@ def test_bug_int_is_true_1():
         ResOperation(rop.INT_MUL, [v2, v1], v3),
         ResOperation(rop.INT_IS_TRUE, [v2], tmp5),
         ResOperation(rop.BOOL_NOT, [tmp5], v4),
-        ResOperation(rop.FAIL, [v4, v3], None),
+        ResOperation(rop.FAIL, [v4, v3, tmp5], None),
             ]
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
     cpu.execute_operations(loop, [BoxInt(-10)])
+    assert tmp5.value == 1
     assert v4.value == 0
     assert v3.value == -1000
 

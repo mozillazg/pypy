@@ -1022,9 +1022,9 @@ class RegAlloc(object):
     consider_cast_ptr_to_int = _same_as
 
     def consider_int_is_true(self, op, ignored):
-        argloc = self.force_allocate_reg(op.args[0], [])
+        argloc = self.make_sure_var_in_reg(op.args[0], [])
+        resloc = self.force_allocate_reg(op.result, op.args)
         self.eventually_free_var(op.args[0])
-        resloc = self.force_allocate_reg(op.result, [])
         self.Perform(op, [argloc], resloc)
 
     def consider_int_abs(self, op, ignored):
