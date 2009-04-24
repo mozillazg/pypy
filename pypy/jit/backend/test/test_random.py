@@ -20,34 +20,40 @@ class OperationBuilder:
         return v_result
 
     def print_loop(self):
+        if demo_conftest.option.output:
+            s = open(demo_conftest.option.output, "w")
+        else:
+            s = sys.stdout
         names = {None: 'None'}
         for v in self.vars:
             names[v] = 'v%d' % len(names)
-            print '    %s = BoxInt()' % (names[v],)
+            print >>s, '    %s = BoxInt()' % (names[v],)
         for op in self.loop.operations:
             v = op.result
             if v not in names:
                 names[v] = 'tmp%d' % len(names)
-                print '    %s = BoxInt()' % (names[v],)
-        print "    loop = TreeLoop('test')"
-        print '    loop.inputargs = [%s]' % (
+                print >>s, '    %s = BoxInt()' % (names[v],)
+        print >>s, "    loop = TreeLoop('test')"
+        print >>s, '    loop.inputargs = [%s]' % (
             ', '.join([names[v] for v in self.loop.inputargs]))
         from pypy.jit.metainterp.resoperation import opname
-        print '    loop.operations = ['
+        print >>s, '    loop.operations = ['
         for op in self.loop.operations:
-            print '        ResOperation(rop.%s, [%s], %s),' % (
+            print >>s, '        ResOperation(rop.%s, [%s], %s),' % (
                 opname[op.opnum],
                 ', '.join([names.get(v, 'ConstInt(%d)' % v.value)
                            for v in op.args]),
                 names[op.result])
-        print '            ]'
-        print '    cpu = CPU(None, None)'
-        print '    cpu.compile_operations(loop)'
-        print '    cpu.execute_operations(loop, [%s])' % (
+        print >>s, '            ]'
+        print >>s, '    cpu = CPU(None, None)'
+        print >>s, '    cpu.compile_operations(loop)'
+        print >>s, '    cpu.execute_operations(loop, [%s])' % (
             ', '.join(['BoxInt(%d)' % v.value for v in self.loop.inputargs]))
         for v in self.loop.operations[-1].args:
-            print '    assert %s.value == %d' % (names[v], v.value)
+            print >>s, '    assert %s.value == %d' % (names[v], v.value)
         self.names = names
+        if demo_conftest.option.output:
+            s.close()
 
 class AbstractOperation:
     def __init__(self, opnum, boolres=False):

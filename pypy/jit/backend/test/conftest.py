@@ -27,5 +27,8 @@ class RandomRunnerPlugin:
                         default=15,
                         dest="repeat",
                         help="run the test this many times"),
+        group.addoption('--output', '-O', action="store", type="str",
+                        default="", dest="output",
+                        help="dump output to a file")
 
 ConftestPlugin = RandomRunnerPlugin
