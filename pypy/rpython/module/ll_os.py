@@ -1356,9 +1356,9 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering(os.rename)
     def register_os_rename(self):
-        os_rename = self.llexternal('rename', [rffi.CCHARP, rffi.CCHARP],
+        os_rename = self.llexternal(underscore_on_windows+'rename', [rffi.CCHARP, rffi.CCHARP],
                                     rffi.INT)
-        os_wrename = self.llexternal('wrename', [rffi.CWCHARP, rffi.CWCHARP],
+        os_wrename = self.llexternal(underscore_on_windows+'wrename', [rffi.CWCHARP, rffi.CWCHARP],
                                     rffi.INT)
 
         def rename_llimpl(oldpath, newpath):
