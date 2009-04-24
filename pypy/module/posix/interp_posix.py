@@ -344,6 +344,16 @@ def getcwd(space):
         return space.wrap(cur)
 getcwd.unwrap_spec = [ObjSpace]
 
+def getcwdu(space):
+    """Return a unicode string representing the current working directory."""
+    try:
+        cur = os.getcwdu()
+    except OSError, e: 
+        raise wrap_oserror(space, e) 
+    else: 
+        return space.wrap(cur)
+getcwd.unwrap_spec = [ObjSpace]
+
 def chdir(space, w_path):
     """Change the current working directory to the specified path."""
     try:
@@ -360,13 +370,13 @@ def mkdir(space, w_path, mode=0777):
         raise wrap_oserror(space, e) 
 mkdir.unwrap_spec = [ObjSpace, W_Root, int]
 
-def rmdir(space, path):
+def rmdir(space, w_path):
     """Remove a directory."""
     try:
-        os.rmdir(path)
+        wrapper(os.rmdir)(space, w_path, ())
     except OSError, e: 
         raise wrap_oserror(space, e) 
-rmdir.unwrap_spec = [ObjSpace, str]
+rmdir.unwrap_spec = [ObjSpace, W_Root]
 
 def strerror(space, errno):
     """Translate an error code to a message string."""

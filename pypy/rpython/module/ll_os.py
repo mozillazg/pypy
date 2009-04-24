@@ -942,15 +942,21 @@ class RegisterOs(BaseLazyRegistering):
                       llimpl=_getfullpathname_llimpl)
 
     @registering(os.getcwd)
-    def register_os_getcwd(self):
+    def register_os_getcwd(self, unicodepath=False):
+        if unicodepath:
+            tp = unicode
+            TP = rffi.CWCHARP
+        else:
+            tp = str
+            TP = rffi.CCHARP
         os_getcwd = self.llexternal(underscore_on_windows + 'getcwd',
-                                    [rffi.CCHARP, rffi.SIZE_T],
-                                    rffi.CCHARP)
+                                    [TP, rffi.SIZE_T],
+                                    TP)
 
         def os_getcwd_llimpl():
             bufsize = 256
             while True:
-                buf = lltype.malloc(rffi.CCHARP.TO, bufsize, flavor='raw')
+                buf = lltype.malloc(TP.TO, bufsize, flavor='raw')
                 res = os_getcwd(buf, rffi.cast(rffi.SIZE_T, bufsize))
                 if res:
                     break   # ok
@@ -962,16 +968,23 @@ class RegisterOs(BaseLazyRegistering):
                 bufsize *= 4
                 if bufsize > 1024*1024:  # xxx hard-coded upper limit
                     raise OSError(error, "getcwd result too large")
-            result = rffi.charp2str(res)
+            if tp is str:
+                result = rffi.charp2str(res)
+            else:
+                result = rffi.wcharp2unicode(res)
             lltype.free(buf, flavor='raw')
             return result
 
         def os_getcwd_oofakeimpl():
             return OOSupport.to_rstr(os.getcwd())
 
-        return extdef([], str,
+        return extdef([], tp,
                       "ll_os.ll_os_getcwd", llimpl=os_getcwd_llimpl,
                       oofakeimpl=os_getcwd_oofakeimpl)
+
+    @registering(os.getcwdu)
+    def register_os_getcwdu(self):
+        return self.register_os_getcwd(unicodepath=True)
 
     @registering(os.listdir)
     def register_os_listdir(self):
@@ -1326,11 +1339,16 @@ class RegisterOs(BaseLazyRegistering):
     @registering(os.rmdir)
     def register_os_rmdir(self):
         os_rmdir = self.llexternal(underscore_on_windows+'rmdir', [rffi.CCHARP], rffi.INT)
+        os_wrmdir = self.llexternal(underscore_on_windows+'wrmdir', [rffi.CWCHARP], rffi.INT)
 
         def rmdir_llimpl(pathname):
-            res = rffi.cast(lltype.Signed, os_rmdir(pathname))
+            if isinstance(pathname, str):
+                res = rffi.cast(lltype.Signed, os_rmdir(pathname))
+            else:
+                res = rffi.cast(lltype.Signed, os_wrmdir(pathname))
             if res < 0:
                 raise OSError(rposix.get_errno(), "os_rmdir failed")
+        rmdir_llimpl._annspecialcase_ = 'specialize:argtype(0)'
 
         return extdef([str], s_None, llimpl=rmdir_llimpl,
                       export_name="ll_os.ll_os_rmdir")
