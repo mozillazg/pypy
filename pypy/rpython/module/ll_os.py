@@ -948,13 +948,13 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering(os.getcwd)
     def register_os_getcwd(self, unicodepath=False):
-        if unicodepath:
-            tp = unicode
-            TP = rffi.CWCHARP
-            charp2str = rffi.charp2str
-        else:
+        if not unicodepath:
             tp = str
             TP = rffi.CCHARP
+            charp2str = rffi.charp2str
+        else:
+            tp = unicode
+            TP = rffi.CWCHARP
             charp2str = rffi.wcharp2unicode
         os_getcwd = self.llexternal(underscore_on_windows + 'getcwd',
                                     [TP, rffi.SIZE_T],
