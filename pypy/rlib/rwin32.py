@@ -34,6 +34,8 @@ class CConfig:
         LPCVOID = rffi_platform.SimpleType("LPCVOID", rffi.VOIDP)
         LPSTR = rffi_platform.SimpleType("LPSTR", rffi.CCHARP)
         LPCSTR = rffi_platform.SimpleType("LPCSTR", rffi.CCHARP)
+        LPWSTR = rffi_platform.SimpleType("LPWSTR", rffi.CWCHARP)
+        LPCWSTR = rffi_platform.SimpleType("LPCWSTR", rffi.CWCHARP)
         LPDWORD = rffi_platform.SimpleType("LPDWORD", rffi.INTP)
         SIZE_T = rffi_platform.SimpleType("SIZE_T", rffi.SIZE_T)
 
@@ -52,7 +54,9 @@ class CConfig:
         DEFAULT_LANGUAGE = rffi_platform.ConstantInteger(
             "MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT)")
 
-        for name in """FORMAT_MESSAGE_ALLOCATE_BUFFER FORMAT_MESSAGE_FROM_SYSTEM
+        for name in """
+              FORMAT_MESSAGE_ALLOCATE_BUFFER FORMAT_MESSAGE_FROM_SYSTEM
+              MAX_PATH
               """.split():
             locals()[name] = rffi_platform.ConstantInteger(name)
 
@@ -109,7 +113,7 @@ if WIN32:
         LocalFree(buf[0])
         return result
 
-    def lastWindowsError():
+    def lastWindowsError(context=None):
         code = GetLastError()
         message = FormatError(code)
         return WindowsError(code, message)
