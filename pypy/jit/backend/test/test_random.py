@@ -12,12 +12,21 @@ class OperationBuilder:
         self.loop = loop
         self.vars = vars
         self.boolvars = []   # subset of self.vars
+        self.should_fail_by = None
 
     def do(self, opnum, argboxes):
         v_result = execute(self.cpu, opnum, argboxes)
         v_result = BoxInt(v_result.value)
         self.loop.operations.append(ResOperation(opnum, argboxes, v_result))
         return v_result
+
+    def get_bool_var(self, r):
+        if self.boolvars:
+            v = r.choice(self.boolvars)
+        else:
+            v = r.choice(self.vars)
+            v = self.do(rop.INT_IS_TRUE, [v])
+        return v
 
     def print_loop(self):
         if demo_conftest.option.output:
@@ -47,10 +56,15 @@ class OperationBuilder:
         print >>s, '            ]'
         print >>s, '    cpu = CPU(None, None)'
         print >>s, '    cpu.compile_operations(loop)'
-        print >>s, '    cpu.execute_operations(loop, [%s])' % (
+        print >>s, '    op = cpu.execute_operations(loop, [%s])' % (
             ', '.join(['BoxInt(%d)' % v.value for v in self.loop.inputargs]))
-        for v in self.loop.operations[-1].args:
-            print >>s, '    assert %s.value == %d' % (names[v], v.value)
+        if self.should_fail_by is None:
+            for v in self.loop.operations[-1].args:
+                print >>s, '    assert %s.value == %d' % (names[v], v.value)
+        else:
+            print >>s, '    assert op is loop.operations[%d].suboperations[0]' % self.should_fail_by_num
+            for v in self.should_fail_by.args:
+                print >>s, '    assert %s.value == %d' % (names[v], v.value)
         self.names = names
         if demo_conftest.option.output:
             s.close()
@@ -71,11 +85,7 @@ class UnaryOperation(AbstractOperation):
 
 class BooleanUnaryOperation(UnaryOperation):
     def produce_into(self, builder, r):
-        if builder.boolvars:
-            v = r.choice(builder.boolvars)
-        else:
-            v = r.choice(builder.vars)
-            v = builder.do(rop.INT_IS_TRUE, [v])
+        v = builder.get_bool_var(r)
         self.put(builder, [v])
 
 class BinaryOperation(AbstractOperation):
@@ -100,6 +110,24 @@ class BinaryOperation(AbstractOperation):
                 v = builder.do(rop.INT_OR, [v, ConstInt(self.or_mask)])
             v_second = v
         self.put(builder, [v_first, v_second])
+
+class GuardBinaryOperation(AbstractOperation):
+
+    def produce_into(self, builder, r):
+        v = builder.get_bool_var(r)
+        op = ResOperation(self.opnum, [v], None)
+        builder.loop.operations.append(op)
+        k = r.random()
+        subset = []
+        num = int(k * len(builder.vars))
+        for i in range(num):
+            subset.append(r.choice(builder.vars))
+        r.shuffle(subset)
+        op.suboperations = [ResOperation(rop.FAIL, subset, None)]
+        if ((self.opnum == rop.GUARD_TRUE and not v.value) or
+            (self.opnum == rop.GUARD_FALSE and v.value)):
+            builder.should_fail_by = op.suboperations[0]
+            builder.should_fail_by_num = len(builder.loop.operations) - 1
 
 OPERATIONS = []
 
@@ -130,6 +158,8 @@ OPERATIONS.append(BinaryOperation(rop.INT_MOD, ~3, 1))
 OPERATIONS.append(BinaryOperation(rop.INT_RSHIFT, LONG_BIT-1))
 OPERATIONS.append(BinaryOperation(rop.INT_LSHIFT, LONG_BIT-1))
 OPERATIONS.append(BinaryOperation(rop.UINT_RSHIFT, LONG_BIT-1))
+OPERATIONS.append(GuardBinaryOperation(rop.GUARD_TRUE))
+OPERATIONS.append(GuardBinaryOperation(rop.GUARD_FALSE))
 
 for _op in [rop.INT_NEG,
             rop.INT_INVERT,
@@ -190,6 +220,8 @@ def check_random_function(r):
 
     for i in range(block_length):
         r.choice(OPERATIONS).produce_into(builder, r)
+        if builder.should_fail_by is not None:
+            break
 
     endvars = []
     for v in vars:
@@ -204,12 +236,16 @@ def check_random_function(r):
 
     cpu.compile_operations(loop)
 
+    if builder.should_fail_by is not None:
+        endvars = builder.should_fail_by.args
     expected = {}
     for v in endvars:
         expected[v] = v.value
+    for v in endvars:
         v.changevalue_int(-sys.maxint-1)
 
-    cpu.execute_operations(loop, valueboxes)
+    op = cpu.execute_operations(loop, valueboxes)
+    assert op.args == endvars
 
     for v in endvars:
         assert v.value == expected[v], (
