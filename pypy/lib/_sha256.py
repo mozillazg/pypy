@@ -205,7 +205,8 @@ def sha_final(sha_info):
     return ''.join([chr(i) for i in dig])
 
 class sha256(object):
-    digest_size = digestsize = 32
+    digest_size = digestsize = SHA_DIGESTSIZE
+    block_size = SHA_BLOCKSIZE
 
     def __init__(self, s=None):
         self._sha = sha_init()

@@ -1,5 +1,6 @@
 from pypy.interpreter.mixedmodule import MixedModule
 from pypy.module._locale import interp_locale
+import sys
 
 class Module(MixedModule):
     """Support for POSIX locales."""
@@ -9,8 +10,12 @@ class Module(MixedModule):
             'localeconv':               'interp_locale.localeconv',
             'strcoll':                  'interp_locale.strcoll',
             'strxfrm':                  'interp_locale.strxfrm',
-            #'getdefaultlocale':        'interp_locale.getdefaultlocale',
             }
+
+    if sys.platform == 'win32':
+        interpleveldefs.update({
+            '_getdefaultlocale':        'interp_locale.getdefaultlocale',
+            })
 
     if interp_locale.HAVE_LANGINFO:
         interpleveldefs.update({
@@ -27,7 +32,7 @@ class Module(MixedModule):
             })
 
     appleveldefs  = {
-            'Error':               'app_locale.Error',
+            'Error':                'app_locale.Error',
             '_fixup_ulcase':        'app_locale._fixup_ulcase',
             }
 

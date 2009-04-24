@@ -123,6 +123,12 @@ class AppTestPosix:
         finally:
             posix.stat_float_times(current)
 
+    def test_stat_result(self):
+        st = self.posix.stat_result((0, 0, 0, 0, 0, 0, 0, 41, 42.1, 43))
+        assert st.st_atime == 41
+        assert st.st_mtime == 42.1
+        assert st.st_ctime == 43
+
     def test_pickle(self):
         import pickle, os
         st = self.posix.stat(os.curdir)
@@ -435,6 +441,15 @@ class AppTestPosix:
         for fd in range(start, stop):
             raises(OSError, os.fstat, fd)   # should have been closed
 
+    if hasattr(os, 'chown'):
+        def test_chown(self):
+            os = self.posix
+            os.unlink(self.path)
+            raises(OSError, os.chown, self.path, os.getuid(), os.getgid())
+            f = open(self.path, "w")
+            f.write("this is a test")
+            f.close()
+            os.chown(self.path, os.getuid(), os.getgid())
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

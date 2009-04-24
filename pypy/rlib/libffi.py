@@ -80,7 +80,6 @@ if not _MSVC:
 else:
     libffidir = py.path.local(pypydir).join('translator', 'c', 'src', 'libffi_msvc')
     eci = ExternalCompilationInfo(
-        pre_include_bits = ['#define _WIN32_WINNT 0x501'],
         includes = ['ffi.h', 'windows.h'],
         libraries = ['kernel32'],
         include_dirs = [libffidir],

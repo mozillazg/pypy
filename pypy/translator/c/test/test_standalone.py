@@ -330,12 +330,22 @@ class TestThread(object):
         cbuilder.generate_source()
         cbuilder.compile()
 
-        # this should work
-        data = cbuilder.cmdexec(str(2*1024*1024))   # 2 MB: should work
-        assert data == 'hello world\ndone\n'
-
-        # this should crash
-        exc_info = py.test.raises(Exception,
-                                  cbuilder.cmdexec,
-                                  str(32*1024))   # 32 KB: crash
-        assert exc_info.type is Exception    # segfault!
+        # recursing should crash with only 32 KB of stack,
+        # and it should eventually work with more stack
+        for test_kb in [32, 128, 512, 1024, 2048, 4096, 8192, 16384]:
+            print >> sys.stderr, 'Trying with %d KB of stack...' % (test_kb,),
+            try:
+                data = cbuilder.cmdexec(str(test_kb * 1024))
+            except Exception, e:
+                if e.__class__ is not Exception:
+                    raise
+                print >> sys.stderr, 'segfault'
+                # got a segfault! try with the next stack size...
+            else:
+                # it worked
+                print >> sys.stderr, 'ok'
+                assert data == 'hello world\ndone\n'
+                assert test_kb > 32   # it cannot work with just 32 KB of stack
+                break    # finish
+        else:
+            py.test.fail("none of the stack sizes worked")

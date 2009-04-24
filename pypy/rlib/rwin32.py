@@ -27,14 +27,17 @@ class CConfig:
         WORD = rffi_platform.SimpleType("WORD", rffi.UINT)
         DWORD = rffi_platform.SimpleType("DWORD", rffi.UINT)
         BOOL = rffi_platform.SimpleType("BOOL", rffi.LONG)
+        BYTE = rffi_platform.SimpleType("BYTE", rffi.UCHAR)
         INT = rffi_platform.SimpleType("INT", rffi.INT)
         LONG = rffi_platform.SimpleType("LONG", rffi.LONG)
         PLONG = rffi_platform.SimpleType("PLONG", rffi.LONGP)
         LPVOID = rffi_platform.SimpleType("LPVOID", rffi.INTP)
         LPCVOID = rffi_platform.SimpleType("LPCVOID", rffi.VOIDP)
+        LPSTR = rffi_platform.SimpleType("LPSTR", rffi.CCHARP)
         LPCSTR = rffi_platform.SimpleType("LPCSTR", rffi.CCHARP)
         LPDWORD = rffi_platform.SimpleType("LPDWORD", rffi.INTP)
         SIZE_T = rffi_platform.SimpleType("SIZE_T", rffi.SIZE_T)
+        ULONG_PTR = rffi_platform.SimpleType("ULONG_PTR", rffi.ULONG)
 
         HRESULT = rffi_platform.SimpleType("HRESULT", rffi.LONG)
         HLOCAL = rffi_platform.SimpleType("HLOCAL", rffi.VOIDP)
@@ -70,6 +73,7 @@ if WIN32:
     PFILETIME = rffi.CArrayPtr(FILETIME)
 
     GetLastError = winexternal('GetLastError', [], DWORD)
+    SetLastError = winexternal('SetLastError', [DWORD], lltype.Void)
 
     LoadLibrary = winexternal('LoadLibraryA', [rffi.CCHARP], rffi.VOIDP)
     GetProcAddress = winexternal('GetProcAddress',
@@ -108,7 +112,7 @@ if WIN32:
         LocalFree(buf[0])
         return result
 
-    def lastWindowsError():
+    def lastWindowsError(context=None):
         code = GetLastError()
         message = FormatError(code)
         return WindowsError(code, message)
