@@ -244,7 +244,8 @@ class ResumeFromInterpDescr(AbstractDescr):
         # XXX it's probably useless to do so when optimizing
         glob = metainterp_sd.globaldata
         old_loops = glob.compiled_merge_points.setdefault(greenkey, [])
-        old_loops.append(new_loop)
+        if new_loop not in map_loop2descr:
+            old_loops.append(new_loop)
 
 
 def compile_fresh_bridge(metainterp, old_loops, resumekey):
