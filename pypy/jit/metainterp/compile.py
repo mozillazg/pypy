@@ -106,9 +106,7 @@ def compile_fresh_loop(metainterp, old_loops, greenkey, start):
     history.source_link = loop
     send_loop_to_backend(metainterp, loop, "loop")
     metainterp.staticdata.stats.loops.append(loop)
-    if len(old_loops) != 0:
-        import pdb
-        pdb.set_trace()
+    assert len(old_loops) == 0
     old_loops.append(loop)
     return loop
 
