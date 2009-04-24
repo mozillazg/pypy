@@ -156,13 +156,25 @@ if WIDE_FILENAMES:
         return f
     def wrapper2(fn):
         impl = extregistry.lookup(fn).lltypeimpl
+
+        from pypy.objspace.std.unicodetype import decode_object
+
+        def unicodepath_w(w_path, space):
+            if not space.is_true(space.isinstance(w_path, space.w_unicode)):
+                # XXX Windows only for the moment
+                w_path = decode_object(space, w_path, "mbcs", None)
+            return space.unicode_w(w_path)
+
         def f(space, w_path1, w_path2, args):
-            if (space.is_true(space.isinstance(w_path1, space.w_unicode)) and
-                space.is_true(space.isinstance(w_path2, space.w_unicode))):
-                return impl(space.unicode_w(w_path1), 
-                            space.unicode_w(w_path2), *args)
+            try:
+                path1 = unicodepath_w(w_path1, space)
+                path2 = unicodepath_w(w_path2, space)
+            except UnicodeError, e:
+                pass
             else:
-                return impl(space.str_w(w_path1), space.str_w(w_path2), *args)
+                return impl(path1, path2, *args)
+
+            return impl(space.str_w(w_path1), space.str_w(w_path2), *args)
         return f
 else:
     def wrapper(fn):
