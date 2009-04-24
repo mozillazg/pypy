@@ -343,12 +343,15 @@ getcwd.unwrap_spec = [ObjSpace]
 
 def getcwdu(space):
     """Return a unicode string representing the current working directory."""
-    try:
-        cur = os.getcwdu()
-    except OSError, e: 
-        raise wrap_oserror(space, e) 
-    else: 
+    if _WIN:
+        try:
+            cur = os.getcwdu()
+        except OSError, e: 
+            raise wrap_oserror(space, e)
         return space.wrap(cur)
+    else:
+        # XXX sys.getfilesystemencoding() is None on Linux
+        return space.call_method(getcwd(space), 'decode')
 getcwd.unwrap_spec = [ObjSpace]
 
 def chdir(space, w_path):
