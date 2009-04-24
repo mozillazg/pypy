@@ -258,7 +258,14 @@ class CPU(object):
         p = sizedescr.alloc()
         return BoxPtr(p)
 
-    do_new_with_vtable = do_new
+    def do_new_with_vtable(self, args, sizedescr):
+        assert isinstance(sizedescr, SizeDescr)
+        assert sizedescr.alloc is not None
+        p = sizedescr.alloc()
+        classadr = args[0].getaddr(self)
+        pobj = lltype.cast_opaque_ptr(rclass.OBJECTPTR, p)
+        pobj.typeptr = llmemory.cast_adr_to_ptr(classadr, rclass.CLASSTYPE)
+        return BoxPtr(p)
 
     def do_getfield_gc(self, args, fielddescr):
         assert isinstance(fielddescr, FieldDescr)
