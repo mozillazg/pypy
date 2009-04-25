@@ -1276,6 +1276,7 @@ class MetaInterp(object):
             if suboperations[-1].opnum != rop.FAIL:
                 must_compile = False
                 log("ignoring old version of the guard")
+        if must_compile:
             self.history = history.History(self.cpu)
             extra = len(suboperations) - 1
             assert extra >= 0
