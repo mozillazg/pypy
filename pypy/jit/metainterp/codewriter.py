@@ -6,7 +6,7 @@ from pypy.objspace.flow.model import Variable, Constant, Link, c_last_exception
 from pypy.rlib import objectmodel
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import _we_are_jitted
-from pypy.rlib.rarithmetic import intmask
+from pypy.jit.metainterp.history import Const, getkind
 from pypy.jit.metainterp import heaptracker, support, history
 from pypy.tool.udir import udir
 from pypy.translator.simplify import get_funcobj, get_functype
@@ -30,81 +30,17 @@ class JitCode(history.AbstractValue):
         self.called_from = called_from
         self.graph = graph
 
-    def setup(self, code, constant_code, unserialized):
+    def setup(self, code, constants):
         self.code = code
-        self.serialized_constants = constant_code
-        self.unserialized_constants = unserialized
-        self.constants = None
-
-    def ensure_constants(self, cpu):
-        if self.constants is None:
-            self.constants = []
-            decoder = JitCodeDecoder(self.serialized_constants)
-            const_code_len = len(self.serialized_constants)
-            unserialized_index = 0
-            while decoder.pc < const_code_len:
-                const_type = decoder.load_int()
-                if const_type == history.CONST_NOT_SERIALIZED:
-                    const = self.unserialized_constants[unserialized_index]
-                    unserialized_index += 1
-                else:
-                    const = history.unserialize_prebuilt(const_type, decoder, cpu)
-                self.constants.append(const)
-        return self.constants
+        self.constants = constants
 
     def __repr__(self):
         return '<JitCode %r>' % (getattr(self, 'name', '?'),)
 
-    def dump(self, cpu, file=None):
-        self.ensure_constants(cpu)
+    def dump(self, file=None):
         import dump
         dump.dump_bytecode(self, file=file)
         print >> file
-
-
-class JitCodeDecoder(object):
-
-    def __init__(self, bytecode):
-        self.bytecode = bytecode
-        self.pc = 0
-
-    def load_int(self):
-        pc = self.pc
-        result = ord(self.bytecode[pc])
-        self.pc = pc + 1
-        if result > 0x7F:
-            result = self._load_larger_int(result)
-        return result
-
-    def _load_larger_int(self, result):    # slow path
-        result = result & 0x7F
-        shift = 7
-        pc = self.pc
-        while 1:
-            byte = ord(self.bytecode[pc])
-            pc += 1
-            result += (byte & 0x7F) << shift
-            shift += 7
-            if not byte & 0x80:
-                break
-        self.pc = pc
-        return intmask(result)
-    _load_larger_int._dont_inline_ = True
-
-    def load_3byte(self):
-        pc = self.pc
-        result = (((ord(self.bytecode[pc + 0])) << 16) |
-                  ((ord(self.bytecode[pc + 1])) <<  8) |
-                  ((ord(self.bytecode[pc + 2])) <<  0))
-        self.pc = pc + 3
-        return result
-
-    def load_bool(self):
-        pc = self.pc
-        result = ord(self.bytecode[pc])
-        self.pc = pc + 1
-        return bool(result)
-
 
 class IndirectCallset(history.AbstractValue):
     def __init__(self, codewriter, graphs):
@@ -292,7 +228,7 @@ class CodeWriter(object):
 ##                                                            [TP], OF)
 ##                insert_func, _ = support.builtin_func_for_spec(rtyper,
 ##                      'list.insert', [TP, lltype.Signed, OF], lltype.Void)
-            tp = history.getkind(OF)
+            tp = getkind(OF)
 ##            if isinstance(TP.TO, lltype.GcStruct):
 ##                ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
 ##                               history.ConstAddr(setfunc.value, self.cpu),
@@ -346,40 +282,24 @@ class BytecodeMaker(object):
         code = assemble(labelpos, self.codewriter.metainterp_sd,
                         self.assembler)
         self.resolve_switch_targets(labelpos)
-        const_code, consts = self.serialize_constants()
-        self.bytecode.setup(code, const_code, consts)
+        self.bytecode.setup(code, self.constants)
 
         self.bytecode._source = self.assembler
         self.bytecode._metainterp_sd = self.codewriter.metainterp_sd
         self.bytecode._labelpos = labelpos
         if self.debug:
-            self.bytecode.dump(self.cpu)
+            self.bytecode.dump()
         else:
             print repr(self.bytecode)
             dir = udir.ensure("jitcodes", dir=1)
-            self.bytecode.dump(self.cpu,
-                               open(str(dir.join(self.bytecode.name)), "w"))
-
-    def serialize_constants(self):
-        code = []
-        unserialized = []
-        for const in self.constants:
-            try:
-                as_bytecode = const.serialize()
-            except history.Unserializable:
-                code.append(history.CONST_NOT_SERIALIZED)
-                unserialized.append(const)
-            else:
-                code.extend(as_bytecode)
-        bytecode = assemble_constant_code(code)
-        return bytecode, unserialized
+            self.bytecode.dump(open(str(dir.join(self.bytecode.name)), "w"))
 
     def const_position(self, constvalue):
         """Generate a constant of the given value.
         Returns its index in the list self.positions[].
         """
         if constvalue is _we_are_jitted: constvalue = True
-        const = history.Const._new(constvalue, self.cpu)
+        const = Const._new(constvalue, self.cpu)
         return self.get_position(const)
 
     def get_position(self, x):
@@ -1237,17 +1157,6 @@ def encode_int(index):
         if not index:
             break
     return result
-
-def assemble_constant_code(assembler):
-    result = []
-    for arg in assembler:
-        if isinstance(arg, bool):
-            result.append(chr(int(arg)))
-        elif isinstance(arg, int):
-            result.extend(encode_int(arg))
-        else:
-            raise AssertionError("not simple enough %s" % arg)
-    return "".join(result)
 
 def assemble(labelpos, metainterp_sd, assembler):
     result = []

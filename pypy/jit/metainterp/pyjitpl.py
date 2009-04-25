@@ -119,16 +119,56 @@ class arguments(object):
 # ____________________________________________________________
 
 
-class MIFrame(codewriter.JitCodeDecoder):
+class MIFrame(object):
 
     def __init__(self, metainterp, jitcode):
         assert isinstance(jitcode, codewriter.JitCode)
         self.metainterp = metainterp
         self.jitcode = jitcode
-        codewriter.JitCodeDecoder.__init__(self, jitcode.code)
-        self.constants = jitcode.ensure_constants(self.metainterp.cpu)
+        self.bytecode = jitcode.code
+        self.constants = jitcode.constants
         self.exception_target = -1
         self.name = jitcode.name # purely for having name attribute
+
+    # ------------------------------
+    # Decoding of the JitCode
+
+    def load_int(self):
+        pc = self.pc
+        result = ord(self.bytecode[pc])
+        self.pc = pc + 1
+        if result > 0x7F:
+            result = self._load_larger_int(result)
+        return result
+
+    def _load_larger_int(self, result):    # slow path
+        result = result & 0x7F
+        shift = 7
+        pc = self.pc
+        while 1:
+            byte = ord(self.bytecode[pc])
+            pc += 1
+            result += (byte & 0x7F) << shift
+            shift += 7
+            if not byte & 0x80:
+                break
+        self.pc = pc
+        return intmask(result)
+    _load_larger_int._dont_inline_ = True
+
+    def load_3byte(self):
+        pc = self.pc
+        result = (((ord(self.bytecode[pc + 0])) << 16) |
+                  ((ord(self.bytecode[pc + 1])) <<  8) |
+                  ((ord(self.bytecode[pc + 2])) <<  0))
+        self.pc = pc + 3
+        return result
+
+    def load_bool(self):
+        pc = self.pc
+        result = ord(self.bytecode[pc])
+        self.pc = pc + 1
+        return bool(result)
 
     def getenv(self, i):
         assert i >= 0
