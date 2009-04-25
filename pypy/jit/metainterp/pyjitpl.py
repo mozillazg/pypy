@@ -1276,14 +1276,14 @@ class MetaInterp(object):
             if suboperations[-1].opnum != rop.FAIL:
                 must_compile = False
                 log("ignoring old version of the guard")
-        if must_compile:
-            self.history = history.History(self.cpu)
-            extra = len(suboperations) - 1
-            assert extra >= 0
-            for i in range(extra):
-                self.history.operations.append(suboperations[i])
-            self.extra_rebuild_operations = extra
-        else:
+            else:
+                self.history = history.History(self.cpu)
+                extra = len(suboperations) - 1
+                assert extra >= 0
+                for i in range(extra):
+                    self.history.operations.append(suboperations[i])
+                self.extra_rebuild_operations = extra
+        if not must_compile:
             self.staticdata.globaldata.blackhole = True
             self.history = history.BlackHole(self.cpu)
             # the BlackHole is invalid because it doesn't start with
