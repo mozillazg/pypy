@@ -1019,10 +1019,12 @@ class MetaInterp(object):
         for j in range(len(self.framestack)):
             f = self.framestack[j]
             #
-            if isinstance(f.exception_box, BoxInt):
+            box = f.exception_box
+            if isinstance(box, BoxInt):
                 box.changevalue_int(saved_env[i].getint())
                 i += 1
-            if isinstance(f.exc_value_box, BoxPtr):
+            box = f.exc_value_box
+            if isinstance(box, BoxPtr):
                 box.changevalue_ptr(saved_env[i].getptr_base())
                 i += 1
             #
