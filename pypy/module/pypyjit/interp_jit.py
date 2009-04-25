@@ -44,14 +44,14 @@ class __extend__(PyFrame):
                     frame=self, next_instr=next_instr, pycode=pycode)
                 co_code = pycode.co_code
                 self.valuestackdepth = hint(self.valuestackdepth, promote=True)
-                prev = next_instr
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
-                if next_instr < prev:
-                    pypyjitdriver.can_enter_jit(frame=self, ec=ec,
-                                                next_instr=next_instr,
-                                                pycode=pycode)
         except ExitFrame:
             return self.popvalue()
+
+    def JUMP_ABSOLUTE(f, jumpto, next_instr, ec=None):
+        pypyjitdriver.can_enter_jit(frame=f, ec=ec, next_instr=jumpto,
+                                    pycode=f.getcode())
+        return jumpto
 
 ##class __extend__(Function):
 ##    __metaclass__ = extendabletype
