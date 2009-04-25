@@ -111,7 +111,7 @@ class BinaryOperation(AbstractOperation):
             v_second = v
         self.put(builder, [v_first, v_second])
 
-class GuardBinaryOperation(AbstractOperation):
+class GuardOperation(AbstractOperation):
 
     def produce_into(self, builder, r):
         v = builder.get_bool_var(r)
@@ -158,8 +158,9 @@ OPERATIONS.append(BinaryOperation(rop.INT_MOD, ~3, 2))
 OPERATIONS.append(BinaryOperation(rop.INT_RSHIFT, LONG_BIT-1))
 OPERATIONS.append(BinaryOperation(rop.INT_LSHIFT, LONG_BIT-1))
 OPERATIONS.append(BinaryOperation(rop.UINT_RSHIFT, LONG_BIT-1))
-OPERATIONS.append(GuardBinaryOperation(rop.GUARD_TRUE))
-OPERATIONS.append(GuardBinaryOperation(rop.GUARD_FALSE))
+
+OPERATIONS.append(GuardOperation(rop.GUARD_TRUE))
+OPERATIONS.append(GuardOperation(rop.GUARD_FALSE))
 
 for _op in [rop.INT_NEG,
             rop.INT_INVERT,
