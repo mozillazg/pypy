@@ -609,9 +609,6 @@ class CPU386(object):
             counter += 1
         return counter, basesize, ptr
 
-    def unserialize_prebuilt(self, const_type, decoder):
-        pass
-
     def calldescrof(self, functype, argtypes, resulttype):
         if resulttype is lltype.Void:
             size = 0

@@ -39,9 +39,6 @@ class CPU(object):
     def compile_operations(self, loop):
         pass
 
-    def unserialize_prebuilt(self, const_type, decoder):
-        pass
-
     def execute_operations(self, loop, valueboxes):
         if DEBUG:
             print "execute_operations: starting", loop

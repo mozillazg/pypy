@@ -234,9 +234,6 @@ class BaseCPU(model.AbstractCPU):
     def cast_int_to_adr(self, int):
         return llimpl.cast_int_to_adr(self.memo_cast, int)
 
-    def unserialize_prebuilt(self, const_type, decoder):
-        pass
-
 
 
 class LLtypeCPU(BaseCPU):
