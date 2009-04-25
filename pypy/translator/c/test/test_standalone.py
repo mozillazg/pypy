@@ -166,6 +166,21 @@ class TestStandalone(object):
         out = py.process.cmdexec("%s 500" % exe)
         assert int(out) == 500*501/2
 
+    if hasattr(os, 'setpgrp'):
+        def test_os_setpgrp(self):
+            def entry_point(argv):
+                os.setpgrp()
+                return 0
+
+            t = TranslationContext(self.config)
+            t.buildannotator().build_types(entry_point, [s_list_of_strings])
+            t.buildrtyper().specialize()
+
+            cbuilder = CStandaloneBuilder(t, entry_point, t.config)
+            cbuilder.generate_source()
+            cbuilder.compile()
+
+
     def test_profopt_mac_osx_bug(self):
         if sys.platform == 'win32':
             py.test.skip("no profopt on win32")
