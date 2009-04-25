@@ -189,8 +189,6 @@ class WarmRunnerDesc:
 
         def maybe_enter_jit(*args):
             try:
-                if self.metainterp_sd.globaldata.blackhole:
-                    return
                 state.maybe_compile_and_run(*args)
             except JitException:
                 raise     # go through
@@ -323,25 +321,22 @@ class WarmRunnerDesc:
         def ll_portal_runner(*args):
             while 1:
                 try:
-                    try:
-                        return support.maybe_on_top_of_llinterp(rtyper,
-                                                          portal_ptr)(*args)
-                    except ContinueRunningNormally, e:
-                        args = ()
-                        for i, ARG in portalfunc_ARGS:
-                            v = unwrap(ARG, e.args[i])
-                            args = args + (v,)
-                    except DoneWithThisFrame, e:
-                        return unwrap(RESULT, e.resultbox)
-                    except ExitFrameWithException, e:
-                        value = e.valuebox.getptr(lltype.Ptr(rclass.OBJECT))
-                        if not we_are_translated():
-                            raise LLException(value.typeptr, value)
-                        else:
-                            value = cast_base_ptr_to_instance(Exception, value)
-                            raise Exception, value
-                finally:
-                    self.metainterp_sd.globaldata.blackhole = False
+                    return support.maybe_on_top_of_llinterp(rtyper,
+                                                      portal_ptr)(*args)
+                except ContinueRunningNormally, e:
+                    args = ()
+                    for i, ARG in portalfunc_ARGS:
+                        v = unwrap(ARG, e.args[i])
+                        args = args + (v,)
+                except DoneWithThisFrame, e:
+                    return unwrap(RESULT, e.resultbox)
+                except ExitFrameWithException, e:
+                    value = e.valuebox.getptr(lltype.Ptr(rclass.OBJECT))
+                    if not we_are_translated():
+                        raise LLException(value.typeptr, value)
+                    else:
+                        value = cast_base_ptr_to_instance(Exception, value)
+                        raise Exception, value
         ll_portal_runner._recursive_portal_call_ = True
 
         portal_runner_ptr = self.helper_func(self.PTR_PORTAL_FUNCTYPE,
