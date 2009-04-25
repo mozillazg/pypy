@@ -101,6 +101,9 @@ class AbstractValue(object):
     def sort_key(self):
         raise NotImplementedError
 
+    def serialize(self):
+        raise Unserializable
+
 class AbstractDescr(AbstractValue):
     def handle_fail_op(self, metainterp, fail_op):
         raise NotImplementedError
@@ -115,6 +118,18 @@ class AbstractMethDescr(AbstractDescr):
         self.jitcodes = jitcodes
     def get_jitcode_for_class(self, oocls):
         return self.jitcodes[oocls]
+
+class Unserializable(Exception):
+    pass
+
+CONST_TYPE_INT = 1
+CONST_TYPE_ADDR = 2
+CONST_NOT_SERIALIZED = 100
+
+def unserialize_prebuilt(const_type, decoder, cpu):
+    if const_type == CONST_TYPE_INT:
+        return ConstInt(decoder.load_int())
+    return cpu.unserialize_prebuilt(const_type, decoder)
 
 
 class Const(AbstractValue):
@@ -148,6 +163,17 @@ class Const(AbstractValue):
     def constbox(self):
         return self
 
+    def serialize(self):
+        """
+        NOT_RPYTHON
+        Convert this constant into a list of strings for JIT bytecode.
+        """
+        # A useful generic implementation.
+        try:
+            return (self.const_type, self.value)
+        except AttributeError:
+            raise Unserializable
+
     def __repr__(self):
         return 'Const(%s)' % self._getrepr_()
 
@@ -178,6 +204,7 @@ class Const(AbstractValue):
 
 class ConstInt(Const):
     type = INT
+    const_type = CONST_TYPE_INT
     _attrs_ = ('value',)
 
     def __init__(self, value):
@@ -195,6 +222,11 @@ class ConstInt(Const):
 
     def getint(self):
         return self.value
+
+    def serialize(self):
+        if isinstance(self.value, Symbolic):
+            raise Unserializable
+        return super(ConstInt, self).serialize()
 
     def getaddr(self, cpu):
         return cpu.cast_int_to_adr(self.value)
