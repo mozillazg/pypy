@@ -3,7 +3,8 @@ This file defines utilities for manipulating objects in an
 RPython-compliant way.
 """
 
-import sys, new
+import sys
+import types
 
 # specialize is a decorator factory for attaching _annspecialcase_
 # attributes to functions: for example
@@ -102,7 +103,7 @@ def instantiate(cls):
     if isinstance(cls, type):
         return cls.__new__(cls)
     else:
-        return new.instance(cls)
+        return types.InstanceType(cls)
 
 def we_are_translated():
     return False
