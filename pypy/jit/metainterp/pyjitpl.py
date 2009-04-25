@@ -26,7 +26,7 @@ def check_args(*args):
     for arg in args:
         assert isinstance(arg, (Box, Const))
 
-DEBUG = False
+DEBUG = True
 
 def log(msg):
     if not we_are_translated():
@@ -466,7 +466,7 @@ class MIFrame(object):
         if not we_are_translated():
             self.metainterp._debug_history.append(['call',
                                                   varargs[0], varargs[1:]])
-        return self.execute(rop.CALL, varargs, descr=calldescr)
+        self.execute(rop.CALL, varargs, descr=calldescr)
 
     @arguments("descr", "varargs")
     def opimpl_residual_call_pure(self, calldescr, varargs):
