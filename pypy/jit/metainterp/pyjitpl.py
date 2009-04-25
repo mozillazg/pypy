@@ -120,6 +120,8 @@ class arguments(object):
 
 
 class MIFrame(object):
+    exception_box = None
+    exc_value_box = None
 
     def __init__(self, metainterp, jitcode):
         assert isinstance(jitcode, codewriter.JitCode)
@@ -987,6 +989,14 @@ class MetaInterp(object):
         framestack = []
         for f in self.framestack:
             newenv = []
+            #
+            box = f.exception_box
+            if isinstance(box, Box):
+                saved_env.append(box.clonebox())
+            box = f.exc_value_box
+            if isinstance(box, Box):
+                saved_env.append(box.clonebox())
+            #
             for box in f.env:
                 if isinstance(box, Box):
                     saved_env.append(box.clonebox())
@@ -1008,6 +1018,14 @@ class MetaInterp(object):
         assert len(pseudoframe._saved_framestack) == len(self.framestack)
         for j in range(len(self.framestack)):
             f = self.framestack[j]
+            #
+            if isinstance(f.exception_box, BoxInt):
+                box.changevalue_int(saved_env[i].getint())
+                i += 1
+            if isinstance(f.exc_value_box, BoxPtr):
+                box.changevalue_ptr(saved_env[i].getptr_base())
+                i += 1
+            #
             pseudoenv = pseudoframe._saved_framestack[j]
             assert len(f.env) == len(pseudoenv)
             for k in range(len(f.env)):
