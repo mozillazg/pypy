@@ -1,7 +1,7 @@
 
 import sys
 from pypy.jit.metainterp.history import (BoxInt, Box, BoxPtr, TreeLoop,
-                                         ConstInt, ConstPtr)
+                                         ConstInt, ConstPtr, ReturnBoxes)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
 from pypy.jit.metainterp.executor import execute
@@ -17,6 +17,7 @@ T = lltype.GcStruct('T', ('parent', S),
                          ('next', lltype.Ptr(S)))
 U = lltype.GcStruct('U', ('parent', T),
                          ('next', lltype.Ptr(S)))
+returnboxes = ReturnBoxes()
 
 class Runner(object):
         
@@ -29,8 +30,10 @@ class Runner(object):
             self.guard_failed = False
         else:
             self.guard_failed = True
-        if result_type != 'void':
-            return res.args[0]
+        if result_type == 'int':
+            return returnboxes._returnboxes_int[0]
+        elif result_type == 'ptr':
+            return returnboxes._returnboxes_ptr[0]
 
     def get_compiled_single_operation(self, opnum, result_type, valueboxes,
                                       descr):
@@ -55,7 +58,7 @@ class Runner(object):
         loop = TreeLoop('single op')
         loop.operations = operations
         loop.inputargs = [box for box in valueboxes if isinstance(box, Box)]
-        self.cpu.compile_operations(loop)
+        self.cpu.compile_operations(loop, returnboxes)
         return loop
 
 class BaseBackendTest(Runner):
@@ -205,10 +208,10 @@ class BaseBackendTest(Runner):
             loop = TreeLoop('name')
             loop.operations = ops
             loop.inputargs = [v1, v2]
-            self.cpu.compile_operations(loop)
+            self.cpu.compile_operations(loop, returnboxes)
             for x, y, z in testcases:
                 op = self.cpu.execute_operations(loop, [BoxInt(x), BoxInt(y)])
-                assert op.args[0].value == z
+                assert returnboxes._returnboxes_int[0].value == z
             # ----------
             # the same thing but with the exception path reversed
 ##            v1 = BoxInt(testcases[0][0])

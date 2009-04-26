@@ -1,15 +1,20 @@
 class AbstractCPU(object):
 
-    def compile_operations(self, loop):
-        """Assemble the given list of operations."""
+    def compile_operations(self, loop, returnboxes):
+        """Assemble the given list of operations.
+        loop is of type history.TreeLoop.
+        returnboxes is of type history.ReturnBoxes.
+        """
         raise NotImplementedError
 
     def execute_operations(self, loop, valueboxes):
         """Calls the assembler generated for the given loop.
-        Returns the ResOperation that failed, of type rop.FAIL.
+        Stops when encountering an operation of type rop.FAIL.
+        Returns the operation, after having saved the current
+        values into the boxes listed by returnboxes.
         """
         raise NotImplementedError
-    
+
     def get_exception(self):
         raise NotImplementedError
 

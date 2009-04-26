@@ -6,7 +6,8 @@ from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import TreeLoop, log, Box, History
-from pypy.jit.metainterp.history import AbstractDescr, BoxInt, BoxPtr
+from pypy.jit.metainterp.history import AbstractDescr, BoxInt, BoxPtr, BoxObj
+from pypy.jit.metainterp.history import Const
 from pypy.jit.metainterp.specnode import NotSpecNode
 from pypy.rlib.debug import debug_print
 
@@ -110,7 +111,7 @@ def compile_fresh_loop(metainterp, old_loops, greenkey, start):
     return loop
 
 def send_loop_to_backend(metainterp, loop, type):
-    metainterp.cpu.compile_operations(loop)
+    metainterp.cpu.compile_operations(loop, metainterp.staticdata.returnboxes)
     if not we_are_translated():
         if type != "entry bridge":
             metainterp.staticdata.stats.compiled_count += 1
@@ -122,23 +123,40 @@ def send_loop_to_backend(metainterp, loop, type):
 
 # ____________________________________________________________
 
-class DoneWithThisFrameDescr0(AbstractDescr):
+class DoneWithThisFrameDescrVoid(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
         raise metainterp_sd.DoneWithThisFrame(None)
 
-class DoneWithThisFrameDescr1(AbstractDescr):
+class DoneWithThisFrameDescrInt(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
         resultbox = fail_op.args[0]
+        if isinstance(resultbox, BoxInt):
+            resultbox = metainterp_sd.returnboxes._returnboxes_int[0]
+        else:
+            assert isinstance(resultbox, Const)
+        raise metainterp_sd.DoneWithThisFrame(resultbox)
+
+class DoneWithThisFrameDescrPtr(AbstractDescr):
+    def handle_fail_op(self, metainterp_sd, fail_op):
+        resultbox = fail_op.args[0]
+        if isinstance(resultbox, BoxPtr):
+            resultbox = metainterp_sd.returnboxes._returnboxes_ptr[0]
+        else:
+            assert isinstance(resultbox, Const)
         raise metainterp_sd.DoneWithThisFrame(resultbox)
 
 class ExitFrameWithExceptionDescr(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
-        assert len(fail_op.args) == 1
         valuebox = fail_op.args[0]
+        if isinstance(valuebox, BoxPtr):
+            valuebox = metainterp_sd.returnboxes._returnboxes_ptr[0]
+        else:
+            assert isinstance(valuebox, Const)
         raise metainterp_sd.ExitFrameWithException(valuebox)
 
-done_with_this_frame_descr_0 = DoneWithThisFrameDescr0()
-done_with_this_frame_descr_1 = DoneWithThisFrameDescr1()
+done_with_this_frame_descr_void = DoneWithThisFrameDescrVoid()
+done_with_this_frame_descr_int  = DoneWithThisFrameDescrInt()
+done_with_this_frame_descr_ptr  = DoneWithThisFrameDescrPtr()
 exit_frame_with_exception_descr = ExitFrameWithExceptionDescr()
 map_loop2descr = {}
 
@@ -147,19 +165,19 @@ _loop = TreeLoop('done_with_this_frame_int')
 _loop.specnodes = [NotSpecNode()]
 _loop.inputargs = [BoxInt()]
 loops_done_with_this_frame_int = [_loop]
-map_loop2descr[_loop] = done_with_this_frame_descr_1
+map_loop2descr[_loop] = done_with_this_frame_descr_int
 
 _loop = TreeLoop('done_with_this_frame_ptr')
 _loop.specnodes = [NotSpecNode()]
 _loop.inputargs = [BoxPtr()]
 loops_done_with_this_frame_ptr = [_loop]
-map_loop2descr[_loop] = done_with_this_frame_descr_1
+map_loop2descr[_loop] = done_with_this_frame_descr_ptr
 
 _loop = TreeLoop('done_with_this_frame_void')
 _loop.specnodes = []
 _loop.inputargs = []
 loops_done_with_this_frame_void = [_loop]
-map_loop2descr[_loop] = done_with_this_frame_descr_0
+map_loop2descr[_loop] = done_with_this_frame_descr_void
 
 _loop = TreeLoop('exit_frame_with_exception')
 _loop.specnodes = [NotSpecNode()]
@@ -181,7 +199,54 @@ class ResumeGuardDescr(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
         metainterp = MetaInterp(metainterp_sd)
-        return metainterp.handle_guard_failure(fail_op, self)
+        patch = self.patch_boxes_temporarily(metainterp_sd, fail_op)
+        try:
+            return metainterp.handle_guard_failure(fail_op, self)
+        finally:
+            self.restore_patched_boxes(metainterp_sd, fail_op, patch)
+
+    def patch_boxes_temporarily(self, metainterp_sd, fail_op):
+        # A bit indirect: when we hit a rop.FAIL, the current values are
+        # stored in the boxes of 'returnboxes' by the backend.  Here,
+        # we fetch them and copy them into the real boxes, i.e. the
+        # 'fail_op.args'.  The point is that we are here in a try:finally
+        # path at the end of which, in restore_patched_boxes(), we can
+        # safely undo exactly the changes done here.
+        returnboxes = metainterp_sd.returnboxes
+        i_int = 0
+        i_ptr = 0
+        i_obj = 0
+        patch = []
+        for box in fail_op.args:
+            patch.append(box.clonebox())
+            if isinstance(box, BoxInt):
+                srcbox = returnboxes._returnboxes_int[i_int]
+                i_int += 1
+                box.changevalue_int(srcbox.getint())
+            elif isinstance(box, BoxPtr):
+                srcbox = returnboxes._returnboxes_ptr[i_ptr]
+                i_ptr += 1
+                box.changevalue_ptr(srcbox.getptr_base())
+            elif metainterp_sd.cpu.is_oo and isinstance(box, BoxObj):
+                srcbox = returnboxes._returnboxes_obj[i_obj]
+                i_obj += 1
+                box.changevalue_obj(srcbox.getobj())
+            else:
+                assert False
+        return patch
+
+    def restore_patched_boxes(self, metainterp_sd, fail_op, patch):
+        for i in range(len(patch)-1, -1, -1):
+            srcbox = patch[i]
+            dstbox = fail_op.args[i]
+            if isinstance(srcbox, BoxInt):
+                srcbox.changevalue_int(dstbox.getint())
+            elif isinstance(srcbox, BoxPtr):
+                srcbox.changevalue_ptr(dstbox.getptr_base())
+            elif metainterp_sd.cpu.is_oo and isinstance(srcbox, BoxObj):
+                srcbox.changevalue_obj(dstbox.getobj())
+            else:
+                assert False
 
     def get_guard_op(self):
         guard_op = self.history.operations[self.history_guard_index]

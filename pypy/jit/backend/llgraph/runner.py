@@ -83,7 +83,7 @@ class BaseCPU(model.AbstractCPU):
         if translate_support_code:
             self.mixlevelann = annmixlevel
 
-    def compile_operations(self, loop):
+    def compile_operations(self, loop, returnboxes):
         """In a real assembler backend, this should assemble the given
         list of operations.  Here we just generate a similar CompiledLoop
         instance.  The code here is RPython, whereas the code in llimpl
@@ -102,13 +102,13 @@ class BaseCPU(model.AbstractCPU):
                 var2index[box] = llimpl.compile_start_obj_var(c)
             else:
                 raise Exception("box is: %r" % (box,))
-        self._compile_branch(c, loop.operations, var2index)
+        self._compile_branch(c, loop.operations, var2index, returnboxes)
         # We must redirect code jumping to the old loop so that it goes
         # to the new loop.
         if prev_c:
             llimpl.compile_redirect_code(prev_c, c)
 
-    def _compile_branch(self, c, operations, var2index):
+    def _compile_branch(self, c, operations, var2index, returnboxes):
         for op in operations:
             llimpl.compile_add(c, op.opnum)
             if isinstance(op.descr, Descr):
@@ -132,7 +132,8 @@ class BaseCPU(model.AbstractCPU):
                                                              x))
             if op.is_guard():
                 c2 = llimpl.compile_suboperations(c)
-                self._compile_branch(c2, op.suboperations, var2index.copy())
+                self._compile_branch(c2, op.suboperations, var2index.copy(),
+                                     returnboxes)
             x = op.result
             if x is not None:
                 if isinstance(x, history.BoxInt):
@@ -150,7 +151,7 @@ class BaseCPU(model.AbstractCPU):
             llimpl.compile_add_jump_target(c, op.jump_target._compiled_version)
         elif op.opnum == rop.FAIL:
             llimpl.compile_add_fail(c, len(self.fail_ops))
-            self.fail_ops.append(op)
+            self.fail_ops.append((op, returnboxes))
 
     def execute_operations(self, loop, valueboxes):
         """Calls the assembler generated for the given loop.
@@ -179,18 +180,27 @@ class BaseCPU(model.AbstractCPU):
         # we hit a FAIL operation.  Fish for the values
         # (in a real backend, this should be done by the FAIL operation
         # itself, not here)
-        op = self.fail_ops[fail_index]
+        op, returnboxes = self.fail_ops[fail_index]
+        i_int = 0
+        i_ptr = 0
+        i_obj = 0
         for i in range(len(op.args)):
             box = op.args[i]
             if isinstance(box, history.BoxInt):
                 value = llimpl.frame_int_getvalue(frame, i)
-                box.changevalue_int(value)
+                dstbox = returnboxes.get_int_box(i_int)
+                i_int += 1
+                dstbox.changevalue_int(value)
             elif isinstance(box, history.BoxPtr):
                 value = llimpl.frame_ptr_getvalue(frame, i)
-                box.changevalue_ptr(value)
+                dstbox = returnboxes.get_ptr_box(i_ptr)
+                i_ptr += 1
+                dstbox.changevalue_ptr(value)
             elif self.is_oo and isinstance(box, history.BoxObj):
                 value = llimpl.frame_ptr_getvalue(frame, i)
-                box.changevalue_obj(value)
+                dstbox = returnboxes.get_obj_box(i_obj)
+                i_obj += 1
+                dstbox.changevalue_obj(value)
             elif isinstance(box, history.ConstInt):
                 pass
             elif isinstance(box, history.ConstPtr):
