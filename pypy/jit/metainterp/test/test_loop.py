@@ -95,7 +95,7 @@ class LoopTest:
                     pass
                 pattern >>= 1
         self.meta_interp(f, [0xF0F0])
-        self.check_loop_count(3)
+        self.check_loop_count(2)
 
     def test_interp_simple(self):
         myjitdriver = JitDriver(greens = ['i'], reds = ['x', 'y'])
