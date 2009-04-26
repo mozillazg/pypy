@@ -805,7 +805,6 @@ class MetaInterpStaticData(object):
         self.stats = stats
         self.options = options
         self.globaldata = MetaInterpGlobalData()
-        self.returnboxes = history.ReturnBoxes()
 
         self.opcode_implementations = []
         self.opcode_names = []
@@ -832,7 +831,6 @@ class MetaInterpStaticData(object):
             self.ts = typesystem.oohelper
         else:
             self.ts = typesystem.llhelper
-        cpu.set_meta_interp_static_data(self)
 
     def _freeze_(self):
         return True
@@ -870,9 +868,27 @@ class MetaInterpStaticData(object):
 
 class MetaInterpGlobalData(object):
     def __init__(self):
+        self.metainterp_doing_call = None
         self._debug_history = []
         self.compiled_merge_points = r_dict(history.mp_eq, history.mp_hash)
                  # { greenkey: list-of-MergePoints }
+
+    def set_metainterp_doing_call(self, metainterp):
+        self.save_recursive_call()
+        self.metainterp_doing_call = metainterp
+
+    def unset_metainterp_doing_call(self, metainterp):
+        if self.metainterp_doing_call != metainterp:
+            metainterp._restore_recursive_call()
+        self.metainterp_doing_call = None
+
+    def save_recursive_call(self):
+        if self.metainterp_doing_call is not None:
+            self.metainterp_doing_call._save_recursive_call()
+            self.metainterp_doing_call = None
+
+    def assert_empty(self):
+        assert self.metainterp_doing_call is None
 
 # ____________________________________________________________
 
@@ -938,6 +954,9 @@ class MetaInterp(object):
 
     @specialize.arg(1)
     def execute_and_record(self, opnum, argboxes, descr=None):
+        # detect recursions when using rop.CALL
+        if opnum == rop.CALL:
+            self.staticdata.globaldata.set_metainterp_doing_call(self)
         # execute the operation first
         history.check_descr(descr)
         resbox = executor.execute(self.cpu, opnum, argboxes, descr)
@@ -953,10 +972,81 @@ class MetaInterp(object):
                 resbox = resbox.nonconstbox()    # ensure it is a Box
         else:
             assert resbox is None or isinstance(resbox, Box)
+            if opnum == rop.CALL:
+                self.staticdata.globaldata.unset_metainterp_doing_call(self)
         # record the operation if not constant-folded away
         if not canfold:
             self.history.record(opnum, argboxes, resbox, descr)
         return resbox
+
+    def _save_recursive_call(self):
+        # A bit of a hack: we need to be safe against box.changevalue_xxx()
+        # called by cpu.execute_operations(), in case we are recursively
+        # in another MetaInterp.  Temporarily save away the content of the
+        # boxes.
+        log('recursive call to execute_operations()!')
+        saved_env = []
+        framestack = []
+        for f in self.framestack:
+            newenv = []
+            #
+            box = f.exception_box
+            if isinstance(box, Box):
+                saved_env.append(box.clonebox())
+            box = f.exc_value_box
+            if isinstance(box, Box):
+                saved_env.append(box.clonebox())
+            #
+            for box in f.env:
+                if isinstance(box, Box):
+                    saved_env.append(box.clonebox())
+                newenv.append(box)
+            framestack.append(newenv)
+        pseudoframe = instantiate(MIFrame)
+        pseudoframe.env = saved_env
+        pseudoframe._saved_framestack = framestack
+        self.framestack.append(pseudoframe)
+
+    def _restore_recursive_call(self):
+        log('recursion detected, restoring state')
+        if not we_are_translated():
+            assert not hasattr(self.framestack[-1], 'jitcode')
+            assert hasattr(self.framestack[-2], 'jitcode')
+        pseudoframe = self.framestack.pop()
+        saved_env = pseudoframe.env
+        i = 0
+        assert len(pseudoframe._saved_framestack) == len(self.framestack)
+        for j in range(len(self.framestack)):
+            f = self.framestack[j]
+            #
+            box = f.exception_box
+            if isinstance(box, BoxInt):
+                box.changevalue_int(saved_env[i].getint())
+                i += 1
+            box = f.exc_value_box
+            if isinstance(box, BoxPtr):
+                box.changevalue_ptr(saved_env[i].getptr_base())
+                i += 1
+            #
+            pseudoenv = pseudoframe._saved_framestack[j]
+            assert len(f.env) == len(pseudoenv)
+            for k in range(len(f.env)):
+                box = f.env[k]
+                if isinstance(box, BoxInt):
+                    assert isinstance(pseudoenv[k], BoxInt)
+                    box.changevalue_int(saved_env[i].getint())
+                    i += 1
+                elif isinstance(box, BoxPtr):
+                    assert isinstance(pseudoenv[k], BoxPtr)
+                    box.changevalue_ptr(saved_env[i].getptr_base())
+                    i += 1
+                else:
+                    if isinstance(box, ConstInt):
+                        assert box.getint() == pseudoenv[k].getint()
+                    elif isinstance(box, ConstPtr):
+                        assert box.getptr_base() == pseudoenv[k].getptr_base()
+                    assert isinstance(box, Const)
+        assert i == len(saved_env)
 
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,

@@ -1,6 +1,6 @@
 import py
 from pypy.jit.backend.minimal.runner import CPU
-from pypy.jit.backend.test.runner import BaseBackendTest, FakeMetaInterpSd
+from pypy.jit.backend.test.runner import BaseBackendTest
 
 class FakeStats(object):
     pass
@@ -14,7 +14,6 @@ class TestMinimal(BaseBackendTest):
     
     def setup_class(cls):
         cls.cpu = CPU(rtyper=None, stats=FakeStats())
-        cls.cpu.set_meta_interp_static_data(FakeMetaInterpSd())
 
     def _skip(self):
         py.test.skip("not supported in non-translated version")

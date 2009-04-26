@@ -512,8 +512,10 @@ def make_state_class(warmrunnerdesc):
                     loop = cell.bridge
                     boxes = cell.fill_boxes(*args[num_green_args:])
             # ---------- execute assembler ----------
+            warmrunnerdesc.metainterp_sd.globaldata.save_recursive_call()
             while True:     # until interrupted by an exception
                 metainterp_sd = warmrunnerdesc.metainterp_sd
+                metainterp_sd.globaldata.assert_empty()
                 fail_op = metainterp_sd.cpu.execute_operations(loop, boxes)
                 loop, boxes = fail_op.descr.handle_fail_op(metainterp_sd,
                                                            fail_op)
