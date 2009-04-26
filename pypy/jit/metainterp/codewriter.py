@@ -44,31 +44,32 @@ class JitCode(history.AbstractValue):
 
 class IndirectCallset(history.AbstractValue):
     def __init__(self, codewriter, graphs):
-        keys = []
-        values = []
+        self.keys = []
+        self.values = []
         for graph in graphs:
             fnptr = codewriter.rtyper.getcallable(graph)
             fnaddress = codewriter.ts.cast_fnptr_to_root(fnptr)
-            keys.append(fnaddress)
-            values.append(codewriter.get_jitcode(graph))
-
-        def bytecode_for_address(fnaddress):
-            if we_are_translated():
-                if self.dict is None:
-                    # Build the dictionary at run-time.  This is needed
-                    # because the keys are function addresses, so they
-                    # can change from run to run.
-                    self.dict = {}
-                    for i in range(len(keys)):
-                        self.dict[keys[i]] = values[i]
-                return self.dict[fnaddress]
-            else:
-                for i in range(len(keys)):
-                    if fnaddress == keys[i]:
-                        return values[i]
-                raise KeyError(fnaddress)
-        self.bytecode_for_address = bytecode_for_address
+            self.keys.append(fnaddress)
+            self.values.append(codewriter.get_jitcode(graph))
         self.dict = None
+
+    def bytecode_for_address(self, fnaddress):
+        if we_are_translated():
+            if self.dict is None:
+                # Build the dictionary at run-time.  This is needed
+                # because the keys are function addresses, so they
+                # can change from run to run.
+                self.dict = {}
+                keys = self.keys
+                values = self.values
+                for i in range(len(keys)):
+                    self.dict[keys[i]] = values[i]
+            return self.dict[fnaddress]
+        else:
+            for i in range(len(self.keys)):
+                if fnaddress == self.keys[i]:
+                    return self.values[i]
+            raise KeyError(fnaddress)
 
 class SwitchDict(history.AbstractValue):
     "Get a 'dict' attribute mapping integer values to bytecode positions."

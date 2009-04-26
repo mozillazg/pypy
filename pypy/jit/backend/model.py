@@ -9,7 +9,22 @@ class AbstractCPU(object):
         Returns the ResOperation that failed, of type rop.FAIL.
         """
         raise NotImplementedError
-    
+
+    def get_latest_value_int(self, index):
+        """Returns the value for the index'th argument to the
+        lastest rop.FAIL.  Returns an int."""
+        raise NotImplementedError
+
+    def get_latest_value_ptr(self, index):
+        """Returns the value for the index'th argument to the
+        lastest rop.FAIL.  Returns a ptr."""
+        raise NotImplementedError
+
+    def get_latest_value_obj(self, index):
+        """Returns the value for the index'th argument to the
+        lastest rop.FAIL.  Returns an obj."""
+        raise NotImplementedError
+
     def get_exception(self):
         raise NotImplementedError
 
