@@ -17,7 +17,10 @@ T = lltype.GcStruct('T', ('parent', S),
                          ('next', lltype.Ptr(S)))
 U = lltype.GcStruct('U', ('parent', T),
                          ('next', lltype.Ptr(S)))
-returnboxes = ReturnBoxes()
+
+class FakeMetaInterpSd(object):
+    returnboxes = ReturnBoxes()
+
 
 class Runner(object):
         
@@ -31,9 +34,9 @@ class Runner(object):
         else:
             self.guard_failed = True
         if result_type == 'int':
-            return returnboxes._returnboxes_int[0]
+            return FakeMetaInterpSd.returnboxes._returnboxes_int[0]
         elif result_type == 'ptr':
-            return returnboxes._returnboxes_ptr[0]
+            return FakeMetaInterpSd.returnboxes._returnboxes_ptr[0]
 
     def get_compiled_single_operation(self, opnum, result_type, valueboxes,
                                       descr):
@@ -58,7 +61,7 @@ class Runner(object):
         loop = TreeLoop('single op')
         loop.operations = operations
         loop.inputargs = [box for box in valueboxes if isinstance(box, Box)]
-        self.cpu.compile_operations(loop, returnboxes)
+        self.cpu.compile_operations(loop)
         return loop
 
 class BaseBackendTest(Runner):
@@ -207,14 +210,15 @@ class BaseBackendTest(Runner):
             loop = TreeLoop('name')
             loop.operations = ops
             loop.inputargs = [v1, v2]
-            self.cpu.compile_operations(loop, returnboxes)
+            self.cpu.compile_operations(loop)
             for x, y, z in testcases:
                 op = self.cpu.execute_operations(loop, [BoxInt(x), BoxInt(y)])
                 if z == boom:
                     assert op is ops[1].suboperations[-1]
                 else:
                     assert op is ops[-1]
-                    assert returnboxes._returnboxes_int[0].value == z
+                    box = FakeMetaInterpSd.returnboxes._returnboxes_int[0]
+                    assert box.value == z
             # ----------
             # the same thing but with the exception path reversed
 ##            v1 = BoxInt(testcases[0][0])
