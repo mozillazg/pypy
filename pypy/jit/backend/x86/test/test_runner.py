@@ -88,7 +88,9 @@ class TestX86(BaseBackendTest):
         operations[-1].jump_target = loop
         operations[-2].suboperations = [ResOperation(rop.FAIL, [t, z], None)]
         cpu.compile_operations(loop)
-        res = self.cpu.execute_operations(loop, [BoxInt(0), BoxInt(10)])
+        self.cpu.set_future_value_int(0, 0)
+        self.cpu.set_future_value_int(1, 10)
+        res = self.cpu.execute_operations(loop)
         assert self.cpu.get_latest_value_int(0) == 0
         assert self.cpu.get_latest_value_int(1) == 55
 
@@ -464,7 +466,8 @@ class TestX86(BaseBackendTest):
                     loop.operations = ops
                     loop.inputargs = [b]
                     self.cpu.compile_operations(loop)
-                    r = self.cpu.execute_operations(loop, [b])
+                    self.cpu.set_future_value_ptr(0, b.value)
+                    r = self.cpu.execute_operations(loop)
                     result = self.cpu.get_latest_value_int(0)
                     if guard == rop.GUARD_FALSE:
                         assert result == execute(self.cpu, op, [b]).value
@@ -505,7 +508,9 @@ class TestX86(BaseBackendTest):
                     loop.operations = ops
                     loop.inputargs = [i for i in (a, b) if isinstance(i, Box)]
                     self.cpu.compile_operations(loop)
-                    r = self.cpu.execute_operations(loop, loop.inputargs)
+                    for i, box in enumerate(loop.inputargs):
+                        self.cpu.set_future_value_int(i, box.value)
+                    r = self.cpu.execute_operations(loop)
                     result = self.cpu.get_latest_value_int(0)
                     if guard == rop.GUARD_FALSE:
                         assert result == execute(self.cpu, op, (a, b)).value
@@ -533,7 +538,8 @@ class TestX86(BaseBackendTest):
             loop.operations = ops
             loop.inputargs = [base_v]
             self.cpu.compile_operations(loop)
-            op = self.cpu.execute_operations(loop, [base_v])
+            self.cpu.set_future_value_int(0, base_v.value)
+            op = self.cpu.execute_operations(loop)
             assert self.cpu.get_latest_value_int(0) == 1024
         finally:
             MachineCodeBlockWrapper.MC_SIZE = orig_size

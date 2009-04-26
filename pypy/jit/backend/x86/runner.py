@@ -69,8 +69,7 @@ class CPU386(object):
     debug = True
     is_oo = False
 
-    BOOTSTRAP_TP = lltype.FuncType([lltype.Ptr(rffi.CArray(lltype.Signed))],
-                                   lltype.Signed)
+    BOOTSTRAP_TP = lltype.FuncType([], lltype.Signed)
 
     def __init__(self, rtyper, stats, translate_support_code=False,
                  mixlevelann=None):
@@ -92,7 +91,6 @@ class CPU386(object):
             self.current_interpreter._store_exception = _store_exception
         TP = lltype.GcArray(llmemory.GCREF)
         self.keepalives = []
-        self.keepalives_index = 0
         self._bootstrap_cache = {}
         self._guard_list = []
         self._compiled_ops = {}
@@ -231,22 +229,6 @@ class CPU386(object):
             self._bootstrap_cache[key] = func
             return func
 
-    def get_box_value_as_int(self, box):
-        if isinstance(box, BoxInt):
-            return box.value
-        elif isinstance(box, ConstInt):
-            return box.value
-        elif isinstance(box, BoxPtr):
-            self.keepalives.append(box.value)
-            return self.cast_gcref_to_int(box.value)
-        elif isinstance(box, ConstPtr): 
-            self.keepalives.append(box.value)
-            return self.cast_gcref_to_int(box.value)
-        elif isinstance(box, ConstAddr):
-            return self.cast_adr_to_int(box.value)
-        else:
-            raise ValueError('get_box_value_as_int, wrong arg')
-
     def _new_box(self, ptr):
         if ptr:
             return BoxPtr(lltype.nullptr(llmemory.GCREF.TO))
@@ -257,7 +239,7 @@ class CPU386(object):
             return self.generated_mps[calldescr]
         except KeyError:
             pass
-        args = [BoxInt(0) for i in range(argnum + 1)]
+        args = [BoxInt() for i in range(argnum + 1)]
         result = self._new_box(ptr)
         operations = [
             ResOperation(rop.CALL, args, result, calldescr),
@@ -271,31 +253,27 @@ class CPU386(object):
         self.generated_mps[calldescr] = loop
         return loop
 
-    def execute_operations(self, loop, valueboxes):
+    def execute_operations(self, loop):
         func = self.get_bootstrap_code(loop)
-        # turn all the values into integers
-        TP = rffi.CArray(lltype.Signed)
-        oldindex = self.keepalives_index
-        values_as_int = lltype.malloc(TP, len(valueboxes), flavor='raw')
-        for i in range(len(valueboxes)):
-            box = valueboxes[i]
-            v = self.get_box_value_as_int(box)
-            values_as_int[i] = v
         # debug info
         #if self.debug and not we_are_translated():
         #    values_repr = ", ".join([str(values_as_int[i]) for i in
         #                             range(len(valueboxes))])
         #    llop.debug_print(lltype.Void, 'exec:', name, values_repr)
-        self.assembler.log_call(valueboxes)
-        self.keepalives_index = len(self.keepalives)
-        guard_index = self.execute_call(loop, func, values_as_int)
+        #self.assembler.log_call(valueboxes) --- XXX
+        guard_index = self.execute_call(loop, func)
         self._guard_index = guard_index # for tests
-        keepalive_until_here(valueboxes)
-        self.keepalives_index = oldindex
-        del self.keepalives[oldindex:]
         op = self._guard_list[guard_index]
         #print "Leaving at: %d" % self.assembler.fail_boxes[len(op.args)]
         return op
+
+    def set_future_value_int(self, index, intvalue):
+        self.assembler.fail_boxes[index] = intvalue
+
+    def set_future_value_ptr(self, index, ptrvalue):
+        self.keepalives.append(ptrvalue)
+        intvalue = self.cast_gcref_to_int(ptrvalue)
+        self.assembler.fail_boxes[index] = intvalue
 
     def get_latest_value_int(self, index):
         return self.assembler.fail_boxes[index]
@@ -304,7 +282,7 @@ class CPU386(object):
         intvalue = self.assembler.fail_boxes[index]
         return self.cast_int_to_gcref(intvalue)
 
-    def execute_call(self, loop, func, values_as_int):
+    def execute_call(self, loop, func):
         # help flow objspace
         prev_interpreter = None
         if not self.translate_support_code:
@@ -314,12 +292,12 @@ class CPU386(object):
         try:
             self.caught_exception = None
             #print "Entering: %d" % rffi.cast(lltype.Signed, func)
-            res = func(values_as_int)
+            res = func()
+            del self.keepalives[:]
             self.reraise_caught_exception()
         finally:
             if not self.translate_support_code:
                 LLInterpreter.current_interpreter = prev_interpreter
-            lltype.free(values_as_int, flavor='raw')
         return res
 
     def reraise_caught_exception(self):
@@ -339,21 +317,21 @@ class CPU386(object):
         self._guard_list.append(guard_op)
         return index
 
-    def convert_box_to_int(self, valuebox):
-        if isinstance(valuebox, ConstInt):
-            return valuebox.value
-        elif isinstance(valuebox, BoxInt):
-            return valuebox.value
-        elif isinstance(valuebox, BoxPtr):
-            x = self.cast_gcref_to_int(valuebox.value)
-            self.keepalives.append(valuebox.value)
-            return x
-        elif isinstance(valuebox, ConstPtr):
-            x = self.cast_gcref_to_int(valuebox.value)
-            self.keepalives.append(valuebox.value)
-            return x
-        else:
-            raise ValueError(valuebox.type)
+#    def convert_box_to_int(self, valuebox):
+#        if isinstance(valuebox, ConstInt):
+#            return valuebox.value
+#        elif isinstance(valuebox, BoxInt):
+#            return valuebox.value
+#        elif isinstance(valuebox, BoxPtr):
+#            x = self.cast_gcref_to_int(valuebox.value)
+#            self.keepalives.append(valuebox.value)
+#            return x
+#        elif isinstance(valuebox, ConstPtr):
+#            x = self.cast_gcref_to_int(valuebox.value)
+#            self.keepalives.append(valuebox.value)
+#            return x
+#        else:
+#            raise ValueError(valuebox.type)
 
 #     def getvaluebox(self, frameadr, guard_op, argindex):
 #         # XXX that's plain stupid, do we care about the return value???
@@ -558,7 +536,8 @@ class CPU386(object):
         num_args, size, ptr = self.unpack_calldescr(calldescr)
         assert isinstance(calldescr, ConstDescr3)
         loop = self._get_loop_for_call(num_args, calldescr, ptr)
-        self.execute_operations(loop, args)
+        history.set_future_values(self, args)
+        self.execute_operations(loop)
         # Note: if an exception is set, the rest of the code does a bit of
         # nonsense but nothing wrong (the return value should be ignored)
         if size == 0:

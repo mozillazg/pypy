@@ -1105,19 +1105,7 @@ class MetaInterp(object):
         num_green_args = self.staticdata.num_green_args
         residual_args = self.get_residual_args(loop,
                                                gmp.argboxes[num_green_args:])
-        j = 0
-        cpu = self.cpu
-        for box in residual_args:
-            if isinstance(box, BoxInt) or isinstance(box, ConstInt):
-                cpu.set_future_value_int(j, box.getint())
-            elif isinstance(box, BoxPtr) or isinstance(box, ConstPtr):
-                cpu.set_future_value_ptr(j, box.getptr_base())
-            elif cpu.is_oo and (isinstance(box, BoxObj) or
-                                isinstance(box, ConstObj)):
-                cpu.set_future_value_obj(j, box.getobj())
-            else:
-                assert False
-            j += 1
+        history.set_future_values(self.cpu, residual_args)
         return loop
 
     def prepare_resume_from_failure(self, opnum):
