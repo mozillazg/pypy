@@ -1,7 +1,7 @@
 
 import sys
 from pypy.jit.metainterp.history import (BoxInt, Box, BoxPtr, TreeLoop,
-                                         ConstInt, ConstPtr, ReturnBoxes)
+                                         ConstInt, ConstPtr)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
 from pypy.jit.metainterp.executor import execute
@@ -18,10 +18,6 @@ T = lltype.GcStruct('T', ('parent', S),
 U = lltype.GcStruct('U', ('parent', T),
                          ('next', lltype.Ptr(S)))
 
-class FakeMetaInterpSd(object):
-    returnboxes = ReturnBoxes()
-
-
 class Runner(object):
         
     def execute_operation(self, opname, valueboxes, result_type, descr=None):
@@ -33,10 +29,8 @@ class Runner(object):
             self.guard_failed = False
         else:
             self.guard_failed = True
-        if result_type == 'int':
-            return FakeMetaInterpSd.returnboxes._returnboxes_int[0]
-        elif result_type == 'ptr':
-            return FakeMetaInterpSd.returnboxes._returnboxes_ptr[0]
+        if result_type != 'void':
+            return res.args[0]
 
     def get_compiled_single_operation(self, opnum, result_type, valueboxes,
                                       descr):
@@ -161,7 +155,7 @@ class BaseBackendTest(Runner):
 
     def test_ovf_operations(self):
         minint = -sys.maxint-1
-        boom = 'boom'
+        boom = 666
         for opnum, testcases in [
             (rop.INT_ADD_OVF, [(10, -2, 8),
                                (-1, minint, boom),
@@ -206,19 +200,15 @@ class BaseBackendTest(Runner):
                 ]
             if opnum in (rop.INT_NEG_OVF, rop.INT_ABS_OVF):
                 del ops[0].args[1]
-            ops[1].suboperations = [ResOperation(rop.FAIL, [], None)]
+            ops[1].suboperations = [ResOperation(rop.FAIL, [ConstInt(boom)],
+                                                 None)]
             loop = TreeLoop('name')
             loop.operations = ops
             loop.inputargs = [v1, v2]
             self.cpu.compile_operations(loop)
             for x, y, z in testcases:
                 op = self.cpu.execute_operations(loop, [BoxInt(x), BoxInt(y)])
-                if z == boom:
-                    assert op is ops[1].suboperations[-1]
-                else:
-                    assert op is ops[-1]
-                    box = FakeMetaInterpSd.returnboxes._returnboxes_int[0]
-                    assert box.value == z
+                assert op.args[0].value == z
             # ----------
             # the same thing but with the exception path reversed
 ##            v1 = BoxInt(testcases[0][0])

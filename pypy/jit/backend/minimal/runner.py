@@ -3,13 +3,12 @@ from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.debug import ll_assert, debug_print
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr, rclass
 from pypy.jit.metainterp.history import AbstractDescr, Box, BoxInt, BoxPtr
-from pypy.jit.metainterp import executor, history
+from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.resoperation import rop, opname
-from pypy.jit.backend.model import AbstractCPU
 
 DEBUG = False
 
-class CPU(AbstractCPU):
+class CPU(object):
     is_oo = False    # XXX for now
 
     def __init__(self, rtyper, stats, translate_support_code=False,
@@ -45,6 +44,7 @@ class CPU(AbstractCPU):
             print "execute_operations: starting", loop
             for box in valueboxes:
                 print "\t", box, "\t", box.get_()
+        valueboxes = [box.clonebox() for box in valueboxes]
         self.clear_exception()
         self._guard_failed = False
         while True:
@@ -108,23 +108,14 @@ class CPU(AbstractCPU):
 
         if DEBUG:
             print "execute_operations: leaving", loop
-        returnboxes = self.metainterp_sd.returnboxes
-        i_int = 0
-        i_ptr = 0
         for i in range(len(op.args)):
             box = op.args[i]
             if isinstance(box, BoxInt):
                 value = env[box].getint()
-                dstbox = returnboxes.get_int_box(i_int)
-                i_int += 1
-                dstbox.changevalue_int(value)
+                box.changevalue_int(value)
             elif isinstance(box, BoxPtr):
                 value = env[box].getptr_base()
-                dstbox = returnboxes.get_ptr_box(i_ptr)
-                i_ptr += 1
-                dstbox.changevalue_ptr(value)
-            else:
-                assert isinstance(box, history.Const)
+                box.changevalue_ptr(value)
             if DEBUG:
                 print "\t", box, "\t", box.get_()
         return op

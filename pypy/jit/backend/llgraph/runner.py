@@ -180,27 +180,17 @@ class BaseCPU(model.AbstractCPU):
         # (in a real backend, this should be done by the FAIL operation
         # itself, not here)
         op = self.fail_ops[fail_index]
-        returnboxes = self.metainterp_sd.returnboxes
-        i_int = 0
-        i_ptr = 0
-        i_obj = 0
         for i in range(len(op.args)):
             box = op.args[i]
             if isinstance(box, history.BoxInt):
                 value = llimpl.frame_int_getvalue(frame, i)
-                dstbox = returnboxes.get_int_box(i_int)
-                i_int += 1
-                dstbox.changevalue_int(value)
+                box.changevalue_int(value)
             elif isinstance(box, history.BoxPtr):
                 value = llimpl.frame_ptr_getvalue(frame, i)
-                dstbox = returnboxes.get_ptr_box(i_ptr)
-                i_ptr += 1
-                dstbox.changevalue_ptr(value)
+                box.changevalue_ptr(value)
             elif self.is_oo and isinstance(box, history.BoxObj):
                 value = llimpl.frame_ptr_getvalue(frame, i)
-                dstbox = returnboxes.get_obj_box(i_obj)
-                i_obj += 1
-                dstbox.changevalue_obj(value)
+                box.changevalue_obj(value)
             elif isinstance(box, history.ConstInt):
                 pass
             elif isinstance(box, history.ConstPtr):

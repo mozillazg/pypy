@@ -102,7 +102,7 @@ class AbstractValue(object):
         raise NotImplementedError
 
 class AbstractDescr(AbstractValue):
-    def handle_fail_op(self, metainterp_sd, fail_op):
+    def handle_fail_op(self, metainterp, fail_op):
         raise NotImplementedError
     def compile_and_attach(self, metainterp, new_loop):
         raise NotImplementedError
@@ -517,28 +517,6 @@ def _list_all_operations(result, operations, omit_fails=True):
     for op in operations:
         if op.is_guard():
             _list_all_operations(result, op.suboperations, omit_fails)
-
-
-class ReturnBoxes(object):
-    def __init__(self):
-        self._returnboxes_int = []     # private
-        self._returnboxes_ptr = []
-        self._returnboxes_obj = []
-
-    def get_int_box(self, i):
-        while len(self._returnboxes_int) <= i:
-            self._returnboxes_int.append(BoxInt())
-        return self._returnboxes_int[i]
-
-    def get_ptr_box(self, i):
-        while len(self._returnboxes_ptr) <= i:
-            self._returnboxes_ptr.append(BoxPtr())
-        return self._returnboxes_ptr[i]
-
-    def get_obj_box(self, i):
-        while len(self._returnboxes_obj) <= i:
-            self._returnboxes_obj.append(BoxObj())
-        return self._returnboxes_obj[i]
 
 # ____________________________________________________________
 
