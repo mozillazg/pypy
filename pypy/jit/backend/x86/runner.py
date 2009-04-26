@@ -11,7 +11,7 @@ from pypy.rpython.lltypesystem import rclass
 from pypy.jit.metainterp import history, codewriter
 from pypy.jit.metainterp.history import (ResOperation, Box, Const,
      ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr, AbstractDescr)
-from pypy.jit.backend.x86.assembler import Assembler386, WORD
+from pypy.jit.backend.x86.assembler import Assembler386, WORD, MAX_FAIL_BOXES
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.backend.x86.support import gc_malloc_fnaddr
@@ -177,8 +177,8 @@ class CPU386(object):
 #                 self.caught_exception = e
 #             return self.assembler.generic_return_addr
 
-    def set_meta_interp(self, metainterp):
-        self.metainterp = metainterp
+#    def set_meta_interp(self, metainterp):
+#        self.metainterp = metainterp
 
     def get_exception(self):
         self.assembler.make_sure_mc_exists()
@@ -268,9 +268,11 @@ class CPU386(object):
         return op
 
     def set_future_value_int(self, index, intvalue):
+        assert index < MAX_FAIL_BOXES, "overflow!"
         self.assembler.fail_boxes[index] = intvalue
 
     def set_future_value_ptr(self, index, ptrvalue):
+        assert index < MAX_FAIL_BOXES, "overflow!"
         self.keepalives.append(ptrvalue)
         intvalue = self.cast_gcref_to_int(ptrvalue)
         self.assembler.fail_boxes[index] = intvalue

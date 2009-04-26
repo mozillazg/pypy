@@ -15,9 +15,6 @@ import sys
 class FakeStats(object):
     pass
 
-class FakeMetaInterp(object):
-    pass
-
 # ____________________________________________________________
 
 class TestX86(BaseBackendTest):
@@ -27,7 +24,6 @@ class TestX86(BaseBackendTest):
     
     def setup_class(cls):
         cls.cpu = CPU(rtyper=None, stats=FakeStats())
-        cls.cpu.set_meta_interp(FakeMetaInterp())
 
     def test_int_binary_ops(self):
         for op, args, res in [
@@ -69,7 +65,6 @@ class TestX86(BaseBackendTest):
 
     def test_execute_operations_in_env(self):
         cpu = self.cpu
-        cpu.set_meta_interp(FakeMetaInterp())
         x = BoxInt(123)
         y = BoxInt(456)
         z = BoxInt(579)
