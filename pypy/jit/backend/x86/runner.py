@@ -247,12 +247,6 @@ class CPU386(object):
         else:
             raise ValueError('get_box_value_as_int, wrong arg')
 
-    def set_value_of_box(self, box, index, fail_boxes):
-        if isinstance(box, BoxInt):
-            box.value = fail_boxes[index]
-        elif isinstance(box, BoxPtr):
-            box.value = self.cast_int_to_gcref(fail_boxes[index])
-
     def _new_box(self, ptr):
         if ptr:
             return BoxPtr(lltype.nullptr(llmemory.GCREF.TO))
@@ -260,12 +254,7 @@ class CPU386(object):
     
     def _get_loop_for_call(self, argnum, calldescr, ptr):
         try:
-            loop = self.generated_mps[calldescr]
-            box = self._new_box(ptr)
-            loop.operations[0].result = box
-            loop.operations[-1].args[0] = box
-            loop.operations[1].suboperations[0].args[0] = box
-            return loop
+            return self.generated_mps[calldescr]
         except KeyError:
             pass
         args = [BoxInt(0) for i in range(argnum + 1)]
@@ -306,10 +295,14 @@ class CPU386(object):
         del self.keepalives[oldindex:]
         op = self._guard_list[guard_index]
         #print "Leaving at: %d" % self.assembler.fail_boxes[len(op.args)]
-        for i in range(len(op.args)):
-            box = op.args[i]
-            self.set_value_of_box(box, i, self.assembler.fail_boxes)
         return op
+
+    def get_latest_value_int(self, index):
+        return self.assembler.fail_boxes[index]
+
+    def get_latest_value_ptr(self, index):
+        intvalue = self.assembler.fail_boxes[index]
+        return self.cast_int_to_gcref(intvalue)
 
     def execute_call(self, loop, func, values_as_int):
         # help flow objspace
@@ -568,7 +561,10 @@ class CPU386(object):
         op = self.execute_operations(loop, args)
         if size == 0:
             return None
-        return op.args[0]
+        elif ptr:
+            return BoxPtr(self.get_latest_value_ptr(0))
+        else:
+            return BoxInt(self.get_latest_value_int(0))
 
     def do_cast_ptr_to_int(self, args, descr=None):
         return BoxInt(self.cast_gcref_to_int(args[0].getptr_base()))
