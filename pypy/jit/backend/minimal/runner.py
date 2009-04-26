@@ -3,7 +3,7 @@ from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.debug import ll_assert, debug_print
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr, rclass
 from pypy.jit.metainterp.history import AbstractDescr, Box, BoxInt, BoxPtr
-from pypy.jit.metainterp import executor
+from pypy.jit.metainterp import executor, history
 from pypy.jit.metainterp.resoperation import rop, opname
 
 DEBUG = False
@@ -36,15 +36,14 @@ class CPU(object):
                                             immortal=True)
         self._ovf_error_inst = ll_inst
 
-    def compile_operations(self, loop):
-        pass
+    def compile_operations(self, loop, returnboxes):
+        loop._returnboxes = returnboxes
 
     def execute_operations(self, loop, valueboxes):
         if DEBUG:
             print "execute_operations: starting", loop
             for box in valueboxes:
                 print "\t", box, "\t", box.get_()
-        valueboxes = [box.clonebox() for box in valueboxes]
         self.clear_exception()
         self._guard_failed = False
         while True:
@@ -108,14 +107,23 @@ class CPU(object):
 
         if DEBUG:
             print "execute_operations: leaving", loop
+        returnboxes = loop._returnboxes
+        i_int = 0
+        i_ptr = 0
         for i in range(len(op.args)):
             box = op.args[i]
             if isinstance(box, BoxInt):
                 value = env[box].getint()
-                box.changevalue_int(value)
+                dstbox = returnboxes.get_int_box(i_int)
+                i_int += 1
+                dstbox.changevalue_int(value)
             elif isinstance(box, BoxPtr):
                 value = env[box].getptr_base()
-                box.changevalue_ptr(value)
+                dstbox = returnboxes.get_ptr_box(i_ptr)
+                i_ptr += 1
+                dstbox.changevalue_ptr(value)
+            else:
+                assert isinstance(box, history.Const)
             if DEBUG:
                 print "\t", box, "\t", box.get_()
         return op
