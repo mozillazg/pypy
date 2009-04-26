@@ -156,7 +156,7 @@ testmap = [
     RegrTest('test_bz2.py', usemodules='bz2'),
     RegrTest('test_calendar.py'),
     RegrTest('test_call.py', core=True),
-    RegrTest('test_capi.py', skip=True),
+    RegrTest('test_capi.py', skip="not applicable"),
     RegrTest('test_cd.py', skip=True),
     RegrTest('test_cfgparser.py'),
 
