@@ -31,7 +31,11 @@ Papers
   D. Ancona, C.F. Bolz, A. Cuni and A. Rigo
 
 * `EU Reports`_: a list of all the reports we produced until 2007 for the
-  European Union sponsored part of PyPy.
+  European Union sponsored part of PyPy.  Notably, it includes:
+
+* `Core Object Optimization Results`_, PyPy Team
+
+* `Compiling Dynamic Language Implementations`_, PyPy Team
 
 
 *Other research using PyPy (as far as we know it):*
@@ -61,6 +65,8 @@ Papers
 .. _`Representation-Based Just-in-Time Specialization and the Psyco Prototype for Python`: http://psyco.sourceforge.net/psyco-pepm-a.ps.gz
 .. _`Back to the Future in One Week -- Implementing a Smalltalk VM in PyPy`: http://dx.doi.org/10.1007/978-3-540-89275-5_7
 .. _`Automatic generation of JIT compilers for dynamic languages in .NET`: http://codespeak.net/svn/pypy/extradoc/talk/ecoop2009/main.pdf
+.. _`Core Object Optimization Results`: http://codespeak.net/svn/pypy/extradoc/eu-report/D06.1_Core_Optimizations-2007-04-30.pdf
+.. _`Compiling Dynamic Language Implementations`: http://codespeak.net/pypy/extradoc/eu-report/D05.1_Publish_on_translating_a_very-high-level_description.pdf
 
 
 Talks and Presentations 
