@@ -832,6 +832,7 @@ class MetaInterpStaticData(object):
             self.ts = typesystem.oohelper
         else:
             self.ts = typesystem.llhelper
+        cpu.set_meta_interp_static_data(self)
 
     def _freeze_(self):
         return True

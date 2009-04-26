@@ -1,17 +1,19 @@
 class AbstractCPU(object):
 
-    def compile_operations(self, loop, returnboxes):
+    def set_meta_interp_static_data(self, metainterp_sd):
+        self.metainterp_sd = metainterp_sd
+
+    def compile_operations(self, loop):
         """Assemble the given list of operations.
         loop is of type history.TreeLoop.
-        returnboxes is of type history.ReturnBoxes.
         """
         raise NotImplementedError
 
     def execute_operations(self, loop, valueboxes):
         """Calls the assembler generated for the given loop.
         Stops when encountering an operation of type rop.FAIL.
-        Returns the operation, after having saved the current
-        values into the boxes listed by returnboxes.
+        Returns the FAIL operation, after having saved the current
+        values into the boxes listed by 'metainterp_sd.returnboxes'.
         """
         raise NotImplementedError
 

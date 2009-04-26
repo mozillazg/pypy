@@ -5,10 +5,11 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr, rclass
 from pypy.jit.metainterp.history import AbstractDescr, Box, BoxInt, BoxPtr
 from pypy.jit.metainterp import executor, history
 from pypy.jit.metainterp.resoperation import rop, opname
+from pypy.jit.backend.model import AbstractCPU
 
 DEBUG = False
 
-class CPU(object):
+class CPU(AbstractCPU):
     is_oo = False    # XXX for now
 
     def __init__(self, rtyper, stats, translate_support_code=False,
@@ -36,8 +37,8 @@ class CPU(object):
                                             immortal=True)
         self._ovf_error_inst = ll_inst
 
-    def compile_operations(self, loop, returnboxes):
-        loop._returnboxes = returnboxes
+    def compile_operations(self, loop):
+        pass
 
     def execute_operations(self, loop, valueboxes):
         if DEBUG:
@@ -107,7 +108,7 @@ class CPU(object):
 
         if DEBUG:
             print "execute_operations: leaving", loop
-        returnboxes = loop._returnboxes
+        returnboxes = self.metainterp_sd.returnboxes
         i_int = 0
         i_ptr = 0
         for i in range(len(op.args)):

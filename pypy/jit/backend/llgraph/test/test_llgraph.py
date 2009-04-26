@@ -7,7 +7,7 @@ from pypy.jit.metainterp.history import BoxInt, BoxPtr, Const, ConstInt,\
      TreeLoop
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.executor import execute
-from pypy.jit.backend.test.runner import BaseBackendTest
+from pypy.jit.backend.test.runner import BaseBackendTest, FakeMetaInterpSd
 
 NODE = lltype.GcForwardReference()
 NODE.become(lltype.GcStruct('NODE', ('value', lltype.Signed),
@@ -20,6 +20,7 @@ class LLGraphTest(BaseBackendTest):
 
     def setup_class(self):
         self.cpu = self.cpu_type(None)
+        self.cpu.set_meta_interp_static_data(FakeMetaInterpSd())
 
     def eval_llinterp(self, runme, *args, **kwds):
         expected_class = kwds.pop('expected_class', None)
