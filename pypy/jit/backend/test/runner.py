@@ -29,8 +29,10 @@ class Runner(object):
             self.guard_failed = False
         else:
             self.guard_failed = True
-        if result_type != 'void':
-            return res.args[0]
+        if result_type == 'int':
+            return BoxInt(self.cpu.get_latest_value_int(0))
+        elif result_type == 'ptr':
+            return BoxPtr(self.cpu.get_latest_value_ptr(0))
 
     def get_compiled_single_operation(self, opnum, result_type, valueboxes,
                                       descr):

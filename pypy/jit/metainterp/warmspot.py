@@ -270,9 +270,9 @@ class WarmRunnerDesc:
         #               except ContinueRunningNormally, e:
         #                   *args = *e.new_args
         #               except DoneWithThisFrame, e:
-        #                   return e.result
+        #                   return e.return
         #               except ExitFrameWithException, e:
-        #                   raise e.type, e.value
+        #                   raise Exception, e.value
         #
         #       def portal(*args):
         #           while 1:
@@ -288,17 +288,37 @@ class WarmRunnerDesc:
         portal_ptr = self.ts.functionptr(PORTALFUNC, 'portal',
                                          graph = portalgraph)
 
-        class DoneWithThisFrame(JitException):
-            def __init__(self, resultbox):
-                self.resultbox = resultbox
+        class DoneWithThisFrameVoid(JitException):
             def __str__(self):
-                return 'DoneWithThisFrame(%s)' % (self.resultbox,)
+                return 'DoneWithThisFrameVoid()'
+
+        class DoneWithThisFrameInt(JitException):
+            def __init__(self, result):
+                assert lltype.typeOf(result) is lltype.Signed
+                self.result = result
+            def __str__(self):
+                return 'DoneWithThisFrameInt(%s)' % (self.result,)
+
+        class DoneWithThisFramePtr(JitException):
+            def __init__(self, result):
+                assert lltype.typeOf(result) == llmemory.GCREF
+                self.result = result
+            def __str__(self):
+                return 'DoneWithThisFramePtr(%s)' % (self.result,)
+
+        class DoneWithThisFrameObj(JitException):
+            def __init__(self, result):
+                assert ootype.typeOf(result) == ootype.Object
+                self.result = result
+            def __str__(self):
+                return 'DoneWithThisFrameObj(%s)' % (self.result,)
 
         class ExitFrameWithException(JitException):
-            def __init__(self, valuebox):
-                self.valuebox = valuebox
+            def __init__(self, value):
+                assert lltype.typeOf(value) == llmemory.GCREF
+                self.value = value
             def __str__(self):
-                return 'ExitFrameWithException(%s)' % (self.valuebox,)
+                return 'ExitFrameWithException(%s)' % (self.value,)
 
         class ContinueRunningNormally(JitException):
             def __init__(self, args):
@@ -308,15 +328,22 @@ class WarmRunnerDesc:
                 return 'ContinueRunningNormally(%s)' % (
                     ', '.join(map(str, self.args)),)
 
-        self.DoneWithThisFrame = DoneWithThisFrame
+        self.DoneWithThisFrameVoid = DoneWithThisFrameVoid
+        self.DoneWithThisFrameInt = DoneWithThisFrameInt
+        self.DoneWithThisFramePtr = DoneWithThisFramePtr
+        self.DoneWithThisFrameObj = DoneWithThisFrameObj
         self.ExitFrameWithException = ExitFrameWithException
         self.ContinueRunningNormally = ContinueRunningNormally
-        self.metainterp_sd.DoneWithThisFrame = DoneWithThisFrame
+        self.metainterp_sd.DoneWithThisFrameVoid = DoneWithThisFrameVoid
+        self.metainterp_sd.DoneWithThisFrameInt = DoneWithThisFrameInt
+        self.metainterp_sd.DoneWithThisFramePtr = DoneWithThisFramePtr
+        self.metainterp_sd.DoneWithThisFrameObj = DoneWithThisFrameObj
         self.metainterp_sd.ExitFrameWithException = ExitFrameWithException
         self.metainterp_sd.ContinueRunningNormally = ContinueRunningNormally
         rtyper = self.translator.rtyper
         portalfunc_ARGS = unrolling_iterable(list(enumerate(PORTALFUNC.ARGS)))
         RESULT = PORTALFUNC.RESULT
+        result_kind = history.getkind(RESULT)
 
         def ll_portal_runner(*args):
             while 1:
@@ -328,10 +355,21 @@ class WarmRunnerDesc:
                     for i, ARG in portalfunc_ARGS:
                         v = unwrap(ARG, e.args[i])
                         args = args + (v,)
-                except DoneWithThisFrame, e:
-                    return unwrap(RESULT, e.resultbox)
+                except DoneWithThisFrameVoid:
+                    assert result_kind == 'void'
+                    return
+                except DoneWithThisFrameInt, e:
+                    assert result_kind == 'int'
+                    return lltype.cast_primitive(RESULT, e.result)
+                except DoneWithThisFramePtr, e:
+                    assert result_kind == 'ptr'
+                    return lltype.cast_opaque_ptr(RESULT, e.result)
+                except DoneWithThisFrameObj, e:
+                    assert result_kind == 'obj'
+                    return ootype.cast_from_object(RESULT, e.result)
                 except ExitFrameWithException, e:
-                    value = e.valuebox.getptr(lltype.Ptr(rclass.OBJECT))
+                    value = lltype.cast_opaque_ptr(lltype.Ptr(rclass.OBJECT),
+                                                   e.value)
                     if not we_are_translated():
                         raise LLException(value.typeptr, value)
                     else:
@@ -512,10 +550,8 @@ def make_state_class(warmrunnerdesc):
                     loop = cell.bridge
                     boxes = cell.fill_boxes(*args[num_green_args:])
             # ---------- execute assembler ----------
-            warmrunnerdesc.metainterp_sd.globaldata.save_recursive_call()
             while True:     # until interrupted by an exception
                 metainterp_sd = warmrunnerdesc.metainterp_sd
-                metainterp_sd.globaldata.assert_empty()
                 fail_op = metainterp_sd.cpu.execute_operations(loop, boxes)
                 loop, boxes = fail_op.descr.handle_fail_op(metainterp_sd,
                                                            fail_op)

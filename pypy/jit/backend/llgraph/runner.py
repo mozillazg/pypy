@@ -176,28 +176,20 @@ class BaseCPU(model.AbstractCPU):
                 raise Exception("bad box in valueboxes: %r" % (box,))
         # run the loop
         fail_index = llimpl.frame_execute(frame)
-        # we hit a FAIL operation.  Fish for the values
-        # (in a real backend, this should be done by the FAIL operation
-        # itself, not here)
-        op = self.fail_ops[fail_index]
-        for i in range(len(op.args)):
-            box = op.args[i]
-            if isinstance(box, history.BoxInt):
-                value = llimpl.frame_int_getvalue(frame, i)
-                box.changevalue_int(value)
-            elif isinstance(box, history.BoxPtr):
-                value = llimpl.frame_ptr_getvalue(frame, i)
-                box.changevalue_ptr(value)
-            elif self.is_oo and isinstance(box, history.BoxObj):
-                value = llimpl.frame_ptr_getvalue(frame, i)
-                box.changevalue_obj(value)
-            elif isinstance(box, history.ConstInt):
-                pass
-            elif isinstance(box, history.ConstPtr):
-                pass
-            else:
-                raise Exception("bad box in 'fail': %r" % (box,))
-        return op
+        # we hit a FAIL operation.
+        self.latest_frame = frame
+        return self.fail_ops[fail_index]
+
+    def get_latest_value_int(self, index):
+        return llimpl.frame_int_getvalue(self.latest_frame, index)
+
+    def get_latest_value_ptr(self, index):
+        return llimpl.frame_ptr_getvalue(self.latest_frame, index)
+
+    def get_latest_value_obj(self, index):
+        return llimpl.frame_ptr_getvalue(self.latest_frame, index)
+
+    # ----------
 
     def get_exception(self):
         return self.cast_adr_to_int(llimpl.get_exception())

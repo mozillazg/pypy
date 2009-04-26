@@ -529,7 +529,11 @@ class MIFrame(object):
     def opimpl_indirect_call(self, pc, indirectcallset, box, varargs):
         box = self.implement_guard_value(pc, box)
         cpu = self.metainterp.cpu
-        jitcode = indirectcallset.bytecode_for_address(box.getaddr(cpu))
+        if cpu.is_oo:
+            key = box.getobj()
+        else:
+            key = box.getaddr(cpu)
+        jitcode = indirectcallset.bytecode_for_address(key)
         f = self.metainterp.newframe(jitcode)
         f.setup_call(varargs)
         return True
@@ -806,6 +810,19 @@ class MetaInterpStaticData(object):
         self.options = options
         self.globaldata = MetaInterpGlobalData()
 
+        RESULT = portal_graph.getreturnvar().concretetype
+        kind = history.getkind(RESULT)
+        if kind == 'void':
+            self.result_type = history.VOID
+        elif kind == 'int':
+            self.result_type = history.INT
+        elif kind == 'ptr':
+            self.result_type = history.PTR
+        elif kind == 'obj':
+            self.result_type = history.OBJ
+        else:
+            assert False
+
         self.opcode_implementations = []
         self.opcode_names = []
         self.opname_to_index = {}
@@ -868,27 +885,9 @@ class MetaInterpStaticData(object):
 
 class MetaInterpGlobalData(object):
     def __init__(self):
-        self.metainterp_doing_call = None
         self._debug_history = []
         self.compiled_merge_points = r_dict(history.mp_eq, history.mp_hash)
                  # { greenkey: list-of-MergePoints }
-
-    def set_metainterp_doing_call(self, metainterp):
-        self.save_recursive_call()
-        self.metainterp_doing_call = metainterp
-
-    def unset_metainterp_doing_call(self, metainterp):
-        if self.metainterp_doing_call != metainterp:
-            metainterp._restore_recursive_call()
-        self.metainterp_doing_call = None
-
-    def save_recursive_call(self):
-        if self.metainterp_doing_call is not None:
-            self.metainterp_doing_call._save_recursive_call()
-            self.metainterp_doing_call = None
-
-    def assert_empty(self):
-        assert self.metainterp_doing_call is None
 
 # ____________________________________________________________
 
@@ -917,7 +916,18 @@ class MetaInterp(object):
         else:
             if not isinstance(self.history, history.BlackHole):
                 self.compile_done_with_this_frame(resultbox)
-            raise self.staticdata.DoneWithThisFrame(resultbox)
+            sd = self.staticdata
+            if sd.result_type == history.VOID:
+                assert resultbox is None
+                raise sd.DoneWithThisFrameVoid
+            elif sd.result_type == history.INT:
+                raise sd.DoneWithThisFrameInt(resultbox.getint())
+            elif sd.result_type == history.PTR:
+                raise sd.DoneWithThisFramePtr(resultbox.getptr_base())
+            elif self.cpu.is_oo and sd.result_type == history.OBJ:
+                raise sd.DoneWithThisFrameObj(resultbox.getobj())
+            else:
+                assert False
 
     def finishframe_exception(self, exceptionbox, excvaluebox):
         if we_are_translated():   # detect and propagate AssertionErrors early
@@ -939,7 +949,7 @@ class MetaInterp(object):
             self.framestack.pop()
         if not isinstance(self.history, history.BlackHole):
             self.compile_exit_frame_with_exception(excvaluebox)
-        raise self.staticdata.ExitFrameWithException(excvaluebox)
+        raise self.staticdata.ExitFrameWithException(excvaluebox.getptr_base())
 
     def create_empty_history(self):
         self.history = history.History(self.cpu)
@@ -954,9 +964,6 @@ class MetaInterp(object):
 
     @specialize.arg(1)
     def execute_and_record(self, opnum, argboxes, descr=None):
-        # detect recursions when using rop.CALL
-        if opnum == rop.CALL:
-            self.staticdata.globaldata.set_metainterp_doing_call(self)
         # execute the operation first
         history.check_descr(descr)
         resbox = executor.execute(self.cpu, opnum, argboxes, descr)
@@ -972,81 +979,10 @@ class MetaInterp(object):
                 resbox = resbox.nonconstbox()    # ensure it is a Box
         else:
             assert resbox is None or isinstance(resbox, Box)
-            if opnum == rop.CALL:
-                self.staticdata.globaldata.unset_metainterp_doing_call(self)
         # record the operation if not constant-folded away
         if not canfold:
             self.history.record(opnum, argboxes, resbox, descr)
         return resbox
-
-    def _save_recursive_call(self):
-        # A bit of a hack: we need to be safe against box.changevalue_xxx()
-        # called by cpu.execute_operations(), in case we are recursively
-        # in another MetaInterp.  Temporarily save away the content of the
-        # boxes.
-        log('recursive call to execute_operations()!')
-        saved_env = []
-        framestack = []
-        for f in self.framestack:
-            newenv = []
-            #
-            box = f.exception_box
-            if isinstance(box, Box):
-                saved_env.append(box.clonebox())
-            box = f.exc_value_box
-            if isinstance(box, Box):
-                saved_env.append(box.clonebox())
-            #
-            for box in f.env:
-                if isinstance(box, Box):
-                    saved_env.append(box.clonebox())
-                newenv.append(box)
-            framestack.append(newenv)
-        pseudoframe = instantiate(MIFrame)
-        pseudoframe.env = saved_env
-        pseudoframe._saved_framestack = framestack
-        self.framestack.append(pseudoframe)
-
-    def _restore_recursive_call(self):
-        log('recursion detected, restoring state')
-        if not we_are_translated():
-            assert not hasattr(self.framestack[-1], 'jitcode')
-            assert hasattr(self.framestack[-2], 'jitcode')
-        pseudoframe = self.framestack.pop()
-        saved_env = pseudoframe.env
-        i = 0
-        assert len(pseudoframe._saved_framestack) == len(self.framestack)
-        for j in range(len(self.framestack)):
-            f = self.framestack[j]
-            #
-            box = f.exception_box
-            if isinstance(box, BoxInt):
-                box.changevalue_int(saved_env[i].getint())
-                i += 1
-            box = f.exc_value_box
-            if isinstance(box, BoxPtr):
-                box.changevalue_ptr(saved_env[i].getptr_base())
-                i += 1
-            #
-            pseudoenv = pseudoframe._saved_framestack[j]
-            assert len(f.env) == len(pseudoenv)
-            for k in range(len(f.env)):
-                box = f.env[k]
-                if isinstance(box, BoxInt):
-                    assert isinstance(pseudoenv[k], BoxInt)
-                    box.changevalue_int(saved_env[i].getint())
-                    i += 1
-                elif isinstance(box, BoxPtr):
-                    assert isinstance(pseudoenv[k], BoxPtr)
-                    box.changevalue_ptr(saved_env[i].getptr_base())
-                    i += 1
-                else:
-                    if isinstance(box, ConstInt):
-                        assert box.getint() == pseudoenv[k].getint()
-                    elif isinstance(box, ConstPtr):
-                        assert box.getptr_base() == pseudoenv[k].getptr_base()
-                    assert isinstance(box, Const)
-        assert i == len(saved_env)
 
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
@@ -1204,15 +1140,22 @@ class MetaInterp(object):
 
     def compile_done_with_this_frame(self, exitbox):
         # temporarily put a JUMP to a pseudo-loop
-        if exitbox is not None:
-            exits = [exitbox]
-            if isinstance(exitbox, BoxInt) or isinstance(exitbox, ConstInt):
-                loops = compile.loops_done_with_this_frame_int
-            else:
-                loops = compile.loops_done_with_this_frame_ptr
-        else:
+        sd = self.staticdata
+        if sd.result_type == history.VOID:
+            assert exitbox is None
             exits = []
             loops = compile.loops_done_with_this_frame_void
+        elif sd.result_type == history.INT:
+            exits = [exitbox]
+            loops = compile.loops_done_with_this_frame_int
+        elif sd.result_type == history.PTR:
+            exits = [exitbox]
+            loops = compile.loops_done_with_this_frame_ptr
+        elif sd.cpu.is_oo and sd.result_type == history.OBJ:
+            exits = [exitbox]
+            loops = compile.loops_done_with_this_frame_obj
+        else:
+            assert False
         self.history.record(rop.JUMP, exits, None)
         target_loop = compile.compile_new_bridge(self, loops, self.resumekey)
         assert target_loop is loops[0]
