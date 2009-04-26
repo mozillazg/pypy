@@ -56,8 +56,9 @@ class OperationBuilder:
         print >>s, '            ]'
         print >>s, '    cpu = CPU(None, None)'
         print >>s, '    cpu.compile_operations(loop)'
-        print >>s, '    op = cpu.execute_operations(loop, [%s])' % (
-            ', '.join(['BoxInt(%d)' % v.value for v in self.loop.inputargs]))
+        for i, v in enumerate(self.loop.inputargs):
+            print >>s, '    cpu.set_future_value_int(%d, %d)' % (i, v.value)
+        print >>s, '    op = cpu.execute_operations(loop)'
         if self.should_fail_by is None:
             for i, v in enumerate(self.loop.operations[-1].args):
                 print >>s, '    assert cpu.get_latest_value_int(%d) == %d' % (

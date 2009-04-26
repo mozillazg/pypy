@@ -20,6 +20,7 @@ class CPU(object):
             self.is_oo = False
         self.stats = stats
         self.translate_support_code = translate_support_code
+        self._future_values = []
         self.setup()
 
     def setup(self):
@@ -39,11 +40,12 @@ class CPU(object):
     def compile_operations(self, loop):
         pass
 
-    def execute_operations(self, loop, valueboxes):
+    def execute_operations(self, loop):
         if DEBUG:
             print "execute_operations: starting", loop
             for box in valueboxes:
                 print "\t", box, "\t", box.get_()
+        valueboxes = self._future_values
         self.clear_exception()
         self._guard_failed = False
         while True:
@@ -111,6 +113,16 @@ class CPU(object):
                 print "\t", env[box], "\t", env[box].get_()
         self.latest_fail = op, env
         return op
+
+    def set_future_value_int(self, index, intvalue):
+        del self._future_values[index:]
+        assert len(self._future_values) == index
+        self._future_values.append(BoxInt(intvalue))
+
+    def set_future_value_ptr(self, index, ptrvalue):
+        del self._future_values[index:]
+        assert len(self._future_values) == index
+        self._future_values.append(BoxPtr(ptrvalue))
 
     def get_latest_value_int(self, index):
         op, env = self.latest_fail

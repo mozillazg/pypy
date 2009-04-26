@@ -19,7 +19,8 @@ def test_bug_rshift():
         ]
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
-    cpu.execute_operations(loop, [BoxInt(9)])
+    cpu.set_future_value_int(0, 9)
+    cpu.execute_operations(loop)
     assert cpu.get_latest_value_int(0) == (9 >> 3)
     assert cpu.get_latest_value_int(1) == (~18)
 
@@ -40,7 +41,8 @@ def test_bug_int_is_true_1():
             ]
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
-    cpu.execute_operations(loop, [BoxInt(-10)])
+    cpu.set_future_value_int(0, -10)
+    cpu.execute_operations(loop)
     assert cpu.get_latest_value_int(0) == 0
     assert cpu.get_latest_value_int(1) == -1000
     assert cpu.get_latest_value_int(2) == 1
@@ -135,7 +137,17 @@ def test_bug_0():
             ]
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
-    cpu.execute_operations(loop, [BoxInt(-13), BoxInt(10), BoxInt(10), BoxInt(8), BoxInt(-8), BoxInt(-16), BoxInt(-18), BoxInt(46), BoxInt(-12), BoxInt(26)])
+    cpu.set_future_value_int(0, -13)
+    cpu.set_future_value_int(1, 10)
+    cpu.set_future_value_int(2, 10)
+    cpu.set_future_value_int(3, 8)
+    cpu.set_future_value_int(4, -8)
+    cpu.set_future_value_int(5, -16)
+    cpu.set_future_value_int(6, -18)
+    cpu.set_future_value_int(7, 46)
+    cpu.set_future_value_int(8, -12)
+    cpu.set_future_value_int(9, 26)
+    cpu.execute_operations(loop)
     assert cpu.get_latest_value_int(0) == 0
     assert cpu.get_latest_value_int(1) == 0
     assert cpu.get_latest_value_int(2) == 0
@@ -239,7 +251,17 @@ def test_bug_1():
             ]
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
-    cpu.execute_operations(loop, [BoxInt(17), BoxInt(-20), BoxInt(-6), BoxInt(6), BoxInt(1), BoxInt(13), BoxInt(13), BoxInt(9), BoxInt(49), BoxInt(8)])
+    cpu.set_future_value_int(0, 17)
+    cpu.set_future_value_int(1, -20)
+    cpu.set_future_value_int(2, -6)
+    cpu.set_future_value_int(3, 6)
+    cpu.set_future_value_int(4, 1)
+    cpu.set_future_value_int(5, 13)
+    cpu.set_future_value_int(6, 13)
+    cpu.set_future_value_int(7, 9)
+    cpu.set_future_value_int(8, 49)
+    cpu.set_future_value_int(9, 8)
+    cpu.execute_operations(loop)
     assert cpu.get_latest_value_int(0) == 0
     assert cpu.get_latest_value_int(1) == 8
     assert cpu.get_latest_value_int(2) == 1

@@ -1,7 +1,7 @@
 
 import sys
 from pypy.jit.metainterp.history import (BoxInt, Box, BoxPtr, TreeLoop,
-                                         ConstInt, ConstPtr)
+                                         ConstInt, ConstPtr, BoxObj)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
 from pypy.jit.metainterp.executor import execute
