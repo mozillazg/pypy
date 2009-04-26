@@ -157,7 +157,7 @@ class BaseBackendTest(Runner):
 
     def test_ovf_operations(self):
         minint = -sys.maxint-1
-        boom = 666
+        boom = 'boom'
         for opnum, testcases in [
             (rop.INT_ADD_OVF, [(10, -2, 8),
                                (-1, minint, boom),
@@ -202,7 +202,7 @@ class BaseBackendTest(Runner):
                 ]
             if opnum in (rop.INT_NEG_OVF, rop.INT_ABS_OVF):
                 del ops[0].args[1]
-            ops[1].suboperations = [ResOperation(rop.FAIL, [ConstInt(boom)],
+            ops[1].suboperations = [ResOperation(rop.FAIL, [],
                                                  None)]
             loop = TreeLoop('name')
             loop.operations = ops
@@ -210,7 +210,11 @@ class BaseBackendTest(Runner):
             self.cpu.compile_operations(loop)
             for x, y, z in testcases:
                 op = self.cpu.execute_operations(loop, [BoxInt(x), BoxInt(y)])
-                assert op.args[0].value == z
+                if z == boom:
+                    assert op is ops[1].suboperations[0]
+                else:
+                    assert op is ops[-1]
+                    assert self.cpu.get_latest_value_int(0) == z
             # ----------
             # the same thing but with the exception path reversed
 ##            v1 = BoxInt(testcases[0][0])
