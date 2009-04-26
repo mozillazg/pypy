@@ -30,10 +30,8 @@ def get_metainterp(func, values, CPUClass, type_system, policy,
 
 class JitMixin:
     basic = True
-    #def check_loops(self, expected=None, **check):
-    #    get_stats().check_loops(expected=expected, **check)
     def check_loops(self, expected=None, **check):
-        pass
+        get_stats().check_loops(expected=expected, **check)
     def check_loop_count(self, count):
         """NB. This is a hack; use check_tree_loop_count() or
         check_enter_count() for the real thing.
