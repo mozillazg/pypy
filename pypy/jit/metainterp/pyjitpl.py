@@ -713,6 +713,11 @@ class MIFrame(object):
             else:
                 box = consts[~num]
             self.env.append(box)
+        if DEBUG:
+            values = [box.get_() for box in self.env]
+            log('setup_resume_at_op  %s:%d %s %d' % (self.jitcode.name,
+                                                     self.pc, values,
+                                                     self.exception_target))
 
     def run_one_step(self):
         # Execute the frame forward.  This method contains a loop that leaves
