@@ -919,7 +919,7 @@ class MetaInterp(object):
             sd = self.staticdata
             if sd.result_type == history.VOID:
                 assert resultbox is None
-                raise sd.DoneWithThisFrameVoid
+                raise sd.DoneWithThisFrameVoid()
             elif sd.result_type == history.INT:
                 raise sd.DoneWithThisFrameInt(resultbox.getint())
             elif sd.result_type == history.PTR:
