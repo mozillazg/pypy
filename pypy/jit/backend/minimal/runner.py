@@ -44,7 +44,6 @@ class CPU(object):
             print "execute_operations: starting", loop
             for box in valueboxes:
                 print "\t", box, "\t", box.get_()
-        valueboxes = [box.clonebox() for box in valueboxes]
         self.clear_exception()
         self._guard_failed = False
         while True:
@@ -108,17 +107,18 @@ class CPU(object):
 
         if DEBUG:
             print "execute_operations: leaving", loop
-        for i in range(len(op.args)):
-            box = op.args[i]
-            if isinstance(box, BoxInt):
-                value = env[box].getint()
-                box.changevalue_int(value)
-            elif isinstance(box, BoxPtr):
-                value = env[box].getptr_base()
-                box.changevalue_ptr(value)
-            if DEBUG:
-                print "\t", box, "\t", box.get_()
+            for box in op.args:
+                print "\t", env[box], "\t", env[box].get_()
+        self.latest_fail = op, env
         return op
+
+    def get_latest_value_int(self, index):
+        op, env = self.latest_fail
+        return env[op.args[index]].getint()
+
+    def get_latest_value_ptr(self, index):
+        op, env = self.latest_fail
+        return env[op.args[index]].getptr_base()
 
     def execute_guard(self, opnum, argboxes):
         if opnum == rop.GUARD_TRUE:
