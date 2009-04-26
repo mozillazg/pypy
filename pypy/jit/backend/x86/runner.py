@@ -263,7 +263,7 @@ class CPU386(object):
             ResOperation(rop.CALL, args, result, calldescr),
             ResOperation(rop.GUARD_NO_EXCEPTION, [], None),
             ResOperation(rop.FAIL, [result], None)]
-        operations[1].suboperations = [ResOperation(rop.FAIL, [result], None)]
+        operations[1].suboperations = [ResOperation(rop.FAIL, [], None)]
         loop = history.TreeLoop('call')
         loop.inputargs = args
         loop.operations = operations
@@ -558,7 +558,9 @@ class CPU386(object):
         num_args, size, ptr = self.unpack_calldescr(calldescr)
         assert isinstance(calldescr, ConstDescr3)
         loop = self._get_loop_for_call(num_args, calldescr, ptr)
-        op = self.execute_operations(loop, args)
+        self.execute_operations(loop, args)
+        # Note: if an exception is set, the rest of the code does a bit of
+        # nonsense but nothing wrong (the return value should be ignored)
         if size == 0:
             return None
         elif ptr:
