@@ -20,8 +20,8 @@ def test_bug_rshift():
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
     cpu.execute_operations(loop, [BoxInt(9)])
-    assert v4.value == (9 >> 3)
-    assert v3.value == (~18)
+    assert cpu.get_latest_value_int(0) == (9 >> 3)
+    assert cpu.get_latest_value_int(1) == (~18)
 
 def test_bug_int_is_true_1():
     v1 = BoxInt()
@@ -41,9 +41,9 @@ def test_bug_int_is_true_1():
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
     cpu.execute_operations(loop, [BoxInt(-10)])
-    assert tmp5.value == 1
-    assert v4.value == 0
-    assert v3.value == -1000
+    assert cpu.get_latest_value_int(0) == 0
+    assert cpu.get_latest_value_int(1) == -1000
+    assert cpu.get_latest_value_int(2) == 1
 
 def test_bug_0():
     v1 = BoxInt()
@@ -136,20 +136,20 @@ def test_bug_0():
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
     cpu.execute_operations(loop, [BoxInt(-13), BoxInt(10), BoxInt(10), BoxInt(8), BoxInt(-8), BoxInt(-16), BoxInt(-18), BoxInt(46), BoxInt(-12), BoxInt(26)])
-    assert v40.value == 0
-    assert v36.value == 0
-    assert v37.value == 0
-    assert v31.value == 0
-    assert v16.value == 1
-    assert v34.value == -7
-    assert v35.value == 1
-    assert v23.value == 0
-    assert v22.value == -2
-    assert v29.value == 18
-    assert v14.value == 1
-    assert v39.value == 18
-    assert v30.value == -1
-    assert v38.value == 0
+    assert cpu.get_latest_value_int(0) == 0
+    assert cpu.get_latest_value_int(1) == 0
+    assert cpu.get_latest_value_int(2) == 0
+    assert cpu.get_latest_value_int(3) == 0
+    assert cpu.get_latest_value_int(4) == 1
+    assert cpu.get_latest_value_int(5) == -7
+    assert cpu.get_latest_value_int(6) == 1
+    assert cpu.get_latest_value_int(7) == 0
+    assert cpu.get_latest_value_int(8) == -2
+    assert cpu.get_latest_value_int(9) == 18
+    assert cpu.get_latest_value_int(10) == 1
+    assert cpu.get_latest_value_int(11) == 18
+    assert cpu.get_latest_value_int(12) == -1
+    assert cpu.get_latest_value_int(13) == 0
 
 def test_bug_1():
     v1 = BoxInt()
@@ -240,24 +240,24 @@ def test_bug_1():
     cpu = CPU(None, None)
     cpu.compile_operations(loop)
     cpu.execute_operations(loop, [BoxInt(17), BoxInt(-20), BoxInt(-6), BoxInt(6), BoxInt(1), BoxInt(13), BoxInt(13), BoxInt(9), BoxInt(49), BoxInt(8)])
-    assert v40.value == 0
-    assert v10.value == 8
-    assert v36.value == 1
-    assert v26.value == 131072
-    assert v13.value == 20
-    assert v30.value == 1
-    assert v21.value == 0
-    assert v33.value == -19
-    assert v18.value == 6
-    assert v25.value == 26
-    assert v31.value == 12
-    assert v32.value == 0
-    assert v28.value == 0
-    assert v29.value == 2
-    assert v35.value == 2
-    assert v38.value == 1
-    assert v20.value == 57344
-    assert v39.value == 1
-    assert v34.value == 1
-    assert v23.value == -2147483648
-    assert v37.value == 49
+    assert cpu.get_latest_value_int(0) == 0
+    assert cpu.get_latest_value_int(1) == 8
+    assert cpu.get_latest_value_int(2) == 1
+    assert cpu.get_latest_value_int(3) == 131072
+    assert cpu.get_latest_value_int(4) == 20
+    assert cpu.get_latest_value_int(5) == 1
+    assert cpu.get_latest_value_int(6) == 0
+    assert cpu.get_latest_value_int(7) == -19
+    assert cpu.get_latest_value_int(8) == 6
+    assert cpu.get_latest_value_int(9) == 26
+    assert cpu.get_latest_value_int(10) == 12
+    assert cpu.get_latest_value_int(11) == 0
+    assert cpu.get_latest_value_int(12) == 0
+    assert cpu.get_latest_value_int(13) == 2
+    assert cpu.get_latest_value_int(14) == 2
+    assert cpu.get_latest_value_int(15) == 1
+    assert cpu.get_latest_value_int(16) == 57344
+    assert cpu.get_latest_value_int(17) == 1
+    assert cpu.get_latest_value_int(18) == 1
+    assert cpu.get_latest_value_int(19) == -2147483648
+    assert cpu.get_latest_value_int(20) == 49

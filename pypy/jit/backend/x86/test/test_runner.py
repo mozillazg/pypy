@@ -89,7 +89,8 @@ class TestX86(BaseBackendTest):
         operations[-2].suboperations = [ResOperation(rop.FAIL, [t, z], None)]
         cpu.compile_operations(loop)
         res = self.cpu.execute_operations(loop, [BoxInt(0), BoxInt(10)])
-        assert [arg.value for arg in res.args] == [0, 55]
+        assert self.cpu.get_latest_value_int(0) == 0
+        assert self.cpu.get_latest_value_int(1) == 55
 
     def test_misc_int_ops(self):
         for op, args, res in [
@@ -464,10 +465,11 @@ class TestX86(BaseBackendTest):
                     loop.inputargs = [b]
                     self.cpu.compile_operations(loop)
                     r = self.cpu.execute_operations(loop, [b])
+                    result = self.cpu.get_latest_value_int(0)
                     if guard == rop.GUARD_FALSE:
-                        assert r.args[0].value == execute(self.cpu, op, [b]).value
+                        assert result == execute(self.cpu, op, [b]).value
                     else:
-                        assert r.args[0].value != execute(self.cpu, op, [b]).value
+                        assert result != execute(self.cpu, op, [b]).value
                     
 
     def test_stuff_followed_by_guard(self):
@@ -504,10 +506,11 @@ class TestX86(BaseBackendTest):
                     loop.inputargs = [i for i in (a, b) if isinstance(i, Box)]
                     self.cpu.compile_operations(loop)
                     r = self.cpu.execute_operations(loop, loop.inputargs)
+                    result = self.cpu.get_latest_value_int(0)
                     if guard == rop.GUARD_FALSE:
-                        assert r.args[0].value == execute(self.cpu, op, (a, b)).value
+                        assert result == execute(self.cpu, op, (a, b)).value
                     else:
-                        assert r.args[0].value != execute(self.cpu, op, (a, b)).value
+                        assert result != execute(self.cpu, op, (a, b)).value
 
     def test_overflow_mc(self):
         from pypy.jit.backend.x86.assembler import MachineCodeBlockWrapper
@@ -531,7 +534,7 @@ class TestX86(BaseBackendTest):
             loop.inputargs = [base_v]
             self.cpu.compile_operations(loop)
             op = self.cpu.execute_operations(loop, [base_v])
-            assert op.args[0].value == 1024
+            assert self.cpu.get_latest_value_int(0) == 1024
         finally:
             MachineCodeBlockWrapper.MC_SIZE = orig_size
             self.cpu.assembler.mc = old_mc

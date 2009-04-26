@@ -59,12 +59,14 @@ class OperationBuilder:
         print >>s, '    op = cpu.execute_operations(loop, [%s])' % (
             ', '.join(['BoxInt(%d)' % v.value for v in self.loop.inputargs]))
         if self.should_fail_by is None:
-            for v in self.loop.operations[-1].args:
-                print >>s, '    assert %s.value == %d' % (names[v], v.value)
+            for i, v in enumerate(self.loop.operations[-1].args):
+                print >>s, '    assert cpu.get_latest_value_int(%d) == %d' % (
+                    i, v.value)
         else:
             print >>s, '    assert op is loop.operations[%d].suboperations[0]' % self.should_fail_by_num
-            for v in self.should_fail_by.args:
-                print >>s, '    assert %s.value == %d' % (names[v], v.value)
+            for i, v in enumerate(self.should_fail_by.args):
+                print >>s, '    assert cpu.get_latest_value_int(%d) == %d' % (
+                    i, v.value)
         self.names = names
         if demo_conftest.option.output:
             s.close()
