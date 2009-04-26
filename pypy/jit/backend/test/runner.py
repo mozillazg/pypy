@@ -23,8 +23,18 @@ class Runner(object):
     def execute_operation(self, opname, valueboxes, result_type, descr=None):
         loop = self.get_compiled_single_operation(opname, result_type,
                                                   valueboxes, descr)
-        boxes = [box for box in valueboxes if isinstance(box, Box)]
-        res = self.cpu.execute_operations(loop, boxes)
+        j = 0
+        for box in valueboxes:
+            if isinstance(box, BoxInt):
+                self.cpu.set_future_value_int(j, box.getint())
+                j += 1
+            elif isinstance(box, BoxPtr):
+                self.cpu.set_future_value_ptr(j, box.getptr_base())
+                j += 1
+            elif isinstance(box, BoxObj):
+                self.cpu.set_future_value_obj(j, box.getobj())
+                j += 1
+        res = self.cpu.execute_operations(loop)
         if res is loop.operations[-1]:
             self.guard_failed = False
         else:
@@ -209,7 +219,9 @@ class BaseBackendTest(Runner):
             loop.inputargs = [v1, v2]
             self.cpu.compile_operations(loop)
             for x, y, z in testcases:
-                op = self.cpu.execute_operations(loop, [BoxInt(x), BoxInt(y)])
+                self.cpu.set_future_value_int(0, x)
+                self.cpu.set_future_value_int(1, y)
+                op = self.cpu.execute_operations(loop)
                 if z == boom:
                     assert op is ops[1].suboperations[0]
                 else:
