@@ -35,8 +35,10 @@ class AppTestLocaleTrivia:
 
         import locale
         assert locale
-
+        
     def test_constants(self):
+        import sys
+
         _CONSTANTS = (
             'LC_CTYPE',
             'LC_NUMERIC',
@@ -59,6 +61,27 @@ class AppTestLocaleTrivia:
         import _locale
         
         for constant in _CONSTANTS:
+            assert hasattr(_locale, constant)
+
+
+        # HAVE_LANGINFO
+        if sys.platform != 'win32':
+            _LANGINFO_NAMES = ('RADIXCHAR THOUSEP CRNCYSTR D_T_FMT D_FMT '
+                        'T_FMT AM_STR PM_STR CODESET T_FMT_AMPM ERA ERA_D_FMT '
+                        'ERA_D_T_FMT ERA_T_FMT ALT_DIGITS YESEXPR NOEXPR '
+                        '_DATE_FMT').split()
+            for i in range(1, 8):
+                _LANGINFO_NAMES.append("DAY_%d" % i)
+                _LANGINFO_NAMES.append("ABDAY_%d" % i)
+            for i in range(1, 13):
+                _LANGINFO_NAMES.append("MON_%d" % i)
+                _LANGINFO_NAMES.append("ABMON_%d" % i)
+        else:
+            _LANGINFO_NAMES = ('LOCALE_USER_DEFAULT LOCALE_SISO639LANGNAME '
+                            'LOCALE_SISO3166CTRYNAME LOCALE_IDEFAULTLANGUAGE '
+                            '').split()
+
+        for constant in _LANGINFO_NAMES:
             assert hasattr(_locale, constant)
 
     def test_setlocale(self):

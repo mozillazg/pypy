@@ -93,18 +93,26 @@ constant_names = (
 for name in constant_names:
     setattr(CConfig, name, platform.DefinedConstantInteger(name))
 
+langinfo_names = []
+if HAVE_LANGINFO:
+    # some of these consts have an additional #ifdef directives
+    # should we support them?
+    langinfo_names.extend('RADIXCHAR THOUSEP CRNCYSTR D_T_FMT D_FMT T_FMT '
+                        'AM_STR PM_STR CODESET T_FMT_AMPM ERA ERA_D_FMT '
+                        'ERA_D_T_FMT ERA_T_FMT ALT_DIGITS YESEXPR NOEXPR '
+                        '_DATE_FMT'.split())
+    for i in range(1, 8):
+        langinfo_names.append("DAY_%d" % i)
+        langinfo_names.append("ABDAY_%d" % i)
+    for i in range(1, 13):
+        langinfo_names.append("MON_%d" % i)
+        langinfo_names.append("ABMON_%d" % i)
 
-langinfo_names = ('CODESET D_T_FMT D_FMT T_FMT RADIXCHAR THOUSEP '
-                  'YESEXPR NOEXPR CRNCYSTR AM_STR PM_STR '
-                  'LOCALE_USER_DEFAULT LOCALE_SISO639LANGNAME '
-                  'LOCALE_SISO3166CTRYNAME LOCALE_IDEFAULTLANGUAGE '
-                  '').split()
-for i in range(1, 8):
-    langinfo_names.append("DAY_%d" % i)
-    langinfo_names.append("ABDAY_%d" % i)
-for i in range(1, 13):
-    langinfo_names.append("MON_%d" % i)
-    langinfo_names.append("ABMON_%d" % i)
+if sys.platform == 'win32':
+    langinfo_names.extend('LOCALE_USER_DEFAULT LOCALE_SISO639LANGNAME '
+                      'LOCALE_SISO3166CTRYNAME LOCALE_IDEFAULTLANGUAGE '
+                      ''.split())
+
 
 for name in langinfo_names:
     setattr(CConfig, name, platform.DefinedConstantInteger(name))
