@@ -154,6 +154,8 @@ if osname == 'posix':
             raise Exception, e     # bare 'raise' does not work here :-(
 
 else:
+    # Windows implementations
+    
     # Supply os.popen() based on subprocess
     def popen(cmd, mode="r", bufsize=-1):
         """popen(command [, mode='r' [, bufsize]]) -> pipe
@@ -165,18 +167,22 @@ else:
         if not mode.startswith('r') and not mode.startswith('w'):
             raise ValueError("invalid mode %r" % (mode,))
 
+        univ_nl = ('b' not in mode)
+
         import subprocess
         if mode.startswith('r'):
             proc = subprocess.Popen(cmd,
                                     shell=True,
                                     stdout=subprocess.PIPE,
-                                    bufsize=bufsize)
+                                    bufsize=bufsize,
+                                    universal_newlines=univ_nl)
             return _wrap_close(proc.stdout, proc)
         else:
             proc = subprocess.Popen(cmd,
                                     shell=True,
                                     stdin=subprocess.PIPE,
-                                    bufsize=bufsize)
+                                    bufsize=bufsize,
+                                    universal_newlines=univ_nl)
             return _wrap_close(proc.stdin, proc)
 
     def popen2(cmd, mode="t", bufsize=-1):
