@@ -17,6 +17,8 @@ class CConfig:
     includes = ['locale.h', 'limits.h']
     if HAVE_LANGINFO:
         includes += ['langinfo.h']
+    if HAVE_LIBINTL:
+        includes += ['libintl.h']
     if sys.platform == 'win32':
         includes += ['windows.h']
     _compilation_info_ = ExternalCompilationInfo(
@@ -268,69 +270,6 @@ def strxfrm(space, s):
 
 strxfrm.unwrap_spec = [ObjSpace, str]
 
-_gettext = external('gettext', [rffi.CCHARP], rffi.CCHARP)
-
-def gettext(space, msg):
-    """gettext(msg) -> string
-    Return translation of msg."""
-    return space.wrap(rffi.charp2str(_gettext(rffi.str2charp(msg))))
-
-gettext.unwrap_spec = [ObjSpace, str]
-
-_dgettext = external('dgettext', [rffi.CCHARP, rffi.CCHARP], rffi.CCHARP)
-
-def dgettext(space, w_domain, msg):
-    """dgettext(domain, msg) -> string
-    Return translation of msg in domain."""
-    if space.is_w(w_domain, space.w_None):
-        domain = None
-        result = _dgettext(domain, rffi.str2charp(msg))
-    else:
-        domain = space.str_w(w_domain)
-        result = _dgettext(rffi.str2charp(domain), rffi.str2charp(msg))
-
-    return space.wrap(rffi.charp2str(result))
-
-dgettext.unwrap_spec = [ObjSpace, W_Root, str]
-
-_dcgettext = external('dcgettext', [rffi.CCHARP, rffi.CCHARP, rffi.INT],
-                                                                rffi.CCHARP)
-
-def dcgettext(space, w_domain, msg, category):
-    """dcgettext(domain, msg, category) -> string
-    Return translation of msg in domain and category."""
-
-    if space.is_w(w_domain, space.w_None):
-        domain = None
-        result = _dcgettext(domain, rffi.str2charp(msg),
-                            rffi.cast(rffi.INT, category))
-    else:
-        domain = space.str_w(w_domain)
-        result = _dcgettext(rffi.str2charp(domain), rffi.str2charp(msg),
-                            rffi.cast(rffi.INT, category))
-
-    return space.wrap(rffi.charp2str(result))
-
-dcgettext.unwrap_spec = [ObjSpace, W_Root, str, int]
-
-
-_textdomain = external('textdomain', [rffi.CCHARP], rffi.CCHARP)
-
-def textdomain(space, w_domain):
-    """textdomain(domain) -> string
-    Set the C library's textdomain to domain, returning the new domain."""
-
-    if space.is_w(w_domain, space.w_None):
-        domain = None
-        result = _textdomain(domain)
-    else:
-        domain = space.str_w(w_domain)
-        result = _textdomain(rffi.str2charp(domain))
-
-    return space.wrap(rffi.charp2str(result))
-
-textdomain.unwrap_spec = [ObjSpace, W_Root]
-
 nl_item = rffi.INT
 _nl_langinfo = external('nl_langinfo', [nl_item], rffi.CCHARP)
 
@@ -346,49 +285,117 @@ def nl_langinfo(space, key):
 
 nl_langinfo.unwrap_spec = [ObjSpace, int]
 
-_bindtextdomain = external('bindtextdomain', [rffi.CCHARP, rffi.CCHARP],
-                                                                rffi.CCHARP)
+#___________________________________________________________________
+# HAVE_LIBINTL dependence
 
-def bindtextdomain(space, domain, w_dir):
-    """bindtextdomain(domain, dir) -> string
-    Bind the C library's domain to dir."""
+if HAVE_LIBINTL:
+    _gettext = external('gettext', [rffi.CCHARP], rffi.CCHARP)
 
-    if space.is_w(w_dir, space.w_None):
-        dir = None
-        dirname = _bindtextdomain(rffi.str2charp(domain), dir)
-    else:
-        dir = space.str_w(w_dir)
-        dirname = _bindtextdomain(rffi.str2charp(domain), rffi.str2charp(dir))
+    def gettext(space, msg):
+        """gettext(msg) -> string
+        Return translation of msg."""
+        return space.wrap(rffi.charp2str(_gettext(rffi.str2charp(msg))))
 
-    if not dirname:
-        errno = rposix.get_errno()
-        raise OperationError(space.w_OSError, space.wrap(errno))
-    return space.wrap(rffi.charp2str(dirname))
+    gettext.unwrap_spec = [ObjSpace, str]
 
-bindtextdomain.unwrap_spec = [ObjSpace, str, W_Root]
+    _dgettext = external('dgettext', [rffi.CCHARP, rffi.CCHARP], rffi.CCHARP)
 
-_bind_textdomain_codeset = external('bind_textdomain_codeset',
-                                    [rffi.CCHARP, rffi.CCHARP], rffi.CCHARP)
+    def dgettext(space, w_domain, msg):
+        """dgettext(domain, msg) -> string
+        Return translation of msg in domain."""
+        if space.is_w(w_domain, space.w_None):
+            domain = None
+            result = _dgettext(domain, rffi.str2charp(msg))
+        else:
+            domain = space.str_w(w_domain)
+            result = _dgettext(rffi.str2charp(domain), rffi.str2charp(msg))
 
-# TODO: platform dependent
-def bind_textdomain_codeset(space, domain, w_codeset):
-    """bind_textdomain_codeset(domain, codeset) -> string
-    Bind the C library's domain to codeset."""
-
-    if space.is_w(w_codeset, space.w_None):
-        codeset = None
-        result = _bind_textdomain_codeset(rffi.str2charp(domain), codeset)
-    else:
-        codeset = space.str_w(w_codeset)
-        result = _bind_textdomain_codeset(rffi.str2charp(domain),
-                                        rffi.str2charp(codeset))
-
-    if not result:
-        return space.w_None
-    else:
         return space.wrap(rffi.charp2str(result))
 
-bind_textdomain_codeset.unwrap_spec = [ObjSpace, str, W_Root]
+    dgettext.unwrap_spec = [ObjSpace, W_Root, str]
+
+    _dcgettext = external('dcgettext', [rffi.CCHARP, rffi.CCHARP, rffi.INT],
+                                                                rffi.CCHARP)
+
+    def dcgettext(space, w_domain, msg, category):
+        """dcgettext(domain, msg, category) -> string
+        Return translation of msg in domain and category."""
+
+        if space.is_w(w_domain, space.w_None):
+            domain = None
+            result = _dcgettext(domain, rffi.str2charp(msg),
+                                rffi.cast(rffi.INT, category))
+        else:
+            domain = space.str_w(w_domain)
+            result = _dcgettext(rffi.str2charp(domain), rffi.str2charp(msg),
+                                rffi.cast(rffi.INT, category))
+
+        return space.wrap(rffi.charp2str(result))
+
+    dcgettext.unwrap_spec = [ObjSpace, W_Root, str, int]
+
+
+    _textdomain = external('textdomain', [rffi.CCHARP], rffi.CCHARP)
+
+    def textdomain(space, w_domain):
+        """textdomain(domain) -> string
+        Set the C library's textdomain to domain, returning the new domain."""
+
+        if space.is_w(w_domain, space.w_None):
+            domain = None
+            result = _textdomain(domain)
+        else:
+            domain = space.str_w(w_domain)
+            result = _textdomain(rffi.str2charp(domain))
+
+        return space.wrap(rffi.charp2str(result))
+
+    textdomain.unwrap_spec = [ObjSpace, W_Root]
+
+    _bindtextdomain = external('bindtextdomain', [rffi.CCHARP, rffi.CCHARP],
+                                                                rffi.CCHARP)
+
+    def bindtextdomain(space, domain, w_dir):
+        """bindtextdomain(domain, dir) -> string
+        Bind the C library's domain to dir."""
+
+        if space.is_w(w_dir, space.w_None):
+            dir = None
+            dirname = _bindtextdomain(rffi.str2charp(domain), dir)
+        else:
+            dir = space.str_w(w_dir)
+            dirname = _bindtextdomain(rffi.str2charp(domain),
+                                        rffi.str2charp(dir))
+
+        if not dirname:
+            errno = rposix.get_errno()
+            raise OperationError(space.w_OSError, space.wrap(errno))
+        return space.wrap(rffi.charp2str(dirname))
+
+    bindtextdomain.unwrap_spec = [ObjSpace, str, W_Root]
+
+    _bind_textdomain_codeset = external('bind_textdomain_codeset',
+                                    [rffi.CCHARP, rffi.CCHARP], rffi.CCHARP)
+
+    # TODO: platform dependent
+    def bind_textdomain_codeset(space, domain, w_codeset):
+        """bind_textdomain_codeset(domain, codeset) -> string
+        Bind the C library's domain to codeset."""
+
+        if space.is_w(w_codeset, space.w_None):
+            codeset = None
+            result = _bind_textdomain_codeset(rffi.str2charp(domain), codeset)
+        else:
+            codeset = space.str_w(w_codeset)
+            result = _bind_textdomain_codeset(rffi.str2charp(domain),
+                                            rffi.str2charp(codeset))
+
+        if not result:
+            return space.w_None
+        else:
+            return space.wrap(rffi.charp2str(result))
+
+    bind_textdomain_codeset.unwrap_spec = [ObjSpace, str, W_Root]
 
 #___________________________________________________________________
 # getdefaultlocale() implementation for Windows
