@@ -374,7 +374,7 @@ testmap = [
     RegrTest('test_slice.py', core=True),
     RegrTest('test_socket.py', usemodules='thread _weakref'),
 
-    RegrTest('test_socket_ssl.py', skip="ssl support is still buggy"),
+    RegrTest('test_socket_ssl.py', usemodules='_ssl'),
     RegrTest('test_socketserver.py', usemodules='thread'),
 
     RegrTest('test_softspace.py', core=True),
