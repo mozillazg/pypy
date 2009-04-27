@@ -26,7 +26,8 @@ def check_args(*args):
     for arg in args:
         assert isinstance(arg, (Box, Const))
 
-DEBUG = True
+# debug level: 0 off, 1 normal, 2 detailed
+DEBUG = 2
 
 def log(msg):
     if not we_are_translated():
@@ -816,17 +817,7 @@ class MetaInterpStaticData(object):
         self.globaldata = MetaInterpGlobalData()
 
         RESULT = portal_graph.getreturnvar().concretetype
-        kind = history.getkind(RESULT)
-        if kind == 'void':
-            self.result_type = history.VOID
-        elif kind == 'int':
-            self.result_type = history.INT
-        elif kind == 'ptr':
-            self.result_type = history.PTR
-        elif kind == 'obj':
-            self.result_type = history.OBJ
-        else:
-            assert False
+        self.result_type = history.getkind(RESULT)
 
         self.opcode_implementations = []
         self.opcode_names = []
@@ -922,14 +913,14 @@ class MetaInterp(object):
             if not isinstance(self.history, history.BlackHole):
                 self.compile_done_with_this_frame(resultbox)
             sd = self.staticdata
-            if sd.result_type == history.VOID:
+            if sd.result_type == 'void':
                 assert resultbox is None
                 raise sd.DoneWithThisFrameVoid()
-            elif sd.result_type == history.INT:
+            elif sd.result_type == 'int':
                 raise sd.DoneWithThisFrameInt(resultbox.getint())
-            elif sd.result_type == history.PTR:
+            elif sd.result_type == 'ptr':
                 raise sd.DoneWithThisFramePtr(resultbox.getptr_base())
-            elif self.cpu.is_oo and sd.result_type == history.OBJ:
+            elif self.cpu.is_oo and sd.result_type == 'obj':
                 raise sd.DoneWithThisFrameObj(resultbox.getobj())
             else:
                 assert False
@@ -1147,17 +1138,17 @@ class MetaInterp(object):
     def compile_done_with_this_frame(self, exitbox):
         # temporarily put a JUMP to a pseudo-loop
         sd = self.staticdata
-        if sd.result_type == history.VOID:
+        if sd.result_type == 'void':
             assert exitbox is None
             exits = []
             loops = compile.loops_done_with_this_frame_void
-        elif sd.result_type == history.INT:
+        elif sd.result_type == 'int':
             exits = [exitbox]
             loops = compile.loops_done_with_this_frame_int
-        elif sd.result_type == history.PTR:
+        elif sd.result_type == 'ptr':
             exits = [exitbox]
             loops = compile.loops_done_with_this_frame_ptr
-        elif sd.cpu.is_oo and sd.result_type == history.OBJ:
+        elif sd.cpu.is_oo and sd.result_type == 'obj':
             exits = [exitbox]
             loops = compile.loops_done_with_this_frame_obj
         else:

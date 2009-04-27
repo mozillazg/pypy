@@ -16,7 +16,6 @@ py.log.setconsumer('compiler', ansi_log)
 
 # ____________________________________________________________
 
-VOID = 'v'
 INT = 'i'
 PTR = 'p'
 OBJ = 'o'

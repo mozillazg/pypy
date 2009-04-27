@@ -125,12 +125,12 @@ def send_loop_to_backend(metainterp, loop, type):
 
 class DoneWithThisFrameDescrVoid(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
-        assert metainterp_sd.result_type == history.VOID
+        assert metainterp_sd.result_type == 'void'
         raise metainterp_sd.DoneWithThisFrameVoid()
 
 class DoneWithThisFrameDescrInt(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
-        assert metainterp_sd.result_type == history.INT
+        assert metainterp_sd.result_type == 'int'
         resultbox = fail_op.args[0]
         if isinstance(resultbox, BoxInt):
             result = metainterp_sd.cpu.get_latest_value_int(0)
@@ -141,7 +141,7 @@ class DoneWithThisFrameDescrInt(AbstractDescr):
 
 class DoneWithThisFrameDescrPtr(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
-        assert metainterp_sd.result_type == history.PTR
+        assert metainterp_sd.result_type == 'ptr'
         resultbox = fail_op.args[0]
         if isinstance(resultbox, BoxPtr):
             result = metainterp_sd.cpu.get_latest_value_ptr(0)
@@ -152,7 +152,7 @@ class DoneWithThisFrameDescrPtr(AbstractDescr):
 
 class DoneWithThisFrameDescrObj(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
-        assert metainterp_sd.result_type == history.OBJ
+        assert metainterp_sd.result_type == 'obj'
         resultbox = fail_op.args[0]
         if isinstance(resultbox, BoxObj):
             result = metainterp_sd.cpu.get_latest_value_obj(0)
