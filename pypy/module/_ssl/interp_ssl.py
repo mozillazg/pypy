@@ -145,6 +145,11 @@ ssl_external('SSL_write', [SSL_P, rffi.CCHARP, rffi.INT], rffi.INT)
 ssl_external('SSL_pending', [SSL_P], rffi.INT)
 ssl_external('SSL_read', [SSL_P, rffi.CCHARP, rffi.INT], rffi.INT)
 
+def ssl_error(space, msg):
+    w_module = space.getbuiltinmodule('_ssl')
+    w_exception = space.getattr(w_module, space.wrap('sslerror'))
+    return OperationError(w_exception, space.wrap(msg))
+
 def _init_ssl():
     libssl_SSL_load_error_strings()
     libssl_SSL_library_init()
@@ -191,7 +196,7 @@ if HAVE_OPENSSL_RAND:
         if bytes == -1:
             msg = "EGD connection failed or EGD did not return"
             msg += " enough data to seed the PRNG"
-            raise OperationError(space.w_Exception, space.wrap(msg))
+            raise ssl_error(space, msg)
         return space.wrap(bytes)
     RAND_egd.unwrap_spec = [ObjSpace, str]
 
@@ -201,7 +206,7 @@ class SSLObject(Wrappable):
         self.w_socket = None
         self.ctx = lltype.malloc(SSL_CTX_P.TO, 1, flavor='raw')
         self.ssl = lltype.malloc(SSL_P.TO, 1, flavor='raw')
-        self.server_cert = lltype.malloc(X509_P.TO, 1, flavor='raw')
+        self.server_cert = lltype.nullptr(X509_P.TO)
         self._server = lltype.malloc(rffi.CCHARP.TO, X509_NAME_MAXLEN, flavor='raw')
         self._issuer = lltype.malloc(rffi.CCHARP.TO, X509_NAME_MAXLEN, flavor='raw')
     
@@ -229,14 +234,11 @@ class SSLObject(Wrappable):
         sockstate = check_socket_and_wait_for_timeout(self.space,
             self.w_socket, True)
         if sockstate == SOCKET_HAS_TIMED_OUT:
-            raise OperationError(self.space.w_Exception,
-                self.space.wrap("The write operation timed out"))
+            raise ssl_error(self.space, "The write operation timed out")
         elif sockstate == SOCKET_HAS_BEEN_CLOSED:
-            raise OperationError(self.space.w_Exception,
-                self.space.wrap("Underlying socket has been closed."))
+            raise ssl_error(self.space, "Underlying socket has been closed.")
         elif sockstate == SOCKET_TOO_LARGE_FOR_SELECT:
-            raise OperationError(self.space.w_Exception,
-                self.space.wrap("Underlying socket too large for select()."))
+            raise ssl_error(self.space, "Underlying socket too large for select().")
 
         num_bytes = 0
         while True:
@@ -255,11 +257,9 @@ class SSLObject(Wrappable):
                 sockstate = SOCKET_OPERATION_OK
         
             if sockstate == SOCKET_HAS_TIMED_OUT:
-                raise OperationError(self.space.w_Exception,
-                    self.space.wrap("The write operation timed out"))
+                raise ssl_error(self.space, "The write operation timed out")
             elif sockstate == SOCKET_HAS_BEEN_CLOSED:
-                raise OperationError(self.space.w_Exception,
-                    self.space.wrap("Underlying socket has been closed."))
+                raise ssl_error(self.space, "Underlying socket has been closed.")
             elif sockstate == SOCKET_IS_NONBLOCKING:
                 break
         
@@ -272,8 +272,7 @@ class SSLObject(Wrappable):
             return self.space.wrap(num_bytes)
         else:
             errstr, errval = _ssl_seterror(self.space, self, num_bytes)
-            raise OperationError(self.space.w_Exception,
-                self.space.wrap("%s: %d" % (errstr, errval)))
+            raise ssl_error(self.space, "%s: %d" % (errstr, errval))
     write.unwrap_spec = ['self', 'bufferstr']
     
     def read(self, num_bytes=1024):
@@ -286,11 +285,9 @@ class SSLObject(Wrappable):
             sockstate = check_socket_and_wait_for_timeout(self.space,
                 self.w_socket, False)
             if sockstate == SOCKET_HAS_TIMED_OUT:
-                raise OperationError(self.space.w_Exception,
-                    self.space.wrap("The read operation timed out"))
+                raise ssl_error(self.space, "The read operation timed out")
             elif sockstate == SOCKET_TOO_LARGE_FOR_SELECT:
-                raise OperationError(self.space.w_Exception,
-                    self.space.wrap("Underlying socket too large for select()."))
+                raise ssl_error(self.space, "Underlying socket too large for select().")
 
         raw_buf, gc_buf = rffi.alloc_buffer(num_bytes)
         while True:
@@ -309,8 +306,7 @@ class SSLObject(Wrappable):
                 sockstate = SOCKET_OPERATION_OK
         
             if sockstate == SOCKET_HAS_TIMED_OUT:
-                raise OperationError(self.space.w_Exception,
-                    self.space.wrap("The read operation timed out"))
+                raise ssl_error(self.space, "The read operation timed out")
             elif sockstate == SOCKET_IS_NONBLOCKING:
                 break
         
@@ -321,8 +317,7 @@ class SSLObject(Wrappable):
                 
         if count <= 0:
             errstr, errval = _ssl_seterror(self.space, self, count)
-            raise OperationError(self.space.w_Exception,
-                self.space.wrap("%s: %d" % (errstr, errval)))
+            raise ssl_error(self.space, "%s: %d" % (errstr, errval))
 
         result = rffi.str_from_buffer(raw_buf, gc_buf, num_bytes, count)
         rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
@@ -361,25 +356,22 @@ def new_sslobject(space, w_sock, w_key_file, w_cert_file):
     
 
     if ((key_file and not cert_file) or (not key_file and cert_file)):
-        raise OperationError(space.w_Exception,
-            space.wrap("Both the key & certificate files must be specified"))
+        raise ssl_error(space, "Both the key & certificate files must be specified")
 
     ss.ctx = libssl_SSL_CTX_new(libssl_SSLv23_method()) # set up context
     if not ss.ctx:
-        raise OperationError(space.w_Exception, space.wrap("SSL_CTX_new error"))
+        raise ssl_error(space, "SSL_CTX_new error")
 
     if key_file:
         ret = libssl_SSL_CTX_use_PrivateKey_file(ss.ctx, key_file,
             SSL_FILETYPE_PEM)
         if ret < 1:
-            raise OperationError(space.w_Exception,
-                space.wrap("SSL_CTX_use_PrivateKey_file error"))
+            raise ssl_error(space, "SSL_CTX_use_PrivateKey_file error")
 
         ret = libssl_SSL_CTX_use_certificate_chain_file(ss.ctx, cert_file)
         libssl_SSL_CTX_ctrl(ss.ctx, SSL_CTRL_OPTIONS, SSL_OP_ALL, None)
         if ret < 1:
-            raise OperationError(space.w_Exception,
-                space.wrap("SSL_CTX_use_certificate_chain_file error"))
+            raise ssl_error(space, "SSL_CTX_use_certificate_chain_file error")
 
     libssl_SSL_CTX_set_verify(ss.ctx, SSL_VERIFY_NONE, None) # set verify level
     ss.ssl = libssl_SSL_new(ss.ctx) # new ssl struct
@@ -408,14 +400,11 @@ def new_sslobject(space, w_sock, w_key_file, w_cert_file):
             sockstate = SOCKET_OPERATION_OK
         
         if sockstate == SOCKET_HAS_TIMED_OUT:
-            raise OperationError(space.w_Exception,
-                space.wrap("The connect operation timed out"))
+            raise ssl_error(space, "The connect operation timed out")
         elif sockstate == SOCKET_HAS_BEEN_CLOSED:
-            raise OperationError(space.w_Exception,
-                space.wrap("Underlying socket has been closed."))
+            raise ssl_error(space, "Underlying socket has been closed.")
         elif sockstate == SOCKET_TOO_LARGE_FOR_SELECT:
-            raise OperationError(space.w_Exception,
-                space.wrap("Underlying socket too large for select()."))
+            raise ssl_error(space, "Underlying socket too large for select().")
         elif sockstate == SOCKET_IS_NONBLOCKING:
             break
         
@@ -424,10 +413,9 @@ def new_sslobject(space, w_sock, w_key_file, w_cert_file):
         else:
             break
     
-    if ret < 0:
+    if ret <= 0:
         errstr, errval = _ssl_seterror(space, ss, ret)
-        raise OperationError(space.w_Exception,
-            space.wrap("%s: %d" % (errstr, errval)))
+        raise ssl_error(space, "%s: %d" % (errstr, errval))
     
     ss.server_cert = libssl_SSL_get_peer_certificate(ss.ssl)
     if ss.server_cert:
