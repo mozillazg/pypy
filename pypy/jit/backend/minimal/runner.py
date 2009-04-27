@@ -41,11 +41,11 @@ class CPU(object):
         pass
 
     def execute_operations(self, loop):
+        valueboxes = self._future_values
         if DEBUG:
             print "execute_operations: starting", loop
             for box in valueboxes:
                 print "\t", box, "\t", box.get_()
-        valueboxes = self._future_values
         self.clear_exception()
         self._guard_failed = False
         while True:
