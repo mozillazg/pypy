@@ -27,7 +27,6 @@ List of extension modules that we support:
     `_rawffi`_
     _socket
     _sre
-    _ssl
     _weakref
     bz2
     cStringIO
