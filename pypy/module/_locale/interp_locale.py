@@ -401,7 +401,7 @@ if HAVE_LIBINTL:
         bind_textdomain_codeset.unwrap_spec = [ObjSpace, str, W_Root]
 
 #___________________________________________________________________
-# getdefaultlocale() implementation for Windows
+# getdefaultlocale() implementation for Windows and MacOSX
 
 if sys.platform == 'win32':
     from pypy.rlib import rwin32
@@ -445,3 +445,5 @@ if sys.platform == 'win32':
         finally:
             lltype.free(buf_lang, flavor='raw')
             lltype.free(buf_country, flavor='raw')
+elif sys.platform == 'darwin':
+    raise NotImplementedError()
