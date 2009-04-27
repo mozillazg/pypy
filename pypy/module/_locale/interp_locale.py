@@ -12,6 +12,7 @@ import sys
 
 HAVE_LANGINFO = sys.platform != 'win32'
 HAVE_LIBINTL  = sys.platform != 'win32'
+HAVE_BIND_TEXTDOMAIN_CODESET = sys.platform != 'win32'  # FIXME: is it correct?
 
 class CConfig:
     includes = ['locale.h', 'limits.h']
@@ -270,20 +271,21 @@ def strxfrm(space, s):
 
 strxfrm.unwrap_spec = [ObjSpace, str]
 
-nl_item = rffi.INT
-_nl_langinfo = external('nl_langinfo', [nl_item], rffi.CCHARP)
+if HAVE_LANGINFO:
+    nl_item = rffi.INT
+    _nl_langinfo = external('nl_langinfo', [nl_item], rffi.CCHARP)
 
-def nl_langinfo(space, key):
-    """nl_langinfo(key) -> string
-    Return the value for the locale information associated with key."""
+    def nl_langinfo(space, key):
+        """nl_langinfo(key) -> string
+        Return the value for the locale information associated with key."""
 
-    if key in constants.values():
-        result = _nl_langinfo(rffi.cast(nl_item, key))
-        return space.wrap(rffi.charp2str(result))
-    raise OperationError(space.w_ValueError,
-                         space.wrap("unsupported langinfo constant"))
+        if key in constants.values():
+            result = _nl_langinfo(rffi.cast(nl_item, key))
+            return space.wrap(rffi.charp2str(result))
+        raise OperationError(space.w_ValueError,
+                             space.wrap("unsupported langinfo constant"))
 
-nl_langinfo.unwrap_spec = [ObjSpace, int]
+    nl_langinfo.unwrap_spec = [ObjSpace, int]
 
 #___________________________________________________________________
 # HAVE_LIBINTL dependence
@@ -377,25 +379,26 @@ if HAVE_LIBINTL:
     _bind_textdomain_codeset = external('bind_textdomain_codeset',
                                     [rffi.CCHARP, rffi.CCHARP], rffi.CCHARP)
 
-    # TODO: platform dependent
-    def bind_textdomain_codeset(space, domain, w_codeset):
-        """bind_textdomain_codeset(domain, codeset) -> string
-        Bind the C library's domain to codeset."""
+    if HAVE_BIND_TEXTDOMAIN_CODESET:
+        def bind_textdomain_codeset(space, domain, w_codeset):
+            """bind_textdomain_codeset(domain, codeset) -> string
+            Bind the C library's domain to codeset."""
 
-        if space.is_w(w_codeset, space.w_None):
-            codeset = None
-            result = _bind_textdomain_codeset(rffi.str2charp(domain), codeset)
-        else:
-            codeset = space.str_w(w_codeset)
-            result = _bind_textdomain_codeset(rffi.str2charp(domain),
-                                            rffi.str2charp(codeset))
+            if space.is_w(w_codeset, space.w_None):
+                codeset = None
+                result = _bind_textdomain_codeset(
+                                            rffi.str2charp(domain), codeset)
+            else:
+                codeset = space.str_w(w_codeset)
+                result = _bind_textdomain_codeset(rffi.str2charp(domain),
+                                                rffi.str2charp(codeset))
 
-        if not result:
-            return space.w_None
-        else:
-            return space.wrap(rffi.charp2str(result))
+            if not result:
+                return space.w_None
+            else:
+                return space.wrap(rffi.charp2str(result))
 
-    bind_textdomain_codeset.unwrap_spec = [ObjSpace, str, W_Root]
+        bind_textdomain_codeset.unwrap_spec = [ObjSpace, str, W_Root]
 
 #___________________________________________________________________
 # getdefaultlocale() implementation for Windows
