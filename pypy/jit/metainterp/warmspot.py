@@ -54,7 +54,9 @@ def jittify_and_run(interp, graph, args, repeat=1, hash_bits=None, **kwds):
         warmrunnerdesc.state.set_param_hash_bits(hash_bits)
     warmrunnerdesc.finish()
     res = interp.eval_graph(graph, args)
+    print '~~~ return value:', res
     while repeat > 1:
+        print '~' * 79
         res1 = interp.eval_graph(graph, args)
         if isinstance(res, int):
             assert res1 == res
@@ -290,6 +292,8 @@ class WarmRunnerDesc:
         #
         portal_ptr = self.ts.functionptr(PORTALFUNC, 'portal',
                                          graph = portalgraph)
+        portalfunc_ARGS = unrolling_iterable(
+            [(i, 'arg%d' % i, ARG) for i, ARG in enumerate(PORTALFUNC.ARGS)])
 
         class DoneWithThisFrameVoid(JitException):
             def __str__(self):
@@ -324,8 +328,13 @@ class WarmRunnerDesc:
                 return 'ExitFrameWithException(%s)' % (self.value,)
 
         class ContinueRunningNormally(JitException):
-            def __init__(self, args):
-                self.args = args
+            def __init__(self, argboxes):
+                # accepts boxes as argument, but unpacks them immediately
+                # before we raise the exception -- the boxes' values will
+                # be modified in a 'finally' by restore_patched_boxes().
+                for i, name, ARG in portalfunc_ARGS:
+                    v = unwrap(ARG, argboxes[i])
+                    setattr(self, name, v)
 
             def __str__(self):
                 return 'ContinueRunningNormally(%s)' % (
@@ -344,7 +353,6 @@ class WarmRunnerDesc:
         self.metainterp_sd.ExitFrameWithException = ExitFrameWithException
         self.metainterp_sd.ContinueRunningNormally = ContinueRunningNormally
         rtyper = self.translator.rtyper
-        portalfunc_ARGS = unrolling_iterable(list(enumerate(PORTALFUNC.ARGS)))
         RESULT = PORTALFUNC.RESULT
         result_kind = history.getkind(RESULT)
 
@@ -355,8 +363,8 @@ class WarmRunnerDesc:
                                                       portal_ptr)(*args)
                 except ContinueRunningNormally, e:
                     args = ()
-                    for i, ARG in portalfunc_ARGS:
-                        v = unwrap(ARG, e.args[i])
+                    for _, name, _ in portalfunc_ARGS:
+                        v = getattr(e, name)
                         args = args + (v,)
                 except DoneWithThisFrameVoid:
                     assert result_kind == 'void'
