@@ -38,7 +38,7 @@ You can translate the whole of PyPy's Python interpreter to low level C code,
 1. Install dependencies.  You need (these are Debian package names,
    adapt as needed):
 
-   * gcc
+   * ``gcc``
    * ``python-dev``
    * ``python-ctypes`` if you are still using Python2.4
    * ``libffi-dev``
@@ -248,6 +248,21 @@ to find a ``PREFIX`` from which the directories
     ../../..
     etc.
 
+In order to use ``distutils`` or ``setuptools`` a directory ``PREFIX/site-packages`` needs to be created. Here's an example session setting up and using ``easy_install``::
+
+    $ cd PREFIX
+    $ mkdir site-packages
+    $ curl -sO http://peak.telecommunity.com/dist/ez_setup.py
+    $ bin/pypy-c ez_setup.py
+    ...
+    $ bin/easy_install WebOb
+    $ bin/pypy-c           
+    Python 2.5.2 (64714, Apr 27 2009, 08:16:13)
+    [PyPy 1.1.0] on linux2
+    Type "help", "copyright", "credits" or "license" for more information.
+    And now for something completely different: ``PyPy doesn't have copolyvariadic dependently-monomorphed hyperfluxads''
+    >>>> import webob
+    >>>>               
 
 .. _`py.py interpreter`:
 
