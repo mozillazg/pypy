@@ -13,7 +13,7 @@ import sys
 if sys.platform == 'win32':
     libraries = ['libeay32', 'ssleay32', 'user32', 'advapi32', 'gdi32']
 else:
-    libraries = ['ssl']
+    libraries = ['ssl', 'crypto']
 
 eci = ExternalCompilationInfo(
     libraries = libraries,
