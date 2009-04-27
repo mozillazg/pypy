@@ -12,7 +12,7 @@ class Module(MixedModule):
             'strxfrm':                  'interp_locale.strxfrm',
             }
 
-    if sys.platform == 'win32':
+    if sys.platform in ('win32', 'darwin'):
         interpleveldefs.update({
             '_getdefaultlocale':        'interp_locale.getdefaultlocale',
             })
@@ -28,7 +28,10 @@ class Module(MixedModule):
             'dcgettext':                'interp_locale.dcgettext',
             'textdomain':               'interp_locale.textdomain',
             'bindtextdomain':           'interp_locale.bindtextdomain',
-            'bind_textdomain_codeset':  'interp_locale.bind_textdomain_codeset',
+            })
+        if interp_locale.HAVE_BIND_TEXTDOMAIN_CODESET:
+            interpleveldefs.update({
+            'bind_textdomain_codeset':'interp_locale.bind_textdomain_codeset',
             })
 
     appleveldefs  = {
