@@ -211,7 +211,7 @@ class WarmRunnerDesc:
             if i < len(self.jitdriver.greens):
                 self.green_args_spec.append(TYPE)
             else:
-                self.red_args_types.append(history.getkind(TYPE)[0])
+                self.red_args_types.append(history.getkind(TYPE))
         RESTYPE = graph.getreturnvar().concretetype
         (self.JIT_ENTER_FUNCTYPE,
          self.PTR_JIT_ENTER_FUNCTYPE) = self.ts.get_FuncType(ALLARGS, lltype.Void)
@@ -477,13 +477,13 @@ def make_state_class(warmrunnerdesc):
             j = 0
             for typecode in red_args_types:
                 value = redargs[j]
-                if typecode == 'p':
+                if typecode == 'ptr':
                     ptrvalue = lltype.cast_opaque_ptr(llmemory.GCREF, value)
                     cpu.set_future_value_ptr(j, ptrvalue)
-                elif typecode == 'o':
+                elif typecode == 'obj':
                     objvalue = ootype.cast_to_object(value)
                     cpu.set_future_value_obj(j, objvalue)
-                elif typecode == 'i':
+                elif typecode == 'int':
                     intvalue = lltype.cast_primitive(lltype.Signed, value)
                     cpu.set_future_value_int(j, intvalue)
                 else:
