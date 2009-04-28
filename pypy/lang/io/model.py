@@ -93,8 +93,26 @@ class W_Block(W_Object):
         W_Object.__init__(self, space)
         
     def apply(self, space, w_receiver, w_message, w_context):
-        assert not self.arguments
-        return self.body.eval(space, w_receiver, w_context)
+        # TODO: move the call logic to a call method to use with blocks also
+        # TODO: store if the block is activateable (a method) or not
+        # TODO: create and populate call object
+
+        w_locals = self.space.w_locals.clone()
+        assert w_locals is not None
+        args = list(self.arguments)
+        
+        for arg in w_message.arguments:
+            try:
+                w_locals.slots[args.pop(0)] = arg.eval(space, w_receiver, w_context)
+            except IndexError:
+                break
+                
+        for arg_name in args:
+            w_locals.slots[arg_name] = space.w_nil
+        
+        w_locals.protos = [w_receiver]
+        w_locals.slots['self'] = w_receiver
+        return self.body.eval(space, w_locals, w_context)
         
         
 def parse_hex(string):
