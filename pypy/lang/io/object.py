@@ -16,5 +16,9 @@ def w_object_method(space, w_target, w_message, w_context):
     names = [x.name for x in w_arguments]
     return W_Block(space, names, w_body)
 
+@register_method('Object', 'clone')
+def w_object_clone(space, w_target, w_message, w_context):
+    assert w_message.name == 'clone'
+    return w_target.clone()
 # def w_object_get_slot(w_target, w_message, w_context):
 #     pass

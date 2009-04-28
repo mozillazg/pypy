@@ -12,6 +12,8 @@ class ObjSpace(object):
         self.w_lobby = W_Object(self)
         self.w_protos = W_Object(self)
         self.w_core = W_Object(self)
+        self.w_locals = W_Object(self)
+        
         
         self.w_core.protos.append(self.w_object)
         
@@ -22,9 +24,16 @@ class ObjSpace(object):
         
         self.init_w_number()
         
+        self.init_w_core()
+        
+    def init_w_core(self):
+        self.w_core.slots['Locals'] = self.w_locals
+        self.w_core.slots['Object'] = self.w_object
+
     def init_w_number(self):
         self.w_number = instantiate(W_Number)
-        W_Object.__init__(self.w_number, self)
+        W_Object.__init__(self.w_number, self)   
+        self.w_number.protos = [self.w_object]     
         self.w_number.value = 0
         for key, function in cfunction_definitions['Number'].items():
             self.w_number.slots[key] = W_CFunction(self, function)

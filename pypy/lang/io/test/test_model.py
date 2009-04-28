@@ -26,4 +26,16 @@ def test_protos():
     space = ObjSpace()
     x = W_Number(space, 2)
     assert x.protos == [space.w_number]
+
+def test_object_clone():
+    space = ObjSpace()
+    x = W_Object(space)
+    assert x.clone().protos == [x] 
     
+
+def test_clone_number():
+    space = ObjSpace()
+    x = W_Number(space, 2)
+    xx = x.clone()
+    assert xx.protos == [x]
+    assert isinstance(xx, W_Number)
