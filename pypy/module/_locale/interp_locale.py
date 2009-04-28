@@ -12,7 +12,7 @@ import sys
 
 HAVE_LANGINFO = sys.platform != 'win32'
 HAVE_LIBINTL  = sys.platform != 'win32'
-HAVE_BIND_TEXTDOMAIN_CODESET = sys.platform != 'win32'  # FIXME: is it correct?
+HAVE_BIND_TEXTDOMAIN_CODESET = platform.Has('bind_textdomain_codeset')
 
 class CConfig:
     includes = ['locale.h', 'limits.h']
