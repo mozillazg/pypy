@@ -13,7 +13,9 @@ class ObjSpace(object):
         self.w_protos = W_Object(self)
         self.w_core = W_Object(self)
         self.w_locals = W_Object(self)
-        
+        self.w_true = W_Object(self, [self.w_object])
+        self.w_false = W_Object(self, [self.w_object])
+        self.w_nil = W_Object(self, [self.w_object])
         
         self.w_core.protos.append(self.w_object)
         
@@ -26,9 +28,17 @@ class ObjSpace(object):
         
         self.init_w_core()
         
+    #     self.init_singletons()
+    #     
+    # def init_singletons(self):
+    #     #true, false, nil, Message, Call, Normal, Break, Continue, Return
+        
     def init_w_core(self):
         self.w_core.slots['Locals'] = self.w_locals
         self.w_core.slots['Object'] = self.w_object
+        self.w_core.slots['true'] = self.w_true
+        self.w_core.slots['false'] = self.w_false
+        self.w_core.slots['nil'] = self.w_nil
 
     def init_w_number(self):
         self.w_number = instantiate(W_Number)
