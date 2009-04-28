@@ -12,7 +12,6 @@ import sys
 
 HAVE_LANGINFO = sys.platform != 'win32'
 HAVE_LIBINTL  = sys.platform != 'win32'
-HAVE_BIND_TEXTDOMAIN_CODESET = platform.Has('bind_textdomain_codeset')
 
 class CConfig:
     includes = ['locale.h', 'limits.h']
@@ -25,6 +24,7 @@ class CConfig:
     _compilation_info_ = ExternalCompilationInfo(
         includes=includes,
     )
+    HAVE_BIND_TEXTDOMAIN_CODESET = platform.Has('bind_textdomain_codeset')
     lconv = platform.Struct("struct lconv", [
             # Numeric (non-monetary) information.
             ("decimal_point", rffi.CCHARP),    # Decimal point character.
@@ -135,6 +135,8 @@ for name in langinfo_names:
         constants[name] = value
 
 locals().update(constants)
+
+HAVE_BIND_TEXTDOMAIN_CODESET = cConfig.HAVE_BIND_TEXTDOMAIN_CODESET
 
 def external(name, args, result, calling_conv='c'):
     return rffi.llexternal(name, args, result,
