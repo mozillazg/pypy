@@ -24,8 +24,17 @@ def test_clone_object():
     x, space = interpret('Object clone')
     assert x.protos == [space.w_object]
     
-import py
 def test_clone_number():
     x, space = interpret('1 clone')
     assert x.value == 1
     assert x.protos[0].protos == [space.w_number]
+    
+def test_true():
+    x, space = interpret('true')
+    assert x == space.w_true
+    assert x.protos == [space.w_object]
+    
+def test_false():
+    x, space = interpret('false')
+    assert x == space.w_false
+    assert x.protos == [space.w_object]
