@@ -25,11 +25,23 @@ class W_Object(object):
     def apply(self, space, w_receiver, w_message, w_context):
         return self
         
+    def clone(self):
+        return W_Object(self.space, [self])
+        
 class W_Number(W_Object):
     """Number"""
-    def __init__(self, space, value):
+    def __init__(self, space, value, protos = None):
         self.value = value
-        W_Object.__init__(self, space, [space.w_number]) 
+        if protos is None:
+            pp = [space.w_number]
+        else:
+            pp = protos
+        W_Object.__init__(self, space, pp) 
+        
+    def clone(self):
+        cloned = W_Number(self.space, self.value)
+        cloned.protos = [self]
+        return cloned
 
 class W_List(W_Object):
     pass
@@ -89,6 +101,7 @@ def parse_hex(string):
     if not string.startswith("0x"):
         raise ValueError
     return int(string, 16) 
+    
 def parse_literal(space, literal):
     for t in [int, float, parse_hex]:
         try:

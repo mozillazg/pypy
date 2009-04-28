@@ -18,3 +18,14 @@ def test_set_slot():
     assert space.w_lobby.slots['a'] == w_number
     assert x == w_number
     assert space.w_lobby.slots['a'] is x
+    
+    
+def test_clone_object():
+    x, space = interpret('Object clone')
+    assert x.protos == [space.w_object]
+    
+import py
+def test_clone_number():
+    x, space = interpret('1 clone')
+    assert x.value == 1
+    assert x.protos[0].protos == [space.w_number]
