@@ -427,7 +427,7 @@ testmap = [
     RegrTest('test_ucn.py'),
     RegrTest('test_unary.py', core=True),
     RegrTest('test_unicode.py', core=True),
-    RegrTest('test_unicode_file.py'),
+    RegrTest('test_unicode_file.py', skip="not supported yet"),
     RegrTest('test_unicodedata.py'),
     RegrTest('test_unittest.py', core=True),
     RegrTest('test_univnewlines.py', core=True),
