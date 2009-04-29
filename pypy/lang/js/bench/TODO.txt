@@ -1,0 +1,35 @@
+All benchmarks are from The Computer Language Benchmarks Game, licensed under the revised BSD License
+
+Maybe we should also take a look at those benchmarks:
+ http://trac.webkit.org/projects/webkit/wiki/JavaScript%20and%20DOM%20Benchmarks
+
+Parameters for the benchmarks:
+
+ackermann 9,10,11
+ary 3000,5000,7000,9000
+binarytrees 12,14,16
+fannkuch 9,10,11
+fasta (substring) 250000,2500000,25000000
+fibo 12,24,32
+harmonic 6000000,8000000,10000000
+hash 40000,60000,80000,100000
+hash2 50,100,150,200
+heapsort 20000,40000,60000,80000,100000
+hello ?
+knucleotide (without one simple regex)
+lists (concat) @0
+matrix @0
+methcall @0
+nbody
+nestedloop @0
+nsieve
+nsievebits
+objinst @0
+partialsums (sin, cos, pow)
+random @0
+recursive
+sieve @0
+spectralnorm (sqrt)
+strcat @0
+sumcol (readline!)
+takfp @0
