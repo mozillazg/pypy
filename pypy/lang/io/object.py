@@ -14,8 +14,15 @@ def w_object_method(space, w_target, w_message, w_context):
     w_body = w_message.arguments[-1]
     w_arguments = w_message.arguments[:-1]
     names = [x.name for x in w_arguments]
-    return W_Block(space, names, w_body)
+    return space.w_block.clone_and_init(space, names, w_body, True)
 
+@register_method('Object', 'block')
+def w_object_block(space, w_target, w_message, w_context):
+    w_body = w_message.arguments[-1]
+    w_arguments = w_message.arguments[:-1]
+    names = [x.name for x in w_arguments]
+    return space.w_block.clone_and_init(space, names, w_body, False)
+    
 @register_method('Object', 'clone')
 def w_object_clone(space, w_target, w_message, w_context):
     assert w_message.name == 'clone'

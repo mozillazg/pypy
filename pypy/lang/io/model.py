@@ -87,16 +87,21 @@ class W_Message(W_Object):
             return w_result
   
 class W_Block(W_Object):
-    def __init__(self, space, arguments, body):
+    def __init__(self, space, arguments, body, activateable=True, protos=[]):
         self.arguments = arguments
         self.body = body
-        W_Object.__init__(self, space)
+        W_Object.__init__(self, space, protos)
+        self.activateable = activateable
         
     def apply(self, space, w_receiver, w_message, w_context):
         # TODO: move the call logic to a call method to use with blocks also
         # TODO: store if the block is activateable (a method) or not
         # TODO: create and populate call object
-
+        if self.activateable:
+            return self.call(space, w_receiver, w_message, w_context)
+        return self
+        
+    def call(self, space, w_receiver, w_message, w_context):
         w_locals = self.space.w_locals.clone()
         assert w_locals is not None
         args = list(self.arguments)
@@ -110,10 +115,21 @@ class W_Block(W_Object):
         for arg_name in args:
             w_locals.slots[arg_name] = space.w_nil
         
-        w_locals.protos = [w_receiver]
-        w_locals.slots['self'] = w_receiver
+        if self.activateable:
+            w_locals.protos = [w_receiver]
+            w_locals.slots['self'] = w_receiver
+        else:
+            w_locals.protos = [w_context]
+            w_locals.slots['self'] = w_context
+            
         return self.body.eval(space, w_locals, w_context)
+            
+    
+    def clone(self):
+        return W_Block(self.space, self.arguments, self.body, self.activateable, [self])
         
+    def clone_and_init(self, space, arguments, body, activateable):
+        return W_Block(space, arguments, body, activateable, [self])
         
 def parse_hex(string):
     if not string.startswith("0x"):
