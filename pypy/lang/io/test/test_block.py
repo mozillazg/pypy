@@ -1,19 +1,18 @@
 from pypy.lang.io.parserhack import parse, interpret
-from pypy.lang.io.model import W_Block
+from pypy.lang.io.model import W_Block, W_Message
 import py.test
-# "W_Message(space,"method", [W_Message(space,"1", [],), ],)"
-def test_get_slot():
-    input = "a := 1; a"
-    #import pdb; pdb.set_trace()
-    res, space = interpret(input)
-    assert res.value == 1
 
-def test_parse_method():
-    # py.test.skip()
-    inp = "a := method(1)\na"
-    # import pdb; pdb.set_trace()
+def test_parse_block():
+    inp = "a := block(1)\na"
+    res,space = interpret(inp)
+    assert isinstance(res, W_Block)
+    assert res.body == W_Message(space, '1', [], None)
+    
+def test_call_block():
+    inp = "a := block(1)\na call"
     res,space = interpret(inp)
     assert res.value == 1
+    
     
 def test_call_method_with_args():
     inp = "a := method(x, x+1)\na(2)"
@@ -35,14 +34,8 @@ def test_superfluous_args_are_ignored():
     res,space = interpret(inp)
     assert res.value == 3
     
-def test_method_proto():
-    inp = 'a := method(f)'
-    res, space = interpret(inp)
-    method = space.w_lobby.slots['a']
-    assert method.protos == [space.w_block]
     
-def test_block_proto():
-    inp = 'Block'
-    res,space = interpret(inp)
-    assert isinstance(res, W_Block)
-    assert res.protos == [space.w_object]
+def test_block_proto_evals_to_nil():
+    inp = 'Block call'
+    res, space = interpret(inp)
+    assert res == space.w_nil
