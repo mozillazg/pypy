@@ -13,7 +13,10 @@ def w_object_set_slot(space, w_target, w_message, w_context):
 def w_object_get_slot(space, w_target, w_message, w_context):
     w_name = w_message.arguments[0].eval(space, w_context, w_context)
     assert isinstance(w_name, W_ImmutableSequence)
-    return w_target.slots[w_name.value]
+    try:
+        return w_target.slots[w_name.value]
+    except KeyError:
+        return space.w_nil
 
 @register_method('Object', 'method')
 def w_object_method(space, w_target, w_message, w_context):

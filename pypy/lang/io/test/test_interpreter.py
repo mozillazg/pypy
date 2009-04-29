@@ -38,3 +38,12 @@ def test_false():
     x, space = interpret('false')
     assert x == space.w_false
     assert x.protos == [space.w_object]
+    
+def test_get_slot():
+    inp1 = 'a := 1; getSlot("a")'
+    inp2 = 'getSlot("a")'
+    res, space = interpret(inp1)
+    assert res.value == 1
+    
+    res, space = interpret(inp2)
+    assert res == space.w_nil
