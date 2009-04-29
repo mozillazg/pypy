@@ -46,3 +46,8 @@ def test_block_proto():
     res,space = interpret(inp)
     assert isinstance(res, W_Block)
     assert res.protos == [space.w_object]
+    
+def test_call_on_method():
+    inp = 'a := method(x, x + 1); getSlot("a") call(3)'
+    res, space = interpret(inp)
+    assert res.value == 4
