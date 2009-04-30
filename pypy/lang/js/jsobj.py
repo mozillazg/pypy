@@ -44,6 +44,9 @@ class W_Root(object):
     def ToNumber(self, ctx):
         return 0.0
     
+    def ToInteger(self, ctx):
+        return int(self.ToNumber(ctx))
+    
     def ToInt32(self, ctx):
         return int(self.ToNumber(ctx))
     
@@ -497,6 +500,15 @@ class W_FloatNumber(W_BaseNumber):
 
     def ToNumber(self, ctx):
         return self.floatval
+
+    def ToInteger(self, ctx):
+        if isnan(self.floatval):
+            return 0
+        
+        if self.floatval == 0 or isinf(self.floatval):
+            return self.floatval
+        
+        return intmask(self.floatval)
 
     def ToInt32(self, ctx):
         if isnan(self.floatval) or isinf(self.floatval):
