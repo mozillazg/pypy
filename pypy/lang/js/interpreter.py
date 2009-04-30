@@ -366,11 +366,7 @@ class W_FromCharCode(W_NewBuiltin):
         temp = []
         for arg in args:
             i = arg.ToInt32(ctx) % 65536 # XXX should be uint16
-            if i > 255:
-                temp.append(unichr(i))
-            else:
-                temp.append(chr(i))
-        
+            temp.append(unichr(i))
         return W_String(''.join(temp))
 
 class W_CharAt(W_NewBuiltin):
@@ -461,6 +457,15 @@ class W_Split(W_NewBuiltin):
         
         return w_array
 
+class W_ToLowerCase(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        string = this.ToString(ctx)
+        return W_String(string.lower())
+
+class W_ToUpperCase(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        string = this.ToString(ctx)
+        return W_String(string.upper())
 
 def common_join(ctx, this, sep=','):
     length = this.Get(ctx, 'length').ToUInt32(ctx)
@@ -652,6 +657,8 @@ class Interpreter(object):
             'indexOf': w_IndexOf,
             'substring': W_Substring(ctx),
             'split': w_Split,
+            'toLowerCase': W_ToLowerCase(ctx),
+            'toUpperCase': W_ToUpperCase(ctx)
         })
         
         # 15.5.3.2
