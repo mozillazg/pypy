@@ -7,6 +7,10 @@ funding. This release focuses on making PyPy's Python interpreter more
 compatible with CPython (currently CPython 2.5) and on making the
 interpreter more stable and bug-free.
 
+Download page:
+    
+   http://codespeak.net/pypy/dist/pypy/doc/download.html
+
 PyPy's Getting Started lives at:
 
    http://codespeak.net/pypy/dist/pypy/doc/getting-started.html
