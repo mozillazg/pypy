@@ -13,3 +13,8 @@ PyPy 1.1 Sources:
 .. _`pypy-1.1.0.zip`: http://codespeak.net/download/pypy/pypy-1.1.0.zip
 .. _`pypy-1.1.0.tar.gz`: http://codespeak.net/download/pypy/pypy-1.1.0.tar.gz
 
+Prebuilt binaries
+~~~~~~~~~~~~~~~~~
+
+We do not provide prebuilt binaries yet (but would happily
+link to other people's pages with one version or another).
