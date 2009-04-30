@@ -391,7 +391,7 @@ class W_String(W_Primitive):
 
     def ToObject(self, ctx):
         o = create_object(ctx, 'String', Value=self)
-        o.Put(ctx, 'length', W_IntNumber(len(self.strval)), flags = RO|DD)
+        o.Put(ctx, 'length', W_IntNumber(len(self.strval)), flags = RO|DD|DE)
         return o
 
     def ToString(self, ctx=None):
