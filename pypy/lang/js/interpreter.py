@@ -618,20 +618,35 @@ class Interpreter(object):
         w_StrPrototype = create_object(ctx, 'Object', Value=W_String(''))
         w_StrPrototype.Class = 'String'
         
+        w_CharAt = W_CharAt(ctx)
+        w_CharAt.Put(ctx, 'length', W_IntNumber(1), flags=allon)
+        
+        # 15.5.4.14
+        w_Split = W_Split(ctx)
+        w_Split.Put(ctx, 'length', W_IntNumber(2), flags=allon)
+        
+        # 15.5.4.7
+        w_IndexOf = W_IndexOf(ctx)
+        w_IndexOf.Put(ctx, 'length', W_IntNumber(1), flags=allon)
+        
         put_values(ctx, w_StrPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_StrPrototype,
             'toString': W_StringValueToString(ctx),
             'valueOf': get_value_of('String')(ctx),
-            'charAt': W_CharAt(ctx),
+            'charAt': w_CharAt,
             'concat': W_Concat(ctx),
-            'indexOf': W_IndexOf(ctx),
+            'indexOf': w_IndexOf,
             'substring': W_Substring(ctx),
-            'split': W_Split(ctx),
+            'split': w_Split,
         })
         
+        # 15.5.3.2
+        w_FromCharCode = W_FromCharCode(ctx)
+        w_FromCharCode.Put(ctx, 'length', W_IntNumber(1), flags=allon)
+        
         w_String.Put(ctx, 'prototype', w_StrPrototype)
-        w_String.Put(ctx, 'fromCharCode', W_FromCharCode(ctx))
+        w_String.Put(ctx, 'fromCharCode', w_FromCharCode)
         w_Global.Put(ctx, 'String', w_String)
 
         w_Array = W_ArrayObject('Array', w_FncPrototype)
