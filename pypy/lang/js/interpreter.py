@@ -422,11 +422,11 @@ class W_Substring(W_NewBuiltin):
         if len(args) < 1:
             start = 0
         else:
-            start = args[0].ToInt32(ctx)
+            start = args[0].ToInteger(ctx)
         if len(args) < 2:
             end = size
         else:
-            end = args[1].ToInt32(ctx)
+            end = args[1].ToInteger(ctx)
         tmp1 = min(max(start, 0), size)
         tmp2 = min(max(end, 0), size)
         start = min(tmp1, tmp2)
