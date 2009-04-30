@@ -384,6 +384,18 @@ class W_CharAt(W_NewBuiltin):
             return W_String('')
         return W_String(string[pos])
 
+class W_CharCodeAt(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        string = this.ToString(ctx)
+        if len(args)>=1:
+            pos = args[0].ToInt32(ctx)
+            if pos < 0 or pos > len(string) - 1:
+                return W_FloatNumber(NAN)
+        else:
+            return W_FloatNumber(NAN)
+        char = string[pos]
+        return W_IntNumber(ord(char))
+
 class W_Concat(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
@@ -635,6 +647,7 @@ class Interpreter(object):
             'toString': W_StringValueToString(ctx),
             'valueOf': get_value_of('String')(ctx),
             'charAt': w_CharAt,
+            'charCodeAt': W_CharCodeAt(ctx),
             'concat': W_Concat(ctx),
             'indexOf': w_IndexOf,
             'substring': W_Substring(ctx),
