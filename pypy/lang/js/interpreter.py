@@ -91,8 +91,9 @@ class W_StringObject(W_NativeObject):
     def Construct(self, ctx, args=[]):
         if len(args) >= 1:
             Value = W_String(args[0].ToString(ctx))
-            return create_object(ctx, 'String', Value = Value)
-        return create_object(ctx, 'String', Value = W_String(''))
+        else:
+            Value = W_String('')
+        return Value.ToObject(ctx)
 
 def create_array(ctx, elements=[]):
     proto = ctx.get_global().Get(ctx, 'Array').Get(ctx, 'prototype')
