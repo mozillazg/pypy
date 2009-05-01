@@ -82,6 +82,7 @@ class W_NumberObject(W_NativeObject):
         return create_object(ctx, 'Number', Value = W_FloatNumber(0.0))
 
 class W_StringObject(W_NativeObject):
+    length = 1
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1:
             return W_String(args[0].ToString(ctx))
@@ -363,6 +364,7 @@ def get_value_of(type):
     return W_ValueValueOf
 
 class W_FromCharCode(W_NewBuiltin):
+    length = 1
     def Call(self, ctx, args=[], this=None):
         temp = []
         for arg in args:
@@ -371,6 +373,7 @@ class W_FromCharCode(W_NewBuiltin):
         return W_String(''.join(temp))
 
 class W_CharAt(W_NewBuiltin):
+    length = 1
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         if len(args)>=1:
@@ -401,6 +404,7 @@ class W_Concat(W_NewBuiltin):
         return W_String(string)
 
 class W_IndexOf(W_NewBuiltin):
+    length = 1
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         if len(args) < 1:
@@ -416,6 +420,7 @@ class W_IndexOf(W_NewBuiltin):
         return W_IntNumber(string.find(substr, pos))
 
 class W_Substring(W_NewBuiltin):
+    length = 2
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         size = len(string)
@@ -434,6 +439,7 @@ class W_Substring(W_NewBuiltin):
         return W_String(string[start:end])
 
 class W_Split(W_NewBuiltin):
+    length = 2
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         
@@ -459,11 +465,13 @@ class W_Split(W_NewBuiltin):
         return w_array
 
 class W_ToLowerCase(W_NewBuiltin):
+    length = 0
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         return W_String(string.lower())
 
 class W_ToUpperCase(W_NewBuiltin):
+    length = 0
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         return W_String(string.upper())
@@ -488,6 +496,7 @@ class W_ArrayToString(W_NewBuiltin):
         return W_String(common_join(ctx, this, sep=','))
 
 class W_ArrayJoin(W_NewBuiltin):
+    length = 1
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1 and not args[0] is w_Undefined:
             sep = args[0].ToString(ctx)
@@ -635,52 +644,36 @@ class Interpreter(object):
 
         w_StrPrototype = create_object(ctx, 'Object', Value=W_String(''))
         w_StrPrototype.Class = 'String'
-        
-        w_CharAt = W_CharAt(ctx)
-        w_CharAt.Put(ctx, 'length', W_IntNumber(1), flags=allon)
-        
-        # 15.5.4.14
-        w_Split = W_Split(ctx)
-        w_Split.Put(ctx, 'length', W_IntNumber(2), flags=allon)
-        
-        # 15.5.4.7
-        w_IndexOf = W_IndexOf(ctx)
-        w_IndexOf.Put(ctx, 'length', W_IntNumber(1), flags=allon)
+        w_StrPrototype.Put(ctx, 'length', W_IntNumber(0))
         
         put_values(ctx, w_StrPrototype, {
-            'constructor': w_FncPrototype,
+            'constructor': w_String,
             '__proto__': w_StrPrototype,
             'toString': W_StringValueToString(ctx),
             'valueOf': get_value_of('String')(ctx),
-            'charAt': w_CharAt,
+            'charAt': W_CharAt(ctx),
             'charCodeAt': W_CharCodeAt(ctx),
             'concat': W_Concat(ctx),
-            'indexOf': w_IndexOf,
+            'indexOf': W_IndexOf(ctx),
             'substring': W_Substring(ctx),
-            'split': w_Split,
+            'split': W_Split(ctx),
             'toLowerCase': W_ToLowerCase(ctx),
             'toUpperCase': W_ToUpperCase(ctx)
         })
         
-        # 15.5.3.2
-        w_FromCharCode = W_FromCharCode(ctx)
-        w_FromCharCode.Put(ctx, 'length', W_IntNumber(1), flags=allon)
-        
-        w_String.Put(ctx, 'prototype', w_StrPrototype)
-        w_String.Put(ctx, 'fromCharCode', w_FromCharCode)
+        w_String.Put(ctx, 'prototype', w_StrPrototype, flags=allon)
+        w_String.Put(ctx, 'fromCharCode', W_FromCharCode(ctx))
         w_Global.Put(ctx, 'String', w_String)
 
         w_Array = W_ArrayObject('Array', w_FncPrototype)
 
         w_ArrPrototype = W_Array(Prototype=w_ObjPrototype)
-        w_arr_join = W_ArrayJoin(ctx)
-        w_arr_join.Put(ctx, 'length', W_IntNumber(1), flags=allon)
         
         put_values(ctx, w_ArrPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_ArrPrototype,
             'toString': W_ArrayToString(ctx),
-            'join': w_arr_join,
+            'join': W_ArrayJoin(ctx),
             'reverse': W_ArrayReverse(ctx),
         })
         

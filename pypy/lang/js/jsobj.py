@@ -108,6 +108,7 @@ w_Null = W_Null()
 
 
 class W_PrimitiveObject(W_Root):
+    length = -1
     def __init__(self, ctx=None, Prototype=None, Class='Object',
                  Value=w_Undefined, callfunc=None):
         self.propdict = {}
@@ -122,6 +123,9 @@ class W_PrimitiveObject(W_Root):
         else:
             self.Scope = None
         self.Value = Value
+        
+        if self.length != -1:
+            self.Put(ctx, 'length', W_IntNumber(self.length), flags = DE|DD|RO)
 
     def Call(self, ctx, args=[], this=None):
         if self.callfunc is None: # XXX Not sure if I should raise it here
