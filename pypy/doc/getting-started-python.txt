@@ -284,8 +284,9 @@ prompt, but with an extra ">".
 
 Now you are ready to start running Python code.  Most Python
 modules should work if they don't involve CPython extension 
-modules.  Here is an example of determining PyPy's performance 
-in pystones:: 
+modules.  **This is slow, and most C modules are not present by
+default even if they are standard!**  Here is an example of
+determining PyPy's performance in pystones:: 
 
     >>>> from test import pystone 
     >>>> pystone.main(10)
