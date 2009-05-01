@@ -419,6 +419,26 @@ class W_IndexOf(W_NewBuiltin):
         pos = min(max(pos, 0), size)
         return W_IntNumber(string.find(substr, pos))
 
+class W_LastIndexOf(W_NewBuiltin):
+    length = 1
+    def Call(self, ctx, args=[], this=None):
+        string = this.ToString(ctx)
+        if len(args) < 1:
+            return W_IntNumber(-1)
+        substr = args[0].ToString(ctx)
+        if len(args) < 2:
+            pos = INFINITY
+        else:
+            val = args[1].ToNumber(ctx)
+            if isnan(val):
+                pos = INFINITY
+            else:
+                pos = args[1].ToInteger(ctx)
+        size = len(string)
+        pos = min(max(pos, 0), size)
+        subsize = len(substr)
+        return W_IntNumber(string.rfind(substr, 0, pos+subsize))
+
 class W_Substring(W_NewBuiltin):
     length = 2
     def Call(self, ctx, args=[], this=None):
@@ -655,6 +675,7 @@ class Interpreter(object):
             'charCodeAt': W_CharCodeAt(ctx),
             'concat': W_Concat(ctx),
             'indexOf': W_IndexOf(ctx),
+            'lastIndexOf': W_LastIndexOf(ctx),
             'substring': W_Substring(ctx),
             'split': W_Split(ctx),
             'toLowerCase': W_ToLowerCase(ctx),
