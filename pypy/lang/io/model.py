@@ -44,8 +44,28 @@ class W_Number(W_Object):
         return cloned
 
 class W_List(W_Object):
-    pass
-    
+    def __init__(self, space, protos = [], items = []):
+        W_Object.__init__(self, space, protos)
+        self.items = items
+
+    def append(self, w_items):
+        self.items += w_items
+        
+    def __getitem__(self, index):
+        try:
+            return self.items[index]
+        except IndexError:
+            return self.space.w_nil
+        
+        
+    def clone(self):
+        return W_List(self.space, [self], list(self.items))
+
+    def clone_and_init(self, space, items):
+        l = self.clone()
+        l.items += items
+        return l
+        
 class W_ImmutableSequence(W_Object):
     def __init__(self, space, string):
         self.value = string
@@ -79,6 +99,7 @@ class W_Message(W_Object):
             w_result = self.literal_value
         else:
             w_method = w_receiver.lookup(self.name)
+            assert w_method is not None, 'Method "%s" not found in "%s"' % (self.name, w_receiver.__class__)
             w_result = w_method.apply(space, w_receiver, self, w_context)
         if self.next:
             #TODO: optimize
@@ -94,8 +115,6 @@ class W_Block(W_Object):
         self.activateable = activateable
         
     def apply(self, space, w_receiver, w_message, w_context):
-        # TODO: move the call logic to a call method to use with blocks also
-        # TODO: store if the block is activateable (a method) or not
         # TODO: create and populate call object
         if self.activateable:
             return self.call(space, w_receiver, w_message, w_context)

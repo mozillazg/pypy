@@ -1,10 +1,11 @@
 from pypy.rlib.objectmodel import instantiate
-from pypy.lang.io.model import W_Number, W_Object, W_CFunction, W_Block, W_Message
+from pypy.lang.io.model import W_Number, W_Object, W_CFunction, W_Block, W_Message, W_List
 from pypy.lang.io.register import cfunction_definitions
 
 import pypy.lang.io.number
 import pypy.lang.io.object
 import pypy.lang.io.block
+import pypy.lang.io.list
 
 class ObjSpace(object):
     """docstring for ObjSpace"""
@@ -18,11 +19,15 @@ class ObjSpace(object):
         self.w_false = W_Object(self, [self.w_object])
         self.w_nil = W_Object(self, [self.w_object])
         self.w_block = W_Block(self, [], W_Message(self, 'nil', []), False, [self.w_object])
+        self.w_list = W_List(self, [self.w_object])
+        
         
         self.w_core.protos.append(self.w_object)
         
         self.w_protos.protos.append(self.w_core)
         self.w_protos.slots['Core'] = self.w_core
+        
+        self.init_w_list()
         
         self.init_w_block()
         
@@ -32,13 +37,13 @@ class ObjSpace(object):
         
         self.init_w_core()
         
-    #     self.init_singletons()
-    #     
-    # def init_singletons(self):
-    #     #true, false, nil, Message, Call, Normal, Break, Continue, Return
     def init_w_block(self):
         for key, function in cfunction_definitions['Block'].items():
             self.w_block.slots[key] = W_CFunction(self, function)
+    
+    def init_w_list(self):
+        for key, function in cfunction_definitions['List'].items():
+            self.w_list.slots[key] = W_CFunction(self, function)
             
     def init_w_core(self):
         self.w_core.slots['Locals'] = self.w_locals
@@ -47,6 +52,7 @@ class ObjSpace(object):
         self.w_core.slots['true'] = self.w_true
         self.w_core.slots['false'] = self.w_false
         self.w_core.slots['nil'] = self.w_nil
+        self.w_core.slots['List'] = self.w_list
 
     def init_w_number(self):
         self.w_number = instantiate(W_Number)
