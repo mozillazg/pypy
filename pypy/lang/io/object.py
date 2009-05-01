@@ -36,5 +36,9 @@ def w_object_block(space, w_target, w_message, w_context):
 def w_object_clone(space, w_target, w_message, w_context):
     assert w_message.name == 'clone'
     return w_target.clone()
-# def w_object_get_slot(w_target, w_message, w_context):
-#     pass
+
+@register_method('Object', 'list')
+def w_object_list(space, w_target, w_message, w_context):
+    w_items = [x.eval(space, w_target, w_context) for x in w_message.arguments]
+    return space.w_list.clone_and_init(space, w_items)
+    
