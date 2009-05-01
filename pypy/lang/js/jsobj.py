@@ -78,6 +78,9 @@ class W_Undefined(W_Root):
     def __str__(self):
         return "w_undefined"
     
+    def ToInteger(self, ctx):
+        return 0
+    
     def ToNumber(self, ctx):
         return NAN
 

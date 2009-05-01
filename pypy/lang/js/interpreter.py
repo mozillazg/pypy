@@ -415,7 +415,7 @@ class W_IndexOf(W_NewBuiltin):
         if len(args) < 2:
             pos = 0
         else:
-            pos = args[1].ToInt32(ctx)
+            pos = args[1].ToInteger(ctx)
         pos = min(max(pos, 0), size)
         return W_IntNumber(string.find(substr, pos))
 
