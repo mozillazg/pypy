@@ -120,52 +120,58 @@ class W_ArrayObject(W_NativeObject):
 
 TEST = False
 
-def evaljs(ctx, args, this):
-    if len(args) >= 1:
-        if  isinstance(args[0], W_String):
-            src = args[0].strval
+class W_Eval(W_NewBuiltin):
+    length = 1
+    def Call(self, ctx, args=[], this=None):
+        if len(args) >= 1:
+            if  isinstance(args[0], W_String):
+                src = args[0].strval
+            else:
+                return args[0]
         else:
-            return args[0]
-    else:
-        src = ''
-    try:
-        node = load_source(src, 'evalcode')
-    except ParseError, e:
-        raise ThrowException(W_String('SyntaxError: '+str(e)))
+            return w_Undefined
+        
+        try:
+            node = load_source(src, 'evalcode')
+        except ParseError, e:
+            raise ThrowException(W_String('SyntaxError: '+str(e)))
 
-    bytecode = JsCode()
-    node.emit(bytecode)
-    return bytecode.run(ctx, retlast=True)
+        bytecode = JsCode()
+        node.emit(bytecode)
+        return bytecode.run(ctx, retlast=True)
 
-def parseIntjs(ctx, args, this):
-    if len(args) < 1:
-        return W_FloatNumber(NAN)
-    s = args[0].ToString(ctx).strip(" ")
-    if len(args) > 1:
-        radix = args[1].ToInt32(ctx)
-    else:
-        radix = 10
-    if len(s) >= 2 and (s.startswith('0x') or s.startswith('0X')) :
-        radix = 16
-        s = s[2:]
-    if s == '' or radix < 2 or radix > 36:
-        return W_FloatNumber(NAN)
-    try:
-        n = int(s, radix)
-    except ValueError:
-        return W_FloatNumber(NAN)
-    return W_IntNumber(n)
+class W_ParseInt(W_NewBuiltin):
+    length = 1
+    def Call(self, ctx, args=[], this=None):
+        if len(args) < 1:
+            return W_FloatNumber(NAN)
+        s = args[0].ToString(ctx).strip(" ")
+        if len(args) > 1:
+            radix = args[1].ToInt32(ctx)
+        else:
+            radix = 10
+        if len(s) >= 2 and (s.startswith('0x') or s.startswith('0X')) :
+            radix = 16
+            s = s[2:]
+        if s == '' or radix < 2 or radix > 36:
+            return W_FloatNumber(NAN)
+        try:
+            n = int(s, radix)
+        except ValueError:
+            return W_FloatNumber(NAN)
+        return W_IntNumber(n)
 
-def parseFloatjs(ctx, args, this):
-    if len(args) < 1:
-        return W_FloatNumber(NAN)
-    s = args[0].ToString(ctx).strip(" ")
-    try:
-        n = float(s)
-    except ValueError:
-        n = NAN
-    return W_FloatNumber(n)
-    
+class W_ParseFloat(W_NewBuiltin):
+    length = 1
+    def Call(self, ctx, args=[], this=None):
+        if len(args) < 1:
+            return W_FloatNumber(NAN)
+        s = args[0].ToString(ctx).strip(" ")
+        try:
+            n = float(s)
+        except ValueError:
+            n = NAN
+        return W_FloatNumber(n)
 
 def printjs(ctx, args, this):
     writer(",".join([i.ToString(ctx) for i in args]))
@@ -713,10 +719,15 @@ class Interpreter(object):
         w_math.Put(ctx, 'floor', W_Builtin(floorjs, Class='function'))
         w_math.Put(ctx, 'pow', W_Builtin(powjs, Class='function'))
         w_math.Put(ctx, 'sqrt', W_Builtin(sqrtjs, Class='function'))
-        w_math.Put(ctx, 'E', W_FloatNumber(math.e))
-        w_math.Put(ctx, 'PI', W_FloatNumber(math.pi))
-        
-        w_Global.Put(ctx, 'version', W_Builtin(versionjs))
+        w_math.Put(ctx, 'E', W_FloatNumber(math.e), flags=allon)
+        w_math.Put(ctx, 'LN2', W_FloatNumber(math.log(2)), flags=allon)
+        w_math.Put(ctx, 'LN10', W_FloatNumber(math.log(10)), flags=allon)
+        w_math.Put(ctx, 'LOG2E', W_FloatNumber(math.log(math.e, 2)), flags=allon)
+        w_math.Put(ctx, 'LOG10E', W_FloatNumber(math.log(math.e, 10)), flags=allon)
+        w_math.Put(ctx, 'PI', W_FloatNumber(math.pi), flags=allon)
+        w_math.Put(ctx, 'SQRT1_2', W_FloatNumber(math.sqrt(0.5)), flags=allon)
+        w_math.Put(ctx, 'SQRT2', W_FloatNumber(math.sqrt(2)), flags=allon)
+        w_Global.Put(ctx, 'version', W_Builtin(versionjs), flags=allon)
         
         #Date
         w_Date = W_DateFake(ctx, Class='Date')
@@ -725,9 +736,9 @@ class Interpreter(object):
         w_Global.Put(ctx, 'NaN', W_FloatNumber(NAN), flags = DE|DD)
         w_Global.Put(ctx, 'Infinity', W_FloatNumber(INFINITY), flags = DE|DD)
         w_Global.Put(ctx, 'undefined', w_Undefined, flags = DE|DD)        
-        w_Global.Put(ctx, 'eval', W_Builtin(evaljs))
-        w_Global.Put(ctx, 'parseInt', W_Builtin(parseIntjs))
-        w_Global.Put(ctx, 'parseFloat', W_Builtin(parseFloatjs))
+        w_Global.Put(ctx, 'eval', W_Eval(ctx))
+        w_Global.Put(ctx, 'parseInt', W_ParseInt(ctx))
+        w_Global.Put(ctx, 'parseFloat', W_ParseFloat(ctx))
         w_Global.Put(ctx, 'isNaN', W_Builtin(isnanjs))
         w_Global.Put(ctx, 'isFinite', W_Builtin(isfinitejs))            
         w_Global.Put(ctx, 'print', W_Builtin(printjs))
