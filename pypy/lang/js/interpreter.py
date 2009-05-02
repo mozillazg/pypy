@@ -585,7 +585,7 @@ class Interpreter(object):
         
         w_FncPrototype = w_Function.Call(ctx, this=w_Function)
         w_Function.Put(ctx, 'prototype', w_FncPrototype, flags = allon)
-        w_Function.Put(ctx, 'constructor', w_Function)
+        w_Function.Put(ctx, 'constructor', w_Function, flags=allon)
         
         toString = W_ToString(ctx)
         
