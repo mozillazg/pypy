@@ -331,8 +331,7 @@ class SemiSpaceGC(MovingGCBase):
         self.trace(obj, self._trace_copy, None)
 
     def _trace_copy(self, pointer, ignored):
-        if pointer.address[0] != NULL:
-            pointer.address[0] = self.copy(pointer.address[0])
+        pointer.address[0] = self.copy(pointer.address[0])
 
     def surviving(self, obj):
         # To use during a collection.  Check if the object is currently
@@ -451,8 +450,7 @@ class SemiSpaceGC(MovingGCBase):
         return scan
 
     def _append_if_nonnull(pointer, stack):
-        if pointer.address[0] != NULL:
-            stack.append(pointer.address[0])
+        stack.append(pointer.address[0])
     _append_if_nonnull = staticmethod(_append_if_nonnull)
 
     def _finalization_state(self, obj):
