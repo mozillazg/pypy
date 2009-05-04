@@ -295,10 +295,9 @@ class GenerationGC(SemiSpaceGC):
 
     def _trace_external_obj(self, pointer, obj):
         addr = pointer.address[0]
-        if addr != NULL:
-            newaddr = self.copy(addr)
-            pointer.address[0] = newaddr
-            self.write_into_last_generation_obj(obj, newaddr)
+        newaddr = self.copy(addr)
+        pointer.address[0] = newaddr
+        self.write_into_last_generation_obj(obj, newaddr)
 
     # ____________________________________________________________
     # Implementation of nursery-only collections

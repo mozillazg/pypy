@@ -909,7 +909,7 @@ class ShadowStackRootWalker(BaseRootWalker):
         addr = gcdata.root_stack_base
         end = gcdata.root_stack_top
         while addr != end:
-            if addr.address[0] != llmemory.NULL:
+            if self.gc.points_to_valid_gc_object(addr):
                 collect_stack_root(gc, addr)
             addr += sizeofaddr
         if self.collect_stacks_from_other_threads is not None:

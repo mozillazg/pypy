@@ -342,11 +342,10 @@ class MarkCompactGC(MovingGCBase):
 
     def _mark_obj(self, pointer, ignored):
         obj = pointer.address[0]
-        if obj != NULL:
-            if self.marked(obj):
-                return
-            self.mark(obj)
-            self.to_see.append(obj)
+        if self.marked(obj):
+            return
+        self.mark(obj)
+        self.to_see.append(obj)
 
     def _mark_root_recursively(self, root):
         self.mark(root.address[0])

@@ -148,14 +148,17 @@ class GCBase(object):
             length = (obj + llmemory.gcarrayofptr_lengthoffset).signed[0]
             item = obj + llmemory.gcarrayofptr_itemsoffset
             while length > 0:
-                callback(item, arg)
+                if self.points_to_valid_gc_object(item):
+                    callback(item, arg)
                 item += llmemory.gcarrayofptr_singleitemoffset
                 length -= 1
             return
         offsets = self.offsets_to_gc_pointers(typeid)
         i = 0
         while i < len(offsets):
-            callback(obj + offsets[i], arg)
+            item = obj + offsets[i]
+            if self.points_to_valid_gc_object(item):
+                callback(item, arg)
             i += 1
         if self.has_gcptr_in_varsize(typeid):
             item = obj + self.varsize_offset_to_variable_part(typeid)
@@ -165,11 +168,17 @@ class GCBase(object):
             while length > 0:
                 j = 0
                 while j < len(offsets):
-                    callback(item + offsets[j], arg)
+                    itemobj = item + offsets[j]
+                    if self.points_to_valid_gc_object(itemobj):
+                        callback(itemobj, arg)
                     j += 1
                 item += itemlength
                 length -= 1
     trace._annspecialcase_ = 'specialize:arg(2)'
+
+    def points_to_valid_gc_object(self, addr):
+        pointsto = addr.address[0]
+        return pointsto != NULL
 
     def debug_check_consistency(self):
         """To use after a collection.  If self.DEBUG is set, this
@@ -205,8 +214,8 @@ class GCBase(object):
         self._debug_record(obj)
     def _debug_callback2(self, pointer, ignored):
         obj = pointer.address[0]
-        if obj:
-            self._debug_record(obj)
+        ll_assert(bool(obj), "NULL address from self.trace()")
+        self._debug_record(obj)
 
     def debug_check_object(self, obj):
         pass
