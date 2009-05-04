@@ -9,6 +9,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.gc.marksweep import X_CLONE, X_POOL, X_POOL_PTR
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.rlib.debug import ll_assert
+from pypy.rlib import rgc
 from pypy import conftest
 from pypy.rlib.rstring import StringBuilder
 
@@ -455,7 +456,6 @@ class GenericGCTests(GCTest):
     def test_can_move(self):
         TP = lltype.GcArray(lltype.Float)
         def func():
-            from pypy.rlib import rgc
             return rgc.can_move(lltype.malloc(TP, 1))
         run = self.runner(func)
         res = run([])
@@ -465,7 +465,6 @@ class GenericGCTests(GCTest):
         TP = lltype.GcArray(lltype.Char)
         def func():
             #try:
-            from pypy.rlib import rgc
             a = rgc.malloc_nonmovable(TP, 3)
             rgc.collect()
             if a:
@@ -483,7 +482,6 @@ class GenericGCTests(GCTest):
         TP = lltype.GcStruct('T', ('s', lltype.Ptr(S)))
         def func():
             try:
-                from pypy.rlib import rgc
                 a = rgc.malloc_nonmovable(TP)
                 rgc.collect()
                 if a:
@@ -499,7 +497,6 @@ class GenericGCTests(GCTest):
     def test_resizable_buffer(self):
         from pypy.rpython.lltypesystem.rstr import STR
         from pypy.rpython.annlowlevel import hlstr
-        from pypy.rlib import rgc
 
         def f():
             ptr = rgc.resizable_buffer_of_shape(STR, 2)
@@ -527,6 +524,37 @@ class GenericGCTests(GCTest):
         fn = self.runner(fn)
         res = fn([])
         assert res == 'y'
+
+    def test_tagged(self):
+        from pypy.rlib.objectmodel import UnboxedValue
+        class A(object):
+            __slots__ = ()
+            def meth(self, x):
+                raise NotImplementedError
+
+        class B(A):
+            attrvalue = 66
+            def __init__(self, normalint):
+                self.normalint = normalint
+            def meth(self, x):
+                return self.normalint + x + 2
+
+        class C(A, UnboxedValue):
+            __slots__ = 'smallint'
+            def meth(self, x):
+                return self.smallint + x + 3
+        def fn(n):
+            if n > 0:
+                x = B(n)
+            else:
+                x = C(n)
+            rgc.collect()
+            return x.meth(100)
+        def func():
+            return fn(1000) + fn(-1000)
+        func = self.runner(func)
+        res = func([])
+        assert res == fn(1000) + fn(-1000)
 
 class GenericMovingGCTests(GenericGCTests):
     GC_CAN_MOVE = True
@@ -638,7 +666,6 @@ class TestMarkSweepGC(GenericGCTests):
         assert res == 22220221
 
     def test_cloning_highlevel(self):
-        from pypy.rlib import rgc
         class A:
             pass
         class B(A):
@@ -672,7 +699,6 @@ class TestMarkSweepGC(GenericGCTests):
         assert res == 1
 
     def test_cloning_highlevel_varsize(self):
-        from pypy.rlib import rgc
         class A:
             pass
         def func(n, dummy):
