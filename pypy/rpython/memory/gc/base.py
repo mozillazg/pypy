@@ -178,7 +178,7 @@ class GCBase(object):
 
     def points_to_valid_gc_object(self, addr):
         pointsto = addr.address[0]
-        return pointsto != NULL
+        return pointsto != NULL and llmemory.cast_adr_to_int(pointsto) & 1 == 0
 
     def debug_check_consistency(self):
         """To use after a collection.  If self.DEBUG is set, this
