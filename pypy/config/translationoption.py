@@ -5,7 +5,7 @@ from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
 from pypy.config.config import ConfigError
 
 DEFL_INLINE_THRESHOLD = 32.4    # just enough to inline add__Int_Int()
-# and just small enough to prevend inlining of some rlist functions.
+# and just small enough to prevent inlining of some rlist functions.
 
 DEFL_PROF_BASED_INLINE_THRESHOLD = 32.4
 DEFL_CLEVER_MALLOC_REMOVAL_INLINE_THRESHOLD = 32.4
