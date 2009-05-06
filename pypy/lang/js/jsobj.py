@@ -111,7 +111,6 @@ w_Null = W_Null()
 
 
 class W_PrimitiveObject(W_Root):
-    length = -1
     def __init__(self, ctx=None, Prototype=None, Class='Object',
                  Value=w_Undefined, callfunc=None):
         self.propdict = {}
@@ -126,9 +125,6 @@ class W_PrimitiveObject(W_Root):
         else:
             self.Scope = None
         self.Value = Value
-        
-        if self.length != -1:
-            self.Put(ctx, 'length', W_IntNumber(self.length), flags = DE|DD|RO)
 
     def Call(self, ctx, args=[], this=None):
         if self.callfunc is None: # XXX Not sure if I should raise it here
@@ -260,6 +256,7 @@ class W_Object(W_PrimitiveObject):
         return self.Get(ctx, 'valueOf').Call(ctx, args=[], this=self).ToNumber(ctx)
 
 class W_NewBuiltin(W_PrimitiveObject):
+    length = -1
     def __init__(self, ctx, Prototype=None, Class='function',
                  Value=w_Undefined, callfunc=None):
         if Prototype is None:
@@ -267,6 +264,10 @@ class W_NewBuiltin(W_PrimitiveObject):
             Prototype = proto
 
         W_PrimitiveObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
+        
+        if self.length != -1:
+            self.Put(ctx, 'length', W_IntNumber(self.length), flags = DE|DD|RO)
+
 
     def Call(self, ctx, args=[], this = None):
         raise NotImplementedError

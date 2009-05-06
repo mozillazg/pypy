@@ -232,7 +232,7 @@ def unescapejs(ctx, args, this):
             elif (i + 5 < lgt and strval[i + 1] == 'u' and
                   _ishex(strval[i + 2]) and _ishex(strval[i + 3]) and
                   _ishex(strval[i + 4]) and _ishex(strval[i + 5])):
-                ch = unichr(int(strval[i+2:i+6], 16))
+                ch = chr(int(strval[i+2:i+6], 16))
                 i += 5
         i += 1
         res.append(ch)
@@ -375,7 +375,7 @@ class W_FromCharCode(W_NewBuiltin):
         temp = []
         for arg in args:
             i = arg.ToInt32(ctx) % 65536 # XXX should be uint16
-            temp.append(unichr(i))
+            temp.append(chr(i))
         return W_String(''.join(temp))
 
 class W_CharAt(W_NewBuiltin):
@@ -422,7 +422,8 @@ class W_IndexOf(W_NewBuiltin):
             pos = 0
         else:
             pos = args[1].ToInteger(ctx)
-        pos = min(max(pos, 0), size)
+        pos = int(min(max(pos, 0), size))
+        assert pos >= 0
         return W_IntNumber(string.find(substr, pos))
 
 class W_LastIndexOf(W_NewBuiltin):
@@ -441,9 +442,11 @@ class W_LastIndexOf(W_NewBuiltin):
             else:
                 pos = args[1].ToInteger(ctx)
         size = len(string)
-        pos = min(max(pos, 0), size)
+        pos = int(min(max(pos, 0), size))
         subsize = len(substr)
-        return W_IntNumber(string.rfind(substr, 0, pos+subsize))
+        endpos = pos+subsize
+        assert endpos >= 0
+        return W_IntNumber(string.rfind(substr, 0, endpos))
 
 class W_Substring(W_NewBuiltin):
     length = 2
@@ -722,8 +725,8 @@ class Interpreter(object):
         w_math.Put(ctx, 'E', W_FloatNumber(math.e), flags=allon)
         w_math.Put(ctx, 'LN2', W_FloatNumber(math.log(2)), flags=allon)
         w_math.Put(ctx, 'LN10', W_FloatNumber(math.log(10)), flags=allon)
-        w_math.Put(ctx, 'LOG2E', W_FloatNumber(math.log(math.e, 2)), flags=allon)
-        w_math.Put(ctx, 'LOG10E', W_FloatNumber(math.log(math.e, 10)), flags=allon)
+        #w_math.Put(ctx, 'LOG2E', W_FloatNumber(math.log(math.e, 2)), flags=allon)
+        #w_math.Put(ctx, 'LOG10E', W_FloatNumber(math.log(math.e, 10)), flags=allon)
         w_math.Put(ctx, 'PI', W_FloatNumber(math.pi), flags=allon)
         w_math.Put(ctx, 'SQRT1_2', W_FloatNumber(math.sqrt(0.5)), flags=allon)
         w_math.Put(ctx, 'SQRT2', W_FloatNumber(math.sqrt(2)), flags=allon)
