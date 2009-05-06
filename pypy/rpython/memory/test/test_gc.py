@@ -495,7 +495,9 @@ class GCTest(object):
             pass
 
         u = Unrelated()
+        u.x = C(47)
         def fn(n):
+            rgc.collect() # check that a prebuilt tagged pointer doesn't explode
             if n > 0:
                 x = B(n)
             else:
