@@ -490,11 +490,17 @@ class GCTest(object):
             __slots__ = 'smallint'
             def meth(self, x):
                 return self.smallint + x + 3
+
+        class Unrelated(object):
+            pass
+
+        u = Unrelated()
         def fn(n):
             if n > 0:
                 x = B(n)
             else:
                 x = C(n)
+            u.x = x # invoke write barrier
             rgc.collect()
             return x.meth(100)
         res = self.interpret(fn, [1000])

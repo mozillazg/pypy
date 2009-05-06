@@ -413,11 +413,11 @@ class GenerationGC(SemiSpaceGC):
     def remember_young_pointer(self, addr_struct, addr):
         ll_assert(not self.is_in_nursery(addr_struct),
                      "nursery object with GCFLAG_NO_YOUNG_PTRS")
+        if not self.is_valid_gc_object(addr):
+            return
         if self.is_in_nursery(addr):
             self.old_objects_pointing_to_young.append(addr_struct)
             self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
-        elif addr == NULL:
-            return
         self.write_into_last_generation_obj(addr_struct, addr)
     remember_young_pointer._dont_inline_ = True
 
