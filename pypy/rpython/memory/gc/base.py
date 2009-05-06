@@ -177,8 +177,10 @@ class GCBase(object):
     trace._annspecialcase_ = 'specialize:arg(2)'
 
     def points_to_valid_gc_object(self, addr):
-        pointsto = addr.address[0]
-        return pointsto != NULL and llmemory.cast_adr_to_int(pointsto) & 1 == 0
+        return self.is_valid_gc_object(addr.address[0])
+
+    def is_valid_gc_object(self, addr):
+        return addr != NULL and llmemory.cast_adr_to_int(addr) & 1 == 0
 
     def debug_check_consistency(self):
         """To use after a collection.  If self.DEBUG is set, this
