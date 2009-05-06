@@ -6,6 +6,7 @@ Usage: js-c [-f] jsourcefile [-f] other_source ...
 
 import sys
 from pypy.lang.js.interpreter import *
+from pypy.lang.js.console import JSConsole
 
 # __________  Entry point  __________
 
@@ -15,6 +16,12 @@ def run_file(interp, name):
 
 def entry_point(argv):
     i = 1
+    
+    if len(argv) == 1:
+        console = JSConsole()
+        console.interact()
+        return 0
+    
     interp = Interpreter()
     while i < len(argv):
         arg = argv[i]
