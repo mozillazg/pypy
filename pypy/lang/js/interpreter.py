@@ -725,8 +725,9 @@ class Interpreter(object):
         w_math.Put(ctx, 'E', W_FloatNumber(math.e), flags=allon)
         w_math.Put(ctx, 'LN2', W_FloatNumber(math.log(2)), flags=allon)
         w_math.Put(ctx, 'LN10', W_FloatNumber(math.log(10)), flags=allon)
-        #w_math.Put(ctx, 'LOG2E', W_FloatNumber(math.log(math.e, 2)), flags=allon)
-        #w_math.Put(ctx, 'LOG10E', W_FloatNumber(math.log(math.e, 10)), flags=allon)
+        log2e = math.log(math.e) / math.log(2) # rpython supports log with one argument only
+        w_math.Put(ctx, 'LOG2E', W_FloatNumber(log2e), flags=allon)
+        w_math.Put(ctx, 'LOG10E', W_FloatNumber(math.log10(math.e)), flags=allon)
         w_math.Put(ctx, 'PI', W_FloatNumber(math.pi), flags=allon)
         w_math.Put(ctx, 'SQRT1_2', W_FloatNumber(math.sqrt(0.5)), flags=allon)
         w_math.Put(ctx, 'SQRT2', W_FloatNumber(math.sqrt(2)), flags=allon)
