@@ -122,7 +122,7 @@ class __extend__(AbstractStringRepr):
             v_start = hop.inputconst(Signed, 0)
         if hop.nb_args > 3:
             v_end = hop.inputarg(Signed, arg=3)
-            if not hop.args_s[2].nonneg:
+            if not hop.args_s[3].nonneg:
                 raise TyperError("str.find() end must be proven non-negative")
         else:
             v_end = hop.gendirectcall(self.ll.ll_strlen, v_str)
@@ -149,7 +149,7 @@ class __extend__(AbstractStringRepr):
             v_start = hop.inputconst(Signed, 0)
         if hop.nb_args > 3:
             v_end = hop.inputarg(Signed, arg=3)
-            if not hop.args_s[2].nonneg:
+            if not hop.args_s[3].nonneg:
                 raise TyperError("str.count() end must be proven non-negative")
         else:
             v_end = hop.gendirectcall(self.ll.ll_strlen, v_str)
