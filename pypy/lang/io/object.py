@@ -1,20 +1,15 @@
 from pypy.lang.io.register import register_method
 from pypy.lang.io.model import W_ImmutableSequence, W_Block
 
-@register_method('Object', 'setSlot')
-def w_object_set_slot(space, w_target, w_message, w_context):
-    w_name = w_message.arguments[0].eval(space, w_context, w_context)
-    w_value = w_message.arguments[1].eval(space, w_context, w_context)
-    assert isinstance(w_name, W_ImmutableSequence)
-    w_target.slots[w_name.value] = w_value
+@register_method('Object', 'setSlot', unwrap_spec=[object, str, object])
+def w_object_set_slot(space, w_target, name, w_value):
+    w_target.slots[name] = w_value
     return w_value
     
-@register_method('Object', 'getSlot')
-def w_object_get_slot(space, w_target, w_message, w_context):
-    w_name = w_message.arguments[0].eval(space, w_context, w_context)
-    assert isinstance(w_name, W_ImmutableSequence)
+@register_method('Object', 'getSlot', unwrap_spec=[object, str])
+def w_object_get_slot(space, w_target, name):
     try:
-        return w_target.slots[w_name.value]
+        return w_target.slots[name]
     except KeyError:
         return space.w_nil
 
@@ -32,9 +27,8 @@ def w_object_block(space, w_target, w_message, w_context):
     names = [x.name for x in w_arguments]
     return space.w_block.clone_and_init(space, names, w_body, False)
     
-@register_method('Object', 'clone')
-def w_object_clone(space, w_target, w_message, w_context):
-    assert w_message.name == 'clone'
+@register_method('Object', 'clone', unwrap_spec=[object])
+def w_object_clone(space, w_target):
     return w_target.clone()
 
 @register_method('Object', 'list')

@@ -7,9 +7,6 @@ def list_append(space, w_target, w_message, w_context):
     w_target.append(w_items)
     return w_target
 
-@register_method('List', 'at')
-def list_at(space, w_target, w_message, w_context):
-    assert len(w_message.arguments) > 0
-    w_item = w_message.arguments[0].eval(space, w_target, w_context)
-    assert isinstance(w_item, W_Number)
-    return w_target[w_item.value]
+@register_method('List', 'at', unwrap_spec=[object, int])
+def list_at(space, target, argument):
+    return target[argument]
