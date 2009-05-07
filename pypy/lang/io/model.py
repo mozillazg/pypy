@@ -12,13 +12,20 @@ class W_Object(object):
     def __ne__(self, other):
         return not self == other
 
-    def lookup(self, name):
+    def lookup(self, name, seen=None):
+        if seen is None:
+            seen = {}
+        else:
+            if self in seen:
+                return None
+        seen[self] = None
+
         try:
             return self.slots[name]
         except KeyError:
             pass
-        for x in self.protos:
-            t = x.lookup(name)
+        for x in self.protos:            
+            t = x.lookup(name, seen)
             if t is not None:
                 return t
 
