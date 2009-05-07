@@ -4,13 +4,12 @@ import autopath
 import os, sys
 from pypy.lang.js.interpreter import load_source, Interpreter, load_file
 from pypy.lang.js.jsparser import parse, ParseError
-from pypy.lang.js.jsobj import W_Builtin, W_String, ThrowException, w_Undefined
+from pypy.lang.js.jsobj import W_NewBuiltin, W_String, ThrowException, w_Undefined
 from pypy.rlib.streamio import open_file_as_stream
 
 def printmessage(msg):
-    if msg is None:
-        return
-    os.write(1, msg)
+    if msg is not None:
+        os.write(1, msg)
 
 def readline():
     result = []
@@ -19,19 +18,46 @@ def readline():
         result.append(s)
         if s == '\n':
             break
-       
+        
         if s == '':
             if len(result) > 1:
                 break
             raise SystemExit
     return ''.join(result)
 
+class W_Quit(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        raise SystemExit, 0
+
+class W_Load(W_NewBuiltin):
+    def __init__(self, ctx, interpreter):
+        W_NewBuiltin.__init__(self, ctx)
+        self.interpreter = interpreter
+    
+    def Call(self, ctx, args=[], this=None):
+        if len(args) >= 1:
+            filename = args[0].ToString(self.interpreter.global_context)
+            try:
+                assert filename is not None
+                program = load_file(filename)
+            except EnvironmentError, e:
+                msg = W_String("Can't open %s: %s" % (filename, e))
+                raise ThrowException(msg)
+            self.interpreter.run(program)
+        return w_Undefined
+
 class JSConsole(object):
     prompt_ok = 'js> '
     prompt_more = '... '
 
     def __init__(self):
-        self.interpreter = Interpreter()
+        interp = Interpreter()
+        ctx = interp.global_context
+        
+        interp.w_Global.Put(ctx, 'quit', W_Quit(ctx))
+        interp.w_Global.Put(ctx, 'load', W_Load(ctx, interp))
+        
+        self.interpreter = interp
     
     def runsource(self, source, filename='<input>'):
         try:
@@ -65,16 +91,24 @@ class JSConsole(object):
                 printmessage('\n')
         except SystemExit:
             raise
-        #except ThrowException, exc:
-        #    self.showtraceback(exc)
+        except ThrowException, exc:
+            self.showtraceback(exc)
+    
+    def showtraceback(self, exc):
+        printmessage(exc.exception.ToString(self.interpreter.global_context))
+        printmessage('\n')
     
     def showsyntaxerror(self, filename, exc):
-        pass
+        printmessage(' ' * 4 + \
+                  ' ' * exc.source_pos.columnno + \
+                  '^\n')
+        printmessage('Syntax Error\n')
     
     def interact(self):
         printmessage('PyPy JavaScript Interpreter\n')
         printmessage(self.prompt_ok)
         
+        # input for the current statement
         lines = []
         
         while True:
