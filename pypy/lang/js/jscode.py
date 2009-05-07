@@ -27,19 +27,19 @@ def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
     try:
         while i < len(opcodes):
             opcode = opcodes[i]
-            if we_are_translated():
-                #this is an optimization strategy for translated code
-                #on top of cpython it destroys the performance
-                #besides, this code might be completely wrong
-                for name, op in opcode_unrolling:
-                    opcode = hint(opcode, deepfreeze=True)
-                    if isinstance(opcode, op):
-                        result = opcode.eval(ctx, stack)
-                        assert result is None
-                        break
-            else:
-                result = opcode.eval(ctx, stack)
-                assert result is None
+            #if we_are_translated():
+            #    #this is an optimization strategy for translated code
+            #    #on top of cpython it destroys the performance
+            #    #besides, this code might be completely wrong
+            #    for name, op in opcode_unrolling:
+            #        opcode = hint(opcode, deepfreeze=True)
+            #        if isinstance(opcode, op):
+            #            result = opcode.eval(ctx, stack)
+            #            assert result is None
+            #            break
+            #else:
+            result = opcode.eval(ctx, stack)
+            assert result is None
 
             if isinstance(opcode, BaseJump):
                 i = opcode.do_jump(stack, i)

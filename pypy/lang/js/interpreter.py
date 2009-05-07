@@ -243,6 +243,7 @@ class W_ToString(W_NewBuiltin):
         return W_String("[object %s]"%this.Class)
 
 class W_ValueOf(W_NewBuiltin):
+    length = 0
     def Call(self, ctx, args=[], this=None):
         return this
 
@@ -583,16 +584,19 @@ class Interpreter(object):
         
         w_Function = W_Function(ctx, Class='Function', 
                               Prototype=w_ObjPrototype)
+        w_FncPrototype = W_Function(ctx, Class='Function', Prototype=w_ObjPrototype)#W_Object(Prototype=None, Class='Function')
+        
         w_Function.Put(ctx, 'length', W_IntNumber(1), flags = allon)
         w_Global.Put(ctx, 'Function', w_Function)
         
-        w_Object = W_ObjectObject('Object', w_Function)
+        w_Object = W_ObjectObject('Object', w_FncPrototype)
         w_Object.Put(ctx, 'prototype', w_ObjPrototype, flags = allon)
-        w_Object.Put(ctx, 'length', W_IntNumber(1), flags = RO | DD)
-        w_Global.Put(ctx, 'Object', w_Object)
+        w_Object.Put(ctx, 'length', W_IntNumber(1), flags = allon)
         w_Global.Prototype = w_ObjPrototype
         
-        w_FncPrototype = w_Function.Call(ctx, this=w_Function)
+        w_Object.Put(ctx, 'prototype', w_ObjPrototype, flags = allon)
+        w_Global.Put(ctx, 'Object', w_Object)
+        
         w_Function.Put(ctx, 'prototype', w_FncPrototype, flags = allon)
         w_Function.Put(ctx, 'constructor', w_Function, flags=allon)
         
@@ -600,7 +604,7 @@ class Interpreter(object):
         
         put_values(ctx, w_ObjPrototype, {
             'constructor': w_Object,
-            '__proto__': w_FncPrototype,
+            '__proto__': w_Null,
             'toString': toString,
             'toLocaleString': toString,
             'valueOf': W_ValueOf(ctx),
@@ -617,6 +621,7 @@ class Interpreter(object):
             'apply': W_Apply(ctx),
             'call': W_Call(ctx),
             'arguments': w_Null,
+            'valueOf': W_ValueOf(ctx),
         })
         
         w_Boolean = W_BooleanObject('Boolean', w_FncPrototype)
