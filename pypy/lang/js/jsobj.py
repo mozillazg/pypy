@@ -669,6 +669,7 @@ def create_object(ctx, prototypename, callfunc=None, Value=w_Undefined):
     proto = ctx.get_global().Get(ctx, prototypename).Get(ctx, 'prototype')
     obj = W_Object(ctx, callfunc = callfunc,Prototype=proto,
                     Class = proto.Class, Value = Value)
+    obj.Put(ctx, '__proto__', proto, DE|DD|RO)
     return obj
 
 def isnull_or_undefined(obj):
