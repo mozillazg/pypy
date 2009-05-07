@@ -39,3 +39,26 @@ def test_clone_number():
     xx = x.clone()
     assert xx.protos == [x]
     assert isinstance(xx, W_Number)
+    
+def test_lookup_cycles():
+    obj = W_Object(None, )
+    obj.protos.append(obj)
+    a = obj.slots['not_fail'] = W_Object(None)
+    assert obj.lookup("not_fail") is a
+    assert obj.lookup('fail') is None
+    
+def test_lookup_cycling_complex():
+    space = ObjSpace()
+    a = W_Object(None, )
+    b = W_Object(None, )
+    c = W_Object(None, )
+    a.protos += [a, c]
+    c.protos += [b]
+    b.protos += [b]
+    a.slots['a'] = W_Number(space, 1)
+    b.slots['b'] = W_Number(space, 2)
+    c.slots['c'] = W_Number(space, 3)
+    assert a.lookup('fail') is None
+    assert a.lookup('a').value == 1
+    assert a.lookup('b').value == 2
+    assert a.lookup('c').value == 3
