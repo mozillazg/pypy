@@ -62,3 +62,7 @@ def test_lookup_cycling_complex():
     assert a.lookup('a').value == 1
     assert a.lookup('b').value == 2
     assert a.lookup('c').value == 3
+    
+def test_lookup_cycle_builtins():
+    space = ObjSpace()
+    assert space.w_object.lookup('Lobby') is space.w_lobby

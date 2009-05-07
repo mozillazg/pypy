@@ -10,7 +10,8 @@ import pypy.lang.io.list
 class ObjSpace(object):
     """docstring for ObjSpace"""
     def __init__(self):
-        self.init_w_object()
+        self.w_object = W_Object(self)
+
         self.w_lobby = W_Object(self)
         self.w_protos = W_Object(self)
         self.w_core = W_Object(self)
@@ -21,11 +22,9 @@ class ObjSpace(object):
         self.w_block = W_Block(self, [], W_Message(self, 'nil', []), False, [self.w_object])
         self.w_list = W_List(self, [self.w_object])
         
+        self.init_w_object()        
         
-        self.w_core.protos.append(self.w_object)
-        
-        self.w_protos.protos.append(self.w_core)
-        self.w_protos.slots['Core'] = self.w_core
+        self.init_w_protos()
         
         self.init_w_list()
         
@@ -37,6 +36,11 @@ class ObjSpace(object):
         
         self.init_w_core()
         
+
+    def init_w_protos(self):
+        self.w_protos.protos.append(self.w_core)
+        self.w_protos.slots['Core'] = self.w_core
+        
     def init_w_block(self):
         for key, function in cfunction_definitions['Block'].items():
             self.w_block.slots[key] = W_CFunction(self, function)
@@ -46,6 +50,7 @@ class ObjSpace(object):
             self.w_list.slots[key] = W_CFunction(self, function)
             
     def init_w_core(self):
+        self.w_core.protos.append(self.w_object)
         self.w_core.slots['Locals'] = self.w_locals
         self.w_core.slots['Block'] = self.w_block
         self.w_core.slots['Object'] = self.w_object
@@ -64,10 +69,12 @@ class ObjSpace(object):
             
     def init_w_lobby(self):
         self.w_lobby.protos.append(self.w_protos)
+        self.w_object.protos.append(self.w_lobby)
         self.w_lobby.slots['Lobby'] = self.w_lobby
         self.w_lobby.slots['Protos'] = self.w_protos
 
     def init_w_object(self):
-        self.w_object = W_Object(self)
+        
+
         for key, function in cfunction_definitions['Object'].items():
             self.w_object.slots[key] = W_CFunction(self, function)
