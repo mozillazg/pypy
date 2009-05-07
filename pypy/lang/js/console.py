@@ -15,10 +15,10 @@ def readline():
     result = []
     while 1:
         s = os.read(0, 1)
-        result.append(s)
         if s == '\n':
             break
-        
+        else:
+            result.append(s)
         if s == '':
             if len(result) > 1:
                 break
@@ -46,6 +46,10 @@ class W_Load(W_NewBuiltin):
             self.interpreter.run(program)
         return w_Undefined
 
+class W_ReadLine(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        return W_String(readline())
+
 class JSConsole(object):
     prompt_ok = 'js> '
     prompt_more = '... '
@@ -56,6 +60,7 @@ class JSConsole(object):
         
         interp.w_Global.Put(ctx, 'quit', W_Quit(ctx))
         interp.w_Global.Put(ctx, 'load', W_Load(ctx, interp))
+        interp.w_Global.Put(ctx, 'readline', W_ReadLine(ctx))
         
         self.interpreter = interp
     
