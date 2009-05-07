@@ -526,28 +526,18 @@ class GenericGCTests(GCTest):
         assert res == 'y'
 
     def test_tagged(self):
-        from pypy.rlib.objectmodel import UnboxedValue
-        class A(object):
-            __slots__ = ()
-            def meth(self, x):
-                raise NotImplementedError
+        class Unrelated(object):
+            pass
 
-        class B(A):
-            attrvalue = 66
-            def __init__(self, normalint):
-                self.normalint = normalint
-            def meth(self, x):
-                return self.normalint + x + 2
-
-        class C(A, UnboxedValue):
-            __slots__ = 'smallint'
-            def meth(self, x):
-                return self.smallint + x + 3
+        u = Unrelated()
+        u.x = UnboxedObject(47)
         def fn(n):
+            rgc.collect() # check that a prebuilt tagged pointer doesn't explode
             if n > 0:
-                x = B(n)
+                x = BoxedObject(n)
             else:
-                x = C(n)
+                x = UnboxedObject(n)
+            u.x = x # invoke write barrier
             rgc.collect()
             return x.meth(100)
         def func():
@@ -555,6 +545,26 @@ class GenericGCTests(GCTest):
         func = self.runner(func)
         res = func([])
         assert res == fn(1000) + fn(-1000)
+
+from pypy.rlib.objectmodel import UnboxedValue
+
+class TaggedBase(object):
+    __slots__ = ()
+    def meth(self, x):
+        raise NotImplementedError
+
+class BoxedObject(TaggedBase):
+    attrvalue = 66
+    def __init__(self, normalint):
+        self.normalint = normalint
+    def meth(self, x):
+        return self.normalint + x + 2
+
+class UnboxedObject(TaggedBase, UnboxedValue):
+    __slots__ = 'smallint'
+    def meth(self, x):
+        return self.smallint + x + 3
+
 
 class GenericMovingGCTests(GenericGCTests):
     GC_CAN_MOVE = True
