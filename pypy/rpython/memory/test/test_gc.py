@@ -472,36 +472,20 @@ class GCTest(object):
 
         assert self.interpret(f, []) == 2
 
-    def test_tagged(self):
+    def test_tagged_simple(self):
         from pypy.rlib.objectmodel import UnboxedValue
-        class A(object):
-            __slots__ = ()
-            def meth(self, x):
-                raise NotImplementedError
-
-        class B(A):
-            attrvalue = 66
-            def __init__(self, normalint):
-                self.normalint = normalint
-            def meth(self, x):
-                return self.normalint + x + 2
-
-        class C(A, UnboxedValue):
-            __slots__ = 'smallint'
-            def meth(self, x):
-                return self.smallint + x + 3
 
         class Unrelated(object):
             pass
 
         u = Unrelated()
-        u.x = C(47)
+        u.x = UnboxedObject(47)
         def fn(n):
             rgc.collect() # check that a prebuilt tagged pointer doesn't explode
             if n > 0:
-                x = B(n)
+                x = BoxedObject(n)
             else:
-                x = C(n)
+                x = UnboxedObject(n)
             u.x = x # invoke write barrier
             rgc.collect()
             return x.meth(100)
@@ -509,6 +493,46 @@ class GCTest(object):
         assert res == 1102
         res = self.interpret(fn, [-1000])
         assert res == -897
+
+    def test_tagged_prebuilt(self):
+
+        class F:
+            pass
+
+        f = F()
+        f.l = [UnboxedObject(10)]
+        def fn(n):
+            if n > 0:
+                x = BoxedObject(n)
+            else:
+                x = UnboxedObject(n)
+            f.l.append(x)
+            rgc.collect()
+            return f.l[-1].meth(100)
+        res = self.interpret(fn, [1000])
+        assert res == 1102
+        res = self.interpret(fn, [-1000])
+        assert res == -897
+
+from pypy.rlib.objectmodel import UnboxedValue
+
+class TaggedBase(object):
+    __slots__ = ()
+    def meth(self, x):
+        raise NotImplementedError
+
+class BoxedObject(TaggedBase):
+    attrvalue = 66
+    def __init__(self, normalint):
+        self.normalint = normalint
+    def meth(self, x):
+        return self.normalint + x + 2
+
+class UnboxedObject(TaggedBase, UnboxedValue):
+    __slots__ = 'smallint'
+    def meth(self, x):
+        return self.smallint + x + 3
+
 
 class TestMarkSweepGC(GCTest):
     from pypy.rpython.memory.gc.marksweep import MarkSweepGC as GCClass

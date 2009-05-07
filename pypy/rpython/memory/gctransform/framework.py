@@ -843,7 +843,7 @@ class BaseRootWalker:
             end = gcdata.static_root_nongcend
             while addr != end:
                 result = addr.address[0]
-                if result.address[0] != llmemory.NULL:
+                if self.gc.points_to_valid_gc_object(result):
                     collect_static_in_prebuilt_nongc(gc, result)
                 addr += sizeofaddr
         if collect_static_in_prebuilt_gc:
@@ -851,7 +851,7 @@ class BaseRootWalker:
             end = gcdata.static_root_end
             while addr != end:
                 result = addr.address[0]
-                if result.address[0] != llmemory.NULL:
+                if self.gc.points_to_valid_gc_object(result):
                     collect_static_in_prebuilt_gc(gc, result)
                 addr += sizeofaddr
         if collect_stack_root:
