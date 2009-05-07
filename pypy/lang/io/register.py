@@ -17,9 +17,15 @@ def register_method(type_name, slot_name, unwrap_spec=None):
                     if typ is float:
                         assert isinstance(x, model.W_Number)
                         args += (x.value, )
+                    elif typ is int:
+                        assert isinstance(x, model.W_Number)
+                        args += (int(x.value), )
                     elif typ is object:
                         args += (x, )
+                    elif typ is str:
+                        args += (x.value, )
                     else:
+                        
                         raise ValueError, 'Unknown unwrap spec'
                 return function(space, *args)
         subdict = cfunction_definitions.setdefault(type_name, {})
