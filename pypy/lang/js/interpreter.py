@@ -658,7 +658,7 @@ class Interpreter(object):
         put_values(ctx, w_Number, {
             'constructor': w_FncPrototype,
             'prototype': w_NumPrototype,
-            '__proto__': w_empty_fun,
+            '__proto__': w_FncPrototype,
             'length'   : W_IntNumber(1),
         })
         w_Number.propdict['prototype'].flags |= RO
