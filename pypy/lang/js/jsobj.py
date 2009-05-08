@@ -1,6 +1,6 @@
 # encoding: utf-8
 from pypy.rlib.rarithmetic import r_uint, intmask, isnan, isinf,\
-     ovfcheck_float_to_int, NAN
+     ovfcheck_float_to_int, NAN, formatd_overflow
 from pypy.lang.js.execution import ThrowException, JsTypeError,\
      RangeError, ReturnException
 DE = 1
@@ -488,13 +488,9 @@ class W_FloatNumber(W_BaseNumber):
             else:
                 return '-Infinity'
         try:
-            intval = ovfcheck_float_to_int(self.floatval)
-            if intval == self.floatval:
-                return str(intval)
+            res = formatd_overflow('', 10, 'g', self.floatval)
         except OverflowError:
-            pass
-
-        res = str(self.floatval)
+            raise
         if (res[-3] == '+' or res[-3] == '-') and res[-2] == '0':
             cut = len(res) - 2
             assert cut >= 0
