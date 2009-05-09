@@ -654,15 +654,37 @@ class STORE_BITXOR(BaseAssignBitOper):
 class STORE_POSTINCR(BaseStore):
     def process(self, ctx, name, stack):
         value = ctx.resolve_identifier(ctx, name)
-        newval = increment(ctx, value)
-        stack.append(value)
+        num = value.ToNumber(ctx)
+        newval = W_FloatNumber(num + 1)
+        
+        stack.append(W_FloatNumber(num))
         return newval
 
 class STORE_POSTDECR(BaseStore):
     def process(self, ctx, name, stack):
         value = ctx.resolve_identifier(ctx, name)
-        newval = increment(ctx, value, -1)
-        stack.append(value)
+        num = value.ToNumber(ctx)
+        newval = W_FloatNumber(num - 1)
+        
+        stack.append(W_FloatNumber(num))
+        return newval
+
+class STORE_PREINCR(BaseStore):
+    def process(self, ctx, name, stack):
+        value = ctx.resolve_identifier(ctx, name)
+        num = value.ToNumber(ctx)
+        newval = W_FloatNumber(num + 1)
+        
+        stack.append(newval)
+        return newval
+
+class STORE_PREDECR(BaseStore):
+    def process(self, ctx, name, stack):
+        value = ctx.resolve_identifier(ctx, name)
+        num = value.ToNumber(ctx)
+        newval = W_FloatNumber(num - 1)
+        
+        stack.append(newval)
         return newval
 
 class LABEL(Opcode):
