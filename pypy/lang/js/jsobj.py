@@ -3,6 +3,7 @@ from pypy.rlib.rarithmetic import r_uint, intmask, isnan, isinf,\
      ovfcheck_float_to_int, NAN, formatd_overflow
 from pypy.lang.js.execution import ThrowException, JsTypeError,\
      RangeError, ReturnException
+import string
 DE = 1
 DD = 2
 RO = 4
@@ -355,7 +356,7 @@ class W_Array(W_ListObject):
                 return
                 
         try:
-            arrayindex = r_uint(float(P))
+            arrayindex = r_uint(to_array_index(P))
         except ValueError:
             return
         
@@ -491,7 +492,8 @@ class W_FloatNumber(W_BaseNumber):
             res = formatd_overflow('', 10, 'g', self.floatval)
         except OverflowError:
             raise
-        if (res[-3] == '+' or res[-3] == '-') and res[-2] == '0':
+        
+        if len(res) > 3 and (res[-3] == '+' or res[-3] == '-') and res[-2] == '0':
             cut = len(res) - 2
             assert cut >= 0
             res = res[:cut] + res[-1]
@@ -672,6 +674,30 @@ def isnull_or_undefined(obj):
     if obj is w_Null or obj is w_Undefined:
         return True
     return False
+
+def to_array_index(s):
+    '''Convert s to an integer if (and only if) s is a valid array index.
+    ValueError is raised if conversion is not possible.
+    '''
+    length = len(s)
+    
+    if length == 0 or length > 10: # len(str(2 ** 32))
+        raise ValueError
+    
+    # '0' is only valid if no characters follow it
+    if s[0] == '0':
+        if length == 1:
+            return 0
+        else:
+            raise ValueError
+    
+    arrayindex = 0
+    for i in range(length):
+        if s[i] not in string.digits:
+            raise ValueError
+        arrayindex = (arrayindex * 10) + (ord(s[i]) - ord('0'))
+        #XXX: check for overflow?
+    return arrayindex
 
 w_True = W_Boolean(True)
 w_False = W_Boolean(False)
