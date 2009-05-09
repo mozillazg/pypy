@@ -468,6 +468,11 @@ class BITOR(BaseBinaryBitwiseOp):
     def operation(self, ctx, op1, op2):
         return W_IntNumber(op1|op2)
 
+class BITNOT(BaseUnaryOperation):
+    def eval(self, ctx, stack):
+        op = stack.pop().ToInt32(ctx)
+        stack.append(W_IntNumber(~op))
+
 class URSH(BaseBinaryBitwiseOp):
     def eval(self, ctx, stack):
         op2 = stack.pop().ToUInt32(ctx)

@@ -230,10 +230,7 @@ BitwiseAnd = create_binary_op('BITAND')
 BitwiseXor = create_binary_op('BITXOR')
 BitwiseOr = create_binary_op('BITOR')
 
-#class BitwiseNot(UnaryOp):
-#    def eval(self, ctx):
-#        op1 = self.expr.eval(ctx).GetValue().ToInt32()
-#        return W_IntNumber(~op1)
+BitwiseNot = create_unary_op('BITNOT')
 
 class Unconditional(Statement):
     def __init__(self, pos, target):
