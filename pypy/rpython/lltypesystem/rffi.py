@@ -513,10 +513,9 @@ FLOATP = lltype.Ptr(lltype.Array(FLOAT, hints={'nolength': True}))
 def make_string_mappings(strtype):
     
     if strtype is str:
-        from pypy.rpython.lltypesystem.rstr import UNICODE as STRTYPE
+        from pypy.rpython.lltypesystem.rstr import STR as STRTYPE
         from pypy.rpython.annlowlevel import llstr as llstrtype
         from pypy.rpython.annlowlevel import hlstr as hlstrtype
-        from pypy.rpython.lltypesystem.rstr import STR as STRTYPE
         TYPEP = CCHARP
         ll_char_type = lltype.Char
         emptystr = ''
