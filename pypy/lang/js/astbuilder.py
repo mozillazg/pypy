@@ -37,7 +37,7 @@ class ASTBuilder(RPythonVisitor):
         'in': operations.In,
     }
     UNOP_TO_CLS = {
-        #'~': operations.BitwiseNot,
+        '~': operations.BitwiseNot,
         '!': operations.Not,
         '+': operations.UPlus,
         '-': operations.UMinus,
