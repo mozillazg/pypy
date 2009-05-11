@@ -13,6 +13,7 @@ from pypy.rlib.streamio import open_file_as_stream
 from pypy.lang.js.jscode import JsCode
 from pypy.rlib.rarithmetic import NAN, INFINITY, isnan, isinf, r_uint
 from pypy.rlib.objectmodel import specialize
+from pypy.rlib.listsort import TimSort
 
 ASTBUILDER = ASTBuilder()
 
@@ -522,6 +523,7 @@ def common_join(ctx, this, sep=','):
     return sep.join(l)
 
 class W_ArrayToString(W_NewBuiltin):
+    length = 0
     def Call(self, ctx, args=[], this=None):
         return W_String(common_join(ctx, this, sep=','))
 
@@ -555,6 +557,70 @@ class W_ArrayReverse(W_NewBuiltin):
             this.Put(ctx, r7, r10)
             this.Put(ctx, r8, r9)
             k += 1
+        
+        return this
+
+class Sorter(TimSort):
+    def __init__(self, list, listlength=None, compare_fn=None, ctx=None):
+        TimSort.__init__(self, list, listlength)
+        self.compare_fn = compare_fn
+        self.ctx = ctx
+    
+    def lt(self, a, b):
+        if self.compare_fn:
+            result = self.compare_fn.Call(self.ctx, [a, b]).ToInt32(self.ctx)
+            return result == -1
+        return a.ToString(self.ctx) < b.ToString(self.ctx)
+
+class W_ArraySort(W_NewBuiltin):
+    length = 1
+    #XXX: further optimize this function
+    def Call(self, ctx, args=[], this=None):
+        length = this.Get(ctx, 'length').ToUInt32(ctx)
+        
+        # According to ECMA-262 15.4.4.11, non-existing properties always come after
+        # existing values. Undefined is always greater than any other value.
+        # So we create a list of non-undefined values, sort them, and append undefined again.
+        values = []
+        undefs = r_uint(0)
+        
+        for i in range(length):
+            P = str(i)
+            
+            if not this.HasProperty(P):
+                # non existing property
+                continue
+            
+            obj = this.Get(ctx, str(i))
+            if obj is w_Undefined:
+                undefs += 1
+                continue
+            
+            values.append(obj)
+        
+        # sort all values
+        if len(args) > 0:
+            sorter = Sorter(values, compare_fn=args[0], ctx=ctx)
+        else:
+            sorter = Sorter(values, ctx=ctx)
+        sorter.sort()
+        
+        # put sorted values back
+        values = sorter.list
+        for i in range(len(values)):
+            this.Put(ctx, str(i), values[i])
+        
+        # append undefined values
+        newlength = len(values)
+        while undefs > 0:
+            undefs -= 1
+            this.Put(ctx, str(newlength), w_Undefined)
+            newlength += 1
+        
+        # delete non-existing elements on the end
+        while length > newlength:
+            this.Delete(str(newlength))
+            newlength += 1
         
         return this
 
@@ -710,6 +776,7 @@ class Interpreter(object):
             'toString': W_ArrayToString(ctx),
             'join': W_ArrayJoin(ctx),
             'reverse': W_ArrayReverse(ctx),
+            'sort': W_ArraySort(ctx),
         })
         
         w_Array.Put(ctx, 'prototype', w_ArrPrototype, flags = allon)
