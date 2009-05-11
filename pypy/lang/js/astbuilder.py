@@ -433,6 +433,14 @@ class ASTBuilder(RPythonVisitor):
             target = None
         return operations.Break(pos, target)
     
+    def visit_continuestatement(self, node):
+        pos = self.get_pos(node)
+        if len(node.children) > 0:
+            target = self.dispatch(node.children[0])
+        else:
+            target = None
+        return operations.Continue(pos, target)
+    
     def visit_returnstatement(self, node):
         pos = self.get_pos(node)
         if len(node.children) > 0:

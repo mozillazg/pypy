@@ -571,7 +571,9 @@ class String(Expression):
         
         for c in internalstring:
             if last == "\\":
-                unescapeseq = unescapedict[last+c]
+                # Lookup escape sequence. Ignore the backslash for 
+                # unknown escape sequences (like SM)
+                unescapeseq = unescapedict.get(last+c, c)
                 temp.append(unescapeseq)
                 c = ' ' # Could be anything
             elif c != "\\":
@@ -813,9 +815,11 @@ class For(Statement):
             bytecode.emit('POP')
         precond = bytecode.emit_startloop_label()
         finish = bytecode.prealocate_endloop_label()
+        update = bytecode.prealocate_updateloop_label()
         self.condition.emit(bytecode)
         bytecode.emit('JUMP_IF_FALSE', finish)
         self.body.emit(bytecode)
+        bytecode.emit_updateloop_label(update)
         self.update.emit(bytecode)
         bytecode.emit('POP')
         bytecode.emit('JUMP', precond)
