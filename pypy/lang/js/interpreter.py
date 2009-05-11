@@ -620,12 +620,12 @@ class W_ArraySort(W_NewBuiltin):
             newlength += 1
         return this
 
-class W_DateFake(W_NewBuiltin): # XXX This is temporary
+class W_DateObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
         return create_object(ctx, 'Object')
     
     def Construct(self, ctx, args=[]):
-        return create_object(ctx, 'Object')
+        return create_object(ctx, 'Date', Value = W_FloatNumber(0.0))
 
 def pypy_repr(ctx, repr, w_arg):
     return W_String(w_arg.__class__.__name__)
@@ -802,7 +802,18 @@ class Interpreter(object):
         w_Global.Put(ctx, 'version', W_Builtin(versionjs), flags=allon)
         
         #Date
-        w_Date = W_DateFake(ctx, Class='Date')
+        w_Date = W_DateObject('Date', w_FncPrototype)
+
+        w_DatePrototype = create_object(ctx, 'Object', Value=W_String(''))
+        w_DatePrototype.Class = 'Date'
+        
+        put_values(ctx, w_DatePrototype, {
+            '__proto__': w_DatePrototype,
+            'valueOf': get_value_of('Date')(ctx),
+        })
+        
+        w_Date.Put(ctx, 'prototype', w_DatePrototype, flags=allon)
+        
         w_Global.Put(ctx, 'Date', w_Date)
         
         w_Global.Put(ctx, 'NaN', W_FloatNumber(NAN), flags = DE|DD)
