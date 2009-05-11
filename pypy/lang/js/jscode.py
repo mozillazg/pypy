@@ -84,6 +84,7 @@ class JsCode(object):
         self.has_labels = True
         self.startlooplabel = []
         self.endlooplabel = []
+        self.updatelooplabel = []
         self.stack = []
 
     def emit_label(self, num = -1):
@@ -92,6 +93,11 @@ class JsCode(object):
         self.emit('LABEL', num)
         return num
 
+    def emit_startloop_label(self):
+        num = self.emit_label()
+        self.startlooplabel.append(num)
+        return num
+    
     def emit_startloop_label(self):
         num = self.emit_label()
         self.startlooplabel.append(num)
@@ -107,9 +113,18 @@ class JsCode(object):
         self.endlooplabel.append(num)
         return num
 
+    def prealocate_updateloop_label(self):
+        num = self.prealocate_label()
+        self.updatelooplabel.append(num)
+        return num
+
     def emit_endloop_label(self, label):
         self.endlooplabel.pop()
         self.startlooplabel.pop()
+        self.emit_label(label)
+
+    def emit_updateloop_label(self, label):
+        self.updatelooplabel.pop()
         self.emit_label(label)
 
     def emit_break(self):
@@ -120,7 +135,7 @@ class JsCode(object):
     def emit_continue(self):
         if not self.startlooplabel:
             raise ThrowError(W_String("Continue outside loop"))
-        self.emit('JUMP', self.startlooplabel[-1])
+        self.emit('JUMP', self.updatelooplabel[-1])
 
     def emit(self, operation, *args):
         opcode = getattr(opcodes, operation)(*args)
