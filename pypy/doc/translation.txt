@@ -485,7 +485,7 @@ correspond to the increase in code-size which is to be expected should the
 function be inlined somewhere. This estimate is the sum of two numbers: for
 one every operations is assigned a specific weight, the default being a weight
 of one. Some operations are considered to be more effort than others,
-e.g. memory allocation and calls others are considered to be no effort at all
+e.g. memory allocation and calls; others are considered to be no effort at all
 (casts...). The size estimate is for one the sum of the weights of all
 operations occuring in the graph. This is called the "static instruction
 count". The other part of the size estimate of a graph is the "median
