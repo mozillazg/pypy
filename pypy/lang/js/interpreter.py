@@ -586,20 +586,17 @@ class W_ArraySort(W_NewBuiltin):
         
         for i in range(length):
             P = str(i)
-            
             if not this.HasProperty(P):
                 # non existing property
                 continue
-            
             obj = this.Get(ctx, str(i))
             if obj is w_Undefined:
                 undefs += 1
                 continue
-            
             values.append(obj)
         
         # sort all values
-        if len(args) > 0:
+        if len(args) > 0 and args[0] is not w_Undefined:
             sorter = Sorter(values, compare_fn=args[0], ctx=ctx)
         else:
             sorter = Sorter(values, ctx=ctx)
@@ -621,7 +618,6 @@ class W_ArraySort(W_NewBuiltin):
         while length > newlength:
             this.Delete(str(newlength))
             newlength += 1
-        
         return this
 
 class W_DateFake(W_NewBuiltin): # XXX This is temporary
