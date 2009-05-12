@@ -976,7 +976,8 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
             # the semispace size starts at 8MB for now, so setting a
             # smaller limit has no effect
             from pypy.rlib import rgc
-            rgc.set_max_heap_size(20000000)   # almost 20 MB
+            # set to more than 32MB -- which should be rounded down to 32MB
+            rgc.set_max_heap_size(32*1024*1024 + 20000)
             s1 = s2 = s3 = None
             try:
                 s1 = g(400000)      # ~ 400 KB
