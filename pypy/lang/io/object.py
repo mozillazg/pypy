@@ -57,3 +57,8 @@ def w_object_do(space, w_target, w_message, w_context):
 @register_method('Object', '', unwrap_spec=[object, object])
 def w_object_(space, w_target, w_arg):
     return w_arg
+
+
+@register_method('Object', 'message')
+def object_message(space, w_target, w_message, w_context):
+    return w_message.arguments[0]

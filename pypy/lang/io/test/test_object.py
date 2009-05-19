@@ -1,5 +1,5 @@
 from pypy.lang.io.parserhack import parse, interpret
-from pypy.lang.io.model import W_Object
+from pypy.lang.io.model import W_Object, W_Message
 import py.test
 
 
@@ -38,3 +38,9 @@ def test_object_question_mark_simple():
     inp2 = 'Object ?a'
     res, space = interpret(inp2)
     assert res is space.w_nil
+
+def test_object_message():
+    inp = 'message(foo)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_Message)
+    assert res.name == 'foo'

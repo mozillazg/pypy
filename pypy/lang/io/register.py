@@ -24,6 +24,11 @@ def register_method(type_name, slot_name, unwrap_spec=None):
                         args += (x, )
                     elif typ is str:
                         args += (x.value, )
+                    elif typ is bool:
+                        if x is space.w_true:
+                            args += (True, )
+                        else:
+                            args += (False, )
                     else:
                         
                         raise ValueError, 'Unknown unwrap spec'
