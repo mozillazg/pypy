@@ -51,3 +51,24 @@ def test_call_on_method():
     inp = 'a := method(x, x + 1); getSlot("a") call(3)'
     res, space = interpret(inp)
     assert res.value == 4
+    
+def test_method_binding():
+    inp = 'c := Object clone; c setSlot("b", 123); c setSlot("a", method(b)); c a'
+    res, space = interpret(inp)
+    assert res.value == 123
+    
+def test_method_modified_binding():
+    inp = 'c := Object clone; c setSlot("b",123); c setSlot("a", method(x, b)); c setSlot("b",1); c a(3)'
+    res, space = interpret(inp)
+    assert res.value == 1
+
+
+def test_block_binding():
+    inp = 'c := Object clone; b := 123; c setSlot("a", block(x, b)); c a call(3)'
+    res, space = interpret(inp)
+    assert res.value == 123
+
+def test_block_modified_binding():
+    inp = 'c := Object clone; b := 42; c setSlot("a", block(x, b)); b := 1; c a call(3)'
+    res, space = interpret(inp)
+    assert res.value == 1
