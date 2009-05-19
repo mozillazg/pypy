@@ -14,6 +14,7 @@ from pypy.jit.backend.cli.methodfactory import get_method_wrapper
 System = CLR.System
 OpCodes = System.Reflection.Emit.OpCodes
 LoopDelegate = CLR.pypy.runtime.LoopDelegate
+DelegateHolder = CLR.pypy.runtime.DelegateHolder
 InputArgs = CLR.pypy.runtime.InputArgs
 
 cVoid = ootype.nullruntimeclass
@@ -51,11 +52,39 @@ class __extend__(Const):
     def store(self, meth):
         assert False, 'cannot store() to Constant'
 
+    def get_cliobj(self):
+        return dotnet.cast_to_native_object(self.getobj())
+
 class __extend__(ConstInt):
     __metaclass__ = extendabletype
 
     def load(self, meth):
         meth.il.Emit(OpCodes.Ldc_I4, self.value)
+
+
+class ConstFunction(Const):
+
+    def __init__(self, name):
+        self.name = name
+        self.holder = DelegateHolder()
+
+    def get_cliobj(self):
+        return dotnet.cliupcast(self.holder, System.Object)
+
+    def load(self, meth):
+        holdertype = self.holder.GetType()
+        funcfield = holdertype.GetField('func')
+        Const.load(self, meth)
+        meth.il.Emit(OpCodes.Castclass, holdertype)
+        meth.il.Emit(OpCodes.Ldfld, funcfield)
+        meth.il.Emit(OpCodes.Castclass, dotnet.typeof(LoopDelegate))
+
+    def _getrepr_(self):
+        return '<ConstFunction %s>' % self.name
+
+    def __hash__(self):
+        return hash(self.holder)
+
 
 class MethodArgument(AbstractValue):
     def __init__(self, index, cliType):
@@ -87,6 +116,7 @@ class MethodArgument(AbstractValue):
 class Method(object):
 
     operations = [] # overwritten at the end of the module
+    tailcall = True
     debug = False
 
     def __init__(self, cpu, name, loop):
@@ -124,10 +154,12 @@ class Method(object):
         # initialize the array of genconsts
         consts = dotnet.new_array(System.Object, len(self.consts))
         for av_const, i in self.consts.iteritems():
-            consts[i] = dotnet.cast_to_native_object(av_const.getobj())
+            #consts[i] = dotnet.cast_to_native_object(av_const.getobj())
+            consts[i] = av_const.get_cliobj()
         # build the delegate
         func = self.meth_wrapper.create_delegate(delegatetype, consts)
-        self.func = dotnet.clidowncast(func, LoopDelegate)
+        func = dotnet.clidowncast(func, LoopDelegate)
+        self.loop._cli_funcbox.holder.SetFunc(func)
 
     def _get_meth_wrapper(self):
         restype = dotnet.class2type(cVoid)
@@ -282,7 +314,10 @@ class Method(object):
         self.il.Emit(OpCodes.Ldc_I4, index_op)
         field = dotnet.typeof(InputArgs).GetField('failed_op')
         self.il.Emit(OpCodes.Stfld, field)
-        # store the lates values
+        self.emit_store_opargs(op)
+
+    def emit_store_opargs(self, op):
+        # store the latest values
         i = 0
         for box in op.args:
             self.store_inputarg(i, box.type, box.getCliType(), box)
@@ -344,13 +379,23 @@ class Method(object):
 
     def emit_op_jump(self, op):
         target = op.jump_target
-        assert target is self.loop, 'TODO'
         assert len(op.args) == len(target.inputargs)
-        i = 0
-        for i in range(len(op.args)):
-            op.args[i].load(self)
-            target.inputargs[i].store(self)
-        self.il.Emit(OpCodes.Br, self.il_loop_start)
+        if target is self.loop:
+            i = 0
+            for i in range(len(op.args)):
+                op.args[i].load(self)
+                target.inputargs[i].store(self)
+            self.il.Emit(OpCodes.Br, self.il_loop_start)
+        else:
+            # it's a real bridge
+            self.emit_store_opargs(op)
+            self.av_inputargs.load(self)
+            self.loop._cli_funcbox.load(self)
+            methinfo = dotnet.typeof(LoopDelegate).GetMethod('Invoke')
+            if self.tailcall:
+                self.il.Emit(OpCodes.Tailcall)
+            self.il.Emit(OpCodes.Callvirt, methinfo)
+            self.il.Emit(OpCodes.Ret)
 
     def emit_op_new_with_vtable(self, op):
         assert isinstance(op.args[0], ConstObj) # ignored, using the descr instead

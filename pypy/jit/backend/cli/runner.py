@@ -1,6 +1,9 @@
+from pypy.tool.pairtype import extendabletype
 from pypy.rpython.ootypesystem import ootype
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.history import AbstractDescr, AbstractMethDescr
-from pypy.jit.metainterp.history import Box, BoxInt, BoxObj
+from pypy.jit.metainterp.history import Box, BoxInt, BoxObj, ConstObj, Const
+from pypy.jit.metainterp.history import TreeLoop
 from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.backend import model
@@ -11,6 +14,12 @@ from pypy.translator.cli.dotnet import CLR
 
 System = CLR.System
 InputArgs = CLR.pypy.runtime.InputArgs
+
+class __extend__(TreeLoop):
+    __metaclass__ = extendabletype
+
+    _cli_funcbox = None
+    _cli_meth = None
 
 
 class CliCPU(model.AbstractCPU):
@@ -67,13 +76,18 @@ class CliCPU(model.AbstractCPU):
     # ----------------------
 
     def compile_operations(self, loop):
-        from pypy.jit.backend.cli.method import Method
-        meth = Method(self, loop.name, loop)
-        loop._cli_meth = meth
+        from pypy.jit.backend.cli.method import Method, ConstFunction
+        if loop._cli_funcbox is None:
+            loop._cli_funcbox = ConstFunction(loop.name)
+        else:
+            # discard previously compiled loop
+            loop._cli_funcbox.holder.SetFunc(None)
+        loop._cli_meth = Method(self, loop.name, loop)
 
     def execute_operations(self, loop):
         meth = loop._cli_meth
-        meth.func(self.get_inputargs())
+        func = loop._cli_funcbox.holder.GetFunc()
+        func(self.get_inputargs())
         return meth.failing_ops[self.inputargs.get_failed_op()]
 
     def set_future_value_int(self, index, intvalue):
