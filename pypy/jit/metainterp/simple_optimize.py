@@ -121,7 +121,7 @@ class Specializer(object):
                     self.nodes[box] = instnode
                     continue
             newoperations.append(op)
-        print "Length of the loop:", len(newoperations)
+        #print "Length of the loop:", len(newoperations)
         self.loop.operations = newoperations
     
     def optimize_loop(self, loop):
