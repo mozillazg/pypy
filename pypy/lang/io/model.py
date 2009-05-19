@@ -110,7 +110,7 @@ class W_Message(W_Object):
             w_result = w_method.apply(space, w_receiver, self, w_context)
         if self.next:
             #TODO: optimize
-            return self.next.eval(space, w_result, w_context)
+            return self.next.eval(space, w_result, w_receiver)
         else:
             return w_result
   
