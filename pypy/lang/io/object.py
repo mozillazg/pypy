@@ -36,3 +36,7 @@ def w_object_list(space, w_target, w_message, w_context):
     w_items = [x.eval(space, w_target, w_context) for x in w_message.arguments]
     return space.w_list.clone_and_init(space, w_items)
     
+@register_method('Object', 'do')
+def w_object_do(space, w_target, w_message, w_context):
+    w_message.arguments[0].eval(space, w_target, w_context)
+    return w_target
