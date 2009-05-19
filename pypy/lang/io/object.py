@@ -13,6 +13,19 @@ def w_object_get_slot(space, w_target, name):
     except KeyError:
         return space.w_nil
 
+@register_method('Object', 'hasSlot', unwrap_spec=[object, str])
+def w_object_has_slot(space, w_target, name):
+    if w_target.lookup(name) is None:
+        return space.w_false
+    return space.w_true
+
+@register_method('Object', '?')
+def w_object_question_mark(space, w_target, w_message, w_context):
+    name = w_message.arguments[0].name
+    if w_object_has_slot(space, w_target, name) is space.w_false:
+        return space.w_nil
+    return w_message.arguments[0].eval(space, w_target, w_context)
+    
 @register_method('Object', 'method')
 def w_object_method(space, w_target, w_message, w_context):
     w_body = w_message.arguments[-1]

@@ -19,3 +19,22 @@ def test_object_anon_slot():
     inp = 'Object getSlot("+")("foo")'
     res, space = interpret(inp)
     assert res.value == 'foo'
+
+def test_object_has_slot():
+    inp = 'Object hasSlot("foo")'
+    res, space = interpret(inp)
+    assert res is space.w_false
+    
+    inp2 = 'Object hasSlot("clone")'
+    res, space = interpret(inp2)
+    assert res is space.w_true
+        
+def test_object_question_mark_simple():
+    inp = 'Object do(a := 1); Object ?a'
+    res, space = interpret(inp)
+    assert res is not space.w_nil
+    assert res.value == 1
+    
+    inp2 = 'Object ?a'
+    res, space = interpret(inp2)
+    assert res is space.w_nil
