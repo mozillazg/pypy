@@ -6,7 +6,8 @@ import pypy.lang.io.number
 import pypy.lang.io.object
 import pypy.lang.io.block
 import pypy.lang.io.list
-
+import pypy.lang.io.call
+import pypy.lang.io.message
 class ObjSpace(object):
     """docstring for ObjSpace"""
     def __init__(self):
@@ -19,24 +20,34 @@ class ObjSpace(object):
         self.w_true = W_Object(self, [self.w_object])
         self.w_false = W_Object(self, [self.w_object])
         self.w_nil = W_Object(self, [self.w_object])
-        self.w_block = W_Block(self, [], W_Message(self, 'nil', []), False, [self.w_object])
         self.w_list = W_List(self, [self.w_object])
+        self.w_call = W_Object(self)
+        
         
         self.init_w_object()        
         
         self.init_w_protos()
         
         self.init_w_list()
-        
+
+        self.init_w_message()
+
+        self.w_block = W_Block(self, [], W_Message(self, 'nil', []), False, [self.w_object])
         self.init_w_block()
         
         self.init_w_lobby()
         
         self.init_w_number()
         
+        
         self.init_w_core()
         
-
+        self.init_w_call()
+         
+    def init_w_call(self):
+        for key, function in cfunction_definitions['Call'].items():
+            self.w_call.slots[key] = W_CFunction(self, function)
+            
     def init_w_protos(self):
         self.w_protos.protos.append(self.w_core)
         self.w_protos.slots['Core'] = self.w_core
@@ -58,6 +69,7 @@ class ObjSpace(object):
         self.w_core.slots['false'] = self.w_false
         self.w_core.slots['nil'] = self.w_nil
         self.w_core.slots['List'] = self.w_list
+        self.w_core.slots['Call'] = self.w_call
 
     def init_w_number(self):
         self.w_number = instantiate(W_Number)
@@ -67,6 +79,14 @@ class ObjSpace(object):
         for key, function in cfunction_definitions['Number'].items():
             self.w_number.slots[key] = W_CFunction(self, function)
             
+    def init_w_message(self):
+        self.w_message = instantiate(W_Message)
+        W_Object.__init__(self.w_message, self)   
+        self.w_message.protos = [self.w_object]     
+        self.w_message.name = "Unnamed"
+        for key, function in cfunction_definitions['Message'].items():
+            self.w_message.slots[key] = W_CFunction(self, function)
+
     def init_w_lobby(self):
         self.w_lobby.protos.append(self.w_protos)
         self.w_object.protos.append(self.w_lobby)

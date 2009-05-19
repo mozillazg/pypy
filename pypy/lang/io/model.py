@@ -92,7 +92,7 @@ class W_Message(W_Object):
         self.literal_value = parse_literal(space, name)
         self.arguments = arguments
         self.next = next
-        W_Object.__init__(self, space)
+        W_Object.__init__(self, space, [space.w_message])
 
     def __repr__(self):
         return "Message(%r, %r, %r)" % (self.name, self.arguments, self.next)
@@ -129,17 +129,17 @@ class W_Block(W_Object):
         
     def call(self, space, w_receiver, w_message, w_context):
         w_locals = self.space.w_locals.clone()
+        w_call = self.space.w_call.clone()
         assert w_locals is not None
-        args = list(self.arguments)
+        assert w_call is not None
         
-        for arg in w_message.arguments:
-            try:
-                w_locals.slots[args.pop(0)] = arg.eval(space, w_receiver, w_context)
-            except IndexError:
-                break
-                
-        for arg_name in args:
-            w_locals.slots[arg_name] = space.w_nil
+        args = list(self.arguments)
+        n_params = len(w_message.arguments)
+        for i in range(len(args)):
+            if i < n_params:
+                w_locals.slots[args[i]] = w_message.arguments[i].eval(space, w_receiver, w_context)
+            else:
+                w_locals.slots[args[i]] = space.w_nil
         
         if self.activateable:
             w_locals.protos = [w_receiver]
@@ -147,7 +147,9 @@ class W_Block(W_Object):
         else:
             w_locals.protos = [w_context]
             w_locals.slots['self'] = w_context
-            
+        
+        w_locals.slots['call'] = w_call
+        w_call.slots['message'] = w_message
         return self.body.eval(space, w_locals, w_context)
             
     

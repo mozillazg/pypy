@@ -72,3 +72,35 @@ def test_block_modified_binding():
     inp = 'c := Object clone; b := 42; c setSlot("a", block(x, b)); b := 1; c a call(3)'
     res, space = interpret(inp)
     assert res.value == 1
+    
+def test_block_call_slot():
+    py.test.skip()
+    inp = """
+    Object do(
+      /*doc Object inlineMethod
+      Creates a method which is executed directly in a receiver (no Locals object is created).
+      <br/>
+      <pre>
+      Io> m := inlineMethod(x := x*2)
+      Io> x := 1
+      ==> 1
+      Io> m
+      ==> 2
+      Io> m
+      ==> 4
+      Io> m
+      ==> 8
+      </pre>
+      */  
+    	inlineMethod := method(call message argAt(0) setIsActivatable(true))
+    )
+    m := inlineMethod(x := x*2)
+    x := 1
+    m
+    m
+    """
+    # from A0_List.io
+    res, space = interpret(inp)
+    assert space.w_object.slots['inlineMethod'] is not None
+    assert res.value == 4
+    
