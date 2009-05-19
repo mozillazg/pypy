@@ -14,3 +14,8 @@ def test_object_do_multiple_slots():
     res, space = interpret(inp)
     assert res.value == 6
     assert space.w_object.slots['a'].value == 1
+    
+def test_object_anon_slot():
+    inp = 'Object getSlot("+")("foo")'
+    res, space = interpret(inp)
+    assert res.value == 'foo'

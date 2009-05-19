@@ -40,3 +40,7 @@ def w_object_list(space, w_target, w_message, w_context):
 def w_object_do(space, w_target, w_message, w_context):
     w_message.arguments[0].eval(space, w_target, w_context)
     return w_target
+    
+@register_method('Object', '', unwrap_spec=[object, object])
+def w_object_(space, w_target, w_arg):
+    return w_arg
