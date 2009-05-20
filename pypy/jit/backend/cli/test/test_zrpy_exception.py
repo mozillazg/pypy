@@ -7,10 +7,5 @@ class TestException(CliTranslatedJitMixin, test_exception.TestOOtype):
     # for the individual tests see
     # ====> ../../../metainterp/test/test_exception.py
 
-    def skip(self):
-        py.test.skip('in-progress')
-
-    test_int_lshift_ovf = skip
-
-
+    pass
 
