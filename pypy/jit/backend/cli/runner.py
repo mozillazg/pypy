@@ -129,10 +129,14 @@ class CliCPU(model.AbstractCPU):
         self.get_inputargs().set_exc_value(None)
 
     def set_overflow_error(self):
-        raise NotImplementedError
+        exc_obj = ootype.cast_to_object(self.ll_ovf_exc)
+        exc_value = dotnet.cast_to_native_object(exc_obj)
+        self.get_inputargs().set_exc_value(exc_value)
 
     def set_zero_division_error(self):
-        raise NotImplementedError
+        exc_obj = ootype.cast_to_object(self.ll_zero_exc)
+        exc_value = dotnet.cast_to_native_object(exc_obj)
+        self.get_inputargs().set_exc_value(exc_value)
 
     # ----------------------
 
