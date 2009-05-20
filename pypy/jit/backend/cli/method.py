@@ -124,7 +124,6 @@ class Method(object):
         self.name = name
         self.loop = loop
         self.boxes = {}       # box --> local var
-        self.failing_ops = [] # index --> op
         self.branches = []
         self.branchlabels = []
         self.consts = {}      # object --> index
@@ -183,10 +182,10 @@ class Method(object):
 
     def get_index_for_failing_op(self, op):
         try:
-            return self.failing_ops.index(op)
+            return self.cpu.failing_ops.index(op)
         except ValueError:
-            self.failing_ops.append(op)
-            return len(self.failing_ops)-1
+            self.cpu.failing_ops.append(op)
+            return len(self.cpu.failing_ops)-1
 
     def get_index_for_constant(self, obj):
         try:
@@ -231,6 +230,7 @@ class Method(object):
         self.il.Emit(OpCodes.Stelem, clitype)
 
     def emit_load_inputargs(self):
+        self.emit_debug("executing: " + self.name)
         i = 0
         for box in self.loop.inputargs:
             self.load_inputarg(i, box.type, box.getCliType())
@@ -243,8 +243,7 @@ class Method(object):
 
     def emit_operations(self, operations):
         for op in operations:
-            if self.debug:
-                self.il.EmitWriteLine(op.repr())
+            self.emit_debug(op.repr())
             func = self.operations[op.opnum]
             assert func is not None
             func(self, op)
@@ -277,6 +276,10 @@ class Method(object):
 
     def store_result(self, op):
         op.result.store(self)
+
+    def emit_debug(self, msg):
+        if self.debug:
+            self.il.EmitWriteLine(msg)
 
     def emit_clear_exception(self):
         self.av_inputargs.load(self)
@@ -315,6 +318,7 @@ class Method(object):
         field = dotnet.typeof(InputArgs).GetField('failed_op')
         self.il.Emit(OpCodes.Stfld, field)
         self.emit_store_opargs(op)
+        self.il.Emit(OpCodes.Ret)
 
     def emit_store_opargs(self, op):
         # store the latest values
@@ -322,7 +326,6 @@ class Method(object):
         for box in op.args:
             self.store_inputarg(i, box.type, box.getCliType(), box)
             i+=1
-        self.il.Emit(OpCodes.Ret)
 
     def emit_guard_bool(self, op, opcode):
         assert op.suboperations
@@ -388,9 +391,10 @@ class Method(object):
             self.il.Emit(OpCodes.Br, self.il_loop_start)
         else:
             # it's a real bridge
+            self.emit_debug('jumping to ' + target.name)
             self.emit_store_opargs(op)
+            target._cli_funcbox.load(self)
             self.av_inputargs.load(self)
-            self.loop._cli_funcbox.load(self)
             methinfo = dotnet.typeof(LoopDelegate).GetMethod('Invoke')
             if self.tailcall:
                 self.il.Emit(OpCodes.Tailcall)

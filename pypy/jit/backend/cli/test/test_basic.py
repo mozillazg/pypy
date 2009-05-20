@@ -38,6 +38,3 @@ class TestBasic(CliJitMixin, test_basic.TestOOtype):
     test_long_long = skip
     test_free_object = skip
     test_stopatxpolicy = skip
-    
-    test_bridge_from_interpreter = _skip
-
