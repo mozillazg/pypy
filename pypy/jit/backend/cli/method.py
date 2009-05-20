@@ -504,21 +504,26 @@ class Method(object):
     def not_implemented(self, op):
         raise NotImplementedError
 
-    emit_op_cast_int_to_ptr = not_implemented
     emit_op_guard_nonvirtualized = not_implemented
     emit_op_unicodelen = not_implemented
-    emit_op_setfield_raw = not_implemented
-    emit_op_cast_ptr_to_int = not_implemented
     emit_op_newunicode = not_implemented
     emit_op_new_array = not_implemented
     emit_op_unicodegetitem = not_implemented
     emit_op_strgetitem = not_implemented
-    emit_op_getfield_raw = not_implemented
-    emit_op_unicodesetitem = not_implemented
-    emit_op_getfield_raw_pure = not_implemented
     emit_op_strlen = not_implemented
     emit_op_newstr = not_implemented
-    emit_op_strsetitem = not_implemented
+
+    def lltype_only(self, op):
+        print 'Operation %s is lltype specific, should not get here!' % op.getopname()
+        raise NotImplementedError
+
+    emit_op_setfield_raw = lltype_only
+    emit_op_getfield_raw = lltype_only
+    emit_op_getfield_raw_pure = lltype_only
+    emit_op_strsetitem = lltype_only
+    emit_op_unicodesetitem = lltype_only
+    emit_op_cast_int_to_ptr = lltype_only
+    emit_op_cast_ptr_to_int = lltype_only
 
 
 # --------------------------------------------------------------------
