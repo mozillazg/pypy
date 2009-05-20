@@ -20,6 +20,10 @@ class __extend__(TreeLoop):
 
     _cli_funcbox = None
     _cli_meth = None
+    _cli_count = 0
+
+    def _get_cli_name(self):
+        return '%s(r%d)' % (self.name, self._cli_count)
 
 
 class CliCPU(model.AbstractCPU):
@@ -34,6 +38,7 @@ class CliCPU(model.AbstractCPU):
         self.stats = stats
         self.translate_support_code = translate_support_code
         self.inputargs = None
+        self.failing_ops = [] # index --> op
         self.ll_ovf_exc = self._get_prebuilt_exc(OverflowError)
         self.ll_zero_exc = self._get_prebuilt_exc(ZeroDivisionError)
 
@@ -82,13 +87,13 @@ class CliCPU(model.AbstractCPU):
         else:
             # discard previously compiled loop
             loop._cli_funcbox.holder.SetFunc(None)
-        loop._cli_meth = Method(self, loop.name, loop)
+        loop._cli_meth = Method(self, loop._get_cli_name(), loop)
+        loop._cli_count += 1
 
     def execute_operations(self, loop):
-        meth = loop._cli_meth
         func = loop._cli_funcbox.holder.GetFunc()
         func(self.get_inputargs())
-        return meth.failing_ops[self.inputargs.get_failed_op()]
+        return self.failing_ops[self.inputargs.get_failed_op()]
 
     def set_future_value_int(self, index, intvalue):
         self.get_inputargs().set_int(index, intvalue)
