@@ -220,6 +220,16 @@ class CliCPU(model.AbstractCPU):
 # ----------------------------------------------------------------------
 key_manager = KeyManager()
 
+class DescrWithKey(AbstractDescr):
+    key = -1
+
+    def __init__(self, key):
+        self.key = key_manager.getkey(key)
+
+    def sort_key(self):
+        return self.key
+
+
 def get_class_for_type(T):
     if T is ootype.Void:
         return ootype.nullruntimeclass
@@ -238,10 +248,10 @@ def get_class_for_type(T):
     else:
         assert False
 
-
-class TypeDescr(AbstractDescr):
+class TypeDescr(DescrWithKey):
 
     def __init__(self, TYPE):
+        DescrWithKey.__init__(self, TYPE)
         from pypy.jit.backend.llgraph.runner import boxresult
         from pypy.jit.metainterp.warmspot import unwrap
         ARRAY = ootype.Array(TYPE)
@@ -288,13 +298,14 @@ class TypeDescr(AbstractDescr):
         clitype = self.get_clitype()
         return clitype.GetConstructor(dotnet.new_array(System.Type, 0))
 
-class StaticMethDescr(AbstractDescr):
+class StaticMethDescr(DescrWithKey):
 
     callfunc = None
     funcclass = ootype.nullruntimeclass
     has_result = False
 
     def __init__(self, FUNC, ARGS, RESULT):
+        DescrWithKey.__init__(self, (FUNC, ARGS, RESULT))
         from pypy.jit.backend.llgraph.runner import boxresult, make_getargs
         getargs = make_getargs(FUNC.ARGS)
         def callfunc(funcbox, argboxes):
@@ -331,6 +342,7 @@ class MethDescr(AbstractMethDescr):
     selfclass = ootype.nullruntimeclass
     methname = ''
     has_result = False
+    key = -1
     
     def __init__(self, SELFTYPE, methname):
         from pypy.jit.backend.llgraph.runner import boxresult, make_getargs
@@ -348,6 +360,10 @@ class MethDescr(AbstractMethDescr):
         self.selfclass = ootype.runtimeClass(SELFTYPE)
         self.methname = methname
         self.has_result = (METH.RESULT != ootype.Void)
+        self.key = key_manager.getkey((SELFTYPE, methname))
+
+    def sort_key(self):
+        return self.key
 
     def get_self_clitype(self):
         return dotnet.class2type(self.selfclass)
@@ -370,15 +386,15 @@ class StringMethDescr(MethDescr):
         return OpCodes.Call
         
 
-class FieldDescr(AbstractDescr):
+class FieldDescr(DescrWithKey):
 
     getfield = None
     setfield = None
     selfclass = ootype.nullruntimeclass
     fieldname = ''
-    key = -1
 
     def __init__(self, TYPE, fieldname):
+        DescrWithKey.__init__(self, (TYPE, fieldname))
         from pypy.jit.backend.llgraph.runner import boxresult
         from pypy.jit.metainterp.warmspot import unwrap
         _, T = TYPE._lookup_field(fieldname)
@@ -396,9 +412,6 @@ class FieldDescr(AbstractDescr):
         self.selfclass = ootype.runtimeClass(TYPE)
         self.fieldname = fieldname
         self.key = key_manager.getkey((TYPE, fieldname))
-
-    def sort_key(self):
-        return self.key
 
     def equals(self, other):
         assert isinstance(other, FieldDescr)
