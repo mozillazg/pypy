@@ -418,7 +418,8 @@ class Method(object):
         assert isinstance(descr, runner.StaticMethDescr)
         delegate_type = descr.get_delegate_clitype()
         meth_invoke = descr.get_meth_info()
-        self._emit_call(op, delegate_type, meth_invoke, descr.has_result)
+        self._emit_call(op, OpCodes.Callvirt, delegate_type,
+                        meth_invoke, descr.has_result)
 
     def emit_op_call(self, op):
         emit_op = Method.emit_op_call_impl.im_func
@@ -432,17 +433,18 @@ class Method(object):
         assert isinstance(descr, runner.MethDescr)
         clitype = descr.get_self_clitype()
         methinfo = descr.get_meth_info()
-        self._emit_call(op, clitype, methinfo, descr.has_result)
+        opcode = descr.get_call_opcode()
+        self._emit_call(op, opcode, clitype, methinfo, descr.has_result)
 
     emit_op_oosend_pure = emit_op_oosend
 
-    def _emit_call(self, op, clitype, methinfo, has_result):
+    def _emit_call(self, op, opcode, clitype, methinfo, has_result):
         av_sm, args_av = op.args[0], op.args[1:]
         av_sm.load(self)
         self.il.Emit(OpCodes.Castclass, clitype)
         for av_arg in args_av:
             av_arg.load(self)
-        self.il.Emit(OpCodes.Callvirt, methinfo)
+        self.il.Emit(opcode, methinfo)
         if has_result:
             self.store_result(op)
 
@@ -505,13 +507,7 @@ class Method(object):
         raise NotImplementedError
 
     emit_op_guard_nonvirtualized = not_implemented
-    emit_op_unicodelen = not_implemented
-    emit_op_newunicode = not_implemented
     emit_op_new_array = not_implemented
-    emit_op_unicodegetitem = not_implemented
-    emit_op_strgetitem = not_implemented
-    emit_op_strlen = not_implemented
-    emit_op_newstr = not_implemented
 
     def lltype_only(self, op):
         print 'Operation %s is lltype specific, should not get here!' % op.getopname()
@@ -524,6 +520,12 @@ class Method(object):
     emit_op_unicodesetitem = lltype_only
     emit_op_cast_int_to_ptr = lltype_only
     emit_op_cast_ptr_to_int = lltype_only
+    emit_op_newstr = lltype_only
+    emit_op_strlen = lltype_only
+    emit_op_strgetitem = lltype_only
+    emit_op_newunicode = lltype_only    
+    emit_op_unicodelen = lltype_only
+    emit_op_unicodegetitem = lltype_only
 
 
 # --------------------------------------------------------------------
