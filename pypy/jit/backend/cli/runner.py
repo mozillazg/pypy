@@ -13,7 +13,9 @@ from pypy.translator.cli import dotnet
 from pypy.translator.cli.dotnet import CLR
 
 System = CLR.System
+OpCodes = System.Reflection.Emit.OpCodes
 InputArgs = CLR.pypy.runtime.InputArgs
+cpypyString = dotnet.classof(CLR.pypy.runtime.String)
 
 class __extend__(TreeLoop):
     __metaclass__ = extendabletype
@@ -62,6 +64,8 @@ class CliCPU(model.AbstractCPU):
 
     @cached_method('_methcache')
     def methdescrof(self, SELFTYPE, methname):
+        if SELFTYPE in (ootype.String, ootype.Unicode):
+            return StringMethDescr(SELFTYPE, methname)
         return MethDescr(SELFTYPE, methname)
 
     @cached_method('_typecache')
@@ -348,6 +352,19 @@ class MethDescr(AbstractMethDescr):
         clitype = self.get_self_clitype()
         return clitype.GetMethod(self.methname+'')
 
+    def get_call_opcode(self):
+        return OpCodes.Callvirt
+
+
+class StringMethDescr(MethDescr):
+
+    def get_meth_info(self):
+        clitype = dotnet.class2type(cpypyString)
+        return clitype.GetMethod(self.methname+'')
+
+    def get_call_opcode(self):
+        return OpCodes.Call
+        
 
 class FieldDescr(AbstractDescr):
 
