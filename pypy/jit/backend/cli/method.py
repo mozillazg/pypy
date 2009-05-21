@@ -410,6 +410,19 @@ class Method(object):
         self.il.Emit(OpCodes.Newobj, ctor_info)
         self.store_result(op)
 
+    def emit_op_runtimenew(self, op):
+        raise NotImplementedError
+
+    def emit_op_instanceof(self, op):
+        descr = op.descr
+        assert isinstance(descr, runner.TypeDescr)
+        clitype = descr.get_clitype()
+        op.args[0].load(self)
+        self.il.Emit(OpCodes.Isinst, clitype)
+        self.il.Emit(OpCodes.Ldnull)
+        self.il.Emit(OpCodes.Cgt_Un)
+        self.store_result(op)
+
     def emit_op_ooidentityhash(self, op):
         raise NotImplementedError
 
@@ -518,6 +531,7 @@ class Method(object):
         print 'Operation %s is lltype specific, should not get here!' % op.getopname()
         raise NotImplementedError
 
+    emit_op_new = lltype_only
     emit_op_setfield_raw = lltype_only
     emit_op_getfield_raw = lltype_only
     emit_op_getfield_raw_pure = lltype_only
@@ -568,10 +582,7 @@ def render_op(methname, instrlist):
         elif isinstance(instr, opcodes.PushArg):
             lines.append('self.push_arg(op, %d)' % instr.n)
         else:
-            if not isinstance(instr, str):
-                print 'WARNING: unknown instruction %s' % instr
-                return
-
+            assert isinstance(instr, str), 'unknown instruction %s' % instr
             if instr.startswith('call '):
                 signature = instr[len('call '):]
                 renderCall(lines, signature)
