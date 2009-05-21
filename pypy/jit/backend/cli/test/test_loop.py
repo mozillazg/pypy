@@ -10,16 +10,12 @@ class TestLoop(CliJitMixin, test_loop.TestOOtype):
     def skip(self):
         py.test.skip("works only after translation")
 
-    def _skip(self):
-        py.test.skip("in-progress")
-
     test_loop_with_two_paths = skip
     test_interp_many_paths = skip
     test_interp_many_paths_2 = skip
     test_adapt_bridge_to_merge_point = skip
     test_outer_and_inner_loop = skip
     test_path_with_operations_not_from_start_2 = skip
-    
-    test_loop_unicode = _skip
+    test_loop_unicode = skip
 
 
