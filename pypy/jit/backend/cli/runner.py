@@ -277,13 +277,12 @@ class TypeDescr(AbstractDescr):
         self.getarraylength = getarraylength
         self.instanceof = instanceof
         self.ooclass = get_class_for_type(TYPE)
-        self.ooarrayclass = get_class_for_type(ARRAY)
 
     def get_clitype(self):
         return dotnet.class2type(self.ooclass)
 
     def get_array_clitype(self):
-        return dotnet.class2type(self.ooarrayclass)
+        return self.get_clitype().MakeArrayType()
 
     def get_constructor_info(self):
         clitype = self.get_clitype()

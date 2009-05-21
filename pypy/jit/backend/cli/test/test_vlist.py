@@ -10,9 +10,6 @@ class TestVlist(CliJitMixin, test_vlist.TestOOtype):
     def skip(self):
         py.test.skip("works only after translation")
 
-    def _skip(self):
-        py.test.skip("in-progress")
-
-    test_list_pass_around = _skip
-    test_cannot_be_virtual = _skip
-    test_ll_fixed_setitem_fast = _skip
+    test_list_pass_around = skip
+    test_cannot_be_virtual = skip
+    test_ll_fixed_setitem_fast = skip
