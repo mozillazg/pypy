@@ -502,12 +502,18 @@ class Method(object):
         self.il.Emit(OpCodes.Castclass, clitype)
         self.il.Emit(OpCodes.Ldlen)
         self.store_result(op)
-        
-    def not_implemented(self, op):
-        raise NotImplementedError
 
-    emit_op_guard_nonvirtualized = not_implemented
-    emit_op_new_array = not_implemented
+    def emit_op_new_array(self, op):
+        raise NotImplementedError
+##         descr = op.descr
+##         assert isinstance(descr, runner.TypeDescr)
+##         item_clitype = descr.get_clitype()
+##         op.args[0].load(self)
+##         self.il.Emit(OpCodes.Newarr, item_clitype)
+##         self.store_result(op)        
+
+    def emit_op_guard_nonvirtualized(self, op):
+        raise NotImplementedError
 
     def lltype_only(self, op):
         print 'Operation %s is lltype specific, should not get here!' % op.getopname()
