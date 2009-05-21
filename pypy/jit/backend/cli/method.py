@@ -504,13 +504,12 @@ class Method(object):
         self.store_result(op)
 
     def emit_op_new_array(self, op):
-        raise NotImplementedError
-##         descr = op.descr
-##         assert isinstance(descr, runner.TypeDescr)
-##         item_clitype = descr.get_clitype()
-##         op.args[0].load(self)
-##         self.il.Emit(OpCodes.Newarr, item_clitype)
-##         self.store_result(op)        
+        descr = op.descr
+        assert isinstance(descr, runner.TypeDescr)
+        item_clitype = descr.get_clitype()
+        op.args[0].load(self)
+        self.il.Emit(OpCodes.Newarr, item_clitype)
+        self.store_result(op)        
 
     def emit_op_guard_nonvirtualized(self, op):
         raise NotImplementedError
