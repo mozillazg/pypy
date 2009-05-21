@@ -149,6 +149,11 @@ class CliCPU(model.AbstractCPU):
         assert len(args) == 1 # but we don't need it, so ignore
         return typedescr.create()
 
+    def do_new_array(self, args, typedescr):
+        assert isinstance(typedescr, TypeDescr)
+        assert len(args) == 1
+        return typedescr.create_array(args[0])
+
     def do_runtimenew(self, args, descr):
         classbox = args[0]
         classobj = ootype.cast_from_object(ootype.Class, classbox.getobj())
