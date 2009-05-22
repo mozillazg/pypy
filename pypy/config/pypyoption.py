@@ -228,6 +228,13 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "use dictionaries optimized for flexibility",
                    default=False),
 
+        BoolOption("withcelldict",
+                   "use dictionaries that are opimized for being used as module dicts",
+                   default=False,
+                   requires=[("objspace.std.withmultidict", True),
+                             ("objspace.opcodes.CALL_LIKELY_BUILTIN", False),
+                             ("objspace.honor__builtins__", False)]),
+
         BoolOption("withsharingdict",
                    "use dictionaries that share the keys part",
                    default=False,
