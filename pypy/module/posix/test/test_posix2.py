@@ -365,6 +365,38 @@ class AppTestPosix:
             os = self.posix
             raises(ValueError, os.sysconf, "!@#$%!#$!@#")
 
+    if hasattr(os, 'fsync'):
+        def test_fsync(self):
+            os = self.posix
+            f = open(self.path2, "w")
+            try:
+                fd = f.fileno()
+                os.fsync(fd)
+            finally:
+                f.close()
+            try:
+                os.fsync(fd)
+            except OSError:
+                pass
+            else:
+                raise AssertionError("os.fsync didn't raise")
+
+    if hasattr(os, 'fdatasync'):
+        def test_fdatasync(self):
+            os = self.posix
+            f = open(self.path2)
+            try:
+                fd = f.fileno()
+                os.fdatasync(fd)
+            finally:
+                f.close()
+            try:
+                os.fdatasync(fd)
+            except OSError:
+                pass
+            else:
+                raise AssertionError("os.fdatasync didn't raise")
+
     def test_largefile(self):
         os = self.posix
         fd = os.open(self.path2 + 'test_largefile', os.O_RDWR | os.O_CREAT, 0666)

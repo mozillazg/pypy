@@ -830,6 +830,30 @@ class RegisterOs(BaseLazyRegistering):
                       llimpl = ftruncate_llimpl,
                       export_name = "ll_os.ll_os_ftruncate")
 
+    @registering_if(os, 'fsync')
+    def register_os_fsync(self):
+        os_fsync = self.llexternal('fsync', [rffi.INT], rffi.INT)
+
+        def fsync_llimpl(fd):
+            res = rffi.cast(rffi.LONG, os_fsync(rffi.cast(rffi.INT, fd)))
+            if res < 0:
+                raise OSError(rposix.get_errno(), "fsync failed")
+        return extdef([int], s_None,
+                      llimpl=fsync_llimpl,
+                      export_name="ll_os.ll_os_fsync")
+
+    @registering_if(os, 'fdatasync')
+    def register_os_fdatasync(self):
+        os_fdatasync = self.llexternal('fdatasync', [rffi.INT], rffi.INT)
+
+        def fdatasync_llimpl(fd):
+            res = rffi.cast(rffi.LONG, os_fdatasync(rffi.cast(rffi.INT, fd)))
+            if res < 0:
+                raise OSError(rposix.get_errno(), "fdatasync failed")
+        return extdef([int], s_None,
+                      llimpl=fdatasync_llimpl,
+                      export_name="ll_os.ll_os_fdatasync")
+
     @registering(os.access)
     def register_os_access(self):
         os_access = self.llexternal(underscore_on_windows + 'access',
