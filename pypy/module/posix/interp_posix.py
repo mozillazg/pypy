@@ -87,6 +87,20 @@ def ftruncate(space, fd, length):
         raise wrap_oserror(space, e) 
 ftruncate.unwrap_spec = [ObjSpace, int, r_longlong]
 
+def fsync(space, fd):
+    try:
+        os.fsync(fd)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+fsync.unwrap_spec = [ObjSpace, int]
+
+def fdatasync(space, fd):
+    try:
+        os.fdatasync(fd)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+fdatasync.unwrap_spec = [ObjSpace, int]
+
 # ____________________________________________________________
 
 # For LL backends, expose all fields.

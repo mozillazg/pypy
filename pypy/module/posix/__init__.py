@@ -69,6 +69,10 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['chown'] = 'interp_posix.chown'
     if hasattr(os, 'ftruncate'):
         interpleveldefs['ftruncate'] = 'interp_posix.ftruncate'
+    if hasattr(os, 'fsync'):
+        interpleveldefs['fsync'] = 'interp_posix.fsync'
+    if hasattr(os, 'fdatasync'):
+        interpleveldefs['fdatasync'] = 'interp_posix.fdatasync'
     if hasattr(os, 'putenv'):
         interpleveldefs['putenv'] = 'interp_posix.putenv'
     if hasattr(posix, 'unsetenv'): # note: emulated in os
