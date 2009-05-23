@@ -1,3 +1,5 @@
+from pypy.interpreter.pyparser import pythonparse
+from pypy.interpreter.pyparser.astbuilder import AstBuilder
 
 class FakeSpace:
     w_None = None
@@ -40,3 +42,10 @@ class FakeSpace:
 
     def call_function(self, func, *args):
         return func(*args)
+
+def source2ast(source, mode, space=FakeSpace(), version='2.5'):
+    python_parser = pythonparse.make_pyparser(version)
+    builder = AstBuilder(python_parser, version, space=space)
+    python_parser.parse_source(source, mode, builder)
+    return builder.rule_stack[-1]
+
