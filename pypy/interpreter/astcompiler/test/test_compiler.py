@@ -1,6 +1,6 @@
 import py
 from pypy.interpreter.astcompiler import misc, pycodegen, opt
-from pypy.interpreter.pyparser.test.test_astbuilder import source2ast
+from pypy.interpreter.pyparser.test.support import source2ast
 from pypy.interpreter.pyparser.test import expressions
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.pyparser.error import SyntaxError, IndentationError
