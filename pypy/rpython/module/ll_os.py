@@ -832,7 +832,10 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'fsync')
     def register_os_fsync(self):
-        os_fsync = self.llexternal('fsync', [rffi.INT], rffi.INT)
+        if not _WIN32:
+            os_fsync = self.llexternal('fsync', [rffi.INT], rffi.INT)
+        else:
+            os_fsync = self.llexternal('_commit', [rffi.INT], rffi.INT)
 
         def fsync_llimpl(fd):
             res = rffi.cast(rffi.LONG, os_fsync(rffi.cast(rffi.INT, fd)))
