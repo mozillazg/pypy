@@ -286,9 +286,9 @@ class AppTestPosix:
 
     def test_utime(self):
         os = self.posix
-        import os.path
+        from os.path import join
         # XXX utimes & float support
-        path = os.path.join(self.pdir, "test_utime.txt")
+        path = join(self.pdir, "test_utime.txt")
         fh = open(path, "w")
         fh.write("x")
         fh.close()
