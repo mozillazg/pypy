@@ -248,9 +248,9 @@ class UnboxedValue(object):
             raise OverflowError("UnboxedValue: argument out of range")
 
     def __repr__(self):
-        return '<unboxed %d>' % (self.getvalue(),)
+        return '<unboxed %d>' % (self.get_untagged_value(),)
 
-    def getvalue(self):   # helper, equivalent to reading the custom field
+    def get_untagged_value(self):   # helper, equivalent to reading the custom field
         if isinstance(self.__class__.__slots__, str):
             return getattr(self, self.__class__.__slots__)
         else:

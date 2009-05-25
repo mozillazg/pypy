@@ -43,9 +43,9 @@ def test_attribute():
     res = interpret(fn1, [42], taggedpointers=True)
     assert res == 42
 
-def test_getvalue():
+def test_get_untagged_value():
     def fn1(n):
-        return C(n).getvalue()
+        return C(n).get_untagged_value()
     res = interpret(fn1, [42], taggedpointers=True)
     assert res == 42
 
