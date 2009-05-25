@@ -53,7 +53,7 @@ class TaggedInstanceRepr(InstanceRepr):
 
     def convert_const_exact(self, value):
         self.setup()
-        number = value.getvalue()
+        number = value.get_untagged_value()
         return ll_int_to_unboxed(self.lowleveltype, number)
 
     def getvalue_from_unboxed(self, llops, vinst):
