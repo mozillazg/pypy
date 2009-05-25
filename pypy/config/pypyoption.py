@@ -186,7 +186,8 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
 
         BoolOption("withsmallint", "use tagged integers",
                    default=False,
-                   requires=[("objspace.std.withprebuiltint", False)]),
+                   requires=[("objspace.std.withprebuiltint", False),
+                             ("translation.taggedpointers", True)]),
 
         BoolOption("withprebuiltint", "prebuild commonly used int objects",
                    default=False),

@@ -542,7 +542,7 @@ class GenericGCTests(GCTest):
             return x.meth(100)
         def func():
             return fn(1000) + fn(-1000)
-        func = self.runner(func)
+        func = self.runner(func, taggedpointers=True)
         res = func([])
         assert res == fn(1000) + fn(-1000)
 
@@ -563,7 +563,7 @@ class GenericGCTests(GCTest):
             return f.l[-1].meth(100)
         def func():
             return fn(1000) ^ fn(-1000)
-        func = self.runner(func)
+        func = self.runner(func, taggedpointers=True)
         res = func([])
         assert res == fn(1000) ^ fn(-1000)
 
