@@ -15,6 +15,7 @@ from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
 from pypy import conftest
 from pypy.tool.udir import udir
+from pypy.rlib import rgc
 
 def compile_func(fn, inputtypes, t=None, gcpolicy="ref"):
     from pypy.config.pypyoption import get_pypy_config
@@ -584,7 +585,6 @@ class TestUsingFramework(AbstractGCTestClass):
 
     def test_weakref(self):
         import weakref
-        from pypy.rlib import rgc
 
         class A:
             pass
@@ -620,7 +620,6 @@ class TestUsingFramework(AbstractGCTestClass):
 
     def test_prebuilt_weakref(self):
         import weakref
-        from pypy.rlib import rgc
         class A:
             pass
         a = A()
@@ -844,7 +843,6 @@ class TestUsingFramework(AbstractGCTestClass):
         from pypy.rlib.libffi import ffi_type_pointer, cast_type_to_ffitype,\
              CDLL, ffi_type_void, CallbackFuncPtr, ffi_type_sint
         from pypy.rpython.lltypesystem import rffi, ll2ctypes
-        from pypy.rlib import rgc
         import gc
         slong = cast_type_to_ffitype(rffi.LONG)
 
@@ -891,7 +889,6 @@ class TestUsingFramework(AbstractGCTestClass):
         assert c_fn() == 1
     
     def test_can_move(self):
-        from pypy.rlib import rgc
         class A:
             pass
         def fn():
@@ -904,7 +901,6 @@ class TestUsingFramework(AbstractGCTestClass):
         TP = lltype.GcArray(lltype.Char)
         def func():
             try:
-                from pypy.rlib import rgc
                 a = rgc.malloc_nonmovable(TP, 3)
                 rgc.collect()
                 if a:
@@ -920,7 +916,6 @@ class TestUsingFramework(AbstractGCTestClass):
     def test_resizable_buffer(self):
         from pypy.rpython.lltypesystem.rstr import STR
         from pypy.rpython.annlowlevel import hlstr
-        from pypy.rlib import rgc
 
         def f():
             ptr = rgc.resizable_buffer_of_shape(STR, 2)
@@ -932,6 +927,45 @@ class TestUsingFramework(AbstractGCTestClass):
         run = self.getcompiled(f)
         assert run() == True
 
+    def test_tagged(self):
+        class Unrelated(object):
+            pass
+
+        u = Unrelated()
+        u.x = UnboxedObject(47)
+        def fn(n):
+            rgc.collect() # check that a prebuilt tagged pointer doesn't explode
+            if n > 0:
+                x = BoxedObject(n)
+            else:
+                x = UnboxedObject(n)
+            u.x = x # invoke write barrier
+            rgc.collect()
+            return x.meth(100)
+        def func():
+            return fn(1000) + fn(-1000)
+        func = self.getcompiled(func, taggedpointers=True)
+        res = func()
+        assert res == fn(1000) + fn(-1000)
+
+from pypy.rlib.objectmodel import UnboxedValue
+
+class TaggedBase(object):
+    __slots__ = ()
+    def meth(self, x):
+        raise NotImplementedError
+
+class BoxedObject(TaggedBase):
+    attrvalue = 66
+    def __init__(self, normalint):
+        self.normalint = normalint
+    def meth(self, x):
+        return self.normalint + x + 2
+
+class UnboxedObject(TaggedBase, UnboxedValue):
+    __slots__ = 'smallint'
+    def meth(self, x):
+        return self.smallint + x + 3
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
     gcpolicy = "semispace"
     should_be_moving = True
@@ -975,7 +1009,6 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
         def fn():
             # the semispace size starts at 8MB for now, so setting a
             # smaller limit has no effect
-            from pypy.rlib import rgc
             rgc.set_max_heap_size(20000000)   # almost 20 MB
             s1 = s2 = s3 = None
             try:

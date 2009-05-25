@@ -24,7 +24,7 @@ class AbstractGCTestClass(object):
             self._cleanups.pop()()
 
     def getcompiled(self, func, argstypelist = [],
-                    annotatorpolicy=None):
+                    annotatorpolicy=None, **extraconfigopts):
         from pypy.config.pypyoption import get_pypy_config
         config = get_pypy_config(translating=True)
         config.translation.gc = self.gcpolicy
@@ -32,6 +32,7 @@ class AbstractGCTestClass(object):
         if self.stacklessgc:
             config.translation.gcrootfinder = "stackless"
         config.translation.simplifying = True
+        config.set(**extraconfigopts)
         t = TranslationContext(config=config)
         self.t = t
         a = t.buildannotator(policy=annotatorpolicy)
