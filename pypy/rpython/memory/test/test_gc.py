@@ -489,9 +489,9 @@ class GCTest(object):
             u.x = x # invoke write barrier
             rgc.collect()
             return x.meth(100)
-        res = self.interpret(fn, [1000])
+        res = self.interpret(fn, [1000], taggedpointers=True)
         assert res == 1102
-        res = self.interpret(fn, [-1000])
+        res = self.interpret(fn, [-1000], taggedpointers=True)
         assert res == -897
 
     def test_tagged_prebuilt(self):
@@ -509,9 +509,9 @@ class GCTest(object):
             f.l.append(x)
             rgc.collect()
             return f.l[-1].meth(100)
-        res = self.interpret(fn, [1000])
+        res = self.interpret(fn, [1000], taggedpointers=True)
         assert res == 1102
-        res = self.interpret(fn, [-1000])
+        res = self.interpret(fn, [-1000], taggedpointers=True)
         assert res == -897
 
     def test_tagged_id(self):
@@ -537,9 +537,9 @@ class GCTest(object):
             return ((id_x1 == id_x2) * 1 +
                     (id_prebuilt1 == id_prebuilt2) * 10 +
                     (id_x1 != id_prebuilt1) * 100)
-        res = self.interpret(fn, [1000])
+        res = self.interpret(fn, [1000], taggedpointers=True)
         assert res == 111
-        res = self.interpret(fn, [-1000])
+        res = self.interpret(fn, [-1000], taggedpointers=True)
         assert res == 111
 
 

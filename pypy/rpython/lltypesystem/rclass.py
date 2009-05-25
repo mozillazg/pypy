@@ -619,17 +619,19 @@ def buildinstancerepr(rtyper, classdef, gcflavor='gc'):
                                                           Constant(False)).value
         virtualizable2 = classdef.classdesc.read_attribute('_virtualizable2_',
                                                            Constant(False)).value
+    config = rtyper.annotator.translator.config
+    usetagging = len(unboxed) != 0 and config.translation.taggedpointers
     if virtualizable:
-        assert len(unboxed) == 0
+        assert not usetagging
         assert gcflavor == 'gc'
         from pypy.rpython.lltypesystem import rvirtualizable
         return rvirtualizable.VirtualizableInstanceRepr(rtyper, classdef)
     elif virtualizable2:
-        assert len(unboxed) == 0
+        assert not usetagging
         assert gcflavor == 'gc'
         from pypy.rpython.lltypesystem import rvirtualizable2
         return rvirtualizable2.Virtualizable2InstanceRepr(rtyper, classdef)
-    elif len(unboxed) == 0:
+    elif not usetagging:
         return InstanceRepr(rtyper, classdef, gcflavor)
     else:
         # the UnboxedValue class and its parent classes need a
