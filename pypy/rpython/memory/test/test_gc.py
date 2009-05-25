@@ -514,6 +514,35 @@ class GCTest(object):
         res = self.interpret(fn, [-1000])
         assert res == -897
 
+    def test_tagged_id(self):
+        from pypy.rlib.objectmodel import UnboxedValue, compute_unique_id
+
+        class Unrelated(object):
+            pass
+
+        u = Unrelated()
+        u.x = UnboxedObject(47)
+        def fn(n):
+            id_prebuilt1 = compute_unique_id(u.x)
+            if n > 0:
+                x = BoxedObject(n)
+            else:
+                x = UnboxedObject(n)
+            id_x1 = compute_unique_id(x)
+            rgc.collect() # check that a prebuilt tagged pointer doesn't explode
+            id_prebuilt2 = compute_unique_id(u.x)
+            id_x2 = compute_unique_id(x)
+            print u.x, id_prebuilt1, id_prebuilt2
+            print x, id_x1, id_x2
+            return ((id_x1 == id_x2) * 1 +
+                    (id_prebuilt1 == id_prebuilt2) * 10 +
+                    (id_x1 != id_prebuilt1) * 100)
+        res = self.interpret(fn, [1000])
+        assert res == 111
+        res = self.interpret(fn, [-1000])
+        assert res == 111
+
+
 from pypy.rlib.objectmodel import UnboxedValue
 
 class TaggedBase(object):

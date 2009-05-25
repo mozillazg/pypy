@@ -553,6 +553,11 @@ class HybridGC(GenerationGC):
 
     def id(self, ptr):
         obj = llmemory.cast_ptr_to_adr(ptr)
+
+        # is it a tagged pointer?
+        if not self.is_valid_gc_object(obj):
+            return llmemory.cast_adr_to_int(obj)
+
         if self._is_external(obj):
             # a prebuilt or rawmalloced object
             if self.is_last_generation(obj):

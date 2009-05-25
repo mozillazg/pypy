@@ -525,7 +525,7 @@ class GenericGCTests(GCTest):
         res = fn([])
         assert res == 'y'
 
-    def test_tagged(self):
+    def test_tagged_simple(self):
         class Unrelated(object):
             pass
 
@@ -545,6 +545,27 @@ class GenericGCTests(GCTest):
         func = self.runner(func)
         res = func([])
         assert res == fn(1000) + fn(-1000)
+
+    def test_tagged_prebuilt(self):
+
+        class F:
+            pass
+
+        f = F()
+        f.l = [UnboxedObject(10)]
+        def fn(n):
+            if n > 0:
+                x = BoxedObject(n)
+            else:
+                x = UnboxedObject(n)
+            f.l.append(x)
+            rgc.collect()
+            return f.l[-1].meth(100)
+        def func():
+            return fn(1000) ^ fn(-1000)
+        func = self.runner(func)
+        res = func([])
+        assert res == fn(1000) ^ fn(-1000)
 
 from pypy.rlib.objectmodel import UnboxedValue
 
