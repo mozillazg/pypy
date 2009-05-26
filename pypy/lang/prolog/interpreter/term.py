@@ -25,10 +25,6 @@ class PrologObject(object):
     __slots__ = ()
     _immutable_ = True
 
-    def __init__(self):
-        raise NotImplementedError("abstract base class")
-        return self
-
     def getvalue(self, heap):
         return self
 
@@ -269,12 +265,11 @@ class Atom(Callable):
         error.throw_type_error("evaluable", self.get_prolog_signature())
 
 
-class Number(NonVar):
+class Number(NonVar, UnboxedValue):
     TAG = tag()
     STANDARD_ORDER = 2
     _immutable_ = True
-    def __init__(self, num):
-        self.num = num
+    __slots__ = ("num", )
 
     @specialize.arg(3)
     def basic_unify(self, other, heap, occurs_check=False):
