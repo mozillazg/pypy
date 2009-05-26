@@ -136,6 +136,27 @@ def test_type():
     res = interpret(fn, [9874], taggedpointers=True)
     assert res.item1 and not res.item0
 
+def test_type_of_None():
+    # use extra function to prevent flow graph cleverness
+    def g(n):
+        if n < 0:
+            x = B(n)
+        elif n == 0:
+            x = None
+        else:
+            x = C(n)
+        return x
+    def fn(n):
+        x= g(n)
+        return type(x) is B, type(x) is C
+
+    res = interpret(fn, [-212], taggedpointers=True)
+    assert res.item0 and not res.item1
+    res = interpret(fn, [9874], taggedpointers=True)
+    assert res.item1 and not res.item0
+    res = interpret(fn, [0], taggedpointers=True)
+    assert not res.item1 and not res.item0
+
 def test_str():
     def fn(n):
         if n > 0:

@@ -1,7 +1,7 @@
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.rclass import getclassrepr, getinstancerepr, get_type_repr
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.lltypesystem.rclass import InstanceRepr, CLASSTYPE
+from pypy.rpython.lltypesystem.rclass import InstanceRepr, CLASSTYPE, ll_inst_type
 from pypy.rpython.lltypesystem.rclass import MissingRTypeAttribute
 from pypy.rpython.lltypesystem.rclass import ll_issubclass_const
 from pypy.rpython.rmodel import TyperError, inputconst
@@ -62,7 +62,7 @@ class TaggedInstanceRepr(InstanceRepr):
         c_one = inputconst(lltype.Signed, 1)
         return llops.genop('int_rshift', [v2, c_one], resulttype=lltype.Signed)
 
-    def gettype_from_unboxed(self, llops, vinst):
+    def gettype_from_unboxed(self, llops, vinst, can_be_none=False):
         unboxedclass_repr = getclassrepr(self.rtyper, self.unboxedclassdef)
         cunboxedcls = inputconst(CLASSTYPE, unboxedclass_repr.getvtable())
         if self.is_parent:
@@ -81,8 +81,12 @@ class TaggedInstanceRepr(InstanceRepr):
             vinst = llops.genop('cast_pointer', [vinst],
                                 resulttype=self.common_repr())
             if can_be_tagged:
+                # XXX do we care about optimizing the case where vinst cannot
+                # be None here?
                 return llops.gendirectcall(ll_unboxed_getclass, vinst,
                                            cunboxedcls)
+            elif can_be_none:
+                return llops.gendirectcall(ll_inst_type, vinst)
             else:
                 ctypeptr = inputconst(lltype.Void, 'typeptr')
                 return llops.genop('getfield', [vinst, ctypeptr],
@@ -100,7 +104,8 @@ class TaggedInstanceRepr(InstanceRepr):
 
     def rtype_type(self, hop):
         [vinst] = hop.inputargs(self)
-        return self.gettype_from_unboxed(hop.llops, vinst)
+        return self.gettype_from_unboxed(
+            hop.llops, vinst, can_be_none=hop.args_s[0].can_be_none())
 
     def rtype_setattr(self, hop):
         # only for UnboxedValue.__init__(), which is not actually called
@@ -144,8 +149,10 @@ def ll_unboxed_to_int(p):
 def ll_unboxed_getclass(instance, class_if_unboxed):
     if lltype.cast_ptr_to_int(instance) & 1:
         return class_if_unboxed
-    else:
+    elif instance:
         return instance.typeptr
+    else:
+        return lltype.nullptr(lltype.typeOf(instance).TO.typeptr.TO)
 
 def ll_unboxed_isinstance_const(obj, minid, maxid, answer_if_unboxed):
     if not obj:
