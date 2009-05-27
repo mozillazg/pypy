@@ -14,7 +14,7 @@ class AbstractTestAsmGCRoot:
     # instructions:
     should_be_moving = False
 
-    def getcompiled(self, func):
+    def getcompiled(self, func, **extraargs):
         def main(argv):
             try:
                 res = func()
@@ -30,6 +30,7 @@ class AbstractTestAsmGCRoot:
         config = get_pypy_config(translating=True)
         config.translation.gc = self.gcpolicy
         config.translation.gcrootfinder = "asmgcc"
+        config.set(**extraargs)
         t = TranslationContext(config=config)
         self.t = t
         a = t.buildannotator()
