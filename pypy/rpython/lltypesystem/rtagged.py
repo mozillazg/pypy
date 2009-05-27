@@ -81,9 +81,11 @@ class TaggedInstanceRepr(InstanceRepr):
             vinst = llops.genop('cast_pointer', [vinst],
                                 resulttype=self.common_repr())
             if can_be_tagged:
-                # XXX do we care about optimizing the case where vinst cannot
-                # be None here?
-                return llops.gendirectcall(ll_unboxed_getclass, vinst,
+                if can_be_none:
+                    func = ll_unboxed_getclass_canbenone
+                else:
+                    func = ll_unboxed_getclass
+                return llops.gendirectcall(func, vinst,
                                            cunboxedcls)
             elif can_be_none:
                 return llops.gendirectcall(ll_inst_type, vinst)
@@ -146,13 +148,15 @@ def ll_int_to_unboxed(PTRTYPE, value):
 def ll_unboxed_to_int(p):
     return lltype.cast_ptr_to_int(p) >> 1
 
+def ll_unboxed_getclass_canbenone(instance, class_if_unboxed):
+    if instance:
+        return ll_unboxed_getclass(instance, class_if_unboxed)
+    return lltype.nullptr(lltype.typeOf(instance).TO.typeptr.TO)
+
 def ll_unboxed_getclass(instance, class_if_unboxed):
     if lltype.cast_ptr_to_int(instance) & 1:
         return class_if_unboxed
-    elif instance:
-        return instance.typeptr
-    else:
-        return lltype.nullptr(lltype.typeOf(instance).TO.typeptr.TO)
+    return instance.typeptr
 
 def ll_unboxed_isinstance_const(obj, minid, maxid, answer_if_unboxed):
     if not obj:
