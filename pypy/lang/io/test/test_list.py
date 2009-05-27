@@ -26,6 +26,15 @@ def test_list_append():
     inp = "a := list(); a append(1)"
     res,space = interpret(inp)
     assert res.items == [W_Number(space, 1)]
+
+def test_list_append_multiple():
+    inp = "a := list(1,2); a append(3,4,5)"
+    res,space = interpret(inp)
+    assert res.items == [W_Number(space, 1), 
+                            W_Number(space, 2),
+                            W_Number(space, 3),
+                            W_Number(space, 4),
+                            W_Number(space, 5)]
     
 def test_list_at():
     inp = "a := list(1,2,3); a at(2)"
