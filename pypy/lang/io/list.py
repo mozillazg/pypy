@@ -10,3 +10,30 @@ def list_append(space, w_target, w_message, w_context):
 @register_method('List', 'at', unwrap_spec=[object, int])
 def list_at(space, target, argument):
     return target[argument]
+    
+@register_method('List', 'foreach')
+def list_foreach(space, w_target, w_message, w_context):
+    argcount = len(w_message.arguments)
+    assert argcount > 0
+    
+    body = w_message.arguments[-1]
+    if argcount == 3:
+        key = w_message.arguments[0].name
+        value = w_message.arguments[1].name
+
+        for i in range(len(w_target.items)):
+            w_context.slots[key] = W_Number(space, i)
+            w_context.slots[value] = w_target.items[i]
+            t = body.eval(space, w_context, w_context)
+    elif argcount == 2:
+        value = w_message.arguments[0].name
+
+        for i in range(len(w_target.items)):
+            w_context.slots[value] = w_target.items[i]
+            t = body.eval(space, w_context, w_context)
+    
+    elif argcount == 1:
+        for i in range(len(w_target.items)):
+            t = body.eval(space, w_context, w_context)
+
+    return t 
