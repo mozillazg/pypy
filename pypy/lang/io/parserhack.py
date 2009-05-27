@@ -10,7 +10,7 @@ def parse(input, space=None):
     child_in.write(input)
     child_in.close()
     s = child_out_err.read().strip()
-    print s
+    # print s
     return eval(s)
 
 def interpret(code):
