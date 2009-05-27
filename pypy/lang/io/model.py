@@ -55,8 +55,8 @@ class W_List(W_Object):
         W_Object.__init__(self, space, protos)
         self.items = items
 
-    def append(self, w_items):
-        self.items += w_items
+    def extend(self, items_w):
+        self.items.extend(items_w)
         
     def __getitem__(self, index):
         try:
