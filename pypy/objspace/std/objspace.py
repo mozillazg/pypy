@@ -592,7 +592,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def newdict(self, module=False):
         if self.config.objspace.std.withmultidict and module:
             from pypy.objspace.std.dictmultiobject import W_DictMultiObject
-            return W_DictMultiObject(self, wary=True)
+            return W_DictMultiObject(self, module=True)
         return self.DictObjectCls(self)
 
     def newslice(self, w_start, w_end, w_step):
