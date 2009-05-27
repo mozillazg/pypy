@@ -229,7 +229,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    default=False),
 
         BoolOption("withcelldict",
-                   "use dictionaries that are opimized for being used as module dicts",
+                   "use dictionaries that are optimized for being used as module dicts",
                    default=False,
                    requires=[("objspace.std.withmultidict", True),
                              ("objspace.opcodes.CALL_LIKELY_BUILTIN", False),
