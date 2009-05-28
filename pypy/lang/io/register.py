@@ -1,7 +1,13 @@
 from pypy.lang.io import model
 cfunction_definitions = {}
-def register_method(type_name, slot_name, unwrap_spec=None):
+def register_method(type_name, slot_name, unwrap_spec=None, alias=None):
+    if alias is None:
+        alias = [slot_name]
+    else:
+        alias.append(slot_name)
+        
     def register(function):
+
         if unwrap_spec is None:
             wrapper = function
         else:
@@ -34,7 +40,10 @@ def register_method(type_name, slot_name, unwrap_spec=None):
                         raise ValueError, 'Unknown unwrap spec'
                 return function(space, *args)
         subdict = cfunction_definitions.setdefault(type_name, {})
-        subdict[slot_name] = wrapper
+
+        
+        for slotn in alias:
+            subdict[slotn] = wrapper
 
         return function
 
