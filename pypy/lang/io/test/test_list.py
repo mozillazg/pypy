@@ -124,19 +124,22 @@ def test_list_first_empty():
     res, space = interpret(inp)
     assert res == space.w_nil
     
-    inp = 'list() first(3)'
+    inp = 'a := list(); a first(3)'
     res, space = interpret(inp)
     assert isinstance(res, W_List)
     assert len(res.items) == 0
+    assert res.protos == [space.w_lobby.slots['a']]
     
 def test_list_first():
-    inp = 'list(9,8,7,6,5,4,3,2,1,1) first'
-    res, _ = interpret(inp)
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,1); a first'
+    res, space = interpret(inp)
     assert isinstance(res, W_List)
     assert res.items[0].value == 9
+    assert res.protos == [space.w_lobby.slots['a']]
     
 def test_list_first_n():
-    inp = 'list(9,8,7,6,5,4,3,2,1,1) first(3)'
-    res, _ = interpret(inp)
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,1); a first(3)'
+    res, space = interpret(inp)
     assert isinstance(res, W_List)
     assert [x.value for x in res.items] == [9,8,7]
+    assert res.protos == [space.w_lobby.slots['a']]
