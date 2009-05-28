@@ -29,3 +29,93 @@ def test_plus_in_method():
     res, space = interpret(inp)
     assert res.value == 8
     
+def test_modulo_int_int():
+    inp = '5 % 3'
+    res, space = interpret(inp)
+    assert res.value == 2
+    
+def test_modulo_int_float():
+    inp = '5 % 3.2'
+    res, space = interpret(inp)
+    assert res.value == 1.7999999999999998
+    
+def test_module_float_float():
+    inp = '5.3 % 3.2'
+    res, space = interpret(inp)
+    assert res.value == 2.0999999999999996
+    
+def test_modulo_neg_int_int():
+    inp = '-8 % 3'
+    res, space = interpret(inp)
+    assert res.value == -2
+    
+def test_modulo_int_neg_int():
+    inp = '8 % -3'
+    res, space = interpret(inp)
+    assert res.value == 2
+    
+def test_modulo_int_neg_int_neg():
+    inp = '-8 % -3'
+    res, space = interpret(inp)
+    assert res.value == -2
+    
+def test_modulo_float_float():
+    inp = '8.3 % 3.2'
+    res, space = interpret(inp)
+    assert res.value == 1.9000000000000004
+    
+def test_modulo_neg_float_float():
+    inp = '-8.3 % 3.2'
+    res, space = interpret(inp)
+    assert res.value == -1.9000000000000004
+
+def test_modulo_float_neg_float():
+    inp = '8.3 % -3.2'
+    res, space = interpret(inp)
+    assert res.value == 1.9000000000000004
+
+def test_modulo_neg_float_neg_float():
+    inp = '-8.3 % -3.2'
+    res, space = interpret(inp)
+    assert res.value == -1.9000000000000004
+    
+def test_alias_modulo():
+    inp = '-8.3 mod(-3.2)'
+    res, space = interpret(inp)
+    assert res.value == -1.9000000000000004
+    
+def test_pow():
+    inp1 = '5 ** -2.2'
+    inp2 = '5 pow(-2.2)'
+    res1, space = interpret(inp1)
+    res2, space = interpret(inp2)
+    assert res1.value >= 0.0289911865471078 \
+        and res1.value <= 0.0289911865471079 \
+        and res2.value == res1.value
+
+def test_ceil():    
+    inp = '3.3 ceil'
+    res, space = interpret(inp)
+    assert res.value == 4
+
+def test_floor():
+    inp = '3.9 floor'
+    res, space = interpret(inp)
+    assert res.value == 3
+    
+def test_round():
+    inp = '3.3 round'
+    res, space = interpret(inp)
+    assert res.value == 3
+    
+    inp = '3.7 round'
+    res, space = interpret(inp)
+    assert res.value == 4
+    
+    inp = '3.5 round'
+    res, space = interpret(inp)
+    assert res.value == 4
+    
+    inp = '-3.4 round'
+    res, space = interpret(inp)
+    assert res.value == -3
