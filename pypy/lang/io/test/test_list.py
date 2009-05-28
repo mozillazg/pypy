@@ -81,3 +81,62 @@ def test_list_foreach_leaks_variables():
     inp = 'b := list(); a := list(99, 34); a foreach(key, value, b append(list(key, value))); key+value'
     res,space = interpret(inp)
     assert res.value == 35
+    
+def test_list_with():
+    inp = 'a := list(1,2,3); b := a with(99, 34); list(a,b)'
+    res, space = interpret(inp)
+    a, b = res.items
+    # a is proto of b
+    assert b.protos == [a]
+    
+    # b has 1,2,3,99,34 as element
+    assert [x.value for x in b.items] == [1, 2, 3, 99, 34]
+    
+def test_list_index_of():
+    inp = 'list(9,8,7,7) indexOf(7)'
+    res, _ = interpret(inp)
+    assert res.value == 2
+    
+    inp = 'list(9,8,7,7) indexOf(42)'
+    res, space = interpret(inp)
+    assert res == space.w_nil
+    
+def test_list_contains():
+    inp = 'list(9,8,7,7) contains(7)'
+    res, space = interpret(inp)
+    assert res == space.w_true
+    
+    inp = 'list(9,8,7,7) contains(42)'
+    res, space = interpret(inp)
+    assert res == space.w_false
+    
+def test_list_size():
+    inp = 'list(9,8,7,7) size'
+    res, _ = interpret(inp)
+    assert res.value == 4
+    
+    inp = 'list() size'
+    res, _ = interpret(inp)
+    assert res.value ==  0
+    
+def test_list_first_empty():
+    inp = 'list() first'
+    res, space = interpret(inp)
+    assert res == space.w_nil
+    
+    inp = 'list() first(3)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert len(res.items) == 0
+    
+def test_list_first():
+    inp = 'list(9,8,7,6,5,4,3,2,1,1) first'
+    res, _ = interpret(inp)
+    assert isinstance(res, W_List)
+    assert res.items[0].value == 9
+    
+def test_list_first_n():
+    inp = 'list(9,8,7,6,5,4,3,2,1,1) first(3)'
+    res, _ = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == [9,8,7]
