@@ -1,5 +1,5 @@
 from pypy.lang.io.register import register_method
-from pypy.lang.io.model import W_ImmutableSequence, W_Block
+from pypy.lang.io.model import W_ImmutableSequence, W_Block, W_Number
 
 @register_method('Object', 'setSlot', unwrap_spec=[object, str, object])
 def w_object_set_slot(space, w_target, name, w_value):
@@ -62,3 +62,7 @@ def w_object_(space, w_target, w_arg):
 @register_method('Object', 'message')
 def object_message(space, w_target, w_message, w_context):
     return w_message.arguments[0]
+    
+@register_method('Object', '-', unwrap_spec=[object, float])
+def object_minus(space, w_target, argument):
+    return W_Number(space, -argument)
