@@ -44,3 +44,11 @@ def test_object_message():
     res, space = interpret(inp)
     assert isinstance(res, W_Message)
     assert res.name == 'foo'
+    
+def test_object_substract():
+    inp = '-1'
+    res, space = interpret(inp)
+    assert res.value == -1
+    
+    inp = '-"a"'
+    py.test.raises(Exception, "interpret(inp)")
