@@ -73,6 +73,15 @@ class W_List(W_Object):
         l.items += items
         return l
         
+class W_Map(W_Object):
+    """A key/value dictionary appropriate for holding large key/value collections."""
+    def __init__(self, space, protos = [], items = {}):
+        W_Object.__init__(self, space, protos)
+        self.items = items
+        
+    def clone(self):
+        return W_Map(self.space, [self], dict(self.items))
+        
 class W_ImmutableSequence(W_Object):
     def __init__(self, space, string):
         self.value = string
