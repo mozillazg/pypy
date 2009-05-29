@@ -1,5 +1,5 @@
 from pypy.rlib.objectmodel import instantiate
-from pypy.lang.io.model import W_Number, W_Object, W_CFunction, W_Block, W_Message, W_List
+from pypy.lang.io.model import W_Number, W_Object, W_CFunction, W_Block, W_Message, W_List, W_Map
 from pypy.lang.io.register import cfunction_definitions
 
 import pypy.lang.io.number
@@ -8,6 +8,8 @@ import pypy.lang.io.block
 import pypy.lang.io.list
 import pypy.lang.io.call
 import pypy.lang.io.message
+import pypy.lang.io.map
+
 class ObjSpace(object):
     """docstring for ObjSpace"""
     def __init__(self):
@@ -22,7 +24,7 @@ class ObjSpace(object):
         self.w_nil = W_Object(self, [self.w_object])
         self.w_list = W_List(self, [self.w_object])
         self.w_call = W_Object(self)
-        
+        self.w_map = W_Map(self, [self.w_object])
         
         self.init_w_object()        
         
@@ -44,6 +46,12 @@ class ObjSpace(object):
         
         self.init_w_call()
          
+        self.init_w_map()
+        
+    def init_w_map(self):
+        for key, function in cfunction_definitions['Map'].items():
+            self.w_map.slots[key] = W_CFunction(self, function)
+            
     def init_w_call(self):
         for key, function in cfunction_definitions['Call'].items():
             self.w_call.slots[key] = W_CFunction(self, function)
@@ -70,6 +78,7 @@ class ObjSpace(object):
         self.w_core.slots['nil'] = self.w_nil
         self.w_core.slots['List'] = self.w_list
         self.w_core.slots['Call'] = self.w_call
+        self.w_core.slots['Map'] = self.w_map
 
     def init_w_number(self):
         self.w_number = instantiate(W_Number)
