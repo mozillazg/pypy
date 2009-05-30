@@ -112,6 +112,40 @@ class W_Map(W_Object):
     def at_put(self, w_key, w_value):
         self.items[w_key.hash()] = MapEntry(w_key, w_value)
         
+    def empty(self):
+        self.items.clear()
+    
+    def has_key(self, w_key):
+        return w_key.hash() in self.items
+        
+    def size(self):
+        return len(self.items)
+    
+    def remove_at(self, w_key):
+        try:
+            del(self.items[w_key.hash()])
+        except Exception, e:
+            pass
+            
+    def has_value(self, w_value):
+        for x in self.items.values():
+            if x.value == x:
+                return True
+        return False
+        
+    def values(self):
+        return [x.value for x in self.items.values()]
+        
+    def foreach(self, space, key_name, value_name, w_body, w_context):
+        for item in self.items.values():
+            w_context.slots[key_name] = item.key
+            w_context.slots[value_name] = item.value
+            t = w_body.eval(space, w_context, w_context)
+        return t 
+        
+    def keys(self):
+        return [x.key for x in self.items.values()]
+        
 class MapEntry(object):
     def __init__(self, w_key, w_value):
         self.key = w_key
