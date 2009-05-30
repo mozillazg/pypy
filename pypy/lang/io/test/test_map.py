@@ -29,6 +29,6 @@ def test_at():
     assert res.value == 'bar'
     
 def test_key_hashing():
-    inp = 'Map clone atPut(1, "bar") atPut(nil, "ipsum") atPut("foo", 123) at(nil)'
+    inp = 'Map clone atPut("1", "bar") atPut("nil", "ipsum") atPut("foo", 123) at("nil")'
     res, space = interpret(inp)
     assert res.value == 'ipsum'
