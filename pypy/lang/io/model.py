@@ -11,7 +11,16 @@ class W_Object(object):
 
     def __ne__(self, other):
         return not self == other
-
+    
+    def hash(self):
+        h = 0
+        for w_x in self.slots:
+            h += w_x.hash()
+        for x in self.protos:
+            h += hash(x)
+        
+        return h
+        
     def lookup(self, name, seen=None):
         if seen is None:
             seen = {}
@@ -49,6 +58,9 @@ class W_Number(W_Object):
         cloned = W_Number(self.space, self.value)
         cloned.protos = [self]
         return cloned
+        
+    def hash(self):
+        return hash(self.value)
 
 class W_List(W_Object):
     def __init__(self, space, protos = [], items = []):
@@ -72,6 +84,12 @@ class W_List(W_Object):
         l = self.clone()
         l.items += items
         return l
+    
+    def hash(self):
+        h = 0
+        for x in self.items:
+            h += x.hash()
+        return h
         
 class W_Map(W_Object):
     """A key/value dictionary appropriate for holding large key/value collections."""
@@ -82,10 +100,30 @@ class W_Map(W_Object):
     def clone(self):
         return W_Map(self.space, [self], dict(self.items))
         
+    def hash(self):
+        h = 0
+        for key, val in self.items:
+            h += key + val.hash()
+        return h
+    
+    def at(self, w_key):
+        return self.items[w_key.hash()].value
+    
+    def at_put(self, w_key, w_value):
+        self.items[w_key.hash()] = MapEntry(w_key, w_value)
+        
+class MapEntry(object):
+    def __init__(self, w_key, w_value):
+        self.key = w_key
+        self.value = w_value
+    
+        
 class W_ImmutableSequence(W_Object):
     def __init__(self, space, string):
         self.value = string
-    
+        
+    def hash(self):
+        return hash(self.value)
 
 class W_CFunction(W_Object):
     def __init__(self, space, function):
@@ -95,6 +133,9 @@ class W_CFunction(W_Object):
     def apply(self, space, w_receiver, w_message, w_context):
         return self.function(space, w_receiver, w_message, w_context)
     
+    def hash(self):
+        return hash(self.function)
+        
 class W_Message(W_Object):
     def __init__(self, space, name, arguments, next = None):
         self.name = name
@@ -106,7 +147,12 @@ class W_Message(W_Object):
     def __repr__(self):
         return "Message(%r, %r, %r)" % (self.name, self.arguments, self.next)
 
-    
+    def hash(self):
+        h = hash(self.name)
+        for x in self.arguments:
+            h += x.hash()
+        return h
+        
     def eval(self, space, w_receiver, w_context):
         if self.name == ';':
             # xxx is this correct?
@@ -167,6 +213,13 @@ class W_Block(W_Object):
         
     def clone_and_init(self, space, arguments, body, activateable):
         return W_Block(space, arguments, body, activateable, [self])
+        
+    def hash(self):
+        h = self.body.hash()
+        for x in self.arguments:
+            h += x.hash()
+        return h
+        
         
 def parse_hex(string):
     if not string.startswith("0x"):

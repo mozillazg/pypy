@@ -18,7 +18,17 @@ def test_map_clone():
 def test_at_put():
     inp = 'Map clone atPut("foo", "bar")'
     res, space = interpret(inp)
-    keys = [(key.value) for key in res.items.keys()]
+    keys = [(entry.key.value) for entry in res.items.values()]
     assert keys == ['foo']
-    values = [(val.value) for val in res.items.values()]
+    values = [(entry.value.value) for entry in res.items.values()]
     assert values == ['bar']
+    
+def test_at():
+    inp = 'Map clone atPut("foo", "bar") atPut("lorem", "ipsum") at("foo")'
+    res, space = interpret(inp)
+    assert res.value == 'bar'
+    
+def test_key_hashing():
+    inp = 'Map clone atPut(1, "bar") atPut(nil, "ipsum") atPut("foo", 123) at(nil)'
+    res, space = interpret(inp)
+    assert res.value == 'ipsum'
