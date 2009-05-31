@@ -208,11 +208,12 @@ class SemiSpaceGC(MovingGCBase):
                              "| used before collection:          ",
                              start_usage, "bytes")
             start_time = time.time()
+        else:
+            start_time = 0 # Help the flow space
+            start_usage = 0 # Help the flow space
         #llop.debug_print(lltype.Void, 'semispace_collect', int(size_changing))
         tospace = self.fromspace
         fromspace = self.tospace
-        start_time = 0 # Help the flow space
-        start_usage = 0 # Help the flow space
         self.fromspace = fromspace
         self.tospace = tospace
         self.top_of_space = tospace + self.space_size
