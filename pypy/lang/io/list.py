@@ -65,7 +65,7 @@ def list_size(space, w_target, w_message, w_context):
     return W_Number(space, len(w_target.items))
     
 @register_method('List', 'first')
-def list_size(space, w_target, w_message, w_context):
+def list_first(space, w_target, w_message, w_context):
     if len(w_message.arguments) != 0:
         t = w_message.arguments[0].eval(space, w_target, w_context)
         assert isinstance(t, W_Number)
@@ -75,10 +75,61 @@ def list_size(space, w_target, w_message, w_context):
     
     if len(w_target.items) == 0 and nfirst == 1:
         return space.w_nil
-
+    
+    if nfirst == 1:
+        return w_target.items[0]
     flist_w = w_target.clone()
     if nfirst < 1:
         flist_w.items = []
     else:
         flist_w.items = flist_w.items[0:nfirst]
     return flist_w
+    
+@register_method('List', 'last')
+def list_last(space, w_target, w_message, w_context):
+    if len(w_message.arguments) != 0:
+        t = w_message.arguments[0].eval(space, w_target, w_context)
+        assert isinstance(t, W_Number)
+        nlast = t.value
+    else:
+        nlast = 1
+    
+    if len(w_target.items) == 0 and nlast == 1:
+        return space.w_nil
+    
+    if nlast == 1:
+        return w_target.items[-1]
+    flist_w = w_target.clone()
+    if nlast < 1:
+        flist_w.items = []
+    else:
+        flist_w.items = flist_w.items[len(flist_w.items)-nlast:]
+    return flist_w
+
+@register_method('List', 'reverseInPlace')
+def list_reverse_in_place(space, w_target, w_message, w_context):
+    w_target.items.reverse()
+    return w_target
+    
+@register_method('List', 'removeAll')
+def list_remove_all(space, w_target, w_message, w_context):
+    try:
+        w_target.items = []
+    except Exception, e:
+        raise Exception, 'index out of bounds'
+
+    return w_target
+    
+@register_method('List', 'atPut')
+def list_reverse_in_place(space, w_target, w_message, w_context):
+    w_key = w_message.arguments[0].eval(space, w_target, w_context)
+    assert isinstance(w_key, W_Number), "argument 0 to method 'atPut' must be a Number"
+    key = w_key.value
+    if len(w_message.arguments) > 1:
+        w_value = w_message.arguments[1].eval(space, w_target, w_context)
+    else:
+        w_value = space.w_nil
+        
+    w_target.items[key] = w_value
+    return w_target
+    
