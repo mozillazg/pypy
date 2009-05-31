@@ -133,9 +133,8 @@ def test_list_first_empty():
 def test_list_first():
     inp = 'a := list(9,8,7,6,5,4,3,2,1,1); a first'
     res, space = interpret(inp)
-    assert isinstance(res, W_List)
-    assert res.items[0].value == 9
-    assert res.protos == [space.w_lobby.slots['a']]
+    assert isinstance(res, W_Number)
+    assert res.value == 9
     
 def test_list_first_n():
     inp = 'a := list(9,8,7,6,5,4,3,2,1,1); a first(3)'
@@ -143,3 +142,77 @@ def test_list_first_n():
     assert isinstance(res, W_List)
     assert [x.value for x in res.items] == [9,8,7]
     assert res.protos == [space.w_lobby.slots['a']]
+    
+def test_list_last():
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a last'
+    res, space = interpret(inp)
+    assert isinstance(res, W_Number)
+    assert res.value == 100
+    
+def test_list_last_n():
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a last(3)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == [2, 1, 100]
+    assert res.protos == [space.w_lobby.slots['a']]
+
+def test_list_first_n_overflow():    
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a first(20)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == [9,8,7,6,5,4,3,2,1,100]
+    assert res.protos == [space.w_lobby.slots['a']]
+    
+
+def test_list_last_n_overflow():
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a last(20)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == [9,8,7,6,5,4,3,2,1,100]
+    assert res.protos == [space.w_lobby.slots['a']]
+
+
+def test_empty_list_first_n():
+    inp = 'a := list(); a first(20)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == []
+    assert res.protos == [space.w_lobby.slots['a']]
+
+def test_empty_list_last_n():
+    inp = 'a := list(); a last(20)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == []
+    assert res.protos == [space.w_lobby.slots['a']]
+
+def test_reverse_in_place():
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a reverseInPlace'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == [100,1,2,3,4,5,6,7,8,9]
+    
+def test_remove_all():
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a removeAll; a'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == []
+
+def test_at_put():
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a atPut(3, 1045)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    assert [x.value for x in res.items] == [9,8,7, 1045, 5, 4, 3, 2, 1, 100]
+    
+def test_at_put_raises():
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a atPut(1000, 1045)'
+    py.test.raises(Exception, 'interpret(inp)')
+
+def test_at_put_wo_value():
+    inp = 'a := list(9,8,7,6,5,4,3,2,1,100); a atPut(3)'
+    res, space = interpret(inp)
+    assert isinstance(res, W_List)
+    nums = [W_Number(space, i) for i in range(9, 0, -1)]
+    nums[3] = space.w_nil
+    nums.append(W_Number(space, 100))
+    assert [x for x in res.items] == nums
