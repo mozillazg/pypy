@@ -14,32 +14,31 @@ exclusionlist = ['shell.js', 'browser.js']
 
 def overriden_evaljs(ctx, args, this):
     try:
-        return evaljs(ctx, args, this)
+        w_eval = W_Eval(ctx)
+        return w_eval.Call(ctx, args, this)
     except JsBaseExcept:
         return W_String("error")
 
-passing_tests = ['Number', 'Boolean']
+passing_tests = ['Number', 'Boolean', 'Array']
 
-class JSDirectory(py.test.collect.Directory):
+class EcmatestPlugin:
+    def pytest_addoption(self, parser):
+        parser.addoption('--ecma',
+               action="store_true", dest="ecma", default=False,
+               help="run js interpreter ecma tests"
+        )
 
-    def filefilter(self, path):
-        if not py.test.config.option.ecma:
-            for i in passing_tests:
-                if i in str(path):
-                    break
-            else:
-                return False
-        if path.check(file=1):
-            return (path.basename not in exclusionlist)  and (path.ext == '.js')
+    def pytest_collect_file(self, path, parent):
+        if parent.name not in passing_tests:
+            return
+        if path.ext == ".js" and path.basename not in exclusionlist:
+            if not parent.config.option.ecma:
+                py.test.skip("ECMA tests disabled, run with --ecma")
+            return JSTestFile(path, parent=parent)
 
-    def join(self, name):
-        if not name.endswith('.js'):
-            return super(Directory, self).join(name)
-        p = self.fspath.join(name)
-        if p.check(file=1):
-            return JSTestFile(p, parent=self)
+ConftestPlugin = EcmatestPlugin
 
-class JSTestFile(py.test.collect.Module):
+class JSTestFile(py.test.collect.File):
     def init_interp(cls):
         if hasattr(cls, 'interp'):
             cls.testcases.PutValue(W_Array(), cls.interp.global_context)
@@ -62,13 +61,7 @@ class JSTestFile(py.test.collect.Module):
         self.name = fspath.purebasename
         self.fspath = fspath
           
-    def run(self):
-        if not py.test.config.option.ecma:
-            for i in passing_tests:
-                if i in self.listnames():
-                    break
-            else:
-                py.test.skip("ECMA tests disabled, run with --ecma")
+    def collect(self):
         if py.test.config.option.collectonly:
             return
         self.init_interp()
@@ -81,23 +74,20 @@ class JSTestFile(py.test.collect.Module):
         except JsBaseExcept:
             raise Failed(msg="Javascript Error", excinfo=py.code.ExceptionInfo())
         except:
-            raise Failed(excinfo=py.code.ExceptionInfo())
+            raise
         ctx = self.interp.global_context
         testcases = ctx.resolve_identifier(ctx, 'testcases')
         self.tc = ctx.resolve_identifier(ctx, 'tc')
         testcount = testcases.Get(ctx, 'length').ToInt32(ctx)
         self.testcases = testcases
-        return range(testcount)
-
-    def join(self, number):
-        return JSTestItem(number, parent = self)
+        return [JSTestItem(number, parent=self) for number in range(testcount)]
 
 class JSTestItem(py.test.collect.Item):
     def __init__(self, number, parent=None):
         super(JSTestItem, self).__init__(str(number), parent)
         self.number = number
         
-    def run(self):
+    def runtest(self):
         ctx = JSTestFile.interp.global_context
         r3 = ctx.resolve_identifier(ctx, 'run_test')
         w_test_number = W_IntNumber(self.number)
@@ -110,4 +100,3 @@ class JSTestItem(py.test.collect.Item):
     def _getpathlineno(self):
         return self.parent.parent.fspath, 0 
 
-Directory = JSDirectory

@@ -627,8 +627,8 @@ class W_DateObject(W_NativeObject):
     def Construct(self, ctx, args=[]):
         return create_object(ctx, 'Date', Value = W_FloatNumber(0.0))
 
-def pypy_repr(ctx, repr, w_arg):
-    return W_String(w_arg.__class__.__name__)
+def pypy_repr(ctx, args, this):
+    return W_String(args[0].__class__.__name__)
 
 def put_values(ctx, obj, dictvalues):
     for key,value in dictvalues.iteritems():
@@ -829,8 +829,8 @@ class Interpreter(object):
 
         w_Global.Put(ctx, 'this', w_Global)
 
-        # DEBUGGING
-        if 0:
+        # debugging
+        if not we_are_translated():
             w_Global.Put(ctx, 'pypy_repr', W_Builtin(pypy_repr))
         
         self.global_context = ctx

@@ -519,6 +519,14 @@ def test_with():
     print(x);
     """, ['4', '2', '3', '4'])
 
+def test_with_expr():
+    assertp("""
+    var x = 4;
+    with({x:2}) {
+        print(x);
+    }
+    """, ['2'])
+
 def test_bitops():
     yield assertv, "2 ^ 2;", 0
     yield assertv, "2 & 3;", 2
@@ -563,7 +571,6 @@ def test_inplace_assign():
     yield assertv, "x=2; x^=2; x;", 0
 
 def test_not():
-    py.test.skip("not supported")
     assertv("~1", -2)
 
 def test_delete_member():
@@ -625,9 +632,11 @@ def test_new_without_args_really():
     assertv("var x = new Boolean; x.toString();", 'false')
 
 def test_pypy_repr():
-    py.test.skip("I don't understand, but it does not work")
-    assertv("pypy_repr(3);", 'W_IntNumber')
-    assertv("pypy_repr(3.0);", 'W_FloatNumber')
+    yield assertv, "pypy_repr(3);", 'W_IntNumber'
+    # See optimization on astbuilder.py for a reason to the test below
+    yield assertv, "pypy_repr(3.0);", 'W_IntNumber'
+    yield assertv, "pypy_repr(3.5);", 'W_FloatNumber'
+    yield assertv, "x=9999; pypy_repr(x*x*x);", 'W_FloatNumber'
 
 def test_number():
     assertp("print(Number(void 0))", "NaN")

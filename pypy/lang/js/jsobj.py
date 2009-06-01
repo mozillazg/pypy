@@ -292,7 +292,7 @@ class W_Builtin(W_PrimitiveObject):
         return self.callfuncbi(ctx, args, None)
         
     def type(self):
-        return 'builtin'
+        return self.Class
 
 class W_ListObject(W_PrimitiveObject):
     def tolist(self):
@@ -427,7 +427,14 @@ class W_String(W_Primitive):
         try:
             return float(self.strval)
         except ValueError:
-            return NAN
+            try:
+                return float(int(self.strval, 16))
+            except ValueError:
+                try:
+                    return float(int(self.strval, 8))
+                except ValueError:
+                    return NAN
+
 
 class W_BaseNumber(W_Primitive):
     """ Base class for numbers, both known to be floats
