@@ -9,9 +9,9 @@ import sys
 import getopt
 from pypy.lang.js.interpreter import load_source, Interpreter, load_file
 from pypy.lang.js.jsparser import parse, ParseError
-from pypy.lang.js.jsobj import W_Builtin, W_String, ThrowException, w_Undefined
+from pypy.lang.js.jsobj import W_Builtin, W_String, ThrowException, \
+                               w_Undefined, W_Boolean
 from pypy.rlib.streamio import open_file_as_stream
-from pypy.lang.js.jscode import JsCode
 
 import code
 sys.ps1 = 'js> '
@@ -36,7 +36,8 @@ DEBUG = False
 
 def debugjs(ctx, args, this):
     global DEBUG
-    DEBUG = True
+    DEBUG = not DEBUG
+    return W_Boolean(DEBUG)
 
 def loadjs(ctx, args, this):
     filename = args[0].ToString()
@@ -47,6 +48,7 @@ def tracejs(ctx, args, this):
     arguments = args
     import pdb
     pdb.set_trace()
+    return w_Undefined
 
 def quitjs(ctx, args, this):
     sys.exit(0)
@@ -73,13 +75,13 @@ class JSInterpreter(code.InteractiveConsole):
         traceback.
         """
         try:
-            if DEBUG:
-                bytecode = JsCode()
-                ast.emit(bytecode)
-                print bytecode
             res = self.interpreter.run(ast, interactive=True)
+            if DEBUG:
+                print self.interpreter._code
             if res not in (None, w_Undefined):
                 try:
+                    if DEBUG:
+                        print repr(res)
                     print res.ToString(self.interpreter.w_Global)
                 except ThrowException, exc:
                     print exc.exception.ToString(self.interpreter.w_Global)
