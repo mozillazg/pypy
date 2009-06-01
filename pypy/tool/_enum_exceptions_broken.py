@@ -91,18 +91,18 @@ def tryGenerate__getitem__(exc):
         try:
             sample = exc(*args)
         except:
-            raise ValueError, "cannot create instance"
+            raise ValueError("cannot create instance")
         if "args" not in sample.__dict__:
-            raise ValueError, "args attribute not found in __dict__"
+            raise ValueError("args attribute not found in __dict__")
         if args != sample.args:
-            raise ValueError, "instance has modified args"
+            raise ValueError("instance has modified args")
         for i in range(5):
             try: x = sample[i]
             except IndexError: x = 42
             try: y = args[i]
             except IndexError: y = 42
             if x != y:
-                raise ValueError, "args does not behave like a sequence"
+                raise ValueError("args does not behave like a sequence")
     del sample.args
     try: x = sample[0]
     except: x = 42
@@ -129,7 +129,7 @@ class ProbeObject(object):
         if idx not in self.probed:
             self.probed.append(idx)
         if self.maxprobe is not None and idx > self.maxprobe:
-            raise IndexError, "cheat cheat %d" % idx
+            raise IndexError("cheat cheat %d" % idx)
         return "arg%d_%s" % (self.argpos, idx)
     def __repr__(self):
         if self.probed:
@@ -193,7 +193,7 @@ def findAllArgs(exc, maxprobe):
         except Exception, e:
             continue
     else:
-        raise TypeError, "cannot analyse arguments of %s" % exc.__name__
+        raise TypeError("cannot analyse arguments of %s" % exc.__name__)
     # for the variable part, don't try combinations
     for i in range(minargs, maxargs):
         for arg in genArgsToTry(i):
@@ -206,7 +206,7 @@ def findAllArgs(exc, maxprobe):
             except:
                 continue
         else:
-            raise TypeError, "cannot analyse arguments of %s" % exc.__name__
+            raise TypeError("cannot analyse arguments of %s" % exc.__name__)
     return minargs, maxargs, res
 
 def captureAssignments(exc, args):

@@ -300,4 +300,4 @@ class AppTestBuiltinApp:
         except ZeroDivisionError:
             pass
         else:
-            raise Exception, "expected ZeroDivisionError from bad property"
+            raise Exception("expected ZeroDivisionError from bad property")

@@ -103,7 +103,7 @@ def change_settings(src):
     for old, new in REPLACE.items():
         newsrc = src.replace(old, new)
         if newsrc == src:
-            raise ValueError, "this makefile does not contain %s" % old
+            raise ValueError("this makefile does not contain %s" % old)
         src = newsrc
     return src
 
@@ -113,7 +113,7 @@ def find_file():
         if name.lower() == 'makefile':
             return name
     else:
-        raise ValueError, 'Makefile not found'
+        raise ValueError('Makefile not found')
 
 try:
     name = find_file()

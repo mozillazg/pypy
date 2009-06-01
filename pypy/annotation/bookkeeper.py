@@ -468,7 +468,7 @@ class Bookkeeper:
                 result = description.FunctionDesc(self, pyobj)
             elif isinstance(pyobj, (type, types.ClassType)):
                 if pyobj is object:
-                    raise Exception, "ClassDesc for object not supported"
+                    raise Exception("ClassDesc for object not supported")
                 if pyobj.__module__ == '__builtin__': # avoid making classdefs for builtin types
                     result = self.getfrozen(pyobj)
                 else:
@@ -689,7 +689,7 @@ def origin_of_meth(boundmeth):
         for name, value in dict.iteritems():
             if value is func:
                 return cls, name
-    raise Exception, "could not match bound-method to attribute name: %r" % (boundmeth,)
+    raise Exception("could not match bound-method to attribute name: %r" % (boundmeth,))
 
 def ishashable(x):
     try:
@@ -715,7 +715,7 @@ class RPythonCallsSpace:
             return SomeTuple(items_s)
 
     def newdict(self):
-        raise CallPatternTooComplex, "'**' argument"
+        raise CallPatternTooComplex("'**' argument")
 
     def unpackiterable(self, s_obj, expected_length=None):
         if isinstance(s_obj, SomeTuple):
@@ -726,7 +726,7 @@ class RPythonCallsSpace:
         if (s_obj.__class__ is SomeObject and
             getattr(s_obj, 'from_ellipsis', False)):    # see newtuple()
             return [Ellipsis]
-        raise CallPatternTooComplex, "'*' argument must be SomeTuple"
+        raise CallPatternTooComplex("'*' argument must be SomeTuple")
 
     def is_w(self, one, other):
         return one is other

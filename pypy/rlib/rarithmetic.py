@@ -99,7 +99,7 @@ def ovfcheck(r):
     # raise OverflowError if the operation did overflow
     assert not isinstance(r, r_uint), "unexpected ovf check on unsigned"
     if type(r) is long:
-        raise OverflowError, "signed integer expression did overflow"
+        raise OverflowError("signed integer expression did overflow")
     return r
 
 def _local_ovfcheck(r):
@@ -107,7 +107,7 @@ def _local_ovfcheck(r):
     # in a context where no primitiveoperator is involved.
     assert not isinstance(r, r_uint), "unexpected ovf check on unsigned"
     if isinstance(r, long):
-        raise OverflowError, "signed integer expression did overflow"
+        raise OverflowError("signed integer expression did overflow")
     return r
 
 def ovfcheck_lshift(a, b):

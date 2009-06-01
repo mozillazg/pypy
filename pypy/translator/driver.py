@@ -159,7 +159,7 @@ class TranslationDriver(SimpleTaskEngine):
                     new_goal = cand
                     break
             else:
-                raise Exception, "cannot infer complete goal from: %r" % goal 
+                raise Exception("cannot infer complete goal from: %r" % goal) 
             l.append(new_goal)
         return l
 
@@ -227,9 +227,9 @@ class TranslationDriver(SimpleTaskEngine):
             if os.WIFEXITED(status):
                 status = os.WEXITSTATUS(status)
                 if status != 0:
-                    raise Exception, "instrumentation child failed: %d" % status
+                    raise Exception("instrumentation child failed: %d" % status)
             else:
-                raise Exception, "instrumentation child aborted"
+                raise Exception("instrumentation child aborted")
             import array, struct
             n = datafile.size()//struct.calcsize('L')
             datafile = datafile.open('rb')

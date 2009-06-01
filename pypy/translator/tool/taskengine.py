@@ -71,7 +71,7 @@ class SimpleTaskEngine(object):
                 else:
                     break
             else:
-                raise RuntimeError, "circular dependecy"
+                raise RuntimeError("circular dependecy")
 
             plan.append(cand)
             for constr in constraints:

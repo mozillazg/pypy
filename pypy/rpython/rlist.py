@@ -347,7 +347,7 @@ def rtype_alloc_and_set(hop):
     # XXX the special case for pyobj_repr needs to be implemented here as well
     # will probably happen during NFS
     if r_list == robject.pyobj_repr:
-        raise Exception, 'please implement this!'
+        raise Exception('please implement this!')
     v_count, v_item = hop.inputargs(Signed, r_list.item_repr)
     cLIST = hop.inputconst(Void, r_list.LIST)
     return hop.gendirectcall(ll_alloc_and_set, cLIST, v_count, v_item)

@@ -47,7 +47,7 @@ def mro_error(orderlists):
     cycle.append(candidate)
     cycle.reverse()
     names = [cls.__name__ for cls in cycle]
-    raise TypeError, "Cycle among base classes: " + ' < '.join(names)
+    raise TypeError("Cycle among base classes: " + ' < '.join(names))
 
 
 def mronames(cls):

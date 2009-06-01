@@ -37,9 +37,8 @@ def register_all(module_dict, *alt_ns):
                     if isinstance(x, StdTypeDef):
                         icls = x.any
                 if icls is None:
-                    raise ValueError, \
-                          "no W_%s or W_%sObject for the definition of %s" % (
-                             i, i, name)
+                    raise ValueError("no W_%s or W_%sObject for the definition of %s" % (
+                             i, i, name))
             l.append(icls)
 
         #XXX trying to be too clever at the moment for userobject.SpecialMethod
@@ -75,7 +74,7 @@ def hack_func_by_name(funcname, namespaces):
         return getattr(objecttype, funcname)
     except AttributeError:
         pass
-    raise NameError, ("trying hard but not finding a multimethod named %s" %
+    raise NameError("trying hard but not finding a multimethod named %s" %
                       funcname)
 
 

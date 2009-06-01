@@ -253,7 +253,7 @@ def rtype_stackless_function(fn):
 
     s_returnvar = annotator.build_types(fn, [s_list_of_strings])
     if not isinstance(s_returnvar, annmodel.SomeInteger):
-        raise Exception, "this probably isn't going to work"
+        raise Exception("this probably isn't going to work")
     t.buildrtyper().specialize()
 
     from pypy.translator.transform import insert_ll_stackcheck

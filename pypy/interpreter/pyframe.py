@@ -373,7 +373,7 @@ class PyFrame(eval.Frame):
         where the order is according to self.pycode.signature()."""
         scope_len = len(scope_w)
         if scope_len > len(self.fastlocals_w):
-            raise ValueError, "new fastscope is longer than the allocated area"
+            raise ValueError("new fastscope is longer than the allocated area")
         self.fastlocals_w[:scope_len] = scope_w
         self.init_cells()
 

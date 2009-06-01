@@ -38,7 +38,7 @@ from pypy.module.__builtin__.__init__ import BUILTIN_TO_INDEX
 def compile(source, filename, mode, flags=None, dont_inherit=None):
     """Replacement for builtin compile() function"""
     if flags is not None or dont_inherit is not None:
-        raise RuntimeError, "not implemented yet"
+        raise RuntimeError("not implemented yet")
 
     if mode == "single":
         gen = Interactive(source, filename)

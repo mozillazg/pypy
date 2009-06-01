@@ -55,7 +55,7 @@ def find_module(name, path=None):
         for ext, mode, kind in get_suffixes():
             if os.path.exists(filename+ext):
                 return (file(filename+ext, mode), filename+ext, (ext, mode, kind))
-    raise ImportError, 'No module named %s' % (name,)
+    raise ImportError('No module named %s' % (name,))
 
 
 def load_module(name, file, filename, description):
@@ -82,7 +82,7 @@ def load_module(name, file, filename, description):
         return module
     if type == PY_COMPILED:
        return  load_compiled(name, filename, file)
-    raise ValueError, 'invalid description argument: %r' % (description,)
+    raise ValueError('invalid description argument: %r' % (description,))
 
 def load_dynamic(name, *args, **kwds):
     raise ImportError(name)

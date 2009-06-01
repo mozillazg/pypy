@@ -278,7 +278,7 @@ class BuiltinActivation(object):
 
     def _run(self, space, scope_w):
         """Subclasses with behavior specific for an unwrap spec are generated"""
-        raise TypeError, "abstract"
+        raise TypeError("abstract")
 
 #________________________________________________________________
 
@@ -731,10 +731,10 @@ class interp2app(Wrappable):
             self_type = f.im_class
             f = f.im_func
         if not isinstance(f, types.FunctionType):
-            raise TypeError, "function expected, got %r instead" % f
+            raise TypeError("function expected, got %r instead" % f)
         if app_name is None:
             if f.func_name.startswith('app_'):
-                raise ValueError, ("function name %r suspiciously starts "
+                raise ValueError("function name %r suspiciously starts "
                                    "with 'app_'" % f.func_name)
             app_name = f.func_name
 

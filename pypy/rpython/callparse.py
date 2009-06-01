@@ -54,7 +54,7 @@ def callparse(rtyper, graph, hop, opname, r_self=None):
     try:
         holders = arguments.match_signature(signature, defs_h)
     except ArgErr, e:
-        raise TyperError, "signature mismatch: %s" % e.getmsg(graph.name)
+        raise TyperError("signature mismatch: %s" % e.getmsg(graph.name))
 
     assert len(holders) == len(rinputs), "argument parsing mismatch"
     vlist = []
@@ -168,7 +168,7 @@ class RPythonCallsSpace:
         return NewTupleHolder(items)
 
     def newdict(self):
-        raise CallPatternTooComplex, "'**' argument"
+        raise CallPatternTooComplex("'**' argument")
 
     def unpackiterable(self, it, expected_length=None):
         if it.is_tuple():
@@ -177,7 +177,7 @@ class RPythonCallsSpace:
                 expected_length != len(items)):
                 raise ValueError
             return list(items)
-        raise CallPatternTooComplex, "'*' argument must be a tuple"
+        raise CallPatternTooComplex("'*' argument must be a tuple")
 
     def is_w(self, one, other):
         return one is other

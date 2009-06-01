@@ -831,7 +831,7 @@ def select_function_code_generators(fnobj, db, functionname):
             assert fnobj.external == 'CPython'
             return [CExternalFunctionCodeGenerator(fnobj, db)]
     else:
-        raise ValueError, "don't know how to generate code for %r" % (fnobj,)
+        raise ValueError("don't know how to generate code for %r" % (fnobj,))
 
 class ExtType_OpaqueNode(ContainerNode):
     nodekind = 'rpyopaque'

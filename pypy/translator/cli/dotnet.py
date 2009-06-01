@@ -306,7 +306,7 @@ class CliClass(object):
             self._load_class()
             return getattr(self._PythonNet_class, attr)
         else:
-            raise AttributeError, attr
+            raise AttributeError(attr)
 
     def __call__(self, *args):
         self._load_class()
@@ -429,7 +429,7 @@ class Entry(ExtRegistryEntry):
             return hop.genop('ooupcast', [v_obj], hop.r_result.lowleveltype)
         else:
             if TYPE not in BOXABLE_TYPES:
-                raise TyperError, "Can't box values of type %s" % v_obj.concretetype
+                raise TyperError("Can't box values of type %s" % v_obj.concretetype)
             return hop.genop('clibox', [v_obj], hop.r_result.lowleveltype)
 
 
@@ -541,8 +541,8 @@ class Entry(ExtRegistryEntry):
         TYPE = type_s.const._INSTANCE
         for i, arg_s in enumerate(args_s):
             if TYPE is not arg_s.ootype:
-                raise TypeError, 'Wrong type of arg #%d: %s expected, %s found' % \
-                      (i, TYPE, arg_s.ootype)
+                raise TypeError('Wrong type of arg #%d: %s expected, %s found' % \
+                      (i, TYPE, arg_s.ootype))
         fullname = '%s.%s[]' % (TYPE._namespace, TYPE._classname)
         cliArray = get_cli_class(fullname)
         return SomeOOInstance(cliArray._INSTANCE)

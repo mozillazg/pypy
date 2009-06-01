@@ -249,7 +249,7 @@ class AppTestTypeObject:
                 return super(WorkOnce, self).__new__(WorkOnce, name, bases, ns)
             def mro(instance):
                 if instance.flag > 0:
-                    raise RuntimeError, "bozo"
+                    raise RuntimeError("bozo")
                 else:
                     instance.flag += 1
                     return type.mro(instance)
@@ -316,7 +316,7 @@ class AppTestTypeObject:
         except TypeError:
             pass
         else:
-            raise TestFailed, "didn't catch MRO conflict"
+            raise TestFailed("didn't catch MRO conflict")
 
     def test_mutable_bases_versus_nonheap_types(self):
         class A(int):
@@ -450,7 +450,7 @@ class AppTestTypeObject:
         except TypeError:
             pass
         else:
-            raise AssertionError, "this multiple inheritance should fail"
+            raise AssertionError("this multiple inheritance should fail")
 
     def test_outer_metaclass(self):
         class OuterMetaClass(type):
@@ -520,7 +520,7 @@ class AppTestTypeObject:
         try:
             assert NoDoc.__doc__ == None
         except AttributeError:
-            raise AssertionError, "__doc__ missing!"
+            raise AssertionError("__doc__ missing!")
 
     def test_explicitdoc(self):
         class ExplicitDoc(object):
@@ -547,7 +547,7 @@ class AppTestTypeObject:
             #       we always raise AttributeError.
             pass
         else:
-            raise AssertionError, '__doc__ should not be writable'
+            raise AssertionError('__doc__ should not be writable')
 
         assert ImmutableDoc.__doc__ == 'foo'
 

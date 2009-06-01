@@ -740,7 +740,7 @@ def mergefunctions(cond):
     return x
 
 def func_producing_exception():
-    raise ValueError, "this might e.g. block the caller"
+    raise ValueError("this might e.g. block the caller")
 
 def funccallsex():
     return func_producing_exception()
@@ -878,7 +878,7 @@ def exception_deduction_with_raise3(x):
     try:
         exception_deduction0(2)
         if x:
-            raise Exc, Exc()
+            raise Exc(Exc())
     except Exc, e:
         witness(e)
         return e

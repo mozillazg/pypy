@@ -13,7 +13,7 @@ class UnionFind(object):
     # mapping-like [] access
     def __getitem__(self, obj):
         if obj not in self.link_to_parent:
-            raise KeyError, obj
+            raise KeyError(obj)
 
         ignore, rep, info = self.find(obj)
 
