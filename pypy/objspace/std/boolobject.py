@@ -11,7 +11,7 @@ class W_BoolObject(W_Object):
         w_self.boolval = not not boolval
 
     def __nonzero__(w_self):
-        raise Exception, "you cannot do that, you must use space.is_true()"
+        raise Exception("you cannot do that, you must use space.is_true()")
 
     def __repr__(w_self):
         """ representation for debugging purposes """

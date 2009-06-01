@@ -245,7 +245,7 @@ class FunctionDesc(Desc):
         try:
             inputcells = args.match_signature(signature, defs_s)
         except ArgErr, e:
-            raise TypeError, "signature mismatch: %s" % e.getmsg(self.name)
+            raise TypeError("signature mismatch: %s" % e.getmsg(self.name))
         return inputcells
 
     def specialize(self, inputcells):

@@ -378,7 +378,7 @@ class TestFlowObjSpace(Base):
 
     #__________________________________________________________
     def raise2(msg):
-        raise IndexError, msg
+        raise IndexError(msg)
     
     def test_raise2(self):
         x = self.codetest(self.raise2)

@@ -185,7 +185,7 @@ class GenRpy:
         # add a dummy _issubtype() to builtins
         if not hasattr(__builtin__, '_issubtype'):
             def _issubtype(cls1, cls2):
-                raise TypeError, "this dummy should *not* be reached"
+                raise TypeError("this dummy should *not* be reached")
             __builtin__._issubtype = _issubtype
         
         class bltinstub:
@@ -214,7 +214,7 @@ class GenRpy:
             return self.nameof(v.value,
                                debug=('Constant in the graph of', self.currentfunc))
         else:
-            raise TypeError, "expr(%r)" % (v,)
+            raise TypeError("expr(%r)" % (v,))
 
     def arglist(self, args, localscope):
         res = [self.expr(arg, localscope) for arg in args]
@@ -397,7 +397,7 @@ class GenRpy:
                         if meth:
                             break
                     else:
-                        raise Exception, "nameof(%r)" % (obj,)
+                        raise Exception("nameof(%r)" % (obj,))
 
                     code = meth.im_func.func_code
                     if namehint and 'namehint' in code.co_varnames[:code.co_argcount]:
@@ -728,7 +728,7 @@ else:
             if func is getattr(module, func.__name__, None):
                 break
         else:
-            raise Exception, '%r not found in any built-in module' % (func,)
+            raise Exception('%r not found in any built-in module' % (func,))
         #if modname == '__builtin__':
         #    # be lazy
         #    return "(space.builtin.get(space.str_w(%s)))" % self.nameof(func.__name__)
@@ -995,7 +995,7 @@ else:
             return 'space.sys.get("stdout")'
         if fil is sys.stderr:
             return 'space.sys.get("stderr")'
-        raise Exception, 'Cannot translate an already-open file: %r' % (fil,)
+        raise Exception('Cannot translate an already-open file: %r' % (fil,))
 
     def gen_source(self, fname, ftmpname=None, file=file):
         self.fname = fname
@@ -1447,7 +1447,7 @@ class memfile(object):
                 f.close()
             self._storage[name] = StringIO.StringIO(data)
         else:
-            raise ValueError, "mode %s not supported" % mode
+            raise ValueError("mode %s not supported" % mode)
         self._file = self._storage[name]
     def __getattr__(self, name):
         return getattr(self._file, name)
@@ -1489,7 +1489,7 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
         if os.path.isdir(libdir):
             break
     else:
-        raise Exception, "cannot find pypy/lib directory"
+        raise Exception("cannot find pypy/lib directory")
     sys.path.insert(0, libdir)
     try:
         if faked_set:

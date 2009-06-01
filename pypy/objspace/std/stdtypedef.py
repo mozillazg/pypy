@@ -157,7 +157,7 @@ def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, s
     if multimethod.extras.get('w_varargs', False):
         wrapper_arglist.append('w_args')        
     if multimethod.extras.get('keywords', False):
-        raise Exception, "no longer supported, use __args__"
+        raise Exception("no longer supported, use __args__")
     if multimethod.extras.get('general__args__', False):
         wrapper_arglist.append('__args__')
     wrapper_arglist += multimethod.extras.get('extra_args', ())

@@ -51,7 +51,7 @@ def app_test_exception():
     except AssertionError: 
         pass 
     else: 
-        raise AssertionError, "app level AssertionError mixup!"
+        raise AssertionError("app level AssertionError mixup!")
     
 def app_test_exception_with_message():
     try:

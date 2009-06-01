@@ -290,7 +290,7 @@ class W_Object(W_Root):
         return '<%s>' % s
 
     def unwrap(w_self, space):
-        raise UnwrapError, 'cannot unwrap %r' % (w_self,)
+        raise UnwrapError('cannot unwrap %r' % (w_self,))
 
 class UnwrapError(Exception):
     pass

@@ -202,7 +202,7 @@ class RPythonAnnotator(object):
             else:
                 return object
         else:
-            raise TypeError, ("Variable or Constant instance expected, "
+            raise TypeError("Variable or Constant instance expected, "
                               "got %r" % (variable,))
 
     def getuserclassdefinitions(self):
@@ -288,7 +288,7 @@ class RPythonAnnotator(object):
             #    return annmodel.s_ImpossibleValue
             return self.bookkeeper.immutableconstant(arg)
         else:
-            raise TypeError, 'Variable or Constant expected, got %r' % (arg,)
+            raise TypeError('Variable or Constant expected, got %r' % (arg,))
 
     def typeannotation(self, t):
         return signature.annotation(t, self.bookkeeper)
@@ -717,7 +717,7 @@ class RPythonAnnotator(object):
         consider_meth = getattr(self,'consider_op_'+op.opname,
                                 None)
         if not consider_meth:
-            raise Exception,"unknown op: %r" % op
+            raise Exception("unknown op: %r" % op)
 
         # let's be careful about avoiding propagated SomeImpossibleValues
         # to enter an op; the latter can result in violations of the

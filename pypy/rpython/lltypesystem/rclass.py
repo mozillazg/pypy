@@ -402,7 +402,7 @@ class InstanceRepr(AbstractInstanceRepr):
 
     def get_ll_hash_function(self):
         if self.classdef is None:
-            raise TyperError, 'missing hash support flag in classdef'
+            raise TyperError('missing hash support flag in classdef')
         if self.rtyper.needs_hash_support(self.classdef):
             try:
                 return self._ll_hash_function

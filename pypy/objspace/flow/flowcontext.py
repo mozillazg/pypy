@@ -76,7 +76,7 @@ class Recorder:
         pass
 
     def guessbool(self, ec, w_condition, **kwds):
-        raise AssertionError, "cannot guessbool(%s)" % (w_condition,)
+        raise AssertionError("cannot guessbool(%s)" % (w_condition,))
 
 
 class BlockRecorder(Recorder):
@@ -179,7 +179,7 @@ class ConcreteNoOp(Recorder):
     # Concrete mode is used to precompute lazily-initialized caches,
     # when we don't want this precomputation to show up on the flow graph.
     def append(self, operation):
-        raise AssertionError, "concrete mode: cannot perform %s" % operation
+        raise AssertionError("concrete mode: cannot perform %s" % operation)
 
 # ____________________________________________________________
 

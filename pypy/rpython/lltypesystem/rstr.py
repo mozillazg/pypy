@@ -829,7 +829,7 @@ class LLHelpers(AbstractLLHelpers):
                     vchunk = hop.gendirectcall(ll_str.ll_int2oct, vitem,
                                                inputconst(Bool, False))
                 else:
-                    raise TyperError, "%%%s is not RPython" % (code, )
+                    raise TyperError("%%%s is not RPython" % (code, ))
             else:
                 from pypy.rpython.lltypesystem.rstr import string_repr
                 vchunk = inputconst(string_repr, thing)

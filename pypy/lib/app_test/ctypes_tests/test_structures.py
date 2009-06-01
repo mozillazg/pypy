@@ -445,7 +445,7 @@ class TestRecursiveStructure(BaseCTypesTestChecker):
             assert ("Structure or union cannot contain itself" in
                             str(details))
         else:
-            raise AssertionError, "Structure or union cannot contain itself"
+            raise AssertionError("Structure or union cannot contain itself")
 
 
     def test_vice_versa(self):
@@ -463,7 +463,7 @@ class TestRecursiveStructure(BaseCTypesTestChecker):
             assert ("_fields_ is final" in
                             str(details))
         else:
-            raise AssertionError, "AttributeError not raised"
+            raise AssertionError("AttributeError not raised")
 
 
 class TestPatologicalCases(BaseCTypesTestChecker):
@@ -472,7 +472,7 @@ class TestPatologicalCases(BaseCTypesTestChecker):
             _fields_ = [('x', c_int)]
 
             def __getattr__(self, name):
-                raise AttributeError, name
+                raise AttributeError(name)
 
         x = X()
         assert x.x == 0

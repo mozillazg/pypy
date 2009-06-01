@@ -18,7 +18,7 @@ class Cell(Wrappable):
 
     def get(self):
         if self.w_value is None:
-            raise ValueError, "get() from an empty cell"
+            raise ValueError("get() from an empty cell")
         return self.w_value
 
     def set(self, w_value):
@@ -26,7 +26,7 @@ class Cell(Wrappable):
 
     def delete(self):
         if self.w_value is None:
-            raise ValueError, "delete() on an empty cell"
+            raise ValueError("delete() on an empty cell")
         self.w_value = None
   
     def descr__eq__(self, space, w_other):

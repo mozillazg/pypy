@@ -453,7 +453,7 @@ class AppTest_PyMagicTestGenerator:
             g = greenlet.getcurrent()
             while not isinstance(g, genlet):
                 if g is None:
-                    raise RuntimeError, 'yield outside a genlet'
+                    raise RuntimeError('yield outside a genlet')
                 g = g.parent
             g.parent.switch(value)
 

@@ -73,7 +73,7 @@ class AppTestAppSysTests:
             etype, val, tb = sys.exc_info()
             assert isinstance(val, etype)
         else:
-            raise AssertionError, "ZeroDivisionError not caught"
+            raise AssertionError("ZeroDivisionError not caught")
 
     def test_io(self): 
         import sys
@@ -174,7 +174,7 @@ class AppTestSysModulePortedFromCPython:
 
         def clear():
             try:
-                raise ValueError, 42
+                raise ValueError(42)
             except ValueError, exc:
                 clear_check(exc)
 
@@ -184,7 +184,7 @@ class AppTestSysModulePortedFromCPython:
         # Verify that a frame currently handling an exception is
         # unaffected by calling exc_clear in a nested frame.
         try:
-            raise ValueError, 13
+            raise ValueError(13)
         except ValueError, exc:
             typ1, value1, traceback1 = sys.exc_info()
             clear()
@@ -207,9 +207,9 @@ class AppTestSysModulePortedFromCPython:
         except SystemExit, exc:
             assert exc.code == 0
         except:
-            raise AssertionError, "wrong exception"
+            raise AssertionError("wrong exception")
         else:
-            raise AssertionError, "no exception"
+            raise AssertionError("no exception")
 
         # call with tuple argument with one entry
         # entry will be unpacked
@@ -218,9 +218,9 @@ class AppTestSysModulePortedFromCPython:
         except SystemExit, exc:
             assert exc.code == 42
         except:
-            raise AssertionError, "wrong exception"
+            raise AssertionError("wrong exception")
         else:
-            raise AssertionError, "no exception"
+            raise AssertionError("no exception")
 
         # call with integer argument
         try:
@@ -228,9 +228,9 @@ class AppTestSysModulePortedFromCPython:
         except SystemExit, exc:
             assert exc.code == 42
         except:
-            raise AssertionError, "wrong exception"
+            raise AssertionError("wrong exception")
         else:
-            raise AssertionError, "no exception"
+            raise AssertionError("no exception")
 
         # call with string argument
         try:
@@ -238,9 +238,9 @@ class AppTestSysModulePortedFromCPython:
         except SystemExit, exc:
             assert exc.code == "exit"
         except:
-            raise AssertionError, "wrong exception"
+            raise AssertionError("wrong exception")
         else:
-            raise AssertionError, "no exception"
+            raise AssertionError("no exception")
 
         # call with tuple argument with two entries
         try:
@@ -248,9 +248,9 @@ class AppTestSysModulePortedFromCPython:
         except SystemExit, exc:
             assert exc.code == (17, 23)
         except:
-            raise AssertionError, "wrong exception"
+            raise AssertionError("wrong exception")
         else:
-            raise AssertionError, "no exception"
+            raise AssertionError("no exception")
 
     def test_getdefaultencoding(self):
         raises(TypeError, sys.getdefaultencoding, 42)

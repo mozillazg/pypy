@@ -9,7 +9,7 @@ try:
     path = py.std.sys.argv[1]
 except IndexError: 
     print "usage: %s PATH" %(py.std.sys.argv[0])
-    raise SystemExit, 1
+    raise SystemExit(1)
 
 d = {}
 

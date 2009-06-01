@@ -232,7 +232,7 @@ class StructTuple(tuple):
             i = int(name[len('item'):])
             return self[i]
         else:
-            raise AttributeError, name
+            raise AttributeError(name)
 
 class OOList(list):
     def ll_length(self):

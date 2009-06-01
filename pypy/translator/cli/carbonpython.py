@@ -52,7 +52,7 @@ class export(object):
         self.inputtypes = args
         self.namespace = kwds.pop('namespace', None)
         if len(kwds) > 0:
-            raise TypeError, "unexpected keyword argument: '%s'" % kwds.keys()[0]
+            raise TypeError("unexpected keyword argument: '%s'" % kwds.keys()[0])
 
     def __call__(self, func):
         func._inputtypes_ = self.inputtypes

@@ -850,7 +850,7 @@ class ObjSpace(object):
             expression = PyCode._from_code(self, expression,
                                           hidden_applevel=hidden_applevel)
         if not isinstance(expression, PyCode):
-            raise TypeError, 'space.eval(): expected a string, code or PyCode object'
+            raise TypeError('space.eval(): expected a string, code or PyCode object')
         return expression.exec_code(self, w_globals, w_locals)
 
     def exec_(self, statement, w_globals, w_locals, hidden_applevel=False):
@@ -863,7 +863,7 @@ class ObjSpace(object):
             statement = PyCode._from_code(self, statement,
                                           hidden_applevel=hidden_applevel)
         if not isinstance(statement, PyCode):
-            raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
+            raise TypeError('space.exec_(): expected a string, code or PyCode object')
         w_key = self.wrap('__builtins__')
         if not self.is_true(self.contains(w_globals, w_key)):
             self.setitem(w_globals, w_key, self.wrap(self.builtin))

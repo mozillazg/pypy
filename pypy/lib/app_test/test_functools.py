@@ -51,7 +51,7 @@ class TestPartial:
         except TypeError:
             pass
         else:
-            raise AssertionError, 'First arg not checked for callability'
+            raise AssertionError('First arg not checked for callability')
 
     def test_protection_of_callers_dict_argument(self):
         # a caller's dictionary should not be altered by partial
@@ -125,7 +125,7 @@ class TestPartial:
         except (TypeError, AttributeError):
             pass
         else:
-            raise AssertionError, 'partial object allowed __dict__ to be deleted'
+            raise AssertionError('partial object allowed __dict__ to be deleted')
 
     def test_weakref(self):
         f = self.thetype(int, base=16)
