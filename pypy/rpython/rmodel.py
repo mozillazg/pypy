@@ -137,12 +137,12 @@ class Repr:
         values of this Repr.
         This can return None to mean that simply using '==' is fine.
         """
-        raise TyperError('no equality function for %r' % self)
+        raise TyperError, 'no equality function for %r' % self
 
     def get_ll_hash_function(self):
         """Return a hash(x) function for low-level values of this Repr.
         """
-        raise TyperError('no hashing function for %r' % self)
+        raise TyperError, 'no hashing function for %r' % self
 
     def get_ll_fasthash_function(self):
         """Return a 'fast' hash(x) function for low-level values of this
@@ -178,10 +178,10 @@ class Repr:
             return None
 
     def rtype_bltn_list(self, hop):
-        raise TyperError('no list() support for %r' % self)
+        raise TyperError, 'no list() support for %r' % self
 
     def rtype_unichr(self, hop):
-        raise TyperError('no unichr() support for %r' % self)
+        raise TyperError, 'no unichr() support for %r' % self
 
     # default implementation of some operations
 

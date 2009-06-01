@@ -999,7 +999,7 @@ class _callable(object):
 
    def _checkargs(self, args, check_callable=True):
        if len(args) != len(self._TYPE.ARGS):
-           raise TypeError("calling %r with wrong argument number: %r" % (self._TYPE, args))
+           raise TypeError,"calling %r with wrong argument number: %r" % (self._TYPE, args)
 
        checked_args = []
        for a, ARG in zip(args, self._TYPE.ARGS):
@@ -1007,13 +1007,13 @@ class _callable(object):
                if ARG is not Void:
                    a = enforce(ARG, a)
            except TypeError:
-               raise TypeError("calling %r with wrong argument types: %r" % (self._TYPE, args))
+               raise TypeError,"calling %r with wrong argument types: %r" % (self._TYPE, args)
            checked_args.append(a)
        if not check_callable:
            return checked_args
        callb = self._callable
        if callb is None:
-           raise RuntimeError("calling undefined or null function")
+           raise RuntimeError,"calling undefined or null function"
        return callb, checked_args
 
    def __eq__(self, other):
@@ -1112,7 +1112,7 @@ class OverloadingResolver(object):
         for meth in self.overloadings:
             ARGS = meth._TYPE.ARGS
             if ARGS in signatures:
-                raise TypeError('Bad overloading')
+                raise TypeError, 'Bad overloading'
             signatures.add(ARGS)
 
     def annotate(self, args_s):
@@ -1136,9 +1136,9 @@ class OverloadingResolver(object):
         if len(matches) == 1:
             return matches[0]
         elif len(matches) > 1:
-            raise TypeError('More than one method match, please use explicit casts')
+            raise TypeError, 'More than one method match, please use explicit casts'
         else:
-            raise TypeError('No suitable overloading found for method')
+            raise TypeError, 'No suitable overloading found for method'
 
     def _check_signature(self, ARGS1, ARGS2):
         if len(ARGS1) != len(ARGS2):
@@ -1540,7 +1540,7 @@ class _dict_items_iterator(_builtin_type):
 
     def _check_stamp(self):
         if self._stamp != self._dict._stamp:
-            raise RuntimeError('Dictionary changed during iteration')
+            raise RuntimeError, 'Dictionary changed during iteration'
 
     def ll_go_next(self):
         # NOT_RPYTHON

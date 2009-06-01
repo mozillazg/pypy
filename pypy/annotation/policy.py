@@ -53,7 +53,7 @@ class AnnotatorPolicy(BasicAnnotatorPolicy):
             except (KeyboardInterrupt, SystemExit):
                 raise
             except:
-                raise Exception("broken specialize directive parms: %s" % directive)
+                raise Exception, "broken specialize directive parms: %s" % directive
         name = name.replace(':', '__')
         try:
             specializer = getattr(pol, name)
@@ -63,7 +63,7 @@ class AnnotatorPolicy(BasicAnnotatorPolicy):
         if directive.startswith('override:'):
             # different signature: override__xyz(*args_s)
             if parms:
-                raise Exception("override:* specialisations don't support parameters")
+                raise Exception, "override:* specialisations don't support parameters"
             def specialize_override(funcdesc, args_s):
                 funcdesc.overridden = True
                 return specializer(*args_s)

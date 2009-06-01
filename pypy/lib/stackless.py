@@ -101,7 +101,7 @@ except ImportError: # we are running from CPython
         getcurrent = staticmethod(getcurrent)
 
         def __reduce__(self):
-            raise TypeError('pickling is not possible based upon greenlets')
+            raise TypeError, 'pickling is not possible based upon greenlets'
 
     _maincoro = coroutine()
     maingreenlet = greenlet.getcurrent()
@@ -468,16 +468,16 @@ class tasklet(coroutine):
 
     def insert(self):
         if self.blocked:
-            raise RuntimeError("You cannot run a blocked tasklet")
+            raise RuntimeError, "You cannot run a blocked tasklet"
             if not self.alive:
-                raise RuntimeError("You cannot run an unbound(dead) tasklet")
+                raise RuntimeError, "You cannot run an unbound(dead) tasklet"
         _scheduler_append(self)
 
     def remove(self):
         if self.blocked:
-            raise RuntimeError("You cannot remove a blocked tasklet.")
+            raise RuntimeError, "You cannot remove a blocked tasklet."
         if self is getcurrent():
-            raise RuntimeError("The current tasklet cannot be removed.")
+            raise RuntimeError, "The current tasklet cannot be removed."
             # not sure if I will revive this  " Use t=tasklet().capture()"
         _scheduler_remove(self)
         

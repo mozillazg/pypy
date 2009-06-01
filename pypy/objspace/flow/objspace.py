@@ -197,7 +197,7 @@ class FlowObjSpace(ObjSpace):
         try:
             check_class = self.unwrap(w_check_class)
         except UnwrapException:
-            raise Exception("non-constant except guard")
+            raise Exception, "non-constant except guard"
         if not isinstance(check_class, tuple):
             # the simple case
             return ObjSpace.exception_match(self, w_exc_type, w_check_class)
@@ -221,7 +221,7 @@ class FlowObjSpace(ObjSpace):
         """
         """
         if func.func_doc and func.func_doc.lstrip().startswith('NOT_RPYTHON'):
-            raise Exception("%r is tagged as NOT_RPYTHON" % (func,))
+            raise Exception, "%r is tagged as NOT_RPYTHON" % (func,)
         code = func.func_code
         if code.co_flags & 32:
             # generator
@@ -267,8 +267,8 @@ class FlowObjSpace(ObjSpace):
         unwrapped = self.unwrap(w_tuple)
         result = tuple([Constant(x) for x in unwrapped])
         if expected_length is not None and len(result) != expected_length:
-            raise ValueError("got a tuple of length %d instead of %d" % (
-                len(result), expected_length))
+            raise ValueError, "got a tuple of length %d instead of %d" % (
+                len(result), expected_length)
         return result
 
     def unpackiterable(self, w_iterable, expected_length=None):
@@ -278,7 +278,7 @@ class FlowObjSpace(ObjSpace):
                 raise ValueError
             return [self.wrap(x) for x in l]
         if isinstance(w_iterable, Variable) and expected_length is None:
-            raise UnwrapException("cannot unpack a Variable iterable"
+            raise UnwrapException, ("cannot unpack a Variable iterable"
                                     "without knowing its length")
         elif expected_length is not None:
             w_len = self.len(w_iterable)
@@ -497,7 +497,7 @@ def _add_exceptions(names, exc):
     for name in names.split():
         lis = implicit_exceptions.setdefault(name, [])
         if exc in lis:
-            raise ValueError("your list is causing duplication!")
+            raise ValueError, "your list is causing duplication!"
         lis.append(exc)
         assert exc in op_appendices
 
@@ -669,7 +669,7 @@ def override():
         ec = self.getexecutioncontext()
         if not (ec and w_obj is ec.w_globals):
             return self.regular_setitem(w_obj, w_key, w_val)
-        raise SyntaxError("attempt to modify global attribute %r in %r" % (w_key, ec.graph.func))
+        raise SyntaxError, "attempt to modify global attribute %r in %r" % (w_key, ec.graph.func)
 
     FlowObjSpace.regular_setitem = FlowObjSpace.setitem
     FlowObjSpace.setitem = setitem

@@ -39,9 +39,9 @@ class UnboundMethod(object):
         self.im_name = im_name
 
     def __raise_TypeError(self, thing):
-        raise TypeError('unbound method %s() must be called with %s ' \
+        raise TypeError, 'unbound method %s() must be called with %s ' \
               'instance as first argument (got %s instead)' % \
-              (self.im_name, self.im_class.__cliclass__, thing))
+              (self.im_name, self.im_class.__cliclass__, thing)
 
     def __call__(self, *args):
         if len(args) == 0:
@@ -116,7 +116,7 @@ class MetaGenericCliClassWrapper(type):
         try:
             return clr.load_cli_class(cls.__assemblyname__, namespace, instance_class)
         except ImportError:
-            raise TypeError("Cannot load type %s.%s" % (namespace, instance_class))
+            raise TypeError, "Cannot load type %s.%s" % (namespace, instance_class)
 
 class MetaCliClassWrapper(type):
     def __setattr__(cls, name, value):

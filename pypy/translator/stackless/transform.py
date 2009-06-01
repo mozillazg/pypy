@@ -611,7 +611,7 @@ class StacklessTransformer(object):
         args = vars_to_save(block)
         for a in args:
             if a not in parms:
-                raise Exception("not covered needed value at resume_point %r"%(label,))
+                raise Exception, "not covered needed value at resume_point %r"%(label,)
         if parms[0] is not None: # returns= case
             res = parms[0]
             args = [arg for arg in args if arg is not res]

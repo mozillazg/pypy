@@ -74,7 +74,7 @@ def __get_builtin_constructor(name):
     elif name in ('SHA384', 'sha384'):
         import _sha512
         return _sha512.sha384
-    raise ValueError("unsupported hash type")
+    raise ValueError, "unsupported hash type"
 
 def __hash_new(name, string=''):
     """new(name, string='') - Return a new hashing object using the named algorithm;

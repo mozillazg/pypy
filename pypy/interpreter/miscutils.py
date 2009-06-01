@@ -41,18 +41,18 @@ class Stack(RootStack):
         """'position' is 0 for the top of the stack, 1 for the item below,
         and so on.  It must not be negative."""
         if position < 0:
-            raise ValueError('negative stack position')
+            raise ValueError, 'negative stack position'
         if position >= len(self.items):
-            raise IndexError('not enough entries in stack')
+            raise IndexError, 'not enough entries in stack'
         return self.items[~position]
 
     def set_top(self, value, position=0):
         """'position' is 0 for the top of the stack, 1 for the item below,
         and so on.  It must not be negative."""
         if position < 0:
-            raise ValueError('negative stack position')
+            raise ValueError, 'negative stack position'
         if position >= len(self.items):
-            raise IndexError('not enough entries in stack')
+            raise IndexError, 'not enough entries in stack'
         self.items[~position] = value
 
     def depth(self):

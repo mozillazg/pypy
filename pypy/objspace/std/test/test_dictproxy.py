@@ -15,7 +15,7 @@ class AppTestUserObject:
         except:
             pass
         else:
-            raise AssertionError('this should not have been writable')
+            raise AssertionError, 'this should not have been writable'
 
     def test_dictproxyeq(self):
         class a(object):

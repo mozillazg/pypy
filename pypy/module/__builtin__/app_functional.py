@@ -38,7 +38,7 @@ def map(function, *collections):
     """
 
     if len(collections) == 0:
-        raise TypeError("map() requires at least one sequence")
+        raise TypeError, "map() requires at least one sequence"
 
     if len(collections) == 1:
         #it's the most common case, so make it faster
@@ -138,7 +138,7 @@ def reduce(function, seq, *initialt):
        try:
           initial = seqiter.next()
        except StopIteration:
-          raise TypeError("reduce() of empty sequence with no initial value")
+          raise TypeError, "reduce() of empty sequence with no initial value"
     while 1:
         try:
             arg = seqiter.next()
@@ -181,7 +181,7 @@ def range(x, y=None, step=1):
         raise TypeError('range() integer step argument expected, got %s' % type(step))
 
     if step == 0:
-        raise ValueError('range() arg 3 must not be zero')
+        raise ValueError, 'range() arg 3 must not be zero'
 
     elif step > 0:
         if stop <= start: # no work for us
@@ -221,10 +221,10 @@ def min(*arr, **kwargs):
 def min_max(comp, funcname, *arr, **kwargs):
     key = kwargs.pop("key", _identity)
     if len(kwargs):
-        raise TypeError('%s() got an unexpected keyword argument' % funcname)
+        raise TypeError, '%s() got an unexpected keyword argument' % funcname
 
     if not arr:
-        raise TypeError('%s() takes at least one argument' % funcname)
+        raise TypeError, '%s() takes at least one argument' % funcname
 
     if len(arr) == 1:
         arr = arr[0]
@@ -233,7 +233,7 @@ def min_max(comp, funcname, *arr, **kwargs):
     try:
         min_max_val = iterator.next()
     except StopIteration:
-        raise ValueError('%s() arg is an empty sequence' % funcname)
+        raise ValueError, '%s() arg is an empty sequence' % funcname
 
     keyed_min_max_val = key(min_max_val)
 

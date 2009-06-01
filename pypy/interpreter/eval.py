@@ -78,7 +78,7 @@ class Frame(Wrappable):
 
     def run(self):
         "Abstract method to override. Runs the frame"
-        raise TypeError("abstract")
+        raise TypeError, "abstract"
     
     def getdictscope(self):
         "Get the locals as a dictionary."
@@ -101,12 +101,12 @@ class Frame(Wrappable):
 
     def getfastscope(self):
         "Abstract. Get the fast locals as a list."
-        raise TypeError("abstract")
+        raise TypeError, "abstract"
 
     def setfastscope(self, scope_w):
         """Abstract. Initialize the fast locals from a list of values,
         where the order is according to self.getcode().signature()."""
-        raise TypeError("abstract")
+        raise TypeError, "abstract"
 
     def fast2locals(self):
         # Copy values from self.fastlocals_w to self.w_locals

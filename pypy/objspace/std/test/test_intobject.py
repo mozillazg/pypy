@@ -23,7 +23,7 @@ class TestW_IntObject:
         """ make sure that the expected exception occours, and unwrap it """
         try:
             res = func(*args, **kwds)
-            raise Exception("should have failed but returned '%s'!" %repr(res))
+            raise Exception, "should have failed but returned '%s'!" %repr(res)
         except FailedToImplement, arg:
             return arg.w_type
 

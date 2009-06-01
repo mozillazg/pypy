@@ -203,7 +203,7 @@ class Entry(ExtRegistryEntry):
                          " %r" % (vobj.concretetype,))
 
 def hlinvoke(repr, llcallable, *args):
-    raise TypeError("hlinvoke is meant to be rtyped and not called direclty")
+    raise TypeError, "hlinvoke is meant to be rtyped and not called direclty"
 
 def invoke_around_extcall(before, after):
     """Call before() before any external function call, and after() after.

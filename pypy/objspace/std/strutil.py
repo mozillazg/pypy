@@ -33,9 +33,9 @@ class NumberStringParser:
 
     def error(self):
         if self.literal:
-            raise ParseStringError('invalid literal for %s(): %s' % (self.fname, self.literal))
+            raise ParseStringError, 'invalid literal for %s(): %s' % (self.fname, self.literal)
         else:
-            raise ParseStringError('empty string for %s()' % (self.fname,))        
+            raise ParseStringError, 'empty string for %s()' % (self.fname,)        
         
     def __init__(self, s, literal, base, fname):
         self.literal = literal
@@ -56,7 +56,7 @@ class NumberStringParser:
             else:
                 base = 10
         elif base < 2 or base > 36:
-            raise ParseStringError("%s() base must be >= 2 and <= 36" % (fname,))
+            raise ParseStringError, "%s() base must be >= 2 and <= 36" % (fname,)
         self.base = base
 
         if not s:

@@ -35,7 +35,7 @@ class __extend__(SomeObject):
 
     def type(obj, *moreargs):
         if moreargs:
-            raise Exception('type() called with more than one argument')
+            raise Exception, 'type() called with more than one argument'
         if obj.is_constant():
             if isinstance(obj, SomeInstance):
                 r = SomePBC([obj.classdef.classdesc])
@@ -97,7 +97,7 @@ class __extend__(SomeObject):
         return obj.is_true()
 
     def hash(obj):
-        raise TypeError("hash() is not generally supported")
+        raise TypeError, "hash() is not generally supported"
 
     def str(obj):
         getbookkeeper().count('str', obj)

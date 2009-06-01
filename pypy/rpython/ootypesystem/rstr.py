@@ -319,7 +319,7 @@ class LLHelpers(AbstractLLHelpers):
                     assert isinstance(r_arg, IntegerRepr)
                     vchunk = hop.genop('oostring', [vitem, c8], resulttype=ootype.String)
                 else:
-                    raise TyperError("%%%s is not RPython" % (code, ))
+                    raise TyperError, "%%%s is not RPython" % (code, )
             else:
                 vchunk = hop.inputconst(string_repr, thing)
             #i = inputconst(Signed, i)
