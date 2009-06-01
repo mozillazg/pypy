@@ -223,9 +223,9 @@ class ArgumentsFromValuestack(AbstractArguments):
 
     def fixedunpack(self, argcount):
         if self.nargs > argcount:
-            raise ValueError("too many arguments (%d expected)" % argcount)
+            raise ValueError, "too many arguments (%d expected)" % argcount
         elif self.nargs < argcount:
-            raise ValueError("not enough arguments (%d expected)" % argcount)
+            raise ValueError, "not enough arguments (%d expected)" % argcount
         data_w = [None] * self.nargs
         nargs = self.nargs
         for i in range(nargs):
@@ -409,16 +409,16 @@ class Arguments(AbstractArguments):
         """The simplest argument parsing: get the 'argcount' arguments,
         or raise a real ValueError if the length is wrong."""
         if self.has_keywords():
-            raise ValueError("no keyword arguments expected")
+            raise ValueError, "no keyword arguments expected"
         if len(self.arguments_w) > argcount:
-            raise ValueError("too many arguments (%d expected)" % argcount)
+            raise ValueError, "too many arguments (%d expected)" % argcount
         if self.w_stararg is not None:
             self.arguments_w = (self.arguments_w +
                                 self.space.viewiterable(self.w_stararg,
                                          argcount - len(self.arguments_w)))
             self.w_stararg = None
         elif len(self.arguments_w) < argcount:
-            raise ValueError("not enough arguments (%d expected)" % argcount)
+            raise ValueError, "not enough arguments (%d expected)" % argcount
         return self.arguments_w
 
     def firstarg(self):

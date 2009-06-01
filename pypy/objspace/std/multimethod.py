@@ -41,7 +41,7 @@ class MultiMethodTable:
         MultiMethod-maker dispatching on exactly 'arity' arguments.
         """
         if arity < 1:
-            raise ValueError("multimethods cannot dispatch on nothing")
+            raise ValueError, "multimethods cannot dispatch on nothing"
         self.arity = arity
         self.root_class = root_class
         self.dispatch_tree = {}

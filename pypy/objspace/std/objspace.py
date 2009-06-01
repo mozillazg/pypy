@@ -205,7 +205,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
                                 w_result = getattr(f, attr)(w_1, w_2)
                                 break
                         else:
-                            raise BytecodeCorruption("bad COMPARE_OP oparg")
+                            raise BytecodeCorruption, "bad COMPARE_OP oparg"
                     f.pushvalue(w_result)
 
             if self.config.objspace.std.logspaceoptypes:
@@ -463,9 +463,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if x is None:
             return self.w_None
         if isinstance(x, W_Object):
-            raise TypeError("attempt to wrap already wrapped object: %s"%(x,))
+            raise TypeError, "attempt to wrap already wrapped object: %s"%(x,)
         if isinstance(x, OperationError):
-            raise TypeError("attempt to wrap already wrapped exception: %s"%
+            raise TypeError, ("attempt to wrap already wrapped exception: %s"%
                               (x,))
         if isinstance(x, int):
             if isinstance(x, bool):
@@ -557,7 +557,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return w_obj
         if isinstance(w_obj, W_Object):
             return w_obj.unwrap(self)
-        raise UnwrapError("cannot unwrap: %r" % w_obj)
+        raise UnwrapError, "cannot unwrap: %r" % w_obj
 
     def newint(self, intval):
         # this time-critical and circular-imports-funny method was stored

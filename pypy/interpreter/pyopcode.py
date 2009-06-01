@@ -763,7 +763,7 @@ class __extend__(pyframe.PyFrame):
                 w_result = getattr(f, attr)(w_1, w_2)
                 break
         else:
-            raise BytecodeCorruption("bad COMPARE_OP oparg")
+            raise BytecodeCorruption, "bad COMPARE_OP oparg"
         f.pushvalue(w_result)
 
     def IMPORT_NAME(f, nameindex, *ignored):
@@ -853,7 +853,7 @@ class __extend__(pyframe.PyFrame):
         return next_instr
 
     def FOR_LOOP(f, oparg, *ignored):
-        raise BytecodeCorruption("old opcode, no longer in use")
+        raise BytecodeCorruption, "old opcode, no longer in use"
 
     def SETUP_LOOP(f, offsettoend, next_instr, *ignored):
         block = LoopBlock(f, next_instr + offsettoend)

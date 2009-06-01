@@ -544,7 +544,7 @@ class LLTypeMallocRemover(BaseMallocRemover):
             newop = SpaceOperation('same_as', [c], op.result)
             self.newops.append(newop)
         else:
-            raise AssertionError(op.opname)
+            raise AssertionError, op.opname
 
         
     def insert_keepalives(self, newvars):
@@ -637,7 +637,7 @@ class OOTypeMallocRemover(BaseMallocRemover):
             newop = SpaceOperation('same_as', [c], op.result)
             self.newops.append(newop)
         else:
-            raise AssertionError(op.opname)
+            raise AssertionError, op.opname
 
     def insert_keepalives(self, newvars):
         pass

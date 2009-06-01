@@ -1757,7 +1757,7 @@ class datetime(date):
         if myoff == otoff:
             return base
         if myoff is None or otoff is None:
-            raise TypeError("cannot mix naive and timezone-aware time")
+            raise TypeError, "cannot mix naive and timezone-aware time"
         return base + timedelta(minutes = otoff-myoff)
 
     def __hash__(self):

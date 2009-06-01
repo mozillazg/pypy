@@ -145,7 +145,7 @@ class ContainerType(LowLevelType):
     _adtmeths = {}
 
     def _inline_is_varsize(self, last):
-        raise TypeError("%r cannot be inlined in structure" % self)
+        raise TypeError, "%r cannot be inlined in structure" % self
 
     def _install_extras(self, adtmeths={}, hints={}):
         self._adtmeths = frozendict(adtmeths)
@@ -177,7 +177,7 @@ class Struct(ContainerType):
         self._arrayfld = None
         for name, typ in fields:
             if name.startswith('_'):
-                raise NameError("%s: field name %r should not start with "
+                raise NameError, ("%s: field name %r should not start with "
                                   "an underscore" % (self._name, name,))
             names.append(name)
             if name in flds:
@@ -235,8 +235,8 @@ class Struct(ContainerType):
 
 
     def _nofield(self, name):
-        raise AttributeError('struct %s has no field %r' % (self._name,
-                                                             name))
+        raise AttributeError, 'struct %s has no field %r' % (self._name,
+                                                             name)
 
     def _names_without_voids(self):
         names_without_voids = [name for name in self._names if self._flds[name] is not Void]
@@ -419,7 +419,7 @@ class FuncType(ContainerType):
         self.ARGS = tuple(args)
         assert isinstance(result, LowLevelType)
         if isinstance(result, ContainerType):
-            raise TypeError("function result can only be primitive or pointer")
+            raise TypeError, "function result can only be primitive or pointer"
         self.RESULT = result
 
     def __str__(self):
@@ -475,7 +475,7 @@ class GcOpaqueType(OpaqueType):
         return "%s (gcopaque)" % self.tag
 
     def _inline_is_varsize(self, last):
-        raise TypeError("%r cannot be inlined in structure" % self)
+        raise TypeError, "%r cannot be inlined in structure" % self
 
 class PyObjectType(ContainerType):
     _gckind = 'cpy'
@@ -588,7 +588,7 @@ class Ptr(LowLevelType):
 
     def __init__(self, TO):
         if not isinstance(TO, ContainerType):
-            raise TypeError("can only point to a Container type, "
+            raise TypeError, ("can only point to a Container type, "
                               "not to %s" % (TO,))
         self.TO = TO
 
@@ -697,7 +697,7 @@ _to_primitive = {
 def cast_primitive(TGT, value):
     ORIG = typeOf(value)
     if not isinstance(TGT, Primitive) or not isinstance(ORIG, Primitive):
-        raise TypeError("can only primitive to primitive")
+        raise TypeError, "can only primitive to primitive"
     if ORIG == TGT:
         return value
     if ORIG == Char or ORIG == UniChar:
@@ -713,7 +713,7 @@ def cast_primitive(TGT, value):
         return TGT._cast(value)
     if ORIG == SingleFloat and TGT == Float:
         return float(value)
-    raise TypeError("unsupported cast")
+    raise TypeError, "unsupported cast"
 
 def _cast_whatever(TGT, value):
     from pypy.rpython.lltypesystem import llmemory
@@ -784,13 +784,13 @@ def castable(PTRTYPE, CURTYPE):
 def cast_pointer(PTRTYPE, ptr):
     CURTYPE = typeOf(ptr)
     if not isinstance(CURTYPE, Ptr) or not isinstance(PTRTYPE, Ptr):
-        raise TypeError("can only cast pointers to other pointers")
+        raise TypeError, "can only cast pointers to other pointers"
     return ptr._cast_to(PTRTYPE)
 
 def cast_opaque_ptr(PTRTYPE, ptr):
     CURTYPE = typeOf(ptr)
     if not isinstance(CURTYPE, Ptr) or not isinstance(PTRTYPE, Ptr):
-        raise TypeError("can only cast pointers to other pointers")
+        raise TypeError, "can only cast pointers to other pointers"
     if CURTYPE == PTRTYPE:
         return ptr
     if CURTYPE.TO._gckind != PTRTYPE.TO._gckind:
@@ -840,9 +840,9 @@ def direct_fieldptr(structptr, fieldname):
     """
     CURTYPE = typeOf(structptr).TO
     if not isinstance(CURTYPE, Struct):
-        raise TypeError("direct_fieldptr: not a struct")
+        raise TypeError, "direct_fieldptr: not a struct"
     if fieldname not in CURTYPE._flds:
-        raise TypeError("%s has no field %r" % (CURTYPE, fieldname))
+        raise TypeError, "%s has no field %r" % (CURTYPE, fieldname)
     if not structptr:
         raise RuntimeError("direct_fieldptr: NULL argument")
     return _subarray._makeptr(structptr._obj, fieldname, structptr._solid)
@@ -855,7 +855,7 @@ def direct_arrayitems(arrayptr):
     """
     CURTYPE = typeOf(arrayptr).TO
     if not isinstance(CURTYPE, (Array, FixedSizeArray)):
-        raise TypeError("direct_arrayitems: not an array")
+        raise TypeError, "direct_arrayitems: not an array"
     if not arrayptr:
         raise RuntimeError("direct_arrayitems: NULL argument")
     return _subarray._makeptr(arrayptr._obj, 0, arrayptr._solid)
@@ -1088,7 +1088,7 @@ class _abstract_ptr(object):
     def __call__(self, *args):
         if isinstance(self._T, FuncType):
             if len(args) != len(self._T.ARGS):
-                raise TypeError("calling %r with wrong argument number: %r" % (self._T, args))
+                raise TypeError,"calling %r with wrong argument number: %r" % (self._T, args)
             for i, a, ARG in zip(range(len(self._T.ARGS)), args, self._T.ARGS):
                 if typeOf(a) != ARG:
                     # ARG could be Void
@@ -1105,11 +1105,11 @@ class _abstract_ptr(object):
                     elif not (isinstance(ARG, ContainerType)
                             and typeOf(a) == Ptr(ARG)):
                         args_repr = [typeOf(arg) for arg in args]
-                        raise TypeError("calling %r with wrong argument "
+                        raise TypeError, ("calling %r with wrong argument "
                                           "types: %r" % (self._T, args_repr))
             callb = self._obj._callable
             if callb is None:
-                raise RuntimeError("calling undefined function")
+                raise RuntimeError,"calling undefined function"
             return callb(*args)
         raise TypeError("%r instance is not a function" % (self._T,))
 
@@ -1235,7 +1235,7 @@ class _interior_ptr(_abstract_ptr):
         self._set_offsets(_offsets)
 
     def __nonzero__(self):
-        raise RuntimeError("do not test an interior pointer for nullity")
+        raise RuntimeError, "do not test an interior pointer for nullity"
 
     def _get_obj(self):
         ob = self._parent
@@ -1462,9 +1462,9 @@ class _array(_parentable):
 
     def __init__(self, TYPE, n, initialization=None, parent=None, parentindex=None):
         if not isinstance(n, int):
-            raise TypeError("array length must be an int")
+            raise TypeError, "array length must be an int"
         if n < 0:
-            raise ValueError("negative array length")
+            raise ValueError, "negative array length"
         _parentable.__init__(self, TYPE)
         self.items = [TYPE.OF._allocate(initialization=initialization, parent=self, parentindex=j)
                       for j in range(n)]
@@ -1754,23 +1754,23 @@ def malloc(T, n=None, flavor='gc', immortal=False, zero=False):
         assert n is None
         o = _opaque(T, initialization=initialization)
     else:
-        raise TypeError("malloc for Structs and Arrays only")
+        raise TypeError, "malloc for Structs and Arrays only"
     if T._gckind != 'gc' and not immortal and flavor.startswith('gc'):
-        raise TypeError("gc flavor malloc of a non-GC non-immortal structure")
+        raise TypeError, "gc flavor malloc of a non-GC non-immortal structure"
     solid = immortal or not flavor.startswith('gc') # immortal or non-gc case
     return _ptr(Ptr(T), o, solid)
 
 def free(p, flavor):
     if flavor.startswith('gc'):
-        raise TypeError("gc flavor free")
+        raise TypeError, "gc flavor free"
     T = typeOf(p)
     if not isinstance(T, Ptr) or p._togckind() != 'raw':
-        raise TypeError("free(): only for pointers to non-gc containers")
+        raise TypeError, "free(): only for pointers to non-gc containers"
     p._obj0._free()
 
 def functionptr(TYPE, name, **attrs):
     if not isinstance(TYPE, FuncType):
-        raise TypeError("functionptr() for FuncTypes only")
+        raise TypeError, "functionptr() for FuncTypes only"
     try:
         hash(tuple(attrs.items()))
     except TypeError:
@@ -1783,7 +1783,7 @@ def nullptr(T):
 
 def opaqueptr(TYPE, name, **attrs):
     if not isinstance(TYPE, OpaqueType):
-        raise TypeError("opaqueptr() for OpaqueTypes only")
+        raise TypeError, "opaqueptr() for OpaqueTypes only"
     o = _opaque(TYPE, _name=name, **attrs)
     return _ptr(Ptr(TYPE), o, solid=True)
 
@@ -1802,22 +1802,22 @@ def cast_int_to_ptr(PTRTYPE, oddint):
 
 def attachRuntimeTypeInfo(GCSTRUCT, funcptr=None, destrptr=None):
     if not isinstance(GCSTRUCT, RttiStruct):
-        raise TypeError("expected a RttiStruct: %s" % GCSTRUCT)
+        raise TypeError, "expected a RttiStruct: %s" % GCSTRUCT
     GCSTRUCT._attach_runtime_type_info_funcptr(funcptr, destrptr)
     return _ptr(Ptr(RuntimeTypeInfo), GCSTRUCT._runtime_type_info)
 
 def getRuntimeTypeInfo(GCSTRUCT):
     if not isinstance(GCSTRUCT, RttiStruct):
-        raise TypeError("expected a RttiStruct: %s" % GCSTRUCT)
+        raise TypeError, "expected a RttiStruct: %s" % GCSTRUCT
     if GCSTRUCT._runtime_type_info is None:
-        raise ValueError("no attached runtime type info for GcStruct %s" % 
+        raise ValueError, ("no attached runtime type info for GcStruct %s" % 
                            GCSTRUCT._name)
     return _ptr(Ptr(RuntimeTypeInfo), GCSTRUCT._runtime_type_info)
 
 def runtime_type_info(p):
     T = typeOf(p)
     if not isinstance(T, Ptr) or not isinstance(T.TO, RttiStruct):
-        raise TypeError("runtime_type_info on non-RttiStruct pointer: %s" % p)
+        raise TypeError, "runtime_type_info on non-RttiStruct pointer: %s" % p
     struct = p._obj
     top_parent = top_container(struct)
     result = getRuntimeTypeInfo(top_parent._TYPE)
@@ -1827,7 +1827,7 @@ def runtime_type_info(p):
         T = typeOf(query_funcptr).TO.ARGS[0]
         result2 = query_funcptr(cast_pointer(T, p))
         if result != result2:
-            raise RuntimeError("runtime type-info function for %s:\n"
+            raise RuntimeError, ("runtime type-info function for %s:\n"
                                  "        returned: %s,\n"
                                  "should have been: %s" % (p, result2, result))
     return result

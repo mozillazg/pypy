@@ -5,7 +5,7 @@ def _conv_descriptor(f):
     elif isinstance(f, (int, long)):
         return f
     else:
-        raise TypeError("argument must be an int, or have a fileno() method.")
+        raise TypeError, "argument must be an int, or have a fileno() method."
 
 __doc__ = """This module performs file control and I/O control on file
 descriptors.  It is an interface to the fcntl() and ioctl() Unix

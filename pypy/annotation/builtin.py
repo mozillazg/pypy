@@ -56,14 +56,14 @@ def builtin_range(*args):
         s_start, s_stop = args[:2]
         s_step = args[2]
     else:
-        raise Exception("range() takes 1 to 3 arguments")
+        raise Exception, "range() takes 1 to 3 arguments"
     empty = False  # so far
     if not s_step.is_constant():
         step = 0 # this case signals a variable step
     else:
         step = s_step.const
         if step == 0:
-            raise Exception("range() with step zero")
+            raise Exception, "range() with step zero"
         if s_start.is_constant() and s_stop.is_constant():
             try:
                 if len(xrange(s_start.const, s_stop.const, step)) == 0:
@@ -350,7 +350,7 @@ def llmemory_cast_int_to_adr(s):
 ##    return SomeInteger()
 
 def unicodedata_decimal(s_uchr):
-    raise TypeError("unicodedate.decimal() calls should not happen at interp-level")    
+    raise TypeError, "unicodedate.decimal() calls should not happen at interp-level"    
 
 def test(*args):
     return s_Bool
@@ -556,14 +556,14 @@ def ooupcast(I, i):
     if ootype.isSubclass(i.ootype, I.const):
         return SomeOOInstance(I.const)
     else:
-        raise AnnotatorError('Cannot cast %s to %s' % (i.ootype, I.const))
+        raise AnnotatorError, 'Cannot cast %s to %s' % (i.ootype, I.const)
 
 def oodowncast(I, i):
     assert isinstance(I.const, ootype.Instance)
     if ootype.isSubclass(I.const, i.ootype):
         return SomeOOInstance(I.const)
     else:
-        raise AnnotatorError('Cannot cast %s to %s' % (i.ootype, I.const))
+        raise AnnotatorError, 'Cannot cast %s to %s' % (i.ootype, I.const)
 
 BUILTIN_ANALYZERS[ootype.instanceof] = instanceof
 BUILTIN_ANALYZERS[ootype.new] = new

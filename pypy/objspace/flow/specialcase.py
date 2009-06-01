@@ -21,7 +21,7 @@ def sc_import(space, fn, args):
     if not isinstance(w_loc, Constant):
         # import * in a function gives us the locals as Variable
         # we always forbid it as a SyntaxError
-        raise SyntaxError("RPython: import * is not allowed in functions")
+        raise SyntaxError, "RPython: import * is not allowed in functions"
     if space.do_imports_immediately:
         name, glob, loc, frm = (space.unwrap(w_name), space.unwrap(w_glob),
                                 space.unwrap(w_loc), space.unwrap(w_frm))
@@ -45,8 +45,8 @@ def sc_operator(space, fn, args):
         elif opname == 'getattr' and len(args_w) == 3:
             return space.do_operation('simple_call', Constant(getattr), *args_w)
         else:
-            raise Exception("should call %r with exactly %d arguments" % (
-                fn, Arity[opname]))
+            raise Exception, "should call %r with exactly %d arguments" % (
+                fn, Arity[opname])
     if space.config.translation.builtins_can_raise_exceptions:
         # in this mode, avoid constant folding and raise an implicit Exception
         w_result = space.do_operation(opname, *args_w)

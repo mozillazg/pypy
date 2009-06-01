@@ -1267,7 +1267,7 @@ class TestAnnotateTestCase:
             elif a==2:
                 raise X(1)
             elif a==3:
-                raise X(4)
+                raise X,4
             else:
                 try:
                     l[0]

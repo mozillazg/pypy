@@ -12,7 +12,7 @@ DDIR = py.path.local('/www/codespeak.net/htdocs/download/pypy')
 
 def usage():
     print "usage: %s [-tag .<micro>] versionbasename" %(py.std.sys.argv[0])
-    raise SystemExit(1)
+    raise SystemExit, 1
 
 def cexec(cmd): 
     logexec(cmd)
@@ -81,7 +81,7 @@ def build_html(target):
         logexec(cmd)
         r = os.system(cmd)
         if r:
-            raise SystemExit(-1)
+            raise SystemExit, -1
         # Remove any .pyc files created in the process
         target.chdir()
         out = cexec("find . -name '*.pyc' -print0 | xargs -0 -r rm")
@@ -100,7 +100,7 @@ if __name__ == '__main__':
         NEWURL = BASEURL.replace('.x', micro)
         r = os.system("svn cp %s %s" % (BASEURL, NEWURL))
         if r:
-            raise SystemExit(-1)
+            raise SystemExit, -1
         BASEURL = NEWURL
         j = 3
         

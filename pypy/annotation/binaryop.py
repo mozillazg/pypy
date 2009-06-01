@@ -967,8 +967,8 @@ class __extend__(pairtype(SomeImpossibleValue, SomeAddress)):
 
 class __extend__(pairtype(SomeAddress, SomeObject)):
     def union((s_addr, s_obj)):
-        raise UnionError("union of address and anything else makes no sense")
+        raise UnionError, "union of address and anything else makes no sense"
 
 class __extend__(pairtype(SomeObject, SomeAddress)):
     def union((s_obj, s_addr)):
-        raise UnionError("union of address and anything else makes no sense")
+        raise UnionError, "union of address and anything else makes no sense"

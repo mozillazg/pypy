@@ -50,7 +50,7 @@ class _Marshaller:
                 if func:
                     break
             else:
-                raise ValueError("unmarshallable object")
+                raise ValueError, "unmarshallable object"
             func(self, x)
 
     def w_long64(self, x):
@@ -84,7 +84,7 @@ class _Marshaller:
 
     def dump_stopiter(self, x):
         if x is not StopIteration:
-            raise ValueError("unmarshallable object")
+            raise ValueError, "unmarshallable object"
         self._write(TYPE_STOPITER)
     dispatch[type(StopIteration)] = dump_stopiter
 
@@ -253,7 +253,7 @@ class _Unmarshaller:
         try:
             return self.dispatch[c](self)
         except KeyError:
-            raise ValueError("bad marshal code: %c (%d)" % (c, ord(c)))
+            raise ValueError, "bad marshal code: %c (%d)" % (c, ord(c))
 
     def r_short(self):
         lo = ord(self._read(1))
@@ -410,7 +410,7 @@ class _Unmarshaller:
         firstlineno = self.r_long()
         lnotab = self.load()
         if not new:
-            raise RuntimeError("can't unmarshal code objects; no 'new' module")
+            raise RuntimeError, "can't unmarshal code objects; no 'new' module"
         return new.code(argcount, nlocals, stacksize, flags, code, consts,
                         names, varnames, filename, name, firstlineno, lnotab,
                         freevars, cellvars)
@@ -500,7 +500,7 @@ class _FastUnmarshaller:
             self.bufpos += 1
             return _load_dispatch[c](self)
         except KeyError:
-            raise ValueError("bad marshal code: %c (%d)" % (c, ord(c)))
+            raise ValueError, "bad marshal code: %c (%d)" % (c, ord(c))
         except IndexError:
             raise EOFError
 
@@ -628,7 +628,7 @@ class _FastUnmarshaller:
         firstlineno = _r_long(self)
         lnotab = self.load()
         if not new:
-            raise RuntimeError("can't unmarshal code objects; no 'new' module")
+            raise RuntimeError, "can't unmarshal code objects; no 'new' module"
         return new.code(argcount, nlocals, stacksize, flags, code, consts,
                         names, varnames, filename, name, firstlineno, lnotab,
                         freevars, cellvars)
