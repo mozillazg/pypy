@@ -11,6 +11,7 @@ from pypy.lang.js.interpreter import load_source, Interpreter, load_file
 from pypy.lang.js.jsparser import parse, ParseError
 from pypy.lang.js.jsobj import W_Builtin, W_String, ThrowException, w_Undefined
 from pypy.rlib.streamio import open_file_as_stream
+from pypy.lang.js.jscode import JsCode
 
 import code
 sys.ps1 = 'js> '
@@ -31,6 +32,11 @@ try:
 except ImportError:
     pass
 
+DEBUG = False
+
+def debugjs(ctx, args, this):
+    global DEBUG
+    DEBUG = True
 
 def loadjs(ctx, args, this):
     filename = args[0].ToString()
@@ -53,7 +59,7 @@ class JSInterpreter(code.InteractiveConsole):
         self.interpreter.w_Global.Put(ctx, 'quit', W_Builtin(quitjs))
         self.interpreter.w_Global.Put(ctx, 'load', W_Builtin(loadjs))
         self.interpreter.w_Global.Put(ctx, 'trace', W_Builtin(tracejs))
-
+        self.interpreter.w_Global.Put(ctx, 'debug', W_Builtin(debugjs))
 
     def runcodefromfile(self, filename):
         f = open_file_as_stream(filename)
@@ -67,6 +73,10 @@ class JSInterpreter(code.InteractiveConsole):
         traceback.
         """
         try:
+            if DEBUG:
+                bytecode = JsCode()
+                ast.emit(bytecode)
+                print bytecode
             res = self.interpreter.run(ast, interactive=True)
             if res not in (None, w_Undefined):
                 try:
@@ -113,7 +123,7 @@ class JSInterpreter(code.InteractiveConsole):
         print ' '*4 + \
               ' '*exc.source_pos.columnno + \
               '^'
-        print 'Syntax Error'
+        print 'Syntax Error:', exc.errorinformation.failure_reasons
 
     def interact(self, banner=None):
         if banner is None:

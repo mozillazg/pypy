@@ -721,14 +721,14 @@ class Void(Expression):
         bytecode.emit('LOAD_UNDEFINED')
 
 class With(Statement):
-    def __init__(self, pos, identifier, body):
+    def __init__(self, pos, expr, body):
         self.pos = pos
-        assert isinstance(identifier, VariableIdentifier)
-        self.identifier = identifier.identifier
+        self.expr = expr
         self.body = body
 
     def emit(self, bytecode):
-        bytecode.emit('WITH_START', self.identifier)
+        self.expr.emit(bytecode)
+        bytecode.emit('WITH_START')
         self.body.emit(bytecode)
         bytecode.emit('WITH_END')
 

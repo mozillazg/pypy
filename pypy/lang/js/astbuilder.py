@@ -223,7 +223,12 @@ class ASTBuilder(RPythonVisitor):
     
     def visit_propertynameandvalue(self, node):
         pos = self.get_pos(node)
-        left = self.dispatch(node.children[0])
+        l = node.children[0]
+        if l.symbol == "IDENTIFIERNAME":
+            lpos = self.get_pos(l)
+            left = operations.Identifier(lpos, l.additional_info)
+        else:
+            left = self.dispatch(l)
         right = self.dispatch(node.children[1])
         return operations.PropertyInit(pos,left,right)
 
