@@ -915,6 +915,15 @@ class AppTestTypeObject:
                 return 0
         raises(TypeError, X)
 
+    def test_dictproxy_is_updated(self):
+        py.test.skip("fix me")
+        class A(object):
+            x = 1
+        d = A.__dict__
+        assert d["x"] == 1
+        A.y = 2
+        assert d["y"] == 2
+
 
 class AppTestMutableBuiltintypes:
 
