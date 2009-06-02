@@ -51,7 +51,7 @@ def w_object_list(space, w_target, w_message, w_context):
     
 @register_method('Object', 'do')
 def w_object_do(space, w_target, w_message, w_context):
-    w_message.arguments[0].eval(space, w_target, w_context)
+    w_message.arguments[0].eval(space, w_target, w_target)
     return w_target
     
 @register_method('Object', '', unwrap_spec=[object, object])
@@ -66,3 +66,9 @@ def object_message(space, w_target, w_message, w_context):
 @register_method('Object', '-', unwrap_spec=[object, float])
 def object_minus(space, w_target, argument):
     return W_Number(space, -argument)
+    
+@register_method('Object', 'debugger')
+def object_message(space, w_target, w_message, w_context):
+    import pdb
+    pdb.set_trace()
+    return w_target
