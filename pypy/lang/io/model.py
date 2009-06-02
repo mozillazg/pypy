@@ -199,7 +199,7 @@ class W_Message(W_Object):
             w_result = w_method.apply(space, w_receiver, self, w_context)
         if self.next:
             #TODO: optimize
-            return self.next.eval(space, w_result, w_receiver)
+            return self.next.eval(space, w_result, w_context)
         else:
             return w_result
   
@@ -239,7 +239,7 @@ class W_Block(W_Object):
         
         w_locals.slots['call'] = w_call
         w_call.slots['message'] = w_message
-        return self.body.eval(space, w_locals, w_context)
+        return self.body.eval(space, w_locals, w_locals)
             
     
     def clone(self):
