@@ -1,5 +1,5 @@
 from pypy.lang.io.parserhack import parse, interpret
-from pypy.lang.io.model import W_Object, W_Message
+from pypy.lang.io.model import W_Object, W_Message, W_Number
 import py.test
 
 
@@ -8,6 +8,18 @@ def test_object_do():
     res, space = interpret(inp)
     assert res.slots['a'].value == 23
     assert res.value == 4
+    
+def test_do_on_map():
+    inp = """
+    Map do(
+        get := method(i, 
+            self at(i)
+        )
+    )
+    Map clone atPut("a", 123) atPut("b", 234) atPut("c", 345) get("b")"""
+    res, _ = interpret(inp)
+    assert isinstance(res, W_Number)
+    assert res.value == 234
     
 def test_object_do_multiple_slots():
     inp = 'Object do(a := 23; b := method(a + 5); a := 1); Object b'

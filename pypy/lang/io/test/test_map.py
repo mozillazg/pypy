@@ -104,6 +104,19 @@ def test_foreach():
     res,space = interpret(inp)
     value = sorted([(x.items[0].value, x.items[1].value) for x in res.items])
     assert value == [('1', 12345), ('2', 99), ('3', 3), ('4', 234)]
+
+def test_map_foreach_leaks():
+    inp = """b := Map clone do(
+        atPut("1", 12345) 
+        atPut("2", 99) 
+        atPut("3", 3) 
+        atPut("4", 234)
+    )
+    c := list()
+    b foreach(key, value, c append(list(key, value))); list(key,value)"""
+    res,space = interpret(inp)
+    l = [x.value for x in res.items]
+    assert l == ['4', 234]
     
 def test_keys():
     inp = """b := Map clone do(
@@ -116,3 +129,35 @@ def test_keys():
     res, space = interpret(inp)
     keys = sorted([x.value for x in res.items])
     assert keys == ['1', '2', '3', '4']
+
+def test_do_on_map_sum():
+    inp = """
+    Map do(
+        sum := method(
+            s := 0
+            self foreach(key, value, s := s + value)
+            // debugger    
+            s
+        )
+    )
+    Map clone atPut("a", 123) atPut("b", 234) atPut("c", 345) sum"""
+    res, _ = interpret(inp)
+    assert isinstance(res, W_Number)
+    assert res.value == 702
+
+
+def test_map_asObject_inline():
+    inp = """
+    Map do(
+    	asObject := method(
+    		o := Object clone
+    		self foreach(k, v, o setSlot(k, getSlot("v")))
+            o
+    	)
+    )
+    Map clone atPut("1", 12345) atPut("2", 99) atPut("3", 3) atPut("4", 234) asObject"""
+    res, space = interpret(inp)
+    assert res.slots['1'].value == 12345
+    assert res.slots['2'].value == 99
+    assert res.slots['3'].value == 3
+    assert res.slots['4'].value == 234
