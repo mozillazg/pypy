@@ -1,4 +1,5 @@
 import sys
+import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import llhelper, MixLevelHelperAnnotator,\
@@ -195,7 +196,7 @@ class WarmRunnerDesc:
             if not we_are_translated():
                 print "~~~ Crash in JIT!"
                 print '~~~ %s: %s' % (e.__class__, e)
-                if sys.stdout == sys.__stdout__:
+                if py.test.config.option.nocapture::
                     import pdb; pdb.post_mortem(sys.exc_info()[2])
                 raise
             debug_print('~~~ Crash in JIT!')
