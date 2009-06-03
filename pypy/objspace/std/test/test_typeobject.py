@@ -916,7 +916,7 @@ class AppTestTypeObject:
         raises(TypeError, X)
 
     def test_dictproxy_is_updated(self):
-        py.test.skip("fix me")
+        skip("fix me")
         class A(object):
             x = 1
         d = A.__dict__
