@@ -196,7 +196,7 @@ class WarmRunnerDesc:
             if not we_are_translated():
                 print "~~~ Crash in JIT!"
                 print '~~~ %s: %s' % (e.__class__, e)
-                if py.test.config.option.nocapture::
+                if py.test.config.option.nocapture:
                     import pdb; pdb.post_mortem(sys.exc_info()[2])
                 raise
             debug_print('~~~ Crash in JIT!')
