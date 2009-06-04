@@ -48,16 +48,17 @@ def get_grammar_file(version):
 
 
 def build_parser(gramfile, parser=None):
-    """reads a (EBNF) grammar definition and builds a parser for it"""
+    """NOT_RPYTHON
+    reads a (EBNF) grammar definition and builds a parser for it
+    """
     if parser is None:
         parser = Parser()
     setup_tokens(parser)
-    # XXX: clean up object dependencies
-    from pypy.rlib.streamio import open_file_as_stream
-    stream = open_file_as_stream(gramfile)
-    grammardef = stream.readall()
-    stream.close()
-    assert isinstance(grammardef, str)
+    stream = open(gramfile, "r")
+    try:
+        grammardef = stream.read()
+    finally:
+        stream.close()
     source = GrammarSource(GRAMMAR_GRAMMAR, grammardef)
     builder = EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=parser)
     GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
