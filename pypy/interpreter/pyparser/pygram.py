@@ -1,5 +1,5 @@
 import token # Temporary until we move to the new parser.
-from pypy.interpreter.pyparser import parser, pytoken
+from pypy.interpreter.pyparser import parser
 
 class PythonGrammar(parser.Grammar):
 
