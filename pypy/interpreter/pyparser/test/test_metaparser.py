@@ -1,8 +1,11 @@
 import py
+import os
+import glob
 import tokenize
 import token
 import StringIO
 from pypy.interpreter.pyparser.metaparser import ParserGenerator, PgenError
+from pypy.interpreter.pyparser.pygram import PythonGrammar
 from pypy.interpreter.pyparser import parser
 
 
@@ -34,6 +37,16 @@ class TestParserGenerator:
         assert g.start == eval_sym
         states, first = g.dfas[eval_sym]
         assert states == [[(0, 1)], [(0, 1)]]
+
+    def test_load_python_grammars(self):
+        gram_pat = os.path.join(os.path.dirname(__file__), "..", "data",
+                                "Grammar*")
+        for gram_file in glob.glob(gram_pat):
+            fp = open(gram_file, "r")
+            try:
+                ParserGenerator(fp.read()).build_grammar(PythonGrammar)
+            finally:
+                fp.close()
 
     def test_items(self):
         g = self.gram_for("foo: NAME STRING OP '+'")
