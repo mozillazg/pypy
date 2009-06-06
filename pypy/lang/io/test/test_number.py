@@ -119,3 +119,33 @@ def test_round():
     inp = '-3.4 round'
     res, space = interpret(inp)
     assert res.value == -3
+    
+def test_as_number():
+    inp = '234 asNumber'
+    res, _ = interpret(inp)
+    assert res.value == 234
+    
+def test_divide():
+    inp = '3/2'
+    res, _ = interpret(inp)
+    assert res.value == 1.5
+    
+def test_division_by_zero():
+    inp = '3/0'
+    res, _ = interpret(inp)
+    assert res.is_nan == False
+    assert res.is_inf == True
+    assert res.value == 0
+    
+def test_division_zero_by_zero():
+    inp = '0/0'
+    res, _ = interpret(inp)
+    assert res.is_nan == True
+    assert res.is_inf == False
+    assert res.value == 0
+    
+def test_multiply():
+    inp = '6*7'
+    res, _  = interpret(inp)
+    assert res.value == 42
+    
