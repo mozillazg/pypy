@@ -193,7 +193,7 @@ class ParserGenerator(object):
                     return label_index
 
     def make_first(self, gram, name):
-        original_firsts = self.first
+        original_firsts = self.first[name]
         firsts = dict()
         for label in original_firsts:
             firsts[self.make_label(gram, label)] = None
