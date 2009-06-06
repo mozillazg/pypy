@@ -46,13 +46,16 @@ class W_Object(object):
         
 class W_Number(W_Object):
     """Number"""
-    def __init__(self, space, value, protos = None):
+    def __init__(self, space, value, protos = None, nan=False, inf=False):
         self.value = value
         if protos is None:
             pp = [space.w_number]
         else:
             pp = protos
         W_Object.__init__(self, space, pp) 
+        # TODO: operations on nan and inf instances
+        self.is_nan = nan
+        self.is_inf = inf
         
     def clone(self):
         cloned = W_Number(self.space, self.value)

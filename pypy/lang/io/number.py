@@ -36,4 +36,25 @@ def w_number_modulo(space, target):
 
     return W_Number(space, n)
 
-
+@register_method('Number', 'asNumber', unwrap_spec=[object])
+def w_number_as_number(space, w_target):
+    return w_target
+    
+@register_method('Number', '/', unwrap_spec=[float, float])
+def w_number_divide(space, dividend, divisor):
+    nan = False
+    inf = False
+    try:
+        value = dividend/float(divisor)
+    except ZeroDivisionError, e:
+        value = 0
+        if dividend == 0:
+            nan = True
+        else:
+            inf = True
+    finally:
+        return W_Number(space, value, nan=nan, inf=inf)
+    
+@register_method('Number', '*', unwrap_spec=[float, float])
+def w_number_multiply(space, a, b):
+    return W_Number(space, a*b)
