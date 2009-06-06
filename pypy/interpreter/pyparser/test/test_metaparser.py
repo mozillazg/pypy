@@ -104,6 +104,7 @@ class TestParserGenerator:
         assert g1.dfas != g2.dfas
 
         g = self.gram_for("foo: (NAME | STRING)*")
+        g = self.gram_for("foo: (NAME | STRING)+")
 
     def test_error(self):
         exc = py.test.raises(PgenError, self.gram_for, "hi").value

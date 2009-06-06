@@ -28,6 +28,8 @@ class NFA(object):
         self.arcs.append((label, to_state))
 
     def find_unlabeled_states(self, into):
+        if self in into:
+            return
         into.add(self)
         for label, state in self.arcs:
             if label is None:
@@ -102,7 +104,7 @@ def simplify_dfa(dfa):
                 if state == other_state:
                     del dfa[j]
                     for sub_state in dfa:
-                        state.unify_state(state, other_state)
+                        sub_state.unify_state(other_state, state)
                     changes = True
                     break
 
