@@ -156,7 +156,7 @@ class ParserGenerator(object):
                 if label in gram.symbol_to_label:
                     return gram.symbol_to_label[label]
                 else:
-                    gram.labels.append((gram.symbol_ids[label], None))
+                    gram.labels.append(gram.symbol_ids[label])
                     gram.symbol_to_label[label] = label_index
                     return label_index
             elif label.isupper():
@@ -164,7 +164,7 @@ class ParserGenerator(object):
                 if token_index in gram.token_ids:
                     return gram.token_ids[token_index]
                 else:
-                    gram.labels.append((token_index, None))
+                    gram.labels.append(token_index)
                     gram.token_ids[token_index] = label_index
                     return label_index
             else:
@@ -177,7 +177,7 @@ class ParserGenerator(object):
                 if value in gram.keyword_ids:
                     return gram.keyword_ids[value]
                 else:
-                    gram.labels.append((gram.KEYWORD_TOKEN, value))
+                    gram.labels.append(gram.KEYWORD_TOKEN)
                     gram.keyword_ids[value] = label_index
                     return label_index
             else:
@@ -188,7 +188,7 @@ class ParserGenerator(object):
                 if token_index in gram.token_ids:
                     return gram.token_ids[token_index]
                 else:
-                    gram.labels.append((token_index, None))
+                    gram.labels.append(token_index)
                     gram.token_ids[token_index] = label_index
                     return label_index
 

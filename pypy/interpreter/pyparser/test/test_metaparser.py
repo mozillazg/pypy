@@ -71,21 +71,15 @@ class TestParserGenerator:
         g = self.gram_for("foo: 'some_keyword' 'for'")
         assert len(g.keyword_ids) == 2
         assert len(g.token_ids) == 0
-        for keyword in ("some_keyword", "for"):
-            label_index = g.keyword_ids[keyword]
-            assert g.labels[label_index][1] == keyword
 
     def test_token(self):
         g = self.gram_for("foo: NAME")
         assert len(g.token_ids) == 1
-        label_index = g.token_ids[token.NAME]
-        assert g.labels[label_index][1] is None
 
     def test_operator(self):
         g = self.gram_for("add: NUMBER '+' NUMBER")
         assert len(g.keyword_ids) == 0
         assert len(g.token_ids) == 2
-        assert g.labels[g.token_ids[token.OP]][1] is None
 
         exc = py.test.raises(PgenError, self.gram_for, "add: '/'").value
         assert str(exc) == "no such operator: '/'"
@@ -93,7 +87,7 @@ class TestParserGenerator:
     def test_symbol(self):
         g = self.gram_for("foo: some_other_rule\nsome_other_rule: NAME")
         assert len(g.dfas) == 2
-        assert len(g.labels) == 3
+        assert len(g.labels) == 2
 
         exc = py.test.raises(PgenError, self.gram_for, "foo: no_rule").value
         assert str(exc) == "no such rule: 'no_rule'"

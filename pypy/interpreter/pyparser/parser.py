@@ -85,7 +85,7 @@ class Parser(object):
             states, first = dfa
             arcs = states[state_index]
             for i, next_state in arcs:
-                t = self.grammar.labels[i][0]
+                sym_id = self.grammar.labels[i]
                 if label_index == i:
                     self.shift(next_state, token_type, value, lineno, column)
                     state_index = next_state
@@ -96,10 +96,11 @@ class Parser(object):
                         dfa, state_index, node = self.stack[-1]
                         states = dfa[0]
                     return False
-                elif t >= 256:
-                    sub_node_dfa = self.grammar.dfas[t]
+                elif sym_id >= 256:
+                    sub_node_dfa = self.grammar.dfas[sym_id]
                     if label_index in sub_node_dfa[1]:
-                        self.push(sub_node_dfa, next_state, t, lineno, column)
+                        self.push(sub_node_dfa, next_state, sym_id, lineno,
+                                  column)
                         break
             else:
                 if (0, state_index) in arcs:
