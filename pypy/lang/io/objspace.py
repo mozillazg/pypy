@@ -79,6 +79,7 @@ class ObjSpace(object):
         self.w_core.slots['List'] = self.w_list
         self.w_core.slots['Call'] = self.w_call
         self.w_core.slots['Map'] = self.w_map
+        self.w_core.slots['Number'] = self.w_number
 
     def init_w_number(self):
         self.w_number = instantiate(W_Number)
