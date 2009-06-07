@@ -38,5 +38,8 @@ class TokenError(SyntaxError):
         SyntaxError.__init__(self, msg, lineno, column, line)
         self.tokens = tokens
 
-class TokenIndentationError(TokenError):
-    pass
+class TokenIndentationError(IndentationError):
+
+    def __init__(self, msg, line, lineno, column, tokens):
+        SyntaxError.__init__(self, msg, lineno, column, line)
+        self.tokens = tokens
