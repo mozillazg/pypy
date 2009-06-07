@@ -1,6 +1,8 @@
 from pypy.lang.io.parserhack import interpret
 from pypy.lang.io.model import W_Number
+from math import isnan, isinf
 import py
+
 def test_even_simpler():
     x, _ = interpret("2")
     assert x.value == 2
@@ -133,16 +135,12 @@ def test_divide():
 def test_division_by_zero():
     inp = '3/0'
     res, _ = interpret(inp)
-    assert res.is_nan == False
-    assert res.is_inf == True
-    assert res.value == 0
+    assert isinf(res.value)
     
 def test_division_zero_by_zero():
     inp = '0/0'
     res, _ = interpret(inp)
-    assert res.is_nan == True
-    assert res.is_inf == False
-    assert res.value == 0
+    assert isnan(res.value)
     
 def test_multiply():
     inp = '6*7'
