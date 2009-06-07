@@ -47,13 +47,13 @@ def w_number_divide(space, dividend, divisor):
     try:
         value = dividend/float(divisor)
     except ZeroDivisionError, e:
-        value = 0
+        # XXX: TODO not sure if this is rpython
         if dividend == 0:
-            nan = True
+            value = float('nan')
         else:
-            inf = True
+            value = float('inf')
     finally:
-        return W_Number(space, value, nan=nan, inf=inf)
+        return W_Number(space, value)
     
 @register_method('Number', '*', unwrap_spec=[float, float])
 def w_number_multiply(space, a, b):
