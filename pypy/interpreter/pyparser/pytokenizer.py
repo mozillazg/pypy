@@ -83,7 +83,9 @@ def generate_tokens(textsrc, flags):
     endDFA = automata.DFA([], [])
     # make the annotator happy
     line = ''
-    for line in textsrc.splitlines(True):
+    lines = textsrc.splitlines(True)
+    lines.append('')
+    for line in lines:
         lnum = lnum + 1
         pos, max = 0, len(line)
 
@@ -94,7 +96,7 @@ def generate_tokens(textsrc, flags):
             endmatch = endDFA.recognize(line)
             if endmatch >= 0:
                 pos = end = endmatch
-                tok = (tokens.STRING, constr + line[:end], lnum, pos, line)
+                tok = (tokens.STRING, contstr + line[:end], lnum, pos, line)
                 token_list.append(tok)
                 last_comment = ''
                 # token_list.append((STRING, contstr + line[:end],
@@ -103,7 +105,7 @@ def generate_tokens(textsrc, flags):
                 contline = None
             elif (needcont and not line.endswith('\\\n') and
                                not line.endswith('\\\r\n')):
-                tok = (tokens.ERRORTOKEN, constr + line, lnum, pos, line)
+                tok = (tokens.ERRORTOKEN, contstr + line, lnum, pos, line)
                 token_list.append(tok)
                 last_comment = ''
                 # token_list.append((ERRORTOKEN, contstr + line,
