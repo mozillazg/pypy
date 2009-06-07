@@ -1,63 +1,35 @@
-import token # Temporary until we move to the new parser.
-from pypy.interpreter.pyparser import parser
+import os
+from pypy.interpreter.pyparser import parser, pytoken, metaparser
 
 class PythonGrammar(parser.Grammar):
 
-    KEYWORD_TOKEN = token.NAME
-    TOKENS = token.__dict__
+    KEYWORD_TOKEN = pytoken.python_tokens["NAME"]
+    TOKENS = pytoken.python_tokens
+    OPERATOR_MAP = pytoken.python_opmap
 
-opmap_raw = """
-( LPAR
-) RPAR
-[ LSQB
-] RSQB
-: COLON
-, COMMA
-; SEMI
-+ PLUS
-- MINUS
-* STAR
-/ SLASH
-| VBAR
-& AMPER
-< LESS
-> GREATER
-= EQUAL
-. DOT
-% PERCENT
-` BACKQUOTE
-{ LBRACE
-} RBRACE
-@ AT
-== EQEQUAL
-!= NOTEQUAL
-<> NOTEQUAL
-<= LESSEQUAL
->= GREATEREQUAL
-~ TILDE
-^ CIRCUMFLEX
-<< LEFTSHIFT
->> RIGHTSHIFT
-** DOUBLESTAR
-+= PLUSEQUAL
--= MINEQUAL
-*= STAREQUAL
-/= SLASHEQUAL
-%= PERCENTEQUAL
-&= AMPEREQUAL
-|= VBAREQUAL
-^= CIRCUMFLEXEQUAL
-<<= LEFTSHIFTEQUAL
->>= RIGHTSHIFTEQUAL
-**= DOUBLESTAREQUAL
-// DOUBLESLASH
-//= DOUBLESLASHEQUAL
-"""
+def _get_python_grammar():
+    here = os.path.dirname(__file__)
+    fp = open(os.path.join(here, "data", "Grammar2.5"))
+    try:
+        gram_source = fp.read()
+    finally:
+        fp.close()
+    pgen = metaparser.ParserGenerator(gram_source)
+    return pgen.build_grammar(PythonGrammar)
 
-opmap = {}
-for line in opmap_raw.splitlines():
-    if line:
-        op, name = line.split()
-        opmap[op] = getattr(token, name)
-PythonGrammar.OPERATOR_MAP = opmap
-del opmap, opmap_raw
+
+python_grammar = _get_python_grammar()
+
+class _Tokens(object):
+    pass
+for tok_name, idx in pytoken.python_tokens.iteritems():
+    setattr(_Tokens, tok_name, idx)
+tokens = _Tokens()
+
+class _Symbols(object):
+    pass
+for sym_name, idx in python_grammar.symbol_ids.iteritems():
+    setattr(_Symbols, sym_name, idx)
+syms = _Symbols()
+
+del _get_python_grammar, _Tokens, tok_name, sym_name, idx

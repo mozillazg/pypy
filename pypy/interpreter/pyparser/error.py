@@ -32,8 +32,11 @@ class ASTError(Exception):
         self.ast_node = ast_node
 
 
-class TokenError(Exception):
-    def __init__(self, msg, tokens):
-        self.msg = msg
+class TokenError(SyntaxError):
+
+    def __init__(self, msg, line, lineno, column, tokens):
+        SyntaxError.__init__(self, msg, lineno, column, line)
         self.tokens = tokens
-    
+
+class TokenIndentationError(TokenError):
+    pass

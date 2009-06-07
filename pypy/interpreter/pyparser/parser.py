@@ -54,12 +54,15 @@ class Node(object):
 
 class ParseError(Exception):
 
-    def __init__(self, msg, token_type, value, lineno, column):
-        Exception.__init__(self, msg)
+    def __init__(self, msg, token_type, value, lineno, column, line,
+                 expected=-1):
+        self.msg = msg
         self.token_type = token_type
         self.value = value
         self.lineno = lineno
         self.column = column
+        self.line = line
+        self.expected = expected
 
     def __str__(self):
         return "ParserError(%s, %r)" % (self.token_type, self.value)
@@ -69,6 +72,7 @@ class Parser(object):
 
     def __init__(self, grammar):
         self.grammar = grammar
+        self.root = None
 
     def prepare(self, start=-1):
         if start == -1:
@@ -78,8 +82,8 @@ class Parser(object):
         self.stack = []
         self.stack.append((self.grammar.dfas[start], 0, current_node))
 
-    def add_token(self, token_type, value, lineno, column):
-        label_index = self.classify(token_type, value, lineno, column)
+    def add_token(self, token_type, value, lineno, column, line):
+        label_index = self.classify(token_type, value, lineno, column, line)
         while True:
             dfa, state_index, node = self.stack[-1]
             states, first = dfa
@@ -107,19 +111,24 @@ class Parser(object):
                     self.pop()
                     if not self.stack:
                         raise ParseError("too much input", token_type, value,
-                                         lineno, column)
+                                         lineno, column, line)
                 else:
+                    if len(arcs) == 1:
+                        expected = sym_id
+                    else:
+                        expected = -1
                     raise ParseError("bad input", token_type, value, lineno,
-                                     column)
+                                     column, line, expected)
 
-    def classify(self, token_type, value, lineno, column):
+    def classify(self, token_type, value, lineno, column, line):
         if token_type == self.grammar.KEYWORD_TOKEN:
             label_index = self.grammar.keyword_ids.get(value, -1)
             if label_index != -1:
                 return label_index
         label_index = self.grammar.token_ids.get(token_type, -1)
         if label_index == -1:
-            raise ParseError("invalid token", token_type, value, lineno, column)
+            raise ParseError("invalid token", token_type, value, lineno, column,
+                             line)
         return label_index
 
     def shift(self, next_state, token_type, value, lineno, column):
