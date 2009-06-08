@@ -1,5 +1,5 @@
 import sys
-from pypy.lang.smalltalk.tool.bitmanipulation import splitter
+from pypy.rlib.bitmanipulation import splitter
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.objectmodel import we_are_translated
 
