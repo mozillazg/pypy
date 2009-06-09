@@ -67,6 +67,7 @@ class PythonParser(parser.Parser):
     def parse_source(self, textsrc, mode="exec", flags=0):
         """Parse a python source according to goal"""
         # Detect source encoding.
+        enc = None
         if textsrc[:3] == '\xEF\xBB\xBF':
             textsrc = textsrc[3:]
             enc = 'utf-8'
@@ -105,6 +106,10 @@ class PythonParser(parser.Parser):
                 msg = "invalid syntax"
             raise new_err(msg, e.lineno, e.column, e.line)
         else:
-            return self.root
+            tree = self.root
         finally:
             self.root = None
+        if enc is not None:
+            # Wrap the tree in an encoding_decl node for the AST builder.
+            tree = parser.Node(pygram.syms.encoding_decl, enc, [tree], 0, 0)
+        return tree

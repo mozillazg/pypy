@@ -14,6 +14,13 @@ class TestPythonParser:
         tree = self.parser.parse_source("name = 32")
         assert self.parser.root is None
 
+    def test_encoding(self):
+        tree = self.parser.parse_source("""# coding: latin-1
+stuff = "nothing"
+""")
+        assert tree.type == syms.encoding_decl
+        assert tree.value == "iso-8859-1"
+
     def test_syntax_error(self):
         parse = self.parser.parse_source
         exc = py.test.raises(SyntaxError, parse, "name another for").value
