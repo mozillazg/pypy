@@ -746,6 +746,36 @@ public class PyPy implements Constants {
         return str.substring(start, end);
     }
 
+    public static Object[] ll_splitlines(String str, boolean keep_newlines) {
+        ArrayList lines = new ArrayList();
+        int i = 0, j = 0;
+        int length = str.length();
+        while (i < length) {
+            int eol;
+            while (i < length && str.charAt(i) != '\n' && str.charAt(i) != '\r') {
+                i++;
+            }
+            eol = i;
+            if (i < length) {
+                if (str.charAt(i) == '\r' && i + 1 < length &&
+                    str.charAt(i + 1) == '\n') {
+                    i += 2;
+                } else {
+                    i++;
+                }
+                if (keep_newlines) {
+                    eol = i;
+                }
+            }
+            lines.add(str.substring(j, eol));
+            j = i;
+        }
+        if (j < length) {
+            lines.add(str.substring(j, length));
+        }
+        return lines.toArray(new String[lines.size()]);
+    }
+        
     public static Object[] ll_split_chr(String str, char c) {
         ArrayList list = new ArrayList();
         int lastidx = 0, idx = 0;
