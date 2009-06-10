@@ -207,6 +207,9 @@ class LLHelpers(AbstractLLHelpers):
     def ll_stringslice_minusone(s):
         return s.ll_substring(0, s.ll_strlen()-1)
 
+    def ll_splitlines(RESULT, s, keep_newlines):
+        return RESULT.ll_convert_from_array(s.ll_splitlines(keep_newlines))
+
     def ll_split_chr(RESULT, s, c):
         return RESULT.ll_convert_from_array(s.ll_split_chr(c))
 

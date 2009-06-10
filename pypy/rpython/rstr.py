@@ -213,6 +213,20 @@ class __extend__(AbstractStringRepr):
                 raise TyperError("sep.join() of non-string list: %r" % r_lst)
             return hop.gendirectcall(llfn, v_str, v_length, v_items)
 
+    def rtype_method_splitlines(self, hop):
+        rstr = hop.args_r[0].repr
+        if hop.nb_args == 2:
+            args = hop.inputargs(rstr.repr, Bool)
+        else:
+            args = [hop.inputarg(rstr.repr, 0), hop.inputconst(Bool, False)]
+        try:
+            list_type = hop.r_result.lowleveltype.TO
+        except AttributeError:
+            list_type = hop.r_result.lowleveltype
+        cLIST = hop.inputconst(Void, list_type)
+        hop.exception_cannot_occur()
+        return hop.gendirectcall(self.ll.ll_splitlines, cLIST, *args)
+
     def rtype_method_split(self, hop):
         rstr = hop.args_r[0].repr
         v_str, v_chr = hop.inputargs(rstr.repr, rstr.char_repr)
