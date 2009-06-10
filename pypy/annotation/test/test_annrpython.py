@@ -425,6 +425,14 @@ class TestAnnotateTestCase:
             s_meth = s_example.getattr(iv(methname))
             assert isinstance(s_constmeth, annmodel.SomeBuiltin)
 
+    def test_str_splitlines(self):
+        a = self.RPythonAnnotator()
+        def f(a_str):
+            return a_str.splitlines()
+        s = a.build_types(f, [str])
+        assert isinstance(s, annmodel.SomeList)
+        assert s.listdef.listitem.resized
+
     def test_simple_slicing(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.simple_slice, [list])
@@ -3068,7 +3076,6 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         a.translator.config.translation.list_comprehension_operations = True
         py.test.raises(TooLateForChange, a.build_types, fn, [int])
-            
 
     def test_listitem_never_resize(self):
         from pypy.rlib.debug import check_annotation
