@@ -123,7 +123,7 @@ class CPU386(object):
         setattr(self.assembler, '_%s_error_vtable' % prefix,
                 llmemory.cast_ptr_to_adr(ll_inst.typeptr))
         setattr(self.assembler, '_%s_error_inst' % prefix,
-                llmemory.cast_ptr_to_adr(ll_inst))
+                lltype.cast_opaque_ptr(llmemory.GCREF, ll_inst))
 
     def setup(self):
         self.assembler = Assembler386(self, self.translate_support_code)
@@ -193,30 +193,30 @@ class CPU386(object):
 
     def get_exception(self):
         self.assembler.make_sure_mc_exists()
-        return self.assembler._exception_bck[0]
+        return self.assembler._exception_bck.type
 
     def get_exc_value(self):
         self.assembler.make_sure_mc_exists()
-        return self.cast_int_to_gcref(self.assembler._exception_bck[1])
+        return self.assembler._exception_bck.value
 
     def clear_exception(self):
         self.assembler.make_sure_mc_exists()
-        self.assembler._exception_bck[0] = 0
-        self.assembler._exception_bck[1] = 0
+        self.assembler._exception_bck.type = 0
+        self.assembler._exception_bck.value = lltype.nullptr(llmemory.GCREF.TO)
 
     def set_overflow_error(self):
         self.assembler.make_sure_mc_exists()
         ovf_vtable = self.cast_adr_to_int(self.assembler._ovf_error_vtable)
-        ovf_inst = self.cast_adr_to_int(self.assembler._ovf_error_inst)
-        self.assembler._exception_bck[0] = ovf_vtable
-        self.assembler._exception_bck[1] = ovf_inst
+        ovf_inst = self.assembler._ovf_error_inst
+        self.assembler._exception_bck.type = ovf_vtable
+        self.assembler._exception_bck.value = ovf_inst
 
     def set_zero_division_error(self):
         self.assembler.make_sure_mc_exists()
         zer_vtable = self.cast_adr_to_int(self.assembler._zer_error_vtable)
-        zer_inst = self.cast_adr_to_int(self.assembler._zer_error_inst)
-        self.assembler._exception_bck[0] = zer_vtable
-        self.assembler._exception_bck[1] = zer_inst
+        zer_inst = self.assembler._zer_error_inst
+        self.assembler._exception_bck.type = zer_vtable
+        self.assembler._exception_bck.value = zer_inst
 
     def compile_operations(self, tree, bridge=None):
         old_loop = tree._x86_compiled
@@ -296,7 +296,7 @@ class CPU386(object):
         if not we_are_translated():
             self.keepalives.append(ptrvalue)
         else:
-            pass    # Boehm looks inside fail_boxes (XXX)
+            pass    # Boehm looks inside fail_boxes (XXXX)
         intvalue = self.cast_gcref_to_int(ptrvalue)
         self.assembler.fail_boxes[index] = intvalue
 
