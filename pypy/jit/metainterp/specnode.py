@@ -136,11 +136,12 @@ class SpecNodeWithFields(FixedClassSpecNode):
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         for ofs, subspecnode in self.fields:
-            from pypy.jit.metainterp.history import AbstractDescr
-            assert isinstance(ofs, AbstractDescr)
-            fieldbox = executor.execute(cpu, rop.GETFIELD_GC,
-                                        [valuebox], ofs)
-            subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
+            if subspecnode is not None:
+                from pypy.jit.metainterp.history import AbstractDescr
+                assert isinstance(ofs, AbstractDescr)
+                fieldbox = executor.execute(cpu, rop.GETFIELD_GC,
+                                            [valuebox], ofs)
+                subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
 
     def adapt_to(self, instnode, modif_list):
         for ofs, subspecnode in self.fields:
