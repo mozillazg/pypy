@@ -82,6 +82,10 @@ class MachineCodeStack(object):
         assert self.mcstack[self.counter - 1] is mc
         self.counter -= 1
 
+EXCEPTION = lltype.GcStruct('exception',
+                            ('type', lltype.Signed),
+                            ('value', llmemory.GCREF))
+
 class Assembler386(object):
     mc = None
     mc2 = None
@@ -99,6 +103,10 @@ class Assembler386(object):
         self._exception_addr = 0
         self.mcstack = MachineCodeStack()
         self.logger = x86Logger()
+        # pre-allocated, so non-movable:
+        self._exception_bck = lltype.malloc(EXCEPTION)
+        self._exception_bck.type = 0
+        self._exception_bck.value = lltype.nullptr(llmemory.GCREF.TO)
 
     def make_sure_mc_exists(self):
         if self.mc is None:
@@ -121,10 +129,10 @@ class Assembler386(object):
                 self._exception_data)
             # a backup, in case our exception can be somehow mangled,
             # by a handling code
-            self._exception_bck = lltype.malloc(rffi.CArray(lltype.Signed), 2,
-                                                zero=True, flavor='raw')
-            self._exception_bck_addr = self.cpu.cast_ptr_to_int(
-                self._exception_bck)
+            self._exception_bck_type_addr = rffi.cast(lltype.Signed,
+                lltype.direct_fieldptr(self._exception_bck, 'type'))
+            self._exception_bck_value_addr = rffi.cast(lltype.Signed,
+                lltype.direct_fieldptr(self._exception_bck, 'value'))
             self.mc = self.mcstack.next_mc()
             self.mc2 = self.mcstack.next_mc()
             # the address of the function called by 'new'
@@ -748,15 +756,15 @@ class Assembler386(object):
         ovf_error_vtable = self.cpu.cast_adr_to_int(self._ovf_error_vtable)
         self.mc.MOV(addr_add(imm(self._exception_addr), imm(0)),
                     imm(ovf_error_vtable))
-        ovf_error_instance = self.cpu.cast_adr_to_int(self._ovf_error_inst)
+        ovf_error_instance = self.cpu.cast_gcref_to_int(self._ovf_error_inst)
         self.mc.MOV(addr_add(imm(self._exception_addr), imm(WORD)),
                     imm(ovf_error_instance))
 
     def generate_exception_handling(self, loc):
         self.mc.MOV(loc, heap(self._exception_addr))
-        self.mc.MOV(heap(self._exception_bck_addr), loc)
+        self.mc.MOV(heap(self._exception_bck_type_addr), loc)
         self.mc.MOV(loc, addr_add(imm(self._exception_addr), imm(WORD)))
-        self.mc.MOV(addr_add(imm(self._exception_bck_addr), imm(WORD)), loc)
+        self.mc.MOV(heap(self._exception_bck_value_addr), loc)
         # clean up the original exception, we don't want
         # to enter more rpython code with exc set
         self.mc.MOV(heap(self._exception_addr), imm(0))
