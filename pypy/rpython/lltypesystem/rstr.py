@@ -674,35 +674,6 @@ class LLHelpers(AbstractLLHelpers):
         s1.copy_contents(s1, newstr, 0, 0, newlen)
         return newstr
 
-    def ll_splitlines(LIST, s, keep_newlines):
-        chars = s.chars
-        strlen = len(chars)
-        i = 0
-        j = 0
-        # The annotator makes sure this list is resizable.
-        res = LIST.ll_newlist(0)
-        while j < strlen:
-            while i < strlen and chars[i] != '\n' and chars[i] != '\r':
-                i += 1
-            eol = i
-            if i < strlen:
-                if chars[i] == '\r' and i + 1 < strlen and chars[i + 1] == '\n':
-                    i += 2
-                else:
-                    i += 1
-                if keep_newlines:
-                    eol = i
-            list_length = res.ll_length()
-            res._ll_resize_ge(list_length + 1)
-            item = res.ll_items()[list_length] = s.malloc(eol - j)
-            item.copy_contents(s, item, j, 0, eol - j)
-            j = i
-        if j < strlen:
-            list_length = res.ll_length()
-            res._ll_resize_ge(list_length + 1)
-            item = res.ll_items()[list_length] = s.malloc(strlen - j)
-            item.copy_contents(s, item, j, 0, strlen - j)
-        return res
 
     def ll_split_chr(LIST, s, c):
         chars = s.chars

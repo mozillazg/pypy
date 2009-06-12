@@ -368,7 +368,6 @@ class AbstractString(BuiltinADTType):
             "ll_lower": Meth([], self.SELFTYPE_T),
             "ll_substring": Meth([Signed, Signed], self.SELFTYPE_T), # ll_substring(start, count)
             "ll_split_chr": Meth([self.CHAR], Array(self.SELFTYPE_T)),
-            "ll_splitlines": Meth([Bool], Array(self.SELFTYPE_T)),
             "ll_contains": Meth([self.CHAR], Bool),
             "ll_replace_chr_chr": Meth([self.CHAR, self.CHAR], self.SELFTYPE_T),
             })
@@ -1289,12 +1288,6 @@ class _string(_builtin_type):
     def ll_substring(self, start, count):
         # NOT_RPYTHON
         return self.make_string(self._str[start:start+count])
-
-    def ll_splitlines(self, keep_newlines):
-        l = [self.make_string(s) for s in self._str.splitlines(keep_newlines)]
-        res = _array(Array(self._TYPE), len(l))
-        res._array[:] = l
-        return res
 
     def ll_split_chr(self, ch):
         # NOT_RPYTHON
