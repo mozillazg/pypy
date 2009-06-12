@@ -17,7 +17,7 @@ class Grammar(object):
         self.symbol_to_label = {}
         self.keyword_ids = {}
         self.dfas = {}
-        self.labels = []
+        self.labels = [0]
         self.token_ids = {}
 
     def _freeze_(self):

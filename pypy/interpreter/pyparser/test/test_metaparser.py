@@ -36,7 +36,8 @@ class TestParserGenerator:
         assert eval_sym in g.dfas
         assert g.start == eval_sym
         states, first = g.dfas[eval_sym]
-        assert states == [[(0, 1)], [(0, 1)]]
+        assert states == [[(1, 1)], [(0, 1)]]
+        assert g.labels[0] == 0
 
     def test_load_python_grammars(self):
         gram_pat = os.path.join(os.path.dirname(__file__), "..", "data",
@@ -87,7 +88,7 @@ class TestParserGenerator:
     def test_symbol(self):
         g = self.gram_for("foo: some_other_rule\nsome_other_rule: NAME")
         assert len(g.dfas) == 2
-        assert len(g.labels) == 2
+        assert len(g.labels) == 3
 
         exc = py.test.raises(PgenError, self.gram_for, "foo: no_rule").value
         assert str(exc) == "no such rule: 'no_rule'"
