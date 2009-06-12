@@ -1179,7 +1179,7 @@ class MetaInterp(object):
                         # clean up, but without shifting the end of the list
                         for i in range(start):
                             self.history.operations[i] = None
-                        compile.prepare_loop_from_bridge(self, self.resumekey)
+                        #compile.prepare_loop_from_bridge(self, self.resumekey)
                 loop = self.compile(original_boxes, live_arg_boxes, start)
                 raise GenerateMergePoint(live_arg_boxes, loop)
 
