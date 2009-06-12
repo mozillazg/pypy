@@ -223,7 +223,7 @@ def generate_tokens(textsrc, flags):
                         punct = python_opmap[token]
                         token = ""
                     else:
-                        punct = parser.tokens['OP']
+                        punct = tokens.OP
                     token_list.append((punct, token, lnum, pos, line))
                     last_comment = ''
             else:
