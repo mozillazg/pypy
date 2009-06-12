@@ -26,7 +26,7 @@ stuff = "nothing"
         exc = py.test.raises(SyntaxError, parse, "name another for").value
         assert exc.msg == "invalid syntax"
         assert exc.lineno == 1
-        assert exc.offset == 16
+        assert exc.offset == 12
         assert exc.text == "name another for"
         exc = py.test.raises(SyntaxError, parse, "\"blah").value
         assert exc.msg == "EOL while scanning single-quoted string"
@@ -34,6 +34,10 @@ stuff = "nothing"
         assert exc.msg == "EOF while scanning triple-quoted string"
         for input in ("())", "(()", "((", "))"):
             py.test.raises(SyntaxError, parse, input)
+
+    def test_is(self):
+        self.parser.parse_source("x is y")
+        self.parser.parse_source("x is not y")
 
     def test_indentation_error(self):
         parse = self.parser.parse_source
