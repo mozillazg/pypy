@@ -572,7 +572,7 @@ class HybridGC(GenerationGC):
                 result = obj
         else:
             result = self._compute_id(obj)     # common case
-        return llmemory.cast_adr_to_int(result)
+        return llmemory.cast_adr_to_int(result) * 2 # see comment in base.py
         # XXX a possible optimization would be to use three dicts, one
         # for each generation, instead of mixing gen2 and gen3 objects.
 

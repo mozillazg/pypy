@@ -521,7 +521,7 @@ class GCTest(object):
             pass
 
         u = Unrelated()
-        u.x = UnboxedObject(47)
+        u.x = UnboxedObject(0)
         def fn(n):
             id_prebuilt1 = compute_unique_id(u.x)
             if n > 0:
