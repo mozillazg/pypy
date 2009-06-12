@@ -243,8 +243,6 @@ class MovingGCBase(GCBase):
         GCBase.setup(self)
         self.objects_with_id = self.AddressDict()
         self.id_free_list = self.AddressStack()
-        # XXX XXX XXX think of something sane:
-        # how do we prevent clashing with tagged pointers?
         self.next_free_id = 1
 
     def can_move(self, addr):
@@ -255,15 +253,16 @@ class MovingGCBase(GCBase):
         # never move.  Overriden in the HybridGC.
         obj = llmemory.cast_ptr_to_adr(ptr)
 
-        # is it a tagged pointer?
-        if not self.is_valid_gc_object(obj):
-            return llmemory.cast_adr_to_int(obj) // 2
+        # is it a tagged pointer? or an external object?
+        if not self.is_valid_gc_object(obj) or self._is_external(obj):
+            return llmemory.cast_adr_to_int(obj)
 
-        if self._is_external(obj):
-            result = obj
-        else:
-            result = self._compute_id(obj)
-        return llmemory.cast_adr_to_int(result)
+        # tagged pointers have ids of the form 2n + 1
+        # external objects have ids of the form 4n (due to word alignment)
+        # self._compute_id returns addresses of the form 2n + 1
+        # if we multiply by 2, we get ids of the form 4n + 2, thus we get no
+        # clashes
+        return llmemory.cast_adr_to_int(self._compute_id(obj)) * 2
 
     def _next_id(self):
         # return an id not currently in use (as an address instead of an int)
