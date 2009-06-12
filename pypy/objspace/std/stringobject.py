@@ -702,30 +702,26 @@ def str_expandtabs__String_ANY(space, w_self, w_tabsize):
  
 def str_splitlines__String_ANY(space, w_self, w_keepends):
     u_keepends  = space.int_w(w_keepends)  # truth value, but type checked
-    if space.config.objspace.std.withstrslice:
-        data = w_self._value
-        selflen = len(data)
-        strs_w = []
-        i = j = 0
-        while i < selflen:
-            # Find a line and append it
-            while i < selflen and data[i] != '\n' and data[i] != '\r':
-                i += 1
-            # Skip the line break reading CRLF as one line break
-            eol = i
+    data = w_self._value
+    selflen = len(data)
+    strs_w = []
+    i = j = 0
+    while i < selflen:
+        # Find a line and append it
+        while i < selflen and data[i] != '\n' and data[i] != '\r':
             i += 1
-            if i < selflen and data[i-1] == '\r' and data[i] == '\n':
-                i += 1
-            if u_keepends:
-                eol = i
-            strs_w.append(sliced(space, data, j, eol, w_self))
-            j = i
+        # Skip the line break reading CRLF as one line break
+        eol = i
+        i += 1
+        if i < selflen and data[i-1] == '\r' and data[i] == '\n':
+            i += 1
+        if u_keepends:
+            eol = i
+        strs_w.append(sliced(space, data, j, eol, w_self))
+        j = i
 
-        if j < selflen:
-            strs_w.append(sliced(space, data, j, len(data), w_self))
-    else:
-        strs_w = [space.wrap(w_line) for w_line in
-                  w_self._value.splitlines(u_keepends)]
+    if j < selflen:
+        strs_w.append(sliced(space, data, j, len(data), w_self))
     return space.newlist(strs_w)
 
 def str_zfill__String_ANY(space, w_self, w_width):
