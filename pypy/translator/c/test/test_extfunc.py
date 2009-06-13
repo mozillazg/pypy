@@ -836,3 +836,11 @@ if hasattr(os, 'uname'):
         for i in range(5):
             res = func(i)
             assert res == os.uname()[i]
+
+
+if hasattr(os, 'setpgrp'):
+    def test_setpgrp():
+        def f():
+            os.setpgrp()
+        func = compile(f, [])
+        # assert did not crash while compiling
