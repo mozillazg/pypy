@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import random
 import string
 import py
@@ -1009,6 +1010,13 @@ class TestAstBuilder:
         s = self.get_first_expr("'hi' ' implicitly' ' extra'")
         assert isinstance(s, ast.Str)
         assert space.eq_w(s.s, space.wrap("hi implicitly extra"))
+        sentence = u"Die Männer ärgen sich!"
+        source = u"# coding: utf-7\nstuff = u'%s'" % (sentence,)
+        tree = self.parser.parse_source(source.encode("utf-7"))
+        assert tree.value == "utf-7"
+        s = ast_from_node(space, tree).body[0].value
+        assert isinstance(s, ast.Str)
+        assert space.eq_w(s.s, space.wrap(sentence))
 
     def test_number(self):
         def get_num(s):
