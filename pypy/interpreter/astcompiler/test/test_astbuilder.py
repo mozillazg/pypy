@@ -2,7 +2,7 @@ import random
 import string
 import py
 from pypy.interpreter.baseobjspace import W_Root
-from pypy.interpreter.pyparser import pyparse, pygram
+from pypy.interpreter.pyparser import pyparse
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.astcompiler.astbuilder import ast_from_node
 from pypy.interpreter.astcompiler import ast2 as ast
@@ -11,7 +11,7 @@ from pypy.interpreter.astcompiler import ast2 as ast
 class TestAstBuilder:
 
     def setup_class(cls):
-        cls.parser = pyparse.PythonParser(pygram.python_grammar)
+        cls.parser = pyparse.PythonParser(cls.space)
 
     def get_ast(self, source, p_mode="exec"):
         tree = self.parser.parse_source(source, p_mode)

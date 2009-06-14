@@ -1,5 +1,5 @@
 import py
-from pypy.interpreter.pyparser import pyparse, pygram
+from pypy.interpreter.pyparser import pyparse
 from pypy.interpreter.pyparser.pygram import syms, tokens
 from pypy.interpreter.pyparser.error import SyntaxError, IndentationError
 
@@ -7,7 +7,7 @@ from pypy.interpreter.pyparser.error import SyntaxError, IndentationError
 class TestPythonParser:
 
     def setup_class(self):
-        self.parser = pyparse.PythonParser(pygram.python_grammar)
+        self.parser = pyparse.PythonParser(self.space)
 
     def test_clear_state(self):
         assert self.parser.root is None
