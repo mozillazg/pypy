@@ -524,6 +524,9 @@ class TestAstBuilder:
         assert args.defaults[0].ctx is ast.Load
         assert args.vararg == "e"
         assert args.kwarg == "f"
+        input = "def f(a=b, c): pass"
+        exc = py.test.raises(SyntaxError, self.get_ast, input).value
+        assert exc.msg == "non-default argument after default one"
 
     def test_decorator(self):
         func = self.get_first_stmt("@dec\ndef f(): pass")
