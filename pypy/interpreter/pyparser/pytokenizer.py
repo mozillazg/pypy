@@ -221,7 +221,6 @@ def generate_tokens(textsrc, flags):
                                              lnum-1, 0, token_list)
                     if token in python_opmap:
                         punct = python_opmap[token]
-                        token = ""
                     else:
                         punct = tokens.OP
                     token_list.append((punct, token, lnum, pos, line))
