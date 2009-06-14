@@ -94,3 +94,13 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
 
     def test_callback_with_collect(self):
         py.test.skip("in-progress")
+
+
+class TestAsmGCRootWithMarkSweep(AbstractTestAsmGCRoot,
+                                 test_newgc.TestUsingFramework):
+    pass
+    # for the individual tests see
+    # ====> ../../test/test_newgc.py
+
+    def test_callback_with_collect(self):
+        py.test.skip("in-progress")
