@@ -50,14 +50,14 @@ def generate_tokens(textsrc, flags):
     the original function is not RPYTHON (uses yield)
     It was also slightly modified to generate Token instances instead
     of the original 5-tuples -- it's now a 4-tuple of
-    
+
     * the Token instance
     * the whole line as a string
     * the line number (the real one, counting continuation lines)
     * the position on the line of the end of the token.
 
     Original docstring ::
-    
+
         The generate_tokens() generator requires one argment, readline, which
         must be a callable object which provides the same interface as the
         readline() method of built-in file objects. Each call to the function
@@ -89,7 +89,7 @@ def generate_tokens(textsrc, flags):
         lnum = lnum + 1
         pos, max = 0, len(line)
 
-        if contstr:                            # continued string
+        if contstr:
             if not line:
                 raise TokenError("EOF while scanning triple-quoted string",
                                  line, lnum-1, 0, token_list)
@@ -99,8 +99,6 @@ def generate_tokens(textsrc, flags):
                 tok = (tokens.STRING, contstr + line[:end], lnum, pos, line)
                 token_list.append(tok)
                 last_comment = ''
-                # token_list.append((STRING, contstr + line[:end],
-                #                    strstart, (lnum, end), contline + line))
                 contstr, needcont = '', 0
                 contline = None
             elif (needcont and not line.endswith('\\\n') and
@@ -108,8 +106,6 @@ def generate_tokens(textsrc, flags):
                 tok = (tokens.ERRORTOKEN, contstr + line, lnum, pos, line)
                 token_list.append(tok)
                 last_comment = ''
-                # token_list.append((ERRORTOKEN, contstr + line,
-                #                    strstart, (lnum, len(line)), contline))
                 contstr = ''
                 contline = None
                 continue
@@ -142,8 +138,8 @@ def generate_tokens(textsrc, flags):
                 token_list.append((tokens.DEDENT, '', lnum, pos, line))
                 last_comment = ''
             if column != indents[-1]:
-                raise TokenIndentationError("unindent does not match any outer indentation level",
-                                 line, lnum, 0, token_list)
+                err = "unindent does not match any outer indentation level"
+                raise TokenIndentationError(err, line, lnum, 0, token_list)
 
         else:                                  # continued statement
             if not line:
@@ -210,7 +206,6 @@ def generate_tokens(textsrc, flags):
                     last_comment = ''
                 elif initial == '\\':                      # continued stmt
                     continued = 1
-                    # lnum -= 1  disabled: count continuation lines separately
                 else:
                     if initial in '([{':
                         parenlev = parenlev + 1
@@ -244,12 +239,8 @@ def generate_tokens(textsrc, flags):
             token_list.append(tok)
         for indent in indents[1:]:                # pop remaining indent levels
             token_list.append((tokens.DEDENT, '', lnum, pos, line))
-    #if token_list and token_list[-1][0].codename != pytoken.NEWLINE:
     tok = (tokens.NEWLINE, '', lnum, 0, '\n')
     token_list.append(tok)
 
     token_list.append((tokens.ENDMARKER, '', lnum, pos, line))
-    #for t in token_list:
-    #    print '%20s  %-25s %d' % (pytoken.tok_name.get(t[0].codename, '?'), t[0], t[-2])
-    #print '----------------------------------------- pyparser/pythonlexer.py'
     return token_list
