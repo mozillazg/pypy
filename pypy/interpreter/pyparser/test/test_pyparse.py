@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import py
 from pypy.interpreter.pyparser import pyparse
 from pypy.interpreter.pyparser.pygram import syms, tokens
@@ -20,6 +21,13 @@ stuff = "nothing"
 """)
         assert tree.type == syms.encoding_decl
         assert tree.value == "iso-8859-1"
+        sentence = u"u'Die Männer ärgen sich!'"
+        input = (u"# coding: utf-7\nstuff = %s" % (sentence,)).encode("utf-7")
+        tree = self.parser.parse_source(input)
+        assert tree.value == "utf-7"
+        input = "# coding: not-here"
+        exc = py.test.raises(SyntaxError, self.parser.parse_source, input).value
+        assert exc.msg == "Unknown encoding: not-here"
 
     def test_syntax_error(self):
         parse = self.parser.parse_source

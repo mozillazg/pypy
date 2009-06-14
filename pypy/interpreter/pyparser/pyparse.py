@@ -1,6 +1,6 @@
 import codeop
 from pypy.interpreter import gateway
-from pypy.interpreter.pyparser.error import SyntaxError, IndentationError
+from pypy.interpreter.error import OperationError
 from pypy.interpreter.pyparser import parser, pytokenizer, pygram, error
 
 
@@ -90,7 +90,7 @@ class PythonParser(parser.Parser):
                     # KeyError
                     space = self.space
                     if space.is_w(e.w_type, space.w_LookupError):
-                        raise SyntaxError("Unknown encoding: %s" % enc)
+                        raise error.SyntaxError("Unknown encoding: %s" % enc)
                     raise
 
         self.prepare(_targets[mode])
