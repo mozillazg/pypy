@@ -31,7 +31,8 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
             v_adr = gen_cast(hop.llops, llmemory.Address, var)
             v_newaddr = hop.genop("direct_call", [c_asm_gcroot, v_adr],
                                   resulttype=llmemory.Address)
-            hop.genop("gc_reload_possibly_moved", [v_newaddr, var])
+            if self.gcdata.gc.moving_gc:
+                hop.genop("gc_reload_possibly_moved", [v_newaddr, var])
 
     def build_root_walker(self):
         return AsmStackRootWalker(self)
