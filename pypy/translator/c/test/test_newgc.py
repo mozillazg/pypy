@@ -655,19 +655,6 @@ class TestUsingFramework(AbstractGCTestClass):
         res = fn()
         assert res == 123
 
-    def test_framework_malloc_gc(self):
-        py.test.skip('in-progress')
-        A = lltype.GcStruct('A', ('value', lltype.Signed))
-
-        def f():
-            p = lltype.malloc(A, flavor='gc')
-            p.value = 123
-            llop.gc__collect(lltype.Void)
-            return p.value
-        fn = self.getcompiled(f)
-        res = fn()
-        assert res == 123
-
     def test_framework_del_seeing_new_types(self):
         class B(object):
             pass
