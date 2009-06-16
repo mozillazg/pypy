@@ -843,7 +843,7 @@ class BaseRootWalker:
             end = gcdata.static_root_nongcend
             while addr != end:
                 result = addr.address[0]
-                if self.gc.points_to_valid_gc_object(result):
+                if gc.points_to_valid_gc_object(result):
                     collect_static_in_prebuilt_nongc(gc, result)
                 addr += sizeofaddr
         if collect_static_in_prebuilt_gc:
@@ -851,7 +851,7 @@ class BaseRootWalker:
             end = gcdata.static_root_end
             while addr != end:
                 result = addr.address[0]
-                if self.gc.points_to_valid_gc_object(result):
+                if gc.points_to_valid_gc_object(result):
                     collect_static_in_prebuilt_gc(gc, result)
                 addr += sizeofaddr
         if collect_stack_root:
@@ -909,7 +909,7 @@ class ShadowStackRootWalker(BaseRootWalker):
         addr = gcdata.root_stack_base
         end = gcdata.root_stack_top
         while addr != end:
-            if self.gc.points_to_valid_gc_object(addr):
+            if gc.points_to_valid_gc_object(addr):
                 collect_stack_root(gc, addr)
             addr += sizeofaddr
         if self.collect_stacks_from_other_threads is not None:
@@ -1018,7 +1018,7 @@ class ShadowStackRootWalker(BaseRootWalker):
                 end = stacktop - sizeofaddr
                 addr = end.address[0]
                 while addr != end:
-                    if addr.address[0] != llmemory.NULL:
+                    if gc.points_to_valid_gc_object(addr):
                         callback(gc, addr)
                     addr += sizeofaddr
 
