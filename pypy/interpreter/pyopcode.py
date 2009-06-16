@@ -1,7 +1,7 @@
 """
 Implementation of a part of the standard Python opcodes.
-The rest, dealing with variables in optimized ways, is in
-pyfastscope.py and pynestedscope.py.
+
+The rest, dealing with variables in optimized ways, is in nestedscope.py.
 """
 
 import sys
