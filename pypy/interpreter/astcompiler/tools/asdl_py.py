@@ -95,6 +95,10 @@ class ASTVisitorVisitor(ASDLVisitor):
     def visitModule(self, mod):
         self.emit("class ASTVisitor(object):")
         self.emit("")
+        self.emit("def visit_sequence(self, seq):", 1)
+        self.emit("for node in seq:", 2)
+        self.emit("node.walkabout(self)", 3)
+        self.emit("")
         super(ASTVisitorVisitor, self).visitModule(mod)
 
     def visitConstructor(self, cons):
