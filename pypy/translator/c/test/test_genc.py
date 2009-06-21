@@ -393,3 +393,16 @@ def test_x():
 
     fn = compile(f, [])
     fn()
+
+def test_name():
+    def f():
+        return 3
+
+    f.c_name = 'pypy_xyz_f'
+
+    t = Translation(f, [], backend="c")
+    t.annotate()
+    compiled_fn = t.compile_c()
+    if conftest.option.view:
+        t.view()
+    assert 'pypy_xyz_f' in t.driver.cbuilder.c_source_filename.read()

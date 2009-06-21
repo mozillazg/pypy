@@ -691,7 +691,11 @@ class FuncNode(ContainerNode):
         self.db = db
         self.T = T
         self.obj = obj
-        if getattr(obj, 'external', None) == 'C' and not db.need_sandboxing(obj):
+        callable = getattr(obj, '_callable', None)
+        if (callable is not None and
+            getattr(callable, 'c_name', None) is not None):
+            self.name = forcename or obj._callable.c_name
+        elif getattr(obj, 'external', None) == 'C' and not db.need_sandboxing(obj):
             self.name = forcename or self.basename()
         else:
             self.name = (forcename or
