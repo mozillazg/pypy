@@ -159,7 +159,11 @@ class GenericASTVisitorVisitor(ASDLVisitor):
                 level = 3
             else:
                 level = 2
-            self.emit("node.%s.walkabout(self)" % (field.name,), level)
+            if field.seq:
+                template = "self.visit_sequence(node.%s)"
+            else:
+                template = "node.%s.walkabout(self)"
+            self.emit(template % (field.name,), level)
             return True
         return False
 
