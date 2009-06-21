@@ -136,13 +136,20 @@ class GenericASTVisitorVisitor(ASDLVisitor):
         self.emit("")
 
     def visitType(self, tp, simple):
-        if isinstance(tp.value, asdl.Sum) and not self.is_simple_sum(tp.value):
-            super(GenericASTVisitorVisitor, self).visitType(tp, simple)
+        if not (isinstance(tp.value, asdl.Sum) and
+                self.is_simple_sum(tp.value)):
+            super(GenericASTVisitorVisitor, self).visitType(tp, tp.name, simple)
 
-    def visitConstructor(self, cons, simple):
-        self.emit("def visit_%s(self, node):" % (cons.name,), 1)
+    def visitProduct(self, prod, name, simple):
+        self.make_visitor(name, prod.fields, simple)
+
+    def visitConstructor(self, cons, _, simple):
+        self.make_visitor(cons.name, cons.fields, simple)
+
+    def make_visitor(self, name, fields, simple):
+        self.emit("def visit_%s(self, node):" % (name,), 1)
         have_body = False
-        for field in cons.fields:
+        for field in fields:
             if self.visitField(field, simple):
                 have_body = True
         if not have_body:
