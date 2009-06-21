@@ -6,8 +6,6 @@ import sys
 import os
 import asdl
 
-ASDL_TYPES = set("identifier int string object bool".split())
-
 
 class ASDLVisitor(asdl.VisitorBase):
 
