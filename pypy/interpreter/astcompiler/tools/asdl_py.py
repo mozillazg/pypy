@@ -152,7 +152,8 @@ class GenericASTVisitorVisitor(ASDLVisitor):
         self.emit("")
 
     def visitField(self, field, simple):
-        if field.type.value not in asdl.builtin_types and field.type.value not in simple:
+        if field.type.value not in asdl.builtin_types and \
+                field.type.value not in simple:
             if field.seq or field.opt:
                 self.emit("if node.%s:" % (field.name,), 2)
                 level = 3
