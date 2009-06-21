@@ -112,7 +112,9 @@ class ASTVisitorVisitor(ASDLVisitor):
         self.emit("")
 
     def visitType(self, tp):
-        super(ASTVisitorVisitor, self).visitType(tp, tp.name)
+        if not (isinstance(tp.value, asdl.Sum) and
+                self.is_simple_sum(tp.value)):
+            super(ASTVisitorVisitor, self).visitType(tp, tp.name)
 
     def visitProduct(self, prod, name):
         self.emit("def visit_%s(self, node):" % (name,), 1)
