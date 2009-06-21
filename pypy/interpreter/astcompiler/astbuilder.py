@@ -592,7 +592,7 @@ class ASTBuilder(object):
                         name_node = argument.children[0]
                         arg_name = name_node.value
                         self.check_forbidden_name(arg_name, name_node)
-                        name = ast.Name(arg_name, ast.Store, name_node.lineno,
+                        name = ast.Name(arg_name, ast.Param, name_node.lineno,
                                         name_node.column)
                         args.append(name)
                     i += 2
