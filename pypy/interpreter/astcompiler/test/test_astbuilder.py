@@ -459,10 +459,10 @@ class TestAstBuilder:
         a1, a2 = args.args
         assert isinstance(a1, ast.Name)
         assert a1.id == "a"
-        assert a1.ctx is ast.Store
+        assert a1.ctx is ast.Param
         assert isinstance(a2, ast.Name)
         assert a2.id == "b"
-        assert a2.ctx is ast.Store
+        assert a2.ctx is ast.Param
         assert args.vararg is None
         assert args.kwarg is None
         args = self.get_first_stmt("def f(a=b): pass").args
@@ -470,7 +470,7 @@ class TestAstBuilder:
         arg = args.args[0]
         assert isinstance(arg, ast.Name)
         assert arg.id == "a"
-        assert arg.ctx is ast.Store
+        assert arg.ctx is ast.Param
         assert len(args.defaults) == 1
         default = args.defaults[0]
         assert isinstance(default, ast.Name)
@@ -519,7 +519,7 @@ class TestAstBuilder:
         assert len(args.args) == 3
         for arg in args.args:
             assert isinstance(arg, ast.Name)
-            assert arg.ctx is ast.Store
+            assert arg.ctx is ast.Param
         assert len(args.defaults) == 1
         assert isinstance(args.defaults[0], ast.Name)
         assert args.defaults[0].ctx is ast.Load
