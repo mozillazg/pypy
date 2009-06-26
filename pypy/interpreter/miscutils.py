@@ -10,7 +10,7 @@ class RootStack:
     pass
 
 class PseudoStack(RootStack):
-    _annspecialcase_ = 'speclize:ctr_location'
+    _annspecialcase_ = 'specialize:ctr_location'
 
     def __init__(self):
         self._top = None
