@@ -9,8 +9,7 @@ from pypy.rlib.rarithmetic import r_uint
 class RootStack:
     pass
 
-class PseudoStack(RootStack):
-    _annspecialcase_ = 'specialize:ctr_location'
+class PseudoFrameStack(RootStack):
 
     def __init__(self):
         self._top = None
@@ -24,6 +23,7 @@ class PseudoStack(RootStack):
         return next
 
     def push(self, next):
+        assert next.f_back is self._top
         self._top = next
         self._depth += 1
 
