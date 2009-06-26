@@ -12,5 +12,3 @@ def while_loop():
     while i < 10000000:
         i = i + 1
     return None
-
-while_loop()

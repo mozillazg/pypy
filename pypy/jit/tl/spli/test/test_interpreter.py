@@ -91,23 +91,3 @@ res = f()""", "<string>", "exec")
                 assert "".join(buf) == res + '\n'
         finally:
             os.write = save
-
-    def test_binary_op(self):
-        def f(a, b):
-            return a & b - a
-
-        v = self.eval(f, [1, 2])
-        assert v.value == f(1, 2)
-
-    def test_while_2(self):
-        def f(a, b):
-            total = 0
-            i = 0
-            while i < 100:
-                if i & 1:
-                    total = total + a
-                else:
-                    total = total + b
-                i = i + 1
-            return total
-        assert self.eval(f, [1, 10]).value == f(1, 10)
