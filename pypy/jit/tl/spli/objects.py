@@ -36,12 +36,6 @@ class SPLIObject(object):
     def add(self, other):
         raise W_TypeError
 
-    def sub(self, other):
-        raise W_TypeError    
-
-    def and_(self, other):
-        raise W_TypeError    
-
     def call(self, args):
         raise W_TypeError
 
@@ -105,20 +99,11 @@ class Int(SPLIObject):
     def add(self, other):
         return Int(self.value + other.as_int())
 
-    def sub(self, other):
-        return Int(self.value - other.as_int())
-
-    def and_(self, other):
-        return Int(self.value & other.as_int())
-
     def cmp_lt(self, other):
         return Bool(self.value < other.as_int())
 
     def as_int(self):
         return self.value
-
-    def is_true(self):
-        return bool(self.value)
 
     def repr(self):
         return Str(str(self.value))
