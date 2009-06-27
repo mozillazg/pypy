@@ -1046,6 +1046,7 @@ class TestAstBuilder:
         assert comp.ifs is None
         assert isinstance(comp.target, ast.Name)
         assert isinstance(comp.iter, ast.Name)
+        assert comp.target.ctx is ast.Store
         gen = self.get_first_expr(brack("x for x in y if w"))
         comp = gen.generators[0]
         assert len(comp.ifs) == 1
@@ -1055,6 +1056,7 @@ class TestAstBuilder:
         tup = gen.generators[0].target
         assert isinstance(tup, ast.Tuple)
         assert len(tup.elts) == 1
+        assert tup.ctx is ast.Store
         gen = self.get_first_expr(brack("a for w in x for m in p if g"))
         gens = gen.generators
         assert len(gens) == 2
