@@ -135,6 +135,12 @@ class W_TypeObject(W_Object):
                     return w_value
         return w_value
 
+    def setdictvalue_w(w_self, attr, w_value):
+        w_self.dict_w[attr] = w_value
+
+    def deldictvalue_w(w_self, attr):
+        del w_self.dict_w[attr]
+
     def lookup(w_self, name):
         # note that this doesn't call __get__ on the result at all
         space = w_self.space
@@ -268,16 +274,16 @@ class W_TypeObject(W_Object):
 
     def get_module(w_self):
         space = w_self.space
-        if w_self.is_heaptype() and '__module__' in w_self.dict_w:
-            return w_self.dict_w['__module__']
+        module = w_self.getdictvalue_w(space, '__module__')
+        if w_self.is_heaptype() and module is not None:
+            return module
         else:
             # for non-heap types, CPython checks for a module.name in the
             # type name.  That's a hack, so we're allowed to use a different
             # hack...
-            if ('__module__' in w_self.dict_w and
-                space.is_true(space.isinstance(w_self.dict_w['__module__'],
-                                               space.w_str))):
-                return w_self.dict_w['__module__']
+            if (module is not None and
+                space.is_true(space.isinstance(module, space.w_str))):
+                return module
             return space.wrap('__builtin__')
 
     def add_subclass(w_self, w_subclass):
@@ -420,14 +426,13 @@ def copy_flags_from_bases(w_self, w_bestbase):
 
 def create_all_slots(w_self, hasoldstylebase):
     space = w_self.space
-    dict_w = w_self.dict_w
-    if '__slots__' not in dict_w:
+    w_slots = w_self.getdictvalue_w(space, '__slots__')
+    if w_slots is None:
         wantdict = True
         wantweakref = True
     else:
         wantdict = False
         wantweakref = False
-        w_slots = dict_w['__slots__']
         if space.is_true(space.isinstance(w_slots, space.w_str)):
             slot_names_w = [w_slots]
         else:
@@ -451,7 +456,8 @@ def create_all_slots(w_self, hasoldstylebase):
     wantdict = wantdict or hasoldstylebase
     if wantdict: create_dict_slot(w_self)
     if wantweakref: create_weakref_slot(w_self)
-    if '__del__' in dict_w: w_self.needsdel = True
+    if w_self.getdictvalue_w(space, '__del__') is not None:
+        w_self.needsdel = True
 
 def create_slot(w_self, slot_name):
     space = w_self.space
@@ -463,17 +469,17 @@ def create_slot(w_self, slot_name):
     # Force interning of slot names.
     slot_name = space.str_w(space.new_interned_str(slot_name))
     member = Member(w_self.nslots, slot_name, w_self)
-    w_self.dict_w[slot_name] = space.wrap(member)
+    w_self.setdictvalue_w(slot_name, space.wrap(member))
     w_self.nslots += 1
 
 def create_dict_slot(w_self):
     if not w_self.hasdict:
-        w_self.dict_w['__dict__'] = w_self.space.wrap(std_dict_descr)
+        w_self.setdictvalue_w('__dict__', w_self.space.wrap(std_dict_descr))
         w_self.hasdict = True
 
 def create_weakref_slot(w_self):
     if not w_self.weakrefable:
-        w_self.dict_w['__weakref__'] = w_self.space.wrap(weakref_descr)
+        w_self.setdictvalue_w('__weakref__', w_self.space.wrap(weakref_descr))
         w_self.weakrefable = True
 
 def valid_slot_name(slot_name):
@@ -513,18 +519,20 @@ def ensure_common_attributes(w_self):
 def ensure_static_new(w_self):
     # special-case __new__, as in CPython:
     # if it is a Function, turn it into a static method
-    if '__new__' in w_self.dict_w:
-        w_new = w_self.dict_w['__new__']
+    w_new = w_self.getdictvalue_w(w_self.space, '__new__')
+    if w_new is not None:
         if isinstance(w_new, Function):
-            w_self.dict_w['__new__'] = StaticMethod(w_new)
+            w_self.setdictvalue_w('__new__', StaticMethod(w_new))
 
 def ensure_doc_attr(w_self):
-    # make sure there is a __doc__ in dict_w
-    w_self.dict_w.setdefault('__doc__', w_self.space.w_None)
+    # make sure there is a __doc__ attribute
+    if w_self.getdictvalue_w(w_self.space, '__doc__') is None:
+        w_self.setdictvalue_w('__doc__', w_self.space.w_None)
 
 def ensure_module_attr(w_self):
     # initialize __module__ in the dict (user-defined types only)
-    if '__module__' not in w_self.dict_w:
+    w_module = w_self.getdictvalue_w(w_self.space, '__module__')
+    if w_module is None:
         space = w_self.space
         try:
             caller = space.getexecutioncontext().framestack.top()
@@ -534,7 +542,7 @@ def ensure_module_attr(w_self):
             w_globals = caller.w_globals
             w_name = space.finditem(w_globals, space.wrap('__name__'))
             if w_name is not None:
-                w_self.dict_w['__module__'] = w_name
+                w_self.setdictvalue_w('__module__', w_name)
 
 def compute_mro(w_self):
     if w_self.is_heaptype():
@@ -633,10 +641,12 @@ def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
             and not w_type.is_heaptype()):
         msg = "can't set attributes on type object '%s'" %(w_type.name,)
         raise OperationError(space.w_TypeError, space.wrap(msg))
-    if name == "__del__" and name not in w_type.dict_w:
-        msg = "a __del__ method added to an existing type will not be called"
-        space.warn(msg, space.w_RuntimeWarning)
-    w_type.dict_w[name] = w_value
+    if name == "__del__":
+        olddel = w_type.getdictvalue_w(space, "__del__")
+        if olddel is None:
+            msg = "a __del__ method added to an existing type will not be called"
+            space.warn(msg, space.w_RuntimeWarning)
+    w_type.setdictvalue_w(name, w_value)
 
 def delattr__Type_ANY(space, w_type, w_name):
     w_type.mutated()
@@ -653,7 +663,7 @@ def delattr__Type_ANY(space, w_type, w_name):
         msg = "can't delete attributes on type object '%s'" %(w_type.name,)
         raise OperationError(space.w_TypeError, space.wrap(msg))
     try:
-        del w_type.dict_w[name]
+        w_type.deldictvalue_w(name)
         return
     except KeyError:
         raise OperationError(space.w_AttributeError, w_name)
