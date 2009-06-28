@@ -304,6 +304,7 @@ class TranslationDriver(SimpleTaskEngine):
             assert self.libdef is not None
             for func, inputtypes in self.libdef.functions:
                 annotator.build_types(func, inputtypes)
+                func.c_name = func.func_name
             self.sanity_check_annotation()
             annotator.simplify()
     #
@@ -422,15 +423,20 @@ class TranslationDriver(SimpleTaskEngine):
         if translator.annotator is not None:
             translator.frozen = True
 
-        standalone = self.standalone
-
-        if standalone:
-            from pypy.translator.c.genc import CStandaloneBuilder as CBuilder
+        if self.libdef is not None:
+            cbuilder = self.libdef.getcbuilder(self.translator, self.config)
+            self.standalone = False
+            standalone = False
         else:
-            from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
-        cbuilder = CBuilder(self.translator, self.entry_point,
-                            config=self.config)
-        cbuilder.stackless = self.config.translation.stackless
+            standalone = self.standalone
+
+            if standalone:
+                from pypy.translator.c.genc import CStandaloneBuilder as CBuilder
+            else:
+                from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
+            cbuilder = CBuilder(self.translator, self.entry_point,
+                                config=self.config)
+            cbuilder.stackless = self.config.translation.stackless
         if not standalone:     # xxx more messy
             cbuilder.modulename = self.extmod_name
         database = cbuilder.build_database()
@@ -477,7 +483,7 @@ class TranslationDriver(SimpleTaskEngine):
     def task_compile_c(self): # xxx messy
         cbuilder = self.cbuilder
         cbuilder.compile()
-        
+
         if self.standalone:
             self.c_entryp = cbuilder.executable_name
             self.create_exe()
