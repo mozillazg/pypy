@@ -105,7 +105,7 @@ class CBuilder(object):
     def __init__(self, translator, entrypoint, config, gcpolicy=None):
         self.translator = translator
         self.entrypoint = entrypoint
-        self.entrypoint_name = self.entrypoint.func_name
+        self.entrypoint_name = getattr(self.entrypoint, 'func_name', None)
         self.originalentrypoint = entrypoint
         self.config = config
         self.gcpolicy = gcpolicy    # for tests only, e.g. rpython/memory/
@@ -156,8 +156,13 @@ class CBuilder(object):
 
         # build entrypoint and eventually other things to expose
         pf = self.getentrypointptr()
-        pfname = db.get(pf)
-        self.c_entrypoint_name = pfname
+        if isinstance(pf, list):
+            for one_pf in pf:
+                db.get(one_pf)
+            self.c_entrypoint_name = None
+        else:
+            pfname = db.get(pf)
+            self.c_entrypoint_name = pfname
         db.complete()
 
         self.collect_compilation_info(db)
@@ -209,7 +214,6 @@ class CBuilder(object):
         if db is None:
             db = self.build_database()
         pf = self.getentrypointptr()
-        pfname = db.get(pf)
         if self.modulename is None:
             self.modulename = uniquemodulename('testing')
         modulename = self.modulename
@@ -229,6 +233,7 @@ class CBuilder(object):
                                                 self.eci,
                                                 defines = defines)
         else:
+            pfname = db.get(pf)
             if self.config.translation.instrument:
                 defines['INSTRUMENT'] = 1
             if CBuilder.have___thread:
