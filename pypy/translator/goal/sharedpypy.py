@@ -16,7 +16,11 @@ OVERRIDES = {
 def main(argv):
     config = get_combined_translation_config(pypy_optiondescription,
         overrides=OVERRIDES, translating=True)
+    config.objspace.nofaking = True
+    config.objspace.compiler = "ast"
+    config.translating = True
     print config
+
     space = make_objspace(config)
     policy = PyPyAnnotatorPolicy(single_space = space)
 
