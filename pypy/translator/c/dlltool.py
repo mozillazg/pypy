@@ -35,11 +35,11 @@ class CLibraryBuilder(CBuilder):
         return self.so_name
 
 class DLLDef(object):
-    def __init__(self, name, functions=[]):
+    def __init__(self, name, functions=[], policy=None):
         self.name = name
         self.functions = functions # [(function, annotation), ...]
         self.driver = TranslationDriver()
-        self.driver.setup_library(self)
+        self.driver.setup_library(self, policy=policy)
 
     def compile(self):
         self.driver.proceed(['compile_c'])
