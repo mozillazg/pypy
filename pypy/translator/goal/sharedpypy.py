@@ -2,13 +2,14 @@
 import sys
 from pypy.translator.c.dlltool import DLLDef
 from pypy.config.translationoption import get_combined_translation_config
-from pypy.rpython.lltypesystem.rffi import charp2str, CCHARP
+from pypy.rpython.lltypesystem.rffi import charp2str, CCHARP, VOIDP
 from pypy.tool.option import make_objspace
 from pypy.interpreter.error import OperationError
 from pypy.config.pypyoption import pypy_optiondescription, set_pypy_opt_level
 from pypy.interpreter.pyopcode import prepare_exec
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
 from pypy.config.translationoption import set_opt_level
+from pypy.config.pypyoption import enable_allworkingmodules
 
 OVERRIDES = {
     'translation.debug': False,
@@ -22,12 +23,12 @@ def main(argv):
     config.translating = True
     set_opt_level(config, '1')
     set_pypy_opt_level(config, '1')
-    print config
+    enable_allworkingmodules(config)
 
     space = make_objspace(config)
     policy = PyPyAnnotatorPolicy(single_space = space)
 
-    def interpret(source):
+    def interpret(source, context):
         source = charp2str(source)
         w_dict = space.newdict()
         try:
@@ -41,7 +42,8 @@ def main(argv):
             return 1
         return 0
 
-    dll = DLLDef('pypylib', [(interpret, [CCHARP])], policy=policy)
+    dll = DLLDef('pypylib', [(interpret, [CCHARP, VOIDP])], policy=policy,
+                 config=config)
     exe_name = dll.compile()
 
 if __name__ == '__main__':
