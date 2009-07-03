@@ -17,7 +17,6 @@ class AppTestRange:
    def test_range_negstartisstop(self):
       assert range(-1, -1) == []
 
-
    def test_range_zero(self):
       assert range(0) == []
 
@@ -66,4 +65,14 @@ class AppTestRange:
 
    def test_range_wrong_type(self):
        raises(TypeError, range, "42")
+
+   def test_range_object_with___int__(self):
+       class A(object):
+           def __int__(self):
+               return 5
+
+       assert range(A()) == [0, 1, 2, 3, 4]
+       assert range(0, A()) == [0, 1, 2, 3, 4]
+       assert range(0, 10, A()) == [0, 5]
+
 

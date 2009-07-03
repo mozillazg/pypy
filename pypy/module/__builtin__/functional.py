@@ -62,17 +62,15 @@ get a list in decending order."""
 
     try:
         # save duplication by redirecting every error to applevel
-        x = space.int_w(w_x)
+        x = space.int_w(space.int(w_x))
         if space.is_w(w_y, space.w_None):
             start, stop = 0, x
         else:
-            start, stop = x, space.int_w(w_y)
-        step = space.int_w(w_step)
+            start, stop = x, space.int_w(space.int(w_y))
+        step = space.int_w(space.int(w_step))
         howmany = get_len_of_range(start, stop, step)
     except OperationError, e:
         if not e.match(space, space.w_TypeError):
-            pass
-        else:
             raise
     except (ValueError, OverflowError):
         pass
