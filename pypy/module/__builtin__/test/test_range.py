@@ -59,8 +59,8 @@ class AppTestRange:
    def test_range_zerostep(self):
        raises(ValueError, range, 1, 5, 0)
 
-   def DONT_test_range_float(self):
-       "How CPython does it - UGLY, ignored for now."
+   def test_range_float(self):
+       "How CPython does it - UGLY."
        assert range(0.1, 2.0, 1.1) == [0, 1]
 
    def test_range_wrong_type(self):
