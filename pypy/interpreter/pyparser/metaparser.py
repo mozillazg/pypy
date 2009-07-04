@@ -140,9 +140,7 @@ class ParserGenerator(object):
                 arcs = []
                 for label, next in state.arcs.iteritems():
                     arcs.append((self.make_label(gram, label), dfa.index(next)))
-                if state.is_final:
-                    arcs.append((0, state_index))
-                states.append(arcs)
+                states.append((arcs, state.is_final))
             our_id = gram.symbol_ids[name]
             gram.dfas[our_id] = (states, self.make_first(gram, name))
         gram.start = gram.symbol_ids[self.start_symbol]

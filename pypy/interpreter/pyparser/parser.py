@@ -87,18 +87,18 @@ class Parser(object):
         while True:
             dfa, state_index, node = self.stack[-1]
             states, first = dfa
-            arcs = states[state_index]
+            arcs, is_accepting = states[state_index]
             for i, next_state in arcs:
                 sym_id = self.grammar.labels[i]
                 if label_index == i:
                     self.shift(next_state, token_type, value, lineno, column)
-                    state_index = next_state
-                    while states[state_index] == [(0, state_index)]:
+                    state = states[next_state]
+                    while state[1] and not state[0]:
                         self.pop()
                         if not self.stack:
                             return True
                         dfa, state_index, node = self.stack[-1]
-                        states = dfa[0]
+                        state = dfa[0][state_index]
                     return False
                 elif sym_id >= 256:
                     sub_node_dfa = self.grammar.dfas[sym_id]
@@ -107,7 +107,7 @@ class Parser(object):
                                   column)
                         break
             else:
-                if (0, state_index) in arcs:
+                if is_accepting:
                     self.pop()
                     if not self.stack:
                         raise ParseError("too much input", token_type, value,
