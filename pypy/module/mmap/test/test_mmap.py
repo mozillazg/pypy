@@ -410,7 +410,7 @@ class AppTestMMap:
         def fn(m): m *= 1                         # but it
         raises((SystemError, TypeError), fn, m)   # doesn't
         def fn(): 1 * m                           # make much sense
-        raises(TypeError, fn)
+        raises((SystemError, TypeError), fn)
         m.close()
         f.close()
 #         
