@@ -36,7 +36,7 @@ class TestParserGenerator:
         assert eval_sym in g.dfas
         assert g.start == eval_sym
         states, first = g.dfas[eval_sym]
-        assert states == [[(1, 1)], [(0, 1)]]
+        assert states == [([(1, 1)], False), ([], True)]
         assert g.labels[0] == 0
 
     def test_load_python_grammars(self):
@@ -53,10 +53,10 @@ class TestParserGenerator:
         g = self.gram_for("foo: NAME STRING OP '+'")
         assert len(g.dfas) == 1
         states = g.dfas[g.symbol_ids["foo"]][0]
-        last = states[0][0][1]
+        last = states[0][0][0][1]
         for state in states[1:-1]:
-            assert last < state[0][1]
-            last = state[0][1]
+            assert last < state[0][0][1]
+            last = state[0][0][1]
 
     def test_alternatives(self):
         g = self.gram_for("foo: STRING | OP")
