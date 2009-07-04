@@ -75,4 +75,18 @@ class AppTestRange:
        assert range(0, A()) == [0, 1, 2, 3, 4]
        assert range(0, 10, A()) == [0, 5]
 
+   def test_range_long(self):
+       import sys
+       assert range(-2**100) == []
+       assert range(0, -2**100) == []
+       assert range(0, 2**100, -1) == []
+       assert range(0, 2**100, -1) == []
 
+       a = long(10 * sys.maxint)
+       b = long(100 * sys.maxint)
+       c = long(50 * sys.maxint)
+
+       assert range(a, a+2) == [a, a+1]
+       assert range(a+2, a, -1L) == [a+2, a+1]
+       assert range(a+4, a, -2) == [a+4, a+2]
+ 
