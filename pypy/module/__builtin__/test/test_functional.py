@@ -129,6 +129,13 @@ class AppTestXRange:
    def test_xrange_float(self):
       assert list(xrange(0.1, 2.0, 1.1)) == [0, 1]
 
+   def test_xrange_long(self):
+       import sys
+       a = long(10 * sys.maxint)
+       raises(OverflowError, xrange, a)
+       raises(OverflowError, xrange, 0, a)
+       raises(OverflowError, xrange, 0, 1, a)
+
 class AppTestReversed:
    def test_reversed(self):
       r = reversed("hello")
