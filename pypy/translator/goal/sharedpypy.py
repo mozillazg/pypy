@@ -1,5 +1,5 @@
 
-import sys
+import sys, pdb, traceback
 from pypy.translator.c.dlltool import DLLDef
 from pypy.config.translationoption import get_combined_translation_config
 from pypy.rpython.lltypesystem.rffi import charp2str, CCHARP, VOIDP
@@ -27,6 +27,7 @@ def main(argv):
 
     space = make_objspace(config)
     policy = PyPyAnnotatorPolicy(single_space = space)
+    policy.allow_someobjects = False
 
     def interpret(source, context):
         source = charp2str(source)
@@ -47,4 +48,13 @@ def main(argv):
     exe_name = dll.compile()
 
 if __name__ == '__main__':
-    main(sys.argv)
+    try:
+        main(sys.argv)
+    except KeyboardInterrupt:
+        raise
+    except:
+        e, v, tb = sys.exc_info()
+        traceback.print_tb(tb)
+        print e, v
+        pdb.post_mortem(tb)
+        
