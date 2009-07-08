@@ -10,6 +10,6 @@ except ImportError:
         from pypy.lib.md5 import md5
 
 try:
-    BaseException
+    BaseException = BaseException
 except NameError:
     BaseException = Exception
