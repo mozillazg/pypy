@@ -8,3 +8,6 @@ class TestDistutils(BasicTest):
 
     def test_nice_errors(self):
         py.test.skip("Unsupported")
+
+    def test_shared_no_links(self):
+        py.test.skip("Unsupported")
