@@ -52,6 +52,8 @@ class Platform(object):
     name = "abstract platform"
     c_environ = None
 
+    so_prefixes = ['']
+
     def __init__(self, cc):
         if self.__class__ is Platform:
             raise TypeError("You should not instantiate Platform class directly")
