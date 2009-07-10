@@ -1004,7 +1004,7 @@ class TestPlatform(object):
         tmpdir.ensure(dir=1)
         c_file = tmpdir.join('c_file.c')
         c_file.write('int f(int a, int b) { return (a + b); }')
-        eci = ExternalCompilationInfo()
+        eci = ExternalCompilationInfo(export_symbols=['f'])
         so = platform.compile([c_file], eci, standalone=False)
         eci = ExternalCompilationInfo(
             libraries = ['c_file'],
