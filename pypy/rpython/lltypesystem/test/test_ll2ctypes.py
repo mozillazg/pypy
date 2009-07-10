@@ -15,6 +15,7 @@ from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
+from pypy.tool.udir import udir
 
 class TestLL2Ctypes(object):
 
@@ -994,3 +995,21 @@ class TestLL2Ctypes(object):
         v2 = ctypes2lltype(llmemory.GCREF, ctypes.c_void_p(1235))
         assert v2 != v
         
+class TestPlatform(object):
+    def test_lib_on_libpaths(self):
+        from pypy.translator.platform import platform
+        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+
+        tmpdir = udir.join('lib_on_libppaths')
+        tmpdir.ensure(dir=1)
+        c_file = tmpdir.join('c_file.c')
+        c_file.write('int f(int a, int b) { return (a + b); }')
+        eci = ExternalCompilationInfo()
+        so = platform.compile([c_file], eci, standalone=False)
+        eci = ExternalCompilationInfo(
+            libraries = ['c_file'],
+            library_dirs = [str(so.dirpath())]
+        )
+        f = rffi.llexternal('f', [rffi.INT, rffi.INT], rffi.INT,
+                            compilation_info=eci)
+        assert f(3, 4) == 7
