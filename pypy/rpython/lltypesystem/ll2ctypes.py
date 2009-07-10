@@ -820,11 +820,13 @@ def get_ctypes_callable(funcptr, calling_conv):
             ext = platform.so_ext
             prefixes = platform.so_prefixes
             for dir in eci.library_dirs:
+                if libpath:
+                    break
                 for prefix in prefixes:
                     tryfile = os.path.join(dir, prefix + libname + '.' + ext)
-                if os.path.isfile(tryfile):
-                    libpath = tryfile
-                    break
+                    if os.path.isfile(tryfile):
+                        libpath = tryfile
+                        break
             if not libpath:
                 libpath = ctypes.util.find_library(libname)
                 if not libpath and os.path.isabs(libname):
