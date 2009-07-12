@@ -31,6 +31,3 @@ class TestMaemo(BasicTest):
         executable = self.platform.compile([cfile], eci)
         res = self.platform.execute(executable)
         self.check_res(res)
-
-    def test_shared_no_links(self):
-        py.test.skip("Unsupported")

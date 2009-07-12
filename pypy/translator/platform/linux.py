@@ -13,7 +13,6 @@ class Linux(BasePosix):
     standalone_only = []
     shared_only = []
     so_ext = 'so'
-    so_prefixes = ['lib', '']
     
     def _args_for_shared(self, args):
         return ['-shared'] + args

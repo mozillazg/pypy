@@ -38,8 +38,8 @@ class Darwin(posix.BasePosix):
             args.append(f)
         return args
 
-    def _link_args_from_eci(self, eci, standalone):
-        args = super(Darwin, self)._link_args_from_eci(eci, standalone)
+    def _link_args_from_eci(self, eci):
+        args = super(Darwin, self)._link_args_from_eci(eci)
         frameworks = self._frameworks(eci.frameworks)
         include_dirs = self._includedirs(eci.include_dirs)
         return (args + frameworks + include_dirs)
