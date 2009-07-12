@@ -133,9 +133,8 @@ class MsvcPlatform(Platform):
     def _args_for_shared(self, args):
         return ['/dll'] + args
 
-    def _link_args_from_eci(self, eci, standalone):
-        # Windows needs to resolve all symbols even for DLLs
-        args = super(MsvcPlatform, self)._link_args_from_eci(eci, standalone=True)
+    def _link_args_from_eci(self, eci):
+        args = super(MsvcPlatform, self)._link_args_from_eci(eci)
         return args + ['/EXPORT:%s' % symbol for symbol in eci.export_symbols]
 
     def _compile_c_file(self, cc, cfile, compile_args):

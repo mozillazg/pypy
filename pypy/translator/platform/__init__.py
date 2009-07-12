@@ -52,8 +52,6 @@ class Platform(object):
     name = "abstract platform"
     c_environ = None
 
-    so_prefixes = ['']
-
     def __init__(self, cc):
         if self.__class__ is Platform:
             raise TypeError("You should not instantiate Platform class directly")
@@ -72,12 +70,7 @@ class Platform(object):
             ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
         return ofiles
 
-    def execute(self, executable, args=None, env=None, compilation_info=None):
-        if env is None:
-            env = {}
-        if compilation_info is not None:
-            env['LD_LIBRARY_PATH'] = ':'.join(
-                [str(i) for i in compilation_info.library_dirs])
+    def execute(self, executable, args=None, env=None):
         returncode, stdout, stderr = _run_subprocess(str(executable), args,
                                                      env)
         return ExecutionResult(returncode, stdout, stderr)
@@ -127,13 +120,9 @@ class Platform(object):
         cflags = self.cflags + extra
         return (cflags + list(eci.compile_extra) + args)
 
-    def _link_args_from_eci(self, eci, standalone):
-        if standalone:
-            library_dirs = self._libdirs(eci.library_dirs)
-            libraries = self._libs(eci.libraries)
-        else:
-            library_dirs = []
-            libraries = []
+    def _link_args_from_eci(self, eci):
+        library_dirs = self._libdirs(eci.library_dirs)
+        libraries = self._libs(eci.libraries)
         link_files = self._linkfiles(eci.link_files)
         return (library_dirs + libraries + self.link_flags +
                 link_files + list(eci.link_extra))
@@ -148,8 +137,8 @@ class Platform(object):
                 exe_name += '.' + self.exe_ext
         else:
             exe_name += '.' + self.so_ext
-        largs = self._link_args_from_eci(eci, standalone)
-        return self._link(self.cc, ofiles, largs, standalone, exe_name)
+        return self._link(self.cc, ofiles, self._link_args_from_eci(eci),
+                          standalone, exe_name)
 
     # below are some detailed informations for platforms
 
