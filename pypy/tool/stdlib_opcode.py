@@ -18,6 +18,7 @@ del load_opcode
 for name in __all__:
     if name in opcode_dict:
         globals()[name] = opcode_dict[name]
+globals().update(opmap)
 
 opcode_method_names = ['MISSING_OPCODE'] * 256
 for name, index in opmap.items():
