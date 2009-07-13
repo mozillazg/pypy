@@ -1029,15 +1029,25 @@ class ASTBuilder(object):
 
     def parse_number(self, raw):
         base = 10
+        if raw.startswith("0"):
+            if len(raw) > 2 and raw[1] in "Xx":
+                base = 16
+            elif len(raw) > 1:
+                base = 8
+            raw = raw.rstrip("0xX")
+            if not raw:
+                raw = "0"
         w_num_str = self.space.wrap(raw)
+        w_index = None
+        w_base = self.space.wrap(base)
         if raw[-1] in "lL":
             tp = self.space.w_long
-            return self.space.call_function(tp, w_num_str)
+            return self.space.call_function(tp, w_num_str, w_base)
         elif raw[-1] in "jJ":
             tp = self.space.w_complex
             return self.space.call_function(tp, w_num_str)
         try:
-            return self.space.call_function(self.space.w_int, w_num_str)
+            return self.space.call_function(self.space.w_int, w_num_str, w_base)
         except error.OperationError, e:
             if not e.match(self.space, self.space.w_ValueError):
                 raise
