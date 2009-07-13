@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import random
 import string
+import sys
 import py
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.pyparser import pyparse
@@ -1039,6 +1040,10 @@ class TestAstBuilder:
         assert space.eq_w(get_num("0X53"), space.wrap(0x53))
         assert space.eq_w(get_num("0"), space.wrap(0))
         assert space.eq_w(get_num("00000"), space.wrap(0))
+        assert space.eq_w(get_num("-3"), space.wrap(-3))
+        assert space.eq_w(get_num("-0"), space.wrap(0))
+        n = get_num(str(-sys.maxint - 1))
+        assert space.is_true(space.isinstance(n, space.w_int))
 
     def check_comprehension(self, brackets, ast_type):
         def brack(s):
