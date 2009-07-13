@@ -1034,7 +1034,7 @@ class ASTBuilder(object):
                 base = 16
             elif len(raw) > 1:
                 base = 8
-            raw = raw.rstrip("0xX")
+            raw = raw.lstrip("0xX")
             if not raw:
                 raw = "0"
         w_num_str = self.space.wrap(raw)
