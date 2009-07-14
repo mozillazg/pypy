@@ -38,7 +38,7 @@ class Scope(object):
         self.nested = False
 
     def lookup(self, name):
-        return self.symbols.get(name, SCOPE_UNKNOWN)
+        return self.symbols.get(self.mangle(name), SCOPE_UNKNOWN)
 
     def note_symbol(self, identifier, role):
         mangled = self.mangle(identifier)
