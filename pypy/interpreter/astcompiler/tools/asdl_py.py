@@ -50,19 +50,23 @@ class ASDLVisitor(asdl.VisitorBase):
 class ASTNodeVisitor(ASDLVisitor):
 
     def visitType(self, tp):
-        self.emit("class %s(AST):" % (tp.name,))
         self.visit(tp.value, tp.name)
-        self.emit("")
 
     def visitSum(self, sum, base):
-        self.emit("pass", 1)
-        self.emit("")
-        is_simple = self.is_simple_sum(sum)
-        for cons in sum.types:
-            self.visit(cons, base, is_simple, sum.attributes)
+        if self.is_simple_sum(sum):
+            for i, cons in enumerate(sum.types):
+                self.emit("%s = %i" % (cons.name, i + 1))
             self.emit("")
+        else:
+            self.emit("class %s(AST):" % (base,))
+            self.emit("pass", 1)
+            self.emit("")
+            for cons in sum.types:
+                self.visit(cons, base, sum.attributes)
+                self.emit("")
 
     def visitProduct(self, product, name):
+        self.emit("class %s(AST):" % (name,))
         self.emit("")
         self.make_constructor(product.fields)
         self.emit("")
@@ -79,18 +83,13 @@ class ASTNodeVisitor(ASDLVisitor):
             self.emit("def __init__(self):", 1)
             self.emit("pass", 2)
 
-    def visitConstructor(self, cons, base, is_enum, extra_attributes):
-        if is_enum:
-            self.emit("class _%s(%s):" % (cons.name, base))
-            self.emit("pass", 1)
-            self.emit("%s = _%s()" % (cons.name, cons.name))
-        else:
-            self.emit("class %s(%s):" % (cons.name, base))
-            self.emit("")
-            self.make_constructor(cons.fields + extra_attributes)
-            self.emit("")
-            self.emit("def walkabout(self, visitor):", 1)
-            self.emit("visitor.visit_%s(self)" % (cons.name,), 2)
+    def visitConstructor(self, cons, base, extra_attributes):
+        self.emit("class %s(%s):" % (cons.name, base))
+        self.emit("")
+        self.make_constructor(cons.fields + extra_attributes)
+        self.emit("")
+        self.emit("def walkabout(self, visitor):", 1)
+        self.emit("visitor.visit_%s(self)" % (cons.name,), 2)
 
     def visitField(self, field):
         self.emit("self.%s = %s" % (field.name, field.name), 2)

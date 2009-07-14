@@ -78,21 +78,21 @@ class TestAstBuilder:
         assert isinstance(d, ast.Delete)
         assert len(d.targets) == 1
         assert isinstance(d.targets[0], ast.Name)
-        assert d.targets[0].ctx is ast.Del
+        assert d.targets[0].ctx == ast.Del
         d = self.get_first_stmt("del x, y")
         assert len(d.targets) == 2
-        assert d.targets[0].ctx is ast.Del
-        assert d.targets[1].ctx is ast.Del
+        assert d.targets[0].ctx == ast.Del
+        assert d.targets[1].ctx == ast.Del
         d = self.get_first_stmt("del x.y")
         assert len(d.targets) == 1
         attr = d.targets[0]
         assert isinstance(attr, ast.Attribute)
-        assert attr.ctx is ast.Del
+        assert attr.ctx == ast.Del
         d = self.get_first_stmt("del x[:]")
         assert len(d.targets) == 1
         sub = d.targets[0]
         assert isinstance(sub, ast.Subscript)
-        assert sub.ctx is ast.Del
+        assert sub.ctx == ast.Del
 
     def test_break(self):
         br = self.get_first_stmt("while True: break").body[0]
@@ -249,7 +249,7 @@ class TestAstBuilder:
         if_ = self.get_first_stmt("if x: 4")
         assert isinstance(if_, ast.If)
         assert isinstance(if_.test, ast.Name)
-        assert if_.test.ctx is ast.Load
+        assert if_.test.ctx == ast.Load
         assert len(if_.body) == 1
         assert isinstance(if_.body[0].value, ast.Num)
         assert if_.orelse is None
@@ -283,7 +283,7 @@ class TestAstBuilder:
         wh = self.get_first_stmt("while x: pass")
         assert isinstance(wh, ast.While)
         assert isinstance(wh.test, ast.Name)
-        assert wh.test.ctx is ast.Load
+        assert wh.test.ctx == ast.Load
         assert len(wh.body) == 1
         assert isinstance(wh.body[0], ast.Pass)
         assert wh.orelse is None
@@ -298,27 +298,27 @@ class TestAstBuilder:
         fr = self.get_first_stmt("for x in y: pass")
         assert isinstance(fr, ast.For)
         assert isinstance(fr.target, ast.Name)
-        assert fr.target.ctx is ast.Store
+        assert fr.target.ctx == ast.Store
         assert isinstance(fr.iter, ast.Name)
-        assert fr.iter.ctx is ast.Load
+        assert fr.iter.ctx == ast.Load
         assert len(fr.body) == 1
         assert isinstance(fr.body[0], ast.Pass)
         assert fr.orelse is None
         fr = self.get_first_stmt("for x, in y: pass")
         tup = fr.target
         assert isinstance(tup, ast.Tuple)
-        assert tup.ctx is ast.Store
+        assert tup.ctx == ast.Store
         assert len(tup.elts) == 1
         assert isinstance(tup.elts[0], ast.Name)
-        assert tup.elts[0].ctx is ast.Store
+        assert tup.elts[0].ctx == ast.Store
         fr = self.get_first_stmt("for x, y in g: pass")
         tup = fr.target
         assert isinstance(tup, ast.Tuple)
-        assert tup.ctx is ast.Store
+        assert tup.ctx == ast.Store
         assert len(tup.elts) == 2
         for elt in tup.elts:
             assert isinstance(elt, ast.Name)
-            assert elt.ctx is ast.Store
+            assert elt.ctx == ast.Store
         fr = self.get_first_stmt("for x in g: pass\nelse: 4")
         assert len(fr.body) == 1
         assert isinstance(fr.body[0], ast.Pass)
@@ -348,7 +348,7 @@ class TestAstBuilder:
         assert len(tr.handlers) == 1
         handler = tr.handlers[0]
         assert isinstance(handler.type, ast.Name)
-        assert handler.type.ctx is ast.Load
+        assert handler.type.ctx == ast.Load
         assert handler.name is None
         assert len(handler.body) == 1
         assert tr.orelse is None
@@ -357,7 +357,7 @@ class TestAstBuilder:
         handler = tr.handlers[0]
         assert isinstance(handler.type, ast.Name)
         assert isinstance(handler.name, ast.Name)
-        assert handler.name.ctx is ast.Store
+        assert handler.name.ctx == ast.Store
         assert handler.name.id == "e"
         assert len(handler.body) == 1
         tr = self.get_first_stmt("try: x\nexcept: pass\nelse: 4")
@@ -411,12 +411,12 @@ class TestAstBuilder:
         assert isinstance(wi.context_expr, ast.Name)
         assert len(wi.body) == 1
         assert isinstance(wi.optional_vars, ast.Name)
-        assert wi.optional_vars.ctx is ast.Store
+        assert wi.optional_vars.ctx == ast.Store
         wi = self.get_first_stmt("with x as (y,): pass")
         assert isinstance(wi.optional_vars, ast.Tuple)
         assert len(wi.optional_vars.elts) == 1
-        assert wi.optional_vars.ctx is ast.Store
-        assert wi.optional_vars.elts[0].ctx is ast.Store
+        assert wi.optional_vars.ctx == ast.Store
+        assert wi.optional_vars.elts[0].ctx == ast.Store
         input = "with x hi y: pass"
         exc = py.test.raises(SyntaxError, self.get_ast, input).value
         assert exc.msg == "expected \"with [expr] as [var]\""
@@ -434,13 +434,13 @@ class TestAstBuilder:
             assert len(cls.bases) == 1
             base = cls.bases[0]
             assert isinstance(base, ast.Name)
-            assert base.ctx is ast.Load
+            assert base.ctx == ast.Load
             assert base.id == "Y"
         cls = self.get_first_stmt("class X(Y, Z): pass")
         assert len(cls.bases) == 2
         for b in cls.bases:
             assert isinstance(b, ast.Name)
-            assert b.ctx is ast.Load
+            assert b.ctx == ast.Load
 
     def test_function(self):
         func = self.get_first_stmt("def f(): pass")
@@ -460,10 +460,10 @@ class TestAstBuilder:
         a1, a2 = args.args
         assert isinstance(a1, ast.Name)
         assert a1.id == "a"
-        assert a1.ctx is ast.Param
+        assert a1.ctx == ast.Param
         assert isinstance(a2, ast.Name)
         assert a2.id == "b"
-        assert a2.ctx is ast.Param
+        assert a2.ctx == ast.Param
         assert args.vararg is None
         assert args.kwarg is None
         args = self.get_first_stmt("def f(a=b): pass").args
@@ -471,12 +471,12 @@ class TestAstBuilder:
         arg = args.args[0]
         assert isinstance(arg, ast.Name)
         assert arg.id == "a"
-        assert arg.ctx is ast.Param
+        assert arg.ctx == ast.Param
         assert len(args.defaults) == 1
         default = args.defaults[0]
         assert isinstance(default, ast.Name)
         assert default.id == "b"
-        assert default.ctx is ast.Load
+        assert default.ctx == ast.Load
         args = self.get_first_stmt("def f(*a): pass").args
         assert args.args is None
         assert args.defaults is None
@@ -494,14 +494,14 @@ class TestAstBuilder:
         assert len(args.args) == 1
         tup = args.args[0]
         assert isinstance(tup, ast.Tuple)
-        assert tup.ctx is ast.Store
+        assert tup.ctx == ast.Store
         assert len(tup.elts) == 2
         e1, e2 = tup.elts
         assert isinstance(e1, ast.Name)
-        assert e1.ctx is ast.Store
+        assert e1.ctx == ast.Store
         assert e1.id == "a"
         assert isinstance(e2, ast.Name)
-        assert e2.ctx is ast.Store
+        assert e2.ctx == ast.Store
         assert e2.id == "b"
         args = self.get_first_stmt("def f((a, (b, c))): pass").args
         assert len(args.args) == 1
@@ -510,20 +510,20 @@ class TestAstBuilder:
         assert len(tup.elts) == 2
         tup2 = tup.elts[1]
         assert isinstance(tup2, ast.Tuple)
-        assert tup2.ctx is ast.Store
+        assert tup2.ctx == ast.Store
         for elt in tup2.elts:
             assert isinstance(elt, ast.Name)
-            assert elt.ctx is ast.Store
+            assert elt.ctx == ast.Store
         assert tup2.elts[0].id == "b"
         assert tup2.elts[1].id == "c"
         args = self.get_first_stmt("def f(a, b, c=d, *e, **f): pass").args
         assert len(args.args) == 3
         for arg in args.args:
             assert isinstance(arg, ast.Name)
-            assert arg.ctx is ast.Param
+            assert arg.ctx == ast.Param
         assert len(args.defaults) == 1
         assert isinstance(args.defaults[0], ast.Name)
-        assert args.defaults[0].ctx is ast.Load
+        assert args.defaults[0].ctx == ast.Load
         assert args.vararg == "e"
         assert args.kwarg == "f"
         input = "def f(a=b, c): pass"
@@ -537,12 +537,12 @@ class TestAstBuilder:
         dec = func.decorators[0]
         assert isinstance(dec, ast.Name)
         assert dec.id == "dec"
-        assert dec.ctx is ast.Load
+        assert dec.ctx == ast.Load
         func = self.get_first_stmt("@mod.hi.dec\ndef f(): pass")
         assert len(func.decorators) == 1
         dec = func.decorators[0]
         assert isinstance(dec, ast.Attribute)
-        assert dec.ctx is ast.Load
+        assert dec.ctx == ast.Load
         assert dec.attr == "dec"
         assert isinstance(dec.value, ast.Attribute)
         assert dec.value.attr == "hi"
@@ -552,7 +552,7 @@ class TestAstBuilder:
         assert len(func.decorators) == 2
         for dec in func.decorators:
             assert isinstance(dec, ast.Name)
-            assert dec.ctx is ast.Load
+            assert dec.ctx == ast.Load
         assert func.decorators[0].id == "dec"
         assert func.decorators[1].id == "dec2"
         func = self.get_first_stmt("@dec()\ndef f(): pass")
@@ -596,7 +596,7 @@ class TestAstBuilder:
             assert isinstance(assign, ast.AugAssign)
             assert assign.op is ast_type
             assert isinstance(assign.target, ast.Name)
-            assert assign.target.ctx is ast.Store
+            assert assign.target.ctx == ast.Store
             assert isinstance(assign.value, ast.Num)
 
     def test_assign(self):
@@ -605,28 +605,28 @@ class TestAstBuilder:
         assert len(assign.targets) == 1
         name = assign.targets[0]
         assert isinstance(name, ast.Name)
-        assert name.ctx is ast.Store
+        assert name.ctx == ast.Store
         value = assign.value
         assert self.space.eq_w(value.n, self.space.wrap(32))
         assign = self.get_first_stmt("hi, = something")
         assert len(assign.targets) == 1
         tup = assign.targets[0]
         assert isinstance(tup, ast.Tuple)
-        assert tup.ctx is ast.Store
+        assert tup.ctx == ast.Store
         assert len(tup.elts) == 1
         assert isinstance(tup.elts[0], ast.Name)
-        assert tup.elts[0].ctx is ast.Store
+        assert tup.elts[0].ctx == ast.Store
 
     def test_name(self):
         name = self.get_first_expr("hi")
         assert isinstance(name, ast.Name)
-        assert name.ctx is ast.Load
+        assert name.ctx == ast.Load
 
     def test_tuple(self):
         tup = self.get_first_expr("()")
         assert isinstance(tup, ast.Tuple)
         assert tup.elts is None
-        assert tup.ctx is ast.Load
+        assert tup.ctx == ast.Load
         tup = self.get_first_expr("(3,)")
         assert len(tup.elts) == 1
         assert self.space.eq_w(tup.elts[0].n, self.space.wrap(3))
@@ -637,7 +637,7 @@ class TestAstBuilder:
         seq = self.get_first_expr("[]")
         assert isinstance(seq, ast.List)
         assert seq.elts is None
-        assert seq.ctx is ast.Load
+        assert seq.ctx == ast.Load
         seq = self.get_first_expr("[3,]")
         assert len(seq.elts) == 1
         assert self.space.eq_w(seq.elts[0].n, self.space.wrap(3))
@@ -658,17 +658,17 @@ class TestAstBuilder:
         key1, key2 = d.keys
         assert isinstance(key1, ast.Num)
         assert isinstance(key2, ast.Name)
-        assert key2.ctx is ast.Load
+        assert key2.ctx == ast.Load
         v1, v2 = d.values
         assert isinstance(v1, ast.Name)
-        assert v1.ctx is ast.Load
+        assert v1.ctx == ast.Load
         assert isinstance(v2, ast.Num)
 
     def test_set_context(self):
         tup = self.get_ast("(a, b) = c").body[0].targets[0]
-        assert all(elt.ctx is ast.Store for elt in tup.elts)
+        assert all(elt.ctx == ast.Store for elt in tup.elts)
         seq = self.get_ast("[a, b] = c").body[0].targets[0]
-        assert all(elt.ctx is ast.Store for elt in seq.elts)
+        assert all(elt.ctx == ast.Store for elt in seq.elts)
         invalid_stores = (
             ("(lambda x: x)", "lambda"),
             ("f()", "call"),
@@ -749,30 +749,30 @@ class TestAstBuilder:
         ifexp = self.get_first_expr("x if y else g")
         assert isinstance(ifexp, ast.IfExp)
         assert isinstance(ifexp.test, ast.Name)
-        assert ifexp.test.ctx is ast.Load
+        assert ifexp.test.ctx == ast.Load
         assert isinstance(ifexp.body, ast.Name)
-        assert ifexp.body.ctx is ast.Load
+        assert ifexp.body.ctx == ast.Load
         assert isinstance(ifexp.orelse, ast.Name)
-        assert ifexp.orelse.ctx is ast.Load
+        assert ifexp.orelse.ctx == ast.Load
 
     def test_boolop(self):
         for ast_type, op in ((ast.And, "and"), (ast.Or, "or")):
             bo = self.get_first_expr("x %s a" % (op,))
             assert isinstance(bo, ast.BoolOp)
-            assert bo.op is ast_type
+            assert bo.op == ast_type
             assert len(bo.values) == 2
             assert isinstance(bo.values[0], ast.Name)
             assert isinstance(bo.values[1], ast.Name)
             bo = self.get_first_expr("x %s a %s b" % (op, op))
-            assert bo.op is ast_type
+            assert bo.op == ast_type
             assert len(bo.values) == 3
 
     def test_not(self):
         n = self.get_first_expr("not x")
         assert isinstance(n, ast.UnaryOp)
-        assert n.op is ast.Not
+        assert n.op == ast.Not
         assert isinstance(n.operand, ast.Name)
-        assert n.operand.ctx is ast.Load
+        assert n.operand.ctx == ast.Load
 
     def test_comparison(self):
         compares = (
@@ -792,12 +792,12 @@ class TestAstBuilder:
             comp = self.get_first_expr("x %s y" % (op,))
             assert isinstance(comp, ast.Compare)
             assert isinstance(comp.left, ast.Name)
-            assert comp.left.ctx is ast.Load
+            assert comp.left.ctx == ast.Load
             assert len(comp.ops) == 1
-            assert comp.ops[0] is ast_type
+            assert comp.ops[0] == ast_type
             assert len(comp.comparators) == 1
             assert isinstance(comp.comparators[0], ast.Name)
-            assert comp.comparators[0].ctx is ast.Load
+            assert comp.comparators[0].ctx == ast.Load
         # Just for fun let's randomly combine operators. :)
         for j in range(10):
             vars = string.ascii_letters[:random.randint(3, 7)]
@@ -827,14 +827,14 @@ class TestAstBuilder:
         for op, ast_type in binops:
             bin = self.get_first_expr("a %s b" % (op,))
             assert isinstance(bin, ast.BinOp)
-            assert bin.op is ast_type
+            assert bin.op == ast_type
             assert isinstance(bin.left, ast.Name)
             assert isinstance(bin.right, ast.Name)
-            assert bin.left.ctx is ast.Load
-            assert bin.right.ctx is ast.Load
+            assert bin.left.ctx == ast.Load
+            assert bin.right.ctx == ast.Load
             bin = self.get_first_expr("a %s b %s c" % (op, op))
             assert isinstance(bin.left, ast.BinOp)
-            assert bin.left.op is ast_type
+            assert bin.left.op == ast_type
             assert isinstance(bin.right, ast.Name)
 
     def test_yield(self):
@@ -856,16 +856,16 @@ class TestAstBuilder:
         for op, ast_type in unary_ops:
             unary = self.get_first_expr("%sx" % (op,))
             assert isinstance(unary, ast.UnaryOp)
-            assert unary.op is ast_type
+            assert unary.op == ast_type
             assert isinstance(unary.operand, ast.Name)
-            assert unary.operand.ctx is ast.Load
+            assert unary.operand.ctx == ast.Load
 
     def test_power(self):
         power = self.get_first_expr("x**5")
         assert isinstance(power, ast.BinOp)
-        assert power.op is ast.Pow
+        assert power.op == ast.Pow
         assert isinstance(power.left , ast.Name)
-        assert power.left.ctx is ast.Load
+        assert power.left.ctx == ast.Load
         assert isinstance(power.right, ast.Num)
 
     def test_call(self):
@@ -876,7 +876,7 @@ class TestAstBuilder:
         assert call.starargs is None
         assert call.kwargs is None
         assert isinstance(call.func, ast.Name)
-        assert call.func.ctx is ast.Load
+        assert call.func.ctx == ast.Load
         call = self.get_first_expr("f(2, 3)")
         assert len(call.args) == 2
         assert isinstance(call.args[0], ast.Num)
@@ -895,10 +895,10 @@ class TestAstBuilder:
         assert call.args is None
         assert isinstance(call.starargs, ast.Name)
         assert call.starargs.id == "a"
-        assert call.starargs.ctx is ast.Load
+        assert call.starargs.ctx == ast.Load
         assert isinstance(call.kwargs, ast.Name)
         assert call.kwargs.id == "b"
-        assert call.kwargs.ctx is ast.Load
+        assert call.kwargs.ctx == ast.Load
         call = self.get_first_expr("f(a, b, x=4, *m, **f)")
         assert len(call.args) == 2
         assert isinstance(call.args[0], ast.Name)
@@ -927,23 +927,23 @@ class TestAstBuilder:
         attr = self.get_first_expr("x.y")
         assert isinstance(attr, ast.Attribute)
         assert isinstance(attr.value, ast.Name)
-        assert attr.value.ctx is ast.Load
+        assert attr.value.ctx == ast.Load
         assert attr.attr == "y"
-        assert attr.ctx is ast.Load
+        assert attr.ctx == ast.Load
         assign = self.get_first_stmt("x.y = 54")
         assert isinstance(assign, ast.Assign)
         assert len(assign.targets) == 1
         attr = assign.targets[0]
         assert isinstance(attr, ast.Attribute)
-        assert attr.value.ctx is ast.Load
-        assert attr.ctx is ast.Store
+        assert attr.value.ctx == ast.Load
+        assert attr.ctx == ast.Store
 
     def test_subscript_and_slices(self):
         sub = self.get_first_expr("x[y]")
         assert isinstance(sub, ast.Subscript)
         assert isinstance(sub.value, ast.Name)
-        assert sub.value.ctx is ast.Load
-        assert sub.ctx is ast.Load
+        assert sub.value.ctx == ast.Load
+        assert sub.ctx == ast.Load
         assert isinstance(sub.slice, ast.Index)
         assert isinstance(sub.slice.value, ast.Name)
         for input in (":", "::"):
@@ -988,7 +988,7 @@ class TestAstBuilder:
         assert isinstance(slc, ast.Index)
         assert isinstance(slc.value, ast.Tuple)
         assert len(slc.value.elts) == 3
-        assert slc.value.ctx is ast.Load
+        assert slc.value.ctx == ast.Load
         slc = self.get_first_expr("x[1,3:4]").slice
         assert isinstance(slc, ast.ExtSlice)
         assert len(slc.dims) == 2
@@ -1051,14 +1051,14 @@ class TestAstBuilder:
         gen = self.get_first_expr(brack("x for x in y"))
         assert isinstance(gen, ast_type)
         assert isinstance(gen.elt, ast.Name)
-        assert gen.elt.ctx is ast.Load
+        assert gen.elt.ctx == ast.Load
         assert len(gen.generators) == 1
         comp = gen.generators[0]
         assert isinstance(comp, ast.comprehension)
         assert comp.ifs is None
         assert isinstance(comp.target, ast.Name)
         assert isinstance(comp.iter, ast.Name)
-        assert comp.target.ctx is ast.Store
+        assert comp.target.ctx == ast.Store
         gen = self.get_first_expr(brack("x for x in y if w"))
         comp = gen.generators[0]
         assert len(comp.ifs) == 1
@@ -1068,7 +1068,7 @@ class TestAstBuilder:
         tup = gen.generators[0].target
         assert isinstance(tup, ast.Tuple)
         assert len(tup.elts) == 1
-        assert tup.ctx is ast.Store
+        assert tup.ctx == ast.Store
         gen = self.get_first_expr(brack("a for w in x for m in p if g"))
         gens = gen.generators
         assert len(gens) == 2
