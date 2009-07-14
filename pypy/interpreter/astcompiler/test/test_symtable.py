@@ -263,6 +263,7 @@ class TestSymbolTable:
             assert exc.msg == error + " contains a nested function with free variables"
 
     def test_exec(self):
+        self.mod_scope("exec 'hi'")
         scp = self.func_scope("def f(): exec 'hi'")
         assert not scp.optimized
         assert isinstance(scp.bare_exec, ast.Exec)

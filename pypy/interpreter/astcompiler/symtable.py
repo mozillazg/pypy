@@ -63,7 +63,7 @@ class Scope(object):
         raise SyntaxError("return outside function", ret.lineno,
                           ret.col_offset)
 
-    def note_bare_exec(self, exc):
+    def note_exec(self, exc):
         pass
 
     def note_import_star(self, imp):
