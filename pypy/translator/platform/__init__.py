@@ -74,7 +74,7 @@ class Platform(object):
 
     def execute(self, executable, args=None, env=None, compilation_info=None):
         if env is None:
-            env = {}
+            env = os.environ.copy()
         if compilation_info is not None:
             env['LD_LIBRARY_PATH'] = ':'.join(
                 [str(i) for i in compilation_info.library_dirs])
