@@ -259,6 +259,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.scopes = {}
         self.scope = None
         self.stack = []
+        self.tmp_name_counter = 0
         top = ModuleScope(module)
         self.globs = top.roles
         self.push_scope(top)
@@ -288,6 +289,10 @@ class SymtableBuilder(ast.GenericASTVisitor):
     def implicit_arg(self, pos):
         name = ".%i" % (pos,)
         self.note_symbol(name, SYM_PARAM)
+
+    def new_temporary_name(self):
+        self.note_symbol("_[%i]" % (self.tmp_name_counter,), SYM_ASSIGNED)
+        self.tmp_name_counter += 1
 
     def note_symbol(self, identifier, role):
         mangled = self.scope.note_symbol(identifier, role)
@@ -368,6 +373,10 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.visit_sequence(genexp.generators[1:])
         genexp.elt.walkabout(self)
         self.pop_scope()
+
+    def visit_ListComp(self, lc):
+        self.new_temporary_name()
+        ast.GenericASTVisitor.visit_ListComp(self, lc)
 
     def visit_arguments(self, arguments):
         assert isinstance(self.scope, FunctionScope) # Annotator hint.

@@ -288,3 +288,7 @@ class TestSymbolTable:
         for input in ("class x: return", "return"):
             exc = py.test.raises(SyntaxError, self.func_scope, input).value
             assert exc.msg == "return outside function"
+
+    def test_listcomp_tmpname(self):
+        scp = self.mod_scope("[x for x in y]")
+        assert scp.lookup("_[0]") == symtable.SCOPE_LOCAL
