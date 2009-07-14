@@ -401,7 +401,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
                 self._handle_params(param.elts, False)
 
     def visit_Name(self, name):
-        if name.ctx is ast.Load:
+        if name.ctx == ast.Load:
             role = SYM_USED
         else:
             role = SYM_ASSIGNED
