@@ -13,7 +13,7 @@ from pypy.translator.c.primitive import PrimitiveType
 from pypy.rlib.rarithmetic import isinf, isnan
 from pypy.translator.c import extfunc
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.tool.compat import BaseException
+from py.builtin import BaseException
 
 def needs_gcheader(T):
     if not isinstance(T, ContainerType):
