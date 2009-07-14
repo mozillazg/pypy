@@ -8,8 +8,3 @@ except ImportError:
     except ImportError:
         # no _md5 module on this platform
         from pypy.lib.md5 import md5
-
-try:
-    BaseException = BaseException
-except NameError:
-    BaseException = Exception
