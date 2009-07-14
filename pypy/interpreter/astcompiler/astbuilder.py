@@ -62,8 +62,9 @@ class ASTBuilder(object):
                 if sub_stmts_count == 1:
                     stmts.append(self.handle_stmt(stmt))
                 else:
+                    stmt = stmt.children[0]
                     for j in range(sub_stmts_count):
-                        small_stmt = stmt.children[j]
+                        small_stmt = stmt.children[j * 2]
                         stmts.append(self.handle_stmt(small_stmt))
             return ast.Module(stmts)
         elif n.type == syms.eval_input:
@@ -116,13 +117,13 @@ class ASTBuilder(object):
         sequence = None
         expr_type = expr.__class__
         if expr_type is ast.Attribute:
-            if ctx is ast.Store:
+            if ctx == ast.Store:
                 self.check_forbidden_name(expr.attr, node)
             expr.ctx = ctx
         elif expr_type is ast.Subscript:
             expr.ctx = ctx
         elif expr_type is ast.Name:
-            if ctx is ast.Store:
+            if ctx == ast.Store:
                 self.check_forbidden_name(expr.id, node)
             expr.ctx = ctx
         elif expr_type is ast.List:
@@ -161,7 +162,7 @@ class ASTBuilder(object):
         else:
             raise AssertionError("unkown expression in set_context()")
         if error is not None:
-            if ctx is ast.Store:
+            if ctx == ast.Store:
                 action = "assign to"
             else:
                 action = "delete"
