@@ -1,5 +1,5 @@
 
-import py, sys
+import py, sys, ctypes
 from pypy.tool.udir import udir
 from pypy.translator.platform import CompilationError, Platform
 from pypy.translator.platform import host
@@ -101,7 +101,6 @@ class TestPlatform(object):
         executable = self.platform.compile([c_file], eci)
         res = self.platform.execute(executable)
         assert res.out.startswith('4.0')
-
 
 def test_equality():
     class X(Platform):
