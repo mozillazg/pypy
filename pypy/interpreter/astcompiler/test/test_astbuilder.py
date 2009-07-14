@@ -46,6 +46,12 @@ class TestAstBuilder:
         assert isinstance(mod, ast.Interactive)
         assert len(mod.body) == 1
 
+        mod = self.get_ast("x = 23; y = 23; b = 23")
+        assert isinstance(mod, ast.Module)
+        assert len(mod.body) == 3
+        for stmt in mod.body:
+            assert isinstance(stmt, ast.Assign)
+
     def test_print(self):
         pri = self.get_first_stmt("print x")
         assert isinstance(pri, ast.Print)
