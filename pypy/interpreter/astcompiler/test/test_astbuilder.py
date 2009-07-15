@@ -211,7 +211,7 @@ class TestAstBuilder:
             assert a1.asname == "b"
             assert a2.name == "w"
             assert a2.asname is None
-        input
+        input = "from x import y a b"
         exc = py.test.raises(SyntaxError, self.get_ast, input).value
         assert exc.msg == "must use 'as' in import"
         input = "from x import a, b,"
