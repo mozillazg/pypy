@@ -99,7 +99,8 @@ class ASTBuilder(object):
             raise AssertionError("non-statement node")
 
     def error(self, msg, n):
-        raise SyntaxError(msg, n.lineno, n.column, self.compile_info.filename)
+        raise SyntaxError(msg, n.lineno, n.column,
+                          filename=self.compile_info.filename)
 
     def check_forbidden_name(self, name, node):
         if name == "None":
