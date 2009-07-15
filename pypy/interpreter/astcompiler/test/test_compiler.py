@@ -50,6 +50,16 @@ class TestCompiler:
 
     st = simple_test
 
+    def test_long_jump(self):
+        func = """def f(x):
+    y = 0
+    if x:
+%s        return 1
+    else:
+        return 0""" % ("        y += 1\n" * 9000,)
+        yield self.st, func, "f(1)", 1
+        yield self.st, func, "f(0)", 0
+
     def test_argtuple(self):
         yield (self.simple_test, "def f( x, (y,z) ): return x,y,z",
                "f((1,2),(3,4))", ((1,2),3,4))
