@@ -33,6 +33,7 @@ class Scope(object):
         self.roles = {}
         self.varnames = []
         self.children = []
+        self.free_vars = []
         self.has_free = False
         self.child_has_free = False
         self.nested = False
@@ -103,6 +104,7 @@ class Scope(object):
                 pass
         elif bound and name in bound:
             self.symbols[name] = SCOPE_FREE
+            self.free_vars.append(name)
             free[name] = None
             self.has_free = True
         elif name in globs:
@@ -152,10 +154,16 @@ class Scope(object):
             except KeyError:
                 if name in bound:
                     self.symbols[name] = SCOPE_FREE
+                    self.free_vars.append(name)
             else:
-                if role_here & (SYM_ASSIGNED | SYM_GLOBAL) and \
+                if role_here & (SYM_BOUND | SYM_GLOBAL) and \
                         self._hide_bound_from_nested_scopes:
-                    self.symbols[name] = SCOPE_FREE
+                    # This happens when a class level attribute or method has
+                    # the same name as a free variable passing through the class
+                    # scope.  We add the name to the class scope's list of free
+                    # vars, so it will be passed through by the interpreter, but
+                    # we leave the scope alone, so it can be local on its own.
+                    self.free_vars.append(name)
         self._check_optimization()
         free.update(new_free)
 
