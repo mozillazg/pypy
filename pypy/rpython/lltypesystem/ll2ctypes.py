@@ -836,7 +836,7 @@ def get_ctypes_callable(funcptr, calling_conv):
                 # on ie slackware there was need for RTLD_GLOBAL here.
                 # this breaks a lot of things, since passing RTLD_GLOBAL
                 # creates symbol conflicts on C level.
-                clib = dllclass._dlltype(libpath)
+                clib = dllclass.LoadLibrary(libpath)
                 cfunc = get_on_lib(clib, funcname)
                 if cfunc is not None:
                     break
