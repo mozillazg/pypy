@@ -1037,6 +1037,8 @@ class TestAstBuilder:
         assert space.eq_w(get_num("32.5"), space.wrap(32.5))
         assert space.eq_w(get_num("32L"), space.newlong(32))
         assert space.eq_w(get_num("32l"), space.newlong(32))
+        assert space.eq_w(get_num("0L"), space.newlong(0))
+        assert space.eq_w(get_num("2"), space.wrap(2))
         assert space.eq_w(get_num("13j"), space.wrap(13j))
         assert space.eq_w(get_num("13J"), space.wrap(13J))
         assert space.eq_w(get_num("053"), space.wrap(053))
