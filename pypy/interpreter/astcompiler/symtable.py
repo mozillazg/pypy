@@ -34,6 +34,7 @@ class Scope(object):
         self.varnames = []
         self.children = []
         self.free_vars = []
+        self.has_exec = False
         self.has_free = False
         self.child_has_free = False
         self.nested = False
@@ -68,7 +69,7 @@ class Scope(object):
                           ret.col_offset)
 
     def note_exec(self, exc):
-        pass
+        self.has_exec = True
 
     def note_import_star(self, imp):
         pass
@@ -198,7 +199,7 @@ class FunctionScope(Scope):
         self.return_with_value = True
 
     def note_exec(self, exc):
-        self.has_exec = True
+        Scope.note_exec(self, exc)
         if not exc.globals:
             self.optimized = False
             self.bare_exec = exc
@@ -249,6 +250,7 @@ class FunctionScope(Scope):
                 trailer = "is a nested function"
             raise SyntaxError(err % (self.name, trailer), node.lineno,
                               node.col_offset)
+        self.optimized = self.optimized and not self.has_exec
 
 
 class ClassScope(Scope):
