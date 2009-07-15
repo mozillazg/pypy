@@ -226,6 +226,8 @@ class ASTBuilder(object):
             if import_name_type == syms.import_as_name:
                 name = import_name.children[0].value
                 if len(import_name.children) == 3:
+                    if import_name.children[1].value != "as":
+                        self.error("must use 'as' in import", import_name)
                     as_name = import_name.children[2].value
                     self.check_forbidden_name(as_name, import_name.children[2])
                 else:
@@ -236,6 +238,8 @@ class ASTBuilder(object):
                 if len(import_name.children) == 1:
                     import_name = import_name.children[0]
                     continue
+                if import_name.children[1].value != "as":
+                    self.error("must use 'as' in import", import_name)
                 alias = self.alias_for_import_name(import_name.children[0])
                 asname_node = import_name.children[2]
                 alias.asname = asname_node.value
