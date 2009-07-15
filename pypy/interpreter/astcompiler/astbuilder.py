@@ -81,7 +81,7 @@ class ASTBuilder(object):
                         stmt = first_child.children[i]
                         if stmt.type == tokens.NEWLINE:
                             break
-                        stmts.append(self.handle_stmt(first_child))
+                        stmts.append(self.handle_stmt(stmt))
                 return ast.Interactive(stmts)
         else:
             raise AssertionError("unkown root node")

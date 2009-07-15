@@ -46,6 +46,12 @@ class TestAstBuilder:
         mod = self.get_ast("x = 23", p_mode="single")
         assert isinstance(mod, ast.Interactive)
         assert len(mod.body) == 1
+        mod = self.get_ast("x = 23; y = 23; b = 23", p_mode="single")
+        assert isinstance(mod, ast.Interactive)
+        assert len(mod.body) == 3
+        for stmt in mod.body:
+            assert isinstance(stmt, ast.Assign)
+        assert mod.body[-1].targets[0].id == "b"
 
         mod = self.get_ast("x = 23; y = 23; b = 23")
         assert isinstance(mod, ast.Module)
