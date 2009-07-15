@@ -190,6 +190,11 @@ class TestSymbolTable:
         assert lscp.name == "lambda"
         assert lscp.lookup("x") == symtable.SCOPE_LOCAL
         assert lscp.lookup("y") == symtable.SCOPE_GLOBAL_IMPLICIT
+        scp = self.mod_scope("lambda x=a: b")
+        self.check_unknown(scp, "x", "b")
+        assert scp.lookup("a") == symtable.SCOPE_GLOBAL_IMPLICIT
+        lscp = scp.children[0]
+        self.check_unknown(lscp, "a")
 
     def test_import(self):
         scp = self.mod_scope("import x")
