@@ -165,6 +165,8 @@ class TestAstBuilder:
         assert a1.asname is None
         assert a2.name == "y"
         assert a2.asname == "w"
+        exc = py.test.raises(SyntaxError, self.get_ast, "import x a b").value
+        assert exc.msg == "must use 'as' in import"
 
     def test_from_import(self):
         im = self.get_first_stmt("from x import y")
@@ -209,6 +211,9 @@ class TestAstBuilder:
             assert a1.asname == "b"
             assert a2.name == "w"
             assert a2.asname is None
+        input
+        exc = py.test.raises(SyntaxError, self.get_ast, input).value
+        assert exc.msg == "must use 'as' in import"
         input = "from x import a, b,"
         exc = py.test.raises(SyntaxError, self.get_ast, input).value
         assert exc.msg == "trailing comma is only allowed with surronding " \
