@@ -2,6 +2,7 @@ import codeop
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.pyparser import parser, pytokenizer, pygram, error
+from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
 
 
 _recode_to_utf8 = gateway.applevel(r'''
@@ -103,6 +104,10 @@ class PythonParser(parser.Parser):
                     raise
 
         flags = compile_info.flags
+        if flags & CO_FUTURE_WITH_STATEMENT:
+            self.grammar = pygram.python_grammar
+        else:
+            self.grammar = pygram.python_grammar_no_with_statement
         source_lines = textsrc.splitlines(True)
         if textsrc and textsrc[-1] == "\n":
             flags &= ~codeop.PyCF_DONT_IMPLY_DEDENT

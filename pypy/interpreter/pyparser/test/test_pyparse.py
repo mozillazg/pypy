@@ -16,6 +16,10 @@ class TestPythonParser:
             info = pyparse.CompileInfo("<test>", mode)
         return self.parser.parse_source(source, info)
 
+    def test_with_and_as_no_future(self):
+        self.parse("with = 23")
+        self.parse("as = 2")
+
     def test_dont_imply_dedent(self):
         info = pyparse.CompileInfo("<test>", "single",
                                    codeop.PyCF_DONT_IMPLY_DEDENT)
