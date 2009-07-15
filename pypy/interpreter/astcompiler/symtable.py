@@ -402,6 +402,10 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.new_temporary_name()
         ast.GenericASTVisitor.visit_ListComp(self, lc)
 
+    def visit_With(self, wih):
+        self.new_temporary_name()
+        ast.GenericASTVisitor.visit_With(self, wih)
+
     def visit_arguments(self, arguments):
         assert isinstance(self.scope, FunctionScope) # Annotator hint.
         if arguments.args:
