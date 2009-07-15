@@ -180,6 +180,18 @@ class TestSymbolTable:
         fscp = cscp.children[0]
         assert fscp.lookup("x") == symtable.SCOPE_FREE
         self.check_unknown(fscp, "a")
+        scp = self.func_scope("""def f(n):
+    class X:
+         def n():
+             return y
+         def x():
+             return n""")
+        assert scp.lookup("n") == symtable.SCOPE_CELL
+        cscp = scp.children[0]
+        assert cscp.lookup("n") == symtable.SCOPE_LOCAL
+        assert "n" in cscp.free_vars
+        xscp = cscp.children[1]
+        assert xscp.lookup("n") == symtable.SCOPE_FREE
 
     def test_lambda(self):
         scp = self.mod_scope("lambda x: y")
