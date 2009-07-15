@@ -16,8 +16,9 @@ class TestAstBuilder:
         cls.parser = pyparse.PythonParser(cls.space)
 
     def get_ast(self, source, p_mode="exec"):
-        tree = self.parser.parse_source(source, p_mode)
-        ast_node = ast_from_node(self.space, tree)
+        info = pyparse.CompileInfo("<test>", p_mode)
+        tree = self.parser.parse_source(source, info)
+        ast_node = ast_from_node(self.space, tree, info)
         return ast_node
 
     def get_first_expr(self, source):
@@ -1019,9 +1020,10 @@ class TestAstBuilder:
         assert space.eq_w(s.s, space.wrap("hi implicitly extra"))
         sentence = u"Die Männer ärgen sich!"
         source = u"# coding: utf-7\nstuff = u'%s'" % (sentence,)
-        tree = self.parser.parse_source(source.encode("utf-7"))
-        assert tree.value == "utf-7"
-        s = ast_from_node(space, tree).body[0].value
+        info = pyparse.CompileInfo("<test>", "exec")
+        tree = self.parser.parse_source(source.encode("utf-7"), info)
+        assert info.encoding == "utf-7"
+        s = ast_from_node(space, tree, info).body[0].value
         assert isinstance(s, ast.Str)
         assert space.eq_w(s.s, space.wrap(sentence))
 

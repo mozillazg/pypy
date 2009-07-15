@@ -56,6 +56,15 @@ def _check_line_for_encoding(line):
     return pytokenizer.match_encoding_declaration(line[i:])
 
 
+class CompileInfo(object):
+
+    def __init__(self, filename, mode="exec", flags=0):
+        self.filename = filename
+        self.mode = mode
+        self.encoding = None
+        self.flags = flags
+
+
 _targets = {
 'eval' : pygram.syms.eval_input,
 'single' : pygram.syms.single_input,
@@ -68,7 +77,7 @@ class PythonParser(parser.Parser):
         parser.Parser.__init__(self, grammar)
         self.space = space
 
-    def parse_source(self, textsrc, mode="exec", flags=0):
+    def parse_source(self, textsrc, compile_info=None):
         """Parse a python source according to goal"""
         # Detect source encoding.
         enc = None
@@ -93,9 +102,9 @@ class PythonParser(parser.Parser):
                         raise error.SyntaxError("Unknown encoding: %s" % enc)
                     raise
 
-        self.prepare(_targets[mode])
+        self.prepare(_targets[compile_info.mode])
         try:
-            tokens = pytokenizer.generate_tokens(textsrc, flags)
+            tokens = pytokenizer.generate_tokens(textsrc, compile_info.flags)
             for tp, value, lineno, column, line in tokens:
                 if self.add_token(tp, value, lineno, column, line):
                     break
@@ -108,12 +117,12 @@ class PythonParser(parser.Parser):
             else:
                 new_err = error.SyntaxError
                 msg = "invalid syntax"
-            raise new_err(msg, e.lineno, e.column, e.line)
+            raise new_err(msg, e.lineno, e.column, e.line,
+                          compile_info.filename)
         else:
             tree = self.root
         finally:
             self.root = None
         if enc is not None:
-            # Wrap the tree in an encoding_decl node for the AST builder.
-            tree = parser.Node(pygram.syms.encoding_decl, enc, [tree], 0, 0)
+            compile_info.encoding = enc
         return tree

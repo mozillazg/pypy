@@ -1,4 +1,7 @@
 import py
+from pypy.interpreter.astcompiler import codegen, astbuilder
+from pypy.interpreter.pyparser import pyparse
+
 from pypy.interpreter.astcompiler import misc, pycodegen, opt
 from pypy.interpreter.pyparser.test.support import source2ast
 from pypy.interpreter.pyparser.test import expressions
@@ -6,20 +9,11 @@ from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.pyparser.error import SyntaxError, IndentationError
 
 def compile_with_astcompiler(expr, mode, space):
-    ast = source2ast(expr, mode, space)
-    misc.set_filename('<testing>', ast)
-    ast = opt.optimize_ast_tree(space, ast)
-    if mode == 'exec':
-        Generator = pycodegen.ModuleCodeGenerator
-    elif mode == 'single':
-        Generator = pycodegen.InteractiveCodeGenerator
-    elif mode == 'eval':
-        Generator = pycodegen.ExpressionCodeGenerator
-    codegen = Generator(space, ast)
-    rcode = codegen.getCode()
-    assert isinstance(rcode, PyCode)
-    assert rcode.co_filename == '<testing>'
-    return rcode
+    p = pyparse.PythonParser(space)
+    info = pyparse.CompileInfo("<test>", mode)
+    cst = p.parse_source(expr, info)
+    ast = astbuilder.ast_from_node(space, cst, info)
+    return codegen.compile_ast(space, ast, info)
 
 
 class TestCompiler:
@@ -654,7 +648,7 @@ class TestCompiler:
         try:
             self.simple_test(source, None, None)
         except IndentationError, e:
-            assert e.msg == 'expected an indented block'
+            assert e.msg == 'expected indented block'
         else:
             raise Exception("DID NOT RAISE")
 

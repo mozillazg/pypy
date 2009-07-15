@@ -253,7 +253,7 @@ class ClassScope(Scope):
 
 class SymtableBuilder(ast.GenericASTVisitor):
 
-    def __init__(self, space, module):
+    def __init__(self, space, module, compile_info):
         self.space = space
         self.module = module
         self.scopes = {}
@@ -263,8 +263,12 @@ class SymtableBuilder(ast.GenericASTVisitor):
         top = ModuleScope(module)
         self.globs = top.roles
         self.push_scope(top)
-        module.walkabout(self)
-        top.finalize(None, {}, {})
+        try:
+            module.walkabout(self)
+            top.finalize(None, {}, {})
+        except SyntaxError, e:
+            e.filename = compile_info.filename
+            raise
         self.pop_scope()
         assert not self.stack
 
