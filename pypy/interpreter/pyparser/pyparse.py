@@ -102,9 +102,14 @@ class PythonParser(parser.Parser):
                         raise error.SyntaxError("Unknown encoding: %s" % enc)
                     raise
 
+        flags = compile_info.flags
+        source_lines = textsrc.splitlines(True)
+        if textsrc and textsrc[-1] == "\n":
+            flags &= ~codeop.PyCF_DONT_IMPLY_DEDENT
+
         self.prepare(_targets[compile_info.mode])
         try:
-            tokens = pytokenizer.generate_tokens(textsrc, compile_info.flags)
+            tokens = pytokenizer.generate_tokens(source_lines, flags)
             for tp, value, lineno, column, line in tokens:
                 if self.add_token(tp, value, lineno, column, line):
                     break

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import codeop
 import py
 from pypy.interpreter.pyparser import pyparse
 from pypy.interpreter.pyparser.pygram import syms, tokens
@@ -14,6 +15,12 @@ class TestPythonParser:
         if info is None:
             info = pyparse.CompileInfo("<test>", mode)
         return self.parser.parse_source(source, info)
+
+    def test_dont_imply_dedent(self):
+        info = pyparse.CompileInfo("<test>", "single",
+                                   codeop.PyCF_DONT_IMPLY_DEDENT)
+        self.parse('if 1:\n  x\n', info=info)
+        self.parse('x = 5 ', info=info)
 
     def test_clear_state(self):
         assert self.parser.root is None

@@ -44,7 +44,7 @@ def match_encoding_declaration(comment):
     return None
 
 
-def generate_tokens(textsrc, flags):
+def generate_tokens(lines, flags):
     """
     This is a rewrite of pypy.module.parser.pytokenize.generate_tokens since
     the original function is not RPYTHON (uses yield)
@@ -83,8 +83,7 @@ def generate_tokens(textsrc, flags):
     endDFA = automata.DFA([], [])
     # make the annotator happy
     line = ''
-    lines = textsrc.splitlines(True)
-    lines.append('')
+    lines.append("")
     for line in lines:
         lnum = lnum + 1
         pos, max = 0, len(line)
@@ -157,9 +156,12 @@ def generate_tokens(textsrc, flags):
                 end = pseudomatch
 
                 if start == end:
-                    # Nothing matched!!!
-                    raise TokenError("Unknown character", line,
-                                 lnum, start, token_list)
+                    if line[pos] == ' ':
+                        break
+                    else:
+                        # Nothing matched!!!
+                        raise TokenError("Unknown character", line,
+                                         lnum, start, token_list)
 
                 pos = end
                 token, initial = line[start:end], line[start]
