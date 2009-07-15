@@ -72,6 +72,7 @@ class ASTNodeVisitor(ASDLVisitor):
         self.emit("")
         self.emit("def walkabout(self, visitor):", 1)
         self.emit("visitor.visit_%s(self)" % (name,), 2)
+        self.emit("")
 
     def make_constructor(self, fields):
         if fields:
