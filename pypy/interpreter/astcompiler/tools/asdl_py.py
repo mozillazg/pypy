@@ -105,6 +105,9 @@ class ASTVisitorVisitor(ASDLVisitor):
         self.emit("for node in seq:", 2)
         self.emit("node.walkabout(self)", 3)
         self.emit("")
+        self.emit("def default_visitor(self, node):", 1)
+        self.emit("raise NodeVisitorNotImplemented", 2)
+        self.emit("")
         super(ASTVisitorVisitor, self).visitModule(mod)
         self.emit("")
 
@@ -115,11 +118,11 @@ class ASTVisitorVisitor(ASDLVisitor):
 
     def visitProduct(self, prod, name):
         self.emit("def visit_%s(self, node):" % (name,), 1)
-        self.emit("raise NodeVisitorNotImplemented", 2)
+        self.emit("self.default_visitor(node)", 2)
 
     def visitConstructor(self, cons, _):
         self.emit("def visit_%s(self, node):" % (cons.name,), 1)
-        self.emit("raise NodeVisitorNotImplemented", 2)
+        self.emit("self.default_visitor(node)", 2)
 
 
 class GenericASTVisitorVisitor(ASDLVisitor):
