@@ -360,7 +360,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
 
     def visit_Lambda(self, lamb):
         if lamb.args.defaults:
-            self.visit_sequence(lamb.defaults)
+            self.visit_sequence(lamb.args.defaults)
         self.push_scope(FunctionScope(lamb, "lambda"))
         lamb.args.walkabout(self)
         lamb.body.walkabout(self)
