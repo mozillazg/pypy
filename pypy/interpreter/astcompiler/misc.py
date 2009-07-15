@@ -1,4 +1,25 @@
+from pypy.interpreter import gateway
 from pypy.interpreter.astcompiler import ast
+
+
+app = gateway.applevel("""
+def syntax_warning(msg, fn, lineno, offset):
+    import warnings
+    try:
+        warnings.warn_explicit(msg, SyntaxWarning, fn, lineno)
+    except SyntaxWarning:
+        raise SyntaxError(msg, fn, lineno, offset)
+""", filename=__file__)
+_emit_syntax_warning = app.interphook("syntax_warning")
+del app
+
+def syntax_warning(space, msg, fn, lineno, offset):
+    w_msg = space.wrap(msg)
+    w_filename = space.wrap(fn)
+    w_lineno = space.wrap(lineno)
+    w_offset = space.wrap(offset)
+    _emit_syntax_warning(space, w_msg, w_filename, w_lineno, w_offset)
+
 
 def flatten(tup):
     elts = []
