@@ -155,6 +155,7 @@ INVALID = splitcases("""
 
     def f():
         from a import *
+        x
         def g():
             x
 
@@ -169,23 +170,27 @@ INVALID = splitcases("""
 
     def f():
         from a import *
+        x
         class g:
             x
 
     def f():
         exec "hi"
+        x = 5
         class g:
             def h():
                 x
 
     def f():
         from a import *
+        x = 4
         class g:
             def h():
                 x
 
     def f(x):
         exec "hi"
+        x = 4
         class g:
             x
 
@@ -196,12 +201,14 @@ INVALID = splitcases("""
 
     def f(x):
         exec "hi"
+        x = 5
         class g:
             def h():
                 x
 
     def f(x):
         from a import *
+        x = 5
         class g:
             def h():
                 x
