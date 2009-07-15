@@ -23,7 +23,6 @@ python_grammar_no_with_statement = python_grammar.shared_copy()
 python_grammar_no_with_statement.keyword_ids = \
     python_grammar_no_with_statement.keyword_ids.copy()
 del python_grammar_no_with_statement.keyword_ids["with"]
-del python_grammar_no_with_statement.keyword_ids["as"]
 
 class _Tokens(object):
     pass
