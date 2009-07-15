@@ -273,7 +273,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.scopes = {}
         self.scope = None
         self.stack = []
-        self.tmp_name_counter = 0
+        self.tmp_name_counter = 1
         top = ModuleScope(module)
         self.globs = top.roles
         self.push_scope(top)
