@@ -404,6 +404,8 @@ class SymtableBuilder(ast.GenericASTVisitor):
 
     def visit_With(self, wih):
         self.new_temporary_name()
+        if wih.optional_vars:
+            self.new_temporary_name()
         ast.GenericASTVisitor.visit_With(self, wih)
 
     def visit_arguments(self, arguments):
