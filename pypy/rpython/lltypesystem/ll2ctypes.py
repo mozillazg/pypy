@@ -833,7 +833,6 @@ def get_ctypes_callable(funcptr, calling_conv):
                     libpath = libname
             if libpath:
                 dllclass = getattr(ctypes, calling_conv + 'dll')
-                # urgh, cannot pass the flag to dllclass.LoadLibrary
                 clib = dllclass._dlltype(libpath)
                 cfunc = get_on_lib(clib, funcname)
                 if cfunc is not None:
