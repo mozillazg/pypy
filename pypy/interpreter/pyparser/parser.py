@@ -20,6 +20,16 @@ class Grammar(object):
         self.labels = [0]
         self.token_ids = {}
 
+    def shared_copy(self):
+        new = self.__class__()
+        new.symbol_ids = self.symbol_ids
+        new.symbols_names = self.symbol_names
+        new.keyword_ids = self.keyword_ids
+        new.dfas = self.dfas
+        new.labels = self.labels
+        new.token_ids = self.token_ids
+        return new
+
     def _freeze_(self):
         # Remove some attributes not used in parsing.
         del self.symbol_to_label
