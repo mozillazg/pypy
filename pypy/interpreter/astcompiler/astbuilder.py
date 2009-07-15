@@ -1051,6 +1051,8 @@ class ASTBuilder(object):
             raw = raw.lstrip("0xX")
             if not raw:
                 raw = "0"
+            elif not raw[0].isdigit():
+                raw = "0" + raw
         w_num_str = self.space.wrap(raw)
         w_index = None
         w_base = self.space.wrap(base)
@@ -1072,7 +1074,7 @@ class ASTBuilder(object):
         first_child_type = first_child.type
         if first_child_type == tokens.NAME:
             return ast.Name(first_child.value, ast.Load,
-                            atom_node.lineno, atom_node.column)
+                            first_child.lineno, first_child.column)
         elif first_child_type == tokens.STRING:
             space = self.space
             sub_strings_w = [parsestring.parsestr(space, self.encoding, s.value)
