@@ -156,12 +156,8 @@ def generate_tokens(lines, flags):
                 end = pseudomatch
 
                 if start == end:
-                    if line[pos] == ' ':
-                        break
-                    else:
-                        # Nothing matched!!!
-                        raise TokenError("Unknown character", line,
-                                         lnum, start, token_list)
+                    raise TokenError("Unknown character", line,
+                                     lnum, start + 1, token_list)
 
                 pos = end
                 token, initial = line[start:end], line[start]
