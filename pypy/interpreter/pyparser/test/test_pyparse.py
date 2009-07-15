@@ -10,27 +10,33 @@ class TestPythonParser:
     def setup_class(self):
         self.parser = pyparse.PythonParser(self.space)
 
+    def parse(self, source, mode="exec", info=None):
+        if info is None:
+            info = pyparse.CompileInfo("<test>", mode)
+        return self.parser.parse_source(source, info)
+
     def test_clear_state(self):
         assert self.parser.root is None
-        tree = self.parser.parse_source("name = 32")
+        tree = self.parse("name = 32")
         assert self.parser.root is None
 
     def test_encoding(self):
-        tree = self.parser.parse_source("""# coding: latin-1
+        info = pyparse.CompileInfo("<test>", "exec")
+        tree = self.parse("""# coding: latin-1
 stuff = "nothing"
-""")
-        assert tree.type == syms.encoding_decl
-        assert tree.value == "iso-8859-1"
+""", info=info)
+        assert tree.type == syms.file_input
+        assert info.encoding == "iso-8859-1"
         sentence = u"u'Die Männer ärgen sich!'"
         input = (u"# coding: utf-7\nstuff = %s" % (sentence,)).encode("utf-7")
-        tree = self.parser.parse_source(input)
-        assert tree.value == "utf-7"
+        tree = self.parse(input, info=info)
+        assert info.encoding == "utf-7"
         input = "# coding: not-here"
-        exc = py.test.raises(SyntaxError, self.parser.parse_source, input).value
+        exc = py.test.raises(SyntaxError, self.parse, input).value
         assert exc.msg == "Unknown encoding: not-here"
 
     def test_syntax_error(self):
-        parse = self.parser.parse_source
+        parse = self.parse
         exc = py.test.raises(SyntaxError, parse, "name another for").value
         assert exc.msg == "invalid syntax"
         assert exc.lineno == 1
@@ -44,11 +50,11 @@ stuff = "nothing"
             py.test.raises(SyntaxError, parse, input)
 
     def test_is(self):
-        self.parser.parse_source("x is y")
-        self.parser.parse_source("x is not y")
+        self.parse("x is y")
+        self.parse("x is not y")
 
     def test_indentation_error(self):
-        parse = self.parser.parse_source
+        parse = self.parse
         input = """
 def f():
 pass"""
@@ -65,9 +71,9 @@ pass"""
         assert exc.msg == "unindent does not match any outer indentation level"
 
     def test_mode(self):
-        assert self.parser.parse_source("x = 43*54").type == syms.file_input
-        tree = self.parser.parse_source("43**54", "eval")
+        assert self.parse("x = 43*54").type == syms.file_input
+        tree = self.parse("43**54", "eval")
         assert tree.type == syms.eval_input
-        py.test.raises(SyntaxError, self.parser.parse_source, "x = 54", "eval")
-        tree = self.parser.parse_source("x = 43", "single")
+        py.test.raises(SyntaxError, self.parse, "x = 54", "eval")
+        tree = self.parse("x = 43", "single")
         assert tree.type == syms.single_input

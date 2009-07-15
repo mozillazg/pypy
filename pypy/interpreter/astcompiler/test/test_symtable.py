@@ -11,9 +11,10 @@ class TestSymbolTable:
         cls.parser = pyparse.PythonParser(cls.space)
 
     def mod_scope(self, source, mode="exec"):
-        tree = self.parser.parse_source(source)
-        module = astbuilder.ast_from_node(self.space, tree)
-        builder = symtable.SymtableBuilder(self.space, module)
+        info = pyparse.CompileInfo("<test>", mode)
+        tree = self.parser.parse_source(source, info)
+        module = astbuilder.ast_from_node(self.space, tree, info)
+        builder = symtable.SymtableBuilder(self.space, module, info)
         scope = builder.find_scope(module)
         assert isinstance(scope, symtable.ModuleScope)
         return scope

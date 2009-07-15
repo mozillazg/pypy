@@ -5,8 +5,8 @@ from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser import parsestring
 
 
-def ast_from_node(space, n):
-    return ASTBuilder(space, n).build_ast()
+def ast_from_node(space, n, compile_info):
+    return ASTBuilder(space, n, compile_info).build_ast()
 
 
 augassign_operator_map = {
@@ -41,13 +41,9 @@ operator_map = {
 
 class ASTBuilder(object):
 
-    def __init__(self, space, n):
+    def __init__(self, space, n, compile_info):
         self.space = space
-        if n.type == syms.encoding_decl:
-            self.encoding = n.value
-            n = n.children[0]
-        else:
-            self.encoding = None
+        self.compile_info = compile_info
         self.root_node = n
 
     def build_ast(self):
@@ -103,7 +99,7 @@ class ASTBuilder(object):
             raise AssertionError("non-statement node")
 
     def error(self, msg, n):
-        raise SyntaxError(msg, n.lineno, n.column)
+        raise SyntaxError(msg, n.lineno, n.column, self.compile_info.filename)
 
     def check_forbidden_name(self, name, node):
         if name == "None":
@@ -1077,7 +1073,8 @@ class ASTBuilder(object):
                             first_child.lineno, first_child.column)
         elif first_child_type == tokens.STRING:
             space = self.space
-            sub_strings_w = [parsestring.parsestr(space, self.encoding, s.value)
+            encoding = self.compile_info.encoding
+            sub_strings_w = [parsestring.parsestr(space, encoding, s.value)
                              for s in atom_node.children]
             if len(sub_strings_w) > 1:
                 w_sub_strings = space.newlist(sub_strings_w)
