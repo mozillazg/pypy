@@ -281,6 +281,14 @@ class TestSymbolTable:
          return x""" % (line,)
             exc = py.test.raises(SyntaxError, self.mod_scope, input).value
             assert exc.msg == error + " contains a nested function with free variables"
+            input = """def f():
+     %s
+     x = 4
+     class Y:
+         def n():
+             return x""" % (line,)
+            exc = py.test.raises(SyntaxError, self.mod_scope, input).value
+            assert exc.msg == error + " contains a nested function with free variables"
 
     def test_exec(self):
         self.mod_scope("exec 'hi'")
