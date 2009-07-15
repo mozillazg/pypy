@@ -109,6 +109,8 @@ class PythonParser(parser.Parser):
         else:
             self.grammar = pygram.python_grammar_no_with_statement
         source_lines = textsrc.splitlines(True)
+        if source_lines and not source_lines[-1].endswith("\n"):
+            source_lines[-1] += '\n'
         if textsrc and textsrc[-1] == "\n":
             flags &= ~codeop.PyCF_DONT_IMPLY_DEDENT
 
