@@ -40,11 +40,14 @@ class Scope(object):
     def lookup(self, name):
         return self.symbols.get(self.mangle(name), SCOPE_UNKNOWN)
 
+    def lookup_role(self, name):
+        return self.roles.get(self.mangle(name), SYM_BLANK)
+
     def note_symbol(self, identifier, role):
         mangled = self.mangle(identifier)
         new_role = role
-        if identifier in self.roles:
-            old_role = self.roles[identifier]
+        if mangled in self.roles:
+            old_role = self.roles[mangled]
             if old_role & SYM_PARAM and role & SYM_PARAM:
                 err = "duplicate argument '%s' in function definition" % \
                     (identifier,)
@@ -256,6 +259,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
     def __init__(self, space, module, compile_info):
         self.space = space
         self.module = module
+        self.compile_info = compile_info
         self.scopes = {}
         self.scope = None
         self.stack = []
@@ -301,7 +305,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
     def note_symbol(self, identifier, role):
         mangled = self.scope.note_symbol(identifier, role)
         if role & SYM_GLOBAL:
-            if identifier in self.globs:
+            if mangled in self.globs:
                 role |= self.globs[mangled]
             self.globs[mangled] = role
 
@@ -356,6 +360,14 @@ class SymtableBuilder(ast.GenericASTVisitor):
 
     def visit_Global(self, glob):
         for name in glob.names:
+            old_role = self.scope.lookup_role(name)
+            if old_role & (SYM_USED | SYM_ASSIGNED):
+                if old_role & SYM_ASSIGNED:
+                    msg = "name '%s' is assigned to before global declaration"
+                else:
+                    msg = "name '%s' is used prior to global declaration"
+                misc.syntax_warning(self.space, msg, self.compile_info.filename,
+                                    glob.lineno, glob.col_offset)
             self.note_symbol(name, SYM_GLOBAL)
 
     def visit_Lambda(self, lamb):
