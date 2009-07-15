@@ -197,21 +197,25 @@ class BaseTestCompiler:
             assert not space.eq_w(w_const, space.wrap("b"))
             assert not space.eq_w(w_const, space.wrap("c"))
 
+    _unicode_error_kind = "w_UnicodeError"
+
     def test_unicodeliterals(self):
+        w_error = getattr(self.space, self._unicode_error_kind)
+
         e = py.test.raises(OperationError, self.eval_string, "u'\\Ufffffffe'")
         ex = e.value
         ex.normalize_exception(self.space)
-        assert ex.match(self.space, self.space.w_UnicodeError)
+        assert ex.match(self.space, w_error)
 
         e = py.test.raises(OperationError, self.eval_string, "u'\\Uffffffff'")
         ex = e.value
         ex.normalize_exception(self.space)
-        assert ex.match(self.space, self.space.w_UnicodeError)
+        assert ex.match(self.space, w_error)
 
         e = py.test.raises(OperationError, self.eval_string, "u'\\U%08x'" % 0x110000)
         ex = e.value
         ex.normalize_exception(self.space)
-        assert ex.match(self.space, self.space.w_UnicodeError)
+        assert ex.match(self.space, w_error)
 
     def test_unicode_docstring(self):
         space = self.space
@@ -636,6 +640,8 @@ def test():
 class TestPyCCompiler(BaseTestCompiler):
     def setup_method(self, method):
         self.compiler = CPythonCompiler(self.space)
+
+    _unicode_error_kind = "w_SyntaxError"
 
     if sys.version_info < (2, 4):
         def skip_on_2_3(self):
