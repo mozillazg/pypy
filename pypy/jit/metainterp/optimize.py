@@ -32,9 +32,9 @@ class InstanceNode(object):
     curfields = None    # optimization; equivalent to an empty dict
     dependencies = None
 
-    def __init__(self, escaped, startbox=False):
+    def __init__(self, escaped, fromstart=False):
         self.escaped = escaped
-        self.startbox = startbox
+        self.fromstart = fromstart
 
     def add_escape_dependency(self, other):
         assert not self.escaped
@@ -54,8 +54,8 @@ class InstanceNode(object):
 
     def __repr__(self):
         flags = ''
-        if self.escaped:  flags += 'e'
-        if self.startbox: flags += 's'
+        if self.escaped:   flags += 'e'
+        if self.fromstart: flags += 's'
         return "<InstanceNode (%s)>" % (flags,)
 
 
@@ -74,7 +74,7 @@ class PerfectSpecializationFinder(object):
     def find_nodes(self, loop):
         self.clear()
         for box in loop.inputargs:
-            self.nodes[box] = InstanceNode(escaped=False, startbox=True)
+            self.nodes[box] = InstanceNode(escaped=False, fromstart=True)
         #
         for op in loop.operations:
             opnum = op.opnum
@@ -117,7 +117,8 @@ class PerfectSpecializationFinder(object):
         elif instnode.origfields is not None and field in instnode.origfields:
             fieldnode = instnode.origfields[field]
         else:
-            fieldnode = InstanceNode(escaped=False, startbox=instnode.startbox)
+            fieldnode = InstanceNode(escaped=False,
+                                     fromstart=instnode.fromstart)
             instnode.add_escape_dependency(fieldnode)
             if instnode.origfields is None:
                 instnode.origfields = av_newdict()
@@ -131,6 +132,9 @@ class PerfectSpecializationFinder(object):
         pass    # prevent the default handling
 
     def find_nodes_JUMP(self, op):
+        pass    # prevent the default handling
+
+    def find_nodes_FAIL(self, op):
         pass    # prevent the default handling
 
 find_nodes_ops = _findall(PerfectSpecializationFinder, 'find_nodes_')

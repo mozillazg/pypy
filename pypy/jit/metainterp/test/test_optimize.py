@@ -121,7 +121,8 @@ class BaseTestOptimize(object):
         jump(i0)
         """
         boxes, getnode = self.find_nodes(ops)
-        assert getnode(boxes.i) is not getnode(boxes.i0)
+        assert getnode(boxes.i).fromstart
+        assert not getnode(boxes.i0).fromstart
 
     def test_find_nodes_non_escape(self):
         ops = """
@@ -137,6 +138,9 @@ class BaseTestOptimize(object):
         assert not getnode(boxes.p0).escaped
         assert not getnode(boxes.p1).escaped
         assert not getnode(boxes.p2).escaped
+        assert getnode(boxes.p0).fromstart
+        assert getnode(boxes.p1).fromstart
+        assert getnode(boxes.p2).fromstart
 
     def test_find_nodes_escape(self):
         ops = """
@@ -158,6 +162,11 @@ class BaseTestOptimize(object):
         assert getnode(boxes.p2).escaped    # forced by p1
         assert getnode(boxes.p3).escaped    # forced because p3 == p1
         assert getnode(boxes.p4).escaped    # forced by p1
+        assert getnode(boxes.p0).fromstart
+        assert getnode(boxes.p1).fromstart
+        assert getnode(boxes.p2).fromstart
+        assert getnode(boxes.p3).fromstart
+        assert not getnode(boxes.p4).fromstart
 
     def test_find_nodes_new(self):
         ops = """
@@ -186,6 +195,9 @@ class BaseTestOptimize(object):
         assert boxp1.origfields[self.valuedescr] is getnode(boxes.i1)
         assert not boxp2.origfields
         assert boxp2.curfields[self.nextdescr] is boxp2
+
+        assert boxp1.fromstart
+        assert not boxp2.fromstart
 
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
