@@ -1,58 +1,18 @@
 import py
 
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
 from pypy.jit.backend.llgraph import runner
-from pypy.jit.metainterp import resoperation, history
-from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
-                                         Const, ConstAddr, TreeLoop)
+                                         Const, ConstAddr, TreeLoop, BoxObj)
 from pypy.jit.metainterp.optimize import perfect_specialization_finder
-from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
-                                          NotSpecNode,
-                                          VirtualInstanceSpecNode)
-
-cpu = runner.LLtypeCPU(None)
-
-NODE = lltype.GcForwardReference()
-NODE.become(lltype.GcStruct('NODE', ('parent', OBJECT),
-                                    ('value', lltype.Signed),
-                                    ('next', lltype.Ptr(NODE))))
-
-node_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
-node_vtable_adr = llmemory.cast_ptr_to_adr(node_vtable)
-
-NODE2 = lltype.GcStruct('NODE2', ('parent', NODE),
-                                 ('one_more_field', lltype.Signed))
-
-node2_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
-node2_vtable_adr = llmemory.cast_ptr_to_adr(node2_vtable)
-
-cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE)}
-
+from pypy.jit.metainterp.test.oparser import parse
 
 # ____________________________________________________________
 
-def Loop(inputargs, operations):
-    loop = TreeLoop("test")
-    loop.inputargs = inputargs
-    loop.operations = operations
-    return loop
-
-class Any(object):
-    def __eq__(self, other):
-        return True
-    def __ne__(self, other):
-        return False
-    def __repr__(self):
-        return '*'
-ANY = Any()
-
 def equaloplists(oplist1, oplist2):
-    #saved = Box._extended_display
-    #try:
-    #    Box._extended_display = False
     print '-'*20, 'Comparing lists', '-'*20
     for op1, op2 in zip(oplist1, oplist2):
         txt1 = str(op1)
@@ -64,69 +24,172 @@ def equaloplists(oplist1, oplist2):
         assert op1.opnum == op2.opnum
         assert len(op1.args) == len(op2.args)
         for x, y in zip(op1.args, op2.args):
-            assert x == y or y == x     # for ANY object :-(
+            assert x == y
         assert op1.result == op2.result
         assert op1.descr == op2.descr
+        if op1.suboperations:
+            assert equaloplists(op1.suboperations, op2.suboperations)
     assert len(oplist1) == len(oplist2)
     print '-'*57
-    #finally:
-    #    Box._extended_display = saved
     return True
 
-def ResOperation(opname, args, result, descr=None):
-    if opname == 'escape':
-        opnum = -123       # random number not in the list
-    else:
-        opnum = getattr(rop, opname.upper())
-    return resoperation.ResOperation(opnum, args, result, descr)
+def test_equaloplists():
+    ops = """
+    [i0]
+    i1 = int_add(i0, 1)
+    guard_true(i1)
+        i2 = int_add(i1, 1)
+        fail(i2)
+    jump(i1)
+    """
+    loop1 = parse(ops)
+    loop2 = parse(ops)
+    loop3 = parse(ops.replace("i2 = int_add", "i2 = int_sub"))
+    assert equaloplists(loop1.operations, loop2.operations)
+    py.test.raises(AssertionError,
+                   "equaloplists(loop1.operations, loop3.operations)")
 
 # ____________________________________________________________
 
-class A:
-    ofs_next = runner.LLtypeCPU.fielddescrof(NODE, 'next')
-    ofs_value = runner.LLtypeCPU.fielddescrof(NODE, 'value')
-    size_of_node = runner.LLtypeCPU.sizeof(NODE)
-    #
-    startnode = lltype.malloc(NODE)
-    startnode.value = 20
-    sum = BoxInt(0)
-    n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, startnode))
-    nextnode = lltype.malloc(NODE)
-    nextnode.value = 19
-    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
-    n1nz = BoxInt(1)    # True
-    v = BoxInt(startnode.value)
-    v2 = BoxInt(startnode.value-1)
-    sum2 = BoxInt(0 + startnode.value)
-    inputargs = [sum, n1]
-    ops = [
-        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], None),
-        ResOperation('getfield_gc', [n1], v, ofs_value),
-        ResOperation('int_sub', [v, ConstInt(1)], v2),
-        ResOperation('int_add', [sum, v], sum2),
-        ResOperation('new_with_vtable', [ConstAddr(node_vtable, cpu)], n2,
-                     size_of_node),
-        ResOperation('setfield_gc', [n2, v2], None, ofs_value),
-        ResOperation('setfield_gc', [n2, n2], None, ofs_next),
-        ResOperation('jump', [sum2, n2], None),
-        ]
+class LLtypeMixin(object):
+    type_system = 'lltype'
 
-    def set_guard(op, args):
-        assert op.is_guard(), op
-        op.suboperations = [ResOperation('fail', args, None)]
+    node_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
+    node_vtable_adr = llmemory.cast_ptr_to_adr(node_vtable)
+    cpu = runner.LLtypeCPU(None)
 
-    set_guard(ops[0], [])
+    NODE = lltype.GcForwardReference()
+    NODE.become(lltype.GcStruct('NODE', ('parent', OBJECT),
+                                        ('value', lltype.Signed),
+                                        ('next', lltype.Ptr(NODE))))
+    node = lltype.malloc(NODE)
+    nodebox = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node))
+    nodebox2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node))
+    nodesize = cpu.sizeof(NODE)
+    valuedescr = cpu.fielddescrof(NODE, 'value')
+    nextdescr = cpu.fielddescrof(NODE, 'next')
 
-def test_A_find_nodes():
-    perfect_specialization_finder.find_nodes(Loop(A.inputargs, A.ops))
-    nodes = perfect_specialization_finder.nodes
-    assert A.sum in nodes
-    assert A.sum2 not in nodes
-    assert nodes[A.n1] is not nodes[A.n2]
-    assert not nodes[A.n1].escaped
-    assert not nodes[A.n2].escaped
+    cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE)}
+    namespace = locals()
 
-    assert not nodes[A.n1].curfields
-    assert nodes[A.n1].origfields[A.ofs_value] is nodes[A.v]
-    assert not nodes[A.n2].origfields
-    assert nodes[A.n2].curfields[A.ofs_next] is nodes[A.n2]
+class OOtypeMixin(object):
+    type_system = 'ootype'
+    
+    cpu = runner.OOtypeCPU(None)
+
+    NODE = ootype.Instance('NODE', ootype.ROOT, {})
+    NODE._add_fields({'value': ootype.Signed,
+                      'next': NODE})
+
+    node_vtable = ootype.runtimeClass(NODE)
+    node_vtable_adr = ootype.cast_to_object(node_vtable)
+
+    node = ootype.new(NODE)
+    nodebox = BoxObj(ootype.cast_to_object(node))
+    nodebox2 = BoxObj(ootype.cast_to_object(node))
+    valuedescr = cpu.fielddescrof(NODE, 'value')
+    nextdescr = cpu.fielddescrof(NODE, 'next')
+    nodesize = cpu.typedescrof(NODE)
+
+    cpu.class_sizes = {node_vtable_adr: cpu.typedescrof(NODE)}
+    namespace = locals()
+
+# ____________________________________________________________
+
+class BaseTestOptimize(object):
+
+    def parse(self, s, boxkinds=None):
+        return parse(s, self.cpu, self.namespace,
+                     type_system=self.type_system,
+                     boxkinds=boxkinds)
+
+    def assert_equal(self, optimized, expected):
+        equaloplists(optimized.operations,
+                     self.parse(expected).operations)
+
+    def find_nodes(self, ops, boxkinds=None):
+        loop = self.parse(ops, boxkinds=boxkinds)
+        perfect_specialization_finder.find_nodes(loop)
+        return loop.getboxes(), perfect_specialization_finder.getnode
+
+    def test_find_nodes_simple(self):
+        ops = """
+        [i]
+        i0 = int_sub(i, 1)
+        guard_value(i0, 0)
+          fail(i0)
+        jump(i0)
+        """
+        boxes, getnode = self.find_nodes(ops)
+        assert getnode(boxes.i) is not getnode(boxes.i0)
+
+    def test_find_nodes_non_escape(self):
+        ops = """
+        [p0]
+        p1 = getfield_gc(p0, descr=nextdescr)
+        i0 = getfield_gc(p1, descr=valuedescr)
+        i1 = int_sub(i0, 1)
+        p2 = getfield_gc(p0, descr=nextdescr)
+        setfield_gc(p2, i1, descr=valuedescr)
+        jump(p0)
+        """
+        boxes, getnode = self.find_nodes(ops)
+        assert not getnode(boxes.p0).escaped
+        assert not getnode(boxes.p1).escaped
+        assert not getnode(boxes.p2).escaped
+
+    def test_find_nodes_escape(self):
+        ops = """
+        [p0]
+        p1 = getfield_gc(p0, descr=nextdescr)
+        p2 = getfield_gc(p1, descr=nextdescr)
+        i0 = getfield_gc(p2, descr=valuedescr)
+        i1 = int_sub(i0, 1)
+        escape(p1)
+        p3 = getfield_gc(p0, descr=nextdescr)
+        setfield_gc(p3, i1, descr=valuedescr)
+        p4 = getfield_gc(p1, descr=nextdescr)
+        setfield_gc(p4, i1, descr=valuedescr)
+        jump(p0)
+        """
+        boxes, getnode = self.find_nodes(ops)
+        assert not getnode(boxes.p0).escaped
+        assert getnode(boxes.p1).escaped
+        assert getnode(boxes.p2).escaped    # forced by p1
+        assert getnode(boxes.p3).escaped    # forced because p3 == p1
+        assert getnode(boxes.p4).escaped    # forced by p1
+
+    def test_find_nodes_new(self):
+        ops = """
+        [sum, p1]
+        guard_class(p1, ConstClass(node_vtable))
+            fail()
+        i1 = getfield_gc(p1, descr=valuedescr)
+        i2 = int_sub(i1, 1)
+        sum2 = int_add(sum, i1)
+        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p2, p2, descr=nextdescr)
+        jump(sum2, p2)
+        """
+        boxes, getnode = self.find_nodes(ops, boxkinds={'sum': BoxInt,
+                                                        'sum2': BoxInt})
+        assert getnode(boxes.sum) is not getnode(boxes.sum2)
+        assert getnode(boxes.p1) is not getnode(boxes.p2)
+
+        boxp1 = getnode(boxes.p1)
+        boxp2 = getnode(boxes.p2)
+        assert not boxp1.escaped
+        assert not boxp2.escaped
+
+        assert not boxp1.curfields
+        assert boxp1.origfields[self.valuedescr] is getnode(boxes.i1)
+        assert not boxp2.origfields
+        assert boxp2.curfields[self.nextdescr] is boxp2
+
+
+class TestLLtype(BaseTestOptimize, LLtypeMixin):
+    pass
+
+class TestOOtype(BaseTestOptimize, OOtypeMixin):
+    pass
