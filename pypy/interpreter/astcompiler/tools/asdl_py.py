@@ -49,10 +49,18 @@ class ASDLVisitor(asdl.VisitorBase):
 
 class ASTNodeVisitor(ASDLVisitor):
 
-    def visitType(self, tp):
-        self.visit(tp.value, tp.name)
+    def visitModule(self, mod):
+        dont_touch = set()
+        for type in mod.dfns:
+            if isinstance(type.value, asdl.Product) or \
+                    self.is_simple_sum(type.value):
+                dont_touch.add(type.name.value)
+        super(ASTNodeVisitor, self).visitModule(mod, dont_touch)
 
-    def visitSum(self, sum, base):
+    def visitType(self, tp, simple):
+        self.visit(tp.value, tp.name, simple)
+
+    def visitSum(self, sum, base, simple):
         if self.is_simple_sum(sum):
             for i, cons in enumerate(sum.types):
                 self.emit("%s = %i" % (cons.name, i + 1))
@@ -62,10 +70,10 @@ class ASTNodeVisitor(ASDLVisitor):
             self.emit("pass", 1)
             self.emit("")
             for cons in sum.types:
-                self.visit(cons, base, sum.attributes)
+                self.visit(cons, base, sum.attributes, simple)
                 self.emit("")
 
-    def visitProduct(self, product, name):
+    def visitProduct(self, product, name, simple):
         self.emit("class %s(AST):" % (name,))
         self.emit("")
         self.make_constructor(product.fields)
@@ -84,13 +92,31 @@ class ASTNodeVisitor(ASDLVisitor):
             self.emit("def __init__(self):", 1)
             self.emit("pass", 2)
 
-    def visitConstructor(self, cons, base, extra_attributes):
+    def visitConstructor(self, cons, base, extra_attributes, simple):
         self.emit("class %s(%s):" % (cons.name, base))
         self.emit("")
         self.make_constructor(cons.fields + extra_attributes)
         self.emit("")
         self.emit("def walkabout(self, visitor):", 1)
         self.emit("visitor.visit_%s(self)" % (cons.name,), 2)
+        self.emit("")
+        self.emit("def mutate_over(self, visitor):", 1)
+        for field in cons.fields:
+            if field.type.value not in asdl.builtin_types and \
+                    field.type.value not in simple:
+                if field.opt or field.seq:
+                    level = 3
+                    self.emit("if self.%s:" % (field.name,), 2)
+                else:
+                    level = 2
+                if field.seq:
+                    sub = (field.name,)
+                    self.emit("visitor._mutate_sequence(self.%s)" % sub, level)
+                else:
+                    sub = (field.name, field.name)
+                    self.emit("self.%s = self.%s.mutate_over(visitor)" % sub,
+                              level)
+        self.emit("return visitor.visit_%s(self)" % (cons.name,), 2)
 
     def visitField(self, field):
         self.emit("self.%s = %s" % (field.name, field.name), 2)
@@ -108,6 +134,10 @@ class ASTVisitorVisitor(ASDLVisitor):
         self.emit("")
         self.emit("def default_visitor(self, node):", 1)
         self.emit("raise NodeVisitorNotImplemented", 2)
+        self.emit("")
+        self.emit("def _mutate_sequence(self, seq):", 1)
+        self.emit("for i in range(len(seq)):", 2)
+        self.emit("seq[i] = seq[i].mutate_over(self)", 3)
         self.emit("")
         super(ASTVisitorVisitor, self).visitModule(mod)
         self.emit("")
@@ -184,6 +214,9 @@ class AST(Wrappable):
 
     def walkabout(self, visitor):
         raise AssertionError("walkabout() implementation not provided")
+
+    def mutate_over(self, visitor):
+        raise AssertionError("mutate_over() implementation not provided")
 
 class NodeVisitorNotImplemented(Exception):
     pass
