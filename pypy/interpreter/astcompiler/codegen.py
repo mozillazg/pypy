@@ -863,6 +863,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         else:
             arg_count = 0
         self.emit_op_arg(ops.CALL_METHOD, arg_count)
+        return True
 
     def _listcomp_generator(self, list_name, gens, gen_index, elt):
         start = self.new_block()
