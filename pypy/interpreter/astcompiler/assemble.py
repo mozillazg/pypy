@@ -402,6 +402,8 @@ _static_opcode_stack_effects = {
     ops.BUILD_MAP : 1,
     ops.COMPARE_OP : -1,
 
+    ops.LOOKUP_METHOD : 1,
+
     ops.LOAD_NAME : 1,
     ops.STORE_NAME : -1,
     ops.DELETE_NAME : 0,
@@ -476,6 +478,12 @@ def _compute_CALL_FUNCTION_KW(arg):
 
 def _compute_CALL_FUNCTION_VAR_KW(arg):
     return _num_args(arg) - 2
+
+def _compute_CALL_LIKELY_BUILTIN(arg):
+    return -(arg & 0xFF) + 1
+
+def _compute_CALL_METHOD(arg):
+    return -arg - 1
 
 
 _stack_effect_computers = {}
