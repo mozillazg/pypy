@@ -149,11 +149,11 @@ class ASTVisitorVisitor(ASDLVisitor):
 
     def visitProduct(self, prod, name):
         self.emit("def visit_%s(self, node):" % (name,), 1)
-        self.emit("self.default_visitor(node)", 2)
+        self.emit("return self.default_visitor(node)", 2)
 
     def visitConstructor(self, cons, _):
         self.emit("def visit_%s(self, node):" % (cons.name,), 1)
-        self.emit("self.default_visitor(node)", 2)
+        self.emit("return self.default_visitor(node)", 2)
 
 
 class GenericASTVisitorVisitor(ASDLVisitor):
