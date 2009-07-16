@@ -193,10 +193,11 @@ class FunctionScope(Scope):
         self.is_generator = True
 
     def note_return(self, ret):
-        if self.is_generator and ret.value:
-            raise SyntaxError("return with value in generator", ret.lineno,
-                              ret.col_offset)
-        self.return_with_value = True
+        if ret.value:
+            if self.is_generator:
+                raise SyntaxError("return with value in generator", ret.lineno,
+                                  ret.col_offset)
+            self.return_with_value = True
 
     def note_exec(self, exc):
         Scope.note_exec(self, exc)
