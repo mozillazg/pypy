@@ -1,5 +1,5 @@
 from pypy.interpreter import gateway
-from pypy.interpreter.astcompiler import ast
+from pypy.interpreter.astcompiler import ast2 as ast
 
 
 app = gateway.applevel("""
