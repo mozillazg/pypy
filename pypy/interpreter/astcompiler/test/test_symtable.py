@@ -298,7 +298,7 @@ class TestSymbolTable:
         assert scp.has_exec
         for line in ("exec 'hi' in g", "exec 'hi' in g, h"):
             scp = self.func_scope("def f(): " + line)
-            assert scp.optimized
+            assert not scp.optimized
             assert scp.bare_exec is None
             assert scp.has_exec
 
