@@ -312,6 +312,7 @@ class TestSymbolTable:
             input = "def f():\n    " + input
             exc = py.test.raises(SyntaxError, self.func_scope, input).value
             assert exc.msg == "return with value in generator"
+        scp = self.func_scope("def f():\n    return\n    yield x")
 
     def test_return(self):
         for input in ("class x: return", "return"):
