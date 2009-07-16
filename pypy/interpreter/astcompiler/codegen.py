@@ -6,6 +6,7 @@ from pypy.interpreter.astcompiler import (ast2 as ast, assemble, symtable,
                                           consts, misc)
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool import stdlib_opcode as ops
+from pypy.module.__builtin__.__init__ import BUILTIN_TO_INDEX
 
 
 def compile_ast(space, module, info):
@@ -794,6 +795,9 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def visit_Call(self, call):
         self.update_position(call)
+        if self._optimize_builtin_call(call) or \
+                self._optimize_method_call(call):
+            return
         call.func.walkabout(self)
         arg = 0
         call_type = 0
@@ -818,6 +822,43 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         elif call_type == 3:
             op = ops.CALL_FUNCTION_VAR_KW
         self.emit_op_arg(op, arg)
+
+    def _call_has_simple_args(self, call):
+        return not call.starargs and not call.kwargs and not call.keywords
+
+    def _optimize_builtin_call(self, call):
+        if not self.space.config.objspace.opcodes.CALL_LIKELY_BUILTIN or \
+                not self._call_has_simple_args(call) or \
+                not isinstance(call.func, ast.Name):
+            return False
+        name_scope = self.scope.lookup(call.func.id)
+        if name_scope == symtable.SCOPE_GLOBAL_IMPLICIT or \
+                name_scope == symtable.SCOPE_UNKNOWN:
+            builtin_index = BUILTIN_TO_INDEX.get(call.func.id, -1)
+            if builtin_index != -1:
+                if call.args:
+                    args_count = len(call.args)
+                    self.visit_sequence(call.args)
+                else:
+                    args_count = 0
+                arg = builtin_index << 8 | args_count
+                self.emit_op_arg(ops.CALL_LIKELY_BUILTIN, arg)
+                return True
+        return False
+
+    def _optimize_method_call(self, call):
+        if not self.space.config.objspace.opcodes.CALL_METHOD or \
+                not self._call_has_simple_args(call) or \
+                not isinstance(call.func, ast.Attribute):
+            return False
+        call.func.value.walkabout(self)
+        self.emit_op_name(ops.LOOKUP_METHOD, self.names, call.func.attr)
+        if call.args:
+            self.visit_sequence(call.args)
+            arg_count = len(call.args)
+        else:
+            arg_count = 0
+        self.emit_op_arg(ops.CALL_METHOD, arg_count)
 
     def _listcomp_generator(self, list_name, gens, gen_index, elt):
         start = self.new_block()
