@@ -1,8 +1,7 @@
-import codeop
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.pyparser import parser, pytokenizer, pygram, error
-from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
+from pypy.interpreter.astcompiler import consts
 
 
 _recode_to_utf8 = gateway.applevel(r'''
@@ -82,13 +81,18 @@ class PythonParser(parser.Parser):
         """Parse a python source according to goal"""
         # Detect source encoding.
         enc = None
-        if textsrc[:3] == '\xEF\xBB\xBF':
+        if textsrc.startswith("\xEF\xBB\xBF"):
             textsrc = textsrc[3:]
             enc = 'utf-8'
-            # check that there is no explicit encoding declared
+            # If an encoding is explicitly given check that it is utf-8.
             decl_enc = _check_for_encoding(textsrc)
-            if decl_enc is not None:
-                raise SyntaxError("encoding declaration in Unicode string")
+            if decl_enc and decl_enc != "utf-8":
+                raise error.SyntaxError("UTF-8 BOM with non-utf8 coding cookie")
+        elif compile_info.flags & consts.PyCF_SOURCE_IS_UTF8:
+            enc = 'utf-8'
+
+            if _check_for_encoding(textsrc) is not None:
+                raise error.SyntaxError("coding declaration in unicode string")
         else:
             enc = _normalize_encoding(_check_for_encoding(textsrc))
             if enc is not None and enc not in ('utf-8', 'iso-8859-1'):
@@ -104,7 +108,7 @@ class PythonParser(parser.Parser):
                     raise
 
         flags = compile_info.flags
-        if flags & CO_FUTURE_WITH_STATEMENT:
+        if flags & consts.CO_FUTURE_WITH_STATEMENT:
             self.grammar = pygram.python_grammar
         else:
             self.grammar = pygram.python_grammar_no_with_statement
@@ -112,7 +116,7 @@ class PythonParser(parser.Parser):
         if source_lines and not source_lines[-1].endswith("\n"):
             source_lines[-1] += '\n'
         if textsrc and textsrc[-1] == "\n":
-            flags &= ~codeop.PyCF_DONT_IMPLY_DEDENT
+            flags &= ~consts.PyCF_DONT_IMPLY_DEDENT
 
         self.prepare(_targets[compile_info.mode])
         try:

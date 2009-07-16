@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-import codeop
 import py
 from pypy.interpreter.pyparser import pyparse
 from pypy.interpreter.pyparser.pygram import syms, tokens
 from pypy.interpreter.pyparser.error import SyntaxError, IndentationError
+from pypy.interpreter.astcompiler import consts
 
 
 class TestPythonParser:
@@ -22,7 +22,7 @@ class TestPythonParser:
 
     def test_dont_imply_dedent(self):
         info = pyparse.CompileInfo("<test>", "single",
-                                   codeop.PyCF_DONT_IMPLY_DEDENT)
+                                   consts.PyCF_DONT_IMPLY_DEDENT)
         self.parse('if 1:\n  x\n', info=info)
         self.parse('x = 5 ', info=info)
 
@@ -42,6 +42,17 @@ stuff = "nothing"
         input = (u"# coding: utf-7\nstuff = %s" % (sentence,)).encode("utf-7")
         tree = self.parse(input, info=info)
         assert info.encoding == "utf-7"
+        input = "\xEF\xBB\xBF# coding: utf-8\nx"
+        self.parse(input, info=info)
+        assert info.encoding == "utf-8"
+        input = "# coding: utf-8\nx"
+        info.flags |= consts.PyCF_SOURCE_IS_UTF8
+        exc = py.test.raises(SyntaxError, self.parse, input, info=info).value
+        info.flags &= ~consts.PyCF_SOURCE_IS_UTF8
+        assert exc.msg == "coding declaration in unicode string"
+        input = "\xEF\xBB\xBF# coding: latin-1\nx"
+        exc = py.test.raises(SyntaxError, self.parse, input).value
+        assert exc.msg == "UTF-8 BOM with non-utf8 coding cookie"
         input = "# coding: not-here"
         exc = py.test.raises(SyntaxError, self.parse, input).value
         assert exc.msg == "Unknown encoding: not-here"
