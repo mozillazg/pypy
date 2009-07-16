@@ -107,11 +107,6 @@ F_BLOCK_FINALLY = 2
 F_BLOCK_FINALLY_END = 3
 
 
-CONST_NOT_CONST = -1
-CONST_FALSE = 0
-CONST_TRUE = 1
-
-
 class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def __init__(self, space, name, tree, lineno, symbols, compile_info):
@@ -134,13 +129,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         generator = kind(self.space, name, node, node.lineno, self.symbols,
                          self.compile_info)
         return generator.assemble()
-
-    def _expr_constant(self, expr):
-        if isinstance(expr, ast.Num):
-            return int(self.space.is_true(expr.n))
-        elif isinstance(expr, ast.Str):
-            return int(self.space.is_true(expr.s))
-        return CONST_NOT_CONST
 
     def push_frame_block(self, kind, block):
         self.frame_blocks.append((kind, block))
@@ -370,11 +358,11 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def visit_If(self, if_):
         self.update_position(if_)
         end = self.new_block()
-        test_constant = self._expr_constant(if_.test)
-        if test_constant == CONST_FALSE:
+        test_constant = misc.expr_constant(self.space, if_.test)
+        if test_constant == misc.CONST_FALSE:
             if if_.orelse:
                 self.visit_sequence(if_.orelse)
-        elif test_constant == CONST_TRUE:
+        elif test_constant == misc.CONST_TRUE:
             self.visit_sequence(if_.body)
         else:
             next = self.new_block()
@@ -442,25 +430,25 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def visit_While(self, wh):
         self.update_position(wh)
-        test_constant = self._expr_constant(wh.test)
-        if test_constant == CONST_FALSE:
+        test_constant = misc.expr_constant(self.space, wh.test)
+        if test_constant == misc.CONST_FALSE:
             if wh.orelse:
                 self.visit_sequence(orelse)
         else:
             end = self.new_block()
-            if test_constant == CONST_NOT_CONST:
+            if test_constant == misc.CONST_NOT_CONST:
                 anchor = self.new_block()
             self.emit_jump(ops.SETUP_LOOP, end)
             loop = self.new_block()
             self.push_frame_block(F_BLOCK_LOOP, loop)
             self.use_next_block(loop)
-            if test_constant == CONST_NOT_CONST:
+            if test_constant == misc.CONST_NOT_CONST:
                 wh.test.walkabout(self)
                 self.emit_jump(ops.JUMP_IF_FALSE, anchor)
                 self.emit_op(ops.POP_TOP)
             self.visit_sequence(wh.body)
             self.emit_jump(ops.JUMP_ABSOLUTE, loop, True)
-            if test_constant == CONST_NOT_CONST:
+            if test_constant == misc.CONST_NOT_CONST:
                 self.use_next_block(anchor)
                 self.emit_op(ops.POP_TOP)
                 self.emit_op(ops.POP_BLOCK)

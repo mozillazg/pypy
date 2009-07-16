@@ -21,6 +21,18 @@ def syntax_warning(space, msg, fn, lineno, offset):
     _emit_syntax_warning(space, w_msg, w_filename, w_lineno, w_offset)
 
 
+CONST_NOT_CONST = -1
+CONST_FALSE = 0
+CONST_TRUE = 1
+
+def expr_constant(space, expr):
+    if isinstance(expr, ast.Num):
+        return int(space.is_true(expr.n))
+    elif isinstance(expr, ast.Str):
+        return int(space.is_true(expr.s))
+    return CONST_NOT_CONST
+
+
 def flatten(tup):
     elts = []
     for elt in tup:
