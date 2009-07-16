@@ -2,7 +2,8 @@
 Generate Python bytecode from a Abstract Syntax Tree.
 """
 
-from pypy.interpreter.astcompiler import ast2 as ast, assemble, symtable, consts
+from pypy.interpreter.astcompiler import (ast2 as ast, assemble, symtable,
+                                          consts, misc)
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool import stdlib_opcode as ops
 

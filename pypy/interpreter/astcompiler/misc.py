@@ -32,6 +32,11 @@ def expr_constant(space, expr):
         return int(space.is_true(expr.s))
     return CONST_NOT_CONST
 
+def is_constant(expr):
+    if isinstance(expr, (ast.Num, ast.Str)):
+        return True
+    return False
+
 
 def flatten(tup):
     elts = []
