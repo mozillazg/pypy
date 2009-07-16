@@ -18,7 +18,7 @@ default_modules = essential_modules.copy()
 default_modules.update(dict.fromkeys(
     ["_codecs", "gc", "_weakref", "marshal", "errno",
      "math", "_sre", "_pickle_support", "operator",
-     "recparser", "symbol", "_random", "__pypy__"]))
+     "parser", "symbol", "_random", "__pypy__"]))
 
 
 # --allworkingmodules
