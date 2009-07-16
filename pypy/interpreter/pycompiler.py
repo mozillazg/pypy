@@ -4,7 +4,7 @@ Compiler instances are stored into 'space.getexecutioncontext().compiler'.
 """
 
 import sys
-from codeop import PyCF_DONT_IMPLY_DEDENT
+from pypy.interpreter.astcompiler.consts import PyCF_DONT_IMPLY_DEDENT
 from pypy.interpreter.error import OperationError
 
 class AbstractCompiler(object):

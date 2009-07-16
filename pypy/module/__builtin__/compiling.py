@@ -4,7 +4,8 @@ Implementation of the interpreter-level compile/eval builtins.
 
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
-from pypy.interpreter.error import OperationError 
+from pypy.interpreter.error import OperationError
+from pypy.interpreter.astcompiler import consts
 from pypy.interpreter.gateway import NoneNotWrapped
 
 def compile(space, w_source, filename, mode, flags=0, dont_inherit=0):
@@ -21,11 +22,11 @@ compile; if absent or zero these statements do influence the compilation,
 in addition to any features explicitly specified.
 """
     if space.is_true(space.isinstance(w_source, space.w_unicode)):
-        # hack: encode the unicode string as UTF-8 and attach
-        # a BOM at the start
-        w_source = space.call_method(w_source, 'encode', space.wrap('utf-8'))
-        str_ = space.str_w(w_source)
-        str_ = '\xEF\xBB\xBF' + str_
+        w_utf_8_source = space.call_method(w_source, "encode",
+                                           space.wrap("utf-8"))
+        str_ = space.str_w(w_utf_8_source)
+        # This flag tells the parser to reject any coding cookies it sees.
+        flags |= consts.PyCF_SOURCE_IS_UTF8
     else:
         str_ = space.str_w(w_source)
 
