@@ -77,7 +77,7 @@ class PythonParser(parser.Parser):
         parser.Parser.__init__(self, grammar)
         self.space = space
 
-    def parse_source(self, textsrc, compile_info=None):
+    def parse_source(self, textsrc, compile_info):
         """Parse a python source according to goal"""
         # Detect source encoding.
         enc = None
