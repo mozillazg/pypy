@@ -569,7 +569,11 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.load_const(space.wrap(level))
         names_w = [space.wrap(alias.name) for alias in imp.names]
         self.load_const(space.newtuple(names_w))
-        self.emit_op_name(ops.IMPORT_NAME, self.names, imp.module)
+        if imp.module:
+            mod_name = imp.module
+        else:
+            mod_name = ""
+        self.emit_op_name(ops.IMPORT_NAME, self.names, mod_name)
         if len(imp.names) == 1 and imp.names[0].name == "*":
             self.emit_op(ops.IMPORT_STAR)
         else:
