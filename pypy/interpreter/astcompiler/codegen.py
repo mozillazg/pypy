@@ -56,7 +56,7 @@ binary_operations = {
     ast.BitOr : ops.BINARY_OR,
     ast.BitAnd : ops.BINARY_AND,
     ast.BitXor : ops.BINARY_XOR,
-    ast.FloorDiv : ops.INPLACE_FLOOR_DIVIDE
+    ast.FloorDiv : ops.BINARY_FLOOR_DIVIDE
 }
 
 inplace_operations = {
@@ -264,7 +264,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             if self.compile_info.flags & consts.CO_FUTURE_DIVISION:
                 return ops.INPLACE_TRUE_DIVIDE
             else:
-                return ops.INPLACE_FLOOR_DIVIDE
+                return ops.INPLACE_DIVIDE
         return inplace_operations[op]
 
     def visit_AugAssign(self, assign):
@@ -314,7 +314,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             if self.compile_info.flags & consts.CO_FUTURE_DIVISION:
                 return ops.BINARY_TRUE_DIVIDE
             else:
-                return ops.BINARY_FLOOR_DIVIDE
+                return ops.BINARY_DIVIDE
         return binary_operations[op]
 
     def visit_BinOp(self, binop):
