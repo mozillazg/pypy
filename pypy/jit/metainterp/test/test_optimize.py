@@ -393,7 +393,7 @@ class BaseTestOptimize(object):
         assert boxp2.knownclsbox.value == self.node_vtable_adr
         assert boxp3.knownclsbox.value == self.node_vtable_adr2
 
-    def test_find_nodes_new_aliasing(self):
+    def test_find_nodes_new_aliasing_1(self):
         py.test.skip("infinite loop")
         ops = """
         [sum, p1]
@@ -414,6 +414,18 @@ class BaseTestOptimize(object):
         # with SpecNodes so far
         self.find_nodes(ops, 'Not, Not',
                         boxkinds={'sum': BoxInt, 'sum2': BoxInt})
+
+    def test_find_nodes_new_aliasing_2(self):
+        py.test.skip("in-progress")
+        ops = """
+        [p1, p2]
+        escape(p2)
+        p3 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        jump(p3, p3)
+        """
+        # both p1 and p2 must be NotSpecNodes; it's not possible to pass
+        # in p1 a Virtual and not in p2, as they both come from the same p3.
+        self.find_nodes(ops, 'Not, Not')
 
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
