@@ -226,7 +226,7 @@ def generate_tokens(lines, flags):
                 if start<max and line[start] in single_quoted:
                     raise TokenError("EOL while scanning single-quoted string",
                              line, lnum, start, token_list)
-                tok = (tokens.ERRORTOKEN, line[pos], lnum, pos, lines)
+                tok = (tokens.ERRORTOKEN, line[pos], lnum, pos, line)
                 token_list.append(tok)
                 last_comment = ''
                 pos = pos + 1
