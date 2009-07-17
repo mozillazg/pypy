@@ -24,11 +24,13 @@ SCOPE_CELL = 5
 
 class Scope(object):
 
-    def __init__(self, node, name, optimized):
+    can_be_optimized = False
+
+    def __init__(self, node, name):
         self.node = node
         self.parent = None
         self.name = name
-        self.optimized = optimized
+        self.locals_fully_known = False
         self.symbols = None
         self.roles = {}
         self.varnames = []
@@ -172,16 +174,19 @@ class Scope(object):
 class ModuleScope(Scope):
 
     def __init__(self, module):
-        Scope.__init__(self, module, "top", False)
+        Scope.__init__(self, module, "top")
 
 
 class FunctionScope(Scope):
 
+    can_be_optimized = True
+
     def __init__(self, func, name):
-        Scope.__init__(self, func, name, True)
+        Scope.__init__(self, func, name)
         self.has_variable_arg = False
         self.has_keywords_arg = False
         self.is_generator = False
+        self.optimized = True
         self.return_with_value = False
         self.import_star = None
         self.bare_exec = None
@@ -251,7 +256,7 @@ class FunctionScope(Scope):
                 trailer = "is a nested function"
             raise SyntaxError(err % (self.name, trailer), node.lineno,
                               node.col_offset)
-        self.optimized = self.optimized and not self.has_exec
+        self.locals_fully_known = self.optimized and not self.has_exec
 
 
 class ClassScope(Scope):
@@ -259,7 +264,7 @@ class ClassScope(Scope):
     _hide_bound_from_nested_scopes = True
 
     def __init__(self, clsdef):
-        Scope.__init__(self, clsdef, clsdef.name, False)
+        Scope.__init__(self, clsdef, clsdef.name)
 
     def mangle(self, name):
         return misc.mangle(name, self.name)
