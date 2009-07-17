@@ -255,6 +255,8 @@ if not _WIN32:
         pass # No check
     
     libc_name = ctypes.util.find_library('c')
+    assert libc_name is not None, "Cannot find C library, ctypes.util.find_library('c') returned None"
+
     def get_libc_name():
         return libc_name
 

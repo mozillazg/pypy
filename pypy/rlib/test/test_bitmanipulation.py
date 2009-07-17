@@ -1,4 +1,4 @@
-from pypy.lang.smalltalk.tool.bitmanipulation import splitter
+from pypy.rlib.bitmanipulation import splitter
 
 
 def test_simple_splitbits():
