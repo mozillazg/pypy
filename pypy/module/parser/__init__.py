@@ -24,5 +24,5 @@ class Module(MixedModule):
          'ASTType'      : 'pyparser.STType',
          'sequence2st'  : 'pyparser.sequence2st',
          'compilest'    : 'pyparser.compilest',
-         'compileast'   : 'pyparser.compileast'
+         'compileast'   : 'pyparser.compilest'
          }
