@@ -350,10 +350,10 @@ class SymtableBuilder(ast.GenericASTVisitor):
 
     def visit_ImportFrom(self, imp):
         for alias in imp.names:
-            if self.visit_alias(alias):
+            if self._visit_alias(alias):
                 self.scope.note_import_star(imp)
 
-    def visit_alias(self, alias):
+    def _visit_alias(self, alias):
         if alias.asname:
             store_name = alias.asname
         else:
