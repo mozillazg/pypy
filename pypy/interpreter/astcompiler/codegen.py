@@ -439,6 +439,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 self.visit_sequence(wh.orelse)
         else:
             end = self.new_block()
+            anchor = None
             if test_constant == misc.CONST_NOT_CONST:
                 anchor = self.new_block()
             self.emit_jump(ops.SETUP_LOOP, end)
