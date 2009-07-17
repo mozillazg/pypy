@@ -119,6 +119,7 @@ class PythonParser(parser.Parser):
             flags &= ~consts.PyCF_DONT_IMPLY_DEDENT
 
         self.prepare(_targets[compile_info.mode])
+        tp = 0
         try:
             tokens = pytokenizer.generate_tokens(source_lines, flags)
             for tp, value, lineno, column, line in tokens:
