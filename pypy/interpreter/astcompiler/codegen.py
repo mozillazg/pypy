@@ -350,7 +350,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 self.emit_op(ops.PRINT_NEWLINE_TO)
             else:
                 self.emit_op(ops.PRINT_NEWLINE)
-        if have_dest:
+        elif have_dest:
             self.emit_op(ops.POP_TOP)
 
     def visit_Delete(self, delete):
