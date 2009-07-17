@@ -1,6 +1,6 @@
 from pypy.rlib.objectmodel import r_dict
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.jit.metainterp import resoperation
+from pypy.jit.metainterp import resoperation, specnode
 from pypy.jit.metainterp.history import AbstractValue
 
 
@@ -31,8 +31,7 @@ class InstanceNode(object):
     origfields = None   # optimization; equivalent to an empty dict
     curfields = None    # optimization; equivalent to an empty dict
     dependencies = None
-    origclass = False
-    curclass = None
+    knownclsbox = None
 
     def __init__(self, escaped, fromstart=False):
         self.escaped = escaped
@@ -62,21 +61,21 @@ class InstanceNode(object):
 
 
 class PerfectSpecializationFinder(object):
+    node_escaped = InstanceNode(escaped=True)
 
     def __init__(self):
         self.nodes = {}     # Box -> InstanceNode
-        self.node_escaped = InstanceNode(escaped=True)
-
-    def clear(self):
-        self.nodes.clear()
 
     def getnode(self, box):
         return self.nodes.get(box, self.node_escaped)
 
     def find_nodes(self, loop):
-        self.clear()
+        inputnodes = []
         for box in loop.inputargs:
-            self.nodes[box] = InstanceNode(escaped=False, fromstart=True)
+            instnode = InstanceNode(escaped=False, fromstart=True)
+            inputnodes.append(instnode)
+            self.nodes[box] = instnode
+        self.inputnodes = inputnodes
         #
         for op in loop.operations:
             opnum = op.opnum
@@ -95,7 +94,7 @@ class PerfectSpecializationFinder(object):
 
     def find_nodes_NEW_WITH_VTABLE(self, op):
         instnode = InstanceNode(escaped=False)
-        instnode.curclass = op.args[0]
+        instnode.knownclsbox = op.args[0]
         self.nodes[op.result] = instnode
 
     def find_nodes_SETFIELD_GC(self, op):
@@ -134,22 +133,40 @@ class PerfectSpecializationFinder(object):
 
     def find_nodes_GUARD_CLASS(self, op):
         instbox = op.args[0]
+        clsbox = op.args[1]
         try:
             instnode = self.nodes[instbox]
         except KeyError:
             instnode = self.nodes[instbox] = InstanceNode(escaped=True)
-        else:
-            if instnode.fromstart:
-                instnode.origclass = True
-        instnode.curclass = op.args[1]
+        assert instnode is not self.node_escaped
+        assert (instnode.knownclsbox is None or
+                instnode.knownclsbox.equals(clsbox))
+        instnode.knownclsbox = clsbox
 
     def find_nodes_JUMP(self, op):
-        pass    # prevent the default handling
+        """Build the list of specnodes based on the result
+        computed by this PerfectSpecializationFinder.
+        """
+        specnodes = []
+        assert len(self.inputnodes) == len(op.args)
+        for i in range(len(op.args)):
+            inputnode = self.inputnodes[i]
+            specnodes.append(self.intersect(inputnode, op.args[i]))
+        self.specnodes = specnodes
 
-    def find_nodes_FAIL(self, op):
-        pass    # prevent the default handling
+    def intersect(self, inputnode, exitbox):
+        assert inputnode.fromstart
+        exitnode = self.getnode(exitbox)
+        if inputnode.escaped or exitnode.escaped or exitnode.fromstart:
+            if (inputnode.knownclsbox is not None and
+                exitnode.knownclsbox is not None and
+                inputnode.knownclsbox.equals(exitnode.knownclsbox)):
+                return specnode.FixedClassSpecNode(inputnode.knownclsbox)
+            else:
+                return specnode.prebuiltNotSpecNode
+        else:
+            xxx #...
 
 find_nodes_ops = _findall(PerfectSpecializationFinder, 'find_nodes_')
-perfect_specialization_finder = PerfectSpecializationFinder()
 
 # ____________________________________________________________
