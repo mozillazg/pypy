@@ -366,6 +366,9 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.note_symbol(store_name, SYM_ASSIGNED)
         return False
 
+    def visit_alias(self, alias):
+        self._visit_alias(alias)
+
     def visit_Exec(self, exc):
         self.scope.note_exec(exc)
         ast.GenericASTVisitor.visit_Exec(self, exc)
