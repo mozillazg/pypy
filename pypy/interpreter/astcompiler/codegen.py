@@ -1141,6 +1141,7 @@ class LambdaCodeGenerator(AbstractFunctionCodeGenerator):
         assert isinstance(lam, ast.Lambda)
         if lam.args.args:
             self._handle_nested_args(lam.args.args)
+            self.argcount = len(lam.args.args)
         lam.body.walkabout(self)
         self.emit_op(ops.RETURN_VALUE)
 

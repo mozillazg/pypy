@@ -695,6 +695,9 @@ class TestCompiler:
         """
         self.simple_test(source, 'l', [1, 2])
 
+    def test_lambda(self):
+        yield self.st, "y = lambda x: x", "y(4)", 4
+
 
 class AppTestPrint:
 
