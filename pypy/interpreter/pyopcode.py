@@ -1,7 +1,7 @@
 """
 Implementation of a part of the standard Python opcodes.
-The rest, dealing with variables in optimized ways, is in
-pyfastscope.py and pynestedscope.py.
+
+The rest, dealing with variables in optimized ways, is in nestedscope.py.
 """
 
 import sys
@@ -304,9 +304,9 @@ class __extend__(pyframe.PyFrame):
 
     ################################################################
     ##  Implementation of the "operational" opcodes
-    ##  See also pyfastscope.py and pynestedscope.py for the rest.
+    ##  See also nestedscope.py for the rest.
     ##
-    
+
     #  the 'self' argument of opcode implementations is called 'f'
     #  for historical reasons
 

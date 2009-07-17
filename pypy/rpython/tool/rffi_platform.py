@@ -14,9 +14,12 @@ import distutils
 #
 # Helpers for simple cases
 
-def eci_from_header(c_header_source):
+def eci_from_header(c_header_source, include_dirs=None):
+    if include_dirs is None:
+        include_dirs = []
     return ExternalCompilationInfo(
-        pre_include_bits=[c_header_source]
+        pre_include_bits=[c_header_source],
+        include_dirs=include_dirs
     )
 
 def getstruct(name, c_header_source, interesting_fields):
@@ -43,9 +46,9 @@ def getdefined(macro, c_header_source):
         DEFINED = Defined(macro)
     return configure(CConfig)['DEFINED']
 
-def has(name, c_header_source):
+def has(name, c_header_source, include_dirs=None):
     class CConfig:
-        _compilation_info_ = eci_from_header(c_header_source)
+        _compilation_info_ = eci_from_header(c_header_source, include_dirs)
         HAS = Has(name)
     return configure(CConfig)['HAS']
 
@@ -57,9 +60,9 @@ def verify_eci(eci):
         WORKS = Works()
     configure(CConfig)
     
-def checkcompiles(expression, c_header_source):
+def checkcompiles(expression, c_header_source, include_dirs=None):
     """Check if expression compiles. If not, returns False"""
-    return has(expression, c_header_source)
+    return has(expression, c_header_source, include_dirs)
     
 def sizeof(name, eci, **kwds):
     class CConfig:
