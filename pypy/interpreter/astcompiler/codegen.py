@@ -122,6 +122,9 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.done_with_future = False
         self._compile(tree)
 
+    def _compile(self, tree):
+        raise NotImplementedError
+
     def current_temporary_name(self):
         name = "_[%i]" % (self.temporary_name_counter,)
         self.temporary_name_counter += 1
