@@ -16,20 +16,20 @@ class STType(Wrappable):
 
     def _build_app_tree(self, space, node, seq_maker, with_lineno, with_column):
         if node.children is not None:
-            seq_w = [None]*len(node.children)
-            # This is a hack to make the annotator think seq_w is resizable.
-            seq_w.append(None)
+            seq_w = [None]*(len(node.children) + 1)
             seq_w[0] = space.wrap(node.type)
             for i in range(1, len(node.children) + 1):
                 seq_w[i] = self._build_app_tree(space, node.children[i - 1],
                                                 seq_maker, with_lineno,
                                                 with_column)
         else:
-            seq_w = [space.wrap(node.type), space.wrap(node.value)]
+            seq_w = [None]*(2 + with_lineno + with_column)
+            seq_w[0] = space.wrap(node.type)
+            seq_w[1] = space.wrap(node.value)
             if with_lineno:
-                seq_w.append(space.wrap(node.lineno))
+                seq_w[2] = space.wrap(node.lineno)
             if with_column:
-                seq_w.append(space.wrap(node.column))
+                seq_w[3] = space.wrap(node.column)
         return seq_maker(seq_w)
 
     def descr_issuite(self, space):
