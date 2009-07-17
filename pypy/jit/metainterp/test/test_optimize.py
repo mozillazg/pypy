@@ -410,7 +410,7 @@ class BaseTestOptimize(object):
         setfield_gc(p2, p2, descr=nextdescr)
         jump(sum2, p2)
         """
-        # the issue is the loop involving p2, which cannot be represented
+        # the issue is the cycle "p2->p2", which cannot be represented
         # with SpecNodes so far
         self.find_nodes(ops, 'Not, Not',
                         boxkinds={'sum': BoxInt, 'sum2': BoxInt})
