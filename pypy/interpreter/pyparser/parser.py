@@ -32,9 +32,12 @@ class Grammar(object):
 
     def _freeze_(self):
         # Remove some attributes not used in parsing.
-        del self.symbol_to_label
-        del self.symbol_names
-        del self.symbol_ids
+        try:
+            del self.symbol_to_label
+            del self.symbol_names
+            del self.symbol_ids
+        except AttributeError:
+            pass
         return True
 
 
