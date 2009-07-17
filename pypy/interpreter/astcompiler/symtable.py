@@ -417,15 +417,16 @@ class SymtableBuilder(ast.GenericASTVisitor):
         ast.GenericASTVisitor.visit_With(self, wih)
 
     def visit_arguments(self, arguments):
-        assert isinstance(self.scope, FunctionScope) # Annotator hint.
+        scope = self.scope
+        assert isinstance(scope, FunctionScope) # Annotator hint.
         if arguments.args:
             self._handle_params(arguments.args, True)
         if arguments.vararg:
             self.note_symbol(arguments.vararg, SYM_PARAM)
-            self.scope.note_variable_arg(arguments.vararg)
+            scope.note_variable_arg(arguments.vararg)
         if arguments.kwarg:
             self.note_symbol(arguments.kwarg, SYM_PARAM)
-            self.scope.note_keywords_arg(arguments.kwarg)
+            scope.note_keywords_arg(arguments.kwarg)
         if arguments.args:
             self._handle_nested_params(arguments.args)
 
