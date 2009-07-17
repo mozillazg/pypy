@@ -601,6 +601,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         body_block = self.new_block()
         cleanup = self.new_block()
         exit_storage = self.current_temporary_name()
+        temp_result = None
         if wih.optional_vars:
             temp_result = self.current_temporary_name()
         wih.context_expr.walkabout(self)
