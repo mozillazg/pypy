@@ -17,7 +17,7 @@ class Instruction(object):
         self.opcode = opcode
         self.arg = arg
         self.lineno = lineno
-        self.jump = None
+        self.has_jump = False
 
     def size(self):
         if self.opcode >= ops.HAVE_ARGUMENT:
@@ -30,7 +30,7 @@ class Instruction(object):
 
     def jump_to(self, target, absolute=False):
         self.jump = (target, absolute)
-
+        self.has_jump = True
 
     def __repr__(self):
         data = [ops.opname[self.opcode]]
@@ -38,7 +38,7 @@ class Instruction(object):
         if self.opcode >= ops.HAVE_ARGUMENT:
             data.append(self.arg)
             template += " %i"
-            if self.jump:
+            if self.has_jump:
                 data.append(self.jump[0])
                 template += " %s"
         template += ">"
@@ -60,7 +60,7 @@ class Block(object):
         if self.next_block is not None:
             self.next_block._post_order(blocks)
         for instr in self.instructions:
-            if instr.jump:
+            if instr.has_jump:
                 instr.jump[0]._post_order(blocks)
         blocks.append(self)
         self.marked = True
@@ -203,7 +203,7 @@ class PythonCodeMaker(ast.ASTVisitor):
                 offset = block.offset
                 for instr in block.instructions:
                     offset += instr.size()
-                    if instr.jump:
+                    if instr.has_jump:
                         target, absolute = instr.jump
                         if absolute:
                             jump_arg = target.offset
@@ -252,7 +252,7 @@ class PythonCodeMaker(ast.ASTVisitor):
             depth += _opcode_stack_effect(instr.opcode, instr.arg)
             if depth >= max_depth:
                 max_depth = depth
-            if instr.jump:
+            if instr.has_jump:
                 max_depth = self._recursive_stack_depth_walk(instr.jump[0],
                                                              depth, max_depth)
                 if instr.opcode == ops.JUMP_ABSOLUTE or \
