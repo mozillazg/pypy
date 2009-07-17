@@ -7,10 +7,11 @@ from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          Const, ConstAddr, TreeLoop, BoxObj,
-                                         AbstractDescr)
+                                         ConstObj, AbstractDescr)
 from pypy.jit.metainterp.optimize import PerfectSpecializationFinder
 from pypy.jit.metainterp.optimize import sort_descrs
-from pypy.jit.metainterp.specnode import NotSpecNode, FixedClassSpecNode
+from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
+from pypy.jit.metainterp.specnode import FixedClassSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.test.oparser import parse
 
@@ -86,6 +87,7 @@ class LLtypeMixin(object):
     nodebox = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node))
     nodebox2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node))
     nodesize = cpu.sizeof(NODE)
+    nodesize2 = cpu.sizeof(NODE2)
     valuedescr = cpu.fielddescrof(NODE, 'value')
     nextdescr = cpu.fielddescrof(NODE, 'next')
 
@@ -114,6 +116,7 @@ class OOtypeMixin(object):
     valuedescr = cpu.fielddescrof(NODE, 'value')
     nextdescr = cpu.fielddescrof(NODE, 'next')
     nodesize = cpu.typedescrof(NODE)
+    nodesize2 = cpu.typedescrof(NODE2)
 
     cpu.class_sizes = {node_vtable_adr: cpu.typedescrof(NODE),
                        node_vtable_adr2: cpu.typedescrof(NODE2)}
@@ -132,13 +135,39 @@ class BaseTestOptimize(object):
         equaloplists(optimized.operations,
                      self.parse(expected).operations)
 
-    def find_nodes(self, ops, boxkinds=None):
+    def assert_specnodes(self, specnodes, text):
+        #
+        def constclass(cls_vtable):
+            if self.type_system == 'lltype':
+                return ConstAddr(llmemory.cast_ptr_to_adr(cls_vtable),
+                                 self.cpu)
+            else:
+                return ConstObj(ootype.cast_to_object(cls_vtable))
+        def makeFixed(cls_vtable):
+            return FixedClassSpecNode(constclass(cls_vtable))
+        def makeVirtual(cls_vtable, **kwds_fields):
+            fields = []
+            for key, value in kwds_fields.items():
+                fields.append((self.namespace[key], value))
+            fields.sort(key = lambda (x, _): x.sort_key())
+            return VirtualInstanceSpecNode(constclass(cls_vtable), fields)
+        #
+        context = {'Not': prebuiltNotSpecNode,
+                   'Fixed': makeFixed,
+                   'Virtual': makeVirtual}
+        lst = eval('[' + text + ']', self.namespace, context)
+        assert len(specnodes) == len(lst)
+        for x, y in zip(specnodes, lst):
+            assert x._equals(y)
+        return True
+
+    def find_nodes(self, ops, spectext, boxkinds=None):
         loop = self.parse(ops, boxkinds=boxkinds)
         perfect_specialization_finder = PerfectSpecializationFinder()
         perfect_specialization_finder.find_nodes(loop)
-        return (loop.getboxes(),
-                perfect_specialization_finder.getnode,
-                perfect_specialization_finder.specnodes)
+        assert self.assert_specnodes(perfect_specialization_finder.specnodes,
+                                     spectext)
+        return (loop.getboxes(), perfect_specialization_finder.getnode)
 
     def test_find_nodes_simple(self):
         ops = """
@@ -148,10 +177,9 @@ class BaseTestOptimize(object):
           fail(i0)
         jump(i0)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Not')
         assert getnode(boxes.i).fromstart
         assert not getnode(boxes.i0).fromstart
-        assert [sn.__class__ for sn in specnodes] == [NotSpecNode]
 
     def test_find_nodes_non_escape(self):
         ops = """
@@ -163,14 +191,13 @@ class BaseTestOptimize(object):
         setfield_gc(p2, i1, descr=valuedescr)
         jump(p0)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Not')
         assert not getnode(boxes.p0).escaped
         assert not getnode(boxes.p1).escaped
         assert not getnode(boxes.p2).escaped
         assert getnode(boxes.p0).fromstart
         assert getnode(boxes.p1).fromstart
         assert getnode(boxes.p2).fromstart
-        assert [sn.__class__ for sn in specnodes] == [NotSpecNode]
 
     def test_find_nodes_escape(self):
         ops = """
@@ -186,7 +213,7 @@ class BaseTestOptimize(object):
         setfield_gc(p4, i1, descr=valuedescr)
         jump(p0)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Not')
         assert not getnode(boxes.p0).escaped
         assert getnode(boxes.p1).escaped
         assert getnode(boxes.p2).escaped    # forced by p1
@@ -197,7 +224,6 @@ class BaseTestOptimize(object):
         assert getnode(boxes.p2).fromstart
         assert getnode(boxes.p3).fromstart
         assert not getnode(boxes.p4).fromstart
-        assert [sn.__class__ for sn in specnodes] == [NotSpecNode]
 
     def test_find_nodes_guard_class_1(self):
         ops = """
@@ -206,10 +232,9 @@ class BaseTestOptimize(object):
             fail()
         jump(p1)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Fixed(node_vtable)')
         boxp1 = getnode(boxes.p1)
         assert boxp1.knownclsbox.value == self.node_vtable_adr
-        assert [sn.__class__ for sn in specnodes] == [FixedClassSpecNode]
 
     def test_find_nodes_guard_class_2(self):
         ops = """
@@ -219,12 +244,11 @@ class BaseTestOptimize(object):
             fail()
         jump(p1)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Not')
         boxp1 = getnode(boxes.p1)
         boxp2 = getnode(boxes.p2)
         assert boxp1.knownclsbox is None
         assert boxp2.knownclsbox.value == self.node_vtable_adr
-        assert [sn.__class__ for sn in specnodes] == [NotSpecNode]
 
     def test_find_nodes_guard_class_outonly(self):
         ops = """
@@ -234,12 +258,11 @@ class BaseTestOptimize(object):
             fail()
         jump(p2)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Not')
         boxp1 = getnode(boxes.p1)
         boxp2 = getnode(boxes.p2)
         assert boxp1.knownclsbox is None
         assert boxp2.knownclsbox.value == self.node_vtable_adr
-        assert [sn.__class__ for sn in specnodes] == [NotSpecNode]
 
     def test_find_nodes_guard_class_inonly(self):
         ops = """
@@ -249,12 +272,11 @@ class BaseTestOptimize(object):
         p2 = escape()
         jump(p2)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Not')
         boxp1 = getnode(boxes.p1)
         boxp2 = getnode(boxes.p2)
         assert boxp1.knownclsbox.value == self.node_vtable_adr
         assert boxp2.knownclsbox is None
-        assert [sn.__class__ for sn in specnodes] == [NotSpecNode]
 
     def test_find_nodes_guard_class_inout(self):
         ops = """
@@ -266,12 +288,11 @@ class BaseTestOptimize(object):
             fail()
         jump(p2)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Fixed(node_vtable)')
         boxp1 = getnode(boxes.p1)
         boxp2 = getnode(boxes.p2)
         assert boxp1.knownclsbox.value == self.node_vtable_adr
         assert boxp2.knownclsbox.value == self.node_vtable_adr
-        assert [sn.__class__ for sn in specnodes] == [FixedClassSpecNode]
 
     def test_find_nodes_guard_class_mismatch(self):
         ops = """
@@ -283,14 +304,52 @@ class BaseTestOptimize(object):
             fail()
         jump(p2)
         """
-        boxes, getnode, specnodes = self.find_nodes(ops)
+        boxes, getnode = self.find_nodes(ops, 'Not')
         boxp1 = getnode(boxes.p1)
         boxp2 = getnode(boxes.p2)
         assert boxp1.knownclsbox.value == self.node_vtable_adr
         assert boxp2.knownclsbox.value == self.node_vtable_adr2
-        assert [sn.__class__ for sn in specnodes] == [NotSpecNode]
 
-    def test_find_nodes_new(self):
+    def test_find_nodes_new_1(self):
+        ops = """
+        [p1]
+        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        jump(p2)
+        """
+        boxes, getnode = self.find_nodes(ops, 'Virtual(node_vtable)')
+
+        boxp1 = getnode(boxes.p1)
+        boxp2 = getnode(boxes.p2)
+        assert not boxp1.escaped
+        assert not boxp2.escaped
+
+        assert not boxp1.origfields
+        assert not boxp1.curfields
+        assert not boxp2.origfields
+        assert not boxp2.curfields
+
+        assert boxp1.fromstart
+        assert not boxp2.fromstart
+
+        assert boxp1.knownclsbox is None
+        assert boxp2.knownclsbox.value == self.node_vtable_adr
+
+    def test_find_nodes_new_2(self):
+        ops = """
+        [i1, p1]
+        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p3 = new_with_vtable(ConstClass(node_vtable2), descr=nodesize2)
+        setfield_gc(p2, p3, descr=nextdescr)
+        setfield_gc(p3, i1, descr=valuedescr)
+        jump(i1, p2)
+        """
+        self.find_nodes(ops,
+            '''Not,
+               Virtual(node_vtable,
+                       nextdescr=Virtual(node_vtable2,
+                                         valuedescr=Not))''')
+
+    def test_find_nodes_new_3(self):
         ops = """
         [sum, p1]
         guard_class(p1, ConstClass(node_vtable))
@@ -300,32 +359,61 @@ class BaseTestOptimize(object):
         sum2 = int_add(sum, i1)
         p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
         setfield_gc(p2, i2, descr=valuedescr)
-        setfield_gc(p2, p2, descr=nextdescr)
+        p3 = new_with_vtable(ConstClass(node_vtable2), descr=nodesize2)
+        setfield_gc(p2, p3, descr=nextdescr)
         jump(sum2, p2)
         """
-        boxes, getnode, specnodes = self.find_nodes(
-            ops, boxkinds={'sum': BoxInt, 'sum2': BoxInt})
+        boxes, getnode = self.find_nodes(
+            ops,
+            '''Not,
+               Virtual(node_vtable,
+                       valuedescr=Not,
+                       nextdescr=Virtual(node_vtable2))''',
+            boxkinds={'sum': BoxInt, 'sum2': BoxInt})
         assert getnode(boxes.sum) is not getnode(boxes.sum2)
         assert getnode(boxes.p1) is not getnode(boxes.p2)
 
         boxp1 = getnode(boxes.p1)
         boxp2 = getnode(boxes.p2)
+        boxp3 = getnode(boxes.p3)
         assert not boxp1.escaped
         assert not boxp2.escaped
+        assert not boxp3.escaped
 
         assert not boxp1.curfields
         assert boxp1.origfields[self.valuedescr] is getnode(boxes.i1)
         assert not boxp2.origfields
-        assert boxp2.curfields[self.nextdescr] is boxp2
+        assert boxp2.curfields[self.nextdescr] is boxp3
 
         assert boxp1.fromstart
         assert not boxp2.fromstart
+        assert not boxp3.fromstart
 
         assert boxp1.knownclsbox.value == self.node_vtable_adr
         assert boxp2.knownclsbox.value == self.node_vtable_adr
+        assert boxp3.knownclsbox.value == self.node_vtable_adr2
 
-        assert [sn.__class__ for sn in specnodes] == [NotSpecNode,
-                                                      VirtualInstanceSpecNode]
+    def test_find_nodes_new_aliasing(self):
+        py.test.skip("infinite loop")
+        ops = """
+        [sum, p1]
+        guard_class(p1, ConstClass(node_vtable))
+            fail()
+        p3 = getfield_gc(p1, descr=nextdescr)
+        guard_class(p3, ConstClass(node_vtable))
+            fail()
+        i1 = getfield_gc(p1, descr=valuedescr)
+        i2 = int_sub(i1, 1)
+        sum2 = int_add(sum, i1)
+        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p2, p2, descr=nextdescr)
+        jump(sum2, p2)
+        """
+        # the issue is the loop involving p2, which cannot be represented
+        # with SpecNodes so far
+        self.find_nodes(ops, 'Not, Not',
+                        boxkinds={'sum': BoxInt, 'sum2': BoxInt})
 
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):

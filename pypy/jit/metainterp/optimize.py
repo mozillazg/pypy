@@ -58,8 +58,9 @@ class InstanceNode(object):
 
     def __repr__(self):
         flags = ''
-        if self.escaped:   flags += 'e'
-        if self.fromstart: flags += 's'
+        if self.escaped:     flags += 'e'
+        if self.fromstart:   flags += 's'
+        if self.knownclsbox: flags += 'c'
         return "<InstanceNode (%s)>" % (flags,)
 
 
@@ -154,12 +155,12 @@ class PerfectSpecializationFinder(object):
         assert len(self.inputnodes) == len(op.args)
         for i in range(len(op.args)):
             inputnode = self.inputnodes[i]
-            specnodes.append(self.intersect(inputnode, op.args[i]))
+            exitnode = self.getnode(op.args[i])
+            specnodes.append(self.intersect(inputnode, exitnode))
         self.specnodes = specnodes
 
-    def intersect(self, inputnode, exitbox):
+    def intersect(self, inputnode, exitnode):
         assert inputnode.fromstart
-        exitnode = self.getnode(exitbox)
         if exitnode.knownclsbox is None:
             return prebuiltNotSpecNode     # no known class at exit
         if (inputnode.knownclsbox is not None and
@@ -171,21 +172,25 @@ class PerfectSpecializationFinder(object):
             if inputnode.knownclsbox is None:
                 return prebuiltNotSpecNode      # class not needed at input
             return FixedClassSpecNode(exitnode.knownclsbox)
-        else:
-            fields = []
-            d = exitnode.curfields
+        #
+        fields = []
+        d = exitnode.curfields
+        if d is not None:
+            if inputnode.origfields is None:
+                inputnode.origfields = av_newdict()
             lst = d.keys()
             sort_descrs(lst)
             for ofs in lst:
-                if ofs not in inputnode.origfields:
+                try:
+                    node = inputnode.origfields[ofs]
+                except KeyError:
                     # field stored at exit, but not read at input.  Must
                     # still be allocated, otherwise it will be incorrectly
                     # uninitialized after a guard failure.
-                    inputnode.origfields[ofs] = InstanceNode(escaped=False,
-                                                             fromstart=True)
-                specnode = self.intersect(inputnode.origfields[ofs], d[ofs])
+                    node = InstanceNode(escaped=False, fromstart=True)
+                specnode = self.intersect(node, d[ofs])
                 fields.append((ofs, specnode))
-            return VirtualInstanceSpecNode(exitnode.knownclsbox, fields)
+        return VirtualInstanceSpecNode(exitnode.knownclsbox, fields)
 
 find_nodes_ops = _findall(PerfectSpecializationFinder, 'find_nodes_')
 
