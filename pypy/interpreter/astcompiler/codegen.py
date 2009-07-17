@@ -518,17 +518,17 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def _import_as(self, alias):
         source_name = alias.name
         dot = source_name.find(".")
-        if dot != -1:
+        if dot > 0:
             start = dot + 1
             while True:
                 dot = source_name.find(".", start)
-                if dot == -1:
+                if dot > 0:
                     end = len(source_name)
                 else:
                     end = dot
                 attr = source_name[start:end]
                 self.emit_op_name(ops.LOAD_ATTR, self.names, attr)
-                if dot == -1:
+                if dot < 0:
                     break
                 start = dot + 1
         self.name_op(alias.asname, ast.Store)
