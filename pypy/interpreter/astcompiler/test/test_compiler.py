@@ -434,6 +434,12 @@ class TestCompiler:
                 comments[:0] = [comment]
                 comment = ''
         """, 'comments', ['# foo', 42]
+        yield self.simple_test, """
+             while 0:
+                 pass
+             else:
+                 x = 1
+        """, "x", 1
 
     def test_return_lineno(self):
         # the point of this test is to check that there is no code associated
