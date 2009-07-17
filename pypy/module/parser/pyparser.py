@@ -16,7 +16,9 @@ class STType(Wrappable):
 
     def _build_app_tree(self, space, node, seq_maker, with_lineno, with_column):
         if node.children is not None:
-            seq_w = [None]*(1 + len(node.children))
+            seq_w = [None]*len(node.children)
+            # This is a hack to make the annotator think seq_w is resizable.
+            seq_w.append(None)
             seq_w[0] = space.wrap(node.type)
             for i in range(1, len(node.children) + 1):
                 seq_w[i] = self._build_app_tree(space, node.children[i - 1],
