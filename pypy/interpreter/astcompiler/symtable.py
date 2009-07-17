@@ -361,7 +361,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
             if store_name == "*":
                 return True
             dot = store_name.find(".")
-            if dot != -1:
+            if dot > 0:
                 store_name = store_name[:dot]
         self.note_symbol(store_name, SYM_ASSIGNED)
         return False
