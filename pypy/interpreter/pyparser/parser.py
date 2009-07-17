@@ -97,6 +97,7 @@ class Parser(object):
 
     def add_token(self, token_type, value, lineno, column, line):
         label_index = self.classify(token_type, value, lineno, column, line)
+        sym_id = 0 # for the annotator
         while True:
             dfa, state_index, node = self.stack[-1]
             states, first = dfa
