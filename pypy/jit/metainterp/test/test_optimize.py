@@ -1,4 +1,4 @@
-import py
+import py, random
 
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
@@ -6,8 +6,10 @@ from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
-                                         Const, ConstAddr, TreeLoop, BoxObj)
+                                         Const, ConstAddr, TreeLoop, BoxObj,
+                                         AbstractDescr)
 from pypy.jit.metainterp.optimize import PerfectSpecializationFinder
+from pypy.jit.metainterp.optimize import sort_descrs
 from pypy.jit.metainterp.specnode import NotSpecNode, FixedClassSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.test.oparser import parse
@@ -50,6 +52,18 @@ def test_equaloplists():
     assert equaloplists(loop1.operations, loop2.operations)
     py.test.raises(AssertionError,
                    "equaloplists(loop1.operations, loop3.operations)")
+
+def test_sort_descrs():
+    class PseudoDescr(AbstractDescr):
+        def __init__(self, n):
+            self.n = n
+        def sort_key(self):
+            return self.n
+    lst = [PseudoDescr(2), PseudoDescr(3), PseudoDescr(6)]
+    lst2 = lst[:]
+    random.shuffle(lst2)
+    sort_descrs(lst2)
+    assert lst2 == lst
 
 # ____________________________________________________________
 
@@ -277,7 +291,6 @@ class BaseTestOptimize(object):
         assert [sn.__class__ for sn in specnodes] == [NotSpecNode]
 
     def test_find_nodes_new(self):
-        py.test.skip("VirtualInstanceSpecNode in-progress")
         ops = """
         [sum, p1]
         guard_class(p1, ConstClass(node_vtable))

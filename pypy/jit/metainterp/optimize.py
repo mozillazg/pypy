@@ -1,6 +1,9 @@
 from pypy.rlib.objectmodel import r_dict
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.jit.metainterp import resoperation, specnode
+from pypy.jit.metainterp import resoperation
+from pypy.jit.metainterp.specnode import prebuiltNotSpecNode
+from pypy.jit.metainterp.specnode import FixedClassSpecNode
+from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.history import AbstractValue
 
 
@@ -157,16 +160,55 @@ class PerfectSpecializationFinder(object):
     def intersect(self, inputnode, exitbox):
         assert inputnode.fromstart
         exitnode = self.getnode(exitbox)
+        if exitnode.knownclsbox is None:
+            return prebuiltNotSpecNode     # no known class at exit
+        if (inputnode.knownclsbox is not None and
+            not inputnode.knownclsbox.equals(exitnode.knownclsbox)):
+            return prebuiltNotSpecNode     # mismatched known class at exit
+        #
+        # for the sequel, we know that the class is known and matches
         if inputnode.escaped or exitnode.escaped or exitnode.fromstart:
-            if (inputnode.knownclsbox is not None and
-                exitnode.knownclsbox is not None and
-                inputnode.knownclsbox.equals(exitnode.knownclsbox)):
-                return specnode.FixedClassSpecNode(inputnode.knownclsbox)
-            else:
-                return specnode.prebuiltNotSpecNode
+            if inputnode.knownclsbox is None:
+                return prebuiltNotSpecNode      # class not needed at input
+            return FixedClassSpecNode(exitnode.knownclsbox)
         else:
-            xxx #...
+            fields = []
+            d = exitnode.curfields
+            lst = d.keys()
+            sort_descrs(lst)
+            for ofs in lst:
+                if ofs not in inputnode.origfields:
+                    # field stored at exit, but not read at input.  Must
+                    # still be allocated, otherwise it will be incorrectly
+                    # uninitialized after a guard failure.
+                    inputnode.origfields[ofs] = InstanceNode(escaped=False,
+                                                             fromstart=True)
+                specnode = self.intersect(inputnode.origfields[ofs], d[ofs])
+                fields.append((ofs, specnode))
+            return VirtualInstanceSpecNode(exitnode.knownclsbox, fields)
 
 find_nodes_ops = _findall(PerfectSpecializationFinder, 'find_nodes_')
 
 # ____________________________________________________________
+
+def partition(array, left, right):
+    last_item = array[right]
+    pivot = last_item.sort_key()
+    storeindex = left
+    for i in range(left, right):
+        if array[i].sort_key() <= pivot:
+            array[i], array[storeindex] = array[storeindex], array[i]
+            storeindex += 1
+    # Move pivot to its final place
+    array[storeindex], array[right] = last_item, array[storeindex]
+    return storeindex
+
+def quicksort(array, left, right):
+    # sort array[left:right+1] (i.e. bounds included)
+    if right > left:
+        pivotnewindex = partition(array, left, right)
+        quicksort(array, left, pivotnewindex - 1)
+        quicksort(array, pivotnewindex + 1, right)
+
+def sort_descrs(lst):
+    quicksort(lst, 0, len(lst)-1)
