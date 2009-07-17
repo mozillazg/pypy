@@ -694,3 +694,15 @@ class TestCompiler:
             l.append(x)
         """
         self.simple_test(source, 'l', [1, 2])
+
+
+class AppTestPrint:
+
+    def test_print_to(self):
+         exec """from StringIO import StringIO
+s = StringIO()
+print >> s, "hi", "lovely!"
+assert s.getvalue() == "hi lovely!\\n"
+s = StringIO()
+print >> s, "hi", "lovely!",
+assert s.getvalue() == "hi lovely!\"""" in {}
