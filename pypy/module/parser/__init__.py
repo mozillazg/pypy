@@ -22,7 +22,6 @@ class Module(MixedModule):
          'ast2list'     : 'pyparser.st2list',
          'ast2tuple'    : 'pyparser.st2tuple',
          'ASTType'      : 'pyparser.STType',
-         'sequence2st'  : 'pyparser.sequence2st',
          'compilest'    : 'pyparser.compilest',
          'compileast'   : 'pyparser.compilest'
          }
