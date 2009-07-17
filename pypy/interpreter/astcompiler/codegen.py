@@ -436,7 +436,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         test_constant = misc.expr_constant(self.space, wh.test)
         if test_constant == misc.CONST_FALSE:
             if wh.orelse:
-                self.visit_sequence(orelse)
+                self.visit_sequence(wh.orelse)
         else:
             end = self.new_block()
             if test_constant == misc.CONST_NOT_CONST:
