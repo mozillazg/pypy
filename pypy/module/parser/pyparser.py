@@ -6,6 +6,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.pyparser import pyparse, pygram, error
 from pypy.interpreter.astcompiler.astbuilder import ast_from_node
 from pypy.interpreter.astcompiler.codegen import compile_ast
+from pypy.rlib.objectmodel import specialize
 
 
 class STType(Wrappable):
@@ -14,6 +15,7 @@ class STType(Wrappable):
         self.tree = tree
         self.mode = mode
 
+    @specialize.arg(3)
     def _build_app_tree(self, space, node, seq_maker, with_lineno, with_column):
         if node.children is not None:
             seq_w = [None]*(len(node.children) + 1)
