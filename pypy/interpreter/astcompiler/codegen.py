@@ -818,6 +818,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if call.kwargs:
             call.kwargs.walkabout(self)
             call_type |= 2
+        op = 0
         if call_type == 0:
             op = ops.CALL_FUNCTION
         elif call_type == 1:
