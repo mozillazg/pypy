@@ -55,12 +55,12 @@ class TestSymbolTable:
     def test_toplevel(self):
         scp = self.mod_scope("x = 4")
         assert scp.lookup("x") == symtable.SCOPE_LOCAL
-        assert not scp.optimized
+        assert not scp.locals_fully_known
         scp = self.mod_scope("x = 4", "single")
-        assert not scp.optimized
+        assert not scp.locals_fully_known
         assert scp.lookup("x") == symtable.SCOPE_LOCAL
         scp = self.mod_scope("x*4*6", "eval")
-        assert not scp.optimized
+        assert not scp.locals_fully_known
         assert scp.lookup("x") == symtable.SCOPE_GLOBAL_IMPLICIT
 
     def test_duplicate_argument(self):
@@ -253,9 +253,9 @@ class TestSymbolTable:
         assert exc.msg == "name 'x' is both local and global"
 
     def test_optimization(self):
-        assert not self.mod_scope("").optimized
-        assert not self.class_scope("class x: pass").optimized
-        assert self.func_scope("def f(): pass").optimized
+        assert not self.mod_scope("").can_be_optimized
+        assert not self.class_scope("class x: pass").can_be_optimized
+        assert self.func_scope("def f(): pass").can_be_optimized
 
     def test_unoptimization_with_nested_scopes(self):
         table = (
@@ -294,11 +294,13 @@ class TestSymbolTable:
         self.mod_scope("exec 'hi'")
         scp = self.func_scope("def f(): exec 'hi'")
         assert not scp.optimized
+        assert not scp.locals_fully_known
         assert isinstance(scp.bare_exec, ast.Exec)
         assert scp.has_exec
         for line in ("exec 'hi' in g", "exec 'hi' in g, h"):
             scp = self.func_scope("def f(): " + line)
-            assert not scp.optimized
+            assert scp.optimized
+            assert not scp.locals_fully_known
             assert scp.bare_exec is None
             assert scp.has_exec
 

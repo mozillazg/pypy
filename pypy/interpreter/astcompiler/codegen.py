@@ -149,7 +149,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         kind = name_ops_default
         container = self.names
         if scope == symtable.SCOPE_LOCAL:
-            if self.scope.optimized:
+            if self.scope.can_be_optimized:
                 container = self.var_names
                 kind = name_ops_fast
         elif scope == symtable.SCOPE_FREE:
@@ -159,7 +159,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             kind = name_ops_deref
             container = self.cell_vars
         elif scope == symtable.SCOPE_GLOBAL_IMPLICIT:
-            if self.scope.optimized:
+            if self.scope.locals_fully_known:
                 kind = name_ops_global
         elif scope == symtable.SCOPE_GLOBAL_EXPLICIT:
             kind = name_ops_global
@@ -1115,7 +1115,7 @@ class AbstractFunctionCodeGenerator(PythonCodeGenerator):
         scope = self.scope
         assert isinstance(scope, symtable.FunctionScope)
         flags = 0
-        if scope.optimized:
+        if scope.locals_fully_known:
             flags |= consts.CO_OPTIMIZED
         if scope.nested:
             flags |= consts.CO_NESTED
