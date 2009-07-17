@@ -83,6 +83,7 @@ def generate_tokens(lines, flags):
     endDFA = automata.DFA([], [])
     # make the annotator happy
     line = ''
+    pos = 0
     lines.append("")
     for line in lines:
         lnum = lnum + 1
