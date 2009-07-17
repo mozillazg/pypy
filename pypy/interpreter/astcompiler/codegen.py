@@ -716,6 +716,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.update_position(comp)
         comp.left.walkabout(self)
         ops_count = len(comp.ops)
+        cleanup = None
         if ops_count > 1:
             cleanup = self.new_block()
             comp.comparators[0].walkabout(self)
