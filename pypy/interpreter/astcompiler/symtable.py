@@ -36,6 +36,7 @@ class Scope(object):
         self.varnames = []
         self.children = []
         self.free_vars = []
+        self.temp_name_counter = 1
         self.has_exec = False
         self.has_free = False
         self.child_has_free = False
@@ -46,6 +47,10 @@ class Scope(object):
 
     def lookup_role(self, name):
         return self.roles.get(self.mangle(name), SYM_BLANK)
+
+    def new_temporary_name(self):
+        self.note_symbol("_[%i]" % (self.temp_name_counter,), SYM_ASSIGNED)
+        self.temp_name_counter += 1
 
     def note_symbol(self, identifier, role):
         mangled = self.mangle(identifier)
@@ -279,7 +284,6 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.scopes = {}
         self.scope = None
         self.stack = []
-        self.tmp_name_counter = 1
         top = ModuleScope(module)
         self.globs = top.roles
         self.push_scope(top)
@@ -313,10 +317,6 @@ class SymtableBuilder(ast.GenericASTVisitor):
     def implicit_arg(self, pos):
         name = ".%i" % (pos,)
         self.note_symbol(name, SYM_PARAM)
-
-    def new_temporary_name(self):
-        self.note_symbol("_[%i]" % (self.tmp_name_counter,), SYM_ASSIGNED)
-        self.tmp_name_counter += 1
 
     def note_symbol(self, identifier, role):
         mangled = self.scope.note_symbol(identifier, role)
@@ -407,13 +407,13 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.pop_scope()
 
     def visit_ListComp(self, lc):
-        self.new_temporary_name()
+        self.scope.new_temporary_name()
         ast.GenericASTVisitor.visit_ListComp(self, lc)
 
     def visit_With(self, wih):
-        self.new_temporary_name()
+        self.scope.new_temporary_name()
         if wih.optional_vars:
-            self.new_temporary_name()
+            self.scope.new_temporary_name()
         ast.GenericASTVisitor.visit_With(self, wih)
 
     def visit_arguments(self, arguments):

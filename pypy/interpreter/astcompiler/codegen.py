@@ -125,6 +125,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def current_temporary_name(self):
         name = "_[%i]" % (self.temporary_name_counter,)
         self.temporary_name_counter += 1
+        assert self.scope.lookup(name) != symtable.SCOPE_UNKNOWN
         return name
 
     def sub_scope(self, kind, name, node):
