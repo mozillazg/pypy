@@ -31,6 +31,8 @@ class InstanceNode(object):
     origfields = None   # optimization; equivalent to an empty dict
     curfields = None    # optimization; equivalent to an empty dict
     dependencies = None
+    origclass = False
+    curclass = None
 
     def __init__(self, escaped, fromstart=False):
         self.escaped = escaped
@@ -92,7 +94,9 @@ class PerfectSpecializationFinder(object):
                 self.getnode(box).mark_escaped()
 
     def find_nodes_NEW_WITH_VTABLE(self, op):
-        self.nodes[op.result] = InstanceNode(escaped=False)
+        instnode = InstanceNode(escaped=False)
+        instnode.curclass = op.args[0]
+        self.nodes[op.result] = instnode
 
     def find_nodes_SETFIELD_GC(self, op):
         instnode = self.getnode(op.args[0])
@@ -129,7 +133,15 @@ class PerfectSpecializationFinder(object):
         self.find_nodes_GETFIELD_GC(op)
 
     def find_nodes_GUARD_CLASS(self, op):
-        pass    # prevent the default handling
+        instbox = op.args[0]
+        try:
+            instnode = self.nodes[instbox]
+        except KeyError:
+            instnode = self.nodes[instbox] = InstanceNode(escaped=True)
+        else:
+            if instnode.fromstart:
+                instnode.origclass = True
+        instnode.curclass = op.args[1]
 
     def find_nodes_JUMP(self, op):
         pass    # prevent the default handling

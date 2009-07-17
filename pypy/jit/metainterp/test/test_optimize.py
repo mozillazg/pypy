@@ -168,6 +168,22 @@ class BaseTestOptimize(object):
         assert getnode(boxes.p3).fromstart
         assert not getnode(boxes.p4).fromstart
 
+    def test_find_nodes_guard_class(self):
+        ops = """
+        [p1]
+        p2 = getfield_gc(p1, descr=nextdescr)
+        guard_class(p2, ConstClass(node_vtable))
+            fail()
+        jump(p1)
+        """
+        boxes, getnode = self.find_nodes(ops)
+        boxp1 = getnode(boxes.p1)
+        boxp2 = getnode(boxes.p2)
+        assert not boxp1.origclass
+        assert boxp1.curclass is None
+        assert boxp2.origclass
+        assert boxp2.curclass.value == self.node_vtable_adr
+
     def test_find_nodes_new(self):
         ops = """
         [sum, p1]
@@ -198,6 +214,11 @@ class BaseTestOptimize(object):
 
         assert boxp1.fromstart
         assert not boxp2.fromstart
+
+        assert boxp1.origclass
+        assert boxp1.curclass.value == self.node_vtable_adr
+        assert not boxp2.origclass
+        assert boxp2.curclass.value == self.node_vtable_adr
 
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
