@@ -356,6 +356,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
                 self.scope.note_import_star(imp)
 
     def _visit_alias(self, alias):
+        assert isinstance(alias, ast.alias)
         if alias.asname:
             store_name = alias.asname
         else:
