@@ -8,7 +8,7 @@ from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          Const, ConstAddr, TreeLoop, BoxObj,
                                          ConstObj, AbstractDescr)
-from pypy.jit.metainterp.optimize import PerfectSpecializationFinder
+from pypy.jit.metainterp.optimizeloop import PerfectSpecializationFinder
 from pypy.jit.metainterp.optimize import sort_descrs
 from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
 from pypy.jit.metainterp.specnode import FixedClassSpecNode
