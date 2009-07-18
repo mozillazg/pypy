@@ -1052,10 +1052,15 @@ class ASTBuilder(object):
                 base = 16
             elif len(raw) > 1:
                 base = 8
-            raw = raw.lstrip("0xX")
-            if not raw:
-                raw = "0"
-            elif not raw[0].isdigit():
+            # strip leading characters
+            i = 0
+            limit = len(raw) - 1
+            while i < limit:
+                if raw[i] not in "0xX":
+                    break
+                i += 1
+            raw = raw[i:]
+            if not raw[0].isdigit():
                 raw = "0" + raw
         w_num_str = self.space.wrap(raw)
         w_index = None
