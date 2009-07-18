@@ -1139,7 +1139,7 @@ class AbstractFunctionCodeGenerator(PythonCodeGenerator):
             arg = args[i]
             if isinstance(arg, ast.Tuple):
                 self.update_position(arg.lineno)
-                self.name_op(".%i" % (i,), ast.Load)
+                self.name_op(".%d" % (i,), ast.Load)
                 arg.walkabout(self)
 
     def _get_code_flags(self):
