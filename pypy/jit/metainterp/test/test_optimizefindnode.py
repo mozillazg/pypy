@@ -526,6 +526,53 @@ class BaseTestOptimize(object):
         self.find_bridge(ops, 'Fixed(node_vtable)', 'Fixed(node_vtable2)',
                          mismatch=True)
 
+    def test_bridge_simple_virtual(self):
+        ops = """
+        [p0]
+        setfield_gc(p0, 123, descr=valuedescr)
+        jump(p0)
+        """
+        self.find_bridge(ops, 'Virtual(node_vtable)', 'Not')
+        self.find_bridge(ops, 'Virtual(node_vtable)', 'Fixed(node_vtable)')
+        self.find_bridge(ops, 'Virtual(node_vtable)',
+                              'Virtual(node_vtable, valuedescr=Not)')
+        self.find_bridge(ops, 'Virtual(node_vtable, valuedescr=Not)',
+                              'Virtual(node_vtable, valuedescr=Not)')
+        self.find_bridge(ops, 'Virtual(node_vtable, valuedescr=Not)',
+                            '''Virtual(node_vtable,
+                                       valuedescr=Not,
+                                       nextdescr=Not)''')
+        self.find_bridge(ops, '''Virtual(node_vtable,
+                                         valuedescr=Not,
+                                         nextdescr=Fixed(node_vtable2))''',
+                              '''Virtual(node_vtable,
+                                         valuedescr=Not,
+                                         nextdescr=Fixed(node_vtable2))''')
+        self.find_bridge(ops, '''Virtual(node_vtable,
+                                         valuedescr=Not,
+                                         nextdescr=Fixed(node_vtable2))''',
+                              '''Virtual(node_vtable,
+                                         valuedescr=Not,
+                                         nextdescr=Not)''')
+        #
+        self.find_bridge(ops, 'Virtual(node_vtable)', 'Virtual(node_vtable)',
+                         mismatch=True)    # because of missing valuedescr
+        self.find_bridge(ops, 'Virtual(node_vtable)', 'Fixed(node_vtable2)',
+                         mismatch=True)    # bad class
+        self.find_bridge(ops, 'Virtual(node_vtable)',
+                         'Virtual(node_vtable2, valuedescr=Not)',
+                         mismatch=True)    # bad class
+        self.find_bridge(ops, 'Virtual(node_vtable, valuedescr=Not)',
+                            '''Virtual(node_vtable,
+                                       valuedescr=Not,
+                                       nextdescr=Fixed(node_vtable))''',
+                         mismatch=True)    # unexpected nextdescr
+        self.find_bridge(ops, 'Virtual(node_vtable, valuedescr=Not)',
+                            '''Virtual(node_vtable,
+                                       valuedescr=Not,
+                                       nextdescr=Virtual(node_vtable))''',
+                         mismatch=True)    # unexpected nextdescr
+
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
     pass
