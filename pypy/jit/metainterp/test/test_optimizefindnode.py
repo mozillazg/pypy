@@ -542,14 +542,16 @@ class BaseTestOptimize(object):
                                     nextdescr=Not)''')
         #
         self.find_bridge(ops, 'Not', 'Virtual(node_vtable)',
-                         mismatch=True)
+                         mismatch=True)   # missing valuedescr
         self.find_bridge(ops, 'Not', 'Virtual(node_vtable, nextdescr=Not)',
-                         mismatch=True)
+                         mismatch=True)   # missing valuedescr
+        self.find_bridge(ops, 'Not', 'Virtual(node_vtable2, valuedescr=Not)',
+                         mismatch=True)   # bad class
         self.find_bridge(ops, 'Not',
                          '''Virtual(node_vtable,
                                     valuedescr=Not,
                                     nextdescr=Fixed(node_vtable))''',
-                         mismatch=True)
+                         mismatch=True)   # nextdescr too precise
 
     def test_bridge_simple_virtual_2(self):
         ops = """
@@ -597,6 +599,23 @@ class BaseTestOptimize(object):
                                        valuedescr=Not,
                                        nextdescr=Virtual(node_vtable))''',
                          mismatch=True)    # unexpected nextdescr
+
+    def test_bridge_virtual_mismatch_1(self):
+        ops = """
+        [i0]
+        p0 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p0, i0, descr=valuedescr)
+        jump(p0, p0)
+        """
+        self.find_bridge(ops, 'Not', 'Not, Not')
+        self.find_bridge(ops, 'Not', 'Not, Fixed(node_vtable)')
+        self.find_bridge(ops, 'Not', 'Fixed(node_vtable), Not')
+        self.find_bridge(ops, 'Not', 'Fixed(node_vtable), Fixed(node_vtable)')
+        #
+        self.find_bridge(ops, 'Not',
+                         '''Virtual(node_vtable, valuedescr=Not),
+                            Virtual(node_vtable, valuedescr=Not)''',
+                         mismatch=True)    # duplicate p0
 
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
