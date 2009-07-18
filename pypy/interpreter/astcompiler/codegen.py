@@ -876,8 +876,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 not self._call_has_simple_args(call) or \
                 not isinstance(call.func, ast.Attribute):
             return False
-        call.func.value.walkabout(self)
-        self.emit_op_name(ops.LOOKUP_METHOD, self.names, call.func.attr)
+        attr_lookup = call.func
+        assert isinstance(attr_lookup, ast.Attribute)
+        attr_lookup.value.walkabout(self)
+        self.emit_op_name(ops.LOOKUP_METHOD, self.names, attr_lookup.attr)
         if call.args:
             self.visit_sequence(call.args)
             arg_count = len(call.args)
