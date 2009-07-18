@@ -904,7 +904,7 @@ class ASTBuilder(object):
                 break
             tmp_atom_expr = self.handle_trailer(trailer, atom_expr)
             tmp_atom_expr.lineno = atom_expr.lineno
-            tmp_atom_expr.column = atom_expr.col_offset
+            tmp_atom_expr.col_offset = atom_expr.col_offset
             atom_expr = tmp_atom_expr
         if power_node.children[-1].type == syms.factor:
             right = self.handle_expr(power_node.children[-1])
