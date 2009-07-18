@@ -578,8 +578,9 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.load_const(space.wrap(level))
         names_w = [None]*len(imp.names)
         for i in range(len(imp.names)):
+            alias = imp.names[i]
             assert isinstance(alias, ast.alias)
-            names_w[i] = space.wrap(imp.names[i])
+            names_w[i] = space.wrap(alias.name)
         self.load_const(space.newtuple(names_w))
         if imp.module:
             mod_name = imp.module
