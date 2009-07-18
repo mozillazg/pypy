@@ -1,7 +1,9 @@
-from pypy.jit.metainterp.specnode import prebuiltNotSpecNode
+from pypy.jit.metainterp.specnode import SpecNode
+from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
 from pypy.jit.metainterp.specnode import FixedClassSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.history import AbstractValue
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.optimize import av_newdict, _findall, sort_descrs
 
 # ____________________________________________________________
@@ -42,6 +44,18 @@ class InstanceNode(object):
                 for box in deps:
                     box.mark_escaped()
 
+    def set_unique_nodes(self):
+        if (self.escaped or self.fromstart or self.knownclsbox is None
+            or self.unique != UNIQUE_UNKNOWN):
+            # this node is not suitable for being a virtual, or we
+            # encounter it more than once when doing the recursion
+            self.unique = UNIQUE_NO
+        else:
+            self.unique = UNIQUE_YES
+            if self.curfields is not None:
+                for subnode in self.curfields.values():
+                    subnode.set_unique_nodes()
+
     def __repr__(self):
         flags = ''
         if self.escaped:     flags += 'e'
@@ -49,8 +63,11 @@ class InstanceNode(object):
         if self.knownclsbox: flags += 'c'
         return "<InstanceNode (%s)>" % (flags,)
 
+# ____________________________________________________________
+# General find_nodes_xxx() interface, for both loops and bridges
 
-class PerfectSpecializationFinder(object):
+class NodeFinder(object):
+    """Abstract base class."""
     node_escaped = InstanceNode(escaped=True)
 
     def __init__(self):
@@ -59,15 +76,8 @@ class PerfectSpecializationFinder(object):
     def getnode(self, box):
         return self.nodes.get(box, self.node_escaped)
 
-    def find_nodes(self, loop):
-        inputnodes = []
-        for box in loop.inputargs:
-            instnode = InstanceNode(escaped=False, fromstart=True)
-            inputnodes.append(instnode)
-            self.nodes[box] = instnode
-        self.inputnodes = inputnodes
-        #
-        for op in loop.operations:
+    def find_nodes(self, operations):
+        for op in operations:
             opnum = op.opnum
             for value, func in find_nodes_ops:
                 if opnum == value:
@@ -134,11 +144,38 @@ class PerfectSpecializationFinder(object):
         instnode.knownclsbox = clsbox
 
     def find_nodes_JUMP(self, op):
-        """Build the list of specnodes based on the result
-        computed by this PerfectSpecializationFinder.
-        """
+        # only set up the 'unique' field of the InstanceNodes;
+        # real handling comes later (build_result_specnodes() for loops).
         for box in op.args:
-            self.find_unique_nodes(self.getnode(box))
+            self.getnode(box).set_unique_nodes()
+
+    def find_nodes_FAIL(self, op):
+        xxx
+
+find_nodes_ops = _findall(NodeFinder, 'find_nodes_')
+
+# ____________________________________________________________
+# Perfect specialization -- for loops only
+
+class PerfectSpecializationFinder(NodeFinder):
+
+    def find_nodes_loop(self, loop):
+        self.setup_input_nodes(loop.inputargs)
+        self.find_nodes(loop.operations)
+        self.build_result_specnodes(loop.operations[-1])
+
+    def setup_input_nodes(self, inputargs):
+        inputnodes = []
+        for box in inputargs:
+            instnode = InstanceNode(escaped=False, fromstart=True)
+            inputnodes.append(instnode)
+            self.nodes[box] = instnode
+        self.inputnodes = inputnodes
+
+    def build_result_specnodes(self, op):
+        # Build the list of specnodes based on the result
+        # computed by NodeFinder.find_nodes().
+        assert op.opnum == rop.JUMP
         specnodes = []
         assert len(self.inputnodes) == len(op.args)
         for i in range(len(op.args)):
@@ -146,19 +183,6 @@ class PerfectSpecializationFinder(object):
             exitnode = self.getnode(op.args[i])
             specnodes.append(self.intersect(inputnode, exitnode))
         self.specnodes = specnodes
-
-    def find_unique_nodes(self, exitnode):
-        if (exitnode.escaped or exitnode.fromstart
-            or exitnode.knownclsbox is None
-            or exitnode.unique != UNIQUE_UNKNOWN):
-            # the exitnode is not suitable for being a virtual, or we
-            # encounter it more than once when doing the recursion
-            exitnode.unique = UNIQUE_NO
-        else:
-            exitnode.unique = UNIQUE_YES
-            if exitnode.curfields is not None:
-                for subnode in exitnode.curfields.values():
-                    self.find_unique_nodes(subnode)
 
     def intersect(self, inputnode, exitnode):
         assert inputnode.fromstart
@@ -198,4 +222,56 @@ class PerfectSpecializationFinder(object):
                 fields.append((ofs, specnode))
         return VirtualInstanceSpecNode(exitnode.knownclsbox, fields)
 
-find_nodes_ops = _findall(PerfectSpecializationFinder, 'find_nodes_')
+# ____________________________________________________________
+# A subclass of NodeFinder for bridges only
+
+class __extend__(SpecNode):
+    def make_instance_node(self):
+        raise NotImplementedError
+    def matches_instance_node(self, exitnode):
+        raise NotImplementedError
+
+class __extend__(NotSpecNode):
+    def make_instance_node(self):
+        return NodeFinder.node_escaped
+    def matches_instance_node(self, exitnode):
+        return True
+
+class __extend__(FixedClassSpecNode):
+    def make_instance_node(self):
+        instnode = InstanceNode(escaped=True)
+        instnode.knownclsbox = self.known_class
+        return instnode
+    def matches_instance_node(self, exitnode):
+        xxx
+
+class __extend__(VirtualInstanceSpecNode):
+    def make_instance_node(self):
+        instnode = InstanceNode(escaped=False)
+        instnode.curfields = av_newdict()
+        for ofs, subspecnode in self.fields:
+            instnode.curfields[ofs] = subspecnode.make_instance_node()
+        return instnode
+    def matches_instance_node(self, exitnode):
+        if exitnode.unique == UNIQUE_NO:
+            return False
+        else:
+            xxx
+
+class BridgeSpecializationFinder(NodeFinder):
+
+    def setup_bridge_input_nodes(self, specnodes, inputargs):
+        assert len(specnodes) == len(inputargs)
+        for i in range(len(inputargs)):
+            instnode = specnodes[i].make_instance_node()
+            box = inputargs[i]
+            self.nodes[box] = instnode
+
+    def bridge_matches(self, jump_op, nextloop_specnodes):
+        assert jump_op.opnum == rop.JUMP
+        assert len(jump_op.args) == len(nextloop_specnodes)
+        for i in range(len(nextloop_specnodes)):
+            exitnode = self.getnode(jump_op.args[i])
+            if not nextloop_specnodes[i].matches_instance_node(exitnode):
+                return False
+        return True

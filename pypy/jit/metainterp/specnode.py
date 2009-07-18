@@ -1,6 +1,8 @@
+from pypy.tool.pairtype import extendabletype
 
 
 class SpecNode(object):
+    __metaclass__ = extendabletype     # extended in optimizefindnode.py
     __slots__ = ()
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):

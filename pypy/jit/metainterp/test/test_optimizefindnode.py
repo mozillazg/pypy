@@ -8,7 +8,8 @@ from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          Const, ConstAddr, TreeLoop, BoxObj,
                                          ConstObj, AbstractDescr)
-from pypy.jit.metainterp.optimizeloop import PerfectSpecializationFinder
+from pypy.jit.metainterp.optimizefindnode import PerfectSpecializationFinder
+from pypy.jit.metainterp.optimizefindnode import BridgeSpecializationFinder
 from pypy.jit.metainterp.optimize import sort_descrs
 from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
 from pypy.jit.metainterp.specnode import FixedClassSpecNode
@@ -135,7 +136,7 @@ class BaseTestOptimize(object):
         equaloplists(optimized.operations,
                      self.parse(expected).operations)
 
-    def assert_specnodes(self, specnodes, text):
+    def unpack_specnodes(self, text):
         #
         def constclass(cls_vtable):
             if self.type_system == 'lltype':
@@ -156,6 +157,10 @@ class BaseTestOptimize(object):
                    'Fixed': makeFixed,
                    'Virtual': makeVirtual}
         lst = eval('[' + text + ']', self.namespace, context)
+        return lst
+
+    def check_specnodes(self, specnodes, text):
+        lst = self.unpack_specnodes(text)
         assert len(specnodes) == len(lst)
         for x, y in zip(specnodes, lst):
             assert x._equals(y)
@@ -164,9 +169,8 @@ class BaseTestOptimize(object):
     def find_nodes(self, ops, spectext, boxkinds=None):
         loop = self.parse(ops, boxkinds=boxkinds)
         perfect_specialization_finder = PerfectSpecializationFinder()
-        perfect_specialization_finder.find_nodes(loop)
-        assert self.assert_specnodes(perfect_specialization_finder.specnodes,
-                                     spectext)
+        perfect_specialization_finder.find_nodes_loop(loop)
+        self.check_specnodes(perfect_specialization_finder.specnodes, spectext)
         return (loop.getboxes(), perfect_specialization_finder.getnode)
 
     def test_find_nodes_simple(self):
@@ -480,6 +484,35 @@ class BaseTestOptimize(object):
             Virtual(node_vtable,
                     nextdescr=Virtual(node_vtable,
                                       nextdescr=Virtual(node_vtable)))''')
+
+    # ------------------------------
+    # Bridge tests
+
+    def find_bridge(self, ops, inputspectext, outputspectext, boxkinds=None,
+                    mismatch=False):
+        inputspecnodes = self.unpack_specnodes(inputspectext)
+        outputspecnodes = self.unpack_specnodes(outputspectext)
+        bridge = self.parse(ops, boxkinds=boxkinds)
+        bridge_specialization_finder = BridgeSpecializationFinder()
+        bridge_specialization_finder.setup_bridge_input_nodes(inputspecnodes,
+                                                              bridge.inputargs)
+        bridge_specialization_finder.find_nodes(bridge.operations)
+        matches = bridge_specialization_finder.bridge_matches(
+            bridge.operations[-1],
+            outputspecnodes)
+        if mismatch:
+            assert not matches
+        else:
+            assert matches
+
+    def test_bridge_simple(self):
+        ops = """
+        [i0]
+        i1 = int_add(i0, 1)
+        jump(i1)
+        """
+        self.find_bridge(ops, 'Not', 'Not')
+        self.find_bridge(ops, 'Not', 'Virtual(node_vtable)', mismatch=True)
 
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
