@@ -25,6 +25,10 @@ def _findall(Class, name_prefix):
 
 # ____________________________________________________________
 
+UNIQUE_UNKNOWN = '\x00'
+UNIQUE_YES     = '\x01'
+UNIQUE_NO      = '\x02'
+
 class InstanceNode(object):
     """For the first phase: InstanceNode is used to match the start and
     the end of the loop, so it contains both 'origfields' that represents
@@ -35,6 +39,7 @@ class InstanceNode(object):
     curfields = None    # optimization; equivalent to an empty dict
     dependencies = None
     knownclsbox = None
+    unique = UNIQUE_UNKNOWN   # for find_unique_nodes()
 
     def __init__(self, escaped, fromstart=False):
         self.escaped = escaped
@@ -151,6 +156,8 @@ class PerfectSpecializationFinder(object):
         """Build the list of specnodes based on the result
         computed by this PerfectSpecializationFinder.
         """
+        for box in op.args:
+            self.find_unique_nodes(self.getnode(box))
         specnodes = []
         assert len(self.inputnodes) == len(op.args)
         for i in range(len(op.args)):
@@ -159,29 +166,42 @@ class PerfectSpecializationFinder(object):
             specnodes.append(self.intersect(inputnode, exitnode))
         self.specnodes = specnodes
 
+    def find_unique_nodes(self, exitnode):
+        if (exitnode.escaped or exitnode.fromstart
+            or exitnode.knownclsbox is None
+            or exitnode.unique != UNIQUE_UNKNOWN):
+            # the exitnode is not suitable for being a virtual, or we
+            # encounter it more than once when doing the recursion
+            exitnode.unique = UNIQUE_NO
+        else:
+            exitnode.unique = UNIQUE_YES
+            if exitnode.curfields is not None:
+                for subnode in exitnode.curfields.values():
+                    self.find_unique_nodes(subnode)
+
     def intersect(self, inputnode, exitnode):
         assert inputnode.fromstart
-        if exitnode.knownclsbox is None:
-            return prebuiltNotSpecNode     # no known class at exit
-        if (inputnode.knownclsbox is not None and
-            not inputnode.knownclsbox.equals(exitnode.knownclsbox)):
-            return prebuiltNotSpecNode     # mismatched known class at exit
+        if exitnode.unique == UNIQUE_NO:
+            # give a NotSpecNode or a FixedClassSpecNode
+            if (inputnode.knownclsbox is not None and
+                exitnode.knownclsbox is not None and
+                inputnode.knownclsbox.equals(exitnode.knownclsbox)):
+                # the class is known at the end, needed at the input,
+                # and matches
+                return FixedClassSpecNode(inputnode.knownclsbox)
+            else:
+                return prebuiltNotSpecNode
         #
-        # for the sequel, we know that the class is known and matches
-        if inputnode.escaped or exitnode.escaped or exitnode.fromstart:
-            if inputnode.knownclsbox is None:
-                return prebuiltNotSpecNode      # class not needed at input
-            return FixedClassSpecNode(exitnode.knownclsbox)
-        #
+        assert exitnode.unique == UNIQUE_YES
         fields = []
         d = exitnode.curfields
         if d is not None:
-            if inputnode.origfields is None:
-                inputnode.origfields = av_newdict()
             lst = d.keys()
             sort_descrs(lst)
             for ofs in lst:
                 try:
+                    if inputnode.origfields is None:
+                        raise KeyError
                     node = inputnode.origfields[ofs]
                 except KeyError:
                     # field stored at exit, but not read at input.  Must
