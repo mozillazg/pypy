@@ -499,7 +499,7 @@ del name, func, op, value
 
 def _opcode_stack_effect(op, arg):
     if we_are_translated():
-        for possible_op in ops.unrolling_op_descs:
+        for possible_op in ops.unrolling_opcode_descs:
             if op == possible_op.index:
                 return _stack_effect_computers[op](arg)
         else:
