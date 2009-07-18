@@ -393,6 +393,17 @@ class BaseTestOptimize(object):
         assert boxp2.knownclsbox.value == self.node_vtable_adr
         assert boxp3.knownclsbox.value == self.node_vtable_adr2
 
+    def test_find_nodes_new_aliasing_0(self):
+        py.test.skip("in-progress")
+        ops = """
+        [p1, p2]
+        p3 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        jump(p3, p3)
+        """
+        # both p1 and p2 must be NotSpecNodes; it's not possible to pass
+        # the same Virtual both in p1 and p2 (at least so far).
+        self.find_nodes(ops, 'Not, Not')
+
     def test_find_nodes_new_aliasing_1(self):
         py.test.skip("infinite loop")
         ops = """
