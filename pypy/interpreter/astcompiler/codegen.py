@@ -940,6 +940,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         anchor = self.new_block()
         end = self.new_block()
         gen = generators[gen_index]
+        assert isinstance(gen, ast.comprehension)
         self.emit_jump(ops.SETUP_LOOP, end)
         self.push_frame_block(F_BLOCK_LOOP, start)
         if gen_index == 0:
