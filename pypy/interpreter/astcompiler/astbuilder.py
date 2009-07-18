@@ -1177,6 +1177,7 @@ class ASTBuilder(object):
             for_node = comp_for.children[1]
             for_targets = self.handle_exprlist(for_node, ast.Store)
             expr = handle_source_expression(comp_for.children[3])
+            assert isinstance(expr, ast.expr)
             if len(for_node.children) == 1:
                 comp = ast.comprehension(for_targets[0], expr, None)
             else:
