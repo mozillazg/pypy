@@ -77,6 +77,7 @@ class ASTNodeVisitor(ASDLVisitor):
 
     def visitProduct(self, product, name, simple):
         self.emit("class %s(AST):" % (name,))
+        self.emit("")
         slots = ", ".join(repr(field.name.value) for field in product.fields)
         self.emit("__slots__ = (%s)" % (slots,), 1)
         self.emit("")
