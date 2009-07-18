@@ -544,6 +544,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def visit_Import(self, imp):
         self.update_position(imp.lineno)
         for alias in imp.names:
+            assert isinstance(alias, ast.alias)
             if self.compile_info.flags & consts.CO_FUTURE_ABSOLUTE_IMPORT:
                 level = 0
             else:
