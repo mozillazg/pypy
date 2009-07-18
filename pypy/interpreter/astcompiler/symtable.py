@@ -243,25 +243,26 @@ class FunctionScope(Scope):
     def _check_optimization(self):
         if (self.has_free or self.child_has_free) and not self.optimized:
             err = None
-            if self.import_star:
-                node = self.import_star
-                if self.bare_exec:
-                    err = "function %r uses import * and bare exec, " \
-                        "which are illegal because it %s"
-                else:
-                    err = "import * is not allowed in function %r because it %s"
-            elif self.bare_exec:
-                node = self.bare_exec
-                err = "unqualified exec is not allowed in function %r " \
-                    "because it %s"
-            else:
-                raise AssertionError("unkown reason for unoptimization")
             if self.child_has_free:
                 trailer = "contains a nested function with free variables"
             else:
                 trailer = "is a nested function"
-            raise SyntaxError(err % (self.name, trailer), node.lineno,
-                              node.col_offset)
+            name = self.name
+            if self.import_star:
+                node = self.import_star
+                if self.bare_exec:
+                    err = "function %r uses import * and bare exec, " \
+                        "which are illegal because it %s" % (name, trailer)
+                else:
+                    err = "import * is not allowed in function %r because " \
+                        "it %s" % (name, trailer)
+            elif self.bare_exec:
+                node = self.bare_exec
+                err = "unqualified exec is not allowed in function %r " \
+                    "because it %s" % (name, trailer)
+            else:
+                raise AssertionError("unkown reason for unoptimization")
+            raise SyntaxError(err, node.lineno, node.col_offset)
         self.locals_fully_known = self.optimized and not self.has_exec
 
 
@@ -385,9 +386,11 @@ class SymtableBuilder(ast.GenericASTVisitor):
             old_role = self.scope.lookup_role(name)
             if old_role & (SYM_USED | SYM_ASSIGNED):
                 if old_role & SYM_ASSIGNED:
-                    msg = "name '%s' is assigned to before global declaration"
+                    msg = "name '%s' is assigned to before global declaration" \
+                        % (name,)
                 else:
-                    msg = "name '%s' is used prior to global declaration"
+                    msg = "name '%s' is used prior to global declaration" % \
+                        (name,)
                 misc.syntax_warning(self.space, msg, self.compile_info.filename,
                                     glob.lineno, glob.col_offset)
             self.note_symbol(name, SYM_GLOBAL)
