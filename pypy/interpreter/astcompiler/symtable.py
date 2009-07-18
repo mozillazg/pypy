@@ -316,7 +316,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
         return self.scopes[scope_node]
 
     def implicit_arg(self, pos):
-        name = ".%i" % (pos,)
+        name = ".%d" % (pos,)
         self.note_symbol(name, SYM_PARAM)
 
     def note_symbol(self, identifier, role):
