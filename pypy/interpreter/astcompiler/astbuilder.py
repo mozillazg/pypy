@@ -1177,7 +1177,6 @@ class ASTBuilder(object):
             for_node = comp_for.children[1]
             for_targets = self.handle_exprlist(for_node, ast.Store)
             expr = handle_source_expression(comp_for.children[3])
-            assert isinstance(expr, ast.expr)
             if len(for_node.children) == 1:
                 comp = ast.comprehension(for_targets[0], expr, None)
             else:
@@ -1198,6 +1197,7 @@ class ASTBuilder(object):
                     comp.ifs = ifs
                 if comp_for.type == iter_type:
                     comp_for = comp_for.children[0]
+            assert isinstance(comp, ast.comprehension)
             comps.append(comp)
         return elt, comps
 
