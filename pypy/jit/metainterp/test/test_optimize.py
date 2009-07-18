@@ -435,6 +435,28 @@ class BaseTestOptimize(object):
         # in p1 a Virtual and not in p2, as they both come from the same p3.
         self.find_nodes(ops, 'Not, Not')
 
+    def test_find_nodes_new_mismatch(self):
+        ops = """
+        [p1]
+        guard_class(p1, ConstClass(node_vtable))
+            fail()
+        p2 = new_with_vtable(ConstClass(node_vtable2), descr=nodesize2)
+        jump(p2)
+        """
+        self.find_nodes(ops, 'Not')
+
+    def test_find_nodes_new_aliasing_mismatch(self):
+        ops = """
+        [p0, p1]
+        guard_class(p0, ConstClass(node_vtable))
+            fail()
+        guard_class(p1, ConstClass(node_vtable2))
+            fail()
+        p2 = new_with_vtable(ConstClass(node_vtable2), descr=nodesize2)
+        jump(p2, p2)
+        """
+        self.find_nodes(ops, 'Not, Fixed(node_vtable2)')
+
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
     pass
