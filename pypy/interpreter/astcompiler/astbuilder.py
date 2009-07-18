@@ -135,7 +135,9 @@ class ASTBuilder(object):
             error = "lambda"
         elif isinstance(expr, ast.Call):
             error = "call"
-        elif isinstance(expr, (ast.BoolOp, ast.BinOp, ast.UnaryOp)):
+        elif isinstance(expr, ast.BoolOp) or \
+                isinstance(expr, ast.BinOp) or \
+                isinstance(expr, ast.UnaryOp):
             error = "operator"
         elif isinstance(expr, ast.GeneratorExp):
             error = "generator expression"
@@ -143,7 +145,9 @@ class ASTBuilder(object):
             error = "yield expression"
         elif isinstance(expr, ast.ListComp):
             error = "list comprehension"
-        elif isinstance(expr, (ast.Dict, ast.Num, ast.Str)):
+        elif isinstance(expr, ast.Dict) or \
+                isinstance(expr, ast.Num) or \
+                isinstance(expr, ast.Str):
             error = "literal"
         elif isinstance(expr, ast.Compare):
             error = "comparison"
