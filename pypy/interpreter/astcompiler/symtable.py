@@ -26,8 +26,9 @@ class Scope(object):
 
     can_be_optimized = False
 
-    def __init__(self, node, name):
-        self.node = node
+    def __init__(self, name, lineno=0, col_offset=0):
+        self.lineno = lineno
+        self.col_offset = col_offset
         self.parent = None
         self.name = name
         self.locals_fully_known = False
@@ -60,7 +61,7 @@ class Scope(object):
             if old_role & SYM_PARAM and role & SYM_PARAM:
                 err = "duplicate argument '%s' in function definition" % \
                     (identifier,)
-                raise SyntaxError(err, self.node.lineno, self.node.col_offset)
+                raise SyntaxError(err, self.lineno, self.col_offset)
             new_role |= old_role
         self.roles[mangled] = new_role
         if role & SYM_PARAM:
@@ -95,7 +96,7 @@ class Scope(object):
         if flags & SYM_GLOBAL:
             if flags & SYM_PARAM:
                 raise SyntaxError("name %r is both local and global" % (name,),
-                                  self.node.lineno, self.node.col_offset)
+                                  self.lineno, self.col_offset)
             self.symbols[name] = SCOPE_GLOBAL_EXPLICIT
             globs[name] = None
             if bound:
@@ -178,8 +179,8 @@ class Scope(object):
 
 class ModuleScope(Scope):
 
-    def __init__(self, module):
-        Scope.__init__(self, module, "top")
+    def __init__(self):
+        Scope.__init__(self, "top")
 
 
 class FunctionScope(Scope):
@@ -187,7 +188,7 @@ class FunctionScope(Scope):
     can_be_optimized = True
 
     def __init__(self, func, name):
-        Scope.__init__(self, func, name)
+        Scope.__init__(self, name, func.lineno, func.col_offset)
         self.has_variable_arg = False
         self.has_keywords_arg = False
         self.is_generator = False
@@ -269,7 +270,7 @@ class ClassScope(Scope):
     _hide_bound_from_nested_scopes = True
 
     def __init__(self, clsdef):
-        Scope.__init__(self, clsdef, clsdef.name)
+        Scope.__init__(self, clsdef.name, clsdef.lineno, clsdef.col_offset)
 
     def mangle(self, name):
         return misc.mangle(name, self.name)
@@ -284,9 +285,9 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.scopes = {}
         self.scope = None
         self.stack = []
-        top = ModuleScope(module)
+        top = ModuleScope()
         self.globs = top.roles
-        self.push_scope(top)
+        self.push_scope(top, module)
         try:
             module.walkabout(self)
             top.finalize(None, {}, {})
@@ -296,11 +297,11 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.pop_scope()
         assert not self.stack
 
-    def push_scope(self, scope):
+    def push_scope(self, scope, node):
         if self.stack:
             self.stack[-1].add_child(scope)
         self.stack.append(scope)
-        self.scopes[scope.node] = scope
+        self.scopes[node] = scope
         # Convenience
         self.scope = scope
 
@@ -331,7 +332,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
             self.visit_sequence(func.args.defaults)
         if func.decorators:
             self.visit_sequence(func.decorators)
-        self.push_scope(FunctionScope(func, func.name))
+        self.push_scope(FunctionScope(func, func.name), func)
         func.args.walkabout(self)
         self.visit_sequence(func.body)
         self.pop_scope()
@@ -344,7 +345,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
         self.note_symbol(clsdef.name, SYM_ASSIGNED)
         if clsdef.bases:
             self.visit_sequence(clsdef.bases)
-        self.push_scope(ClassScope(clsdef))
+        self.push_scope(ClassScope(clsdef), clsdef)
         self.visit_sequence(clsdef.body)
         self.pop_scope()
 
@@ -392,7 +393,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
     def visit_Lambda(self, lamb):
         if lamb.args.defaults:
             self.visit_sequence(lamb.args.defaults)
-        self.push_scope(FunctionScope(lamb, "lambda"))
+        self.push_scope(FunctionScope(lamb, "lambda"), lamb)
         lamb.args.walkabout(self)
         lamb.body.walkabout(self)
         self.pop_scope()
@@ -400,7 +401,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
     def visit_GeneratorExp(self, genexp):
         outer = genexp.generators[0]
         outer.iter.walkabout(self)
-        self.push_scope(FunctionScope(genexp, "genexp"))
+        self.push_scope(FunctionScope(genexp, "genexp"), genexp)
         self.implicit_arg(0)
         outer.target.walkabout(self)
         if outer.ifs:
