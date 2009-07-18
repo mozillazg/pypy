@@ -67,7 +67,9 @@ class ASTNodeVisitor(ASDLVisitor):
             self.emit("")
         else:
             self.emit("class %s(AST):" % (base,))
-            self.emit("pass", 1)
+            self.emit("")
+            slots = ", ".join(repr(attr.name.value) for attr in sum.attributes)
+            self.emit("__slots__ = (%s)" % (slots,), 1)
             self.emit("")
             for cons in sum.types:
                 self.visit(cons, base, sum.attributes, simple)
@@ -75,6 +77,8 @@ class ASTNodeVisitor(ASDLVisitor):
 
     def visitProduct(self, product, name, simple):
         self.emit("class %s(AST):" % (name,))
+        slots = ", ".join(repr(field.name.value) for field in product.fields)
+        self.emit("__slots__ = (%s)" % (slots,), 1)
         self.emit("")
         self.make_constructor(product.fields)
         self.emit("")
@@ -95,7 +99,11 @@ class ASTNodeVisitor(ASDLVisitor):
     def visitConstructor(self, cons, base, extra_attributes, simple):
         self.emit("class %s(%s):" % (cons.name, base))
         self.emit("")
-        self.make_constructor(cons.fields + extra_attributes)
+        all_fields = cons.fields + extra_attributes
+        slots = ", ".join(repr(field.name.value) for field in all_fields)
+        self.emit("__slots__ = (%s)" % (slots,), 1)
+        self.emit("")
+        self.make_constructor(all_fields)
         self.emit("")
         self.emit("def walkabout(self, visitor):", 1)
         self.emit("visitor.visit_%s(self)" % (cons.name,), 2)
