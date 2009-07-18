@@ -186,10 +186,10 @@ class PythonCodeMaker(ast.ASTVisitor):
         index = self.add_const(obj)
         self.emit_op_arg(ops.LOAD_CONST, index)
 
-    def update_position(self, node):
-        self.lineno = node.lineno
+    def update_position(self, lineno):
+        self.lineno = lineno
         if self.first_lineno == -1:
-            self.first_lineno = node.lineno
+            self.first_lineno = lineno
 
     def _resolve_block_targets(self, blocks):
         last_extended_arg_count = 0
