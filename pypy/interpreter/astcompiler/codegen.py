@@ -990,7 +990,9 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                               genexp.lineno)
         self.update_position(genexp.lineno)
         self._make_function(code)
-        genexp.generators[0].iter.walkabout(self)
+        first_comp = genexp.generators[0]
+        assert isinstance(first_comp, ast.comprehension)
+        first_comp.iter.walkabout(self)
         self.emit_op(ops.GET_ITER)
         self.emit_op_arg(ops.CALL_FUNCTION, 1)
 
