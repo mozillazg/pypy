@@ -1105,8 +1105,9 @@ class AbstractFunctionCodeGenerator(PythonCodeGenerator):
     def _compile(self, func):
         assert isinstance(func, ast.FunctionDef)
         if self.is_docstring(func.body[0]):
-            assert isinstance(func.body[0], ast.Expr)
-            self.add_const(func.body[0].value.s)
+            doc_string = func.body[0]
+            assert isinstance(doc_string, ast.Expr)
+            self.add_const(doc_string.value.s)
             start = 1
         else:
             self.add_const(self.space.w_None)
