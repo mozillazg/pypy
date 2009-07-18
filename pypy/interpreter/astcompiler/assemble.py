@@ -298,7 +298,7 @@ class PythonCodeMaker(ast.ASTVisitor):
                              stack_depth,
                              flags,
                              bytecode,
-                             consts_w,
+                             list(consts_w),
                              names,
                              var_names,
                              self.compile_info.filename,
