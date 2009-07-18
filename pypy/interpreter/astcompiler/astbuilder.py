@@ -969,6 +969,7 @@ class ASTBuilder(object):
                 ext_slice = ast.ExtSlice(slices)
                 return ast.Subscript(left_expr, ext_slice, ast.Load,
                                      middle.lineno, middle.column)
+            assert isinstance(slices[0], ast.Index)
             elts = [idx.value for idx in slices]
             tup = ast.Tuple(elts, ast.Load, middle.lineno, middle.column)
             return ast.Subscript(left_expr, ast.Index(tup), ast.Load,
