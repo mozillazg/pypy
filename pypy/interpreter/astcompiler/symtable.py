@@ -403,6 +403,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
 
     def visit_GeneratorExp(self, genexp):
         outer = genexp.generators[0]
+        assert isinstance(outer, ast.comprehension)
         outer.iter.walkabout(self)
         new_scope = FunctionScope("genexp", genexp.lineno, genexp.col_offset)
         self.push_scope(new_scope, genexp)
