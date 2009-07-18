@@ -131,8 +131,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         assert self.scope.lookup(name) != symtable.SCOPE_UNKNOWN
         return name
 
-    def sub_scope(self, kind, name, node):
-        generator = kind(self.space, name, node, node.lineno, self.symbols,
+    def sub_scope(self, kind, name, node, lineno):
+        generator = kind(self.space, name, node, lineno, self.symbols,
                          self.compile_info)
         return generator.assemble()
 
@@ -234,7 +234,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             num_defaults = len(func.args.defaults)
         else:
             num_defaults = 0
-        code = self.sub_scope(FunctionCodeGenerator, func.name, func)
+        code = self.sub_scope(FunctionCodeGenerator, func.name, func,
+                              func.lineno)
         self.update_position(func.lineno)
         self._make_function(code, num_defaults)
         self.name_op(func.name, ast.Store)
@@ -245,7 +246,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             default_count = len(lam.args.defaults)
         else:
             default_count = 0
-        code = self.sub_scope(LambdaCodeGenerator, "<lambda>", lam)
+        code = self.sub_scope(LambdaCodeGenerator, "<lambda>", lam, lam.lineno)
         self.update_position(lam.lineno)
         self._make_function(code, default_count)
 
@@ -258,7 +259,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         else:
             bases_count = 0
         self.emit_op_arg(ops.BUILD_TUPLE, bases_count)
-        code = self.sub_scope(ClassCodeGenerator, cls.name, cls)
+        code = self.sub_scope(ClassCodeGenerator, cls.name, cls, cls.lineno)
         self.update_position(cls.lineno)
         self._make_function(code, 0)
         self.emit_op_arg(ops.CALL_FUNCTION, 0)
@@ -971,7 +972,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.use_next_block(end)
 
     def visit_GeneratorExp(self, genexp):
-        code = self.sub_scope(GenExpCodeGenerator, "<genexp>", genexp)
+        code = self.sub_scope(GenExpCodeGenerator, "<genexp>", genexp,
+                              genexp.lineno)
         self.update_position(genexp.lineno)
         self._make_function(code)
         genexp.generators[0].iter.walkabout(self)
