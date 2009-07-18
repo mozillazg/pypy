@@ -95,8 +95,8 @@ class Scope(object):
     def _finalize_name(self, name, flags, local, bound, free, globs):
         if flags & SYM_GLOBAL:
             if flags & SYM_PARAM:
-                raise SyntaxError("name %r is both local and global" % (name,),
-                                  self.lineno, self.col_offset)
+                err = "name '%s' is both local and global" % (name,)
+                raise SyntaxError(err, self.lineno, self.col_offset)
             self.symbols[name] = SCOPE_GLOBAL_EXPLICIT
             globs[name] = None
             if bound:
@@ -251,14 +251,14 @@ class FunctionScope(Scope):
             if self.import_star:
                 node = self.import_star
                 if self.bare_exec:
-                    err = "function %r uses import * and bare exec, " \
+                    err = "function '%s' uses import * and bare exec, " \
                         "which are illegal because it %s" % (name, trailer)
                 else:
-                    err = "import * is not allowed in function %r because " \
+                    err = "import * is not allowed in function '%s' because " \
                         "it %s" % (name, trailer)
             elif self.bare_exec:
                 node = self.bare_exec
-                err = "unqualified exec is not allowed in function %r " \
+                err = "unqualified exec is not allowed in function '%s' " \
                     "because it %s" % (name, trailer)
             else:
                 raise AssertionError("unkown reason for unoptimization")
