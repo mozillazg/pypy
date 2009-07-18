@@ -526,7 +526,32 @@ class BaseTestOptimize(object):
         self.find_bridge(ops, 'Fixed(node_vtable)', 'Fixed(node_vtable2)',
                          mismatch=True)
 
-    def test_bridge_simple_virtual(self):
+    def test_bridge_simple_virtual_1(self):
+        ops = """
+        [i0]
+        p0 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p0, i0, descr=valuedescr)
+        jump(p0)
+        """
+        self.find_bridge(ops, 'Not', 'Not')
+        self.find_bridge(ops, 'Not', 'Fixed(node_vtable)')
+        self.find_bridge(ops, 'Not', 'Virtual(node_vtable, valuedescr=Not)')
+        self.find_bridge(ops, 'Not',
+                         '''Virtual(node_vtable,
+                                    valuedescr=Not,
+                                    nextdescr=Not)''')
+        #
+        self.find_bridge(ops, 'Not', 'Virtual(node_vtable)',
+                         mismatch=True)
+        self.find_bridge(ops, 'Not', 'Virtual(node_vtable, nextdescr=Not)',
+                         mismatch=True)
+        self.find_bridge(ops, 'Not',
+                         '''Virtual(node_vtable,
+                                    valuedescr=Not,
+                                    nextdescr=Fixed(node_vtable))''',
+                         mismatch=True)
+
+    def test_bridge_simple_virtual_2(self):
         ops = """
         [p0]
         setfield_gc(p0, 123, descr=valuedescr)
