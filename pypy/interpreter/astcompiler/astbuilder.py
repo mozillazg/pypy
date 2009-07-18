@@ -112,49 +112,44 @@ class ASTBuilder(object):
     def set_context(self, expr, ctx, node):
         error = None
         sequence = None
-        expr_type = expr.__class__
-        if expr_type is ast.Attribute:
+        if isinstance(expr, ast.Attribute):
             if ctx == ast.Store:
                 self.check_forbidden_name(expr.attr, node)
             expr.ctx = ctx
-        elif expr_type is ast.Subscript:
+        elif isinstance(expr, ast.Subscript):
             expr.ctx = ctx
-        elif expr_type is ast.Name:
+        elif isinstance(expr, ast.Name):
             if ctx == ast.Store:
                 self.check_forbidden_name(expr.id, node)
             expr.ctx = ctx
-        elif expr_type is ast.List:
+        elif isinstance(expr, ast.List):
             expr.ctx = ctx
             sequence = expr.elts
-        elif expr_type is ast.Tuple:
+        elif isinstance(expr, ast.Tuple):
             if expr.elts:
                 expr.ctx = ctx
                 sequence = expr.elts
             else:
                 error = "()"
-        elif expr_type is ast.Lambda:
+        elif isinstance(expr, ast.Lambda):
             error = "lambda"
-        elif expr_type is ast.Call:
+        elif isinstance(expr, ast.Call):
             error = "call"
-        elif expr_type is ast.BoolOp or \
-                expr_type is ast.BinOp or \
-                expr_type is ast.UnaryOp:
+        elif isinstance(expr, (ast.BoolOp, ast.BinOp, ast.UnaryOp)):
             error = "operator"
-        elif expr_type is ast.GeneratorExp:
+        elif isinstance(expr, ast.GeneratorExp):
             error = "generator expression"
-        elif expr_type is ast.Yield:
+        elif isinstance(expr, ast.Yield):
             error = "yield expression"
-        elif expr_type is ast.ListComp:
+        elif isinstance(expr, ast.ListComp):
             error = "list comprehension"
-        elif expr_type is ast.Dict or \
-                expr_type is ast.Num or \
-                expr_type is ast.Str:
+        elif isinstance(expr, (ast.Dict, ast.Num, ast.Str)):
             error = "literal"
-        elif expr_type is ast.Compare:
+        elif isinstance(expr, ast.Compare):
             error = "comparison"
-        elif expr_type is ast.IfExp:
+        elif isinstance(expr, ast.IfExp):
             error = "conditional expression"
-        elif expr_type is ast.Repr:
+        elif isinstance(expr, ast.Repr):
             error = "repr"
         else:
             raise AssertionError("unkown expression in set_context()")
