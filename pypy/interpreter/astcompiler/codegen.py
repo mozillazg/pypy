@@ -576,7 +576,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         else:
             level = imp.level
         self.load_const(space.wrap(level))
-        names_w = [space.wrap(alias.name) for alias in imp.names]
+        names_w = []
+        for alias in imp.names:
+            assert isinstance(alias, ast.alias)
+            names_w.append(space.wrap(alias.name))
         self.load_const(space.newtuple(names_w))
         if imp.module:
             mod_name = imp.module
@@ -587,6 +590,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op(ops.IMPORT_STAR)
         else:
             for alias in imp.names:
+                assert isinstance(alias, ast.alias)
                 self.emit_op_name(ops.IMPORT_FROM, self.names, alias.name)
                 if alias.asname:
                     store_name = alias.asname
