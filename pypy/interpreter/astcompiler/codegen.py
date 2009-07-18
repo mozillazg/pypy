@@ -859,7 +859,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         name_scope = self.scope.lookup(func_name.id)
         if name_scope == symtable.SCOPE_GLOBAL_IMPLICIT or \
                 name_scope == symtable.SCOPE_UNKNOWN:
-            builtin_index = BUILTIN_TO_INDEX.get(call.func.id, -1)
+            builtin_index = BUILTIN_TO_INDEX.get(func_name.id, -1)
             if builtin_index != -1:
                 if call.args:
                     args_count = len(call.args)
