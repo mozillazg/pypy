@@ -222,6 +222,8 @@ from pypy.tool.pairtype import extendabletype
 
 class AST(Wrappable):
 
+    __slots__ = ()
+
     __metaclass__ = extendabletype
 
     def walkabout(self, visitor):
