@@ -249,15 +249,37 @@ class __extend__(FixedClassSpecNode):
 class __extend__(VirtualInstanceSpecNode):
     def make_instance_node(self):
         instnode = InstanceNode(escaped=False)
+        instnode.knownclsbox = self.known_class
         instnode.curfields = av_newdict()
         for ofs, subspecnode in self.fields:
             instnode.curfields[ofs] = subspecnode.make_instance_node()
         return instnode
+
     def matches_instance_node(self, exitnode):
         if exitnode.unique == UNIQUE_NO:
             return False
-        else:
-            xxx
+        #
+        assert exitnode.unique == UNIQUE_YES
+        if not self.known_class.equals(exitnode.knownclsbox):
+            # unique match, but the class is known to be a mismatch
+            return False
+        #
+        d = exitnode.curfields
+        seen = 0
+        for ofs, subspecnode in self.fields:
+            try:
+                if d is None:
+                    raise KeyError
+                instnode = d[ofs]
+                seen += 1
+            except KeyError:
+                instnode = NodeFinder.node_escaped
+            if not subspecnode.matches_instance_node(instnode):
+                return False
+        if d is not None and len(d) > seen:
+            return False          # some key is in d but not in self.fields
+        return True
+
 
 class BridgeSpecializationFinder(NodeFinder):
 
