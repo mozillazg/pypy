@@ -187,8 +187,8 @@ class FunctionScope(Scope):
 
     can_be_optimized = True
 
-    def __init__(self, func, name):
-        Scope.__init__(self, name, func.lineno, func.col_offset)
+    def __init__(self, name, lineno, col_offset):
+        Scope.__init__(self, name, lineno, col_offset)
         self.has_variable_arg = False
         self.has_keywords_arg = False
         self.is_generator = False
@@ -332,7 +332,8 @@ class SymtableBuilder(ast.GenericASTVisitor):
             self.visit_sequence(func.args.defaults)
         if func.decorators:
             self.visit_sequence(func.decorators)
-        self.push_scope(FunctionScope(func, func.name), func)
+        new_scope = FunctionScope(func.name, func.lineno, func.col_offset)
+        self.push_scope(new_scope, func)
         func.args.walkabout(self)
         self.visit_sequence(func.body)
         self.pop_scope()
@@ -393,7 +394,8 @@ class SymtableBuilder(ast.GenericASTVisitor):
     def visit_Lambda(self, lamb):
         if lamb.args.defaults:
             self.visit_sequence(lamb.args.defaults)
-        self.push_scope(FunctionScope(lamb, "lambda"), lamb)
+        new_scope = FunctionScope("lambda", lamb.lineno, lamb.col_offset)
+        self.push_scope(new_scope, lamb)
         lamb.args.walkabout(self)
         lamb.body.walkabout(self)
         self.pop_scope()
@@ -401,7 +403,8 @@ class SymtableBuilder(ast.GenericASTVisitor):
     def visit_GeneratorExp(self, genexp):
         outer = genexp.generators[0]
         outer.iter.walkabout(self)
-        self.push_scope(FunctionScope(genexp, "genexp"), genexp)
+        new_scope = FunctionScope("genexp", genexp.lineno, genexp.col_offset)
+        self.push_scope(new_scope, genexp)
         self.implicit_arg(0)
         outer.target.walkabout(self)
         if outer.ifs:
