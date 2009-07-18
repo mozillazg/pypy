@@ -457,6 +457,15 @@ class BaseTestOptimize(object):
         """
         self.find_nodes(ops, 'Not, Fixed(node_vtable2)')
 
+    def test_find_nodes_new_escapes(self):
+        ops = """
+        [p0]
+        escape(p0)
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        jump(p1)
+        """
+        self.find_nodes(ops, 'Not')
+
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
     pass
