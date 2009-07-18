@@ -50,7 +50,7 @@ class Scope(object):
         return self.roles.get(self.mangle(name), SYM_BLANK)
 
     def new_temporary_name(self):
-        self.note_symbol("_[%i]" % (self.temp_name_counter,), SYM_ASSIGNED)
+        self.note_symbol("_[%d]" % (self.temp_name_counter,), SYM_ASSIGNED)
         self.temp_name_counter += 1
 
     def note_symbol(self, identifier, role):

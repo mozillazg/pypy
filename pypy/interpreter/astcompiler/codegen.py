@@ -126,7 +126,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         raise NotImplementedError
 
     def current_temporary_name(self):
-        name = "_[%i]" % (self.temporary_name_counter,)
+        name = "_[%d]" % (self.temporary_name_counter,)
         self.temporary_name_counter += 1
         assert self.scope.lookup(name) != symtable.SCOPE_UNKNOWN
         return name
