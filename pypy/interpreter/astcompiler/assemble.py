@@ -492,7 +492,7 @@ for name, func in globals().items():
         _stack_effect_computers[getattr(ops, name[9:])] = func
 for op, value in _static_opcode_stack_effects.iteritems():
     def func(arg, _value=value):
-        return value
+        return _value
     _stack_effect_computers[op] = func
 del name, func, op, value
 
