@@ -86,6 +86,7 @@ class Parser(object):
     def __init__(self, grammar):
         self.grammar = grammar
         self.root = None
+        self.stack = None
 
     def prepare(self, start=-1):
         if start == -1:
