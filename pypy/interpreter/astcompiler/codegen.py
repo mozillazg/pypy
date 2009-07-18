@@ -186,9 +186,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if body:
             start = 0
             if self.is_docstring(body[0]):
-                assert isinstance(body[0], ast.Expr)
+                doc_expr = body[0]
+                assert isinstance(doc_expr, ast.Expr)
                 start = 1
-                body[0].value.walkabout(self)
+                doc_expr.value.walkabout(self)
                 self.name_op("__doc__", ast.Store)
             for i in range(start, len(body)):
                 body[i].walkabout(self)
