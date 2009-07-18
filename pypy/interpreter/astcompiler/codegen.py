@@ -888,9 +888,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if_cleanup = self.new_block()
         anchor = self.new_block()
         gen = gens[gen_index]
-        it = gen.iter
-        assert isinstance(it, ast.expr)
-        it.walkabout(self)
+        assert isinstance(gen, ast.comprehension)
+        gen.iter.walkabout(self)
         self.emit_op(ops.GET_ITER)
         self.use_next_block(start)
         self.emit_jump(ops.FOR_ITER, anchor)
