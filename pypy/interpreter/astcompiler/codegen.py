@@ -856,7 +856,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             return False
         func_name = call.func
         assert isinstance(func_name, ast.Name)
-        name_scope = self.scope.lookup(func_name)
+        name_scope = self.scope.lookup(func_name.id)
         if name_scope == symtable.SCOPE_GLOBAL_IMPLICIT or \
                 name_scope == symtable.SCOPE_UNKNOWN:
             builtin_index = BUILTIN_TO_INDEX.get(call.func.id, -1)
