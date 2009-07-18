@@ -527,10 +527,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         source_name = alias.name
         dot = source_name.find(".")
         if dot > 0:
-            start = dot + 1
             while True:
+                start = dot + 1
                 dot = source_name.find(".", start)
-                if dot > 0:
+                if dot < 0:
                     end = len(source_name)
                 else:
                     end = dot
@@ -538,7 +538,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 self.emit_op_name(ops.LOAD_ATTR, self.names, attr)
                 if dot < 0:
                     break
-                start = dot + 1
         self.name_op(alias.asname, ast.Store)
 
     def visit_Import(self, imp):
