@@ -1020,7 +1020,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             elif stack_count == 1:
                 self.emit_op_arg(ops.DUP_TOPX, 2)
             elif stack_count == 2:
-                self.emit_op-arg(ops.DUP_TOPX, 3)
+                self.emit_op_arg(ops.DUP_TOPX, 3)
         elif ctx == ast.AugStore:
             if stack_count == 0:
                 self.emit_op(ops.ROT_TWO)
