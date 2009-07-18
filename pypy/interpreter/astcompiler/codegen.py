@@ -852,7 +852,9 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 not self._call_has_simple_args(call) or \
                 not isinstance(call.func, ast.Name):
             return False
-        name_scope = self.scope.lookup(call.func.id)
+        func_name = call.func
+        assert isinstance(func_name, ast.Name)
+        name_scope = self.scope.lookup(func_name)
         if name_scope == symtable.SCOPE_GLOBAL_IMPLICIT or \
                 name_scope == symtable.SCOPE_UNKNOWN:
             builtin_index = BUILTIN_TO_INDEX.get(call.func.id, -1)
