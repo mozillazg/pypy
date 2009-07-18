@@ -413,6 +413,14 @@ class TestCompiler:
         decl = str(decl) + "\n"
         yield self.st, decl, 'x', (1, 2, 3, 4)
 
+        source = """def f(a):
+    del a
+    def x():
+        a
+"""
+        exc = py.test.raises(SyntaxError, self.run, source).value
+        assert exc.msg == "Can't delete variable used in nested scopes: 'a'"
+
     def test_try_except_finally(self):
         yield self.simple_test, """
             try:
