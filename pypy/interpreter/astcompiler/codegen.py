@@ -1107,7 +1107,7 @@ class AbstractFunctionCodeGenerator(PythonCodeGenerator):
         if self.is_docstring(func.body[0]):
             doc_string = func.body[0]
             assert isinstance(doc_string, ast.Expr)
-            self.add_const(doc_string.value.s)
+            doc_string.value.walkabout(self)
             start = 1
         else:
             self.add_const(self.space.w_None)
