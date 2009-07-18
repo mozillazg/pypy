@@ -233,7 +233,7 @@ class __extend__(SpecNode):
 
 class __extend__(NotSpecNode):
     def make_instance_node(self):
-        return NodeFinder.node_escaped
+        return InstanceNode(escaped=True)
     def matches_instance_node(self, exitnode):
         return True
 

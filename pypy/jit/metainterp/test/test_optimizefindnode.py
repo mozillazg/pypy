@@ -167,6 +167,7 @@ class BaseTestOptimize(object):
         return True
 
     def find_nodes(self, ops, spectext, boxkinds=None):
+        assert boxkinds is None or isinstance(boxkinds, dict)
         loop = self.parse(ops, boxkinds=boxkinds)
         perfect_specialization_finder = PerfectSpecializationFinder()
         perfect_specialization_finder.find_nodes_loop(loop)
@@ -490,6 +491,7 @@ class BaseTestOptimize(object):
 
     def find_bridge(self, ops, inputspectext, outputspectext, boxkinds=None,
                     mismatch=False):
+        assert boxkinds is None or isinstance(boxkinds, dict)
         inputspecnodes = self.unpack_specnodes(inputspectext)
         outputspecnodes = self.unpack_specnodes(outputspectext)
         bridge = self.parse(ops, boxkinds=boxkinds)
@@ -616,6 +618,57 @@ class BaseTestOptimize(object):
                          '''Virtual(node_vtable, valuedescr=Not),
                             Virtual(node_vtable, valuedescr=Not)''',
                          mismatch=True)    # duplicate p0
+
+    def test_bridge_guard_class(self):
+        ops = """
+        [p1]
+        p2 = getfield_gc(p1, descr=nextdescr)
+        guard_class(p2, ConstClass(node_vtable))
+            fail()
+        jump(p2)
+        """
+        self.find_bridge(ops, 'Not', 'Not')
+        self.find_bridge(ops, 'Not', 'Fixed(node_vtable)')
+        self.find_bridge(ops, 'Virtual(node_vtable2, nextdescr=Not)',
+                              'Fixed(node_vtable)')
+        self.find_bridge(ops,
+            '''Virtual(node_vtable,
+                       nextdescr=Virtual(node_vtable,
+                                         nextdescr=Fixed(node_vtable2)))''',
+            '''Virtual(node_vtable,
+                       nextdescr=Fixed(node_vtable2))''')
+        #
+        self.find_bridge(ops, 'Not', 'Virtual(node_vtable)',
+                         mismatch=True)
+
+    def test_bridge_unused(self):
+        ops = """
+        []
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p3 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, p2, descr=nextdescr)
+        setfield_gc(p2, p3, descr=nextdescr)
+        jump(p1)
+        """
+        self.find_bridge(ops, '',
+            '''Not''')
+        self.find_bridge(ops, '',
+            '''Virtual(node_vtable,
+                       nextdescr=Not)''')
+        self.find_bridge(ops, '',
+            '''Virtual(node_vtable,
+                       nextdescr=Virtual(node_vtable,
+                                         nextdescr=Not))''')
+        self.find_bridge(ops, '',
+            '''Virtual(node_vtable,
+                       nextdescr=Virtual(node_vtable,
+                                         nextdescr=Virtual(node_vtable)))''')
+        self.find_bridge(ops, '',
+            '''Virtual(node_vtable,
+                       nextdescr=Virtual(node_vtable,
+                                         nextdescr=Virtual(node_vtable,
+                                                           nextdescr=Not)))''')
 
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
