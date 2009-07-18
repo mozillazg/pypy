@@ -193,6 +193,11 @@ class PerfectSpecializationFinder(object):
                 return prebuiltNotSpecNode
         #
         assert exitnode.unique == UNIQUE_YES
+        if (inputnode.knownclsbox is not None and
+            not inputnode.knownclsbox.equals(exitnode.knownclsbox)):
+            # unique match, but the class is known to be a mismatch
+            return prebuiltNotSpecNode
+        #
         fields = []
         d = exitnode.curfields
         if d is not None:
