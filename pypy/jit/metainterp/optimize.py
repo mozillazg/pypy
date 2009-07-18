@@ -181,7 +181,7 @@ class PerfectSpecializationFinder(object):
 
     def intersect(self, inputnode, exitnode):
         assert inputnode.fromstart
-        if exitnode.unique == UNIQUE_NO:
+        if exitnode.unique == UNIQUE_NO or inputnode.escaped:
             # give a NotSpecNode or a FixedClassSpecNode
             if (inputnode.knownclsbox is not None and
                 exitnode.knownclsbox is not None and
