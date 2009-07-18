@@ -172,7 +172,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         except KeyError:
             if kind is name_ops_deref and ctx == ast.Del:
                 raise SyntaxError("Can't delete variable used in "
-                                  "nested scopes: %r" % (identifier,))
+                                  "nested scopes: '%s'" % (identifier,))
             raise AssertionError("Unkown name operation")
         self.emit_op_arg(op, self.add_name(container, identifier))
 
