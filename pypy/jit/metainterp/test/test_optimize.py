@@ -466,6 +466,21 @@ class BaseTestOptimize(object):
         """
         self.find_nodes(ops, 'Not')
 
+    def test_find_nodes_new_unused(self):
+        ops = """
+        [p0]
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p3 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, p2, descr=nextdescr)
+        setfield_gc(p2, p3, descr=nextdescr)
+        jump(p1)
+        """
+        self.find_nodes(ops, '''
+            Virtual(node_vtable,
+                    nextdescr=Virtual(node_vtable,
+                                      nextdescr=Virtual(node_vtable)))''')
+
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
     pass
