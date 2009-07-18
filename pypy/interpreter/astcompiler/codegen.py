@@ -555,7 +555,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 self._import_as(alias)
             else:
                 dot = alias.name.find(".")
-                if dot == -1:
+                if dot < 0:
                     store_name = alias.name
                 else:
                     store_name = alias.name[:dot]
