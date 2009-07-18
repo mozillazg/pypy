@@ -186,6 +186,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if body:
             start = 0
             if self.is_docstring(body[0]):
+                assert isinstance(body[0], ast.Expr)
                 start = 1
                 body[0].value.walkabout(self)
                 self.name_op("__doc__", ast.Store)
@@ -1101,6 +1102,7 @@ class AbstractFunctionCodeGenerator(PythonCodeGenerator):
     def _compile(self, func):
         assert isinstance(func, ast.FunctionDef)
         if self.is_docstring(func.body[0]):
+            assert isinstance(func.body[0], ast.Expr)
             self.add_const(func.body[0].value.s)
             start = 1
         else:
