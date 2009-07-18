@@ -587,8 +587,9 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         else:
             mod_name = ""
         self.emit_op_name(ops.IMPORT_NAME, self.names, mod_name)
-        if len(imp.names) == 1 and isinstance(imp.names[0], ast.alias) and \
-                imp.names[0].name == "*":
+        first = imp.names[0]
+        assert isinstance(first, ast.alias)
+        if len(imp.names) == 1 and first.name == "*":
             self.emit_op(ops.IMPORT_STAR)
         else:
             for alias in imp.names:
