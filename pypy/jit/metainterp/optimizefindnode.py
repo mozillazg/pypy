@@ -243,7 +243,8 @@ class __extend__(FixedClassSpecNode):
         instnode.knownclsbox = self.known_class
         return instnode
     def matches_instance_node(self, exitnode):
-        xxx
+        return (exitnode.knownclsbox is not None and
+                self.known_class.equals(exitnode.knownclsbox))
 
 class __extend__(VirtualInstanceSpecNode):
     def make_instance_node(self):
@@ -259,6 +260,11 @@ class __extend__(VirtualInstanceSpecNode):
             xxx
 
 class BridgeSpecializationFinder(NodeFinder):
+
+    def find_nodes_bridge(self, bridge, specnodes):
+        if specnodes is not None:
+            self.setup_bridge_input_nodes(specnodes, bridge.inputargs)
+        self.find_nodes(bridge.operations)
 
     def setup_bridge_input_nodes(self, specnodes, inputargs):
         assert len(specnodes) == len(inputargs)

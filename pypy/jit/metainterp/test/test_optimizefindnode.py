@@ -494,9 +494,7 @@ class BaseTestOptimize(object):
         outputspecnodes = self.unpack_specnodes(outputspectext)
         bridge = self.parse(ops, boxkinds=boxkinds)
         bridge_specialization_finder = BridgeSpecializationFinder()
-        bridge_specialization_finder.setup_bridge_input_nodes(inputspecnodes,
-                                                              bridge.inputargs)
-        bridge_specialization_finder.find_nodes(bridge.operations)
+        bridge_specialization_finder.find_nodes_bridge(bridge, inputspecnodes)
         matches = bridge_specialization_finder.bridge_matches(
             bridge.operations[-1],
             outputspecnodes)
@@ -513,6 +511,20 @@ class BaseTestOptimize(object):
         """
         self.find_bridge(ops, 'Not', 'Not')
         self.find_bridge(ops, 'Not', 'Virtual(node_vtable)', mismatch=True)
+
+    def test_bridge_simple_known_class(self):
+        ops = """
+        [p0]
+        setfield_gc(p0, 123, descr=valuedescr)
+        jump(p0)
+        """
+        self.find_bridge(ops, 'Not', 'Not')
+        self.find_bridge(ops, 'Fixed(node_vtable)', 'Not')
+        self.find_bridge(ops, 'Fixed(node_vtable)', 'Fixed(node_vtable)')
+        #
+        self.find_bridge(ops, 'Not', 'Fixed(node_vtable)', mismatch=True)
+        self.find_bridge(ops, 'Fixed(node_vtable)', 'Fixed(node_vtable2)',
+                         mismatch=True)
 
 
 class TestLLtype(BaseTestOptimize, LLtypeMixin):
