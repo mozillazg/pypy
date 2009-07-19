@@ -15,44 +15,6 @@ from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.test.oparser import parse
 
-# ____________________________________________________________
-
-def equaloplists(oplist1, oplist2):
-    print '-'*20, 'Comparing lists', '-'*20
-    for op1, op2 in zip(oplist1, oplist2):
-        txt1 = str(op1)
-        txt2 = str(op2)
-        while txt1 or txt2:
-            print '%-39s| %s' % (txt1[:39], txt2[:39])
-            txt1 = txt1[39:]
-            txt2 = txt2[39:]
-        assert op1.opnum == op2.opnum
-        assert len(op1.args) == len(op2.args)
-        for x, y in zip(op1.args, op2.args):
-            assert x == y
-        assert op1.result == op2.result
-        assert op1.descr == op2.descr
-        if op1.suboperations:
-            assert equaloplists(op1.suboperations, op2.suboperations)
-    assert len(oplist1) == len(oplist2)
-    print '-'*57
-    return True
-
-def test_equaloplists():
-    ops = """
-    [i0]
-    i1 = int_add(i0, 1)
-    guard_true(i1)
-        i2 = int_add(i1, 1)
-        fail(i2)
-    jump(i1)
-    """
-    loop1 = parse(ops)
-    loop2 = parse(ops)
-    loop3 = parse(ops.replace("i2 = int_add", "i2 = int_sub"))
-    assert equaloplists(loop1.operations, loop2.operations)
-    py.test.raises(AssertionError,
-                   "equaloplists(loop1.operations, loop3.operations)")
 
 def test_sort_descrs():
     class PseudoDescr(AbstractDescr):
@@ -60,11 +22,12 @@ def test_sort_descrs():
             self.n = n
         def sort_key(self):
             return self.n
-    lst = [PseudoDescr(2), PseudoDescr(3), PseudoDescr(6)]
-    lst2 = lst[:]
-    random.shuffle(lst2)
-    sort_descrs(lst2)
-    assert lst2 == lst
+    for i in range(17):
+        lst = [PseudoDescr(j) for j in range(i)]
+        lst2 = lst[:]
+        random.shuffle(lst2)
+        sort_descrs(lst2)
+        assert lst2 == lst
 
 # ____________________________________________________________
 
@@ -122,18 +85,12 @@ class OOtypeMixin(object):
                        node_vtable_adr2: cpu.typedescrof(NODE2)}
     namespace = locals()
 
-# ____________________________________________________________
-
-class BaseTestOptimize(object):
+class BaseTest(object):
 
     def parse(self, s, boxkinds=None):
         return parse(s, self.cpu, self.namespace,
                      type_system=self.type_system,
                      boxkinds=boxkinds)
-
-    def assert_equal(self, optimized, expected):
-        equaloplists(optimized.operations,
-                     self.parse(expected).operations)
 
     def unpack_specnodes(self, text):
         #
@@ -161,6 +118,10 @@ class BaseTestOptimize(object):
         for x, y in zip(specnodes, lst):
             assert x._equals(y)
         return True
+
+# ____________________________________________________________
+
+class BaseTestOptimizeFindNode(BaseTest):
 
     def find_nodes(self, ops, spectext, boxkinds=None):
         assert boxkinds is None or isinstance(boxkinds, dict)
@@ -546,8 +507,8 @@ class BaseTestOptimize(object):
                                                            nextdescr=Not)))''')
 
 
-class TestLLtype(BaseTestOptimize, LLtypeMixin):
+class TestLLtype(BaseTestOptimizeFindNode, LLtypeMixin):
     pass
 
-class TestOOtype(BaseTestOptimize, OOtypeMixin):
+class TestOOtype(BaseTestOptimizeFindNode, OOtypeMixin):
     pass
