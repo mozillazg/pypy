@@ -101,6 +101,11 @@ class OpParser(object):
                     return ConstObj(ootype.cast_to_object(self.consts[name]))
             elif arg == 'None':
                 return None
+            elif arg == 'NULL':
+                if self.type_system == 'lltype':
+                    return ConstPtr(ConstPtr.value)
+                else:
+                    return ConstObj(ConstObj.value)
             return self.vars[arg]
 
     def parse_op(self, line):

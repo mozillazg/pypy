@@ -1,4 +1,5 @@
 from pypy.jit.metainterp.history import Const, Box
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.optimizeutil import av_newdict, _findall
 from pypy.rlib.objectmodel import we_are_translated
 
@@ -114,6 +115,30 @@ class Optimizer(object):
         if self.has_constant_class(op.args[0]):
             assert op.result.getint() == 0
             self.make_constant(op.result)
+        else:
+            self.optimize_default(op)
+
+    def optimize_OOISNOT(self, op):
+        if isinstance(op.args[1], Const) and not op.args[1].nonnull():
+            op.opnum = rop.OONONNULL
+            del op.args[1]
+            self.optimize_OONONNULL(op)
+        elif isinstance(op.args[0], Const) and not op.args[0].nonnull():
+            op.opnum = rop.OONONNULL
+            del op.args[0]
+            self.optimize_OONONNULL(op)
+        else:
+            self.optimize_default(op)
+
+    def optimize_OOIS(self, op):
+        if isinstance(op.args[1], Const) and not op.args[1].nonnull():
+            op.opnum = rop.OOISNULL
+            del op.args[1]
+            self.optimize_OOISNULL(op)
+        elif isinstance(op.args[0], Const) and not op.args[0].nonnull():
+            op.opnum = rop.OOISNULL
+            del op.args[0]
+            self.optimize_OOISNULL(op)
         else:
             self.optimize_default(op)
 
