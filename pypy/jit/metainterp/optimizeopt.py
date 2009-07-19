@@ -103,5 +103,19 @@ class Optimizer(object):
             self.emit_operation(op)
             self.make_constant_class(instbox, clsbox)
 
+    def optimize_OONONNULL(self, op):
+        if self.has_constant_class(op.args[0]):
+            assert op.result.getint() == 1
+            self.make_constant(op.result)
+        else:
+            self.optimize_default(op)
+
+    def optimize_OOISNULL(self, op):
+        if self.has_constant_class(op.args[0]):
+            assert op.result.getint() == 0
+            self.make_constant(op.result)
+        else:
+            self.optimize_default(op)
+
 
 optimize_ops = _findall(Optimizer, 'optimize_')
