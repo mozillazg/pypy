@@ -996,6 +996,11 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.emit_op(ops.GET_ITER)
         self.emit_op_arg(ops.CALL_FUNCTION, 1)
 
+    def visit_Repr(self, rep):
+        self.update_position(rep.lineno)
+        rep.value.walkabout(self)
+        self.emit_op(ops.UNARY_CONVERT)
+
     def visit_Attribute(self, attr):
         self.update_position(attr.lineno)
         names = self.names
