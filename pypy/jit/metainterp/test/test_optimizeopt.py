@@ -3,6 +3,7 @@ from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             OOtypeMixin,
                                                             BaseTest)
 from pypy.jit.metainterp.optimizeopt import optimize
+from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.metainterp.test.oparser import parse
 
 # ____________________________________________________________
@@ -67,7 +68,7 @@ class BaseTestOptimizeOpt(BaseTest):
         i0 = int_sub(i, 1)
         guard_value(i0, 0)
           fail(i0)
-        jump(i0)
+        jump(i)
         """
         self.optimize(ops, 'Not', ops)
 
@@ -90,6 +91,61 @@ class BaseTestOptimizeOpt(BaseTest):
         jump()
         """
         self.optimize(ops, '', expected, i0=5, i1=1, i2=0)
+
+    def test_constfold_all(self):
+        for op in range(rop.INT_ADD, rop.BOOL_NOT+1):
+            try:
+                op = opname[op]
+            except KeyError:
+                continue
+            ops = """
+            []
+            i1 = %s(3, 2)
+            jump()
+            """ % op.lower()
+            expected = """
+            []
+            jump()
+            """
+            self.optimize(ops, '', expected)
+
+    # ----------
+
+    def test_remove_guard_class(self):
+        ops = """
+        [p0]
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        jump(p0)
+        """
+        expected = """
+        [p0]
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        jump(p0)
+        """
+        self.optimize(ops, 'Not', expected)
+
+    def test_remove_consecutive_guard_value_constfold(self):
+        ops = """
+        [i0]
+        guard_value(i0, 0)
+          fail()
+        i1 = int_add(i0, 1)
+        guard_value(i1, 1)
+          fail()
+        i2 = int_add(i1, 2)
+        jump(i2)
+        """
+        expected = """
+        [i0]
+        guard_value(i0, 0)
+            fail()
+        jump(3)
+        """
+        self.optimize(ops, 'Not', expected, i0=0, i1=1, i2=3)
 
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
