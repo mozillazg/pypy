@@ -27,7 +27,7 @@ class InstanceNode(object):
     dependencies = None
 
     def __init__(self, fromstart=False):
-        self.fromstart = fromstart
+        self.fromstart = fromstart    # for loops only: present since the start
 
     def add_escape_dependency(self, other):
         assert not self.escaped
