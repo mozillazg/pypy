@@ -19,18 +19,9 @@ class NotSpecNode(SpecNode):
 prebuiltNotSpecNode = NotSpecNode()
 
 
-class FixedClassSpecNode(SpecNode):
-    def __init__(self, known_class):
-        self.known_class = known_class
-
-    def _equals(self, other):   # for tests only
-        return (type(other) is FixedClassSpecNode and
-                self.known_class.equals(other.known_class))
-
-
-class VirtualInstanceSpecNode(FixedClassSpecNode):
+class VirtualInstanceSpecNode(SpecNode):
     def __init__(self, known_class, fields):
-        FixedClassSpecNode.__init__(self, known_class)
+        self.known_class = known_class
         self.fields = fields
 
     def _equals(self, other):   # for tests only
