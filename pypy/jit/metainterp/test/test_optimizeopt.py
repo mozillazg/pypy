@@ -70,7 +70,7 @@ class BaseTestOptimizeOpt(BaseTest):
           fail(i0)
         jump(i)
         """
-        self.optimize(ops, 'Not', ops)
+        self.optimize(ops, 'Not', ops, i0=0)
 
     def test_constant_propagate(self):
         ops = """
@@ -146,6 +146,48 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(3)
         """
         self.optimize(ops, 'Not', expected, i0=0, i1=1, i2=3)
+
+    def test_ooisnull_oononnull_1(self):
+        ops = """
+        [p0]
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        i0 = oononnull(p0)
+        guard_true(i0)
+          fail()
+        i1 = ooisnull(p0)
+        guard_false(i1)
+          fail()
+        jump(p0)
+        """
+        expected = """
+        [p0]
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        jump(p0)
+        """
+        self.optimize(ops, 'Not', expected, i0=1, i1=0)
+
+    def test_ooisnull_oononnull_2(self):
+        py.test.skip("less important")
+        ops = """
+        [p0]
+        i0 = oononnull(p0)         # p0 != NULL
+        guard_true(i0)
+          fail()
+        i1 = ooisnull(p0)
+        guard_false(i1)
+          fail()
+        jump(p0)
+        """
+        expected = """
+        [p0]
+        i0 = oononnull(p0)
+        guard_true(i0)
+          fail()
+        jump(p0)
+        """
+        self.optimize(ops, 'Not', expected, i0=1, i1=0)
 
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
