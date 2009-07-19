@@ -150,30 +150,30 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def name_op(self, identifier, ctx):
         scope = self.scope.lookup(identifier)
-        kind = name_ops_default
+        op = ops.NOP
         container = self.names
         if scope == symtable.SCOPE_LOCAL:
             if self.scope.can_be_optimized:
                 container = self.var_names
-                kind = name_ops_fast
+                op = name_ops_fast(ctx)
         elif scope == symtable.SCOPE_FREE:
-            kind = name_ops_deref
+            op = name_ops_deref(ctx)
             container = self.free_vars
         elif scope == symtable.SCOPE_CELL:
-            kind = name_ops_deref
+            try:
+                op = name_ops_deref(ctx)
+            except KeyError:
+                assert ctx == ast.Del
+                raise SyntaxError("Can't delete variable used in "
+                                  "nested scopes: '%s'" % (identifier,))
             container = self.cell_vars
         elif scope == symtable.SCOPE_GLOBAL_IMPLICIT:
             if self.scope.locals_fully_known:
-                kind = name_ops_global
+                op = name_ops_global(ctx)
         elif scope == symtable.SCOPE_GLOBAL_EXPLICIT:
-            kind = name_ops_global
-        try:
-            op = kind(ctx)
-        except KeyError:
-            if kind is name_ops_deref and ctx == ast.Del:
-                raise SyntaxError("Can't delete variable used in "
-                                  "nested scopes: '%s'" % (identifier,))
-            raise AssertionError("Unkown name operation")
+            op = name_ops_global(ctx)
+        if op == ops.NOP:
+            op = name_ops_default(ctx)
         self.emit_op_arg(op, self.add_name(container, identifier))
 
     def is_docstring(self, node):
