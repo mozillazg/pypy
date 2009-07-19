@@ -489,10 +489,12 @@ def _compute_CALL_METHOD(arg):
 _stack_effect_computers = {}
 for name, func in globals().items():
     if name.startswith("_compute_"):
+        func._always_inline_ = True
         _stack_effect_computers[getattr(ops, name[9:])] = func
 for op, value in _static_opcode_stack_effects.iteritems():
     def func(arg, _value=value):
         return _value
+    func._always_inline_ = True
     _stack_effect_computers[op] = func
 del name, func, op, value
 

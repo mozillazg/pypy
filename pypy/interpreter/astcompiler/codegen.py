@@ -14,38 +14,38 @@ def compile_ast(space, module, info):
     return TopLevelCodeGenerator(space, module, symbols, info).assemble()
 
 
-name_ops_default = {
+name_ops_default = misc.dict_to_switch({
     ast.Load : ops.LOAD_NAME,
     ast.Store : ops.STORE_NAME,
     ast.Del : ops.DELETE_NAME
-}
+})
 
-name_ops_fast = {
+name_ops_fast = misc.dict_to_switch({
     ast.Load : ops.LOAD_FAST,
     ast.Store : ops.STORE_FAST,
     ast.Del : ops.DELETE_FAST
-}
+})
 
-name_ops_deref = {
+name_ops_deref = misc.dict_to_switch({
     ast.Load : ops.LOAD_DEREF,
     ast.Store : ops.STORE_DEREF,
-}
+})
 
-name_ops_global = {
+name_ops_global = misc.dict_to_switch({
     ast.Load : ops.LOAD_GLOBAL,
     ast.Store : ops.STORE_GLOBAL,
     ast.Del : ops.DELETE_GLOBAL
-}
+})
 
 
-unary_operations = {
+unary_operations = misc.dict_to_switch({
     ast.Invert : ops.UNARY_INVERT,
     ast.Not : ops.UNARY_NOT,
     ast.UAdd : ops.UNARY_POSITIVE,
     ast.USub : ops.UNARY_NEGATIVE
-}
+})
 
-binary_operations = {
+binary_operations = misc.dict_to_switch({
     ast.Add : ops.BINARY_ADD,
     ast.Sub : ops.BINARY_SUBTRACT,
     ast.Mult : ops.BINARY_MULTIPLY,
@@ -57,9 +57,9 @@ binary_operations = {
     ast.BitAnd : ops.BINARY_AND,
     ast.BitXor : ops.BINARY_XOR,
     ast.FloorDiv : ops.BINARY_FLOOR_DIVIDE
-}
+})
 
-inplace_operations = {
+inplace_operations = misc.dict_to_switch({
     ast.Add : ops.INPLACE_ADD,
     ast.Sub : ops.INPLACE_SUBTRACT,
     ast.Mult : ops.INPLACE_MULTIPLY,
@@ -71,9 +71,9 @@ inplace_operations = {
     ast.BitAnd : ops.INPLACE_AND,
     ast.BitXor : ops.INPLACE_XOR,
     ast.FloorDiv : ops.INPLACE_FLOOR_DIVIDE
-}
+})
 
-compare_operations = {
+compare_operations = misc.dict_to_switch({
     ast.Eq : 2,
     ast.NotEq : 3,
     ast.Lt : 0,
@@ -84,23 +84,23 @@ compare_operations = {
     ast.NotIn : 7,
     ast.Is : 8,
     ast.IsNot : 9
-}
+})
 
-subscr_operations = {
+subscr_operations = misc.dict_to_switch({
     ast.AugLoad : ops.BINARY_SUBSCR,
     ast.Load : ops.BINARY_SUBSCR,
     ast.AugStore : ops.STORE_SUBSCR,
     ast.Store : ops.STORE_SUBSCR,
     ast.Del : ops.DELETE_SUBSCR
-}
+})
 
-slice_operations = {
+slice_operations = misc.dict_to_switch({
     ast.AugLoad : ops.SLICE,
     ast.Load : ops.SLICE,
     ast.AugStore : ops.STORE_SLICE,
     ast.Store : ops.STORE_SLICE,
     ast.Del : ops.DELETE_SLICE
-}
+})
 
 
 F_BLOCK_LOOP = 0
@@ -168,7 +168,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         elif scope == symtable.SCOPE_GLOBAL_EXPLICIT:
             kind = name_ops_global
         try:
-            op = kind[ctx]
+            op = kind(ctx)
         except KeyError:
             if kind is name_ops_deref and ctx == ast.Del:
                 raise SyntaxError("Can't delete variable used in "
@@ -275,7 +275,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 return ops.INPLACE_TRUE_DIVIDE
             else:
                 return ops.INPLACE_DIVIDE
-        return inplace_operations[op]
+        return inplace_operations(op)
 
     def visit_AugAssign(self, assign):
         self.update_position(assign.lineno)
@@ -325,7 +325,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 return ops.BINARY_TRUE_DIVIDE
             else:
                 return ops.BINARY_DIVIDE
-        return binary_operations[op]
+        return binary_operations(op)
 
     def visit_BinOp(self, binop):
         self.update_position(binop.lineno)
@@ -716,7 +716,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def visit_UnaryOp(self, op):
         self.update_position(op.lineno)
         op.operand.walkabout(self)
-        self.emit_op(unary_operations[op.op])
+        self.emit_op(unary_operations(op.op))
 
     def visit_BoolOp(self, op):
         self.update_position(op.lineno)
@@ -743,14 +743,14 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         for i in range(1, ops_count):
             self.emit_op(ops.DUP_TOP)
             self.emit_op(ops.ROT_THREE)
-            op_kind = compare_operations[comp.ops[i - 1]]
+            op_kind = compare_operations(comp.ops[i - 1])
             self.emit_op_arg(ops.COMPARE_OP, op_kind)
             self.emit_jump(ops.JUMP_IF_FALSE, cleanup)
             self.emit_op(ops.POP_TOP)
             if i < (ops_count - 1):
                 comp.comparators[i].walkabout(self)
         comp.comparators[-1].walkabout(self)
-        last_kind = compare_operations[comp.ops[-1]]
+        last_kind = compare_operations(comp.ops[-1])
         self.emit_op_arg(ops.COMPARE_OP, last_kind)
         if ops_count > 1:
             end = self.new_block()
@@ -1047,7 +1047,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 self.emit_op(ops.ROT_THREE)
             elif stack_count == 2:
                 self.emit_op(ops.ROT_FOUR)
-        self.emit_op(slice_operations[ctx] + slice_offset)
+        self.emit_op(slice_operations(ctx) + slice_offset)
 
     def _complex_slice(self, slc, ctx):
         if slc.lower:
@@ -1102,7 +1102,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op_arg(ops.DUP_TOPX, 2)
         elif ctx == ast.AugStore:
             self.emit_op(ops.ROT_THREE)
-        self.emit_op(subscr_operations[ctx])
+        self.emit_op(subscr_operations(ctx))
 
     def visit_Subscript(self, sub):
         self.update_position(sub.lineno)
