@@ -315,6 +315,34 @@ class BaseTestOptimize(object):
         assert boxp1.knownclsbox.value == self.node_vtable_adr
         assert boxp2.knownclsbox.value == self.node_vtable_adr2
 
+    def test_find_nodes_guard_class_bug(self):
+        py.test.skip("oups")
+        ops = """
+        [p1]
+        p2 = escape()
+        setfield_gc(p1, p2, descr=nextdescr)
+        p3 = getfield_gc(p1, descr=nextdescr)
+        guard_class(p3, ConstClass(node_vtable))
+            fail()
+        jump(p1)
+        """
+        self.find_nodes(ops, 'Not')
+
+    def test_find_nodes_external_change(self):
+        py.test.skip("oups")
+        ops = """
+        [p0, p3]
+        guard_class(p3, ConstClass(node_vtable))
+            fail()
+        p1 = getfield_gc(p0, descr=nextdescr)
+        guard_class(p1, ConstClass(node_vtable))
+            fail()
+        escape()      # might change the field!
+        p2 = getfield_gc(p0, descr=nextdescr)
+        jump(p0, p2)
+        """
+        self.find_nodes(ops, 'Not, Not')
+
     def test_find_nodes_new_1(self):
         ops = """
         [p1]
