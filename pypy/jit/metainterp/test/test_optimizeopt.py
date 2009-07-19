@@ -189,6 +189,33 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize(ops, 'Not', expected, i0=1, i1=0)
 
+    def test_oois_1(self):
+        ops = """
+        [p0]
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        i0 = ooisnot(p0, NULL)
+        guard_true(i0)
+          fail()
+        i1 = oois(p0, NULL)
+        guard_false(i1)
+          fail()
+        i2 = ooisnot(NULL, p0)
+        guard_true(i0)
+          fail()
+        i3 = oois(NULL, p0)
+        guard_false(i1)
+          fail()
+        jump(p0)
+        """
+        expected = """
+        [p0]
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        jump(p0)
+        """
+        self.optimize(ops, 'Not', expected, i0=1, i1=0, i2=1, i3=0)
+
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
     pass
