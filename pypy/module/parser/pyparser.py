@@ -42,14 +42,14 @@ class STType(Wrappable):
         return space.wrap(self.tree.type == pygram.syms.eval_input)
     descr_isexpr.unwrap_spec = ["self", ObjSpace]
 
-    def descr_totuple(self, space, with_lineno=False, with_offset=False):
+    def descr_totuple(self, space, line_info=False, col_info=False):
         return self._build_app_tree(space, self.tree, space.newtuple,
-                                    with_lineno, with_offset)
+                                    line_info, col_info)
     descr_totuple.unwrap_spec = ["self", ObjSpace, bool, bool]
 
-    def descr_tolist(self, space, with_lineno=False, with_offset=False):
+    def descr_tolist(self, space, line_info=False, col_info=False):
         return self._build_app_tree(space, self.tree, space.newlist,
-                                    with_lineno, with_offset)
+                                    line_info, col_info)
     descr_tolist.unwrap_spec = ["self", ObjSpace, bool, bool]
 
     def descr_compile(self, space, filename="<syntax-tree>"):
