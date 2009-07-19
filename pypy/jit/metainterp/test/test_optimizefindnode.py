@@ -10,7 +10,7 @@ from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          ConstObj, AbstractDescr)
 from pypy.jit.metainterp.optimizefindnode import PerfectSpecializationFinder
 from pypy.jit.metainterp.optimizefindnode import BridgeSpecializationFinder
-from pypy.jit.metainterp.optimize import sort_descrs
+from pypy.jit.metainterp.optimizeutil import sort_descrs
 from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
 from pypy.jit.metainterp.specnode import FixedClassSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode

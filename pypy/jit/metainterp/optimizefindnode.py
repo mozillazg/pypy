@@ -4,7 +4,7 @@ from pypy.jit.metainterp.specnode import FixedClassSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.history import AbstractValue
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.optimize import av_newdict, _findall, sort_descrs
+from pypy.jit.metainterp.optimizeutil import av_newdict, _findall, sort_descrs
 
 # ____________________________________________________________
 
