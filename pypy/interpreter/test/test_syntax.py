@@ -284,6 +284,37 @@ class AppTestYield:
 
         exec s
 
+
+class AppTestDecorators:
+
+    def test_function_decorators(self):
+        def other():
+            return 4
+        def dec(f):
+            return other
+        ns = {}
+        ns["dec"] = dec
+        exec """@dec
+def g():
+    pass""" in ns
+        assert ns["g"] is other
+        assert ns["g"]() == 4
+
+    def test_application_order(self):
+        def dec1(f):
+            record.append(1)
+            return f
+        def dec2(f):
+            record.append(2)
+            return f
+        record = []
+        ns = {"dec1" : dec1, "dec2" : dec2}
+        exec """@dec1
+@dec2
+def g(): pass""" in ns
+        assert record == [2, 1]
+
+
 class AppTestWith:
     def test_with_simple(self):
 

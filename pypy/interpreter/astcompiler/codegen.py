@@ -238,6 +238,9 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                               func.lineno)
         self.update_position(func.lineno)
         self._make_function(code, num_defaults)
+        if func.decorators:
+            for i in range(len(func.decorators)):
+                self.emit_op_arg(ops.CALL_FUNCTION, 1)
         self.name_op(func.name, ast.Store)
 
     def visit_Lambda(self, lam):
