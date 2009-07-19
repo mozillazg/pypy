@@ -22,7 +22,7 @@ prebuiltNotSpecNode = NotSpecNode()
 class VirtualInstanceSpecNode(SpecNode):
     def __init__(self, known_class, fields):
         self.known_class = known_class
-        self.fields = fields
+        self.fields = fields    # list: [(fieldofs, subspecnode)]
 
     def _equals(self, other):   # for tests only
         ok = (type(other) is VirtualInstanceSpecNode and
