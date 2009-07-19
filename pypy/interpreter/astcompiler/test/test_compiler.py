@@ -712,6 +712,9 @@ class TestCompiler:
     def test_lambda(self):
         yield self.st, "y = lambda x: x", "y(4)", 4
 
+    def test_backquote_repr(self):
+        yield self.st, "x = None; y = `x`", "y", "None"
+
 
 class AppTestPrint:
 
