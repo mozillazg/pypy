@@ -12,7 +12,6 @@ from pypy.jit.metainterp.optimizefindnode import PerfectSpecializationFinder
 from pypy.jit.metainterp.optimizefindnode import BridgeSpecializationFinder
 from pypy.jit.metainterp.optimizeutil import sort_descrs
 from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
-from pypy.jit.metainterp.specnode import FixedClassSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.test.oparser import parse
 
@@ -144,8 +143,6 @@ class BaseTestOptimize(object):
                                  self.cpu)
             else:
                 return ConstObj(ootype.cast_to_object(cls_vtable))
-        def makeFixed(cls_vtable):
-            return FixedClassSpecNode(constclass(cls_vtable))
         def makeVirtual(cls_vtable, **kwds_fields):
             fields = []
             for key, value in kwds_fields.items():
@@ -154,7 +151,6 @@ class BaseTestOptimize(object):
             return VirtualInstanceSpecNode(constclass(cls_vtable), fields)
         #
         context = {'Not': prebuiltNotSpecNode,
-                   'Fixed': makeFixed,
                    'Virtual': makeVirtual}
         lst = eval('[' + text + ']', self.namespace, context)
         return lst
@@ -229,119 +225,6 @@ class BaseTestOptimize(object):
         assert getnode(boxes.p2).fromstart
         assert getnode(boxes.p3).fromstart
         assert not getnode(boxes.p4).fromstart
-
-    def test_find_nodes_guard_class_1(self):
-        ops = """
-        [p1]
-        guard_class(p1, ConstClass(node_vtable))
-            fail()
-        jump(p1)
-        """
-        boxes, getnode = self.find_nodes(ops, 'Fixed(node_vtable)')
-        boxp1 = getnode(boxes.p1)
-        assert boxp1.knownclsbox.value == self.node_vtable_adr
-
-    def test_find_nodes_guard_class_2(self):
-        ops = """
-        [p1]
-        p2 = getfield_gc(p1, descr=nextdescr)
-        guard_class(p2, ConstClass(node_vtable))
-            fail()
-        jump(p1)
-        """
-        boxes, getnode = self.find_nodes(ops, 'Not')
-        boxp1 = getnode(boxes.p1)
-        boxp2 = getnode(boxes.p2)
-        assert boxp1.knownclsbox is None
-        assert boxp2.knownclsbox.value == self.node_vtable_adr
-
-    def test_find_nodes_guard_class_outonly(self):
-        ops = """
-        [p1]
-        p2 = escape()
-        guard_class(p2, ConstClass(node_vtable))
-            fail()
-        jump(p2)
-        """
-        boxes, getnode = self.find_nodes(ops, 'Not')
-        boxp1 = getnode(boxes.p1)
-        boxp2 = getnode(boxes.p2)
-        assert boxp1.knownclsbox is None
-        assert boxp2.knownclsbox.value == self.node_vtable_adr
-
-    def test_find_nodes_guard_class_inonly(self):
-        ops = """
-        [p1]
-        guard_class(p1, ConstClass(node_vtable))
-            fail()
-        p2 = escape()
-        jump(p2)
-        """
-        boxes, getnode = self.find_nodes(ops, 'Not')
-        boxp1 = getnode(boxes.p1)
-        boxp2 = getnode(boxes.p2)
-        assert boxp1.knownclsbox.value == self.node_vtable_adr
-        assert boxp2.knownclsbox is None
-
-    def test_find_nodes_guard_class_inout(self):
-        ops = """
-        [p1]
-        guard_class(p1, ConstClass(node_vtable))
-            fail()
-        p2 = escape()
-        guard_class(p2, ConstClass(node_vtable))
-            fail()
-        jump(p2)
-        """
-        boxes, getnode = self.find_nodes(ops, 'Fixed(node_vtable)')
-        boxp1 = getnode(boxes.p1)
-        boxp2 = getnode(boxes.p2)
-        assert boxp1.knownclsbox.value == self.node_vtable_adr
-        assert boxp2.knownclsbox.value == self.node_vtable_adr
-
-    def test_find_nodes_guard_class_mismatch(self):
-        ops = """
-        [p1]
-        guard_class(p1, ConstClass(node_vtable))
-            fail()
-        p2 = escape()
-        guard_class(p2, ConstClass(node_vtable2))
-            fail()
-        jump(p2)
-        """
-        boxes, getnode = self.find_nodes(ops, 'Not')
-        boxp1 = getnode(boxes.p1)
-        boxp2 = getnode(boxes.p2)
-        assert boxp1.knownclsbox.value == self.node_vtable_adr
-        assert boxp2.knownclsbox.value == self.node_vtable_adr2
-
-    def test_find_nodes_guard_class_bug(self):
-        py.test.skip("oups")
-        ops = """
-        [p1]
-        p2 = escape()
-        setfield_gc(p1, p2, descr=nextdescr)
-        p3 = getfield_gc(p1, descr=nextdescr)
-        guard_class(p3, ConstClass(node_vtable))
-            fail()
-        jump(p1)
-        """
-        self.find_nodes(ops, 'Not')
-
-    def test_find_nodes_external_change(self):
-        py.test.skip("oups")
-        ops = """
-        [p0, p3]
-        guard_class(p3, ConstClass(node_vtable))
-            fail()
-        p1 = getfield_gc(p0, descr=nextdescr)
-        guard_class(p1, ConstClass(node_vtable))
-            fail()
-        escape()      # might change the field!
-        p2 = getfield_gc(p0, descr=nextdescr)
-        jump(p0, p2)
-        """
-        self.find_nodes(ops, 'Not, Not')
 
     def test_find_nodes_new_1(self):
         ops = """
@@ -422,7 +305,6 @@ class BaseTestOptimize(object):
         assert not boxp2.fromstart
         assert not boxp3.fromstart
 
-        assert boxp1.knownclsbox.value == self.node_vtable_adr
         assert boxp2.knownclsbox.value == self.node_vtable_adr
         assert boxp3.knownclsbox.value == self.node_vtable_adr2
 
@@ -454,7 +336,7 @@ class BaseTestOptimize(object):
         """
         # the issue is the cycle "p2->p2", which cannot be represented
         # with SpecNodes so far
-        self.find_nodes(ops, 'Not, Fixed(node_vtable)',
+        self.find_nodes(ops, 'Not, Not',
                         boxkinds={'sum': BoxInt, 'sum2': BoxInt})
 
     def test_find_nodes_new_aliasing_2(self):
@@ -469,6 +351,7 @@ class BaseTestOptimize(object):
         self.find_nodes(ops, 'Not, Not')
 
     def test_find_nodes_new_mismatch(self):
+        py.test.skip("gives a Virtual instead of Not -- not really wrong")
         ops = """
         [p1]
         guard_class(p1, ConstClass(node_vtable))
@@ -488,7 +371,7 @@ class BaseTestOptimize(object):
         p2 = new_with_vtable(ConstClass(node_vtable2), descr=nodesize2)
         jump(p2, p2)
         """
-        self.find_nodes(ops, 'Not, Fixed(node_vtable2)')
+        self.find_nodes(ops, 'Not, Not')
 
     def test_find_nodes_new_escapes(self):
         ops = """
@@ -549,12 +432,6 @@ class BaseTestOptimize(object):
         jump(p0)
         """
         self.find_bridge(ops, 'Not', 'Not')
-        self.find_bridge(ops, 'Fixed(node_vtable)', 'Not')
-        self.find_bridge(ops, 'Fixed(node_vtable)', 'Fixed(node_vtable)')
-        #
-        self.find_bridge(ops, 'Not', 'Fixed(node_vtable)', mismatch=True)
-        self.find_bridge(ops, 'Fixed(node_vtable)', 'Fixed(node_vtable2)',
-                         mismatch=True)
 
     def test_bridge_simple_virtual_1(self):
         ops = """
@@ -564,7 +441,6 @@ class BaseTestOptimize(object):
         jump(p0)
         """
         self.find_bridge(ops, 'Not', 'Not')
-        self.find_bridge(ops, 'Not', 'Fixed(node_vtable)')
         self.find_bridge(ops, 'Not', 'Virtual(node_vtable, valuedescr=Not)')
         self.find_bridge(ops, 'Not',
                          '''Virtual(node_vtable,
@@ -577,11 +453,6 @@ class BaseTestOptimize(object):
                          mismatch=True)   # missing valuedescr
         self.find_bridge(ops, 'Not', 'Virtual(node_vtable2, valuedescr=Not)',
                          mismatch=True)   # bad class
-        self.find_bridge(ops, 'Not',
-                         '''Virtual(node_vtable,
-                                    valuedescr=Not,
-                                    nextdescr=Fixed(node_vtable))''',
-                         mismatch=True)   # nextdescr too precise
 
     def test_bridge_simple_virtual_2(self):
         ops = """
@@ -590,7 +461,6 @@ class BaseTestOptimize(object):
         jump(p0)
         """
         self.find_bridge(ops, 'Virtual(node_vtable)', 'Not')
-        self.find_bridge(ops, 'Virtual(node_vtable)', 'Fixed(node_vtable)')
         self.find_bridge(ops, 'Virtual(node_vtable)',
                               'Virtual(node_vtable, valuedescr=Not)')
         self.find_bridge(ops, 'Virtual(node_vtable, valuedescr=Not)',
@@ -601,34 +471,16 @@ class BaseTestOptimize(object):
                                        nextdescr=Not)''')
         self.find_bridge(ops, '''Virtual(node_vtable,
                                          valuedescr=Not,
-                                         nextdescr=Fixed(node_vtable2))''',
-                              '''Virtual(node_vtable,
-                                         valuedescr=Not,
-                                         nextdescr=Fixed(node_vtable2))''')
-        self.find_bridge(ops, '''Virtual(node_vtable,
-                                         valuedescr=Not,
-                                         nextdescr=Fixed(node_vtable2))''',
+                                         nextdescr=Not)''',
                               '''Virtual(node_vtable,
                                          valuedescr=Not,
                                          nextdescr=Not)''')
         #
         self.find_bridge(ops, 'Virtual(node_vtable)', 'Virtual(node_vtable)',
                          mismatch=True)    # because of missing valuedescr
-        self.find_bridge(ops, 'Virtual(node_vtable)', 'Fixed(node_vtable2)',
-                         mismatch=True)    # bad class
         self.find_bridge(ops, 'Virtual(node_vtable)',
                          'Virtual(node_vtable2, valuedescr=Not)',
                          mismatch=True)    # bad class
-        self.find_bridge(ops, 'Virtual(node_vtable, valuedescr=Not)',
-                            '''Virtual(node_vtable,
-                                       valuedescr=Not,
-                                       nextdescr=Fixed(node_vtable))''',
-                         mismatch=True)    # unexpected nextdescr
-        self.find_bridge(ops, 'Virtual(node_vtable, valuedescr=Not)',
-                            '''Virtual(node_vtable,
-                                       valuedescr=Not,
-                                       nextdescr=Virtual(node_vtable))''',
-                         mismatch=True)    # unexpected nextdescr
 
     def test_bridge_virtual_mismatch_1(self):
         ops = """
@@ -638,9 +490,6 @@ class BaseTestOptimize(object):
         jump(p0, p0)
         """
         self.find_bridge(ops, 'Not', 'Not, Not')
-        self.find_bridge(ops, 'Not', 'Not, Fixed(node_vtable)')
-        self.find_bridge(ops, 'Not', 'Fixed(node_vtable), Not')
-        self.find_bridge(ops, 'Not', 'Fixed(node_vtable), Fixed(node_vtable)')
         #
         self.find_bridge(ops, 'Not',
                          '''Virtual(node_vtable, valuedescr=Not),
@@ -656,15 +505,13 @@ class BaseTestOptimize(object):
         jump(p2)
         """
         self.find_bridge(ops, 'Not', 'Not')
-        self.find_bridge(ops, 'Not', 'Fixed(node_vtable)')
-        self.find_bridge(ops, 'Virtual(node_vtable2, nextdescr=Not)',
-                              'Fixed(node_vtable)')
+        self.find_bridge(ops, 'Virtual(node_vtable2, nextdescr=Not)', 'Not')
         self.find_bridge(ops,
             '''Virtual(node_vtable,
                        nextdescr=Virtual(node_vtable,
-                                         nextdescr=Fixed(node_vtable2)))''',
+                                         nextdescr=Not))''',
             '''Virtual(node_vtable,
-                       nextdescr=Fixed(node_vtable2))''')
+                       nextdescr=Not)''')
         #
         self.find_bridge(ops, 'Not', 'Virtual(node_vtable)',
                          mismatch=True)

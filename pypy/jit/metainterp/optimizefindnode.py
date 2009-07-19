@@ -1,6 +1,5 @@
 from pypy.jit.metainterp.specnode import SpecNode
 from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
-from pypy.jit.metainterp.specnode import FixedClassSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.history import AbstractValue
 from pypy.jit.metainterp.resoperation import rop
@@ -18,14 +17,16 @@ class InstanceNode(object):
     the field's status at the start and 'curfields' that represents it
     at the current point (== the end when the first phase is complete).
     """
+    escaped = False     # if True, then all the rest of the info is pointless
+    unique = UNIQUE_UNKNOWN   # for find_unique_nodes()
+
+    # fields used to store the shape of the potential Virtual
+    knownclsbox = None
     origfields = None   # optimization; equivalent to an empty dict
     curfields = None    # optimization; equivalent to an empty dict
     dependencies = None
-    knownclsbox = None
-    unique = UNIQUE_UNKNOWN   # for find_unique_nodes()
 
-    def __init__(self, escaped, fromstart=False):
-        self.escaped = escaped
+    def __init__(self, fromstart=False):
         self.fromstart = fromstart
 
     def add_escape_dependency(self, other):
@@ -68,7 +69,8 @@ class InstanceNode(object):
 
 class NodeFinder(object):
     """Abstract base class."""
-    node_escaped = InstanceNode(escaped=True)
+    node_escaped = InstanceNode()
+    node_escaped.escaped = True
 
     def __init__(self):
         self.nodes = {}     # Box -> InstanceNode
@@ -93,7 +95,7 @@ class NodeFinder(object):
                 self.getnode(box).mark_escaped()
 
     def find_nodes_NEW_WITH_VTABLE(self, op):
-        instnode = InstanceNode(escaped=False)
+        instnode = InstanceNode()
         instnode.knownclsbox = op.args[0]
         self.nodes[op.result] = instnode
 
@@ -119,35 +121,27 @@ class NodeFinder(object):
             fieldnode = instnode.curfields[field]
         elif instnode.origfields is not None and field in instnode.origfields:
             fieldnode = instnode.origfields[field]
-        else:
-            fieldnode = InstanceNode(escaped=False,
-                                     fromstart=instnode.fromstart)
+        elif instnode.fromstart:
+            fieldnode = InstanceNode(fromstart=True)
             instnode.add_escape_dependency(fieldnode)
             if instnode.origfields is None:
                 instnode.origfields = av_newdict()
             instnode.origfields[field] = fieldnode
+        else:
+            return    # nothing to be gained from tracking the field
         self.nodes[op.result] = fieldnode
 
     def find_nodes_GETFIELD_GC_PURE(self, op):
         self.find_nodes_GETFIELD_GC(op)
-
-    def find_nodes_GUARD_CLASS(self, op):
-        instbox = op.args[0]
-        clsbox = op.args[1]
-        try:
-            instnode = self.nodes[instbox]
-        except KeyError:
-            instnode = self.nodes[instbox] = InstanceNode(escaped=True)
-        assert instnode is not self.node_escaped
-        assert (instnode.knownclsbox is None or
-                instnode.knownclsbox.equals(clsbox))
-        instnode.knownclsbox = clsbox
 
     def find_nodes_JUMP(self, op):
         # only set up the 'unique' field of the InstanceNodes;
         # real handling comes later (build_result_specnodes() for loops).
         for box in op.args:
             self.getnode(box).set_unique_nodes()
+
+    def find_nodes_GUARD_CLASS(self, op):
+        pass     # prevent default handling
 
     def find_nodes_FAIL(self, op):
         xxx
@@ -158,6 +152,7 @@ find_nodes_ops = _findall(NodeFinder, 'find_nodes_')
 # Perfect specialization -- for loops only
 
 class PerfectSpecializationFinder(NodeFinder):
+    node_fromstart = InstanceNode(fromstart=True)
 
     def find_nodes_loop(self, loop):
         self.setup_input_nodes(loop.inputargs)
@@ -167,7 +162,7 @@ class PerfectSpecializationFinder(NodeFinder):
     def setup_input_nodes(self, inputargs):
         inputnodes = []
         for box in inputargs:
-            instnode = InstanceNode(escaped=False, fromstart=True)
+            instnode = InstanceNode(fromstart=True)
             inputnodes.append(instnode)
             self.nodes[box] = instnode
         self.inputnodes = inputnodes
@@ -187,15 +182,8 @@ class PerfectSpecializationFinder(NodeFinder):
     def intersect(self, inputnode, exitnode):
         assert inputnode.fromstart
         if exitnode.unique == UNIQUE_NO or inputnode.escaped:
-            # give a NotSpecNode or a FixedClassSpecNode
-            if (inputnode.knownclsbox is not None and
-                exitnode.knownclsbox is not None and
-                inputnode.knownclsbox.equals(exitnode.knownclsbox)):
-                # the class is known at the end, needed at the input,
-                # and matches
-                return FixedClassSpecNode(inputnode.knownclsbox)
-            else:
-                return prebuiltNotSpecNode
+            # give a NotSpecNode
+            return prebuiltNotSpecNode
         #
         assert exitnode.unique == UNIQUE_YES
         if (inputnode.knownclsbox is not None and
@@ -217,7 +205,7 @@ class PerfectSpecializationFinder(NodeFinder):
                     # field stored at exit, but not read at input.  Must
                     # still be allocated, otherwise it will be incorrectly
                     # uninitialized after a guard failure.
-                    node = InstanceNode(escaped=False, fromstart=True)
+                    node = self.node_fromstart
                 specnode = self.intersect(node, d[ofs])
                 fields.append((ofs, specnode))
         return VirtualInstanceSpecNode(exitnode.knownclsbox, fields)
@@ -233,22 +221,13 @@ class __extend__(SpecNode):
 
 class __extend__(NotSpecNode):
     def make_instance_node(self):
-        return InstanceNode(escaped=True)
+        return NodeFinder.node_escaped
     def matches_instance_node(self, exitnode):
         return True
 
-class __extend__(FixedClassSpecNode):
-    def make_instance_node(self):
-        instnode = InstanceNode(escaped=True)
-        instnode.knownclsbox = self.known_class
-        return instnode
-    def matches_instance_node(self, exitnode):
-        return (exitnode.knownclsbox is not None and
-                self.known_class.equals(exitnode.knownclsbox))
-
 class __extend__(VirtualInstanceSpecNode):
     def make_instance_node(self):
-        instnode = InstanceNode(escaped=False)
+        instnode = InstanceNode()
         instnode.knownclsbox = self.known_class
         instnode.curfields = av_newdict()
         for ofs, subspecnode in self.fields:
