@@ -6,7 +6,9 @@ class Module(MixedModule):
 
      applevel_name = 'parser'
 
-     appleveldefs = {}
+     appleveldefs = {
+         'ParserError' : 'app_helpers.ParserError'
+         }
 
      interpleveldefs = {
          '__name__'     : '(space.wrap("parser"))',
