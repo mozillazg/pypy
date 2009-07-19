@@ -53,8 +53,9 @@ class BaseTestOptimizeOpt(BaseTest):
         assert equaloplists(optimized.operations,
                             expected.operations)
 
-    def optimize(self, ops, spectext, optops, boxkinds=None):
+    def optimize(self, ops, spectext, optops, boxkinds=None, **values):
         loop = self.parse(ops, boxkinds=boxkinds)
+        loop.setvalues(**values)
         loop.specnodes = self.unpack_specnodes(spectext)
         optimize(loop)
         expected = self.parse(optops, boxkinds=boxkinds)
@@ -69,6 +70,26 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(i0)
         """
         self.optimize(ops, 'Not', ops)
+
+    def test_constant_propagate(self):
+        ops = """
+        []
+        i0 = int_add(2, 3)
+        i1 = int_is_true(i0)
+        guard_true(i1)
+          fail()
+        i2 = bool_not(i1)
+        guard_false(i2)
+          fail()
+        guard_value(i0, 5)
+          fail()
+        jump()
+        """
+        expected = """
+        []
+        jump()
+        """
+        self.optimize(ops, '', expected, i0=5, i1=1, i2=0)
 
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
