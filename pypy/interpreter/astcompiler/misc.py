@@ -1,7 +1,5 @@
 from pypy.interpreter import gateway
 from pypy.interpreter.astcompiler import ast2 as ast
-from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.unroll import unrolling_iterable
 
 
 app = gateway.applevel("""
@@ -38,21 +36,6 @@ def is_constant(expr):
     if isinstance(expr, (ast.Num, ast.Str)):
         return True
     return False
-
-
-def dict_to_switch(d):
-    def lookup(query):
-        if we_are_translated():
-            for key, value in unrolling_iteritems:
-                if key == query:
-                    return value
-            else:
-                raise KeyError
-        else:
-            return d[query]
-    lookup._always_inline_ = True
-    unrolling_iteritems = unrolling_iterable(d.iteritems())
-    return lookup
 
 
 def flatten(tup):
