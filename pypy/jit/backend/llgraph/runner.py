@@ -43,6 +43,9 @@ class Descr(history.AbstractDescr):
     def sort_key(self):
         return self.ofs
 
+    def is_pointer_field(self):
+        return self.typeinfo == 'p'
+
     def equals(self, other):
         if not isinstance(other, Descr):
             return False
@@ -679,9 +682,13 @@ class FieldDescr(OODescr):
             
         self.getfield = getfield
         self.setfield = setfield
+        self._is_pointer_field = (history.getkind(T) == 'obj')
 
     def sort_key(self):
         return self._keys.getkey((self.TYPE, self.fieldname))
+
+    def is_pointer_field(self):
+        return self._is_pointer_field
 
     def equals(self, other):
         return self.TYPE == other.TYPE and \
