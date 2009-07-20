@@ -1078,6 +1078,7 @@ class TestAstBuilder:
         assert space.eq_w(get_num("00000"), space.wrap(0))
         assert space.eq_w(get_num("-3"), space.wrap(-3))
         assert space.eq_w(get_num("-0"), space.wrap(0))
+        assert space.eq_w(get_num("-0xAAAAAAL"), space.wrap(-0xAAAAAAL))
         n = get_num(str(-sys.maxint - 1))
         assert space.is_true(space.isinstance(n, space.w_int))
 
