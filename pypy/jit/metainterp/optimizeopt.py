@@ -1,5 +1,5 @@
-from pypy.jit.metainterp.history import Const, Box, BoxInt, BoxPtr, BoxObj
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp.history import Box, BoxInt, BoxPtr, BoxObj
+from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.specnode import SpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
@@ -77,6 +77,10 @@ class ConstantValue(InstanceValue):
     def __init__(self, box):
         self.box = box
 
+CVAL_ZERO    = ConstantValue(ConstInt(0))
+CVAL_NULLPTR = ConstantValue(ConstPtr(ConstPtr.value))
+CVAL_NULLOBJ = ConstantValue(ConstObj(ConstObj.value))
+
 
 class VirtualValue(InstanceValue):
     box = None
@@ -98,7 +102,7 @@ class VirtualValue(InstanceValue):
     def force_box(self):
         if self.box is None:
             optimizer = self.optimizer
-            xxxx
+            import py; py.test.skip("in-progress")
         return self.box
 
 
@@ -171,11 +175,11 @@ class Optimizer(object):
     def new_const(self, fieldofs):
         if fieldofs.is_pointer_field():
             if not self.cpu.is_oo:
-                return history.CONST_NULL
+                return CVAL_NULLPTR
             else:
-                return history.CONST_NULL_OBJ
+                return CVAL_NULLOBJ
         else:
-            return history.CONST_FALSE
+            return CVAL_ZERO
 
     # ----------
 
@@ -329,7 +333,7 @@ class Optimizer(object):
             self.optimize_default(op)
 
     def optimize_NEW_WITH_VTABLE(self, op):
-        import py; py.test.skip("in-progress")
+        self.make_virtual(op.result)
 
 
 optimize_ops = _findall(Optimizer, 'optimize_')
