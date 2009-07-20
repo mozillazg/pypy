@@ -253,6 +253,38 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not', expected, i0=1, i1=0, i2=1, i3=0)
 
+    def test_nonnull_1(self):
+        ops = """
+        [p0]
+        setfield_gc(p0, 5, descr=valuedescr)     # forces p0 != NULL
+        i0 = ooisnot(p0, NULL)
+        guard_true(i0)
+          fail()
+        i1 = oois(p0, NULL)
+        guard_false(i1)
+          fail()
+        i2 = ooisnot(NULL, p0)
+        guard_true(i0)
+          fail()
+        i3 = oois(NULL, p0)
+        guard_false(i1)
+          fail()
+        i4 = oononnull(p0)
+        guard_true(i4)
+          fail()
+        i5 = ooisnull(p0)
+        guard_false(i5)
+          fail()
+        jump(p0)
+        """
+        expected = """
+        [p0]
+        setfield_gc(p0, 5, descr=valuedescr)
+        jump(p0)
+        """
+        self.optimize_loop(ops, 'Not', expected,
+                           i0=1, i1=0, i2=1, i3=0, i4=1, i5=0)
+
     # ----------
 
     def test_virtual_1(self):
