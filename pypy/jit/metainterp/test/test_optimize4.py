@@ -1,4 +1,5 @@
 import py
+py.test.skip("deprecated")
 
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
