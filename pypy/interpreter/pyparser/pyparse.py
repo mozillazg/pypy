@@ -130,7 +130,7 @@ class PythonParser(parser.Parser):
             if tp == pygram.tokens.INDENT:
                 msg = "unexpected indent"
             elif e.expected == pygram.tokens.INDENT:
-                msg = "expected indented block"
+                msg = "expected an indented block"
             else:
                 new_err = error.SyntaxError
                 msg = "invalid syntax"

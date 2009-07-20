@@ -81,7 +81,7 @@ stuff = "nothing"
 def f():
 pass"""
         exc = py.test.raises(IndentationError, parse, input).value
-        assert exc.msg == "expected indented block"
+        assert exc.msg == "expected an indented block"
         assert exc.lineno == 3
         assert exc.text.startswith("pass")
         assert exc.offset == 4

@@ -672,7 +672,7 @@ class TestCompiler:
         try:
             self.simple_test(source, None, None)
         except IndentationError, e:
-            assert e.msg == 'expected indented block'
+            assert e.msg == 'expected an indented block'
         else:
             raise Exception("DID NOT RAISE")
 
