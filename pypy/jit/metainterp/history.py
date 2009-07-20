@@ -231,8 +231,6 @@ class ConstInt(Const):
     def _getrepr_(self):
         return self.value
 
-    sort_key = getint
-
     def repr_rpython(self):
         return repr_rpython(self, 'ci')
 
