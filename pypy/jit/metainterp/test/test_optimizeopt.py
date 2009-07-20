@@ -303,6 +303,23 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not, Virtual(node_vtable, valuedescr=Not)',
                            expected)
 
+    def test_virtual_2(self):
+        ops = """
+        [i, p0]
+        i0 = getfield_gc(p0, descr=valuedescr)
+        i1 = int_add(i0, i)
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i1, descr=valuedescr)
+        jump(i, p1)
+        """
+        expected = """
+        [i, i2]
+        i1 = int_add(i2, i)
+        jump(i, i1)
+        """
+        self.optimize_loop(ops, 'Not, Virtual(node_vtable, valuedescr=Not)',
+                           expected)
+
     def test_virtual_oois(self):
         ops = """
         [p0, p1, p2]
@@ -361,6 +378,28 @@ class BaseTestOptimizeOpt(BaseTest):
         # the details of the algorithm...
         expected2 = ops
         self.optimize_loop(ops, 'Not, Not, Not', expected2)
+
+    def test_virtual_default_field(self):
+        py.test.skip("in-progress")
+        ops = """
+        [p0]
+        i0 = getfield_gc(p0, descr=valuedescr)
+        guard_value(i0, 0)
+          fail()
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        # the field 'value' has its default value of 0
+        jump(p1)
+        """
+        expected = """
+        [i]
+        guard_value(i, 0)
+          fail()
+        jump(0)
+        """
+        # the 'expected' is sub-optimal, but it should be done by another later
+        # optimization step.  See test_find_nodes_default_field() for why.
+        self.optimize_loop(ops, 'Virtual(node_vtable, valuedescr=Not)',
+                           expected)
 
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
