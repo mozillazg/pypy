@@ -64,9 +64,11 @@ class OpParser(object):
         if elem.startswith('i'):
             # integer
             box = BoxInt()
+            _box_counter_more_than(elem[1:])
         elif elem.startswith('p'):
             # pointer
             box = BoxPtr()
+            _box_counter_more_than(elem[1:])
         else:
             for prefix, boxclass in self.boxkinds.iteritems():
                 if elem.startswith(prefix):
@@ -213,3 +215,7 @@ class OpParser(object):
 def parse(descr, cpu=None, namespace={}, type_system='lltype',
           boxkinds=None):
     return OpParser(descr, cpu, namespace, type_system, boxkinds).parse()
+
+def _box_counter_more_than(s):
+    if s.isdigit():
+        Box._counter = max(Box._counter, int(s)+1)
