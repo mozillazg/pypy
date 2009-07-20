@@ -85,7 +85,7 @@ class ASTBuilder(object):
                         stmts.append(self.handle_stmt(stmt))
                 return ast.Interactive(stmts)
         else:
-            raise AssertionError("unkown root node")
+            raise AssertionError("unknown root node")
 
     def number_of_statements(self, n):
         stmt_type = n.type
@@ -157,7 +157,7 @@ class ASTBuilder(object):
         elif isinstance(expr, ast.Repr):
             error = "repr"
         else:
-            raise AssertionError("unkown expression in set_context()")
+            raise AssertionError("unknown expression in set_context()")
         if error is not None:
             if ctx == ast.Store:
                 action = "assign to"
@@ -219,7 +219,7 @@ class ASTBuilder(object):
             return ast.Raise(exc, value, traceback, flow_node.lineno,
                              flow_node.column)
         else:
-            raise AssertionError("unkown flow statement")
+            raise AssertionError("unknown flow statement")
 
     def alias_for_import_name(self, import_name, store=True):
         while True:
@@ -259,7 +259,7 @@ class ASTBuilder(object):
             elif import_name_type == tokens.STAR:
                 return ast.alias("*", None)
             else:
-                raise AssertionError("unkown import name")
+                raise AssertionError("unknown import name")
 
     def handle_import_stmt(self, import_node):
         import_node = import_node.children[0]
@@ -298,7 +298,7 @@ class ASTBuilder(object):
                     self.error("trailing comma is only allowed with "
                                "surronding parenthesis", names_node)
             else:
-                raise AssertionError("unkown import node")
+                raise AssertionError("unknown import node")
             if star_import:
                 aliases = [self.alias_for_import_name(names_node)]
             else:
@@ -309,7 +309,7 @@ class ASTBuilder(object):
             return ast.ImportFrom(modname, aliases, dot_count,
                                   import_node.lineno, import_node.column)
         else:
-            raise AssertionError("unkown import node")
+            raise AssertionError("unknown import node")
 
     def handle_global_stmt(self, global_node):
         names = [global_node.children[i].value
@@ -405,7 +405,7 @@ class ASTBuilder(object):
             body = self.handle_suite(if_node.children[3])
             return ast.If(expr, body, otherwise, if_node.lineno, if_node.column)
         else:
-            raise AssertionError("unkown if statement configuration")
+            raise AssertionError("unknown if statement configuration")
 
     def handle_while_stmt(self, while_node):
         loop_test = self.handle_expr(while_node.children[1])
@@ -610,7 +610,7 @@ class ASTBuilder(object):
                 self.check_forbidden_name(keywords_arg, name_node)
                 i += 3
             else:
-                raise AssertionError("unkown node in argument list")
+                raise AssertionError("unknown node in argument list")
         if not defaults:
             defaults = None
         if not args:
@@ -689,7 +689,7 @@ class ASTBuilder(object):
             else:
                 raise AssertionError("unhandled compound statement")
         else:
-            raise AssertionError("unkown statment type")
+            raise AssertionError("unknown statment type")
 
     def handle_expr_stmt(self, stmt):
         if len(stmt.children) == 1:
@@ -804,7 +804,7 @@ class ASTBuilder(object):
             elif expr_node_type == syms.power:
                 return self.handle_power(expr_node)
             else:
-                raise AssertionError("unkown expr")
+                raise AssertionError("unknown expr")
 
     def handle_lambdef(self, lambdef_node):
         expr = self.handle_expr(lambdef_node.children[-1])
@@ -1132,7 +1132,7 @@ class ASTBuilder(object):
             expr = self.handle_testlist(atom_node.children[1])
             return ast.Repr(expr, atom_node.lineno, atom_node.column)
         else:
-            raise AssertionError("unkown atom")
+            raise AssertionError("unknown atom")
 
     def handle_testlist_gexp(self, gexp_node):
         if len(gexp_node.children) > 1 and \

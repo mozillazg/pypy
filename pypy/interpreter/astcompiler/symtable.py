@@ -261,7 +261,7 @@ class FunctionScope(Scope):
                 err = "unqualified exec is not allowed in function '%s' " \
                     "because it %s" % (name, trailer)
             else:
-                raise AssertionError("unkown reason for unoptimization")
+                raise AssertionError("unknown reason for unoptimization")
             raise SyntaxError(err, node.lineno, node.col_offset)
         self.locals_fully_known = self.optimized and not self.has_exec
 
@@ -451,7 +451,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
                 if is_toplevel:
                     self.implicit_arg(i)
             else:
-                raise AssertionError("unkown parameter type")
+                raise AssertionError("unknown parameter type")
         if not is_toplevel:
             self._handle_nested_params(params)
 
