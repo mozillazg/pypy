@@ -358,6 +358,62 @@ class BaseTestOptimizeFindNode(BaseTest):
                     nextdescr=Virtual(node_vtable,
                                       nextdescr=Virtual(node_vtable)))''')
 
+    def test_find_nodes_oois(self):
+        ops = """
+        [p3, p4, p2]
+        p0 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        i1 = oononnull(p0)
+        guard_true(i1)
+          fail()
+        i2 = ooisnull(p0)
+        guard_false(i2)
+          fail()
+        i3 = ooisnot(p0, NULL)
+        guard_true(i3)
+          fail()
+        i4 = oois(p0, NULL)
+        guard_false(i4)
+          fail()
+        i5 = ooisnot(NULL, p0)
+        guard_true(i5)
+          fail()
+        i6 = oois(NULL, p0)
+        guard_false(i6)
+          fail()
+        i7 = ooisnot(p0, p1)
+        guard_true(i7)
+          fail()
+        i8 = oois(p0, p1)
+        guard_false(i8)
+          fail()
+        i9 = ooisnot(p0, p2)
+        guard_true(i9)
+          fail()
+        i10 = oois(p0, p2)
+        guard_false(i10)
+          fail()
+        i11 = ooisnot(p2, p1)
+        guard_true(i11)
+          fail()
+        i12 = oois(p2, p1)
+        guard_false(i12)
+          fail()
+        jump(p0, p1, p2)
+        """
+        self.find_nodes(ops, '''Virtual(node_vtable),
+                                Virtual(node_vtable),
+                                Not''')
+
+    def test_find_nodes_call(self):
+        ops = """
+        [i0, p2]
+        p0 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        i1 = call_pure(i0, p0)     # forces p0 to not be virtual
+        jump(i1, p0)
+        """
+        self.find_nodes(ops, 'Not, Not')
+
     # ------------------------------
     # Bridge tests
 

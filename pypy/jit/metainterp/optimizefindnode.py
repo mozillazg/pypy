@@ -89,7 +89,7 @@ class NodeFinder(object):
                 self.find_nodes_default(op)
 
     def find_nodes_default(self, op):
-        if not op.has_no_side_effect():
+        if not op.has_no_side_effect_ptr():
             # default case: mark the arguments as escaping
             for box in op.args:
                 self.getnode(box).mark_escaped()
