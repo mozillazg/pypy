@@ -64,15 +64,8 @@ class Optimizer(object):
         """Maps a Box/Const to the corresponding Box/Const/VirtualBox
         by following the dict _equals.
         """
-        while box in self._equals:
-            # follow the chain: box -> box2 -> box3 -> ...
-            box2 = self._equals[box]
-            if box2 not in self._equals:
-                return box2
-            # compress the mapping one step (rare case)
-            box3 = self._equals[box2]
-            self._equals[box] = box3
-            box = box3
+        box = self._equals.get(box, box)
+        assert box not in self._equals
         return box
 
     def _make_equal(self, box, box2):
@@ -202,14 +195,14 @@ class Optimizer(object):
             self.make_constant_class(instbox, clsbox)
 
     def optimize_OONONNULL(self, op):
-        if self.has_constant_class(op.args[0]):
+        if self.known_nonnull(op.args[0]):
             assert op.result.getint() == 1
             self.make_constant(op.result)
         else:
             self.optimize_default(op)
 
     def optimize_OOISNULL(self, op):
-        if self.has_constant_class(op.args[0]):
+        if self.known_nonnull(op.args[0]):
             assert op.result.getint() == 0
             self.make_constant(op.result)
         else:
@@ -250,6 +243,7 @@ class Optimizer(object):
         if isinstance(instbox, VirtualBox):
             self._make_equal(op.result, instbox.fields[op.descr])
         else:
+            self.make_nonnull(instbox)
             self.optimize_default(op)
 
     optimize_GETFIELD_PURE_GC = optimize_GETFIELD_GC
@@ -259,6 +253,7 @@ class Optimizer(object):
         if isinstance(instbox, VirtualBox):
             instbox.fields[op.descr] = op.args[1]
         else:
+            self.make_nonnull(instbox)
             self.optimize_default(op)
 
 
