@@ -241,6 +241,7 @@ class Optimizer(object):
     def optimize_GETFIELD_GC(self, op):
         instbox = op.args[0]
         if isinstance(instbox, VirtualBox):
+            # optimizefindnode should ensure that 'op.descr in instbox.fields'
             self._make_equal(op.result, instbox.fields[op.descr])
         else:
             self.make_nonnull(instbox)
@@ -255,6 +256,9 @@ class Optimizer(object):
         else:
             self.make_nonnull(instbox)
             self.optimize_default(op)
+
+    def optimize_NEW_WITH_VTABLE(self, op):
+        self.make_virtual(op.result, op.args[0])
 
 
 optimize_ops = _findall(Optimizer, 'optimize_')
