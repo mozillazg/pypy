@@ -89,6 +89,9 @@ class VirtualValue(InstanceValue):
     def getfield(self, ofs):
         return self._fields[ofs]
 
+    def getfield_default(self, ofs, default):
+        return self._fields.get(ofs, default)
+
     def setfield(self, ofs, fieldvalue):
         self._fields[ofs] = fieldvalue
 
@@ -102,25 +105,21 @@ class VirtualValue(InstanceValue):
 class __extend__(SpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
         newinputargs.append(box)
-    def teardown_virtual_node(self, optimizer, box, newexitargs):
-        newexitargs.append(box)
+    def teardown_virtual_node(self, optimizer, value, newexitargs):
+        newexitargs.append(value.force_box())
 
 class __extend__(VirtualInstanceSpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
-        import py; py.test.skip("in-progress")
-        vbox = optimizer.make_virtual(box, self.known_class)
+        vvalue = optimizer.make_virtual(box)
         for ofs, subspecnode in self.fields:
             subbox = optimizer.new_box(ofs)
-            vbox.fields[ofs] = subbox
+            vvalue.setfield(ofs, optimizer.getvalue(subbox))
             subspecnode.setup_virtual_node(optimizer, subbox, newinputargs)
-    def teardown_virtual_node(self, optimizer, box, newexitargs):
-        assert isinstance(box, VirtualBox) and box.escaped_to is None
+    def teardown_virtual_node(self, optimizer, value, newexitargs):
+        assert value.is_virtual()
         for ofs, subspecnode in self.fields:
-            try:
-                subbox = box.fields[ofs]
-            except KeyError:
-                subbox = optimizer.new_const(ofs)
-            subspecnode.teardown_virtual_node(optimizer, subbox, newexitargs)
+            subvalue = value.getfield_default(ofs, optimizer.new_const(ofs))
+            subspecnode.teardown_virtual_node(optimizer, subvalue, newexitargs)
 
 
 class Optimizer(object):
@@ -154,6 +153,11 @@ class Optimizer(object):
 
     def known_nonnull(self, box):
         return self.getvalue(box).is_nonnull()
+
+    def make_virtual(self, box):
+        vvalue = VirtualValue(self)
+        self.make_equal_to(box, vvalue)
+        return vvalue
 
     def new_box(self, fieldofs):
         if fieldofs.is_pointer_field():
@@ -198,8 +202,7 @@ class Optimizer(object):
                 self.optimize_default(op)
         self.loop.operations = self.newoperations
 
-    def emit_operation(self, op):
-        must_clone = True
+    def emit_operation(self, op, must_clone=True):
         for i in range(len(op.args)):
             arg = op.args[i]
             if arg in self.values:
@@ -223,15 +226,17 @@ class Optimizer(object):
         # otherwise, the operation remains
         self.emit_operation(op)
 
-    def XXX_optimize_JUMP(self, op):
+    def optimize_JUMP(self, op):
         orgop = self.loop.operations[-1]
         exitargs = []
         specnodes = orgop.jump_target.specnodes
         assert len(op.args) == len(specnodes)
         for i in range(len(specnodes)):
-            specnodes[i].teardown_virtual_node(self, op.args[i], exitargs)
+            value = self.getvalue(op.args[i])
+            specnodes[i].teardown_virtual_node(self, value, exitargs)
+        op = op.clone()
         op.args = exitargs
-        #XXX return op
+        self.emit_operation(op, must_clone=False)
 
     def optimize_guard(self, op):
         value = self.getvalue(op.args[0])
