@@ -1019,6 +1019,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op_name(ops.STORE_ATTR, names, attr.attr)
         elif attr.ctx == ast.Store:
             self.emit_op_name(ops.STORE_ATTR, names, attr.attr)
+        elif attr.ctx == ast.Del:
+            self.emit_op_name(ops.DELETE_ATTR, names, attr.attr)
+        else:
+            raise AssertionError("unknown context")
 
     def _simple_slice(self, slc, ctx):
         slice_offset = 0

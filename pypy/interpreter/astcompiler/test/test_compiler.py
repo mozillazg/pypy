@@ -715,6 +715,18 @@ class TestCompiler:
     def test_backquote_repr(self):
         yield self.st, "x = None; y = `x`", "y", "None"
 
+    def test_deleting_attributes(self):
+        test = """class X():
+   x = 3
+del X.x
+try:
+    X.x
+except AttributeError:
+    pass
+else:
+    raise AssertionError("attribute not removed")"""
+        yield self.st, test, "X.__name__", "X"
+
 
 class AppTestPrint:
 
