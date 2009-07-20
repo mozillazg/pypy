@@ -400,6 +400,57 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Virtual(node_vtable, valuedescr=Not)',
                            expected)
 
+    def test_virtual_3(self):
+        ops = """
+        [i]
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i, descr=valuedescr)
+        i0 = getfield_gc(p1, descr=valuedescr)
+        i1 = int_add(i0, 1)
+        jump(i1)
+        """
+        expected = """
+        [i]
+        i1 = int_add(i, 1)
+        jump(i1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_nonvirtual_1(self):
+        ops = """
+        [i]
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i, descr=valuedescr)
+        i0 = getfield_gc(p1, descr=valuedescr)
+        i1 = int_add(i0, 1)
+        escape(p1)
+        escape(p1)
+        jump(i1)
+        """
+        expected = """
+        [i]
+        i1 = int_add(i, 1)
+        p9 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p9, i, descr=valuedescr)
+        escape(p9)
+        escape(p9)
+        jump(i1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_nonvirtual_2(self):
+        ops = """
+        [i, p0]
+        i0 = getfield_gc(p0, descr=valuedescr)
+        escape(p0)
+        i1 = int_add(i0, i)
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i1, descr=valuedescr)
+        jump(i, p1)
+        """
+        expected = ops
+        self.optimize_loop(ops, 'Not, Not', expected)
+
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
     pass
