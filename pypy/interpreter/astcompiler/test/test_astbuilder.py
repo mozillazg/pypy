@@ -965,26 +965,40 @@ class TestAstBuilder:
         assert sub.ctx == ast.Load
         assert isinstance(sub.slice, ast.Index)
         assert isinstance(sub.slice.value, ast.Name)
-        for input in (":", "::"):
-            slc = self.get_first_expr("x[%s]" % (input,)).slice
-            assert slc.upper is None
-            assert slc.lower is None
-            assert slc.step is None
-        for input in ("1:", "1::"):
-            slc = self.get_first_expr("x[%s]" % (input,)).slice
-            assert isinstance(slc.lower, ast.Num)
-            assert slc.upper is None
-            assert slc.step is None
-        for input in (":2", ":2:"):
-            slc = self.get_first_expr("x[%s]" % (input,)).slice
-            assert slc.lower is None
-            assert isinstance(slc.upper, ast.Num)
-            assert slc.step is None
-        for input in ("2:2:", "2:2"):
-            slc = self.get_first_expr("x[%s]" % (input,)).slice
-            assert isinstance(slc.lower, ast.Num)
-            assert isinstance(slc.upper, ast.Num)
-            assert slc.step is None
+        slc = self.get_first_expr("x[:]").slice
+        assert slc.upper is None
+        assert slc.lower is None
+        assert slc.step is None
+        slc = self.get_first_expr("x[::]").slice
+        assert slc.upper is None
+        assert slc.lower is None
+        assert isinstance(slc.step, ast.Name)
+        assert slc.step.id == "None"
+        assert slc.step.ctx == ast.Load
+        slc = self.get_first_expr("x[1:]").slice
+        assert isinstance(slc.lower, ast.Num)
+        assert slc.upper is None
+        assert slc.step is None
+        slc = self.get_first_expr("x[1::]").slice
+        assert isinstance(slc.lower, ast.Num)
+        assert slc.upper is None
+        assert isinstance(slc.step, ast.Name)
+        slc = self.get_first_expr("x[:2]").slice
+        assert slc.lower is None
+        assert isinstance(slc.upper, ast.Num)
+        assert slc.step is None
+        slc = self.get_first_expr("x[:2:]").slice
+        assert slc.lower is None
+        assert isinstance(slc.upper, ast.Num)
+        assert isinstance(slc.step, ast.Name)
+        slc = self.get_first_expr("x[2:2]").slice
+        assert isinstance(slc.lower, ast.Num)
+        assert isinstance(slc.upper, ast.Num)
+        assert slc.step is None
+        slc = self.get_first_expr("x[2:2:]").slice
+        assert isinstance(slc.lower, ast.Num)
+        assert isinstance(slc.upper, ast.Num)
+        assert isinstance(slc.step, ast.Name)
         slc = self.get_first_expr("x[::2]").slice
         assert slc.lower is None
         assert slc.upper is None
