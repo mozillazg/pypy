@@ -424,9 +424,9 @@ class BaseTestOptimizeFindNode(BaseTest):
         # the field 'value' has its default value of 0
         jump(p1)
         """
-        # Unclear if the answer must contain or not the 'value' field.
-        # For now it does not.
-        self.find_nodes(ops, 'Virtual(node_vtable)')
+        # The answer must contain the 'value' field, because otherwise
+        # we might get incorrect results: when tracing, maybe i0 was not 0.
+        self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)')
 
     # ------------------------------
     # Bridge tests
