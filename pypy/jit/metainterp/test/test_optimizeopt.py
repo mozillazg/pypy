@@ -376,7 +376,46 @@ class BaseTestOptimizeOpt(BaseTest):
         # to be complete, we also check the no-opt case where most comparisons
         # are not removed.  The exact set of comparisons removed depends on
         # the details of the algorithm...
-        expected2 = ops
+        expected2 = """
+        [p0, p1, p2]
+        i1 = oononnull(p0)
+        guard_true(i1)
+          fail()
+        i2 = ooisnull(p0)
+        guard_false(i2)
+          fail()
+        i3 = oononnull(p0)
+        guard_true(i3)
+          fail()
+        i4 = ooisnull(p0)
+        guard_false(i4)
+          fail()
+        i5 = oononnull(p0)
+        guard_true(i5)
+          fail()
+        i6 = ooisnull(p0)
+        guard_false(i6)
+          fail()
+        i7 = ooisnot(p0, p1)
+        guard_true(i7)
+          fail()
+        i8 = oois(p0, p1)
+        guard_false(i8)
+          fail()
+        i9 = ooisnot(p0, p2)
+        guard_true(i9)
+          fail()
+        i10 = oois(p0, p2)
+        guard_false(i10)
+          fail()
+        i11 = ooisnot(p2, p1)
+        guard_true(i11)
+          fail()
+        i12 = oois(p2, p1)
+        guard_false(i12)
+          fail()
+        jump(p0, p1, p2)
+        """
         self.optimize_loop(ops, 'Not, Not, Not', expected2)
 
     def test_virtual_default_field(self):
