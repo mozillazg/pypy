@@ -117,10 +117,11 @@ class rop(object):
     _GUARD_FOLDABLE_LAST   = 11
     GUARD_NO_EXCEPTION     = 13
     GUARD_EXCEPTION        = 14
-    _GUARD_LAST = 19 # ----- end of guard operations -----
+    _GUARD_LAST = 14 # ----- end of guard operations -----
 
-    _NOSIDEEFFECT_FIRST = 20 # ----- start of no_side_effect operations -----
-    _ALWAYS_PURE_FIRST = 20 # ----- start of always_pure operations -----
+    _NOSIDEEFFECT_FIRST = 19 # ----- start of no_side_effect operations -----
+    _ALWAYS_PURE_FIRST = 19 # ----- start of always_pure operations -----
+    OOSEND_PURE            = 19    # ootype operation
     CALL_PURE              = 20
     #
     CAST_INT_TO_PTR        = 21
@@ -174,9 +175,8 @@ class rop(object):
     OOIDENTITYHASH         = 85
     INSTANCEOF             = 86
     SUBCLASSOF             = 87
-    OOSEND_PURE            = 88
     #
-    _ALWAYS_PURE_LAST = 88  # ----- end of always_pure operations -----
+    _ALWAYS_PURE_LAST = 87  # ----- end of always_pure operations -----
 
     GETARRAYITEM_GC        = 120
     GETFIELD_GC            = 121
