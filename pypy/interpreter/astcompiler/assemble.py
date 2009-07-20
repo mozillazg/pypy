@@ -503,7 +503,7 @@ def _opcode_stack_effect(op, arg):
     if we_are_translated():
         for possible_op in ops.unrolling_opcode_descs:
             if op == possible_op.index:
-                return _stack_effect_computers[op](arg)
+                return _stack_effect_computers[possible_op](arg)
         else:
             raise AssertionError("unkown opcode: %s" % (op,))
     else:
