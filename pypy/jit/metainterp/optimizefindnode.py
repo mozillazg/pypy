@@ -193,6 +193,13 @@ class PerfectSpecializationFinder(NodeFinder):
         #
         fields = []
         d = exitnode.curfields
+        if inputnode.origfields is not None:
+            if d is not None:
+                d = d.copy()
+            else:
+                d = av_newdict()
+            for ofs in inputnode.origfields:
+                d.setdefault(ofs, self.node_escaped)
         if d is not None:
             lst = d.keys()
             sort_descrs(lst)
