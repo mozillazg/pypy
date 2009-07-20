@@ -181,12 +181,12 @@ class rop(object):
     GETARRAYITEM_GC        = 120
     GETFIELD_GC            = 121
     GETFIELD_RAW           = 122
+    NEW                    = 123
+    NEW_WITH_VTABLE        = 124
+    NEW_ARRAY              = 125
     _NOSIDEEFFECT_PTR_LAST = 129 # -- end of no_side_effect_ptr operations --
     _NOSIDEEFFECT_LAST = 129 # ----- end of no_side_effect operations -----
 
-    NEW                    = 130
-    NEW_WITH_VTABLE        = 131
-    NEW_ARRAY              = 132
     SETARRAYITEM_GC        = 133
     SETFIELD_GC            = 134
     SETFIELD_RAW           = 135
