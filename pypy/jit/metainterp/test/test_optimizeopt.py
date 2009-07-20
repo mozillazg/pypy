@@ -469,10 +469,10 @@ class BaseTestOptimizeOpt(BaseTest):
         expected = """
         [i]
         i1 = int_add(i, 1)
-        p9 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
-        setfield_gc(p9, i, descr=valuedescr)
-        escape(p9)
-        escape(p9)
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i, descr=valuedescr)
+        escape(p1)
+        escape(p1)
         jump(i1)
         """
         self.optimize_loop(ops, 'Not', expected)

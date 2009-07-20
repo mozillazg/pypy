@@ -86,8 +86,9 @@ class VirtualValue(InstanceValue):
     box = None
     level = LEVEL_KNOWNCLASS
 
-    def __init__(self, optimizer):
+    def __init__(self, optimizer, source_op=None):
         self.optimizer = optimizer
+        self.source_op = source_op  # the NEW_WITH_VTABLE operation building it
         self._fields = av_newdict()
 
     def getfield(self, ofs):
@@ -101,8 +102,16 @@ class VirtualValue(InstanceValue):
 
     def force_box(self):
         if self.box is None:
-            optimizer = self.optimizer
-            import py; py.test.skip("in-progress")
+            assert self.source_op is not None       # otherwise, we are trying
+            # to force a Virtual from a specnode computed by optimizefindnode.
+            newoperations = self.optimizer.newoperations
+            newoperations.append(self.source_op)
+            self.box = box = self.source_op.result
+            for ofs in self._fields:
+                subbox = self._fields[ofs].force_box()
+                op = ResOperation(rop.SETFIELD_GC, [box, subbox], None,
+                                  descr=ofs)
+                newoperations.append(op)
         return self.box
 
 
@@ -158,8 +167,8 @@ class Optimizer(object):
     def known_nonnull(self, box):
         return self.getvalue(box).is_nonnull()
 
-    def make_virtual(self, box):
-        vvalue = VirtualValue(self)
+    def make_virtual(self, box, source_op=None):
+        vvalue = VirtualValue(self, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
 
@@ -333,7 +342,7 @@ class Optimizer(object):
             self.optimize_default(op)
 
     def optimize_NEW_WITH_VTABLE(self, op):
-        self.make_virtual(op.result)
+        self.make_virtual(op.result, op)
 
 
 optimize_ops = _findall(Optimizer, 'optimize_')
