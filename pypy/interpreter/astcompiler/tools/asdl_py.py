@@ -101,7 +101,7 @@ class ASTNodeVisitor(ASDLVisitor):
         self.emit("class %s(%s):" % (cons.name, base))
         self.emit("")
         all_fields = cons.fields + extra_attributes
-        slots = ", ".join(repr(field.name.value) for field in all_fields)
+        slots = ", ".join(repr(field.name.value) for field in cons.fields)
         self.emit("__slots__ = (%s)" % (slots,), 1)
         self.emit("")
         self.make_constructor(all_fields)
