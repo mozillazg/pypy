@@ -8,7 +8,7 @@ from pypy.jit.metainterp.test.oparser import parse
 
 # ____________________________________________________________
 
-def equaloplists(oplist1, oplist2):
+def equaloplists(oplist1, oplist2, remap={}):
     print '-'*20, 'Comparing lists', '-'*20
     for op1, op2 in zip(oplist1, oplist2):
         txt1 = str(op1)
@@ -20,11 +20,11 @@ def equaloplists(oplist1, oplist2):
         assert op1.opnum == op2.opnum
         assert len(op1.args) == len(op2.args)
         for x, y in zip(op1.args, op2.args):
-            assert x == y
-        assert op1.result == op2.result
+            assert x == remap.get(y, y)
+        assert op1.result == remap.get(op2.result, op2.result)
         assert op1.descr == op2.descr
         if op1.suboperations:
-            assert equaloplists(op1.suboperations, op2.suboperations)
+            assert equaloplists(op1.suboperations, op2.suboperations, remap)
     assert len(oplist1) == len(oplist2)
     print '-'*57
     return True
@@ -45,20 +45,57 @@ def test_equaloplists():
     py.test.raises(AssertionError,
                    "equaloplists(loop1.operations, loop3.operations)")
 
+def test_equaloplists_remap():
+    ops1 = """
+    [i0]
+    i1 = int_add(i0, 1)
+    guard_true(i1)
+        i2 = int_add(i1, 1)
+        fail(i2)
+    jump(i1)
+    """
+    ops2 = """
+    [i3]
+    i1 = int_add(i3, 1)
+    guard_true(i1)
+        i5 = int_add(i1, 1)
+        fail(i5)
+    jump(i1)
+    """
+    loop1 = parse(ops1)
+    loop2 = parse(ops2)
+    py.test.raises(AssertionError,
+                   "equaloplists(loop1.operations, loop2.operations)")
+    i0 = loop1.inputargs[0]
+    i3 = loop2.inputargs[0]
+    i2 = loop1.operations[1].suboperations[0].result
+    i5 = loop2.operations[1].suboperations[0].result
+    assert equaloplists(loop1.operations, loop2.operations,
+                        {i3: i0, i5: i2})
+
 # ____________________________________________________________
 
 class BaseTestOptimizeOpt(BaseTest):
 
     def assert_equal(self, optimized, expected):
-        assert optimized.inputargs == expected.inputargs
+        assert len(optimized.inputargs) == len(expected.inputargs)
+        remap = {}
+        for box1, box2 in zip(optimized.inputargs, expected.inputargs):
+            assert box1.__class__ == box2.__class__
+            remap[box2] = box1
         assert equaloplists(optimized.operations,
-                            expected.operations)
+                            expected.operations,
+                            remap)
 
-    def optimize(self, ops, spectext, optops, boxkinds=None, **values):
+    def optimize_loop(self, ops, spectext, optops, boxkinds=None, **values):
         loop = self.parse(ops, boxkinds=boxkinds)
         loop.setvalues(**values)
         loop.specnodes = self.unpack_specnodes(spectext)
-        optimize(loop)
+        assert loop.operations[-1].opnum == rop.JUMP
+        loop.operations[-1].jump_target = loop
+        #
+        optimize(self.cpu, loop)
+        #
         expected = self.parse(optops, boxkinds=boxkinds)
         self.assert_equal(loop, expected)
 
@@ -70,7 +107,7 @@ class BaseTestOptimizeOpt(BaseTest):
           fail(i0)
         jump(i)
         """
-        self.optimize(ops, 'Not', ops, i0=0)
+        self.optimize_loop(ops, 'Not', ops, i0=0)
 
     def test_constant_propagate(self):
         ops = """
@@ -90,7 +127,7 @@ class BaseTestOptimizeOpt(BaseTest):
         []
         jump()
         """
-        self.optimize(ops, '', expected, i0=5, i1=1, i2=0)
+        self.optimize_loop(ops, '', expected, i0=5, i1=1, i2=0)
 
     def test_constfold_all(self):
         for op in range(rop.INT_ADD, rop.BOOL_NOT+1):
@@ -107,7 +144,7 @@ class BaseTestOptimizeOpt(BaseTest):
             []
             jump()
             """
-            self.optimize(ops, '', expected)
+            self.optimize_loop(ops, '', expected)
 
     # ----------
 
@@ -126,7 +163,7 @@ class BaseTestOptimizeOpt(BaseTest):
           fail()
         jump(p0)
         """
-        self.optimize(ops, 'Not', expected)
+        self.optimize_loop(ops, 'Not', expected)
 
     def test_remove_consecutive_guard_value_constfold(self):
         ops = """
@@ -145,7 +182,7 @@ class BaseTestOptimizeOpt(BaseTest):
             fail()
         jump(3)
         """
-        self.optimize(ops, 'Not', expected, i0=0, i1=1, i2=3)
+        self.optimize_loop(ops, 'Not', expected, i0=0, i1=1, i2=3)
 
     def test_ooisnull_oononnull_1(self):
         ops = """
@@ -166,7 +203,7 @@ class BaseTestOptimizeOpt(BaseTest):
           fail()
         jump(p0)
         """
-        self.optimize(ops, 'Not', expected, i0=1, i1=0)
+        self.optimize_loop(ops, 'Not', expected, i0=1, i1=0)
 
     def test_ooisnull_oononnull_2(self):
         py.test.skip("less important")
@@ -187,7 +224,7 @@ class BaseTestOptimizeOpt(BaseTest):
           fail()
         jump(p0)
         """
-        self.optimize(ops, 'Not', expected, i0=1, i1=0)
+        self.optimize_loop(ops, 'Not', expected, i0=1, i1=0)
 
     def test_oois_1(self):
         ops = """
@@ -214,7 +251,84 @@ class BaseTestOptimizeOpt(BaseTest):
           fail()
         jump(p0)
         """
-        self.optimize(ops, 'Not', expected, i0=1, i1=0, i2=1, i3=0)
+        self.optimize_loop(ops, 'Not', expected, i0=1, i1=0, i2=1, i3=0)
+
+    # ----------
+
+    def test_virtual_1(self):
+        ops = """
+        [i, p0]
+        i0 = getfield_gc(p0, descr=valuedescr)
+        i1 = int_add(i0, i)
+        setfield_gc(p0, i1, descr=valuedescr)
+        jump(i, p0)
+        """
+        expected = """
+        [i, i2]
+        i1 = int_add(i2, i)
+        jump(i, i1)
+        """
+        self.optimize_loop(ops, 'Not, Virtual(node_vtable, valuedescr=Not)',
+                           expected)
+
+    def test_virtual_oois(self):
+        ops = """
+        [p0, p1, p2]
+        i1 = oononnull(p0)
+        guard_true(i1)
+          fail()
+        i2 = ooisnull(p0)
+        guard_false(i2)
+          fail()
+        i3 = ooisnot(p0, NULL)
+        guard_true(i3)
+          fail()
+        i4 = oois(p0, NULL)
+        guard_false(i4)
+          fail()
+        i5 = ooisnot(NULL, p0)
+        guard_true(i5)
+          fail()
+        i6 = oois(NULL, p0)
+        guard_false(i6)
+          fail()
+        i7 = ooisnot(p0, p1)
+        guard_true(i7)
+          fail()
+        i8 = oois(p0, p1)
+        guard_false(i8)
+          fail()
+        i9 = ooisnot(p0, p2)
+        guard_true(i9)
+          fail()
+        i10 = oois(p0, p2)
+        guard_false(i10)
+          fail()
+        i11 = ooisnot(p2, p1)
+        guard_true(i11)
+          fail()
+        i12 = oois(p2, p1)
+        guard_false(i12)
+          fail()
+        jump(p0, p1, p2)
+        """
+        expected = """
+        [p2]
+        # all constant-folded :-)
+        jump(p2)
+        """
+        self.optimize_loop(ops, '''Virtual(node_vtable),
+                                   Virtual(node_vtable),
+                                   Not''',
+                           expected,
+                           i1=1, i2=0, i3=1, i4=0, i5=1, i6=0,
+                           i7=1, i8=0, i9=1, i10=0, i11=1, i12=0)
+        #
+        # to be complete, we also check the no-opt case where most comparisons
+        # are not removed.  The exact set of comparisons removed depends on
+        # the details of the algorithm...
+        expected2 = ops
+        self.optimize_loop(ops, 'Not, Not, Not', expected2)
 
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
