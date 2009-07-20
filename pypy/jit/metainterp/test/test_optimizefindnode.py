@@ -414,6 +414,20 @@ class BaseTestOptimizeFindNode(BaseTest):
         """
         self.find_nodes(ops, 'Not, Not')
 
+    def test_find_nodes_default_field(self):
+        ops = """
+        [p0]
+        i0 = getfield_gc(p0, descr=valuedescr)
+        guard_value(i0, 0)
+          fail()
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        # the field 'value' has its default value of 0
+        jump(p1)
+        """
+        # Unclear if the answer must contain or not the 'value' field.
+        # For now it does not.
+        self.find_nodes(ops, 'Virtual(node_vtable)')
+
     # ------------------------------
     # Bridge tests
 
