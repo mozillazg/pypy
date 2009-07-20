@@ -1051,6 +1051,11 @@ class ASTBuilder(object):
 
     def parse_number(self, raw):
         base = 10
+        if raw.startswith("-"):
+            negative = True
+            raw = raw.lstrip("-")
+        else:
+            negative = False
         if raw.startswith("0"):
             if len(raw) > 2 and raw[1] in "Xx":
                 base = 16
@@ -1066,6 +1071,8 @@ class ASTBuilder(object):
             raw = raw[i:]
             if not raw[0].isdigit():
                 raw = "0" + raw
+        if negative:
+            raw = "-" + raw
         w_num_str = self.space.wrap(raw)
         w_index = None
         w_base = self.space.wrap(base)
