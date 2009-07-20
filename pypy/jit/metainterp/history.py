@@ -317,6 +317,8 @@ class ConstPtr(Const):
     def repr_rpython(self):
         return repr_rpython(self, 'cp')
 
+CONST_NULL = ConstPtr(ConstPtr.value)
+
 class ConstObj(Const):
     type = OBJ
     value = ootype.NULL
@@ -359,6 +361,8 @@ class ConstObj(Const):
 
     def repr_rpython(self):
         return repr_rpython(self, 'co')
+
+CONST_NULL_OBJ = ConstObj(ConstObj.value)
 
 class Box(AbstractValue):
     __slots__ = ()

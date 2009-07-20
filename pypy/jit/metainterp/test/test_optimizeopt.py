@@ -380,7 +380,6 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not, Not, Not', expected2)
 
     def test_virtual_default_field(self):
-        py.test.skip("in-progress")
         ops = """
         [p0]
         i0 = getfield_gc(p0, descr=valuedescr)
