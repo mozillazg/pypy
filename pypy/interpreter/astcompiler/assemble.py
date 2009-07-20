@@ -510,7 +510,7 @@ def _opcode_stack_effect(op, arg):
             if op == possible_op.index:
                 return _stack_effect_computers[possible_op.index](arg)
         else:
-            raise AssertionError("unkown opcode: %s" % (op,))
+            raise AssertionError("unknown opcode: %s" % (op,))
     else:
         try:
             return _static_opcode_stack_effects[op]

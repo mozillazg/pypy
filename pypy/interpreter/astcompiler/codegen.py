@@ -302,7 +302,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op(self._op_for_augassign(assign.op))
             self.name_op(target.id, ast.Store)
         else:
-            raise AssertionError("unkown augassign")
+            raise AssertionError("unknown augassign")
 
     def visit_Assert(self, asrt):
         self.update_position(asrt.lineno)
@@ -1076,7 +1076,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         elif isinstance(slc, ast.Index):
             slc.value.walkabout(self)
         else:
-            raise AssertionError("unkown nested slice type")
+            raise AssertionError("unknown nested slice type")
 
     def _compile_slice(self, slc, ctx):
         if isinstance(slc, ast.Index):
@@ -1101,7 +1101,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                     self._nested_slice(dim, ctx)
                 self.emit_op_arg(ops.BUILD_TUPLE, len(slc.dims))
         else:
-            raise AssertionError("unkown slice type")
+            raise AssertionError("unknown slice type")
         if ctx == ast.AugLoad:
             self.emit_op_arg(ops.DUP_TOPX, 2)
         elif ctx == ast.AugStore:
