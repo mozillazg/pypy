@@ -1007,20 +1007,19 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def visit_Attribute(self, attr):
         self.update_position(attr.lineno)
         names = self.names
-        ctx = attr.ctx
-        if ctx != ast.AugStore:
+        if attr.ctx != ast.AugStore:
             attr.value.walkabout(self)
-        if ctx == ast.AugLoad:
+        if attr.ctx == ast.AugLoad:
             self.emit_op(ops.DUP_TOP)
             self.emit_op_name(ops.LOAD_ATTR, names, attr.attr)
-        elif ctx == ast.Load:
+        elif attr.ctx == ast.Load:
             self.emit_op_name(ops.LOAD_ATTR, names, attr.attr)
-        elif ctx == ast.AugStore:
+        elif attr.ctx == ast.AugStore:
             self.emit_op(ops.ROT_TWO)
             self.emit_op_name(ops.STORE_ATTR, names, attr.attr)
-        elif ctx == ast.Store:
+        elif attr.ctx == ast.Store:
             self.emit_op_name(ops.STORE_ATTR, names, attr.attr)
-        elif ctx == ast.Del:
+        elif attr.ctx == ast.Del:
             self.emit_op_name(ops.DELETE_ATTR, names, attr.attr)
         else:
             raise AssertionError("unknown context")
