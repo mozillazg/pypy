@@ -317,7 +317,7 @@ def _list_from_dict(d, offset=0):
 
 
 _static_opcode_stack_effects = {
-    ops.NOP,
+    ops.NOP : 0,
 
     ops.POP_TOP : -1,
     ops.ROT_TWO : 0,
