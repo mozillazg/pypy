@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.history import Const, Box, BoxInt, BoxPtr, BoxObj
-from pypy.jit.metainterp.history import AbstractValue
+from pypy.jit.metainterp import history
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.specnode import SpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
@@ -19,7 +19,7 @@ def optimize(cpu, loop):
 
 # ____________________________________________________________
 
-class VirtualBox(AbstractValue):
+class VirtualBox(history.AbstractValue):
     def __init__(self):
         self.fields = av_newdict()     # ofs -> Box
 
@@ -30,7 +30,7 @@ class VirtualBox(AbstractValue):
 class __extend__(SpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
         newinputargs.append(box)
-    def teardown_virtual_node(self, box, newexitargs):
+    def teardown_virtual_node(self, optimizer, box, newexitargs):
         newexitargs.append(box)
 
 class __extend__(VirtualInstanceSpecNode):
@@ -40,11 +40,14 @@ class __extend__(VirtualInstanceSpecNode):
             subbox = optimizer.make_box(ofs)
             vbox.fields[ofs] = subbox
             subspecnode.setup_virtual_node(optimizer, subbox, newinputargs)
-    def teardown_virtual_node(self, box, newexitargs):
+    def teardown_virtual_node(self, optimizer, box, newexitargs):
         assert isinstance(box, VirtualBox)
         for ofs, subspecnode in self.fields:
-            # XXX if ofs not in box.fields:...
-            subspecnode.teardown_virtual_node(box.fields[ofs], newexitargs)
+            try:
+                subbox = box.fields[ofs]
+            except KeyError:
+                subbox = optimizer.make_const(ofs)
+            subspecnode.teardown_virtual_node(optimizer, subbox, newexitargs)
 
 
 class Optimizer(object):
@@ -107,6 +110,15 @@ class Optimizer(object):
         else:
             return BoxInt()
 
+    def make_const(self, fieldofs):
+        if fieldofs.is_pointer_field():
+            if not self.cpu.is_oo:
+                return history.CONST_NULL
+            else:
+                return history.CONST_NULL_OBJ
+        else:
+            return history.CONST_FALSE
+
     def known_nonnull(self, box):
         if isinstance(box, Box):
             return box in self._known_classes
@@ -163,7 +175,7 @@ class Optimizer(object):
         specnodes = orgop.jump_target.specnodes
         assert len(op.args) == len(specnodes)
         for i in range(len(specnodes)):
-            specnodes[i].teardown_virtual_node(op.args[i], exitargs)
+            specnodes[i].teardown_virtual_node(self, op.args[i], exitargs)
         op.args = exitargs
         self.emit_operation(op)
 
