@@ -99,6 +99,9 @@ class NodeFinder(object):
         instnode.knownclsbox = op.args[0]
         self.nodes[op.result] = instnode
 
+    def find_nodes_GUARD_CLASS(self, op):
+        pass     # prevent default handling
+
     def find_nodes_SETFIELD_GC(self, op):
         instnode = self.getnode(op.args[0])
         if instnode.escaped:
@@ -140,11 +143,11 @@ class NodeFinder(object):
         for box in op.args:
             self.getnode(box).set_unique_nodes()
 
-    def find_nodes_GUARD_CLASS(self, op):
-        pass     # prevent default handling
-
     def find_nodes_FAIL(self, op):
-        xxx
+        # only for bridges, and only for the ones that end in a 'return'
+        # or 'raise'; all other cases end with a JUMP.
+        for box in op.args:
+            self.getnode(box).unique = UNIQUE_NO
 
 find_nodes_ops = _findall(NodeFinder, 'find_nodes_')
 
@@ -282,7 +285,6 @@ class BridgeSpecializationFinder(NodeFinder):
             self.nodes[box] = instnode
 
     def bridge_matches(self, jump_op, nextloop_specnodes):
-        assert jump_op.opnum == rop.JUMP
         assert len(jump_op.args) == len(nextloop_specnodes)
         for i in range(len(nextloop_specnodes)):
             exitnode = self.getnode(jump_op.args[i])
