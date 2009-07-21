@@ -204,6 +204,7 @@ class Optimizer(object):
     # ----------
 
     def propagate_forward(self):
+        self.exception_might_have_happened = False
         self.newoperations = []
         for op in self.loop.operations:
             opnum = op.opnum
@@ -226,6 +227,8 @@ class Optimizer(object):
                         must_clone = False
                     op.args[i] = box
         self.newoperations.append(op)
+        if op.can_raise():
+            self.exception_might_have_happened = True
 
     def optimize_default(self, op):
         if op.is_always_pure():
@@ -277,6 +280,12 @@ class Optimizer(object):
             return
         self.emit_operation(op)
         value.make_constant_class()
+
+    def optimize_GUARD_NO_EXCEPTION(self, op):
+        if not self.exception_might_have_happened:
+            return
+        self.emit_operation(op)
+        self.exception_might_have_happened = False
 
     def optimize_OONONNULL(self, op):
         if self.known_nonnull(op.args[0]):
