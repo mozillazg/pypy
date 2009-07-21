@@ -547,7 +547,7 @@ class TestAstBuilder:
         assert args.kwarg == "f"
         input = "def f(a=b, c): pass"
         exc = py.test.raises(SyntaxError, self.get_ast, input).value
-        assert exc.msg == "non-default argument after default one"
+        assert exc.msg == "non-default argument follows default argument""
 
     def test_decorator(self):
         func = self.get_first_stmt("@dec\ndef f(): pass")
@@ -690,7 +690,7 @@ class TestAstBuilder:
         assert all(elt.ctx == ast.Store for elt in seq.elts)
         invalid_stores = (
             ("(lambda x: x)", "lambda"),
-            ("f()", "call"),
+            ("f()", "function call"),
             ("~x", "operator"),
             ("+x", "operator"),
             ("-x", "operator"),
