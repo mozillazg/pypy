@@ -12,11 +12,10 @@ from pypy.rlib.objectmodel import we_are_translated
 
 class Instruction(object):
 
-    def __init__(self, opcode, lineno, arg=0):
-        assert lineno != -1
+    def __init__(self, opcode, arg=0):
         self.opcode = opcode
         self.arg = arg
-        self.lineno = lineno
+        self.lineno = 0
         self.has_jump = False
 
     def size(self):
@@ -122,7 +121,6 @@ class PythonCodeMaker(ast.ASTVisitor):
         self.name = name
         self.first_lineno = first_lineno
         self.compile_info = compile_info
-        self.lineno = -1
         self.first_block = self.new_block()
         self.use_block(self.first_block)
         self.names = {}
@@ -132,6 +130,8 @@ class PythonCodeMaker(ast.ASTVisitor):
         self.free_vars = _list_to_dict(scope.free_vars, len(self.cell_vars))
         self.w_consts = space.newdict()
         self.argcount = 0
+        self.lineno_set = False
+        self.lineno = 0
         self.add_none_to_final_return = True
 
     def new_block(self):
@@ -149,14 +149,21 @@ class PythonCodeMaker(ast.ASTVisitor):
         return block
 
     def emit_op(self, op):
-        instr = Instruction(op, self.lineno)
+        instr = Instruction(op)
+        if not self.lineno_set:
+            instr.lineno = self.lineno
+            self.lineno_set = True
         self.instrs.append(instr)
         if op == ops.RETURN_VALUE:
             self.current_block.have_return = True
         return instr
 
     def emit_op_arg(self, op, arg):
-        self.instrs.append(Instruction(op, self.lineno, arg))
+        instr = Instruction(op, arg)
+        if not self.lineno_set:
+            instr.lineno = self.lineno
+            self.lineno_set = True
+        self.instrs.append(instr)
 
     def emit_op_name(self, op, container, name):
         self.emit_op_arg(op, self.add_name(container, name))
@@ -188,8 +195,7 @@ class PythonCodeMaker(ast.ASTVisitor):
 
     def update_position(self, lineno):
         self.lineno = lineno
-        if self.first_lineno == -1:
-            self.first_lineno = lineno
+        self.lineno_set = False
 
     def _resolve_block_targets(self, blocks):
         last_extended_arg_count = 0
@@ -269,18 +275,22 @@ class PythonCodeMaker(ast.ASTVisitor):
         for block in blocks:
             offset = block.offset
             for instr in block.instructions:
-                lineno_table_builder.note_lineno_here(offset, instr.lineno)
+                if instr.lineno:
+                    lineno_table_builder.note_lineno_here(offset, instr.lineno)
                 offset += instr.size()
         return lineno_table_builder.get_table()
 
     def assemble(self):
-        if self.lineno == -1:
-            self.lineno = self.first_lineno
         if not self.current_block.have_return:
             self.use_next_block()
             if self.add_none_to_final_return:
                 self.load_const(self.space.w_None)
             self.emit_op(ops.RETURN_VALUE)
+        if self.first_lineno == -1:
+            if self.first_block.instructions:
+                self.first_lineno = self.first_block.instructions[0].lineno
+            else:
+                self.first_lineno = 1
         blocks = self.first_block.post_order()
         self._resolve_block_targets(blocks)
         lnotab = self._build_lnotab(blocks)
@@ -531,6 +541,7 @@ class LinenoTableBuilder(object):
     def note_lineno_here(self, offset, lineno):
         # compute deltas
         line = lineno - self.current_line
+        addr = offset - self.current_off
         # Python assumes that lineno always increases with
         # increasing bytecode address (lnotab is unsigned char).
         # Depending on when SET_LINENO instructions are emitted
@@ -541,10 +552,7 @@ class LinenoTableBuilder(object):
         # after the loading of "b".  This works with the C Python
         # compiler because it only generates a SET_LINENO instruction
         # for the assignment.
-        if line > 0:
-            addr = offset - self.current_off
-            if not addr and not line:
-                return
+        if line or addr:
             push = self.table.append
             while addr > 255:
                 push(chr(255))
