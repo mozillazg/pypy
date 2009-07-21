@@ -339,8 +339,9 @@ class Optimizer(object):
             value.make_nonnull()
             self.optimize_default(op)
 
-    def optimize_GETFIELD_PURE_GC(self, op):
-        xxx # optimize_GETFIELD_GC
+    # note: the following line does not mean that the two operations are
+    # completely equivalent, because GETFIELD_GC_PURE is_always_pure().
+    optimize_GETFIELD_GC_PURE = optimize_GETFIELD_GC
 
     def optimize_SETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])

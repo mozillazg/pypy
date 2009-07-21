@@ -108,6 +108,12 @@ class OpParser(object):
                     return ConstPtr(ConstPtr.value)
                 else:
                     return ConstObj(ConstObj.value)
+            elif arg.startswith('ConstPtr('):
+                name = arg[len('ConstPtr('):-1]
+                if self.type_system == 'lltype':
+                    return ConstPtr(self.boxkinds[name])
+                else:
+                    return ConstObj(self.boxkinds[name])
             return self.vars[arg]
 
     def parse_op(self, line):
