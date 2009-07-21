@@ -576,6 +576,23 @@ class BaseTestOptimizeFindNode(BaseTest):
                                          nextdescr=Virtual(node_vtable,
                                                            nextdescr=Not)))''')
 
+    def test_bridge_to_fail(self):
+        ops = """
+        [i1]
+        i2 = int_add(i1, 5)
+        fail(i2)
+        """
+        self.find_bridge(ops, 'Not', 'Not')
+
+    def test_bridge_virtual_to_fail(self):
+        ops = """
+        [i1]
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i1, descr=valuedescr)
+        fail(p1)
+        """
+        self.find_bridge(ops, 'Not', 'Not')
+
 
 class TestLLtype(BaseTestOptimizeFindNode, LLtypeMixin):
     pass
