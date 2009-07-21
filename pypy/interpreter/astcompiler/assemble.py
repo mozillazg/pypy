@@ -194,8 +194,9 @@ class PythonCodeMaker(ast.ASTVisitor):
         self.emit_op_arg(ops.LOAD_CONST, index)
 
     def update_position(self, lineno):
-        self.lineno = lineno
-        self.lineno_set = False
+        if lineno > self.lineno:
+            self.lineno = lineno
+            self.lineno_set = False
 
     def _resolve_block_targets(self, blocks):
         last_extended_arg_count = 0
@@ -541,6 +542,7 @@ class LinenoTableBuilder(object):
     def note_lineno_here(self, offset, lineno):
         # compute deltas
         line = lineno - self.current_line
+        assert line >= 0
         addr = offset - self.current_off
         # Python assumes that lineno always increases with
         # increasing bytecode address (lnotab is unsigned char).
@@ -559,12 +561,11 @@ class LinenoTableBuilder(object):
                 push(chr(0))
                 addr -= 255
             while line > 255:
-                push(chr(addr))
+                push(chr(0))
                 push(chr(255))
                 line -= 255
                 addr = 0
-            if addr > 0 or line > 0:
-                push(chr(addr))
-                push(chr(line))
+            push(chr(addr))
+            push(chr(line))
             self.current_line = lineno
             self.current_off = offset
