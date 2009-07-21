@@ -301,6 +301,35 @@ class BaseTestOptimizeOpt(BaseTest):
 
     # ----------
 
+    def test_fold_guard_no_exception(self):
+        ops = """
+        [i]
+        guard_no_exception()
+            fail()
+        i1 = int_add(i, 3)
+        guard_no_exception()
+            fail()
+        i2 = call(i1)
+        guard_no_exception()
+            fail(i1, i2)
+        guard_no_exception()
+            fail()
+        i3 = call(i2)
+        jump(i1)       # the exception is considered lost when we loop back
+        """
+        expected = """
+        [i]
+        i1 = int_add(i, 3)
+        i2 = call(i1)
+        guard_no_exception()
+            fail(i1, i2)
+        i3 = call(i2)
+        jump(i1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    # ----------
+
     def test_virtual_1(self):
         ops = """
         [i, p0]
