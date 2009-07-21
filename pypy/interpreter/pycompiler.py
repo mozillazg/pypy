@@ -231,8 +231,15 @@ class PythonAstCompiler(PyCodeCompiler):
         from pypy.interpreter.pyparser.pythonlexer import TokenIndentationError
         from pypy.interpreter.astcompiler.astbuilder import ast_from_node
         from pypy.interpreter.astcompiler.codegen import compile_ast
+        from pypy.interpreter.astcompiler import consts
 
         space = self.space
+
+        if flags & ~(consts.PyCF_SOURCE_IS_UTF8 | consts.PyCF_DONT_IMPLY_DEDENT
+                     | self.futureFlags.allowed_flags):
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("invalid compile flags"))
+
         space.timer.start("PythonAST compile")
         try:
             flags |= getFutures(self.futureFlags, source)
