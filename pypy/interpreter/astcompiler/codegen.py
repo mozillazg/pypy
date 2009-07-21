@@ -227,6 +227,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op_arg(ops.MAKE_FUNCTION, num_defaults)
 
     def visit_FunctionDef(self, func):
+        self.update_position(func.lineno)
         if func.decorators:
             self.visit_sequence(func.decorators)
         if func.args.defaults:
@@ -236,7 +237,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             num_defaults = 0
         code = self.sub_scope(FunctionCodeGenerator, func.name, func,
                               func.lineno)
-        self.update_position(func.lineno)
         self._make_function(code, num_defaults)
         if func.decorators:
             for i in range(len(func.decorators)):
@@ -244,13 +244,13 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.name_op(func.name, ast.Store)
 
     def visit_Lambda(self, lam):
+        self.update_position(lam.lineno)
         if lam.args.defaults:
             self.visit_sequence(lam.args.defaults)
             default_count = len(lam.args.defaults)
         else:
             default_count = 0
         code = self.sub_scope(LambdaCodeGenerator, "<lambda>", lam, lam.lineno)
-        self.update_position(lam.lineno)
         self._make_function(code, default_count)
 
     def visit_ClassDef(self, cls):
@@ -263,7 +263,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             bases_count = 0
         self.emit_op_arg(ops.BUILD_TUPLE, bases_count)
         code = self.sub_scope(ClassCodeGenerator, cls.name, cls, cls.lineno)
-        self.update_position(cls.lineno)
         self._make_function(code, 0)
         self.emit_op_arg(ops.CALL_FUNCTION, 0)
         self.emit_op(ops.BUILD_CLASS)
