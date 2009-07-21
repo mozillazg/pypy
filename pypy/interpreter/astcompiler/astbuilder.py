@@ -135,7 +135,7 @@ class ASTBuilder(object):
         elif isinstance(expr, ast.Lambda):
             error = "lambda"
         elif isinstance(expr, ast.Call):
-            error = "call"
+            error = "function call"
         elif isinstance(expr, ast.BoolOp) or \
                 isinstance(expr, ast.BinOp) or \
                 isinstance(expr, ast.UnaryOp):
@@ -581,8 +581,8 @@ class ASTBuilder(object):
                         i += 2
                         have_default = True
                     elif have_default:
-                        self.error("non-default argument after default one",
-                                   arguments_node)
+                        msg = "non-default argument follows default argument"
+                        self.error(msg, arguments_node)
                     if len(argument.children) == 3:
                         sub_arg = argument.children[1]
                         if len(sub_arg.children) != 1:
