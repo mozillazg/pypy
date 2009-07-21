@@ -285,6 +285,20 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not', expected,
                            i0=1, i1=0, i2=1, i3=0, i4=1, i5=0)
 
+    def test_const_guard_value(self):
+        ops = """
+        []
+        i = int_add(5, 3)
+        guard_value(i, 8)
+            fail()
+        jump()
+        """
+        expected = """
+        []
+        jump()
+        """
+        self.optimize_loop(ops, '', expected, i=8)
+
     # ----------
 
     def test_virtual_1(self):
