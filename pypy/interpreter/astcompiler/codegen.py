@@ -146,7 +146,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def error(self, msg, node):
         raise SyntaxError(msg, node.lineno, node.col_offset,
-                          self.compile_info.filename)
+                          filename=self.compile_info.filename)
 
     def name_op(self, identifier, ctx):
         scope = self.scope.lookup(identifier)
