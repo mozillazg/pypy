@@ -541,7 +541,7 @@ class LinenoTableBuilder(object):
         # after the loading of "b".  This works with the C Python
         # compiler because it only generates a SET_LINENO instruction
         # for the assignment.
-        if line >= 0:
+        if line > 0:
             addr = offset - self.current_off
             if not addr and not line:
                 return
