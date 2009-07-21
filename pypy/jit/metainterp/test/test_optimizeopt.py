@@ -533,6 +533,43 @@ class BaseTestOptimizeOpt(BaseTest):
         expected = ops
         self.optimize_loop(ops, 'Not, Not', expected)
 
+    def test_getfield_gc_pure_1(self):
+        ops = """
+        [i]
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i, descr=valuedescr)
+        i1 = getfield_gc_pure(p1, descr=valuedescr)
+        jump(i1)
+        """
+        expected = """
+        [i]
+        jump(i)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_getfield_gc_pure_2(self):
+        ops = """
+        [i]
+        i1 = getfield_gc_pure(ConstPtr(myptr), descr=valuedescr)
+        jump(i1)
+        """
+        expected = """
+        [i]
+        jump(5)
+        """
+        self.optimize_loop(ops, 'Not', expected, i1=5,
+                           boxkinds={'myptr': self.nodebox.value})
+
+    def test_getfield_gc_nonpure_2(self):
+        ops = """
+        [i]
+        i1 = getfield_gc(ConstPtr(myptr), descr=valuedescr)
+        jump(i1)
+        """
+        expected = ops
+        self.optimize_loop(ops, 'Not', expected, i1=5,
+                           boxkinds={'myptr': self.nodebox.value})
+
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
     pass
