@@ -1131,22 +1131,6 @@ class TopLevelCodeGenerator(PythonCodeGenerator):
 
 class AbstractFunctionCodeGenerator(PythonCodeGenerator):
 
-    def _compile(self, func):
-        assert isinstance(func, ast.FunctionDef)
-        if self.is_docstring(func.body[0]):
-            doc_string = func.body[0]
-            assert isinstance(doc_string, ast.Expr)
-            doc_string.value.walkabout(self)
-            start = 1
-        else:
-            self.add_const(self.space.w_None)
-            start = 0
-        if func.args.args:
-            self._handle_nested_args(func.args.args)
-            self.argcount = len(func.args.args)
-        for i in range(start, len(func.body)):
-            func.body[i].walkabout(self)
-
     def _handle_nested_args(self, args):
         for i in range(len(args)):
             arg = args[i]
@@ -1175,7 +1159,22 @@ class AbstractFunctionCodeGenerator(PythonCodeGenerator):
 
 
 class FunctionCodeGenerator(AbstractFunctionCodeGenerator):
-    pass
+
+    def _compile(self, func):
+        assert isinstance(func, ast.FunctionDef)
+        if self.is_docstring(func.body[0]):
+            doc_string = func.body[0]
+            assert isinstance(doc_string, ast.Expr)
+            doc_string.value.walkabout(self)
+            start = 1
+        else:
+            self.add_const(self.space.w_None)
+            start = 0
+        if func.args.args:
+            self._handle_nested_args(func.args.args)
+            self.argcount = len(func.args.args)
+        for i in range(start, len(func.body)):
+            func.body[i].walkabout(self)
 
 
 class LambdaCodeGenerator(AbstractFunctionCodeGenerator):
