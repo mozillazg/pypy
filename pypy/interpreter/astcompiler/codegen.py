@@ -413,12 +413,13 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                     self.emit_jump(ops.CONTINUE_LOOP, block, True)
                     break
                 if self.frame_blocks[i][0] == F_BLOCK_FINALLY_END:
-                    self.error("'continue' not allowed in 'finally' clause",
+                    self.error("'continue' not supported inside 'finally' " \
+                                   "clause",
                                cont)
             else:
                 self.error("'continue' outside loop", cont)
         elif current_block == F_BLOCK_FINALLY_END:
-            self.error("'continue' not allowed in 'finally' clause", cont)
+            self.error("'continue' not supported inside 'finally' clause", cont)
 
     def visit_For(self, fr):
         self.update_position(fr.lineno)
