@@ -401,7 +401,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def visit_Continue(self, cont):
         if not self.frame_blocks:
-            self.error("'continue' outside look", cont)
+            self.error("'continue' not properly in loop", cont)
         current_block, block = self.frame_blocks[-1]
         if current_block == F_BLOCK_LOOP:
             self.emit_jump(ops.JUMP_ABSOLUTE, block, True)
@@ -417,7 +417,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                                    "clause",
                                cont)
             else:
-                self.error("'continue' outside loop", cont)
+                self.error("'continue' not properly in loop", cont)
         elif current_block == F_BLOCK_FINALLY_END:
             self.error("'continue' not supported inside 'finally' clause", cont)
 
