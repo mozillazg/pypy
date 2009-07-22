@@ -242,8 +242,9 @@ class PythonAstCompiler(PyCodeCompiler):
 
         space.timer.start("PythonAST compile")
         try:
-            flags |= getFutures(self.futureFlags, source)
-            info = CompileInfo(filename, mode, flags)
+            f_flags, future_lineno = getFutures(self.futureFlags, source)
+            flags |= f_flags
+            info = CompileInfo(filename, mode, flags, future_lineno)
             parse_tree = self.parser.parse_source(source, info)
             module = ast_from_node(space, parse_tree, info)
             code = compile_ast(space, module, info)

@@ -6,6 +6,7 @@ from pypy.interpreter.astcompiler import (ast2 as ast, assemble, symtable,
                                           consts, misc)
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool import stdlib_opcode as ops
+from pypy.interpreter.pyparser import future
 from pypy.module.__builtin__.__init__ import BUILTIN_TO_INDEX
 
 
@@ -118,8 +119,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.symbols = symbols
         self.frame_blocks = []
         self.interactive = False
-        self.temporary_name_counter = 1
         self.done_with_future = False
+        self.temporary_name_counter = 1
         self._compile(tree)
 
     def _compile(self, tree):
@@ -551,6 +552,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def visit_Import(self, imp):
         self.update_position(imp.lineno, True)
+        self.done_with_future = True
         for alias in imp.names:
             assert isinstance(alias, ast.alias)
             if self.compile_info.flags & consts.CO_FUTURE_ABSOLUTE_IMPORT:
@@ -573,10 +575,21 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def visit_ImportFrom(self, imp):
         self.update_position(imp.lineno, True)
         space = self.space
+        first = imp.names[0]
+        assert isinstance(first, ast.alias)
+        star_import = len(imp.names) == 1 and first.name == "*"
         if imp.module == "__future__":
-            if self.done_with_future:
-                self.error("__future__ statements must appear before other " \
-                               "imports", imp)
+            if self.done_with_future or \
+                    imp.lineno > self.compile_info.last_future_import:
+                self.error("__future__ statements must appear at beginning " \
+                               "of file", imp)
+            if star_import:
+                self.error("* not valid in __future__ imports", imp)
+            for alias in imp.names:
+                assert isinstance(alias, ast.alias)
+                if alias.name not in future.futureFlags_2_5.compiler_features:
+                    self.error("future feature %s is not defined" %
+                               (alias.name,), imp)
         else:
             self.done_with_future = True
         if imp.level == 0 and \
@@ -596,9 +609,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         else:
             mod_name = ""
         self.emit_op_name(ops.IMPORT_NAME, self.names, mod_name)
-        first = imp.names[0]
-        assert isinstance(first, ast.alias)
-        if len(imp.names) == 1 and first.name == "*":
+        if star_import:
             self.emit_op(ops.IMPORT_STAR)
         else:
             for alias in imp.names:

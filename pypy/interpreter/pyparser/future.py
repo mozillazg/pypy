@@ -33,7 +33,7 @@ def getFutures(futureFlags, source):
         futures.start()
     except DoneException, e:
         pass
-    return futures.flags
+    return futures.flags, futures.lineno
     
 class DoneException(Exception):
     pass
@@ -67,6 +67,7 @@ class FutureAutomaton(object):
         self.futureFlags = futureFlags
         self.s = string
         self.pos = 0
+        self.lineno = 1
         self.docstringConsumed = False
         self.flags = 0
 
@@ -98,15 +99,23 @@ class FutureAutomaton(object):
             while 1: # Deal with a triple quoted docstring
                 if self.getc() == '\\':
                     self.pos += 2
-                elif self.getc() != endchar:
-                    self.pos += 1
                 else:
-                    self.pos += 1
-                    if (self.getc() == endchar and
-                        self.getc(+1) == endchar):
-                        self.pos += 2
-                        self.consumeEmptyLine()
-                        break
+                    c = self.getc()
+                    if c != endchar:
+                        self.pos += 1
+                        if c == '\n':
+                            self.lineno += 1
+                        elif c == '\r':
+                            if self.getc() == '\n':
+                                self.pos += 1
+                                self.lineno += 1
+                    else:
+                        self.pos += 1
+                        if (self.getc() == endchar and
+                            self.getc(+1) == endchar):
+                            self.pos += 2
+                            self.consumeEmptyLine()
+                            break
 
         else: # Deal with a single quoted docstring
             self.pos += 1
@@ -142,11 +151,16 @@ class FutureAutomaton(object):
             self.consumeWhitespace()
             self.start()
         elif self.getc() in '\r\n':
+            c = self.getc()
             self.pos += 1
-            if self.getc() == '\n':
-                self.pos += 1
+            if c == '\r':
+                if self.getc() == '\n':
+                    self.pos += 1
+                    self.lineno += 1
+            else:
+                self.lineno += 1
             self.start()
-            
+
     def consumeComment(self):
         self.pos += 1
         while self.getc() not in '\r\n':
@@ -196,11 +210,13 @@ class FutureAutomaton(object):
                 c = self.getc()
                 if c == '\n':
                     self.pos += 1
+                    self.lineno += 1
                     continue
                 elif c == '\r':
                     self.pos += 1
                     if self.getc() == '\n':
                         self.pos += 1
+                        self.lineno += 1
                 else:
                     raise DoneException
             else:
