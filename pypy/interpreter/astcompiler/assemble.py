@@ -561,7 +561,7 @@ class LinenoTableBuilder(object):
                 push(chr(0))
                 addr -= 255
             while line > 255:
-                push(chr(0))
+                push(chr(addr))
                 push(chr(255))
                 line -= 255
                 addr = 0
