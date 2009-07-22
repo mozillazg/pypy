@@ -309,7 +309,7 @@ class TestSymbolTable:
         assert scp.is_generator
         for input in ("yield x", "class y: yield x"):
             exc = py.test.raises(SyntaxError, self.mod_scope, "yield x").value
-            assert exc.msg == "yield outside function"
+            assert exc.msg == "'yield' outside function"
         for input in ("yield\n    return x", "return x\n    yield"):
             input = "def f():\n    " + input
             exc = py.test.raises(SyntaxError, self.func_scope, input).value

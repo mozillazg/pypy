@@ -69,7 +69,7 @@ class Scope(object):
         return mangled
 
     def note_yield(self, yield_node):
-        raise SyntaxError("yield outside function", yield_node.lineno,
+        raise SyntaxError("'yield' outside function", yield_node.lineno,
                           yield_node.col_offset)
 
     def note_return(self, ret):
