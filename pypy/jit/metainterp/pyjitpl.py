@@ -4,7 +4,7 @@ from pypy.rlib.objectmodel import we_are_translated, r_dict
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_print
 
-from pypy.jit.metainterp import history, compile
+from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, Box
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.heaptracker import populate_type_cache
@@ -832,13 +832,12 @@ class MIFrame(object):
         if not we_are_translated():
             self.metainterp._debug_history[-1][-1] = argboxes
 
-    def setup_resume_at_op(self, pc, nums, consts, liveboxes,
-                           exception_target):
+    def setup_resume_at_op(self, pc, exception_target, env):
         if not we_are_translated():
-            check_args(*liveboxes)
+            check_args(*env)
         self.pc = pc
         self.exception_target = exception_target
-        self.env = _consume_nums(nums, liveboxes, consts)
+        self.env = env
         if DEBUG >= 2:
             values = ' '.join([box.repr_rpython() for box in self.env])
             log('setup_resume_at_op  %s:%d [%s] %d' % (self.jitcode.name,
@@ -869,28 +868,21 @@ class MIFrame(object):
             return
         saved_pc = self.pc
         self.pc = pc
-        # XXX 'resume_info' should be shared, either partially or
-        #     if possible totally
-        resume_info = []
-        liveboxes = []
-        consts = []
-        memo = {}
-        if metainterp.staticdata.virtualizable_info is None:
-            vable_nums = None
-        else:
-            vable_nums = _generate_nums(metainterp.virtualizable_boxes,
-                                        memo, liveboxes, consts)
+        resumebuilder = resume.ResumeDataBuilder()
+        if metainterp.staticdata.virtualizable_info is not None:
+            resumebuilder.generate_boxes(metainterp.virtualizable_boxes)
         for frame in metainterp.framestack:
-            nums = _generate_nums(frame.env, memo, liveboxes, consts)
-            resume_info.append((frame.jitcode, frame.pc, nums,
-                                frame.exception_target))
+            resumebuilder.generate_frame_info(frame.jitcode, frame.pc,
+                                              frame.exception_target)
+            resumebuilder.generate_boxes(frame.env)
         if box is not None:
             moreargs = [box] + extraargs
         else:
             moreargs = list(extraargs)
         guard_op = metainterp.history.record(opnum, moreargs, None)
-        resumedescr = compile.ResumeGuardDescr(resume_info, vable_nums, consts,
+        resumedescr = compile.ResumeGuardDescr(
             metainterp.history, len(metainterp.history.operations)-1)
+        liveboxes = resumebuilder.finish(resumedescr)
         op = history.ResOperation(rop.FAIL, liveboxes, None, descr=resumedescr)
         guard_op.suboperations = [op]
         self.pc = saved_pc
@@ -921,35 +913,6 @@ class MIFrame(object):
             self.metainterp._debug_history.append(['call',
                                                   argboxes[0], argboxes[1:]])
         return self.metainterp.handle_exception()
-
-# ____________________________________________________________
-
-def _generate_nums(frameboxes, memo, liveboxes, consts):
-    nums = []
-    for framebox in frameboxes:
-        assert framebox is not None
-        if isinstance(framebox, Box):
-            try:
-                num = memo[framebox]
-            except KeyError:
-                num = len(liveboxes)
-                memo[framebox] = num
-                liveboxes.append(framebox)
-        else:
-            num = ~len(consts)
-            consts.append(framebox)
-        nums.append(num)
-    return nums
-
-def _consume_nums(nums, liveboxes, consts):
-    env = []
-    for num in nums:
-        if num >= 0:
-            box = liveboxes[num]
-        else:
-            box = consts[~num]
-        env.append(box)
-    return env
 
 # ____________________________________________________________
 
@@ -1476,10 +1439,7 @@ class MetaInterp(object):
             self.history = history.BlackHole(self.cpu)
             # the BlackHole is invalid because it doesn't start with
             # guard_failure.key.guard_op.suboperations, but that's fine
-        self.rebuild_state_after_failure(resumedescr.resume_info,
-                                         resumedescr.vable_nums,
-                                         resumedescr.consts,
-                                         guard_failure.args)
+        self.rebuild_state_after_failure(resumedescr, guard_failure.args)
 
     def initialize_virtualizable(self, original_boxes):
         vinfo = self.staticdata.virtualizable_info
@@ -1548,14 +1508,13 @@ class MetaInterp(object):
             frame.generate_guard(frame.pc, rop.GUARD_NO_EXCEPTION, None, [])
             return False
 
-    def rebuild_state_after_failure(self, resume_info, vable_nums, consts,
-                                    newboxes):
+    def rebuild_state_after_failure(self, resumedescr, newboxes):
         if not we_are_translated():
             self._debug_history.append(['guard_failure', None, None])
         vinfo = self.staticdata.virtualizable_info
+        resumereader = resume.ResumeDataReader(resumedescr, newboxes)
         if vinfo is not None:
-            self.virtualizable_boxes = _consume_nums(vable_nums,
-                                                     newboxes, consts)
+            self.virtualizable_boxes = resumereader.consume_boxes()
             # just jumped away from assembler (case 4 in the comment in
             # virtualizable.py) into tracing (case 2); check that vable_rti
             # is and stays NULL.
@@ -1565,10 +1524,11 @@ class MetaInterp(object):
             self.synchronize_virtualizable()
             #
         self.framestack = []
-        for jitcode, pc, nums, exception_target in resume_info:
+        while resumereader.has_more_frame_infos():
+            jitcode, pc, exception_target = resumereader.consume_frame_info()
+            env = resumereader.consume_boxes()
             f = self.newframe(jitcode)
-            f.setup_resume_at_op(pc, nums, consts, newboxes,
-                                           exception_target)
+            f.setup_resume_at_op(pc, exception_target, env)
 
     def check_synchronized_virtualizable(self):
         if not we_are_translated():
