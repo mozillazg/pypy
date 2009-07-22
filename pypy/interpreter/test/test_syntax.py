@@ -640,7 +640,7 @@ class AppTestSyntaxError:
         except SyntaxError, e:
             assert e.lineno == 4
             assert e.text.endswith('a b c d e\n')
-            assert e.offset == e.text.index('b') + 1
+            assert e.offset == e.text.index('b')
         else:
             raise Exception("no SyntaxError??")
 
