@@ -715,7 +715,7 @@ class ASTBuilder(object):
             for i in range(0, len(stmt.children) - 2, 2):
                 target_node = stmt.children[i]
                 if target_node.type == syms.yield_expr:
-                    self.error("can't assign to yield expr", target_node)
+                    self.error("can't assign to yield expression", target_node)
                 target_expr = self.handle_testlist(target_node)
                 self.set_context(target_expr, ast.Store, target_node)
                 targets.append(target_expr)
