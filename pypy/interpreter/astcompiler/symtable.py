@@ -200,17 +200,16 @@ class FunctionScope(Scope):
     def note_yield(self, yield_node):
         if self.return_with_value:
             raise SyntaxError("'return' with argument inside generator",
-                              yield_node.lineno, yield_node.col_offset)
-        self.yie_node = yield_node
+                              self.ret.lineno, self.ret.col_offset)
         self.is_generator = True
 
     def note_return(self, ret):
         if ret.value:
             if self.is_generator:
                 raise SyntaxError("'return' with argument in generator",
-                                  self.yie_node.lineno,
-                                  self.yie_node.col_offset)
+                                  ret.lineno, ret.col_offset)
             self.return_with_value = True
+            self.ret = ret
 
     def note_exec(self, exc):
         Scope.note_exec(self, exc)
