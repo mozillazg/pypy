@@ -199,7 +199,7 @@ class FunctionScope(Scope):
 
     def note_yield(self, yield_node):
         if self.return_with_value:
-            raise SyntaxError("'return' with argument in generator",
+            raise SyntaxError("'return' with argument inside generator",
                               yield_node.lineno, yield_node.col_offset)
         self.is_generator = True
 
