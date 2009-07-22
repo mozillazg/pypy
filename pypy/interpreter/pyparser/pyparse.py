@@ -58,12 +58,12 @@ def _check_line_for_encoding(line):
 
 class CompileInfo(object):
 
-    def __init__(self, filename, mode="exec", flags=0, future_lineno=0):
+    def __init__(self, filename, mode="exec", flags=0, future_pos=(0, 0)):
         self.filename = filename
         self.mode = mode
         self.encoding = None
         self.flags = flags
-        self.last_future_import = future_lineno
+        self.last_future_import = future_pos
 
 
 _targets = {
