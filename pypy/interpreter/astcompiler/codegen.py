@@ -227,7 +227,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op_arg(ops.MAKE_FUNCTION, num_defaults)
 
     def visit_FunctionDef(self, func):
-        self.update_position(func.lineno)
+        self.update_position(func.lineno, True)
         if func.decorators:
             self.visit_sequence(func.decorators)
         if func.args.defaults:
@@ -254,7 +254,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self._make_function(code, default_count)
 
     def visit_ClassDef(self, cls):
-        self.update_position(cls.lineno)
+        self.update_position(cls.lineno, True)
         self.load_const(self.space.wrap(cls.name))
         if cls.bases:
             bases_count = len(cls.bases)
@@ -277,7 +277,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         return inplace_operations(op)
 
     def visit_AugAssign(self, assign):
-        self.update_position(assign.lineno)
+        self.update_position(assign.lineno, True)
         target = assign.target
         if isinstance(target, ast.Attribute):
             attr = ast.Attribute(target.value, target.attr, ast.AugLoad,
@@ -333,7 +333,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.emit_op(self._binop(binop.op))
 
     def visit_Return(self, ret):
-        self.update_position(ret.lineno)
+        self.update_position(ret.lineno, True)
         if ret.value:
             ret.value.walkabout(self)
         else:
@@ -341,7 +341,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.emit_op(ops.RETURN_VALUE)
 
     def visit_Print(self, pr):
-        self.update_position(pr.lineno)
+        self.update_position(pr.lineno, True)
         have_dest = bool(pr.dest)
         if have_dest:
             pr.dest.walkabout(self)
@@ -364,11 +364,11 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op(ops.POP_TOP)
 
     def visit_Delete(self, delete):
-        self.update_position(delete.lineno)
+        self.update_position(delete.lineno, True)
         self.visit_sequence(delete.targets)
 
     def visit_If(self, if_):
-        self.update_position(if_.lineno)
+        self.update_position(if_.lineno, True)
         end = self.new_block()
         test_constant = misc.expr_constant(self.space, if_.test)
         if test_constant == misc.CONST_FALSE:
@@ -390,7 +390,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.use_next_block(end)
 
     def visit_Break(self, br):
-        self.update_position(br.lineno)
+        self.update_position(br.lineno, True)
         for f_block in self.frame_blocks:
             if f_block[0] == F_BLOCK_LOOP:
                 break
@@ -421,7 +421,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.error("'continue' not supported inside 'finally' clause", cont)
 
     def visit_For(self, fr):
-        self.update_position(fr.lineno)
+        self.update_position(fr.lineno, True)
         start = self.new_block()
         cleanup = self.new_block()
         end = self.new_block()
@@ -442,7 +442,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.use_next_block(end)
 
     def visit_While(self, wh):
-        self.update_position(wh.lineno)
+        self.update_position(wh.lineno, True)
         test_constant = misc.expr_constant(self.space, wh.test)
         if test_constant == misc.CONST_FALSE:
             if wh.orelse:
@@ -472,7 +472,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.use_next_block(end)
 
     def visit_TryExcept(self, te):
-        self.update_position(te.lineno)
+        self.update_position(te.lineno, True)
         exc = self.new_block()
         otherwise = self.new_block()
         end = self.new_block()
@@ -486,7 +486,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.use_next_block(exc)
         for handler in te.handlers:
             assert isinstance(handler, ast.excepthandler)
-            self.update_position(handler.lineno)
+            self.update_position(handler.lineno, True)
             next_except = self.new_block()
             if handler.type:
                 self.emit_op(ops.DUP_TOP)
@@ -512,7 +512,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.use_next_block(end)
 
     def visit_TryFinally(self, tf):
-        self.update_position(tf.lineno)
+        self.update_position(tf.lineno, True)
         end = self.new_block()
         self.emit_jump(ops.SETUP_FINALLY, end)
         body = self.use_next_block()
@@ -545,7 +545,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.name_op(alias.asname, ast.Store)
 
     def visit_Import(self, imp):
-        self.update_position(imp.lineno)
+        self.update_position(imp.lineno, True)
         for alias in imp.names:
             assert isinstance(alias, ast.alias)
             if self.compile_info.flags & consts.CO_FUTURE_ABSOLUTE_IMPORT:
@@ -566,7 +566,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 self.name_op(store_name, ast.Store)
 
     def visit_ImportFrom(self, imp):
-        self.update_position(imp.lineno)
+        self.update_position(imp.lineno, True)
         space = self.space
         if imp.module == "__future__":
             if self.done_with_future:
@@ -607,7 +607,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op(ops.POP_TOP)
 
     def visit_Assign(self, assign):
-        self.update_position(assign.lineno)
+        self.update_position(assign.lineno, True)
         assign.value.walkabout(self)
         duplications = len(assign.targets) - 1
         for i in range(len(assign.targets)):
@@ -616,7 +616,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             assign.targets[i].walkabout(self)
 
     def visit_With(self, wih):
-        self.update_position(wih.lineno)
+        self.update_position(wih.lineno, True)
         body_block = self.new_block()
         cleanup = self.new_block()
         exit_storage = self.current_temporary_name()
@@ -653,7 +653,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.pop_frame_block(F_BLOCK_FINALLY_END, cleanup)
 
     def visit_Raise(self, rais):
-        self.update_position(rais.lineno)
+        self.update_position(rais.lineno, True)
         arg = 0
         if rais.type:
             rais.type.walkabout(self)
@@ -667,7 +667,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.emit_op_arg(ops.RAISE_VARARGS, arg)
 
     def visit_Exec(self, exc):
-        self.update_position(exc.lineno)
+        self.update_position(exc.lineno, True)
         exc.body.walkabout(self)
         if exc.globals:
             exc.globals.walkabout(self)
@@ -685,10 +685,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         pass
 
     def visit_Pass(self, pas):
-        self.update_position(pas.lineno)
+        self.update_position(pas.lineno, True)
 
     def visit_Expr(self, expr):
-        self.update_position(expr.lineno)
+        self.update_position(expr.lineno, True)
         if self.interactive:
             expr.value.walkabout(self)
             self.emit_op(ops.PRINT_EXPR)

@@ -193,8 +193,10 @@ class PythonCodeMaker(ast.ASTVisitor):
         index = self.add_const(obj)
         self.emit_op_arg(ops.LOAD_CONST, index)
 
-    def update_position(self, lineno):
-        if lineno > self.lineno:
+    def update_position(self, lineno, force=False):
+        if force or lineno > self.lineno:
+            if force and lineno < self.lineno:
+                raise AssertionError
             self.lineno = lineno
             self.lineno_set = False
 
