@@ -34,9 +34,7 @@ class ResOperation(object):
         self.descr = descr
 
     def clone(self):
-        res = ResOperation(self.opnum, self.args, self.result, self.descr)
-        res.jump_target = self.jump_target
-        return res
+        return ResOperation(self.opnum, self.args, self.result, self.descr)
 
     def __repr__(self):
         return self.repr()

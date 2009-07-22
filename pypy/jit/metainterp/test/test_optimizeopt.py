@@ -480,7 +480,7 @@ class BaseTestOptimizeOpt(BaseTest):
         # the 'expected' is sub-optimal, but it should be done by another later
         # optimization step.  See test_find_nodes_default_field() for why.
         self.optimize_loop(ops, 'Virtual(node_vtable, valuedescr=Not)',
-                           expected)
+                           expected, i0=0)
 
     def test_virtual_3(self):
         ops = """
@@ -569,6 +569,27 @@ class BaseTestOptimizeOpt(BaseTest):
         expected = ops
         self.optimize_loop(ops, 'Not', expected, i1=5,
                            boxkinds={'myptr': self.nodebox.value})
+
+    def test_expand_fail_arguments(self):
+        ops = """
+        [i1, i2, i3, p3]
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, 1, descr=valuedescr)
+        setfield_gc(p1, p2, descr=nextdescr)
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p2, p3, descr=nextdescr)
+        guard_true(i1)
+            fail(p1, i3)
+        jump(i2, i1, i3, p3)
+        """
+        expected = """
+        [i1, i2, i3, p3]
+        guard_true(i1)
+            fail(i2, p3, i3)
+        jump(i2, 1, i3, p3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected, i1=1)
 
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
