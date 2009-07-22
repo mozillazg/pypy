@@ -580,7 +580,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             last_line, last_offset = self.compile_info.last_future_import
             if imp.lineno > last_line or \
                     imp.lineno == last_line and imp.col_offset > last_offset:
-                print last_offset, imp.lineno, imp.col_offset
                 self.error("__future__ statements must appear at beginning " \
                                "of file", imp)
             if star_import:
