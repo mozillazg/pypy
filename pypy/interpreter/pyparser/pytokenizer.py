@@ -205,7 +205,6 @@ def generate_tokens(lines, flags):
                         token_list.append(tok)
                         last_comment = ''
                 elif initial in namechars:                 # ordinary name
-                    print token, start
                     token_list.append((tokens.NAME, token, lnum, start, line))
                     last_comment = ''
                 elif initial == '\\':                      # continued stmt
