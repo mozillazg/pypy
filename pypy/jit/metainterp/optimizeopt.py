@@ -36,9 +36,11 @@ class InstanceValue(object):
     def force_box(self):
         return self.box
 
-    def get_args_for_fail(self, list):
+    def get_args_for_fail(self, list, memo):
         if not self.is_constant():
-            list.append(self.box)
+            if self.box not in memo:
+                list.append(self.box)
+                memo[self.box] = None
 
     def is_constant(self):
         return self.level == LEVEL_CONSTANT
@@ -118,14 +120,19 @@ class VirtualValue(InstanceValue):
                 newoperations.append(op)
         return self.box
 
-    def get_args_for_fail(self, list):
+    def get_args_for_fail(self, list, memo):
         if self.box is not None:
-            InstanceValue.get_args_for_fail(self, list)
+            InstanceValue.get_args_for_fail(self, list, memo)
         else:
+            if self.source_op is not None: #otherwise, no loop detection needed
+                keybox = self.source_op.result
+                if keybox in memo:
+                    return
+                memo[keybox] = None
             lst = self._fields.keys()
             sort_descrs(lst)
             for ofs in lst:
-                self._fields[ofs].get_args_for_fail(list)
+                self._fields[ofs].get_args_for_fail(list, memo)
 
 
 class __extend__(SpecNode):
@@ -251,14 +258,17 @@ class Optimizer(object):
         op_fail = op1.suboperations[0]
         assert op_fail.opnum == rop.FAIL
         #
+        memo = {}
         newboxes = []
         for box in op_fail.args:
             try:
                 value = self.values[box]
             except KeyError:
-                newboxes.append(box)
+                if box not in memo:
+                    newboxes.append(box)
+                    memo[box] = None
             else:
-                value.get_args_for_fail(newboxes)
+                value.get_args_for_fail(newboxes, memo)
         # NB. we mutate op_fail in-place above.  That's bad.  Hopefully
         # it does not really matter because no-one is going to look again
         # at its unoptimized version.  We cannot really clone it because of
