@@ -431,6 +431,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         fr.iter.walkabout(self)
         self.emit_op(ops.GET_ITER)
         self.use_next_block(start)
+        # This adds another line, so each for iteration can be traced.
+        self.lineno_set = False
         self.emit_jump(ops.FOR_ITER, cleanup)
         fr.target.walkabout(self)
         self.visit_sequence(fr.body)
@@ -458,6 +460,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.push_frame_block(F_BLOCK_LOOP, loop)
             self.use_next_block(loop)
             if test_constant == misc.CONST_NOT_CONST:
+                # Force another lineno to be set for tracing purposes.
+                self.lineno_set = False
                 wh.test.walkabout(self)
                 self.emit_jump(ops.JUMP_IF_FALSE, anchor)
                 self.emit_op(ops.POP_TOP)
