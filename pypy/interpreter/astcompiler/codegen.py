@@ -399,6 +399,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.emit_op(ops.BREAK_LOOP)
 
     def visit_Continue(self, cont):
+        self.update_position(cont.lineno, True)
         if not self.frame_blocks:
             self.error("'continue' not properly in loop", cont)
         current_block, block = self.frame_blocks[-1]
