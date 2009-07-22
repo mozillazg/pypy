@@ -1535,7 +1535,7 @@ SyntaxError: 'return' with argument inside generator (<doctest test.test_generat
 >>> def f(): x = yield = y
 Traceback (most recent call last):
   ...
-SyntaxError: ccan't assign to yield expression (<doctest test.test_generators.__test__.coroutine[23]>, line 1)
+SyntaxError: can't assign to yield expression (<doctest test.test_generators.__test__.coroutine[23]>, line 1)
 
 >>> def f(): (yield bar) = y
 Traceback (most recent call last):
