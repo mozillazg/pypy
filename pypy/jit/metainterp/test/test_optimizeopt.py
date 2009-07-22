@@ -591,6 +591,24 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not', expected, i1=1)
 
+    def test_expand_fail_loop(self):
+        ops = """
+        [i1, i2]
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i2, descr=valuedescr)
+        setfield_gc(p1, p1, descr=nextdescr)
+        guard_true(i1)
+            fail(p1)
+        jump(i1, i2)
+        """
+        expected = """
+        [i1, i2]
+        guard_true(i1)
+            fail(i2)
+        jump(1, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected, i1=1)
+
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
     pass
