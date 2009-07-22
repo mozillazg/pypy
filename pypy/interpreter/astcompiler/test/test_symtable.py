@@ -313,7 +313,7 @@ class TestSymbolTable:
         for input in ("yield\n    return x", "return x\n    yield"):
             input = "def f():\n    " + input
             exc = py.test.raises(SyntaxError, self.func_scope, input).value
-            assert exc.msg == "'return' with argument in generator"
+            assert exc.msg == "'return' with argument inside generator"
         scp = self.func_scope("def f():\n    return\n    yield x")
 
     def test_return(self):
