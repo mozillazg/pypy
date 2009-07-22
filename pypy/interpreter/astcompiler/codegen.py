@@ -119,7 +119,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.symbols = symbols
         self.frame_blocks = []
         self.interactive = False
-        self.done_with_future = False
         self.temporary_name_counter = 1
         self._compile(tree)
 
@@ -552,7 +551,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def visit_Import(self, imp):
         self.update_position(imp.lineno, True)
-        self.done_with_future = True
         for alias in imp.names:
             assert isinstance(alias, ast.alias)
             if self.compile_info.flags & consts.CO_FUTURE_ABSOLUTE_IMPORT:
@@ -579,8 +577,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         assert isinstance(first, ast.alias)
         star_import = len(imp.names) == 1 and first.name == "*"
         if imp.module == "__future__":
-            if self.done_with_future or \
-                    imp.lineno > self.compile_info.last_future_import:
+            last_line, last_offset = self.compile_info.last_future_import
+            if imp.lineno > last_line or \
+                    imp.lineno == last_line and imp.col_offset > last_offset:
+                print last_offset, imp.lineno, imp.col_offset
                 self.error("__future__ statements must appear at beginning " \
                                "of file", imp)
             if star_import:
@@ -590,8 +590,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                 if alias.name not in future.futureFlags_2_5.compiler_features:
                     self.error("future feature %s is not defined" %
                                (alias.name,), imp)
-        else:
-            self.done_with_future = True
         if imp.level == 0 and \
                 not self.compile_info.flags & consts.CO_FUTURE_ABSOLUTE_IMPORT:
             level = -1

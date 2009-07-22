@@ -33,7 +33,7 @@ def getFutures(futureFlags, source):
         futures.start()
     except DoneException, e:
         pass
-    return futures.flags, futures.lineno
+    return futures.flags, (futures.lineno, futures.col_offset)
     
 class DoneException(Exception):
     pass
@@ -68,6 +68,8 @@ class FutureAutomaton(object):
         self.s = string
         self.pos = 0
         self.lineno = 1
+        self.line_start_pos = 0
+        self.col_offset = 0
         self.docstringConsumed = False
         self.flags = 0
 
@@ -90,6 +92,10 @@ class FutureAutomaton(object):
         else:
             return
 
+    def atbol(self):
+        self.lineno += 1
+        self.line_start_pos = self.pos
+
     def consumeDocstring(self):
         self.docstringConsumed = True
         endchar = self.getc()
@@ -104,11 +110,11 @@ class FutureAutomaton(object):
                     if c != endchar:
                         self.pos += 1
                         if c == '\n':
-                            self.lineno += 1
+                            self.atbol()
                         elif c == '\r':
                             if self.getc() == '\n':
                                 self.pos += 1
-                                self.lineno += 1
+                                self.atbol()
                     else:
                         self.pos += 1
                         if (self.getc() == endchar and
@@ -156,9 +162,9 @@ class FutureAutomaton(object):
             if c == '\r':
                 if self.getc() == '\n':
                     self.pos += 1
-                    self.lineno += 1
+                    self.atbol()
             else:
-                self.lineno += 1
+                self.atbol()
             self.start()
 
     def consumeComment(self):
@@ -168,6 +174,7 @@ class FutureAutomaton(object):
         self.consumeEmptyLine()
 
     def consumeFrom(self):
+        col_offset = self.pos - self.line_start_pos
         self.pos += 1
         if self.getc() == 'r' and self.getc(+1) == 'o' and self.getc(+2) == 'm':
             self.docstringConsumed = True
@@ -190,6 +197,7 @@ class FutureAutomaton(object):
             else:
                 self.setFlag(self.getName())
                 self.getMore()
+            self.col_offset = col_offset
             self.consumeEmptyLine()
         else:
             return
@@ -210,13 +218,13 @@ class FutureAutomaton(object):
                 c = self.getc()
                 if c == '\n':
                     self.pos += 1
-                    self.lineno += 1
+                    self.atbol()
                     continue
                 elif c == '\r':
                     self.pos += 1
                     if self.getc() == '\n':
                         self.pos += 1
-                        self.lineno += 1
+                        self.atbol()
                 else:
                     raise DoneException
             else:
