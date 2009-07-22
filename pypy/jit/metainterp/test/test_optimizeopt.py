@@ -609,6 +609,33 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not', expected, i1=1)
 
+    def test_expand_fail_duplicate(self):
+        ops = """
+        [i1, i2]
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i2, descr=valuedescr)
+        setfield_gc(p1, p2, descr=nextdescr)
+        setfield_gc(p2, i2, descr=valuedescr)
+        guard_true(i1)
+            fail(%s)
+        jump(i1, i2)
+        """
+        expected = """
+        [i1, i2]
+        guard_true(i1)
+            fail(i2)
+        jump(1, i2)
+        """
+        self.optimize_loop(ops % 'p1',         'Not, Not', expected, i1=1)
+        self.optimize_loop(ops % 'p1, i2',     'Not, Not', expected, i1=1)
+        self.optimize_loop(ops % 'p1, i2, i2', 'Not, Not', expected, i1=1)
+        self.optimize_loop(ops % 'i2, p1, i2', 'Not, Not', expected, i1=1)
+        self.optimize_loop(ops % 'i2, i2, p1', 'Not, Not', expected, i1=1)
+        self.optimize_loop(ops % 'p1, p1',     'Not, Not', expected, i1=1)
+        self.optimize_loop(ops % 'p1, p2',     'Not, Not', expected, i1=1)
+        self.optimize_loop(ops % 'p2, p1',     'Not, Not', expected, i1=1)
+
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
     pass
