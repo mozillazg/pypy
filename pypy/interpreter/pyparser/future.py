@@ -67,7 +67,8 @@ class FutureAutomaton(object):
         self.futureFlags = futureFlags
         self.s = string
         self.pos = 0
-        self.lineno = 1
+        self.current_lineno = 1
+        self.lineno = -1
         self.line_start_pos = 0
         self.col_offset = 0
         self.docstringConsumed = False
@@ -93,7 +94,7 @@ class FutureAutomaton(object):
             return
 
     def atbol(self):
-        self.lineno += 1
+        self.current_lineno += 1
         self.line_start_pos = self.pos
 
     def consumeDocstring(self):
@@ -175,6 +176,7 @@ class FutureAutomaton(object):
 
     def consumeFrom(self):
         col_offset = self.pos - self.line_start_pos
+        line = self.current_lineno
         self.pos += 1
         if self.getc() == 'r' and self.getc(+1) == 'o' and self.getc(+2) == 'm':
             self.docstringConsumed = True
@@ -198,6 +200,7 @@ class FutureAutomaton(object):
                 self.setFlag(self.getName())
                 self.getMore()
             self.col_offset = col_offset
+            self.lineno = line
             self.consumeEmptyLine()
         else:
             return
