@@ -3,7 +3,7 @@ from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.specnode import SpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
-from pypy.jit.metainterp.optimizeutil import av_newdict, _findall
+from pypy.jit.metainterp.optimizeutil import av_newdict, _findall, sort_descrs
 from pypy.rlib.objectmodel import we_are_translated
 
 
@@ -35,6 +35,10 @@ class InstanceValue(object):
 
     def force_box(self):
         return self.box
+
+    def get_args_for_fail(self, list):
+        if not self.is_constant():
+            list.append(self.box)
 
     def is_constant(self):
         return self.level == LEVEL_CONSTANT
@@ -113,6 +117,15 @@ class VirtualValue(InstanceValue):
                                   descr=ofs)
                 newoperations.append(op)
         return self.box
+
+    def get_args_for_fail(self, list):
+        if self.box is not None:
+            InstanceValue.get_args_for_fail(self, list)
+        else:
+            lst = self._fields.keys()
+            sort_descrs(lst)
+            for ofs in lst:
+                self._fields[ofs].get_args_for_fail(list)
 
 
 class __extend__(SpecNode):
@@ -217,6 +230,7 @@ class Optimizer(object):
         self.loop.operations = self.newoperations
 
     def emit_operation(self, op, must_clone=True):
+        op1 = op
         for i in range(len(op.args)):
             arg = op.args[i]
             if arg in self.values:
@@ -226,9 +240,32 @@ class Optimizer(object):
                         op = op.clone()
                         must_clone = False
                     op.args[i] = box
-        self.newoperations.append(op)
-        if op.can_raise():
+        if op.is_guard():
+            self.clone_guard(op, op1)
+        elif op.can_raise():
             self.exception_might_have_happened = True
+        self.newoperations.append(op)
+
+    def clone_guard(self, op2, op1):
+        assert len(op1.suboperations) == 1
+        op_fail = op1.suboperations[0]
+        assert op_fail.opnum == rop.FAIL
+        #
+        newboxes = []
+        for box in op_fail.args:
+            try:
+                value = self.values[box]
+            except KeyError:
+                newboxes.append(box)
+            else:
+                value.get_args_for_fail(newboxes)
+        # NB. we mutate op_fail in-place above.  That's bad.  Hopefully
+        # it does not really matter because no-one is going to look again
+        # at its unoptimized version.  We cannot really clone it because of
+        # how the rest works (e.g. it is returned by cpu.execute_operations()).
+        op_fail.args = newboxes
+        op2.suboperations = op1.suboperations
+        op1.optimized = op2
 
     def optimize_default(self, op):
         if op.is_always_pure():
@@ -250,9 +287,10 @@ class Optimizer(object):
         for i in range(len(specnodes)):
             value = self.getvalue(op.args[i])
             specnodes[i].teardown_virtual_node(self, value, exitargs)
-        op = op.clone()
-        op.args = exitargs
-        self.emit_operation(op, must_clone=False)
+        op2 = op.clone()
+        op2.args = exitargs
+        op2.jump_target = op.jump_target
+        self.emit_operation(op2, must_clone=False)
 
     def optimize_guard(self, op):
         value = self.getvalue(op.args[0])
@@ -263,14 +301,15 @@ class Optimizer(object):
 
     def optimize_GUARD_VALUE(self, op):
         assert isinstance(op.args[1], Const)
+        assert op.args[0].getint() == op.args[1].getint()
         self.optimize_guard(op)
 
     def optimize_GUARD_TRUE(self, op):
-        assert op.args[0].getint()
+        assert op.args[0].getint() == 1
         self.optimize_guard(op)
 
     def optimize_GUARD_FALSE(self, op):
-        assert not op.args[0].getint()
+        assert op.args[0].getint() == 0
         self.optimize_guard(op)
 
     def optimize_GUARD_CLASS(self, op):
