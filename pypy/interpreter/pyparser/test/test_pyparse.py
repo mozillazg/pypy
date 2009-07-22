@@ -62,7 +62,7 @@ stuff = "nothing"
         exc = py.test.raises(SyntaxError, parse, "name another for").value
         assert exc.msg == "invalid syntax"
         assert exc.lineno == 1
-        assert exc.offset == 12
+        assert exc.offset == 5
         assert exc.text.startswith("name another for")
         exc = py.test.raises(SyntaxError, parse, "\"blah").value
         assert exc.msg == "EOL while scanning single-quoted string"
@@ -84,7 +84,7 @@ pass"""
         assert exc.msg == "expected an indented block"
         assert exc.lineno == 3
         assert exc.text.startswith("pass")
-        assert exc.offset == 4
+        assert exc.offset == 0
         input = "hi\n    indented"
         exc = py.test.raises(IndentationError, parse, input).value
         assert exc.msg == "unexpected indent"
