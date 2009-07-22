@@ -85,6 +85,7 @@ def generate_tokens(lines, flags):
     line = ''
     pos = 0
     lines.append("")
+    strstart = (0, 0)
     for line in lines:
         lnum = lnum + 1
         pos, max = 0, len(line)
