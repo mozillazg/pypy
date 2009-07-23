@@ -7,3 +7,8 @@ def call_arg_at(space, w_target, w_message, w_context):
                                         space, 
                                         w_target.slots['message'], 
                                         w_message, w_context)
+                                        
+                                        
+@register_method('Call', 'evalArgAt')
+def call_eval_arg_at(space, w_target, w_message, w_context):
+    return call_arg_at(space, w_target, w_message, w_context).eval(space, w_context, w_context)
