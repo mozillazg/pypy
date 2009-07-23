@@ -4,12 +4,13 @@ in a nicer fashion
 """
 
 from pypy.jit.metainterp.history import TreeLoop, BoxInt, BoxPtr, ConstInt,\
-     ConstAddr, ConstObj, ConstPtr, Box
+     ConstAddr, ConstObj, ConstPtr, Box, BoxObj
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 
 _cache = {}
+_default_namespace = {'lltype': {}, 'ootype': {}}
 
 class ParseError(Exception):
     pass
@@ -58,7 +59,7 @@ class OpParser(object):
 
     def box_for_var(self, elem):
         try:
-            return _cache[elem]
+            return _cache[self.type_system, elem]
         except KeyError:
             pass
         if elem.startswith('i'):
@@ -67,7 +68,10 @@ class OpParser(object):
             _box_counter_more_than(elem[1:])
         elif elem.startswith('p'):
             # pointer
-            box = BoxPtr()
+            if self.cpu.is_oo:
+                box = BoxObj()
+            else:
+                box = BoxPtr()
             _box_counter_more_than(elem[1:])
         else:
             for prefix, boxclass in self.boxkinds.iteritems():
@@ -76,7 +80,7 @@ class OpParser(object):
                     break
             else:
                 raise ParseError("Unknown variable type: %s" % elem)
-        _cache[elem] = box
+        _cache[self.type_system, elem] = box
         box._str = elem
         return box
 
@@ -220,8 +224,10 @@ class OpParser(object):
         inpargs = self.parse_header_line(line[1:-1])
         return base_indent, inpargs
 
-def parse(descr, cpu=None, namespace={}, type_system='lltype',
+def parse(descr, cpu=None, namespace=None, type_system='lltype',
           boxkinds=None):
+    if namespace is None:
+        namespace = _default_namespace[type_system]
     return OpParser(descr, cpu, namespace, type_system, boxkinds).parse()
 
 def _box_counter_more_than(s):
