@@ -1,4 +1,6 @@
-from pypy.jit.metainterp.history import Box
+import sys
+from pypy.jit.metainterp.history import Box, Const
+from pypy.jit.metainterp.resoperation import rop
 
 # Logic to encode the chain of frames and the state of the boxes at a
 # FAIL operation, and to decode it again.  This is a bit advanced,
@@ -6,7 +8,7 @@ from pypy.jit.metainterp.history import Box
 # arbitrary cycles.
 
 # XXX I guess that building the data so that it is compact as possible
-# would be a big win.
+# on the 'storage' object would be a big win.
 
 
 class ResumeDataBuilder(object):
@@ -41,32 +43,122 @@ class ResumeDataBuilder(object):
         storage.rd_frame_infos = self.frame_infos[:]
         storage.rd_nums = self.nums[:]
         storage.rd_consts = self.consts[:]
+        storage.rd_virtuals = None
         return self.liveboxes
+
+
+VIRTUAL_FLAG = int((sys.maxint+1) // 2)
+assert not (VIRTUAL_FLAG & (VIRTUAL_FLAG-1))    # a power of two
+
+class ResumeDataVirtualAdder(object):
+
+    def __init__(self, storage, liveboxes):
+        self.storage = storage
+        self.nums = storage.rd_nums[:]
+        self.consts = storage.rd_consts[:]
+        assert storage.rd_virtuals is None
+        self.original_liveboxes = liveboxes
+        self.liveboxes = {}
+        for box in liveboxes:
+            self.liveboxes[box] = 0
+        self.virtuals = []
+        self.vfieldboxes = []
+
+    def make_virtual(self, virtualbox, known_class, sizedescr,
+                     fielddescrs, fieldboxes):
+        assert self.liveboxes[virtualbox] == 0
+        self.liveboxes[virtualbox] = len(self.virtuals) | VIRTUAL_FLAG
+        vinfo = VirtualInfo(known_class, sizedescr, fielddescrs)
+        self.virtuals.append(vinfo)
+        self.vfieldboxes.append(fieldboxes)
+        for box in fieldboxes:
+            if isinstance(box, Box):
+                self.liveboxes.setdefault(box, 0)
+
+    def finish(self):
+        storage = self.storage
+        liveboxes = []
+        for box, index in self.liveboxes.items():
+            if index == 0:
+                self.liveboxes[box] = len(liveboxes)
+                liveboxes.append(box)
+        for i in range(len(storage.rd_nums)):
+            num = storage.rd_nums[i]
+            if num >= 0:
+                box = self.original_liveboxes[num]
+                storage.rd_nums[i] = self.liveboxes[box]
+        storage.rd_virtuals = self.virtuals[:]
+        for i in range(len(storage.rd_virtuals)):
+            vinfo = storage.rd_virtuals[i]
+            fieldboxes = self.vfieldboxes[i]
+            vinfo.fieldnums = [self._getboxindex(box) for box in fieldboxes]
+        storage.rd_consts = self.consts[:]
+        return liveboxes
+
+    def _getboxindex(self, box):
+        if isinstance(box, Const):
+            result = -2 - len(self.consts)
+            self.consts.append(box)
+            return result
+        else:
+            return self.liveboxes[box]
+
+
+class VirtualInfo(object):
+    def __init__(self, known_class, sizedescr, fielddescrs):
+        self.known_class = known_class
+        self.sizedescr = sizedescr
+        self.fielddescrs = fielddescrs
+        #self.fieldnums = ...
+
+    def allocate(self, metainterp):
+        return metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
+                                             [self.known_class],
+                                             descr=self.sizedescr)
+
+    def setfields(self, metainterp, box, fn_decode_box):
+        for i in range(len(self.fielddescrs)):
+            fieldbox = fn_decode_box(self.fieldnums[i])
+            metainterp.execute_and_record(rop.SETFIELD_GC,
+                                          [box, fieldbox],
+                                          descr=self.fielddescrs[i])
 
 
 class ResumeDataReader(object):
     i_frame_infos = 0
     i_boxes = 0
 
-    def __init__(self, storage, liveboxes):
+    def __init__(self, storage, liveboxes, metainterp=None):
         self.frame_infos = storage.rd_frame_infos
         self.nums = storage.rd_nums
         self.consts = storage.rd_consts
         self.liveboxes = liveboxes
+        if storage.rd_virtuals is not None:
+            self.prepare_virtuals(metainterp, storage.rd_virtuals)
+
+    def prepare_virtuals(self, metainterp, virtuals):
+        self.virtuals = [vinfo.allocate(metainterp) for vinfo in virtuals]
+        for i in range(len(virtuals)):
+            vinfo = virtuals[i]
+            vinfo.setfields(metainterp, self.virtuals[i], self._decode_box)
 
     def consume_boxes(self):
         boxes = []
         while True:
             num = self.nums[self.i_boxes]
             self.i_boxes += 1
-            if num >= 0:
-                box = self.liveboxes[num]
-            elif num != -1:
-                box = self.consts[-2 - num]
-            else:
+            if num == -1:
                 break
-            boxes.append(box)
+            boxes.append(self._decode_box(num))
         return boxes
+
+    def _decode_box(self, num):
+        if num < 0:
+            return self.consts[-2 - num]
+        elif num & VIRTUAL_FLAG:
+            return self.virtuals[num - VIRTUAL_FLAG]
+        else:
+            return self.liveboxes[num]
 
     def has_more_frame_infos(self):
         return self.i_frame_infos < len(self.frame_infos)

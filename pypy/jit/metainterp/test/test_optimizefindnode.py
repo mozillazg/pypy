@@ -53,6 +53,7 @@ class LLtypeMixin(object):
     nodesize2 = cpu.sizeof(NODE2)
     valuedescr = cpu.fielddescrof(NODE, 'value')
     nextdescr = cpu.fielddescrof(NODE, 'next')
+    otherdescr = cpu.fielddescrof(NODE2, 'other')
 
     cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
                       cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2)}
