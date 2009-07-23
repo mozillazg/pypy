@@ -238,12 +238,15 @@ class OptimizingVisitor(ast.ASTVisitor):
         return name
 
     def visit_Tuple(self, tup):
-        consts_w = []
         if tup.elts:
-            for node in tup.elts:
+            consts_w = []*len(tup.elts)
+            for i in range(len(tup.elts)):
+                node = tup.elts[i]
                 w_const = node.as_constant()
                 if w_const is None:
                     return tup
-                consts_w.append(w_const)
+                consts_w[i] = node
+        else:
+            consts_w = []
         w_consts = self.space.newtuple(consts_w)
         return ast.Const(w_consts, tup.lineno, tup.col_offset)
