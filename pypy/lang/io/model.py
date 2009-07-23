@@ -219,7 +219,11 @@ class W_Block(W_Object):
         
     def call(self, space, w_receiver, w_message, w_context):
         w_locals = self.space.w_locals.clone()
+
         w_call = self.space.w_call.clone()
+        w_call.sender = w_context
+        w_call.target = w_receiver
+
         assert w_locals is not None
         assert w_call is not None
         
