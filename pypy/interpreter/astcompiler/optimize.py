@@ -239,7 +239,7 @@ class OptimizingVisitor(ast.ASTVisitor):
 
     def visit_Tuple(self, tup):
         if tup.elts:
-            consts_w = []*len(tup.elts)
+            consts_w = [None]*len(tup.elts)
             for i in range(len(tup.elts)):
                 node = tup.elts[i]
                 w_const = node.as_constant()
