@@ -1,11 +1,13 @@
 import py
+from pypy.rpython.lltypesystem import rclass
+from pypy.rpython.ootypesystem import ootype
 from pypy.jit.metainterp.test.test_resume import MyMetaInterp
 from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             OOtypeMixin,
                                                             BaseTest)
 from pypy.jit.metainterp.optimizeopt import optimize
-from pypy.jit.metainterp.history import AbstractDescr, ConstInt
-from pypy.jit.metainterp import resume
+from pypy.jit.metainterp.history import AbstractDescr, ConstInt, BoxPtr
+from pypy.jit.metainterp import resume, executor
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.metainterp.test.oparser import parse
 
@@ -591,22 +593,63 @@ class BaseTestOptimizeOpt(BaseTest):
         self.fdescr = fdescr
         self.namespace['fdescr'] = fdescr
 
-    def unpack_expected_fail_args(self, oparse, text):
+    def _verify_fail_args(self, boxes, oparse, text):
         import re
         r = re.compile(r"\bwhere\s+(\w+)\s+is a\s+(\w+)")
         parts = list(r.finditer(text))
-        if parts:
-            text = text[:parts[0].start()]
-            xxx
-        return [oparse.getvar(s.strip()) for s in text.split(',')]
+        ends = [match.start() for match in parts] + [len(text)]
+        #
+        virtuals = {}
+        for match, end in zip(parts, ends[1:]):
+            pvar = match.group(1)
+            cls_vtable = self.namespace[match.group(2)]
+            fieldstext = text[match.end():end]
+            virtuals[pvar] = (cls_vtable, None, fieldstext)
+        #
+        def _variables_equal(box, varname, strict):
+            if varname not in virtuals:
+                if strict:
+                    assert box == oparse.getvar(varname)
+                else:
+                    assert box.value == oparse.getvar(varname).value
+            else:
+                cls_vtable, resolved, fieldstext = virtuals[varname]
+                if not self.cpu.is_oo:
+                    assert box.getptr(rclass.OBJECTPTR).typeptr == cls_vtable
+                else:
+                    root = ootype.cast_from_object(ootype.ROOT, box.getobj())
+                    assert ootype.classof(root) == cls_vtable
+                if resolved is not None:
+                    assert resolved.value == box.value
+                else:
+                    virtuals[varname] = cls_vtable, box, fieldstext
+        #
+        basetext = text[:ends[0]]
+        varnames = [s.strip() for s in basetext.split(',')]
+        assert len(boxes) == len(varnames)
+        for box, varname in zip(boxes, varnames):
+            _variables_equal(box, varname, strict=True)
+        #
+        for cls_vtable, resolved, fieldstext in virtuals.values():
+            assert resolved is not None
+            for fieldtext in fieldstext.split(','):
+                fieldtext = fieldtext.strip()
+                if not fieldtext:
+                    continue
+                fieldname, fieldvalue = fieldtext.split('=')
+                fielddescr = self.namespace[fieldname.strip()]
+                fieldbox = executor.execute(self.cpu,
+                                            rop.GETFIELD_GC,
+                                            [resolved],
+                                            descr=fielddescr)
+                _variables_equal(fieldbox, fieldvalue.strip(), strict=False)
 
     def check_expanded_fail_descr(self, expectedtext):
         fdescr = self.fdescr
         args, oparse = fdescr.args_seen[-1]
-        reader = resume.ResumeDataReader(fdescr, args, MyMetaInterp())
+        reader = resume.ResumeDataReader(fdescr, args, MyMetaInterp(self.cpu))
         boxes = reader.consume_boxes()
-        expected = self.unpack_expected_fail_args(oparse, expectedtext)
-        assert boxes == expected
+        self._verify_fail_args(boxes, oparse, expectedtext)
 
     def test_expand_fail_1(self):
         self.make_fail_descr()
@@ -632,7 +675,6 @@ class BaseTestOptimizeOpt(BaseTest):
         self.check_expanded_fail_descr('15, i3')
 
     def test_expand_fail_2(self):
-        py.test.skip("in-progress")
         self.make_fail_descr()
         ops = """
         [i1, i2]

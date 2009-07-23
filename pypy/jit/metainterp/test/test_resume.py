@@ -57,8 +57,10 @@ def test_frame_info():
 
 
 class MyMetaInterp:
+    def __init__(self, cpu):
+        self.cpu = cpu
     def execute_and_record(self, opnum, argboxes, descr=None):
-        return executor.execute(LLtypeMixin.cpu, opnum, argboxes, descr)
+        return executor.execute(self.cpu, opnum, argboxes, descr)
 
 demo55 = lltype.malloc(LLtypeMixin.NODE)
 demo55o = lltype.cast_opaque_ptr(llmemory.GCREF, demo55)
@@ -76,7 +78,8 @@ def test_virtual_adder_no_op():
     assert liveboxes == [b1s, b2s, b3s]
     #
     b1t, b2t, b3t = [BoxInt(11), BoxPtr(demo55o), BoxInt(33)]
-    reader = ResumeDataReader(storage, [b1t, b2t, b3t], MyMetaInterp())
+    reader = ResumeDataReader(storage, [b1t, b2t, b3t],
+                              MyMetaInterp(LLtypeMixin.cpu))
     lst = reader.consume_boxes()
     assert lst == [b1t, ConstInt(1), b1t, b2t]
     lst = reader.consume_boxes()
@@ -121,7 +124,8 @@ def test_virtual_adder_make_virtual():
                          b5s]
     #
     b1t, b3t, b5t = [BoxInt(11), BoxInt(33), BoxPtr(demo55o)]
-    reader = ResumeDataReader(storage, [b1t, b3t, b5t], MyMetaInterp())
+    reader = ResumeDataReader(storage, [b1t, b3t, b5t],
+                              MyMetaInterp(LLtypeMixin.cpu))
     lst = reader.consume_boxes()
     b2t = lst[-1]
     assert lst == [b1t, ConstInt(1), b1t, b2t]
@@ -161,7 +165,8 @@ def test_virtual_adder_make_constant():
         assert liveboxes == [b2s, b3s]
         #
         b2t, b3t = [BoxPtr(demo55o), BoxInt(33)]
-        reader = ResumeDataReader(storage, [b2t, b3t], MyMetaInterp())
+        reader = ResumeDataReader(storage, [b2t, b3t],
+                                  MyMetaInterp(LLtypeMixin.cpu))
         lst = reader.consume_boxes()
         c1t = ConstInt(111)
         assert lst == [c1t, ConstInt(1), c1t, b2t]
