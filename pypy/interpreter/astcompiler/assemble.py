@@ -214,6 +214,14 @@ class PythonCodeMaker(ast.ASTVisitor):
                     offset += instr.size()
                     if instr.has_jump:
                         target, absolute = instr.jump
+                        op = instr.opcode
+                        if op == ops.JUMP_ABSOLUTE or op == ops.JUMP_FORWARD:
+                            if target.instructions:
+                                target_op = target.instructions[0].opcode
+                                if target_op == ops.JUMP_ABSOLUTE:
+                                    target = target.instructions[0].jump[0]
+                                    instr.opcode = ops.JUMP_ABSOLUTE
+                                    absolute = True
                         if absolute:
                             jump_arg = target.offset
                         else:
