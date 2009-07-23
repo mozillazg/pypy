@@ -1,5 +1,14 @@
-from pypy.interpreter.astcompiler import ast2 as ast
+import sys
+import itertools
+
+from pypy.interpreter.astcompiler import ast2 as ast, consts, misc
 from pypy.tool import stdlib_opcode as ops
+from pypy.interpreter.error import OperationError
+from pypy.rlib.unroll import unrolling_iterable
+
+
+def optimize_ast(space, tree, compile_info):
+    return tree.mutate_over(OptimizingVisitor(space, compile_info))
 
 
 CONST_NOT_CONST = -1
@@ -38,6 +47,12 @@ class __extend__(ast.Str):
         return self.s
 
 
+class __extend__(ast.Const):
+
+    def as_constant(self):
+        return self.value
+
+
 class __extend__(ast.UnaryOp):
 
     def accept_jump_if(self, gen, condition, target):
@@ -65,3 +80,164 @@ class __extend__(ast.BoolOp):
             gen.use_next_block(end)
         else:
             self._accept_jump_if_any_is(gen, condition, target)
+
+
+def _binary_fold(name):
+    def do_fold(space, left, right):
+        return getattr(space, name)(left, right)
+    return do_fold
+
+def _unary_fold(name):
+    def do_fold(space, operand):
+        return getattr(space, name)(operand)
+    return do_fold
+
+def _fold_pow(space, left, right):
+    return space.pow(left, right, space.w_None)
+
+def _fold_not(space, operand):
+    return space.wrap(not space.is_true(operand))
+
+
+binary_folders = {
+    ast.Add : _binary_fold("add"),
+    ast.Sub : _binary_fold("sub"),
+    ast.Mult : _binary_fold("mul"),
+    ast.Div : _binary_fold("truediv"),
+    ast.FloorDiv : _binary_fold("floordiv"),
+    ast.Mod : _binary_fold("mod"),
+    ast.Pow : _fold_pow,
+    ast.LShift : _binary_fold("lshift"),
+    ast.RShift : _binary_fold("rshift"),
+    ast.BitOr : _binary_fold("or_"),
+    ast.BitXor : _binary_fold("xor"),
+    ast.BitAnd : _binary_fold("and_")
+}
+unrolling_binary_folders = unrolling_iterable(binary_folders.items())
+
+unary_folders = {
+    ast.Not : _fold_not,
+    ast.USub : _unary_fold("neg"),
+    ast.UAdd : _unary_fold("pos"),
+    ast.Invert : _unary_fold("invert")
+}
+unrolling_unary_folders = unrolling_iterable(unary_folders.items())
+
+for folder in itertools.chain(binary_folders.itervalues(),
+                              unary_folders.itervalues()):
+    folder._always_inline_ = True
+del folder
+
+opposite_compare_operations = misc.dict_to_switch({
+    ast.Is : ast.IsNot,
+    ast.IsNot : ast.Is,
+    ast.In : ast.NotIn,
+    ast.NotIn : ast.In
+})
+
+
+class OptimizingVisitor(ast.ASTVisitor):
+
+    def __init__(self, space, compile_info):
+        self.space = space
+        self.compile_info = compile_info
+
+    def default_visitor(self, node):
+        return node
+
+    def visit_BinOp(self, binop):
+        left = binop.left.as_constant()
+        if left is not None:
+            right = binop.right.as_constant()
+            if right is not None:
+                op = binop.op
+                if op == ast.Div and \
+                        not self.compile_info.flags & consts.CO_FUTURE_DIVISION:
+                    return binop
+                try:
+                    for op_kind, folder in unrolling_binary_folders:
+                        if op_kind == op:
+                            w_const = folder(self.space, left, right)
+                except OperationError:
+                    pass
+                else:
+                    try:
+                        w_len = self.space.len(w_const)
+                    except OperationError:
+                        pass
+                    else:
+                        if self.space.int_w(w_len) > 20:
+                            return binop
+                    return ast.Const(w_const, binop.lineno, binop.col_offset)
+        return binop
+
+    def visit_UnaryOp(self, unary):
+        w_operand = unary.operand.as_constant()
+        op = unary.op
+        if w_operand is not None:
+            try:
+                for op_kind, folder in unrolling_unary_folders:
+                    if op_kind == op:
+                        w_const = folder(self.space, w_operand)
+                w_minint = self.space.wrap(-sys.maxint - 1)
+                # This makes sure the result is an integer.
+                if self.space.eq_w(w_minint, w_const):
+                    w_const = w_minint
+            except OperationError:
+                pass
+            else:
+                return ast.Const(w_const, unary.lineno, unary.col_offset)
+        elif op == ast.Not:
+            compare = unary.operand
+            if isinstance(compare, ast.Compare) and len(compare.ops) == 1:
+                cmp_op = compare.ops[0]
+                try:
+                    opposite = opposite_compare_operations(cmp_op)
+                except KeyError:
+                    pass
+                else:
+                    compare.ops[0] = opposite
+                    return compare
+        return unary
+
+    def visit_BoolOp(self, bop):
+        values = bop.values
+        we_are_and = bop.op == ast.And
+        i = 0
+        while i < len(values) - 1:
+            truth = values[i].as_constant_truth(self.space)
+            if truth != CONST_NOT_CONST:
+                if truth == CONST_FALSE == we_are_and:
+                    del values[i + 1:]
+                    break
+                else:
+                    del values[i]
+            else:
+                i += 1
+        if len(values) == 1:
+            return values[0]
+        return bop
+
+    def visit_Repr(self, rep):
+        w_const = rep.value.as_constant()
+        if w_const is not None:
+            w_repr = self.space.repr(w_const)
+            return ast.Const(w_repr, rep.lineno, rep.col_offset)
+        return rep
+
+    def visit_Name(self, name):
+        if name.id == "None":
+            assert name.ctx == ast.Load
+            return ast.Const(self.space.w_None, name.lineno, name.col_offset)
+        return name
+
+    def visit_Tuple(self, tup):
+        consts_w = []
+        if tup.elts:
+            for node in tup.elts:
+                w_const = node.as_constant()
+                if w_const is None:
+                    return tup
+                consts_w.append(w_const)
+        w_consts = self.space.newtuple(consts_w)
+        return ast.Const(w_consts, tup.lineno, tup.col_offset)
