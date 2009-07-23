@@ -4,6 +4,7 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.specnode import SpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.optimizeutil import av_newdict, _findall, sort_descrs
+from pypy.jit.metainterp import resume
 from pypy.rlib.objectmodel import we_are_translated
 
 
@@ -36,11 +37,9 @@ class InstanceValue(object):
     def force_box(self):
         return self.box
 
-    def get_args_for_fail(self, list, memo):
-        if not self.is_constant():
-            if self.box not in memo:
-                list.append(self.box)
-                memo[self.box] = None
+    def get_args_for_fail(self, srcbox, modifier):
+        if self.is_constant():
+            modifier.make_constant(srcbox, self.box)
 
     def is_constant(self):
         return self.level == LEVEL_CONSTANT
@@ -120,10 +119,11 @@ class VirtualValue(InstanceValue):
                 newoperations.append(op)
         return self.box
 
-    def get_args_for_fail(self, list, memo):
+    def get_args_for_fail(self, srcbox, modifier):
         if self.box is not None:
-            InstanceValue.get_args_for_fail(self, list, memo)
+            InstanceValue.get_args_for_fail(self, srcbox, modifier)
         else:
+            xxxxx
             if self.source_op is not None: #otherwise, no loop detection needed
                 keybox = self.source_op.result
                 if keybox in memo:
@@ -258,18 +258,19 @@ class Optimizer(object):
         op_fail = op1.suboperations[0]
         assert op_fail.opnum == rop.FAIL
         #
-        memo = {}
-        newboxes = []
+        if not we_are_translated() and op_fail.descr is None:  # for tests
+            op_fail.descr = Storage()
+            resume.ResumeDataBuilder()
+            resume.generate_boxes(op_fail.args)
+            resume.finish(op_fail.descr)
+        modifier = resume.ResumeDataVirtualAdder(op_fail.descr, op_fail.args)
         for box in op_fail.args:
-            try:
+            if box in self.values:
                 value = self.values[box]
-            except KeyError:
-                if box not in memo:
-                    newboxes.append(box)
-                    memo[box] = None
-            else:
-                value.get_args_for_fail(newboxes, memo)
-        # NB. we mutate op_fail in-place above.  That's bad.  Hopefully
+                value.get_args_for_fail(box, modifier)
+        newboxes = modifier.finish()
+        # NB. we mutate op_fail in-place below, as well as op_fail.descr
+        # via the ResumeDataVirtualAdder.  That's bad.  Hopefully
         # it does not really matter because no-one is going to look again
         # at its unoptimized version.  We cannot really clone it because of
         # how the rest works (e.g. it is returned by cpu.execute_operations()).
@@ -405,3 +406,6 @@ class Optimizer(object):
 
 
 optimize_ops = _findall(Optimizer, 'optimize_')
+
+class Storage:
+    "for tests."
