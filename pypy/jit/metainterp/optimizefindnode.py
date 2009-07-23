@@ -160,7 +160,7 @@ class PerfectSpecializationFinder(NodeFinder):
     def find_nodes_loop(self, loop):
         self.setup_input_nodes(loop.inputargs)
         self.find_nodes(loop.operations)
-        self.build_result_specnodes(loop.operations[-1])
+        self.build_result_specnodes(loop)
 
     def setup_input_nodes(self, inputargs):
         inputnodes = []
@@ -170,9 +170,10 @@ class PerfectSpecializationFinder(NodeFinder):
             self.nodes[box] = instnode
         self.inputnodes = inputnodes
 
-    def build_result_specnodes(self, op):
+    def build_result_specnodes(self, loop):
         # Build the list of specnodes based on the result
         # computed by NodeFinder.find_nodes().
+        op = loop.operations[-1]
         assert op.opnum == rop.JUMP
         specnodes = []
         assert len(self.inputnodes) == len(op.args)
@@ -180,7 +181,7 @@ class PerfectSpecializationFinder(NodeFinder):
             inputnode = self.inputnodes[i]
             exitnode = self.getnode(op.args[i])
             specnodes.append(self.intersect(inputnode, exitnode))
-        self.specnodes = specnodes
+        loop.specnodes = specnodes
 
     def intersect(self, inputnode, exitnode):
         assert inputnode.fromstart
@@ -272,10 +273,11 @@ class __extend__(VirtualInstanceSpecNode):
 
 class BridgeSpecializationFinder(NodeFinder):
 
-    def find_nodes_bridge(self, bridge, specnodes):
-        if specnodes is not None:
+    def find_nodes_bridge(self, bridge, specnodes=None):
+        if specnodes is not None:      # not used actually
             self.setup_bridge_input_nodes(specnodes, bridge.inputargs)
         self.find_nodes(bridge.operations)
+        self.jump_op = bridge.operations[-1]
 
     def setup_bridge_input_nodes(self, specnodes, inputargs):
         assert len(specnodes) == len(inputargs)
@@ -284,7 +286,8 @@ class BridgeSpecializationFinder(NodeFinder):
             box = inputargs[i]
             self.nodes[box] = instnode
 
-    def bridge_matches(self, jump_op, nextloop_specnodes):
+    def bridge_matches(self, nextloop_specnodes):
+        jump_op = self.jump_op
         assert len(jump_op.args) == len(nextloop_specnodes)
         for i in range(len(nextloop_specnodes)):
             exitnode = self.getnode(jump_op.args[i])

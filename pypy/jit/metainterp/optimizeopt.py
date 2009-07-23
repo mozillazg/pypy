@@ -8,7 +8,7 @@ from pypy.jit.metainterp import resume
 from pypy.rlib.objectmodel import we_are_translated
 
 
-def optimize(cpu, loop):
+def optimize_loop_1(cpu, loop):
     """Optimize loop.operations to make it match the input of loop.specnodes
     and to remove internal overheadish operations.  Note that loop.specnodes
     must be applicable to the loop; you will probably get an AssertionError
@@ -16,6 +16,13 @@ def optimize(cpu, loop):
     """
     optimizer = Optimizer(cpu, loop)
     optimizer.setup_virtuals()
+    optimizer.propagate_forward()
+
+def optimize_bridge_1(cpu, bridge):
+    """The same, but for a bridge.  The only difference is that we don't
+    expect 'specnodes' on the bridge.
+    """
+    optimizer = Optimizer(cpu, bridge)
     optimizer.propagate_forward()
 
 # ____________________________________________________________

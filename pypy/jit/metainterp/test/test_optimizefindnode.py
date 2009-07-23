@@ -121,7 +121,7 @@ class BaseTest(object):
         lst = self.unpack_specnodes(text)
         assert len(specnodes) == len(lst)
         for x, y in zip(specnodes, lst):
-            assert x._equals(y)
+            assert x.equals(y)
         return True
 
 # ____________________________________________________________
@@ -133,7 +133,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         loop = self.parse(ops, boxkinds=boxkinds)
         perfect_specialization_finder = PerfectSpecializationFinder()
         perfect_specialization_finder.find_nodes_loop(loop)
-        self.check_specnodes(perfect_specialization_finder.specnodes, spectext)
+        self.check_specnodes(loop.specnodes, spectext)
         return (loop.getboxes(), perfect_specialization_finder.getnode)
 
     def test_find_nodes_simple(self):
@@ -444,9 +444,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         bridge = self.parse(ops, boxkinds=boxkinds)
         bridge_specialization_finder = BridgeSpecializationFinder()
         bridge_specialization_finder.find_nodes_bridge(bridge, inputspecnodes)
-        matches = bridge_specialization_finder.bridge_matches(
-            bridge.operations[-1],
-            outputspecnodes)
+        matches = bridge_specialization_finder.bridge_matches(outputspecnodes)
         if mismatch:
             assert not matches
         else:

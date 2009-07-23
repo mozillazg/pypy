@@ -932,7 +932,7 @@ class MetaInterpStaticData(object):
         self.opcode_names = []
         self.opname_to_index = {}
         if optimizer is None:
-            from pypy.jit.metainterp import optimize4 as optimizer
+            from pypy.jit.metainterp import optimize as optimizer
         self.optimize_loop = optimizer.optimize_loop
         self.optimize_bridge = optimizer.optimize_bridge
 
@@ -973,7 +973,9 @@ class MetaInterpStaticData(object):
     def _setup_once(self):
         """Runtime setup needed by the various components of the JIT."""
         if not self.globaldata.initialized:
-            xxxxxxxx
+            self.cpu.class_sizes = class_sizes = {}
+            for vtable, sizedescr in self._class_sizes:
+                class_sizes[vtable] = sizedescr
             self.cpu.setup_once()
             log(self.jit_starting_line)
             if not self.profiler.initialized:
@@ -985,6 +987,7 @@ class MetaInterpStaticData(object):
         self._codewriter = codewriter.CodeWriter(self, policy, ts)
         self.portal_code = self._codewriter.make_portal_bytecode(
             self.portal_graph)
+        self._class_sizes = self._codewriter.class_sizes
 
     # ---------- construction-time interface ----------
 
