@@ -840,6 +840,28 @@ class BaseTestOptimizeOpt(BaseTest):
             where p2 is a node_vtable, valuedescr=i2, nextdescr=p1
             ''')
 
+    def test_expand_fail_6(self):
+        self.make_fail_descr()
+        ops = """
+        [p0, i0, i1]
+        guard_true(i0)
+            fail(p0, descr=fdescr)
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, i1, descr=valuedescr)
+        jump(p1, i1, i1)
+        """
+        expected = """
+        [i1b, i0, i1]
+        guard_true(i0)
+            fail(i1b, descr=fdescr)
+        jump(i1, i1, i1)
+        """
+        self.optimize_loop(ops, '''Virtual(node_vtable, valuedescr=Not),
+                                   Not, Not''', expected, i0=1)
+        self.check_expanded_fail_descr('''p0
+            where p0 is a node_vtable, valuedescr=i1b
+            ''')
+
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
     pass
