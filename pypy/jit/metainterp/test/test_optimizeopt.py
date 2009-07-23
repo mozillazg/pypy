@@ -725,37 +725,33 @@ class BaseTestOptimizeOpt(BaseTest):
             ''')
 
     def test_expand_fail_4(self):
-        py.test.skip("in-progress")
-        ops = """
-        [i1, i2]
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
-        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
-        setfield_gc(p1, i2, descr=valuedescr)
-        setfield_gc(p1, p2, descr=nextdescr)
-        setfield_gc(p2, i2, descr=valuedescr)
-        guard_true(i1)
-            fail(%s)
-        jump(i1, i2)
-        """
-        expected = """
-        [i1, i2]
-        guard_true(i1)
+        for arg in ['p1', 'p1,i2', 'i2,p1', 'p1,p2', 'p2,p1',
+                    'p1,p2,i2', 'p1,i2,p2', 'p2,p1,i2',
+                    'p2,i2,p1', 'i2,p1,p2', 'i2,p2,p1']:
+            self.make_fail_descr()
+            ops = """
+            [i1, i2, i3]
             p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+            setfield_gc(p1, i3, descr=valuedescr)
+            i4 = getfield_gc(p1, descr=valuedescr)   # copy of i3
             p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
             setfield_gc(p1, i2, descr=valuedescr)
             setfield_gc(p1, p2, descr=nextdescr)
             setfield_gc(p2, i2, descr=valuedescr)
-            fail(%s)
-        jump(1, i2)
-        """
-        self.optimize_loop(ops      % 'p1',     'Not, Not',
-                           expected % 'p1',     i1=1)
-        self.optimize_loop(ops      % 'p1, i2', 'Not, Not',
-                           expected % 'p1, i2', i1=1)
-        self.optimize_loop(ops      % 'i2, p1', 'Not, Not',
-                           expected % 'i2, p1', i1=1)
-        self.optimize_loop(ops      % 'p1, p2', 'Not, Not',
-                           expected % 'p1, p2', i1=1)
+            guard_true(i1)
+                fail(i4, %s, i3, descr=fdescr)
+            jump(i1, i2, i3)
+            """
+            expected = """
+            [i1, i2, i3]
+            guard_true(i1)
+                fail(i3, i2, descr=fdescr)
+            jump(1, i2, i3)
+            """
+            self.optimize_loop(ops % arg, 'Not, Not, Not', expected, i1=1)
+            self.check_expanded_fail_descr('''i3, %s, i3
+                where p1 is a node_vtable, valuedescr=i2, nextdescr=p2
+                where p2 is a node_vtable, valuedescr=i2''' % arg)
 
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
