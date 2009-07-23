@@ -161,3 +161,10 @@ def test_map_asObject_inline():
     assert res.slots['2'].value == 99
     assert res.slots['3'].value == 3
     assert res.slots['4'].value == 234
+
+
+def test_map_with():
+  inp = """Map with("a", 1, "b", 2) asObject"""
+  res, space = interpret(inp)
+  assert res.slots['a'].value == 1
+  assert res.slots['b'].value == 2
