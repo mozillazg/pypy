@@ -79,8 +79,8 @@ class ResumeDataVirtualAdder(object):
 
     def _register_boxes(self, boxes):
         for box in boxes:
-            if isinstance(box, Box):
-                self.liveboxes.setdefault(box, 0)
+            if isinstance(box, Box) and box not in self.liveboxes:
+                self.liveboxes[box] = 0
                 self.liveboxes_order.append(box)
 
     def is_virtual(self, virtualbox):
