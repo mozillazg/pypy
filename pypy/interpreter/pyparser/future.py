@@ -73,6 +73,7 @@ class FutureAutomaton(object):
         self.col_offset = 0
         self.docstringConsumed = False
         self.flags = 0
+        self.got_features = 0
 
     def getc(self, offset=0):
         try:
@@ -190,17 +191,21 @@ class FutureAutomaton(object):
                 raise DoneException
             self.pos += 6
             self.consumeWhitespace()
-            if self.getc() == '(':
-                self.pos += 1
-                self.consumeWhitespace()
-                self.setFlag(self.getName())
-                # Set flag corresponding to name
-                self.getMore(parenList=True)
-            else:
-                self.setFlag(self.getName())
-                self.getMore()
-            self.col_offset = col_offset
-            self.lineno = line
+            old_got = self.got_features
+            try:
+                if self.getc() == '(':
+                    self.pos += 1
+                    self.consumeWhitespace()
+                    self.setFlag(self.getName())
+                    # Set flag corresponding to name
+                    self.getMore(parenList=True)
+                else:
+                    self.setFlag(self.getName())
+                    self.getMore()
+            finally:
+                if self.got_features > old_got:
+                    self.col_offset = col_offset
+                    self.lineno = line
             self.consumeEmptyLine()
         else:
             return
@@ -269,6 +274,7 @@ class FutureAutomaton(object):
             self.getMore(parenList=parenList)
 
     def setFlag(self, feature):
+        self.got_features += 1
         try:
             self.flags |= self.futureFlags.compiler_features[feature]
         except KeyError:
