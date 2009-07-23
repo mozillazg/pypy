@@ -1,3 +1,4 @@
+import py
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.metainterp.resume import *
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, ConstInt, ConstAddr
