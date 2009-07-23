@@ -370,11 +370,11 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def visit_If(self, if_):
         self.update_position(if_.lineno, True)
         end = self.new_block()
-        test_constant = misc.expr_constant(self.space, if_.test)
-        if test_constant == misc.CONST_FALSE:
+        test_constant = if_.test.as_constant_truth(self.space)
+        if test_constant == optimize.CONST_FALSE:
             if if_.orelse:
                 self.visit_sequence(if_.orelse)
-        elif test_constant == misc.CONST_TRUE:
+        elif test_constant == optimize.CONST_TRUE:
             self.visit_sequence(if_.body)
         else:
             next = self.new_block()
@@ -445,27 +445,27 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def visit_While(self, wh):
         self.update_position(wh.lineno, True)
-        test_constant = misc.expr_constant(self.space, wh.test)
-        if test_constant == misc.CONST_FALSE:
+        test_constant = wh.test.as_constant_truth(self.space)
+        if test_constant == optimize.CONST_FALSE:
             if wh.orelse:
                 self.visit_sequence(wh.orelse)
         else:
             end = self.new_block()
             anchor = None
-            if test_constant == misc.CONST_NOT_CONST:
+            if test_constant == optimize.CONST_NOT_CONST:
                 anchor = self.new_block()
             self.emit_jump(ops.SETUP_LOOP, end)
             loop = self.new_block()
             self.push_frame_block(F_BLOCK_LOOP, loop)
             self.use_next_block(loop)
-            if test_constant == misc.CONST_NOT_CONST:
+            if test_constant == optimize.CONST_NOT_CONST:
                 # Force another lineno to be set for tracing purposes.
                 self.lineno_set = False
                 wh.test.accept_jump_if(self, False, anchor)
                 self.emit_op(ops.POP_TOP)
             self.visit_sequence(wh.body)
             self.emit_jump(ops.JUMP_ABSOLUTE, loop, True)
-            if test_constant == misc.CONST_NOT_CONST:
+            if test_constant == optimize.CONST_NOT_CONST:
                 self.use_next_block(anchor)
                 self.emit_op(ops.POP_TOP)
                 self.emit_op(ops.POP_BLOCK)

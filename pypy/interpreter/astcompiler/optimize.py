@@ -2,7 +2,21 @@ from pypy.interpreter.astcompiler import ast2 as ast
 from pypy.tool import stdlib_opcode as ops
 
 
+CONST_NOT_CONST = -1
+CONST_FALSE = 0
+CONST_TRUE = 1
+
+
 class __extend__(ast.expr):
+
+    def as_constant_truth(self, space):
+        const = self.as_constant()
+        if const is None:
+            return CONST_NOT_CONST
+        return int(space.is_true(const))
+
+    def as_constant(self):
+        return None
 
     def accept_jump_if(self, gen, condition, target):
         self.walkabout(gen)
@@ -10,6 +24,18 @@ class __extend__(ast.expr):
             gen.emit_jump(ops.JUMP_IF_TRUE, target)
         else:
             gen.emit_jump(ops.JUMP_IF_FALSE, target)
+
+
+class __extend__(ast.Num):
+
+    def as_constant(self):
+        return self.n
+
+
+class __extend__(ast.Str):
+
+    def as_constant(self):
+        return self.s
 
 
 class __extend__(ast.UnaryOp):
