@@ -723,42 +723,6 @@ class TestECCompiler(BaseTestCompiler):
 ##        py.test.skip("unsupported")
 
 class AppTestOptimizer:
-    def test_constant_fold_add(self):
-        import parser
-        class Folder(object):
-            def defaultvisit(self, node):
-                return node
-
-            def __getattr__(self, attrname):
-                if attrname.startswith('visit'):
-                    return self.defaultvisit
-                raise AttributeError(attrname)
-
-            def visitAdd(self, node):
-                left = node.left
-                right = node.right
-                if isinstance(left, parser.ASTConst) and \
-                       isinstance(right, parser.ASTConst):
-                    if type(left.value) == type(right.value):
-                        return parser.ASTConst(left.value + right.value)
-                return node
-
-        def hook(ast, enc, filename):
-            return ast.mutate(Folder())
-
-        parser.install_compiler_hook(hook)
-        code = compile("1+2", "", "eval")
-        parser.install_compiler_hook(None)
-        import dis, sys, StringIO
-        s = StringIO.StringIO()
-        so = sys.stdout
-        sys.stdout = s
-        try:
-            dis.dis(code)
-        finally:
-            sys.stdout = so
-        output = s.getvalue()
-        assert 'BINARY_ADD' not in output
 
     def test_remove_ending(self):
         source = """def f():
@@ -777,7 +741,41 @@ class AppTestOptimizer:
         output = s.getvalue()
         assert output.count('LOAD_CONST') == 1
 
-    
+    def test_none_constant(self):
+        import opcode
+        co = compile("def f(): return None", "<test>", "exec").co_consts[0]
+        co = co.co_code
+        op = ord(co[0]) + (ord(co[1]) << 8)
+        assert op == opcode.opmap["LOAD_CONST"]
+
+    def test_division_folding(self):
+        def code(source):
+            return compile(source, "<test>", "exec")
+        co = code("x = 10//4")
+        assert len(co.co_consts) == 2
+        assert co.co_consts[0] == 2
+        co = code("x = 10/4")
+        assert len(co.co_consts) == 3
+        assert co.co_consts[:2] == (10, 4)
+        co = code("from __future__ import division\nx = 10/4")
+        assert co.co_consts[2] == 2.5
+
+    def test_tuple_folding(self):
+        co = compile("(1, 2, 3)", "<test>", "exec")
+        assert co.co_consts == ((1, 2, 3), None)
+        co = compile("()", "<test>", "exec")
+        assert co.co_consts == ((), None)
+
+    def test_unary_folding(self):
+        co = compile("-(3)", "<test>", "exec")
+        assert co.co_consts[0] == -3
+        co = compile("~3", "<test>", "exec")
+        assert co.co_consts[0] == ~3
+        co = compile("+(-3)", "<test>", "exec")
+        assert co.co_consts[0] == -3
+        co = compile("not None", "<test>", "exec")
+        assert co.co_consts[0] is True
+
     def test_folding_of_binops_on_constants(self):
         def disassemble(func):
             from StringIO import StringIO

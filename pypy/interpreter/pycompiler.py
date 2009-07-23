@@ -231,7 +231,7 @@ class PythonAstCompiler(PyCodeCompiler):
         from pypy.interpreter.pyparser.pythonlexer import TokenIndentationError
         from pypy.interpreter.astcompiler.astbuilder import ast_from_node
         from pypy.interpreter.astcompiler.codegen import compile_ast
-        from pypy.interpreter.astcompiler import consts
+        from pypy.interpreter.astcompiler import consts, optimize
 
         space = self.space
 
@@ -247,6 +247,7 @@ class PythonAstCompiler(PyCodeCompiler):
             info = CompileInfo(filename, mode, flags, future_lineno)
             parse_tree = self.parser.parse_source(source, info)
             module = ast_from_node(space, parse_tree, info)
+            module = optimize.optimize_ast(space, module, info)
             code = compile_ast(space, module, info)
         except IndentationError, e:
             raise OperationError(space.w_IndentationError,
