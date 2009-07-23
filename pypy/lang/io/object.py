@@ -72,3 +72,24 @@ def object_message(space, w_target, w_message, w_context):
     import pdb
     pdb.set_trace()
     return w_target
+
+@register_method('Object', 'for')
+def object_for(space, w_target, w_message, w_context):
+   argcount = len(w_message.arguments)
+   assert argcount >= 4 and argcount <=5
+
+   body = w_message.arguments[-1]
+   start = int(w_message.arguments[1].name)
+   stop = int(w_message.arguments[2].name)
+   if argcount == 4:
+      step = 1
+   else:
+      step = int(w_message.arguments[3].name)
+   
+      
+   key = w_message.arguments[0].name
+
+   for i in range(start, stop, step):
+      w_context.slots[key] = W_Number(space, i)
+      t = body.eval(space, w_context, w_context)
+   return t
