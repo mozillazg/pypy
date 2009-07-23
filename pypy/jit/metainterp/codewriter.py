@@ -134,7 +134,7 @@ class CodeWriter(object):
         if self.portal_graph is None or graph is self.portal_graph:
             return ()
         fnptr = self.rtyper.getcallable(graph)
-        if self.metainterp_sd.cpu.is_oo:
+        if self.cpu.is_oo:
             if oosend_methdescr:
                 return (None, oosend_methdescr)
             else:
@@ -742,8 +742,8 @@ class BytecodeMaker(object):
             # store the vtable as an address -- that's fine, because the
             # GC doesn't need to follow them
             self.emit('new_with_vtable',
-                      self.get_position(self.cpu.sizeof(STRUCT)),
                       self.const_position(vtable))
+            self.codewriter.register_known_gctype(vtable, STRUCT)
         else:
             self.emit('new', self.get_position(self.cpu.sizeof(STRUCT)))
         self.register_var(op.result)

@@ -37,9 +37,11 @@ class InstanceValue(object):
     def force_box(self):
         return self.box
 
-    def get_args_for_fail(self, srcbox, modifier):
-        if self.is_constant():
-            modifier.make_constant(srcbox, self.box)
+    def get_key_box(self):
+        return self.box
+
+    def get_args_for_fail(self, modifier):
+        pass
 
     def is_constant(self):
         return self.level == LEVEL_CONSTANT
@@ -91,8 +93,10 @@ class VirtualValue(InstanceValue):
     box = None
     level = LEVEL_KNOWNCLASS
 
-    def __init__(self, optimizer, source_op=None):
+    def __init__(self, optimizer, known_class, keybox, source_op=None):
         self.optimizer = optimizer
+        self.known_class = known_class
+        self.keybox = keybox   # only used as a key in dictionaries
         self.source_op = source_op  # the NEW_WITH_VTABLE operation building it
         self._fields = av_newdict()
 
@@ -119,20 +123,21 @@ class VirtualValue(InstanceValue):
                 newoperations.append(op)
         return self.box
 
-    def get_args_for_fail(self, srcbox, modifier):
-        if self.box is not None:
-            InstanceValue.get_args_for_fail(self, srcbox, modifier)
-        else:
-            xxxxx
-            if self.source_op is not None: #otherwise, no loop detection needed
-                keybox = self.source_op.result
-                if keybox in memo:
-                    return
-                memo[keybox] = None
+    def get_key_box(self):
+        if self.box is None:
+            return self.keybox
+        return self.box
+
+    def get_args_for_fail(self, modifier):
+        if self.box is None and not modifier.is_virtual(self.keybox):
             lst = self._fields.keys()
             sort_descrs(lst)
+            fieldboxes = [self._fields[ofs].get_key_box() for ofs in lst]
+            modifier.make_virtual(self.keybox, self.known_class,
+                                  lst, fieldboxes)
             for ofs in lst:
-                self._fields[ofs].get_args_for_fail(list, memo)
+                fieldvalue = self._fields[ofs]
+                fieldvalue.get_args_for_fail(modifier)
 
 
 class __extend__(SpecNode):
@@ -143,7 +148,7 @@ class __extend__(SpecNode):
 
 class __extend__(VirtualInstanceSpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
-        vvalue = optimizer.make_virtual(box)
+        vvalue = optimizer.make_virtual(self.known_class, box)
         for ofs, subspecnode in self.fields:
             subbox = optimizer.new_box(ofs)
             vvalue.setfield(ofs, optimizer.getvalue(subbox))
@@ -187,8 +192,8 @@ class Optimizer(object):
     def known_nonnull(self, box):
         return self.getvalue(box).is_nonnull()
 
-    def make_virtual(self, box, source_op=None):
-        vvalue = VirtualValue(self, source_op)
+    def make_virtual(self, known_class, box, source_op=None):
+        vvalue = VirtualValue(self, known_class, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
 
@@ -259,21 +264,28 @@ class Optimizer(object):
         assert op_fail.opnum == rop.FAIL
         #
         if not we_are_translated() and op_fail.descr is None:  # for tests
-            op_fail.descr = Storage()
-            resume.ResumeDataBuilder()
-            resume.generate_boxes(op_fail.args)
-            resume.finish(op_fail.descr)
-        modifier = resume.ResumeDataVirtualAdder(op_fail.descr, op_fail.args)
+            descr = Storage()
+            builder = resume.ResumeDataBuilder()
+            builder.generate_boxes(op_fail.args)
+            builder.finish(descr)
+        else:
+            descr = op_fail.descr
+        oldboxes = []
+        for box in op_fail.args:
+            if box in self.values:
+                box = self.values[box].get_key_box()   # may be a Const, too
+            oldboxes.append(box)
+        modifier = resume.ResumeDataVirtualAdder(descr, oldboxes)
         for box in op_fail.args:
             if box in self.values:
                 value = self.values[box]
-                value.get_args_for_fail(box, modifier)
+                value.get_args_for_fail(modifier)
         newboxes = modifier.finish()
-        # NB. we mutate op_fail in-place below, as well as op_fail.descr
+        # XXX we mutate op_fail in-place below, as well as op_fail.descr
         # via the ResumeDataVirtualAdder.  That's bad.  Hopefully
         # it does not really matter because no-one is going to look again
-        # at its unoptimized version.  We cannot really clone it because of
-        # how the rest works (e.g. it is returned by cpu.execute_operations()).
+        # at its unoptimized version.  We should really clone it (and
+        # the descr too).
         op_fail.args = newboxes
         op2.suboperations = op1.suboperations
         op1.optimized = op2
@@ -402,7 +414,7 @@ class Optimizer(object):
             self.optimize_default(op)
 
     def optimize_NEW_WITH_VTABLE(self, op):
-        self.make_virtual(op.result, op)
+        self.make_virtual(op.args[0], op.result, op)
 
 
 optimize_ops = _findall(Optimizer, 'optimize_')

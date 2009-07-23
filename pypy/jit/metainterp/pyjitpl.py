@@ -7,7 +7,6 @@ from pypy.rlib.debug import debug_print
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, Box
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.heaptracker import populate_type_cache
 from pypy.jit.metainterp import codewriter, executor
 from pypy.jit.metainterp import typesystem
 from pypy.rlib.rarithmetic import intmask
@@ -310,9 +309,9 @@ class MIFrame(object):
     def opimpl_new(self, size):
         self.execute(rop.NEW, [], descr=size)
 
-    @arguments("descr", "constbox")
-    def opimpl_new_with_vtable(self, size, vtablebox):
-        self.execute(rop.NEW_WITH_VTABLE, [vtablebox], descr=size)
+    @arguments("constbox")
+    def opimpl_new_with_vtable(self, vtablebox):
+        self.execute(rop.NEW_WITH_VTABLE, [vtablebox])
 
     @arguments("box")
     def opimpl_runtimenew(self, classbox):
@@ -932,11 +931,6 @@ class MetaInterpStaticData(object):
         self.opcode_implementations = []
         self.opcode_names = []
         self.opname_to_index = {}
-        self._class_sizes = populate_type_cache(graphs, self.cpu)
-        if not cpu.translate_support_code:
-            self.cpu.class_sizes = self._class_sizes
-        else:
-            self.cpu.class_sizes = None
         if optimizer is None:
             from pypy.jit.metainterp import optimize4 as optimizer
         self.optimize_loop = optimizer.optimize_loop
@@ -979,11 +973,7 @@ class MetaInterpStaticData(object):
     def _setup_once(self):
         """Runtime setup needed by the various components of the JIT."""
         if not self.globaldata.initialized:
-            if self.cpu.class_sizes is None:
-                cs = {}
-                for key, value in self._class_sizes:
-                    cs[key] = value
-                self.cpu.class_sizes = cs
+            xxxxxxxx
             self.cpu.setup_once()
             log(self.jit_starting_line)
             if not self.profiler.initialized:
