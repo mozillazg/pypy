@@ -153,7 +153,7 @@ class BaseTestOptimizeOpt(BaseTest):
 
     # ----------
 
-    def test_remove_guard_class(self):
+    def test_remove_guard_class_1(self):
         ops = """
         [p0]
         guard_class(p0, ConstClass(node_vtable))
@@ -167,6 +167,23 @@ class BaseTestOptimizeOpt(BaseTest):
         guard_class(p0, ConstClass(node_vtable))
           fail()
         jump(p0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_remove_guard_class_2(self):
+        ops = """
+        [i0]
+        p0 = new_with_vtable(ConstClass(node_vtable))
+        escape(p0)
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        p0 = new_with_vtable(ConstClass(node_vtable))
+        escape(p0)
+        jump(i0)
         """
         self.optimize_loop(ops, 'Not', expected)
 
@@ -503,6 +520,27 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not', expected)
 
+    def test_virtual_4(self):
+        ops = """
+        [i0, p0]
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        i1 = getfield_gc(p0, descr=valuedescr)
+        i2 = int_sub(i1, 1)
+        i3 = int_add(i0, i1)
+        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(i3, p1)
+        """
+        expected = """
+        [i0, i1]
+        i2 = int_sub(i1, 1)
+        i3 = int_add(i0, i1)
+        jump(i3, i2)
+        """
+        self.optimize_loop(ops, 'Not, Virtual(node_vtable, valuedescr=Not)',
+                           expected)
+
     def test_nonvirtual_1(self):
         ops = """
         [i]
@@ -537,6 +575,28 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         expected = ops
         self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_nonvirtual_later(self):
+        ops = """
+        [i]
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, i, descr=valuedescr)
+        i1 = getfield_gc(p1, descr=valuedescr)
+        escape(p1)
+        i2 = getfield_gc(p1, descr=valuedescr)
+        i3 = int_add(i1, i2)
+        jump(i3)
+        """
+        expected = """
+        [i]
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, i, descr=valuedescr)
+        escape(p1)
+        i2 = getfield_gc(p1, descr=valuedescr)
+        i3 = int_add(i, i2)
+        jump(i3)
+        """
+        self.optimize_loop(ops, 'Not', expected)
 
     def test_getfield_gc_pure_1(self):
         ops = """
