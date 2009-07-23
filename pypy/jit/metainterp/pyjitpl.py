@@ -1512,7 +1512,7 @@ class MetaInterp(object):
         if not we_are_translated():
             self._debug_history.append(['guard_failure', None, None])
         vinfo = self.staticdata.virtualizable_info
-        resumereader = resume.ResumeDataReader(resumedescr, newboxes)
+        resumereader = resume.ResumeDataReader(resumedescr, newboxes, self)
         if vinfo is not None:
             self.virtualizable_boxes = resumereader.consume_boxes()
             # just jumped away from assembler (case 4 in the comment in

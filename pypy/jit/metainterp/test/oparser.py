@@ -147,6 +147,8 @@ class OpParser(object):
                 args.append(self.getvar(arg))
             except KeyError:
                 raise ParseError("Unknown var: %s" % arg)
+        if hasattr(descr, '_oparser_uses_descr'):
+            descr._oparser_uses_descr(self, args)
         return opnum, args, descr
 
     def parse_result_op(self, line):
