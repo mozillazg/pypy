@@ -95,6 +95,7 @@ class CodeWriter(object):
         self.counter = 0
         self.raise_analyzer = RaiseAnalyzer(self.rtyper.annotator.translator)
         self.class_sizes = []
+        self._class_sizes_seen = {}
 
     def make_portal_bytecode(self, graph):
         log.info("making JitCodes...")
@@ -209,6 +210,21 @@ class CodeWriter(object):
         # ok
         calldescr = self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT)
         return calldescr, non_void_args
+
+    def register_known_gctype(self, vtable, STRUCT):
+        # lltype only
+        key = vtable._as_obj()
+        if key not in self._class_sizes_seen:
+            self._class_sizes_seen[key] = True
+            sizedescr = self.cpu.sizeof(STRUCT)
+            self.class_sizes.append((vtable, sizedescr))
+
+    def register_known_ooclass(self, cls, CLASS):
+        # ootype only
+        if cls not in self._class_sizes_seen:
+            self._class_sizes_seen[cls] = True
+            typedescr = self.cpu.typedescrof(CLASS)
+            self.class_sizes.append((cls, typedescr))
 
 
     if 0:        # disabled
@@ -768,8 +784,8 @@ class BytecodeMaker(object):
         TYPE = op.args[0].value
         cls = ootype.runtimeClass(TYPE)
         self.emit('new_with_vtable',
-                  self.get_position(self.cpu.typedescrof(TYPE)),
                   self.const_position(cls))
+        self.codewriter.register_known_ooclass(cls, TYPE)
         self.register_var(op.result)
 
     def serialize_op_oonewarray(self, op):

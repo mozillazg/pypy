@@ -1,4 +1,5 @@
 import py
+from pypy.rpython.lltypesystem import llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated, r_dict
 from pypy.rlib.unroll import unrolling_iterable
@@ -973,15 +974,23 @@ class MetaInterpStaticData(object):
     def _setup_once(self):
         """Runtime setup needed by the various components of the JIT."""
         if not self.globaldata.initialized:
-            self.cpu.class_sizes = class_sizes = {}
-            for vtable, sizedescr in self._class_sizes:
-                class_sizes[vtable] = sizedescr
+            self._setup_class_sizes()
             self.cpu.setup_once()
             log(self.jit_starting_line)
             if not self.profiler.initialized:
                 self.profiler.start()
                 self.profiler.initialized = True
             self.globaldata.initialized = True
+
+    def _setup_class_sizes(self):
+        self.cpu.class_sizes = class_sizes = {}
+        for vtable, sizedescr in self._class_sizes:
+            if not self.cpu.is_oo:
+                vtable = llmemory.cast_ptr_to_adr(vtable)
+                vtable = self.cpu.cast_adr_to_int(vtable)
+            else:
+                vtable = ootype.cast_to_object(vtable)
+            class_sizes[vtable] = sizedescr
 
     def generate_bytecode(self, policy, ts):
         self._codewriter = codewriter.CodeWriter(self, policy, ts)
