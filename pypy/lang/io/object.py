@@ -79,16 +79,16 @@ def object_for(space, w_target, w_message, w_context):
    assert argcount >= 4 and argcount <=5
 
    body = w_message.arguments[-1]
-   start = int(w_message.arguments[1].name)
-   stop = int(w_message.arguments[2].name)
+   start = w_message.arguments[1].eval(space, w_target, w_context).value
+   stop = w_message.arguments[2].eval(space, w_target, w_context).value
    if argcount == 4:
       step = 1
    else:
-      step = int(w_message.arguments[3].name)
+      step = w_message.arguments[3].eval(space, w_message, w_context).value
    
       
    key = w_message.arguments[0].name
-
+   
    for i in range(start, stop, step):
       w_context.slots[key] = W_Number(space, i)
       t = body.eval(space, w_context, w_context)
