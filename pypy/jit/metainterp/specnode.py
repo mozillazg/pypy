@@ -12,8 +12,8 @@ class SpecNode(object):
 class NotSpecNode(SpecNode):
     __slots__ = ()
 
-    def _equals(self, other):   # for tests only
-        return type(other) is NotSpecNode
+    def equals(self, other):
+        return isinstance(other, NotSpecNode)
 
 
 prebuiltNotSpecNode = NotSpecNode()
@@ -24,11 +24,22 @@ class VirtualInstanceSpecNode(SpecNode):
         self.known_class = known_class
         self.fields = fields    # list: [(fieldofs, subspecnode)]
 
-    def _equals(self, other):   # for tests only
-        ok = (type(other) is VirtualInstanceSpecNode and
-              self.known_class.equals(other.known_class) and
-              len(self.fields) == len(other.fields))
-        if ok:
-            for (o1, s1), (o2, s2) in zip(self.fields, other.fields):
-                ok = ok and o1 == o2 and s1._equals(s2)
-        return ok
+    def equals(self, other):
+        if not (isinstance(other, VirtualInstanceSpecNode) and
+                self.known_class.equals(other.known_class) and
+                len(self.fields) == len(other.fields)):
+            return False
+        for i in range(len(self.fields)):
+            o1, s1 = self.fields[i]
+            o2, s2 = other.fields[i]
+            if not (o1.sort_key() == o2.sort_key() and s1.equals(s2)):
+                return False
+        return True
+
+
+def equals_specnodes(specnodes1, specnodes2):
+    assert len(specnodes1) == len(specnodes2)
+    for i in range(len(specnodes1)):
+        if not specnodes1[i].equals(specnodes2[i]):
+            return False
+    return True

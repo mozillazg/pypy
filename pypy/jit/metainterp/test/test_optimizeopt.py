@@ -5,7 +5,7 @@ from pypy.jit.metainterp.test.test_resume import MyMetaInterp
 from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             OOtypeMixin,
                                                             BaseTest)
-from pypy.jit.metainterp.optimizeopt import optimize
+from pypy.jit.metainterp.optimizeopt import optimize_loop_1
 from pypy.jit.metainterp.history import AbstractDescr, ConstInt
 from pypy.jit.metainterp import resume, executor
 from pypy.jit.metainterp.resoperation import rop, opname
@@ -99,7 +99,7 @@ class BaseTestOptimizeOpt(BaseTest):
         assert loop.operations[-1].opnum == rop.JUMP
         loop.operations[-1].jump_target = loop
         #
-        optimize(self.cpu, loop)
+        optimize_loop_1(self.cpu, loop)
         #
         expected = self.parse(optops, boxkinds=boxkinds)
         self.assert_equal(loop, expected)

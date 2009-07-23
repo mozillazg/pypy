@@ -94,6 +94,7 @@ class CodeWriter(object):
         self.ts = ts
         self.counter = 0
         self.raise_analyzer = RaiseAnalyzer(self.rtyper.annotator.translator)
+        self.class_sizes = []
 
     def make_portal_bytecode(self, graph):
         log.info("making JitCodes...")
