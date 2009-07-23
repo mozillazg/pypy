@@ -61,6 +61,8 @@ class MyMetaInterp:
 
 
 def test_virtual_adder():
+    py.test.skip("not enabled")
+    # see r66529 in pypy/branch/pyjitpl5-optimize4/pypy/jit/metainterp
     storage = make_demo_storage()
     b1s, b2s, b3s, b4s, b5s = [BoxInt(1), BoxPtr(), BoxInt(3),
                                BoxPtr(), BoxPtr()]
