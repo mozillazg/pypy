@@ -82,6 +82,10 @@ class OOtypeMixin(object):
     nodesize = cpu.typedescrof(NODE)
     nodesize2 = cpu.typedescrof(NODE2)
 
+    # force a consistent order
+    valuedescr.sort_key()
+    nextdescr.sort_key()
+
     cpu.class_sizes = {node_vtable_adr: cpu.typedescrof(NODE),
                        node_vtable_adr2: cpu.typedescrof(NODE2)}
     namespace = locals()

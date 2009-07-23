@@ -6,7 +6,7 @@ from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             OOtypeMixin,
                                                             BaseTest)
 from pypy.jit.metainterp.optimizeopt import optimize
-from pypy.jit.metainterp.history import AbstractDescr, ConstInt, BoxPtr
+from pypy.jit.metainterp.history import AbstractDescr, ConstInt
 from pypy.jit.metainterp import resume, executor
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.metainterp.test.oparser import parse
@@ -630,7 +630,9 @@ class BaseTestOptimizeOpt(BaseTest):
         for box, varname in zip(boxes, varnames):
             _variables_equal(box, varname, strict=True)
         #
-        for cls_vtable, resolved, fieldstext in virtuals.values():
+        for match in parts:
+            pvar = match.group(1)
+            cls_vtable, resolved, fieldstext = virtuals[pvar]
             assert resolved is not None
             for fieldtext in fieldstext.split(','):
                 fieldtext = fieldtext.strip()
@@ -697,7 +699,7 @@ class BaseTestOptimizeOpt(BaseTest):
             ''')
 
     def test_expand_fail_3(self):
-        py.test.skip("in-progress")
+        self.make_fail_descr()
         ops = """
         [i1, i2, i3, p3]
         p1 = new_with_vtable(ConstClass(node_vtable))
@@ -707,22 +709,20 @@ class BaseTestOptimizeOpt(BaseTest):
         setfield_gc(p2, i2, descr=valuedescr)
         setfield_gc(p2, p3, descr=nextdescr)
         guard_true(i1)
-            fail(p1, i3)
+            fail(p1, i3, descr=fdescr)
         jump(i2, i1, i3, p3)
         """
         expected = """
         [i1, i2, i3, p3]
         guard_true(i1)
-            p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
-            p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
-            setfield_gc(p1, 1, descr=valuedescr)
-            setfield_gc(p1, p2, descr=nextdescr)
-            setfield_gc(p2, i2, descr=valuedescr)
-            setfield_gc(p2, p3, descr=nextdescr)
-            fail(p1, i3)
+            fail(i3, i2, p3, descr=fdescr)
         jump(i2, 1, i3, p3)
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not', expected, i1=1)
+        self.check_expanded_fail_descr('''p1, i3
+            where p1 is a node_vtable, valuedescr=1, nextdescr=p2
+            where p2 is a node_vtable, valuedescr=i2, nextdescr=p3
+            ''')
 
     def test_expand_fail_4(self):
         py.test.skip("in-progress")
