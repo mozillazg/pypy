@@ -724,6 +724,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.update_position(string.lineno)
         self.load_const(string.s)
 
+    def visit_Const(self, const):
+        self.update_position(const.lineno)
+        self.load_const(const.value)
+
     def visit_UnaryOp(self, op):
         self.update_position(op.lineno)
         op.operand.walkabout(self)
