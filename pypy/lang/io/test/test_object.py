@@ -74,3 +74,11 @@ def test_object_for():
    assert len(res.items) == 4
    results = [t.value for t in res.items]
    results == [0, 3, 6, 9]
+   
+def test_object_leaks():
+    inp = """a:= list();
+    for(x, 0, 10, 3, a append(x));
+    x"""
+    res, _ = interpret(inp)
+
+    assert res.value == 9
