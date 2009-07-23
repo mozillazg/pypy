@@ -1,5 +1,5 @@
 from pypy.lang.io.parserhack import interpret
-from pypy.lang.io.model import W_Message, W_Block
+from pypy.lang.io.model import W_Message, W_Block, W_List
 import py
 
 
@@ -14,7 +14,16 @@ def test_message_arg_at():
     inp = 'a := message(foo(2,3,4)); a argAt(1)'
     res, space = interpret(inp)
     assert res.name == '3'
-    
+
+def test_message_arguments():
+  inp = """msg := message(B(C D, E));
+  msg arguments"""
+  res, space = interpret(inp)
+  assert isinstance(res, W_List)
+  assert res[0].name == 'C'
+  assert res[0].next.name == 'D' 
+  assert res[1].name == 'E'
+  
 # def test_setIsActivatable():
 #     inp = "a := block(1);a setIsActivateable(true); a"
 #     res,space = interpret(inp)
