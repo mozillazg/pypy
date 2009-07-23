@@ -282,14 +282,44 @@ class PythonCodeMaker(ast.ASTVisitor):
         return max_depth
 
     def _build_lnotab(self, blocks):
-        lineno_table_builder = LinenoTableBuilder(self.first_lineno)
+        current_line = self.first_lineno
+        current_off = 0
+        table = []
+        push = table.append
         for block in blocks:
             offset = block.offset
             for instr in block.instructions:
                 if instr.lineno:
-                    lineno_table_builder.note_lineno_here(offset, instr.lineno)
+                    # compute deltas
+                    line = instr.lineno - current_line
+                    assert line >= 0
+                    addr = offset - current_off
+                    # Python assumes that lineno always increases with
+                    # increasing bytecode address (lnotab is unsigned char).
+                    # Depending on when SET_LINENO instructions are emitted this
+                    # is not always true.  Consider the code:
+                    #     a = (1,
+                    #          b)
+                    # In the bytecode stream, the assignment to "a" occurs after
+                    # the loading of "b".  This works with the C Python compiler
+                    # because it only generates a SET_LINENO instruction for the
+                    # assignment.
+                    if line or addr:
+                        while addr > 255:
+                            push(chr(255))
+                            push(chr(0))
+                            addr -= 255
+                        while line > 255:
+                            push(chr(addr))
+                            push(chr(255))
+                            line -= 255
+                            addr = 0
+                        push(chr(addr))
+                        push(chr(line))
+                        current_line = instr.lineno
+                        current_off = offset
                 offset += instr.size()
-        return lineno_table_builder.get_table()
+        return ''.join(table)
 
     def assemble(self):
         if not self.current_block.have_return:
@@ -537,45 +567,3 @@ def _opcode_stack_effect(op, arg):
             return _static_opcode_stack_effects[op]
         except KeyError:
             return _stack_effect_computers[op](arg)
-
-
-class LinenoTableBuilder(object):
-
-    def __init__(self, first_lineno):
-        self.first = self.current_line = first_lineno
-        self.current_off = 0
-        self.table = []
-
-    def get_table(self):
-        return ''.join(self.table)
-
-    def note_lineno_here(self, offset, lineno):
-        # compute deltas
-        line = lineno - self.current_line
-        assert line >= 0
-        addr = offset - self.current_off
-        # Python assumes that lineno always increases with
-        # increasing bytecode address (lnotab is unsigned char).
-        # Depending on when SET_LINENO instructions are emitted
-        # this is not always true.  Consider the code:
-        #     a = (1,
-        #          b)
-        # In the bytecode stream, the assignment to "a" occurs
-        # after the loading of "b".  This works with the C Python
-        # compiler because it only generates a SET_LINENO instruction
-        # for the assignment.
-        if line or addr:
-            push = self.table.append
-            while addr > 255:
-                push(chr(255))
-                push(chr(0))
-                addr -= 255
-            while line > 255:
-                push(chr(addr))
-                push(chr(255))
-                line -= 255
-                addr = 0
-            push(chr(addr))
-            push(chr(line))
-            self.current_line = lineno
-            self.current_off = offset
