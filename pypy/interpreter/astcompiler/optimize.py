@@ -158,6 +158,9 @@ class OptimizingVisitor(ast.ASTVisitor):
                     for op_kind, folder in unrolling_binary_folders:
                         if op_kind == op:
                             w_const = folder(self.space, left, right)
+                            break
+                    else:
+                        raise AssertionError("unknown binary operation")
                 except OperationError:
                     pass
                 else:
@@ -179,6 +182,9 @@ class OptimizingVisitor(ast.ASTVisitor):
                 for op_kind, folder in unrolling_unary_folders:
                     if op_kind == op:
                         w_const = folder(self.space, w_operand)
+                        break
+                else:
+                    raise AssertionError("unknown unary operation")
                 w_minint = self.space.wrap(-sys.maxint - 1)
                 # This makes sure the result is an integer.
                 if self.space.eq_w(w_minint, w_const):
