@@ -12,3 +12,11 @@ def call_arg_at(space, w_target, w_message, w_context):
 @register_method('Call', 'evalArgAt')
 def call_eval_arg_at(space, w_target, w_message, w_context):
     return call_arg_at(space, w_target, w_message, w_context).eval(space, w_context, w_context)
+    
+@register_method('Call', 'sender')
+def call_sender(space, w_target, w_message, w_context):
+    return w_target.sender
+
+@register_method('Call', 'target')
+def call_target(space, w_target, w_message, w_context):
+    return w_target.target
