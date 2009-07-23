@@ -8,6 +8,7 @@ from pypy.interpreter.astcompiler import optimize # For side effects
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool import stdlib_opcode as ops
 from pypy.interpreter.pyparser import future
+from pypy.interpreter.error import OperationError
 from pypy.module.__builtin__.__init__ import BUILTIN_TO_INDEX
 
 
@@ -619,12 +620,70 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def visit_Assign(self, assign):
         self.update_position(assign.lineno, True)
+        if self._optimize_unpacking(assign):
+            return
         assign.value.walkabout(self)
         duplications = len(assign.targets) - 1
         for i in range(len(assign.targets)):
             if i < duplications:
                 self.emit_op(ops.DUP_TOP)
             assign.targets[i].walkabout(self)
+
+    def _optimize_unpacking(self, assign):
+        if len(assign.targets) != 1:
+            return False
+        targets = self._list_from_sequence_node(assign.targets[0], False)
+        if targets is None:
+            return False
+        values = self._list_from_sequence_node(assign.value, True)
+        if values is None:
+            return False
+        targets_count = len(targets)
+        values_count = len(values)
+        if targets_count != values_count:
+            return False
+        for target in targets:
+            if not isinstance(target, ast.Name):
+                break
+        else:
+            self.visit_sequence(values)
+            seen_names = {}
+            for i in range(targets_count - 1, -1, -1):
+                target = targets[i]
+                assert isinstance(target, ast.Name)
+                if target.id not in seen_names:
+                    seen_names[target.id] = True
+                    self.name_op(target.id, ast.Store)
+                else:
+                    self.emit_op(ops.POP_TOP)
+            return True
+        if values_count > 3:
+            return False
+        self.visit_sequence(values)
+        if values_count == 2:
+            self.emit_op(ops.ROT_TWO)
+        elif values_count == 3:
+            self.emit_op(ops.ROT_THREE)
+            self.emit_op(ops.ROT_TWO)
+        self.visit_sequence(targets)
+        return True
+
+    def _list_from_sequence_node(self, node, const_possible):
+        if isinstance(node, ast.Tuple):
+            nodes = node.elts
+        elif isinstance(node, ast.List):
+            nodes = node.elts
+        elif const_possible and isinstance(node, ast.Const):
+            try:
+                values_w = self.space.unpackiterable(node.value)
+            except OperationError:
+                return None
+            line = node.lineno
+            column = node.col_offset
+            nodes = [ast.Const(obj, line, column) for obj in values_w]
+        else:
+            nodes = None
+        return nodes
 
     def visit_With(self, wih):
         self.update_position(wih.lineno, True)
