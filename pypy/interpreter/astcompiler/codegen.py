@@ -4,6 +4,7 @@ Generate Python bytecode from a Abstract Syntax Tree.
 
 from pypy.interpreter.astcompiler import (ast2 as ast, assemble, symtable,
                                           consts, misc)
+from pypy.interpreter.astcompiler import optimize # For side effects
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool import stdlib_opcode as ops
 from pypy.interpreter.pyparser import future
@@ -306,8 +307,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def visit_Assert(self, asrt):
         self.update_position(asrt.lineno)
         end = self.new_block()
-        asrt.test.walkabout(self)
-        self.emit_jump(ops.JUMP_IF_TRUE, end)
+        asrt.test.accept_jump_if(self, True, end)
         self.emit_op(ops.POP_TOP)
         self.emit_op_name(ops.LOAD_GLOBAL, self.names, "AssertionError")
         if asrt.msg:
@@ -378,8 +378,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.visit_sequence(if_.body)
         else:
             next = self.new_block()
-            if_.test.walkabout(self)
-            self.emit_jump(ops.JUMP_IF_FALSE, next)
+            if_.test.accept_jump_if(self, False, next)
             self.emit_op(ops.POP_TOP)
             self.visit_sequence(if_.body)
             self.emit_jump(ops.JUMP_FORWARD, end)
@@ -462,8 +461,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             if test_constant == misc.CONST_NOT_CONST:
                 # Force another lineno to be set for tracing purposes.
                 self.lineno_set = False
-                wh.test.walkabout(self)
-                self.emit_jump(ops.JUMP_IF_FALSE, anchor)
+                wh.test.accept_jump_if(self, False, anchor)
                 self.emit_op(ops.POP_TOP)
             self.visit_sequence(wh.body)
             self.emit_jump(ops.JUMP_ABSOLUTE, loop, True)
@@ -777,8 +775,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.update_position(ifexp.lineno)
         end = self.new_block()
         otherwise = self.new_block()
-        ifexp.test.walkabout(self)
-        self.emit_jump(ops.JUMP_IF_FALSE, otherwise)
+        ifexp.test.accept_jump_if(self, False, otherwise)
         self.emit_op(ops.POP_TOP)
         ifexp.body.walkabout(self)
         self.emit_jump(ops.JUMP_FORWARD, end)
@@ -921,8 +918,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if gen.ifs:
             if_count = len(gen.ifs)
             for if_ in gen.ifs:
-                if_.walkabout(self)
-                self.emit_jump(ops.JUMP_IF_FALSE, if_cleanup)
+                if_.accept_jump_if(self, False, if_cleanup)
                 self.use_next_block()
                 self.emit_op(ops.POP_TOP)
         else:
@@ -976,8 +972,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if gen.ifs:
             ifs_count = len(gen.ifs)
             for if_ in gen.ifs:
-                if_.walkabout(self)
-                self.emit_jump(ops.JUMP_IF_FALSE, if_cleanup)
+                if_.accept_jump_if(self, False, if_cleanup)
                 self.use_next_block()
                 self.emit_op(ops.POP_TOP)
         else:
