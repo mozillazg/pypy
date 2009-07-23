@@ -30,6 +30,7 @@ def optimize_bridge(options, old_loops, bridge, cpu):
     finder.find_nodes_bridge(bridge)
     for old_loop in old_loops:
         if finder.bridge_matches(old_loop.specnodes):
+            bridge.operations[-1].jump_target = old_loop
             optimize_bridge_1(cpu, bridge)
             return old_loop
     return None
