@@ -4,7 +4,7 @@ from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             OOtypeMixin,
                                                             BaseTest)
 from pypy.jit.metainterp.optimizeopt import optimize
-from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.history import AbstractDescr, ConstInt
 from pypy.jit.metainterp import resume
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.metainterp.test.oparser import parse
@@ -354,7 +354,7 @@ class BaseTestOptimizeOpt(BaseTest):
         [i, p0]
         i0 = getfield_gc(p0, descr=valuedescr)
         i1 = int_add(i0, i)
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i1, descr=valuedescr)
         jump(i, p1)
         """
@@ -470,7 +470,7 @@ class BaseTestOptimizeOpt(BaseTest):
         i0 = getfield_gc(p0, descr=valuedescr)
         guard_value(i0, 0)
           fail()
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         # the field 'value' has its default value of 0
         jump(p1)
         """
@@ -488,7 +488,7 @@ class BaseTestOptimizeOpt(BaseTest):
     def test_virtual_3(self):
         ops = """
         [i]
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
         i0 = getfield_gc(p1, descr=valuedescr)
         i1 = int_add(i0, 1)
@@ -504,7 +504,7 @@ class BaseTestOptimizeOpt(BaseTest):
     def test_nonvirtual_1(self):
         ops = """
         [i]
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
         i0 = getfield_gc(p1, descr=valuedescr)
         i1 = int_add(i0, 1)
@@ -515,7 +515,7 @@ class BaseTestOptimizeOpt(BaseTest):
         expected = """
         [i]
         i1 = int_add(i, 1)
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
         escape(p1)
         escape(p1)
@@ -529,7 +529,7 @@ class BaseTestOptimizeOpt(BaseTest):
         i0 = getfield_gc(p0, descr=valuedescr)
         escape(p0)
         i1 = int_add(i0, i)
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i1, descr=valuedescr)
         jump(i, p1)
         """
@@ -539,7 +539,7 @@ class BaseTestOptimizeOpt(BaseTest):
     def test_getfield_gc_pure_1(self):
         ops = """
         [i]
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
         i1 = getfield_gc_pure(p1, descr=valuedescr)
         jump(i1)
@@ -575,16 +575,14 @@ class BaseTestOptimizeOpt(BaseTest):
 
     # ----------
 
-    def make_fail_descr(self, boxestext):
+    def make_fail_descr(self):
         class FailDescr(AbstractDescr):
             args_seen = []
             def _oparser_uses_descr(self, oparse, args):
                 # typically called twice, before and after optimization
                 if len(self.args_seen) == 0:
-                    boxes = [oparse.box_for_var(boxtext.strip())
-                             for boxtext in boxestext.split(',')]
                     builder = resume.ResumeDataBuilder()
-                    builder.generate_boxes(boxes)
+                    builder.generate_boxes(args)
                     liveboxes = builder.finish(fdescr)
                     assert liveboxes == args
                 self.args_seen.append((args, oparse))
@@ -593,23 +591,36 @@ class BaseTestOptimizeOpt(BaseTest):
         self.fdescr = fdescr
         self.namespace['fdescr'] = fdescr
 
+    def unpack_expected_fail_args(self, oparse, text):
+        import re
+        r = re.compile(r"\bwhere\s+(\w+)\s+is a\s+(\w+)")
+        parts = list(r.finditer(text))
+        if parts:
+            text = text[:parts[0].start()]
+            xxx
+        return [oparse.getvar(s.strip()) for s in text.split(',')]
+
     def check_expanded_fail_descr(self, expectedtext):
         fdescr = self.fdescr
         args, oparse = fdescr.args_seen[-1]
         reader = resume.ResumeDataReader(fdescr, args, MyMetaInterp())
         boxes = reader.consume_boxes()
-        expected = [oparse.getvar(boxtext.strip())
-                    for boxtext in expectedtext.split(',')]
+        expected = self.unpack_expected_fail_args(oparse, expectedtext)
         assert boxes == expected
 
     def test_expand_fail_1(self):
-        self.make_fail_descr('i2, i3')
+        self.make_fail_descr()
         ops = """
         [i1, i3]
+        # first rename i3 into i4
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, i3, descr=valuedescr)
+        i4 = getfield_gc(p1, descr=valuedescr)
+        #
         i2 = int_add(10, 5)
         guard_true(i1)
-            fail(i2, i3, descr=fdescr)
-        jump(i1, i3)
+            fail(i2, i4, descr=fdescr)
+        jump(i1, i4)
         """
         expected = """
         [i1, i3]
@@ -622,32 +633,33 @@ class BaseTestOptimizeOpt(BaseTest):
 
     def test_expand_fail_2(self):
         py.test.skip("in-progress")
+        self.make_fail_descr()
         ops = """
         [i1, i2]
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i2, descr=valuedescr)
         setfield_gc(p1, p1, descr=nextdescr)
         guard_true(i1)
-            fail(p1)
+            fail(p1, descr=fdescr)
         jump(i1, i2)
         """
         expected = """
         [i1, i2]
         guard_true(i1)
-            p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
-            setfield_gc(p1, i2, descr=valuedescr)
-            setfield_gc(p1, p1, descr=nextdescr)
-            fail(p1)
+            fail(i2, descr=fdescr)
         jump(1, i2)
         """
         self.optimize_loop(ops, 'Not, Not', expected, i1=1)
+        self.check_expanded_fail_descr('''ptr
+            where ptr is a node_vtable, valuedescr=i2
+            ''')
 
     def test_expand_fail_3(self):
         py.test.skip("in-progress")
         ops = """
         [i1, i2, i3, p3]
-        p1 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
-        p2 = new_with_vtable(ConstClass(node_vtable), descr=nodesize)
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p2 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, 1, descr=valuedescr)
         setfield_gc(p1, p2, descr=nextdescr)
         setfield_gc(p2, i2, descr=valuedescr)

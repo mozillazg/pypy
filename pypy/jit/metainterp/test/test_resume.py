@@ -97,13 +97,11 @@ def test_virtual_adder_make_virtual():
     modifier.make_virtual(b2s,
                           ConstAddr(LLtypeMixin.node_vtable_adr,
                                     LLtypeMixin.cpu),
-                          LLtypeMixin.nodesize,
                           [LLtypeMixin.nextdescr, LLtypeMixin.valuedescr],
                           [b4s, c1s])   # new fields
     modifier.make_virtual(b4s,
                           ConstAddr(LLtypeMixin.node_vtable_adr2,
                                     LLtypeMixin.cpu),
-                          LLtypeMixin.nodesize2,
                           [LLtypeMixin.nextdescr, LLtypeMixin.valuedescr,
                                                   LLtypeMixin.otherdescr],
                           [b2s, b3s, b5s])  # new fields
@@ -143,23 +141,31 @@ def test_virtual_adder_make_virtual():
 
 
 def test_virtual_adder_make_constant():
-    storage = make_demo_storage()
-    b1s, b2s, b3s = [BoxInt(1), BoxPtr(), BoxInt(3)]
-    modifier = ResumeDataVirtualAdder(storage, [b1s, b2s, b3s])
-    modifier.make_constant(b1s, ConstInt(111))           # <-------
-    assert not modifier.is_virtual(b1s)
-    assert not modifier.is_virtual(b2s)
-    assert not modifier.is_virtual(b3s)
-    # done
-    liveboxes = modifier.finish()
-    assert liveboxes == [b2s, b3s]
-    #
-    b2t, b3t = [BoxPtr(demo55o), BoxInt(33)]
-    reader = ResumeDataReader(storage, [b2t, b3t], MyMetaInterp())
-    lst = reader.consume_boxes()
-    c1t = ConstInt(111)
-    assert lst == [c1t, ConstInt(1), c1t, b2t]
-    lst = reader.consume_boxes()
-    assert lst == [ConstInt(2), ConstInt(3)]
-    lst = reader.consume_boxes()
-    assert lst == [c1t, b2t, b3t]
+    for testnumber in [0, 1]:
+        storage = make_demo_storage()
+        b1s, b2s, b3s = [BoxInt(1), BoxPtr(), BoxInt(3)]
+        if testnumber == 0:
+            # I. making a constant with make_constant()
+            modifier = ResumeDataVirtualAdder(storage, [b1s, b2s, b3s])
+            modifier.make_constant(b1s, ConstInt(111))
+            assert not modifier.is_virtual(b1s)
+        else:
+            # II. making a constant by directly specifying a constant in
+            #     the list of liveboxes
+            b1s = ConstInt(111)
+            modifier = ResumeDataVirtualAdder(storage, [b1s, b2s, b3s])
+        assert not modifier.is_virtual(b2s)
+        assert not modifier.is_virtual(b3s)
+        # done
+        liveboxes = modifier.finish()
+        assert liveboxes == [b2s, b3s]
+        #
+        b2t, b3t = [BoxPtr(demo55o), BoxInt(33)]
+        reader = ResumeDataReader(storage, [b2t, b3t], MyMetaInterp())
+        lst = reader.consume_boxes()
+        c1t = ConstInt(111)
+        assert lst == [c1t, ConstInt(1), c1t, b2t]
+        lst = reader.consume_boxes()
+        assert lst == [ConstInt(2), ConstInt(3)]
+        lst = reader.consume_boxes()
+        assert lst == [c1t, b2t, b3t]

@@ -59,24 +59,26 @@ class ResumeDataVirtualAdder(object):
         assert storage.rd_virtuals is None
         self.original_liveboxes = liveboxes
         self.liveboxes = {}
-        for box in liveboxes:
-            self.liveboxes[box] = 0
-        self.liveboxes_order = liveboxes[:]
+        self.liveboxes_order = []
+        self._register_boxes(liveboxes)
         self.virtuals = []
         self.vfieldboxes = []
 
     def make_constant(self, box, const):
-        assert self.liveboxes[box] == 0
-        self.liveboxes[box] = self._getconstindex(const)
+        # this part of the interface is not used so far by optimizeopt.py
+        if self.liveboxes[box] == 0:
+            self.liveboxes[box] = self._getconstindex(const)
 
-    def make_virtual(self, virtualbox, known_class, sizedescr,
-                     fielddescrs, fieldboxes):
+    def make_virtual(self, virtualbox, known_class, fielddescrs, fieldboxes):
         assert self.liveboxes[virtualbox] == 0
         self.liveboxes[virtualbox] = len(self.virtuals) | VIRTUAL_FLAG
-        vinfo = VirtualInfo(known_class, sizedescr, fielddescrs)
+        vinfo = VirtualInfo(known_class, fielddescrs)
         self.virtuals.append(vinfo)
         self.vfieldboxes.append(fieldboxes)
-        for box in fieldboxes:
+        self._register_boxes(fieldboxes)
+
+    def _register_boxes(self, boxes):
+        for box in boxes:
             if isinstance(box, Box):
                 self.liveboxes.setdefault(box, 0)
                 self.liveboxes_order.append(box)
@@ -95,7 +97,7 @@ class ResumeDataVirtualAdder(object):
             num = storage.rd_nums[i]
             if num >= 0:
                 box = self.original_liveboxes[num]
-                storage.rd_nums[i] = self.liveboxes[box]
+                storage.rd_nums[i] = self._getboxindex(box)
         storage.rd_virtuals = self.virtuals[:]
         for i in range(len(storage.rd_virtuals)):
             vinfo = storage.rd_virtuals[i]
@@ -117,16 +119,14 @@ class ResumeDataVirtualAdder(object):
 
 
 class VirtualInfo(object):
-    def __init__(self, known_class, sizedescr, fielddescrs):
+    def __init__(self, known_class, fielddescrs):
         self.known_class = known_class
-        self.sizedescr = sizedescr
         self.fielddescrs = fielddescrs
         #self.fieldnums = ...
 
     def allocate(self, metainterp):
         return metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
-                                             [self.known_class],
-                                             descr=self.sizedescr)
+                                             [self.known_class])
 
     def setfields(self, metainterp, box, fn_decode_box):
         for i in range(len(self.fielddescrs)):

@@ -268,19 +268,23 @@ class LLtypeCPU(BaseCPU):
         return history.BoxInt(llimpl.do_arraylen_gc(arraydescr, array))
 
     def do_strlen(self, args, descr=None):
+        assert descr is None
         string = args[0].getptr_base()
         return history.BoxInt(llimpl.do_strlen(0, string))
 
     def do_strgetitem(self, args, descr=None):
+        assert descr is None
         string = args[0].getptr_base()
         index = args[1].getint()
         return history.BoxInt(llimpl.do_strgetitem(0, string, index))
 
     def do_unicodelen(self, args, descr=None):
+        assert descr is None
         string = args[0].getptr_base()
         return history.BoxInt(llimpl.do_unicodelen(0, string))
 
     def do_unicodegetitem(self, args, descr=None):
+        assert descr is None
         string = args[0].getptr_base()
         index = args[1].getint()
         return history.BoxInt(llimpl.do_unicodegetitem(0, string, index))
@@ -319,8 +323,10 @@ class LLtypeCPU(BaseCPU):
     def do_new(self, args, size):
         return history.BoxPtr(llimpl.do_new(size.ofs))
 
-    def do_new_with_vtable(self, args, size):
+    def do_new_with_vtable(self, args, descr=None):
+        assert descr is None
         vtable = args[0].getint()
+        size = self.class_sizes[vtable]    # attribute set by codewriter.py
         result = llimpl.do_new(size.ofs)
         llimpl.do_setfield_gc_int(result, self.fielddescrof_vtable.ofs,
                                   vtable, self.memo_cast)
@@ -365,20 +371,24 @@ class LLtypeCPU(BaseCPU):
                                        self.memo_cast)
 
     def do_newstr(self, args, descr=None):
+        assert descr is None
         length = args[0].getint()
         return history.BoxPtr(llimpl.do_newstr(0, length))
 
     def do_newunicode(self, args, descr=None):
+        assert descr is None
         length = args[0].getint()
         return history.BoxPtr(llimpl.do_newunicode(0, length))
 
     def do_strsetitem(self, args, descr=None):
+        assert descr is None
         string = args[0].getptr_base()
         index = args[1].getint()
         newvalue = args[2].getint()
         llimpl.do_strsetitem(0, string, index, newvalue)
 
     def do_unicodesetitem(self, args, descr=None):
+        assert descr is None
         string = args[0].getptr_base()
         index = args[1].getint()
         newvalue = args[2].getint()
@@ -401,11 +411,13 @@ class LLtypeCPU(BaseCPU):
             llimpl.do_call_void(func, self.memo_cast)
 
     def do_cast_int_to_ptr(self, args, descr=None):
+        assert descr is None
         return history.BoxPtr(llimpl.cast_from_int(llmemory.GCREF,
                                                    args[0].getint(),
                                                    self.memo_cast))
 
     def do_cast_ptr_to_int(self, args, descr=None):
+        assert descr is None
         return history.BoxInt(llimpl.cast_to_int(args[0].getptr_base(),
                                                         self.memo_cast))
 
@@ -511,7 +523,7 @@ class OOtypeCPU(BaseCPU):
         # XXX: return None if RESULT is Void
         return x
 
-    def do_oosend(self, args, descr=None):
+    def do_oosend(self, args, descr):
         assert isinstance(descr, MethDescr)
         selfbox = args[0]
         argboxes = args[1:]
