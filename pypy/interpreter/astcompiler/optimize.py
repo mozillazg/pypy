@@ -245,7 +245,7 @@ class OptimizingVisitor(ast.ASTVisitor):
                 w_const = node.as_constant()
                 if w_const is None:
                     return tup
-                consts_w[i] = node
+                consts_w[i] = w_const
         else:
             consts_w = []
         w_consts = self.space.newtuple(consts_w)
