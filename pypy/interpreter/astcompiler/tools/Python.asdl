@@ -77,6 +77,9 @@ module Python version "$Revision: 43614 $"
 	     | List(expr* elts, expr_context ctx) 
 	     | Tuple(expr *elts, expr_context ctx)
 
+             -- PyPy modification
+             | Const(object value)
+
 	      -- col_offset is the byte offset in the utf8 string the parser uses
 	      attributes (int lineno, int col_offset)
 
