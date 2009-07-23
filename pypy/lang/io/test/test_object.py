@@ -64,3 +64,13 @@ def test_object_substract():
     
     inp = '-"a"'
     py.test.raises(Exception, "interpret(inp)")
+    
+def test_object_for():
+   inp = """a:= list();
+   for(x, 0, 10, 3, a append(x));
+   a"""
+   res, space = interpret(inp)
+   
+   assert len(res.items) == 4
+   results = [t.value for t in res.items]
+   results == [0, 3, 6, 9]
