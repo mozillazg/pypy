@@ -180,17 +180,18 @@ class PythonCodeMaker(ast.ASTVisitor):
             container[name] = index
         return index
 
-    def add_const(self, obj):
+    def add_const(self, obj, w_key=None):
         space = self.space
-        w_key = space.newtuple([obj, space.type(obj)])
+        if w_key is None:
+            w_key = space.newtuple([obj, space.type(obj)])
         w_len = space.finditem(self.w_consts, w_key)
         if w_len is None:
             w_len = space.len(self.w_consts)
             space.setitem(self.w_consts, w_key, w_len)
         return space.int_w(w_len)
 
-    def load_const(self, obj):
-        index = self.add_const(obj)
+    def load_const(self, obj, w_key=None):
+        index = self.add_const(obj, w_key)
         self.emit_op_arg(ops.LOAD_CONST, index)
 
     def update_position(self, lineno, force=False):
