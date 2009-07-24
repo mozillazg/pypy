@@ -18,7 +18,7 @@ class __extend__(ast.List):
 
 class __extend__(ast.Tuple):
 
-    def as_list_w(self, space):
+    def as_node_list(self, space):
         return self.elts
 
 
