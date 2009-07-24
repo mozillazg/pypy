@@ -822,6 +822,8 @@ def frame_clear(frame, loop):
     frame.loop = loop
     frame.env = {}
     for i in range(len(loop.inputargs)):
+        expected_type = loop.inputargs[i].concretetype
+        assert lltype.typeOf(_future_values[i]) == expected_type
         frame.env[loop.inputargs[i]] = _future_values[i]
     del _future_values[:]
 
