@@ -761,19 +761,19 @@ class AppTestOptimizer:
         assert co.co_consts[2] == 2.5
 
     def test_tuple_folding(self):
-        co = compile("(1, 2, 3)", "<test>", "exec")
+        co = compile("x = (1, 2, 3)", "<test>", "exec")
         assert co.co_consts == ((1, 2, 3), None)
-        co = compile("()", "<test>", "exec")
+        co = compile("x = ()", "<test>", "exec")
         assert co.co_consts == ((), None)
 
     def test_unary_folding(self):
-        co = compile("-(3)", "<test>", "exec")
+        co = compile("x = -(3)", "<test>", "exec")
         assert co.co_consts[0] == -3
-        co = compile("~3", "<test>", "exec")
+        co = compile("x = ~3", "<test>", "exec")
         assert co.co_consts[0] == ~3
-        co = compile("+(-3)", "<test>", "exec")
+        co = compile("x = +(-3)", "<test>", "exec")
         assert co.co_consts[0] == -3
-        co = compile("not None", "<test>", "exec")
+        co = compile("x = not None", "<test>", "exec")
         assert co.co_consts[0] is True
 
     def test_folding_of_binops_on_constants(self):
