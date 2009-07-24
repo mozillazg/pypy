@@ -321,6 +321,17 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, '', expected, i=8)
 
+    def test_constptr_guard_value(self):
+        ops = """
+        []
+        p1 = escape()
+        guard_value(p1, ConstPtr(myptr))
+            fail()
+        jump()
+        """
+        self.optimize_loop(ops, '', ops, p1=self.nodebox.value,
+                           boxkinds={'myptr': self.nodebox.value})
+
     # ----------
 
     def test_fold_guard_no_exception(self):
