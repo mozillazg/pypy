@@ -1,4 +1,4 @@
-from pypy.interpreter.astcompiler import ast2 as ast
+from pypy.interpreter.astcompiler import ast2 as ast, misc
 from pypy.interpreter import error
 from pypy.interpreter.pyparser.pygram import syms, tokens
 from pypy.interpreter.pyparser.error import SyntaxError
@@ -25,7 +25,7 @@ augassign_operator_map = {
     '**=' : ast.Pow
 }
 
-operator_map = {
+operator_map = misc.dict_to_switch({
     tokens.VBAR : ast.BitOr,
     tokens.CIRCUMFLEX : ast.BitXor,
     tokens.AMPER : ast.BitAnd,
@@ -37,7 +37,7 @@ operator_map = {
     tokens.SLASH : ast.Div,
     tokens.DOUBLESLASH : ast.FloorDiv,
     tokens.PERCENT : ast.Mod
-}
+})
 
 
 class ASTBuilder(object):
@@ -857,13 +857,13 @@ class ASTBuilder(object):
     def handle_binop(self, binop_node):
         left = self.handle_expr(binop_node.children[0])
         right = self.handle_expr(binop_node.children[2])
-        op = operator_map[binop_node.children[1].type]
+        op = operator_map(binop_node.children[1].type)
         result = ast.BinOp(left, op, right, binop_node.lineno,
                            binop_node.column)
         number_of_ops = (len(binop_node.children) - 1) / 2
         for i in range(1, number_of_ops):
             op_node = binop_node.children[i * 2 + 1]
-            op = operator_map[op_node.type]
+            op = operator_map(op_node.type)
             sub_right = self.handle_expr(binop_node.children[i * 2 + 2])
             result = ast.BinOp(result, op, sub_right, op_node.lineno,
                                op_node.column)
