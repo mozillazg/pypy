@@ -1151,7 +1151,7 @@ class MetaInterp(object):
         if not canfold:
             op = self.history.record(opnum, argboxes, resbox, descr)
             if (not we_are_translated() and op is not None
-                and self.framestack):
+                and getattr(self, 'framestack', None)):
                 op.pc = self.framestack[-1].pc
                 op.name = self.framestack[-1].jitcode.name
         if require_attention:
