@@ -89,6 +89,9 @@ class CPU386(object):
                                                          'typeptr',
                                                         translate_support_code)
 
+    def set_class_sizes(self, class_sizes):
+        self.class_sizes = class_sizes
+
     def _setup_prebuilt_error(self, prefix, Class):
         if self.rtyper is not None:   # normal case
             bk = self.rtyper.annotator.bookkeeper
@@ -424,7 +427,7 @@ class CPU386(object):
             raise NotImplementedError("size = %d" % size)
 
     def _new_do_len(TP):
-        def do_strlen(self, args, descr=0):
+        def do_strlen(self, args, descr=None):
             basesize, itemsize, ofs_length = symbolic.get_array_token(TP,
                                                 self.translate_support_code)
             gcref = args[0].getptr(llmemory.GCREF)
@@ -435,7 +438,7 @@ class CPU386(object):
     do_strlen = _new_do_len(rstr.STR)
     do_unicodelen = _new_do_len(rstr.UNICODE)
 
-    def do_strgetitem(self, args, descr=0):
+    def do_strgetitem(self, args, descr=None):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
                                                     self.translate_support_code)
         gcref = args[0].getptr(llmemory.GCREF)
@@ -443,7 +446,7 @@ class CPU386(object):
         v = rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[basesize + i]
         return BoxInt(ord(v))
 
-    def do_unicodegetitem(self, args, descr=0):
+    def do_unicodegetitem(self, args, descr=None):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
                                                     self.translate_support_code)
         gcref = args[0].getptr(llmemory.GCREF)
@@ -507,10 +510,13 @@ class CPU386(object):
         res = self.gc_ll_descr.gc_malloc(descrsize)
         return BoxPtr(res)
 
-    def do_new_with_vtable(self, args, descrsize):
+    def do_new_with_vtable(self, args, descr=None):
+        assert descr is None
+        classint = args[0].getint()
+        descrsize = self.class_sizes[classint]
         res = self.gc_ll_descr.gc_malloc(descrsize)
         as_array = rffi.cast(rffi.CArrayPtr(lltype.Signed), res)
-        as_array[self.vtable_offset/WORD] = args[0].getint()
+        as_array[self.vtable_offset/WORD] = classint
         return BoxPtr(res)
 
     def do_new_array(self, args, arraydescr):
@@ -518,19 +524,19 @@ class CPU386(object):
         res = self.gc_ll_descr.gc_malloc_array(arraydescr, num_elem)
         return BoxPtr(self.cast_adr_to_gcref(res))
 
-    def do_newstr(self, args, descr=0):
+    def do_newstr(self, args, descr=None):
         num_elem = args[0].getint()
         tsc = self.translate_support_code
         res = self.gc_ll_descr.gc_malloc_str(num_elem, tsc)
         return BoxPtr(self.cast_adr_to_gcref(res))
 
-    def do_newunicode(self, args, descr=0):
+    def do_newunicode(self, args, descr=None):
         num_elem = args[0].getint()
         tsc = self.translate_support_code
         res = self.gc_ll_descr.gc_malloc_unicode(num_elem, tsc)
         return BoxPtr(self.cast_adr_to_gcref(res))
 
-    def do_strsetitem(self, args, descr=0):
+    def do_strsetitem(self, args, descr=None):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
                                                 self.translate_support_code)
         index = args[1].getint()
@@ -538,7 +544,7 @@ class CPU386(object):
         a = args[0].getptr(llmemory.GCREF)
         rffi.cast(rffi.CArrayPtr(lltype.Char), a)[index + basesize] = chr(v)
 
-    def do_unicodesetitem(self, args, descr=0):
+    def do_unicodesetitem(self, args, descr=None):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
                                                 self.translate_support_code)
         index = args[1].getint()
