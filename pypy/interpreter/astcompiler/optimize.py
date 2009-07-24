@@ -225,7 +225,7 @@ class OptimizingVisitor(ast.ASTVisitor):
         while i < len(values) - 1:
             truth = values[i].as_constant_truth(self.space)
             if truth != CONST_NOT_CONST:
-                if truth == CONST_FALSE == we_are_and:
+                if (truth != CONST_TRUE) == we_are_and:
                     del values[i + 1:]
                     break
                 else:
