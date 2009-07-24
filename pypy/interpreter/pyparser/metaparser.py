@@ -4,7 +4,6 @@ Makes a parser from a grammar source.
 Inspired by Guido van Rossum's pgen2.
 """
 
-import collections
 import StringIO
 import tokenize
 import token
@@ -79,11 +78,11 @@ def nfa_to_dfa(start, end):
     start.find_unlabeled_states(base_nfas)
     state_stack = [DFA(base_nfas, end)]
     for state in state_stack:
-        arcs = collections.defaultdict(set)
+        arcs = {}
         for nfa in state.nfas:
             for label, sub_nfa in nfa.arcs:
                 if label is not None:
-                    sub_nfa.find_unlabeled_states(arcs[label])
+                    sub_nfa.find_unlabeled_states(arcs.setdefault(label, set()))
         for label, nfa_set in arcs.iteritems():
             for st in state_stack:
                 if st.nfas == nfa_set:
