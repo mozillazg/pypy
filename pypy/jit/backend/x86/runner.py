@@ -39,6 +39,9 @@ class ConstDescr3(AbstractDescr):
     def sort_key(self):
         return self.v0    # the ofs field for fielddescrs
 
+    def is_pointer_field(self):
+        return self.flag2     # for fielddescrs
+
     def equals(self, other):
         if not isinstance(other, ConstDescr3):
             return False
