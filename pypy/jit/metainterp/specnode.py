@@ -5,15 +5,15 @@ class SpecNode(object):
     __metaclass__ = extendabletype     # extended in optimizefindnode.py
     __slots__ = ()
 
-    def extract_runtime_data(self, cpu, valuebox, resultlist):
-        resultlist.append(valuebox)
-
 
 class NotSpecNode(SpecNode):
     __slots__ = ()
 
     def equals(self, other):
         return isinstance(other, NotSpecNode)
+
+    def extract_runtime_data(self, cpu, valuebox, resultlist):
+        resultlist.append(valuebox)
 
 
 prebuiltNotSpecNode = NotSpecNode()
@@ -35,6 +35,14 @@ class VirtualInstanceSpecNode(SpecNode):
             if not (o1.sort_key() == o2.sort_key() and s1.equals(s2)):
                 return False
         return True
+
+    def extract_runtime_data(self, cpu, valuebox, resultlist):
+        from pypy.jit.metainterp import executor, history, resoperation
+        for ofs, subspecnode in self.fields:
+            assert isinstance(ofs, history.AbstractDescr)
+            fieldbox = executor.execute(cpu, resoperation.rop.GETFIELD_GC,
+                                        [valuebox], ofs)
+            subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
 
 
 def equals_specnodes(specnodes1, specnodes2):
