@@ -2,6 +2,11 @@
 Generate Python bytecode from a Abstract Syntax Tree.
 """
 
+# NOTE TO READERS: All the ugly and "obvious" isinstance assertions here are to
+# help the annotator.  To it, unfortunately, everything is not so obvious.  If
+# you figure out a way to remove them, great, but try a translation first,
+# please.
+
 from pypy.interpreter.astcompiler import (ast2 as ast, assemble, symtable,
                                           consts, misc)
 from pypy.interpreter.astcompiler import optimize, asthelpers # For side effects
@@ -13,6 +18,7 @@ from pypy.module.__builtin__.__init__ import BUILTIN_TO_INDEX
 
 
 def compile_ast(space, module, info):
+    """Generate a code object from AST."""
     symbols = symtable.SymtableBuilder(space, module, info)
     return TopLevelCodeGenerator(space, module, symbols, info).assemble()
 
@@ -106,6 +112,7 @@ slice_operations = misc.dict_to_switch({
 })
 
 
+# These are frame blocks.
 F_BLOCK_LOOP = 0
 F_BLOCK_EXCEPT = 1
 F_BLOCK_FINALLY = 2
@@ -113,6 +120,11 @@ F_BLOCK_FINALLY_END = 3
 
 
 class PythonCodeGenerator(assemble.PythonCodeMaker):
+    """Base code generator.
+
+    A subclass of this is created for every scope to be compiled.  It walks
+    across the AST tree generating bytecode as needed.
+    """
 
     def __init__(self, space, name, tree, lineno, symbols, compile_info):
         self.scope = symbols.find_scope(tree)
@@ -125,15 +137,21 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self._compile(tree)
 
     def _compile(self, tree):
+        """Override in subclasses to compile a scope."""
         raise NotImplementedError
 
     def current_temporary_name(self):
+        """Return the name of the current temporary variable.
+
+        This must be in sync with the one during symbol table building.
+        """
         name = "_[%d]" % (self.temporary_name_counter,)
         self.temporary_name_counter += 1
         assert self.scope.lookup(name) != symtable.SCOPE_UNKNOWN
         return name
 
     def sub_scope(self, kind, name, node, lineno):
+        """Convenience function for compiling a sub scope."""
         generator = kind(self.space, name, node, lineno, self.symbols,
                          self.compile_info)
         return generator.assemble()
@@ -151,6 +169,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
                           filename=self.compile_info.filename)
 
     def name_op(self, identifier, ctx):
+        """Generate an operation appropiate for the scope of the identifier."""
         scope = self.scope.lookup(identifier)
         op = ops.NOP
         container = self.names
@@ -182,9 +201,11 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         return isinstance(node, ast.Expr) and isinstance(node.value, ast.Str)
 
     def _get_code_flags(self):
+        # Default for everything but module scopes.
         return consts.CO_NEWLOCALS
 
     def _handle_body(self, body):
+        """Compile a list of statements, handling doc strings if needed."""
         if body:
             start = 0
             if self.is_docstring(body[0]):
@@ -212,8 +233,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         mod.body.walkabout(self)
 
     def _make_function(self, code, num_defaults=0):
+        """Emit the opcodes to turn a code object into a function."""
         code_index = self.add_const(code)
         if code.co_freevars:
+            # Load cell and free vars to pass on.
             for free in code.co_freevars:
                 free_scope = self.scope.lookup(free)
                 if free_scope == symtable.SCOPE_CELL:
@@ -230,6 +253,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
 
     def visit_FunctionDef(self, func):
         self.update_position(func.lineno, True)
+        # Load decorators first, but apply them after the function is created.
         if func.decorators:
             self.visit_sequence(func.decorators)
         if func.args.defaults:
@@ -240,6 +264,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         code = self.sub_scope(FunctionCodeGenerator, func.name, func,
                               func.lineno)
         self._make_function(code, num_defaults)
+        # Apply decorators.
         if func.decorators:
             for i in range(len(func.decorators)):
                 self.emit_op_arg(ops.CALL_FUNCTION, 1)
@@ -403,6 +428,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if not self.frame_blocks:
             self.error("'continue' not properly in loop", cont)
         current_block, block = self.frame_blocks[-1]
+        # Continue cannot be in a finally block.
         if current_block == F_BLOCK_LOOP:
             self.emit_jump(ops.JUMP_ABSOLUTE, block, True)
         elif current_block == F_BLOCK_EXCEPT or \
@@ -524,6 +550,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         self.visit_sequence(tf.body)
         self.emit_op(ops.POP_BLOCK)
         self.pop_frame_block(F_BLOCK_FINALLY, body)
+        # Indicates there was no exception.
         self.load_const(self.space.w_None)
         self.use_next_block(end)
         self.push_frame_block(F_BLOCK_FINALLY_END, end)
@@ -559,6 +586,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.load_const(self.space.wrap(level))
             self.load_const(self.space.w_None)
             self.emit_op_name(ops.IMPORT_NAME, self.names, alias.name)
+            # If there's no asname then we store the root module.  If there is
+            # an asname, _import_as stores the last module of the chain into it.
             if alias.asname:
                 self._import_as(alias)
             else:
@@ -575,6 +604,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         first = imp.names[0]
         assert isinstance(first, ast.alias)
         star_import = len(imp.names) == 1 and first.name == "*"
+        # Various error checking for future imports.
         if imp.module == "__future__":
             last_line, last_offset = self.compile_info.last_future_import
             if imp.lineno > last_line or \
@@ -603,6 +633,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if imp.module:
             mod_name = imp.module
         else:
+            # In the case of a relative import.
             mod_name = ""
         self.emit_op_name(ops.IMPORT_NAME, self.names, mod_name)
         if star_import:
@@ -630,6 +661,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             assign.targets[i].walkabout(self)
 
     def _optimize_unpacking(self, assign):
+        """Try to optimize out BUILD_TUPLE and UNPACK_SEQUENCE opcodes."""
         if len(assign.targets) != 1:
             return False
         targets = assign.targets[0].as_node_list(self.space)
@@ -745,6 +777,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if self.interactive:
             expr.value.walkabout(self)
             self.emit_op(ops.PRINT_EXPR)
+        # Only compile if the expression isn't constant.
         elif not expr.value.constant:
             expr.value.walkabout(self)
             self.emit_op(ops.POP_TOP)
@@ -1230,6 +1263,7 @@ class FunctionCodeGenerator(AbstractFunctionCodeGenerator):
 
     def _compile(self, func):
         assert isinstance(func, ast.FunctionDef)
+        # If there's a docstring, store it as the first constant.
         if self.is_docstring(func.body[0]):
             doc_string = func.body[0]
             assert isinstance(doc_string, ast.Expr)

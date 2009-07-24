@@ -57,6 +57,15 @@ def _check_line_for_encoding(line):
 
 
 class CompileInfo(object):
+    """Stores information about the source being compiled.
+
+    * filename: The filename of the source.
+    * mode: The parse mode to use. ('exec', 'eval', or 'single')
+    * flags: Parser and compiler flags.
+    * encoding: The source encoding.
+    * last_future_import: The line number and offset of the last __future__
+      import.
+    """
 
     def __init__(self, filename, mode="exec", flags=0, future_pos=(0, 0)):
         self.filename = filename
@@ -79,7 +88,11 @@ class PythonParser(parser.Parser):
         self.space = space
 
     def parse_source(self, textsrc, compile_info):
-        """Parse a python source according to goal"""
+        """Main entry point for parsing Python source.
+
+        Everything from decoding the source to tokenizing to building the parse
+        tree is handled here.
+        """
         # Detect source encoding.
         enc = None
         if textsrc.startswith("\xEF\xBB\xBF"):
@@ -111,10 +124,18 @@ class PythonParser(parser.Parser):
                     raise
 
         flags = compile_info.flags
+
+        # In order to not raise errors when 'as' or 'with' are used as names in
+        # code that does not explicitly enable the with statement, we have two
+        # grammars.  One with 'as' and 'with' and keywords and one without.
+        # This is far better than CPython, where the parser is hacked up to
+        # check for __future__ imports and recognize new keywords accordingly.
         if flags & consts.CO_FUTURE_WITH_STATEMENT:
             self.grammar = pygram.python_grammar
         else:
             self.grammar = pygram.python_grammar_no_with_statement
+
+        # The tokenizer is very picky about how it wants its input.
         source_lines = textsrc.splitlines(True)
         if source_lines and not source_lines[-1].endswith("\n"):
             source_lines[-1] += '\n'
@@ -129,6 +150,8 @@ class PythonParser(parser.Parser):
                 if self.add_token(tp, value, lineno, column, line):
                     break
         except parser.ParseError, e:
+            # Catch parse errors, pretty them up and reraise them as a
+            # SyntaxError.
             new_err = error.IndentationError
             if tp == pygram.tokens.INDENT:
                 msg = "unexpected indent"
@@ -142,6 +165,7 @@ class PythonParser(parser.Parser):
         else:
             tree = self.root
         finally:
+            # Avoid hanging onto the tree.
             self.root = None
         if enc is not None:
             compile_info.encoding = enc
