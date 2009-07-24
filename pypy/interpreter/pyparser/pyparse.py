@@ -88,12 +88,13 @@ class PythonParser(parser.Parser):
             # If an encoding is explicitly given check that it is utf-8.
             decl_enc = _check_for_encoding(textsrc)
             if decl_enc and decl_enc != "utf-8":
-                raise error.SyntaxError("UTF-8 BOM with non-utf8 coding cookie")
+                raise error.SyntaxError("UTF-8 BOM with non-utf8 coding cookie",
+                                        filename=compile_info.filename)
         elif compile_info.flags & consts.PyCF_SOURCE_IS_UTF8:
             enc = 'utf-8'
-
             if _check_for_encoding(textsrc) is not None:
-                raise error.SyntaxError("coding declaration in unicode string")
+                raise error.SyntaxError("coding declaration in unicode string",
+                                        filename=compile_info.filename)
         else:
             enc = _normalize_encoding(_check_for_encoding(textsrc))
             if enc is not None and enc not in ('utf-8', 'iso-8859-1'):
@@ -105,7 +106,8 @@ class PythonParser(parser.Parser):
                     # KeyError
                     space = self.space
                     if space.is_w(e.w_type, space.w_LookupError):
-                        raise error.SyntaxError("Unknown encoding: %s" % enc)
+                        raise error.SyntaxError("Unknown encoding: %s" % enc,
+                                                filename=compile_info.filename)
                     raise
 
         flags = compile_info.flags
