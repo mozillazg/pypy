@@ -16,6 +16,18 @@ CONST_FALSE = 0
 CONST_TRUE = 1
 
 
+class __extend__(ast.AST):
+
+    def as_constant_truth(self, space):
+        raise AssertionError("only for expressions")
+
+    def as_constant(self):
+        raise AssertionError("only for expressions")
+
+    def accept_jump_if(self, gen, condition, target):
+        raise AssertionError("only for expressions")
+
+
 class __extend__(ast.expr):
 
     def as_constant_truth(self, space):
