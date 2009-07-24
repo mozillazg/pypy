@@ -7,8 +7,7 @@ Generate Python bytecode from a Abstract Syntax Tree.
 # you figure out a way to remove them, great, but try a translation first,
 # please.
 
-from pypy.interpreter.astcompiler import (ast2 as ast, assemble, symtable,
-                                          consts, misc)
+from pypy.interpreter.astcompiler import ast, assemble, symtable, consts, misc
 from pypy.interpreter.astcompiler import optimize, asthelpers # For side effects
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool import stdlib_opcode as ops

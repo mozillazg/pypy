@@ -1,4 +1,4 @@
-from pypy.interpreter.astcompiler import ast2 as ast, misc
+from pypy.interpreter.astcompiler import ast, misc
 from pypy.interpreter import error
 from pypy.interpreter.pyparser.pygram import syms, tokens
 from pypy.interpreter.pyparser.error import SyntaxError

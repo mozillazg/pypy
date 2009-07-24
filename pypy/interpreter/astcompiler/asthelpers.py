@@ -1,4 +1,4 @@
-from pypy.interpreter.astcompiler import ast2 as ast
+from pypy.interpreter.astcompiler import ast
 from pypy.interpreter.error import OperationError
 
 

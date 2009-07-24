@@ -247,7 +247,7 @@ def main(argv):
         print "Assuming default values of Python.asdl and ast.py"
         here = os.path.dirname(__file__)
         def_file = os.path.join(here, "Python.asdl")
-        out_file = os.path.join(here, "..", "ast2.py")
+        out_file = os.path.join(here, "..", "ast.py")
     else:
         print >> sys.stderr, "invalid arguments"
         return 2

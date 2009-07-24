@@ -2,7 +2,7 @@
 Python control flow graph generation and bytecode assembly.
 """
 
-from pypy.interpreter.astcompiler import ast2 as ast, symtable
+from pypy.interpreter.astcompiler import ast, symtable
 from pypy.interpreter import pycode
 from pypy.tool import stdlib_opcode as ops
 
