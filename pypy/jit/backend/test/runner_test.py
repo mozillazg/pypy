@@ -274,6 +274,7 @@ class BaseBackendTest(Runner):
     def test_field_basic(self):
         t_box, T_box = self.alloc_instance(self.T)
         fielddescr = self.cpu.fielddescrof(self.S, 'value')
+        assert not fielddescr.is_pointer_field()
         res = self.execute_operation(rop.SETFIELD_GC, [t_box, BoxInt(39082)],
                                      'void', descr=fielddescr)
         assert res is None
@@ -296,6 +297,7 @@ class BaseBackendTest(Runner):
         #
         u_box, U_box = self.alloc_instance(self.U)
         fielddescr2 = self.cpu.fielddescrof(self.S, 'next')
+        assert fielddescr2.is_pointer_field()
         res = self.execute_operation(rop.SETFIELD_GC, [t_box, u_box],
                                      'void', descr=fielddescr2)
         assert res is None
