@@ -75,6 +75,19 @@ def test_object_for():
    results = [t.value for t in res.items]
    results == [0, 3, 6, 9]
    
+def test_improved_object_for():
+    
+    inp = """a:= list();
+    x := 2
+    y := 11
+    for(x, 0, y - 1, x + 1, a append(x));
+    a"""
+    res, space = interpret(inp)
+
+    assert len(res.items) == 4
+    results = [t.value for t in res.items]
+    results == [0, 3, 6, 9]
+       
 def test_object_leaks():
     inp = """a:= list();
     for(x, 0, 10, 3, a append(x));
