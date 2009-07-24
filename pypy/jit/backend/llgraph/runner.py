@@ -91,6 +91,13 @@ class BaseCPU(model.AbstractCPU):
         assert self.translate_support_code
         return False
 
+    def set_class_sizes(self, class_sizes):
+        self.class_sizes = class_sizes
+        for vtable, size in class_sizes.items():
+            if not self.is_oo:
+                size = size.ofs
+            llimpl.set_class_size(self.memo_cast, vtable, size)
+
     def compile_operations(self, loop, bridge=None):
         """In a real assembler backend, this should assemble the given
         list of operations.  Here we just generate a similar CompiledLoop
@@ -326,7 +333,7 @@ class LLtypeCPU(BaseCPU):
     def do_new_with_vtable(self, args, descr=None):
         assert descr is None
         vtable = args[0].getint()
-        size = self.class_sizes[vtable]    # attribute set by codewriter.py
+        size = self.class_sizes[vtable]
         result = llimpl.do_new(size.ofs)
         llimpl.do_setfield_gc_int(result, self.fielddescrof_vtable.ofs,
                                   vtable, self.memo_cast)

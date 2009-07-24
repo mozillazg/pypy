@@ -983,7 +983,7 @@ class MetaInterpStaticData(object):
             self.globaldata.initialized = True
 
     def _setup_class_sizes(self):
-        self.cpu.class_sizes = class_sizes = {}
+        class_sizes = {}
         for vtable, sizedescr in self._class_sizes:
             if not self.cpu.is_oo:
                 vtable = llmemory.cast_ptr_to_adr(vtable)
@@ -991,6 +991,7 @@ class MetaInterpStaticData(object):
             else:
                 vtable = ootype.cast_to_object(vtable)
             class_sizes[vtable] = sizedescr
+        self.cpu.set_class_sizes(class_sizes)
 
     def generate_bytecode(self, policy, ts):
         self._codewriter = codewriter.CodeWriter(self, policy, ts)
