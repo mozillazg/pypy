@@ -16,6 +16,10 @@ _emit_syntax_warning = app.interphook("syntax_warning")
 del app
 
 def syntax_warning(space, msg, fn, lineno, offset):
+    """Raise an applevel SyntaxWarning.
+
+    If the user has set this warning to raise an error, a SyntaxError will be
+    raised."""
     w_msg = space.wrap(msg)
     w_filename = space.wrap(fn)
     w_lineno = space.wrap(lineno)
@@ -24,6 +28,7 @@ def syntax_warning(space, msg, fn, lineno, offset):
 
 
 def dict_to_switch(d):
+    """Convert of dictionary with integer keys to a switch statement."""
     def lookup(query):
         if we_are_translated():
             for key, value in unrolling_iteritems:

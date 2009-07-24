@@ -44,16 +44,22 @@ class Scope(object):
         self.nested = False
 
     def lookup(self, name):
+        """Find the scope of identifier 'name'."""
         return self.symbols.get(self.mangle(name), SCOPE_UNKNOWN)
 
     def lookup_role(self, name):
         return self.roles.get(self.mangle(name), SYM_BLANK)
 
     def new_temporary_name(self):
+        """Return the next temporary name.
+
+        This must be in sync with PythonCodeGenerator's counter.
+        """
         self.note_symbol("_[%d]" % (self.temp_name_counter,), SYM_ASSIGNED)
         self.temp_name_counter += 1
 
     def note_symbol(self, identifier, role):
+        """Record that identifier occurs in this scope."""
         mangled = self.mangle(identifier)
         new_role = role
         if mangled in self.roles:
@@ -69,17 +75,21 @@ class Scope(object):
         return mangled
 
     def note_yield(self, yield_node):
+        """Called when a yield is found."""
         raise SyntaxError("'yield' outside function", yield_node.lineno,
                           yield_node.col_offset)
 
     def note_return(self, ret):
+        """Called when a return statement is found."""
         raise SyntaxError("return outside function", ret.lineno,
                           ret.col_offset)
 
     def note_exec(self, exc):
+        """Called when an exec statement is found."""
         self.has_exec = True
 
     def note_import_star(self, imp):
+        """Called when a start import is found."""
         pass
 
     def mangle(self, name):
@@ -89,10 +99,12 @@ class Scope(object):
             return name
 
     def add_child(self, child_scope):
+        """Note a new child scope."""
         child_scope.parent = self
         self.children.append(child_scope)
 
     def _finalize_name(self, name, flags, local, bound, free, globs):
+        """Decide on the scope of a name."""
         if flags & SYM_GLOBAL:
             if flags & SYM_PARAM:
                 err = "name '%s' is both local and global" % (name,)
@@ -124,11 +136,13 @@ class Scope(object):
             self.symbols[name] = SCOPE_GLOBAL_IMPLICIT
 
     def _pass_on_bindings(self, local, bound, globs, new_bound, new_globs):
+        """Allow child scopes to see names bound here and in outer scopes."""
         new_globs.update(globs)
         if bound:
             new_bound.update(bound)
 
     def _finalize_cells(self, free):
+        """Hook for FunctionScope."""
         pass
 
     def _check_optimization(self):
@@ -137,6 +151,7 @@ class Scope(object):
     _hide_bound_from_nested_scopes = False
 
     def finalize(self, bound, free, globs):
+        """Enter final bookeeping data in to self.symbols."""
         self.symbols = {}
         local = {}
         new_globs = {}
@@ -150,6 +165,8 @@ class Scope(object):
             self._pass_on_bindings(local, bound, globs, new_bound, new_globs)
         child_frees = {}
         for child in self.children:
+            # Symbol dictionaries are copied to avoid having child scopes
+            # pollute each other's.
             child_free = new_free.copy()
             child.finalize(new_bound.copy(), child_free, new_globs.copy())
             child_frees.update(child_free)
@@ -279,6 +296,7 @@ class ClassScope(Scope):
 
 
 class SymtableBuilder(ast.GenericASTVisitor):
+    """Find symbol information from AST."""
 
     def __init__(self, space, module, compile_info):
         self.space = space
@@ -300,6 +318,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
         assert not self.stack
 
     def push_scope(self, scope, node):
+        """Push a child scope."""
         if self.stack:
             self.stack[-1].add_child(scope)
         self.stack.append(scope)
@@ -315,13 +334,16 @@ class SymtableBuilder(ast.GenericASTVisitor):
             self.scope = None
 
     def find_scope(self, scope_node):
+        """Lookup the scope for a given AST node."""
         return self.scopes[scope_node]
 
     def implicit_arg(self, pos):
+        """Note a implicit arg for implicit tuple unpacking."""
         name = ".%d" % (pos,)
         self.note_symbol(name, SYM_PARAM)
 
     def note_symbol(self, identifier, role):
+        """Note the identifer on the current scope."""
         mangled = self.scope.note_symbol(identifier, role)
         if role & SYM_GLOBAL:
             if mangled in self.globs:
@@ -330,6 +352,7 @@ class SymtableBuilder(ast.GenericASTVisitor):
 
     def visit_FunctionDef(self, func):
         self.note_symbol(func.name, SYM_ASSIGNED)
+        # Function defaults and decorators happen in the outer scope.
         if func.args.defaults:
             self.visit_sequence(func.args.defaults)
         if func.decorators:
@@ -449,6 +472,8 @@ class SymtableBuilder(ast.GenericASTVisitor):
             if isinstance(arg, ast.Name):
                 self.note_symbol(arg.id, SYM_PARAM)
             elif isinstance(arg, ast.Tuple):
+                # Tuple unpacking in the argument list.  Add a secret variable
+                # name to recieve the tuple with.
                 if is_toplevel:
                     self.implicit_arg(i)
             else:

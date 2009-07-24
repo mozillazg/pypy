@@ -1,3 +1,4 @@
+"""codegen helpers and AST constant folding."""
 import sys
 import itertools
 
@@ -19,9 +20,11 @@ CONST_TRUE = 1
 class __extend__(ast.AST):
 
     def as_constant_truth(self, space):
+        """Return the truth of this node if known."""
         raise AssertionError("only for expressions")
 
     def as_constant(self):
+        """Return the value of this node as a wrapped constant if possible."""
         raise AssertionError("only for expressions")
 
     def accept_jump_if(self, gen, condition, target):
@@ -149,6 +152,7 @@ opposite_compare_operations = misc.dict_to_switch({
 
 
 class OptimizingVisitor(ast.ASTVisitor):
+    """Constant folds AST."""
 
     def __init__(self, space, compile_info):
         self.space = space
@@ -163,6 +167,9 @@ class OptimizingVisitor(ast.ASTVisitor):
             right = binop.right.as_constant()
             if right is not None:
                 op = binop.op
+                # Can't fold straight division without "from __future_ import
+                # division" because it might be affected at runtime by the -Q
+                # flag.
                 if op == ast.Div and \
                         not self.compile_info.flags & consts.CO_FUTURE_DIVISION:
                     return binop
@@ -173,9 +180,12 @@ class OptimizingVisitor(ast.ASTVisitor):
                             break
                     else:
                         raise AssertionError("unknown binary operation")
+                # Let all errors be found at runtime.
                 except OperationError:
                     pass
                 else:
+                    # To avoid blowing up the size of pyc files, we only fold
+                    # reasonably sized sequences.
                     try:
                         w_len = self.space.len(w_const)
                     except OperationError:
@@ -244,12 +254,15 @@ class OptimizingVisitor(ast.ASTVisitor):
         return rep
 
     def visit_Name(self, name):
+        # Turn loading None into a constant lookup.  Eventaully, we can do this
+        # for True and False, too.
         if name.id == "None":
             assert name.ctx == ast.Load
             return ast.Const(self.space.w_None, name.lineno, name.col_offset)
         return name
 
     def visit_Tuple(self, tup):
+        """Try to turn tuple building into a constant."""
         if tup.elts:
             consts_w = [None]*len(tup.elts)
             for i in range(len(tup.elts)):

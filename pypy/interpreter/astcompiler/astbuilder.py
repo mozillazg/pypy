@@ -6,8 +6,9 @@ from pypy.interpreter.pyparser import parsestring
 from pypy.rlib.objectmodel import specialize
 
 
-def ast_from_node(space, n, compile_info):
-    return ASTBuilder(space, n, compile_info).build_ast()
+def ast_from_node(space, node, compile_info):
+    """Turn a parse tree, node, to AST."""
+    return ASTBuilder(space, node, compile_info).build_ast()
 
 
 augassign_operator_map = {
@@ -48,6 +49,7 @@ class ASTBuilder(object):
         self.root_node = n
 
     def build_ast(self):
+        """Convert an top level parse tree node into an AST mod."""
         n = self.root_node
         if n.type == syms.file_input:
             stmts = []
@@ -88,6 +90,7 @@ class ASTBuilder(object):
             raise AssertionError("unknown root node")
 
     def number_of_statements(self, n):
+        """Compute the number of AST statements contained in a node."""
         stmt_type = n.type
         if stmt_type == syms.compound_stmt:
             return 1
@@ -100,10 +103,12 @@ class ASTBuilder(object):
             raise AssertionError("non-statement node")
 
     def error(self, msg, n):
+        """Raise a SyntaxError with the lineno and column set to n's."""
         raise SyntaxError(msg, n.lineno, n.column,
                           filename=self.compile_info.filename)
 
     def check_forbidden_name(self, name, node):
+        """Raise an error if the name cannot be assigned to."""
         if name == "None":
             self.error("assignment to None", node)
         if name == "__debug__":
@@ -111,6 +116,7 @@ class ASTBuilder(object):
         # XXX Warn about using True and False
 
     def set_context(self, expr, ctx, node):
+        """Set the context of an expression to Store or Del if possible."""
         error = None
         sequence = None
         if isinstance(expr, ast.Attribute):
@@ -227,6 +233,8 @@ class ASTBuilder(object):
             if import_name_type == syms.import_as_name:
                 name = import_name.children[0].value
                 if len(import_name.children) == 3:
+                    # 'as' is not yet a keyword in Python 2.5, so the grammar
+                    # just specifies a NAME token.  We check it manually here.
                     if import_name.children[1].value != "as":
                         self.error("must use 'as' in import", import_name)
                     as_name = import_name.children[2].value
@@ -492,6 +500,7 @@ class ASTBuilder(object):
         return ast.With(test, target, body, with_node.lineno, with_node.column)
 
     def handle_with_var(self, with_var_node):
+        # The grammar doesn't require 'as', so check it manually.
         if with_var_node.children[0].value != "as":
             self.error("expected \"with [expr] as [var]\"", with_var_node)
         return self.handle_expr(with_var_node.children[1])
@@ -870,7 +879,7 @@ class ASTBuilder(object):
         return result
 
     def handle_factor(self, factor_node):
-        # Fold '-' on constants.
+        # Fold '-' on constant numbers.
         if factor_node.children[0].type == tokens.MINUS and \
                 len(factor_node.children) == 2:
             factor = factor_node.children[1]
@@ -1100,6 +1109,7 @@ class ASTBuilder(object):
             encoding = self.compile_info.encoding
             sub_strings_w = [parsestring.parsestr(space, encoding, s.value)
                              for s in atom_node.children]
+            # This implements implicit string concatenation.
             if len(sub_strings_w) > 1:
                 w_sub_strings = space.newlist(sub_strings_w)
                 w_join = space.getattr(space.wrap(""), space.wrap("join"))
