@@ -1,5 +1,5 @@
 from pypy.annotation import model as annmodel
-from pypy.rpython.lltypesystem import lltype, llmemory, rstr
+from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython import rlist
 from pypy.objspace.flow.model import Variable, Constant, Link, c_last_exception
@@ -106,10 +106,24 @@ class CodeWriter(object):
             graph_key, called_from = self.unfinished_graphs.pop()
             self.make_one_bytecode(graph_key, False, called_from)
         log.info("there are %d JitCode instances." % len(self.all_graphs))
-        # xxx annotation hack: make sure there is at least one ConstAddr around
-        if self.rtyper.type_system.name == 'lltype':
-            jitcode.constants.append(history.ConstAddr(llmemory.NULL, self.cpu))
+        self.annotation_hacks(jitcode)
         return jitcode
+
+    def annotation_hacks(self, jitcode):
+        # xxx annotation hack: make sure there is at least one ConstAddr around
+        #if self.rtyper.type_system.name == 'lltypesystem':
+        #    jitcode.constants.append(history.ConstAddr(llmemory.NULL,
+        #                                               self.cpu))
+        # xxx annotation hack: make sure class_sizes is not empty
+        if not self.class_sizes:
+            if self.rtyper.type_system.name == 'lltypesystem':
+                STRUCT = lltype.GcStruct('empty')
+                vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
+                self.register_known_gctype(vtable, STRUCT)
+            else:
+                TYPE = ootype.Instance('empty', ootype.ROOT)
+                cls = ootype.runtimeClass(TYPE)
+                self.register_known_ooclass(cls, TYPE)
 
     def make_one_bytecode(self, graph_key, portal, called_from=None):
         maker = BytecodeMaker(self, graph_key, portal)

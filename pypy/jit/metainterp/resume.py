@@ -139,20 +139,21 @@ class VirtualInfo(object):
 class ResumeDataReader(object):
     i_frame_infos = 0
     i_boxes = 0
+    virtuals = None
 
     def __init__(self, storage, liveboxes, metainterp=None):
         self.frame_infos = storage.rd_frame_infos
         self.nums = storage.rd_nums
         self.consts = storage.rd_consts
         self.liveboxes = liveboxes
-        if storage.rd_virtuals is not None:
-            self._prepare_virtuals(metainterp, storage.rd_virtuals)
+        self._prepare_virtuals(metainterp, storage.rd_virtuals)
 
     def _prepare_virtuals(self, metainterp, virtuals):
-        self.virtuals = [vinfo.allocate(metainterp) for vinfo in virtuals]
-        for i in range(len(virtuals)):
-            vinfo = virtuals[i]
-            vinfo.setfields(metainterp, self.virtuals[i], self._decode_box)
+        if virtuals:
+            self.virtuals = [vinfo.allocate(metainterp) for vinfo in virtuals]
+            for i in range(len(virtuals)):
+                vinfo = virtuals[i]
+                vinfo.setfields(metainterp, self.virtuals[i], self._decode_box)
 
     def consume_boxes(self):
         boxes = []

@@ -1,13 +1,14 @@
 import py
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
+from pypy.rlib.objectmodel import instantiate
 from pypy.jit.metainterp.test.test_resume import MyMetaInterp
 from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             OOtypeMixin,
                                                             BaseTest)
 from pypy.jit.metainterp.optimizeopt import optimize_loop_1
 from pypy.jit.metainterp.history import AbstractDescr, ConstInt
-from pypy.jit.metainterp import resume, executor
+from pypy.jit.metainterp import resume, executor, compile
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.metainterp.test.oparser import parse
 
@@ -677,7 +678,7 @@ class BaseTestOptimizeOpt(BaseTest):
     # ----------
 
     def make_fail_descr(self):
-        class FailDescr(AbstractDescr):
+        class FailDescr(compile.ResumeGuardDescr):
             args_seen = []
             def _oparser_uses_descr(self, oparse, args):
                 # typically called twice, before and after optimization
@@ -688,7 +689,7 @@ class BaseTestOptimizeOpt(BaseTest):
                     assert liveboxes == args
                 self.args_seen.append((args, oparse))
         #
-        fdescr = FailDescr()
+        fdescr = instantiate(FailDescr)
         self.fdescr = fdescr
         self.namespace['fdescr'] = fdescr
 

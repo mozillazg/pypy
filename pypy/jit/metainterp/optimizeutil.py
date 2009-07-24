@@ -14,6 +14,11 @@ def av_hash(self):
 def av_newdict():
     return r_dict(av_eq, av_hash)
 
+def av_newdict2():
+    # another implementation of av_newdict(), allowing different types for
+    # the values...
+    return r_dict(av_eq, av_hash)
+
 def _findall(Class, name_prefix):
     result = []
     for value, name in resoperation.opname.items():
