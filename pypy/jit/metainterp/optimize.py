@@ -14,7 +14,7 @@ def optimize_loop(options, old_loops, loop, cpu):
     finder.find_nodes_loop(loop)
     for old_loop in old_loops:
         if equals_specnodes(old_loop.specnodes, loop.specnodes):
-            return old_loops
+            return old_loop
     optimize_loop_1(cpu, loop)
     return None
 
