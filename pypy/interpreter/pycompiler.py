@@ -224,11 +224,12 @@ class PythonAstCompiler(PyCodeCompiler):
         self.compiler_flags = self.futureFlags.allowed_flags
 
     def compile(self, source, filename, mode, flags):
-        from pypy.interpreter.pyparser.error import SyntaxError, IndentationError
+        from pypy.interpreter.pyparser.error import (SyntaxError,
+                                                     IndentationError,
+                                                     TokenIndentationError)
         from pypy.interpreter.pycode import PyCode
         from pypy.interpreter.pyparser.pyparse import CompileInfo
         from pypy.interpreter.pyparser.future import getFutures
-        from pypy.interpreter.pyparser.pythonlexer import TokenIndentationError
         from pypy.interpreter.astcompiler.astbuilder import ast_from_node
         from pypy.interpreter.astcompiler.codegen import compile_ast
         from pypy.interpreter.astcompiler import consts, optimize
