@@ -169,7 +169,9 @@ class ResumeDataReader(object):
         if num < 0:
             return self.consts[-2 - num]
         elif num & VIRTUAL_FLAG:
-            return self.virtuals[num - VIRTUAL_FLAG]
+            virtuals = self.virtuals
+            assert virtuals is not None
+            return virtuals[num - VIRTUAL_FLAG]
         else:
             return self.liveboxes[num]
 
