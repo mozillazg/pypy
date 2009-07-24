@@ -293,6 +293,8 @@ class CoercionTest(unittest.TestCase):
                         self.assertRaises(TypeError, eval,
                                           '%s(a, b)' % op, {'a': a, 'b': b})
                     else:
+                        print ia, a, ib, b, op
+                        print eval("%s(a, b)" % op)
                         self.assertEquals(format_result(res),
                                           format_result(eval('%s(a, b)' % op)),
                                           '%s(%s, %s) == %s failed' % (op, a, b, res))
