@@ -3,8 +3,8 @@ from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.specnode import SpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
-from pypy.jit.metainterp.optimizeutil import av_newdict, _findall, sort_descrs
-from pypy.jit.metainterp import resume
+from pypy.jit.metainterp.optimizeutil import av_newdict2, _findall, sort_descrs
+from pypy.jit.metainterp import resume, compile
 from pypy.rlib.objectmodel import we_are_translated
 
 
@@ -82,6 +82,9 @@ class InstanceValue(object):
             self.level = LEVEL_NONNULL
 
     def is_virtual(self):
+        # Don't check this with 'isinstance(_, VirtualValue)'!
+        # Even if it is a VirtualValue, the 'box' can be non-None,
+        # meaning it has been forced.
         return self.box is None
 
 
@@ -105,7 +108,7 @@ class VirtualValue(InstanceValue):
         self.known_class = known_class
         self.keybox = keybox   # only used as a key in dictionaries
         self.source_op = source_op  # the NEW_WITH_VTABLE operation building it
-        self._fields = av_newdict()
+        self._fields = av_newdict2()
 
     def getfield(self, ofs):
         return self._fields[ofs]
@@ -114,6 +117,7 @@ class VirtualValue(InstanceValue):
         return self._fields.get(ofs, default)
 
     def setfield(self, ofs, fieldvalue):
+        assert isinstance(fieldvalue, InstanceValue)
         self._fields[ofs] = fieldvalue
 
     def force_box(self):
@@ -277,6 +281,7 @@ class Optimizer(object):
             builder.finish(descr)
         else:
             descr = op_fail.descr
+            assert isinstance(descr, compile.ResumeGuardDescr)
         oldboxes = []
         for box in op_fail.args:
             if box in self.values:
