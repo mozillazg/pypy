@@ -145,25 +145,26 @@ class PythonParser(parser.Parser):
         self.prepare(_targets[compile_info.mode])
         tp = 0
         try:
-            tokens = pytokenizer.generate_tokens(source_lines, flags)
-            for tp, value, lineno, column, line in tokens:
-                if self.add_token(tp, value, lineno, column, line):
-                    break
-        except parser.ParseError, e:
-            # Catch parse errors, pretty them up and reraise them as a
-            # SyntaxError.
-            new_err = error.IndentationError
-            if tp == pygram.tokens.INDENT:
-                msg = "unexpected indent"
-            elif e.expected == pygram.tokens.INDENT:
-                msg = "expected an indented block"
+            try:
+                tokens = pytokenizer.generate_tokens(source_lines, flags)
+                for tp, value, lineno, column, line in tokens:
+                    if self.add_token(tp, value, lineno, column, line):
+                        break
+            except parser.ParseError, e:
+                # Catch parse errors, pretty them up and reraise them as a
+                # SyntaxError.
+                new_err = error.IndentationError
+                if tp == pygram.tokens.INDENT:
+                    msg = "unexpected indent"
+                elif e.expected == pygram.tokens.INDENT:
+                    msg = "expected an indented block"
+                else:
+                    new_err = error.SyntaxError
+                    msg = "invalid syntax"
+                raise new_err(msg, e.lineno, e.column, e.line,
+                              compile_info.filename)
             else:
-                new_err = error.SyntaxError
-                msg = "invalid syntax"
-            raise new_err(msg, e.lineno, e.column, e.line,
-                          compile_info.filename)
-        else:
-            tree = self.root
+                tree = self.root
         finally:
             # Avoid hanging onto the tree.
             self.root = None
