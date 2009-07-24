@@ -68,7 +68,7 @@ class OpParser(object):
             _box_counter_more_than(elem[1:])
         elif elem.startswith('p'):
             # pointer
-            if self.cpu.is_oo:
+            if getattr(self.cpu, 'is_oo', False):
                 box = BoxObj()
             else:
                 box = BoxPtr()
