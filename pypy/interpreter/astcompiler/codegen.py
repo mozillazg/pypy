@@ -4,7 +4,7 @@ Generate Python bytecode from a Abstract Syntax Tree.
 
 from pypy.interpreter.astcompiler import (ast2 as ast, assemble, symtable,
                                           consts, misc)
-from pypy.interpreter.astcompiler import optimize # For side effects
+from pypy.interpreter.astcompiler import optimize, asthelpers # For side effects
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool import stdlib_opcode as ops
 from pypy.interpreter.pyparser import future
@@ -632,10 +632,10 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
     def _optimize_unpacking(self, assign):
         if len(assign.targets) != 1:
             return False
-        targets = self._list_from_sequence_node(assign.targets[0], False)
+        targets = assign.targets[0].as_node_list(self.space)
         if targets is None:
             return False
-        values = self._list_from_sequence_node(assign.value, True)
+        values = assign.value.as_node_list(self.space)
         if values is None:
             return False
         targets_count = len(targets)
@@ -667,23 +667,6 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             self.emit_op(ops.ROT_TWO)
         self.visit_sequence(targets)
         return True
-
-    def _list_from_sequence_node(self, node, const_possible):
-        if isinstance(node, ast.Tuple):
-            nodes = node.elts
-        elif isinstance(node, ast.List):
-            nodes = node.elts
-        elif const_possible and isinstance(node, ast.Const):
-            try:
-                values_w = self.space.unpackiterable(node.value)
-            except OperationError:
-                return None
-            line = node.lineno
-            column = node.col_offset
-            nodes = [ast.Const(obj, line, column) for obj in values_w]
-        else:
-            nodes = None
-        return nodes
 
     def visit_With(self, wih):
         self.update_position(wih.lineno, True)
@@ -762,8 +745,7 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
         if self.interactive:
             expr.value.walkabout(self)
             self.emit_op(ops.PRINT_EXPR)
-        elif not isinstance(expr.value, ast.Num) and \
-                not isinstance(expr.value, ast.Str):
+        elif not expr.value.constant:
             expr.value.walkabout(self)
             self.emit_op(ops.POP_TOP)
 
