@@ -158,8 +158,8 @@ class __extend__(VirtualInstanceSpecNode):
         vvalue = optimizer.make_virtual(self.known_class, box)
         for ofs, subspecnode in self.fields:
             subbox = optimizer.new_box(ofs)
-            vvalue.setfield(ofs, optimizer.getvalue(subbox))
             subspecnode.setup_virtual_node(optimizer, subbox, newinputargs)
+            vvalue.setfield(ofs, optimizer.getvalue(subbox))
     def teardown_virtual_node(self, optimizer, value, newexitargs):
         assert value.is_virtual()
         for ofs, subspecnode in self.fields:
