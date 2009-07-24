@@ -1,5 +1,5 @@
 from pypy.interpreter import gateway
-from pypy.interpreter.astcompiler import ast2 as ast
+from pypy.interpreter.astcompiler import ast
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 

@@ -2,7 +2,7 @@
 import sys
 import itertools
 
-from pypy.interpreter.astcompiler import ast2 as ast, consts, misc
+from pypy.interpreter.astcompiler import ast, consts, misc
 from pypy.tool import stdlib_opcode as ops
 from pypy.interpreter.error import OperationError
 from pypy.rlib.unroll import unrolling_iterable

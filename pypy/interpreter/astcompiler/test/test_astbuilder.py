@@ -7,7 +7,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.pyparser import pyparse
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.astcompiler.astbuilder import ast_from_node
-from pypy.interpreter.astcompiler import ast2 as ast, consts
+from pypy.interpreter.astcompiler import ast, consts
 
 
 class TestAstBuilder:
