@@ -93,3 +93,8 @@ def object_for(space, w_target, w_message, w_context):
       w_context.slots[key] = W_Number(space, i)
       t = body.eval(space, w_context, w_context)
    return t
+   
+@register_method('Object', 'appendProto', unwrap_spec=[object, object])
+def object_append_proto(space, w_target, w_proto):
+    w_target.protos.append(w_proto)
+    return w_target
