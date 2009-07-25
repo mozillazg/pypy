@@ -135,3 +135,10 @@ def test_object_break_return_value():
     """
     res, _ = interpret(inp)
     assert res.value == -1
+    
+def test_object_continue():
+    inp = """a := list()
+    for(x, 1, 10, continue; a append(x))
+    a"""
+    res, space = interpret(inp)
+    assert len(res.items) == 0
