@@ -95,3 +95,25 @@ def test_object_leaks():
     res, _ = interpret(inp)
 
     assert res.value == 9
+    
+def test_object_append_proto():
+    inp = """a := Object clone
+    b := Object clone
+    a appendProto(b)"""
+    res, space = interpret(inp)
+    assert res.protos == [space.w_object, space.w_lobby.slots['b']]
+    
+def test_object_doMessage():
+    inp = """m := message(asNumber + 123)
+    1 doMessage(m)"""
+    res, space = interpret(inp)
+    
+    assert res.value == 124
+    
+    
+def test_object_doMessage_optional_context():
+    inp = """m := message(asNumber + 123)
+    1 doMessage(m, 2)"""
+    res, space = interpret(inp)
+    
+    assert res.value == 125
