@@ -120,3 +120,7 @@ def object_break(space, w_target, w_message, w_context):
     space.break_status(w_result)
     return w_target
     
+    
+@register_method('Object', 'continue')
+def object_continue(space, w_target, w_message, w_context):
+    space.continue_status()
