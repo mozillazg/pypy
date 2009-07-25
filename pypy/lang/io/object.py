@@ -98,3 +98,12 @@ def object_for(space, w_target, w_message, w_context):
 def object_append_proto(space, w_target, w_proto):
     w_target.protos.append(w_proto)
     return w_target
+    
+@register_method('Object', 'doMessage',)
+def object_do_message(space, w_target, w_message, w_context):
+    w_msg = w_message.arguments[0].eval(space, w_context, w_context)
+    w_receiver = w_target
+    if len(w_message.arguments) == 2:
+        w_receiver = w_message.arguments[1].eval(space, w_context, w_context)
+        
+    return w_msg.eval(space, w_receiver, w_receiver)
