@@ -87,6 +87,11 @@ def test_improved_object_for():
     assert len(res.items) == 4
     results = [t.value for t in res.items]
     results == [0, 3, 6, 9]
+    
+def test_object_for_returns_nil():
+    inp = """for(x, 1, 2, nil)"""
+    res, space = interpret(inp)
+    assert res == space.w_nil
        
 def test_object_leaks():
     inp = """a:= list();
@@ -117,3 +122,16 @@ def test_object_doMessage_optional_context():
     res, space = interpret(inp)
     
     assert res.value == 125
+    
+def test_object_break():
+    inp = """for(x, 7, 1000, break)
+    x
+    """
+    res, _ = interpret(inp)
+    assert res.value == 7   
+    
+def test_object_break_return_value():
+    inp = """for(x, 7, 1000, break(-1))
+    """
+    res, _ = interpret(inp)
+    assert res.value == -1

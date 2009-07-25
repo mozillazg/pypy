@@ -92,6 +92,9 @@ def object_for(space, w_target, w_message, w_context):
    for i in range(start, stop, step):
       w_context.slots[key] = W_Number(space, i)
       t = body.eval(space, w_context, w_context)
+      if not space.is_normal_status():
+          space.normal_status()
+          break
    return t
    
 @register_method('Object', 'appendProto', unwrap_spec=[object, object])
@@ -107,3 +110,13 @@ def object_do_message(space, w_target, w_message, w_context):
         w_receiver = w_message.arguments[1].eval(space, w_context, w_context)
         
     return w_msg.eval(space, w_receiver, w_receiver)
+    
+    
+@register_method('Object', 'break')
+def object_break(space, w_target, w_message, w_context):
+    w_result = space.w_nil
+    if len(w_message.arguments) > 0:
+        w_result = w_message.arguments[0].eval(space, w_context, w_context)
+    space.break_status(w_result)
+    return w_target
+    
