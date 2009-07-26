@@ -58,3 +58,15 @@ def w_number_divide(space, dividend, divisor):
 @register_method('Number', '*', unwrap_spec=[float, float])
 def w_number_multiply(space, a, b):
     return W_Number(space, a*b)
+    
+@register_method('Number', '==', unwrap_spec=[float, float])
+def w_number_equals(space, a, b):
+    w_value = space.w_false
+    if w_number_compare(space, a, b) == 0:
+        w_value = space.w_true
+    return w_value
+    
+@register_method('Number', 'compare', unwrap_spec=[float, float])
+def w_number_compare(space, a, b):
+     return W_Number(space, cmp(a,b), [space.w_number])
+    
