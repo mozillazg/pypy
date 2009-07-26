@@ -142,3 +142,27 @@ def test_object_continue():
     a"""
     res, space = interpret(inp)
     assert len(res.items) == 0
+    
+def test_object_return():
+    inp = """x := method(y, return)
+    x(99)"""
+    res, space = interpret(inp)
+    assert res == space.w_nil
+
+def test_object_return2():    
+    inp = """x := method(y, return; 666)
+    x(99)"""
+    res, space = interpret(inp)
+    assert res.value == 666
+    
+def test_object_return_value():
+    inp = """x := method(y, return 42)
+    x(99)"""
+    res, space = interpret(inp)
+    assert res.value == 42
+
+def test_object_return_value2():    
+    inp = """x := method(y, return(1024); 666)
+    x(99)"""
+    res, space = interpret(inp)
+    assert res.value == 1024

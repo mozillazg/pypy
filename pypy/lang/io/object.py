@@ -89,6 +89,7 @@ def object_for(space, w_target, w_message, w_context):
       
    key = w_message.arguments[0].name
    
+   space.normal_status()
    for i in range(start, stop, step):
       w_context.slots[key] = W_Number(space, i)
       t = body.eval(space, w_context, w_context)
@@ -124,3 +125,13 @@ def object_break(space, w_target, w_message, w_context):
 @register_method('Object', 'continue')
 def object_continue(space, w_target, w_message, w_context):
     space.continue_status()
+    return w_target
+    
+@register_method('Object', 'return')
+def object_return(space, w_target, w_message, w_context):
+    w_value = space.w_nil
+    if len(w_message.arguments) > 0:
+        w_value = w_message.arguments[0].eval(space, w_context, w_context)
+    
+    space.return_status(w_value)
+    return w_target

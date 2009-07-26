@@ -1,5 +1,5 @@
 from pypy.rlib.objectmodel import instantiate
-from pypy.lang.io.model import W_Number, W_Object, W_CFunction, W_Block, W_Message, W_List, W_Map
+from pypy.lang.io.model import W_Number, W_Object, W_CFunction, W_Block, W_Message, W_List, W_Map, W_ImmutableSequence
 from pypy.lang.io.register import cfunction_definitions
 
 import pypy.lang.io.number
@@ -23,9 +23,18 @@ class ObjSpace(object):
         self.w_false = W_Object(self, [self.w_object])
         self.w_nil = W_Object(self, [self.w_object])
         self.w_list = W_List(self, [self.w_object])
-        self.w_call = W_Object(self)
+        self.w_call = W_Object(self, [self.w_object])
         self.w_map = W_Map(self, [self.w_object])
         
+        # flow control objects
+        self.w_normal = W_Object(self, [self.w_object])
+        self.w_break = W_Object(self, [self.w_object])
+        self.w_continue = W_Object(self, [self.w_object])
+        self.w_return = W_Object(self, [self.w_object])
+        self.w_eol = W_Object(self, [self.w_object])
+        # default stop state
+        self.stop_status = self.w_normal
+        self.w_return_value = self.w_nil
         self.init_w_object()        
         
         self.init_w_protos()
@@ -47,6 +56,8 @@ class ObjSpace(object):
         self.init_w_call()
          
         self.init_w_map()
+        
+        self.init_w_flow_objects()
         
     def init_w_map(self):
         for key, function in cfunction_definitions['Map'].items():
@@ -104,7 +115,46 @@ class ObjSpace(object):
         self.w_lobby.slots['Protos'] = self.w_protos
 
     def init_w_object(self):
-        
-
         for key, function in cfunction_definitions['Object'].items():
             self.w_object.slots[key] = W_CFunction(self, function)
+            
+    def init_w_flow_objects(self):
+        # Flow control: Normal
+        self.w_core.slots['Normal'] = self.w_normal
+        self.w_core.slots['Normal'].slots['type'] = W_ImmutableSequence(self, 'Normal')
+    	
+    	# Flow control: Break
+    	self.w_core.slots['Break'] = self.w_block
+        self.w_core.slots['Break'].slots['type'] = W_ImmutableSequence(self, 'Break')
+
+    	# Flow control: Continue
+        self.w_core.slots['Continue'] = self.w_continue
+        self.w_core.slots['Continue'].slots['type'] = W_ImmutableSequence(self, 'Continue')
+
+    	# Flow control: Return
+    	self.w_core.slots['Return'] = self.w_return
+        self.w_core.slots['Return'].slots['type'] = W_ImmutableSequence(self, 'Return')
+
+    	# Flow control: Eol
+    	self.w_core.slots['Eol'] = self.w_eol
+        self.w_core.slots['Eol'].slots['type'] = W_ImmutableSequence(self, 'Eol')
+        
+        
+    def break_status(self, result):
+        self.stop_status = self.w_break
+        self.w_return_value = result
+        
+        
+    def normal_status(self):
+        self.stop_status = self.w_normal
+        self.w_return_value = self.w_nil
+        
+    def is_normal_status(self):
+        return self.stop_status == self.w_normal
+        
+    def continue_status(self):
+        self.stop_status = self.w_continue
+    
+    def return_status(self, result):
+        self.stop_status = self.w_return
+        self.w_return_value = result
