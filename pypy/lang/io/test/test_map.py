@@ -74,13 +74,13 @@ def test_remve_at():
     assert values == ['nil', 3, 234]
     
 def test_has_value():
-    inp = 'Map clone atPut("1", "nil") atPut("2", "lorem") atPut("3", 3) atPut("4", 234) hasValue("234")'
+    inp = 'Map clone atPut("1", "nil") atPut("2", "lorem") atPut("3", 3) atPut("4", 234) hasValue(234)'
     res, space = interpret(inp)
-    assert res == space.w_true
+    assert res is space.w_true
     
     inp = 'Map clone atPut("1", "nil") atPut("2", "lorem") atPut("3", 3) atPut("4", 234) hasValue("1234567890")'
     res, space = interpret(inp)
-    assert res == space.w_false
+    assert res is space.w_false
     
 def test_values():
     inp = 'Map clone atPut("1", 12345) atPut("2", 99) atPut("3", 3) atPut("4", 234) values'
