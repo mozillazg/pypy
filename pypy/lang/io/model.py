@@ -198,6 +198,8 @@ class W_Message(W_Object):
             w_method = w_receiver.lookup(self.name)
             assert w_method is not None, 'Method "%s" not found in "%s"' % (self.name, w_receiver.__class__)
             w_result = w_method.apply(space, w_receiver, self, w_context)
+            if not space.is_normal_status():
+                return space.w_return_value
         if self.next:
             #TODO: optimize
             return self.next.eval(space, w_result, w_context)
