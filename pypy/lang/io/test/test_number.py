@@ -147,3 +147,24 @@ def test_multiply():
     res, _  = interpret(inp)
     assert res.value == 42
     
+def test_equals():
+    inp = '3 == 5'
+    res, space = interpret(inp)
+    assert res == space.w_false
+    
+    inp = '5 == 5'
+    res, space = interpret(inp)
+    assert res == space.w_true
+    
+def test_compare():
+    inp = '7 compare(7)'
+    res, space = interpret(inp)
+    assert res.value == 0
+    
+    inp = '7 compare(8)'
+    res, space = interpret(inp)
+    assert res.value == -1
+    
+    inp = '7 compare(6)'
+    res, space = interpret(inp)
+    assert res.value == 1
