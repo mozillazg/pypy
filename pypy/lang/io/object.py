@@ -80,7 +80,7 @@ def object_for(space, w_target, w_message, w_context):
 
    body = w_message.arguments[-1]
    start = w_message.arguments[1].eval(space, w_target, w_context).value
-   stop = w_message.arguments[2].eval(space, w_target, w_context).value
+   stop = 1 + w_message.arguments[2].eval(space, w_target, w_context).value
    if argcount == 4:
       step = 1
    else:
@@ -93,7 +93,7 @@ def object_for(space, w_target, w_message, w_context):
    for i in range(start, stop, step):
       w_context.slots[key] = W_Number(space, i)
       t = body.eval(space, w_context, w_context)
-      if not space.is_normal_status():
+      if not space.is_normal_status() and not space.is_continue_status():
           space.normal_status()
           break
    return t

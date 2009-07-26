@@ -154,7 +154,11 @@ class ObjSpace(object):
         
     def continue_status(self):
         self.stop_status = self.w_continue
-    
+
+    def is_continue_status(self):
+        return self.stop_status == self.w_continue    
+
     def return_status(self, result):
         self.stop_status = self.w_return
         self.w_return_value = result
+        
