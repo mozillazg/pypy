@@ -135,3 +135,16 @@ def object_return(space, w_target, w_message, w_context):
     
     space.return_status(w_value)
     return w_target
+    
+@register_method('Object', 'if')
+def object_if(space, w_target, w_message, w_context):
+    w_condition = w_message.arguments[0].eval(space, w_context, w_context)
+
+    if w_condition is space.w_true:
+        index = 1 
+    else:
+        index = 2
+        
+    if index < len(w_message.arguments):
+        return w_message.arguments[index].eval(space, w_context, w_context)
+    return w_condition

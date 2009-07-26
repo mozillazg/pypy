@@ -167,3 +167,32 @@ def test_object_return_value2():
     x(99)"""
     res, space = interpret(inp)
     assert res.value == 1024
+
+def test_object_if():
+    inp = """a := list()
+    for(i, 1, 10, 
+        if(i == 3, continue)
+        a append(i))
+    a
+    """
+    res, space = interpret(inp)
+    values = [x.value for x in res.items]
+    assert values == [1, 2 ,3, 4, 5, 6, 7, 8, 9, 10]
+
+def test_object_if2():
+    inp = """if(false, 1, 2)"""
+    res, _ = interpret(inp)
+    assert res.value == 2
+    
+    inp = """if(true, 1, 2)"""
+    res, _ = interpret(inp)
+    assert res.value == 1
+    
+def test_object_if3():
+    inp = 'if(true)'
+    res, space = interpret(inp)
+    assert res is space.w_true
+    
+    inp = 'if(false)'
+    res, space = interpret(inp)
+    assert res is space.w_false
