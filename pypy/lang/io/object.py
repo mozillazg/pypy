@@ -148,3 +148,11 @@ def object_if(space, w_target, w_message, w_context):
     if index < len(w_message.arguments):
         return w_message.arguments[index].eval(space, w_context, w_context)
     return w_condition
+    
+@register_method('Object', 'stopStatus')
+def object_stopstatus(space, w_target, w_message, w_context):
+    if len(w_message.arguments) > 0:
+        w_message.arguments[0].eval(space, w_context, w_context)
+    w = space.stop_status
+    space.normal_status()
+    return w
