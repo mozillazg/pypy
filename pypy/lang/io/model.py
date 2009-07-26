@@ -130,7 +130,7 @@ class W_Map(W_Object):
             
     def has_value(self, w_value):
         for x in self.items.values():
-            if x.value == x:
+            if x.value == w_value:
                 return True
         return False
         
