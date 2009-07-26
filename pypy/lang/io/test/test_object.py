@@ -196,3 +196,20 @@ def test_object_if3():
     inp = 'if(false)'
     res, space = interpret(inp)
     assert res is space.w_false
+    
+def test_object_stopStatus():
+    inp = 'stopStatus'
+    res, space = interpret(inp)
+    assert res is space.w_normal
+    
+    inp = 'stopStatus(break)'
+    res, space = interpret(inp)
+    assert res is space.w_break
+    
+    inp = 'stopStatus(continue)'
+    res, space = interpret(inp)
+    assert res is space.w_continue
+    
+    inp = 'stopStatus(return 42)'
+    res, space = interpret(inp)
+    assert res is space.w_return
