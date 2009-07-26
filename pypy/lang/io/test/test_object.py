@@ -139,9 +139,10 @@ def test_object_break_return_value():
 def test_object_continue():
     inp = """a := list()
     for(x, 1, 10, continue; a append(x))
-    a"""
+    """
     res, space = interpret(inp)
-    assert len(res.items) == 0
+    assert space.w_lobby.slots['x'].value == 10
+    assert len(space.w_lobby.slots['a'].items) == 0
     
 def test_object_return():
     inp = """x := method(y, return)
