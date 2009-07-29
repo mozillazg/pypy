@@ -1,3 +1,4 @@
+import autopath
 import py
 import os
 import glob
@@ -12,7 +13,7 @@ def parse(input, space=None):
     child_in.write(input)
     child_in.close()
     s = child_out_err.read().strip()
-    # print s
+    print s
     return eval(s)
 
 def interpret(code):
@@ -31,3 +32,9 @@ def load_io_files(space):
     files = glob.glob('io/*.io')
     for f in files:
         parse_file(f, space).eval(space, space.w_lobby, space.w_lobby)
+    
+    
+if __name__ == '__main__':
+    import sys
+    space = ObjSpace()
+    parse(py.path.local(sys.argv[1]).read(), space)
