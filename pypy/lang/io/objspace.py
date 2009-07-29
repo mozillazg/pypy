@@ -1,5 +1,6 @@
 from pypy.rlib.objectmodel import instantiate
 from pypy.lang.io.model import W_Number, W_Object, W_CFunction, W_Block, W_Message, W_List, W_Map, W_ImmutableSequence
+from pypy.lang.io.coroutinemodel import W_Coroutine
 from pypy.lang.io.register import cfunction_definitions
 
 import pypy.lang.io.number
@@ -9,6 +10,7 @@ import pypy.lang.io.list
 import pypy.lang.io.call
 import pypy.lang.io.message
 import pypy.lang.io.map
+import pypy.lang.io.coroutine
 
 class ObjSpace(object):
     """docstring for ObjSpace"""
@@ -25,7 +27,7 @@ class ObjSpace(object):
         self.w_list = W_List(self, [self.w_object])
         self.w_call = W_Object(self, [self.w_object])
         self.w_map = W_Map(self, [self.w_object])
-        
+        self.w_coroutine = W_Coroutine.w_getcurrent(self)
         # flow control objects
         self.w_normal = W_Object(self, [self.w_object])
         self.w_break = W_Object(self, [self.w_object])
@@ -56,8 +58,12 @@ class ObjSpace(object):
         self.init_w_call()
          
         self.init_w_map()
+
+        self.init_w_coroutine()
         
         self.init_w_flow_objects()
+        
+
         
     def init_w_map(self):
         for key, function in cfunction_definitions['Map'].items():
@@ -91,6 +97,7 @@ class ObjSpace(object):
         self.w_core.slots['Call'] = self.w_call
         self.w_core.slots['Map'] = self.w_map
         self.w_core.slots['Number'] = self.w_number
+        self.w_core.slots['Coroutine'] = self.w_coroutine
 
     def init_w_number(self):
         self.w_number = instantiate(W_Number)
@@ -140,10 +147,13 @@ class ObjSpace(object):
         self.w_core.slots['Eol'].slots['type'] = W_ImmutableSequence(self, 'Eol')
         
         
+    def init_w_coroutine(self):
+        for key, function in cfunction_definitions['Coroutine'].items():
+            self.w_coroutine.slots[key] = W_CFunction(self, function)
+        
     def break_status(self, result):
         self.stop_status = self.w_break
         self.w_return_value = result
-        
         
     def normal_status(self):
         self.stop_status = self.w_normal
@@ -162,3 +172,7 @@ class ObjSpace(object):
         self.stop_status = self.w_return
         self.w_return_value = result
         
+    def newbool(self, value):
+        if value:
+            return self.w_true
+        return self.w_false
