@@ -142,6 +142,12 @@ class W_Map(W_Object):
             w_context.slots[key_name] = item.key
             w_context.slots[value_name] = item.value
             t = w_body.eval(space, w_context, w_context)
+            if not space.is_normal_status():
+                if space.is_continue_status():
+                    space.normal_status()
+                else:
+                    space.normal_status()
+                    break
         return t 
         
     def keys(self):
@@ -199,6 +205,7 @@ class W_Message(W_Object):
             assert w_method is not None, 'Method "%s" not found in "%s"' % (self.name, w_receiver.__class__)
             w_result = w_method.apply(space, w_receiver, self, w_context)
             if not space.is_normal_status():
+                print 'Returning non default value'
                 return space.w_return_value
         if self.next:
             #TODO: optimize

@@ -105,6 +105,33 @@ def test_foreach():
     value = sorted([(x.items[0].value, x.items[1].value) for x in res.items])
     assert value == [('1', 12345), ('2', 99), ('3', 3), ('4', 234)]
 
+def test_map_foreach_continue():
+    inp = """b := Map clone do(
+        atPut("1", 12345) 
+        atPut("2", 99) 
+        atPut("3", 3) 
+        atPut("4", 234)
+    )
+    c := list()
+    b foreach(key, value, if(value == 99, continue); c append(list(key, value))); c"""
+    res,space = interpret(inp)
+    value = sorted([(x.items[0].value, x.items[1].value) for x in res.items])
+    assert value == [('1', 12345), ('3', 3), ('4', 234)]
+
+def test_map_foreach_break():
+    inp = """b := Map clone do(
+        atPut("1", 12345) 
+        atPut("2", 99) 
+        atPut("3", 3) 
+        atPut("4", 234)
+    )
+    c := list()
+    b foreach(key, value, break(99); c append(list(key, value)));"""
+    res,space = interpret(inp)
+    assert space.w_lobby.slots['c'].items == []
+    assert res.value == 99
+    
+
 def test_map_foreach_leaks():
     inp = """b := Map clone do(
         atPut("1", 12345) 
