@@ -93,9 +93,14 @@ def object_for(space, w_target, w_message, w_context):
    for i in range(start, stop, step):
       w_context.slots[key] = W_Number(space, i)
       t = body.eval(space, w_context, w_context)
-      if not space.is_normal_status() and not space.is_continue_status():
-          space.normal_status()
-          break
+      
+      if not space.is_normal_status():
+          if space.is_continue_status():
+              space.normal_status()
+          else:
+            space.normal_status()
+            break
+            
    return t
    
 @register_method('Object', 'appendProto', unwrap_spec=[object, object])

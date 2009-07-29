@@ -61,10 +61,7 @@ def w_number_multiply(space, a, b):
     
 @register_method('Number', '==', unwrap_spec=[float, float])
 def w_number_equals(space, a, b):
-    w_value = space.w_false
-    if w_number_compare(space, a, b) == 0:
-        w_value = space.w_true
-    return w_value
+    return space.newbool(cmp(a, b) == 0)
     
 @register_method('Number', 'compare', unwrap_spec=[float, float])
 def w_number_compare(space, a, b):
