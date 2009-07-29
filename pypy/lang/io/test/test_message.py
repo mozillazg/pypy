@@ -30,6 +30,35 @@ def test_message_name():
     res, space = interpret(inp)
     assert isinstance(res, W_ImmutableSequence)
     assert res.value == 'B'
+
+def test_argsEvaluatedIn():
+    inp = """
+    Object do(
+        m := method(call message argsEvaluatedIn(call sender))
+    )
+    x := 99
+    f := Object clone do(
+    x := 1
+    )
+    f m(x)
+    """
+    res, space = interpret(inp)
+    values = [x.value for x in res.items]
+    assert values == [99]
+def test_argsEvaluatedIn2():    
+    inp = """
+    Object do(
+        m := method(call message argsEvaluatedIn(call sender))
+    )
+    x := 99
+    f := Object clone do(
+    x := 1
+    )
+    f do(return m(x))
+    """
+    res, space = interpret(inp)
+    values = [x.value for x in res.items]
+    assert values == [1]
     
 # def test_setIsActivatable():
 #     inp = "a := block(1);a setIsActivateable(true); a"
