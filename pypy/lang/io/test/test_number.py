@@ -150,11 +150,11 @@ def test_multiply():
 def test_equals():
     inp = '3 == 5'
     res, space = interpret(inp)
-    assert res == space.w_false
+    assert res is space.w_false
     
     inp = '5 == 5'
     res, space = interpret(inp)
-    assert res == space.w_true
+    assert res is space.w_true
     
 def test_compare():
     inp = '7 compare(7)'

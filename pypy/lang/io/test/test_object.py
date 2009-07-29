@@ -176,8 +176,8 @@ def test_object_if():
     a
     """
     res, space = interpret(inp)
-    values = [x.value for x in res.items]
-    assert values == [1, 2 ,3, 4, 5, 6, 7, 8, 9, 10]
+    values = [x.value for x in space.w_lobby.slots['a'].items]
+    assert values == [1, 2, 4, 5, 6, 7, 8, 9, 10]
 
 def test_object_if2():
     inp = """if(false, 1, 2)"""
