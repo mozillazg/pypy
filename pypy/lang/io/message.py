@@ -13,8 +13,7 @@ def message_arguments(space, w_receiver, w_message, w_context):
  
 @register_method('Message', 'name')
 def message_name(space, w_receiver, w_message, w_context):
-    # XXX TODO clone from space
-    return W_ImmutableSequence(space, w_receiver.name)
+    return space.w_immutable_sequence.clone_and_init(w_receiver.name)
 
 @register_method('Message', 'argsEvaluatedIn')
 def message_argsEvaluatedIn(space, w_target, w_message, w_context):
