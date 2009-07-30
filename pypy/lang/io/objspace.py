@@ -34,6 +34,10 @@ class ObjSpace(object):
         self.w_continue = W_Object(self, [self.w_object])
         self.w_return = W_Object(self, [self.w_object])
         self.w_eol = W_Object(self, [self.w_object])
+        
+        # XXX TODO: change this when Sequence is implemented
+        self.w_sequence = W_Object(self, [self.w_object])
+        self.w_immutable_sequence = W_ImmutableSequence(self, '', [self.w_sequence])
         # default stop state
         self.stop_status = self.w_normal
         self.w_return_value = self.w_nil
@@ -89,6 +93,7 @@ class ObjSpace(object):
         self.w_core.protos.append(self.w_object)
         self.w_core.slots['Locals'] = self.w_locals
         self.w_core.slots['Block'] = self.w_block
+        self.w_core.slots['Coroutine'] = self.w_coroutine
         self.w_core.slots['Object'] = self.w_object
         self.w_core.slots['true'] = self.w_true
         self.w_core.slots['false'] = self.w_false
@@ -96,8 +101,10 @@ class ObjSpace(object):
         self.w_core.slots['List'] = self.w_list
         self.w_core.slots['Call'] = self.w_call
         self.w_core.slots['Map'] = self.w_map
+        self.w_core.slots['Message'] = self.w_message
         self.w_core.slots['Number'] = self.w_number
-        self.w_core.slots['Coroutine'] = self.w_coroutine
+        self.w_core.slots['Sequence'] = self.w_sequence
+        self.w_core.slots['ImmutableSequence'] = self.w_immutable_sequence
 
     def init_w_number(self):
         self.w_number = instantiate(W_Number)

@@ -160,12 +160,20 @@ class MapEntry(object):
     
         
 class W_ImmutableSequence(W_Object):
-    def __init__(self, space, string):
+    def __init__(self, space, string, protos=[]):
+        W_Object.__init__(self, space, protos)
         self.value = string
         
     def hash(self):
         return hash(self.value)
+        
+    def clone(self):
+        return W_ImmutableSequence(self.space, self.value, [self])
 
+    def clone_and_init(self, value):
+        ims = self.clone()
+        ims.value = value
+        return ims 
 class W_CFunction(W_Object):
     def __init__(self, space, function):
         self.function = function
@@ -281,4 +289,4 @@ def parse_literal(space, literal):
         except ValueError:
             pass
     if literal.startswith('"') and literal.endswith('"'):
-        return W_ImmutableSequence(space, literal[1:-1])
+        return space.w_immutable_sequence.clone_and_init(literal[1:-1])
