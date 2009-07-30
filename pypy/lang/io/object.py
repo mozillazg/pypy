@@ -6,6 +6,12 @@ def w_object_set_slot(space, w_target, name, w_value):
     w_target.slots[name] = w_value
     return w_value
     
+@register_method('Object', 'setSlotWithType', unwrap_spec=[object, str, object])
+def w_object_set_slot_with_type(space, w_target, name, w_value):
+    w_object_set_slot(space, w_target, name, w_value)
+    w_object_set_slot(space, w_value, "type", space.w_immutable_sequence.clone_and_init(name))
+    return w_value
+
 @register_method('Object', 'getSlot', unwrap_spec=[object, str])
 def w_object_get_slot(space, w_target, name):
     try:
