@@ -1,5 +1,5 @@
 from pypy.lang.io.parserhack import parse, interpret
-from pypy.lang.io.model import W_Object, W_Message, W_Number
+from pypy.lang.io.model import W_Object, W_Message, W_Number, W_ImmutableSequence
 import py.test
 
 
@@ -213,3 +213,12 @@ def test_object_stopStatus():
     inp = 'stopStatus(return 42)'
     res, space = interpret(inp)
     assert res is space.w_return
+    
+def test_set_slot_with_type():
+    inp = """a := Object clone
+    setSlotWithType("foo", a)
+    """
+    res, space = interpret(inp)
+    assert isinstance(res.slots['type'], W_ImmutableSequence)
+    assert res.slots['type'].value == 'foo'
+    assert space.w_lobby.slots['foo'] == res
