@@ -17,6 +17,10 @@ PLATFORMS = [
     'distutils',
 ]
 
+def check_have_jit(config):
+    import pypy.jit       # check out branch/pyjitpl5 instead of trunk!
+
+
 translation_optiondescription = OptionDescription(
         "translation", "Translation Options", [
     BoolOption("stackless", "enable stackless features during compilation",
@@ -100,8 +104,7 @@ translation_optiondescription = OptionDescription(
     # JIT generation
     BoolOption("jit", "generate a JIT",
                default=False, cmdline="--jit",
-               validator=lambda config:
-                   py.test.fail("check out branch/pyjitpl5 instead of trunk!"),
+               validator=check_have_jit,
                requires=[("translation.gc", "boehm"),
                          ("translation.list_comprehension_operations", True)]),
 
