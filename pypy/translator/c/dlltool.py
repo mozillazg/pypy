@@ -6,6 +6,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 class CLibraryBuilder(CBuilder):
     standalone = False
+    split = True
 
     def __init__(self, *args, **kwds):
         self.functions = kwds.pop('functions')
