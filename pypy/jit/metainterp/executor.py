@@ -1,13 +1,13 @@
 """This implements pyjitpl's execution of operations.
 """
 
-import py
+import py, math
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
-from pypy.jit.metainterp.history import BoxInt, ConstInt, check_descr
-from pypy.jit.metainterp.history import INT, PTR, OBJ
+from pypy.jit.metainterp.history import BoxInt, ConstInt, check_descr, BoxFloat
+from pypy.jit.metainterp.history import INT, PTR, OBJ, ConstFloat, FLOAT
 from pypy.jit.metainterp.resoperation import rop
 
 
@@ -55,6 +55,29 @@ def do_uint_rshift(cpu, args, descr=None):
 
 # ----------
 
+def do_float_neg(cpu, args, descr=None):
+    return ConstFloat(-args[0].getfloat())
+
+def do_float_abs(cpu, args, descr=None):
+    return ConstFloat(math.abs(args[0].getfloat()))
+
+def do_float_is_true(cpu, args, descr=None):
+    return ConstInt(bool(args[0].getfloat()))
+
+def do_float_add(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() + args[1].getfloat())
+
+def do_float_sub(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() - args[1].getfloat())
+
+def do_float_mul(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() * args[1].getfloat())
+
+def do_float_truediv(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() / args[1].getfloat())
+
+# ----------
+
 def do_int_lt(cpu, args, descr=None):
     return ConstInt(args[0].getint() < args[1].getint())
 
@@ -84,6 +107,26 @@ def do_uint_gt(cpu, args, descr=None):
 
 def do_uint_ge(cpu, args, descr=None):
     return ConstInt(r_uint(args[0].getint()) >= r_uint(args[1].getint()))
+
+# ----------
+
+def do_float_lt(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() < args[1].getfloat())
+
+def do_float_le(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() <= args[1].getfloat())
+
+def do_float_eq(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() == args[1].getfloat())
+
+def do_float_ne(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() != args[1].getfloat())
+
+def do_float_gt(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() > args[1].getfloat())
+
+def do_float_ge(cpu, args, descr=None):
+    return ConstFloat(args[0].getfloat() >= args[1].getfloat())
 
 # ----------
 
