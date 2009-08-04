@@ -219,6 +219,8 @@ class LLGraphTests:
 
 
 class TestLLTypeLLGraph(LLtypeBackendTest, LLGraphTests):
+    # for individual tests look
+    # ====> ../../test/runner_test.py
     from pypy.jit.backend.llgraph.runner import LLtypeCPU as cpu_type
 
 ## these tests never worked
