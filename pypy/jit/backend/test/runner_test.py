@@ -2,7 +2,7 @@
 import py, sys, random
 from pypy.jit.metainterp.history import (BoxInt, Box, BoxPtr, TreeLoop,
                                          ConstInt, ConstPtr, BoxObj,
-                                         ConstObj)
+                                         ConstObj, BoxFloat, ConstFloat)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
@@ -20,6 +20,9 @@ class Runner(object):
             if isinstance(box, BoxInt):
                 self.cpu.set_future_value_int(j, box.getint())
                 j += 1
+            elif isinstance(box, BoxFloat):
+                self.cpu.set_future_value_float(j, box.getfloat())
+                j += 1
             elif isinstance(box, BoxPtr):
                 self.cpu.set_future_value_ptr(j, box.getptr_base())
                 j += 1
@@ -35,6 +38,8 @@ class Runner(object):
             return BoxInt(self.cpu.get_latest_value_int(0))
         elif result_type == 'ptr':
             return BoxPtr(self.cpu.get_latest_value_ptr(0))
+        elif result_type == 'float':
+            return BoxFloat(self.cpu.get_latest_value_float(0))
         elif result_type == 'void':
             return None
         else:
@@ -48,6 +53,8 @@ class Runner(object):
             result = BoxInt()
         elif result_type == 'ptr':
             result = BoxPtr()
+        elif result_type == 'float':
+            result = BoxFloat()
         else:
             raise ValueError(result_type)
         if result is None:
@@ -152,6 +159,27 @@ class BaseBackendTest(Runner):
             for x, y, z in testcases:
                 res = self.execute_operation(opnum, [BoxInt(x), BoxInt(y)],
                                              'int')
+                assert res.value == z
+
+    def test_binary_float_operations(self):
+        for opnum, testcases in [
+            (rop.FLOAT_ADD, [(10.0, -2.5, 7.5)]),
+            (rop.FLOAT_SUB, [(-1., 1., -2.)]),
+            (rop.FLOAT_MUL, [(-3.5, 3.5, -12.25)]),
+            # exact equality, platform floats
+            (rop.FLOAT_TRUEDIV, [(-2., -3., -2./-3.)]),
+            ]:
+            for x, y, z in testcases:
+                res = self.execute_operation(opnum, [BoxFloat(x), BoxFloat(y)],
+                                             'float')
+                assert res.value == z
+                res = self.execute_operation(opnum, [ConstFloat(x),
+                                                     BoxFloat(y)],
+                                             'float')
+                assert res.value == z
+                res = self.execute_operation(opnum, [BoxFloat(x),
+                                                     ConstFloat(y)],
+                                             'float')
                 assert res.value == z
 
     def test_compare_operations(self):
@@ -479,6 +507,18 @@ class BaseBackendTest(Runner):
         r = self.execute_operation(rop.GETARRAYITEM_GC, [a_box, BoxInt(302)],
                                    'int', descr=arraydescr)
         assert r.value == 1
+
+    def test_array_float(self):
+        a_box, A = self.alloc_array_of(lltype.Float, 24)
+        arraydescr = self.cpu.arraydescrof(A)
+        r = self.execute_operation(rop.SETARRAYITEM_GC, [a_box, BoxInt(13),
+                                                         BoxFloat(3.5)],
+                                   'void', descr=arraydescr)
+        assert r is None
+        r = self.execute_operation(rop.GETARRAYITEM_GC, [a_box, BoxInt(13)],
+                                   'float', descr=arraydescr)
+        assert r.value == 3.5
+        
 
     def test_string_basic(self):
         s_box = self.alloc_string("hello\xfe")

@@ -7,8 +7,9 @@ when executing on top of the llinterpreter.
 import sys
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.annotation import model as annmodel
-from pypy.jit.metainterp.history import (ConstInt, ConstPtr, ConstAddr, ConstObj,
-                                         BoxInt, BoxPtr, BoxObj)
+from pypy.jit.metainterp.history import (ConstInt, ConstPtr, ConstAddr,
+                                         ConstObj,
+                                         BoxInt, BoxPtr, BoxObj, BoxFloat)
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.module.support import LLSupport, OOSupport
@@ -69,6 +70,10 @@ TYPES = {
     'int_add_ovf'     : (('int', 'int'), 'int'),
     'int_sub_ovf'     : (('int', 'int'), 'int'),
     'int_mul_ovf'     : (('int', 'int'), 'int'),
+    'float_add'       : (('float', 'float'), 'float'),
+    'float_sub'       : (('float', 'float'), 'float'),
+    'float_mul'       : (('float', 'float'), 'float'),
+    'float_truediv'   : (('float', 'float'), 'float'),
     'bool_not'        : (('bool',), 'bool'),
     'uint_add'        : (('int', 'int'), 'int'),
     'uint_sub'        : (('int', 'int'), 'int'),
@@ -91,20 +96,20 @@ TYPES = {
     'ooisnot'         : (('ptr', 'ptr'), 'bool'),
     'instanceof'      : (('ptr',), 'bool'),
     'subclassof'      : (('ptr', 'ptr'), 'bool'),
-    'setfield_gc'     : (('ptr', 'intorptr'), None),
-    'getfield_gc'     : (('ptr',), 'intorptr'),
-    'getfield_gc_pure': (('ptr',), 'intorptr'),
-    'setfield_raw'    : (('ptr', 'intorptr'), None),
-    'getfield_raw'    : (('ptr',), 'intorptr'),
-    'getfield_raw_pure': (('ptr',), 'intorptr'),
-    'setarrayitem_gc' : (('ptr', 'int', 'intorptr'), None),
-    'getarrayitem_gc' : (('ptr', 'int'), 'intorptr'),
-    'getarrayitem_gc_pure' : (('ptr', 'int'), 'intorptr'),
+    'setfield_gc'     : (('ptr', 'any'), None),
+    'getfield_gc'     : (('ptr',), 'any'),
+    'getfield_gc_pure': (('ptr',), 'any'),
+    'setfield_raw'    : (('ptr', 'any'), None),
+    'getfield_raw'    : (('ptr',), 'any'),
+    'getfield_raw_pure': (('ptr',), 'any'),
+    'setarrayitem_gc' : (('ptr', 'int', 'any'), None),
+    'getarrayitem_gc' : (('ptr', 'int'), 'any'),
+    'getarrayitem_gc_pure' : (('ptr', 'int'), 'any'),
     'arraylen_gc'     : (('ptr',), 'int'),
-    'call'            : (('ptr', 'varargs'), 'intorptr'),
-    'call_pure'       : (('ptr', 'varargs'), 'intorptr'),
-    'oosend'          : (('varargs',), 'intorptr'),
-    'oosend_pure'     : (('varargs',), 'intorptr'),
+    'call'            : (('ptr', 'varargs'), 'any'),
+    'call_pure'       : (('ptr', 'varargs'), 'any'),
+    'oosend'          : (('varargs',), 'any'),
+    'oosend_pure'     : (('varargs',), 'any'),
     'guard_true'      : (('bool',), None),
     'guard_false'     : (('bool',), None),
     'guard_value'     : (('int', 'int'), None),
@@ -209,13 +214,15 @@ def repr_list(lst, types, memocast):
     return '[%s]' % (', '.join(res_l))
 
 def repr1(x, tp, memocast):
-    if tp == "intorptr":
+    if tp == "any":
         TYPE = lltype.typeOf(x)
         if isinstance(TYPE, lltype.Ptr) and TYPE.TO._gckind == 'gc':
             tp = "ptr"
+        elif TYPE is lltype.Float:
+            tp = 'float'
         else:
             tp = "int"
-    if tp == 'int':
+    if tp == 'int' or tp == 'float':
         return str(x)
     elif tp == 'void':
         return '---'
@@ -264,6 +271,16 @@ def compile_start_int_var(loop):
     _variables.append(v)
     return r
 
+def compile_start_float_var(loop):
+    loop = _from_opaque(loop)
+    assert not loop.operations
+    v = Variable()
+    v.concretetype = lltype.Float
+    loop.inputargs.append(v)
+    r = len(_variables)
+    _variables.append(v)
+    return r
+
 def compile_start_ptr_var(loop):
     loop = _from_opaque(loop)
     assert not loop.operations
@@ -307,6 +324,13 @@ def compile_add_int_const(loop, value):
     op = loop.operations[-1]
     op.args.append(const)
 
+def compile_add_float_const(loop, value):
+    loop = _from_opaque(loop)
+    const = Constant(value)
+    const.concretetype = lltype.Float
+    op = loop.operations[-1]
+    op.args.append(const)
+
 def compile_add_ptr_const(loop, value, TYPE=llmemory.GCREF):
     loop = _from_opaque(loop)
     const = Constant(value)
@@ -318,6 +342,16 @@ def compile_add_int_result(loop):
     loop = _from_opaque(loop)
     v = Variable()
     v.concretetype = lltype.Signed
+    op = loop.operations[-1]
+    op.result = v
+    r = len(_variables)
+    _variables.append(v)
+    return r
+
+def compile_add_float_result(loop):
+    loop = _from_opaque(loop)
+    v = Variable()
+    v.concretetype = lltype.Float
     op = loop.operations[-1]
     op.result = v
     r = len(_variables)
@@ -413,6 +447,8 @@ class Frame(object):
                     RESTYPE = op.result.concretetype
                     if RESTYPE is lltype.Signed:
                         x = self.as_int(result)
+                    elif RESTYPE is lltype.Float:
+                        x = self.as_float(result)
                     elif RESTYPE is llmemory.GCREF:
                         x = self.as_ptr(result)
                     elif RESTYPE is ootype.Object:
@@ -473,6 +509,9 @@ class Frame(object):
     def as_int(self, x):
         return cast_to_int(x, self.memocast)
 
+    def as_float(self, x):
+        return x
+
     def as_ptr(self, x):
         return cast_to_ptr(x)
 
@@ -507,6 +546,8 @@ class Frame(object):
                     for x in args:
                         if type(x) is int:
                             boxedargs.append(BoxInt(x))
+                        elif type(x) is float:
+                            boxedargs.append(BoxFloat(x))
                         elif isinstance(ootype.typeOf(x), ootype.OOType):
                             boxedargs.append(BoxObj(ootype.cast_to_object(x)))
                         else:
@@ -601,6 +642,8 @@ class Frame(object):
     def op_getarrayitem_gc(self, arraydescr, array, index):
         if arraydescr.typeinfo == 'p':
             return do_getarrayitem_gc_ptr(array, index)
+        elif arraydescr.typeinfo == 'f':
+            return do_getarrayitem_gc_float(array, index)
         else:
             return do_getarrayitem_gc_int(array, index, self.memocast)
 
@@ -634,6 +677,8 @@ class Frame(object):
     def op_setarrayitem_gc(self, arraydescr, array, index, newvalue):
         if arraydescr.typeinfo == 'p':
             do_setarrayitem_gc_ptr(array, index, newvalue)
+        elif arraydescr.typeinfo == 'f':
+            do_setarrayitem_gc_float(array, index, newvalue)
         else:
             do_setarrayitem_gc_int(array, index, newvalue, self.memocast)
 
@@ -836,20 +881,18 @@ def frame_clear(frame, loop):
         frame.env[loop.inputargs[i]] = _future_values[i]
     del _future_values[:]
 
-def set_future_value_int(index, value):
-    del _future_values[index:]
-    assert len(_future_values) == index
-    _future_values.append(value)
+def _new_set_future_value(name):
+    def set_future_value(index, value):
+        del _future_values[index:]
+        assert len(_future_values) == index
+        _future_values.append(value)
+    set_future_value.func_name = name
+    return set_future_value
 
-def set_future_value_ptr(index, value):
-    del _future_values[index:]
-    assert len(_future_values) == index
-    _future_values.append(value)
-
-def set_future_value_obj(index, value):
-    del _future_values[index:]
-    assert len(_future_values) == index
-    _future_values.append(value)
+set_future_value_ptr = _new_set_future_value('set_future_value_ptr')
+set_future_value_obj = _new_set_future_value('set_future_value_obj')
+set_future_value_float = _new_set_future_value('set_future_value_float')
+set_future_value_int = _new_set_future_value('set_future_value_int')
 
 def frame_execute(frame):
     frame = _from_opaque(frame)
@@ -872,6 +915,10 @@ def frame_execute(frame):
     return result
 
 def frame_int_getvalue(frame, num):
+    frame = _from_opaque(frame)
+    return frame.fail_args[num]
+
+def frame_float_getvalue(frame, num):
     frame = _from_opaque(frame)
     return frame.fail_args[num]
 
@@ -991,6 +1038,10 @@ def do_getarrayitem_gc_int(array, index, memocast):
     array = array._obj.container
     return cast_to_int(array.getitem(index), memocast)
 
+def do_getarrayitem_gc_float(array, index):
+    array = array._obj.container
+    return array.getitem(index)
+
 def do_getarrayitem_gc_ptr(array, index):
     array = array._obj.container
     return cast_to_ptr(array.getitem(index))
@@ -1033,6 +1084,11 @@ def do_setarrayitem_gc_int(array, index, newvalue, memocast):
     array = array._obj.container
     ITEMTYPE = lltype.typeOf(array).OF
     newvalue = cast_from_int(ITEMTYPE, newvalue, memocast)
+    array.setitem(index, newvalue)
+
+def do_setarrayitem_gc_float(array, index, newvalue):
+    array = array._obj.container
+    ITEMTYPE = lltype.typeOf(array).OF
     array.setitem(index, newvalue)
 
 def do_setarrayitem_gc_ptr(array, index, newvalue):

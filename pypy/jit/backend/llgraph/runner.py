@@ -116,6 +116,8 @@ class BaseCPU(model.AbstractCPU):
                 var2index[box] = llimpl.compile_start_int_var(c)
             elif isinstance(box, history.BoxPtr):
                 var2index[box] = llimpl.compile_start_ptr_var(c)
+            elif isinstance(box, history.BoxFloat):
+                var2index[box] = llimpl.compile_start_float_var(c)
             elif self.is_oo and isinstance(box, history.BoxObj):
                 var2index[box] = llimpl.compile_start_obj_var(c)
             else:
@@ -140,6 +142,8 @@ class BaseCPU(model.AbstractCPU):
                     llimpl.compile_add_var(c, var2index[x])
                 elif isinstance(x, history.ConstInt):
                     llimpl.compile_add_int_const(c, x.value)
+                elif isinstance(x, history.ConstFloat):
+                    llimpl.compile_add_float_const(c, x.value)
                 elif isinstance(x, history.ConstPtr):
                     llimpl.compile_add_ptr_const(c, x.value)
                 elif isinstance(x, history.ConstAddr):
@@ -156,6 +160,8 @@ class BaseCPU(model.AbstractCPU):
             if x is not None:
                 if isinstance(x, history.BoxInt):
                     var2index[x] = llimpl.compile_add_int_result(c)
+                elif isinstance(x, history.BoxFloat):
+                    var2index[x] = llimpl.compile_add_float_result(c)
                 elif isinstance(x, history.BoxPtr):
                     var2index[x] = llimpl.compile_add_ptr_result(c)
                 elif self.is_oo and isinstance(x, history.BoxObj):
@@ -187,6 +193,9 @@ class BaseCPU(model.AbstractCPU):
     def set_future_value_int(self, index, intvalue):
         llimpl.set_future_value_int(index, intvalue)
 
+    def set_future_value_float(self, index, floatval):
+        llimpl.set_future_value_float(index, floatval)
+
     def set_future_value_ptr(self, index, ptrvalue):
         llimpl.set_future_value_ptr(index, ptrvalue)
 
@@ -195,6 +204,9 @@ class BaseCPU(model.AbstractCPU):
 
     def get_latest_value_int(self, index):
         return llimpl.frame_int_getvalue(self.latest_frame, index)
+
+    def get_latest_value_float(self, index):
+        return llimpl.frame_float_getvalue(self.latest_frame, index)
 
     def get_latest_value_ptr(self, index):
         return llimpl.frame_ptr_getvalue(self.latest_frame, index)
