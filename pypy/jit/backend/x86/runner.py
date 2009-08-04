@@ -281,12 +281,19 @@ class CPU386(object):
         assert index < MAX_FAIL_BOXES, "overflow!"
         self.assembler.fail_boxes_int[index] = intvalue
 
+    def set_future_value_float(self, index, floatval):
+        assert index < MAX_FAIL_BOXES, "overflow!"
+        self.assembler.fail_boxes_float[index] = floatval
+
     def set_future_value_ptr(self, index, ptrvalue):
         assert index < MAX_FAIL_BOXES, "overflow!"
         self.assembler.fail_boxes_ptr[index] = ptrvalue
 
     def get_latest_value_int(self, index):
         return self.assembler.fail_boxes_int[index]
+
+    def get_latest_value_float(self, index):
+        return self.assembler.fail_boxes_float[index]
 
     def get_latest_value_ptr(self, index):
         ptrvalue = self.assembler.fail_boxes_ptr[index]

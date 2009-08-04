@@ -3,6 +3,53 @@ from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
      BoxPtr, ConstPtr, TreeLoop
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.x86.runner import CPU
+from pypy.jit.metainterp.test.oparser import parse
+from pypy.jit.metainterp.test.oparser import parse
+
+class TestRegalloc(object):
+    namespace = {}
+    type_system = 'lltype'
+    cpu = CPU(None, None)
+    
+    def parse(self, s, boxkinds=None):
+        return parse(s, self.cpu, self.namespace,
+                     type_system=self.type_system,
+                     boxkinds=boxkinds)
+
+    def interpret(self, ops, args):
+        loop = self.parse(ops)
+        self.cpu.compile_operations(loop)
+        for i, arg in enumerate(args):
+            if isinstance(arg, int):
+                self.cpu.set_future_value_int(i, arg)
+            elif isinstance(arg, float):
+                self.cpu.set_future_value_float(i, arg)
+            else:
+                raise NotImplementedError("Arg: %s" % arg)
+        self.cpu.execute_operations(loop)
+
+    def getfloat(self, index):
+        return self.cpu.get_latest_value_float(index)
+
+    def test_float_add(self):
+        ops = '''
+        [f0, f1]
+        f2 = float_add(f0, f1)
+        fail(f2)
+        '''
+        z = 3.5
+        self.interpret(ops, [1.5, 2.5])
+        assert self.getfloat(0) == 4.0
+
+    def test_float_add_spill(self):
+        ops = '''
+        [f0, f1]
+        f2 = float_add(f0, f1)
+        f3 = float_add(1.5, f2)
+        fail(f3)
+        '''
+        self.interpret(ops, [1.5, 2.5])
+        assert self.getfloat(0) == 5.5
 
 def test_bug_rshift():
     v1 = BoxInt()

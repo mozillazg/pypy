@@ -455,14 +455,26 @@ FLDL.mode1(MODRM64, ['\xDD', modrm(1)])
 FADDP = Instruction()
 FADDP.mode0(['\xDE\xC1'])
 
+FADDL = Instruction()
+FADDL.mode1(MODRM64, ['\xDC', modrm(1)])
+
 FSUBP = Instruction()
 FSUBP.mode0(['\xDE\xE1'])
+
+FSUBL = Instruction()
+FSUBL.mode1(MODRM64, ['\xDC', orbyte(4<<3), modrm(1)])
 
 FMULP = Instruction()
 FMULP.mode0(['\xDE\xC9'])
 
+FMULL = Instruction()
+FMULL.mode1(MODRM64, ['\xDC', orbyte(1<<3), modrm(1)])
+
 FDIVP = Instruction()
 FDIVP.mode0(['\xDE\xF1'])
+
+FDIVL = Instruction()
+FDIVL.mode1(MODRM64, ['\xDC', orbyte(6<<3), modrm(1)])
 
 FCHS = Instruction()
 FCHS.mode0(['\xD9\xE0'])
