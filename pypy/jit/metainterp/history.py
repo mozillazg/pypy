@@ -19,12 +19,15 @@ py.log.setconsumer('compiler', ansi_log)
 INT = 'i'
 PTR = 'p'
 OBJ = 'o'
+FLOAT = 'f'
 
 def getkind(TYPE):
     if TYPE is lltype.Void:
         return "void"
     elif isinstance(TYPE, lltype.Primitive):
-        if TYPE in (lltype.Float, lltype.SingleFloat):
+        if TYPE is lltype.Float:
+            return 'float'
+        if TYPE is lltype.SingleFloat:
             raise NotImplementedError("type %s not supported" % TYPE)
         # XXX fix this for oo...
         if rffi.sizeof(TYPE) > rffi.sizeof(lltype.Signed):
@@ -74,6 +77,9 @@ class AbstractValue(object):
     __slots__ = ()
 
     def getint(self):
+        raise NotImplementedError
+
+    def getfloat(self):
         raise NotImplementedError
 
     def getptr_base(self):
@@ -280,6 +286,26 @@ class ConstAddr(Const):       # only for constants built before translation
     def repr_rpython(self):
         return repr_rpython(self, 'ca')
 
+class ConstFloat(Const):
+    type = FLOAT
+    _attrs_ = ('value',)
+
+    def __init__(self, floatval):
+        assert isinstance(floatval, float)
+        self.value = floatval
+
+    def getfloat(self):
+        return self.value
+
+    def _getrepr_(self):
+        return self.value
+
+    def repr_rpython(self):
+        return repr_rpython(self, 'cf')
+
+    def __hash__(self):
+       return hash(self.value)
+
 class ConstPtr(Const):
     type = PTR
     value = lltype.nullptr(llmemory.GCREF.TO)
@@ -393,10 +419,7 @@ class Box(AbstractValue):
     def __str__(self):
         if not hasattr(self, '_str'):
             try:
-                if self.type == INT:
-                    t = 'i'
-                else:
-                    t = 'p'
+                t = self.type
             except AttributeError:
                 t = 'b'
             self._str = '%s%d' % (t, Box._counter)
@@ -443,6 +466,23 @@ class BoxInt(Box):
         return repr_rpython(self, 'bi')
 
     changevalue_int = __init__
+
+class BoxFloat(Box):
+    type = FLOAT
+    _attrs_ = ('value',)
+    
+    def __init__(self, floatval=0.0):
+        assert isinstance(floatval, float)
+        self.value = floatval
+
+    def getfloat(self):
+        return self.value
+
+    def _getrepr_(self):
+        return self.value
+
+    def repr_rpython(self):
+        return repr_rpython(self, 'bf')
 
 class BoxPtr(Box):
     type = PTR
