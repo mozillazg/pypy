@@ -4,7 +4,7 @@ in a nicer fashion
 """
 
 from pypy.jit.metainterp.history import TreeLoop, BoxInt, BoxPtr, ConstInt,\
-     ConstAddr, ConstObj, ConstPtr, Box, BoxObj
+     ConstAddr, ConstObj, ConstPtr, Box, BoxObj, BoxFloat, ConstFloat
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
@@ -14,7 +14,6 @@ _default_namespace = {'lltype': {}, 'ootype': {}}
 
 class ParseError(Exception):
     pass
-
 
 class Boxes(object):
     pass
@@ -66,6 +65,9 @@ class OpParser(object):
             # integer
             box = BoxInt()
             _box_counter_more_than(elem[1:])
+        elif elem.startswith('f'):
+            box = BoxFloat()
+            _box_counter_more_than(elem[1:])
         elif elem.startswith('p'):
             # pointer
             if getattr(self.cpu, 'is_oo', False):
@@ -98,27 +100,30 @@ class OpParser(object):
         try:
             return ConstInt(int(arg))
         except ValueError:
-            if arg.startswith('ConstClass('):
-                name = arg[len('ConstClass('):-1]
-                if self.type_system == 'lltype':
-                    return ConstAddr(llmemory.cast_ptr_to_adr(self.consts[name]),
-                                     self.cpu)
-                else:
-                    return ConstObj(ootype.cast_to_object(self.consts[name]))
-            elif arg == 'None':
-                return None
-            elif arg == 'NULL':
-                if self.type_system == 'lltype':
-                    return ConstPtr(ConstPtr.value)
-                else:
-                    return ConstObj(ConstObj.value)
-            elif arg.startswith('ConstPtr('):
-                name = arg[len('ConstPtr('):-1]
-                if self.type_system == 'lltype':
-                    return ConstPtr(self.boxkinds[name])
-                else:
-                    return ConstObj(self.boxkinds[name])
-            return self.vars[arg]
+            try:
+                return ConstFloat(float(arg))
+            except ValueError:
+                if arg.startswith('ConstClass('):
+                    name = arg[len('ConstClass('):-1]
+                    if self.type_system == 'lltype':
+                        return ConstAddr(llmemory.cast_ptr_to_adr(self.consts[name]),
+                                         self.cpu)
+                    else:
+                        return ConstObj(ootype.cast_to_object(self.consts[name]))
+                elif arg == 'None':
+                    return None
+                elif arg == 'NULL':
+                    if self.type_system == 'lltype':
+                        return ConstPtr(ConstPtr.value)
+                    else:
+                        return ConstObj(ConstObj.value)
+                elif arg.startswith('ConstPtr('):
+                    name = arg[len('ConstPtr('):-1]
+                    if self.type_system == 'lltype':
+                        return ConstPtr(self.boxkinds[name])
+                    else:
+                        return ConstObj(self.boxkinds[name])
+                return self.vars[arg]
 
     def parse_op(self, line):
         num = line.find('(')

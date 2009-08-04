@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import lltype
 
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.history import AbstractDescr, BoxInt
+from pypy.jit.metainterp.history import AbstractDescr, BoxInt, BoxFloat
 
 def test_basic_parse():
     x = """
@@ -101,3 +101,14 @@ def test_boxkind():
     loop = parse(x, None, {}, boxkinds={'sum': BoxInt})
     b = loop.getboxes()
     assert isinstance(b.sum0, BoxInt)
+
+def test_float():
+    x = '''
+    [f0]
+    f1 = float_add(f0, 1.5)
+    '''
+    loop = parse(x, None, {})
+    b = loop.getboxes()
+    assert isinstance(b.f0, BoxFloat)
+    assert isinstance(b.f1, BoxFloat)
+    
