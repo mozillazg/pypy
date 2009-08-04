@@ -46,7 +46,7 @@ class GcLLDescr_boehm(GcLLDescription):
     def arraydescrof(self, A, translate_support_code):
         basesize, itemsize, ofs_length = symbolic.get_array_token(A,
                                                        translate_support_code)
-        assert rffi.sizeof(A.OF) in [1, 2, WORD]
+        assert rffi.sizeof(A.OF) in [1, 2, WORD, 2*WORD]
         # assert ofs_length == 0 --- but it's symbolic...
         if isinstance(A.OF, lltype.Ptr) and A.OF.TO._gckind == 'gc':
             ptr = True
@@ -355,7 +355,7 @@ class GcLLDescr_framework(GcLLDescription):
     def arraydescrof(self, A, translate_support_code):
         assert translate_support_code, "required with the framework GC"
         basesize, itemsize, ofs_length = symbolic.get_array_token(A, True)
-        assert rffi.sizeof(A.OF) in [1, 2, WORD]
+        assert rffi.sizeof(A.OF) in [1, 2, WORD, 2*WORD]
         # assert ofs_length == self.array_length_ofs --- but it's symbolics...
         if isinstance(A.OF, lltype.Ptr) and A.OF.TO._gckind == 'gc':
             ptr = True

@@ -1,7 +1,7 @@
 import sys, os
 import ctypes
 from pypy.jit.backend.x86 import symbolic
-from pypy.jit.metainterp.history import Const, Box, BoxPtr, PTR
+from pypy.jit.metainterp.history import Const, Box, BoxPtr, PTR, FLOAT
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -14,6 +14,7 @@ from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.support import AbstractLogger
+from pypy.jit.backend.x86.support import ListOfFloats
 
 # our calling convention - we pass three first args as edx, ecx and eax
 # and the rest stays on the stack
@@ -103,6 +104,8 @@ class Assembler386(object):
                                             MAX_FAIL_BOXES, zero=True)
         self.fail_boxes_ptr = lltype.malloc(lltype.GcArray(llmemory.GCREF),
                                             MAX_FAIL_BOXES, zero=True)
+        self.fail_boxes_float = lltype.malloc(lltype.GcArray(lltype.Float),
+                                              MAX_FAIL_BOXES, zero=True)
 
     def make_sure_mc_exists(self):
         if self.mc is None:
@@ -110,10 +113,13 @@ class Assembler386(object):
 
             rffi.cast(lltype.Signed, self.fail_boxes_int)   # workaround
             rffi.cast(lltype.Signed, self.fail_boxes_ptr)   # workaround
+            rffi.cast(lltype.Signed, self.fail_boxes_float) # workaround
             self.fail_box_int_addr = rffi.cast(lltype.Signed,
                 lltype.direct_arrayitems(self.fail_boxes_int))
             self.fail_box_ptr_addr = rffi.cast(lltype.Signed,
                 lltype.direct_arrayitems(self.fail_boxes_ptr))
+            self.fail_box_float_addr = rffi.cast(lltype.Signed,
+                lltype.direct_arrayitems(self.fail_boxes_float))
 
             self.logger.create_log()
             # we generate the loop body in 'mc'
@@ -160,7 +166,7 @@ class Assembler386(object):
             self.gcrootmap = gc_ll_descr.gcrootmap
             if self.gcrootmap:
                 self.gcrootmap.initialize()
-
+            self.floatmap = ListOfFloats()
 
     def _compute_longest_fail_op(self, ops):
         max_so_far = 0
@@ -223,16 +229,24 @@ class Assembler386(object):
         for i in range(len(arglocs)):
             loc = arglocs[i]
             if not isinstance(loc, REG):
-                if args[i].type == PTR:
-                    # This uses XCHG to put zeroes in fail_boxes_ptr after
-                    # reading them
-                    self.mc.XOR(ecx, ecx)
-                    self.mc.XCHG(ecx, addr_add(imm(self.fail_box_ptr_addr),
-                                               imm(i*WORD)))
+                if args[i].type == FLOAT:
+                    self.mc.MOV(ecx, addr_add(imm(self.fail_box_float_addr),
+                                              imm(i*2*WORD)))
+                    self.mc.MOV(stack_pos(loc.position + 1, 1), ecx)
+                    self.mc.MOV(ecx, addr_add(imm(self.fail_box_float_addr),
+                                              imm((i*2 + 1) * WORD)))
+                    self.mc.MOV(stack_pos(loc.position, 1), ecx)
                 else:
-                    self.mc.MOV(ecx, addr_add(imm(self.fail_box_int_addr),
-                                              imm(i*WORD)))
-                self.mc.MOV(loc, ecx)
+                    if args[i].type == PTR:
+                        # This uses XCHG to put zeroes in fail_boxes_ptr after
+                        # reading them
+                        self.mc.XOR(ecx, ecx)
+                        self.mc.XCHG(ecx, addr_add(imm(self.fail_box_ptr_addr),
+                                                   imm(i*WORD)))
+                    else:
+                        self.mc.MOV(ecx, addr_add(imm(self.fail_box_int_addr),
+                                                  imm(i*WORD)))
+                    self.mc.MOV(loc, ecx)
         for i in range(len(arglocs)):
             loc = arglocs[i]
             if isinstance(loc, REG):
@@ -265,6 +279,12 @@ class Assembler386(object):
         self.mc.MOV(to_loc, from_loc)
 
     regalloc_store = regalloc_load
+
+    def regalloc_load_float(self, from_loc, to_loc):
+        self.mc.FLDL(from_loc)
+
+    def regalloc_store_float(self, from_loc, to_loc):
+        self.mc.FSTPL(to_loc)
 
     def regalloc_push(self, loc):
         self.mc.PUSH(loc)
@@ -392,6 +412,16 @@ class Assembler386(object):
     genop_guard_uint_le = _cmpop_guard("BE", "AE", "A", "B")
     genop_guard_uint_ge = _cmpop_guard("AE", "BE", "B", "A")
 
+    def _binop_float(opname):
+        def genop_binary_float(self, op, arglocs, resultloc):
+            getattr(self.mc, opname)(arglocs[1])
+        return genop_binary_float
+
+    genop_float_add = _binop_float('FADDL')
+    genop_float_sub = _binop_float('FSUBL')
+    genop_float_mul = _binop_float('FMULL')
+    genop_float_truediv = _binop_float('FDIVL')
+
     # for now all chars are being considered ints, although we should make
     # a difference at some point
     xxx_genop_char_eq = genop_int_eq
@@ -505,6 +535,8 @@ class Assembler386(object):
         if scale.value == 0:
             self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc, ofs.value,
                                             scale.value))
+        elif scale.value == 3:
+            self.mc.FLDL(addr64_add(base_loc, ofs_loc, ofs.value, scale.value))
         elif scale.value == 2:
             self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value,
                                          scale.value))
@@ -537,6 +569,10 @@ class Assembler386(object):
         if scale_loc.value == 2:
             self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value,
                                  scale_loc.value), value_loc)
+        elif scale_loc.value == 3:
+            assert value_loc is st0
+            self.mc.FSTPL(addr64_add(base_loc, ofs_loc, baseofs.value,
+                                    scale_loc.value))
         elif scale_loc.value == 0:
             self.mc.MOV(addr8_add(base_loc, ofs_loc, baseofs.value,
                                  scale_loc.value), lower_byte(value_loc))
@@ -700,7 +736,7 @@ class Assembler386(object):
         self.mc = oldmc
         return addr
 
-    def generate_failure(self, op, locs, exc):
+    def generate_failure(self, op, locs, exc, regalloc):
         pos = self.mc.tell()
         for i in range(len(locs)):
             loc = locs[i]
@@ -713,12 +749,28 @@ class Assembler386(object):
         for i in range(len(locs)):
             loc = locs[i]
             if not isinstance(loc, REG):
-                if op.args[i].type == PTR:
-                    base = self.fail_box_ptr_addr
+                if op.args[i].type == FLOAT:
+                    base = self.fail_box_float_addr
+                    if loc is st0:
+                        self.mc.FSTPL(addr64_add(imm(base), imm(i*2*WORD)))
+                        regalloc.st0 = None
+                    else:
+                        assert isinstance(loc, MODRM)
+                        start = stack_pos(loc.position, 1)
+                        next = stack_pos(loc.position + 1, 1)
+                        self.mc.MOV(eax, start)
+                        self.mc.MOV(addr_add(imm(base), imm((i*2 + 1)*WORD)),
+                                    eax)
+                        self.mc.MOV(eax, next)
+                        self.mc.MOV(addr_add(imm(base), imm(2*i*WORD)),
+                                    eax)
                 else:
-                    base = self.fail_box_int_addr
-                self.mc.MOV(eax, loc)
-                self.mc.MOV(addr_add(imm(base), imm(i*WORD)), eax)
+                    if op.args[i].type == PTR:
+                        base = self.fail_box_ptr_addr
+                    else:
+                        base = self.fail_box_int_addr
+                    self.mc.MOV(eax, loc)
+                    self.mc.MOV(addr_add(imm(base), imm(i*WORD)), eax)
         if self.debug_markers:
             self.mc.MOV(eax, imm(pos))
             self.mc.MOV(addr_add(imm(self.fail_box_int_addr),
@@ -772,7 +824,7 @@ class Assembler386(object):
         else:
             x = arglocs[0]
             if isinstance(x, MODRM):
-                x = stack_pos(x.position)
+                x = stack_pos(x.position, 1)
         self.mc.CALL(x)
         self.mark_gc_roots()
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
@@ -878,6 +930,20 @@ def addr16_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
             return mem16(reg_or_imm1, (offset << scale) + reg_or_imm2.value)
         else:
             return memSIB16(reg_or_imm1, reg_or_imm2, scale, offset)
+
+def addr64_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
+    if isinstance(reg_or_imm1, IMM32):
+        if isinstance(reg_or_imm2, IMM32):
+            return heap64(reg_or_imm1.value + (offset << scale) +
+                         reg_or_imm2.value)
+        else:
+            return memSIB64(None, reg_or_imm2, scale, reg_or_imm1.value + offset)
+    else:
+        if isinstance(reg_or_imm2, IMM32):
+            return mem64(reg_or_imm1, (offset << scale) + reg_or_imm2.value)
+        else:
+            return memSIB64(reg_or_imm1, reg_or_imm2, scale, offset)
+    
 
 def addr_add_const(reg_or_imm1, offset):
     if isinstance(reg_or_imm1, IMM32):

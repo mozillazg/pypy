@@ -3,7 +3,8 @@
 """
 
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
-                                         ResOperation, ConstAddr, BoxPtr)
+                                         ResOperation, ConstAddr, BoxPtr,
+                                         INT, PTR, FLOAT, ConstFloat)
 from pypy.jit.backend.x86.ri386 import *
 from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
 from pypy.rlib.objectmodel import we_are_translated
@@ -16,6 +17,16 @@ from pypy.jit.metainterp.resoperation import rop
 # saved and restored
 REGS = [eax, ecx, edx]
 WORD = 4
+
+_sizes = {
+    # in WORDs
+    INT   : 1,
+    FLOAT : 2,
+    PTR   : 1,
+    }
+
+def sizeofbox(box):
+    return _sizes[box.type]
 
 class ImplementConstantOverflow(Exception):
     """ This exception is raised when someone uses the result
@@ -41,20 +52,6 @@ def newcheckdict():
         return {}
     return checkdict()
 
-def convert_to_imm(c):
-    if isinstance(c, ConstInt):
-        return imm(c.value)
-    elif isinstance(c, ConstPtr):
-        if we_are_translated() and c.value and rgc.can_move(c.value):
-            print "convert_to_imm: ConstPtr needs special care"
-            raise AssertionError
-        return imm(rffi.cast(lltype.Signed, c.value))
-    elif isinstance(c, ConstAddr):
-        return imm(ll2ctypes.cast_adr_to_int(c.value))
-    else:
-        print "convert_to_imm: got a %s" % c
-        raise AssertionError
-
 class RegAlloc(object):
     max_stack_depth = 0
     exc = False
@@ -78,9 +75,10 @@ class RegAlloc(object):
             #if guard_op:
             #    loop_consts, sd = self._start_from_guard_op(guard_op, mp, jump)
             #else:
-            loop_consts, sd = self._compute_loop_consts(tree.inputargs, jump)
+            loop_consts = self._compute_loop_consts(tree.inputargs, jump)
             self.loop_consts = loop_consts
-            self.current_stack_depth = sd
+            self.current_stack_depth = -1
+            self.st0 = None
         else:
             self._rewrite_const_ptrs(guard_op.suboperations)
             guard_op.inputargs = None
@@ -108,6 +106,7 @@ class RegAlloc(object):
             jump_or_fail = guard_op.suboperations[-1]
             self.loop_consts = {}
             self.tree = regalloc.tree
+            self.st0 = regalloc.st0
             if jump_or_fail.opnum == rop.FAIL:
                 self.jump_reg_candidates = {}
             else:
@@ -117,6 +116,7 @@ class RegAlloc(object):
 
     def _create_jump_reg_candidates(self, jump):
         self.jump_reg_candidates = {}
+        # XXX disabled, note
         return
         for i in range(len(jump.args)):
             arg = jump.args[i]
@@ -127,6 +127,23 @@ class RegAlloc(object):
     def copy(self, guard_op):
         return RegAlloc(self.assembler, None, self.translate_support_code,
                         self, guard_op)
+
+    def const_to_operand(self, c):
+        if isinstance(c, ConstInt):
+            return imm(c.value)
+        elif isinstance(c, ConstPtr):
+            if we_are_translated() and c.value and rgc.can_move(c.value):
+                print "const_to_operand: ConstPtr needs special care"
+                raise AssertionError
+            return imm(rffi.cast(lltype.Signed, c.value))
+        elif isinstance(c, ConstAddr):
+            return imm(ll2ctypes.cast_adr_to_int(c.value))
+        elif isinstance(c, ConstFloat):
+            addr = self.assembler.floatmap.getaddr(c.getfloat())
+            return heap64(addr)
+        else:
+            print "const_to_operand: got a %s" % c
+            raise AssertionError
 
 #     def _start_from_guard_op(self, guard_op, mp, jump):
 #         xxx
@@ -190,7 +207,7 @@ class RegAlloc(object):
             #                arg in self.stack_bindings):
             #                self.stack_bindings[jarg] = stack_pos(i)
             #                self.dirty_stack[jarg] = True
-        return loop_consts, len(inputargs)
+        return loop_consts
 
     def _check_invariants(self):
         if not we_are_translated():
@@ -216,10 +233,22 @@ class RegAlloc(object):
             self.assembler.dump('%s <- %s(%s)' % (to_loc, v, from_loc))
         self.assembler.regalloc_load(from_loc, to_loc)
 
+    def load_float(self, v, from_loc, to_loc):
+        assert to_loc is st0
+        if not we_are_translated():
+            self.assembler.dump('%s <- %s(%s)' % (to_loc, v, from_loc))
+        self.assembler.regalloc_load_float(from_loc, to_loc)
+
     def Store(self, v, from_loc, to_loc):
         if not we_are_translated():
             self.assembler.dump('%s(%s) -> %s' % (v, from_loc, to_loc))
         self.assembler.regalloc_store(from_loc, to_loc)
+
+    def store_float(self, v, from_loc, to_loc):
+        assert from_loc is st0
+        if not we_are_translated():
+            self.assembler.dump('%s(%s) -> %s' % (v, from_loc, to_loc))
+        self.assembler.regalloc_store_float(from_loc, to_loc)
 
     def Perform(self, op, arglocs, result_loc):
         if not we_are_translated():
@@ -274,7 +303,7 @@ class RegAlloc(object):
         # load/store places
         operations = tree.operations
         self.position = -1
-        self.process_inputargs(tree)
+        self.current_stack_depth = self.process_inputargs(tree)
         self._walk_operations(operations)
 
     def walk_guard_ops(self, inputargs, operations, exc):
@@ -313,7 +342,8 @@ class RegAlloc(object):
                 else:
                     nothing = oplist[op.opnum](self, op, None)
                 assert nothing is None     # temporary, remove me
-                self.eventually_free_var(op.result)
+                if op.result is not None:
+                    self.eventually_free_var(op.result)
                 self._check_invariants()
             else:
                 self.eventually_free_vars(op.args)
@@ -418,7 +448,7 @@ class RegAlloc(object):
 
     def try_allocate_reg(self, v, selected_reg=None):
         if isinstance(v, Const):
-            return convert_to_imm(v)
+            return self.const_to_operand(v)
         if selected_reg is not None:
             res = self.reg_bindings.get(v, None)
             if res:
@@ -461,11 +491,11 @@ class RegAlloc(object):
         if selected_reg or not imm_fine:
             # this means we cannot have it in IMM, eh
             if selected_reg in self.free_regs:
-                self.Load(v, convert_to_imm(v), selected_reg)
+                self.Load(v, self.const_to_operand(v), selected_reg)
                 return selected_reg
             if selected_reg is None and self.free_regs:
                 loc = self.free_regs.pop()
-                self.Load(v, convert_to_imm(v), loc)
+                self.Load(v, self.const_to_operand(v), loc)
                 return loc
             v_to_spill = self.pick_variable_to_spill(v, forbidden_vars, selected_reg)
             loc = self.loc(v_to_spill)
@@ -478,9 +508,9 @@ class RegAlloc(object):
                 self.Store(v_to_spill, loc, newloc)
             del self.reg_bindings[v_to_spill]
             self.free_regs.append(loc)
-            self.Load(v, convert_to_imm(v), loc)
+            self.Load(v, self.const_to_operand(v), loc)
             return loc
-        return convert_to_imm(v)
+        return self.const_to_operand(v)
 
     def force_allocate_reg(self, v, forbidden_vars, selected_reg=None):
         if isinstance(v, Const):
@@ -525,7 +555,7 @@ class RegAlloc(object):
         try:
             res = self.stack_bindings[v]
         except KeyError:
-            newloc = stack_pos(self.current_stack_depth)
+            newloc = stack_pos(self.current_stack_depth, sizeofbox(v))
             self.stack_bindings[v] = newloc
             self.current_stack_depth += 1
             res = newloc
@@ -560,9 +590,14 @@ class RegAlloc(object):
         self.reg_bindings[to_v] = reg
 
     def eventually_free_var(self, v):
-        if isinstance(v, Const) or v not in self.reg_bindings:
+        assert v is not None
+        if (isinstance(v, Const) or
+            (v not in self.reg_bindings and v is not self.st0)):
             return
         if v not in self.longevity or self.longevity[v][1] <= self.position:
+            if v is self.st0:
+                self.st0 = None
+                return
             self.free_regs.append(self.reg_bindings[v])
             del self.reg_bindings[v]
 
@@ -571,8 +606,11 @@ class RegAlloc(object):
             self.eventually_free_var(v)
 
     def loc(self, v):
+        assert v is not None # nonsense
         if isinstance(v, Const):
-            return convert_to_imm(v)
+            return self.const_to_operand(v)
+        if v is self.st0:
+            return st0
         try:
             return self.reg_bindings[v]
         except KeyError:
@@ -656,12 +694,37 @@ class RegAlloc(object):
             loc = self.reg_bindings[result_v]
         return loc
 
+    def force_float_result_in_reg(self, result, v):
+        if self.st0 is v:
+            if self.longevity[v][1] > self.position:
+                self.store_float(v, st0, self.stack_loc(v))
+        else:
+            if self.st0 is not None:
+                self.store_float(self.st0, st0, self.stack_loc(self.st0))
+            self.load_float(v, self.loc(v), st0)
+        self.st0 = result
+
+    def force_float_in_reg(self, v):
+        if self.st0 is v:
+            return
+        if self.st0 is not None:
+            self.store_float(self.st0, st0, self.stack_loc(self.st0))
+        self.load_float(v, self.loc(v), st0)
+        self.st0 = v
+
+    def force_allocate_float_reg(self, v):
+        if self.st0 is not None:
+            self.store_float(self.st0, st0, self.stack_loc(self.st0))
+        self.st0 = v
+        return st0
+
     def process_inputargs(self, tree):
         # XXX we can sort out here by longevity if we need something
         # more optimal
         inputargs = tree.inputargs
         locs = [None] * len(inputargs)
         jump = tree.operations[-1]
+        stackdepth = 0
         if jump.opnum != rop.JUMP:
             jump = None
         elif jump.jump_target is not tree:
@@ -671,7 +734,9 @@ class RegAlloc(object):
             arg = inputargs[i]
             assert not isinstance(arg, Const)
             reg = None
-            if arg not in self.loop_consts and self.longevity[arg][1] > -1:
+            boxsize = sizeofbox(arg)
+            if (arg not in self.loop_consts and self.longevity[arg][1] > -1 and
+                boxsize == WORD): # only allocate regs for WORD size
                 reg = self.try_allocate_reg(arg)
             if reg:
                 locs[i] = reg
@@ -682,13 +747,15 @@ class RegAlloc(object):
                 #    jarg = jump.args[i]
                 #    self.jump_reg_candidates[jarg] = reg
             else:
-                loc = stack_pos(i)
+                loc = stack_pos(stackdepth, boxsize)
                 self.stack_bindings[arg] = loc
                 locs[i] = loc
+            stackdepth += boxsize
             # otherwise we have it saved on stack, so no worry
         tree.arglocs = locs
         self.assembler.make_merge_point(tree, locs)
         self.eventually_free_vars(inputargs)
+        return stackdepth
 
     def regalloc_for_guard(self, guard_op):
         return self.copy(guard_op)
@@ -706,7 +773,7 @@ class RegAlloc(object):
     def consider_fail(self, op, ignored):
         # make sure all vars are on stack
         locs = [self.loc(arg) for arg in op.args]
-        self.assembler.generate_failure(op, locs, self.exc)
+        self.assembler.generate_failure(op, locs, self.exc, self)
         self.eventually_free_vars(op.args)
 
     def consider_guard_no_exception(self, op, ignored):
@@ -790,6 +857,18 @@ class RegAlloc(object):
     consider_int_and = _consider_binop
     consider_int_or  = _consider_binop
     consider_int_xor = _consider_binop
+
+    def _consider_binop_float(self, op, ignored):
+        x = op.args[0]
+        locx = self.loc(x)
+        self.force_float_result_in_reg(op.result, x)
+        self.Perform(op, [st0, self.loc(op.args[1])], st0)
+        self.eventually_free_vars(op.args)
+
+    consider_float_add = _consider_binop_float
+    consider_float_sub = _consider_binop_float
+    consider_float_mul = _consider_binop_float
+    consider_float_truediv = _consider_binop_float
     
     def _consider_binop_ovf(self, op, guard_op):
         loc, argloc = self._consider_binop_part(op, None)
@@ -798,7 +877,8 @@ class RegAlloc(object):
         self.perform_with_guard(op, guard_op, regalloc, [loc, argloc], loc,
                                 overflow=True)
         self.eventually_free_vars(guard_op.inputargs)
-        self.eventually_free_var(guard_op.result)
+        if guard_op.result is not None:
+            self.eventually_free_var(guard_op.result)
 
     consider_int_mul_ovf = _consider_binop_ovf
     consider_int_sub_ovf = _consider_binop_ovf
@@ -813,7 +893,7 @@ class RegAlloc(object):
 
     def consider_int_lshift(self, op, ignored):
         if isinstance(op.args[1], Const):
-            loc2 = convert_to_imm(op.args[1])
+            loc2 = self.const_to_operand(op.args[1])
         else:
             loc2 = self.make_sure_var_in_reg(op.args[1], [], ecx)
         loc1 = self.force_result_in_reg(op.result, op.args[0], op.args)
@@ -1029,8 +1109,13 @@ class RegAlloc(object):
     def consider_setarrayitem_gc(self, op, ignored):
         scale, ofs, ptr = self._unpack_arraydescr(op.descr)
         base_loc  = self.make_sure_var_in_reg(op.args[0], op.args)
-        value_loc = self.make_sure_var_in_reg(op.args[2], op.args)
         ofs_loc = self.make_sure_var_in_reg(op.args[1], op.args)
+        if scale > 2:
+            # float number...
+            self.force_float_in_reg(op.args[2])
+            value_loc = st0
+        else:
+            value_loc = self.make_sure_var_in_reg(op.args[2], op.args)
         if ptr:
             gc_ll_descr = self.assembler.cpu.gc_ll_descr
             gc_ll_descr.gen_write_barrier(self.assembler, base_loc, value_loc)
@@ -1052,7 +1137,11 @@ class RegAlloc(object):
         base_loc = self.make_sure_var_in_reg(op.args[0], op.args)
         ofs_loc = self.make_sure_var_in_reg(op.args[1], op.args)
         self.eventually_free_vars(op.args)
-        result_loc = self.force_allocate_reg(op.result, [])
+        if scale == 3:
+            # float
+            result_loc = self.force_allocate_float_reg(op.result)
+        else:
+            result_loc = self.force_allocate_reg(op.result, [])
         self.Perform(op, [base_loc, ofs_loc, imm(scale), imm(ofs)], result_loc)
 
     consider_getfield_raw = consider_getfield_gc
@@ -1164,9 +1253,9 @@ class RegAlloc(object):
             # write the code that moves the correct value into 'res', in two
             # steps: generate a pair PUSH (immediately) / POP (later)
             if isinstance(src, MODRM):
-                src = stack_pos(src.position)
+                src = stack_pos(src.position, 1)
             if isinstance(res, MODRM):
-                res = stack_pos(res.position)
+                res = stack_pos(res.position, 1)
             self.assembler.regalloc_push(src)
             later_pops.append(res)
             extra_on_stack += 1
@@ -1188,8 +1277,17 @@ for name, value in RegAlloc.__dict__.iteritems():
         num = getattr(rop, name.upper())
         oplist[num] = value
 
-def stack_pos(i):
-    res = mem(ebp, -WORD * (1 + i))
+class WrongSizeForStackPos(Exception):
+    pass
+
+def stack_pos(i, size):
+    if size == 1:
+        res = mem(ebp, -WORD * (1 + i))
+    elif size == 2:
+        res = mem64(ebp, -WORD * (i + 2))
+    else:
+        raise WrongSizeForStackPos()
+    assert isinstance(res, MODRM)
     res.position = i
     return res
 
