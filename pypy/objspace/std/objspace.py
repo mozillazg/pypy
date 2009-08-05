@@ -141,13 +141,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     w_globals = f.w_globals
                     num = oparg >> 8
                     assert isinstance(w_globals, W_DictMultiObject)
-                    w_value = w_globals.implementation.get_builtin_indexed(num)
+                    w_value = w_globals.get_builtin_indexed(num)
                     if w_value is None:
                         builtins = f.get_builtin()
                         assert isinstance(builtins, Module)
                         w_builtin_dict = builtins.w_dict
                         assert isinstance(w_builtin_dict, W_DictMultiObject)
-                        w_value = w_builtin_dict.implementation.get_builtin_indexed(num)
+                        w_value = w_builtin_dict.get_builtin_indexed(num)
         ##                 if w_value is not None:
         ##                     print "CALL_LIKELY_BUILTIN fast"
                     if w_value is None:
@@ -590,10 +590,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return W_ListObject(list_w)
 
     def newdict(self, module=False):
-        if self.config.objspace.std.withmultidict and module:
-            from pypy.objspace.std.dictmultiobject import W_DictMultiObject
-            return W_DictMultiObject(self, module=True)
-        return self.DictObjectCls(self)
+        return self.DictObjectCls.allocate_and_init_instance(self, module=module)
 
     def newslice(self, w_start, w_end, w_step):
         return W_SliceObject(w_start, w_end, w_step)
@@ -747,13 +744,21 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def finditem(self, w_obj, w_key):
         # performance shortcut to avoid creating the OperationError(KeyError)
-        if type(w_obj) is self.DictObjectCls:
+        if (self.config.objspace.std.withmultidict and
+                isinstance(w_obj, self.DictObjectCls) and
+                not w_obj.user_overridden_class) or (
+                not self.config.objspace.std.withmultidict and
+                type(w_obj) is self.DictObjectCls):
             return w_obj.get(w_key, None)
         return ObjSpace.finditem(self, w_obj, w_key)
 
     def set_str_keyed_item(self, w_obj, w_key, w_value, shadows_type=True):
         # performance shortcut to avoid creating the OperationError(KeyError)
-        if type(w_obj) is self.DictObjectCls:
+        if (self.config.objspace.std.withmultidict and
+                isinstance(w_obj, self.DictObjectCls) and
+                not w_obj.user_overridden_class) or (
+                not self.config.objspace.std.withmultidict and
+                type(w_obj) is self.DictObjectCls):
             w_obj.set_str_keyed_item(w_key, w_value, shadows_type)
         else:
             self.setitem(w_obj, w_key, w_value)

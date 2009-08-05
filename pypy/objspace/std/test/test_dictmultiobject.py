@@ -16,7 +16,7 @@ class TestW_DictMultiObject(test_dictobject.TestW_DictObject):
         space = self.space
         w = space.wrap
         d = {"a": w(1), "b": w(2)}
-        w_d = space.DictObjectCls(space)
+        w_d = space.DictObjectCls.allocate_and_init_instance(space)
         w_d.initialize_from_strdict_shared(d)
         assert self.space.eq_w(space.getitem(w_d, w("a")), w(1))
         assert self.space.eq_w(space.getitem(w_d, w("b")), w(2))
@@ -130,7 +130,7 @@ class TestDictImplementation:
 
     def test_stressdict(self):
         from random import randint
-        d = self.space.DictObjectCls(self.space)
+        d = self.space.DictObjectCls.allocate_and_init_instance(self.space)
         N = 10000
         pydict = {}
         for i in range(N):
@@ -160,51 +160,51 @@ class TestRDictImplementation:
         return self.ImplementionClass(self.space)
 
     def test_setitem(self):
-        assert self.impl.setitem(self.string, 1000) is self.impl
-        assert self.impl.length() == 1
-        assert self.impl.get(self.string) == 1000
+        assert self.impl.impl_setitem(self.string, 1000) is self.impl
+        assert self.impl.impl_length() == 1
+        assert self.impl.impl_getitem(self.string) == 1000
 
     def test_setitem_str(self):
-        assert self.impl.setitem_str(self.space.str_w(self.string), 1000) is self.impl
-        assert self.impl.length() == 1
-        assert self.impl.get(self.string) == 1000
+        assert self.impl.impl_setitem_str(self.space.str_w(self.string), 1000) is self.impl
+        assert self.impl.impl_length() == 1
+        assert self.impl.impl_getitem(self.string) == 1000
 
     def test_delitem(self):
-        self.impl.setitem(self.string, 1000)
-        self.impl.setitem(self.string2, 2000)
-        assert self.impl.length() == 2
-        newimpl =  self.impl.delitem(self.string)
-        assert self.impl.length() == 1
+        self.impl.impl_setitem(self.string, 1000)
+        self.impl.impl_setitem(self.string2, 2000)
+        assert self.impl.impl_length() == 2
+        newimpl =  self.impl.impl_delitem(self.string)
+        assert self.impl.impl_length() == 1
         assert newimpl is self.impl
-        newimpl = self.impl.delitem(self.string2)
-        assert self.impl.length() == 0
+        newimpl = self.impl.impl_delitem(self.string2)
+        assert self.impl.impl_length() == 0
         assert isinstance(newimpl, self.EmptyClass)
 
     def test_keys(self):
-        self.impl.setitem(self.string, 1000)
-        self.impl.setitem(self.string2, 2000)
-        keys = self.impl.keys()
+        self.impl.impl_setitem(self.string, 1000)
+        self.impl.impl_setitem(self.string2, 2000)
+        keys = self.impl.impl_keys()
         keys.sort()
         assert keys == [self.string, self.string2]
 
     def test_values(self):
-        self.impl.setitem(self.string, 1000)
-        self.impl.setitem(self.string2, 2000)
-        values = self.impl.values()
+        self.impl.impl_setitem(self.string, 1000)
+        self.impl.impl_setitem(self.string2, 2000)
+        values = self.impl.impl_values()
         values.sort()
         assert values == [1000, 2000]
 
     def test_items(self):
-        self.impl.setitem(self.string, 1000)
-        self.impl.setitem(self.string2, 2000)
-        items = self.impl.items()
+        self.impl.impl_setitem(self.string, 1000)
+        self.impl.impl_setitem(self.string2, 2000)
+        items = self.impl.impl_items()
         items.sort()
         assert items == zip([self.string, self.string2], [1000, 2000])
 
     def test_iterkeys(self):
-        self.impl.setitem(self.string, 1000)
-        self.impl.setitem(self.string2, 2000)
-        iteratorimplementation = self.impl.iterkeys()
+        self.impl.impl_setitem(self.string, 1000)
+        self.impl.impl_setitem(self.string2, 2000)
+        iteratorimplementation = self.impl.impl_iterkeys()
         keys = []
         while 1:
             key = iteratorimplementation.next()
@@ -215,9 +215,9 @@ class TestRDictImplementation:
         assert keys == [self.string, self.string2]
 
     def test_itervalues(self):
-        self.impl.setitem(self.string, 1000)
-        self.impl.setitem(self.string2, 2000)
-        iteratorimplementation = self.impl.itervalues()
+        self.impl.impl_setitem(self.string, 1000)
+        self.impl.impl_setitem(self.string2, 2000)
+        iteratorimplementation = self.impl.impl_itervalues()
         values = []
         while 1:
             value = iteratorimplementation.next()
@@ -228,9 +228,9 @@ class TestRDictImplementation:
         assert values == [1000, 2000]
 
     def test_iteritems(self):
-        self.impl.setitem(self.string, 1000)
-        self.impl.setitem(self.string2, 2000)
-        iteratorimplementation = self.impl.iteritems()
+        self.impl.impl_setitem(self.string, 1000)
+        self.impl.impl_setitem(self.string2, 2000)
+        iteratorimplementation = self.impl.impl_iteritems()
         items = []
         while 1:
             item = iteratorimplementation.next()
@@ -243,8 +243,8 @@ class TestRDictImplementation:
     def test_devolve(self):
         impl = self.impl
         for x in xrange(100):
-            impl = impl.setitem(self.space.str_w(str(x)), x)
-            impl = impl.setitem(x, x)
+            impl = impl.impl_setitem(self.space.str_w(str(x)), x)
+            impl = impl.impl_setitem(x, x)
         assert isinstance(impl, self.DevolvedClass)
 
 class TestStrDictImplementation(TestRDictImplementation):

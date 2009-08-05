@@ -1,4 +1,3 @@
-from pypy.objspace.std.dictmultiobject import DictImplementation
 from pypy.objspace.std.dictmultiobject import IteratorImplementation
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject, _is_sane_hash
 
@@ -14,11 +13,15 @@ class ModuleCell(object):
     def __repr__(self):
         return "<ModuleCell: %s>" % (self.w_value, )
 
-class ModuleDictImplementation(DictImplementation):
+class ModuleDictImplementation(W_DictMultiObject):
     def __init__(self, space):
         self.space = space
         self.content = {}
         self.unshadowed_builtins = {}
+
+    def clear(self):
+        self.content = None
+        self.unshadowed_builtins = None
 
     def getcell(self, key, make_new=True):
         try:
@@ -43,14 +46,14 @@ class ModuleDictImplementation(DictImplementation):
             w_value = cell.invalidate()
             cell = impl.content[name] = ModuleCell(w_value)
 
-    def setitem(self, w_key, w_value):
+    def impl_setitem(self, w_key, w_value):
         space = self.space
         if space.is_w(space.type(w_key), space.w_str):
-            return self.setitem_str(w_key, w_value)
+            return self.impl_setitem_str(w_key, w_value)
         else:
-            return self._as_rdict().setitem(w_key, w_value)
+            return self._as_rdict().impl_setitem(w_key, w_value)
 
-    def setitem_str(self, w_key, w_value, shadows_type=True):
+    def impl_setitem_str(self, w_key, w_value, shadows_type=True):
         name = self.space.str_w(w_key)
         self.getcell(name).w_value = w_value
         
@@ -60,7 +63,7 @@ class ModuleDictImplementation(DictImplementation):
 
         return self
 
-    def delitem(self, w_key):
+    def impl_delitem(self, w_key):
         space = self.space
         w_key_type = space.type(w_key)
         if space.is_w(w_key_type, space.w_str):
@@ -72,12 +75,12 @@ class ModuleDictImplementation(DictImplementation):
         elif _is_sane_hash(space, w_key_type):
             raise KeyError
         else:
-            return self._as_rdict().delitem(w_key)
+            return self._as_rdict().impl_delitem(w_key)
         
-    def length(self):
+    def impl_length(self):
         return len(self.content)
 
-    def get(self, w_lookup):
+    def impl_getitem(self, w_lookup):
         space = self.space
         w_lookup_type = space.type(w_lookup)
         if space.is_w(w_lookup_type, space.w_str):
@@ -88,25 +91,25 @@ class ModuleDictImplementation(DictImplementation):
         elif _is_sane_hash(space, w_lookup_type):
             return None
         else:
-            return self._as_rdict().get(w_lookup)
+            return self._as_rdict().impl_getitem(w_lookup)
 
-    def iteritems(self):
+    def impl_iteritems(self):
         return ModuleDictItemIteratorImplementation(self.space, self)
 
-    def iterkeys(self):
+    def impl_iterkeys(self):
         return ModuleDictKeyIteratorImplementation(self.space, self)
 
-    def itervalues(self):
+    def impl_itervalues(self):
         return ModuleDictValueIteratorImplementation(self.space, self)
 
-    def keys(self):
+    def impl_keys(self):
         space = self.space
         return [space.wrap(key) for key in self.content.iterkeys()]
 
-    def values(self):
+    def impl_values(self):
         return [cell.w_value for cell in self.content.itervalues()]
 
-    def items(self):
+    def impl_items(self):
         space = self.space
         return [space.newtuple([space.wrap(key), cell.w_value])
                     for (key, cell) in self.content.iteritems()]
@@ -114,7 +117,7 @@ class ModuleDictImplementation(DictImplementation):
     def _as_rdict(self):
         newimpl = self.space.DefaultDictImpl(self.space)
         for k, cell in self.content.iteritems():
-            newimpl.setitem(self.space.wrap(k), cell.w_value)
+            newimpl.impl_setitem(self.space.wrap(k), cell.w_value)
             cell.invalidate()
         for k in self.unshadowed_builtins:
             self.invalidate_unshadowed_builtin(k)
@@ -208,8 +211,8 @@ def get_global_cache(space, code, w_globals):
     return holder.getcache(space, code, w_globals)
 
 def getimplementation(w_dict):
-    if type(w_dict) is W_DictMultiObject:
-        return w_dict.implementation
+    if type(w_dict) is ModuleDictImplementation and w_dict.fallback is None:
+        return w_dict
     else:
         return None
 

@@ -8,13 +8,13 @@ class TestW_DictObject:
 
     def test_empty(self):
         space = self.space
-        d = self.space.DictObjectCls(space)
+        d = self.space.DictObjectCls.allocate_and_init_instance(space)
         assert not self.space.is_true(d)
 
     def test_nonempty(self):
         space = self.space
         wNone = space.w_None
-        d = self.space.DictObjectCls(space)
+        d = self.space.DictObjectCls.allocate_and_init_instance(space)
         d.initialize_content([(wNone, wNone)])
         assert space.is_true(d)
         i = space.getitem(d, wNone)
@@ -25,7 +25,7 @@ class TestW_DictObject:
         space = self.space
         wk1 = space.wrap('key')
         wone = space.wrap(1)
-        d = self.space.DictObjectCls(space)
+        d = self.space.DictObjectCls.allocate_and_init_instance(space)
         d.initialize_content([(space.wrap('zero'),space.wrap(0))])
         space.setitem(d,wk1,wone)
         wback = space.getitem(d,wk1)
@@ -34,7 +34,7 @@ class TestW_DictObject:
     def test_delitem(self):
         space = self.space
         wk1 = space.wrap('key')
-        d = self.space.DictObjectCls(space)
+        d = self.space.DictObjectCls.allocate_and_init_instance(space)
         d.initialize_content( [(space.wrap('zero'),space.wrap(0)),
                                (space.wrap('one'),space.wrap(1)),
                                (space.wrap('two'),space.wrap(2))])
@@ -127,7 +127,7 @@ class TestW_DictObject:
         space = self.space
         w = space.wrap
         d = {"a": w(1), "b": w(2)}
-        w_d = space.DictObjectCls(space)
+        w_d = space.DictObjectCls.allocate_and_init_instance(space)
         w_d.initialize_from_strdict_shared(d)
         assert self.space.eq_w(space.getitem(w_d, w("a")), w(1))
         assert self.space.eq_w(space.getitem(w_d, w("b")), w(2))
@@ -489,6 +489,10 @@ class FakeSpace:
     def type(self, w_obj):
         return type(w_obj)
     w_str = str
+    w_dict = dict
+    def allocate_instance(self, cls, w_type):
+        from pypy.rlib.objectmodel import instantiate
+        return instantiate(cls)
 
 class Config:
     pass
@@ -499,6 +503,7 @@ FakeSpace.config.objspace.std = Config()
 FakeSpace.config.objspace.std.withdictmeasurement = False
 FakeSpace.config.objspace.std.withsharingdict = False
 FakeSpace.config.objspace.std.withsmalldicts = False
+FakeSpace.config.objspace.std.withshadowtracking = False
 FakeSpace.config.objspace.std.withcelldict = False
 FakeSpace.config.objspace.opcodes = Config()
 FakeSpace.config.objspace.opcodes.CALL_LIKELY_BUILTIN = False
@@ -512,7 +517,7 @@ class TestDictImplementation:
 
     def test_stressdict(self):
         from random import randint
-        d = self.space.DictObjectCls(self.space)
+        d = self.space.DictObjectCls.allocate_and_init_instance(self.space)
         N = 10000
         pydict = {}
         for i in range(N):
