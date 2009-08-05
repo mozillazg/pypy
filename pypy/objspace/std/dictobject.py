@@ -15,6 +15,15 @@ class W_DictObject(W_Object):
             w_self.content = w_otherdict.content.copy()
         w_self.space = space
 
+    def allocate_and_init_instance(space, w_type=None, module=False,
+                                   instance=False, classofinstance=None):
+        if w_type is None:
+            w_type = space.w_dict
+        w_obj = space.allocate_instance(W_DictObject, w_type)
+        W_DictObject.__init__(w_obj, space)
+        return w_obj
+    allocate_and_init_instance = staticmethod(allocate_and_init_instance)
+
     def initialize_content(w_self, list_pairs_w):
         for w_k, w_v in list_pairs_w:
             w_self.content[w_k] = w_v
@@ -36,7 +45,7 @@ class W_DictObject(W_Object):
             result[space.unwrap(w_key)] = space.unwrap(w_value)
         return result
 
-    def len(w_self):
+    def length(w_self):
         return len(w_self.content)
 
     def get(w_dict, w_lookup, w_default):

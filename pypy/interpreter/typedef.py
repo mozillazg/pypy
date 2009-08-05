@@ -224,6 +224,8 @@ def _builduserclswithfeature(supercls, *features):
 
     if "user" in features:     # generic feature needed by all subcls
         class Proto(object):
+            user_overridden_class = True
+
             def getclass(self, space):
                 return self.w__class__
 
@@ -287,30 +289,20 @@ def _builduserclswithfeature(supercls, *features):
             def user_setup(self, space, w_subtype):
                 self.space = space
                 self.w__class__ = w_subtype
-                if space.config.objspace.std.withsharingdict:
-                    from pypy.objspace.std import dictmultiobject
-                    self.w__dict__ = dictmultiobject.W_DictMultiObject(space,
-                            sharing=True)
-                elif space.config.objspace.std.withshadowtracking:
-                    from pypy.objspace.std import dictmultiobject
-                    self.w__dict__ = dictmultiobject.W_DictMultiObject(space)
-                    self.w__dict__.implementation = \
-                        dictmultiobject.ShadowDetectingDictImplementation(
-                                space, w_subtype)
-                else:
-                    self.w__dict__ = space.newdict()
+                self.w__dict__ = space.DictObjectCls.allocate_and_init_instance(
+                    space, instance=True, classofinstance=w_subtype)
                 self.user_setup_slots(w_subtype.nslots)
 
             def setclass(self, space, w_subtype):
                 # only used by descr_set___class__
                 self.w__class__ = w_subtype
                 if space.config.objspace.std.withshadowtracking:
-                    self.w__dict__.implementation.set_shadows_anything()
+                    self.w__dict__.set_shadows_anything()
 
             def getdictvalue_attr_is_in_class(self, space, w_name):
                 w_dict = self.w__dict__
                 if space.config.objspace.std.withshadowtracking:
-                    if not w_dict.implementation.shadows_anything():
+                    if not w_dict.shadows_anything():
                         return None
                 return space.finditem(w_dict, w_name)
 

@@ -303,12 +303,8 @@ def descr_instance_new(space, w_type, w_class, w_dict=None):
 class W_InstanceObject(Wrappable):
     def __init__(self, space, w_class, w_dict=None):
         if w_dict is None:
-            if space.config.objspace.std.withsharingdict:
-                from pypy.objspace.std import dictmultiobject
-                w_dict = dictmultiobject.W_DictMultiObject(space,
-                            sharing=True)
-            else:
-                w_dict = space.newdict()
+            w_dict = space.DictObjectCls.allocate_and_init_instance(
+                    space, instance=True)
         assert isinstance(w_class, W_ClassObject)
         self.w_class = w_class
         self.w_dict = w_dict

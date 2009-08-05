@@ -246,7 +246,7 @@ class W_TypeObject(W_Object):
         if w_self.lazyloaders:
             w_self._freeze_()    # force un-lazification
         space = w_self.space
-        newdic = space.DictObjectCls(space)
+        newdic = space.DictObjectCls.allocate_and_init_instance(space)
         newdic.initialize_from_strdict_shared(w_self.dict_w)
         return W_DictProxyObject(newdic)
 

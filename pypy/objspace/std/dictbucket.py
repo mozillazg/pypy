@@ -1,4 +1,4 @@
-from pypy.objspace.std.dictmultiobject import DictImplementation
+from pypy.objspace.std.dictmultiobject import W_DictMultiObject
 from pypy.objspace.std.dictmultiobject import IteratorImplementation
 
 
@@ -13,12 +13,15 @@ class BucketNode:
 DISTRIBUTE = 9
 
 
-class BucketDictImplementation(DictImplementation):
+class BucketDictImplementation(W_DictMultiObject):
 
     def __init__(self, space):
         self.space = space
         self.len = 0
         self.table = [None] * 4
+
+    def release_content(self):
+        self.table = None
 
     def __repr__(self):
         bs = []
@@ -30,7 +33,7 @@ class BucketDictImplementation(DictImplementation):
             bs.append(str(count))
         return "%s<%s>" % (self.__class__.__name__, ', '.join(bs))
 
-    def get(self, w_key):
+    def impl_getitem(self, w_key):
         space = self.space
         hash = space.hash_w(w_key)
         index = (hash * DISTRIBUTE) & (len(self.table) - 1)
@@ -41,7 +44,7 @@ class BucketDictImplementation(DictImplementation):
             node = node.next
         return None
 
-    def setitem(self, w_key, w_value):
+    def impl_setitem(self, w_key, w_value):
         space = self.space
         hash = space.hash_w(w_key)
         index = (hash * DISTRIBUTE) & (len(self.table) - 1)
@@ -57,10 +60,10 @@ class BucketDictImplementation(DictImplementation):
             self._resize()
         return self
 
-    def setitem_str(self, w_key, w_value, shadows_type=True):
-        return self.setitem(w_key, w_value)
+    def impl_setitem_str(self, w_key, w_value, shadows_type=True):
+        return self.impl_setitem(w_key, w_value)
 
-    def delitem(self, w_key):
+    def impl_delitem(self, w_key):
         space = self.space
         hash = space.hash_w(w_key)
         index = (hash * DISTRIBUTE) & (len(self.table) - 1)
@@ -82,7 +85,7 @@ class BucketDictImplementation(DictImplementation):
             node = node.next
         raise KeyError
 
-    def length(self):
+    def impl_length(self):
         return self.len
 
     def _resize(self):
@@ -99,14 +102,14 @@ class BucketDictImplementation(DictImplementation):
                 node = next
         self.table = newtable
 
-    def iteritems(self):
+    def impl_iteritems(self):
         return BucketDictItemIteratorImplementation(self.space, self)
-    def iterkeys(self):
+    def impl_iterkeys(self):
         return BucketDictKeyIteratorImplementation(self.space, self)
-    def itervalues(self):
+    def impl_itervalues(self):
         return BucketDictValueIteratorImplementation(self.space, self)
 
-    def keys(self):
+    def impl_keys(self):
         result_w = []
         for node in self.table:
             while node is not None:
@@ -114,7 +117,7 @@ class BucketDictImplementation(DictImplementation):
                 node = node.next
         return result_w
 
-    def values(self):
+    def impl_values(self):
         result_w = []
         for node in self.table:
             while node is not None:
@@ -122,7 +125,7 @@ class BucketDictImplementation(DictImplementation):
                 node = node.next
         return result_w
 
-    def items(self):
+    def impl_items(self):
         space = self.space
         result_w = []
         for node in self.table:
