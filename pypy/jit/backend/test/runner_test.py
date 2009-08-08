@@ -341,6 +341,23 @@ class BaseBackendTest(Runner):
                                      'ptr', descr=fielddescr2)
         assert res.value == null_const.value
 
+    def test_field_float(self):
+        f_box, _ = self.alloc_instance(self.F)
+        intfielddescr = self.cpu.fielddescrof(self.F, 'intfield')
+        floatfielddescr = self.cpu.fielddescrof(self.F, 'floatfield')
+        i = BoxInt(3)
+        f = BoxFloat(3.5)
+        self.execute_operation(rop.SETFIELD_GC, [f_box, i], 'void',
+                               descr=intfielddescr)
+        self.execute_operation(rop.SETFIELD_GC, [f_box, f], 'void',
+                               descr=floatfielddescr)
+        res = self.execute_operation(rop.GETFIELD_GC, [f_box], 'int',
+                                     descr=intfielddescr)
+        assert res.value == 3
+        res = self.execute_operation(rop.GETFIELD_GC, [f_box], 'float',
+                                     descr=floatfielddescr)
+        assert res.value == 3.5
+
     def test_passing_guards(self):
         for (opname, args) in [(rop.GUARD_TRUE, [BoxInt(1)]),
                                (rop.GUARD_FALSE, [BoxInt(0)]),
@@ -585,6 +602,8 @@ class LLtypeBackendTest(BaseBackendTest):
                              ('next', lltype.Ptr(S)))
     U = lltype.GcStruct('U', ('parent', T),
                              ('next', lltype.Ptr(S)))
+    F = lltype.GcStruct('F', ('intfield', lltype.Signed),
+                             ('floatfield', lltype.Float))
 
 
     def alloc_instance(self, T):
