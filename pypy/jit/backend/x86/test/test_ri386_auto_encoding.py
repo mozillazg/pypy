@@ -44,13 +44,16 @@ sizes = {
     i386.REL32: 4,
 }
 
-suffixes = {0:'', 1:'b', 2:'w', 4:'l'}
+suffixes = {0:'', 1:'b', 2:'w', 4:'l', 8:'l'}
 
 def reg_tests():
     return i386.registers[:]
 
 def reg8_tests():
     return i386.registers8[:]
+
+def floatreg_tests():
+    return i386.floatregisters[:]
 
 def imm8_tests():
     v = [-128,-1,0,1,127] + [random.randrange(-127, 127) for i in range(COUNT1)]
@@ -85,9 +88,6 @@ def pick1(memSIB, cache=[]):
 def modrm_tests():
     return i386.registers + [pick1(i386.memSIB) for i in range(COUNT2)]
 
-def modrm_noreg_tests():
-    return [pick1(i386.memSIB) for i in range(COUNT2)]
-
 def modrm64_tests():
     return [pick1(i386.memSIB64) for i in range(COUNT2)]
 
@@ -115,6 +115,7 @@ tests = {
 
     i386.REG: reg_tests,
     i386.MODRM: modrm_tests,
+    i386.FLOATREG: floatreg_tests,
     i386.MODRM64: modrm64_tests,
     i386.IMM32: imm32_tests,
     i386.REG8: reg8_tests,
@@ -136,9 +137,8 @@ def run_test(instrname, instr, args_lists):
         suffix = ""
         all = instr.as_all_suffixes
         for m, extra in args:
-            if m in (i386.MODRM, i386.MODRM8) or all:
-                if not instrname == 'FNSTCW':
-                    suffix = suffixes[sizes[m]] + suffix
+            if m in (i386.MODRM, i386.MODRM8, i386.MODRM64) or all:
+                suffix = suffixes[sizes[m]] + suffix
         following = ""
         if instr.indirect:
             suffix = ""
@@ -191,10 +191,7 @@ def run_test(instrname, instr, args_lists):
 def rec_test_all(instrname, modes, args=[]):
     if modes:
         m = modes[0]
-        if instrname.startswith('F') and m is i386.MODRM:
-            lst = modrm_noreg_tests()
-        else:
-            lst = tests[m]()
+        lst = tests[m]()
         random.shuffle(lst)
         result = []
         for extra in lst:

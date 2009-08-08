@@ -353,6 +353,7 @@ class TestX86(LLtypeBackendTest):
         for a, b in boxes:
             for guard in guards:
                 for op in all:
+                    print "NEXT"
                     res = BoxInt()
                     ops = [
                         ResOperation(op, [a, b], res),

@@ -31,6 +31,9 @@ class TestRegalloc(object):
     def getfloat(self, index):
         return self.cpu.get_latest_value_float(index)
 
+    def getint(self, index):
+        return self.cpu.get_latest_value_int(index)
+
     def test_float_add(self):
         ops = '''
         [f0, f1]
@@ -50,6 +53,18 @@ class TestRegalloc(object):
         '''
         self.interpret(ops, [1.5, 2.5])
         assert self.getfloat(0) == 5.5
+
+    def test_float_failure_with_stack_pop(self):
+        ops = '''
+        [f0, i1]
+        f2 = float_add(f0, f0)
+        guard_true(i1)
+            fail(i1)
+        f3 = float_add(f2, f2)
+        fail(f3)
+        '''
+        self.interpret(ops, [1.5, 0])
+        assert self.getint(0) == 0
 
 def test_bug_rshift():
     v1 = BoxInt()

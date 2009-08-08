@@ -25,7 +25,7 @@ class FLOATREG(OPERAND):
         return '<ST(%d)>' % self.num
 
     def assembler(self):
-        raise TypeError("Float registers should not appear in assembler")
+        return '%%st(%d)' % self.num
 
 class ST0(FLOATREG): num=0
 class ST1(FLOATREG): num=1
@@ -233,6 +233,7 @@ st7 = ST7()
 
 registers = [eax, ecx, edx, ebx, esp, ebp, esi, edi]
 registers8 = [al, cl, dl, bl, ah, ch, dh, bh]
+floatregisters = [st0]
 
 for r in registers + registers8:
     r.bitmask = 1 << r.op
