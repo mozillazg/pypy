@@ -33,6 +33,8 @@ type_order = {
     DH: [(DH, None), (REG8, None), (MODRM8, reg2modrm8)],
     BH: [(BH, None), (REG8, None), (MODRM8, reg2modrm8)],
 
+    ST0: [(ST0, None), (FLOATREG, None)],
+
     REG:  [(REG,  None), (MODRM,  reg2modrm)],
     REG8: [(REG8, None), (MODRM8, reg2modrm8)],
 
@@ -74,6 +76,18 @@ class register(operand):
         value = 'arg%d.op' % self.op
         if self.factor != 1:
             value = '%s * %d' % (value, self.factor)
+        if has_orbyte:
+            lines.append('orbyte |= %s' % value)
+        else:
+            lines.append('orbyte = %s' % value)
+        return True
+
+class floatregister(operand):
+    def __init__(self, op):
+        self.op = op
+
+    def eval(self, lines, has_orbyte):
+        value = 'arg%d.num' % self.op
         if has_orbyte:
             lines.append('orbyte |= %s' % value)
         else:
@@ -449,32 +463,36 @@ SAHF.mode0(['\x9E'])
 
 # ------------------------- floating point instructions ------------------
 
-FLDL = Instruction()
-FLDL.mode1(MODRM64, ['\xDD', modrm(1)])
+FLD = Instruction()
+FLD.mode1(MODRM64, ['\xDD', modrm(1)])
 
-FADDP = Instruction()
-FADDP.mode0(['\xDE\xC1'])
+FADD = Instruction()
+FADD.mode1(MODRM64, ['\xDC', modrm(1)])
+FADD.mode1(FLOATREG, ['\xD8', floatregister(1), '\xC0'])
 
-FADDL = Instruction()
-FADDL.mode1(MODRM64, ['\xDC', modrm(1)])
+FDECSTP = Instruction()
+FDECSTP.mode0(['\xD9\xF6'])
 
 FSUBP = Instruction()
 FSUBP.mode0(['\xDE\xE1'])
 
-FSUBL = Instruction()
-FSUBL.mode1(MODRM64, ['\xDC', orbyte(4<<3), modrm(1)])
+FSUB = Instruction()
+FSUB.mode1(MODRM64, ['\xDC', orbyte(4<<3), modrm(1)])
+FSUB.mode1(FLOATREG, ['\xD8', floatregister(1),  '\xE0'])
 
 FMULP = Instruction()
 FMULP.mode0(['\xDE\xC9'])
 
-FMULL = Instruction()
-FMULL.mode1(MODRM64, ['\xDC', orbyte(1<<3), modrm(1)])
+FMUL = Instruction()
+FMUL.mode1(MODRM64, ['\xDC', orbyte(1<<3), modrm(1)])
+FMUL.mode1(FLOATREG, ['\xD8', floatregister(1), '\xC8'])
 
 FDIVP = Instruction()
 FDIVP.mode0(['\xDE\xF1'])
 
-FDIVL = Instruction()
-FDIVL.mode1(MODRM64, ['\xDC', orbyte(6<<3), modrm(1)])
+FDIV = Instruction()
+FDIV.mode1(MODRM64, ['\xDC', orbyte(6<<3), modrm(1)])
+FDIV.mode1(FLOATREG, ['\xD8', floatregister(1), '\xF0'])
 
 FCHS = Instruction()
 FCHS.mode0(['\xD9\xE0'])
@@ -495,19 +513,10 @@ FUCOMP.mode0(['\xDD\xE9'])
 FUCOMPP = Instruction()
 FUCOMPP.mode0(['\xDA\xE9'])
 
-FSTPL = Instruction()
-FSTPL.mode1(MODRM64, ['\xDD', orbyte(3<<3), modrm(1)])
-FSTL = Instruction()
-FSTL.mode1(MODRM64, ['\xDD', orbyte(2<<3), modrm(1)])
-
-FISTP = Instruction()
-FISTP.mode1(MODRM, ['\xDB', orbyte(3<<3), modrm(1)])
-
-FILD = Instruction()
-FILD.mode1(MODRM, ['\xDB', orbyte(0<<3), modrm(1)])
-
-FNSTCW = Instruction()
-FNSTCW.mode1(MODRM, ['\xD9', orbyte(7<<3), modrm(1)])
+FSTP = Instruction()
+FSTP.mode1(MODRM64, ['\xDD', orbyte(3<<3), modrm(1)])
+FST = Instruction()
+FST.mode1(MODRM64, ['\xDD', orbyte(2<<3), modrm(1)])
 
 # ------------------------- end of floating point ------------------------
 

@@ -61,6 +61,7 @@ class RegAlloc(object):
         # variables that have place in register
         self.assembler = assembler
         self.translate_support_code = translate_support_code
+        self.pop_float_stack = False
         if regalloc is None:
             self._rewrite_const_ptrs(tree.operations)
             self.tree = tree
@@ -597,6 +598,7 @@ class RegAlloc(object):
         if v not in self.longevity or self.longevity[v][1] <= self.position:
             if v is self.st0:
                 self.st0 = None
+                self.pop_float_stack = True
                 return
             self.free_regs.append(self.reg_bindings[v])
             del self.reg_bindings[v]
@@ -799,22 +801,6 @@ class RegAlloc(object):
         self.eventually_free_vars(op.args)
         self.eventually_free_var(box)
 
-    #def consider_guard2(self, op, ignored):
-    #    loc1, ops1 = self.make_sure_var_in_reg(op.args[0], [])
-    #    loc2, ops2 = self.make_sure_var_in_reg(op.args[1], [])
-    #    locs = [self.loc(arg) for arg in op.liveboxes]
-    #    self.eventually_free_vars(op.args + op.liveboxes)
-    #    return ops1 + ops2 + [PerformDiscard(op, [loc1, loc2] + locs)]
-
-    #consider_guard_lt = consider_guard2
-    #consider_guard_le = consider_guard2
-    #consider_guard_eq = consider_guard2
-    #consider_guard_ne = consider_guard2
-    #consider_guard_gt = consider_guard2
-    #consider_guard_ge = consider_guard2
-    #consider_guard_is = consider_guard2
-    #consider_guard_isnot = consider_guard2
-
     def consider_guard_value(self, op, ignored):
         x = self.loc(op.args[0])
         if not (isinstance(x, REG) or isinstance(op.args[1], Const)):
@@ -860,9 +846,12 @@ class RegAlloc(object):
 
     def _consider_binop_float(self, op, ignored):
         x = op.args[0]
-        locx = self.loc(x)
         self.force_float_result_in_reg(op.result, x)
-        self.Perform(op, [st0, self.loc(op.args[1])], st0)
+        if op.args[0] is op.args[1]:
+            loc1 = st0
+        else:
+            loc1 = self.loc(op.args[1])
+        self.Perform(op, [st0, loc1], st0)
         self.eventually_free_vars(op.args)
 
     consider_float_add = _consider_binop_float
@@ -1082,8 +1071,13 @@ class RegAlloc(object):
 
     def consider_setfield_gc(self, op, ignored):
         base_loc = self.make_sure_var_in_reg(op.args[0], op.args)
-        value_loc = self.make_sure_var_in_reg(op.args[1], op.args)
         ofs_loc, size_loc, ptr = self._unpack_fielddescr(op.descr)
+        if size_loc.value == 2*WORD:
+            # float
+            self.force_float_in_reg(op.args[1])
+            value_loc = st0
+        else:
+            value_loc = self.make_sure_var_in_reg(op.args[1], op.args)
         if ptr:
             gc_ll_descr = self.assembler.cpu.gc_ll_descr
             gc_ll_descr.gen_write_barrier(self.assembler, base_loc, value_loc)
@@ -1110,6 +1104,7 @@ class RegAlloc(object):
         scale, ofs, ptr = self._unpack_arraydescr(op.descr)
         base_loc  = self.make_sure_var_in_reg(op.args[0], op.args)
         ofs_loc = self.make_sure_var_in_reg(op.args[1], op.args)
+        self.eventually_free_vars(op.args)
         if scale > 2:
             # float number...
             self.force_float_in_reg(op.args[2])
@@ -1119,7 +1114,6 @@ class RegAlloc(object):
         if ptr:
             gc_ll_descr = self.assembler.cpu.gc_ll_descr
             gc_ll_descr.gen_write_barrier(self.assembler, base_loc, value_loc)
-        self.eventually_free_vars(op.args)
         self.PerformDiscard(op, [base_loc, ofs_loc, value_loc,
                                  imm(scale), imm(ofs)])
 
@@ -1127,7 +1121,10 @@ class RegAlloc(object):
         ofs_loc, size_loc, _ = self._unpack_fielddescr(op.descr)
         base_loc = self.make_sure_var_in_reg(op.args[0], op.args)
         self.eventually_free_vars(op.args)
-        result_loc = self.force_allocate_reg(op.result, [])
+        if size_loc.value == 2*WORD:
+            result_loc = self.force_allocate_float_reg(op.result)
+        else:
+            result_loc = self.force_allocate_reg(op.result, [])
         self.Perform(op, [base_loc, ofs_loc, size_loc], result_loc)
 
     consider_getfield_gc_pure = consider_getfield_gc
@@ -1146,18 +1143,6 @@ class RegAlloc(object):
 
     consider_getfield_raw = consider_getfield_gc
     consider_getarrayitem_gc_pure = consider_getarrayitem_gc
-
-    def _consider_listop(self, op, ignored):
-        return self._call(op, [self.loc(arg) for arg in op.args])
-    
-    xxx_consider_getitem     = _consider_listop
-    xxx_consider_len         = _consider_listop
-    xxx_consider_append      = _consider_listop
-    xxx_consider_pop         = _consider_listop
-    xxx_consider_setitem     = _consider_listop
-    xxx_consider_newlist     = _consider_listop
-    xxx_consider_insert      = _consider_listop
-    xxx_consider_listnonzero = _consider_listop
 
     def _same_as(self, op, ignored):
         x = op.args[0]

@@ -281,10 +281,10 @@ class Assembler386(object):
     regalloc_store = regalloc_load
 
     def regalloc_load_float(self, from_loc, to_loc):
-        self.mc.FLDL(from_loc)
+        self.mc.FLD(from_loc)
 
     def regalloc_store_float(self, from_loc, to_loc):
-        self.mc.FSTPL(to_loc)
+        self.mc.FSTP(to_loc)
 
     def regalloc_push(self, loc):
         self.mc.PUSH(loc)
@@ -417,10 +417,10 @@ class Assembler386(object):
             getattr(self.mc, opname)(arglocs[1])
         return genop_binary_float
 
-    genop_float_add = _binop_float('FADDL')
-    genop_float_sub = _binop_float('FSUBL')
-    genop_float_mul = _binop_float('FMULL')
-    genop_float_truediv = _binop_float('FDIVL')
+    genop_float_add = _binop_float('FADD')
+    genop_float_sub = _binop_float('FSUB')
+    genop_float_mul = _binop_float('FMUL')
+    genop_float_truediv = _binop_float('FDIV')
 
     # for now all chars are being considered ints, although we should make
     # a difference at some point
@@ -523,6 +523,9 @@ class Assembler386(object):
             self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc))
         elif size == WORD:
             self.mc.MOV(resloc, addr_add(base_loc, ofs_loc))
+        elif size == 2*WORD:
+            assert resloc is st0
+            self.mc.FST(addr64_add(base_loc, ofs_loc))
         else:
             raise NotImplementedError("getfield size = %d" % size)
 
@@ -536,7 +539,7 @@ class Assembler386(object):
             self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc, ofs.value,
                                             scale.value))
         elif scale.value == 3:
-            self.mc.FLDL(addr64_add(base_loc, ofs_loc, ofs.value, scale.value))
+            self.mc.FLD(addr64_add(base_loc, ofs_loc, ofs.value, scale.value))
         elif scale.value == 2:
             self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value,
                                          scale.value))
@@ -553,6 +556,9 @@ class Assembler386(object):
         size = size_loc.value
         if size == WORD:
             self.mc.MOV(addr_add(base_loc, ofs_loc), value_loc)
+        elif size == 2*WORD:
+            assert value_loc is st0
+            self.mc.FST(addr64_add(base_loc, ofs_loc))
         elif size == 2:
             raise NotImplementedError("shorts and friends")
             self.mc.MOV(addr16_add(base_loc, ofs_loc), lower_2_bytes(value_loc))
@@ -571,7 +577,7 @@ class Assembler386(object):
                                  scale_loc.value), value_loc)
         elif scale_loc.value == 3:
             assert value_loc is st0
-            self.mc.FSTPL(addr64_add(base_loc, ofs_loc, baseofs.value,
+            self.mc.FST(addr64_add(base_loc, ofs_loc, baseofs.value,
                                     scale_loc.value))
         elif scale_loc.value == 0:
             self.mc.MOV(addr8_add(base_loc, ofs_loc, baseofs.value,
@@ -746,14 +752,15 @@ class Assembler386(object):
                 else:
                     base = self.fail_box_int_addr
                 self.mc.MOV(addr_add(imm(base), imm(i*WORD)), loc)
+        freed_float = False
         for i in range(len(locs)):
             loc = locs[i]
             if not isinstance(loc, REG):
                 if op.args[i].type == FLOAT:
                     base = self.fail_box_float_addr
                     if loc is st0:
-                        self.mc.FSTPL(addr64_add(imm(base), imm(i*2*WORD)))
-                        regalloc.st0 = None
+                        self.mc.FSTP(addr64_add(imm(base), imm(i*2*WORD)))
+                        freed_float = True
                     else:
                         assert isinstance(loc, MODRM)
                         start = stack_pos(loc.position, 1)
@@ -783,6 +790,8 @@ class Assembler386(object):
         guard_index = self.cpu.make_guard_index(op)
         self.mc.MOV(eax, imm(guard_index))
         #if self.gcrootmap:
+        if regalloc.st0 is not None and not freed_float:
+            self.pop_float_stack()
         self.mc.POP(ebp)
         self.mc.RET()
 
@@ -834,6 +843,9 @@ class Assembler386(object):
             self.mc.AND(eax, imm(0xffff))
 
     genop_call_pure = genop_call
+
+    def pop_float_stack(self):
+        self.mc.FDECSTP()
 
     def not_implemented_op_discard(self, op, arglocs):
         print "not implemented operation: %s" % op.getopname()
