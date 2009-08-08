@@ -652,6 +652,8 @@ class Frame(object):
     def op_getfield_gc(self, fielddescr, struct):
         if fielddescr.typeinfo == 'p':
             return do_getfield_gc_ptr(struct, fielddescr.ofs)
+        elif fielddescr.typeinfo == 'f':
+            return do_getfield_gc_float(struct, fielddescr.ofs)
         else:
             return do_getfield_gc_int(struct, fielddescr.ofs, self.memocast)
 
@@ -660,6 +662,8 @@ class Frame(object):
     def op_getfield_raw(self, fielddescr, struct):
         if fielddescr.typeinfo == 'p':
             return do_getfield_raw_ptr(struct, fielddescr.ofs, self.memocast)
+        elif fielddescr.typeinfo == 'f':
+            xxx
         else:
             return do_getfield_raw_int(struct, fielddescr.ofs, self.memocast)
 
@@ -685,6 +689,8 @@ class Frame(object):
     def op_setfield_gc(self, fielddescr, struct, newvalue):
         if fielddescr.typeinfo == 'p':
             do_setfield_gc_ptr(struct, fielddescr.ofs, newvalue)
+        elif fielddescr.typeinfo == 'f':
+            do_setfield_gc_float(struct, fielddescr.ofs, newvalue)
         else:
             do_setfield_gc_int(struct, fielddescr.ofs, newvalue,
                                self.memocast)
@@ -693,6 +699,8 @@ class Frame(object):
         if fielddescr.typeinfo == 'p':
             do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue,
                                 self.memocast)
+        elif fielddescr.typeinfo == 'f':
+            xxx
         else:
             do_setfield_raw_int(struct, fielddescr.ofs, newvalue,
                                 self.memocast)
@@ -1058,6 +1066,12 @@ def do_getfield_gc_ptr(struct, fieldnum):
     x = getattr(ptr, fieldname)
     return cast_to_ptr(x)
 
+def do_getfield_gc_float(struct, fieldnum):
+    STRUCT, fieldname = symbolic.TokenToField[fieldnum]
+    ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
+    x = getattr(ptr, fieldname)
+    return x
+
 def do_getfield_raw_int(struct, fieldnum, memocast):
     STRUCT, fieldname = symbolic.TokenToField[fieldnum]
     ptr = cast_from_int(lltype.Ptr(STRUCT), struct, memocast)
@@ -1102,6 +1116,11 @@ def do_setfield_gc_int(struct, fieldnum, newvalue, memocast):
     ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
     FIELDTYPE = getattr(STRUCT, fieldname)
     newvalue = cast_from_int(FIELDTYPE, newvalue, memocast)
+    setattr(ptr, fieldname, newvalue)
+
+def do_setfield_gc_float(struct, fieldnum, newvalue):
+    STRUCT, fieldname = symbolic.TokenToField[fieldnum]
+    ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
     setattr(ptr, fieldname, newvalue)
 
 def do_setfield_gc_ptr(struct, fieldnum, newvalue):
