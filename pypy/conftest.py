@@ -15,7 +15,13 @@ rootdir = py.magic.autopath().dirpath()
 pytest_plugins = "resultlog",
 rsyncdirs = ['.', '../lib-python', '../demo']
 rsyncignore = ['_cache']
- 
+
+# XXX workaround for a py.test bug clashing with lib/py bug
+# do we really need the latter?
+empty_conftest = type(sys)('conftest')
+empty_conftest.__file__ = "?"
+sys.modules['pypy.lib.py.conftest'] = empty_conftest
+
 # PyPy's command line extra options (these are added 
 # to py.test's standard options) 
 #
