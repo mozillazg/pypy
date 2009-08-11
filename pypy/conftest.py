@@ -29,25 +29,22 @@ def _set_platform(opt, opt_str, value, parser):
 
 option = py.test.config.option
 
-class PyPyTestPlugin:
-    def pytest_addoption(self, parser):
-        group = parser.addgroup("pypy options")
-        group.addoption('--view', action="store_true", dest="view", default=False,
-               help="view translation tests' flow graphs with Pygame")
-        group.addoption('-A', '--runappdirect', action="store_true",
-               default=False, dest="runappdirect",
-               help="run applevel tests directly on python interpreter (not through PyPy)")
-        group.addoption('--direct', action="store_true",
-               default=False, dest="rundirect",
-               help="run pexpect tests directly")
-        group.addoption('-P', '--platform', action="callback", type="string",
-               default="host", callback=_set_platform,
-               help="set up tests to use specified platform as compile/run target")
+def pytest_addoption(parser):
+    group = parser.addgroup("pypy options")
+    group.addoption('--view', action="store_true", dest="view", default=False,
+           help="view translation tests' flow graphs with Pygame")
+    group.addoption('-A', '--runappdirect', action="store_true",
+           default=False, dest="runappdirect",
+           help="run applevel tests directly on python interpreter (not through PyPy)")
+    group.addoption('--direct', action="store_true",
+           default=False, dest="rundirect",
+           help="run pexpect tests directly")
+    group.addoption('-P', '--platform', action="callback", type="string",
+           default="host", callback=_set_platform,
+           help="set up tests to use specified platform as compile/run target")
 
-    def pytest_funcarg__space(self, pyfuncitem):
-        return gettestobjspace()
-        
-ConftestPlugin = PyPyTestPlugin
+def pytest_funcarg__space(request):
+    return gettestobjspace()
 
 _SPACECACHE={}
 def gettestobjspace(name=None, **kwds):
