@@ -955,22 +955,23 @@ class RegAlloc(object):
                 pass
         # otherwise it's clean
 
-    def sync_var_if_survives(self, v):
-        if self.longevity[v][1] > self.position:
-            self.sync_var(v)
-
     def _call(self, op, arglocs, force_store=[]):
         # we need to store all variables which are now in registers
         for v, reg in self.reg_bindings.items():
             if self.longevity[v][1] > self.position or v in force_store:
                 self.sync_var(v)
         self.reg_bindings = newcheckdict()
-        if op.result is not None:
+        resloc = eax
+        if op.result is not None and sizeofbox(op.result) == 1:
             self.reg_bindings[op.result] = eax
             self.free_regs = [reg for reg in REGS if reg is not eax]
         else:
+            if op.result is not None:
+                assert op.result.type == FLOAT
+                self.st0 = op.result
+                resloc = st0
             self.free_regs = REGS[:]
-        self.Perform(op, arglocs, eax)
+        self.Perform(op, arglocs, resloc)
 
     def consider_call(self, op, ignored):
         from pypy.jit.backend.x86.runner import CPU386

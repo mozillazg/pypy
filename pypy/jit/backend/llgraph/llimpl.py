@@ -711,6 +711,8 @@ class Frame(object):
             err_result = None
         elif calldescr.typeinfo == 'p':
             err_result = lltype.nullptr(llmemory.GCREF.TO)
+        elif calldescr.typeinfo == 'f':
+            err_result = 0.0
         else:
             assert calldescr.typeinfo == 'i'
             err_result = 0

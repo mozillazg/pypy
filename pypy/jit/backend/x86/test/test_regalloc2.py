@@ -4,10 +4,10 @@ from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.metainterp.test.oparser import parse
-from pypy.jit.metainterp.test.oparser import parse
 
 class TestRegalloc(object):
-    namespace = {}
+    namespace = {
+    }
     type_system = 'lltype'
     cpu = CPU(None, None)
     
@@ -65,6 +65,15 @@ class TestRegalloc(object):
         '''
         self.interpret(ops, [1.5, 0])
         assert self.getint(0) == 0
+
+    def test_float_call_st0_sync(self):
+        py.test.skip("XXX finish")
+        ops = '''
+        [f0, f1]
+        f2 = float_add(f0, f1)
+        call(f2, descr=calldescr)
+        '''
+        xxx
 
 def test_bug_rshift():
     v1 = BoxInt()
