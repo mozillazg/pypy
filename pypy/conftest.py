@@ -29,6 +29,8 @@ def _set_platform(opt, opt_str, value, parser):
 
 option = py.test.config.option
 
+#pytest_option_capture = 'no'
+
 def pytest_addoption(parser):
     group = parser.addgroup("pypy options")
     group.addoption('--view', action="store_true", dest="view", default=False,
@@ -316,10 +318,10 @@ class PyPyTestFunction(py.test.collect.Function):
                 raise AppError, AppError(appexcinfo), tb
             raise
 
-    def repr_failure(self, excinfo, outerr):
+    def repr_failure(self, excinfo):
         if excinfo.errisinstance(AppError):
             excinfo = excinfo.value.excinfo
-        return super(PyPyTestFunction, self).repr_failure(excinfo, outerr)
+        return super(PyPyTestFunction, self).repr_failure(excinfo)
 
 _pygame_imported = False
 
