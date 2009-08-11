@@ -106,6 +106,22 @@ class BaseBackendTest(Runner):
                                      'int', descr=calldescr)
         assert res.value == ord('B')
 
+    def test_call_float(self):
+        from pypy.rpython.annlowlevel import llhelper
+        cpu = self.cpu
+        def func(f1, f2):
+            print f1, f2
+            return f1 + f2*10.0
+        FPTR = self.Ptr(self.FuncType([lltype.Float] * 2, lltype.Float))
+        func_ptr = llhelper(FPTR, func)
+        calldescr = cpu.calldescrof(deref(FPTR), deref(FPTR).ARGS,
+                                    deref(FPTR).RESULT)
+        res = self.execute_operation(rop.CALL,
+                                     [self.get_funcbox(cpu, func_ptr),
+                                      BoxFloat(3.5), BoxFloat(4.5)],
+                                     'float', descr=calldescr)
+        assert res.value == func(3.5, 4.5)
+
     def test_executor(self):
         cpu = self.cpu
         x = execute(cpu, rop.INT_ADD, [BoxInt(100), ConstInt(42)])
