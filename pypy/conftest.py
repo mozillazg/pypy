@@ -29,8 +29,6 @@ def _set_platform(opt, opt_str, value, parser):
 
 option = py.test.config.option
 
-#pytest_option_capture = 'no'
-
 def pytest_addoption(parser):
     group = parser.addgroup("pypy options")
     group.addoption('--view', action="store_true", dest="view", default=False,
