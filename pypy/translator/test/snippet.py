@@ -683,9 +683,8 @@ class HaveProp(object):
         self.v = v
 
     def _hi(self):
-        "HaveProp._hi"
         return self.v
-    hi = property(_hi)
+    hi = property(_hi, doc="HaveProp._hi")
 
 
 def run_prop(v):
