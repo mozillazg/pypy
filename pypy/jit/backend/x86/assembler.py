@@ -826,8 +826,15 @@ class Assembler386(object):
         for i in range(len(op.args) - 1, 0, -1):
             v = op.args[i]
             loc = arglocs[i]
-            self.mc.PUSH(loc)
-            extra_on_stack += 1
+            if isinstance(loc, MODRM64):
+                self.mc.PUSH(stack_pos(loc.position, 1))
+                self.mc.PUSH(stack_pos(loc.position + 1, 1))
+                extra_on_stack += 2
+            elif loc is st0:
+                xxx
+            else:
+                self.mc.PUSH(loc)
+                extra_on_stack += 1
         if isinstance(op.args[0], Const):
             x = rel32(op.args[0].getint())
         else:
