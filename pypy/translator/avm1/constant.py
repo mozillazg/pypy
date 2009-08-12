@@ -25,11 +25,14 @@ class AVM1ConstGenerator(BaseConstantGenerator):
 
     def _begin_gen_constants(self, asmgen, all_constants):
         self.asmgen = asmgen
+        self.asmgen.push_const(CONST_OBJNAME)
         self.asmgen.init_object()
         self.asmgen.store_register(CONST_OBJNAME)
-        self.asmgen.push_const(CONST_OBJNAME)
         self.asmgen.set_variable()
         return asmgen
+
+    def _end_gen_constants(self, a, b):
+        pass
     
     # _________________________________________________________________
     # OOSupport interface

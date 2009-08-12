@@ -3,6 +3,7 @@ import struct
 
 from pypy.translator.avm.records import RecordHeader, ShapeWithStyle, Matrix, CXForm
 from pypy.translator.avm.avm1 import Block
+from pypy.translator.avm.util import BitStream
 
 next_character_id = 1
 
@@ -117,12 +118,42 @@ class PlaceObject(SwfTag):
         return (struct.pack("<HH", self.shapeid, self.depth) +
                 (self.transform.serialize() + self.colortransform.serialize()).serialize())
 
+class PlaceObject2(PlaceObject):
+
+    TAG_TYPE = 26
+    TAG_MIN_VERSION = 3
+
+    def __init__(self, shapeid, depth, transform=None, colortransform=None):
+        self.shapeid = shapeid
+        self.depth = depth
+        self.transform = transform
+        self.colortransform = colortransform
+    
+    def serialize_data(self):
+        flags = BitStream()
+        flags.write_bit(False) # HasClipActions
+        flags.write_bit(False) # HasClipDepth
+        flags.write_bit(False) # HasName
+        flags.write_bit(False) # HasRatio
+        flags.write_bit(self.colortransform is not None)
+        flags.write_bit(self.transform is not None)
+        flags.write_bit(True)  # HasCharacter
+        flags.write_bit(False) # FlagMove
+        
+        bytes = flags.serialize() + struct.pack("<HH", self.depth, self.shapeid)
+        bits = BitStream()
+        if self.transform is not None:
+            bits += self.transform.serialize()
+        if self.colortransform is not None:
+            bits += self.colortransform.serialize()
+        return bytes + bits.serialize()
+
 class DefineEditText(SwfTag):
 
     TAG_TYPE = 37
     TAG_MIN_VERSION = 4
     
-    def __init__(self, rect, variable, text="", readonly=False, isHTML=False,
+    def __init__(self, rect, variable, text="", readonly=True, isHTML=False,
                  wordwrap=False, multiline=True, password=False, autosize=True,
                  selectable=True, border=False, color=None, maxlength=None,
                  layout=None, font=None, size=12, fontclass=None, characterid=None):

@@ -19,35 +19,12 @@ INTEGER     = DataType(7, "integer", "l")
 CONSTANT8   = DataType(8, "constant 8", "B")
 CONSTANT16  = DataType(9, "constant 16", "H")
 
-class Index(object):
-    def __init__(self, index):
-        self.index = index
-
-class Value(object):
-    def __init__(self, value):
-        self.value = value
-
-class Null(object):
-    type = NULL
-
-class Undefined(object):
-    type = UNDEFINED
-
-class ConstantIndexDescriptor(object):
-    def __get__(self, obj, objtype):
-        return CONSTANT8 if obj.index < 256 else CONSTANT16
-
-class Constant(Index):
-    type = ConstantIndexDescriptor()
-
-class Register(object):
-    type = REGISTER
-    
-class RegisterByIndex(Register, Index):
-    pass
-
-class RegisterByValue(Register, Value):
-    pass
+preload = dict(this="preload_this",
+               arguments="preload_args",
+               super="preload_super",
+               _root="preload_root",
+               _parent="preload_parent",
+               _global="preload_global")
 
 class Action(object):
     
@@ -128,7 +105,7 @@ class Block(object):
         self.insert_end = insert_end
         
         self.labels = {}
-        self.branch_blocks = {}
+        self.branch_blocks = []
         self.actions = []
         
         self.current_offset = 0
@@ -174,6 +151,9 @@ class Block(object):
     def add_action(self, action):
         if self._sealed:
             raise SealedBlockError("Block is sealed. Cannot add new actions")
+
+        assert isinstance(action, Action)
+        
         self.code = "" # Dirty the code.
         action.offset = self.current_offset
         action.get_block_props_early(self)
@@ -187,7 +167,7 @@ class Block(object):
             return old_action
 
         # Two nots negate. Take them out.
-        if action.ACTION_NAME == "ActionNot" and action.ACTION_NAME == "ActionNot":
+        if len(self.actions) > 0 and action.ACTION_NAME == "ActionNot" and self.actions[-1].ACTION_NAME == "ActionNot":
             self.actions.pop()
             self.current_offset -= 1 # len(ShortAction) is 1
             return None
@@ -199,10 +179,16 @@ class Block(object):
         return action
     
     def serialize(self):
+        if not self._sealed:
+            raise SealedBlockError("Block must be sealed before it can be serialized")
         if len(self.code) > 0:
             return self.code
         bytes = []
+        block_offset = 0
         for action in self.actions:
+            if isinstance(action, Block):
+                block_offset += len(action)
+            action.offset += block_offset
             action.get_block_props_late(self)
             bytes += action.serialize()
         if self.insert_end:
@@ -258,46 +244,47 @@ class ActionDefineFunction2(Action, Block):
         Block.__init__(self, toplevel, False)
         self.function_name = name
         self.params = parameters
+        self.preload_register_count = 1 # Start at 1.
         
         # Flags
+        self.registers        = [None]
         self.preload_parent   = False
         self.preload_root     = False
         self.suppress_super   = True
         self.preload_super    = False
-        self.suppress_args    = False
-        self.preload_args     = True
+        self.suppress_args    = True
+        self.preload_args     = False
         self.suppress_this    = True
         self.preload_this     = False
         self.preload_global   = False
         self.eval_flags()
-    
-    def eval_flags(self): # WARNING! eval_flags will clear registers!
-        # bits = BitStream()
-        # bits.write_bit_value(self.flags, 16)
-        # bits.rewind()
-        # preload_parent  = bits.read_bit()
-        # preload_root    = bits.read_bit()
-        # suppress_super  = bits.read_bit()
-        # preload_super   = bits.read_bit()
-        # suppress_args   = bits.read_bit()
-        # preload_args    = bits.read_bit()
-        # suppress_this   = bits.read_bit()
-        # preload_this    = bits.read_bit()
-        # bits.cursor += 7 # skip over 7 Reserved bits
-        # preload_global  = bits.read_bit()
+
+        for name in parameters:
+            self.registers.append(name)
         
-        self.registers = [None]
+    def eval_flags(self):
         
         # According to the docs, this is the order of register allocation.
-        if self.preload_this:   self.registers.append("this")
-        if self.preload_args:   self.registers.append("arguments")
-        if self.preload_super:  self.registers.append("super")
-        if self.preload_root:   self.registers.append("_root")
-        if self.preload_parent: self.registers.append("_parent")
-        if self.preload_global: self.registers.append("_global")
+        if self.preload_this and "this" not in self.registers:
+            self.suppress_this = False
+            self.registers.insert(1, "this")
+            
+        if self.preload_args and "arguments" not in self.registers:
+            self.suppress_args = False
+            self.registers.insert(2, "arguments")
+            
+        if self.preload_super and "super" not in self.registers:
+            self.suppress_super = False
+            self.registers.insert(3, "super")
+            
+        if self.preload_root and "_root" not in self.registers:
+            self.registers.insert(4, "_root")
+            
+        if self.preload_parent and "_parent" not in self.registers:
+            self.registers.insert(5, "_parent")
         
-        for name in self.params:
-            self.registers.append(name)
+        if self.preload_global and "_global" not in self.registers:
+            self.registers.insert(6, "_global")
         
     def gen_data(self):
 
@@ -315,7 +302,7 @@ class ActionDefineFunction2(Action, Block):
         
         self.block_data = Block.serialize(self)
         bytes = [self.function_name, "\0",
-                 struct.pack("HB", len(self.params), len(self.registers)-1),
+                 struct.pack("HB", len(self.params), len(self.registers)),
                  bits.serialize()]
         
         for name in self.params:
@@ -411,10 +398,11 @@ class BranchingActionBase(Action):
 
     def get_block_props_late(self, block):
         if len(self.branch_label) > 0:
-            self.branch_offset = block.labels[self.branch_label] - self.offset
+            print "BRANCH:", self.branch_label, block.labels[self.branch_label], self.offset
+            self.branch_offset = block.labels[self.branch_label] - self.offset - len(self)
 
     def gen_data(self):
-        return struct.pack("H", self.branch_offset)
+        return struct.pack("h", self.branch_offset)
 
 class ActionJump(BranchingActionBase):
     ACTION_NAME = "ActionJump"
@@ -433,37 +421,20 @@ class ActionPush(Action):
         self.add_element(*args)
     
     def add_element(self, element):
-        if hasattr(element, "__iter__") and not isinstance(element, basestring):
-            for e in element:
-                self.add_element(e)
-        if isinstance(element, (Null, Undefined)):
-            self.values.append((0, element.type))
-        elif isinstance(element, basestring):
-            self.values.append((element, STRING))
-        elif isinstance(element, bool):
-            self.values.append((element, BOOLEAN))
-        elif isinstance(element, int):
-            self.values.append((element, INTEGER))
-        elif isinstance(element, float):
-            if element > 0xFFFFFFFF:
-                self.values.append((element, DOUBLE))
-            else:
-                self.values.append((element, FLOAT))
-        elif isinstance(element, Index):
-            self.values.append((element.index, element.type))
-        elif isinstance(element, RegisterByValue):
-            self.values.append((element.value, RegisterByValue))
-
+        if hasattr(element, "__iter__") and not isinstance(element, (basestring, tuple)):
+            for t in element:
+                self.add_element(t)
+        else:
+            if element in (NULL, UNDEFINED):
+                element = (None, element)
+            assert isinstance(element, tuple)
+            self.values.append(element)
+        
     def get_block_props_early(self, block):
         for index, (value, type) in enumerate(self.values):
             if type == STRING:
                 constant_index = block.constants.add_constant(value)
                 self.values[index] = (constant_index, CONSTANT8 if constant_index < 256 else CONSTANT16)
-            elif type == RegisterByValue:
-                register_index = block.find_register(value)
-                if register_index < 0:
-                    raise ValueError("register value '%s' not found in registers at this point" % value)
-                self.values[index] = (register_index, REGISTER)
     
     def gen_data(self):
         bytes = []
@@ -511,13 +482,16 @@ class ActionTry(Action):
         has_catch_block = len(self.catch_block.actions) > 0
         bits = BitStream()
         bits.zero_fill(5)
-        bits.write_bit(isinstance(self.catch_object, Register))
+        bits.write_bit(isinstance(self.catch_object, int))
         bits.write_bit(len(self.finally_block.actions) > 0)
         bits.write_bit(has_catch_block)
         bytes = [bits.serialize()]
-        bytes += [struct.pack("HHH", len(self.try_block) + 5 if has_catch_block else 0, len(self.catch_block), len(self.finally_block))]
-        bytes += self.catch_object.index if isinstance(self.catch_object, Register) else (self.catch_object + "\0")
-        return "".join(bytes)
+        bytes += [struct.pack("3H",
+                              len(self.try_block) + 5 if has_catch_block else 0,
+                              len(self.catch_block),
+                              len(self.finally_block))]
+        bytes += [self.catch_object, "" if isinstance(self.catch_object, int) else "\0"]
+        return bytes
 
     def gen_outer_data(self):
         bytes = [self.try_block.serialize()]
@@ -556,17 +530,28 @@ class ActionWith(Action):
     
     def gen_data(self):
         return struct.pack("H", len(self.block)) + self.block.serialize()
-    
-def make_short_action(value, name):
+
+SHORT_ACTIONS = {}
+
+# turns NextFrame into next_frame
+def make_underlined(name):
+    return ''.join('_' + c.lower() if c.isupper() else c for c in name)[1:]
+
+def make_short_action(value, name, push_count=0):
     
     def __len__(self):
         return 1 # 1 (Action ID)
     
     def serialize(self):
         return chr(self.ACTION_ID)
+    
+    act = type(name, (Action,), dict(ACTION_ID=value, ACTION_NAME=name, push_count=push_count,
+                                     __len__=__len__, serialize=serialize))
 
-    return type(name, (Action,), dict(ACTION_ID=value, ACTION_NAME=name,
-                                      __len__=__len__, serialize=serialize))
+    SHORT_ACTIONS[name[6:].lower()] = act
+    SHORT_ACTIONS[make_underlined(name[6:])] = act
+
+    return act
 
 ActionNextFrame           = make_short_action(0x04, "ActionNextFrame")
 ActionPreviousFrame       = make_short_action(0x05, "ActionPreviousFrame")
@@ -574,29 +559,29 @@ ActionPlay                = make_short_action(0x06, "ActionPlay")
 ActionStop                = make_short_action(0x07, "ActionStop")
 ActionToggleQuality       = make_short_action(0x08, "ActionToggleQuality")
 ActionStopSounds          = make_short_action(0x09, "ActionStopSounds")
-ActionAdd                 = make_short_action(0x0a, "ActionAdd")
-ActionSubtract            = make_short_action(0x0b, "ActionSubtract")
-ActionMultiply            = make_short_action(0x0c, "ActionMultiply")
-ActionDivide              = make_short_action(0x0d, "ActionDivide")
-ActionEquals              = make_short_action(0x0e, "ActionEquals")
-ActionLess                = make_short_action(0x0f, "ActionLess")
-ActionAnd                 = make_short_action(0x10, "ActionAnd")
-ActionOr                  = make_short_action(0x11, "ActionOr")
+ActionAdd                 = make_short_action(0x0a, "ActionAdd", -1)
+ActionSubtract            = make_short_action(0x0b, "ActionSubtract", -1)
+ActionMultiply            = make_short_action(0x0c, "ActionMultiply", -1)
+ActionDivide              = make_short_action(0x0d, "ActionDivide", -1)
+ActionEquals              = make_short_action(0x0e, "ActionEquals", -1)
+ActionLess                = make_short_action(0x0f, "ActionLess", -1)
+ActionAnd                 = make_short_action(0x10, "ActionAnd", -1)
+ActionOr                  = make_short_action(0x11, "ActionOr", -1)
 ActionNot                 = make_short_action(0x12, "ActionNot")
-ActionStringEquals        = make_short_action(0x13, "ActionStringEquals")
+ActionStringEquals        = make_short_action(0x13, "ActionStringEquals", -1)
 ActionStringLength        = make_short_action(0x14, "ActionStringLength")
 ActionStringExtract       = make_short_action(0x15, "ActionStringExtract")
-ActionPop                 = make_short_action(0x17, "ActionPop")
+ActionPop                 = make_short_action(0x17, "ActionPop", -1)
 ActionToInteger           = make_short_action(0x18, "ActionToInteger")
 ActionGetVariable         = make_short_action(0x1c, "ActionGetVariable")
-ActionSetVariable         = make_short_action(0x1d, "ActionSetVariable")
+ActionSetVariable         = make_short_action(0x1d, "ActionSetVariable", -2)
 ActionSetTarget2          = make_short_action(0x20, "ActionSetTarget2")
-ActionStringAdd           = make_short_action(0x21, "ActionStringAdd")
-ActionGetProperty         = make_short_action(0x22, "ActionGetProperty")
-ActionSetProperty         = make_short_action(0x23, "ActionSetProperty")
+ActionStringAdd           = make_short_action(0x21, "ActionStringAdd", -1)
+ActionGetProperty         = make_short_action(0x22, "ActionGetProperty", -1)
+ActionSetProperty         = make_short_action(0x23, "ActionSetProperty", -3)
 ActionCloneSprite         = make_short_action(0x24, "ActionCloneSprite")
 ActionRemoveSprite        = make_short_action(0x25, "ActionRemoveSprite")
-ActionTrace               = make_short_action(0x26, "ActionTrace")
+ActionTrace               = make_short_action(0x26, "ActionTrace", -1)
 ActionStartDrag           = make_short_action(0x27, "ActionStartDrag")
 ActionEndDrag             = make_short_action(0x28, "ActionEndDrag")
 ActionStringLess          = make_short_action(0x29, "ActionStringLess")
@@ -616,7 +601,7 @@ ActionDelThreadVars       = make_short_action(0x3b, "ActionDelThreadVars")
 ActionDefineLocalVal      = make_short_action(0x3c, "ActionDefineLocalVal")
 ActionCallFunction        = make_short_action(0x3d, "ActionCallFunction")
 ActionReturn              = make_short_action(0x3e, "ActionReturn")
-ActionModulo              = make_short_action(0x3f, "ActionModulo")
+ActionModulo              = make_short_action(0x3f, "ActionModulo", -1)
 ActionNewObject           = make_short_action(0x40, "ActionNewObject")
 ActionDefineLocal         = make_short_action(0x41, "ActionDefineLocal")
 ActionInitArray           = make_short_action(0x42, "ActionInitArray")
@@ -624,26 +609,26 @@ ActionInitObject          = make_short_action(0x43, "ActionInitObject")
 ActionTypeof              = make_short_action(0x44, "ActionTypeof")
 ActionGetTargetPath       = make_short_action(0x45, "ActionGetTargetPath")
 ActionEnumerate           = make_short_action(0x46, "ActionEnumerate")
-ActionTypedAdd            = make_short_action(0x47, "ActionTypedAdd")
-ActionTypedLessThan       = make_short_action(0x48, "ActionTypedLessThan")
-ActionTypedEquals         = make_short_action(0x49, "ActionTypedEquals")
+ActionTypedAdd            = make_short_action(0x47, "ActionTypedAdd", -1)
+ActionTypedLess           = make_short_action(0x48, "ActionTypedLess", -1)
+ActionTypedEquals         = make_short_action(0x49, "ActionTypedEquals", -1)
 ActionConvertToNumber     = make_short_action(0x4a, "ActionConvertToNumber")
 ActionConvertToString     = make_short_action(0x4b, "ActionConvertToString")
-ActionDuplicate           = make_short_action(0x4c, "ActionDuplicate")
+ActionDuplicate           = make_short_action(0x4c, "ActionDuplicate", 1)
 ActionSwap                = make_short_action(0x4d, "ActionSwap")
-ActionGetMember           = make_short_action(0x4e, "ActionGetMember")
-ActionSetMember           = make_short_action(0x4f, "ActionSetMember")
+ActionGetMember           = make_short_action(0x4e, "ActionGetMember", -1)
+ActionSetMember           = make_short_action(0x4f, "ActionSetMember", -3)
 ActionIncrement           = make_short_action(0x50, "ActionIncrement")
 ActionDecrement           = make_short_action(0x51, "ActionDecrement")
 ActionCallMethod          = make_short_action(0x52, "ActionCallMethod")
 ActionCallNewMethod       = make_short_action(0x53, "ActionCallNewMethod")
-ActionBitAnd              = make_short_action(0x60, "ActionBitAnd")
-ActionBitOr               = make_short_action(0x61, "ActionBitOr")
-ActionBitXor              = make_short_action(0x62, "ActionBitXor")
-ActionShiftLeft           = make_short_action(0x63, "ActionShiftLeft")
-ActionShiftRight          = make_short_action(0x64, "ActionShiftRight")
-ActionShiftUnsigned       = make_short_action(0x65, "ActionShiftUnsigned")
-ActionStrictEquals        = make_short_action(0x66, "ActionStrictEquals")
-ActionGreater             = make_short_action(0x67, "ActionGreater")
-ActionStringGreater       = make_short_action(0x68, "ActionStringGreater")
+ActionBitAnd              = make_short_action(0x60, "ActionBitAnd", -1)
+ActionBitOr               = make_short_action(0x61, "ActionBitOr", -1)
+ActionBitXor              = make_short_action(0x62, "ActionBitXor", -1)
+ActionShiftLeft           = make_short_action(0x63, "ActionShiftLeft", -1)
+ActionShiftRight          = make_short_action(0x64, "ActionShiftRight", -1)
+ActionShiftUnsigned       = make_short_action(0x65, "ActionShiftUnsigned", -1)
+ActionStrictEquals        = make_short_action(0x66, "ActionStrictEquals", -1)
+ActionGreater             = make_short_action(0x67, "ActionGreater", -1)
+ActionStringGreater       = make_short_action(0x68, "ActionStringGreater", -1)
 ActionExtends             = make_short_action(0x69, "ActionExtends")

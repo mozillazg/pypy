@@ -1,9 +1,6 @@
-import string
-from pypy.translator.avm.class_ import Class
-from pypy.translator.avm.delegate import Delegate
-from pypy.translator.avm.cts import types
+#from pypy.translator.avm.class_ import Class
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.ootypesystem.module import ll_os
+from pypy.translator.cli.support import Counter
 from pypy.translator.oosupport.database import Database as OODatabase
 
 try:
@@ -16,7 +13,6 @@ class LowLevelDatabase(OODatabase):
         OODatabase.__init__(self, genoo)
         self.classes = {} # INSTANCE --> class_name
         self.classnames = set() # (namespace, name)
-        self.recordnames = {} # RECORD --> name
         self.functions = {} # graph --> function_name
         self.methods = {} # graph --> method_name
         self.consts = {}  # value --> AbstractConst
@@ -25,17 +21,6 @@ class LowLevelDatabase(OODatabase):
 
     def next_count(self):
         return self.unique()
-
-    def _default_record_name(self, RECORD):
-        trans = string.maketrans('[]<>(), :', '_________')
-        name = ['Record']
-        # XXX: refactor this: we need a proper way to ensure unique names
-        for f_name, (FIELD_TYPE, f_default) in RECORD._fields.iteritems():
-            type_name = FIELD_TYPE._short_name().translate(trans)
-            name.append(f_name)
-            name.append(type_name)
-            
-        return '__'.join(name)
 
     def _default_class_name(self, INSTANCE):
         parts = INSTANCE._name.rsplit('.', 1)
@@ -52,42 +37,26 @@ class LowLevelDatabase(OODatabase):
         self.pending_node(function)
         return function.get_name()
 
-    def pending_class(self, INSTANCE):
-        try:
-            return self.classes[INSTANCE]
-        except KeyError:
-            pass
+    # def pending_class(self, INSTANCE):
+    #     try:
+    #         return self.classes[INSTANCE]
+    #     except KeyError:
+    #         pass
         
-        if isinstance(INSTANCE, dotnet.NativeInstance):
-            self.classes[INSTANCE] = INSTANCE._name
-            return INSTANCE._name
-        else:
-            namespace, name = self._default_class_name(INSTANCE)
-            name = self.get_unique_class_name(namespace, name)
-            if namespace is None:
-                full_name = name
-            else:
-                full_name = '%s.%s' % (namespace, name)
-            self.classes[INSTANCE] = full_name
-            cls = Class(self, INSTANCE, namespace, name)
-            self.pending_node(cls)
-            return full_name
-
-    def pending_record(self, RECORD):
-        try:
-            return BUILTIN_RECORDS[RECORD]
-        except KeyError:
-            pass
-        try:
-            return self.recordnames[RECORD]
-        except KeyError:
-            pass
-        name = self._default_record_name(RECORD)
-        name = self.get_unique_class_name(None, name)
-        self.recordnames[RECORD] = name
-        r = Record(self, RECORD, name)
-        self.pending_node(r)
-        return name
+    #     if isinstance(INSTANCE, dotnet.NativeInstance):
+    #         self.classes[INSTANCE] = INSTANCE._name
+    #         return INSTANCE._name
+    #     else:
+    #         namespace, name = self._default_class_name(INSTANCE)
+    #         name = self.get_unique_class_name(namespace, name)
+    #         if namespace is None:
+    #             full_name = name
+    #         else:
+    #             full_name = '%s.%s' % (namespace, name)
+    #         self.classes[INSTANCE] = full_name
+    #         cls = Class(self, INSTANCE, namespace, name)
+    #         self.pending_node(cls)
+    #         return full_name
 
     def record_function(self, graph, name):
         self.functions[graph] = name
@@ -113,18 +82,3 @@ class LowLevelDatabase(OODatabase):
             return NATIVE_INSTANCE._name
         except KeyError:
             return self.classes[INSTANCE]
-
-    def get_record_name(self, RECORD):
-        try:
-            return BUILTIN_RECORDS[RECORD]
-        except KeyError:
-            return self.recordnames[RECORD]
-
-    def record_delegate(self, TYPE):
-        try:
-            return self.delegates[TYPE]
-        except KeyError:
-            name = 'StaticMethod__%d' % len(self.delegates)
-            self.delegates[TYPE] = name
-            self.pending_node(Delegate(self, TYPE, name))
-            return name
