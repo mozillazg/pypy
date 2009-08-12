@@ -9,7 +9,8 @@ misc_ops = {
     'runtimenew':    [om.RuntimeNew],
     'oosetfield':    [am.SetField],
     'oogetfield':    [am.GetField],
-#    'oosend':        am.CallMethod
+    'oonewarray':    [om.OONewArray],
+    'oosend':        [am.CallMethod],
 }
 
 unary_ops = {

@@ -1,6 +1,7 @@
 from BaseHTTPServer import HTTPServer as BaseHTTPServer, BaseHTTPRequestHandler
 from cgi import parse_qs
 
+import time
 import webbrowser
 
 class HTTPServer(BaseHTTPServer):
@@ -30,8 +31,12 @@ def parse_result(string):
         return True
     elif string == "false":
         return False
-    elif all(c in "0123456789-" for c in string):
+    elif string == "undefined" or string == "null":
+        return None
+    elif all(c in "123456789-" for c in string):
         return int(string)
+    elif "," in string:
+        return [parse_result(s) for s in string.split(",")]
     return string
 
 class TestCase(object):
@@ -57,10 +62,9 @@ class TestHandler(BaseHTTPRequestHandler):
         self.serve_data(mime, data)
         
     def do_POST(self):
-        print self.path
         if self.path == "/test.result":
             form = parse_qs(self.rfile.read(int(self.headers['content-length'])))
-            self.server.testcase.result = parse_result(form['result'][0])
+            self.server.testcase.result = form['result'][0]
 
     def serve_data(self, content_type, data):
         self.send_response(200)
@@ -79,7 +83,10 @@ class BrowserTest(object):
 
     def get_result(self):
         testcase = self.httpd.testcase
+        start_time = time.time()
         while testcase.result is None:
+            if time.time() - start_time > 10:
+                assert False
             self.httpd.handle_request()
         return testcase.result
 
@@ -89,4 +96,4 @@ def browsertest(name, swfdata):
     driver.start_server(config.http_port, testcase)
     webbrowser.open('http://localhost:%d/test.html' % config.http_port)
     
-    return driver.get_result()
+    return parse_result(driver.get_result())

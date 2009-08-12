@@ -200,13 +200,14 @@ class AVM1Gen(OOGenerator):
     
     def set_member(self):
         self.action(avm1.ActionSetMember())
-        self.pop_stack(3)
+        value, name, obj = self.pop_stack(3)
+        print "SETMEMBER: %s.%s = %r" % (obj, name, value)
         
     def get_member(self):
         self.action(avm1.ActionGetMember())
         name, obj = self.pop_stack(2)
         print "GETMEMBER:", name, obj
-        self.push_stack(Variable("%s.%s") % obj, name)
+        self.push_stack(Variable("%s.%s" % (obj, name)))
         
     def push_reg_index(self, index):
         self.action(avm1.ActionPush((index, avm1.REGISTER)))
@@ -222,7 +223,7 @@ class AVM1Gen(OOGenerator):
         k = self.find_register(v)
         print k
         if k >= 0:
-            self.push_stack(v)
+            self.push_stack(Variable(v))
             self.push_reg_index(k)
         else:
             if self.in_function() == 2:
@@ -267,14 +268,14 @@ class AVM1Gen(OOGenerator):
         self.pop_stack(2)
     
     def init_object(self, members={}):
-        self.push_const(*members.items())
+        self.load(members.items())
         self.push_const(len(members))
         self.action(avm1.ActionInitObject())
         self.pop_stack(self.pop_stack()[0])
         self.push_stack(ScriptObject("object"))
 
     def init_array(self, members=[]):
-        self.push_const(members)
+        self.load(members)
         self.push_const(len(members))
         self.action(avm1.ActionInitArray())
         self.pop_stack(self.pop_stack()[0])
@@ -296,7 +297,7 @@ class AVM1Gen(OOGenerator):
         
     # Assumes the args and number of args and ScriptObject are on the stack.
     def call_method_n(self, func_name):
-        self.push_const(func_name)
+        self.load(func_name)
         self.action(avm1.ActionCallMethod())
         name, obj, nargs = self.pop_stack(3)
         self.pop_stack(nargs)
@@ -328,15 +329,15 @@ class AVM1Gen(OOGenerator):
     # If no args are passed then it is assumed that the args and number of args are on the stack.
     def newobject_constthis(self, obj, *args):
         if len(args) > 0:
-            self.push_const(args, len(args), obj)
+            self.load(args+(len(args), obj))
         else:
-            self.push_const(obj)
+            self.load(obj)
         self.newobject()
         
     
     def newobject(self):
         self.action(avm1.ActionNewObject())
-        name, nargs = self.pop_stack()
+        name, nargs = self.pop_stack(2)
         args = self.pop_stack(nargs)
         self.push_stack(ScriptObject(name))
         
@@ -383,13 +384,12 @@ class AVM1Gen(OOGenerator):
 
     def dup(self, TYPE):
         self.action(avm1.ActionDuplicate())
-        self.push_stack([self.pop_stack()] * 2)
+        self.push_stack(*[self.pop_stack()] * 2)
     
     def load(self, v):
-        print v, type(v)
         if hasattr(v, "__iter__")  and not isinstance(v, basestring):
             for i in v:
-                self.load(v)
+                self.load(i)
         elif isinstance(v, ClassName):
             if v.namespace:
                 ns = v.namespace.split('.')
@@ -480,15 +480,16 @@ class AVM1Gen(OOGenerator):
 
     call_oounicode = call_oostring
 
-    # def new(self, TYPE):
-    #     pass
+    def new(self, TYPE):
+        if isinstance(TYPE, ootype.List):
+            self.oonewarray(None)
     
-    def oonewarray(self, TYPE, length):
-        self.newobject_constthis("Array", 1)
+    def oonewarray(self, TYPE, length=1):
+        self.newobject_constthis("Array", length)
     
     def push_null(self, TYPE=None):
         self.action(avm1.ActionPush(avm1.NULL))
-        self
+        self.push_stack(avm1.NULL)
 
     def push_undefined(self):
         self.action(avm1.ActionPush(avm1.UNDEFINED))
@@ -496,6 +497,11 @@ class AVM1Gen(OOGenerator):
 
     def push_primitive_constant(self, TYPE, value):
         if TYPE is ootype.Void:
-            self.push_undefined()
+            self.push_null()
+        elif TYPE is ootype.String:
+            if value._str is None:
+                self.push_null()
+            else:
+                self.push_const(value._str)
         else:
             self.push_const(value)
