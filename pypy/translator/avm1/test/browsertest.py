@@ -16,6 +16,7 @@ class config(object):
 <body>
 <object type="application/x-shockwave-flash" data="test.swf" width="%d" height="%d">
 <param name="movie" value="test.swf" />
+<param name="allowScriptAccess" value="always" />
 </object>
 </body>
 </html>"""
@@ -29,18 +30,15 @@ def parse_result(string):
         return True
     elif string == "false":
         return False
-    elif string == "null" or string == "undefined":
-        return None
-    elif string.isdigit():
+    elif all(c in "0123456789-" for c in string):
         return int(string)
     return string
 
 class TestCase(object):
-    def __init__(self, name, swfdata, testcount):
+    def __init__(self, name, swfdata):
         self.name = name
         self.swfdata = swfdata
-        self.results = []
-        self.testcount = testcount
+        self.result = None
     
 class TestHandler(BaseHTTPRequestHandler):
     """The HTTP handler class that provides the tests and handles results"""
@@ -59,9 +57,10 @@ class TestHandler(BaseHTTPRequestHandler):
         self.serve_data(mime, data)
         
     def do_POST(self):
+        print self.path
         if self.path == "/test.result":
             form = parse_qs(self.rfile.read(int(self.headers['content-length'])))
-            self.server.testcase.results.append(parse_result(form['result'][0]))
+            self.server.testcase.result = parse_result(form['result'][0])
 
     def serve_data(self, content_type, data):
         self.send_response(200)
@@ -80,14 +79,14 @@ class BrowserTest(object):
 
     def get_result(self):
         testcase = self.httpd.testcase
-        while len(testcase.results) < testcase.testcount:
+        while testcase.result is None:
             self.httpd.handle_request()
-        return self.httpd.testcase.results
+        return testcase.result
 
-def browsertest(name, swfdata, testcount):
-    testcase = TestCase(str(name), swfdata, testcount)
+def browsertest(name, swfdata):
+    testcase = TestCase(str(name), swfdata)
     driver = BrowserTest()
     driver.start_server(config.http_port, testcase)
     webbrowser.open('http://localhost:%d/test.html' % config.http_port)
-
+    
     return driver.get_result()

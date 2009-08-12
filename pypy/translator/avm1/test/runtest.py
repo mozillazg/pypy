@@ -10,13 +10,14 @@ from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.backendopt.checkvirtual import check_virtual_methods
 from pypy.translator.oosupport.support import patch_os, unpatch_os
 from pypy.translator.avm.test.harness import TestHarness
+from pypy.translator.avm.genavm import GenAVM1
 
-def translate_space_op(gen, op):
-    if op.opname == "cast_int_to_char":
-        gen.push_arg(op.args[0])
-        gen.push_const(1)
-        gen.push_var("String")
-        gen.call_method("fromCharCode")
+# def translate_space_op(gen, op):
+#     if op.opname == "cast_int_to_char":
+#         gen.push_arg(op.args[0])
+#         gen.push_const(1)
+#         gen.push_var("String")
+#         gen.call_method("fromCharCode")
 
 def compile_function(func, name, annotation=[], graph=None, backendopt=True,
                      auto_raise_exc=False, exctrans=False,
@@ -24,8 +25,11 @@ def compile_function(func, name, annotation=[], graph=None, backendopt=True,
     olddefs = patch_os()
     gen = _build_gen(func, annotation, name, graph, backendopt,
                      exctrans, annotatorpolicy, nowrap)
+    harness = TestHarness(name)
+    gen.ilasm = harness.actions
+    gen.generate_source()
     unpatch_os(olddefs) # restore original values
-    return gen
+    return gen, harness
 
 def _build_gen(func, annotation, name, graph=None, backendopt=True, exctrans=False,
                annotatorpolicy=None, nowrap=False):
@@ -50,62 +54,29 @@ def _build_gen(func, annotation, name, graph=None, backendopt=True, exctrans=Fal
         backend_optimizations(t)
     
     main_graph = t.graphs[0]
-
-    harness = TestHarness(name)
-    harness.actions.begin_function(main_graph.name, [v.name for v in main_graph.getargs()])
-    for op in main_graph.startblock.operations:
-        translate_space_op(harness.actions, op)
-    harness.actions.return_stmt()
-    harness.actions.exit_scope()
+    tmpdir = py.path.local('.')
     
-    return harness
-
-class StructTuple(tuple):
-    def __getattr__(self, name):
-        if name.startswith('item'):
-            i = int(name[len('item'):])
-            return self[i]
-        else:
-            raise AttributeError, name
-
-class OOList(list):
-    def ll_length(self):
-        return len(self)
-
-    def ll_getitem_fast(self, i):
-        return self[i]
-
-class InstanceWrapper:
-    def __init__(self, class_name):
-        self.class_name = class_name
-
-class ExceptionWrapper:
-    def __init__(self, class_name):
-        self.class_name = class_name
-
-    def __repr__(self):
-        return 'ExceptionWrapper(%s)' % repr(self.class_name)
+    return GenAVM1(tmpdir, t, None, exctrans)
 
 class AVM1Test(BaseRtypingTest, OORtypeMixin):
     def __init__(self):
         self._func = None
         self._ann = None
+        self._genoo = None
         self._harness = None
-        self._test_count = 1
 
     def _compile(self, fn, args, ann=None, backendopt=True, auto_raise_exc=False, exctrans=False):
         if ann is None:
             ann = [lltype_to_annotation(typeOf(x)) for x in args]
-        if self._func is fn and self._ann == ann:
-            return self._harness
-        else:
-            self._harness = compile_function(fn, self.__class__.__name__, ann,
-                                             backendopt=backendopt,
-                                             auto_raise_exc=auto_raise_exc,
-                                             exctrans=exctrans)
-            self._func = fn
-            self._ann = ann
-            return self._harness
+        self._genoo, self._harness = compile_function(fn,
+                                                      "%s.%s" % (self.__class__.__name__, fn.func_name),
+                                                      ann,
+                                                      backendopt=backendopt,
+                                                      auto_raise_exc=auto_raise_exc,
+                                                      exctrans=exctrans)
+        self._func = fn
+        self._ann = ann
+        return self._harness
 
     def _skip_win(self, reason):
         if platform.system() == 'Windows':
@@ -123,16 +94,12 @@ class AVM1Test(BaseRtypingTest, OORtypeMixin):
             backendopt = getattr(self, 'backendopt', True) # enable it by default
         return backendopt
     
-    def interpret(self, fn, args, expected=None, annotation=None, backendopt=None, exctrans=False):
+    def interpret(self, fn, args, annotation=None, backendopt=None, exctrans=False):
         backendopt = self._get_backendopt(backendopt)
         harness = self._compile(fn, args, annotation, backendopt=backendopt, exctrans=exctrans)
-        harness.start_test("%d" % self._test_count)
-        self._test_count += 1
         harness.actions.call_function_constargs(fn.func_name, *args)
-        harness.finish_test(expected)
-
-    def do_test(self):
-        self._harness.do_test()
+        result = harness.do_test(True)
+        return result
     
     def interpret_raises(self, exception, fn, args, backendopt=None, exctrans=False):
         import exceptions # needed by eval
