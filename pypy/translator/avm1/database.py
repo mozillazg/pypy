@@ -75,8 +75,8 @@ class LowLevelDatabase(OODatabase):
         return name
 
     def class_name(self, INSTANCE):
-        if INSTANCE is ootype.ROOT:
-            return types.object.classname()
+        #if INSTANCE is ootype.ROOT:
+        #    return types.object.classname()
         try:
             NATIVE_INSTANCE = INSTANCE._hints['NATIVE_INSTANCE']
             return NATIVE_INSTANCE._name

@@ -45,6 +45,35 @@ class _PushArgsForFunctionCall(MicroInstruction):
             generator.load(arg)
         generator.push_const(len(args))
 
+class _CallMethod(MicroInstruction):
+    def render(self, generator, op):
+        args = op.args
+        method_name = args[0].value
+        this = args[1]
+        
+        if isinstance(this.concretetype, ootype.Array):
+            for arg in args[1:]:
+                generator.load(arg)
+            if method_name == "ll_setitem_fast":
+                generator.set_member()
+                generator.push_const(False) # Spoof a method call result
+            elif method_name == "ll_getitem_fast":
+                generator.get_member()
+            elif method_name == "ll_length":
+                generator.load("length")
+                generator.get_member()
+            else:
+                assert False
+        else:
+            if len(args) > 2:
+                for arg in args[2:]:
+                    generator.load(arg)
+                generator.push_const(len(args)-2)
+            else:
+                generator.push_const(0)
+            generator.load(this)
+            generator.call_method_n(method_name)
+
 class CallConstantMethod(MicroInstruction):
     def __init__(self, obj, func_name):
         self.obj = obj
@@ -66,3 +95,4 @@ StoreResultStart        = _StoreResultStart()
 StoreResultEnd          = _StoreResultEnd()
 GetField                = _GetField()
 SetField                = _SetField()
+CallMethod              = _CallMethod()

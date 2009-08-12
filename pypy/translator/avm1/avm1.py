@@ -416,6 +416,8 @@ class ActionPush(Action):
     ACTION_NAME = "ActionPush"
     ACTION_ID = 0x96
 
+    USE_CONSTANTS = False
+    
     def __init__(self, *args):
         self.values = []
         self.add_element(*args)
@@ -431,6 +433,7 @@ class ActionPush(Action):
             self.values.append(element)
         
     def get_block_props_early(self, block):
+        if not ActionPush.USE_CONSTANTS: return
         for index, (value, type) in enumerate(self.values):
             if type == STRING:
                 constant_index = block.constants.add_constant(value)
