@@ -45,7 +45,8 @@ def test_block_proto():
     inp = 'Block'
     res,space = interpret(inp)
     assert isinstance(res, W_Block)
-    assert res.protos == [space.w_object]
+    assert len(res.protos) == 1
+    assert res.protos[0] is space.w_object
     
 def test_call_on_method():
     inp = 'a := method(x, x + 1); getSlot("a") call(3)'
@@ -104,3 +105,12 @@ def test_block_call_slot():
     assert space.w_object.slots['inlineMethod'] is not None
     assert res.value == 4
     
+    
+def test_resolution_order():
+    inp = """id := method(a, a)
+    test := method(name, getSlot("self") setSlot(3 + name, 33))
+    test(7)
+    """
+    res, space = interpret(inp)
+    assert res.value == 33
+    assert space.w_lobby.slots[10].value == 33
