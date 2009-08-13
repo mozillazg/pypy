@@ -19,6 +19,6 @@ def test_set_slot():
     input = "a := b"
     ast = parse(input, space)
     a = W_Message(space, '"a"', [])
-    a.literal_value = W_ImmutableSequence(space, 'a')
+    a.literal_value = space.w_immutable_sequence.clone_and_init('a')
     
     assert ast == W_Message(space, "setSlot", [a, W_Message(space, 'b', [])], )
