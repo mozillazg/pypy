@@ -255,3 +255,19 @@ def test_object_update_slot():
 def test_object_update_slot_raises():
     inp = 'qwer = 23'
     py.test.raises(Exception, 'interpret(inp)')
+    
+def test_object_write():
+    inp = """
+    p := Object clone do(
+        print := method(
+            self printed := true
+        )
+    )
+    a := p clone
+    b := p clone
+    write(a, b)
+    """
+    res, space = interpret(inp)
+    assert res is space.w_nil
+    assert space.w_lobby.slots['a'].slots['printed'] is space.w_true
+    assert space.w_lobby.slots['b'].slots['printed'] is space.w_true

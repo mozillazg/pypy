@@ -70,6 +70,7 @@ class ObjSpace(object):
         
         self.init_w_sequence()
         
+        self.init_stored_messages()
 
         
     def init_w_map(self):
@@ -190,3 +191,6 @@ class ObjSpace(object):
         if value:
             return self.w_true
         return self.w_false
+        
+    def init_stored_messages(self):
+        self.w_print_message = W_Message(self, 'print', [])
