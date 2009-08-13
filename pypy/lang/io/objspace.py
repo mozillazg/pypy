@@ -11,6 +11,7 @@ import pypy.lang.io.call
 import pypy.lang.io.message
 import pypy.lang.io.map
 import pypy.lang.io.coroutine
+import pypy.lang.io.sequence
 
 class ObjSpace(object):
     """docstring for ObjSpace"""
@@ -36,7 +37,7 @@ class ObjSpace(object):
         self.w_eol = W_Object(self, [self.w_object])
         
         # XXX TODO: change this when Sequence is implemented
-        self.w_sequence = W_Object(self, [self.w_object])
+        self.w_sequence = W_ImmutableSequence(self, '',[self.w_object])
         self.w_immutable_sequence = W_ImmutableSequence(self, '', [self.w_sequence])
         # default stop state
         self.stop_status = self.w_normal
@@ -66,6 +67,8 @@ class ObjSpace(object):
         self.init_w_coroutine()
         
         self.init_w_flow_objects()
+        
+        self.init_w_sequence()
         
 
         
@@ -138,7 +141,7 @@ class ObjSpace(object):
         self.w_core.slots['Normal'].slots['type'] = W_ImmutableSequence(self, 'Normal')
     	
     	# Flow control: Break
-    	self.w_core.slots['Break'] = self.w_block
+    	self.w_core.slots['Break'] = self.w_break
         self.w_core.slots['Break'].slots['type'] = W_ImmutableSequence(self, 'Break')
 
     	# Flow control: Continue
@@ -158,6 +161,10 @@ class ObjSpace(object):
         for key, function in cfunction_definitions['Coroutine'].items():
             self.w_coroutine.slots[key] = W_CFunction(self, function)
         
+    def init_w_sequence(self):
+        for key, function in cfunction_definitions['Sequence'].items():
+            self.w_sequence.slots[key] = W_CFunction(self, function)
+            
     def break_status(self, result):
         self.stop_status = self.w_break
         self.w_return_value = result
