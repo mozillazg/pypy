@@ -193,3 +193,9 @@ def object_update_slot(space, w_target, slotname, w_value):
     w_target.slots[slotname] = w_value
     return w_value
     
+@register_method('Object', 'write')
+def object_write(space, w_target, w_message, w_context):
+    for x in w_message.arguments:
+        e = x.eval(space, w_context, w_context)
+        space.w_print_message.eval(space, e, w_context)
+    return space.w_nil
