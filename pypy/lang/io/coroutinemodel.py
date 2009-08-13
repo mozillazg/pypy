@@ -1,3 +1,8 @@
+# XXX wtf
+import greenlet
+import py.magic
+py.magic.__dict__['greenlet'] = greenlet.greenlet
+
 from pypy.lang.io.model import W_Object
 from pypy.rlib.rcoroutine import make_coroutine_classes
 d = make_coroutine_classes(W_Object)
@@ -14,7 +19,7 @@ class W_Coroutine(Coroutine):
         W_Object.__init__(self, space, protos)
 
     def clone(self):
-        return W_Coroutine(self.space, self.state, [self])
+        return W_Coroutine(self.space, self.costate, [self])
     
     @staticmethod
     def w_getcurrent(space):
@@ -27,6 +32,11 @@ class W_Coroutine(Coroutine):
             space._coroutine_state = AppCoState(space)
             space._coroutine_state.post_install()
         return space._coroutine_state
+        
+    def run(self, space, w_receiver, w_context):
+        t = IoThunk(space, self.slots['runMessage'], w_receiver, w_context)
+        self.bind(t)
+        self.switch()
 
 class AppCoState(BaseCoState):
     def __init__(self, space):
@@ -46,4 +56,5 @@ class IoThunk(AbstractThunk):
         self.w_context = w_context
     
     def call(self):
-        self.w_message.eval(self.space, self.w_receiver, self.w_context)
+        t = self.w_message.eval(self.space, self.w_receiver, self.w_context)
+        self.w_receiver.slots['result'] = t
