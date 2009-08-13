@@ -1,5 +1,5 @@
 from pypy.lang.io.parserhack import parse, interpret
-from pypy.lang.io.model import W_Object, W_Message, W_Number, W_ImmutableSequence
+from pypy.lang.io.model import W_Object, W_Message, W_Number,  W_ImmutableSequence, W_Block
 import py.test
 
 
@@ -222,3 +222,36 @@ def test_set_slot_with_type():
     assert isinstance(res.slots['type'], W_ImmutableSequence)
     assert res.slots['type'].value == 'foo'
     assert space.w_lobby.slots['foo'] == res
+    
+def test_doString():
+    inp = """doString("1")"""
+    res, space = interpret(inp)
+    assert res.value == 1
+
+def test_doString_method():
+    inp = """
+    doString("method(" .. "foo" .. " = call evalArgAt(0); self)")"""
+    res, space = interpret(inp)
+    print res
+    assert isinstance(res, W_Block)
+def test_doString_method2():
+    py.test.skip()
+    inp = """
+    foo := 234
+    name := "foo"
+    setSlot("set" .. name asCapitalized,
+		doString("method(" .. name .. " = call evalArgAt(0); self)"))
+    setFoo(1)"""
+    res, space = interpret(inp)
+    assert res.slots['foo'].value == 1
+def test_object_update_slot():
+    inp = """
+    a := 3
+    a = 5
+    """
+    res, space = interpret(inp)
+    assert res.value == 5
+    assert space.w_lobby.slots['a'].value == 5
+def test_object_update_slot_raises():
+    inp = 'qwer = 23'
+    py.test.raises(Exception, 'interpret(inp)')
