@@ -167,3 +167,29 @@ def object_stopstatus(space, w_target, w_message, w_context):
     w = space.stop_status
     space.normal_status()
     return w
+    
+@register_method('Object', 'doString', unwrap_spec=[object, str])
+def object_do_string(space, w_target, code):
+    # XXX Replace this when the actual parser is done
+    from parserhack import parse
+    ast = parse(code, space)
+    return ast.eval(space, w_target, w_target)
+    
+    
+# XXX replace with the original one in A2_Object.io when it works
+@register_method('Object', 'newSlot', unwrap_spec=[object, str, object])
+def object_new_slot(space, w_target, name, w_value):
+    from pypy.lang.io.model import W_CFunction
+    w_target.slots[name] = w_value
+    def setSlot(space, w_target, w_message, w_context):
+        w_target.slots[name] = w_message.arguments[0].eval(space, w_context, w_context)
+        return w_target
+    w_target.slots['set%s' % (name[0].capitalize() + name[1:])] = W_CFunction(space, setSlot)
+    
+@register_method('Object', 'updateSlot', unwrap_spec=[object, str, object])
+def object_update_slot(space, w_target, slotname, w_value):
+    assert w_target.lookup(slotname) is not None
+
+    w_target.slots[slotname] = w_value
+    return w_value
+    
