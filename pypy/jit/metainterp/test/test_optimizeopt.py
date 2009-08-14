@@ -346,8 +346,8 @@ class BaseTestOptimizeOpt(BaseTest):
             fail()
         jump()
         """
-        self.optimize_loop(ops, '', ops, p1=self.nodebox.value,
-                           boxkinds={'myptr': self.nodebox.value})
+        self.optimize_loop(ops, '', ops, p1=self.nodebox.value)
+
 
     def test_p123_simple(self):
         ops = """
@@ -760,8 +760,7 @@ class BaseTestOptimizeOpt(BaseTest):
         [i]
         jump(5)
         """
-        self.optimize_loop(ops, 'Not', expected, i1=5,
-                           boxkinds={'myptr': self.nodebox.value})
+        self.optimize_loop(ops, 'Not', expected, i1=5)
 
     def test_getfield_gc_nonpure_2(self):
         ops = """
@@ -770,8 +769,7 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(i1)
         """
         expected = ops
-        self.optimize_loop(ops, 'Not', expected, i1=5,
-                           boxkinds={'myptr': self.nodebox.value})
+        self.optimize_loop(ops, 'Not', expected, i1=5)
 
     def test_varray_1(self):
         ops = """
