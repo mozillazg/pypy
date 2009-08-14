@@ -27,6 +27,20 @@ def syntax_warning(space, msg, fn, lineno, offset):
     _emit_syntax_warning(space, w_msg, w_filename, w_lineno, w_offset)
 
 
+class ForbiddenNameAssignment(Exception):
+
+    def __init__(self, name, node):
+        self.name = name
+        self.node = node
+
+
+def check_forbidden_name(name, node=None):
+    """Raise an error if the name cannot be assigned to."""
+    if name in ("None", "__debug__"):
+        raise ForbiddenNameAssignment(name, node)
+    # XXX Warn about using True and False
+
+
 def dict_to_switch(d):
     """Convert of dictionary with integer keys to a switch statement."""
     def lookup(query):

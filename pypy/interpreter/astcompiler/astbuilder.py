@@ -1,4 +1,5 @@
 from pypy.interpreter.astcompiler import ast, misc
+from pypy.interpreter.astcompiler import asthelpers # Side effects
 from pypy.interpreter import error
 from pypy.interpreter.pyparser.pygram import syms, tokens
 from pypy.interpreter.pyparser.error import SyntaxError
@@ -107,72 +108,24 @@ class ASTBuilder(object):
         raise SyntaxError(msg, n.lineno, n.column,
                           filename=self.compile_info.filename)
 
-    def check_forbidden_name(self, name, node):
-        """Raise an error if the name cannot be assigned to."""
-        if name == "None":
-            self.error("assignment to None", node)
-        if name == "__debug__":
-            self.error("assignment to __debug__", node)
-        # XXX Warn about using True and False
+    def error_ast(self, msg, ast_node):
+        raise SyntaxError(msg, ast_node.lineno, ast_node.col_offset,
+                          filename=self.compile_info.filename)
 
-    def set_context(self, expr, ctx, node):
+    def check_forbidden_name(self, name, node):
+        try:
+            misc.check_forbidden_name(name)
+        except misc.ForbiddenNameAssignment, e:
+            self.error("assignment to %s" % (e.name,), node)
+
+    def set_context(self, expr, ctx):
         """Set the context of an expression to Store or Del if possible."""
-        error = None
-        sequence = None
-        if isinstance(expr, ast.Attribute):
-            if ctx == ast.Store:
-                self.check_forbidden_name(expr.attr, node)
-            expr.ctx = ctx
-        elif isinstance(expr, ast.Subscript):
-            expr.ctx = ctx
-        elif isinstance(expr, ast.Name):
-            if ctx == ast.Store:
-                self.check_forbidden_name(expr.id, node)
-            expr.ctx = ctx
-        elif isinstance(expr, ast.List):
-            expr.ctx = ctx
-            sequence = expr.elts
-        elif isinstance(expr, ast.Tuple):
-            if expr.elts:
-                expr.ctx = ctx
-                sequence = expr.elts
-            else:
-                error = "()"
-        elif isinstance(expr, ast.Lambda):
-            error = "lambda"
-        elif isinstance(expr, ast.Call):
-            error = "function call"
-        elif isinstance(expr, ast.BoolOp) or \
-                isinstance(expr, ast.BinOp) or \
-                isinstance(expr, ast.UnaryOp):
-            error = "operator"
-        elif isinstance(expr, ast.GeneratorExp):
-            error = "generator expression"
-        elif isinstance(expr, ast.Yield):
-            error = "yield expression"
-        elif isinstance(expr, ast.ListComp):
-            error = "list comprehension"
-        elif isinstance(expr, ast.Dict) or \
-                isinstance(expr, ast.Num) or \
-                isinstance(expr, ast.Str):
-            error = "literal"
-        elif isinstance(expr, ast.Compare):
-            error = "comparison"
-        elif isinstance(expr, ast.IfExp):
-            error = "conditional expression"
-        elif isinstance(expr, ast.Repr):
-            error = "repr"
-        else:
-            raise AssertionError("unknown expression in set_context()")
-        if error is not None:
-            if ctx == ast.Store:
-                action = "assign to"
-            else:
-                action = "delete"
-            self.error("can't %s %s" % (action, error), node)
-        if sequence:
-            for item in sequence:
-                self.set_context(item, ctx, node)
+        try:
+            expr.set_context(ctx)
+        except ast.UnacceptableExpressionContext, e:
+            self.error_ast(e.msg, e.node)
+        except misc.ForbiddenNameAssignment, e:
+            self.error_ast("assignment to %s" % (e.name,), e.node)
 
     def handle_print_stmt(self, print_node):
         dest = None
@@ -452,7 +405,7 @@ class ASTBuilder(object):
         if child_count == 4:
             target_child = exc.children[3]
             target = self.handle_expr(target_child)
-            self.set_context(target, ast.Store, target_child)
+            self.set_context(target, ast.Store)
         return ast.excepthandler(test, target, suite, exc.lineno, exc.column)
 
     def handle_try_stmt(self, try_node):
@@ -494,7 +447,7 @@ class ASTBuilder(object):
         if len(with_node.children) == 5:
             target_node = with_node.children[2]
             target = self.handle_with_var(target_node)
-            self.set_context(target, ast.Store, target_node)
+            self.set_context(target, ast.Store)
         else:
             target = None
         return ast.With(test, target, body, with_node.lineno, with_node.column)
@@ -644,7 +597,7 @@ class ASTBuilder(object):
                     args.append(self.handle_arg_unpacking(child))
                 break
         tup = ast.Tuple(args, ast.Store, fplist_node.lineno, fplist_node.column)
-        self.set_context(tup, ast.Store, fplist_node)
+        self.set_context(tup, ast.Store)
         return tup
 
     def handle_stmt(self, stmt):
@@ -708,7 +661,7 @@ class ASTBuilder(object):
             # Augmented assignment.
             target_child = stmt.children[0]
             target_expr = self.handle_testlist(target_child)
-            self.set_context(target_expr, ast.Store, target_child)
+            self.set_context(target_expr, ast.Store)
             value_child = stmt.children[2]
             if value_child.type == syms.testlist:
                 value_expr = self.handle_testlist(value_child)
@@ -726,7 +679,7 @@ class ASTBuilder(object):
                 if target_node.type == syms.yield_expr:
                     self.error("can't assign to yield expression", target_node)
                 target_expr = self.handle_testlist(target_node)
-                self.set_context(target_expr, ast.Store, target_node)
+                self.set_context(target_expr, ast.Store)
                 targets.append(target_expr)
             value_child = stmt.children[-1]
             if value_child.type == syms.testlist:
@@ -1249,6 +1202,6 @@ class ASTBuilder(object):
         for i in range(0, len(exprlist.children), 2):
             child = exprlist.children[i]
             expr = self.handle_expr(child)
-            self.set_context(expr, context, child)
+            self.set_context(expr, context)
             exprs.append(expr)
         return exprs
