@@ -580,6 +580,7 @@ class Optimizer(object):
 
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])
+        assert isinstance(value, AbstractVirtualStructValue)
         if value.is_virtual():
             # optimizefindnode should ensure that fieldvalue is found
             fieldvalue = value.getfield(op.descr, None)
@@ -621,6 +622,7 @@ class Optimizer(object):
     def optimize_ARRAYLEN_GC(self, op):
         value = self.getvalue(op.args[0])
         if value.is_virtual():
+            assert isinstance(value, VArrayValue)
             assert op.result.getint() == value.getlength()
             self.make_constant(op.result)
         else:
@@ -632,6 +634,7 @@ class Optimizer(object):
         indexbox = op.args[1]
         if value.is_virtual() and self.is_constant(indexbox):
             # optimizefindnode should ensure that itemvalue is found
+            assert isinstance(value, VArrayValue)
             itemvalue = value.getitem(indexbox.getint(), None)
             assert itemvalue is not None
             self.make_equal_to(op.result, itemvalue)
@@ -647,6 +650,7 @@ class Optimizer(object):
         value = self.getvalue(op.args[0])
         indexbox = op.args[1]
         if value.is_virtual() and self.is_constant(indexbox):
+            assert isinstance(value, VArrayValue)
             value.setitem(indexbox.getint(), self.getvalue(op.args[2]))
         else:
             value.make_nonnull()

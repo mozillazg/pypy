@@ -1,10 +1,17 @@
 from pypy.tool.pairtype import extendabletype
 
+class PurelyAbstractBaseClass(NotImplementedError):
+    pass
 
 class SpecNode(object):
     __metaclass__ = extendabletype     # extended in optimizefindnode.py
     __slots__ = ()
 
+    def equals(self, other):
+        raise PurelyAbstractBaseClass()
+
+    def extract_runtime_data(self, cpu, valuebox, resultlist):
+        raise PurelyAbstractBaseClass()
 
 class NotSpecNode(SpecNode):
     __slots__ = ()
