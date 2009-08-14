@@ -240,53 +240,6 @@ class CodeWriter(object):
             typedescr = self.cpu.typedescrof(CLASS)
             self.class_sizes.append((cls, typedescr))
 
-
-    if 0:        # disabled
-      def fixed_list_descr_for_tp(self, TP):
-        try:
-            return self.fixed_list_cache[TP.TO]
-        except KeyError:
-            OF = TP.TO.OF
-            rtyper = self.rtyper
-            setfunc, _ = support.builtin_func_for_spec(rtyper, 'list.setitem',
-                                                       [TP, lltype.Signed, OF],
-                                                       lltype.Void)
-            getfunc, _ = support.builtin_func_for_spec(rtyper, 'list.getitem',
-                                                       [TP, lltype.Signed], OF)
-            malloc_func, _ = support.builtin_func_for_spec(rtyper, 'newlist',
-                                                           [lltype.Signed, OF],
-                                                           TP)
-            len_func, _ = support.builtin_func_for_spec(rtyper, 'list.len',
-                                                        [TP], lltype.Signed)
-##            if isinstance(TP.TO, lltype.GcStruct):
-##                append_func, _ = support.builtin_func_for_spec(rtyper,
-##                                                               'list.append',
-##                                                        [TP, OF], lltype.Void)
-##                pop_func, _ = support.builtin_func_for_spec(rtyper, 'list.pop',
-##                                                            [TP], OF)
-##                insert_func, _ = support.builtin_func_for_spec(rtyper,
-##                      'list.insert', [TP, lltype.Signed, OF], lltype.Void)
-            tp = getkind(OF)
-##            if isinstance(TP.TO, lltype.GcStruct):
-##                ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
-##                               history.ConstAddr(setfunc.value, self.cpu),
-##                               history.ConstAddr(malloc_func.value, self.cpu),
-##                               history.ConstAddr(append_func.value, self.cpu),
-##                               history.ConstAddr(pop_func.value, self.cpu),
-##                               history.ConstAddr(insert_func.value, self.cpu),
-##                               history.ConstAddr(len_func.value, self.cpu),
-##                               history.ConstAddr(nonzero_func.value, self.cpu),
-##                               tp)
-##            else:
-            ld = FixedListDescr(history.ConstAddr(getfunc.value, self.cpu),
-                                history.ConstAddr(setfunc.value, self.cpu),
-                                history.ConstAddr(malloc_func.value, self.cpu),
-                                history.ConstAddr(len_func.value, self.cpu),
-                                tp)
-            self.fixed_list_cache[TP.TO] = ld
-            return ld
-
-
 class BytecodeMaker(object):
     debug = False
     
