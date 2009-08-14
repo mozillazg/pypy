@@ -574,15 +574,18 @@ class Frame(object):
 
     def op_guard_no_overflow(self, _):
         global _overflow_flag
-        if _overflow_flag:
-            _overflow_flag = False
+        flag = _overflow_flag
+        assert flag != 'unset'
+        _overflow_flag = 'unset'
+        if flag:
             raise GuardFailed
 
     def op_guard_overflow(self, _):
         global _overflow_flag
-        if _overflow_flag:
-            _overflow_flag = False
-        else:
+        flag = _overflow_flag
+        assert flag != 'unset'
+        _overflow_flag = 'unset'
+        if not flag:
             raise GuardFailed
 
     # ----------
@@ -916,9 +919,11 @@ def set_overflow_error():
 def set_zero_division_error():
     _set_error(ZeroDivisionError)
 
-_overflow_flag = False
+_overflow_flag = 'unset'
 
 def get_overflow_flag():
+    if _overflow_flag == 'unset':
+        return False
     return _overflow_flag
 
 def set_overflow_flag(flag):
