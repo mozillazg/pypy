@@ -85,6 +85,10 @@ class stmt(AST):
 
     __slots__ = ('lineno', 'col_offset')
 
+    def __init__(self, lineno, col_offset):
+        self.lineno = lineno
+        self.col_offset = col_offset
+
 class FunctionDef(stmt):
 
     __slots__ = ('name', 'args', 'body', 'decorators')
@@ -94,8 +98,7 @@ class FunctionDef(stmt):
         self.args = args
         self.body = body
         self.decorators = decorators
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_FunctionDef(self)
@@ -115,8 +118,7 @@ class ClassDef(stmt):
         self.name = name
         self.bases = bases
         self.body = body
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_ClassDef(self)
@@ -134,8 +136,7 @@ class Return(stmt):
 
     def __init__(self, value, lineno, col_offset):
         self.value = value
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Return(self)
@@ -151,8 +152,7 @@ class Delete(stmt):
 
     def __init__(self, targets, lineno, col_offset):
         self.targets = targets
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Delete(self)
@@ -169,8 +169,7 @@ class Assign(stmt):
     def __init__(self, targets, value, lineno, col_offset):
         self.targets = targets
         self.value = value
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Assign(self)
@@ -189,8 +188,7 @@ class AugAssign(stmt):
         self.target = target
         self.op = op
         self.value = value
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_AugAssign(self)
@@ -208,8 +206,7 @@ class Print(stmt):
         self.dest = dest
         self.values = values
         self.nl = nl
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Print(self)
@@ -230,8 +227,7 @@ class For(stmt):
         self.iter = iter
         self.body = body
         self.orelse = orelse
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_For(self)
@@ -253,8 +249,7 @@ class While(stmt):
         self.test = test
         self.body = body
         self.orelse = orelse
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_While(self)
@@ -275,8 +270,7 @@ class If(stmt):
         self.test = test
         self.body = body
         self.orelse = orelse
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_If(self)
@@ -297,8 +291,7 @@ class With(stmt):
         self.context_expr = context_expr
         self.optional_vars = optional_vars
         self.body = body
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_With(self)
@@ -319,8 +312,7 @@ class Raise(stmt):
         self.type = type
         self.inst = inst
         self.tback = tback
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Raise(self)
@@ -342,8 +334,7 @@ class TryExcept(stmt):
         self.body = body
         self.handlers = handlers
         self.orelse = orelse
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_TryExcept(self)
@@ -362,8 +353,7 @@ class TryFinally(stmt):
     def __init__(self, body, finalbody, lineno, col_offset):
         self.body = body
         self.finalbody = finalbody
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_TryFinally(self)
@@ -382,8 +372,7 @@ class Assert(stmt):
     def __init__(self, test, msg, lineno, col_offset):
         self.test = test
         self.msg = msg
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Assert(self)
@@ -400,8 +389,7 @@ class Import(stmt):
 
     def __init__(self, names, lineno, col_offset):
         self.names = names
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Import(self)
@@ -417,8 +405,7 @@ class ImportFrom(stmt):
         self.module = module
         self.names = names
         self.level = level
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_ImportFrom(self)
@@ -434,8 +421,7 @@ class Exec(stmt):
         self.body = body
         self.globals = globals
         self.locals = locals
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Exec(self)
@@ -454,8 +440,7 @@ class Global(stmt):
 
     def __init__(self, names, lineno, col_offset):
         self.names = names
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Global(self)
@@ -469,8 +454,7 @@ class Expr(stmt):
 
     def __init__(self, value, lineno, col_offset):
         self.value = value
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Expr(self)
@@ -484,8 +468,7 @@ class Pass(stmt):
     __slots__ = ()
 
     def __init__(self, lineno, col_offset):
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Pass(self)
@@ -498,8 +481,7 @@ class Break(stmt):
     __slots__ = ()
 
     def __init__(self, lineno, col_offset):
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Break(self)
@@ -512,8 +494,7 @@ class Continue(stmt):
     __slots__ = ()
 
     def __init__(self, lineno, col_offset):
-        self.lineno = lineno
-        self.col_offset = col_offset
+        stmt.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Continue(self)
@@ -525,6 +506,10 @@ class expr(AST):
 
     __slots__ = ('lineno', 'col_offset')
 
+    def __init__(self, lineno, col_offset):
+        self.lineno = lineno
+        self.col_offset = col_offset
+
 class BoolOp(expr):
 
     __slots__ = ('op', 'values')
@@ -532,8 +517,7 @@ class BoolOp(expr):
     def __init__(self, op, values, lineno, col_offset):
         self.op = op
         self.values = values
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_BoolOp(self)
@@ -551,8 +535,7 @@ class BinOp(expr):
         self.left = left
         self.op = op
         self.right = right
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_BinOp(self)
@@ -569,8 +552,7 @@ class UnaryOp(expr):
     def __init__(self, op, operand, lineno, col_offset):
         self.op = op
         self.operand = operand
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_UnaryOp(self)
@@ -586,8 +568,7 @@ class Lambda(expr):
     def __init__(self, args, body, lineno, col_offset):
         self.args = args
         self.body = body
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Lambda(self)
@@ -604,8 +585,7 @@ class IfExp(expr):
         self.test = test
         self.body = body
         self.orelse = orelse
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_IfExp(self)
@@ -623,8 +603,7 @@ class Dict(expr):
     def __init__(self, keys, values, lineno, col_offset):
         self.keys = keys
         self.values = values
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Dict(self)
@@ -643,8 +622,7 @@ class ListComp(expr):
     def __init__(self, elt, generators, lineno, col_offset):
         self.elt = elt
         self.generators = generators
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_ListComp(self)
@@ -660,8 +638,7 @@ class GeneratorExp(expr):
     def __init__(self, elt, generators, lineno, col_offset):
         self.elt = elt
         self.generators = generators
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_GeneratorExp(self)
@@ -676,8 +653,7 @@ class Yield(expr):
 
     def __init__(self, value, lineno, col_offset):
         self.value = value
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Yield(self)
@@ -695,8 +671,7 @@ class Compare(expr):
         self.left = left
         self.ops = ops
         self.comparators = comparators
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Compare(self)
@@ -717,8 +692,7 @@ class Call(expr):
         self.keywords = keywords
         self.starargs = starargs
         self.kwargs = kwargs
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Call(self)
@@ -739,8 +713,7 @@ class Repr(expr):
 
     def __init__(self, value, lineno, col_offset):
         self.value = value
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Repr(self)
@@ -755,8 +728,7 @@ class Num(expr):
 
     def __init__(self, n, lineno, col_offset):
         self.n = n
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Num(self)
@@ -770,8 +742,7 @@ class Str(expr):
 
     def __init__(self, s, lineno, col_offset):
         self.s = s
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Str(self)
@@ -787,8 +758,7 @@ class Attribute(expr):
         self.value = value
         self.attr = attr
         self.ctx = ctx
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Attribute(self)
@@ -805,8 +775,7 @@ class Subscript(expr):
         self.value = value
         self.slice = slice
         self.ctx = ctx
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Subscript(self)
@@ -823,8 +792,7 @@ class Name(expr):
     def __init__(self, id, ctx, lineno, col_offset):
         self.id = id
         self.ctx = ctx
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Name(self)
@@ -839,8 +807,7 @@ class List(expr):
     def __init__(self, elts, ctx, lineno, col_offset):
         self.elts = elts
         self.ctx = ctx
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_List(self)
@@ -857,8 +824,7 @@ class Tuple(expr):
     def __init__(self, elts, ctx, lineno, col_offset):
         self.elts = elts
         self.ctx = ctx
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Tuple(self)
@@ -874,8 +840,7 @@ class Const(expr):
 
     def __init__(self, value, lineno, col_offset):
         self.value = value
-        self.lineno = lineno
-        self.col_offset = col_offset
+        expr.__init__(self, lineno, col_offset)
 
     def walkabout(self, visitor):
         visitor.visit_Const(self)
