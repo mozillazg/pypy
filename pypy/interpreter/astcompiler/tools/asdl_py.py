@@ -71,6 +71,12 @@ class ASTNodeVisitor(ASDLVisitor):
             slots = ", ".join(repr(attr.name.value) for attr in sum.attributes)
             self.emit("__slots__ = (%s)" % (slots,), 1)
             self.emit("")
+            if sum.attributes:
+                args = ", ".join(attr.name.value for attr in sum.attributes)
+                self.emit("def __init__(self, %s):" % (args,), 1)
+                for attr in sum.attributes:
+                    self.visit(attr)
+                self.emit("")
             for cons in sum.types:
                 self.visit(cons, base, sum.attributes, simple)
                 self.emit("")
@@ -87,12 +93,16 @@ class ASTNodeVisitor(ASDLVisitor):
         self.emit("visitor.visit_%s(self)" % (name,), 2)
         self.emit("")
 
-    def make_constructor(self, fields):
-        if fields:
-            args = ", ".join(str(field.name) for field in fields)
+    def make_constructor(self, fields, extras=None, base=None):
+        if fields or extras:
+            arg_fields = fields + extras if extras else fields
+            args = ", ".join(str(field.name) for field in arg_fields)
             self.emit("def __init__(self, %s):" % args, 1)
             for field in fields:
                 self.visit(field)
+            if extras:
+                base_args = ", ".join(str(field.name) for field in extras)
+                self.emit("%s.__init__(self, %s)" % (base, base_args), 2)
         else:
             self.emit("def __init__(self):", 1)
             self.emit("pass", 2)
@@ -100,11 +110,10 @@ class ASTNodeVisitor(ASDLVisitor):
     def visitConstructor(self, cons, base, extra_attributes, simple):
         self.emit("class %s(%s):" % (cons.name, base))
         self.emit("")
-        all_fields = cons.fields + extra_attributes
         slots = ", ".join(repr(field.name.value) for field in cons.fields)
         self.emit("__slots__ = (%s)" % (slots,), 1)
         self.emit("")
-        self.make_constructor(all_fields)
+        self.make_constructor(cons.fields, extra_attributes, base)
         self.emit("")
         self.emit("def walkabout(self, visitor):", 1)
         self.emit("visitor.visit_%s(self)" % (cons.name,), 2)
