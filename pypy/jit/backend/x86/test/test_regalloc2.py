@@ -4,12 +4,20 @@ from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.metainterp.test.oparser import parse
+from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.annlowlevel import llhelper
 
 class TestRegalloc(object):
-    namespace = {
-    }
-    type_system = 'lltype'
     cpu = CPU(None, None)
+    def func(f1, f2):
+        print f1, f2
+        return f1 + f2*10.0
+    FPTR = lltype.Ptr(lltype.FuncType([lltype.Float] * 2, lltype.Float))
+    func_ptr = llhelper(FPTR, func)
+    calldescr = cpu.calldescrof(FPTR.TO, FPTR.TO.ARGS, FPTR.TO.RESULT)
+
+    namespace = locals().copy()
+    type_system = 'lltype'
     
     def parse(self, s, boxkinds=None):
         return parse(s, self.cpu, self.namespace,
@@ -67,13 +75,15 @@ class TestRegalloc(object):
         assert self.getint(0) == 0
 
     def test_float_call_st0_sync(self):
-        py.test.skip("XXX finish")
+        py.test.skip("in-progress")
         ops = '''
         [f0, f1]
         f2 = float_add(f0, f1)
-        call(f2, descr=calldescr)
+        f3 = call(ConstClass(func_ptr), f2, f0, descr=calldescr)
+        fail(f3)
         '''
-        xxx
+        self.interpret(ops, [0.5, 1.5])
+        assert self.getfloat(0) == 3.0
 
 def test_bug_rshift():
     v1 = BoxInt()
