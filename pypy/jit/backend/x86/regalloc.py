@@ -738,7 +738,7 @@ class RegAlloc(object):
             reg = None
             boxsize = sizeofbox(arg)
             if (arg not in self.loop_consts and self.longevity[arg][1] > -1 and
-                boxsize == WORD): # only allocate regs for WORD size
+                boxsize == 1): # only allocate regs for WORD size
                 reg = self.try_allocate_reg(arg)
             if reg:
                 locs[i] = reg
@@ -1105,13 +1105,13 @@ class RegAlloc(object):
         scale, ofs, ptr = self._unpack_arraydescr(op.descr)
         base_loc  = self.make_sure_var_in_reg(op.args[0], op.args)
         ofs_loc = self.make_sure_var_in_reg(op.args[1], op.args)
-        self.eventually_free_vars(op.args)
         if scale > 2:
             # float number...
             self.force_float_in_reg(op.args[2])
             value_loc = st0
         else:
             value_loc = self.make_sure_var_in_reg(op.args[2], op.args)
+        self.eventually_free_vars(op.args)
         if ptr:
             gc_ll_descr = self.assembler.cpu.gc_ll_descr
             gc_ll_descr.gen_write_barrier(self.assembler, base_loc, value_loc)
