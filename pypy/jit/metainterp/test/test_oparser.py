@@ -1,5 +1,5 @@
 
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.jit.metainterp.resoperation import rop
@@ -112,3 +112,12 @@ def test_float():
     assert isinstance(b.f0, BoxFloat)
     assert isinstance(b.f1, BoxFloat)
     
+def test_getvar_const_ptr():
+    x = '''
+    []
+    call(ConstPtr(func_ptr))
+    '''
+    TP = lltype.GcArray(lltype.Signed)
+    NULL = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.nullptr(TP))
+    loop = parse(x, None, {'func_ptr' : NULL})
+    assert loop.operations[0].args[0].value == NULL
