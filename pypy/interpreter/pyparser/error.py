@@ -10,9 +10,9 @@ class SyntaxError(Exception):
         self.filename = filename
         self.print_file_and_line = False
 
-    def wrap_info(self, space, filename):
+    def wrap_info(self, space):
         return space.newtuple([space.wrap(self.msg),
-                               space.newtuple([space.wrap(filename),
+                               space.newtuple([space.wrap(self.filename),
                                                space.wrap(self.lineno),
                                                space.wrap(self.offset),
                                                space.wrap(self.text)])])

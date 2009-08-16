@@ -150,6 +150,9 @@ class PythonParser(parser.Parser):
                 for tp, value, lineno, column, line in tokens:
                     if self.add_token(tp, value, lineno, column, line):
                         break
+            except error.TokenError, e:
+                e.filename = compile_info.filename
+                raise
             except parser.ParseError, e:
                 # Catch parse errors, pretty them up and reraise them as a
                 # SyntaxError.
