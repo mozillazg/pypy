@@ -4,8 +4,8 @@ from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lltype import Void
 from pypy.translator.oosupport.function import Function as OOFunction
-from pypy.translator.avm.node import Node
-from pypy.translator.avm.avm1gen import ClassName
+from pypy.translator.avm1.node import Node
+from pypy.translator.avm1.avm1gen import ClassName
 
 def load_variable_hook(self, v):
     if v.name in self.argset:

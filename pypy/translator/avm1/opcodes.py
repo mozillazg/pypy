@@ -1,6 +1,6 @@
 
 from pypy.translator.oosupport import metavm as om
-from pypy.translator.avm import metavm as am, avm1 as a
+from pypy.translator.avm1 import metavm as am, avm1 as a
 
 DoNothing = [om.PushAllArgs]
 

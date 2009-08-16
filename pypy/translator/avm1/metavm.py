@@ -1,7 +1,6 @@
 
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.oosupport.metavm import MicroInstruction
-from pypy.translator.avm.avm1gen import StackDummy
 
 class _SetField(MicroInstruction):
     def render(self, generator, op):
