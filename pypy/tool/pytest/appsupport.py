@@ -182,6 +182,18 @@ def build_pytest_assertion(space):
                                space.newtuple([w_BuiltinAssertionError]),
                                w_dict)
 
+def _exc_info(space, err):
+    """Hack the fact that exc_info() isn't set until a app except
+    block catches it."""
+    err.normalize_exception(space)
+    frame = space.getexecutioncontext().framestack.top()
+    old = frame.last_exception
+    frame.last_exception = err
+    try:
+        return space.sys.call("exc_info")
+    finally:
+        frame.last_exception = old
+
 def pypyraises(space, w_ExpectedException, w_expr, __args__):
     """A built-in function providing the equivalent of py.test.raises()."""
     args_w, kwds_w = __args__.unpack()
@@ -201,14 +213,14 @@ def pypyraises(space, w_ExpectedException, w_expr, __args__):
             space.exec_(source.compile(), frame.w_globals, w_locals)
         except OperationError, e:
             if e.match(space, w_ExpectedException):
-                return space.sys.call('exc_info')
+                return _exc_info(space, e)
             raise
     else:
         try:
             space.call_args(w_expr, __args__)
         except OperationError, e:
             if e.match(space, w_ExpectedException):
-                return space.sys.call('exc_info')
+                return _exc_info(space, e)
             raise
     raise OperationError(space.w_AssertionError,
                          space.wrap("DID NOT RAISE"))
