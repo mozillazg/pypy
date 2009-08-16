@@ -1,9 +1,9 @@
 
 import struct
 
-from pypy.translator.avm.records import RecordHeader, ShapeWithStyle, Matrix, CXForm
-from pypy.translator.avm.avm1 import Block
-from pypy.translator.avm.util import BitStream
+from pypy.translator.avm1.records import RecordHeader, ShapeWithStyle, Matrix, CXForm
+from pypy.translator.avm1.avm1 import Block
+from pypy.translator.avm1.util import BitStream
 
 next_character_id = 1
 

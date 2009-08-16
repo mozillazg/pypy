@@ -2,7 +2,7 @@
 # AVM1 = ActionScript Virtual Machine 1
 # Used for ActionScript 1 and 2
 
-from pypy.translator.avm.util import BitStream
+from pypy.translator.avm1.util import BitStream
 from collections import namedtuple
 import struct
 

@@ -1,8 +1,8 @@
 
 import struct
 
-from pypy.translator.avm.util import BitStream
-from pypy.translator.avm.records import Rect
+from pypy.translator.avm1.util import BitStream
+from pypy.translator.avm1.records import Rect
 
 class SwfData(object):
 

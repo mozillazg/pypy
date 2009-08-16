@@ -1,6 +1,6 @@
 
 import struct
-from pypy.translator.avm.util import serialize_u32 as u32
+from pypy.translator.avm2.util import serialize_u32 as u32
 
 # ======================================
 # Constants
@@ -69,7 +69,7 @@ class Namespace(object):
         return not self == other
         
     def write_to_pool(self, pool):
-        self._name_index = pool.utf8_index(name)
+        self._name_index = pool.utf8_pool.index_for(self.name)
 
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
@@ -94,11 +94,11 @@ class NamespaceSet(object):
         return not self == other
 
     def write_to_pool(self, pool):
-        self._namespace_indices = [pool.namespace_index(ns) for ns in self.namespaces]
+        self._namespace_indices = [pool.namespace_pool.index_for(ns) for ns in self.namespaces]
     
     def serialize(self):
         assert self._namespace_indices is not None, "Please call write_to_pool before serializing"
-        return u32(len(self.namespaces)) + ''.join(u32(index) for index in self_namespace_indices)
+        return u32(len(self.namespaces)) + ''.join(u32(index) for index in self._namespace_indices)
         
 
 NO_NAMESPACE  = Namespace(TYPE_NAMESPACE_Namespace, "")
@@ -127,7 +127,7 @@ class MultinameL(object):
         return hash((self.kind, self.ns_set))
     
     def write_to_pool(self, pool):
-        self._ns_set_index = pool.nsset_index(self.ns_set)
+        self._ns_set_index = pool.nsset_pool.index_for(self.ns_set)
 
     def serialize(self):
         assert self._ns_set_index is not None, "Please call write_to_pool before serializing"
@@ -155,7 +155,7 @@ class Multiname(MultinameL):
 
     def write_to_pool(self, pool):
         super(Multiname, self).write_to_pool(pool)
-        self._name_index = pool.utf8_index(self.name)
+        self._name_index = pool.utf8_pool.index_for(self.name)
 
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
@@ -186,8 +186,8 @@ class QName(object):
         return hash((self.kind, self.name, self.ns))
     
     def write_to_pool(self, pool):
-        self._name_index = pool.utf8_index(self.name)
-        self._ns_index = pool.namespace_index(self.ns)
+        self._name_index = pool.utf8_pool.index_for(self.name)
+        self._ns_index = pool.namespace_pool.index_for(self.ns)
         
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
@@ -223,7 +223,7 @@ class RtqName(object):
         self._name_index = None
 
     def write_to_pool(self, pool):
-        self._name_index = pool.utf8_index(name)
+        self._name_index = pool.utf8_pool.index_for(name)
 
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
@@ -232,22 +232,7 @@ class RtqName(object):
 # Constant Pool
 # ======================================
 
-def constant_index_base(default, pool_name):
-    def fn(self, value):
-        if value == default:
-            return 0
-        
-        pool = getattr(self, pool_name)
-        
-        if value in pool:
-            return pool.index(value) + 1
-        else:
-            pool.append(value)
-            return len(pool)
-        
-    return fn
-
-class OptimizedPool(object):
+class ValuePool(object):
     
     def __init__(self, default):
         self.index_map = {}
@@ -258,17 +243,17 @@ class OptimizedPool(object):
         if value == self.default:
             return 0
         
-        if value in index_map:
-            return index_map[value]
+        if value in self.index_map:
+            return self.index_map[value]
         
         self.pool.append(value)
         index = len(self.pool)
         self.index_map[value] = index
         return index
-
+    
     def value_at(self, index):
         if index == 0:
-            return default
+            return self.default
         
         if index < len(self.pool):
             return self.pool[index]
@@ -278,26 +263,25 @@ class OptimizedPool(object):
 class AbcConstantPool(object):
     
     def __init__(self):
-        self.int_pool       = OptimizedPool()
-        self.uint_pool      = OptimizedPool()
-        self.double_pool    = OptimizedPool()
-        self.utf8_pool      = OptimizedPool()
-        self.namespace_pool = OptimizedPool()
-        self.nsset_pool     = OptimizedPool()
-        self.multiname_pool = OptimizedPool()
+        self.int_pool       = ValuePool(0)
+        self.uint_pool      = ValuePool(0)
+        self.double_pool    = ValuePool(float("nan"))
+        self.utf8_pool      = ValuePool("")
+        self.namespace_pool = ValuePool(ANY_NAMESPACE)
+        self.nsset_pool     = ValuePool(NO_NAMESPACE_SET)
+        self.multiname_pool = ValuePool()
         
-    int_index       = constant_index_base(0, "int_pool")
-    uint_index      = constant_index_base(0, "uint_pool")
-    double_index    = constant_index_base(float("nan"), "double_pool")
-    utf8_index      = constant_index_base("", "utf8_pool")
-    namespace_index = constant_index_base(ANY_NAMESPACE, "namespace_pool")
-    nsset_index     = constant_index_base(NO_NAMESPACE_SET, "nsset_pool")
-
     def has_RTNS(self, index):
-        return self.multiname_pool[index].kind in (TYPE_MULTINAME_RtqName, TYPE_MULTINAME_RtqNameA, TYPE_MULTINAME_RtqNameL, TYPE_MULTINAME_RtqNameLA)
+        return self.multiname_pool[index].kind in (TYPE_MULTINAME_RtqName,
+                                                   TYPE_MULTINAME_RtqNameA,
+                                                   TYPE_MULTINAME_RtqNameL,
+                                                   TYPE_MULTINAME_RtqNameLA)
 
     def has_RTName(self, index):
-        return self.multiname_pool[index].kind in (TYPE_MULTINAME_MultinameL, TYPE_MULTINAME_MultinameLA, TYPE_MULTINAME_RtqNameL, TYPE_MULTINAME_RtqNameLA)
+        return self.multiname_pool[index].kind in (TYPE_MULTINAME_MultinameL,
+                                                   TYPE_MULTINAME_MultinameLA,
+                                                   TYPE_MULTINAME_RtqNameL,
+                                                   TYPE_MULTINAME_RtqNameLA)
 
     def serialize(self):
 

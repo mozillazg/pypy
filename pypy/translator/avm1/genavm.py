@@ -1,12 +1,12 @@
 
 import py
 from pypy.translator.oosupport.genoo import GenOO
-from pypy.translator.avm.avm1gen import AVM1Gen
-from pypy.translator.avm.constant import AVM1ConstGenerator
-from pypy.translator.avm.database import LowLevelDatabase
-from pypy.translator.avm.function import Function
-from pypy.translator.avm.opcodes import opcodes
-from pypy.translator.avm.types import AVM1TypeSystem
+from pypy.translator.avm1.avm1gen import AVM1Gen
+from pypy.translator.avm1.constant import AVM1ConstGenerator
+from pypy.translator.avm1.database import LowLevelDatabase
+from pypy.translator.avm1.function import Function
+from pypy.translator.avm1.opcodes import opcodes
+from pypy.translator.avm1.types import AVM1TypeSystem
 
 class GenAVM1(GenOO):
     
