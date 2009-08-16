@@ -223,42 +223,55 @@ class PythonAstCompiler(PyCodeCompiler):
         self.futureFlags = future.futureFlags_2_5
         self.compiler_flags = self.futureFlags.allowed_flags
 
-    def compile(self, source, filename, mode, flags):
+    def compile_ast(self, node, filename, mode, flags):
+        from pypy.interpreter.pyparser.pyparse import CompileInfo
+        info = CompileInfo(filename, mode, flags)
+        return self._compile_ast(node, info)
+
+    def _compile_ast(self, node, info):
+        from pypy.interpreter.astcompiler import optimize
+        from pypy.interpreter.astcompiler.codegen import compile_ast
+        from pypy.interpreter.pyparser.error import SyntaxError
+        space = self.space
+        try:
+            mod = optimize.optimize_ast(space, node, info)
+            code = compile_ast(space, mod, info)
+        except SyntaxError, e:
+            raise OperationError(space.w_SyntaxError,
+                                 e.wrap_info(space))
+        return code
+
+    def compile_to_ast(self, source, filename, mode, flags):
+        from pypy.interpreter.pyparser.pyparse import CompileInfo
+        info = CompileInfo(filename, mode, flags)
+        return self._compile_to_ast(source, info)
+
+    def _compile_to_ast(self, source, info):
+        from pypy.interpreter.pyparser.future import getFutures
         from pypy.interpreter.pyparser.error import (SyntaxError,
                                                      IndentationError,
                                                      TokenIndentationError)
-        from pypy.interpreter.pycode import PyCode
-        from pypy.interpreter.pyparser.pyparse import CompileInfo
-        from pypy.interpreter.pyparser.future import getFutures
         from pypy.interpreter.astcompiler.astbuilder import ast_from_node
-        from pypy.interpreter.astcompiler.codegen import compile_ast
-        from pypy.interpreter.astcompiler import consts, optimize
-
         space = self.space
-
-        if flags & ~(consts.PyCF_SOURCE_IS_UTF8 | consts.PyCF_DONT_IMPLY_DEDENT
-                     | self.futureFlags.allowed_flags):
-            raise OperationError(space.w_ValueError,
-                                 space.wrap("invalid compile flags"))
-
-        space.timer.start("PythonAST compile")
         try:
-            f_flags, future_lineno = getFutures(self.futureFlags, source)
-            flags |= f_flags
-            info = CompileInfo(filename, mode, flags, future_lineno)
+            f_flags, future_info = getFutures(self.futureFlags, source)
+            info.last_future_import = future_info
+            info.flags |= f_flags
             parse_tree = self.parser.parse_source(source, info)
-            module = ast_from_node(space, parse_tree, info)
-            module = optimize.optimize_ast(space, module, info)
-            code = compile_ast(space, module, info)
+            mod = ast_from_node(space, parse_tree, info)
         except IndentationError, e:
             raise OperationError(space.w_IndentationError,
-                                 e.wrap_info(space, filename))
+                                 e.wrap_info(space))
         except TokenIndentationError, e:
             raise OperationError(space.w_IndentationError,
-                                 e.wrap_info(space, filename))
+                                 e.wrap_info(space))
         except SyntaxError, e:
             raise OperationError(space.w_SyntaxError,
-                                 e.wrap_info(space, filename))
-        assert isinstance(code, PyCode)
-        space.timer.stop("PythonAST compile")
-        return code
+                                 e.wrap_info(space))
+        return mod
+
+    def compile(self, source, filename, mode, flags):
+        from pypy.interpreter.pyparser.pyparse import CompileInfo
+        info = CompileInfo(filename, mode, flags)
+        mod = self._compile_to_ast(source, info)
+        return self._compile_ast(mod, info)

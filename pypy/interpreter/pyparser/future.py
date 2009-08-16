@@ -298,12 +298,9 @@ class FutureFlags(object):
                 self.compiler_features[fname] = flag
             if version >= feature.getMandatoryRelease():
                 self.mandatory_flags |= feature.compiler_flag
-        self.allowed_flags = compiler_flags | PyCF_DONT_IMPLY_DEDENT
+        self.allowed_flags = compiler_flags
 
     def get_flag_names(self, space, flags):
-        if flags & ~self.allowed_flags:
-            raise OperationError(space.w_ValueError,
-                                 space.wrap("compile(): unrecognized flags"))
         flag_names = []
         for name, value in self.compiler_features.items():
             if flags & value:
