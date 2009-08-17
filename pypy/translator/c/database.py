@@ -28,7 +28,8 @@ class LowLevelDatabase(object):
                  gcpolicyclass=None,
                  stacklesstransformer=None,
                  thread_enabled=False,
-                 sandbox=False):
+                 sandbox=False,
+                 exceptions="standard"):
         self.translator = translator
         self.standalone = standalone
         self.sandbox    = sandbox
@@ -57,7 +58,8 @@ class LowLevelDatabase(object):
         if translator is None or translator.rtyper is None:
             self.exctransformer = None
         else:
-            self.exctransformer = translator.getexceptiontransformer()
+            self.exctransformer = translator.getexceptiontransformer(
+                exceptions)
         if translator is not None:
             self.gctransformer = self.gcpolicy.transformerclass(translator)
         self.completed = False

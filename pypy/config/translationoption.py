@@ -90,6 +90,14 @@ translation_optiondescription = OptionDescription(
                      "shadowstack": [("translation.gc", "generation")],
                      "asmgcc": [("translation.gc", "generation")],
                  }),
+    ChoiceOption("exceptions",
+                 "Strategy for raising and catching exceptions",
+                 ["standard", "asmgcc"],
+                 "standard",
+                 cmdline="--exceptions",
+                 requires={
+                     "asmgcc": [("translation.gcrootfinder", "asmgcc")],
+                 }),
 
     # other noticeable options
     BoolOption("thread", "enable use of threading primitives",

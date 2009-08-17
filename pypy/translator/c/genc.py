@@ -148,7 +148,8 @@ class CBuilder(object):
                               gcpolicyclass=gcpolicyclass,
                               stacklesstransformer=stacklesstransformer,
                               thread_enabled=self.config.translation.thread,
-                              sandbox=self.config.translation.sandbox)
+                              sandbox=self.config.translation.sandbox,
+                              exceptions=self.config.translation.exceptions)
         self.db = db
         
         # give the gc a chance to register interest in the start-up functions it
