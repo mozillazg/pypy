@@ -1,6 +1,6 @@
 import autopath
 import py
-from pypy.translator.avm.test.runtest import AVM1Test
+from pypy.translator.avm1.test.runtest import AVM1Test
 from pypy.rpython.test.test_rint import BaseTestRint
 from pypy.rlib.rarithmetic import r_longlong
 

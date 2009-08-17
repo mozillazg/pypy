@@ -4,17 +4,6 @@ import struct, os, math
 ALIGN_LEFT = "left"
 ALIGN_RIGHT = "right"
 
-def serialize_u32(value):
-    s = ""
-    while True:
-        bits = value & 0b01111111 # low 7 bits
-        value >>= 7
-        if not value:
-            s += chr(bits)
-            break
-        s += chr(0b10000000 | bits)
-    return s
-
 class BitStream(object):
 
     """ BitStream is a class for taking care of data structures that are bit-packed, like SWF."""

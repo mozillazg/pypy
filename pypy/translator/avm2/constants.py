@@ -1,9 +1,64 @@
-
+c
 import struct
 from pypy.translator.avm2.util import serialize_u32 as u32
 
 # ======================================
 # Constants
+# ======================================
+
+# ======================================
+# Method Flags
+# ======================================
+
+"""
+Suggest to the run-time that an arguments object (as specified by
+the ActionScript 3.0 Language Reference) be created. Must not be used
+together with METHODFLAG_NeedRest
+"""
+METHODFLAG_Arguments     = 0x01
+
+"""
+Must be set if this method uses the newactivation opcode
+"""
+METHODFLAG_Activation    = 0x02
+
+"""
+This flag creates an ActionScript 3.0 ...rest arguments array.
+Must not by used with METHODFLAG_Arguments
+"""
+METHODFLAG_NeedRest      = 0x04
+
+"""
+Must be set if this method has optional parameters and the options
+field is present in this method_info structure.
+"""
+METHODFLAG_HasOptional   = 0x08
+
+"""
+Undocumented as of now.
+"""
+METHODFLAG_IgnoreRest    = 0x10
+
+"""
+Undocumented as fo now. Assuming this flag is to implement the
+"native" keyword in AS3.
+"""
+METHODFLAG_Native        = 0x20
+
+"""
+Must be set if this method uses the dxns or dxnslate opcodes.
+"""
+
+METHODFLAG_SetsDxns      = 0x40
+
+"""
+Must be set when the param_names field is presetn in this method_info
+structure.
+"""
+METHODFLAG_HasParamNames = 0x80
+
+# ======================================
+# Types
 # ======================================
 
 # String types
@@ -47,6 +102,29 @@ TYPE_MULTINAME_NameL              = 0x13
 TYPE_MULTINAME_NameLA             = 0x14
 TYPE_MULTINAME_MultinameL         = 0x1B
 TYPE_MULTINAME_MultinameLA        = 0x1C
+
+def py_to_abc(value, pool):
+    if value is True:
+        return TYPE_BOOLEAN_True, None
+    if value is False:
+        return TYPE_BOOLEAN_False, None
+    if value is None:
+        return TYPE_OBJECT_Null, None
+    if isinstance(value, basestring):
+        return TYPE_STRING_Utf8
+    if isinstance(value, int):
+        if value < 0:
+            return TYPE_NUMBER_Int, pool.int_pool
+        return TYPE_NUMBER_UInt, pool.uint_pool
+    if isinstance(value, float):
+        return TYPE_NUMBER_DOUBLE, pool.double_pool
+    if isinstance(value, Namespace):
+        return value.kind, pool.namespace_pool
+    if isinstance(value, NamespaceSet):
+        return TYPE_NAMESPACE_SET_NamespaceSet, pool.nsset_pool
+    if hasattr(value, "KIND"):
+        return value.KIND, pool.multiname_pool
+    raise ValueError, "This is not an ABC-compatible type."
 
 # ======================================
 # Namespaces
@@ -104,6 +182,9 @@ class NamespaceSet(object):
 NO_NAMESPACE  = Namespace(TYPE_NAMESPACE_Namespace, "")
 ANY_NAMESPACE = Namespace(TYPE_NAMESPACE_Namespace, "*")
 
+PACKAGE_NAMESPACE = Namespace(TYPE_NAMESPACE_PackageNamespace, "")
+PRIVATE_NAMESPACE = Namespace(TYPE_NAMESPACE_PrivateNamespace, "private")
+
 NO_NAMESPACE_SET = NamespaceSet()
 
 # ======================================
@@ -155,7 +236,11 @@ class Multiname(MultinameL):
 
     def write_to_pool(self, pool):
         super(Multiname, self).write_to_pool(pool)
-        self._name_index = pool.utf8_pool.index_for(self.name)
+        assert self.name != ""
+        if self.name == "*":
+            self._name_index = 0
+        else:
+            self._name_index = pool.utf8_pool.index_for(self.name)
 
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
@@ -186,7 +271,11 @@ class QName(object):
         return hash((self.kind, self.name, self.ns))
     
     def write_to_pool(self, pool):
-        self._name_index = pool.utf8_pool.index_for(self.name)
+        assert self.name != ""
+        if self.name == "*":
+            self._name_index = 0
+        else:
+            self._name_index = pool.utf8_pool.index_for(self.name)
         self._ns_index = pool.namespace_pool.index_for(self.ns)
         
     def serialize(self):
@@ -223,10 +312,17 @@ class RtqName(object):
         self._name_index = None
 
     def write_to_pool(self, pool):
-        self._name_index = pool.utf8_pool.index_for(name)
+        assert self.name != ""
+        if self.name == "*":
+            self._name_index = 0
+        else:
+            self._name_index = pool.utf8_pool.index_for(name)
 
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
+
+class RtqNameA(object):
+    KIND = TYPE_MULTINAME_RtqNameA
     
 # ======================================
 # Constant Pool
@@ -239,6 +335,9 @@ class ValuePool(object):
         self.pool      = []
         self.default = default
 
+    def __iter__(self):
+        return iter(self.pool)
+        
     def index_for(self, value):
         if value == self.default:
             return 0

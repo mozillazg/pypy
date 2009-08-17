@@ -9,8 +9,8 @@ from pypy.annotation.model import lltype_to_annotation
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.backendopt.checkvirtual import check_virtual_methods
 from pypy.translator.oosupport.support import patch_os, unpatch_os
-from pypy.translator.avm.test.harness import TestHarness
-from pypy.translator.avm.genavm import GenAVM1
+from pypy.translator.avm1.test.harness import TestHarness
+from pypy.translator.avm1.genavm import GenAVM1
 
 # def translate_space_op(gen, op):
 #     if op.opname == "cast_int_to_char":
