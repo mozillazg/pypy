@@ -580,8 +580,8 @@ class Optimizer(object):
 
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])
-        assert isinstance(value, AbstractVirtualStructValue)
         if value.is_virtual():
+            assert isinstance(value, AbstractVirtualStructValue)
             # optimizefindnode should ensure that fieldvalue is found
             fieldvalue = value.getfield(op.descr, None)
             assert fieldvalue is not None
