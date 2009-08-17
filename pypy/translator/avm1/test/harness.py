@@ -1,6 +1,6 @@
 
-from pypy.translator.avm.test import browsertest as b
-from pypy.translator.avm import avm1 as a, avm1gen as g, swf as s, tags as t, records as r
+from pypy.translator.avm1.test import browsertest as b
+from pypy.translator.avm1 import avm1 as a, avm1gen as g, swf as s, tags as t, records as r
 
 class TestHarness(object):
     def __init__(self, name):

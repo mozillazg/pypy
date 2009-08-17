@@ -4,7 +4,7 @@
 
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.avm import avm1, types
+from pypy.translator.avm1 import avm1, types
 from pypy.translator.oosupport.treebuilder import SubOperation
 from pypy.translator.oosupport.metavm import Generator as OOGenerator, InstructionList
 from pypy.translator.oosupport.constant import push_constant

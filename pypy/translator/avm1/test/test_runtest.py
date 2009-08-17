@@ -1,7 +1,7 @@
 import autopath
 import py
 from pypy.translator.oosupport.test_template.runtest import BaseTestRunTest
-from pypy.translator.avm.test.runtest import AVM1Test
+from pypy.translator.avm1.test.runtest import AVM1Test
 
 class TestRunTest(BaseTestRunTest, AVM1Test):
 
