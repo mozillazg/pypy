@@ -108,12 +108,18 @@ class TranslationContext(object):
                                    type_system = type_system)
         return self.rtyper
 
-    def getexceptiontransformer(self):
+    def getexceptiontransformer(self, kind="standard"):
         if self.rtyper is None:
             raise ValueError("no rtyper")
         if self.exceptiontransformer is not None:
             return self.exceptiontransformer
-        from pypy.translator.exceptiontransform import ExceptionTransformer
+        if kind == "standard":
+            from pypy.translator.exceptiontransform import ExceptionTransformer
+        elif kind == "asmgcc":
+            from pypy.translator.c.gcc.gccexceptiontransform import \
+                                                           ExceptionTransformer
+        else:
+            raise TypeError("unknown value: kind=%r" % (kind,))
         self.exceptiontransformer = ExceptionTransformer(self)
         return self.exceptiontransformer
 
