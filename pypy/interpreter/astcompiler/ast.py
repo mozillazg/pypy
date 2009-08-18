@@ -1512,7 +1512,7 @@ class Compare(expr):
         if w_list is not None:
             list_w = space.viewiterable(w_list)
             if list_w:
-                self.ops = [w_obj.to_simple_int() for w_obj in list_w]
+                self.ops = [w_obj.to_simple_int(space) for w_obj in list_w]
             else:
                 self.ops = None
         w_list = self.w_comparators
@@ -1865,32 +1865,32 @@ class expr_context(AST):
 
 class _Load(expr_context):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 1
 
 class _Store(expr_context):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 2
 
 class _Del(expr_context):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 3
 
 class _AugLoad(expr_context):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 4
 
 class _AugStore(expr_context):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 5
 
 class _Param(expr_context):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 6
 
 Load = 1
@@ -2039,12 +2039,12 @@ class boolop(AST):
 
 class _And(boolop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 1
 
 class _Or(boolop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 2
 
 And = 1
@@ -2063,62 +2063,62 @@ class operator(AST):
 
 class _Add(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 1
 
 class _Sub(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 2
 
 class _Mult(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 3
 
 class _Div(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 4
 
 class _Mod(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 5
 
 class _Pow(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 6
 
 class _LShift(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 7
 
 class _RShift(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 8
 
 class _BitOr(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 9
 
 class _BitXor(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 10
 
 class _BitAnd(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 11
 
 class _FloorDiv(operator):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 12
 
 Add = 1
@@ -2157,22 +2157,22 @@ class unaryop(AST):
 
 class _Invert(unaryop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 1
 
 class _Not(unaryop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 2
 
 class _UAdd(unaryop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 3
 
 class _USub(unaryop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 4
 
 Invert = 1
@@ -2195,52 +2195,52 @@ class cmpop(AST):
 
 class _Eq(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 1
 
 class _NotEq(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 2
 
 class _Lt(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 3
 
 class _LtE(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 4
 
 class _Gt(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 5
 
 class _GtE(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 6
 
 class _Is(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 7
 
 class _IsNot(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 8
 
 class _In(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 9
 
 class _NotIn(cmpop):
 
-    def to_simple_int(self):
+    def to_simple_int(self, space):
         return 10
 
 Eq = 1
@@ -3320,7 +3320,7 @@ def AugAssign_get_op(space, w_self):
 
 def AugAssign_set_op(space, w_self, w_new_value):
     obj = space.interp_w(operator, w_new_value)
-    w_self.op = obj.to_simple_int()
+    w_self.op = obj.to_simple_int(space)
     w_self.initialization_state |= 2
 
 def AugAssign_get_value(space, w_self):
@@ -4320,7 +4320,7 @@ def BoolOp_get_op(space, w_self):
 
 def BoolOp_set_op(space, w_self, w_new_value):
     obj = space.interp_w(boolop, w_new_value)
-    w_self.op = obj.to_simple_int()
+    w_self.op = obj.to_simple_int(space)
     w_self.initialization_state |= 1
 
 def BoolOp_get_values(space, w_self):
@@ -4385,7 +4385,7 @@ def BinOp_get_op(space, w_self):
 
 def BinOp_set_op(space, w_self, w_new_value):
     obj = space.interp_w(operator, w_new_value)
-    w_self.op = obj.to_simple_int()
+    w_self.op = obj.to_simple_int(space)
     w_self.initialization_state |= 2
 
 def BinOp_get_right(space, w_self):
@@ -4433,7 +4433,7 @@ def UnaryOp_get_op(space, w_self):
 
 def UnaryOp_set_op(space, w_self, w_new_value):
     obj = space.interp_w(unaryop, w_new_value)
-    w_self.op = obj.to_simple_int()
+    w_self.op = obj.to_simple_int(space)
     w_self.initialization_state |= 1
 
 def UnaryOp_get_operand(space, w_self):
@@ -5084,7 +5084,7 @@ def Attribute_get_ctx(space, w_self):
 
 def Attribute_set_ctx(space, w_self, w_new_value):
     obj = space.interp_w(expr_context, w_new_value)
-    w_self.ctx = obj.to_simple_int()
+    w_self.ctx = obj.to_simple_int(space)
     w_self.initialization_state |= 4
 
 _Attribute_field_unroller = unrolling_iterable(['value', 'attr', 'ctx', 'lineno', 'col_offset'])
@@ -5142,7 +5142,7 @@ def Subscript_get_ctx(space, w_self):
 
 def Subscript_set_ctx(space, w_self, w_new_value):
     obj = space.interp_w(expr_context, w_new_value)
-    w_self.ctx = obj.to_simple_int()
+    w_self.ctx = obj.to_simple_int(space)
     w_self.initialization_state |= 4
 
 _Subscript_field_unroller = unrolling_iterable(['value', 'slice', 'ctx', 'lineno', 'col_offset'])
@@ -5190,7 +5190,7 @@ def Name_get_ctx(space, w_self):
 
 def Name_set_ctx(space, w_self, w_new_value):
     obj = space.interp_w(expr_context, w_new_value)
-    w_self.ctx = obj.to_simple_int()
+    w_self.ctx = obj.to_simple_int(space)
     w_self.initialization_state |= 2
 
 _Name_field_unroller = unrolling_iterable(['id', 'ctx', 'lineno', 'col_offset'])
@@ -5244,7 +5244,7 @@ def List_get_ctx(space, w_self):
 
 def List_set_ctx(space, w_self, w_new_value):
     obj = space.interp_w(expr_context, w_new_value)
-    w_self.ctx = obj.to_simple_int()
+    w_self.ctx = obj.to_simple_int(space)
     w_self.initialization_state |= 2
 
 _List_field_unroller = unrolling_iterable(['elts', 'ctx', 'lineno', 'col_offset'])
@@ -5299,7 +5299,7 @@ def Tuple_get_ctx(space, w_self):
 
 def Tuple_set_ctx(space, w_self, w_new_value):
     obj = space.interp_w(expr_context, w_new_value)
-    w_self.ctx = obj.to_simple_int()
+    w_self.ctx = obj.to_simple_int(space)
     w_self.initialization_state |= 2
 
 _Tuple_field_unroller = unrolling_iterable(['elts', 'ctx', 'lineno', 'col_offset'])
