@@ -74,10 +74,10 @@ def parse_python(space, source, mode):
        tree = parser.parse_source(source, info)
     except error.IndentationError, e:
         raise OperationError(space.w_IndentationError,
-                             e.wrap_info(space, "<string>"))
+                             e.wrap_info(space))
     except error.SyntaxError, e:
         raise OperationError(space.w_SyntaxError,
-                             e.wrap_info(space, "<string>"))
+                             e.wrap_info(space))
     return space.wrap(STType(tree, mode))
 
 
