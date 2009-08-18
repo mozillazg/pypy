@@ -26,3 +26,7 @@ def coroutine_run(space, w_target, w_message, w_context):
 #     w_coro.slots['result'] = w_result
 #     return w_coro
 #     
+
+@register_method('Coroutine', 'resume')
+def coroutine_switch(space, w_target, w_message, w_context):
+    w_target.switch()
