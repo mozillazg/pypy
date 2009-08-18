@@ -75,23 +75,22 @@ class GcRootTracker(object):
         shapelines = []
         shapeofs = 0
         def _globalname(name):
-            if self.format == 'darwin':
+            if self.format in ('darwin', 'mingw32'):
                 return '_' + name
             return name
         def _globl(name):
             print >> output, "\t.globl %s" % _globalname(name)
         def _label(name):
             print >> output, "%s:" % _globalname(name)
-        def _variant(elf, darwin):
-            if self.format == 'darwin':
-                txt = darwin
-            else:
-                txt = elf
+        def _variant(**kwargs):
+            txt = kwargs[self.format]
             print >> output, "\t%s" % txt
-        
+
         print >> output, "\t.text"
         _globl('pypy_asm_stackwalk')
-        _variant('.type pypy_asm_stackwalk, @function', '')
+        _variant(elf='.type pypy_asm_stackwalk, @function',
+                 darwin='',
+                 mingw32='')
         _label('pypy_asm_stackwalk')
         print >> output, """\
             /* See description in asmgcroot.py */
@@ -114,7 +113,9 @@ class GcRootTracker(object):
             popl   %eax
             ret
 """
-        _variant('.size pypy_asm_stackwalk, .-pypy_asm_stackwalk', '')
+        _variant(elf='.size pypy_asm_stackwalk, .-pypy_asm_stackwalk',
+                 darwin='',
+                 mingw32='')
         print >> output, '\t.data'
         print >> output, '\t.align\t4'
         _globl('__gcmapstart')
@@ -135,7 +136,9 @@ class GcRootTracker(object):
             print >> output, '\t.long\t%d' % (n,)
         _globl('__gcmapend')
         _label('__gcmapend')
-        _variant('.section\t.rodata', '.const')
+        _variant(elf='.section\t.rodata',
+                 darwin='.const',
+                 mingw32='')
         _globl('__gccallshapes')
         _label('__gccallshapes')
         output.writelines(shapelines)
