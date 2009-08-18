@@ -382,7 +382,7 @@ class AppExposeVisitor(ASDLVisitor):
             self.emit("w_err = space.wrap(\"%s constructor takes 0 or %i " \
                           "positional arguments\")" % (name, arity), 3)
             self.emit("raise OperationError(space.w_TypeError, w_err)", 3)
-            self.emit("for i, field in unrolling_iterable(enumerate([%s])):" %
+            self.emit("for i, field in unrolling_iterable(enumerate((%s,))):" %
                       (comma_fields,), 2)
             self.emit("space.setattr(w_self, space.wrap(field), args_w[i])", 3)
         else:
