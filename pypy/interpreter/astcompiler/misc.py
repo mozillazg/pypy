@@ -31,21 +31,26 @@ def parse_future(tree):
     future_lineno = 0
     future_column = 0
     have_docstring = False
-    if isinstance(tree, ast.Module) or isinstance(tree, ast.Interactive):
-        for stmt in tree.body:
-            if isinstance(stmt, ast.Str):
-                if have_docstring:
-                    break
-                else:
-                    have_docstring = True
-            elif isinstance(stmt, ast.ImportFrom):
-                if stmt.module == "__future__":
-                    future_lineno = stmt.lineno
-                    future_column = stmt.col_offset
-                else:
-                    break
+    if isinstance(tree, ast.Module):
+        body = tree.body
+    elif isinstance(tree, ast.Interactive):
+        body = tree.body
+    else:
+        return 0, 0
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Str):
+            if have_docstring:
+                break
+            else:
+                have_docstring = True
+        elif isinstance(stmt, ast.ImportFrom):
+            if stmt.module == "__future__":
+                future_lineno = stmt.lineno
+                future_column = stmt.col_offset
             else:
                 break
+        else:
+            break
     return future_lineno, future_column
 
 
