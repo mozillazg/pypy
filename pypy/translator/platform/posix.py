@@ -172,7 +172,8 @@ class GnuMakefile(object):
         if fpath.dirpath() == self.makefile_dir:
             return fpath.basename
         elif fpath.dirpath().dirpath() == self.makefile_dir.dirpath():
-            return '../' + fpath.relto(self.makefile_dir.dirpath())
+            path = '../' + fpath.relto(self.makefile_dir.dirpath())
+            return path.replace('\\', '/')
         else:
             return str(fpath)
 
