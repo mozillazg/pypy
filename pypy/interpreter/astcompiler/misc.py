@@ -30,6 +30,7 @@ def syntax_warning(space, msg, fn, lineno, offset):
 def parse_future(tree):
     future_lineno = 0
     future_column = 0
+    have_docstring = False
     if isinstance(tree, ast.Module) or isinstance(tree, ast.Interactive):
         for stmt in tree.body:
             if isinstance(stmt, ast.Str):
