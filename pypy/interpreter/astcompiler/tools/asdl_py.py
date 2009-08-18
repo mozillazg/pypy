@@ -600,7 +600,7 @@ def missing_field(space, state, required, host):
             missing = required[i]
             if missing is not None:
                  err = "required attribute '%s' missing from %s"
-                 err = erro % (missing, host)
+                 err = err % (missing, host)
                  w_err = space.wrap(err)
                  raise OperationError(space.w_TypeError, w_err)
     raise AssertionError("should not reach here")
