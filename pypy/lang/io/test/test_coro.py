@@ -39,7 +39,6 @@ def test_set_result():
     c := Coroutine currentCoroutine clone
     c setResult(99)"""
     res, space = interpret(inp)
-    print res.slots
     assert isinstance(res, W_Coroutine)
     assert res.slots['result'].value == 99
     
@@ -57,6 +56,15 @@ def test_parentCoroutine():
     assert isinstance(res, W_Coroutine)
     assert res is space.w_lobby.slots['foo'].slots['parentCoroutine']
     
+def test_coro_result_last_value():
+    inp = """
+    c := Coroutine currentCoroutine clone
+    c setRunMessage(message(99))
+    c run
+    c"""
+    res, space = interpret(inp)
+    assert res.slots['result'].value == 99
+    
 def test_coro_resume():
     py.test.skip()
     inp = """
@@ -67,6 +75,20 @@ def test_coro_resume():
     """
     res,space = interpret(inp)
     assert res.value == 23
+    
+def test_coro_resume2():
+    inp = """
+    a := Coroutine currentCoroutine clone
+    b := Coroutine currentCoroutine clone
+
+    a setRunMessage(message(b run; b resume; 4))
+    b setRunMessage(message(a resume; 5))
+    a run
+    a result
+    """
+    res, space = interpret(inp)
+    assert res.value == 4
+    assert space.w_lobby.slots['b'].slots['result'].value == 5
     
 def test_coro_stacksize():
     inp = 'Coroutine clone stackSize'
