@@ -742,8 +742,15 @@ class FunctionGcRootTracker(object):
                 if lineoffset >= 0:
                     assert  lineoffset in (1,2)
                     return [InsnStackAdjust(-4)]
-        return [InsnCall(self.currentlineno),
-                InsnSetLocal('%eax')]      # the result is there
+        insns = [InsnCall(self.currentlineno),
+                 InsnSetLocal('%eax')]      # the result is there
+        if sys.platform == 'win32':
+            # handle __stdcall calling convention:
+            # Stack cleanup is performed by the called function,
+            # Function name is decorated with "@N" where N is the stack size
+            if match and '@' in target:
+                insns.append(InsnStackAdjust(int(target.split('@')[1])))
+        return insns
 
 
 class UnrecognizedOperation(Exception):
