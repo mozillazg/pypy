@@ -121,6 +121,7 @@ class Definition(object):
     def write(self, f):
         def write_list(prefix, lst):
             for i, fn in enumerate(lst):
+                fn = fn.replace('\\', '\\\\')
                 print >> f, prefix, fn,
                 if i < len(lst)-1:
                     print >> f, '\\'
@@ -129,7 +130,7 @@ class Definition(object):
                 prefix = ' ' * len(prefix)
         name, value = self.name, self.value
         if isinstance(value, str):
-            f.write('%s = %s\n' % (name, value))
+            f.write('%s = %s\n' % (name, value.replace('\\', '\\\\')))
         else:
             write_list('%s =' % (name,), value)
         if value:
