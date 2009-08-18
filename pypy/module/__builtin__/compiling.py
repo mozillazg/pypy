@@ -24,6 +24,7 @@ in addition to any features explicitly specified.
 
     ast_node = None
     w_ast_type = space.gettypeobject(ast.AST.typedef)
+    str_ = None
     if space.is_true(space.isinstance(w_source, w_ast_type)):
         ast_node = space.interp_w(ast.mod, w_source)
         ast_node.sync_app_attrs(space)
