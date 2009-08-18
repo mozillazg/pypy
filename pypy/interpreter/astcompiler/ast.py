@@ -1512,7 +1512,7 @@ class Compare(expr):
         if w_list is not None:
             list_w = space.viewiterable(w_list)
             if list_w:
-                self.ops = [space.interp_w(cmpop, w_obj).to_simple_int() for w_obj in list_w]
+                self.ops = [space.interp_w(cmpop, w_obj).to_simple_int(space) for w_obj in list_w]
             else:
                 self.ops = None
         w_list = self.w_comparators
