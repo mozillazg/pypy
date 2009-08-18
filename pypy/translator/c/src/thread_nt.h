@@ -61,7 +61,7 @@ int RPyThreadGetIdent()
   return GetCurrentThreadId();
 }
 
-static int
+static void
 bootstrap(void *call)
 {
 	callobj *obj = (callobj*)call;
@@ -71,7 +71,6 @@ bootstrap(void *call)
 	obj->id = RPyThreadGetIdent();
 	ReleaseSemaphore(obj->done, 1, NULL);
 	func();
-	return 0;
 }
 
 long RPyThreadStart(void (*func)(void))
