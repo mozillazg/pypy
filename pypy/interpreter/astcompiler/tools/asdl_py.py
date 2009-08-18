@@ -368,6 +368,9 @@ class AppExposeVisitor(ASDLVisitor):
         self.emit("")
 
     def make_init(self, name, fields):
+        comma_fields = ", ".join(repr(field.name.value) for field in fields)
+        config = (name, comma_fields)
+        self.emit("_%s_field_unroller = unrolling_iterable([%s])" % config)
         self.emit("def %s_init(space, w_self, args):" % (name,))
         self.emit("w_self = space.descr_self_interp_w(%s, w_self)" % (name,), 1)
         for field in fields:
@@ -376,15 +379,15 @@ class AppExposeVisitor(ASDLVisitor):
         self.emit("args_w, kwargs_w = args.unpack()", 1)
         self.emit("if args_w:", 1)
         arity = len(fields)
-        comma_fields = ", ".join(repr(field.name.value) for field in fields)
         if arity:
             self.emit("if len(args_w) != %i:" % (arity,), 2)
             self.emit("w_err = space.wrap(\"%s constructor takes 0 or %i " \
                           "positional arguments\")" % (name, arity), 3)
             self.emit("raise OperationError(space.w_TypeError, w_err)", 3)
-            self.emit("for i, field in unrolling_iterable(enumerate((%s,))):" %
-                      (comma_fields,), 2)
+            self.emit("i = 0", 2)
+            self.emit("for field in _%s_field_unroller:" % (name,), 2)
             self.emit("space.setattr(w_self, space.wrap(field), args_w[i])", 3)
+            self.emit("i += 1", 3)
         else:
             self.emit("w_err = space.wrap(\"%s constructor takes no " \
                           " arguments\")" % (name,), 2)
