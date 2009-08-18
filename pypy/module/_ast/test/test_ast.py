@@ -1,14 +1,5 @@
 import py
 
-from pypy.interpreter import gateway
-
-
-app = gateway.applevel("""def get_ast(source, mode="exec"):
-    import _ast as ast
-    mod = compile(source, "<test>", mode, ast.PyCF_AST_ONLY)
-    assert isinstance(mod, ast.mod)
-    return mod""")
-
 
 class AppTestAST:
 
@@ -16,7 +7,13 @@ class AppTestAST:
         cls.w_ast = cls.space.appexec([], """():
     import _ast
     return _ast""")
-        cls.w_get_ast = app.wget(cls.space, "get_ast")
+        cls.w_get_ast = cls.space.appexec([], """():
+    def get_ast(source, mode="exec"):
+        import _ast as ast
+        mod = compile(source, "<test>", mode, ast.PyCF_AST_ONLY)
+        assert isinstance(mod, ast.mod)
+        return mod
+    return get_ast""")
 
     def test_build_ast(self):
         ast = self.ast
