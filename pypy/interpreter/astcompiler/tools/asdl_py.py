@@ -316,6 +316,15 @@ def get_unwrapper(tp, name, simple_types):
     return "space.interp_w(%s, %s)" % (tp, name)
 
 
+# CPython lets blank AST nodes (no constructor arguments) be created
+# and the attributes added later.  In CPython, it is implemented by
+# implementing applevel and c level AST as different structures and
+# copying between them.  This is hideous, so we use a slightly less
+# ugly hack in PyPy.  Each field has a bitmask which is set on the
+# initialization_state attribute when the field type is set.  When
+# sync_app_attrs() is called, it's a simple matter of removing the
+# optional field flags from initialization_state, and using XOR to
+# test if all the required fields have been set.
 class AppExposeVisitor(ASDLVisitor):
 
     def visitType(self, tp):
