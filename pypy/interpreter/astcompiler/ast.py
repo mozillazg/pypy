@@ -2838,6 +2838,7 @@ def Module_set_body(space, w_self, w_new_value):
     w_self.w_body = w_new_value
     w_self.initialization_state |= 1
 
+_Module_field_unroller = unrolling_iterable(['body'])
 def Module_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Module, w_self)
     w_self.w_body = None
@@ -2846,8 +2847,10 @@ def Module_init(space, w_self, args):
         if len(args_w) != 1:
             w_err = space.wrap("Module constructor takes 0 or 1 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('body',))):
+        i = 0
+        for field in _Module_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Module_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -2878,6 +2881,7 @@ def Interactive_set_body(space, w_self, w_new_value):
     w_self.w_body = w_new_value
     w_self.initialization_state |= 1
 
+_Interactive_field_unroller = unrolling_iterable(['body'])
 def Interactive_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Interactive, w_self)
     w_self.w_body = None
@@ -2886,8 +2890,10 @@ def Interactive_init(space, w_self, args):
         if len(args_w) != 1:
             w_err = space.wrap("Interactive constructor takes 0 or 1 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('body',))):
+        i = 0
+        for field in _Interactive_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Interactive_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -2911,6 +2917,7 @@ def Expression_set_body(space, w_self, w_new_value):
     w_self.body = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 1
 
+_Expression_field_unroller = unrolling_iterable(['body'])
 def Expression_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Expression, w_self)
     args_w, kwargs_w = args.unpack()
@@ -2918,8 +2925,10 @@ def Expression_init(space, w_self, args):
         if len(args_w) != 1:
             w_err = space.wrap("Expression constructor takes 0 or 1 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('body',))):
+        i = 0
+        for field in _Expression_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Expression_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -2950,6 +2959,7 @@ def Suite_set_body(space, w_self, w_new_value):
     w_self.w_body = w_new_value
     w_self.initialization_state |= 1
 
+_Suite_field_unroller = unrolling_iterable(['body'])
 def Suite_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Suite, w_self)
     w_self.w_body = None
@@ -2958,8 +2968,10 @@ def Suite_init(space, w_self, args):
         if len(args_w) != 1:
             w_err = space.wrap("Suite constructor takes 0 or 1 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('body',))):
+        i = 0
+        for field in _Suite_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Suite_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3055,6 +3067,7 @@ def FunctionDef_set_decorators(space, w_self, w_new_value):
     w_self.w_decorators = w_new_value
     w_self.initialization_state |= 8
 
+_FunctionDef_field_unroller = unrolling_iterable(['name', 'args', 'body', 'decorators', 'lineno', 'col_offset'])
 def FunctionDef_init(space, w_self, args):
     w_self = space.descr_self_interp_w(FunctionDef, w_self)
     w_self.w_body = None
@@ -3064,8 +3077,10 @@ def FunctionDef_init(space, w_self, args):
         if len(args_w) != 6:
             w_err = space.wrap("FunctionDef constructor takes 0 or 6 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('name', 'args', 'body', 'decorators', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _FunctionDef_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 FunctionDef_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3126,6 +3141,7 @@ def ClassDef_set_body(space, w_self, w_new_value):
     w_self.w_body = w_new_value
     w_self.initialization_state |= 4
 
+_ClassDef_field_unroller = unrolling_iterable(['name', 'bases', 'body', 'lineno', 'col_offset'])
 def ClassDef_init(space, w_self, args):
     w_self = space.descr_self_interp_w(ClassDef, w_self)
     w_self.w_bases = None
@@ -3135,8 +3151,10 @@ def ClassDef_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("ClassDef constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('name', 'bases', 'body', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _ClassDef_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 ClassDef_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3162,6 +3180,7 @@ def Return_set_value(space, w_self, w_new_value):
     w_self.value = space.interp_w(expr, w_new_value, True)
     w_self.initialization_state |= 1
 
+_Return_field_unroller = unrolling_iterable(['value', 'lineno', 'col_offset'])
 def Return_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Return, w_self)
     args_w, kwargs_w = args.unpack()
@@ -3169,8 +3188,10 @@ def Return_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Return constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('value', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Return_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Return_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3201,6 +3222,7 @@ def Delete_set_targets(space, w_self, w_new_value):
     w_self.w_targets = w_new_value
     w_self.initialization_state |= 1
 
+_Delete_field_unroller = unrolling_iterable(['targets', 'lineno', 'col_offset'])
 def Delete_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Delete, w_self)
     w_self.w_targets = None
@@ -3209,8 +3231,10 @@ def Delete_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Delete constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('targets', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Delete_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Delete_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3251,6 +3275,7 @@ def Assign_set_value(space, w_self, w_new_value):
     w_self.value = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 2
 
+_Assign_field_unroller = unrolling_iterable(['targets', 'value', 'lineno', 'col_offset'])
 def Assign_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Assign, w_self)
     w_self.w_targets = None
@@ -3259,8 +3284,10 @@ def Assign_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("Assign constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('targets', 'value', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Assign_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Assign_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3306,6 +3333,7 @@ def AugAssign_set_value(space, w_self, w_new_value):
     w_self.value = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 4
 
+_AugAssign_field_unroller = unrolling_iterable(['target', 'op', 'value', 'lineno', 'col_offset'])
 def AugAssign_init(space, w_self, args):
     w_self = space.descr_self_interp_w(AugAssign, w_self)
     args_w, kwargs_w = args.unpack()
@@ -3313,8 +3341,10 @@ def AugAssign_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("AugAssign constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('target', 'op', 'value', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _AugAssign_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 AugAssign_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3367,6 +3397,7 @@ def Print_set_nl(space, w_self, w_new_value):
     w_self.nl = space.bool_w(w_new_value)
     w_self.initialization_state |= 4
 
+_Print_field_unroller = unrolling_iterable(['dest', 'values', 'nl', 'lineno', 'col_offset'])
 def Print_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Print, w_self)
     w_self.w_values = None
@@ -3375,8 +3406,10 @@ def Print_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("Print constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('dest', 'values', 'nl', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Print_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Print_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3446,6 +3479,7 @@ def For_set_orelse(space, w_self, w_new_value):
     w_self.w_orelse = w_new_value
     w_self.initialization_state |= 8
 
+_For_field_unroller = unrolling_iterable(['target', 'iter', 'body', 'orelse', 'lineno', 'col_offset'])
 def For_init(space, w_self, args):
     w_self = space.descr_self_interp_w(For, w_self)
     w_self.w_body = None
@@ -3455,8 +3489,10 @@ def For_init(space, w_self, args):
         if len(args_w) != 6:
             w_err = space.wrap("For constructor takes 0 or 6 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('target', 'iter', 'body', 'orelse', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _For_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 For_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3517,6 +3553,7 @@ def While_set_orelse(space, w_self, w_new_value):
     w_self.w_orelse = w_new_value
     w_self.initialization_state |= 4
 
+_While_field_unroller = unrolling_iterable(['test', 'body', 'orelse', 'lineno', 'col_offset'])
 def While_init(space, w_self, args):
     w_self = space.descr_self_interp_w(While, w_self)
     w_self.w_body = None
@@ -3526,8 +3563,10 @@ def While_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("While constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('test', 'body', 'orelse', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _While_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 While_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3587,6 +3626,7 @@ def If_set_orelse(space, w_self, w_new_value):
     w_self.w_orelse = w_new_value
     w_self.initialization_state |= 4
 
+_If_field_unroller = unrolling_iterable(['test', 'body', 'orelse', 'lineno', 'col_offset'])
 def If_init(space, w_self, args):
     w_self = space.descr_self_interp_w(If, w_self)
     w_self.w_body = None
@@ -3596,8 +3636,10 @@ def If_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("If constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('test', 'body', 'orelse', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _If_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 If_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3650,6 +3692,7 @@ def With_set_body(space, w_self, w_new_value):
     w_self.w_body = w_new_value
     w_self.initialization_state |= 4
 
+_With_field_unroller = unrolling_iterable(['context_expr', 'optional_vars', 'body', 'lineno', 'col_offset'])
 def With_init(space, w_self, args):
     w_self = space.descr_self_interp_w(With, w_self)
     w_self.w_body = None
@@ -3658,8 +3701,10 @@ def With_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("With constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('context_expr', 'optional_vars', 'body', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _With_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 With_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3705,6 +3750,7 @@ def Raise_set_tback(space, w_self, w_new_value):
     w_self.tback = space.interp_w(expr, w_new_value, True)
     w_self.initialization_state |= 4
 
+_Raise_field_unroller = unrolling_iterable(['type', 'inst', 'tback', 'lineno', 'col_offset'])
 def Raise_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Raise, w_self)
     args_w, kwargs_w = args.unpack()
@@ -3712,8 +3758,10 @@ def Raise_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("Raise constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('type', 'inst', 'tback', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Raise_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Raise_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3780,6 +3828,7 @@ def TryExcept_set_orelse(space, w_self, w_new_value):
     w_self.w_orelse = w_new_value
     w_self.initialization_state |= 4
 
+_TryExcept_field_unroller = unrolling_iterable(['body', 'handlers', 'orelse', 'lineno', 'col_offset'])
 def TryExcept_init(space, w_self, args):
     w_self = space.descr_self_interp_w(TryExcept, w_self)
     w_self.w_body = None
@@ -3790,8 +3839,10 @@ def TryExcept_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("TryExcept constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('body', 'handlers', 'orelse', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _TryExcept_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 TryExcept_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3841,6 +3892,7 @@ def TryFinally_set_finalbody(space, w_self, w_new_value):
     w_self.w_finalbody = w_new_value
     w_self.initialization_state |= 2
 
+_TryFinally_field_unroller = unrolling_iterable(['body', 'finalbody', 'lineno', 'col_offset'])
 def TryFinally_init(space, w_self, args):
     w_self = space.descr_self_interp_w(TryFinally, w_self)
     w_self.w_body = None
@@ -3850,8 +3902,10 @@ def TryFinally_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("TryFinally constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('body', 'finalbody', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _TryFinally_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 TryFinally_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3886,6 +3940,7 @@ def Assert_set_msg(space, w_self, w_new_value):
     w_self.msg = space.interp_w(expr, w_new_value, True)
     w_self.initialization_state |= 2
 
+_Assert_field_unroller = unrolling_iterable(['test', 'msg', 'lineno', 'col_offset'])
 def Assert_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Assert, w_self)
     args_w, kwargs_w = args.unpack()
@@ -3893,8 +3948,10 @@ def Assert_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("Assert constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('test', 'msg', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Assert_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Assert_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3926,6 +3983,7 @@ def Import_set_names(space, w_self, w_new_value):
     w_self.w_names = w_new_value
     w_self.initialization_state |= 1
 
+_Import_field_unroller = unrolling_iterable(['names', 'lineno', 'col_offset'])
 def Import_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Import, w_self)
     w_self.w_names = None
@@ -3934,8 +3992,10 @@ def Import_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Import constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('names', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Import_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Import_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -3992,6 +4052,7 @@ def ImportFrom_set_level(space, w_self, w_new_value):
         w_self.level = space.int_w(w_new_value)
     w_self.initialization_state |= 4
 
+_ImportFrom_field_unroller = unrolling_iterable(['module', 'names', 'level', 'lineno', 'col_offset'])
 def ImportFrom_init(space, w_self, args):
     w_self = space.descr_self_interp_w(ImportFrom, w_self)
     w_self.w_names = None
@@ -4000,8 +4061,10 @@ def ImportFrom_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("ImportFrom constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('module', 'names', 'level', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _ImportFrom_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 ImportFrom_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4047,6 +4110,7 @@ def Exec_set_locals(space, w_self, w_new_value):
     w_self.locals = space.interp_w(expr, w_new_value, True)
     w_self.initialization_state |= 4
 
+_Exec_field_unroller = unrolling_iterable(['body', 'globals', 'locals', 'lineno', 'col_offset'])
 def Exec_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Exec, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4054,8 +4118,10 @@ def Exec_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("Exec constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('body', 'globals', 'locals', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Exec_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Exec_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4088,6 +4154,7 @@ def Global_set_names(space, w_self, w_new_value):
     w_self.w_names = w_new_value
     w_self.initialization_state |= 1
 
+_Global_field_unroller = unrolling_iterable(['names', 'lineno', 'col_offset'])
 def Global_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Global, w_self)
     w_self.w_names = None
@@ -4096,8 +4163,10 @@ def Global_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Global constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('names', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Global_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Global_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4121,6 +4190,7 @@ def Expr_set_value(space, w_self, w_new_value):
     w_self.value = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 1
 
+_Expr_field_unroller = unrolling_iterable(['value', 'lineno', 'col_offset'])
 def Expr_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Expr, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4128,8 +4198,10 @@ def Expr_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Expr constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('value', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Expr_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Expr_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4143,6 +4215,7 @@ Expr.typedef = typedef.TypeDef("Expr",
 )
 Expr.typedef.acceptable_as_base_class = False
 
+_Pass_field_unroller = unrolling_iterable(['lineno', 'col_offset'])
 def Pass_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Pass, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4150,8 +4223,10 @@ def Pass_init(space, w_self, args):
         if len(args_w) != 2:
             w_err = space.wrap("Pass constructor takes 0 or 2 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('lineno', 'col_offset',))):
+        i = 0
+        for field in _Pass_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Pass_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4164,6 +4239,7 @@ Pass.typedef = typedef.TypeDef("Pass",
 )
 Pass.typedef.acceptable_as_base_class = False
 
+_Break_field_unroller = unrolling_iterable(['lineno', 'col_offset'])
 def Break_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Break, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4171,8 +4247,10 @@ def Break_init(space, w_self, args):
         if len(args_w) != 2:
             w_err = space.wrap("Break constructor takes 0 or 2 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('lineno', 'col_offset',))):
+        i = 0
+        for field in _Break_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Break_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4185,6 +4263,7 @@ Break.typedef = typedef.TypeDef("Break",
 )
 Break.typedef.acceptable_as_base_class = False
 
+_Continue_field_unroller = unrolling_iterable(['lineno', 'col_offset'])
 def Continue_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Continue, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4192,8 +4271,10 @@ def Continue_init(space, w_self, args):
         if len(args_w) != 2:
             w_err = space.wrap("Continue constructor takes 0 or 2 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('lineno', 'col_offset',))):
+        i = 0
+        for field in _Continue_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Continue_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4262,6 +4343,7 @@ def BoolOp_set_values(space, w_self, w_new_value):
     w_self.w_values = w_new_value
     w_self.initialization_state |= 2
 
+_BoolOp_field_unroller = unrolling_iterable(['op', 'values', 'lineno', 'col_offset'])
 def BoolOp_init(space, w_self, args):
     w_self = space.descr_self_interp_w(BoolOp, w_self)
     w_self.w_values = None
@@ -4270,8 +4352,10 @@ def BoolOp_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("BoolOp constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('op', 'values', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _BoolOp_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 BoolOp_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4317,6 +4401,7 @@ def BinOp_set_right(space, w_self, w_new_value):
     w_self.right = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 4
 
+_BinOp_field_unroller = unrolling_iterable(['left', 'op', 'right', 'lineno', 'col_offset'])
 def BinOp_init(space, w_self, args):
     w_self = space.descr_self_interp_w(BinOp, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4324,8 +4409,10 @@ def BinOp_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("BinOp constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('left', 'op', 'right', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _BinOp_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 BinOp_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4362,6 +4449,7 @@ def UnaryOp_set_operand(space, w_self, w_new_value):
     w_self.operand = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 2
 
+_UnaryOp_field_unroller = unrolling_iterable(['op', 'operand', 'lineno', 'col_offset'])
 def UnaryOp_init(space, w_self, args):
     w_self = space.descr_self_interp_w(UnaryOp, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4369,8 +4457,10 @@ def UnaryOp_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("UnaryOp constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('op', 'operand', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _UnaryOp_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 UnaryOp_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4405,6 +4495,7 @@ def Lambda_set_body(space, w_self, w_new_value):
     w_self.body = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 2
 
+_Lambda_field_unroller = unrolling_iterable(['args', 'body', 'lineno', 'col_offset'])
 def Lambda_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Lambda, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4412,8 +4503,10 @@ def Lambda_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("Lambda constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('args', 'body', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Lambda_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Lambda_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4458,6 +4551,7 @@ def IfExp_set_orelse(space, w_self, w_new_value):
     w_self.orelse = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 4
 
+_IfExp_field_unroller = unrolling_iterable(['test', 'body', 'orelse', 'lineno', 'col_offset'])
 def IfExp_init(space, w_self, args):
     w_self = space.descr_self_interp_w(IfExp, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4465,8 +4559,10 @@ def IfExp_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("IfExp constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('test', 'body', 'orelse', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _IfExp_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 IfExp_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4516,6 +4612,7 @@ def Dict_set_values(space, w_self, w_new_value):
     w_self.w_values = w_new_value
     w_self.initialization_state |= 2
 
+_Dict_field_unroller = unrolling_iterable(['keys', 'values', 'lineno', 'col_offset'])
 def Dict_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Dict, w_self)
     w_self.w_keys = None
@@ -4525,8 +4622,10 @@ def Dict_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("Dict constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('keys', 'values', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Dict_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Dict_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4568,6 +4667,7 @@ def ListComp_set_generators(space, w_self, w_new_value):
     w_self.w_generators = w_new_value
     w_self.initialization_state |= 2
 
+_ListComp_field_unroller = unrolling_iterable(['elt', 'generators', 'lineno', 'col_offset'])
 def ListComp_init(space, w_self, args):
     w_self = space.descr_self_interp_w(ListComp, w_self)
     w_self.w_generators = None
@@ -4576,8 +4676,10 @@ def ListComp_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("ListComp constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('elt', 'generators', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _ListComp_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 ListComp_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4619,6 +4721,7 @@ def GeneratorExp_set_generators(space, w_self, w_new_value):
     w_self.w_generators = w_new_value
     w_self.initialization_state |= 2
 
+_GeneratorExp_field_unroller = unrolling_iterable(['elt', 'generators', 'lineno', 'col_offset'])
 def GeneratorExp_init(space, w_self, args):
     w_self = space.descr_self_interp_w(GeneratorExp, w_self)
     w_self.w_generators = None
@@ -4627,8 +4730,10 @@ def GeneratorExp_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("GeneratorExp constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('elt', 'generators', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _GeneratorExp_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 GeneratorExp_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4653,6 +4758,7 @@ def Yield_set_value(space, w_self, w_new_value):
     w_self.value = space.interp_w(expr, w_new_value, True)
     w_self.initialization_state |= 1
 
+_Yield_field_unroller = unrolling_iterable(['value', 'lineno', 'col_offset'])
 def Yield_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Yield, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4660,8 +4766,10 @@ def Yield_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Yield constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('value', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Yield_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Yield_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4719,6 +4827,7 @@ def Compare_set_comparators(space, w_self, w_new_value):
     w_self.w_comparators = w_new_value
     w_self.initialization_state |= 4
 
+_Compare_field_unroller = unrolling_iterable(['left', 'ops', 'comparators', 'lineno', 'col_offset'])
 def Compare_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Compare, w_self)
     w_self.w_ops = None
@@ -4728,8 +4837,10 @@ def Compare_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("Compare constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('left', 'ops', 'comparators', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Compare_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Compare_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4809,6 +4920,7 @@ def Call_set_kwargs(space, w_self, w_new_value):
     w_self.kwargs = space.interp_w(expr, w_new_value, True)
     w_self.initialization_state |= 16
 
+_Call_field_unroller = unrolling_iterable(['func', 'args', 'keywords', 'starargs', 'kwargs', 'lineno', 'col_offset'])
 def Call_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Call, w_self)
     w_self.w_args = None
@@ -4818,8 +4930,10 @@ def Call_init(space, w_self, args):
         if len(args_w) != 7:
             w_err = space.wrap("Call constructor takes 0 or 7 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('func', 'args', 'keywords', 'starargs', 'kwargs', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Call_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Call_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4847,6 +4961,7 @@ def Repr_set_value(space, w_self, w_new_value):
     w_self.value = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 1
 
+_Repr_field_unroller = unrolling_iterable(['value', 'lineno', 'col_offset'])
 def Repr_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Repr, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4854,8 +4969,10 @@ def Repr_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Repr constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('value', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Repr_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Repr_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4879,6 +4996,7 @@ def Num_set_n(space, w_self, w_new_value):
     w_self.n = w_new_value
     w_self.initialization_state |= 1
 
+_Num_field_unroller = unrolling_iterable(['n', 'lineno', 'col_offset'])
 def Num_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Num, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4886,8 +5004,10 @@ def Num_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Num constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('n', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Num_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Num_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4914,6 +5034,7 @@ def Str_set_s(space, w_self, w_new_value):
     w_self.s = w_new_value
     w_self.initialization_state |= 1
 
+_Str_field_unroller = unrolling_iterable(['s', 'lineno', 'col_offset'])
 def Str_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Str, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4921,8 +5042,10 @@ def Str_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Str constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('s', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Str_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Str_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -4967,6 +5090,7 @@ def Attribute_set_ctx(space, w_self, w_new_value):
     w_self.ctx = obj.to_simple_int()
     w_self.initialization_state |= 4
 
+_Attribute_field_unroller = unrolling_iterable(['value', 'attr', 'ctx', 'lineno', 'col_offset'])
 def Attribute_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Attribute, w_self)
     args_w, kwargs_w = args.unpack()
@@ -4974,8 +5098,10 @@ def Attribute_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("Attribute constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('value', 'attr', 'ctx', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Attribute_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Attribute_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5022,6 +5148,7 @@ def Subscript_set_ctx(space, w_self, w_new_value):
     w_self.ctx = obj.to_simple_int()
     w_self.initialization_state |= 4
 
+_Subscript_field_unroller = unrolling_iterable(['value', 'slice', 'ctx', 'lineno', 'col_offset'])
 def Subscript_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Subscript, w_self)
     args_w, kwargs_w = args.unpack()
@@ -5029,8 +5156,10 @@ def Subscript_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("Subscript constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('value', 'slice', 'ctx', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Subscript_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Subscript_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5067,6 +5196,7 @@ def Name_set_ctx(space, w_self, w_new_value):
     w_self.ctx = obj.to_simple_int()
     w_self.initialization_state |= 2
 
+_Name_field_unroller = unrolling_iterable(['id', 'ctx', 'lineno', 'col_offset'])
 def Name_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Name, w_self)
     args_w, kwargs_w = args.unpack()
@@ -5074,8 +5204,10 @@ def Name_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("Name constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('id', 'ctx', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Name_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Name_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5118,6 +5250,7 @@ def List_set_ctx(space, w_self, w_new_value):
     w_self.ctx = obj.to_simple_int()
     w_self.initialization_state |= 2
 
+_List_field_unroller = unrolling_iterable(['elts', 'ctx', 'lineno', 'col_offset'])
 def List_init(space, w_self, args):
     w_self = space.descr_self_interp_w(List, w_self)
     w_self.w_elts = None
@@ -5126,8 +5259,10 @@ def List_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("List constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('elts', 'ctx', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _List_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 List_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5170,6 +5305,7 @@ def Tuple_set_ctx(space, w_self, w_new_value):
     w_self.ctx = obj.to_simple_int()
     w_self.initialization_state |= 2
 
+_Tuple_field_unroller = unrolling_iterable(['elts', 'ctx', 'lineno', 'col_offset'])
 def Tuple_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Tuple, w_self)
     w_self.w_elts = None
@@ -5178,8 +5314,10 @@ def Tuple_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("Tuple constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('elts', 'ctx', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Tuple_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Tuple_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5204,6 +5342,7 @@ def Const_set_value(space, w_self, w_new_value):
     w_self.value = w_new_value
     w_self.initialization_state |= 1
 
+_Const_field_unroller = unrolling_iterable(['value', 'lineno', 'col_offset'])
 def Const_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Const, w_self)
     args_w, kwargs_w = args.unpack()
@@ -5211,8 +5350,10 @@ def Const_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Const constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('value', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _Const_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Const_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5280,6 +5421,7 @@ slice.typedef = typedef.TypeDef("slice",
 )
 slice.typedef.acceptable_as_base_class = False
 
+_Ellipsis_field_unroller = unrolling_iterable([])
 def Ellipsis_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Ellipsis, w_self)
     args_w, kwargs_w = args.unpack()
@@ -5328,6 +5470,7 @@ def Slice_set_step(space, w_self, w_new_value):
     w_self.step = space.interp_w(expr, w_new_value, True)
     w_self.initialization_state |= 4
 
+_Slice_field_unroller = unrolling_iterable(['lower', 'upper', 'step'])
 def Slice_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Slice, w_self)
     args_w, kwargs_w = args.unpack()
@@ -5335,8 +5478,10 @@ def Slice_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("Slice constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('lower', 'upper', 'step',))):
+        i = 0
+        for field in _Slice_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Slice_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5369,6 +5514,7 @@ def ExtSlice_set_dims(space, w_self, w_new_value):
     w_self.w_dims = w_new_value
     w_self.initialization_state |= 1
 
+_ExtSlice_field_unroller = unrolling_iterable(['dims'])
 def ExtSlice_init(space, w_self, args):
     w_self = space.descr_self_interp_w(ExtSlice, w_self)
     w_self.w_dims = None
@@ -5377,8 +5523,10 @@ def ExtSlice_init(space, w_self, args):
         if len(args_w) != 1:
             w_err = space.wrap("ExtSlice constructor takes 0 or 1 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('dims',))):
+        i = 0
+        for field in _ExtSlice_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 ExtSlice_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5402,6 +5550,7 @@ def Index_set_value(space, w_self, w_new_value):
     w_self.value = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 1
 
+_Index_field_unroller = unrolling_iterable(['value'])
 def Index_init(space, w_self, args):
     w_self = space.descr_self_interp_w(Index, w_self)
     args_w, kwargs_w = args.unpack()
@@ -5409,8 +5558,10 @@ def Index_init(space, w_self, args):
         if len(args_w) != 1:
             w_err = space.wrap("Index constructor takes 0 or 1 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('value',))):
+        i = 0
+        for field in _Index_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 Index_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5681,6 +5832,7 @@ def comprehension_set_ifs(space, w_self, w_new_value):
     w_self.w_ifs = w_new_value
     w_self.initialization_state |= 4
 
+_comprehension_field_unroller = unrolling_iterable(['target', 'iter', 'ifs'])
 def comprehension_init(space, w_self, args):
     w_self = space.descr_self_interp_w(comprehension, w_self)
     w_self.w_ifs = None
@@ -5689,8 +5841,10 @@ def comprehension_init(space, w_self, args):
         if len(args_w) != 3:
             w_err = space.wrap("comprehension constructor takes 0 or 3 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('target', 'iter', 'ifs',))):
+        i = 0
+        for field in _comprehension_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 comprehension_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5763,6 +5917,7 @@ def excepthandler_set_col_offset(space, w_self, w_new_value):
     w_self.col_offset = space.int_w(w_new_value)
     w_self.initialization_state |= 16
 
+_excepthandler_field_unroller = unrolling_iterable(['type', 'name', 'body', 'lineno', 'col_offset'])
 def excepthandler_init(space, w_self, args):
     w_self = space.descr_self_interp_w(excepthandler, w_self)
     w_self.w_body = None
@@ -5771,8 +5926,10 @@ def excepthandler_init(space, w_self, args):
         if len(args_w) != 5:
             w_err = space.wrap("excepthandler constructor takes 0 or 5 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('type', 'name', 'body', 'lineno', 'col_offset',))):
+        i = 0
+        for field in _excepthandler_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 excepthandler_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5850,6 +6007,7 @@ def arguments_set_defaults(space, w_self, w_new_value):
     w_self.w_defaults = w_new_value
     w_self.initialization_state |= 8
 
+_arguments_field_unroller = unrolling_iterable(['args', 'vararg', 'kwarg', 'defaults'])
 def arguments_init(space, w_self, args):
     w_self = space.descr_self_interp_w(arguments, w_self)
     w_self.w_args = None
@@ -5859,8 +6017,10 @@ def arguments_init(space, w_self, args):
         if len(args_w) != 4:
             w_err = space.wrap("arguments constructor takes 0 or 4 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('args', 'vararg', 'kwarg', 'defaults',))):
+        i = 0
+        for field in _arguments_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 arguments_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5897,6 +6057,7 @@ def keyword_set_value(space, w_self, w_new_value):
     w_self.value = space.interp_w(expr, w_new_value, False)
     w_self.initialization_state |= 2
 
+_keyword_field_unroller = unrolling_iterable(['arg', 'value'])
 def keyword_init(space, w_self, args):
     w_self = space.descr_self_interp_w(keyword, w_self)
     args_w, kwargs_w = args.unpack()
@@ -5904,8 +6065,10 @@ def keyword_init(space, w_self, args):
         if len(args_w) != 2:
             w_err = space.wrap("keyword constructor takes 0 or 2 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('arg', 'value',))):
+        i = 0
+        for field in _keyword_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 keyword_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
@@ -5943,6 +6106,7 @@ def alias_set_asname(space, w_self, w_new_value):
         w_self.asname = space.str_w(w_new_value)
     w_self.initialization_state |= 2
 
+_alias_field_unroller = unrolling_iterable(['name', 'asname'])
 def alias_init(space, w_self, args):
     w_self = space.descr_self_interp_w(alias, w_self)
     args_w, kwargs_w = args.unpack()
@@ -5950,8 +6114,10 @@ def alias_init(space, w_self, args):
         if len(args_w) != 2:
             w_err = space.wrap("alias constructor takes 0 or 2 positional arguments")
             raise OperationError(space.w_TypeError, w_err)
-        for i, field in unrolling_iterable(enumerate(('name', 'asname',))):
+        i = 0
+        for field in _alias_field_unroller:
             space.setattr(w_self, space.wrap(field), args_w[i])
+            i += 1
     for field, w_value in kwargs_w.iteritems():
         space.setattr(w_self, space.wrap(field), w_value)
 alias_init.unwrap_spec = [ObjSpace, W_Root, Arguments]
