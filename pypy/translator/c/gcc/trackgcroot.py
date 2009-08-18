@@ -188,8 +188,10 @@ class GcRootTracker(object):
         if functionlines:
             yield in_function, functionlines
 
+    _find_functions_mingw32 = _find_functions_darwin
+
     def process(self, iterlines, newfile, entrypoint='main', filename='?'):
-        if self.format == 'darwin':
+        if self.format in ('darwin', 'mingw32'):
             entrypoint = '_' + entrypoint
         for in_function, lines in self.find_functions(iterlines):
             if in_function:
@@ -230,6 +232,9 @@ class FunctionGcRootTracker(object):
             assert funcname == match.group(1)
             assert funcname == match.group(2)
         elif format == 'darwin':
+            match = r_functionstart_darwin.match(lines[0])
+            funcname = '_'+match.group(1)
+        elif format == 'mingw32':
             match = r_functionstart_darwin.match(lines[0])
             funcname = '_'+match.group(1)
         else:
@@ -1107,6 +1112,8 @@ if __name__ == '__main__':
             break
     if sys.platform == 'darwin':
         format = 'darwin'
+    elif sys.platform == 'win32':
+        format = 'mingw32'
     else:
         format = 'elf'
     tracker = GcRootTracker(verbose=verbose, shuffle=shuffle, format=format)
