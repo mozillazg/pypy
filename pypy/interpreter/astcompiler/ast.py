@@ -4046,10 +4046,7 @@ def ImportFrom_get_level(space, w_self):
     return space.wrap(w_self.level)
 
 def ImportFrom_set_level(space, w_self, w_new_value):
-    if space.is_w(w_new_value, space.w_None):
-        w_self.level = None
-    else:
-        w_self.level = space.int_w(w_new_value)
+    w_self.level = space.int_w(w_new_value)
     w_self.initialization_state |= 4
 
 _ImportFrom_field_unroller = unrolling_iterable(['module', 'names', 'level', 'lineno', 'col_offset'])

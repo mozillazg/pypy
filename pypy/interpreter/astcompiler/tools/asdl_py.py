@@ -463,7 +463,7 @@ class AppExposeVisitor(ASDLVisitor):
                           config, 1)
         else:
             level = 1
-            if field.opt:
+            if field.opt and field.type.value != "int":
                 self.emit("if space.is_w(w_new_value, space.w_None):", 1)
                 self.emit("w_self.%s = None" % (field.name,), 2)
                 level += 1
