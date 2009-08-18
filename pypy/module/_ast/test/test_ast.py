@@ -156,6 +156,8 @@ class AppTestAST:
         raises(AttributeError, ast.Module, nothing=23)
 
     def test_future(self):
-        skip("have to write an AST future parser")
         mod = self.get_ast("from __future__ import with_statement")
         compile(mod, "<test>", "exec")
+        mod = self.get_ast("from __future__ import with_statement; import y; " \
+                               "from __future__ import nested_scopes")
+        raises(SyntaxError, compile, mod, "<test>", "exec")
