@@ -225,7 +225,8 @@ class PythonAstCompiler(PyCodeCompiler):
 
     def compile_ast(self, node, filename, mode, flags):
         from pypy.interpreter.pyparser.pyparse import CompileInfo
-        info = CompileInfo(filename, mode, flags)
+        from pypy.interpreter.astcompiler.misc import parse_future
+        info = CompileInfo(filename, mode, flags, parse_future(node))
         return self._compile_ast(node, info)
 
     def _compile_ast(self, node, info):
