@@ -312,8 +312,9 @@ def get_unwrapper(tp, name, simple_types):
     if tp in asdl.builtin_types:
         return "space.%s(%s)" % (asdl_type_map[tp], name)
     elif tp in simple_types:
-        return "%s.to_simple_int(space)" % (name,)
-    return "space.interp_w(%s, %s)" % (tp, name)
+        return "space.interp_w(%s, %s).to_simple_int()" % (tp, name)
+    else:
+        return "space.interp_w(%s, %s)" % (tp, name)
 
 
 # CPython lets blank AST nodes (no constructor arguments) be created
