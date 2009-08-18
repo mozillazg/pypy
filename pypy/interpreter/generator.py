@@ -2,6 +2,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.rlib.rarithmetic import intmask
+from pypy.interpreter.pyopcode import LoopBlock
 
 
 class GeneratorIterator(Wrappable):
@@ -126,4 +127,7 @@ return next yielded value or raise StopIteration."""
 
     def __del__(self):
         if not self.frame.frame_finished_execution:
-            self._enqueue_for_destruction(self.space)
+            for block in self.frame.blockstack:
+                if not isinstance(block, LoopBlock):
+                    self._enqueue_for_destruction(self.space)
+                    break
