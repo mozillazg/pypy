@@ -65,7 +65,7 @@ class ASTNodeVisitor(ASDLVisitor):
             for i, cons in enumerate(sum.types):
                 self.emit("class _%s(%s):" % (cons.name, base))
                 self.emit("")
-                self.emit("def to_simple_int(self):", 1)
+                self.emit("def to_simple_int(self, space):", 1)
                 self.emit("return %i" % (i + 1,), 2)
                 self.emit("")
             for i, cons in enumerate(sum.types):
@@ -312,7 +312,7 @@ def get_unwrapper(tp, name, simple_types):
     if tp in asdl.builtin_types:
         return "space.%s(%s)" % (asdl_type_map[tp], name)
     elif tp in simple_types:
-        return "%s.to_simple_int()" % (name,)
+        return "%s.to_simple_int(space)" % (name,)
     return "space.interp_w(%s, %s)" % (tp, name)
 
 
@@ -456,7 +456,8 @@ class AppExposeVisitor(ASDLVisitor):
             if field.type.value in self.data.simple_types:
                 self.emit("obj = space.interp_w(%s, w_new_value)" % \
                               (field.type,), 1)
-                self.emit("w_self.%s = obj.to_simple_int()" % (field.name,), 1)
+                self.emit("w_self.%s = obj.to_simple_int(space)" %
+                          (field.name,), 1)
             else:
                 config = (field.name, field.type, repr(field.opt))
                 self.emit("w_self.%s = space.interp_w(%s, w_new_value, %s)" %
