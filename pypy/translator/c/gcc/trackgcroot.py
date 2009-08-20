@@ -23,15 +23,16 @@ r_sectionstart         = re.compile(r"\t\.("+'|'.join(OTHERSECTIONS)+").*$")
 r_functionstart_darwin = re.compile(r"_(\w+):\s*$")
 
 # inside functions
-r_label         = re.compile(r"([.]?\w+)[:]\s*$")
+LABEL           = r'([.]?[\w$@]+)'
+r_label         = re.compile(LABEL+"[:]\s*$")
 r_globl         = re.compile(r"\t[.]globl\t(\w+)\s*$")
 r_insn          = re.compile(r"\t([a-z]\w*)\s")
-r_jump          = re.compile(r"\tj\w+\s+([.]?[\w$]+)\s*$")
+r_jump          = re.compile(r"\tj\w+\s+"+LABEL+"\s*$")
 OPERAND         =           r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
 r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
 r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
-r_jmp_switch    = re.compile(r"\tjmp\t[*]([.]?\w+)[(]")
-r_jmptable_item = re.compile(r"\t.long\t([.]?\w+)\s*$")
+r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
+r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"\s*$")
 r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text")
 r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
 LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
