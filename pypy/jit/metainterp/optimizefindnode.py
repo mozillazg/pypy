@@ -384,6 +384,14 @@ class __extend__(NotSpecNode):
     def matches_instance_node(self, exitnode):
         return True
 
+class __extend__(ConstantSpecNode):
+    def make_instance_node(self):
+        raise AssertionError, "not implemented (but not used actually)"
+    def matches_instance_node(self, exitnode):
+        if exitnode.knownvaluebox is None:
+            return False
+        return self.constbox.equals(exitnode.knownvaluebox)
+
 class __extend__(VirtualInstanceSpecNode):
     def make_instance_node(self):
         instnode = InstanceNode()
