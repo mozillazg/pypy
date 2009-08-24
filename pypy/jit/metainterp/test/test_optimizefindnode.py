@@ -52,6 +52,7 @@ class LLtypeMixin(object):
     node = lltype.malloc(NODE)
     nodebox = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node))
     myptr = nodebox.value
+    myptr2 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(NODE))
     nodebox2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node))
     nodesize = cpu.sizeof(NODE)
     nodesize2 = cpu.sizeof(NODE2)
@@ -90,6 +91,7 @@ class OOtypeMixin(object):
     node = ootype.new(NODE)
     nodebox = BoxObj(ootype.cast_to_object(node))
     myptr = nodebox.value
+    myptr2 = ootype.cast_to_object(ootype.new(NODE))
     nodebox2 = BoxObj(ootype.cast_to_object(node))
     valuedescr = cpu.fielddescrof(NODE, 'value')
     nextdescr = cpu.fielddescrof(NODE, 'next')
@@ -691,6 +693,17 @@ class BaseTestOptimizeFindNode(BaseTest):
         jump(p0)
         """
         self.find_bridge(ops, 'Not', 'Not')
+
+    def test_bridge_simple_constant(self):
+        ops = """
+        [p0]
+        guard_value(p0, ConstPtr(myptr))
+            fail()
+        jump(p0)
+        """
+        self.find_bridge(ops, 'Not', 'Not')
+        self.find_bridge(ops, 'Not', 'Constant(myptr)')
+        self.find_bridge(ops, 'Not', 'Constant(myptr2)', mismatch=True)
 
     def test_bridge_simple_virtual_1(self):
         ops = """
