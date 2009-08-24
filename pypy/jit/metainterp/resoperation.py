@@ -189,7 +189,6 @@ _oplist = [
     'NEW_ARRAY',
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
-    'CALL_IF',
     'SETARRAYITEM_GC',
     'SETFIELD_GC',
     'SETFIELD_RAW',

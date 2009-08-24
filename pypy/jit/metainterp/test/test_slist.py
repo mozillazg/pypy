@@ -35,8 +35,6 @@ class ListTests:
             return m
         res = self.interp_operations(f, [11], listops=True)
         assert res == 49
-        import pdb
-        pdb.set_trace()
         self.check_history_(call=5)
 
     def test_list_of_voids(self):
@@ -81,7 +79,7 @@ class ListTests:
             return lst[i]
         res = self.meta_interp(f, [21], listops=True)
         assert res == f(21)
-        self.check_loops(call=0, call_if=0)
+        self.check_loops(call=0)
 
 # we don't support resizable lists on ootype
 #class TestOOtype(ListTests, OOJitMixin):
