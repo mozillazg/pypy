@@ -374,6 +374,13 @@ class MIFrame(object):
                 rop.INT_ADD, [indexbox, lenbox])
         self.make_result_box(indexbox)
 
+    @arguments("box", "descr", "descr", "box")
+    def opimpl_getlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox):
+        arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
+                                          [listbox], descr=itemsdescr)
+        self.execute(rop.GETARRAYITEM_GC, [arraybox, indexbox],
+                     descr=arraydescr)
+
     @arguments("orgpc", "box")
     def opimpl_check_zerodivisionerror(self, pc, box):
         nonzerobox = self.metainterp.execute_and_record(
