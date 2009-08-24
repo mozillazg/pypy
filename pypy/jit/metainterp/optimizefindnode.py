@@ -48,6 +48,9 @@ class InstanceNode(object):
     def __init__(self, fromstart=False):
         self.fromstart = fromstart    # for loops only: present since the start
 
+    def is_constant(self):
+        return self.knownvaluebox is not None
+
     def add_escape_dependency(self, other):
         assert not self.escaped
         if self.dependencies is None:
@@ -110,12 +113,15 @@ class NodeFinder(object):
 
     def getnode(self, box):
         if isinstance(box, Const):
-            node = InstanceNode()
-            node.unique = UNIQUE_NO
-            node.knownvaluebox = box
-            self.nodes[box] = node
-            return node
+            return self.set_constant_node(box)
         return self.nodes.get(box, self.node_escaped)
+
+    def set_constant_node(self, box):
+        node = InstanceNode()
+        node.unique = UNIQUE_NO
+        node.knownvaluebox = box
+        self.nodes[box] = node
+        return node
 
     def find_nodes(self, operations):
         for op in operations:
@@ -128,6 +134,13 @@ class NodeFinder(object):
                 self.find_nodes_default(op)
 
     def find_nodes_default(self, op):
+        if op.is_always_pure():
+            for arg in op.args:
+                node = self.getnode(arg)
+                if not node.is_constant():
+                    break
+            else:
+                self.set_constant_node(op.result)
         # default case: mark the arguments as escaping
         for box in op.args:
             self.getnode(box).mark_escaped()
@@ -163,12 +176,13 @@ class NodeFinder(object):
 
     def find_nodes_GUARD_CLASS(self, op):
         instnode = self.getnode(op.args[0])
-        if instnode.fromstart:    # only useful in this case
+        if instnode.fromstart:    # only useful (and safe) in this case
             instnode.knownclsbox = op.args[1]
 
     def find_nodes_GUARD_VALUE(self, op):
         instnode = self.getnode(op.args[0])
-        instnode.knownvaluebox = op.args[1]
+        if instnode.fromstart:    # only useful (and safe) in this case
+            instnode.knownvaluebox = op.args[1]
 
     def find_nodes_SETFIELD_GC(self, op):
         instnode = self.getnode(op.args[0])
@@ -295,8 +309,9 @@ class PerfectSpecializationFinder(NodeFinder):
         assert inputnode.fromstart
         if inputnode.escaped:
             return prebuiltNotSpecNode
-        if inputnode.knownvaluebox is not None and \
-           inputnode.knownvaluebox == exitnode.knownvaluebox:
+        if inputnode.is_constant() and \
+           exitnode.is_constant() and \
+           inputnode.knownvaluebox.equals(exitnode.knownvaluebox):
             return ConstantSpecNode(inputnode.knownvaluebox)
         unique = exitnode.unique
         if unique == UNIQUE_NO:

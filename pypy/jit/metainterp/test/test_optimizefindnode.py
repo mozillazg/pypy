@@ -177,9 +177,10 @@ class BaseTest(object):
 
 class BaseTestOptimizeFindNode(BaseTest):
 
-    def find_nodes(self, ops, spectext, boxkinds=None):
+    def find_nodes(self, ops, spectext, boxkinds=None, **values):
         assert boxkinds is None or isinstance(boxkinds, dict)
         loop = self.parse(ops, boxkinds=boxkinds)
+        loop.setvalues(**values)
         perfect_specialization_finder = PerfectSpecializationFinder()
         perfect_specialization_finder.find_nodes_loop(loop)
         self.check_specnodes(loop.specnodes, spectext)
@@ -481,7 +482,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         """
         # The answer must contain the 'value' field, because otherwise
         # we might get incorrect results: when tracing, maybe i0 was not 0.
-        self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Constant(0))')
+        self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)')
 
     def test_find_nodes_nonvirtual_guard_class(self):
         ops = """
@@ -654,21 +655,29 @@ class BaseTestOptimizeFindNode(BaseTest):
             fail()
         jump(ConstPtr(myptr))
         """
-        expected = """
-        [p1]
-        jump(p1)
-        """
         self.find_nodes(ops, 'Constant(myptr)')
+
+    def test_find_nodes_guard_value_same_as_constant(self):
+        ops = """
+        [p1]
+        guard_value(p1, ConstPtr(myptr))
+            fail()
+        p2 = same_as(ConstPtr(myptr))
+        jump(p2)
+        """
+        self.find_nodes(ops, 'Constant(myptr)', p2=self.myptr)
+
 
     # ------------------------------
     # Bridge tests
 
     def find_bridge(self, ops, inputspectext, outputspectext, boxkinds=None,
-                    mismatch=False):
+                    mismatch=False, **values):
         assert boxkinds is None or isinstance(boxkinds, dict)
         inputspecnodes = self.unpack_specnodes(inputspectext)
         outputspecnodes = self.unpack_specnodes(outputspectext)
         bridge = self.parse(ops, boxkinds=boxkinds)
+        bridge.setvalues(**values)
         bridge_specialization_finder = BridgeSpecializationFinder()
         bridge_specialization_finder.find_nodes_bridge(bridge, inputspecnodes)
         matches = bridge_specialization_finder.bridge_matches(outputspecnodes)
@@ -695,15 +704,16 @@ class BaseTestOptimizeFindNode(BaseTest):
         self.find_bridge(ops, 'Not', 'Not')
 
     def test_bridge_simple_constant(self):
+        py.test.skip('fixme')
         ops = """
         [p0]
         guard_value(p0, ConstPtr(myptr))
             fail()
         jump(p0)
         """
-        self.find_bridge(ops, 'Not', 'Not')
-        self.find_bridge(ops, 'Not', 'Constant(myptr)')
-        self.find_bridge(ops, 'Not', 'Constant(myptr2)', mismatch=True)
+        #self.find_bridge(ops, 'Not', 'Not')
+        self.find_bridge(ops, None, 'Constant(myptr)', p0=self.myptr)
+        #self.find_bridge(ops, 'Not', 'Constant(myptr2)', mismatch=True)
 
     def test_bridge_simple_virtual_1(self):
         ops = """
