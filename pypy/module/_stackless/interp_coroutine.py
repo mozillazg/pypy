@@ -174,7 +174,7 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
 
     def descr__setstate__(self, space, w_args):
         try:
-            w_flags, w_frame, w_thunk, w_parent = space.unpackiterable(w_args,
+            w_flags, w_state, w_thunk, w_parent = space.unpackiterable(w_args,
                                                              expected_length=4)
         except UnpackValueError, e:
             raise OperationError(space.w_ValueError, space.wrap(e.msg))
@@ -183,7 +183,7 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
             w_parent = self.w_getmain(space)
         self.parent = space.interp_w(AppCoroutine, w_parent)
         ec = self.space.getexecutioncontext()
-        self.subctx.setstate(space, w_frame)
+        self.subctx.setstate(space, w_state)
         self.reconstruct_framechain()
         if space.is_w(w_thunk, space.w_None):
             self.thunk = None

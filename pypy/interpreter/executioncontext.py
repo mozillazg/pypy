@@ -73,6 +73,7 @@ class ExecutionContext:
             f_back.f_forward = None
         if not we_are_jitted() or self.some_frame is frame:
             self.some_frame = f_back
+        self.framestackdepth -= 1
         
         if self.w_tracefunc is not None and not frame.hide():
             self.space.frame_trace_action.fire()
@@ -112,20 +113,19 @@ class ExecutionContext:
 
         # the following interface is for pickling and unpickling
         def getstate(self, space):
-            # we just save the top frame, which brings the whole frame stack
-            f = self.topframe
-            return space.wrap(f)
+            # XXX we could just save the top frame, which brings
+            # the whole frame stack, but right now we get the whole stack
+            items = [space.wrap(f) for f in self.getframestack()]
+            return space.newtuple(items)
 
-        def setstate(self, space, w_frame):
-            f = space.interp_w(PyFrame, w_frame)
-            self.topframe = f
-            count = 0
-            if f:
-                count = 1
-                while f.f_back:
-                    count += 1
-                    f = f.f_back
-            self.framestackdepth = count
+        def setstate(self, space, w_state):
+            from pypy.interpreter.pyframe import PyFrame
+            frames_w = space.unpackiterable(w_state)
+            if len(frames_w) > 0:
+                self.topframe = space.interp_w(PyFrame, frames_w[-1])
+            else:
+                self.topframe = None
+            self.framestackdepth = len(frames_w)
 
         def getframestack(self):
             index = self.framestackdepth
