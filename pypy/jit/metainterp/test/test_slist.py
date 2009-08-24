@@ -20,7 +20,6 @@ class ListTests:
         assert res == 9
 
     def test_list_operations(self):
-        py.test.skip("not yet")
         class FooBar:
             def __init__(self, z):
                 self.z = z
@@ -36,6 +35,9 @@ class ListTests:
             return m
         res = self.interp_operations(f, [11], listops=True)
         assert res == 49
+        import pdb
+        pdb.set_trace()
+        self.check_history_(call=5)
 
     def test_list_of_voids(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'lst'])
@@ -64,7 +66,7 @@ class ListTests:
         res = self.meta_interp(f, [21], listops=True, optimizer=simple_optimize)
         assert res == 0
 
-    def test_resizable_list(self):
+    def test_getitem(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'lst', 'i'])
         def f(n):
             lst = []

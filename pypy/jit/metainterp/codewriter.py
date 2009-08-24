@@ -110,11 +110,6 @@ class CodeWriter(object):
         return jitcode
 
     def annotation_hacks(self, jitcode):
-        # xxx annotation hack: make sure there is at least one ConstAddr around
-        #if self.rtyper.type_system.name == 'lltypesystem':
-        #    jitcode.constants.append(history.ConstAddr(llmemory.NULL,
-        #                                               self.cpu))
-        # xxx annotation hack: make sure class_sizes is not empty
         if not self.class_sizes:
             if self.rtyper.type_system.name == 'lltypesystem':
                 STRUCT = lltype.GcStruct('empty')
@@ -1129,6 +1124,21 @@ class BytecodeMaker(object):
         else:
             return ARRAY.OF == lltype.Void
 
+    def handle_resizable_list_setitem(self, op, arraydescr, itemsdescr,
+                                      lengthdescr, args):
+        index = self.prepare_list_getset(op, lengthdescr, args,
+                                         'check_resizable_neg_index')
+        if index is None:
+            return False
+        self.emit('setlistitem_gc')
+        self.emit(self.var_position(args[0]))
+        self.emit(self.get_position(itemsdescr))
+        self.emit(self.get_position(arraydescr))
+        self.emit(self.var_position(index))
+        self.emit(self.var_position(args[2]))
+        self.register_var(op.result)
+        return True
+
     def handle_resizable_list_call(self, op, oopspec_name, args, LIST):
         assert isinstance(LIST.TO, lltype.GcStruct)
         # no ootype
@@ -1138,11 +1148,35 @@ class BytecodeMaker(object):
         arraydescr = self.cpu.arraydescrof(ARRAY)
         lengthdescr = self.cpu.fielddescrof(LIST.TO, 'length')
         itemsdescr = self.cpu.fielddescrof(LIST.TO, 'items')
+        structdescr = self.cpu.sizeof(LIST.TO)
         if oopspec_name == 'list.getitem':
             return self.handle_resizable_list_getitem(op, arraydescr,
                                              itemsdescr, lengthdescr, args)
+        if oopspec_name == 'list.setitem':
+            return self.handle_resizable_list_setitem(op, arraydescr,
+                                             itemsdescr, lengthdescr, args)
         if oopspec_name == 'list.len':
-            xxx
+            self.emit('getfield_gc')
+            self.emit(self.var_position(args[0]))
+            self.emit(self.get_position(lengthdescr))
+            self.register_var(op.result)
+            return True
+        if oopspec_name == 'newlist':
+            if len(args) < 1:
+                args.append(Constant(0, lltype.Signed))
+            if len(args) > 1:
+                v_default = args[1]
+                if (not isinstance(v_default, Constant) or
+                    v_default.value != arrayItem(ARRAY)._defl()):
+                    return False     # variable or non-null initial value
+            self.emit('newlist')
+            self.emit(self.get_position(structdescr))
+            self.emit(self.get_position(lengthdescr))
+            self.emit(self.get_position(itemsdescr))
+            self.emit(self.get_position(arraydescr))
+            self.emit(self.var_position(args[0]))
+            self.register_var(op.result)
+            return True
         return False
 
     def handle_list_call(self, op, oopspec_name, args, LIST):
