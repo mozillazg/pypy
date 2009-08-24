@@ -231,8 +231,8 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(ConstPtr(myptr))
         """
         expected = """
-        [p1]
-        jump(ConstPtr(myptr))
+        []
+        jump()
         """
         self.optimize_loop(ops, 'Constant(myptr)', expected, p1=self.nodebox.value)
         
@@ -1046,11 +1046,11 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(p1)
         """
         expected = """
-        [p1]
+        []
         i1 = getfield_gc(ConstPtr(myptr), descr=valuedescr)
         escape(i1)
         escape(i1)
-        jump(ConstPtr(myptr))
+        jump()
         """
         self.optimize_loop(ops, 'Constant(myptr)', expected, p1=self.nodebox.value)
 
