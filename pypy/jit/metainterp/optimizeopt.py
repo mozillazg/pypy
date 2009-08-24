@@ -295,14 +295,14 @@ class VArrayValue(AbstractVirtualValue):
 class __extend__(SpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
         newinputargs.append(box)
-    def setup_constant_node(self, optimizer, box):
-        pass
     def teardown_virtual_node(self, optimizer, value, newexitargs):
         newexitargs.append(value.force_box())
 
 class __extend__(ConstantSpecNode):
-    def setup_constant_node(self, optimizer, box):
+    def setup_virtual_node(self, optimizer, box, newinputargs):
         optimizer.make_constant(box)
+    def teardown_virtual_node(self, optimizer, value, newexitargs):
+        pass
 
 class __extend__(AbstractVirtualStructSpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
@@ -469,7 +469,6 @@ class Optimizer(object):
         newinputargs = []
         for i in range(len(inputargs)):
             specnodes[i].setup_virtual_node(self, inputargs[i], newinputargs)
-            specnodes[i].setup_constant_node(self, inputargs[i])
         self.loop.inputargs = newinputargs
 
     # ----------
