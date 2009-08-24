@@ -1,7 +1,7 @@
 from pypy.jit.metainterp.history import Box, BoxInt, BoxPtr, BoxObj
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj, PTR, OBJ
 from pypy.jit.metainterp.resoperation import rop, ResOperation
-from pypy.jit.metainterp.specnode import SpecNode, ConstantSpecNode
+from pypy.jit.metainterp.specnode import SpecNode, NotSpecNode, ConstantSpecNode
 from pypy.jit.metainterp.specnode import AbstractVirtualStructSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.specnode import VirtualArraySpecNode
@@ -291,8 +291,13 @@ class VArrayValue(AbstractVirtualValue):
                 if itemvalue is not None:
                     itemvalue.get_args_for_fail(modifier)
 
-
 class __extend__(SpecNode):
+    def setup_virtual_node(self, optimizer, box, newinputargs):
+        raise NotImplementedError
+    def teardown_virtual_node(self, optimizer, value, newexitargs):
+        raise NotImplementedError
+
+class __extend__(NotSpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
         newinputargs.append(box)
     def teardown_virtual_node(self, optimizer, value, newexitargs):
