@@ -34,7 +34,7 @@ class ConstantSpecNode(SpecNode):
                self.constbox == other.constbox
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
-        raise NotImplementedError
+        pass
 
 
 class AbstractVirtualStructSpecNode(SpecNode):
