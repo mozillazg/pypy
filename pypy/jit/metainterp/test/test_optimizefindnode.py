@@ -704,16 +704,21 @@ class BaseTestOptimizeFindNode(BaseTest):
         self.find_bridge(ops, 'Not', 'Not')
 
     def test_bridge_simple_constant(self):
-        py.test.skip('fixme')
+        ops = """
+        []
+        jump(ConstPtr(myptr))
+        """
+        self.find_bridge(ops, '', 'Not')
+        self.find_bridge(ops, '', 'Constant(myptr)')
+        self.find_bridge(ops, '', 'Constant(myptr2)', mismatch=True)
+
+    def test_bridge_simple_constant_mismatch(self):
         ops = """
         [p0]
-        guard_value(p0, ConstPtr(myptr))
-            fail()
         jump(p0)
         """
-        #self.find_bridge(ops, 'Not', 'Not')
-        self.find_bridge(ops, None, 'Constant(myptr)', p0=self.myptr)
-        #self.find_bridge(ops, 'Not', 'Constant(myptr2)', mismatch=True)
+        self.find_bridge(ops, 'Not', 'Not')
+        self.find_bridge(ops, 'Not', 'Constant(myptr)', mismatch=True)
 
     def test_bridge_simple_virtual_1(self):
         ops = """
