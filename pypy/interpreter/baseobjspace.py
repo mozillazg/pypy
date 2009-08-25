@@ -1205,7 +1205,6 @@ ObjSpace.IrregularOpTable = [
     'is_w',
     'newtuple',
     'newlist',
-    'newviewlist',
     'newdict',
     'newslice',
     'call_args',
