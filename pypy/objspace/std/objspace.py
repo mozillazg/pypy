@@ -589,6 +589,15 @@ class StdObjSpace(ObjSpace, DescrOperation):
             from pypy.objspace.std.listobject import W_ListObject
             return W_ListObject(list_w)
 
+    def newviewlist(self, context, getitem, setitem, delitem, append, length):
+        assert self.config.objspace.std.withmultilist, "view lists require " \
+            "multilists"
+        from pypy.objspace.std.listmultiobject import W_ListMultiObject
+        from pypy.objspace.std.viewlist import ViewListImplementation
+        impl = ViewListImplementation(self, context, getitem, setitem, delitem,
+                                      append, length)
+        return W_ListMultiObject(self, impl)
+
     def newdict(self, module=False):
         if self.config.objspace.std.withmultidict and module:
             from pypy.objspace.std.dictmultiobject import W_DictMultiObject

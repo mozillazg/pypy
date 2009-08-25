@@ -188,13 +188,21 @@ def check_keyboard_interrupt(e):
 # Interfacing/Integrating with py.test's collection process 
 #
 #
-def ensure_pytest_builtin_helpers(helpers='skip raises'.split()):
+
+def _pytest_raises_wrapper(*args, **kwargs):
+    """Emulate the API of appsupport.pypyraises."""
+    __tracebackhide__ = True
+    return py.test.raises(*args, **kwargs)._excinfo
+
+def ensure_pytest_builtin_helpers(helpers='skip'.split()):
     """ hack (py.test.) raises and skip into builtins, needed
         for applevel tests to run directly on cpython but 
         apparently earlier on "raises" was already added
         to module's globals. 
     """ 
     import __builtin__
+    if not hasattr(__builtin__, "raises"):
+        __builtin__.raises = _pytest_raises_wrapper
     for helper in helpers: 
         if not hasattr(__builtin__, helper):
             setattr(__builtin__, helper, getattr(py.test, helper))
