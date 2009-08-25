@@ -161,7 +161,11 @@ class ASTNodeVisitor(ASDLVisitor):
             elif attr.type.value not in asdl.builtin_types and \
                     attr.type.value not in self.data.simple_types:
                 doing_something = True
-                self.emit("self.%s.sync_app_attrs(space)" % (attr.name,), 2)
+                level = 2
+                if attr.opt:
+                    self.emit("if self.%s:" % (attr.name,), 2)
+                    level += 1
+                self.emit("self.%s.sync_app_attrs(space)" % (attr.name,), level)
         self.emit("")
 
     def make_constructor(self, fields, node, extras=None, base=None):
