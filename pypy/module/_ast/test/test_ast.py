@@ -95,6 +95,15 @@ class AppTestAST:
         const.value = 5
         assert const.value == 5
 
+    def test_optional(self):
+        mod = self.get_ast("x(32)", "eval")
+        call = mod.body
+        assert call.starargs is None
+        assert call.kwargs is None
+        co = compile(mod, "<test>", "eval")
+        ns = {"x" : lambda x: x}
+        assert eval(co, ns) == 32
+
     def test_list_syncing(self):
         ast = self.ast
         mod = ast.Module([ast.Lt()])

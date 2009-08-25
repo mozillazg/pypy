@@ -343,7 +343,8 @@ class Return(stmt):
         else:
             if not self.initialization_state & 1:
                 self.value = None
-        self.value.sync_app_attrs(space)
+        if self.value:
+            self.value.sync_app_attrs(space)
 
 
 class Delete(stmt):
@@ -487,7 +488,8 @@ class Print(stmt):
         else:
             if not self.initialization_state & 1:
                 self.dest = None
-        self.dest.sync_app_attrs(space)
+        if self.dest:
+            self.dest.sync_app_attrs(space)
         w_list = self.w_values
         if w_list is not None:
             list_w = space.viewiterable(w_list)
@@ -701,7 +703,8 @@ class With(stmt):
             if not self.initialization_state & 2:
                 self.optional_vars = None
         self.context_expr.sync_app_attrs(space)
-        self.optional_vars.sync_app_attrs(space)
+        if self.optional_vars:
+            self.optional_vars.sync_app_attrs(space)
         w_list = self.w_body
         if w_list is not None:
             list_w = space.viewiterable(w_list)
@@ -750,9 +753,12 @@ class Raise(stmt):
                 self.inst = None
             if not self.initialization_state & 4:
                 self.tback = None
-        self.type.sync_app_attrs(space)
-        self.inst.sync_app_attrs(space)
-        self.tback.sync_app_attrs(space)
+        if self.type:
+            self.type.sync_app_attrs(space)
+        if self.inst:
+            self.inst.sync_app_attrs(space)
+        if self.tback:
+            self.tback.sync_app_attrs(space)
 
 
 class TryExcept(stmt):
@@ -900,7 +906,8 @@ class Assert(stmt):
             if not self.initialization_state & 2:
                 self.msg = None
         self.test.sync_app_attrs(space)
-        self.msg.sync_app_attrs(space)
+        if self.msg:
+            self.msg.sync_app_attrs(space)
 
 
 class Import(stmt):
@@ -1014,8 +1021,10 @@ class Exec(stmt):
             if not self.initialization_state & 4:
                 self.locals = None
         self.body.sync_app_attrs(space)
-        self.globals.sync_app_attrs(space)
-        self.locals.sync_app_attrs(space)
+        if self.globals:
+            self.globals.sync_app_attrs(space)
+        if self.locals:
+            self.locals.sync_app_attrs(space)
 
 
 class Global(stmt):
@@ -1474,7 +1483,8 @@ class Yield(expr):
         else:
             if not self.initialization_state & 1:
                 self.value = None
-        self.value.sync_app_attrs(space)
+        if self.value:
+            self.value.sync_app_attrs(space)
 
 
 class Compare(expr):
@@ -1587,8 +1597,10 @@ class Call(expr):
         if self.keywords is not None:
             for node in self.keywords:
                 node.sync_app_attrs(space)
-        self.starargs.sync_app_attrs(space)
-        self.kwargs.sync_app_attrs(space)
+        if self.starargs:
+            self.starargs.sync_app_attrs(space)
+        if self.kwargs:
+            self.kwargs.sync_app_attrs(space)
 
 
 class Repr(expr):
@@ -1967,9 +1979,12 @@ class Slice(slice):
                 self.upper = None
             if not self.initialization_state & 4:
                 self.step = None
-        self.lower.sync_app_attrs(space)
-        self.upper.sync_app_attrs(space)
-        self.step.sync_app_attrs(space)
+        if self.lower:
+            self.lower.sync_app_attrs(space)
+        if self.upper:
+            self.upper.sync_app_attrs(space)
+        if self.step:
+            self.step.sync_app_attrs(space)
 
 
 class ExtSlice(slice):
@@ -2323,8 +2338,10 @@ class excepthandler(AST):
                 self.type = None
             if not self.initialization_state & 2:
                 self.name = None
-        self.type.sync_app_attrs(space)
-        self.name.sync_app_attrs(space)
+        if self.type:
+            self.type.sync_app_attrs(space)
+        if self.name:
+            self.name.sync_app_attrs(space)
         w_list = self.w_body
         if w_list is not None:
             list_w = space.viewiterable(w_list)
