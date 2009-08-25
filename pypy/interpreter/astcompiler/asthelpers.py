@@ -10,6 +10,15 @@ class UnacceptableExpressionContext(Exception):
 setattr(ast, "UnacceptableExpressionContext", UnacceptableExpressionContext)
 
 
+class __extend__(ast.AST):
+
+    def as_node_list(self, space):
+        raise AssertionError("only for expressions")
+
+    def set_context(self, ctx):
+        raise AssertionError("should only be on expressions")
+
+
 class __extend__(ast.expr):
 
     constant = False
