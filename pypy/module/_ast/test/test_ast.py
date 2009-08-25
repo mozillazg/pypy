@@ -164,6 +164,9 @@ class AppTestAST:
     def test_future(self):
         mod = self.get_ast("from __future__ import with_statement")
         compile(mod, "<test>", "exec")
+        mod = self.get_ast(""""I'm a docstring."\n
+from __future__ import generators""")
+        compile(mod, "<test>", "exec")
         mod = self.get_ast("from __future__ import with_statement; import y; " \
                                "from __future__ import nested_scopes")
         raises(SyntaxError, compile, mod, "<test>", "exec")

@@ -38,7 +38,7 @@ def parse_future(tree):
     else:
         return 0, 0
     for stmt in body:
-        if isinstance(stmt, ast.Str):
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Str):
             if have_docstring:
                 break
             else:
