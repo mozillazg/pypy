@@ -3,7 +3,7 @@
 ========================================================================
 
 The documentation about the current JIT is available as a
-first submitted article:
+first published article:
 
 * `Tracing the Meta-Level: PyPy's Tracing JIT Compiler`__
 
