@@ -1,6 +1,6 @@
 from pypy.annotation.model import SomeObject, s_ImpossibleValue
 from pypy.annotation.model import SomeInteger, s_Bool, unionof
-from pypy.annotation.model import SomeInstance
+from pypy.annotation.model import SomeInstance, s_None, isdegenerated
 from pypy.annotation.listdef import ListItem
 
 
@@ -135,6 +135,11 @@ class DictDef:
 
     def generalize_key(self, s_key):
         self.dictkey.generalize(s_key)
+        s_value = self.dictkey.s_value
+        # we allow degenerated keys because some tests rely on it, although is
+        # not really supported by RPython in a broader sense
+        if s_value != s_None and not isdegenerated(s_value) and s_value.can_be_none():
+            raise Exception("dictionary keys cannot be None")
 
     def generalize_value(self, s_value):
         self.dictvalue.generalize(s_value)

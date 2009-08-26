@@ -495,6 +495,25 @@ class TestAnnotateTestCase:
         s = a.build_types(snippet.dict_keys2, [])
         assert not isinstance(listitem(s), annmodel.SomeString)
 
+    def test_dict_keys_cannot_be_None(self):
+        a = self.RPythonAnnotator()
+        def f():
+            d = {}
+            d['foo'] = 42
+            d[None] = 43
+            return d
+        py.test.raises(Exception, a.build_types, f, [])
+
+    def test_dict_keys_void(self):
+        a = self.RPythonAnnotator()
+        def f():
+            d = {}
+            d[None] = 43
+            return d
+        s = a.build_types(f, [])
+        assert isinstance(s, annmodel.SomeDict)
+        assert s.dictdef.dictkey.s_value == annmodel.s_None
+
     def test_dict_values(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.dict_values, [])
@@ -525,7 +544,7 @@ class TestAnnotateTestCase:
         assert isinstance(dictkey(s), annmodel.SomeString)
         assert isinstance(dictvalue(s), annmodel.SomeInteger)
         assert not dictvalue(s).nonneg
-        
+    
     def test_exception_deduction(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.exception_deduction, [])
