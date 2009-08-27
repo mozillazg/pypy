@@ -41,6 +41,10 @@ class LLTypeHelper(TypeSystemHelper):
     BoxRef = history.BoxPtr
     ConstRef = history.ConstPtr
 
+    def new_ConstRef(self, x):
+        ptrval = lltype.cast_opaque_ptr(llmemory.GCREF, x)
+        return history.ConstPtr(ptrval)
+
     def get_typeptr(self, obj):
         return obj.typeptr
 
@@ -111,6 +115,10 @@ class OOTypeHelper(TypeSystemHelper):
     BASETYPE = ootype.Object
     BoxRef = history.BoxObj
     ConstRef = history.ConstObj
+
+    def new_ConstRef(self, x):
+        obj = ootype.cast_to_object(x)
+        return history.ConstObj(obj)
 
     def get_typeptr(self, obj):
         return ootype.classof(obj)

@@ -152,7 +152,7 @@ class DoneWithThisFrameDescrInt(AbstractDescr):
 
 class DoneWithThisFrameDescrPtr(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
-        assert metainterp_sd.result_type == 'ptr'
+        assert metainterp_sd.result_type == 'ref'
         resultbox = fail_op.args[0]
         if isinstance(resultbox, BoxPtr):
             result = metainterp_sd.cpu.get_latest_value_ref(0)
@@ -163,7 +163,7 @@ class DoneWithThisFrameDescrPtr(AbstractDescr):
 
 class DoneWithThisFrameDescrObj(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
-        assert metainterp_sd.result_type == 'obj'
+        assert metainterp_sd.result_type == 'ref'
         resultbox = fail_op.args[0]
         if isinstance(resultbox, BoxObj):
             result = metainterp_sd.cpu.get_latest_value_ref(0)

@@ -454,10 +454,10 @@ class WarmRunnerDesc:
                     assert result_kind == 'int'
                     return lltype.cast_primitive(RESULT, e.result)
                 except DoneWithThisFramePtr, e:
-                    assert result_kind == 'ptr'
+                    assert result_kind == 'ref'
                     return lltype.cast_opaque_ptr(RESULT, e.result)
                 except DoneWithThisFrameObj, e:
-                    assert result_kind == 'obj'
+                    assert result_kind == 'ref'
                     return ootype.cast_from_object(RESULT, e.result)
                 except ExitFrameWithExceptionRef, e:
                     value = ts.cast_to_baseclass(e.value)
@@ -689,10 +689,10 @@ def make_state_class(warmrunnerdesc):
 
     def set_future_value(j, value, typecode):
         cpu = metainterp_sd.cpu
-        if typecode == 'ptr':
+        if not cpu.is_oo and typecode == 'ref':
             ptrvalue = lltype.cast_opaque_ptr(llmemory.GCREF, value)
             cpu.set_future_value_ref(j, ptrvalue)
-        elif typecode == 'obj':
+        elif cpu.is_oo and typecode == 'ref':
             objvalue = ootype.cast_to_object(value)
             cpu.set_future_value_ref(j, objvalue)
         elif typecode == 'int':
