@@ -1135,9 +1135,9 @@ class MetaInterp(object):
                 raise sd.DoneWithThisFrameVoid()
             elif sd.result_type == 'int':
                 raise sd.DoneWithThisFrameInt(resultbox.getint())
-            elif sd.result_type == 'ref':
+            elif not self.cpu.is_oo and sd.result_type == 'ref':
                 raise sd.DoneWithThisFramePtr(resultbox.getref_base())
-            elif self.cpu.is_oo and sd.result_type == 'obj': # XXX 
+            elif self.cpu.is_oo and sd.result_type == 'ref':
                 raise sd.DoneWithThisFrameObj(resultbox.getref_base())
             else:
                 assert False
