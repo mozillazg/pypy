@@ -108,10 +108,13 @@ class LLTypeHelper(TypeSystemHelper):
         adr = llmemory.cast_ptr_to_adr(ptr)
         return cpu.cast_adr_to_int(adr)
 
-    def cast_opaque_ptr(self, TYPE, value):
+    def cast_from_ref(self, TYPE, value):
         return lltype.cast_opaque_ptr(TYPE, value)
-    cast_opaque_ptr._annspecialcase_ = 'specialize:arg(1)'
+    cast_from_ref._annspecialcase_ = 'specialize:arg(1)'
 
+    def cast_to_ref(self, value):
+        return lltype.cast_opaque_ptr(llmemory.GCREF, value)
+    
     def getaddr_for_box(self, cpu, box):
         return box.getaddr(cpu)
 
@@ -185,9 +188,12 @@ class OOTypeHelper(TypeSystemHelper):
     def cast_baseclass_to_hashable(self, cpu, obj):
         return ootype.cast_to_object(obj)
 
-    def cast_opaque_ptr(self, TYPE, value):
+    def cast_from_ref(self, TYPE, value):
         return ootype.cast_from_object(TYPE, value)
-    cast_opaque_ptr._annspecialcase_ = 'specialize:arg(1)'
+    cast_from_ref._annspecialcase_ = 'specialize:arg(1)'
+
+    def cast_to_ref(self, value):
+        return ootype.cast_to_object(value)
 
     def getaddr_for_box(self, cpu, box):
         return box.getref_base()
