@@ -691,10 +691,10 @@ def make_state_class(warmrunnerdesc):
         cpu = metainterp_sd.cpu
         if typecode == 'ptr':
             ptrvalue = lltype.cast_opaque_ptr(llmemory.GCREF, value)
-            cpu.set_future_value_ptr(j, ptrvalue)
+            cpu.set_future_value_ref(j, ptrvalue)
         elif typecode == 'obj':
             objvalue = ootype.cast_to_object(value)
-            cpu.set_future_value_obj(j, objvalue)
+            cpu.set_future_value_ref(j, objvalue)
         elif typecode == 'int':
             intvalue = lltype.cast_primitive(lltype.Signed, value)
             cpu.set_future_value_int(j, intvalue)

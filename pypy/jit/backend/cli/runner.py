@@ -105,14 +105,14 @@ class CliCPU(model.AbstractCPU):
     def set_future_value_int(self, index, intvalue):
         self.get_inputargs().set_int(index, intvalue)
 
-    def set_future_value_obj(self, index, objvalue):
+    def set_future_value_ref(self, index, objvalue):
         obj = dotnet.cast_to_native_object(objvalue)
         self.get_inputargs().set_obj(index, obj)
 
     def get_latest_value_int(self, index):
         return self.get_inputargs().get_int(index)
 
-    def get_latest_value_obj(self, index):
+    def get_latest_value_ref(self, index):
         obj = self.get_inputargs().get_obj(index)
         return dotnet.cast_from_native_object(obj)
 

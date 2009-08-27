@@ -332,7 +332,7 @@ class TestX86(LLtypeBackendTest):
                     if op == rop.INT_IS_TRUE:
                         self.cpu.set_future_value_int(0, b.value)
                     else:
-                        self.cpu.set_future_value_ptr(0, b.value)
+                        self.cpu.set_future_value_ref(0, b.value)
                     r = self.cpu.execute_operations(loop)
                     result = self.cpu.get_latest_value_int(0)
                     if guard == rop.GUARD_FALSE:

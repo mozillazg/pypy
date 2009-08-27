@@ -216,14 +216,14 @@ class CPU386(object):
         assert index < MAX_FAIL_BOXES, "overflow!"
         self.assembler.fail_boxes_int[index] = intvalue
 
-    def set_future_value_ptr(self, index, ptrvalue):
+    def set_future_value_ref(self, index, ptrvalue):
         assert index < MAX_FAIL_BOXES, "overflow!"
         self.assembler.fail_boxes_ptr[index] = ptrvalue
 
     def get_latest_value_int(self, index):
         return self.assembler.fail_boxes_int[index]
 
-    def get_latest_value_ptr(self, index):
+    def get_latest_value_ref(self, index):
         ptrvalue = self.assembler.fail_boxes_ptr[index]
         # clear after reading
         self.assembler.fail_boxes_ptr[index] = lltype.nullptr(
@@ -465,7 +465,7 @@ class CPU386(object):
         if size == 0:
             return None
         elif ptr:
-            return BoxPtr(self.get_latest_value_ptr(0))
+            return BoxPtr(self.get_latest_value_ref(0))
         else:
             return BoxInt(self.get_latest_value_int(0))
 

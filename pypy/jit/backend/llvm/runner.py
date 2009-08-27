@@ -310,7 +310,7 @@ class LLVMCPU(object):
         p = rffi.cast(lltype.Ptr(self.SIGNED_VALUE), self.in_out_args[index])
         p[0] = intvalue
 
-    def set_future_value_ptr(self, index, ptrvalue):
+    def set_future_value_ref(self, index, ptrvalue):
         p = rffi.cast(lltype.Ptr(self.POINTER_VALUE), self.in_out_args[index])
         p[0] = ptrvalue
 
@@ -331,7 +331,7 @@ class LLVMCPU(object):
         p = rffi.cast(lltype.Ptr(self.SIGNED_VALUE), self.in_out_args[index])
         return p[0]
 
-    def get_latest_value_ptr(self, index):
+    def get_latest_value_ref(self, index):
         p = rffi.cast(lltype.Ptr(self.POINTER_VALUE), self.in_out_args[index])
         return p[0]
 
@@ -679,7 +679,7 @@ class LLVMCPU(object):
         if calldescr.res_index < 0:
             return None
         elif calldescr.res_index == self.SIZE_GCPTR:
-            return BoxPtr(self.get_latest_value_ptr(0))
+            return BoxPtr(self.get_latest_value_ref(0))
         else:
             return BoxInt(self.get_latest_value_int(0))
 
