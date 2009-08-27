@@ -343,7 +343,7 @@ class Optimizer(object):
             return box
         if box.type == REF:
             value = box.getref_base()
-            key = self.cpu.ts.cast_ref_to_hashable(value)
+            key = self.cpu.ts.cast_ref_to_hashable(self.cpu, value)
             try:
                 return self.interned_refs[key]
             except KeyError:
