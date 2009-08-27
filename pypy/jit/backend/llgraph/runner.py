@@ -695,7 +695,7 @@ class TypeDescr(OODescr):
         self.setarrayitem = setarrayitem
         self.getarraylength = getarraylength
         self.instanceof = instanceof
-        self._is_array_of_pointers = (history.getkind(TYPE) == 'obj')
+        self._is_array_of_pointers = (history.getkind(TYPE) == 'ref')
 
     def is_array_of_pointers(self):
         # for arrays, TYPE is the type of the array item.
@@ -725,7 +725,7 @@ class FieldDescr(OODescr):
             
         self.getfield = getfield
         self.setfield = setfield
-        self._is_pointer_field = (history.getkind(T) == 'obj')
+        self._is_pointer_field = (history.getkind(T) == 'ref')
 
     def sort_key(self):
         return self._keys.getkey((self.TYPE, self.fieldname))

@@ -321,7 +321,7 @@ class TypeDescr(DescrWithKey):
         self.instanceof = instanceof
         self.ooclass = get_class_for_type(TYPE)
         self.typename = TYPE._short_name()
-        self._is_array_of_pointers = (history.getkind(TYPE) == 'obj')
+        self._is_array_of_pointers = (history.getkind(TYPE) == 'ref')
 
     def is_array_of_pointers(self):
         # for arrays, TYPE is the type of the array item.
@@ -456,7 +456,7 @@ class FieldDescr(DescrWithKey):
         self.selfclass = ootype.runtimeClass(TYPE)
         self.fieldname = fieldname
         self.key = key_manager.getkey((TYPE, fieldname))
-        self._is_pointer_field = (history.getkind(T) == 'obj')
+        self._is_pointer_field = (history.getkind(T) == 'ref')
 
     def is_pointer_field(self):
         return self._is_pointer_field
