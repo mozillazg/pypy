@@ -181,7 +181,7 @@ class ExitFrameWithExceptionDescrPtr(AbstractDescr):
         else:
             assert isinstance(valuebox, history.Const)
             value = valuebox.getref_base()
-        raise metainterp_sd.ExitFrameWithExceptionPtr(value)
+        raise metainterp_sd.ExitFrameWithExceptionRef(metainterp_sd.cpu, value)
 
 class ExitFrameWithExceptionDescrObj(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
@@ -192,7 +192,7 @@ class ExitFrameWithExceptionDescrObj(AbstractDescr):
         else:
             assert isinstance(valuebox, history.Const)
             value = valuebox.getref_base()
-        raise metainterp_sd.ExitFrameWithExceptionObj(value)
+        raise metainterp_sd.ExitFrameWithExceptionRef(metainterp_sd.cpu, value)
 
 done_with_this_frame_descr_void = DoneWithThisFrameDescrVoid()
 done_with_this_frame_descr_int = DoneWithThisFrameDescrInt()

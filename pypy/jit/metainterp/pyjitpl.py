@@ -1051,7 +1051,7 @@ class MetaInterpStaticData(object):
     def _setup_class_sizes(self):
         class_sizes = {}
         for vtable, sizedescr in self._class_sizes:
-            vtable = self.cpu.ts.cast_ref_to_hashable(self.cpu, vtable)
+            vtable = self.cpu.ts.cast_baseclass_to_hashable(self.cpu, vtable)
             class_sizes[vtable] = sizedescr
         self.cpu.set_class_sizes(class_sizes)
 
@@ -1165,10 +1165,7 @@ class MetaInterp(object):
             self.framestack.pop()
         if not self.is_blackholing():
             self.compile_exit_frame_with_exception(excvaluebox)
-        if self.cpu.is_oo:
-            raise self.staticdata.ExitFrameWithExceptionObj(excvaluebox.getref_base())
-        else:
-            raise self.staticdata.ExitFrameWithExceptionPtr(excvaluebox.getref_base())
+        raise self.staticdata.ExitFrameWithExceptionRef(self.cpu, excvaluebox.getref_base())
 
     def raise_overflow_error(self):
         etype, evalue = self.cpu.get_overflow_error()

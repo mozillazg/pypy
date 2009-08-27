@@ -37,6 +37,7 @@ class LLTypeHelper(TypeSystemHelper):
 
     name = 'lltype'
     functionptr = staticmethod(lltype.functionptr)
+    BASETYPE = llmemory.GCREF
     BoxRef = history.BoxPtr
     ConstRef = history.ConstPtr
 
@@ -74,6 +75,9 @@ class LLTypeHelper(TypeSystemHelper):
         obj = evaluebox.getref(lltype.Ptr(rclass.OBJECT))
         return cast_base_ptr_to_instance(Exception, obj)
 
+    def cast_to_baseclass(self, value):
+        return lltype.cast_opaque_ptr(lltype.Ptr(rclass.OBJECT), value)
+
     def clean_box(self, box):
         if isinstance(box, history.BoxPtr):
             box.value = lltype.nullptr(llmemory.GCREF.TO)
@@ -95,15 +99,21 @@ class LLTypeHelper(TypeSystemHelper):
         adr = llmemory.cast_ptr_to_adr(ptr)
         return cpu.cast_adr_to_int(adr)
 
+    def cast_baseclass_to_hashable(self, cpu, ptr):
+        adr = llmemory.cast_ptr_to_adr(ptr)
+        return cpu.cast_adr_to_int(adr)
+
+
 class OOTypeHelper(TypeSystemHelper):
 
     name = 'ootype'
     functionptr = staticmethod(ootype.static_meth)
+    BASETYPE = ootype.Object
     BoxRef = history.BoxObj
     ConstRef = history.ConstObj
 
     def get_typeptr(self, obj):
-        return obj.meta
+        return ootype.classof(obj)
 
     def get_FuncType(self, ARGS, RESULT):
         FUNCTYPE = ootype.StaticMethod(ARGS, RESULT)
@@ -133,6 +143,9 @@ class OOTypeHelper(TypeSystemHelper):
         obj = evaluebox.getref(ootype.ROOT)
         return cast_base_ptr_to_instance(Exception, obj)
 
+    def cast_to_baseclass(self, value):
+        return ootype.cast_from_object(ootype.ROOT, value)
+
     def clean_box(self, box):
         if isinstance(box, history.BoxObj):
             box.value = ootype.NULL
@@ -153,6 +166,8 @@ class OOTypeHelper(TypeSystemHelper):
     def cast_ref_to_hashable(self, cpu, obj):
         return ootype.cast_to_object(obj)
 
+    def cast_baseclass_to_hashable(self, cpu, obj):
+        return ootype.cast_to_object(obj)
 
 llhelper = LLTypeHelper()
 oohelper = OOTypeHelper()

@@ -399,19 +399,12 @@ class WarmRunnerDesc:
             def __str__(self):
                 return 'DoneWithThisFrameObj(%s)' % (self.result,)
 
-        class ExitFrameWithExceptionPtr(JitException):
-            def __init__(self, value):
-                assert lltype.typeOf(value) == llmemory.GCREF
+        class ExitFrameWithExceptionRef(JitException):
+            def __init__(self, cpu, value):
+                assert lltype.typeOf(value) == cpu.ts.BASETYPE
                 self.value = value
             def __str__(self):
-                return 'ExitFrameWithExceptionPtr(%s)' % (self.value,)
-
-        class ExitFrameWithExceptionObj(JitException):
-            def __init__(self, value):
-                assert lltype.typeOf(value) == ootype.Object
-                self.value = value
-            def __str__(self):
-                return 'ExitFrameWithExceptionObj(%s)' % (self.value,)
+                return 'ExitFrameWithExceptionRef(%s)' % (self.value,)
 
         class ContinueRunningNormally(JitException):
             def __init__(self, argboxes):
@@ -430,20 +423,19 @@ class WarmRunnerDesc:
         self.DoneWithThisFrameInt = DoneWithThisFrameInt
         self.DoneWithThisFramePtr = DoneWithThisFramePtr
         self.DoneWithThisFrameObj = DoneWithThisFrameObj
-        self.ExitFrameWithExceptionPtr = ExitFrameWithExceptionPtr
-        self.ExitFrameWithExceptionObj = ExitFrameWithExceptionObj
+        self.ExitFrameWithExceptionRef = ExitFrameWithExceptionRef
         self.ContinueRunningNormally = ContinueRunningNormally
         self.metainterp_sd.DoneWithThisFrameVoid = DoneWithThisFrameVoid
         self.metainterp_sd.DoneWithThisFrameInt = DoneWithThisFrameInt
         self.metainterp_sd.DoneWithThisFramePtr = DoneWithThisFramePtr
         self.metainterp_sd.DoneWithThisFrameObj = DoneWithThisFrameObj
-        self.metainterp_sd.ExitFrameWithExceptionPtr = ExitFrameWithExceptionPtr
-        self.metainterp_sd.ExitFrameWithExceptionObj = ExitFrameWithExceptionObj
+        self.metainterp_sd.ExitFrameWithExceptionRef = ExitFrameWithExceptionRef
         self.metainterp_sd.ContinueRunningNormally = ContinueRunningNormally
         rtyper = self.translator.rtyper
         RESULT = PORTALFUNC.RESULT
         result_kind = history.getkind(RESULT)
         is_oo = self.cpu.is_oo
+        ts = self.cpu.ts
 
         def ll_portal_runner(*args):
             while 1:
@@ -467,20 +459,10 @@ class WarmRunnerDesc:
                 except DoneWithThisFrameObj, e:
                     assert result_kind == 'obj'
                     return ootype.cast_from_object(RESULT, e.result)
-                except ExitFrameWithExceptionPtr, e:
-                    assert not is_oo
-                    value = lltype.cast_opaque_ptr(lltype.Ptr(rclass.OBJECT),
-                                                   e.value)
+                except ExitFrameWithExceptionRef, e:
+                    value = ts.cast_to_baseclass(e.value)
                     if not we_are_translated():
-                        raise LLException(value.typeptr, value)
-                    else:
-                        value = cast_base_ptr_to_instance(Exception, value)
-                        raise Exception, value
-                except ExitFrameWithExceptionObj, e:
-                    assert is_oo
-                    value = ootype.cast_from_object(ootype.ROOT, e.value)
-                    if not we_are_translated():
-                        raise LLException(ootype.classof(value), value)
+                        raise LLException(ts.get_typeptr(value), value)
                     else:
                         value = cast_base_ptr_to_instance(Exception, value)
                         raise Exception, value
