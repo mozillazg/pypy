@@ -10,6 +10,7 @@ from pypy.jit.metainterp.history import AbstractDescr, BoxInt, BoxPtr, BoxObj,\
      Const
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.specnode import NotSpecNode
+from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rlib.debug import debug_print
 
 def compile_new_loop(metainterp, old_loops, greenkey, start=0):
@@ -191,17 +192,17 @@ _loop.inputargs = [BoxInt()]
 _loop.finishdescr = done_with_this_frame_descr_int
 loops_done_with_this_frame_int = [_loop]
 
-_loop = TerminatingLoop('done_with_this_frame_ptr')
+_loop = TerminatingLoop('done_with_this_frame_ref')
 _loop.specnodes = [prebuiltNotSpecNode]
 _loop.inputargs = [BoxPtr()]
 _loop.finishdescr = done_with_this_frame_descr_ref
-loops_done_with_this_frame_ptr = [_loop]
+llhelper.loops_done_with_this_frame_ref = [_loop]
 
-_loop = TerminatingLoop('done_with_this_frame_obj')
+_loop = TerminatingLoop('done_with_this_frame_ref')
 _loop.specnodes = [prebuiltNotSpecNode]
 _loop.inputargs = [BoxObj()]
 _loop.finishdescr = done_with_this_frame_descr_ref
-loops_done_with_this_frame_obj = [_loop]
+oohelper.loops_done_with_this_frame_ref = [_loop]
 
 _loop = TerminatingLoop('done_with_this_frame_void')
 _loop.specnodes = []
@@ -209,17 +210,17 @@ _loop.inputargs = []
 _loop.finishdescr = done_with_this_frame_descr_void
 loops_done_with_this_frame_void = [_loop]
 
-_loop = TerminatingLoop('exit_frame_with_exception_ptr')
+_loop = TerminatingLoop('exit_frame_with_exception_ref')
 _loop.specnodes = [prebuiltNotSpecNode]
 _loop.inputargs = [BoxPtr()]
 _loop.finishdescr = exit_frame_with_exception_descr_ref
-loops_exit_frame_with_exception_ptr = [_loop]
+llhelper.loops_exit_frame_with_exception_ref = [_loop]
 
-_loop = TerminatingLoop('exit_frame_with_exception_obj')
+_loop = TerminatingLoop('exit_frame_with_exception_ref')
 _loop.specnodes = [prebuiltNotSpecNode]
 _loop.inputargs = [BoxObj()]
 _loop.finishdescr = exit_frame_with_exception_descr_ref
-loops_exit_frame_with_exception_obj = [_loop]
+oohelper.loops_exit_frame_with_exception_ref = [_loop]
 del _loop
 
 
