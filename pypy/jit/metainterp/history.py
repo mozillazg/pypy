@@ -503,10 +503,10 @@ class BoxPtr(Box):
         return repr_rpython(self, 'bp')
 
     def changevalue_box(self, srcbox):
-        self.changevalue_ptr(srcbox.getref_base())
+        self.changevalue_ref(srcbox.getref_base())
 
     _getrepr_ = repr_pointer
-    changevalue_ptr = __init__
+    changevalue_ref = __init__
 
 NULLBOX = BoxPtr()
 
@@ -548,10 +548,10 @@ class BoxObj(Box):
         return repr_rpython(self, 'bo')
 
     def changevalue_box(self, srcbox):
-        self.changevalue_obj(srcbox.getref_base())
+        self.changevalue_ref(srcbox.getref_base())
 
     _getrepr_ = repr_object
-    changevalue_obj = __init__
+    changevalue_ref = __init__
 
 
 def set_future_values(cpu, boxes):

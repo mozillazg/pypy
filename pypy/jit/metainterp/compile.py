@@ -256,12 +256,9 @@ class ResumeGuardDescr(AbstractDescr):
             if isinstance(box, BoxInt):
                 srcvalue = cpu.get_latest_value_int(i)
                 box.changevalue_int(srcvalue)
-            elif not cpu.is_oo and isinstance(box, BoxPtr):
+            elif isinstance(box, cpu.ts.BoxRef):
                 srcvalue = cpu.get_latest_value_ref(i)
-                box.changevalue_ptr(srcvalue)
-            elif cpu.is_oo and isinstance(box, BoxObj):
-                srcvalue = cpu.get_latest_value_ref(i)
-                box.changevalue_obj(srcvalue)
+                box.changevalue_ref(srcvalue)
             elif isinstance(box, Const):
                 pass # we don't need to do anything
             else:
@@ -274,12 +271,10 @@ class ResumeGuardDescr(AbstractDescr):
             dstbox = fail_op.args[i]
             if isinstance(dstbox, BoxInt):
                 dstbox.changevalue_int(srcbox.getint())
-            elif not metainterp_sd.cpu.is_oo and isinstance(dstbox, BoxPtr):
-                dstbox.changevalue_ptr(srcbox.getref_base())
+            elif isinstance(dstbox, metainterp_sd.cpu.ts.BoxRef):
+                dstbox.changevalue_ref(srcbox.getref_base())
             elif isinstance(dstbox, Const):
                 pass
-            elif metainterp_sd.cpu.is_oo and isinstance(dstbox, BoxObj):
-                dstbox.changevalue_obj(srcbox.getref_base())
             else:
                 assert False
 
