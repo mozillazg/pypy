@@ -45,6 +45,7 @@ class LLTypeHelper(TypeSystemHelper):
     BoxRef = history.BoxPtr
     ConstRef = history.ConstPtr
     loops_done_with_this_frame_ref = None # patched by compile.py
+    CVAL_NULLREF = None # patched by optimizeopt.py
 
     from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR as VABLERTI
     null_vable_rti = lltype.nullptr(VABLERTI.TO)
@@ -143,6 +144,7 @@ class OOTypeHelper(TypeSystemHelper):
     BoxRef = history.BoxObj
     ConstRef = history.ConstObj
     loops_done_with_this_frame_ref = None # patched by compile.py
+    CVAL_NULLREF = None # patched by optimizeopt.py
     
     from pypy.rpython.ootypesystem.rvirtualizable2 import VABLERTI
     null_vable_rti = ootype.make_null_instance(VABLERTI)

@@ -8,6 +8,7 @@ from pypy.jit.metainterp.specnode import VirtualArraySpecNode
 from pypy.jit.metainterp.specnode import VirtualStructSpecNode
 from pypy.jit.metainterp.optimizeutil import av_newdict2, _findall, sort_descrs
 from pypy.jit.metainterp import resume, compile
+from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype
 
@@ -124,8 +125,8 @@ class ConstantValue(OptValue):
         self.box = box
 
 CVAL_ZERO    = ConstantValue(ConstInt(0))
-CVAL_NULLPTR = ConstantValue(ConstPtr(ConstPtr.value))
-CVAL_NULLOBJ = ConstantValue(ConstObj(ConstObj.value))
+llhelper.CVAL_NULLREF = ConstantValue(ConstPtr(ConstPtr.value))
+oohelper.CVAL_NULLREF = ConstantValue(ConstObj(ConstObj.value))
 
 
 class AbstractVirtualValue(OptValue):
@@ -399,10 +400,7 @@ class Optimizer(object):
         return value
 
     def new_ptr_box(self):
-        if not self.cpu.is_oo:
-            return BoxPtr()
-        else:
-            return BoxObj()
+        return self.cpu.ts.BoxRef()
 
     def new_box(self, fieldofs):
         if fieldofs.is_pointer_field():
@@ -412,10 +410,7 @@ class Optimizer(object):
 
     def new_const(self, fieldofs):
         if fieldofs.is_pointer_field():
-            if not self.cpu.is_oo:
-                return CVAL_NULLPTR
-            else:
-                return CVAL_NULLOBJ
+            return self.cpu.ts.CVAL_NULLREF
         else:
             return CVAL_ZERO
 
@@ -427,10 +422,7 @@ class Optimizer(object):
 
     def new_const_item(self, arraydescr):
         if arraydescr.is_array_of_pointers():
-            if not self.cpu.is_oo:
-                return CVAL_NULLPTR
-            else:
-                return CVAL_NULLOBJ
+            return self.cpu.ts.CVAL_NULLREF
         else:
             return CVAL_ZERO
 
