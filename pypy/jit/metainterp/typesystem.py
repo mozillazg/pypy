@@ -1,6 +1,8 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance, llstr, oostr
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import cast_instance_to_base_obj
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp import history
 
@@ -37,10 +39,15 @@ class LLTypeHelper(TypeSystemHelper):
 
     name = 'lltype'
     functionptr = staticmethod(lltype.functionptr)
+    nullptr = staticmethod(lltype.nullptr)
+    cast_instance_to_base_ref = staticmethod(cast_instance_to_base_ptr)
     BASETYPE = llmemory.GCREF
     BoxRef = history.BoxPtr
     ConstRef = history.ConstPtr
     loops_done_with_this_frame_ref = None # patched by compile.py
+
+    from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR as VABLERTI
+    null_vable_rti = lltype.nullptr(VABLERTI.TO)
 
     def new_ConstRef(self, x):
         ptrval = lltype.cast_opaque_ptr(llmemory.GCREF, x)
@@ -53,6 +60,13 @@ class LLTypeHelper(TypeSystemHelper):
         FUNCTYPE = lltype.FuncType(ARGS, RESULT)
         FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
         return FUNCTYPE, FUNCPTRTYPE
+
+    def get_superclass(self, TYPE):
+        return lltype.Ptr(TYPE.TO._first_struct()[1])
+
+    def cast_to_instance_maybe(self, TYPE, instance):
+        return lltype.cast_pointer(TYPE, instance)
+    cast_to_instance_maybe._annspecialcase_ = 'specialize:arg(1)'
 
     def cast_fnptr_to_root(self, fnptr):
         return llmemory.cast_ptr_to_adr(fnptr)
@@ -122,10 +136,15 @@ class OOTypeHelper(TypeSystemHelper):
 
     name = 'ootype'
     functionptr = staticmethod(ootype.static_meth)
+    nullptr = staticmethod(ootype.null)
+    cast_instance_to_base_ref = staticmethod(cast_instance_to_base_obj)
     BASETYPE = ootype.Object
     BoxRef = history.BoxObj
     ConstRef = history.ConstObj
     loops_done_with_this_frame_ref = None # patched by compile.py
+    
+    from pypy.rpython.ootypesystem.rvirtualizable2 import VABLERTI
+    null_vable_rti = ootype.make_null_instance(VABLERTI)
     
     def new_ConstRef(self, x):
         obj = ootype.cast_to_object(x)
@@ -137,6 +156,13 @@ class OOTypeHelper(TypeSystemHelper):
     def get_FuncType(self, ARGS, RESULT):
         FUNCTYPE = ootype.StaticMethod(ARGS, RESULT)
         return FUNCTYPE, FUNCTYPE
+
+    def get_superclass(self, TYPE):
+        return TYPE._superclass
+
+    def cast_to_instance_maybe(self, TYPE, instance):
+        return instance
+    cast_to_instance_maybe._annspecialcase_ = 'specialize:arg(1)'
 
     def cast_fnptr_to_root(self, fnptr):
         return ootype.cast_to_object(fnptr)
