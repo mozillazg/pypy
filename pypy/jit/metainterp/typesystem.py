@@ -40,6 +40,7 @@ class LLTypeHelper(TypeSystemHelper):
     BASETYPE = llmemory.GCREF
     BoxRef = history.BoxPtr
     ConstRef = history.ConstPtr
+    loops_done_with_this_frame_ref = None # patched by compile.py
 
     def new_ConstRef(self, x):
         ptrval = lltype.cast_opaque_ptr(llmemory.GCREF, x)
@@ -121,7 +122,8 @@ class OOTypeHelper(TypeSystemHelper):
     BASETYPE = ootype.Object
     BoxRef = history.BoxObj
     ConstRef = history.ConstObj
-
+    loops_done_with_this_frame_ref = None # patched by compile.py
+    
     def new_ConstRef(self, x):
         obj = ootype.cast_to_object(x)
         return history.ConstObj(obj)

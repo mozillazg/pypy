@@ -1440,12 +1440,9 @@ class MetaInterp(object):
         elif sd.result_type == 'int':
             exits = [exitbox]
             loops = compile.loops_done_with_this_frame_int
-        elif not sd.cpu.is_oo and sd.result_type == 'ref':
+        elif sd.result_type == 'ref':
             exits = [exitbox]
-            loops = compile.loops_done_with_this_frame_ptr
-        elif sd.cpu.is_oo and sd.result_type == 'ref':
-            exits = [exitbox]
-            loops = compile.loops_done_with_this_frame_obj
+            loops = sd.cpu.ts.loops_done_with_this_frame_ref
         else:
             assert False
         self.history.record(rop.JUMP, exits, None)
@@ -1456,10 +1453,7 @@ class MetaInterp(object):
         self.gen_store_back_in_virtualizable()
         # temporarily put a JUMP to a pseudo-loop
         self.history.record(rop.JUMP, [valuebox], None)
-        if self.cpu.is_oo:
-            loops = compile.loops_exit_frame_with_exception_obj
-        else:
-            loops = compile.loops_exit_frame_with_exception_ptr
+        loops = self.cpu.ts.loops_exit_frame_with_exception_ref
         target_loop = compile.compile_new_bridge(self, loops, self.resumekey)
         assert target_loop is loops[0]
 
