@@ -91,8 +91,9 @@ class LLTypeHelper(TypeSystemHelper):
         ll = llstr(str)
         return history.ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, ll))
 
-    def cast_ref_to_hashable(self, ptr):
-        return lltype.cast_ptr_to_int(ptr)
+    def cast_ref_to_hashable(self, cpu, ptr):
+        adr = llmemory.cast_ptr_to_adr(ptr)
+        return cpu.cast_adr_to_int(adr)
 
 class OOTypeHelper(TypeSystemHelper):
 
@@ -149,8 +150,8 @@ class OOTypeHelper(TypeSystemHelper):
         oo = oostr(str)
         return history.ConstObj(ootype.cast_to_object(oo))
 
-    def cast_ref_to_hashable(self, obj):
-        return obj
+    def cast_ref_to_hashable(self, cpu, obj):
+        return ootype.cast_to_object(obj)
 
 
 llhelper = LLTypeHelper()

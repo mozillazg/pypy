@@ -1051,11 +1051,7 @@ class MetaInterpStaticData(object):
     def _setup_class_sizes(self):
         class_sizes = {}
         for vtable, sizedescr in self._class_sizes:
-            if not self.cpu.is_oo:
-                vtable = llmemory.cast_ptr_to_adr(vtable)
-                vtable = self.cpu.cast_adr_to_int(vtable)
-            else:
-                vtable = ootype.cast_to_object(vtable)
+            vtable = self.cpu.ts.cast_ref_to_hashable(self.cpu, vtable)
             class_sizes[vtable] = sizedescr
         self.cpu.set_class_sizes(class_sizes)
 
