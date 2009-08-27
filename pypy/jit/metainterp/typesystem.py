@@ -128,6 +128,7 @@ class LLTypeHelper(TypeSystemHelper):
 
     def cast_to_ref(self, value):
         return lltype.cast_opaque_ptr(llmemory.GCREF, value)
+    cast_to_ref._annspecialcase_ = 'specialize:ll'
     
     def getaddr_for_box(self, cpu, box):
         return box.getaddr(cpu)
@@ -220,6 +221,7 @@ class OOTypeHelper(TypeSystemHelper):
 
     def cast_to_ref(self, value):
         return ootype.cast_to_object(value)
+    cast_to_ref._annspecialcase_ = 'specialize:ll'
 
     def getaddr_for_box(self, cpu, box):
         return box.getref_base()
