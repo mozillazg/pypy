@@ -1,7 +1,7 @@
 import sys, os
 import ctypes
 from pypy.jit.backend.x86 import symbolic
-from pypy.jit.metainterp.history import Const, Box, BoxPtr, PTR
+from pypy.jit.metainterp.history import Const, Box, BoxPtr, REF
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -240,7 +240,7 @@ class Assembler386(object):
         for i in range(len(arglocs)):
             loc = arglocs[i]
             if not isinstance(loc, REG):
-                if args[i].type == PTR:
+                if args[i].type == REF:
                     # This uses XCHG to put zeroes in fail_boxes_ptr after
                     # reading them
                     self.mc.XOR(ecx, ecx)
@@ -253,7 +253,7 @@ class Assembler386(object):
         for i in range(len(arglocs)):
             loc = arglocs[i]
             if isinstance(loc, REG):
-                if args[i].type == PTR:
+                if args[i].type == REF:
                     # This uses XCHG to put zeroes in fail_boxes_ptr after
                     # reading them
                     self.mc.XOR(loc, loc)
@@ -718,7 +718,7 @@ class Assembler386(object):
         for i in range(len(locs)):
             loc = locs[i]
             if isinstance(loc, REG):
-                if op.args[i].type == PTR:
+                if op.args[i].type == REF:
                     base = self.fail_box_ptr_addr
                 else:
                     base = self.fail_box_int_addr
@@ -726,7 +726,7 @@ class Assembler386(object):
         for i in range(len(locs)):
             loc = locs[i]
             if not isinstance(loc, REG):
-                if op.args[i].type == PTR:
+                if op.args[i].type == REF:
                     base = self.fail_box_ptr_addr
                 else:
                     base = self.fail_box_int_addr

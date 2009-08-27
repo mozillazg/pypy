@@ -44,7 +44,7 @@ class __extend__(AbstractValue):
         
         if self.type == history.INT:
             return dotnet.typeof(System.Int32)
-        elif self.type == history.OBJ:
+        elif self.type == history.REF:
             return dotnet.typeof(System.Object)
         else:
             assert False, 'Unknown type: %s' % self.type
@@ -282,7 +282,7 @@ class Method(object):
         t = dotnet.typeof(InputArgs)
         if type == history.INT:
             fieldname = 'ints'
-        elif type == history.OBJ:
+        elif type == history.REF:
             fieldname = 'objs'
         else:
             assert False, 'Unknown type %s' % type

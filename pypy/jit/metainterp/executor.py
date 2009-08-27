@@ -7,7 +7,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
 from pypy.jit.metainterp.history import BoxInt, ConstInt, check_descr
-from pypy.jit.metainterp.history import INT, PTR, OBJ
+from pypy.jit.metainterp.history import INT, REF
 from pypy.jit.metainterp.resoperation import rop
 
 
@@ -106,22 +106,20 @@ def do_oononnull(cpu, args, descr=None):
     tp = args[0].type
     if tp == INT:
         x = bool(args[0].getint())
-    elif tp == PTR:
+    elif tp == REF:
         x = bool(args[0].getref_base())
     else:
-        assert tp == OBJ
-        x = bool(args[0].getref_base())
+        assert False
     return ConstInt(x)
 
 def do_ooisnull(cpu, args, descr=None):
     tp = args[0].type
     if tp == INT:
         x = bool(args[0].getint())
-    elif tp == PTR:
+    elif tp == REF:
         x = bool(args[0].getref_base())
     else:
-        assert tp == OBJ
-        x = bool(args[0].getref_base())
+        assert False
     return ConstInt(not x)
 
 def do_oois(cpu, args, descr=None):
@@ -129,11 +127,10 @@ def do_oois(cpu, args, descr=None):
     assert tp == args[1].type
     if tp == INT:
         x = args[0].getint() == args[1].getint()
-    elif tp == PTR:
+    elif tp == REF:
         x = args[0].getref_base() == args[1].getref_base()
     else:
-        assert tp == OBJ
-        x = args[0].getref_base() == args[1].getref_base()
+        assert False
     return ConstInt(x)
 
 def do_ooisnot(cpu, args, descr=None):
@@ -141,11 +138,10 @@ def do_ooisnot(cpu, args, descr=None):
     assert tp == args[1].type
     if tp == INT:
         x = args[0].getint() != args[1].getint()
-    elif tp == PTR:
+    elif tp == REF:
         x = args[0].getref_base() != args[1].getref_base()
     else:
-        assert tp == OBJ
-        x = args[0].getref_base() != args[1].getref_base()
+        assert False
     return ConstInt(x)
 
 def do_ooidentityhash(cpu, args, descr=None):

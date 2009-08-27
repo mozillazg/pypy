@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.history import Box, BoxInt, BoxPtr, BoxObj
-from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj, PTR, OBJ
+from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj, REF
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.specnode import SpecNode, NotSpecNode, ConstantSpecNode
 from pypy.jit.metainterp.specnode import AbstractVirtualStructSpecNode
@@ -336,26 +336,18 @@ class Optimizer(object):
         self.values = {}
         self.values_to_clean = []    # OptValues to clean when we see an
                                      # operation with side-effects
-        self.interned_ptrs = {}
-        self.interned_objs = {}
+        self.interned_refs = {}
 
     def getinterned(self, box):
         if not self.is_constant(box):
             return box
-        if not self.cpu.is_oo and box.type == PTR:
+        if box.type == REF:
             value = box.getref_base()
-            key = lltype.cast_ptr_to_int(value)
+            key = self.cpu.ts.cast_ref_to_hashable(value)
             try:
-                return self.interned_ptrs[key]
+                return self.interned_refs[key]
             except KeyError:
-                self.interned_ptrs[key] = box
-                return box
-        elif self.cpu.is_oo and box.type == OBJ:
-            value = box.getref_base()
-            try:
-                return self.interned_objs[value]
-            except KeyError:
-                self.interned_objs[value] = box
+                self.interned_refs[key] = box
                 return box
         else:
             return box

@@ -1,9 +1,7 @@
-#from pypy.rpython.annlowlevel import base_ptr_lltype, base_obj_ootype
-#from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
-#from pypy.rpython.annlowlevel import cast_instance_to_base_obj
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance, llstr, oostr
+from pypy.jit.metainterp import history
 from pypy.jit.metainterp import history
 
 def deref(T):
@@ -39,10 +37,8 @@ class LLTypeHelper(TypeSystemHelper):
 
     name = 'lltype'
     functionptr = staticmethod(lltype.functionptr)
-    #ROOT_TYPE = llmemory.Address
-    #BASE_OBJ_TYPE = base_ptr_lltype()
-    #NULL_OBJECT = base_ptr_lltype()._defl()
-    #cast_instance_to_base_ptr = staticmethod(cast_instance_to_base_ptr)
+    BoxRef = history.BoxPtr
+    ConstRef = history.ConstPtr
 
     def get_typeptr(self, obj):
         return obj.typeptr
@@ -95,15 +91,15 @@ class LLTypeHelper(TypeSystemHelper):
         ll = llstr(str)
         return history.ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, ll))
 
+    def cast_ref_to_hashable(self, ptr):
+        return lltype.cast_ptr_to_int(ptr)
 
 class OOTypeHelper(TypeSystemHelper):
 
     name = 'ootype'
     functionptr = staticmethod(ootype.static_meth)
-    #ROOT_TYPE = ootype.Object
-    #BASE_OBJ_TYPE = base_obj_ootype()
-    #NULL_OBJECT = base_obj_ootype()._defl()
-    #cast_instance_to_base_ptr = staticmethod(cast_instance_to_base_obj)
+    BoxRef = history.BoxObj
+    ConstRef = history.ConstObj
 
     def get_typeptr(self, obj):
         return obj.meta
@@ -152,6 +148,9 @@ class OOTypeHelper(TypeSystemHelper):
     def conststr(self, str):
         oo = oostr(str)
         return history.ConstObj(ootype.cast_to_object(oo))
+
+    def cast_ref_to_hashable(self, obj):
+        return obj
 
 
 llhelper = LLTypeHelper()
