@@ -24,10 +24,10 @@ class Runner(object):
                 self.cpu.set_future_value_int(j, box.getint())
                 j += 1
             elif isinstance(box, BoxPtr):
-                self.cpu.set_future_value_ptr(j, box.getref_base())
+                self.cpu.set_future_value_ref(j, box.getref_base())
                 j += 1
             elif isinstance(box, BoxObj):
-                self.cpu.set_future_value_obj(j, box.getref_base())
+                self.cpu.set_future_value_ref(j, box.getref_base())
                 j += 1
         res = self.cpu.execute_operations(loop)
         if res is loop.operations[-1]:
@@ -37,7 +37,7 @@ class Runner(object):
         if result_type == 'int':
             return BoxInt(self.cpu.get_latest_value_int(0))
         elif result_type == 'ptr':
-            return BoxPtr(self.cpu.get_latest_value_ptr(0))
+            return BoxPtr(self.cpu.get_latest_value_ref(0))
         elif result_type == 'void':
             return None
         else:
@@ -885,7 +885,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.set_future_value_int(0, 1)
         self.cpu.execute_operations(loop)
         assert self.cpu.get_latest_value_int(0) == 0
-        assert self.cpu.get_latest_value_ptr(1) == xptr
+        assert self.cpu.get_latest_value_ref(1) == xptr
         self.cpu.clear_exception()
         self.cpu.set_future_value_int(0, 0)
         self.cpu.execute_operations(loop)

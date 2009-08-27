@@ -309,7 +309,7 @@ class ConstPtr(Const):
         return bool(self.value)
 
     def set_future_value(self, cpu, j):
-        cpu.set_future_value_ptr(j, self.value)
+        cpu.set_future_value_ref(j, self.value)
 
     def equals(self, other):
         return self.value == other.getref_base()
@@ -355,7 +355,7 @@ class ConstObj(Const):
         return bool(self.value)
 
     def set_future_value(self, cpu, j):
-        cpu.set_future_value_obj(j, self.value)
+        cpu.set_future_value_ref(j, self.value)
 
 ##    def getaddr(self, cpu):
 ##        # so far this is used only when calling
@@ -500,7 +500,7 @@ class BoxPtr(Box):
         return bool(self.value)
 
     def set_future_value(self, cpu, j):
-        cpu.set_future_value_ptr(j, self.value)
+        cpu.set_future_value_ref(j, self.value)
 
     def repr_rpython(self):
         return repr_rpython(self, 'bp')
@@ -545,7 +545,7 @@ class BoxObj(Box):
         return bool(self.value)
 
     def set_future_value(self, cpu, j):
-        cpu.set_future_value_obj(j, self.value)
+        cpu.set_future_value_ref(j, self.value)
 
     def repr_rpython(self):
         return repr_rpython(self, 'bo')

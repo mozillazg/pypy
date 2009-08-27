@@ -187,19 +187,13 @@ class BaseCPU(model.AbstractCPU):
     def set_future_value_int(self, index, intvalue):
         llimpl.set_future_value_int(index, intvalue)
 
-    def set_future_value_ptr(self, index, ptrvalue):
-        llimpl.set_future_value_ptr(index, ptrvalue)
-
-    def set_future_value_obj(self, index, objvalue):
-        llimpl.set_future_value_obj(index, objvalue)
+    def set_future_value_ref(self, index, objvalue):
+        llimpl.set_future_value_ref(index, objvalue)
 
     def get_latest_value_int(self, index):
         return llimpl.frame_int_getvalue(self.latest_frame, index)
 
-    def get_latest_value_ptr(self, index):
-        return llimpl.frame_ptr_getvalue(self.latest_frame, index)
-
-    def get_latest_value_obj(self, index):
+    def get_latest_value_ref(self, index):
         return llimpl.frame_ptr_getvalue(self.latest_frame, index)
 
     # ----------

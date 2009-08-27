@@ -866,12 +866,7 @@ def set_future_value_int(index, value):
     assert len(_future_values) == index
     _future_values.append(value)
 
-def set_future_value_ptr(index, value):
-    del _future_values[index:]
-    assert len(_future_values) == index
-    _future_values.append(value)
-
-def set_future_value_obj(index, value):
+def set_future_value_ref(index, value):
     del _future_values[index:]
     assert len(_future_values) == index
     _future_values.append(value)
@@ -1274,8 +1269,7 @@ setannotation(compile_redirect_code, annmodel.s_None)
 setannotation(new_frame, s_Frame)
 setannotation(frame_clear, annmodel.s_None)
 setannotation(set_future_value_int, annmodel.s_None)
-setannotation(set_future_value_ptr, annmodel.s_None)
-setannotation(set_future_value_obj, annmodel.s_None)
+setannotation(set_future_value_ref, annmodel.s_None)
 setannotation(frame_execute, annmodel.SomeInteger())
 setannotation(frame_int_getvalue, annmodel.SomeInteger())
 setannotation(frame_ptr_getvalue, annmodel.SomePtr(llmemory.GCREF))
