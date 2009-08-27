@@ -385,19 +385,12 @@ class WarmRunnerDesc:
             def __str__(self):
                 return 'DoneWithThisFrameInt(%s)' % (self.result,)
 
-        class DoneWithThisFramePtr(JitException):
-            def __init__(self, result):
-                assert lltype.typeOf(result) == llmemory.GCREF
+        class DoneWithThisFrameRef(JitException):
+            def __init__(self, cpu, result):
+                assert lltype.typeOf(result) == cpu.ts.BASETYPE
                 self.result = result
             def __str__(self):
-                return 'DoneWithThisFramePtr(%s)' % (self.result,)
-
-        class DoneWithThisFrameObj(JitException):
-            def __init__(self, result):
-                assert ootype.typeOf(result) == ootype.Object
-                self.result = result
-            def __str__(self):
-                return 'DoneWithThisFrameObj(%s)' % (self.result,)
+                return 'DoneWithThisFrameRef(%s)' % (self.result,)
 
         class ExitFrameWithExceptionRef(JitException):
             def __init__(self, cpu, value):
@@ -421,14 +414,12 @@ class WarmRunnerDesc:
 
         self.DoneWithThisFrameVoid = DoneWithThisFrameVoid
         self.DoneWithThisFrameInt = DoneWithThisFrameInt
-        self.DoneWithThisFramePtr = DoneWithThisFramePtr
-        self.DoneWithThisFrameObj = DoneWithThisFrameObj
+        self.DoneWithThisFrameRef = DoneWithThisFrameRef
         self.ExitFrameWithExceptionRef = ExitFrameWithExceptionRef
         self.ContinueRunningNormally = ContinueRunningNormally
         self.metainterp_sd.DoneWithThisFrameVoid = DoneWithThisFrameVoid
         self.metainterp_sd.DoneWithThisFrameInt = DoneWithThisFrameInt
-        self.metainterp_sd.DoneWithThisFramePtr = DoneWithThisFramePtr
-        self.metainterp_sd.DoneWithThisFrameObj = DoneWithThisFrameObj
+        self.metainterp_sd.DoneWithThisFrameRef = DoneWithThisFrameRef
         self.metainterp_sd.ExitFrameWithExceptionRef = ExitFrameWithExceptionRef
         self.metainterp_sd.ContinueRunningNormally = ContinueRunningNormally
         rtyper = self.translator.rtyper
@@ -453,12 +444,9 @@ class WarmRunnerDesc:
                 except DoneWithThisFrameInt, e:
                     assert result_kind == 'int'
                     return lltype.cast_primitive(RESULT, e.result)
-                except DoneWithThisFramePtr, e:
+                except DoneWithThisFrameRef, e:
                     assert result_kind == 'ref'
-                    return lltype.cast_opaque_ptr(RESULT, e.result)
-                except DoneWithThisFrameObj, e:
-                    assert result_kind == 'ref'
-                    return ootype.cast_from_object(RESULT, e.result)
+                    return ts.cast_opaque_ptr(RESULT, e.result)
                 except ExitFrameWithExceptionRef, e:
                     value = ts.cast_to_baseclass(e.value)
                     if not we_are_translated():
