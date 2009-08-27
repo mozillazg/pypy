@@ -189,10 +189,17 @@ def check_keyboard_interrupt(e):
 #
 #
 
-def _pytest_raises_wrapper(*args, **kwargs):
+def _pytest_raises_wrapper(*__args, **__kwargs):
     """Emulate the API of appsupport.pypyraises."""
     __tracebackhide__ = True
-    return py.test.raises(*args, **kwargs)._excinfo
+    # Horrible, nasty, terrible, hideous, ugly hack to help another one.
+    if len(__args) == 2 and isinstance(__args[1], str):
+        me = sys._getframe()
+        them = sys._getframe(1)
+        me.f_globals.update(them.f_globals)
+        me.f_locals.update(them.f_locals)
+        del me, them
+    return py.test.raises(*__args, **__kwargs)._excinfo
 
 def ensure_pytest_builtin_helpers(helpers='skip'.split()):
     """ hack (py.test.) raises and skip into builtins, needed
