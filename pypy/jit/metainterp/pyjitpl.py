@@ -714,10 +714,7 @@ class MIFrame(object):
     def opimpl_indirect_call(self, pc, indirectcallset, box, varargs):
         box = self.implement_guard_value(pc, box)
         cpu = self.metainterp.cpu
-        if cpu.is_oo:
-            key = box.getref_base()
-        else:
-            key = box.getaddr(cpu)
+        key = cpu.ts.getaddr_for_box(cpu, box)
         jitcode = indirectcallset.bytecode_for_address(key)
         f = self.metainterp.newframe(jitcode)
         f.setup_call(varargs)

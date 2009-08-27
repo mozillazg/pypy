@@ -111,6 +111,8 @@ class LLTypeHelper(TypeSystemHelper):
         return lltype.cast_opaque_ptr(TYPE, value)
     cast_opaque_ptr._annspecialcase_ = 'specialize:arg(1)'
 
+    def getaddr_for_box(self, cpu, box):
+        return box.getaddr(cpu)
 
 class OOTypeHelper(TypeSystemHelper):
 
@@ -185,5 +187,8 @@ class OOTypeHelper(TypeSystemHelper):
         return ootype.cast_from_object(TYPE, value)
     cast_opaque_ptr._annspecialcase_ = 'specialize:arg(1)'
 
+    def getaddr_for_box(self, cpu, box):
+        return box.getref_base()
+    
 llhelper = LLTypeHelper()
 oohelper = OOTypeHelper()
