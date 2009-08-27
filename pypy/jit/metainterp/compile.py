@@ -150,27 +150,17 @@ class DoneWithThisFrameDescrInt(AbstractDescr):
             result = resultbox.getint()
         raise metainterp_sd.DoneWithThisFrameInt(result)
 
-class DoneWithThisFrameDescrPtr(AbstractDescr):
+class DoneWithThisFrameDescrRef(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
         assert metainterp_sd.result_type == 'ref'
         resultbox = fail_op.args[0]
-        if isinstance(resultbox, BoxPtr):
-            result = metainterp_sd.cpu.get_latest_value_ref(0)
+        cpu = metainterp_sd.cpu
+        if isinstance(resultbox, cpu.ts.BoxRef):
+            result = cpu.get_latest_value_ref(0)
         else:
             assert isinstance(resultbox, history.Const)
             result = resultbox.getref_base()
-        raise metainterp_sd.DoneWithThisFramePtr(result)
-
-class DoneWithThisFrameDescrObj(AbstractDescr):
-    def handle_fail_op(self, metainterp_sd, fail_op):
-        assert metainterp_sd.result_type == 'ref'
-        resultbox = fail_op.args[0]
-        if isinstance(resultbox, BoxObj):
-            result = metainterp_sd.cpu.get_latest_value_ref(0)
-        else:
-            assert isinstance(resultbox, history.Const)
-            result = resultbox.getref_base()
-        raise metainterp_sd.DoneWithThisFrameObj(result)
+        raise metainterp_sd.DoneWithThisFrameRef(cpu, result)
 
 class ExitFrameWithExceptionDescrRef(AbstractDescr):
     def handle_fail_op(self, metainterp_sd, fail_op):
@@ -186,8 +176,7 @@ class ExitFrameWithExceptionDescrRef(AbstractDescr):
 
 done_with_this_frame_descr_void = DoneWithThisFrameDescrVoid()
 done_with_this_frame_descr_int = DoneWithThisFrameDescrInt()
-done_with_this_frame_descr_ptr = DoneWithThisFrameDescrPtr()
-done_with_this_frame_descr_obj = DoneWithThisFrameDescrObj()
+done_with_this_frame_descr_ref = DoneWithThisFrameDescrRef()
 exit_frame_with_exception_descr_ref = ExitFrameWithExceptionDescrRef()
 
 class TerminatingLoop(TreeLoop):
@@ -205,13 +194,13 @@ loops_done_with_this_frame_int = [_loop]
 _loop = TerminatingLoop('done_with_this_frame_ptr')
 _loop.specnodes = [prebuiltNotSpecNode]
 _loop.inputargs = [BoxPtr()]
-_loop.finishdescr = done_with_this_frame_descr_ptr
+_loop.finishdescr = done_with_this_frame_descr_ref
 loops_done_with_this_frame_ptr = [_loop]
 
 _loop = TerminatingLoop('done_with_this_frame_obj')
 _loop.specnodes = [prebuiltNotSpecNode]
 _loop.inputargs = [BoxObj()]
-_loop.finishdescr = done_with_this_frame_descr_obj
+_loop.finishdescr = done_with_this_frame_descr_ref
 loops_done_with_this_frame_obj = [_loop]
 
 _loop = TerminatingLoop('done_with_this_frame_void')
