@@ -17,8 +17,7 @@ py.log.setconsumer('compiler', ansi_log)
 # ____________________________________________________________
 
 INT = 'i'
-PTR = 'p'
-OBJ = 'o'
+REF = 'r'
 
 def getkind(TYPE):
     if TYPE is lltype.Void:
@@ -280,7 +279,7 @@ class ConstAddr(Const):       # only for constants built before translation
         return repr_rpython(self, 'ca')
 
 class ConstPtr(Const):
-    type = PTR
+    type = REF
     value = lltype.nullptr(llmemory.GCREF.TO)
     _attrs_ = ('value',)
 
@@ -326,7 +325,7 @@ class ConstPtr(Const):
         return hlstr(lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), self.value))
 
 class ConstObj(Const):
-    type = OBJ
+    type = REF
     value = ootype.NULL
     _attrs_ = ('value',)
 
@@ -471,7 +470,7 @@ class BoxInt(Box):
     changevalue_int = __init__
 
 class BoxPtr(Box):
-    type = PTR
+    type = REF
     _attrs_ = ('value',)
 
     def __init__(self, value=lltype.nullptr(llmemory.GCREF.TO)):
@@ -516,7 +515,7 @@ NULLBOX = BoxPtr()
 
 
 class BoxObj(Box):
-    type = OBJ
+    type = REF
     _attrs_ = ('value',)
 
     def __init__(self, value=ootype.NULL):
