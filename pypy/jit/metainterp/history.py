@@ -33,9 +33,9 @@ def getkind(TYPE):
         if TYPE.TO._gckind == 'raw':
             return "int"
         else:
-            return "ptr"
+            return "ref"
     elif isinstance(TYPE, ootype.OOType):
-        return "obj"
+        return "ref"
     else:
         raise NotImplementedError("type %s not supported" % TYPE)
 
@@ -153,12 +153,8 @@ class Const(AbstractValue):
             else:
                 intval = lltype.cast_primitive(lltype.Signed, x)
             return ConstInt(intval)
-        elif kind == "ptr":
-            ptrval = lltype.cast_opaque_ptr(llmemory.GCREF, x)
-            return ConstPtr(ptrval)
-        elif kind == "obj":
-            obj = ootype.cast_to_object(x)
-            return ConstObj(obj)
+        elif kind == "ref":
+            return cpu.ts.new_ConstRef(x)
         else:
             raise NotImplementedError(kind)
 
@@ -388,7 +384,8 @@ class Box(AbstractValue):
         if kind == "int":
             intval = lltype.cast_primitive(lltype.Signed, x)
             return BoxInt(intval)
-        elif kind == "ptr":
+        elif kind == "ref":
+            # XXX add ootype support?
             ptrval = lltype.cast_opaque_ptr(llmemory.GCREF, x)
             return BoxPtr(ptrval)
         else:
