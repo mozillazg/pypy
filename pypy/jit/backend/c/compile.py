@@ -112,6 +112,20 @@ class Compiler:
 
     # ____________________________________________________________
 
+    def _unary(expr):
+        def generate_unary(self, f, op):
+            argnum = self.argnum
+            argnum[op.result] = j = len(argnum)
+            expr2 = expr % (argnum[op.args[0]],)
+            print >> f, 'long v%d=%s;' % (j, expr2)
+        return generate_unary
+
+    generate_SAME_AS     = _unary('v%d')
+    generate_INT_IS_TRUE = _unary('v%d!=0')
+    generate_INT_NEG     = _unary('-v%d')
+    generate_INT_INVERT  = _unary('~v%d')
+    generate_BOOL_NOT    = _unary('!v%d')
+
     def _binary(expr):
         def generate_binary(self, f, op):
             argnum = self.argnum
