@@ -120,13 +120,24 @@ class Compiler:
             print >> f, 'long v%d=%s;' % (j, expr2)
         return generate_binary
 
+    generate_INT_ADD = _binary('v%d+v%d')
+    generate_INT_SUB = _binary('v%d-v%d')
+    generate_INT_MUL = _binary('v%d*v%d')
+    generate_INT_FLOORDIV = _binary('v%d/v%d')
+    generate_INT_MOD = _binary('v%d%%v%d')
+    generate_INT_AND = _binary('v%d&v%d')
+    generate_INT_OR  = _binary('v%d|v%d')
+    generate_INT_XOR = _binary('v%d^v%d')
+    generate_INT_RSHIFT = _binary('v%d>>v%d')
+    generate_INT_LSHIFT = _binary('v%d<<v%d')
+    generate_UINT_RSHIFT = _binary('((unsigned long)v%d)>>v%d')
+
     generate_INT_LT = _binary('v%d<v%d')
     generate_INT_LE = _binary('v%d<=v%d')
     generate_INT_EQ = _binary('v%d==v%d')
     generate_INT_NE = _binary('v%d!=v%d')
     generate_INT_GT = _binary('v%d>v%d')
     generate_INT_GE = _binary('v%d>=v%d')
-
     generate_UINT_LT = _binary('((unsigned long)v%d)<(unsigned long)v%d')
     generate_UINT_LE = _binary('((unsigned long)v%d)<=(unsigned long)v%d')
     generate_UINT_GT = _binary('((unsigned long)v%d)>(unsigned long)v%d')
