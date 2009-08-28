@@ -14,7 +14,7 @@ from pypy.interpreter.pyparser import parser
 class PgenError(Exception):
 
     def __init__(self, msg, location=None):
-        super(PgenError, self).__init__(msg)
+        Exception.__init__(self, msg)
         self.location = location
 
 
