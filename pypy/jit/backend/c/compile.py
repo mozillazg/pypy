@@ -68,11 +68,11 @@ class Compiler:
                     guard_counter)
                 print >> f, 'int _c_jit_f%d(){return %d;}' % (
                     guard_counter, guard_counter)
-                self.set_guard_operation(op.suboperations[0], guard_counter)
                 guard_counter += 1
         #
         funcname = '_c_jit_f%d' % self.fn_counter
         print >> f, 'int %s(){' % funcname
+        self.guard_counter = self.fn_counter + 1
         self.argname = {}
         j = 0
         for arg in inputargs:
@@ -121,7 +121,7 @@ class Compiler:
         if isinstance(v, Box):
             return self.argname[v]
         else:
-            xxx
+            return str(v.get_())
 
     def generate(self, f, op, expr):
         if op.result is None:
@@ -179,13 +179,35 @@ class Compiler:
                                  args_expr)
         self.generate(f, op, expr)
 
+    def generate_failure(self, f, op, return_expr):
+        assert op.opnum == rop.FAIL
+        for j in range(len(op.args)):
+            print >> f, '_c_jit_al[%d]=%s;' % (j, self.vexpr(op.args[j]))
+        print >> f, 'return %s;' % return_expr
+
+    def generate_guard(self, f, op, expr):
+        print >> f, 'if (__builtin_expect(%s,0)){' % expr
+        fail_op = op.suboperations[0]
+        self.generate_failure(f, fail_op, '_c_jit_f%d()' % self.guard_counter)
+        self.set_guard_operation(fail_op, self.guard_counter)
+        self.guard_counter += 1
+        print >> f, '}'
+
+    def generate_GUARD_TRUE(self, f, op):
+        self.generate_guard(f, op, '!%s' % self.vexpr(op.args[0]))
+
+    def generate_GUARD_FALSE(self, f, op):
+        self.generate_guard(f, op, self.vexpr(op.args[0]))
+
+    def generate_GUARD_VALUE(self, f, op):
+        self.generate_guard(f, op, '%s!=%s' % (self.vexpr(op.args[0]),
+                                               self.vexpr(op.args[1])))
+
     def generate_GUARD_NO_EXCEPTION(self, f, op):
         pass  # XXX
 
     def generate_FAIL(self, f, op):
-        for j in range(len(op.args)):
-            print >> f, '_c_jit_al[%d]=%s;' % (j, self.vexpr(op.args[j]))
-        print >> f, 'return %d;' % self.fn_counter
+        self.generate_failure(f, op, str(self.fn_counter))
         self.set_guard_operation(op, self.fn_counter)
 
     def generate_JUMP(self, f, op):
