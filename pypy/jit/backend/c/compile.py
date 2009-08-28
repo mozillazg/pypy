@@ -78,6 +78,7 @@ class Compiler:
         self.argname = {}
         j = 0
         for arg in inputargs:
+            assert arg not in self.argname
             self.argname[arg] = name = 'v%d' % j
             if arg.type == INT:
                 print >> f, 'long %s=_c_jit_al[%d];' % (name, j)
@@ -179,6 +180,11 @@ class Compiler:
     generate_UINT_LE = _binary('((unsigned long)%s)<=(unsigned long)%s')
     generate_UINT_GT = _binary('((unsigned long)%s)>(unsigned long)%s')
     generate_UINT_GE = _binary('((unsigned long)%s)>=(unsigned long)%s')
+
+    generate_OOISNULL  = _unary('%s==0')
+    generate_OONONNULL = _unary('%s!=0')
+    generate_OOIS      = _binary('%s==%s')
+    generate_OOISNOT   = _binary('%s!=%s')
 
     def generate_CALL(self, f, op):
         calldescr = op.descr
