@@ -65,16 +65,34 @@ def test_coro_result_last_value():
     res, space = interpret(inp)
     assert res.slots['result'].value == 99
     
-def test_coro_resume():
-    py.test.skip()
+def test_coro_parent_resume_switch():
+    # py.test.skip()
     inp = """
-    b := message(Coroutine currentCoroutine setResult(23); Coroutine currentCoroutine parentCoroutine resume; "bye" print)
-    a := Coroutine currentCoroutine clone
+    back := currentCoro
+    p := Coroutine currentCoroutine clone do(
+        name := "p"
+      setRunMessage(
+        message(
+          p setResult(99);
+          back resume
+        )
+      )
+    )
+    b := message(
+      Coroutine currentCoroutine setResult(23); 
+      Coroutine currentCoroutine parentCoroutine run; 
+      24
+    )
+    a := Coroutine currentCoroutine clone do(
+        name := "a"
+    )
+    a setParentCoroutine(p)
     a setRunMessage(b) run
-    a result
     """
     res,space = interpret(inp)
-    assert res.value == 23
+    
+    assert space.w_lobby.slots['a'].slots['result'].value == 23
+    assert space.w_lobby.slots['p'].slots['result'].value == 99
     
 def test_coro_resume2():
     inp = """

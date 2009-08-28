@@ -26,6 +26,9 @@ class W_Coroutine(Coroutine):
         return W_Coroutine._get_state(space).current
 
     @staticmethod
+    def w_getmain(space):
+        return W_Coroutine._get_state(space).main
+    @staticmethod
     def _get_state(space):
         # XXX: Need a propper caching machinery
         if not hasattr(space, '_coroutine_state'):
@@ -34,19 +37,24 @@ class W_Coroutine(Coroutine):
         return space._coroutine_state
         
     def run(self, space, w_receiver, w_context):
-        t = IoThunk(space, self.slots['runMessage'], w_receiver, w_context)
-        self.bind(t)
+        if self.thunk is None:
+            t = IoThunk(space, self.slots['runMessage'], self, w_context)
+            self.bind(t)
+            p = self.lookup('parentCoroutine')
+            if not space.isnil(p):
+                self.parent = p
+        
         self.switch()
 
 class AppCoState(BaseCoState):
     def __init__(self, space):
         BaseCoState.__init__(self)
-        self.w_tempval = space.w_nil
         self.space = space
         
     def post_install(self):
-        self.current = self.main = W_Coroutine(self.space, self, [self.space.w_object])
-        # self.main.subctx.framestack = None    # wack
+        self.main = W_Coroutine(self.space, self, [self.space.w_object])
+        self.current = self.main.clone()
+        # self.current.slots['parentCoroutine'] = self.main
 
 class IoThunk(AbstractThunk):
     def __init__(self, space, w_message, w_receiver, w_context):
@@ -57,4 +65,4 @@ class IoThunk(AbstractThunk):
     
     def call(self):
         t = self.w_message.eval(self.space, self.w_receiver, self.w_context)
-        self.w_receiver.slots['result'] = t
+        self.w_receiver.slots['result'] = thunk
