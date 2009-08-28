@@ -28,7 +28,7 @@ class ObjSpace(object):
         self.w_list = W_List(self, [self.w_object])
         self.w_call = W_Object(self, [self.w_object])
         self.w_map = W_Map(self, [self.w_object])
-        self.w_coroutine = W_Coroutine.w_getcurrent(self)
+        self.w_coroutine = W_Coroutine.w_getmain(self)
         # flow control objects
         self.w_normal = W_Object(self, [self.w_object])
         self.w_break = W_Object(self, [self.w_object])
@@ -191,6 +191,9 @@ class ObjSpace(object):
         if value:
             return self.w_true
         return self.w_false
+    
+    def isnil(self, w_object):
+        return w_object is self.w_nil
         
     def init_stored_messages(self):
         self.w_print_message = W_Message(self, 'print', [])
