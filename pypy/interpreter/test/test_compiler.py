@@ -652,6 +652,7 @@ class TestPyCCompiler(BaseTestCompiler):
     elif sys.version_info < (2, 5):
         def skip_on_2_4(self):
             py.test.skip("syntax not supported by the CPython 2.4 compiler")
+        _unicode_error_kind = "w_UnicodeError"
         test_continue_in_nested_finally = skip_on_2_4
         test_try_except_finally = skip_on_2_4
         test_yield_in_finally = skip_on_2_4
