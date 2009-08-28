@@ -189,8 +189,17 @@ def _exc_info(space, err):
     frame = space.getexecutioncontext().framestack.top()
     old = frame.last_exception
     frame.last_exception = err
+    if not hasattr(space, '_w_ExceptionInfo'):
+        space._w_ExceptionInfo = space.appexec([], """():
+    class _ExceptionInfo(object):
+        def __init__(self):
+            import sys
+            self.type, self.value, _ = sys.exc_info()
+
+    return _ExceptionInfo
+""")    
     try:
-        return space.sys.call("exc_info")
+        return space.call_function(space._w_ExceptionInfo)
     finally:
         frame.last_exception = old
 

@@ -56,13 +56,13 @@ class AppTestAST:
             return compile(node, "<test>", "exec")
         mod = ast.Module()
         raises(AttributeError, getattr, mod, "body")
-        exc = raises(TypeError, com, mod)[1]
+        exc = raises(TypeError, com, mod).value
         assert str(exc) == "required attribute 'body' missing from Module"
         expr = ast.Name()
         expr.id = "hi"
         expr.ctx = ast.Load()
         expr.lineno = 4
-        exc = raises(TypeError, com, ast.Module([ast.Expr(expr, 0, 0)]))[1]
+        exc = raises(TypeError, com, ast.Module([ast.Expr(expr, 0, 0)])).value
         assert str(exc) == "required attribute 'col_offset' missing from Name"
 
     def test_int(self):
@@ -156,7 +156,7 @@ class AppTestAST:
         assert fr.body is body
         assert fr.lineno == 0
         assert fr.col_offset == 1
-        exc = raises(TypeError, ast.Module, 1, 2)[1]
+        exc = raises(TypeError, ast.Module, 1, 2).value
         msg = str(exc)
         assert msg == "Module constructor takes 0 or 1 positional arguments"
         raises(AttributeError, ast.Module, nothing=23)
