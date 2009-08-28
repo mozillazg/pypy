@@ -1,10 +1,11 @@
-from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.tool.udir import udir
 from pypy.rlib import libffi
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp import resoperation, history
 from pypy.jit.metainterp.resoperation import ResOperation, rop
-from pypy.jit.metainterp.history import AbstractDescr, Box, BoxInt, BoxPtr
+from pypy.jit.metainterp.history import AbstractDescr, Box, BoxInt, BoxPtr, INT
+from pypy.jit.metainterp.history import ConstPtr
 import os
 
 
@@ -14,7 +15,8 @@ class CompilerError(Exception):
 
 class Compiler:
     FUNCPTR = lltype.Ptr(lltype.FuncType([], rffi.INT))
-    
+    CHARPP = lltype.Ptr(lltype.Array(llmemory.GCREF, hints={'nolength': True}))
+
     def __init__(self):
         self.fn_counter = 0
         self.filename_counter = 0
@@ -77,7 +79,10 @@ class Compiler:
         j = 0
         for arg in inputargs:
             self.argname[arg] = name = 'v%d' % j
-            print >> f, 'long %s=_c_jit_al[%d];' % (name, j)
+            if arg.type == INT:
+                print >> f, 'long %s=_c_jit_al[%d];' % (name, j)
+            else:
+                print >> f, 'char*%s=_c_jit_ap[%d];' % (name, j)
             j += 1
         if simpleloop:
             print >> f, 'while(1){'
@@ -105,7 +110,9 @@ class Compiler:
         handle = libffi.dlopen(fn, libffi.RTLD_GLOBAL | libffi.RTLD_NOW)
         if self.c_jit_al is None:
             c_jit_al = libffi.dlsym(handle, "_c_jit_al")
+            c_jit_ap = libffi.dlsym(handle, "_c_jit_ap")
             self.c_jit_al = rffi.cast(rffi.LONGP, c_jit_al)
+            self.c_jit_ap = rffi.cast(self.CHARPP, c_jit_ap)
         if funcname is not None:
             c_func = libffi.dlsym(handle, funcname)
             loop._c_jit_func = rffi.cast(self.FUNCPTR, c_func)
@@ -120,8 +127,10 @@ class Compiler:
     def vexpr(self, v):
         if isinstance(v, Box):
             return self.argname[v]
+        elif isinstance(v, ConstPtr):
+            return str(rffi.cast(lltype.Signed, v.value))
         else:
-            return str(v.get_())
+            return str(v.getint())
 
     def generate(self, f, op, expr):
         if op.result is None:
@@ -182,7 +191,11 @@ class Compiler:
     def generate_failure(self, f, op, return_expr):
         assert op.opnum == rop.FAIL
         for j in range(len(op.args)):
-            print >> f, '_c_jit_al[%d]=%s;' % (j, self.vexpr(op.args[j]))
+            box = op.args[j]
+            if box.type == INT:
+                print >> f, '_c_jit_al[%d]=%s;' % (j, self.vexpr(box))
+            else:
+                print >> f, '_c_jit_ap[%d]=%s;' % (j, self.vexpr(box))
         print >> f, 'return %s;' % return_expr
 
     def generate_guard(self, f, op, expr):
