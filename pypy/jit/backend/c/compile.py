@@ -294,6 +294,31 @@ def get_class_for_type(TYPE):
 BoxInt._c_jit_type = 'long'
 BoxPtr._c_jit_type = 'char*'
 
+BoxInt._c_jit_make = staticmethod(lambda value: BoxInt(value))
+BoxPtr._c_jit_make = staticmethod(lambda value: BoxPtr(
+                                           rffi.cast(llmemory.GCREF, value)))
+
+
+class ArrayDescr(AbstractDescr):
+    def __init__(self, item_cls, item_c_type, item_size):
+        self.item_cls = item_cls
+        self.item_c_type = item_c_type
+        self.item_size = item_size
+
+def get_c_array_descr(ITEM):
+    assert ITEM is not lltype.Void
+    cls = get_class_for_type(ITEM)
+    c_type = get_c_type(ITEM)
+    try:
+        return _c_array_type_for_item_type[cls, c_type]
+    except KeyError:
+        descr = ArrayDescr(cls, c_type, rffi.sizeof(ITEM))
+        _c_array_type_for_item_type[cls, c_type] = descr
+        return descr
+
+_c_array_type_for_item_type = {}
+
+
 class CallDescr(AbstractDescr):
     call_loop = None
 
