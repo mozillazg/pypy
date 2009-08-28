@@ -2,6 +2,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.c.compile import Compiler, get_c_type, get_class_for_type
 from pypy.jit.backend.c.compile import CallDescr, ArrayDescr, get_c_array_descr
+from pypy.jit.backend.c.compile import FieldDescr
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.history import BoxInt, BoxPtr
 from pypy.jit.backend.x86 import symbolic
@@ -14,6 +15,7 @@ class CCPU(AbstractCPU):
 
     def __init__(self, rtyper, stats, translate_support_code=False):
         self.rtyper = rtyper
+        self.field_descrs = {}
         self.call_descrs = {}
         self.compiler = Compiler(translate_support_code)
         self.translate_support_code = translate_support_code
@@ -36,6 +38,19 @@ class CCPU(AbstractCPU):
     def get_latest_value_ptr(self, index):
         return self.compiler.c_jit_ap[index]
 
+    def fielddescrof(self, S, fieldname):
+        try:
+            return self.field_descrs[S, fieldname]
+        except KeyError:
+            pass
+        ofs, size = symbolic.get_field_token(S, fieldname,
+                                             self.translate_support_code)
+        cls = get_class_for_type(getattr(S, fieldname))
+        c_type = get_c_type(getattr(S, fieldname))
+        descr = FieldDescr(ofs, cls, c_type, size)
+        self.field_descrs[S, fieldname] = descr
+        return descr
+
     @staticmethod
     def arraydescrof(A):
         return get_c_array_descr(A.OF)
@@ -52,6 +67,22 @@ class CCPU(AbstractCPU):
         descr = CallDescr(args_cls, cls_result, ct_result)
         self.call_descrs[key] = descr
         return descr
+
+    def do_getfield_gc(self, args, fielddescr):
+        assert isinstance(fielddescr, FieldDescr)
+        gcref = args[0].getptr(llmemory.GCREF)
+        ofs = fielddescr.field_ofs
+        size = fielddescr.field_size
+        if size == 1:
+            v = ord(rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[ofs])
+        elif size == 2:
+            v = rffi.cast(rffi.CArrayPtr(rffi.USHORT), gcref)[ofs/2]
+            v = rffi.cast(lltype.Signed, v)
+        elif size == WORD:
+            v = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs/WORD]
+        else:
+            raise NotImplementedError("size = %d" % size)
+        return fielddescr.field_cls._c_jit_make(v)
 
     def do_arraylen_gc(self, args, arraydescr):
         ofs = 0    #self.gc_ll_descr.array_length_ofs
