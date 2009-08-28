@@ -9,10 +9,10 @@ from pypy.jit.metainterp.history import BoxInt, BoxPtr
 class CCPU(AbstractCPU):
     is_oo = False
 
-    def __init__(self, rtyper, stats):
+    def __init__(self, rtyper, stats, translate_support_code=False):
         self.rtyper = rtyper
         self.call_descrs = {}
-        self.compiler = Compiler()
+        self.compiler = Compiler(translate_support_code)
 
     def compile_operations(self, loop, guard_op=None):
         self.compiler.compile_operations(loop, guard_op)

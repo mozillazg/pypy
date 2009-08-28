@@ -1,4 +1,4 @@
-from pypy.rpython.lltypesystem import lltype, llmemory, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
 from pypy.tool.udir import udir
 from pypy.rlib import libffi
 from pypy.rlib.objectmodel import we_are_translated
@@ -6,6 +6,7 @@ from pypy.jit.metainterp import resoperation, history
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import AbstractDescr, Box, BoxInt, BoxPtr, INT
 from pypy.jit.metainterp.history import ConstPtr
+from pypy.jit.backend.x86 import symbolic
 import os
 
 
@@ -17,12 +18,13 @@ class Compiler:
     FUNCPTR = lltype.Ptr(lltype.FuncType([], rffi.INT))
     CHARPP = lltype.Ptr(lltype.Array(llmemory.GCREF, hints={'nolength': True}))
 
-    def __init__(self):
+    def __init__(self, translate_support_code):
         self.fn_counter = 0
         self.filename_counter = 0
         self.c_jit_al = None
         self.c_jit_ap = None
         self.guard_operations = []
+        self.translate_support_code = translate_support_code
 
     def run(self, loop):
         res = loop._c_jit_func()
@@ -101,7 +103,8 @@ class Compiler:
         basename = os.path.basename(fn)
         output_fn = basename[:-2]+'.so'
         retcode = subprocess.call(
-            ['gcc', basename, '-shared', '-o', output_fn],
+            ['gcc', '-fomit-frame-pointer', '-O2', basename,
+             '-shared', '-o', output_fn],
             cwd=os.path.dirname(fn))
         if retcode != 0:
             raise CompilerError(fn)
@@ -194,6 +197,29 @@ class Compiler:
                                  args_expr)
         self.generate(f, op, expr)
 
+    def generate_STRLEN(self, f, op):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
+                                                   self.translate_support_code)
+        self.generate(f, op, '*(long*)(%s+%d)' % (self.vexpr(op.args[0]),
+                                                  ofs_length))
+
+    def generate_STRGETITEM(self, f, op):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
+                                                   self.translate_support_code)
+        self.generate(f, op, '(unsigned char)%s[%d+%s]' % (
+            self.vexpr(op.args[0]),
+            basesize,
+            self.vexpr(op.args[1])))
+
+    def generate_STRSETITEM(self, f, op):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
+                                                   self.translate_support_code)
+        print >> f, '%s[%d+%s]=%s;' % (
+            self.vexpr(op.args[0]),
+            basesize,
+            self.vexpr(op.args[1]),
+            self.vexpr(op.args[2]))
+
     def generate_failure(self, f, op, return_expr):
         assert op.opnum == rop.FAIL
         for j in range(len(op.args)):
@@ -232,7 +258,8 @@ class Compiler:
     def generate_JUMP(self, f, op):
         if self.simpleloop:
             for j in range(len(op.args)):
-                print >> f, 'long w%d=%s;' % (j, self.vexpr(op.args[j]))
+                print >> f, '%s w%d=%s;' % (op.args[j]._c_jit_type,
+                                            j, self.vexpr(op.args[j]))
             for j in range(len(op.args)):
                 print >> f, 'v%d=w%d;' % (j, j)
             print >> f, '}'
