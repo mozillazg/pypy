@@ -1,4 +1,4 @@
-from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.c.compile import Compiler, get_c_type, get_class_for_type
 from pypy.jit.backend.c.compile import CallDescr
@@ -20,11 +20,17 @@ class CCPU(AbstractCPU):
     def set_future_value_int(self, index, intvalue):
         self.compiler.c_jit_al[index] = intvalue
 
+    def set_future_value_ptr(self, index, ptrvalue):
+        self.compiler.c_jit_ap[index] = ptrvalue
+
     def execute_operations(self, loop):
         return self.compiler.run(loop)
 
     def get_latest_value_int(self, index):
         return self.compiler.c_jit_al[index]
+
+    def get_latest_value_ptr(self, index):
+        return self.compiler.c_jit_ap[index]
 
     def calldescrof(self, FUNC, ARGS, RESULT):
         args_cls = [get_class_for_type(ARG) for ARG in ARGS]
@@ -53,9 +59,15 @@ class CCPU(AbstractCPU):
         else:
             return BoxInt(self.get_latest_value_int(0))
 
+    def do_newstr(self, args, descr=None):
+        xxx#...
+
     @staticmethod
     def cast_adr_to_int(addr):
         return rffi.cast(lltype.Signed, addr)
 
 
 CPU = CCPU
+
+import pypy.jit.metainterp.executor
+pypy.jit.metainterp.executor.make_execute_list(CPU)
