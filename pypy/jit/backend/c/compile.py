@@ -112,15 +112,25 @@ class Compiler:
 
     # ____________________________________________________________
 
-    def _binary(binop):
+    def _binary(expr):
         def generate_binary(self, f, op):
             argnum = self.argnum
             argnum[op.result] = j = len(argnum)
-            print >> f, 'long v%d=v%d%sv%d;' % (j,     argnum[op.args[0]],
-                                                binop, argnum[op.args[1]])
+            expr2 = expr % (argnum[op.args[0]], argnum[op.args[1]])
+            print >> f, 'long v%d=%s;' % (j, expr2)
         return generate_binary
 
-    generate_INT_LT = _binary('<')
+    generate_INT_LT = _binary('v%d<v%d')
+    generate_INT_LE = _binary('v%d<=v%d')
+    generate_INT_EQ = _binary('v%d==v%d')
+    generate_INT_NE = _binary('v%d!=v%d')
+    generate_INT_GT = _binary('v%d>v%d')
+    generate_INT_GE = _binary('v%d>=v%d')
+
+    generate_UINT_LT = _binary('((unsigned long)v%d)<(unsigned long)v%d')
+    generate_UINT_LE = _binary('((unsigned long)v%d)<=(unsigned long)v%d')
+    generate_UINT_GT = _binary('((unsigned long)v%d)>(unsigned long)v%d')
+    generate_UINT_GE = _binary('((unsigned long)v%d)>=(unsigned long)v%d')
 
     def generate_FAIL(self, f, op):
         for j in range(len(op.args)):
