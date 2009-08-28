@@ -299,6 +299,14 @@ BoxPtr._c_jit_make = staticmethod(lambda value: BoxPtr(
                                            rffi.cast(llmemory.GCREF, value)))
 
 
+class FieldDescr(AbstractDescr):
+    def __init__(self, field_ofs, field_cls, field_c_type, field_size):
+        self.field_ofs = field_ofs
+        self.field_cls = field_cls
+        self.field_c_type = field_c_type
+        self.field_size = field_size
+
+
 class ArrayDescr(AbstractDescr):
     def __init__(self, item_cls, item_c_type, item_size):
         self.item_cls = item_cls
