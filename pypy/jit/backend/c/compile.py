@@ -2,9 +2,14 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.tool.udir import udir
 from pypy.rlib import libffi
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.jit.metainterp import resoperation
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp import resoperation, history
+from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.metainterp.history import AbstractDescr, Box, BoxInt, BoxPtr
 import os
+
+
+class CompilerError(Exception):
+    pass
 
 
 class Compiler:
@@ -68,11 +73,11 @@ class Compiler:
         #
         funcname = '_c_jit_f%d' % self.fn_counter
         print >> f, 'int %s(){' % funcname
-        self.argnum = {}
+        self.argname = {}
         j = 0
         for arg in inputargs:
-            self.argnum[arg] = j
-            print >> f, 'long v%d=_c_jit_al[%d];' % (j, j)
+            self.argname[arg] = name = 'v%d' % j
+            print >> f, 'long %s=_c_jit_al[%d];' % (name, j)
             j += 1
         if simpleloop:
             print >> f, 'while(1){'
@@ -112,61 +117,81 @@ class Compiler:
 
     # ____________________________________________________________
 
+    def vexpr(self, v):
+        if isinstance(v, Box):
+            return self.argname[v]
+        else:
+            xxx
+
+    def generate(self, f, op, expr):
+        if op.result is None:
+            print >> f, '%s;' % expr
+        else:
+            argname = self.argname
+            argname[op.result] = name = 'v%d' % len(argname)
+            print >> f, '%s %s=%s;' % (op.result._c_jit_type, name, expr)
+
     def _unary(expr):
         def generate_unary(self, f, op):
-            argnum = self.argnum
-            argnum[op.result] = j = len(argnum)
-            expr2 = expr % (argnum[op.args[0]],)
-            print >> f, 'long v%d=%s;' % (j, expr2)
+            self.generate(f, op, expr % (self.vexpr(op.args[0]),))
         return generate_unary
 
-    generate_SAME_AS     = _unary('v%d')
-    generate_INT_IS_TRUE = _unary('v%d!=0')
-    generate_INT_NEG     = _unary('-v%d')
-    generate_INT_INVERT  = _unary('~v%d')
-    generate_BOOL_NOT    = _unary('!v%d')
+    generate_SAME_AS     = _unary('%s')
+    generate_INT_IS_TRUE = _unary('%s!=0')
+    generate_INT_NEG     = _unary('-%s')
+    generate_INT_INVERT  = _unary('~%s')
+    generate_BOOL_NOT    = _unary('!%s')
 
     def _binary(expr):
         def generate_binary(self, f, op):
-            argnum = self.argnum
-            argnum[op.result] = j = len(argnum)
-            expr2 = expr % (argnum[op.args[0]], argnum[op.args[1]])
-            print >> f, 'long v%d=%s;' % (j, expr2)
+            self.generate(f, op, expr % (self.vexpr(op.args[0]),
+                                         self.vexpr(op.args[1])))
         return generate_binary
 
-    generate_INT_ADD = _binary('v%d+v%d')
-    generate_INT_SUB = _binary('v%d-v%d')
-    generate_INT_MUL = _binary('v%d*v%d')
-    generate_INT_FLOORDIV = _binary('v%d/v%d')
-    generate_INT_MOD = _binary('v%d%%v%d')
-    generate_INT_AND = _binary('v%d&v%d')
-    generate_INT_OR  = _binary('v%d|v%d')
-    generate_INT_XOR = _binary('v%d^v%d')
-    generate_INT_RSHIFT = _binary('v%d>>v%d')
-    generate_INT_LSHIFT = _binary('v%d<<v%d')
-    generate_UINT_RSHIFT = _binary('((unsigned long)v%d)>>v%d')
+    generate_INT_ADD = _binary('%s+%s')
+    generate_INT_SUB = _binary('%s-%s')
+    generate_INT_MUL = _binary('%s*%s')
+    generate_INT_FLOORDIV = _binary('%s/%s')
+    generate_INT_MOD = _binary('%s%%%s')
+    generate_INT_AND = _binary('%s&%s')
+    generate_INT_OR  = _binary('%s|%s')
+    generate_INT_XOR = _binary('%s^%s')
+    generate_INT_RSHIFT = _binary('%s>>%s')
+    generate_INT_LSHIFT = _binary('%s<<%s')
+    generate_UINT_RSHIFT = _binary('((unsigned long)%s)>>%s')
 
-    generate_INT_LT = _binary('v%d<v%d')
-    generate_INT_LE = _binary('v%d<=v%d')
-    generate_INT_EQ = _binary('v%d==v%d')
-    generate_INT_NE = _binary('v%d!=v%d')
-    generate_INT_GT = _binary('v%d>v%d')
-    generate_INT_GE = _binary('v%d>=v%d')
-    generate_UINT_LT = _binary('((unsigned long)v%d)<(unsigned long)v%d')
-    generate_UINT_LE = _binary('((unsigned long)v%d)<=(unsigned long)v%d')
-    generate_UINT_GT = _binary('((unsigned long)v%d)>(unsigned long)v%d')
-    generate_UINT_GE = _binary('((unsigned long)v%d)>=(unsigned long)v%d')
+    generate_INT_LT = _binary('%s<%s')
+    generate_INT_LE = _binary('%s<=%s')
+    generate_INT_EQ = _binary('%s==%s')
+    generate_INT_NE = _binary('%s!=%s')
+    generate_INT_GT = _binary('%s>%s')
+    generate_INT_GE = _binary('%s>=%s')
+    generate_UINT_LT = _binary('((unsigned long)%s)<(unsigned long)%s')
+    generate_UINT_LE = _binary('((unsigned long)%s)<=(unsigned long)%s')
+    generate_UINT_GT = _binary('((unsigned long)%s)>(unsigned long)%s')
+    generate_UINT_GE = _binary('((unsigned long)%s)>=(unsigned long)%s')
+
+    def generate_CALL(self, f, op):
+        calldescr = op.descr
+        assert isinstance(calldescr, CallDescr)
+        args_expr = ','.join([self.vexpr(v_arg) for v_arg in op.args[1:]])
+        expr = '((%s)%s)(%s)' % (calldescr.func_c_type, self.vexpr(op.args[0]),
+                                 args_expr)
+        self.generate(f, op, expr)
+
+    def generate_GUARD_NO_EXCEPTION(self, f, op):
+        pass  # XXX
 
     def generate_FAIL(self, f, op):
         for j in range(len(op.args)):
-            print >> f, '_c_jit_al[%d]=v%d;' % (j, self.argnum[op.args[j]])
+            print >> f, '_c_jit_al[%d]=%s;' % (j, self.vexpr(op.args[j]))
         print >> f, 'return %d;' % self.fn_counter
         self.set_guard_operation(op, self.fn_counter)
 
     def generate_JUMP(self, f, op):
         if self.simpleloop:
             for j in range(len(op.args)):
-                print >> f, 'long w%d=v%d;' % (j, self.argnum[op.args[j]])
+                print >> f, 'long w%d=%s;' % (j, self.vexpr(op.args[j]))
             for j in range(len(op.args)):
                 print >> f, 'v%d=w%d;' % (j, j)
             print >> f, '}'
@@ -174,5 +199,64 @@ class Compiler:
             xxx
 
 
-class CompilerError(Exception):
-    pass
+# ____________________________________________________________
+
+def get_c_type(TYPE):
+    if TYPE is lltype.Void:
+        return 'void'
+    if isinstance(TYPE, lltype.Ptr):
+        return 'char*'
+    return _c_type_by_size[rffi.sizeof(TYPE)]
+
+_c_type_by_size = {
+    rffi.sizeof(rffi.CHAR): 'char',
+    rffi.sizeof(rffi.SHORT): 'short',
+    rffi.sizeof(rffi.INT): 'int',
+    rffi.sizeof(rffi.LONG): 'long',
+    }
+
+def get_class_for_type(TYPE):
+    if TYPE is lltype.Void:
+        return None
+    elif history.getkind(TYPE) == 'ptr':
+        return BoxPtr
+    else:
+        return BoxInt
+
+BoxInt._c_jit_type = 'long'
+BoxPtr._c_jit_type = 'char*'
+
+class CallDescr(AbstractDescr):
+    call_loop = None
+
+    def __init__(self, arg_classes, ret_class, ret_c_type):
+        self.arg_classes = arg_classes
+        self.ret_class = ret_class
+        self.ret_c_type = ret_c_type
+        if arg_classes:
+            arg_c_types = [cls._c_jit_type for cls in arg_classes]
+            arg_c_types = ','.join(arg_c_types)
+        else:
+            arg_c_types = 'void'
+        self.func_c_type = '%s(*)(%s)' % (ret_c_type, arg_c_types)
+
+    def get_loop_for_call(self, compiler):
+        if self.call_loop is None:
+            args = [BoxInt()] + [cls() for cls in self.arg_classes]
+            if self.ret_class is None:
+                result = None
+                result_list = []
+            else:
+                result = self.ret_class()
+                result_list = [result]
+            operations = [
+                ResOperation(rop.CALL, args, result, self),
+                ResOperation(rop.GUARD_NO_EXCEPTION, [], None),
+                ResOperation(rop.FAIL, result_list, None)]
+            operations[1].suboperations = [ResOperation(rop.FAIL, [], None)]
+            loop = history.TreeLoop('call')
+            loop.inputargs = args
+            loop.operations = operations
+            compiler.compile_operations(loop)
+            self.call_loop = loop
+        return self.call_loop
