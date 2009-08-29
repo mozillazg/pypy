@@ -5,6 +5,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llsupport import symbolic
+from pypy.jit.backend.llsupport.descr import get_size_descr, SizeDescr
 from pypy.jit.backend.llsupport.descr import get_field_descr, get_array_descr
 from pypy.jit.backend.llsupport.descr import AbstractFieldDescr
 from pypy.jit.backend.llsupport.descr import AbstractArrayDescr
@@ -50,6 +51,9 @@ class AbstractLLCPU(AbstractCPU):
 
     def cast_gcref_to_int(self, x):
         return rffi.cast(lltype.Signed, x)
+
+    def sizeof(self, S):
+        return get_size_descr(S, self.translate_support_code)
 
     def fielddescrof(self, STRUCT, fieldname):
         return get_field_descr(STRUCT, fieldname, self.translate_support_code)
@@ -166,6 +170,10 @@ class AbstractLLCPU(AbstractCPU):
 
     def do_setfield_raw(self, args, fielddescr):
         self._base_do_setfield(args[0].getint(), args[1], fielddescr)
+
+    def do_new(self, args, sizedescr):
+        res = self.gc_ll_descr.gc_malloc(sizedescr)
+        return BoxPtr(res)
 
 
 import pypy.jit.metainterp.executor

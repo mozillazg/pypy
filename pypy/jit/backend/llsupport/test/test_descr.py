@@ -1,6 +1,22 @@
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.jit.backend.llsupport.descr import *
+from pypy.jit.backend.llsupport import symbolic
 from pypy.rlib.objectmodel import Symbolic
+
+
+def test_get_size_descr():
+    T = lltype.GcStruct('T')
+    S = lltype.GcStruct('S', ('x', lltype.Char),
+                             ('y', lltype.Ptr(T)))
+    descr_s = get_size_descr(S, False)
+    descr_t = get_size_descr(T, False)
+    assert descr_s.size == symbolic.get_size(S, False)
+    assert descr_t.size == symbolic.get_size(T, False)
+    assert descr_s == get_size_descr(S, False)
+    assert descr_s != get_size_descr(S, True)
+    #
+    descr_s = get_size_descr(S, True)
+    assert isinstance(descr_s.size, Symbolic)
 
 
 def test_get_field_descr():
