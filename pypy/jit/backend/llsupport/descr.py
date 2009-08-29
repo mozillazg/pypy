@@ -1,3 +1,4 @@
+import weakref
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import AbstractDescr
@@ -38,15 +39,17 @@ def getFieldDescrClass(TYPE):
     return getDescrClass(TYPE, AbstractFieldDescr, GcPtrFieldDescr,
                          NonGcPtrFieldDescr, 'Field')
 
-def get_field_descr(STRUCT, fieldname, translate_support_code, _cache={}):
+def get_field_descr(STRUCT, fieldname, translate_support_code,
+                    _cache=weakref.WeakKeyDictionary()):
     try:
-        return _cache[STRUCT, fieldname, translate_support_code]
+        return _cache[STRUCT][fieldname, translate_support_code]
     except KeyError:
         offset, _ = symbolic.get_field_token(STRUCT, fieldname,
                                              translate_support_code)
         FIELDTYPE = getattr(STRUCT, fieldname)
         fielddescr = getFieldDescrClass(FIELDTYPE)(offset)
-        _cache[STRUCT, fieldname, translate_support_code] = fielddescr
+        cachedict = _cache.setdefault(STRUCT, {})
+        cachedict[fieldname, translate_support_code] = fielddescr
         return fielddescr
 
 
@@ -85,7 +88,7 @@ def getArrayDescrClass(ARRAY):
     return getDescrClass(ARRAY.OF, AbstractArrayDescr, GcPtrArrayDescr,
                          NonGcPtrArrayDescr, 'Array')
 
-def get_array_descr(ARRAY, _cache={}):
+def get_array_descr(ARRAY, _cache=weakref.WeakKeyDictionary()):
     try:
         return _cache[ARRAY]
     except KeyError:
