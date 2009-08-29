@@ -32,7 +32,6 @@ class __extend__(TreeLoop):
 class CliCPU(model.AbstractCPU):
     
     ts = oohelper
-    is_oo = True
 
     def __init__(self, rtyper, stats, translate_support_code=False,
                  mixlevelann=None, gcdescr=None):
