@@ -121,50 +121,84 @@ class FakeLLOp:
                             repr(offset_to_length), p))
         return p
 
+    def _write_barrier_failing_case(self, adr_struct, adr_newptr):
+        self.record.append(('barrier', adr_struct, adr_newptr))
 
-def test_framework_malloc():
-    class FakeTranslator:
-        pass
-    class config:
-        class translation:
-            gc = 'hybrid'
-            gcrootfinder = 'asmgcc'
-            gctransformer = 'framework'
-    gcdescr = get_description(config)
-    translator = FakeTranslator()
-    llop1 = FakeLLOp()
-    gc_ll_descr = GcLLDescr_framework(gcdescr, FakeTranslator(), llop1)
-    #
-    # ---------- gc_malloc ----------
-    S = lltype.GcStruct('S', ('x', lltype.Signed))
-    sizedescr = get_size_descr(gc_ll_descr, S)
-    p = gc_ll_descr.gc_malloc(sizedescr)
-    assert llop1.record == [("fixedsize", sizedescr.type_id,
-                             repr(sizedescr.size), False, p)]
-    del llop1.record[:]
-    # ---------- gc_malloc_array ----------
-    A = lltype.GcArray(lltype.Signed)
-    arraydescr = get_array_descr(gc_ll_descr, A)
-    p = gc_ll_descr.gc_malloc_array(arraydescr, 10)
-    assert llop1.record == [("varsize", arraydescr.type_id, 10,
-                             repr(arraydescr.get_base_size(True)),
-                             repr(arraydescr.get_item_size(True)),
-                             repr(arraydescr.get_ofs_length(True)), p)]
-    del llop1.record[:]
-    # ---------- gc_malloc_str ----------
-    p = gc_ll_descr.gc_malloc_str(10)
-    type_id = gc_ll_descr.layoutbuilder.get_type_id(rstr.STR)
-    basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR, True)
-    assert llop1.record == [("varsize", type_id, 10,
-                             repr(basesize), repr(itemsize), repr(ofs_length),
-                             p)]
-    del llop1.record[:]
-    # ---------- gc_malloc_unicode ----------
-    p = gc_ll_descr.gc_malloc_unicode(10)
-    type_id = gc_ll_descr.layoutbuilder.get_type_id(rstr.UNICODE)
-    basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
-                                                              True)
-    assert llop1.record == [("varsize", type_id, 10,
-                             repr(basesize), repr(itemsize), repr(ofs_length),
-                             p)]
-    del llop1.record[:]
+    def get_write_barrier_failing_case(self, FUNCTYPE):
+        return self._write_barrier_failing_case
+
+
+class TestFramework:
+
+    def setup_method(self, meth):
+        class FakeTranslator:
+            pass
+        class config:
+            class translation:
+                gc = 'hybrid'
+                gcrootfinder = 'asmgcc'
+                gctransformer = 'framework'
+        gcdescr = get_description(config)
+        translator = FakeTranslator()
+        self.llop1 = FakeLLOp()
+        self.gc_ll_descr = GcLLDescr_framework(gcdescr, FakeTranslator(),
+                                               self.llop1)
+
+    def test_gc_malloc(self):
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        sizedescr = get_size_descr(self.gc_ll_descr, S)
+        p = self.gc_ll_descr.gc_malloc(sizedescr)
+        assert self.llop1.record == [("fixedsize", sizedescr.type_id,
+                                      repr(sizedescr.size), False, p)]
+        assert repr(self.gc_ll_descr.args_for_new(sizedescr)) == repr(
+            [sizedescr.size, sizedescr.type_id, False])
+
+    def test_gc_malloc_array(self):
+        A = lltype.GcArray(lltype.Signed)
+        arraydescr = get_array_descr(self.gc_ll_descr, A)
+        p = self.gc_ll_descr.gc_malloc_array(arraydescr, 10)
+        assert self.llop1.record == [("varsize", arraydescr.type_id, 10,
+                                      repr(arraydescr.get_base_size(True)),
+                                      repr(arraydescr.get_item_size(True)),
+                                      repr(arraydescr.get_ofs_length(True)),
+                                      p)]
+        assert repr(self.gc_ll_descr.args_for_new_array(arraydescr)) == repr(
+            [arraydescr.get_item_size(True), arraydescr.type_id])
+
+    def test_gc_malloc_str(self):
+        p = self.gc_ll_descr.gc_malloc_str(10)
+        type_id = self.gc_ll_descr.layoutbuilder.get_type_id(rstr.STR)
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
+                                                                  True)
+        assert self.llop1.record == [("varsize", type_id, 10,
+                                      repr(basesize), repr(itemsize),
+                                      repr(ofs_length), p)]
+
+    def test_gc_malloc_unicode(self):
+        p = self.gc_ll_descr.gc_malloc_unicode(10)
+        type_id = self.gc_ll_descr.layoutbuilder.get_type_id(rstr.UNICODE)
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
+                                                                  True)
+        assert self.llop1.record == [("varsize", type_id, 10,
+                                      repr(basesize), repr(itemsize),
+                                      repr(ofs_length), p)]
+
+    def test_do_write_barrier(self):
+        gc_ll_descr = self.gc_ll_descr
+        R = lltype.GcStruct('R')
+        S = lltype.GcStruct('S', ('r', lltype.Ptr(R)))
+        s = lltype.malloc(S)
+        r = lltype.malloc(R)
+        s_hdr = gc_ll_descr.gcheaderbuilder.new_header(s)
+        s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+        r_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, r)
+        s_adr = llmemory.cast_ptr_to_adr(s)
+        r_adr = llmemory.cast_ptr_to_adr(r)
+        #
+        s_hdr.tid &= ~gc_ll_descr.GCClass.JIT_WB_IF_FLAG
+        gc_ll_descr.do_write_barrier(s_gcref, r_gcref)
+        assert self.llop1.record == []    # not called
+        #
+        s_hdr.tid |= gc_ll_descr.GCClass.JIT_WB_IF_FLAG
+        gc_ll_descr.do_write_barrier(s_gcref, r_gcref)
+        assert self.llop1.record == [('barrier', s_adr, r_adr)]

@@ -266,6 +266,7 @@ class GcLLDescr_framework(GcLLDescription):
 
     def __init__(self, gcdescr, translator, llop1=llop):
         from pypy.rpython.memory.gc.base import choose_gc_from_config
+        from pypy.rpython.memory.gcheader import GCHeaderBuilder
         from pypy.rpython.memory.gctransform import framework
         GcLLDescription.__init__(self, gcdescr, translator)
         assert self.translate_support_code, "required with the framework GC"
@@ -299,6 +300,7 @@ class GcLLDescr_framework(GcLLDescription):
         self.GCClass, _ = choose_gc_from_config(gcdescr.config)
         self.moving_gc = self.GCClass.moving_gc
         self.HDRPTR = lltype.Ptr(self.GCClass.HDR)
+        self.gcheaderbuilder = GCHeaderBuilder(self.HDRPTR.TO)
         self.fielddescr_tid = get_field_descr(self, self.GCClass.HDR, 'tid')
         (self.array_basesize, _, self.array_length_ofs) = \
              symbolic.get_array_token(lltype.GcArray(lltype.Signed), True)
@@ -383,17 +385,16 @@ class GcLLDescr_framework(GcLLDescription):
 
     def args_for_new(self, sizedescr):
         assert isinstance(sizedescr, BaseSizeDescr)
-        size = descrsize.v0
-        type_id = descrsize.type_id
-        has_finalizer = descrsize.flag2
+        size = sizedescr.size
+        type_id = sizedescr.type_id
+        has_finalizer = sizedescr.has_finalizer
         return [size, type_id, has_finalizer]
 
     def args_for_new_array(self, arraydescr):
-        assert isinstance(arraydescr, ConstDescr3)
-        basesize = arraydescr.v0
-        itemsize = arraydescr.v1
+        assert isinstance(arraydescr, BaseArrayDescr)
+        itemsize = arraydescr.get_item_size(self.translate_support_code)
         type_id = arraydescr.type_id
-        return [basesize, itemsize, type_id]
+        return [itemsize, type_id]
 
     def get_funcptr_for_new(self):
         return llhelper(self.GC_MALLOC_BASIC, self.malloc_basic)
@@ -409,6 +410,7 @@ class GcLLDescr_framework(GcLLDescription):
 
     def do_write_barrier(self, gcref_struct, gcref_newptr):
         hdr_addr = llmemory.cast_ptr_to_adr(gcref_struct)
+        hdr_addr -= self.gcheaderbuilder.size_gc_header
         hdr = llmemory.cast_adr_to_ptr(hdr_addr, self.HDRPTR)
         if hdr.tid & self.GCClass.JIT_WB_IF_FLAG:
             # get a pointer to the 'remember_young_pointer' function from
