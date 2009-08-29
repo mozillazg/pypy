@@ -48,6 +48,9 @@ class AbstractLLCPU(AbstractCPU):
             _check_addr_range(x)
         return rffi.cast(llmemory.GCREF, x)
 
+    def cast_gcref_to_int(self, x):
+        return rffi.cast(lltype.Signed, x)
+
     def fielddescrof(self, STRUCT, fieldname):
         return get_field_descr(STRUCT, fieldname, self.translate_support_code)
 
@@ -99,7 +102,7 @@ class AbstractLLCPU(AbstractCPU):
         def do_strlen(self, args, descr=None):
             basesize, itemsize, ofs_length = symbolic.get_array_token(TP,
                                                 self.translate_support_code)
-            gcref = args[0].getptr(llmemory.GCREF)
+            gcref = args[0].getptr_base()
             v = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs_length/WORD]
             return BoxInt(v)
         return do_strlen
@@ -110,7 +113,7 @@ class AbstractLLCPU(AbstractCPU):
     def do_strgetitem(self, args, descr=None):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
                                                     self.translate_support_code)
-        gcref = args[0].getptr(llmemory.GCREF)
+        gcref = args[0].getptr_base()
         i = args[1].getint()
         v = rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[basesize + i]
         return BoxInt(ord(v))
@@ -131,11 +134,38 @@ class AbstractLLCPU(AbstractCPU):
             return BoxInt(val)
 
     def do_getfield_gc(self, args, fielddescr):
-        gcref = args[0].getptr(llmemory.GCREF)
+        gcref = args[0].getptr_base()
         return self._base_do_getfield(gcref, fielddescr)
 
     def do_getfield_raw(self, args, fielddescr):
         return self._base_do_getfield(args[0].getint(), fielddescr)
+
+    @specialize.argtype(1)
+    def _base_do_setfield(self, gcref, vbox, fielddescr):
+        ofs, size, ptr = self.unpack_fielddescr(fielddescr)
+        if ptr:
+            assert lltype.typeOf(gcref) is not lltype.Signed, (
+                "can't handle write barriers for setfield_raw")
+            ptr = vbox.getptr_base()
+            self.gc_ll_descr.do_write_barrier(gcref, ptr)
+            a = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)
+            a[ofs/WORD] = self.cast_gcref_to_int(ptr)
+        else:
+            v = vbox.getint()
+            for TYPE, itemsize in unroll_basic_sizes:
+                if size == itemsize:
+                    v = rffi.cast(TYPE, v)
+                    rffi.cast(rffi.CArrayPtr(TYPE), gcref)[ofs] = v
+                    break
+            else:
+                raise NotImplementedError("size = %d" % size)
+
+    def do_setfield_gc(self, args, fielddescr):
+        gcref = args[0].getptr_base()
+        self._base_do_setfield(gcref, args[1], fielddescr)
+
+    def do_setfield_raw(self, args, fielddescr):
+        self._base_do_setfield(args[0].getint(), args[1], fielddescr)
 
 
 import pypy.jit.metainterp.executor
