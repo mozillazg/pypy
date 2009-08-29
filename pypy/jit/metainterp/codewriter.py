@@ -144,7 +144,7 @@ class CodeWriter(object):
         if self.portal_graph is None or graph is self.portal_graph:
             return ()
         fnptr = self.rtyper.getcallable(graph)
-        if self.cpu.is_oo:
+        if self.rtyper.type_system.name == 'ootypesystem':
             if oosend_methdescr:
                 return (None, oosend_methdescr)
             else:
