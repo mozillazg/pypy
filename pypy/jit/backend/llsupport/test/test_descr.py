@@ -104,19 +104,22 @@ def test_get_array_descr():
 
 
 def test_get_call_descr():
-    descr1 = get_call_descr([lltype.Char, lltype.Signed], lltype.Char, False)
+    cache = {}
+    descr1 = get_call_descr([lltype.Char, lltype.Signed], lltype.Char, False,
+                            cache)
     assert descr1.get_result_size(False) == rffi.sizeof(lltype.Char)
     assert not descr1.returns_a_pointer()
     assert descr1.arg_classes == [BoxInt, BoxInt]
     #
     T = lltype.GcStruct('T')
-    descr2 = get_call_descr([lltype.Ptr(T)], lltype.Ptr(T), False)
+    descr2 = get_call_descr([lltype.Ptr(T)], lltype.Ptr(T), False, cache)
     assert descr2.get_result_size(False) == rffi.sizeof(lltype.Ptr(T))
     assert descr2.returns_a_pointer()
     assert descr2.arg_classes == [BoxPtr]
     #
     U = lltype.GcStruct('U', ('x', lltype.Signed))
-    assert descr2 == get_call_descr([lltype.Ptr(U)], lltype.Ptr(U), False)
+    assert descr2 == get_call_descr([lltype.Ptr(U)], lltype.Ptr(U), False,
+                                    cache)
 
 
 def test_repr_of_descr():
@@ -142,8 +145,11 @@ def test_repr_of_descr():
     descr3i = get_array_descr(lltype.GcArray(lltype.Char))
     assert descr3i.repr_of_descr() == '<CharArrayDescr>'
     #
-    descr4 = get_call_descr([lltype.Char, lltype.Ptr(S)], lltype.Ptr(S), False)
+    cache = {}
+    descr4 = get_call_descr([lltype.Char, lltype.Ptr(S)], lltype.Ptr(S),
+                            False, cache)
     assert 'GcPtrCallDescr' in descr4.repr_of_descr()
     #
-    descr4i = get_call_descr([lltype.Char, lltype.Ptr(S)], lltype.Char, False)
+    descr4i = get_call_descr([lltype.Char, lltype.Ptr(S)], lltype.Char,
+                             False, cache)
     assert 'IntCallDescr' in descr4i.repr_of_descr()

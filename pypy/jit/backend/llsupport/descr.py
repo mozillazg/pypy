@@ -196,7 +196,7 @@ class IntCallDescr(BaseCallDescr):
         return self.result_size
 
 
-def get_call_descr(ARGS, RESULT, translate_support_code, _cache={}):
+def get_call_descr(ARGS, RESULT, translate_support_code, cache):
     arg_classes = []
     for ARG in ARGS:
         kind = getkind(ARG)
@@ -211,13 +211,13 @@ def get_call_descr(ARGS, RESULT, translate_support_code, _cache={}):
     ptr = isinstance(RESULT, lltype.Ptr) and RESULT.TO._gckind == 'gc'
     key = (translate_support_code, tuple(arg_classes), result_size, ptr)
     try:
-        return _cache[key]
+        return cache[key]
     except KeyError:
         if ptr:
             calldescr = GcPtrCallDescr(arg_classes)
         else:
             calldescr = IntCallDescr(arg_classes, result_size)
-        _cache[key] = calldescr
+        cache[key] = calldescr
         return calldescr
 
 
