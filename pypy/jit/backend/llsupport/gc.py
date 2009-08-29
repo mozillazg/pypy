@@ -4,7 +4,8 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.jit.backend.llsupport import symbolic
-from pypy.jit.backend.llsupport.descr import SizeDescr
+from pypy.jit.backend.llsupport.symbolic import WORD
+from pypy.jit.backend.llsupport.descr import SizeDescr, AbstractArrayDescr
 
 # ____________________________________________________________
 
@@ -27,6 +28,7 @@ class GcLLDescr_boehm(GcLLDescription):
 
     def __init__(self, gcdescr, cpu):
         # grab a pointer to the Boehm 'malloc' function
+        self.translate_support_code = cpu.translate_support_code
         compilation_info = ExternalCompilationInfo(libraries=['gc'])
         malloc_fn_ptr = rffi.llexternal("GC_local_malloc",
                                         [lltype.Signed], # size_t, but good enough
@@ -46,32 +48,18 @@ class GcLLDescr_boehm(GcLLDescription):
 
         init_fn_ptr()
 
-    def sizeof(self, S, translate_support_code):
-        size = symbolic.get_size(S, translate_support_code)
-        return ConstDescr3(size, 0, False)
-
-    def arraydescrof(self, A, translate_support_code):
-        basesize, itemsize, ofs_length = symbolic.get_array_token(A,
-                                                       translate_support_code)
-        assert rffi.sizeof(A.OF) in [1, 2, WORD]
-        # assert ofs_length == 0 --- but it's symbolic...
-        if isinstance(A.OF, lltype.Ptr) and A.OF.TO._gckind == 'gc':
-            ptr = True
-        else:
-            ptr = False
-        return ConstDescr3(basesize, itemsize, ptr)
-
     def gc_malloc(self, sizedescr):
         assert isinstance(sizedescr, SizeDescr)
         return self.funcptr_for_new(sizedescr.size)
 
     def gc_malloc_array(self, arraydescr, num_elem):
-        assert isinstance(arraydescr, ConstDescr3)
-        basesize = arraydescr.v0
-        itemsize = arraydescr.v1
+        assert isinstance(arraydescr, AbstractArrayDescr)
+        ofs_length = arraydescr.get_ofs_length(self.translate_support_code)
+        basesize = arraydescr.get_base_size(self.translate_support_code)
+        itemsize = arraydescr.get_item_size(self.translate_support_code)
         size = basesize + itemsize * num_elem
         res = self.funcptr_for_new(size)
-        rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[0] = num_elem
+        rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[ofs_length/WORD] = num_elem
         return res
 
     def gc_malloc_str(self, num_elem, translate_support_code):
