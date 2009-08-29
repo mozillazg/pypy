@@ -15,8 +15,8 @@ class VirtualizableInfo:
         jitdriver = warmrunnerdesc.jitdriver
         cpu = warmrunnerdesc.cpu
         self.cpu = cpu
-        self.VABLERTI = cpu.ts.VABLERTI
-        self.null_vable_rti = cpu.ts.null_vable_rti
+        self.VABLERTI = cpu.ts.get_VABLERTI()
+        self.null_vable_rti = cpu.ts.nullptr(deref(self.VABLERTI))
         self.BoxArray = cpu.ts.BoxRef
         #
         assert len(jitdriver.virtualizables) == 1    # for now
