@@ -11,7 +11,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.jit import JitDriver
 from pypy.jit.backend.x86.runner import CPU386
-from pypy.jit.backend.x86.gc import GcRefList, GcRootMap_asmgcc
+from pypy.jit.backend.llsupport.gc import GcRefList, GcRootMap_asmgcc
 from pypy.jit.backend.x86.regalloc import stack_pos
 
 
@@ -82,22 +82,6 @@ def test_compile_boehm():
     res = compile_and_run(get_test(main), "boehm", jit=True)
     assert int(res) >= 16
 
-def test_GcRefList():
-    S = lltype.GcStruct('S')
-    order = range(20000) * 4
-    random.shuffle(order)
-    def fn(args):
-        allocs = [lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
-                  for i in range(20000)]
-        allocs = [allocs[i] for i in order]
-        #
-        gcrefs = GcRefList()
-        addrs = [gcrefs.get_address_of_gcref(ptr) for ptr in allocs]
-        for i in range(len(allocs)):
-            assert addrs[i].address[0] == llmemory.cast_ptr_to_adr(allocs[i])
-        return 0
-    compile_and_run(fn, "hybrid", gcrootfinder="asmgcc", jit=False)
-
 def test_compile_hybrid_1():
     # a moving GC.  Supports malloc_varsize_nonmovable.  Simple test, works
     # without write_barriers and root stack enumeration.
@@ -113,39 +97,8 @@ def test_compile_hybrid_1():
                           jit=True)
     assert int(res) == 20
 
-def test_GcRootMap_asmgcc():
-    gcrootmap = GcRootMap_asmgcc()
-    shape = gcrootmap._get_callshape([stack_pos(1), stack_pos(55)])
-    num1 = stack_pos(1).ofs_relative_to_ebp()
-    num2 = stack_pos(55).ofs_relative_to_ebp()
-    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2]
-    #
-    shapeaddr = gcrootmap.encode_callshape([stack_pos(1), stack_pos(55)])
-    PCALLSHAPE = lltype.Ptr(GcRootMap_asmgcc.CALLSHAPE_ARRAY)
-    p = llmemory.cast_adr_to_ptr(shapeaddr, PCALLSHAPE)
-    num1a = -2*(num1|2)-1
-    num2a = ((-2*(num2|2)-1) >> 7) | 128
-    num2b = (-2*(num2|2)-1) & 127
-    for i, expected in enumerate([num2a, num2b, num1a, 0, 4, 19, 11, 3, 12]):
-        assert p[i] == expected
-    #
-    retaddr = rffi.cast(llmemory.Address, 1234567890)
-    gcrootmap.put(retaddr, shapeaddr)
-    assert gcrootmap._gcmap[0] == retaddr
-    assert gcrootmap._gcmap[1] == shapeaddr
-    assert gcrootmap.gcmapstart().address[0] == retaddr
-    #
-    # the same as before, but enough times to trigger a few resizes
-    expected_shapeaddr = {}
-    for i in range(1, 600):
-        shapeaddr = gcrootmap.encode_callshape([stack_pos(i)])
-        expected_shapeaddr[i] = shapeaddr
-        retaddr = rffi.cast(llmemory.Address, 123456789 + i)
-        gcrootmap.put(retaddr, shapeaddr)
-    for i in range(1, 600):
-        expected_retaddr = rffi.cast(llmemory.Address, 123456789 + i)
-        assert gcrootmap._gcmap[i*2+0] == expected_retaddr
-        assert gcrootmap._gcmap[i*2+1] == expected_shapeaddr[i]
+def test_get_callshape():
+    xxx #test that _get_callshape() is called with the right arguments
 
 def test_compile_hybrid_2():
     # More complex test, requires root stack enumeration but

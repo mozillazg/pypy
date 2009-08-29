@@ -5,17 +5,19 @@ from pypy.rlib.objectmodel import Symbolic
 
 
 def test_get_size_descr():
+    c0 = GcCache(False)
+    c1 = GcCache(True)
     T = lltype.GcStruct('T')
     S = lltype.GcStruct('S', ('x', lltype.Char),
                              ('y', lltype.Ptr(T)))
-    descr_s = get_size_descr(S, False)
-    descr_t = get_size_descr(T, False)
+    descr_s = get_size_descr(c0, S)
+    descr_t = get_size_descr(c0, T)
     assert descr_s.size == symbolic.get_size(S, False)
     assert descr_t.size == symbolic.get_size(T, False)
-    assert descr_s == get_size_descr(S, False)
-    assert descr_s != get_size_descr(S, True)
+    assert descr_s == get_size_descr(c0, S)
+    assert descr_s != get_size_descr(c1, S)
     #
-    descr_s = get_size_descr(S, True)
+    descr_s = get_size_descr(c1, S)
     assert isinstance(descr_s.size, Symbolic)
 
 
@@ -31,12 +33,15 @@ def test_get_field_descr():
     assert cls != getFieldDescrClass(lltype.Signed)
     assert cls == getFieldDescrClass(lltype.Char)
     #
-    assert get_field_descr(S, 'y', False) == get_field_descr(S, 'y', False)
-    assert get_field_descr(S, 'y', False) != get_field_descr(S, 'y', True)
+    c0 = GcCache(False)
+    c1 = GcCache(True)
+    assert get_field_descr(c0, S, 'y') == get_field_descr(c0, S, 'y')
+    assert get_field_descr(c0, S, 'y') != get_field_descr(c1, S, 'y')
     for tsc in [False, True]:
-        descr_x = get_field_descr(S, 'x', tsc)
-        descr_y = get_field_descr(S, 'y', tsc)
-        descr_z = get_field_descr(S, 'z', tsc)
+        c2 = GcCache(tsc)
+        descr_x = get_field_descr(c2, S, 'x')
+        descr_y = get_field_descr(c2, S, 'y')
+        descr_z = get_field_descr(c2, S, 'z')
         assert descr_x.__class__ is cls
         assert descr_y.__class__ is GcPtrFieldDescr
         assert descr_z.__class__ is NonGcPtrFieldDescr
@@ -70,13 +75,14 @@ def test_get_array_descr():
     assert cls != getArrayDescrClass(lltype.GcArray(lltype.Signed))
     assert cls == getArrayDescrClass(lltype.GcArray(lltype.Char))
     #
-    descr1 = get_array_descr(A1)
-    descr2 = get_array_descr(A2)
-    descr3 = get_array_descr(A3)
+    c0 = GcCache(False)
+    descr1 = get_array_descr(c0, A1)
+    descr2 = get_array_descr(c0, A2)
+    descr3 = get_array_descr(c0, A3)
     assert descr1.__class__ is cls
     assert descr2.__class__ is GcPtrArrayDescr
     assert descr3.__class__ is NonGcPtrArrayDescr
-    assert descr1 == get_array_descr(lltype.GcArray(lltype.Char))
+    assert descr1 == get_array_descr(c0, lltype.GcArray(lltype.Char))
     assert not descr1.is_array_of_pointers()
     assert     descr2.is_array_of_pointers()
     assert not descr3.is_array_of_pointers()
@@ -104,52 +110,49 @@ def test_get_array_descr():
 
 
 def test_get_call_descr():
-    cache = {}
-    descr1 = get_call_descr([lltype.Char, lltype.Signed], lltype.Char, False,
-                            cache)
+    c0 = GcCache(False)
+    descr1 = get_call_descr(c0, [lltype.Char, lltype.Signed], lltype.Char)
     assert descr1.get_result_size(False) == rffi.sizeof(lltype.Char)
     assert not descr1.returns_a_pointer()
     assert descr1.arg_classes == [BoxInt, BoxInt]
     #
     T = lltype.GcStruct('T')
-    descr2 = get_call_descr([lltype.Ptr(T)], lltype.Ptr(T), False, cache)
+    descr2 = get_call_descr(c0, [lltype.Ptr(T)], lltype.Ptr(T))
     assert descr2.get_result_size(False) == rffi.sizeof(lltype.Ptr(T))
     assert descr2.returns_a_pointer()
     assert descr2.arg_classes == [BoxPtr]
     #
     U = lltype.GcStruct('U', ('x', lltype.Signed))
-    assert descr2 == get_call_descr([lltype.Ptr(U)], lltype.Ptr(U), False,
-                                    cache)
+    assert descr2 == get_call_descr(c0, [lltype.Ptr(U)], lltype.Ptr(U))
 
 
 def test_repr_of_descr():
+    c0 = GcCache(False)
     T = lltype.GcStruct('T')
     S = lltype.GcStruct('S', ('x', lltype.Char),
                              ('y', lltype.Ptr(T)),
                              ('z', lltype.Ptr(T)))
-    descr1 = get_size_descr(S, False)
+    descr1 = get_size_descr(c0, S)
     s = symbolic.get_size(S, False)
     assert descr1.repr_of_descr() == '<SizeDescr %d>' % s
     #
-    descr2 = get_field_descr(S, 'y', False)
+    descr2 = get_field_descr(c0, S, 'y')
     o, _ = symbolic.get_field_token(S, 'y', False)
     assert descr2.repr_of_descr() == '<GcPtrFieldDescr %d>' % o
     #
-    descr2i = get_field_descr(S, 'x', False)
+    descr2i = get_field_descr(c0, S, 'x')
     o, _ = symbolic.get_field_token(S, 'x', False)
     assert descr2i.repr_of_descr() == '<CharFieldDescr %d>' % o
     #
-    descr3 = get_array_descr(lltype.GcArray(lltype.Ptr(S)))
+    descr3 = get_array_descr(c0, lltype.GcArray(lltype.Ptr(S)))
     assert descr3.repr_of_descr() == '<GcPtrArrayDescr>'
     #
-    descr3i = get_array_descr(lltype.GcArray(lltype.Char))
+    descr3i = get_array_descr(c0, lltype.GcArray(lltype.Char))
     assert descr3i.repr_of_descr() == '<CharArrayDescr>'
     #
     cache = {}
-    descr4 = get_call_descr([lltype.Char, lltype.Ptr(S)], lltype.Ptr(S),
-                            False, cache)
+    descr4 = get_call_descr(c0, [lltype.Char, lltype.Ptr(S)], lltype.Ptr(S))
     assert 'GcPtrCallDescr' in descr4.repr_of_descr()
     #
-    descr4i = get_call_descr([lltype.Char, lltype.Ptr(S)], lltype.Char,
-                             False, cache)
+    descr4i = get_call_descr(c0, [lltype.Char, lltype.Ptr(S)], lltype.Char)
     assert 'IntCallDescr' in descr4i.repr_of_descr()

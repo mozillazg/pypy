@@ -18,13 +18,10 @@ class CPU386(AbstractLLCPU):
     BOOTSTRAP_TP = lltype.FuncType([], lltype.Signed)
 
     def __init__(self, rtyper, stats, translate_support_code=False,
-                 mixlevelann=None, gcdescr=None):
+                 gcdescr=None):
         AbstractLLCPU.__init__(self, rtyper, stats, translate_support_code,
                                gcdescr)
-        if translate_support_code:
-            assert mixlevelann
-            self.mixlevelann = mixlevelann
-        else:
+        if not translate_support_code:
             self.current_interpreter = LLInterpreter(self.rtyper)
 
             def _store_exception(lle):

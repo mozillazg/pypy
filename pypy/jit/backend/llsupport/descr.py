@@ -1,4 +1,3 @@
-import weakref
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
@@ -9,6 +8,21 @@ from pypy.jit.metainterp.resoperation import ResOperation, rop
 # as compact as possible.  This is done by not storing the field size or
 # the 'is_pointer_field' flag in the instance itself but in the class
 # (in methods actually) using a few classes instead of just one.
+
+
+class GcCache(object):
+    def __init__(self, translate_support_code):
+        self.translate_support_code = translate_support_code
+        self._cache_size = {}
+        self._cache_field = {}
+        self._cache_array = {}
+        self._cache_call = {}
+
+    def init_size_descr(self, STRUCT, sizedescr):
+        pass
+
+    def init_array_descr(self, ARRAY, arraydescr):
+        pass
 
 
 # ____________________________________________________________
@@ -23,15 +37,15 @@ class SizeDescr(AbstractDescr):
 
 BaseSizeDescr = SizeDescr
 
-def get_size_descr(STRUCT, translate_support_code,
-                   _cache=weakref.WeakKeyDictionary()):
+def get_size_descr(gccache, STRUCT):
+    cache = gccache._cache_size
     try:
-        return _cache[STRUCT][translate_support_code]
+        return cache[STRUCT]
     except KeyError:
-        size = symbolic.get_size(STRUCT, translate_support_code)
+        size = symbolic.get_size(STRUCT, gccache.translate_support_code)
         sizedescr = SizeDescr(size)
-        cachedict = _cache.setdefault(STRUCT, {})
-        cachedict[translate_support_code] = sizedescr
+        gccache.init_size_descr(STRUCT, sizedescr)
+        cache[STRUCT] = sizedescr
         return sizedescr
 
 
@@ -70,17 +84,17 @@ def getFieldDescrClass(TYPE):
     return getDescrClass(TYPE, BaseFieldDescr, GcPtrFieldDescr,
                          NonGcPtrFieldDescr, 'Field')
 
-def get_field_descr(STRUCT, fieldname, translate_support_code,
-                    _cache=weakref.WeakKeyDictionary()):
+def get_field_descr(gccache, STRUCT, fieldname):
+    cache = gccache._cache_field
     try:
-        return _cache[STRUCT][fieldname, translate_support_code]
+        return cache[STRUCT][fieldname]
     except KeyError:
         offset, _ = symbolic.get_field_token(STRUCT, fieldname,
-                                             translate_support_code)
+                                             gccache.translate_support_code)
         FIELDTYPE = getattr(STRUCT, fieldname)
         fielddescr = getFieldDescrClass(FIELDTYPE)(offset)
-        cachedict = _cache.setdefault(STRUCT, {})
-        cachedict[fieldname, translate_support_code] = fielddescr
+        cachedict = cache.setdefault(STRUCT, {})
+        cachedict[fieldname] = fielddescr
         return fielddescr
 
 
@@ -91,6 +105,7 @@ _A = lltype.GcArray(lltype.Signed)     # a random gcarray
 
 
 class BaseArrayDescr(AbstractDescr):
+    _clsname = ''
 
     def get_base_size(self, translate_support_code):
         basesize, _, _ = symbolic.get_array_token(_A, translate_support_code)
@@ -124,9 +139,10 @@ def getArrayDescrClass(ARRAY):
     return getDescrClass(ARRAY.OF, BaseArrayDescr, GcPtrArrayDescr,
                          NonGcPtrArrayDescr, 'Array')
 
-def get_array_descr(ARRAY, _cache=weakref.WeakKeyDictionary()):
+def get_array_descr(gccache, ARRAY):
+    cache = gccache._cache_array
     try:
-        return _cache[ARRAY]
+        return cache[ARRAY]
     except KeyError:
         arraydescr = getArrayDescrClass(ARRAY)()
         # verify basic assumption that all arrays' basesize and ofslength
@@ -135,7 +151,8 @@ def get_array_descr(ARRAY, _cache=weakref.WeakKeyDictionary()):
         assert basesize == arraydescr.get_base_size(False)
         assert itemsize == arraydescr.get_item_size(False)
         assert ofslength == arraydescr.get_ofs_length(False)
-        _cache[ARRAY] = arraydescr
+        gccache.init_array_descr(ARRAY, arraydescr)
+        cache[ARRAY] = arraydescr
         return arraydescr
 
 
@@ -144,6 +161,7 @@ def get_array_descr(ARRAY, _cache=weakref.WeakKeyDictionary()):
 
 class BaseCallDescr(AbstractDescr):
     call_loop = None
+    arg_classes = []     # <-- annotation hack
 
     def __init__(self, arg_classes):
         self.arg_classes = arg_classes    # list of BoxInt/BoxPtr classes
@@ -196,7 +214,7 @@ class IntCallDescr(BaseCallDescr):
         return self.result_size
 
 
-def get_call_descr(ARGS, RESULT, translate_support_code, cache):
+def get_call_descr(gccache, ARGS, RESULT):
     arg_classes = []
     for ARG in ARGS:
         kind = getkind(ARG)
@@ -207,9 +225,10 @@ def get_call_descr(ARGS, RESULT, translate_support_code, cache):
     if RESULT is lltype.Void:
         result_size = 0
     else:
-        result_size = symbolic.get_size(RESULT, translate_support_code)
+        result_size = symbolic.get_size(RESULT, gccache.translate_support_code)
     ptr = isinstance(RESULT, lltype.Ptr) and RESULT.TO._gckind == 'gc'
-    key = (translate_support_code, tuple(arg_classes), result_size, ptr)
+    key = (tuple(arg_classes), result_size, ptr)
+    cache = gccache._cache_call
     try:
         return cache[key]
     except KeyError:
