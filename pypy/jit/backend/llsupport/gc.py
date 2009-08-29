@@ -5,7 +5,7 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD
-from pypy.jit.backend.llsupport.descr import SizeDescr, AbstractArrayDescr
+from pypy.jit.backend.llsupport.descr import BaseSizeDescr, BaseArrayDescr
 
 # ____________________________________________________________
 
@@ -49,11 +49,11 @@ class GcLLDescr_boehm(GcLLDescription):
         init_fn_ptr()
 
     def gc_malloc(self, sizedescr):
-        assert isinstance(sizedescr, SizeDescr)
+        assert isinstance(sizedescr, BaseSizeDescr)
         return self.funcptr_for_new(sizedescr.size)
 
     def gc_malloc_array(self, arraydescr, num_elem):
-        assert isinstance(arraydescr, AbstractArrayDescr)
+        assert isinstance(arraydescr, BaseArrayDescr)
         ofs_length = arraydescr.get_ofs_length(self.translate_support_code)
         basesize = arraydescr.get_base_size(self.translate_support_code)
         itemsize = arraydescr.get_item_size(self.translate_support_code)
@@ -80,7 +80,7 @@ class GcLLDescr_boehm(GcLLDescription):
         return res
 
     def args_for_new(self, sizedescr):
-        assert isinstance(sizedescr, SizeDescr)
+        assert isinstance(sizedescr, BaseSizeDescr)
         return [sizedescr.size]
 
     def get_funcptr_for_new(self):

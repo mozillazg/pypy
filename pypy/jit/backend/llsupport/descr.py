@@ -21,6 +21,8 @@ class SizeDescr(AbstractDescr):
     def repr_of_descr(self):
         return '<SizeDescr %s>' % self.size
 
+BaseSizeDescr = SizeDescr
+
 def get_size_descr(STRUCT, translate_support_code,
                    _cache=weakref.WeakKeyDictionary()):
     try:
@@ -36,7 +38,7 @@ def get_size_descr(STRUCT, translate_support_code,
 # ____________________________________________________________
 # FieldDescrs
 
-class AbstractFieldDescr(AbstractDescr):
+class BaseFieldDescr(AbstractDescr):
 
     def __init__(self, offset):
         self.offset = offset
@@ -54,7 +56,7 @@ class AbstractFieldDescr(AbstractDescr):
         return '<%s %s>' % (self._clsname, self.offset)
 
 
-class NonGcPtrFieldDescr(AbstractFieldDescr):
+class NonGcPtrFieldDescr(BaseFieldDescr):
     _clsname = 'NonGcPtrFieldDescr'
     def get_field_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
@@ -65,7 +67,7 @@ class GcPtrFieldDescr(NonGcPtrFieldDescr):
         return True
 
 def getFieldDescrClass(TYPE):
-    return getDescrClass(TYPE, AbstractFieldDescr, GcPtrFieldDescr,
+    return getDescrClass(TYPE, BaseFieldDescr, GcPtrFieldDescr,
                          NonGcPtrFieldDescr, 'Field')
 
 def get_field_descr(STRUCT, fieldname, translate_support_code,
@@ -88,7 +90,7 @@ def get_field_descr(STRUCT, fieldname, translate_support_code,
 _A = lltype.GcArray(lltype.Signed)     # a random gcarray
 
 
-class AbstractArrayDescr(AbstractDescr):
+class BaseArrayDescr(AbstractDescr):
 
     def get_base_size(self, translate_support_code):
         basesize, _, _ = symbolic.get_array_token(_A, translate_support_code)
@@ -108,7 +110,7 @@ class AbstractArrayDescr(AbstractDescr):
         return '<%s>' % self._clsname
 
 
-class NonGcPtrArrayDescr(AbstractArrayDescr):
+class NonGcPtrArrayDescr(BaseArrayDescr):
     _clsname = 'NonGcPtrArrayDescr'
     def get_item_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
@@ -119,7 +121,7 @@ class GcPtrArrayDescr(NonGcPtrArrayDescr):
         return True
 
 def getArrayDescrClass(ARRAY):
-    return getDescrClass(ARRAY.OF, AbstractArrayDescr, GcPtrArrayDescr,
+    return getDescrClass(ARRAY.OF, BaseArrayDescr, GcPtrArrayDescr,
                          NonGcPtrArrayDescr, 'Array')
 
 def get_array_descr(ARRAY, _cache=weakref.WeakKeyDictionary()):
@@ -140,7 +142,7 @@ def get_array_descr(ARRAY, _cache=weakref.WeakKeyDictionary()):
 # ____________________________________________________________
 # CallDescrs
 
-class AbstractCallDescr(AbstractDescr):
+class BaseCallDescr(AbstractDescr):
     call_loop = None
 
     def __init__(self, arg_classes):
@@ -155,7 +157,7 @@ class AbstractCallDescr(AbstractDescr):
     def get_loop_for_call(self, cpu):
         if self.call_loop is not None:
             return self.call_loop
-        args = [cls() for cls in self.arg_classes]
+        args = [BoxInt()] + [cls() for cls in self.arg_classes]
         if self.get_result_size(cpu.translate_support_code) == 0:
             result = None
             result_list = []
@@ -178,16 +180,16 @@ class AbstractCallDescr(AbstractDescr):
         return loop
 
 
-class GcPtrCallDescr(AbstractCallDescr):
+class GcPtrCallDescr(BaseCallDescr):
     def returns_a_pointer(self):
         return True
 
     def get_result_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
-class IntCallDescr(AbstractCallDescr):
+class IntCallDescr(BaseCallDescr):
     def __init__(self, arg_classes, result_size):
-        AbstractCallDescr.__init__(self, arg_classes)
+        BaseCallDescr.__init__(self, arg_classes)
         self.result_size = result_size
 
     def get_result_size(self, translate_support_code):
@@ -221,7 +223,7 @@ def get_call_descr(ARGS, RESULT, translate_support_code, _cache={}):
 
 # ____________________________________________________________
 
-def getDescrClass(TYPE, AbstractDescr, GcPtrDescr, NonGcPtrDescr,
+def getDescrClass(TYPE, BaseDescr, GcPtrDescr, NonGcPtrDescr,
                   nameprefix, _cache={}):
     if isinstance(TYPE, lltype.Ptr):
         if TYPE.TO._gckind == 'gc':
@@ -232,7 +234,7 @@ def getDescrClass(TYPE, AbstractDescr, GcPtrDescr, NonGcPtrDescr,
         return _cache[nameprefix, TYPE]
     except KeyError:
         #
-        class Descr(AbstractDescr):
+        class Descr(BaseDescr):
             _clsname = '%s%sDescr' % (TYPE._name, nameprefix)
             def get_field_size(self, translate_support_code):
                 return symbolic.get_size(TYPE, translate_support_code)

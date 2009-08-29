@@ -12,7 +12,8 @@ from pypy.rlib import rgc
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.x86.jump import remap_stack_layout
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.backend.llsupport.descr import AbstractFieldDescr
+from pypy.jit.backend.llsupport.descr import BaseFieldDescr
+from pypy.jit.backend.llsupport.descr import BaseCallDescr
 
 REGS = [eax, ecx, edx, ebx, esi, edi]
 WORD = 4
@@ -718,9 +719,9 @@ class RegAlloc(object):
     def consider_call(self, op, ignored):
         from pypy.jit.backend.x86.runner import CPU386
         calldescr = op.descr
-        numargs, size, _ = CPU386.unpack_calldescr(calldescr)
-        assert numargs == len(op.args) - 1
-        return self._call(op, [imm(size)] +
+        assert isinstance(calldescr, BaseCallDescr)
+        assert len(calldescr.arg_classes) == len(op.args) - 1
+        return self._call(op, [imm(calldescr.result_size)] +
                           [self.loc(arg) for arg in op.args])
 
     consider_call_pure = consider_call
@@ -798,12 +799,11 @@ class RegAlloc(object):
                                     op.result)
 
     def _unpack_arraydescr(self, arraydescr):
-        from pypy.jit.backend.x86.runner import CPU386
         xxx
         return CPU386.unpack_arraydescr(arraydescr)
 
     def _unpack_fielddescr(self, fielddescr):
-        assert isinstance(fielddescr, AbstractFieldDescr)
+        assert isinstance(fielddescr, BaseFieldDescr)
         ofs = fielddescr.offset
         size = fielddescr.get_field_size(self.translate_support_code)
         ptr = fielddescr.is_pointer_field()
