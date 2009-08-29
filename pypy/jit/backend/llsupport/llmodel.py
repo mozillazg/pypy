@@ -1,9 +1,10 @@
 import sys
-from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
+from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr
 from pypy.jit.backend.model import AbstractCPU
+from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.descr import get_field_descr, get_array_descr
 from pypy.jit.backend.llsupport.descr import AbstractFieldDescr
 from pypy.jit.backend.llsupport.descr import AbstractArrayDescr
@@ -50,8 +51,24 @@ class AbstractLLCPU(AbstractCPU):
     def fielddescrof(self, STRUCT, fieldname):
         return get_field_descr(STRUCT, fieldname, self.translate_support_code)
 
+    def unpack_fielddescr(self, fielddescr):
+        assert isinstance(fielddescr, AbstractFieldDescr)
+        ofs = fielddescr.offset
+        size = fielddescr.get_field_size(self.translate_support_code)
+        ptr = fielddescr.is_pointer_field()
+        return ofs, size, ptr
+    unpack_fielddescr._always_inline_ = True
+
     def arraydescrof(self, A):
         return get_array_descr(A)
+
+    def unpack_arraydescr(self, arraydescr):
+        assert isinstance(arraydescr, AbstractArrayDescr)
+        ofs = arraydescr.get_base_size(self.translate_support_code)
+        size = arraydescr.get_item_size(self.translate_support_code)
+        ptr = arraydescr.is_array_of_pointers()
+        return ofs, size, ptr
+    unpack_arraydescr._always_inline_ = True
 
     def do_arraylen_gc(self, args, arraydescr):
         assert isinstance(arraydescr, AbstractArrayDescr)
@@ -61,24 +78,64 @@ class AbstractLLCPU(AbstractCPU):
         return BoxInt(length)
 
     def do_getarrayitem_gc(self, args, arraydescr):
-        assert isinstance(arraydescr, AbstractArrayDescr)
         itemindex = args[1].getint()
         gcref = args[0].getptr_base()
-        ofs = arraydescr.get_base_size(self.translate_support_code)
-        size = arraydescr.get_item_size(self.translate_support_code)
-        ptr = arraydescr.is_array_of_pointers()
+        ofs, size, ptr = self.unpack_arraydescr(arraydescr)
         #
         for TYPE, itemsize in unroll_basic_sizes:
             if size == itemsize:
                 val = (rffi.cast(rffi.CArrayPtr(TYPE), gcref)
                        [ofs/itemsize + itemindex])
+                val = rffi.cast(lltype.Signed, val)
                 break
         else:
             raise NotImplementedError("size = %d" % size)
         if ptr:
             return BoxPtr(self.cast_int_to_gcref(val))
         else:
-            return BoxInt(rffi.cast(lltype.Signed, val))
+            return BoxInt(val)
+
+    def _new_do_len(TP):
+        def do_strlen(self, args, descr=None):
+            basesize, itemsize, ofs_length = symbolic.get_array_token(TP,
+                                                self.translate_support_code)
+            gcref = args[0].getptr(llmemory.GCREF)
+            v = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs_length/WORD]
+            return BoxInt(v)
+        return do_strlen
+
+    do_strlen = _new_do_len(rstr.STR)
+    do_unicodelen = _new_do_len(rstr.UNICODE)
+
+    def do_strgetitem(self, args, descr=None):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
+                                                    self.translate_support_code)
+        gcref = args[0].getptr(llmemory.GCREF)
+        i = args[1].getint()
+        v = rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[basesize + i]
+        return BoxInt(ord(v))
+
+    @specialize.argtype(1)
+    def _base_do_getfield(self, gcref, fielddescr):
+        ofs, size, ptr = self.unpack_fielddescr(fielddescr)
+        for TYPE, itemsize in unroll_basic_sizes:
+            if size == itemsize:
+                val = rffi.cast(rffi.CArrayPtr(TYPE), gcref)[ofs/itemsize]
+                val = rffi.cast(lltype.Signed, val)
+                break
+        else:
+            raise NotImplementedError("size = %d" % size)
+        if ptr:
+            return BoxPtr(self.cast_int_to_gcref(val))
+        else:
+            return BoxInt(val)
+
+    def do_getfield_gc(self, args, fielddescr):
+        gcref = args[0].getptr(llmemory.GCREF)
+        return self._base_do_getfield(gcref, fielddescr)
+
+    def do_getfield_raw(self, args, fielddescr):
+        return self._base_do_getfield(args[0].getint(), fielddescr)
 
 
 import pypy.jit.metainterp.executor
