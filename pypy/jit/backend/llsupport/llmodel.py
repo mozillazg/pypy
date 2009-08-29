@@ -3,6 +3,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values
 from pypy.jit.backend.model import AbstractCPU
+from pypy.jit.backend.logger import LLLogger
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
 from pypy.jit.backend.llsupport.descr import get_size_descr, SizeDescr
@@ -20,6 +21,7 @@ def _check_addr_range(x):
 
 class AbstractLLCPU(AbstractCPU):
     is_oo = False
+    logger_cls = LLLogger
 
     def __init__(self, rtyper, stats, translate_support_code=False,
                  gcdescr=None):

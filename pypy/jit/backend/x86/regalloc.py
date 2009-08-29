@@ -12,6 +12,7 @@ from pypy.rlib import rgc
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.x86.jump import remap_stack_layout
 from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.backend.llsupport.descr import AbstractFieldDescr
 
 REGS = [eax, ecx, edx, ebx, esi, edi]
 WORD = 4
@@ -798,11 +799,14 @@ class RegAlloc(object):
 
     def _unpack_arraydescr(self, arraydescr):
         from pypy.jit.backend.x86.runner import CPU386
+        xxx
         return CPU386.unpack_arraydescr(arraydescr)
 
     def _unpack_fielddescr(self, fielddescr):
-        from pypy.jit.backend.x86.runner import CPU386
-        ofs, size, ptr = CPU386.unpack_fielddescr(fielddescr)
+        assert isinstance(fielddescr, AbstractFieldDescr)
+        ofs = fielddescr.offset
+        size = fielddescr.get_field_size(self.translate_support_code)
+        ptr = fielddescr.is_pointer_field()
         return imm(ofs), imm(size), ptr
 
     def _common_consider_setfield(self, op, ignored, raw):

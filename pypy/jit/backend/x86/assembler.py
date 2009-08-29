@@ -13,7 +13,6 @@ from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.backend.logger import AbstractLogger
 
 # our calling convention - we pass three first args as edx, ecx and eax
 # and the rest stays on the stack
@@ -95,7 +94,7 @@ class Assembler386(object):
         self._exception_data = lltype.nullptr(rffi.CArray(lltype.Signed))
         self._exception_addr = 0
         self.mcstack = MachineCodeStack()
-        self.logger = x86Logger()
+        self.logger = cpu.logger_cls()
         self.fail_boxes_int = lltype.malloc(lltype.GcArray(lltype.Signed),
                                             MAX_FAIL_BOXES, zero=True)
         self.fail_boxes_ptr = lltype.malloc(lltype.GcArray(llmemory.GCREF),
@@ -103,8 +102,6 @@ class Assembler386(object):
 
     def make_sure_mc_exists(self):
         if self.mc is None:
-            from pypy.jit.backend.x86.runner import ConstDescr3
-
             rffi.cast(lltype.Signed, self.fail_boxes_int)   # workaround
             rffi.cast(lltype.Signed, self.fail_boxes_ptr)   # workaround
             self.fail_box_int_addr = rffi.cast(lltype.Signed,
