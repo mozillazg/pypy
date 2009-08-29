@@ -126,8 +126,6 @@ class Assembler386(object):
                                                 zero=True, flavor='raw')
             self._exception_bck_addr = self.cpu.cast_ptr_to_int(
                 self._exception_bck)
-            self.mc = self.mcstack.next_mc()
-            self.mc2 = self.mcstack.next_mc()
             # the address of the function called by 'new'
             gc_ll_descr = self.cpu.gc_ll_descr
             ll_new = gc_ll_descr.get_funcptr_for_new()
@@ -147,6 +145,7 @@ class Assembler386(object):
             # for moving GCs, the array used to hold the address of GC objects
             # that appear as ConstPtr.
             if gc_ll_descr.moving_gc:
+                import py; py.test.skip("in-progress: non-Boehm GC")
                 self.gcrefs = gc_ll_descr.GcRefList()
                 self.single_gcref_descr = ConstDescr3(0, WORD, True)
             else:
@@ -154,6 +153,9 @@ class Assembler386(object):
             self.gcrootmap = gc_ll_descr.gcrootmap
             if self.gcrootmap:
                 self.gcrootmap.initialize()
+            # done
+            self.mc2 = self.mcstack.next_mc()
+            self.mc = self.mcstack.next_mc()
 
 
     def _compute_longest_fail_op(self, ops):
