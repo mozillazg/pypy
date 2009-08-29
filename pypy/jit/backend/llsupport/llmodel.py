@@ -1,24 +1,14 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rlib.objectmodel import we_are_translated, specialize
-from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llsupport import symbolic
+from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
 from pypy.jit.backend.llsupport.descr import get_size_descr, SizeDescr
 from pypy.jit.backend.llsupport.descr import get_field_descr, get_array_descr
 from pypy.jit.backend.llsupport.descr import AbstractFieldDescr
 from pypy.jit.backend.llsupport.descr import AbstractArrayDescr
-
-WORD         = rffi.sizeof(lltype.Signed)
-SIZEOF_CHAR  = rffi.sizeof(lltype.Char)
-SIZEOF_SHORT = rffi.sizeof(rffi.SHORT)
-SIZEOF_INT   = rffi.sizeof(rffi.INT)
-
-unroll_basic_sizes = unrolling_iterable([(lltype.Signed, WORD),
-                                         (lltype.Char,   SIZEOF_CHAR),
-                                         (rffi.SHORT,    SIZEOF_SHORT),
-                                         (rffi.INT,      SIZEOF_INT)])
 
 def _check_addr_range(x):
     if sys.platform == 'linux2':
@@ -83,6 +73,8 @@ class AbstractLLCPU(AbstractCPU):
         return ofs, size, ptr
     unpack_arraydescr._always_inline_ = True
 
+    # ____________________________________________________________
+
     def do_arraylen_gc(self, args, arraydescr):
         assert isinstance(arraydescr, AbstractArrayDescr)
         ofs = arraydescr.get_ofs_length(self.translate_support_code)
@@ -107,6 +99,27 @@ class AbstractLLCPU(AbstractCPU):
             return BoxPtr(self.cast_int_to_gcref(val))
         else:
             return BoxInt(val)
+
+    def do_setarrayitem_gc(self, args, arraydescr):
+        itemindex = args[1].getint()
+        gcref = args[0].getptr_base()
+        ofs, size, ptr = self.unpack_arraydescr(arraydescr)
+        vbox = args[2]
+        #
+        if ptr:
+            vboxptr = vbox.getptr_base()
+            self.gc_ll_descr.do_write_barrier(gcref, vboxptr)
+            a = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)
+            a[ofs/WORD + itemindex] = self.cast_gcref_to_int(vboxptr)
+        else:
+            v = vbox.getint()
+            for TYPE, itemsize in unroll_basic_sizes:
+                if size == itemsize:
+                    a = rffi.cast(rffi.CArrayPtr(TYPE), gcref)
+                    a[ofs/itemsize + itemindex] = rffi.cast(TYPE, v)
+                    break
+            else:
+                raise NotImplementedError("size = %d" % size)
 
     def _new_do_len(TP):
         def do_strlen(self, args, descr=None):
@@ -188,6 +201,11 @@ class AbstractLLCPU(AbstractCPU):
         res = self.gc_ll_descr.gc_malloc(descrsize)
         as_array = rffi.cast(rffi.CArrayPtr(lltype.Signed), res)
         as_array[self.vtable_offset/WORD] = classint
+        return BoxPtr(res)
+
+    def do_new_array(self, args, arraydescr):
+        num_elem = args[0].getint()
+        res = self.gc_ll_descr.gc_malloc_array(arraydescr, num_elem)
         return BoxPtr(res)
 
 
