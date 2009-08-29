@@ -21,6 +21,10 @@ def get_size(TYPE, translate_support_code):
     return ctypes.sizeof(ctype)
 
 @specialize.memo()
+def get_size_of_ptr(translate_support_code):
+    return get_size(llmemory.GCREF, translate_support_code)
+
+@specialize.memo()
 def get_array_token(T, translate_support_code):
     # T can be an array or a var-sized structure
     if translate_support_code:
