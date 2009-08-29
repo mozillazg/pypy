@@ -115,10 +115,9 @@ class BaseCPU(model.AbstractCPU):
         for box in loop.inputargs:
             if isinstance(box, history.BoxInt):
                 var2index[box] = llimpl.compile_start_int_var(c)
-            elif isinstance(box, history.BoxPtr):
-                var2index[box] = llimpl.compile_start_ptr_var(c)
-            elif self.is_oo and isinstance(box, history.BoxObj):
-                var2index[box] = llimpl.compile_start_obj_var(c)
+            elif isinstance(box, self.ts.BoxRef):
+                TYPE = self.ts.BASETYPE
+                var2index[box] = llimpl.compile_start_ref_var(c, TYPE)
             else:
                 raise Exception("box is: %r" % (box,))
         self._compile_branch(c, loop.operations, var2index)

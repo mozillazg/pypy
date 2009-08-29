@@ -267,21 +267,11 @@ def compile_start_int_var(loop):
     _variables.append(v)
     return r
 
-def compile_start_ptr_var(loop):
+def compile_start_ref_var(loop, TYPE):
     loop = _from_opaque(loop)
     assert not loop.operations
     v = Variable()
-    v.concretetype = llmemory.GCREF
-    loop.inputargs.append(v)
-    r = len(_variables)
-    _variables.append(v)
-    return r
-
-def compile_start_obj_var(loop):
-    loop = _from_opaque(loop)
-    assert not loop.operations
-    v = Variable()
-    v.concretetype = ootype.Object
+    v.concretetype = TYPE
     loop.inputargs.append(v)
     r = len(_variables)
     _variables.append(v)
@@ -1252,8 +1242,7 @@ s_MemoCast = annmodel.SomePtr(MEMOCAST)
 
 setannotation(compile_start, s_CompiledLoop)
 setannotation(compile_start_int_var, annmodel.SomeInteger())
-setannotation(compile_start_ptr_var, annmodel.SomeInteger())
-setannotation(compile_start_obj_var, annmodel.SomeInteger())
+setannotation(compile_start_ref_var, annmodel.SomeInteger())
 setannotation(compile_add, annmodel.s_None)
 setannotation(compile_add_descr, annmodel.s_None)
 setannotation(compile_add_var, annmodel.s_None)
