@@ -9,7 +9,7 @@ from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib import rgc
-from pypy.jit.backend.x86 import symbolic
+from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.x86.jump import remap_stack_layout
 from pypy.jit.metainterp.resoperation import rop
 

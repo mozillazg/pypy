@@ -1,6 +1,6 @@
 import sys, os
 import ctypes
-from pypy.jit.backend.x86 import symbolic
+from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import Const, Box, BoxPtr, PTR
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
@@ -28,18 +28,6 @@ else:
 
 def align_stack_words(words):
     return (words + CALL_ALIGN - 1) & ~(CALL_ALIGN-1)
-
-class x86Logger(AbstractLogger):
-
-    is_oo = False
-
-    def repr_of_descr(self, descr):
-        from pypy.jit.backend.x86.runner import ConstDescr3
-        if isinstance(descr, ConstDescr3):
-            return (str(descr.v0) + "," + str(descr.v1) +
-                    "," + str(descr.flag2))
-        return AbstractLogger.repr_of_descr(self, descr)
-
 
 class MachineCodeBlockWrapper(object):
     MC_SIZE = 1024*1024

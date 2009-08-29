@@ -18,6 +18,9 @@ class SizeDescr(AbstractDescr):
     def __init__(self, size):
         self.size = size
 
+    def repr_of_descr(self):
+        return '<SizeDescr %s>' % self.size
+
 def get_size_descr(STRUCT, translate_support_code,
                    _cache=weakref.WeakKeyDictionary()):
     try:
@@ -47,12 +50,17 @@ class AbstractFieldDescr(AbstractDescr):
     def is_pointer_field(self):
         return False        # unless overridden by GcPtrFieldDescr
 
+    def repr_of_descr(self):
+        return '<%s %s>' % (self._clsname, self.offset)
+
 
 class NonGcPtrFieldDescr(AbstractFieldDescr):
+    _clsname = 'NonGcPtrFieldDescr'
     def get_field_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
 class GcPtrFieldDescr(NonGcPtrFieldDescr):
+    _clsname = 'GcPtrFieldDescr'
     def is_pointer_field(self):
         return True
 
@@ -96,12 +104,17 @@ class AbstractArrayDescr(AbstractDescr):
     def is_array_of_pointers(self):
         return False        # unless overridden by GcPtrArrayDescr
 
+    def repr_of_descr(self):
+        return '<%s>' % self._clsname
+
 
 class NonGcPtrArrayDescr(AbstractArrayDescr):
+    _clsname = 'NonGcPtrArrayDescr'
     def get_item_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
 class GcPtrArrayDescr(NonGcPtrArrayDescr):
+    _clsname = 'GcPtrArrayDescr'
     def is_array_of_pointers(self):
         return True
 
@@ -220,10 +233,11 @@ def getDescrClass(TYPE, AbstractDescr, GcPtrDescr, NonGcPtrDescr,
     except KeyError:
         #
         class Descr(AbstractDescr):
+            _clsname = '%s%sDescr' % (TYPE._name, nameprefix)
             def get_field_size(self, translate_support_code):
                 return symbolic.get_size(TYPE, translate_support_code)
             get_item_size = get_field_size
         #
-        Descr.__name__ = '%s%sDescr' % (TYPE._name, nameprefix)
+        Descr.__name__ = Descr._clsname
         _cache[nameprefix, TYPE] = Descr
         return Descr
