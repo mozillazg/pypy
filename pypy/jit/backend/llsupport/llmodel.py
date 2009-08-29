@@ -1,5 +1,5 @@
 import sys
-from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr
@@ -36,6 +36,12 @@ class AbstractLLCPU(AbstractCPU):
         self.stats = stats
         self.translate_support_code = translate_support_code
         self.gc_ll_descr = get_ll_description(gcdescr, self)
+        self.vtable_offset, _ = symbolic.get_field_token(rclass.OBJECT,
+                                                         'typeptr',
+                                                        translate_support_code)
+
+    def set_class_sizes(self, class_sizes):
+        self.class_sizes = class_sizes
 
     # ------------------- helpers and descriptions --------------------
 
@@ -173,6 +179,15 @@ class AbstractLLCPU(AbstractCPU):
 
     def do_new(self, args, sizedescr):
         res = self.gc_ll_descr.gc_malloc(sizedescr)
+        return BoxPtr(res)
+
+    def do_new_with_vtable(self, args, descr=None):
+        assert descr is None
+        classint = args[0].getint()
+        descrsize = self.class_sizes[classint]
+        res = self.gc_ll_descr.gc_malloc(descrsize)
+        as_array = rffi.cast(rffi.CArrayPtr(lltype.Signed), res)
+        as_array[self.vtable_offset/WORD] = classint
         return BoxPtr(res)
 
 
