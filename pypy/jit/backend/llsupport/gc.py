@@ -79,10 +79,9 @@ class GcLLDescr_boehm(GcLLDescription):
         rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[ofs_length/WORD] = num_elem
         return res
 
-    def args_for_new(self, descrsize):
-        assert isinstance(descrsize, ConstDescr3)
-        size = descrsize.v0
-        return [size]
+    def args_for_new(self, sizedescr):
+        assert isinstance(sizedescr, SizeDescr)
+        return [sizedescr.size]
 
     def get_funcptr_for_new(self):
         return self.funcptr_for_new

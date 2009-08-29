@@ -6,7 +6,6 @@ from pypy.rpython.llinterp import LLInterpreter
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp import history
 from pypy.jit.backend.x86.assembler import Assembler386, MAX_FAIL_BOXES
-from pypy.jit.backend.x86.assembler import x86Logger
 from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
 
 history.TreeLoop._x86_compiled = 0
@@ -15,7 +14,6 @@ history.TreeLoop._x86_bootstrap_code = 0
 
 class CPU386(AbstractLLCPU):
     debug = True
-    logger_cls = x86Logger
 
     BOOTSTRAP_TP = lltype.FuncType([], lltype.Signed)
 
@@ -162,6 +160,11 @@ class CPU386(AbstractLLCPU):
         index = len(self._guard_list)
         self._guard_list.append(guard_op)
         return index
+
+    @staticmethod
+    def cast_ptr_to_int(x):
+        adr = llmemory.cast_ptr_to_adr(x)
+        return CPU386.cast_adr_to_int(adr)
 
 
 CPU = CPU386
