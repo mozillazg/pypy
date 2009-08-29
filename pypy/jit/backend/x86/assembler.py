@@ -31,8 +31,6 @@ def align_stack_words(words):
 
 class x86Logger(AbstractLogger):
 
-    is_oo = False
-
     def repr_of_descr(self, descr):
         from pypy.jit.backend.x86.runner import ConstDescr3
         if isinstance(descr, ConstDescr3):

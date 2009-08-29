@@ -49,7 +49,6 @@ def _check_addr_range(x):
 
 class CPU386(object):
     debug = True
-    is_oo = False
     ts = llhelper
     logger_cls = x86Logger
 
