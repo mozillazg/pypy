@@ -62,6 +62,10 @@ class JitMixin:
 
         class DoneWithThisFrame(Exception):
             pass
+
+        class DoneWithThisFrameRef(DoneWithThisFrame):
+            def __init__(self, cpu, *args):
+                DoneWithThisFrame.__init__(self, *args)
         
         class FakeWarmRunnerDesc:
             def attach_unoptimized_bridge_from_interp(self, greenkey, newloop):
@@ -84,8 +88,7 @@ class JitMixin:
         metainterp.staticdata._class_sizes = cw.class_sizes
         metainterp.staticdata.state = FakeWarmRunnerDesc()
         metainterp.staticdata.DoneWithThisFrameInt = DoneWithThisFrame
-        metainterp.staticdata.DoneWithThisFramePtr = DoneWithThisFrame
-        metainterp.staticdata.DoneWithThisFrameObj = DoneWithThisFrame
+        metainterp.staticdata.DoneWithThisFrameRef = DoneWithThisFrameRef
         self.metainterp = metainterp
         try:
             metainterp.compile_and_run_once(*args)
