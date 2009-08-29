@@ -400,6 +400,13 @@ class BaseBackendTest(Runner):
         a_box, A = self.alloc_array_of(lltype.Signed, 342)
         arraydescr = self.cpu.arraydescrof(A)
         assert not arraydescr.is_array_of_pointers()
+        #
+        r = self.cpu.do_arraylen_gc([a_box], arraydescr)
+        assert r.value == 342
+        self.cpu.do_setarrayitem_gc([a_box, BoxInt(311), BoxInt(170)], arraydescr)
+        r = self.cpu.do_getarrayitem_gc([a_box, BoxInt(311)], arraydescr)
+        assert r.value == 170
+        #
         r = self.execute_operation(rop.ARRAYLEN_GC, [a_box],
                                    'int', descr=arraydescr)
         assert r.value == 342
@@ -410,11 +417,6 @@ class BaseBackendTest(Runner):
         r = self.execute_operation(rop.GETARRAYITEM_GC, [a_box, BoxInt(310)],
                                    'int', descr=arraydescr)
         assert r.value == 7441
-        r = self.cpu.do_getarrayitem_gc([a_box, BoxInt(310)], arraydescr)
-        assert r.value == 7441
-        self.cpu.do_setarrayitem_gc([a_box, BoxInt(3), BoxInt(170)], arraydescr)
-        r = self.cpu.do_getarrayitem_gc([a_box, BoxInt(3)], arraydescr)
-        assert r.value == 170
         #
         a_box, A = self.alloc_array_of(lltype.Char, 11)
         arraydescr = self.cpu.arraydescrof(A)
@@ -513,6 +515,11 @@ class BaseBackendTest(Runner):
         assert r.value == 153
 
     def test_unicode_basic(self):
+        u_box = self.cpu.do_newunicode([ConstInt(5)])
+        self.cpu.do_unicodesetitem([u_box, BoxInt(4), BoxInt(123)])
+        r = self.cpu.do_unicodegetitem([u_box, BoxInt(4)])
+        assert r.value == 123
+        #
         u_box = self.alloc_unicode(u"hello\u1234")
         r = self.execute_operation(rop.UNICODELEN, [u_box], 'int')
         assert r.value == 6
@@ -528,10 +535,6 @@ class BaseBackendTest(Runner):
         r = self.execute_operation(rop.UNICODEGETITEM, [u_box, BoxInt(4)],
                                    'int')
         assert r.value == 31313
-        u_box = self.cpu.do_newunicode([ConstInt(5)])
-        self.cpu.do_unicodesetitem([u_box, BoxInt(4), BoxInt(123)])
-        r = self.cpu.do_unicodegetitem([u_box, BoxInt(4)])
-        assert r.value == 123
 
     def test_same_as(self):
         r = self.execute_operation(rop.SAME_AS, [ConstInt(5)], 'int')

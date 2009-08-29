@@ -12,7 +12,7 @@ from pypy.rlib import rgc
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.x86.jump import remap_stack_layout
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.backend.llsupport.descr import BaseFieldDescr
+from pypy.jit.backend.llsupport.descr import BaseFieldDescr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import BaseCallDescr
 
 REGS = [eax, ecx, edx, ebx, esi, edi]
@@ -768,14 +768,14 @@ class RegAlloc(object):
         else:
             assert False, itemsize
 
-    def _malloc_varsize(self, ofs_items, ofs_length, size, v, res_v):
+    def _malloc_varsize(self, ofs_items, ofs_length, scale, v, res_v):
         # XXX kill this function at some point
         if isinstance(v, Box):
             loc = self.make_sure_var_in_reg(v, [v])
             other_loc = self.force_allocate_reg(TempBox(), [v])
-            self.assembler.load_effective_addr(loc, ofs_items, size, other_loc)
+            self.assembler.load_effective_addr(loc, ofs_items,scale, other_loc)
         else:
-            other_loc = imm(ofs_items + (v.getint() << size))
+            other_loc = imm(ofs_items + (v.getint() << scale))
         self._call(ResOperation(rop.NEW, [v], res_v),
                    [other_loc], [v])
         loc = self.make_sure_var_in_reg(v, [res_v])
@@ -794,13 +794,20 @@ class RegAlloc(object):
             arglocs.append(self.loc(op.args[0]))
             return self._call(op, arglocs)
         # boehm GC (XXX kill the following code at some point)
-        size_of_field, basesize, _ = self._unpack_arraydescr(op.descr)
-        return self._malloc_varsize(basesize, 0, size_of_field, op.args[0],
+        scale_of_field, basesize, _ = self._unpack_arraydescr(op.descr)
+        return self._malloc_varsize(basesize, 0, scale_of_field, op.args[0],
                                     op.result)
 
     def _unpack_arraydescr(self, arraydescr):
-        xxx
-        return CPU386.unpack_arraydescr(arraydescr)
+        assert isinstance(arraydescr, BaseArrayDescr)
+        ofs = arraydescr.get_base_size(self.translate_support_code)
+        size = arraydescr.get_item_size(self.translate_support_code)
+        ptr = arraydescr.is_array_of_pointers()
+        scale = 0
+        while (1 << scale) < size:
+            scale += 1
+        assert (1 << scale) == size
+        return scale, ofs, ptr
 
     def _unpack_fielddescr(self, fielddescr):
         assert isinstance(fielddescr, BaseFieldDescr)
