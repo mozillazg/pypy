@@ -4,6 +4,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.jit.backend.llsupport import symbolic
+from pypy.jit.backend.llsupport.descr import SizeDescr
 
 # ____________________________________________________________
 
@@ -60,10 +61,9 @@ class GcLLDescr_boehm(GcLLDescription):
             ptr = False
         return ConstDescr3(basesize, itemsize, ptr)
 
-    def gc_malloc(self, descrsize):
-        assert isinstance(descrsize, ConstDescr3)
-        size = descrsize.v0
-        return self.funcptr_for_new(size)
+    def gc_malloc(self, sizedescr):
+        assert isinstance(sizedescr, SizeDescr)
+        return self.funcptr_for_new(sizedescr.size)
 
     def gc_malloc_array(self, arraydescr, num_elem):
         assert isinstance(arraydescr, ConstDescr3)

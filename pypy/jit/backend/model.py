@@ -128,7 +128,7 @@ class AbstractCPU(object):
     def do_new(self, args, sizedescr):
         raise NotImplementedError
 
-    def do_new_with_vtable(self, args, sizedescr):
+    def do_new_with_vtable(self, args, descr=None):
         raise NotImplementedError
     
     def do_new_array(self, args, arraydescr):

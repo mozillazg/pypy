@@ -10,6 +10,25 @@ from pypy.jit.metainterp.history import AbstractDescr
 
 
 # ____________________________________________________________
+# SizeDescrs
+
+class SizeDescr(AbstractDescr):
+    def __init__(self, size):
+        self.size = size
+
+def get_size_descr(STRUCT, translate_support_code,
+                   _cache=weakref.WeakKeyDictionary()):
+    try:
+        return _cache[STRUCT][translate_support_code]
+    except KeyError:
+        size = symbolic.get_size(STRUCT, translate_support_code)
+        sizedescr = SizeDescr(size)
+        cachedict = _cache.setdefault(STRUCT, {})
+        cachedict[translate_support_code] = sizedescr
+        return sizedescr
+
+
+# ____________________________________________________________
 # FieldDescrs
 
 class AbstractFieldDescr(AbstractDescr):
