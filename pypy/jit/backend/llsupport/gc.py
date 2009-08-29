@@ -62,18 +62,18 @@ class GcLLDescr_boehm(GcLLDescription):
         rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[ofs_length/WORD] = num_elem
         return res
 
-    def gc_malloc_str(self, num_elem, translate_support_code):
+    def gc_malloc_str(self, num_elem):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
-                                                      translate_support_code)
+                                                   self.translate_support_code)
         assert itemsize == 1
         size = basesize + num_elem
         res = self.funcptr_for_new(size)
         rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[ofs_length/WORD] = num_elem
         return res
 
-    def gc_malloc_unicode(self, num_elem, translate_support_code):
+    def gc_malloc_unicode(self, num_elem):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
-                                                      translate_support_code)
+                                                   self.translate_support_code)
         size = basesize + num_elem * itemsize
         res = self.funcptr_for_new(size)
         rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[ofs_length/WORD] = num_elem

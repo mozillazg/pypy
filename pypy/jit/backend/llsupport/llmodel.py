@@ -208,6 +208,33 @@ class AbstractLLCPU(AbstractCPU):
         res = self.gc_ll_descr.gc_malloc_array(arraydescr, num_elem)
         return BoxPtr(res)
 
+    def do_newstr(self, args, descr=None):
+        num_elem = args[0].getint()
+        res = self.gc_ll_descr.gc_malloc_str(num_elem)
+        return BoxPtr(res)
+
+    def do_newunicode(self, args, descr=None):
+        num_elem = args[0].getint()
+        res = self.gc_ll_descr.gc_malloc_unicode(num_elem)
+        return BoxPtr(res)
+
+    def do_strsetitem(self, args, descr=None):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
+                                                self.translate_support_code)
+        index = args[1].getint()
+        v = args[2].getint()
+        a = args[0].getptr_base()
+        rffi.cast(rffi.CArrayPtr(lltype.Char), a)[index + basesize] = chr(v)
+
+    def do_unicodesetitem(self, args, descr=None):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
+                                                self.translate_support_code)
+        index = args[1].getint()
+        v = args[2].getint()
+        a = args[0].getptr_base()
+        basesize = basesize // itemsize
+        rffi.cast(rffi.CArrayPtr(lltype.UniChar), a)[index + basesize] = unichr(v)
+
 
 import pypy.jit.metainterp.executor
 pypy.jit.metainterp.executor.make_execute_list(AbstractLLCPU)
