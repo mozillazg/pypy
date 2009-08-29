@@ -1,7 +1,9 @@
 import weakref
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.backend.llsupport import symbolic
-from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
+from pypy.jit.metainterp.history import TreeLoop
+from pypy.jit.metainterp.resoperation import ResOperation, rop
 
 # The point of the class organization in this file is to make instances
 # as compact as possible.  This is done by not storing the field size or
@@ -112,8 +114,96 @@ def get_array_descr(ARRAY, _cache=weakref.WeakKeyDictionary()):
         return _cache[ARRAY]
     except KeyError:
         arraydescr = getArrayDescrClass(ARRAY)()
+        # verify basic assumption that all arrays' basesize and ofslength
+        # are equal
+        basesize, itemsize, ofslength = symbolic.get_array_token(ARRAY, False)
+        assert basesize == arraydescr.get_base_size(False)
+        assert itemsize == arraydescr.get_item_size(False)
+        assert ofslength == arraydescr.get_ofs_length(False)
         _cache[ARRAY] = arraydescr
         return arraydescr
+
+
+# ____________________________________________________________
+# CallDescrs
+
+class AbstractCallDescr(AbstractDescr):
+    call_loop = None
+
+    def __init__(self, arg_classes):
+        self.arg_classes = arg_classes    # list of BoxInt/BoxPtr classes
+
+    def returns_a_pointer(self):
+        return False         # unless overridden by GcPtrCallDescr
+
+    def get_result_size(self, translate_support_code):
+        raise NotImplementedError
+
+    def get_loop_for_call(self, cpu):
+        if self.call_loop is not None:
+            return self.call_loop
+        args = [cls() for cls in self.arg_classes]
+        if self.get_result_size(cpu.translate_support_code) == 0:
+            result = None
+            result_list = []
+        else:
+            if self.returns_a_pointer():
+                result = BoxPtr()
+            else:
+                result = BoxInt()
+            result_list = [result]
+        operations = [
+            ResOperation(rop.CALL, args, result, self),
+            ResOperation(rop.GUARD_NO_EXCEPTION, [], None),
+            ResOperation(rop.FAIL, result_list, None)]
+        operations[1].suboperations = [ResOperation(rop.FAIL, [], None)]
+        loop = TreeLoop('call')
+        loop.inputargs = args
+        loop.operations = operations
+        cpu.compile_operations(loop)
+        self.call_loop = loop
+        return loop
+
+
+class GcPtrCallDescr(AbstractCallDescr):
+    def returns_a_pointer(self):
+        return True
+
+    def get_result_size(self, translate_support_code):
+        return symbolic.get_size_of_ptr(translate_support_code)
+
+class IntCallDescr(AbstractCallDescr):
+    def __init__(self, arg_classes, result_size):
+        AbstractCallDescr.__init__(self, arg_classes)
+        self.result_size = result_size
+
+    def get_result_size(self, translate_support_code):
+        return self.result_size
+
+
+def get_call_descr(ARGS, RESULT, translate_support_code, _cache={}):
+    arg_classes = []
+    for ARG in ARGS:
+        kind = getkind(ARG)
+        if   kind == 'int': arg_classes.append(BoxInt)
+        elif kind == 'ptr': arg_classes.append(BoxPtr)
+        else:
+            raise NotImplementedError('ARG = %r' % (ARG,))
+    if RESULT is lltype.Void:
+        result_size = 0
+    else:
+        result_size = symbolic.get_size(RESULT, translate_support_code)
+    ptr = isinstance(RESULT, lltype.Ptr) and RESULT.TO._gckind == 'gc'
+    key = (translate_support_code, tuple(arg_classes), result_size, ptr)
+    try:
+        return _cache[key]
+    except KeyError:
+        if ptr:
+            calldescr = GcPtrCallDescr(arg_classes)
+        else:
+            calldescr = IntCallDescr(arg_classes, result_size)
+        _cache[key] = calldescr
+        return calldescr
 
 
 # ____________________________________________________________

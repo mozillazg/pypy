@@ -1,7 +1,7 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rlib.objectmodel import we_are_translated, specialize
-from pypy.jit.metainterp.history import BoxInt, BoxPtr
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
@@ -9,6 +9,7 @@ from pypy.jit.backend.llsupport.descr import get_size_descr, SizeDescr
 from pypy.jit.backend.llsupport.descr import get_field_descr, get_array_descr
 from pypy.jit.backend.llsupport.descr import AbstractFieldDescr
 from pypy.jit.backend.llsupport.descr import AbstractArrayDescr
+from pypy.jit.backend.llsupport.descr import get_call_descr, AbstractCallDescr
 
 def _check_addr_range(x):
     if sys.platform == 'linux2':
@@ -18,6 +19,7 @@ def _check_addr_range(x):
 
 
 class AbstractLLCPU(AbstractCPU):
+    is_oo = False
 
     def __init__(self, rtyper, stats, translate_support_code=False,
                  gcdescr=None):
@@ -72,6 +74,9 @@ class AbstractLLCPU(AbstractCPU):
         ptr = arraydescr.is_array_of_pointers()
         return ofs, size, ptr
     unpack_arraydescr._always_inline_ = True
+
+    def calldescrof(self, FUNC, ARGS, RESULT):
+        return get_call_descr(ARGS, RESULT, self.translate_support_code)
 
     # ____________________________________________________________
 
@@ -234,6 +239,23 @@ class AbstractLLCPU(AbstractCPU):
         a = args[0].getptr_base()
         basesize = basesize // itemsize
         rffi.cast(rffi.CArrayPtr(lltype.UniChar), a)[index + basesize] = unichr(v)
+
+    def do_call(self, args, calldescr):
+        assert isinstance(calldescr, AbstractCallDescr)
+        if not we_are_translated():
+            assert ([cls.type for cls in calldescr.arg_classes] ==
+                    [arg.type for arg in args[1:]])
+        loop = calldescr.get_loop_for_call(self)
+        set_future_values(self, args)
+        self.execute_operations(loop)
+        # Note: if an exception is set, the rest of the code does a bit of
+        # nonsense but nothing wrong (the return value should be ignored)
+        if calldescr.returns_a_pointer():
+            return BoxPtr(self.get_latest_value_ptr(0))
+        elif calldescr.get_result_size(self.translate_support_code) != 0:
+            return BoxInt(self.get_latest_value_int(0))
+        else:
+            return None
 
     def do_cast_ptr_to_int(self, args, descr=None):
         return BoxInt(self.cast_gcref_to_int(args[0].getptr_base()))
