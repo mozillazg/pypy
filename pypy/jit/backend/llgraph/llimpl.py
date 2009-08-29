@@ -300,7 +300,7 @@ def compile_add_int_const(loop, value):
     op = loop.operations[-1]
     op.args.append(const)
 
-def compile_add_ptr_const(loop, value, TYPE=llmemory.GCREF):
+def compile_add_ref_const(loop, value, TYPE):
     loop = _from_opaque(loop)
     const = Constant(value)
     const.concretetype = TYPE
@@ -317,7 +317,7 @@ def compile_add_int_result(loop):
     _variables.append(v)
     return r
 
-def compile_add_ptr_result(loop, TYPE=llmemory.GCREF):
+def compile_add_ref_result(loop, TYPE):
     loop = _from_opaque(loop)
     v = Variable()
     v.concretetype = TYPE
@@ -1247,9 +1247,9 @@ setannotation(compile_add, annmodel.s_None)
 setannotation(compile_add_descr, annmodel.s_None)
 setannotation(compile_add_var, annmodel.s_None)
 setannotation(compile_add_int_const, annmodel.s_None)
-setannotation(compile_add_ptr_const, annmodel.s_None)
+setannotation(compile_add_ref_const, annmodel.s_None)
 setannotation(compile_add_int_result, annmodel.SomeInteger())
-setannotation(compile_add_ptr_result, annmodel.SomeInteger())
+setannotation(compile_add_ref_result, annmodel.SomeInteger())
 setannotation(compile_add_jump_target, annmodel.s_None)
 setannotation(compile_add_fail, annmodel.s_None)
 setannotation(compile_suboperations, s_CompiledLoop)

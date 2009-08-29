@@ -140,12 +140,10 @@ class BaseCPU(model.AbstractCPU):
                     llimpl.compile_add_var(c, var2index[x])
                 elif isinstance(x, history.ConstInt):
                     llimpl.compile_add_int_const(c, x.value)
-                elif isinstance(x, history.ConstPtr):
-                    llimpl.compile_add_ptr_const(c, x.value)
+                elif isinstance(x, self.ts.ConstRef):
+                    llimpl.compile_add_ref_const(c, x.value, self.ts.BASETYPE)
                 elif isinstance(x, history.ConstAddr):
                     llimpl.compile_add_int_const(c, x.getint())
-                elif self.is_oo and isinstance(x, history.ConstObj):
-                    llimpl.compile_add_ptr_const(c, x.value, ootype.Object)
                 else:
                     raise Exception("%s args contain: %r" % (op.getopname(),
                                                              x))
@@ -156,10 +154,8 @@ class BaseCPU(model.AbstractCPU):
             if x is not None:
                 if isinstance(x, history.BoxInt):
                     var2index[x] = llimpl.compile_add_int_result(c)
-                elif isinstance(x, history.BoxPtr):
-                    var2index[x] = llimpl.compile_add_ptr_result(c)
-                elif self.is_oo and isinstance(x, history.BoxObj):
-                    var2index[x] = llimpl.compile_add_ptr_result(c, ootype.Object)
+                elif isinstance(x, self.ts.BoxRef):
+                    var2index[x] = llimpl.compile_add_ref_result(c, self.ts.BASETYPE)
                 else:
                     raise Exception("%s.result contain: %r" % (op.getopname(),
                                                                x))
