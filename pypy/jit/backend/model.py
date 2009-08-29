@@ -79,6 +79,8 @@ class AbstractCPU(object):
 
     @staticmethod
     def calldescrof(FUNC, ARGS, RESULT):
+        # FUNC is the original function type, but ARGS is a list of types
+        # with Voids removed
         raise NotImplementedError
 
     @staticmethod
