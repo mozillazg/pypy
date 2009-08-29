@@ -44,6 +44,7 @@ class LLTypeHelper(TypeSystemHelper):
     BASETYPE = llmemory.GCREF
     BoxRef = history.BoxPtr
     ConstRef = history.ConstPtr
+    ConstAddr = history.ConstAddr
     loops_done_with_this_frame_ref = None # patched by compile.py
     CVAL_NULLREF = None # patched by optimizeopt.py
 
@@ -144,6 +145,7 @@ class OOTypeHelper(TypeSystemHelper):
     BASETYPE = ootype.Object
     BoxRef = history.BoxObj
     ConstRef = history.ConstObj
+    ConstAddr = history.ConstObj
     loops_done_with_this_frame_ref = None # patched by compile.py
     CVAL_NULLREF = None # patched by optimizeopt.py
 

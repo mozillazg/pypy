@@ -990,7 +990,7 @@ class MetaInterpStaticData(object):
         self.stats = stats
         self.options = options
         if cpu.logger_cls is not None:
-            options.logger_noopt = cpu.logger_cls()
+            options.logger_noopt = cpu.logger_cls(cpu.ts)
 
         RESULT = portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)

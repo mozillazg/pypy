@@ -107,7 +107,7 @@ class Assembler386(object):
         self._exception_data = lltype.nullptr(rffi.CArray(lltype.Signed))
         self._exception_addr = 0
         self.mcstack = MachineCodeStack()
-        self.logger = x86Logger()
+        self.logger = x86Logger(cpu.ts)
         self.fail_boxes_int = lltype.malloc(lltype.GcArray(lltype.Signed),
                                             MAX_FAIL_BOXES, zero=True)
         self.fail_boxes_ptr = lltype.malloc(lltype.GcArray(llmemory.GCREF),
