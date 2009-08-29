@@ -721,7 +721,8 @@ class RegAlloc(object):
         calldescr = op.descr
         assert isinstance(calldescr, BaseCallDescr)
         assert len(calldescr.arg_classes) == len(op.args) - 1
-        return self._call(op, [imm(calldescr.result_size)] +
+        size = calldescr.get_result_size(self.translate_support_code)
+        return self._call(op, [imm(size)] +
                           [self.loc(arg) for arg in op.args])
 
     consider_call_pure = consider_call
