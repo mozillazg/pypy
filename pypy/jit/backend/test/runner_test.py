@@ -235,10 +235,7 @@ class BaseBackendTest(Runner):
                     ]
                 ops[1].suboperations = [ResOperation(rop.FAIL, [], None)]
             else:
-                if self.cpu.is_oo:
-                    v_exc = BoxObj()
-                else:
-                    v_exc = BoxPtr()
+                v_exc = self.cpu.ts.BoxRef()
                 ops = [
                     ResOperation(opnum, [v1, v2], v_res),
                     ResOperation(rop.GUARD_OVERFLOW, [], None),
