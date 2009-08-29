@@ -28,6 +28,7 @@ class AbstractLLCPU(AbstractCPU):
         self.rtyper = rtyper
         self.stats = stats
         self.translate_support_code = translate_support_code
+        self._call_cache = {}
         self.gc_ll_descr = get_ll_description(gcdescr, self)
         self.vtable_offset, _ = symbolic.get_field_token(rclass.OBJECT,
                                                          'typeptr',
@@ -85,7 +86,8 @@ class AbstractLLCPU(AbstractCPU):
     unpack_arraydescr._always_inline_ = True
 
     def calldescrof(self, FUNC, ARGS, RESULT):
-        return get_call_descr(ARGS, RESULT, self.translate_support_code)
+        return get_call_descr(ARGS, RESULT, self.translate_support_code,
+                              self._call_cache)
 
     # ____________________________________________________________
 
@@ -153,6 +155,15 @@ class AbstractLLCPU(AbstractCPU):
         gcref = args[0].getptr_base()
         i = args[1].getint()
         v = rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[basesize + i]
+        return BoxInt(ord(v))
+
+    def do_unicodegetitem(self, args, descr=None):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
+                                                    self.translate_support_code)
+        gcref = args[0].getptr_base()
+        i = args[1].getint()
+        basesize = basesize // itemsize
+        v = rffi.cast(rffi.CArrayPtr(lltype.UniChar), gcref)[basesize + i]
         return BoxInt(ord(v))
 
     @specialize.argtype(1)
