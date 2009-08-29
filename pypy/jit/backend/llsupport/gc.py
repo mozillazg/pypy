@@ -3,11 +3,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.jit.backend.x86 import symbolic
-from pypy.jit.backend.x86.runner import ConstDescr3
-from pypy.jit.backend.x86.ri386 import MODRM, IMM32, mem, imm32, rel32, heap
-from pypy.jit.backend.x86.ri386 import REG, eax, ecx, edx
-from pypy.jit.backend.x86.assembler import WORD
+from pypy.jit.backend.llsupport import symbolic
 
 # ____________________________________________________________
 
