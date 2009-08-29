@@ -6,11 +6,10 @@ from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.logger import LLLogger
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
-from pypy.jit.backend.llsupport.descr import get_size_descr, SizeDescr
-from pypy.jit.backend.llsupport.descr import get_field_descr, get_array_descr
-from pypy.jit.backend.llsupport.descr import AbstractFieldDescr
-from pypy.jit.backend.llsupport.descr import AbstractArrayDescr
-from pypy.jit.backend.llsupport.descr import get_call_descr, AbstractCallDescr
+from pypy.jit.backend.llsupport.descr import get_size_descr,  BaseSizeDescr
+from pypy.jit.backend.llsupport.descr import get_field_descr, BaseFieldDescr
+from pypy.jit.backend.llsupport.descr import get_array_descr, BaseArrayDescr
+from pypy.jit.backend.llsupport.descr import get_call_descr,  BaseCallDescr
 
 def _check_addr_range(x):
     if sys.platform == 'linux2':
@@ -67,7 +66,7 @@ class AbstractLLCPU(AbstractCPU):
         return get_field_descr(STRUCT, fieldname, self.translate_support_code)
 
     def unpack_fielddescr(self, fielddescr):
-        assert isinstance(fielddescr, AbstractFieldDescr)
+        assert isinstance(fielddescr, BaseFieldDescr)
         ofs = fielddescr.offset
         size = fielddescr.get_field_size(self.translate_support_code)
         ptr = fielddescr.is_pointer_field()
@@ -78,7 +77,7 @@ class AbstractLLCPU(AbstractCPU):
         return get_array_descr(A)
 
     def unpack_arraydescr(self, arraydescr):
-        assert isinstance(arraydescr, AbstractArrayDescr)
+        assert isinstance(arraydescr, BaseArrayDescr)
         ofs = arraydescr.get_base_size(self.translate_support_code)
         size = arraydescr.get_item_size(self.translate_support_code)
         ptr = arraydescr.is_array_of_pointers()
@@ -91,7 +90,7 @@ class AbstractLLCPU(AbstractCPU):
     # ____________________________________________________________
 
     def do_arraylen_gc(self, args, arraydescr):
-        assert isinstance(arraydescr, AbstractArrayDescr)
+        assert isinstance(arraydescr, BaseArrayDescr)
         ofs = arraydescr.get_ofs_length(self.translate_support_code)
         gcref = args[0].getptr_base()
         length = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs/WORD]
@@ -251,7 +250,8 @@ class AbstractLLCPU(AbstractCPU):
         rffi.cast(rffi.CArrayPtr(lltype.UniChar), a)[index + basesize] = unichr(v)
 
     def do_call(self, args, calldescr):
-        assert isinstance(calldescr, AbstractCallDescr)
+        assert isinstance(calldescr, BaseCallDescr)
+        assert len(args) == 1 + len(calldescr.arg_classes)
         if not we_are_translated():
             assert ([cls.type for cls in calldescr.arg_classes] ==
                     [arg.type for arg in args[1:]])
