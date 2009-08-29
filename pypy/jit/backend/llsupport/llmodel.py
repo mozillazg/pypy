@@ -28,8 +28,11 @@ class AbstractLLCPU(AbstractCPU):
         self.rtyper = rtyper
         self.stats = stats
         self.translate_support_code = translate_support_code
-        self._call_cache = {}
-        self.gc_ll_descr = get_ll_description(gcdescr, self)
+        if translate_support_code:
+            translator = rtyper.annotator.translator
+        else:
+            translator = None
+        self.gc_ll_descr = get_ll_description(gcdescr, translator)
         self.vtable_offset, _ = symbolic.get_field_token(rclass.OBJECT,
                                                          'typeptr',
                                                         translate_support_code)
@@ -58,11 +61,6 @@ class AbstractLLCPU(AbstractCPU):
     # ------------------- helpers and descriptions --------------------
 
     @staticmethod
-    def cast_adr_to_int(x):
-        res = rffi.cast(lltype.Signed, x)
-        return res
-
-    @staticmethod
     def cast_int_to_gcref(x):
         if not we_are_translated():
             _check_addr_range(x)
@@ -78,11 +76,15 @@ class AbstractLLCPU(AbstractCPU):
             _check_addr_range(x)
         return rffi.cast(llmemory.Address, x)
 
+    @staticmethod
+    def cast_adr_to_int(x):
+        return rffi.cast(lltype.Signed, x)
+
     def sizeof(self, S):
-        return get_size_descr(S, self.translate_support_code)
+        return get_size_descr(self.gc_ll_descr, S)
 
     def fielddescrof(self, STRUCT, fieldname):
-        return get_field_descr(STRUCT, fieldname, self.translate_support_code)
+        return get_field_descr(self.gc_ll_descr, STRUCT, fieldname)
 
     def unpack_fielddescr(self, fielddescr):
         assert isinstance(fielddescr, BaseFieldDescr)
@@ -93,7 +95,7 @@ class AbstractLLCPU(AbstractCPU):
     unpack_fielddescr._always_inline_ = True
 
     def arraydescrof(self, A):
-        return get_array_descr(A)
+        return get_array_descr(self.gc_ll_descr, A)
 
     def unpack_arraydescr(self, arraydescr):
         assert isinstance(arraydescr, BaseArrayDescr)
@@ -104,8 +106,7 @@ class AbstractLLCPU(AbstractCPU):
     unpack_arraydescr._always_inline_ = True
 
     def calldescrof(self, FUNC, ARGS, RESULT):
-        return get_call_descr(ARGS, RESULT, self.translate_support_code,
-                              self._call_cache)
+        return get_call_descr(self.gc_ll_descr, ARGS, RESULT)
 
     def get_overflow_error(self):
         ovf_vtable = self.cast_adr_to_int(self._ovf_error_vtable)
