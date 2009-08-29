@@ -145,9 +145,9 @@ class Assembler386(object):
             # for moving GCs, the array used to hold the address of GC objects
             # that appear as ConstPtr.
             if gc_ll_descr.moving_gc:
-                import py; py.test.skip("in-progress: non-Boehm GC")
+                from pypy.jit.backend.llsupport.descr import GcPtrFieldDescr
                 self.gcrefs = gc_ll_descr.GcRefList()
-                self.single_gcref_descr = ConstDescr3(0, WORD, True)
+                self.single_gcref_descr = GcPtrFieldDescr(0)
             else:
                 self.gcrefs = None
             self.gcrootmap = gc_ll_descr.gcrootmap
