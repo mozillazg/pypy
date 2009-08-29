@@ -42,13 +42,21 @@ class AbstractLLCPU(AbstractCPU):
         res = rffi.cast(lltype.Signed, x)
         return res
 
-    def cast_int_to_gcref(self, x):
+    @staticmethod
+    def cast_int_to_gcref(x):
         if not we_are_translated():
             _check_addr_range(x)
         return rffi.cast(llmemory.GCREF, x)
 
-    def cast_gcref_to_int(self, x):
+    @staticmethod
+    def cast_gcref_to_int(x):
         return rffi.cast(lltype.Signed, x)
+
+    @staticmethod
+    def cast_int_to_adr(x):
+        if not we_are_translated():
+            _check_addr_range(x)
+        return rffi.cast(llmemory.Address, x)
 
     def sizeof(self, S):
         return get_size_descr(S, self.translate_support_code)
