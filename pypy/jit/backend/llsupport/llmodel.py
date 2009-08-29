@@ -192,7 +192,7 @@ class AbstractLLCPU(AbstractCPU):
             for TYPE, itemsize in unroll_basic_sizes:
                 if size == itemsize:
                     v = rffi.cast(TYPE, v)
-                    rffi.cast(rffi.CArrayPtr(TYPE), gcref)[ofs] = v
+                    rffi.cast(rffi.CArrayPtr(TYPE), gcref)[ofs/itemsize] = v
                     break
             else:
                 raise NotImplementedError("size = %d" % size)

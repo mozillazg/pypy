@@ -275,6 +275,11 @@ class BaseBackendTest(Runner):
         t_box, T_box = self.alloc_instance(self.T)
         fielddescr = self.cpu.fielddescrof(self.S, 'value')
         assert not fielddescr.is_pointer_field()
+        #
+        self.cpu.do_setfield_gc([t_box, BoxInt(1333)], fielddescr)
+        r = self.cpu.do_getfield_gc([t_box], fielddescr)
+        assert r.value == 1333
+        #
         res = self.execute_operation(rop.SETFIELD_GC, [t_box, BoxInt(39082)],
                                      'void', descr=fielddescr)
         assert res is None
@@ -674,6 +679,8 @@ class LLtypeBackendTest(BaseBackendTest):
         r = self.cpu.do_getfield_gc([r1], descrshort)
         assert r.value == 1313
         self.cpu.do_setfield_gc([r1, BoxInt(1333)], descrshort)
+        r = self.cpu.do_getfield_gc([r1], descrshort)
+        assert r.value == 1333
         r = self.execute_operation(rop.GETFIELD_GC, [r1], 'int',
                                    descr=descrshort)
         assert r.value == 1333
