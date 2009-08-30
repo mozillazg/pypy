@@ -135,7 +135,7 @@ class ParserGenerator(object):
         for name in names:
             dfa = self.dfas[name]
             states = []
-            for state_index, state in enumerate(dfa):
+            for state in dfa:
                 arcs = []
                 for label, next in state.arcs.iteritems():
                     arcs.append((self.make_label(gram, label), dfa.index(next)))
