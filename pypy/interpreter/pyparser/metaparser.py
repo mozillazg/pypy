@@ -73,7 +73,13 @@ class DFA(object):
 
 
 def nfa_to_dfa(start, end):
-    """Convert an NFA to a DFA(s)"""
+    """Convert an NFA to a DFA(s)
+
+    Each DFA is initially a set of NFA states without labels.  We start with the
+    DFA for the start NFA.  Then we add labeled arcs to it pointing to another
+    set of NFAs (the next state).  Finally, we do the same thing to every DFA
+    that is found and return the list of states.
+    """
     base_nfas = set()
     start.find_unlabeled_states(base_nfas)
     state_stack = [DFA(base_nfas, end)]
