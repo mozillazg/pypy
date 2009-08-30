@@ -197,6 +197,8 @@ _oplist = [
     'UNICODESETITEM',
     'NEWUNICODE',
     'RUNTIMENEW',     # ootype operation
+    'COND_CALL',      # [cond, imm_and, if_false_value,
+                      #                 if_true_call, args_for_call...]
     'DEBUG_MERGE_POINT',      # debugging only
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----

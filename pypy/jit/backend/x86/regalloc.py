@@ -717,15 +717,39 @@ class RegAlloc(object):
         self.Perform(op, arglocs, eax)
 
     def consider_call(self, op, ignored):
-        from pypy.jit.backend.x86.runner import CPU386
         calldescr = op.descr
         assert isinstance(calldescr, BaseCallDescr)
         assert len(calldescr.arg_classes) == len(op.args) - 1
         size = calldescr.get_result_size(self.translate_support_code)
-        return self._call(op, [imm(size)] +
-                          [self.loc(arg) for arg in op.args])
+        self._call(op, [imm(size)] + [self.loc(arg) for arg in op.args])
 
     consider_call_pure = consider_call
+
+    def consider_cond_call(self, op, ignored):
+        calldescr = op.descr
+        assert isinstance(calldescr, BaseCallDescr)
+        v_cond = op.args[0]
+        v_mask = op.args[1]
+        v_value_if_false = op.args[2]
+        if op.result is not None:
+            resloc = self.force_result_in_reg(op.result, v_value_if_false, [])
+        else:
+            resloc = None
+        condloc = self.loc(v_cond)
+        arglocs = [resloc] + [self.loc(arg) for arg in op.args[3:]]
+        # add eax, ecx and edx as extra "arguments" to ensure they are
+        # saved and restored.  Don't add them if they are equal to resloc!
+        for v, reg in self.reg_bindings.items():
+            if ((reg is eax or reg is ecx or reg is edx)
+                and self.longevity[v][1] > self.position
+                and reg not in arglocs):
+                arglocs.append(reg)
+        size = calldescr.get_result_size(self.translate_support_code)
+        self.Perform(op,
+                     [imm(size), condloc, convert_to_imm(v_mask)] + arglocs,
+                     resloc)
+        self.eventually_free_var(v_cond)
+        self.eventually_free_vars(op.args[3:])
 
     def consider_new(self, op, ignored):
         args = self.assembler.cpu.gc_ll_descr.args_for_new(op.descr)
