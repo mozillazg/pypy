@@ -786,6 +786,8 @@ class Assembler386(object):
         mc.TEST(loc_cond, loc_mask)
         mc.write('\x74\x00')             # JZ after_the_call
         jz_location = mc.get_relative_pos()
+        # the following is supposed to be the slow path, so whenever possible
+        # we choose the most compact encoding over the most efficient one.
         for i in range(len(arglocs)-1, 4, -1):
             mc.PUSH(arglocs[i])
         mc.CALL(rel32(op.args[3].getint()))
