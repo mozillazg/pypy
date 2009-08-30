@@ -109,11 +109,28 @@ class BaseBackendTest(Runner):
             func_ptr = llhelper(FPTR, func)
             FUNC = deref(FPTR)
             calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+            funcbox = self.get_funcbox(cpu, func_ptr)
             res = self.execute_operation(rop.CALL,
-                                         [self.get_funcbox(cpu, func_ptr),
-                                          BoxInt(num), BoxInt(num)],
+                                         [funcbox, BoxInt(num), BoxInt(num)],
                                          'int', descr=calldescr)
             assert res.value == 2 * num
+
+            # also test COND_CALL:
+            for cond in [False, True]:
+                value = random.randrange(-sys.maxint, sys.maxint)
+                if cond:
+                    value |= 4096
+                else:
+                    value &= ~4096
+                res = self.execute_operation(rop.COND_CALL,
+                                         [BoxInt(value), ConstInt(4096),
+                                          BoxInt(321123),
+                                          funcbox, BoxInt(num), BoxInt(num)],
+                                         'int', descr=calldescr)
+                if cond:
+                    assert res.value == 2 * num
+                else:
+                    assert res.value == 321123
 
     def test_executor(self):
         cpu = self.cpu

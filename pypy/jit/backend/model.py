@@ -160,6 +160,12 @@ class AbstractCPU(object):
     def do_call(self, args, calldescr):
         raise NotImplementedError
 
+    def do_cond_call(self, args, calldescr):
+        if not args[0].getint():
+            return args[1]
+        else:
+            return self.do_call(args[2:], calldescr)
+
     def do_cast_int_to_ptr(self, args, descr=None):
         raise NotImplementedError
 

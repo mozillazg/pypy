@@ -755,17 +755,14 @@ class Assembler386(object):
         sizeloc = arglocs[0]
         assert isinstance(sizeloc, IMM32)
         size = sizeloc.value
-        arglocs = arglocs[1:]
         nargs = len(op.args)-1
         extra_on_stack = self.align_stack_for_call(nargs)
-        for i in range(nargs, 0, -1):
-            v = op.args[i]
-            loc = arglocs[i]
-            self.mc.PUSH(loc)
+        for i in range(nargs+1, 1, -1):
+            self.mc.PUSH(arglocs[i])
         if isinstance(op.args[0], Const):
             x = rel32(op.args[0].getint())
         else:
-            x = arglocs[0]
+            x = arglocs[1]
         self.mc.CALL(x)
         self.mark_gc_roots()
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
@@ -775,6 +772,41 @@ class Assembler386(object):
             self.mc.AND(eax, imm(0xffff))
 
     genop_call_pure = genop_call
+
+    def genop_cond_call(self, op, arglocs, resloc):
+        sizeloc = arglocs[0]
+        assert isinstance(sizeloc, IMM32)
+        size = sizeloc.value
+        # use 'mc._mc' directly instead of 'mc', to avoid
+        # bad surprizes if the code buffer is mostly full
+        loc_cond           = arglocs[1]
+        loc_mask           = arglocs[2]
+        loc_value_if_false = arglocs[3]
+        mc = self.mc._mc
+        mc.TEST(loc_cond, loc_mask)
+        mc.write('\x74\x00')             # JZ after_the_call
+        jz_location = mc.get_relative_pos()
+        for i in range(len(arglocs)-1, 4, -1):
+            mc.PUSH(arglocs[i])
+        mc.CALL(rel32(op.args[3].getint()))
+        if size == 1:
+            mc.MOVZX(resloc, al)
+        elif size == 2:
+            mc.MOVZX(resloc, eax)     # actually reads the AX part only
+        elif resloc is not None and resloc is not eax:
+            mc.XCHG(eax, resloc)
+        pop_count = 0
+        for i in range(5, len(arglocs)):
+            loc = arglocs[i]
+            pop_count += 1
+            if loc is not resloc and isinstance(loc, REG):
+                while pop_count > 0:
+                    mc.POP(loc)
+                    pop_count -= 1
+        if pop_count:
+            mc.ADD(esp, imm(WORD * pop_count))
+        # patch the JZ above
+        mc.overwrite(jz_location-1, chr(mc.get_relative_pos() - jz_location))
 
     def not_implemented_op_discard(self, op, arglocs):
         print "not implemented operation: %s" % op.getopname()
