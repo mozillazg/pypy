@@ -1,5 +1,6 @@
 import random
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
+from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.backend.llsupport.descr import *
 from pypy.jit.backend.llsupport.gc import *
 from pypy.jit.backend.llsupport import symbolic
@@ -124,8 +125,8 @@ class FakeLLOp:
     def _write_barrier_failing_case(self, adr_struct, adr_newptr):
         self.record.append(('barrier', adr_struct, adr_newptr))
 
-    def get_write_barrier_failing_case(self, FUNCTYPE):
-        return self._write_barrier_failing_case
+    def get_write_barrier_failing_case(self, FPTRTYPE):
+        return llhelper(FPTRTYPE, self._write_barrier_failing_case)
 
 
 class TestFramework:
@@ -138,11 +139,18 @@ class TestFramework:
                 gc = 'hybrid'
                 gcrootfinder = 'asmgcc'
                 gctransformer = 'framework'
+        class FakeCPU:
+            def cast_adr_to_int(self, adr):
+                ptr = llmemory.cast_adr_to_ptr(adr, gc_ll_descr.WB_FUNCPTR)
+                assert ptr._obj._callable == llop1._write_barrier_failing_case
+                return 42
         gcdescr = get_description(config)
         translator = FakeTranslator()
-        self.llop1 = FakeLLOp()
-        self.gc_ll_descr = GcLLDescr_framework(gcdescr, FakeTranslator(),
-                                               self.llop1)
+        llop1 = FakeLLOp()
+        gc_ll_descr = GcLLDescr_framework(gcdescr, FakeTranslator(), llop1)
+        self.llop1 = llop1
+        self.gc_ll_descr = gc_ll_descr
+        self.fake_cpu = FakeCPU()
 
     def test_gc_malloc(self):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
@@ -202,3 +210,120 @@ class TestFramework:
         s_hdr.tid |= gc_ll_descr.GCClass.JIT_WB_IF_FLAG
         gc_ll_descr.do_write_barrier(s_gcref, r_gcref)
         assert self.llop1.record == [('barrier', s_adr, r_adr)]
+
+    def test_gen_write_barrier(self):
+        gc_ll_descr = self.gc_ll_descr
+        llop1 = self.llop1
+        #
+        newops = []
+        v_base = BoxPtr()
+        v_value = BoxPtr()
+        gc_ll_descr._gen_write_barrier(self.fake_cpu, newops, v_base, v_value)
+        assert llop1.record == []
+        assert len(newops) == 2
+        assert newops[0].opnum == rop.GETFIELD_RAW
+        assert newops[0].args == [v_base]
+        assert newops[0].descr == gc_ll_descr.fielddescr_tid
+        v_tid = newops[0].result
+        assert newops[1].opnum == rop.COND_CALL_GC_WB
+        assert newops[1].args[0] == v_tid
+        assert newops[1].args[1] ==ConstInt(gc_ll_descr.GCClass.JIT_WB_IF_FLAG)
+        assert newops[1].args[2] == ConstInt(42)     # func ptr
+        assert newops[1].args[3] == v_base
+        assert newops[1].args[4] == v_value
+        assert newops[1].descr == gc_ll_descr.calldescr_jit_wb
+        assert newops[1].result is None
+
+    def test_rewrite_assembler_1(self):
+        # check rewriting of ConstPtrs
+        class MyFakeCPU:
+            def cast_adr_to_int(self, adr):
+                stored_addr = adr.address[0]
+                assert stored_addr == llmemory.cast_ptr_to_adr(s_gcref)
+                return 43
+        S = lltype.GcStruct('S')
+        s = lltype.malloc(S)
+        s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+        v_random_box = BoxPtr()
+        v_result = BoxInt()
+        operations = [
+            ResOperation(rop.OOIS, [v_random_box, ConstPtr(s_gcref)],
+                         v_result),
+            ]
+        gcrefs = GcRefList()
+        gc_ll_descr = self.gc_ll_descr
+        gc_ll_descr.rewrite_assembler(MyFakeCPU(), gcrefs, operations)
+        assert len(operations) == 2
+        assert operations[0].opnum == rop.GETFIELD_RAW
+        assert operations[0].args == [ConstInt(43)]
+        assert operations[0].descr == gc_ll_descr.single_gcref_descr
+        v_box = operations[0].result
+        assert isinstance(v_box, BoxPtr)
+        assert operations[1].opnum == rop.OOIS
+        assert operations[1].args == [v_random_box, v_box]
+        assert operations[1].result == v_result
+
+    def test_rewrite_assembler_2(self):
+        # check write barriers before SETFIELD_GC
+        v_base = BoxPtr()
+        v_value = BoxPtr()
+        field_descr = AbstractDescr()
+        operations = [
+            ResOperation(rop.SETFIELD_GC, [v_base, v_value], None,
+                         descr=field_descr),
+            ]
+        gc_ll_descr = self.gc_ll_descr
+        gc_ll_descr.rewrite_assembler(self.fake_cpu, None, operations)
+        assert len(operations) == 3
+        #
+        assert operations[0].opnum == rop.GETFIELD_RAW
+        assert operations[0].args == [v_base]
+        assert operations[0].descr == gc_ll_descr.fielddescr_tid
+        v_tid = operations[0].result
+        #
+        assert operations[1].opnum == rop.COND_CALL_GC_WB
+        assert operations[1].args[0] == v_tid
+        assert operations[1].args[1] == ConstInt(
+                                            gc_ll_descr.GCClass.JIT_WB_IF_FLAG)
+        assert operations[1].args[2] == ConstInt(42)     # func ptr
+        assert operations[1].args[3] == v_base
+        assert operations[1].args[4] == v_value
+        assert operations[1].descr == gc_ll_descr.calldescr_jit_wb
+        assert operations[1].result is None
+        #
+        assert operations[2].opnum == rop.SETFIELD_RAW
+        assert operations[2].args == [v_base, v_value]
+        assert operations[2].descr == field_descr
+
+    def test_rewrite_assembler_3(self):
+        # check write barriers before SETARRAYITEM_GC
+        v_base = BoxPtr()
+        v_index = BoxInt()
+        v_value = BoxPtr()
+        array_descr = AbstractDescr()
+        operations = [
+            ResOperation(rop.SETARRAYITEM_GC, [v_base, v_index, v_value], None,
+                         descr=array_descr),
+            ]
+        gc_ll_descr = self.gc_ll_descr
+        gc_ll_descr.rewrite_assembler(self.fake_cpu, None, operations)
+        assert len(operations) == 3
+        #
+        assert operations[0].opnum == rop.GETFIELD_RAW
+        assert operations[0].args == [v_base]
+        assert operations[0].descr == gc_ll_descr.fielddescr_tid
+        v_tid = operations[0].result
+        #
+        assert operations[1].opnum == rop.COND_CALL_GC_WB
+        assert operations[1].args[0] == v_tid
+        assert operations[1].args[1] == ConstInt(
+                                            gc_ll_descr.GCClass.JIT_WB_IF_FLAG)
+        assert operations[1].args[2] == ConstInt(42)     # func ptr
+        assert operations[1].args[3] == v_base
+        assert operations[1].args[4] == v_value
+        assert operations[1].descr == gc_ll_descr.calldescr_jit_wb
+        assert operations[1].result is None
+        #
+        assert operations[2].opnum == rop.SETARRAYITEM_RAW
+        assert operations[2].args == [v_base, v_index, v_value]
+        assert operations[2].descr == array_descr
