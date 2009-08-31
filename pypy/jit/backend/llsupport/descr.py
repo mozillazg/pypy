@@ -29,6 +29,8 @@ class GcCache(object):
 # SizeDescrs
 
 class SizeDescr(AbstractDescr):
+    size = 0      # help translation
+
     def __init__(self, size):
         self.size = size
 
@@ -53,6 +55,8 @@ def get_size_descr(gccache, STRUCT):
 # FieldDescrs
 
 class BaseFieldDescr(AbstractDescr):
+    offset = 0      # help translation
+    _clsname = ''
 
     def __init__(self, offset):
         self.offset = offset
