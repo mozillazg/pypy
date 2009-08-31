@@ -250,9 +250,8 @@ class TestFramework:
             ResOperation(rop.OOIS, [v_random_box, ConstPtr(s_gcref)],
                          v_result),
             ]
-        gcrefs = GcRefList()
         gc_ll_descr = self.gc_ll_descr
-        gc_ll_descr.rewrite_assembler(MyFakeCPU(), gcrefs, operations)
+        gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
         assert len(operations) == 2
         assert operations[0].opnum == rop.GETFIELD_RAW
         assert operations[0].args == [ConstInt(43)]
@@ -273,7 +272,7 @@ class TestFramework:
                          descr=field_descr),
             ]
         gc_ll_descr = self.gc_ll_descr
-        gc_ll_descr.rewrite_assembler(self.fake_cpu, None, operations)
+        gc_ll_descr.rewrite_assembler(self.fake_cpu, operations)
         assert len(operations) == 3
         #
         assert operations[0].opnum == rop.GETFIELD_RAW
@@ -306,7 +305,7 @@ class TestFramework:
                          descr=array_descr),
             ]
         gc_ll_descr = self.gc_ll_descr
-        gc_ll_descr.rewrite_assembler(self.fake_cpu, None, operations)
+        gc_ll_descr.rewrite_assembler(self.fake_cpu, operations)
         assert len(operations) == 3
         #
         assert operations[0].opnum == rop.GETFIELD_RAW
