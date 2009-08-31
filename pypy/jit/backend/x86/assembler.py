@@ -142,14 +142,6 @@ class Assembler386(object):
                 ll_new_unicode = gc_ll_descr.get_funcptr_for_newunicode()
                 self.malloc_unicode_func_addr = rffi.cast(lltype.Signed,
                                                           ll_new_unicode)
-            # for moving GCs, the array used to hold the address of GC objects
-            # that appear as ConstPtr.
-            if gc_ll_descr.moving_gc:
-                from pypy.jit.backend.llsupport.descr import GcPtrFieldDescr
-                self.gcrefs = gc_ll_descr.GcRefList()
-                self.single_gcref_descr = GcPtrFieldDescr(0)
-            else:
-                self.gcrefs = None
             self.gcrootmap = gc_ll_descr.gcrootmap
             if self.gcrootmap:
                 self.gcrootmap.initialize()
@@ -569,6 +561,7 @@ class Assembler386(object):
             assert 0, itemsize
 
     genop_discard_setfield_raw = genop_discard_setfield_gc
+    genop_discard_setarrayitem_raw = genop_discard_setarrayitem_gc
 
     def genop_strlen(self, op, arglocs, resloc):
         base_loc = arglocs[0]
@@ -583,9 +576,9 @@ class Assembler386(object):
         self.mc.MOV(resloc, addr_add_const(base_loc, ofs_length))
 
     def genop_arraylen_gc(self, op, arglocs, resloc):
-        ofs = self.cpu.gc_ll_descr.array_length_ofs
         base_loc, ofs_loc = arglocs
-        self.mc.MOV(resloc, addr_add_const(base_loc, ofs))
+        assert isinstance(ofs_loc, IMM32)
+        self.mc.MOV(resloc, addr_add_const(base_loc, ofs_loc.value))
 
     def genop_strgetitem(self, op, arglocs, resloc):
         base_loc, ofs_loc = arglocs
@@ -773,42 +766,34 @@ class Assembler386(object):
 
     genop_call_pure = genop_call
 
-    def genop_cond_call(self, op, arglocs, resloc):
-        sizeloc = arglocs[0]
-        assert isinstance(sizeloc, IMM32)
-        size = sizeloc.value
+    def genop_discard_cond_call_gc_wb(self, op, arglocs):
         # use 'mc._mc' directly instead of 'mc', to avoid
         # bad surprizes if the code buffer is mostly full
-        loc_cond           = arglocs[1]
-        loc_mask           = arglocs[2]
-        loc_value_if_false = arglocs[3]
+        loc_cond = arglocs[0]
+        loc_mask = arglocs[1]
         mc = self.mc._mc
         mc.TEST(loc_cond, loc_mask)
         mc.write('\x74\x00')             # JZ after_the_call
         jz_location = mc.get_relative_pos()
         # the following is supposed to be the slow path, so whenever possible
         # we choose the most compact encoding over the most efficient one.
-        for i in range(len(arglocs)-1, 4, -1):
+        for i in range(len(arglocs)-1, 2, -1):
             mc.PUSH(arglocs[i])
-        mc.CALL(rel32(op.args[3].getint()))
-        if size == 1:
-            mc.MOVZX(resloc, al)
-        elif size == 2:
-            mc.MOVZX(resloc, eax)     # actually reads the AX part only
-        elif resloc is not None and resloc is not eax:
-            mc.XCHG(eax, resloc)
+        mc.CALL(rel32(op.args[2].getint()))
         pop_count = 0
-        for i in range(5, len(arglocs)):
+        for i in range(3, len(arglocs)):
             loc = arglocs[i]
             pop_count += 1
-            if loc is not resloc and isinstance(loc, REG):
+            if isinstance(loc, REG):
                 while pop_count > 0:
                     mc.POP(loc)
                     pop_count -= 1
         if pop_count:
             mc.ADD(esp, imm(WORD * pop_count))
         # patch the JZ above
-        mc.overwrite(jz_location-1, chr(mc.get_relative_pos() - jz_location))
+        offset = mc.get_relative_pos() - jz_location
+        assert 0 < offset <= 127
+        mc.overwrite(jz_location-1, chr(offset))
 
     def not_implemented_op_discard(self, op, arglocs):
         print "not implemented operation: %s" % op.getopname()
