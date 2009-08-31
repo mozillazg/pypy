@@ -23,7 +23,7 @@ class GcLLDescription(GcCache):
         return True
     def do_write_barrier(self, gcref_struct, gcref_newptr):
         pass
-    def rewrite_assembler(self, cpu, gcrefs, operations):
+    def rewrite_assembler(self, cpu, operations):
         pass
 
 # ____________________________________________________________
@@ -266,7 +266,6 @@ class GcRootMap_asmgcc:
 
 
 class GcLLDescr_framework(GcLLDescription):
-    GcRefList = GcRefList
 
     def __init__(self, gcdescr, translator, llop1=llop):
         from pypy.rpython.memory.gc.base import choose_gc_from_config
@@ -276,6 +275,7 @@ class GcLLDescr_framework(GcLLDescription):
         assert self.translate_support_code, "required with the framework GC"
         self.translator = translator
         self.llop1 = llop1
+        self.gcrefs = None
 
         # we need the hybrid GC for GcRefList.alloc_gcref_list() to work
         if gcdescr.config.translation.gc != 'hybrid':
@@ -429,7 +429,7 @@ class GcLLDescr_framework(GcLLDescription):
             funcptr(llmemory.cast_ptr_to_adr(gcref_struct),
                     llmemory.cast_ptr_to_adr(gcref_newptr))
 
-    def rewrite_assembler(self, cpu, gcrefs, operations):
+    def rewrite_assembler(self, cpu, operations):
         # Perform two kinds of rewrites in parallel:
         #
         # - Add COND_CALLs to the write barrier before SETFIELD_GC and
@@ -443,6 +443,8 @@ class GcLLDescr_framework(GcLLDescription):
         #   replace direct usage of ConstPtr with a BoxPtr loaded by a
         #   GETFIELD_RAW from the array 'gcrefs.list'.
         #
+        if self.gcrefs is None:
+            self.gcrefs = GcRefList()
         newops = []
         for op in operations:
             if op.opnum == rop.DEBUG_MERGE_POINT:
@@ -454,7 +456,7 @@ class GcLLDescr_framework(GcLLDescription):
                 if (isinstance(v, ConstPtr) and bool(v.value)
                                             and rgc.can_move(v.value)):
                     box = BoxPtr(v.value)
-                    addr = gcrefs.get_address_of_gcref(v.value)
+                    addr = self.gcrefs.get_address_of_gcref(v.value)
                     addr = cpu.cast_adr_to_int(addr)
                     newops.append(ResOperation(rop.GETFIELD_RAW,
                                                [ConstInt(addr)], box,
@@ -478,7 +480,7 @@ class GcLLDescr_framework(GcLLDescription):
                                       descr=op.descr)
             # ----------
             if op.is_guard():
-                self.rewrite_assembler(cpu, gcrefs, op.suboperations)
+                self.rewrite_assembler(cpu, op.suboperations)
             newops.append(op)
         del operations[:]
         operations.extend(newops)
