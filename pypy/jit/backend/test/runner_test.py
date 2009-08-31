@@ -115,23 +115,6 @@ class BaseBackendTest(Runner):
                                          'int', descr=calldescr)
             assert res.value == 2 * num
 
-            # also test COND_CALL:
-            for cond in [False, True]:
-                value = random.randrange(-sys.maxint, sys.maxint)
-                if cond:
-                    value |= 4096
-                else:
-                    value &= ~4096
-                res = self.execute_operation(rop.COND_CALL,
-                                         [BoxInt(value), ConstInt(4096),
-                                          BoxInt(321123),
-                                          funcbox, BoxInt(num), BoxInt(num)],
-                                         'int', descr=calldescr)
-                if cond:
-                    assert res.value == 2 * num
-                else:
-                    assert res.value == 321123
-
     def test_executor(self):
         cpu = self.cpu
         x = execute(cpu, rop.INT_ADD, [BoxInt(100), ConstInt(42)])
@@ -959,6 +942,32 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.execute_operations(loop)
         assert self.cpu.get_latest_value_int(0) == 0
         self.cpu.clear_exception()
+
+    def test_cond_call_gc_wb(self):
+        def func_void(a, b):
+            record.append((a, b))
+        record = []
+        #
+        FUNC = self.FuncType([lltype.Signed, lltype.Signed], lltype.Void)
+        func_ptr = llhelper(lltype.Ptr(FUNC), func_void)
+        funcbox = self.get_funcbox(self.cpu, func_ptr)
+        calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+        for cond in [False, True]:
+            value = random.randrange(-sys.maxint, sys.maxint)
+            if cond:
+                value |= 4096
+            else:
+                value &= ~4096
+            del record[:]
+            self.execute_operation(rop.COND_CALL_GC_WB,
+                                   [BoxInt(value), ConstInt(4096),
+                                    funcbox, BoxInt(655360), BoxInt(-2121)],
+                                   'void', descr=calldescr)
+            if cond:
+                assert record == [(655360, -2121)]
+            else:
+                assert record == []
+
 
 class OOtypeBackendTest(BaseBackendTest):
 
