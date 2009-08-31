@@ -770,8 +770,47 @@ class BaseTestOptimizeFindNode(BaseTest):
         """
         self.find_nodes(ops, 'Not, Not')
 
+    def test_find_nodes_arithmetic_propagation_bug_0(self):
+        ops = """
+        [p1]
+        i1 = getarrayitem_gc(p1, 0, descr=arraydescr)
+        escape(i1)
+        i2 = int_add(0, 1)
+        p2 = new_array(i2, descr=arraydescr)
+        i3 = escape()
+        setarrayitem_gc(p2, 0, i3, descr=arraydescr)
+        jump(p2)
+        """
+        self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1)
+
+    def test_find_nodes_arithmetic_propagation_bug_1(self):
+        ops = """
+        [p1]
+        i1 = getarrayitem_gc(p1, 0, descr=arraydescr)
+        escape(i1)
+        i2 = same_as(1)
+        p2 = new_array(i2, descr=arraydescr)
+        setarrayitem_gc(p2, 0, 5)
+        jump(p2)
+        """
+        self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1)
+
+    def test_find_nodes_arithmetic_propagation_bug_2(self):
+        ops = """
+        [p1]
+        i0 = int_sub(17, 17)
+        i1 = getarrayitem_gc(p1, i0, descr=arraydescr)
+        escape(i1)
+        i2 = int_add(0, 1)
+        p2 = new_array(i2, descr=arraydescr)
+        i3 = escape()
+        setarrayitem_gc(p2, i0, i3, descr=arraydescr)
+        jump(p2)
+        """
+        self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1, i0=0)
+
     def test_find_nodes_bug_1(self):
-        py.test.skip("fails!")
+        py.test.skip("still a bug")
         ops = """
         [p12]
         i16 = ooisnull(p12)
@@ -836,7 +875,9 @@ class BaseTestOptimizeFindNode(BaseTest):
             fail()
         jump(p58)
         """
-        self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)')
+        self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)',
+                        i16=0, i25=0, i39=0, i52=0, i55=0, i59=0,
+                        i43=1, i45=1, i48=1, i40=1)
 
     # ------------------------------
     # Bridge tests
