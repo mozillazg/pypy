@@ -82,7 +82,7 @@ class GcPtrFieldDescr(NonGcPtrFieldDescr):
 
 def getFieldDescrClass(TYPE):
     return getDescrClass(TYPE, BaseFieldDescr, GcPtrFieldDescr,
-                         NonGcPtrFieldDescr, 'Field')
+                         NonGcPtrFieldDescr, 'Field', 'get_field_size')
 
 def get_field_descr(gccache, STRUCT, fieldname):
     cache = gccache._cache_field
@@ -137,7 +137,7 @@ class GcPtrArrayDescr(NonGcPtrArrayDescr):
 
 def getArrayDescrClass(ARRAY):
     return getDescrClass(ARRAY.OF, BaseArrayDescr, GcPtrArrayDescr,
-                         NonGcPtrArrayDescr, 'Array')
+                         NonGcPtrArrayDescr, 'Array', 'get_item_size')
 
 def get_array_descr(gccache, ARRAY):
     cache = gccache._cache_array
@@ -160,6 +160,7 @@ def get_array_descr(gccache, ARRAY):
 # CallDescrs
 
 class BaseCallDescr(AbstractDescr):
+    _clsname = ''
     call_loop = None
     arg_classes = []     # <-- annotation hack
 
@@ -197,22 +198,30 @@ class BaseCallDescr(AbstractDescr):
         self.call_loop = loop
         return loop
 
+    def repr_of_descr(self):
+        return '<%s>' % self._clsname
 
-class GcPtrCallDescr(BaseCallDescr):
-    def returns_a_pointer(self):
-        return True
 
+class NonGcPtrCallDescr(BaseCallDescr):
+    _clsname = 'NonGcPtrCallDescr'
     def get_result_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
-class IntCallDescr(BaseCallDescr):
-    def __init__(self, arg_classes, result_size):
-        BaseCallDescr.__init__(self, arg_classes)
-        self.result_size = result_size
+class GcPtrCallDescr(NonGcPtrCallDescr):
+    _clsname = 'GcPtrCallDescr'
+    def returns_a_pointer(self):
+        return True
 
+class VoidCallDescr(NonGcPtrCallDescr):
+    _clsname = 'VoidCallDescr'
     def get_result_size(self, translate_support_code):
-        return self.result_size
+        return 0
 
+def getCallDescrClass(RESULT):
+    if RESULT is lltype.Void:
+        return VoidCallDescr
+    return getDescrClass(RESULT, BaseCallDescr, GcPtrCallDescr,
+                         NonGcPtrCallDescr, 'Call', 'get_result_size')
 
 def get_call_descr(gccache, ARGS, RESULT):
     arg_classes = []
@@ -222,20 +231,13 @@ def get_call_descr(gccache, ARGS, RESULT):
         elif kind == 'ptr': arg_classes.append(BoxPtr)
         else:
             raise NotImplementedError('ARG = %r' % (ARG,))
-    if RESULT is lltype.Void:
-        result_size = 0
-    else:
-        result_size = symbolic.get_size(RESULT, gccache.translate_support_code)
-    ptr = isinstance(RESULT, lltype.Ptr) and RESULT.TO._gckind == 'gc'
-    key = (tuple(arg_classes), result_size, ptr)
+    cls = getCallDescrClass(RESULT)
+    key = (cls, tuple(arg_classes))
     cache = gccache._cache_call
     try:
         return cache[key]
     except KeyError:
-        if ptr:
-            calldescr = GcPtrCallDescr(arg_classes)
-        else:
-            calldescr = IntCallDescr(arg_classes, result_size)
+        calldescr = cls(arg_classes)
         cache[key] = calldescr
         return calldescr
 
@@ -243,7 +245,7 @@ def get_call_descr(gccache, ARGS, RESULT):
 # ____________________________________________________________
 
 def getDescrClass(TYPE, BaseDescr, GcPtrDescr, NonGcPtrDescr,
-                  nameprefix, _cache={}):
+                  nameprefix, methodname, _cache={}):
     if isinstance(TYPE, lltype.Ptr):
         if TYPE.TO._gckind == 'gc':
             return GcPtrDescr
@@ -255,10 +257,11 @@ def getDescrClass(TYPE, BaseDescr, GcPtrDescr, NonGcPtrDescr,
         #
         class Descr(BaseDescr):
             _clsname = '%s%sDescr' % (TYPE._name, nameprefix)
-            def get_field_size(self, translate_support_code):
-                return symbolic.get_size(TYPE, translate_support_code)
-            get_item_size = get_field_size
-        #
         Descr.__name__ = Descr._clsname
+        #
+        def method(self, translate_support_code):
+            return symbolic.get_size(TYPE, translate_support_code)
+        setattr(Descr, methodname, method)
+        #
         _cache[nameprefix, TYPE] = Descr
         return Descr
