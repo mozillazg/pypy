@@ -4,10 +4,14 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, ConstInt, ConstPtr
+from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD
 from pypy.jit.backend.llsupport.descr import BaseSizeDescr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import GcCache, get_field_descr
+from pypy.jit.backend.llsupport.descr import GcPtrFieldDescr
+from pypy.jit.backend.llsupport.descr import get_call_descr
 
 # ____________________________________________________________
 
@@ -19,7 +23,7 @@ class GcLLDescription(GcCache):
         return True
     def do_write_barrier(self, gcref_struct, gcref_newptr):
         pass
-    def gen_write_barrier(self, regalloc, base_reg, value_reg):
+    def rewrite_assembler(self, cpu, gcrefs, operations):
         pass
 
 # ____________________________________________________________
@@ -287,6 +291,7 @@ class GcLLDescr_framework(GcLLDescription):
                                       " with the JIT" % (name,))
         gcrootmap = cls()
         self.gcrootmap = gcrootmap
+        self.single_gcref_descr = GcPtrFieldDescr(0)
 
         # make a TransformerLayoutBuilder and save it on the translator
         # where it can be fished and reused by the FrameworkGCTransformer
@@ -302,6 +307,10 @@ class GcLLDescr_framework(GcLLDescription):
         self.HDRPTR = lltype.Ptr(self.GCClass.HDR)
         self.gcheaderbuilder = GCHeaderBuilder(self.HDRPTR.TO)
         self.fielddescr_tid = get_field_descr(self, self.GCClass.HDR, 'tid')
+        self.c_jit_wb_if_flag = ConstInt(self.GCClass.JIT_WB_IF_FLAG)
+        self.calldescr_jit_wb = get_call_descr(self, [llmemory.GCREF,
+                                                      llmemory.GCREF],
+                                               lltype.Void)
         (self.array_basesize, _, self.array_length_ofs) = \
              symbolic.get_array_token(lltype.GcArray(lltype.Signed), True)
 
@@ -420,42 +429,71 @@ class GcLLDescr_framework(GcLLDescription):
             funcptr(llmemory.cast_ptr_to_adr(gcref_struct),
                     llmemory.cast_ptr_to_adr(gcref_newptr))
 
-    def gen_write_barrier(self, assembler, base_reg, value_reg):
-        from pypy.jit.backend.x86.regalloc import REGS
-        bytes_count = 11
+    def rewrite_assembler(self, cpu, gcrefs, operations):
+        # Perform two kinds of rewrites in parallel:
         #
-        if isinstance(value_reg, IMM32):
-            if value_reg.value == 0:
-                return      # writing NULL: don't need the write barrier at all
-            bytes_count += 4
-        else:
-            assert isinstance(value_reg, REG)
+        # - Add COND_CALLs to the write barrier before SETFIELD_GC and
+        #   SETARRAYITEM_GC operations.
         #
-        if isinstance(base_reg, IMM32):
-            bytes_count += 4
-            tidaddr = heap(base_reg.value + 0)
-        else:
-            assert isinstance(base_reg, REG)
-            tidaddr = mem(base_reg, 0)
+        # - Remove all uses of ConstPtrs away from the assembler.
+        #   Idea: when running on a moving GC, we can't (easily) encode
+        #   the ConstPtrs in the assembler, because they can move at any
+        #   point in time.  Instead, we store them in 'gcrefs.list', a GC
+        #   but nonmovable list; and here, we modify 'operations' to
+        #   replace direct usage of ConstPtr with a BoxPtr loaded by a
+        #   GETFIELD_RAW from the array 'gcrefs.list'.
         #
-        assembler.mc.TEST(tidaddr, imm32(self.GCClass.JIT_WB_IF_FLAG))
-        # do the rest using 'mc._mc' directly instead of 'mc', to avoid
-        # bad surprizes if the code buffer is mostly full
-        mc = assembler.mc._mc
-        mc.write('\x74')             # JZ label_end
-        mc.write(chr(bytes_count))
-        start = mc.tell()
-        mc.PUSHA()                   # 1 byte
-        mc.PUSH(value_reg)           # 1 or 5 bytes
-        mc.PUSH(base_reg)            # 1 or 5 bytes
-        funcptr = self.llop1.get_write_barrier_failing_case(self.WB_FUNCPTR)
-        funcaddr = rffi.cast(lltype.Signed, funcptr)
-        mc.CALL(rel32(funcaddr))     # 5 bytes
-        mc.POP(eax)                  # 1 byte
-        mc.POP(eax)                  # 1 byte
-        mc.POPA()                    # 1 byte
-                              # total: 11+(4?)+(4?) bytes
-        assert mc.tell() == start + bytes_count
+        newops = []
+        for op in operations:
+            if op.opnum == rop.DEBUG_MERGE_POINT:
+                continue
+            # ---------- replace ConstPtrs with GETFIELD_RAW ----------
+            # xxx some performance issue here
+            for i in range(len(op.args)):
+                v = op.args[i]
+                if (isinstance(v, ConstPtr) and bool(v.value)
+                                            and rgc.can_move(v.value)):
+                    box = BoxPtr(v.value)
+                    addr = gcrefs.get_address_of_gcref(v.value)
+                    addr = cpu.cast_adr_to_int(addr)
+                    newops.append(ResOperation(rop.GETFIELD_RAW,
+                                               [ConstInt(addr)], box,
+                                               self.single_gcref_descr))
+                    op.args[i] = box
+            # ---------- write barrier for SETFIELD_GC ----------
+            if op.opnum == rop.SETFIELD_GC:
+                v = op.args[1]
+                if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
+                                             bool(v.value)): # store a non-NULL
+                    self._gen_write_barrier(cpu, newops, op.args[0], v)
+                    op = ResOperation(rop.SETFIELD_RAW, op.args, None,
+                                      descr=op.descr)
+            # ---------- write barrier for SETARRAYITEM_GC ----------
+            if op.opnum == rop.SETARRAYITEM_GC:
+                v = op.args[2]
+                if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
+                                             bool(v.value)): # store a non-NULL
+                    self._gen_write_barrier(cpu, newops, op.args[0], v)
+                    op = ResOperation(rop.SETARRAYITEM_RAW, op.args, None,
+                                      descr=op.descr)
+            # ----------
+            if op.is_guard():
+                self.rewrite_assembler(cpu, gcrefs, op.suboperations)
+            newops.append(op)
+        del operations[:]
+        operations.extend(newops)
+
+    def _gen_write_barrier(self, cpu, newops, v_base, v_value):
+        v_tid = BoxInt()
+        newops.append(ResOperation(rop.GETFIELD_RAW, [v_base], v_tid,
+                                   descr=self.fielddescr_tid))
+        llop1 = self.llop1
+        funcptr = llop1.get_write_barrier_failing_case(self.WB_FUNCPTR)
+        funcaddr = llmemory.cast_ptr_to_adr(funcptr)
+        c_func = ConstInt(cpu.cast_adr_to_int(funcaddr))
+        args = [v_tid, self.c_jit_wb_if_flag, c_func, v_base, v_value]
+        newops.append(ResOperation(rop.COND_CALL_GC_WB, args, None,
+                                   descr=self.calldescr_jit_wb))
 
 # ____________________________________________________________
 
