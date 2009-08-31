@@ -139,6 +139,9 @@ class AbstractCPU(object):
     def do_setarrayitem_gc(self, args, arraydescr):
         raise NotImplementedError
 
+    def do_setarrayitem_raw(self, args, arraydescr):
+        raise NotImplementedError
+
     def do_setfield_gc(self, args, fielddescr):
         raise NotImplementedError
 
@@ -160,11 +163,12 @@ class AbstractCPU(object):
     def do_call(self, args, calldescr):
         raise NotImplementedError
 
-    def do_cond_call(self, args, calldescr):
-        if not args[0].getint():
-            return args[1]
-        else:
-            return self.do_call(args[2:], calldescr)
+    def do_cond_call_gc_wb(self, args, calldescr):
+        if args[0].getint() & args[1].getint():
+            self.do_call(args[2:], calldescr)
+
+    def do_cond_call_gc_malloc(self, args, calldescr):
+        xxx
 
     def do_cast_int_to_ptr(self, args, descr=None):
         raise NotImplementedError
