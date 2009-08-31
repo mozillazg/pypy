@@ -809,8 +809,21 @@ class BaseTestOptimizeFindNode(BaseTest):
         """
         self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1, i0=0)
 
+    def test_find_nodes_arithmetic_propagation_bug_3(self):
+        ops = """
+        [p1]
+        i1 = getarrayitem_gc(p1, 0, descr=arraydescr)
+        escape(i1)
+        p3 = new_array(1, descr=arraydescr)
+        i2 = arraylen_gc(p3, descr=arraydescr)
+        p2 = new_array(i2, descr=arraydescr)
+        i3 = escape()
+        setarrayitem_gc(p2, 0, i3, descr=arraydescr)
+        jump(p2)
+        """
+        self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1)
+
     def test_find_nodes_bug_1(self):
-        py.test.skip("still a bug")
         ops = """
         [p12]
         i16 = ooisnull(p12)

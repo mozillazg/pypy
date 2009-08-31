@@ -166,7 +166,6 @@ class NodeFinder(object):
     find_nodes_OOISNULL    = find_nodes_no_escape
     find_nodes_OOIS        = find_nodes_no_escape
     find_nodes_OOISNOT     = find_nodes_no_escape
-    find_nodes_ARRAYLEN_GC = find_nodes_no_escape
     find_nodes_INSTANCEOF  = find_nodes_no_escape
 
     def find_nodes_NEW_WITH_VTABLE(self, op):
@@ -187,6 +186,12 @@ class NodeFinder(object):
         arraynode.arraysize = lengthbox.getint()
         arraynode.arraydescr = op.descr
         self.nodes[op.result] = arraynode
+
+    def find_nodes_ARRAYLEN_GC(self, op):
+        arraynode = self.getnode(op.args[0])
+        if arraynode.arraydescr is not None:
+            assert op.result.getint() == arraynode.arraysize
+            self.set_constant_node(op.result)
 
     def find_nodes_GUARD_CLASS(self, op):
         instnode = self.getnode(op.args[0])
