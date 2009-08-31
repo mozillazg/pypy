@@ -74,8 +74,25 @@ class LLtypeMixin(object):
     sbox = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S)))
     arraydescr2 = cpu.arraydescrof(lltype.GcArray(lltype.Ptr(S)))
 
+    T = lltype.GcStruct('TUPLE',
+                        ('c', lltype.Signed),
+                        ('d', lltype.Ptr(lltype.GcArray(lltype.Ptr(NODE)))))
+    tsize = cpu.sizeof(T)
+    cdescr = cpu.fielddescrof(T, 'c')
+    ddescr = cpu.fielddescrof(T, 'd')
+    arraydescr3 = cpu.arraydescrof(lltype.GcArray(lltype.Ptr(NODE)))
+
+    U = lltype.GcStruct('U',
+                        ('parent', OBJECT),
+                        ('one', lltype.Ptr(lltype.GcArray(lltype.Ptr(NODE)))))
+    u_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
+    u_vtable_adr = llmemory.cast_ptr_to_adr(u_vtable)
+    usize = cpu.sizeof(U)
+    onedescr = cpu.fielddescrof(U, 'one')
+
     cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
-                      cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2)}
+                      cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),
+                       cpu.cast_adr_to_int(u_vtable_adr): cpu.sizeof(U)}
     namespace = locals()
 
 class OOtypeMixin(object):
@@ -117,6 +134,19 @@ class OOtypeMixin(object):
     sbox = BoxObj(ootype.cast_to_object(ootype.new(S)))
     arraydescr2 = cpu.arraydescrof(ootype.Array(S))
 
+    T = ootype.Record({'c': ootype.Signed,
+                       'd': ootype.Array(NODE)})
+    tsize = cpu.typedescrof(T)
+    cdescr = cpu.fielddescrof(T, 'c')
+    ddescr = cpu.fielddescrof(T, 'd')
+    arraydescr3 = cpu.arraydescrof(ootype.Array(NODE))
+
+    U = ootype.Instance('U', ootype.ROOT, {'one': ootype.Array(NODE)})
+    usize = cpu.typedescrof(U)
+    onedescr = cpu.fielddescrof(U, 'one')
+    u_vtable = ootype.runtimeClass(U)
+    u_vtable_adr = ootype.cast_to_object(u_vtable)
+
     # force a consistent order
     valuedescr.sort_key()
     nextdescr.sort_key()
@@ -124,7 +154,8 @@ class OOtypeMixin(object):
     bdescr.sort_key()
 
     cpu.class_sizes = {node_vtable_adr: cpu.typedescrof(NODE),
-                       node_vtable_adr2: cpu.typedescrof(NODE2)}
+                       node_vtable_adr2: cpu.typedescrof(NODE2),
+                       u_vtable_adr: cpu.typedescrof(U)}
     namespace = locals()
 
 class BaseTest(object):
@@ -738,6 +769,74 @@ class BaseTestOptimizeFindNode(BaseTest):
         jump(i0, p1)
         """
         self.find_nodes(ops, 'Not, Not')
+
+    def test_find_nodes_bug_1(self):
+        py.test.skip("fails!")
+        ops = """
+        [p12]
+        i16 = ooisnull(p12)
+        guard_false(i16)
+            fail()
+        guard_class(p12, ConstClass(node_vtable))
+            fail()
+        guard_class(p12, ConstClass(node_vtable))
+            fail()
+        i22 = getfield_gc_pure(p12, descr=valuedescr)
+        escape(i22)
+        i25 = ooisnull(p12)
+        guard_false(i25)
+            fail()
+        guard_class(p12, ConstClass(node_vtable))
+            fail()
+        guard_class(p12, ConstClass(node_vtable))
+            fail()
+        i29 = getfield_gc_pure(p12, descr=valuedescr)
+        i31 = int_add_ovf(i29, 1)
+        guard_no_overflow()
+            fail()
+        p33 = new_with_vtable(ConstClass(node_vtable))      # NODE
+        setfield_gc(p33, i31, descr=valuedescr)
+        #
+        p35 = new_array(1, descr=arraydescr3)               # Array(NODE)
+        setarrayitem_gc(p35, 0, p33, descr=arraydescr3)
+        p38 = new_with_vtable(ConstClass(u_vtable))         # U
+        setfield_gc(p38, p35, descr=onedescr)
+        i39 = ooisnull(p38)
+        guard_false(i39)
+            fail()
+        i40 = oononnull(p38)
+        guard_true(i40)
+            fail()
+        guard_class(p38, ConstClass(u_vtable))
+            fail()
+        p42 = getfield_gc(p38, descr=onedescr)              # Array(NODE)
+        i43 = arraylen_gc(p42, descr=arraydescr3)
+        i45 = int_sub(i43, 0)
+        p46 = new(descr=tsize)                              # T
+        setfield_gc(p46, i45, descr=cdescr)
+        p47 = new_array(i45, descr=arraydescr3)             # Array(NODE)
+        setfield_gc(p46, p47, descr=ddescr)
+        i48 = int_lt(0, i43)
+        guard_true(i48)
+            fail()
+        p49 = getarrayitem_gc(p42, 0, descr=arraydescr3)    # NODE
+        p50 = getfield_gc(p46, descr=ddescr)                # Array(NODE)
+        setarrayitem_gc(p50, 0, p49, descr=arraydescr3)
+        i52 = int_lt(1, i43)
+        guard_false(i52)
+            fail()
+        i53 = getfield_gc(p46, descr=cdescr)
+        i55 = int_ne(i53, 1)
+        guard_false(i55)
+            fail()
+        p56 = getfield_gc(p46, descr=ddescr)                # Array(NODE)
+        p58 = getarrayitem_gc(p56, 0, descr=arraydescr3)    # NODE
+        i59 = ooisnull(p38)
+        guard_false(i59)
+            fail()
+        jump(p58)
+        """
+        self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)')
 
     # ------------------------------
     # Bridge tests
