@@ -59,8 +59,8 @@ class RegAlloc(object):
         self.assembler = assembler
         self.translate_support_code = translate_support_code
         if regalloc is None:
-            gc_ll_descr = self.assembler.cpu.gc_ll_descr
-            gc_ll_descr.rewrite_assembler(self, tree.operations)
+            cpu = self.assembler.cpu
+            cpu.gc_ll_descr.rewrite_assembler(cpu, tree.operations)
             self.tree = tree
             self.reg_bindings = newcheckdict()
             self.stack_bindings = newcheckdict()

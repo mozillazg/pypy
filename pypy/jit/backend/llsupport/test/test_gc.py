@@ -148,6 +148,7 @@ class TestFramework:
         translator = FakeTranslator()
         llop1 = FakeLLOp()
         gc_ll_descr = GcLLDescr_framework(gcdescr, FakeTranslator(), llop1)
+        gc_ll_descr.initialize()
         self.llop1 = llop1
         self.gc_ll_descr = gc_ll_descr
         self.fake_cpu = FakeCPU()
@@ -233,6 +234,14 @@ class TestFramework:
         assert newops[1].args[4] == v_value
         assert newops[1].descr == gc_ll_descr.calldescr_jit_wb
         assert newops[1].result is None
+
+    def test_get_rid_of_debug_merge_point(self):
+        operations = [
+            ResOperation(rop.DEBUG_MERGE_POINT, [], None),
+            ]
+        gc_ll_descr = self.gc_ll_descr
+        gc_ll_descr.rewrite_assembler(None, operations)
+        assert len(operations) == 0
 
     def test_rewrite_assembler_1(self):
         # check rewriting of ConstPtrs
