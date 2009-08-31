@@ -128,6 +128,7 @@ class Assembler386(object):
                 self._exception_bck)
             # the address of the function called by 'new'
             gc_ll_descr = self.cpu.gc_ll_descr
+            gc_ll_descr.initialize()
             ll_new = gc_ll_descr.get_funcptr_for_new()
             self.malloc_func_addr = rffi.cast(lltype.Signed, ll_new)
             if gc_ll_descr.get_funcptr_for_newarray is not None:
@@ -143,8 +144,6 @@ class Assembler386(object):
                 self.malloc_unicode_func_addr = rffi.cast(lltype.Signed,
                                                           ll_new_unicode)
             self.gcrootmap = gc_ll_descr.gcrootmap
-            if self.gcrootmap:
-                self.gcrootmap.initialize()
             # done
             self.mc2 = self.mcstack.next_mc()
             self.mc = self.mcstack.next_mc()

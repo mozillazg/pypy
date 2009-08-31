@@ -5,6 +5,7 @@
 from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
      BoxPtr, ConstPtr, TreeLoop
 from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.backend.llsupport.descr import GcCache
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.backend.x86.regalloc import RegAlloc, REGS, WORD
 from pypy.jit.metainterp.test.oparser import parse
@@ -20,11 +21,14 @@ class DummyTree(object):
 class MockAssembler(object):
     gcrefs = None
 
-    def __init__(self):
+    def __init__(self, cpu=None):
         self.loads = []
         self.stores = []
         self.performs = []
         self.lea = []
+        self.cpu = cpu or CPU(None, None)
+        if not hasattr(self.cpu, 'gc_ll_descr'):
+            self.cpu.gc_ll_descr = MockGcDescr(False)
 
     def dump(self, *args):
         pass
@@ -43,6 +47,26 @@ class MockAssembler(object):
 
     def load_effective_addr(self, *args):
         self.lea.append(args)
+
+class GcRootMap(object):
+    def initialize(self):
+        pass
+
+class MockGcDescr(GcCache):
+    def get_funcptr_for_new(self):
+        return 123
+    get_funcptr_for_newarray = get_funcptr_for_new
+    get_funcptr_for_newstr = get_funcptr_for_new
+    get_funcptr_for_newunicode = get_funcptr_for_new
+    
+    moving_gc = True
+    gcrootmap = GcRootMap()
+
+    def initialize(self):
+        pass
+    def rewrite_assembler(self, cpu, operations):
+        pass
+
 
 class RegAllocForTests(RegAlloc):
     position = 0
@@ -101,7 +125,7 @@ class TestRegallocDirect(object):
 
     def test_registers_around_call(self):
         cpu = CPU(None, None)
-        regalloc = RegAlloc(MockAssembler(), DummyTree())
+        regalloc = RegAlloc(MockAssembler(cpu), DummyTree())
         boxes = self.fill_regs(regalloc)
         TP = lltype.FuncType([], lltype.Void)
         calldescr = cpu.calldescrof(TP, TP.ARGS, TP.RESULT)
@@ -117,8 +141,7 @@ class TestRegallocDirect(object):
 
     def test_registers_around_newstr(self):
         cpu = CPU(None, None)
-        regalloc = RegAllocForTests(MockAssembler(), DummyTree())
-        regalloc.assembler.cpu = cpu
+        regalloc = RegAllocForTests(MockAssembler(cpu), DummyTree())
         boxes = self.fill_regs(regalloc)
         regalloc._check_invariants()
         for box in boxes:
@@ -522,42 +545,10 @@ class TestRegallocMoreRegisters(BaseTestRegalloc):
         assert s[1] == 'a'
         
 
-class GcRootMap(object):
-    def initialize(self):
-        pass
-
-class MockGcDescr(object):
-    def get_funcptr_for_new(self):
-        return 123
-    get_funcptr_for_newarray = get_funcptr_for_new
-    get_funcptr_for_newstr = get_funcptr_for_new
-    get_funcptr_for_newunicode = get_funcptr_for_new
-    
-    moving_gc = True
-    class GcRefList(object):
-        MAXLEN = 1000
-        
-        def __init__(self):
-            TP = rffi.CArray(llmemory.GCREF)
-            self.l = lltype.malloc(TP, self.MAXLEN, flavor='raw')
-            self.size = 0
-        
-        def get_address_of_gcref(self, addr):
-            baseaddr = rffi.cast(lltype.Signed, self.l)
-            for i in range(self.size):
-                if self.l[i] == addr:
-                    return baseaddr + i * WORD
-            self.l[self.size] = addr
-            self.size += 1
-            return baseaddr + (self.size - 1) * WORD
-
-    gcrootmap = GcRootMap()
-
 class TestRegallocGc(BaseTestRegalloc):
     cpu = CPU(None, None)
-    cpu.gc_ll_descr = MockGcDescr()
-    cpu.gcrefs = cpu.gc_ll_descr.GcRefList()
-
+    cpu.gc_ll_descr = MockGcDescr(False)
+    
     S = lltype.GcForwardReference()
     S.become(lltype.GcStruct('S', ('field', lltype.Ptr(S)),
                              ('int', lltype.Signed)))
@@ -603,15 +594,6 @@ class TestRegallocGc(BaseTestRegalloc):
         '''
         self.interpret(ops, [0])
         assert not self.getptr(0, lltype.Ptr(self.S))
-
-    def test_get_rid_of_debug_merge_point(self):
-        ops = '''
-        []
-        debug_merge_point()
-        fail()
-        '''
-        loop = self.interpret(ops, [], run=False)
-        assert len(loop.operations) == 1
 
     def test_bug_0(self):
         ops = '''

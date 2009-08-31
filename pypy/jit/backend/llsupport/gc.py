@@ -21,6 +21,8 @@ class GcLLDescription(GcCache):
         self.gcdescr = gcdescr
     def _freeze_(self):
         return True
+    def initialize(self):
+        pass
     def do_write_barrier(self, gcref_struct, gcref_newptr):
         pass
     def rewrite_assembler(self, cpu, operations):
@@ -275,7 +277,6 @@ class GcLLDescr_framework(GcLLDescription):
         assert self.translate_support_code, "required with the framework GC"
         self.translator = translator
         self.llop1 = llop1
-        self.gcrefs = None
 
         # we need the hybrid GC for GcRefList.alloc_gcref_list() to work
         if gcdescr.config.translation.gc != 'hybrid':
@@ -358,6 +359,9 @@ class GcLLDescr_framework(GcLLDescription):
         self.malloc_unicode = malloc_unicode
         self.GC_MALLOC_STR_UNICODE = lltype.Ptr(lltype.FuncType(
             [lltype.Signed], llmemory.GCREF))
+
+    def initialize(self):
+        self.gcrefs = GcRefList()
 
     def init_size_descr(self, S, descr):
         from pypy.rpython.memory.gctypelayout import weakpointer_offset
@@ -443,8 +447,6 @@ class GcLLDescr_framework(GcLLDescription):
         #   replace direct usage of ConstPtr with a BoxPtr loaded by a
         #   GETFIELD_RAW from the array 'gcrefs.list'.
         #
-        if self.gcrefs is None:
-            self.gcrefs = GcRefList()
         newops = []
         for op in operations:
             if op.opnum == rop.DEBUG_MERGE_POINT:
