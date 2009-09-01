@@ -114,7 +114,7 @@ class GcRefList:
     HASHTABLE_BITS = 10
     HASHTABLE_SIZE = 1 << HASHTABLE_BITS
 
-    def __init__(self):
+    def initialize(self):
         if we_are_translated(): n = 2000
         else:                   n = 10    # tests only
         self.list = self.alloc_gcref_list(n)
@@ -202,8 +202,10 @@ class GcRootMap_asmgcc:
         return llmemory.cast_ptr_to_adr(self._gcmap)
 
     def gcmapend(self):
-        start = self.gcmapstart()
-        return start + llmemory.sizeof(llmemory.Address)*self._gcmap_curlength
+        addr = self.gcmapstart()
+        if self._gcmap_curlength:
+            addr += llmemory.sizeof(llmemory.Address)*self._gcmap_curlength
+        return addr
 
     def put(self, retaddr, callshapeaddr):
         """'retaddr' is the address just after the CALL.
@@ -226,24 +228,31 @@ class GcRootMap_asmgcc:
         if oldgcmap:
             lltype.free(oldgcmap, flavor='raw')
 
-    def encode_callshape(self, gclocs):
-        """Encode a callshape from the list of locations containing GC
-        pointers.  'gclocs' is a list of offsets relative to EBP."""
-        shape = self._get_callshape(gclocs)
-        return self._compress_callshape(shape)
+    def get_basic_shape(self):
+        return [self.LOC_EBP_BASED | 4,     # return addr: at   4(%ebp)
+                self.LOC_EBP_BASED | (-4),  # saved %ebx:  at  -4(%ebp)
+                self.LOC_EBP_BASED | (-8),  # saved %esi:  at  -8(%ebp)
+                self.LOC_EBP_BASED | (-12), # saved %edi:  at -12(%ebp)
+                self.LOC_EBP_BASED | 0,     # saved %ebp:  at    (%ebp)
+                0]
 
-    def _get_callshape(self, gclocs):
-        shape = [self.LOC_EBP_BASED | 4,     # return addr: at   4(%ebp)
-                 self.LOC_EBP_BASED | (-4),  # saved %ebx:  at  -4(%ebp)
-                 self.LOC_EBP_BASED | (-8),  # saved %esi:  at  -8(%ebp)
-                 self.LOC_EBP_BASED | (-12), # saved %edi:  at -12(%ebp)
-                 self.LOC_EBP_BASED | 0,     # saved %ebp:  at    (%ebp)
-                 0]
-        for loc in gclocs:
-            shape.append(self.LOC_EBP_BASED | loc)
-        return shape
+    def add_ebp_offset(self, shape, offset):
+        assert (offset & 3) == 0
+        shape.append(self.LOC_EBP_BASED | offset)
 
-    def _compress_callshape(self, shape):
+    def add_ebx(self, shape):
+        shape.append(self.LOC_REG | 0)
+
+    def add_esi(self, shape):
+        shape.append(self.LOC_REG | 4)
+
+    def add_edi(self, shape):
+        shape.append(self.LOC_REG | 8)
+
+    def add_ebp(self, shape):
+        shape.append(self.LOC_REG | 12)
+
+    def compress_callshape(self, shape):
         # Similar to compress_callshape() in trackgcroot.py.  XXX a bit slowish
         result = []
         for loc in shape:
@@ -292,6 +301,7 @@ class GcLLDescr_framework(GcLLDescription):
                                       " with the JIT" % (name,))
         gcrootmap = cls()
         self.gcrootmap = gcrootmap
+        self.gcrefs = GcRefList()
         self.single_gcref_descr = GcPtrFieldDescr(0)
 
         # make a TransformerLayoutBuilder and save it on the translator
@@ -336,7 +346,7 @@ class GcLLDescr_framework(GcLLDescription):
                 self.array_length_ofs, True, False)
         self.malloc_array = malloc_array
         self.GC_MALLOC_ARRAY = lltype.Ptr(lltype.FuncType(
-            [lltype.Signed] * 4, llmemory.GCREF))
+            [lltype.Signed] * 3, llmemory.GCREF))
         #
         (str_basesize, str_itemsize, str_ofs_length
          ) = symbolic.get_array_token(rstr.STR, True)
@@ -361,7 +371,8 @@ class GcLLDescr_framework(GcLLDescription):
             [lltype.Signed], llmemory.GCREF))
 
     def initialize(self):
-        self.gcrefs = GcRefList()
+        self.gcrefs.initialize()
+        self.gcrootmap.initialize()
 
     def init_size_descr(self, S, descr):
         from pypy.rpython.memory.gctypelayout import weakpointer_offset

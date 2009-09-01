@@ -931,6 +931,26 @@ class RegAlloc(object):
     def consider_debug_merge_point(self, op, ignored):
         pass
 
+    def get_mark_gc_roots(self, gcrootmap):
+        shape = gcrootmap.get_basic_shape()
+        for v, val in self.stack_bindings.items():
+            if (isinstance(v, BoxPtr) and
+                self.longevity[v][1] > self.position):
+                assert isinstance(val, MODRM)
+                gcrootmap.add_ebp_offset(shape, get_ebp_ofs(val.position))
+        for v, reg in self.reg_bindings.items():
+            if (isinstance(v, BoxPtr) and
+                self.longevity[v][1] > self.position):
+                if reg is ebx:
+                    gcrootmap.add_ebx(shape)
+                elif reg is esi:
+                    gcrootmap.add_esi(shape)
+                elif reg is edi:
+                    gcrootmap.add_edi(shape)
+                else:
+                    assert reg is eax     # ok to ignore this one
+        return gcrootmap.compress_callshape(shape)
+
     def not_implemented_op(self, op, ignored):
         print "[regalloc] Not implemented operation: %s" % op.getopname()
         raise NotImplementedError
@@ -943,12 +963,15 @@ for name, value in RegAlloc.__dict__.iteritems():
         num = getattr(rop, name.upper())
         oplist[num] = value
 
-def stack_pos(i):
+def get_ebp_ofs(position):
     # Argument is a stack position (0, 1, 2...).
     # Returns (ebp-16), (ebp-20), (ebp-24)...
     # This depends on the fact that our function prologue contains
     # exactly 4 PUSHes.
-    res = mem(ebp, -WORD * (4 + i))
+    return -WORD * (4 + position)
+
+def stack_pos(i):
+    res = mem(ebp, get_ebp_ofs(i))
     res.position = i
     return res
 

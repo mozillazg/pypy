@@ -295,7 +295,7 @@ class AbstractLLCPU(AbstractCPU):
         assert isinstance(calldescr, BaseCallDescr)
         assert len(args) == 1 + len(calldescr.arg_classes)
         if not we_are_translated():
-            assert ([cls.type for cls in calldescr.arg_classes] ==
+            assert (list(calldescr.arg_classes) ==
                     [arg.type for arg in args[1:]])
         loop = calldescr.get_loop_for_call(self)
         set_future_values(self, args)

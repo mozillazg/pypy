@@ -143,7 +143,6 @@ class Assembler386(object):
                 ll_new_unicode = gc_ll_descr.get_funcptr_for_newunicode()
                 self.malloc_unicode_func_addr = rffi.cast(lltype.Signed,
                                                           ll_new_unicode)
-            self.gcrootmap = gc_ll_descr.gcrootmap
             # done
             self.mc2 = self.mcstack.next_mc()
             self.mc = self.mcstack.next_mc()
@@ -816,22 +815,11 @@ class Assembler386(object):
     #    self.mc.MOVZX(eax, eax)
 
     def mark_gc_roots(self):
-        if self.gcrootmap:
-            gclocs = []
-            regalloc = self._regalloc
-            for v, val in regalloc.stack_bindings.items():
-                if (isinstance(v, BoxPtr) and
-                    regalloc.longevity[v][1] > regalloc.position):
-                    gclocs.append(val)
-            #alllocs = []
-            #for loc in gclocs:
-            #    assert isinstance(loc, MODRM)
-            #    alllocs.append(str(loc.position))
-            #print self.mc.tell()
-            #print ", ".join(alllocs)
-            shape = self.gcrootmap.encode_callshape(gclocs)
-            self.gcrootmap.put(rffi.cast(llmemory.Address, self.mc.tell()),
-                               shape)
+        gcrootmap = self.cpu.gc_ll_descr.gcrootmap
+        if gcrootmap:
+            mark = self._regalloc.get_mark_gc_roots(gcrootmap)
+            gcrootmap.put(rffi.cast(llmemory.Address, self.mc.tell()), mark)
+
 
 genop_discard_list = [Assembler386.not_implemented_op_discard] * rop._LAST
 genop_list = [Assembler386.not_implemented_op] * rop._LAST
