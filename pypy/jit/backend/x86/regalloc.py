@@ -171,7 +171,7 @@ class RegAlloc(object):
             return False
         if (self.longevity[op.result][1] > i + 1 or
             op.result in operations[i + 1].inputargs):
-            print "!!!! boolean flag not optimized away !!!!"
+            #print "!!!! boolean flag not optimized away !!!!"
             return False
         return True
 
