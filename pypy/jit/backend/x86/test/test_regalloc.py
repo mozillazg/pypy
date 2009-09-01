@@ -247,9 +247,9 @@ class BaseTestRegalloc(object):
         gcref = self.cpu.get_latest_value_ref(index)
         return lltype.cast_opaque_ptr(T, gcref)
 
-    def attach_bridge(self, ops, loop, guard_op):
+    def attach_bridge(self, ops, loop, guard_op, **kwds):
         assert guard_op.is_guard()
-        bridge = self.parse(ops)
+        bridge = self.parse(ops, **kwds)
         guard_op.suboperations = bridge.operations
         self.cpu.compile_operations(loop, guard_op)
         return bridge
