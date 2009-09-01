@@ -166,10 +166,18 @@ def get_array_descr(gccache, ARRAY):
 class BaseCallDescr(AbstractDescr):
     _clsname = ''
     call_loop = None
-    arg_classes = []     # <-- annotation hack
+    arg_classes = ''     # <-- annotation hack
 
     def __init__(self, arg_classes):
-        self.arg_classes = arg_classes    # list of BoxInt/BoxPtr classes
+        self.arg_classes = arg_classes    # string of "p" and "i" (ptr/int)
+
+    def instantiate_arg_classes(self):
+        result = []
+        for c in self.arg_classes:
+            if c == 'i': box = BoxInt()
+            else:        box = BoxPtr()
+            result.append(box)
+        return result
 
     def returns_a_pointer(self):
         return False         # unless overridden by GcPtrCallDescr
@@ -180,7 +188,7 @@ class BaseCallDescr(AbstractDescr):
     def get_loop_for_call(self, cpu):
         if self.call_loop is not None:
             return self.call_loop
-        args = [BoxInt()] + [cls() for cls in self.arg_classes]
+        args = [BoxInt()] + self.instantiate_arg_classes()
         if self.get_result_size(cpu.translate_support_code) == 0:
             result = None
             result_list = []
@@ -231,12 +239,13 @@ def get_call_descr(gccache, ARGS, RESULT):
     arg_classes = []
     for ARG in ARGS:
         kind = getkind(ARG)
-        if   kind == 'int': arg_classes.append(BoxInt)
-        elif kind == 'ptr': arg_classes.append(BoxPtr)
+        if   kind == 'int': arg_classes.append('i')
+        elif kind == 'ptr': arg_classes.append('p')
         else:
             raise NotImplementedError('ARG = %r' % (ARG,))
+    arg_classes = ''.join(arg_classes)
     cls = getCallDescrClass(RESULT)
-    key = (cls, tuple(arg_classes))
+    key = (cls, arg_classes)
     cache = gccache._cache_call
     try:
         return cache[key]

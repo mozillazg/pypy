@@ -27,8 +27,7 @@ class MockAssembler(object):
         self.performs = []
         self.lea = []
         self.cpu = cpu or CPU(None, None)
-        if not hasattr(self.cpu, 'gc_ll_descr'):
-            self.cpu.gc_ll_descr = MockGcDescr(False)
+        self.cpu.gc_ll_descr = MockGcDescr(False)
 
     def dump(self, *args):
         pass
@@ -48,9 +47,20 @@ class MockAssembler(object):
     def load_effective_addr(self, *args):
         self.lea.append(args)
 
-class GcRootMap(object):
-    def initialize(self):
-        pass
+class MockGcRootMap(object):
+    def get_basic_shape(self):
+        return ['shape']
+    def add_ebp_offset(self, shape, offset):
+        shape.append(offset)
+    def add_ebx(self, shape):
+        shape.append('ebx')
+    def add_esi(self, shape):
+        shape.append('esi')
+    def add_edi(self, shape):
+        shape.append('edi')
+    def compress_callshape(self, shape):
+        assert shape[0] == 'shape'
+        return ['compressed'] + shape[1:]
 
 class MockGcDescr(GcCache):
     def get_funcptr_for_new(self):
@@ -60,7 +70,7 @@ class MockGcDescr(GcCache):
     get_funcptr_for_newunicode = get_funcptr_for_new
     
     moving_gc = True
-    gcrootmap = GcRootMap()
+    gcrootmap = MockGcRootMap()
 
     def initialize(self):
         pass
@@ -74,10 +84,10 @@ class RegAllocForTests(RegAlloc):
         return -1
 
 class TestRegallocDirect(object):
-    def fill_regs(self, regalloc):
+    def fill_regs(self, regalloc, cls=BoxInt):
         allboxes = []
         for reg in REGS:
-            box = BoxInt()
+            box = cls()
             allboxes.append(box)
             regalloc.reg_bindings[box] = reg
         regalloc.free_regs = []
@@ -130,14 +140,35 @@ class TestRegallocDirect(object):
         TP = lltype.FuncType([], lltype.Void)
         calldescr = cpu.calldescrof(TP, TP.ARGS, TP.RESULT)
         regalloc._check_invariants()
-        box = boxes[0]
         for box in boxes:
             regalloc.longevity[box] = (0, 1)
+        box = boxes[0]
         regalloc.position = 0
         regalloc.consider_call(ResOperation(rop.CALL, [box], None, calldescr),
                                None)
         assert len(regalloc.assembler.stores) == 3
         regalloc._check_invariants()
+
+    def test_mark_gc_roots(self):
+        cpu = CPU(None, None)
+        regalloc = RegAlloc(MockAssembler(cpu), DummyTree())
+        cpu = regalloc.assembler.cpu
+        boxes = self.fill_regs(regalloc, cls=BoxPtr)
+        TP = lltype.FuncType([], lltype.Signed)
+        calldescr = cpu.calldescrof(TP, TP.ARGS, TP.RESULT)
+        regalloc._check_invariants()
+        for box in boxes:
+            regalloc.longevity[box] = (0, 1)
+        box = boxes[0]
+        regalloc.position = 0
+        regalloc.consider_call(ResOperation(rop.CALL, [box], BoxInt(),
+                                            calldescr), None)
+        assert len(regalloc.assembler.stores) == 3
+        #
+        mark = regalloc.get_mark_gc_roots(cpu.gc_ll_descr.gcrootmap)
+        assert mark[0] == 'compressed'
+        expected = ['ebx', 'esi', 'edi', -16, -20, -24]
+        assert dict.fromkeys(mark[1:]) == dict.fromkeys(expected)
 
     def test_registers_around_newstr(self):
         cpu = CPU(None, None)

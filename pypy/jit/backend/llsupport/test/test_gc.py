@@ -54,6 +54,7 @@ def test_GcRefList():
     allocs = [allocs[i] for i in order]
     #
     gcrefs = GcRefList()
+    gcrefs.initialize()
     addrs = [gcrefs.get_address_of_gcref(ptr) for ptr in allocs]
     for i in range(len(allocs)):
         assert addrs[i].address[0] == llmemory.cast_ptr_to_adr(allocs[i])
@@ -64,16 +65,27 @@ def test_GcRootMap_asmgcc():
     gcrootmap = GcRootMap_asmgcc()
     num1 = stack_pos(1)
     num2 = stack_pos(55)
-    shape = gcrootmap._get_callshape([num1, num2])
+    shape = gcrootmap.get_basic_shape()
+    gcrootmap.add_ebp_offset(shape, num1)
+    gcrootmap.add_ebp_offset(shape, num2)
     assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2]
+    gcrootmap.add_ebx(shape)
+    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2, 0|1]
+    gcrootmap.add_esi(shape)
+    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2, 0|1, 4|1]
+    gcrootmap.add_edi(shape)
+    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2, 0|1, 4|1, 8|1]
+    gcrootmap.add_ebp(shape)
+    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2, 0|1, 4|1, 8|1, 12|1]
     #
-    shapeaddr = gcrootmap.encode_callshape([num1, num2])
+    shapeaddr = gcrootmap.compress_callshape(shape)
     PCALLSHAPE = lltype.Ptr(GcRootMap_asmgcc.CALLSHAPE_ARRAY)
     p = llmemory.cast_adr_to_ptr(shapeaddr, PCALLSHAPE)
     num1a = -2*(num1|2)-1
     num2a = ((-2*(num2|2)-1) >> 7) | 128
     num2b = (-2*(num2|2)-1) & 127
-    for i, expected in enumerate([num2a, num2b, num1a, 0, 4, 19, 11, 3, 12]):
+    for i, expected in enumerate([26, 18, 10, 2,
+                                  num2a, num2b, num1a, 0, 4, 19, 11, 3, 12]):
         assert p[i] == expected
     #
     retaddr = rffi.cast(llmemory.Address, 1234567890)
@@ -85,7 +97,9 @@ def test_GcRootMap_asmgcc():
     # the same as before, but enough times to trigger a few resizes
     expected_shapeaddr = {}
     for i in range(1, 600):
-        shapeaddr = gcrootmap.encode_callshape([stack_pos(i)])
+        shape = gcrootmap.get_basic_shape()
+        gcrootmap.add_ebp_offset(shape, stack_pos(i))
+        shapeaddr = gcrootmap.compress_callshape(shape)
         expected_shapeaddr[i] = shapeaddr
         retaddr = rffi.cast(llmemory.Address, 123456789 + i)
         gcrootmap.put(retaddr, shapeaddr)
