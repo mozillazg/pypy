@@ -169,7 +169,7 @@ class BaseCallDescr(AbstractDescr):
     arg_classes = ''     # <-- annotation hack
 
     def __init__(self, arg_classes):
-        self.arg_classes = arg_classes    # string of "p" and "i" (ptr/int)
+        self.arg_classes = arg_classes    # string of "r" and "i" (ref/int)
 
     def instantiate_arg_classes(self):
         result = []
@@ -240,7 +240,7 @@ def get_call_descr(gccache, ARGS, RESULT):
     for ARG in ARGS:
         kind = getkind(ARG)
         if   kind == 'int': arg_classes.append('i')
-        elif kind == 'ptr': arg_classes.append('p')
+        elif kind == 'ref': arg_classes.append('r')
         else:
             raise NotImplementedError('ARG = %r' % (ARG,))
     arg_classes = ''.join(arg_classes)

@@ -2,8 +2,8 @@ import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values
+from pypy.jit.metainterp.typesystem import llhelper
 from pypy.jit.backend.model import AbstractCPU
-from pypy.jit.backend.logger import LLLogger
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
 from pypy.jit.backend.llsupport.descr import get_size_descr,  BaseSizeDescr
@@ -19,8 +19,7 @@ def _check_addr_range(x):
 
 
 class AbstractLLCPU(AbstractCPU):
-    is_oo = False
-    logger_cls = LLLogger
+    ts = llhelper
 
     def __init__(self, rtyper, stats, translate_support_code=False,
                  gcdescr=None):
@@ -125,13 +124,13 @@ class AbstractLLCPU(AbstractCPU):
     def do_arraylen_gc(self, args, arraydescr):
         assert isinstance(arraydescr, BaseArrayDescr)
         ofs = arraydescr.get_ofs_length(self.translate_support_code)
-        gcref = args[0].getptr_base()
+        gcref = args[0].getref_base()
         length = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs/WORD]
         return BoxInt(length)
 
     def do_getarrayitem_gc(self, args, arraydescr):
         itemindex = args[1].getint()
-        gcref = args[0].getptr_base()
+        gcref = args[0].getref_base()
         ofs, size, ptr = self.unpack_arraydescr(arraydescr)
         #
         for TYPE, itemsize in unroll_basic_sizes:
@@ -149,12 +148,12 @@ class AbstractLLCPU(AbstractCPU):
 
     def do_setarrayitem_gc(self, args, arraydescr):
         itemindex = args[1].getint()
-        gcref = args[0].getptr_base()
+        gcref = args[0].getref_base()
         ofs, size, ptr = self.unpack_arraydescr(arraydescr)
         vbox = args[2]
         #
         if ptr:
-            vboxptr = vbox.getptr_base()
+            vboxptr = vbox.getref_base()
             self.gc_ll_descr.do_write_barrier(gcref, vboxptr)
             a = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)
             a[ofs/WORD + itemindex] = self.cast_gcref_to_int(vboxptr)
@@ -172,7 +171,7 @@ class AbstractLLCPU(AbstractCPU):
         def do_strlen(self, args, descr=None):
             basesize, itemsize, ofs_length = symbolic.get_array_token(TP,
                                                 self.translate_support_code)
-            gcref = args[0].getptr_base()
+            gcref = args[0].getref_base()
             v = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs_length/WORD]
             return BoxInt(v)
         return do_strlen
@@ -183,7 +182,7 @@ class AbstractLLCPU(AbstractCPU):
     def do_strgetitem(self, args, descr=None):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
                                                     self.translate_support_code)
-        gcref = args[0].getptr_base()
+        gcref = args[0].getref_base()
         i = args[1].getint()
         v = rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[basesize + i]
         return BoxInt(ord(v))
@@ -191,7 +190,7 @@ class AbstractLLCPU(AbstractCPU):
     def do_unicodegetitem(self, args, descr=None):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
                                                     self.translate_support_code)
-        gcref = args[0].getptr_base()
+        gcref = args[0].getref_base()
         i = args[1].getint()
         basesize = basesize // itemsize
         v = rffi.cast(rffi.CArrayPtr(lltype.UniChar), gcref)[basesize + i]
@@ -213,7 +212,7 @@ class AbstractLLCPU(AbstractCPU):
             return BoxInt(val)
 
     def do_getfield_gc(self, args, fielddescr):
-        gcref = args[0].getptr_base()
+        gcref = args[0].getref_base()
         return self._base_do_getfield(gcref, fielddescr)
 
     def do_getfield_raw(self, args, fielddescr):
@@ -225,7 +224,7 @@ class AbstractLLCPU(AbstractCPU):
         if ptr:
             assert lltype.typeOf(gcref) is not lltype.Signed, (
                 "can't handle write barriers for setfield_raw")
-            ptr = vbox.getptr_base()
+            ptr = vbox.getref_base()
             self.gc_ll_descr.do_write_barrier(gcref, ptr)
             a = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)
             a[ofs/WORD] = self.cast_gcref_to_int(ptr)
@@ -240,7 +239,7 @@ class AbstractLLCPU(AbstractCPU):
                 raise NotImplementedError("size = %d" % size)
 
     def do_setfield_gc(self, args, fielddescr):
-        gcref = args[0].getptr_base()
+        gcref = args[0].getref_base()
         self._base_do_setfield(gcref, args[1], fielddescr)
 
     def do_setfield_raw(self, args, fielddescr):
@@ -279,7 +278,7 @@ class AbstractLLCPU(AbstractCPU):
                                                 self.translate_support_code)
         index = args[1].getint()
         v = args[2].getint()
-        a = args[0].getptr_base()
+        a = args[0].getref_base()
         rffi.cast(rffi.CArrayPtr(lltype.Char), a)[index + basesize] = chr(v)
 
     def do_unicodesetitem(self, args, descr=None):
@@ -287,7 +286,7 @@ class AbstractLLCPU(AbstractCPU):
                                                 self.translate_support_code)
         index = args[1].getint()
         v = args[2].getint()
-        a = args[0].getptr_base()
+        a = args[0].getref_base()
         basesize = basesize // itemsize
         rffi.cast(rffi.CArrayPtr(lltype.UniChar), a)[index + basesize] = unichr(v)
 
@@ -303,14 +302,14 @@ class AbstractLLCPU(AbstractCPU):
         # Note: if an exception is set, the rest of the code does a bit of
         # nonsense but nothing wrong (the return value should be ignored)
         if calldescr.returns_a_pointer():
-            return BoxPtr(self.get_latest_value_ptr(0))
+            return BoxPtr(self.get_latest_value_ref(0))
         elif calldescr.get_result_size(self.translate_support_code) != 0:
             return BoxInt(self.get_latest_value_int(0))
         else:
             return None
 
     def do_cast_ptr_to_int(self, args, descr=None):
-        return BoxInt(self.cast_gcref_to_int(args[0].getptr_base()))
+        return BoxInt(self.cast_gcref_to_int(args[0].getref_base()))
 
     def do_cast_int_to_ptr(self, args, descr=None):
         return BoxPtr(self.cast_int_to_gcref(args[0].getint()))

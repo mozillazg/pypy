@@ -4,7 +4,7 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import Const, ConstInt, Box, \
      BoxInt, ConstAddr
 
-class AbstractLogger(object):
+class Logger(object):
 
     def __init__(self, ts):
         self._log_fd = -1
@@ -119,10 +119,3 @@ class AbstractLogger(object):
         args_s = ','.join([self.repr_of_arg(memo, box) for box in valueboxes])
         os.write(self._log_fd, "CALL\n")
         os.write(self._log_fd, "%s %s\n" % (name, args_s))
-
-
-class LLLogger(AbstractLogger):
-    is_oo = False
-
-class OOLogger(AbstractLogger):
-    is_oo = True

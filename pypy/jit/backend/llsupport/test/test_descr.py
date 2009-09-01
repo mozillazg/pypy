@@ -120,7 +120,7 @@ def test_get_call_descr():
     descr2 = get_call_descr(c0, [lltype.Ptr(T)], lltype.Ptr(T))
     assert descr2.get_result_size(False) == rffi.sizeof(lltype.Ptr(T))
     assert descr2.returns_a_pointer()
-    assert descr2.arg_classes == "p"
+    assert descr2.arg_classes == "r"
     #
     U = lltype.GcStruct('U', ('x', lltype.Signed))
     assert descr2 == get_call_descr(c0, [lltype.Ptr(U)], lltype.Ptr(U))
@@ -129,7 +129,7 @@ def test_get_call_descr():
     descr3 = get_call_descr(c1, [lltype.Ptr(T)], lltype.Ptr(U))
     assert isinstance(descr3.get_result_size(True), Symbolic)
     assert descr3.returns_a_pointer()
-    assert descr3.arg_classes == "p"
+    assert descr3.arg_classes == "r"
 
 
 def test_repr_of_descr():

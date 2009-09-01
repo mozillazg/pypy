@@ -7,6 +7,7 @@ from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.annotation import model as annmodel
 from pypy.tool.uid import fixid
+from pypy.jit.backend.logger import Logger
 from pypy.jit.backend.x86.regalloc import (RegAlloc, WORD, REGS, TempBox,
                                            lower_byte, stack_pos)
 from pypy.rlib.objectmodel import we_are_translated, specialize
@@ -94,7 +95,7 @@ class Assembler386(object):
         self._exception_data = lltype.nullptr(rffi.CArray(lltype.Signed))
         self._exception_addr = 0
         self.mcstack = MachineCodeStack()
-        self.logger = cpu.logger_cls()
+        self.logger = Logger(cpu.ts)
         self.fail_boxes_int = lltype.malloc(lltype.GcArray(lltype.Signed),
                                             MAX_FAIL_BOXES, zero=True)
         self.fail_boxes_ptr = lltype.malloc(lltype.GcArray(llmemory.GCREF),
