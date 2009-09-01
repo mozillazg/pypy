@@ -1,5 +1,4 @@
 class AbstractCPU(object):
-    logger_cls = None
 
     def set_class_sizes(self, class_sizes):
         self.class_sizes = class_sizes

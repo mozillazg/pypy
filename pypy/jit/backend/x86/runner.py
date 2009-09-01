@@ -7,7 +7,6 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp import history
 from pypy.jit.backend.x86.assembler import Assembler386, MAX_FAIL_BOXES
 from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
-from pypy.jit.metainterp.typesystem import llhelper
 
 history.TreeLoop._x86_compiled = 0
 history.TreeLoop._x86_bootstrap_code = 0
@@ -15,7 +14,6 @@ history.TreeLoop._x86_bootstrap_code = 0
 
 class CPU386(AbstractLLCPU):
     debug = True
-    ts = llhelper
 
     BOOTSTRAP_TP = lltype.FuncType([], lltype.Signed)
 
