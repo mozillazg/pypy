@@ -206,7 +206,6 @@ class Assembler386(object):
     def assemble_bootstrap_code(self, jumpaddr, arglocs, args, framesize):
         self.make_sure_mc_exists()
         addr = self.mc.tell()
-        #if self.gcrootmap:
         self.mc.PUSH(ebp)
         self.mc.MOV(ebp, esp)
         self.mc.PUSH(ebx)
@@ -625,13 +624,15 @@ class Assembler386(object):
 
     def genop_discard_jump(self, op, locs):
         targetmp = op.jump_target
+        # don't break the following code sequence!
+        mc = self.mc._mc
         if op.jump_target is not self.tree:
-            self.jumps_to_look_at.append((op, self.mc.tell()))
-        self.mc.JMP(rel32(targetmp._x86_compiled))
+            self.jumps_to_look_at.append((op, mc.tell()))
+        mc.JMP(rel32(targetmp._x86_compiled))
         if op.jump_target is not self.tree:
             # Reserve 6 bytes for a possible later patch by patch_jump().
             # Put them after the JMP by default, as it's not doing anything.
-            self.mc.SUB(esp, imm32(0))
+            mc.SUB(esp, imm32(0))
 
     def genop_guard_guard_true(self, op, ign_1, addr, locs, ign_2):
         loc = locs[0]
@@ -718,16 +719,17 @@ class Assembler386(object):
                                  eax)
         if exc:
             self.generate_exception_handling(eax)
-        self.places_to_patch_framesize.append(self.mc.tell())
-        self.mc.ADD(esp, imm32(0))
+        # don't break the following code sequence!
+        mc = self.mc._mc
+        self.places_to_patch_framesize.append(mc.tell())
+        mc.ADD(esp, imm32(0))
         guard_index = self.cpu.make_guard_index(op)
-        self.mc.MOV(eax, imm(guard_index))
-        #if self.gcrootmap:
-        self.mc.POP(edi)
-        self.mc.POP(esi)
-        self.mc.POP(ebx)
-        self.mc.POP(ebp)
-        self.mc.RET()
+        mc.MOV(eax, imm(guard_index))
+        mc.POP(edi)
+        mc.POP(esi)
+        mc.POP(ebx)
+        mc.POP(ebp)
+        mc.RET()
 
     def generate_exception_handling(self, loc):
         self.mc.MOV(loc, heap(self._exception_addr))
