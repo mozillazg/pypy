@@ -58,7 +58,7 @@ class CPU386(AbstractLLCPU):
         self.assembler._exception_bck[0] = 0
         self.assembler._exception_bck[1] = 0
 
-    def compile_operations(self, tree, bridge=None):
+    def compile_operations(self, tree, guard_op=None):
         old_loop = tree._x86_compiled
         if old_loop:
             olddepth = tree._x86_stack_depth
