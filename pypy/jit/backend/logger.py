@@ -30,7 +30,7 @@ class AbstractLogger(object):
                                        compute_unique_id(loop))
 
     def repr_of_descr(self, descr):
-        return ''
+        return descr.repr_of_descr()
 
     def repr_of_arg(self, memo, arg):
         try:
@@ -119,3 +119,10 @@ class AbstractLogger(object):
         args_s = ','.join([self.repr_of_arg(memo, box) for box in valueboxes])
         os.write(self._log_fd, "CALL\n")
         os.write(self._log_fd, "%s %s\n" % (name, args_s))
+
+
+class LLLogger(AbstractLogger):
+    is_oo = False
+
+class OOLogger(AbstractLogger):
+    is_oo = True
