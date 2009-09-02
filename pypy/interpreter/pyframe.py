@@ -65,6 +65,18 @@ class PyFrame(eval.Frame):
     +---------------+
     | real_frame    |
     +---------------+
+       |
+       |
+       v
+      ...
+    
+    This ensures that the virtual frames don't escape via the f_back of the
+    real frames. For the same reason, the executioncontext's some_frame
+    attribute should only point to real frames.
+
+    All places where a frame can become accessed from applevel-code (like
+    sys._getframe and traceback catching) need to call force_f_back to ensure
+    that the intermediate virtual frames are forced to be real ones.
 
     """ 
 
