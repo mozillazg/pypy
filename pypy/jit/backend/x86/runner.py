@@ -59,20 +59,10 @@ class CPU386(AbstractLLCPU):
         self.assembler._exception_bck[1] = 0
 
     def compile_operations(self, tree, guard_op=None):
-        old_loop = tree._x86_compiled
-        if old_loop:
-            olddepth = tree._x86_stack_depth
-            oldlocs = tree.arglocs
-        else:
-            oldlocs = None
-            olddepth = 0
-        stack_depth = self.assembler.assemble(tree)
-        newlocs = tree.arglocs
-        if old_loop != 0:
-            self.assembler.patch_jump(old_loop, tree._x86_compiled,
-                                      oldlocs, newlocs, olddepth,
-                                      tree._x86_stack_depth)
-
+        if guard_op is not None:
+            self.assembler.assemble_from_guard(guard_op)
+        self.assembler.assemble_loop(tree)
+        
     def get_bootstrap_code(self, loop):
         addr = loop._x86_bootstrap_code
         if not addr:
