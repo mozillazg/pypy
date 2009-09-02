@@ -40,13 +40,13 @@ class ExecutionContext:
     def gettopframe_nohidden(self):
         frame = self.gettopframe()
         while frame and frame.hide():
-            frame = frame.f_back
+            frame = frame.f_back()
         return frame
 
     def getnextframe_nohidden(frame):
-        frame = frame.f_back
+        frame = frame.f_back()
         while frame and frame.hide():
-            frame = frame.f_back
+            frame = frame.f_back()
         return frame
     getnextframe_nohidden = staticmethod(getnextframe_nohidden)
 
@@ -56,8 +56,8 @@ class ExecutionContext:
                                  self.space.wrap("maximum recursion depth exceeded"))
         self.framestackdepth += 1
         #
+        frame.f_back_some = self.some_frame
         curtopframe = self.gettopframe()
-        frame.f_back = curtopframe
         if curtopframe is not None:
             curtopframe.f_forward = frame
         if not we_are_jitted():
@@ -68,11 +68,11 @@ class ExecutionContext:
             self._trace(frame, 'leaveframe', self.space.w_None)
 
         #assert frame is self.gettopframe() --- slowish
-        f_back = frame.f_back
+        f_back = frame.f_back()
         if f_back is not None:
             f_back.f_forward = None
         if not we_are_jitted() or self.some_frame is frame:
-            self.some_frame = f_back
+            self.some_frame = frame.f_back_some
         self.framestackdepth -= 1
         
         if self.w_tracefunc is not None and not frame.hide():
@@ -134,7 +134,7 @@ class ExecutionContext:
             while index > 0:
                 index -= 1
                 lst[index] = f
-                f = f.f_back
+                f = f.f_back()
             assert f is None
             return lst
         # coroutine: I think this is all, folks!
