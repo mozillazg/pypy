@@ -86,7 +86,8 @@ class TestRecompilation(BaseTestRegalloc):
 
     def test_bridge_jumps_to_self_deeper(self):
         loop = self.interpret('''
-        [i0, i1, i2]
+        [i0, i1, i2, i31, i32, i33]
+        i30 = int_add(i1, i2)
         i3 = int_add(i0, 1)
         i4 = int_and(i3, 1)
         guard_false(i4)
@@ -94,7 +95,7 @@ class TestRecompilation(BaseTestRegalloc):
         i5 = int_lt(i3, 20)
         guard_true(i5)
             fail(1, i3)
-        jump(i3, i1, i2)
+        jump(i3, i30, 1, i30, i30, i30)
         ''', [0])
         assert self.getint(0) == 0
         assert self.getint(1) == 1
@@ -104,10 +105,14 @@ class TestRecompilation(BaseTestRegalloc):
         i8 = int_add(i3, 1)
         i6 = int_add(i8, i10)
         i7 = int_add(i3, i6)
-        jump(i3, i6, i7)
+        i12 = int_add(i7, i8)
+        i11 = int_add(i12, i6)
+        jump(i3, i12, i11, i10, i6, i7)
         '''
-        bridge = self.attach_bridge(ops, loop, loop.operations[2],
+        guard_op = loop.operations[3]
+        bridge = self.attach_bridge(ops, loop, guard_op,
                                     jump_targets=[loop])
+        assert guard_op._x86_stack_depth > loop._x86_stack_depth
         self.cpu.set_future_value_int(0, 0)
         self.cpu.set_future_value_int(1, 0)
         self.cpu.set_future_value_int(2, 0)
