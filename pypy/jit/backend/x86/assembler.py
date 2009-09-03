@@ -186,7 +186,7 @@ class Assembler386(object):
             guard_op._x86_stack_depth = stack_depth
             mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
             mc.LEA(esp, addr_add(imm32(0), ebp,
-                                 -(stack_depth - 1) * WORD))
+                                 -(stack_depth + RET_BP - 2) * WORD))
             mc.done()
         if we_are_translated():
             self._regalloc = None   # else keep it around for debugging
