@@ -662,6 +662,9 @@ class Assembler386(object):
         exc = (guard_op.opnum == rop.GUARD_EXCEPTION or
                guard_op.opnum == rop.GUARD_NO_EXCEPTION)
         guard_op._x86_faillocs = fail_locs
+        # XXX horrible hack that allows us to preserve order
+        #     of inputargs to bridge
+        guard_op._fail_op = guard_op.suboperations[0]
         self.generate_failure(self.mc2, guard_op.suboperations[0], fail_locs,
                               exc)
         return addr
