@@ -586,18 +586,7 @@ class TestRegallocGc(BaseTestRegalloc):
         '''
         self.interpret(ops, [])
         assert not self.getptr(0, lltype.Ptr(self.S))
-        
-    def test_rewrite_constptr_in_bridge(self):
-        ops = '''
-        [i0]
-        guard_true(i0)
-            p1 = getfield_gc(ConstPtr(struct_ref), descr=fielddescr)
-            fail(p1)
-        fail(0)
-        '''
-        self.interpret(ops, [0])
-        assert not self.getptr(0, lltype.Ptr(self.S))
-
+    
     def test_bug_0(self):
         ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8]
