@@ -48,3 +48,22 @@ def test_rpython_RWeakValueDictionary():
     # we don't implement the correct weakref behavior in lltype when
     # directly interpreted, but we can still test that the rest works.
     interpret(make_test(go_away=False, loop=12), [])
+
+def test_rpython_prebuilt():
+    d = RWeakValueDictionary(X)
+    living = [X() for i in range(8)]
+    for i in range(8):
+        d.set(str(i), living[i])
+    #
+    def f():
+        x = X()
+        for i in range(8, 13):
+            d.set(str(i), x)
+        for i in range(0, 8):
+            assert d.get(str(i)) is living[i]
+        for i in range(8, 13):
+            assert d.get(str(i)) is x
+        assert d.get("foobar") is None
+    #
+    f()
+    interpret(f, [])

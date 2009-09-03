@@ -1,27 +1,66 @@
+from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, rstr, rclass, rdict
-from pypy.rpython.controllerentry import Controller
-from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
-from pypy.rpython.annlowlevel import cast_instance_to_base_ptr, llstr
-from pypy.rlib.objectmodel import specialize
+from pypy.rpython.rclass import getinstancerepr
+from pypy.rpython.rmodel import Repr
 from pypy.rlib.rweakref import RWeakValueDictionary
 
 
-class WeakDictController(Controller):
-    knowntype = RWeakValueDictionary
+class WeakValueDictRepr(Repr):
+    def __init__(self, rtyper):
+        self.rtyper = rtyper
+        self.lowleveltype = lltype.Ptr(WEAKDICT)
+        self.dict_cache = {}
 
-    @specialize.arg(1)
-    def new(self, valueclass):
-        WEAKDICT = get_WEAKDICT(valueclass)
-        d = lltype.malloc(WEAKDICT)
-        d.entries = WEAKDICT.entries.TO.allocate(DICT_INITSIZE)
-        d.num_pristine_entries = DICT_INITSIZE
-        return d
+    def convert_const(self, weakdict):
+        if not isinstance(weakdict, RWeakValueDictionary):
+            raise TyperError("expected an RWeakValueDictionary: %r" % (
+                weakdict,))
+        try:
+            key = Constant(weakdict)
+            return self.dict_cache[key]
+        except KeyError:
+            self.setup()
+            l_dict = ll_new_weakdict()
+            self.dict_cache[key] = l_dict
+            bk = self.rtyper.annotator.bookkeeper
+            classdef = bk.getuniqueclassdef(weakdict._valueclass)
+            r_key = rstr.string_repr
+            r_value = getinstancerepr(self.rtyper, classdef)
+            for dictkey, dictvalue in weakdict._dict.items():
+                llkey = r_key.convert_const(dictkey)
+                llvalue = r_value.convert_const(dictvalue)
+                if llvalue:
+                    llvalue = lltype.cast_pointer(rclass.OBJECTPTR, llvalue)
+                    ll_set(l_dict, llkey, llvalue)
+            return l_dict
 
-    def get_get(self, d):
-        return d.ll_get
+    def rtype_method_get(self, hop):
+        v_d, v_key = hop.inputargs(self, rstr.string_repr)
+        hop.exception_cannot_occur()
+        v_result = hop.gendirectcall(ll_get, v_d, v_key)
+        v_result = hop.genop("cast_pointer", [v_result],
+                             resulttype=hop.r_result.lowleveltype)
+        return v_result
 
-    def get_set(self, d):
-        return d.ll_set
+    def rtype_method_set(self, hop):
+        v_d, v_key, v_value = hop.inputargs(self, rstr.string_repr,
+                                            hop.args_r[2])
+        if hop.args_s[2].is_constant() and hop.args_s[2].const is None:
+            value = lltype.nullptr(rclass.OBJECTPTR.TO)
+            v_value = hop.inputconst(rclass.OBJECTPTR, value)
+        else:
+            v_value = hop.genop("cast_pointer", [v_value],
+                                resulttype=rclass.OBJECTPTR)
+        hop.exception_cannot_occur()
+        hop.gendirectcall(ll_set, v_d, v_key, v_value)
+
+
+def specialize_make_weakdict(hop):
+    hop.exception_cannot_occur()
+    v_d = hop.gendirectcall(ll_new_weakdict)
+    return v_d
+
+# ____________________________________________________________
 
 
 pristine_marker = lltype.malloc(rstr.STR, 0)
@@ -61,17 +100,20 @@ WEAKDICTENTRYARRAY = lltype.GcArray(WEAKDICTENTRY,
                                     adtmeths=entrymeths,
                                     hints={'weakarray': 'value'})
 
-def ll_get(d, key):
-    llkey = llstr(key)
+def ll_new_weakdict():
+    d = lltype.malloc(WEAKDICT)
+    d.entries = WEAKDICT.entries.TO.allocate(DICT_INITSIZE)
+    d.num_pristine_entries = DICT_INITSIZE
+    return d
+
+def ll_get(d, llkey):
     hash = llkey.gethash()
     i = rdict.ll_dict_lookup(d, llkey, hash)
     llvalue = d.entries[i].value
     #print 'get', i, key, hash, llvalue
-    return cast_base_ptr_to_instance(d.valueclass, llvalue)
+    return llvalue
 
-def ll_set(d, key, value):
-    llkey = llstr(key)
-    llvalue = cast_instance_to_base_ptr(value)
+def ll_set(d, llkey, llvalue):
     hash = llkey.gethash()
     i = rdict.ll_dict_lookup(d, llkey, hash)
     everused = d.entries.everused(i)
@@ -108,13 +150,8 @@ dictmeths = {
     'paranoia': False,
     }
 
-@specialize.memo()
-def get_WEAKDICT(valueclass):
-    adtmeths = dictmeths.copy()
-    adtmeths['valueclass'] = valueclass
-    WEAKDICT = lltype.GcStruct("weakdict",
-                               ("num_items", lltype.Signed),
-                               ("num_pristine_entries", lltype.Signed),
-                               ("entries", lltype.Ptr(WEAKDICTENTRYARRAY)),
-                               adtmeths=adtmeths)
-    return WEAKDICT
+WEAKDICT = lltype.GcStruct("weakdict",
+                           ("num_items", lltype.Signed),
+                           ("num_pristine_entries", lltype.Signed),
+                           ("entries", lltype.Ptr(WEAKDICTENTRYARRAY)),
+                           adtmeths=dictmeths)
