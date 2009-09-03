@@ -5,6 +5,9 @@ from pypy.rpython.test.test_llinterp import interpret
 class X(object):
     pass
 
+class Y(X):
+    pass
+
 
 def make_test(go_away=True, loop=100):
     def f():
@@ -39,6 +42,10 @@ def make_test(go_away=True, loop=100):
         assert d.get("def") is x2
         assert d.get("ghi") is x3
         assert d.get("hello") is None
+        # finally, a subclass
+        y = Y()
+        d.set("hello", y)
+        assert d.get("hello") is y
     return f
 
 def test_RWeakValueDictionary():
