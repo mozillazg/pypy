@@ -35,6 +35,7 @@ class TestRecompilation(BaseTestRegalloc):
         jump(i1)
         '''
         loop = self.interpret(ops, [0])
+        previous = loop._x86_stack_depth
         assert self.getint(0) == 20
         ops = '''
         [i1]
@@ -42,9 +43,14 @@ class TestRecompilation(BaseTestRegalloc):
         i4 = int_add(i3, 1)
         i5 = int_add(i4, 1)
         i6 = int_add(i5, 1)
-        fail(i3, i4, i5, i6)
+        i7 = int_add(i5, i4)
+        i8 = int_add(i7, 1)
+        i9 = int_add(i8, 1)
+        fail(i3, i4, i5, i6, i7, i8, i9)
         '''
         bridge = self.attach_bridge(ops, loop, loop.operations[-2])
+        new = loop.operations[2]._x86_stack_depth
+        assert new > previous
         self.cpu.set_future_value_int(0, 0)
         op = self.cpu.execute_operations(loop)
         assert op is bridge.operations[-1]
