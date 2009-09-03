@@ -222,7 +222,7 @@ class GCTest(object):
         assert 160 <= res <= 165
 
     def test_weakref(self):
-        import weakref, gc
+        import weakref
         class A(object):
             pass
         def g():
@@ -243,7 +243,7 @@ class GCTest(object):
         assert res
 
     def test_weakref_to_object_with_finalizer(self):
-        import weakref, gc
+        import weakref
         class A(object):
             count = 0
         a = A()
@@ -261,6 +261,31 @@ class GCTest(object):
             return result
         res = self.interpret(f, [])
         assert res
+
+    def test_weakvaluedict(self):
+        py.test.skip("in-progress")
+        from pypy.rlib.rweakref import RWeakValueDictionary
+        class X(object):
+            def __init__(self, n):
+                self.n = n
+        def g(d, x111):
+            x222 = X(222)
+            d.set("abc", x111)
+            d.set("def", x222)
+            return ((d.get("abc") is x111) * 100 +
+                    (d.get("def") is x222) * 10 +
+                    (d.get("foobar") is not None))
+        def f():
+            d = RWeakValueDictionary(X)
+            x111 = X(111)
+            res = g(d, x111)
+            llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
+            res = res + ((d.get("abc") is x111) * 10000 +
+                         (d.get("def") is not None) * 1000)
+            return res
+        res = self.interpret(f, [])
+        assert res == 10110
 
     def test_id(self):
         class A(object):

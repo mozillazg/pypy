@@ -63,7 +63,7 @@ def specialize_make_weakdict(hop):
 # ____________________________________________________________
 
 
-pristine_marker = lltype.malloc(rstr.STR, 0)
+pristine_marker = lltype.malloc(rstr.STR, 0, zero=True)
 DICT_INITSIZE = 8
 
 WEAKDICTENTRY = lltype.Struct("weakdictentry",
