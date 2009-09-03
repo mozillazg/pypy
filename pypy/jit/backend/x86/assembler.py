@@ -183,14 +183,13 @@ class Assembler386(object):
         stack_words = align_stack_words(stack_words + RET_BP)
         stack_depth = stack_words - RET_BP
         if guard_op is None:
-            tree._x86_stack_depth = stack_words - RET_BP
+            tree._x86_stack_depth = stack_depth
         else:
-            guard_op._x86_stack_depth = stack_words
-            if stack_words - RET_BP != tree._x86_stack_depth:
-                mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
-                mc.LEA(esp, addr_add(imm32(0), ebp,
-                                  -(stack_words - 1) * WORD))
-                mc.done()
+            guard_op._x86_stack_depth = stack_depth
+            mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
+            mc.LEA(esp, addr_add(imm32(0), ebp,
+                                 -(stack_words - 1) * WORD))
+            mc.done()
         if we_are_translated():
             self._regalloc = None   # else keep it around for debugging
         return newpos
