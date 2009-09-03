@@ -371,6 +371,24 @@ class TestRegallocSimple(BaseTestRegalloc):
         assert self.getint(0) == 0
         assert self.getint(1) == 10
 
+    def test_nested_unused_arg(self):
+        ops = '''
+        [i0, i1]
+        guard_true(i0)
+           fail(i0, i1)
+        fail(1)
+        '''
+        loop = self.interpret(ops, [0, 1])
+        assert self.getint(0) == 0
+        bridge_ops = '''
+        [i0, i1]
+        fail(1, 2)
+        '''
+        self.attach_bridge(bridge_ops, loop, loop.operations[0])
+        self.cpu.set_future_value_int(0, 0)
+        self.cpu.set_future_value_int(1, 1)
+        self.cpu.execute_operations(loop)
+
     def test_spill_for_constant(self):
         ops = '''
         [i0, i1, i2, i3]
