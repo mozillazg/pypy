@@ -320,18 +320,24 @@ class TestRegallocSimple(BaseTestRegalloc):
         assert not self.cpu.assembler.fail_boxes_ptr[1]
 
     def test_exception_bridge_no_exception(self):
-        py.test.skip("rewrite")
-        
         ops = '''
         [i0]
         call(ConstClass(raising_fptr), i0, descr=raising_calldescr)
         guard_exception(ConstClass(zero_division_error))
-            guard_no_exception()
-                fail(2)
             fail(1)
         fail(0)
         '''
-        self.interpret(ops, [0])
+        bridge_ops = '''
+        []
+        guard_no_exception()
+            fail(2)
+        fail(1)
+        '''
+        loop = self.interpret(ops, [0])
+        assert self.getint(0) == 1
+        bridge = self.attach_bridge(bridge_ops, loop, loop.operations[1])
+        self.cpu.set_future_value_int(0, 0)
+        self.cpu.execute_operations(loop)
         assert self.getint(0) == 1
 
     def test_inputarg_unused(self):
@@ -343,16 +349,25 @@ class TestRegallocSimple(BaseTestRegalloc):
         # assert did not explode
 
     def test_nested_guards(self):
-        py.test.skip("rewrite")
         ops = '''
         [i0, i1]
         guard_true(i0)
-            guard_true(i0)
-                fail(i0, i1)
-            fail(3)
+            fail(i0, i1)
         fail(4)
         '''
-        self.interpret(ops, [0, 10])
+        bridge_ops = '''
+        [i0, i1]
+        guard_true(i0)
+            fail(i0, i1)
+        fail(3)
+        '''
+        loop = self.interpret(ops, [0, 10])
+        assert self.getint(0) == 0
+        assert self.getint(1) == 10
+        bridge = self.attach_bridge(bridge_ops, loop, loop.operations[0])
+        self.cpu.set_future_value_int(0, 0)
+        self.cpu.set_future_value_int(1, 10)
+        self.cpu.execute_operations(loop)
         assert self.getint(0) == 0
         assert self.getint(1) == 10
 

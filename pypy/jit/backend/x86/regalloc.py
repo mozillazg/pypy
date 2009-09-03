@@ -64,9 +64,10 @@ class RegAlloc(object):
         self.tree = tree
         if guard_op is not None:
             locs = guard_op._x86_faillocs
-            inpargs, longevity = self._compute_inpargs(guard_op)
+            inpargs = [arg for arg in guard_op._fail_op.args if
+                       isinstance(arg, Box)]
+            self._compute_vars_longevity(inpargs, guard_op.suboperations)
             self.inputargs = inpargs
-            self.longevity = longevity
             self.position = -1
             self._update_bindings(locs, inpargs)
             self.current_stack_depth = guard_op._x86_stack_depth
@@ -250,32 +251,32 @@ class RegAlloc(object):
             assert isinstance(arg, Box)
         self.longevity = longevity
 
-    def _compute_inpargs(self, guard):
-        operations = guard.suboperations
-        longevity = {}
-        end = {}
-        for i in range(len(operations)-1, -1, -1):
-            op = operations[i]
-            if op.is_guard():
-                for arg in op.suboperations[0].args:
-                    if isinstance(arg, Box) and arg not in end:
-                        end[arg] = i
-            for arg in op.args:
-                if isinstance(arg, Box) and arg not in end:
-                    end[arg] = i
-            if op.result:
-                if op.result in end:
-                    longevity[op.result] = (i, end[op.result])
-                    del end[op.result]
-                # otherwise this var is never ever used
-        for v, e in end.items():
-            longevity[v] = (0, e)
-        inputargs = end.keys()
-        for arg in longevity:
-            assert isinstance(arg, Box)
-        for arg in inputargs:
-            assert isinstance(arg, Box)
-        return inputargs, longevity
+#     def _compute_inpargs(self, guard):
+#         operations = guard.suboperations
+#         longevity = {}
+#         end = {}
+#         for i in range(len(operations)-1, -1, -1):
+#             op = operations[i]
+#             if op.is_guard():
+#                 for arg in op.suboperations[0].args:
+#                     if isinstance(arg, Box) and arg not in end:
+#                         end[arg] = i
+#             for arg in op.args:
+#                 if isinstance(arg, Box) and arg not in end:
+#                     end[arg] = i
+#             if op.result:
+#                 if op.result in end:
+#                     longevity[op.result] = (i, end[op.result])
+#                     del end[op.result]
+#                 # otherwise this var is never ever used
+#         for v, e in end.items():
+#             longevity[v] = (0, e)
+#         inputargs = end.keys()
+#         for arg in longevity:
+#             assert isinstance(arg, Box)
+#         for arg in inputargs:
+#             assert isinstance(arg, Box)
+#         return inputargs, longevity
 
     def try_allocate_reg(self, v, selected_reg=None, need_lower_byte=False):
         assert not isinstance(v, Const)
