@@ -151,8 +151,6 @@ class Assembler386(object):
         mc.done()
 
     def assemble(self, tree, operations, guard_op):
-        self.places_to_patch_framesize = []
-        #self.jumps_to_look_at = []
         # the last operation can be 'jump', 'return' or 'guard_pause';
         # a 'jump' can either close a loop, or end a bridge to some
         # previously-compiled code.
@@ -192,15 +190,6 @@ class Assembler386(object):
                 mc.SUB(esp, imm32((stack_words - RET_BP -
                                    tree._x86_stack_depth) * WORD))
                 mc.done()
-        for place in self.places_to_patch_framesize:
-            mc = codebuf.InMemoryCodeBuilder(place, place + 128)
-            mc.ADD(esp, imm32(stack_depth * WORD))
-            mc.done()
-        #for op, pos in self.jumps_to_look_at:
-        #    if op.jump_target._x86_stack_depth != tree._x86_stack_depth:
-        #        tl = op.jump_target
-        #        self.patch_jump(pos, tl._x86_compiled, tl.arglocs, tl.arglocs,
-        #                        tree._x86_stack_depth, tl._x86_stack_depth)
         if we_are_translated():
             self._regalloc = None   # else keep it around for debugging
         return newpos
@@ -628,14 +617,8 @@ class Assembler386(object):
         targetmp = op.jump_target
         # don't break the following code sequence!
         mc = self.mc._mc
-        if op.jump_target is not self.tree:
-            xxx
-            self.jumps_to_look_at.append((op, mc.tell()))
+        #mc.SUB(esp, targetmp._x86_compiled - xxx)
         mc.JMP(rel32(targetmp._x86_compiled))
-        if op.jump_target is not self.tree:
-            # Reserve 6 bytes for a possible later patch by patch_jump().
-            # Put them after the JMP by default, as it's not doing anything.
-            mc.SUB(esp, imm32(0))
 
     def genop_guard_guard_true(self, op, ign_1, addr, locs, ign_2):
         loc = locs[0]
@@ -715,8 +698,7 @@ class Assembler386(object):
             self.generate_exception_handling(mc, eax)
         # don't break the following code sequence!
         mc = mc._mc
-        self.places_to_patch_framesize.append(mc.tell())
-        mc.ADD(esp, imm32(0))
+        mc.LEA(esp, addr_add(imm(0), ebp, -3 * WORD))
         guard_index = self.cpu.make_guard_index(op)
         mc.MOV(eax, imm(guard_index))
         mc.POP(edi)
