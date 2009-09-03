@@ -270,7 +270,6 @@ class TestRegallocSimple(BaseTestRegalloc):
         assert self.getint(0) == 20
 
     def test_two_loops_and_a_bridge(self):
-        py.test.skip("bridge support needed")
         ops = '''
         [i0, i1, i2, i3]
         i4 = int_add(i0, 1)
@@ -279,7 +278,7 @@ class TestRegallocSimple(BaseTestRegalloc):
            fail(i4, i1, i2, i3)
         jump(i4, i1, i2, i3)
         '''
-        loop = self.interpret(ops, [0])
+        loop = self.interpret(ops, [0, 0, 0, 0])
         ops2 = '''
         [i5]
         i1 = int_add(i5, 1)
@@ -287,17 +286,18 @@ class TestRegallocSimple(BaseTestRegalloc):
         i4 = int_add(i3, 1)
         i2 = int_lt(i4, 30)
         guard_true(i2)
-           fail(i2)
+           fail(i4)
         jump(i4)
         '''
-        loop2 = self.interpret(ops2, [0], jump_targets=[loop, 'self'])
+        loop2 = self.interpret(ops2, [0])
         bridge_ops = '''
         [i4]
         jump(i4, i4, i4, i4)
         '''
-        xxx
-        bridge = self.attach_bridge(xxx)
-
+        bridge = self.attach_bridge(bridge_ops, loop2, loop2.operations[4],
+                                    jump_targets=[loop])
+        self.cpu.set_future_value_int(0, 0)
+        self.cpu.execute_operations(loop2)
         assert self.getint(0) == 31
         assert self.getint(1) == 30
         assert self.getint(2) == 30
