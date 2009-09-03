@@ -10,7 +10,7 @@ from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
 
 history.TreeLoop._x86_compiled = 0
 history.TreeLoop._x86_bootstrap_code = 0
-
+history.TreeLoop._x86_stack_depth = 0
 
 class CPU386(AbstractLLCPU):
     debug = True

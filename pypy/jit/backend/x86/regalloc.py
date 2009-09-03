@@ -83,6 +83,11 @@ class RegAlloc(object):
             self.free_regs = REGS[:]
 
     def _update_bindings(self, locs, args):
+        newlocs = []
+        for loc in locs:
+            if not isinstance(loc, IMM8) and not isinstance(loc, IMM32):
+                newlocs.append(loc)
+        locs = newlocs
         assert len(locs) == len(args)
         used = {}
         for i in range(len(locs)):
@@ -211,7 +216,8 @@ class RegAlloc(object):
             i += 1
         assert not self.reg_bindings
         jmp = operations[-1]
-        self.max_stack_depth = self.current_stack_depth
+        self.max_stack_depth = max(self.current_stack_depth,
+                                   self.max_stack_depth)
 
     def _compute_vars_longevity(self, inputargs, operations):
         # compute a dictionary that maps variables to index in
@@ -923,6 +929,7 @@ class RegAlloc(object):
                                            dst_locations, tmploc)
         self.eventually_free_var(box)
         self.eventually_free_vars(op.args)
+        self.max_stack_depth = op.jump_target._x86_stack_depth    
         self.PerformDiscard(op, [])
 
     def consider_debug_merge_point(self, op, ignored):

@@ -15,8 +15,12 @@ from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.metainterp.resoperation import rop
 
+
+
 # our calling convention - we pass first 6 args in registers
 # and the rest stays on the stack
+
+RET_BP = 5 # ret ip + bp + bx + esi + edi = 5 words
 
 MAX_FAIL_BOXES = 1000
 if sys.platform == 'darwin':
@@ -165,20 +169,17 @@ class Assembler386(object):
             inputargs = tree.inputargs
             self.logger.log_loop(tree)
             regalloc.walk_operations(tree)
-            stack_words = regalloc.max_stack_depth
         else:
             inputargs = regalloc.inputargs
             self.logger.log_operations
             mc = self.mc._mc
-            adr_sub = mc.tell()
-            mc.SUB(esp, imm32(0))
+            adr_lea = mc.tell()
+            mc.LEA(esp, addr_add(imm32(0), ebp, 0))
             regalloc._walk_operations(operations)
-            stack_words = max(regalloc.max_stack_depth,
-                              tree._x86_stack_depth)
+        stack_words = regalloc.max_stack_depth
         self.mc.done()
         self.mc2.done()
         # possibly align, e.g. for Mac OS X
-        RET_BP = 5 # ret ip + bp + bx + esi + edi = 5 words
         stack_words = align_stack_words(stack_words + RET_BP)
         stack_depth = stack_words - RET_BP
         if guard_op is None:
@@ -186,9 +187,9 @@ class Assembler386(object):
         else:
             guard_op._x86_stack_depth = stack_words
             if stack_words - RET_BP != tree._x86_stack_depth:
-                mc = codebuf.InMemoryCodeBuilder(adr_sub, adr_sub + 128)
-                mc.SUB(esp, imm32((stack_words - RET_BP -
-                                   tree._x86_stack_depth) * WORD))
+                mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
+                mc.LEA(esp, addr_add(imm32(0), ebp,
+                                  -(stack_words - 1) * WORD))
                 mc.done()
         if we_are_translated():
             self._regalloc = None   # else keep it around for debugging
@@ -617,7 +618,6 @@ class Assembler386(object):
         targetmp = op.jump_target
         # don't break the following code sequence!
         mc = self.mc._mc
-        #mc.SUB(esp, targetmp._x86_compiled - xxx)
         mc.JMP(rel32(targetmp._x86_compiled))
 
     def genop_guard_guard_true(self, op, ign_1, addr, locs, ign_2):
@@ -698,7 +698,7 @@ class Assembler386(object):
             self.generate_exception_handling(mc, eax)
         # don't break the following code sequence!
         mc = mc._mc
-        mc.LEA(esp, addr_add(imm(0), ebp, -3 * WORD))
+        mc.LEA(esp, addr_add(imm(0), ebp, (-RET_BP + 2) * WORD))
         guard_index = self.cpu.make_guard_index(op)
         mc.MOV(eax, imm(guard_index))
         mc.POP(edi)
