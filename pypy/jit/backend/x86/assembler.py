@@ -171,6 +171,9 @@ class Assembler386(object):
         else:
             inputargs = regalloc.inputargs
             self.logger.log_operations
+            mc = self.mc._mc
+            adr_sub = mc.tell()
+            mc.SUB(esp, imm32(0))
             regalloc._walk_operations(operations)
             stack_words = max(regalloc.max_stack_depth,
                               tree._x86_stack_depth)
@@ -182,6 +185,13 @@ class Assembler386(object):
         stack_depth = stack_words - RET_BP
         if guard_op is None:
             tree._x86_stack_depth = stack_words - RET_BP
+        else:
+            guard_op._x86_stack_depth = stack_words
+            if stack_words - RET_BP != tree._x86_stack_depth:
+                mc = codebuf.InMemoryCodeBuilder(adr_sub, adr_sub + 128)
+                mc.SUB(esp, imm32((stack_words - RET_BP -
+                                   tree._x86_stack_depth) * WORD))
+                mc.done()
         for place in self.places_to_patch_framesize:
             mc = codebuf.InMemoryCodeBuilder(place, place + 128)
             mc.ADD(esp, imm32(stack_depth * WORD))
