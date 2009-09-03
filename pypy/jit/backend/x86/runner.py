@@ -60,8 +60,9 @@ class CPU386(AbstractLLCPU):
 
     def compile_operations(self, tree, guard_op=None):
         if guard_op is not None:
-            self.assembler.assemble_from_guard(guard_op)
-        self.assembler.assemble_loop(tree)
+            self.assembler.assemble_from_guard(tree, guard_op)
+        else:
+            self.assembler.assemble_loop(tree)
         
     def get_bootstrap_code(self, loop):
         addr = loop._x86_bootstrap_code

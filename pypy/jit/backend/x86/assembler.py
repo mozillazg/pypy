@@ -140,50 +140,60 @@ class Assembler386(object):
         return max_so_far
 
     def assemble_loop(self, loop):
-        self.assemble(loop)
+        self.assemble(loop, loop.operations, None)
 
-    def assemble(self, tree):
+    def assemble_from_guard(self, tree, guard_op):
+        newaddr = self.assemble(tree, guard_op.suboperations, guard_op)
+        # patch the jump from original guard
+        addr = guard_op._x86_addr
+        mc = codebuf.InMemoryCodeBuilder(addr, addr + 128)
+        mc.write(packimm32(newaddr - addr - 4))
+        mc.done()
+
+    def assemble(self, tree, operations, guard_op):
         self.places_to_patch_framesize = []
-        self.jumps_to_look_at = []
+        #self.jumps_to_look_at = []
         # the last operation can be 'jump', 'return' or 'guard_pause';
         # a 'jump' can either close a loop, or end a bridge to some
         # previously-compiled code.
-        self._compute_longest_fail_op(tree.operations)
+        self._compute_longest_fail_op(operations)
         self.tree = tree
         self.make_sure_mc_exists()
-        inputargs = tree.inputargs
-        self.logger.log_loop(tree)
-        regalloc = RegAlloc(self, tree, self.cpu.translate_support_code)
+        newpos = self.mc.tell()
+        regalloc = RegAlloc(self, tree, self.cpu.translate_support_code,
+                            guard_op)
         self._regalloc = regalloc
-        regalloc.walk_operations(tree)
-        self.sanitize_tree(tree.operations)
+        if guard_op is None:
+            inputargs = tree.inputargs
+            self.logger.log_loop(tree)
+            regalloc.walk_operations(tree)
+            stack_words = regalloc.max_stack_depth
+        else:
+            inputargs = regalloc.inputargs
+            self.logger.log_operations
+            regalloc._walk_operations(operations)
+            stack_words = max(regalloc.max_stack_depth,
+                              tree._x86_stack_depth)
         self.mc.done()
         self.mc2.done()
-        stack_words = regalloc.max_stack_depth
         # possibly align, e.g. for Mac OS X
         RET_BP = 5 # ret ip + bp + bx + esi + edi = 5 words
         stack_words = align_stack_words(stack_words + RET_BP)
-        tree._x86_stack_depth = stack_words - RET_BP
+        stack_depth = stack_words - RET_BP
+        if guard_op is None:
+            tree._x86_stack_depth = stack_words - RET_BP
         for place in self.places_to_patch_framesize:
             mc = codebuf.InMemoryCodeBuilder(place, place + 128)
-            mc.ADD(esp, imm32(tree._x86_stack_depth * WORD))
+            mc.ADD(esp, imm32(stack_depth * WORD))
             mc.done()
-        for op, pos in self.jumps_to_look_at:
-            if op.jump_target._x86_stack_depth != tree._x86_stack_depth:
-                tl = op.jump_target
-                self.patch_jump(pos, tl._x86_compiled, tl.arglocs, tl.arglocs,
-                                tree._x86_stack_depth, tl._x86_stack_depth)
+        #for op, pos in self.jumps_to_look_at:
+        #    if op.jump_target._x86_stack_depth != tree._x86_stack_depth:
+        #        tl = op.jump_target
+        #        self.patch_jump(pos, tl._x86_compiled, tl.arglocs, tl.arglocs,
+        #                        tree._x86_stack_depth, tl._x86_stack_depth)
         if we_are_translated():
             self._regalloc = None   # else keep it around for debugging
-
-    def sanitize_tree(self, operations):
-        """ Cleans up all attributes attached by regalloc and backend
-        """
-        for op in operations:
-            if op.is_guard():
-                op.inputargs = None
-                op.longevity = None
-                self.sanitize_tree(op.suboperations)
+        return newpos
 
     def assemble_bootstrap_code(self, jumpaddr, arglocs, args, framesize):
         self.make_sure_mc_exists()
@@ -609,6 +619,7 @@ class Assembler386(object):
         # don't break the following code sequence!
         mc = self.mc._mc
         if op.jump_target is not self.tree:
+            xxx
             self.jumps_to_look_at.append((op, mc.tell()))
         mc.JMP(rel32(targetmp._x86_compiled))
         if op.jump_target is not self.tree:
@@ -666,6 +677,7 @@ class Assembler386(object):
         return addr
 
     def generate_failure(self, mc, op, locs, exc):
+        assert op.opnum == rop.FAIL
         pos = mc.tell()
         for i in range(len(locs)):
             loc = locs[i]
@@ -716,6 +728,7 @@ class Assembler386(object):
     @specialize.arg(3)
     def implement_guard(self, addr, guard_op, emit_jump):
         emit_jump(rel32(addr))
+        guard_op._x86_addr = self.mc.tell() - 4
 
     def genop_call(self, op, arglocs, resloc):
         sizeloc = arglocs[0]
