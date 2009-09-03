@@ -94,7 +94,7 @@ class RegAlloc(object):
         for i in range(len(locs)):
             v = args[i]
             loc = locs[i]
-            if isinstance(loc, REG):
+            if isinstance(loc, REG) and self.longevity[v][1] > -1:
                 self.reg_bindings[v] = loc
                 used[loc] = None
             else:
