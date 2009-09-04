@@ -49,7 +49,7 @@ class TestRecompilation(BaseTestRegalloc):
         fail(i3, i4, i5, i6, i7, i8, i9)
         '''
         bridge = self.attach_bridge(ops, loop, loop.operations[-2])
-        new = loop.operations[2]._x86_stack_depth
+        new = loop.operations[2]._x86_bridge_stack_depth
         assert new > previous
         self.cpu.set_future_value_int(0, 0)
         op = self.cpu.execute_operations(loop)
@@ -112,7 +112,7 @@ class TestRecompilation(BaseTestRegalloc):
         guard_op = loop.operations[3]
         bridge = self.attach_bridge(ops, loop, guard_op,
                                     jump_targets=[loop])
-        assert guard_op._x86_stack_depth > loop._x86_stack_depth
+        assert guard_op._x86_bridge_stack_depth > loop._x86_stack_depth
         self.cpu.set_future_value_int(0, 0)
         self.cpu.set_future_value_int(1, 0)
         self.cpu.set_future_value_int(2, 0)
