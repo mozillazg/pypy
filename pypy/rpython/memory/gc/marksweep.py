@@ -21,6 +21,7 @@ X_CLONE_PTR = lltype.Ptr(X_CLONE)
 
 memoryError = MemoryError()
 class MarkSweepGC(GCBase):
+    gcname = "marksweep"
     HDR = lltype.ForwardReference()
     HDRPTR = lltype.Ptr(HDR)
     # need to maintain a linked list of malloced objects, since we used the
@@ -151,7 +152,8 @@ class MarkSweepGC(GCBase):
     malloc_fixedsize_clear._dont_inline_ = True
 
     def malloc_varsize(self, typeid, length, size, itemsize, offset_to_length,
-                       can_collect):
+                       can_collect, contains_weakptr):
+        assert not contains_weakptr
         if can_collect:
             self.maybe_collect()
         size_gc_header = self.gcheaderbuilder.size_gc_header
@@ -183,7 +185,8 @@ class MarkSweepGC(GCBase):
     malloc_varsize._dont_inline_ = True
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
-                             offset_to_length, can_collect):
+                             offset_to_length, can_collect, contains_weakptr):
+        assert not contains_weakptr
         if can_collect:
             self.maybe_collect()
         size_gc_header = self.gcheaderbuilder.size_gc_header
@@ -293,7 +296,6 @@ class MarkSweepGC(GCBase):
             size = self.fixed_size(typeid)
             estimate = raw_malloc_usage(size_gc_header + size)
             if hdr.typeid & 1:
-                typeid = hdr.typeid >> 1
                 offset = self.weakpointer_offset(typeid)
                 hdr.typeid = hdr.typeid & (~1)
                 gc_info = llmemory.cast_ptr_to_adr(hdr)
@@ -687,6 +689,7 @@ class MarkSweepGC(GCBase):
 
 class PrintingMarkSweepGC(MarkSweepGC):
     _alloc_flavor_ = "raw"
+    gcname = "statistics"
     COLLECT_EVERY = 2000
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, start_heap_size=4096):

@@ -33,6 +33,13 @@ class GCTest(object):
     def teardown_class(cls):
         py.log._setstate(cls._saved_logstate)
 
+    def get_config(self):
+        from pypy.config.translationoption import \
+               get_combined_translation_config
+        config = get_combined_translation_config()
+        config.translation.gc = self.GCClass.gcname
+        return config
+
     def interpret(self, func, values, **kwds):
         interp, graph = get_interpreter(func, values, **kwds)
         gcwrapper.prepare_graphs_and_create_gc(interp, self.GCClass,
@@ -261,6 +268,47 @@ class GCTest(object):
             return result
         res = self.interpret(f, [])
         assert res
+
+    def test_weakarray(self):
+        if self.get_config().translation.norweakarray:
+            py.test.skip("no weak arrays on this GC")
+        OBJ = lltype.GcStruct('OBJ', ('x', lltype.Signed))
+        prebuilt_obj = lltype.malloc(OBJ, zero=True)
+        S = lltype.Struct('S', ('foo', lltype.Ptr(OBJ)),
+                               ('bar', lltype.Ptr(OBJ)))
+        A = lltype.GcArray(S, hints={'weakarray': 'bar'})
+        #
+        def set(d, n):
+            obj1 = lltype.malloc(OBJ, zero=True)
+            obj2 = lltype.malloc(OBJ, zero=True)
+            d[n].foo = obj1
+            d[n].bar = obj2
+            return obj1, obj2
+        def g(d):
+            key1, value1 = set(d, 1)
+            key2, value2 = set(d, 2)
+            key3, value3 = set(d, 3)
+            return key1, value1, key3, value3       # key2, value2 dropped
+        def f():
+            d = lltype.malloc(A, 4)
+            i = 0
+            while i < 4:
+                d[i].foo = prebuilt_obj
+                d[i].bar = lltype.nullptr(OBJ)
+                i += 1
+            key1, value1, key3, value3 = g(d)
+            llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
+            return (((d[0].foo == prebuilt_obj) << 0) +
+                    ((not d[0].bar)             << 1) +
+                    ((d[1].foo == key1)         << 2) +
+                    ((d[1].bar == value1)       << 3) +
+                    ((not d[2].foo)             << 4) +   #  \  removed by
+                    ((not d[2].bar)             << 5) +   #  /  gc.collect
+                    ((d[3].foo == key3)         << 6) +
+                    ((d[3].bar == value3)       << 7))
+        res = self.interpret(f, [])
+        assert res == 255
 
     def test_weakvaluedict(self):
         py.test.skip("in-progress")

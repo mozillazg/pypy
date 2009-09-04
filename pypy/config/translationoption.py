@@ -47,17 +47,21 @@ translation_optiondescription = OptionDescription(
                  ["boehm", "ref", "marksweep", "semispace", "statistics",
                   "generation", "hybrid", "markcompact", "none"],
                   "ref", requires={
-                     "ref": [("translation.rweakref", False), # XXX
+                     "ref": [("translation.norweakref", True), # XXX
                              ("translation.gctransformer", "ref")],
-                     "none": [("translation.rweakref", False), # XXX
+                     "none": [("translation.norweakref", True), # XXX
                              ("translation.gctransformer", "none")],
                      "semispace": [("translation.gctransformer", "framework")],
-                     "marksweep": [("translation.gctransformer", "framework")],
-                     "statistics": [("translation.gctransformer", "framework")],
+                     "marksweep": [("translation.gctransformer", "framework"),
+                                   ("translation.norweakarray", True)],
+                     "statistics": [("translation.gctransformer", "framework"),
+                                    ("translation.norweakarray", True)],
                      "generation": [("translation.gctransformer", "framework")],
                      "hybrid": [("translation.gctransformer", "framework")],
-                     "boehm": [("translation.gctransformer", "boehm")],
-                     "markcompact": [("translation.gctransformer", "framework")],
+                     "boehm": [("translation.gctransformer", "boehm"),
+                               ("translation.norweakarray", True)],
+                     "markcompact": [("translation.gctransformer", "framework"),
+                                     ("translation.norweakarray", True)],
                      },
                   cmdline="--gc"),
     ChoiceOption("gctransformer", "GC transformer that is used - internal",
@@ -91,8 +95,11 @@ translation_optiondescription = OptionDescription(
                default=False, cmdline="--sandbox",
                requires=[("translation.thread", False)],
                suggests=[("translation.gc", "generation")]),
-    BoolOption("rweakref", "The backend supports RPython-level weakrefs",
-               default=True),
+    BoolOption("norweakref", "No support for RPython-level weakrefs",
+               default=False,
+               requires=[("translation.norweakarray", True)]),
+    BoolOption("norweakarray", "No support for RPython-level weak arrays",
+               default=False),
 
     # JIT generation: use -Ojit to enable it
     BoolOption("jit", "generate a JIT",
