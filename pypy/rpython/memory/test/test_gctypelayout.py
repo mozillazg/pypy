@@ -1,6 +1,6 @@
 from pypy.rpython.memory.gctypelayout import TypeLayoutBuilder, GCData
 from pypy.rpython.memory.gctypelayout import offsets_to_gc_pointers
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype
 
 def getname(T):
     try:
@@ -40,22 +40,3 @@ def test_layout_builder():
         lst1 = gcdata.q_varsize_offsets_to_gcpointers_in_var_part(tid1)
         lst2 = gcdata.q_offsets_to_gc_pointers(tid2)
         assert len(lst1) == len(lst2)
-
-def test_weakarray():
-    OBJ = lltype.GcStruct('some_object')
-    S = lltype.Struct('weakstruct',
-                      ('foo', lltype.Ptr(OBJ)),
-                      ('bar', lltype.Ptr(OBJ)))
-    A = lltype.GcArray(S, hints={'weakarray': 'bar'})
-    layoutbuilder = TypeLayoutBuilder()
-    tid = layoutbuilder.get_type_id(A)
-    gcdata = GCData(layoutbuilder.type_info_list)
-    assert gcdata.q_is_varsize(tid)
-    assert gcdata.q_has_gcptr_in_varsize(tid)
-    assert not gcdata.q_is_gcarrayofgcptr(tid)
-    assert len(gcdata.q_offsets_to_gc_pointers(tid)) == 0
-    assert len(gcdata.q_varsize_offsets_to_gcpointers_in_var_part(tid)) == 1
-    weakofs = gcdata.q_weakpointer_offset(tid)
-    assert isinstance(weakofs, llmemory.FieldOffset)
-    assert weakofs.TYPE == S
-    assert weakofs.fldname == 'bar'
