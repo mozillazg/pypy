@@ -391,6 +391,9 @@ class GenerationGC(SemiSpaceGC):
         if self.is_in_nursery(pointer.address[0]):
             pointer.address[0] = self.copy(pointer.address[0])
 
+    # The code relies on the fact that no weakref can be an old object
+    # weakly pointing to a young object.  Indeed, weakrefs are immutable
+    # so they cannot point to an object that was created after it.
     def invalidate_young_weakrefs(self):
         # walk over the list of objects that contain weakrefs and are in the
         # nursery.  if the object it references survives then update the
