@@ -32,6 +32,8 @@ class Arena(object):
         else:
             stop = start + llmemory.raw_malloc_usage(size)
         assert 0 <= start <= stop <= self.nbytes
+        print '------------------ reset %s %d %d ----------------' % (
+            id(self), start, stop)
         for offset, ptr in self.objectptrs.items():
             size = self.objectsizes[offset]
             if offset < start:   # object is before the cleared area
@@ -40,6 +42,7 @@ class Arena(object):
                 assert offset >= stop, "object overlaps cleared area"
             else:
                 obj = ptr._obj
+                print offset, '\t', obj
                 del Arena.object_arena_location[obj]
                 del self.objectptrs[offset]
                 del self.objectsizes[offset]
@@ -49,6 +52,7 @@ class Arena(object):
         else:
             initialbyte = "#"
         self.usagemap[start:stop] = array.array('c', initialbyte*(stop-start))
+        print self.usagemap.tostring()[:150]
 
     def check(self):
         if self.freed:

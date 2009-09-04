@@ -273,14 +273,14 @@ class GCTest(object):
         if self.get_config().translation.norweakarray:
             py.test.skip("no weak arrays on this GC")
         OBJ = lltype.GcStruct('OBJ', ('x', lltype.Signed))
-        prebuilt_obj = lltype.malloc(OBJ, zero=True)
+        prebuilt_obj = lltype.malloc(OBJ); prebuilt_obj.x = -1
         S = lltype.Struct('S', ('foo', lltype.Ptr(OBJ)),
                                ('bar', lltype.Ptr(OBJ)))
         A = lltype.GcArray(S, hints={'weakarray': 'bar'})
         #
         def set(d, n):
-            obj1 = lltype.malloc(OBJ, zero=True)
-            obj2 = lltype.malloc(OBJ, zero=True)
+            obj1 = lltype.malloc(OBJ); obj1.x = n
+            obj2 = lltype.malloc(OBJ); obj2.x = n+100
             d[n].foo = obj1
             d[n].bar = obj2
             return obj1, obj2
@@ -310,7 +310,59 @@ class GCTest(object):
         res = self.interpret(f, [])
         assert res == 255
 
+    def test_weakarray_larger(self):
+        if self.get_config().translation.norweakarray:
+            py.test.skip("no weak arrays on this GC")
+        OBJ = lltype.GcStruct('OBJ', ('x', lltype.Signed))
+        prebuilt_obj = lltype.malloc(OBJ); prebuilt_obj.x = -1
+        S = lltype.Struct('S', ('foo', lltype.Ptr(OBJ)),
+                               ('bar', lltype.Ptr(OBJ)))
+        A = lltype.GcArray(S, hints={'weakarray': 'bar'})
+        #
+        def set(d, n):
+            obj1 = lltype.malloc(OBJ, zero=True)
+            obj2 = lltype.malloc(OBJ, zero=True)
+            d[n].foo = obj1
+            d[n].bar = obj2
+            return obj1, obj2
+        def g(d, a, b, discard):
+            lst = []
+            while a < b:
+                key, value = set(d, a)
+                if not discard:
+                    lst.append(key)
+                    lst.append(value)
+                set(d, a+1)
+                a += 2
+            return lst
+        def f():
+            d = lltype.malloc(A, 65)
+            i = 0
+            while i < 65:
+                d[i].foo = prebuilt_obj
+                d[i].bar = lltype.nullptr(OBJ)
+                i += 1
+            g(d, 0, 16, True)             # discard the first list
+            lst1 = g(d, 16, 64, False)
+            llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
+            res = d[64].foo == prebuilt_obj and not d[64].bar
+            i = 0
+            while i < 16:
+                res = res and not d[i].foo and not d[i].bar
+                i += 1
+            while i < 64:
+                res = res and d[i].foo == lst1[i-16] and d[i].bar == lst1[i-15]
+                i += 1
+                res = res and not d[i].foo and not d[i].bar
+                i += 1
+            return res
+        res = self.interpret(f, [])
+        assert res
+
     def test_weakvaluedict(self):
+        if self.get_config().translation.norweakarray:
+            py.test.skip("no weak arrays on this GC")
         py.test.skip("in-progress")
         from pypy.rlib.rweakref import RWeakValueDictionary
         class X(object):
