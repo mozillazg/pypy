@@ -589,28 +589,6 @@ class Assembler386(object):
     def make_merge_point(self, tree, locs):
         pos = self.mc.tell()
         tree._x86_compiled = pos
-        #tree.comeback_bootstrap_addr = self.assemble_comeback_bootstrap(pos,
-        #                                                locs, stacklocs)
-
-#     def patch_jump(self, old_pos, new_pos, oldlocs, newlocs, olddepth, newdepth):
-#         for i in range(len(oldlocs)):
-#             oldloc = oldlocs[i]
-#             newloc = newlocs[i]
-#             if isinstance(newloc, MODRM):
-#                 assert isinstance(oldloc, MODRM)
-#                 assert newloc.position == oldloc.position
-#             else:
-#                 assert newloc is oldloc
-#             # newlocs should be sorted in acending order, excluding the regs
-#             if not we_are_translated():
-#                 locs = [loc.position for loc in newlocs if isinstance(loc, MODRM)]
-#                 assert locs == sorted(locs)
-#         #
-#         mc = codebuf.InMemoryCodeBuilder(old_pos, old_pos +
-#                                          MachineCodeBlockWrapper.MC_SIZE)
-#         mc.SUB(esp, imm(WORD * (newdepth - olddepth)))
-#         mc.JMP(rel32(new_pos))
-#         mc.done()
 
     def genop_discard_jump(self, op, locs):
         self.mc.JMP(rel32(op.jump_target._x86_compiled))
@@ -782,15 +760,6 @@ class Assembler386(object):
     def not_implemented_op_guard(self, op, regalloc, arglocs, resloc, descr):
         print "not implemented operation (guard): %s" % op.getopname()
         raise NotImplementedError
-
-    #def genop_call__1(self, op, arglocs, resloc):
-    #    self.gen_call(op, arglocs, resloc)
-    #    self.mc.MOVZX(eax, al)
-
-    #def genop_call__2(self, op, arglocs, resloc):
-    #    # XXX test it test it test it
-    #    self.gen_call(op, arglocs, resloc)
-    #    self.mc.MOVZX(eax, eax)
 
     def mark_gc_roots(self):
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap
