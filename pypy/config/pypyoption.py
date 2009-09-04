@@ -269,7 +269,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    cmdline=None,
                    default=False,
                    # weakrefs needed, because of get_subclasses()
-                   requires=[("translation.norweakref", False)]),
+                   requires=[("translation.rweakref", True)]),
 
         BoolOption("withshadowtracking",
                    "track whether an instance attribute shadows a type"
@@ -277,12 +277,12 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    default=False,
                    requires=[("objspace.std.withmultidict", True),
                              ("objspace.std.withtypeversion", True),
-                             ("translation.norweakref", False)]),
+                             ("translation.rweakref", True)]),
         BoolOption("withmethodcache",
                    "try to cache method lookups",
                    default=False,
                    requires=[("objspace.std.withtypeversion", True),
-                             ("translation.norweakref", False)]),
+                             ("translation.rweakref", True)]),
         BoolOption("withmethodcachecounter",
                    "try to cache methods and provide a counter in __pypy__. "
                    "for testing purposes only.",

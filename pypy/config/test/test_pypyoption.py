@@ -54,7 +54,7 @@ def test_set_pypy_opt_level():
 
 def test_rweakref_required():
     conf = get_pypy_config()
-    conf.translation.norweakref = True
+    conf.translation.rweakref = False
     set_pypy_opt_level(conf, '3')
 
     assert not conf.objspace.std.withtypeversion
