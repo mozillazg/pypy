@@ -166,7 +166,8 @@ def encode_type_shape(builder, info, TYPE):
             info.ofstovar = llmemory.itemoffsetof(TYPE, 0)
         assert isinstance(ARRAY, lltype.Array)
         if ARRAY.OF != lltype.Void:
-            offsets = offsets_to_gc_pointers(ARRAY.OF)
+            ignore = ARRAY._hints.get('weakarray', None)
+            offsets = offsets_to_gc_pointers(ARRAY.OF, ignoring=ignore)
         else:
             offsets = ()
         info.varofstoptrs = builder.offsets2table(offsets, ARRAY.OF)
@@ -322,10 +323,12 @@ class TypeLayoutBuilder(object):
 #
 # Helpers to discover GC pointers inside structures
 
-def offsets_to_gc_pointers(TYPE):
+def offsets_to_gc_pointers(TYPE, ignoring=None):
     offsets = []
     if isinstance(TYPE, lltype.Struct):
         for name in TYPE._names:
+            if name == ignoring:
+                continue
             FIELD = getattr(TYPE, name)
             if isinstance(FIELD, lltype.Array):
                 continue    # skip inlined array

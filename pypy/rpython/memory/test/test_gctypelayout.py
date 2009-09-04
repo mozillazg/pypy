@@ -54,7 +54,7 @@ def test_weakarray():
     assert gcdata.q_has_gcptr_in_varsize(tid)
     assert not gcdata.q_is_gcarrayofgcptr(tid)
     assert len(gcdata.q_offsets_to_gc_pointers(tid)) == 0
-    assert len(gcdata.q_varsize_offsets_to_gcpointers_in_var_part(tid)) == 2
+    assert len(gcdata.q_varsize_offsets_to_gcpointers_in_var_part(tid)) == 1
     weakofs = gcdata.q_weakpointer_offset(tid)
     assert isinstance(weakofs, llmemory.FieldOffset)
     assert weakofs.TYPE == S
