@@ -1,5 +1,6 @@
 import py
 from pypy.interpreter import executioncontext
+from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.conftest import gettestobjspace
 
 class Finished(Exception):
@@ -219,3 +220,216 @@ class TestExecutionContext:
         """)
         events = space.unwrap(w_events)
         assert [i[0] for i in events] == ['c_call', 'c_return', 'c_call']
+
+class TestFrameChaining(object):
+    class EC(ExecutionContext):
+        def __init__(self, jitted=False):
+            self.jitted = jitted
+            self._init_frame_chain()
+
+        def _we_are_jitted(self):
+            return self.jitted
+
+    class Frame(object):
+        def __init__(self):
+            ExecutionContext._init_chaining_attributes(self)
+
+        def f_back(self):
+            return ExecutionContext._extract_back_from_frame(self)
+
+        def force_f_back(self):
+            return ExecutionContext._force_back_of_frame(self)
+
+    def test_frame_chain(self):
+
+        ec = self.EC()
+
+        assert ec.some_frame is None
+        assert ec.framestackdepth == 0
+
+        frame = self.Frame()
+        ec._chain(frame)
+        assert ec.some_frame is frame
+        assert ec.framestackdepth == 1
+        assert frame.f_back_some is None
+        assert frame.f_forward is None
+        
+        frame2 = self.Frame()
+        ec._chain(frame2)
+        assert ec.some_frame is frame2
+        assert ec.framestackdepth == 2
+        assert frame2.f_back_some is frame
+        assert frame.f_forward is frame2
+        assert frame2.f_forward is None
+       
+        frame3 = self.Frame()
+        ec._chain(frame3)
+        assert ec.some_frame is frame3
+        assert frame3.f_back_some is frame2
+        assert frame2.f_forward is frame3
+        # now we should unchain
+
+        assert frame3.f_back() is frame2
+        ec._unchain(frame3)
+        assert ec.some_frame is frame2
+        assert ec.framestackdepth == 2
+        assert frame2.f_forward is None
+        assert frame3.f_back_some is frame2
+        
+        assert frame2.f_back() is frame
+        ec._unchain(frame2)
+        assert ec.some_frame is frame
+        assert ec.framestackdepth == 1
+        assert frame.f_forward is None
+        assert frame2.f_back_some is frame
+
+        assert frame.f_back() is None
+        ec._unchain(frame)
+        assert ec.some_frame is None
+        assert ec.framestackdepth == 0
+        assert frame.f_back_some is None
+
+    # we want a simplified copy of the previous tests and do a force on frame2 ok
+    def test_frame_chain_forced(self):
+
+        ec = self.EC()
+
+        frame = self.Frame()
+        ec._chain(frame)
+        
+        frame2 = self.Frame()
+        ec._chain(frame2)
+        assert ec.some_frame is frame2
+        assert ec.framestackdepth == 2
+        assert frame2.f_back_some is frame
+        assert frame.f_forward is frame2
+        assert frame2.f_forward is None
+        res = frame2.force_f_back()
+        assert res is frame
+        assert frame.f_back_forced
+        
+        frame3 = self.Frame()
+        ec._chain(frame3)
+        # now we should unchain
+
+        assert frame3.f_back() is frame2
+        ec._unchain(frame3)
+        assert ec.some_frame is frame2
+        assert frame3.f_back_some is frame2
+        
+        assert frame2.f_back() is frame
+        ec._unchain(frame2)
+        assert frame2.f_back_some is frame
+
+        assert frame.f_back() is None
+        ec._unchain(frame)
+        assert ec.some_frame is None
+        assert frame.f_back_some is None
+
+        assert frame2.f_back() is frame
+        assert frame.f_back() is None
+
+    def test_frame_chain_jitted(self):
+
+        ec = self.EC()
+
+        assert ec.some_frame is None
+        assert ec.framestackdepth == 0
+
+        frame = self.Frame()
+        ec._chain(frame)
+        assert ec.some_frame is frame
+        assert ec.framestackdepth == 1
+        assert frame.f_back_some is None
+        assert frame.f_forward is None
+        
+        ec.jitted = True
+        frame2 = self.Frame()
+        ec._chain(frame2)
+        assert ec.some_frame is frame
+        assert ec.framestackdepth == 2
+        assert frame2.f_back_some is frame
+        assert frame.f_forward is frame2
+        assert frame2.f_forward is None
+
+        # recursive enter/leave seen by the jit
+        frame3 = self.Frame()
+        ec._chain(frame3)
+        assert ec.some_frame is frame
+        assert frame3.f_back_some is frame
+        assert frame2.f_forward is frame3
+        # now we should unchain
+
+        assert frame3.f_back() is frame2
+        ec._unchain(frame3)
+        assert ec.some_frame is frame
+        assert ec.framestackdepth == 2
+        assert frame2.f_forward is None
+        assert frame3.f_back_some is frame
+       
+        # recursive enter/leave not seen by the jit
+        ec.jitted = False
+        ec._chain(frame3)
+        assert ec.some_frame is frame3
+        assert frame3.f_back_some is frame
+        assert frame2.f_forward is frame3 # this btw is the bit that may be problematic xxx
+        # now we should unchain
+
+        assert frame3.f_back() is frame2
+        ec._unchain(frame3)
+        assert ec.some_frame is frame
+        assert ec.framestackdepth == 2
+        assert frame2.f_forward is None
+        assert frame3.f_back_some is frame
+        ec.jitted = True
+
+        assert frame2.f_back() is frame
+        ec._unchain(frame2)
+        assert ec.some_frame is frame
+        assert ec.framestackdepth == 1
+        assert frame.f_forward is None
+        assert frame2.f_back_some is frame
+
+        ec.jitted = False
+        assert frame.f_back() is None
+        ec._unchain(frame)
+        assert ec.some_frame is None
+        assert ec.framestackdepth == 0
+        assert frame.f_back_some is None
+
+
+    def test_frame_chain_jitted_forced(self):
+
+        ec = self.EC()
+
+        assert ec.some_frame is None
+        assert ec.framestackdepth == 0
+
+        frame = self.Frame()
+        ec._chain(frame)
+        
+        ec.jitted = True
+        frame2 = self.Frame()
+        ec._chain(frame2)
+
+        # recursive enter/leave seen by the jit
+        frame3 = self.Frame()
+        ec._chain(frame3)
+        res = frame3.force_f_back()
+        assert res is frame2
+
+        assert frame3.f_back() is frame2
+        ec._unchain(frame3)
+      
+        assert frame2.f_back() is frame
+        ec._unchain(frame2)
+        ec.jitted = False
+        assert frame.f_back() is None
+        ec._unchain(frame)
+
+        assert frame3.f_back() is frame2
+        assert frame2.f_back() is frame
+        assert frame.f_back() is None
+         # cool yes
+
+     
