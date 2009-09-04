@@ -124,8 +124,10 @@ class FakeLLOp:
         return p
 
     def do_malloc_varsize_clear(self, RESTYPE, type_id, length, size,
-                                itemsize, offset_to_length, can_collect):
+                                itemsize, offset_to_length, can_collect,
+                                contains_weakptr):
         assert can_collect
+        assert not contains_weakptr
         p = llmemory.raw_malloc(size + itemsize * length)
         (p + offset_to_length).signed[0] = length
         p = llmemory.cast_adr_to_ptr(p, RESTYPE)

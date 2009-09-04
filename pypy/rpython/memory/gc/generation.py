@@ -28,6 +28,7 @@ class GenerationGC(SemiSpaceGC):
     old objects that contain pointers to young objects are recorded in
     a list.
     """
+    gcname = "generation"
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
     needs_write_barrier = True
@@ -160,7 +161,8 @@ class GenerationGC(SemiSpaceGC):
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
-                             offset_to_length, can_collect):
+                             offset_to_length, can_collect,
+                             contains_weakptr):
         # Only use the nursery if there are not too many items.
         if not raw_malloc_usage(itemsize):
             too_many_items = False
@@ -179,7 +181,7 @@ class GenerationGC(SemiSpaceGC):
             maxlength = maxlength_for_minimal_nursery << self.nursery_scale
             too_many_items = length > maxlength
 
-        if (not can_collect or
+        if (contains_weakptr or not can_collect or
             too_many_items or
             (raw_malloc_usage(size) > self.lb_young_var_basesize and
              raw_malloc_usage(size) > self.largest_young_var_basesize)):
@@ -189,7 +191,8 @@ class GenerationGC(SemiSpaceGC):
             #     second comparison as well.
             return SemiSpaceGC.malloc_varsize_clear(self, typeid, length, size,
                                                     itemsize, offset_to_length,
-                                                    can_collect)
+                                                    can_collect,
+                                                    contains_weakptr)
         # with the above checks we know now that totalsize cannot be more
         # than about half of the nursery size; in particular, the + and *
         # cannot overflow

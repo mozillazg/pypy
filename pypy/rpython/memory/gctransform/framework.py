@@ -621,12 +621,12 @@ class FrameworkGCTransformer(GCTransformer):
         # used by the JIT (see pypy.jit.backend.llsupport.gc)
         op = hop.spaceop
         [v_typeid, v_length, v_size, v_itemsize,
-         v_offset_to_length, v_can_collect] = op.args
+         v_offset_to_length, v_can_collect, v_contains_weakptr] = op.args
         livevars = self.push_roots(hop)
         hop.genop("direct_call",
                   [self.malloc_varsize_clear_ptr, self.c_const_gc,
                    v_typeid, v_length, v_size, v_itemsize,
-                   v_offset_to_length, v_can_collect],
+                   v_offset_to_length, v_can_collect, v_contains_weakptr],
                   resultvar=op.result)
         self.pop_roots(hop, livevars)
 

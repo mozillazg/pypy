@@ -737,6 +737,8 @@ class BytecodeMaker(object):
         else:
             # XXX only strings or simple arrays for now
             ARRAY = op.args[0].value
+            assert isinstance(ARRAY, lltype.GcArray)
+            assert not isinstance(ARRAY.OF, lltype.Struct)
             arraydescr = self.cpu.arraydescrof(ARRAY)
             self.emit('new_array')
             self.emit(self.get_position(arraydescr))

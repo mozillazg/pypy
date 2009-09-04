@@ -24,7 +24,7 @@ class BaseWeakRefRepr(Repr):
 
     def __init__(self, rtyper):
         self.rtyper = rtyper
-        if not rtyper.getconfig().translation.rweakref:
+        if rtyper.getconfig().translation.norweakref:
             raise TyperError("RPython-level weakrefs are not supported by "
                              "this backend or GC policy")
 
