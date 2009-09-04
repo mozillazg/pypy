@@ -175,7 +175,7 @@ class Assembler386(object):
             self.logger.log_operations
             mc = self.mc._mc
             adr_lea = mc.tell()
-            mc.LEA(esp, addr_add(imm32(0), ebp, 0))
+            mc.LEA(esp, fixedsize_ebp_ofs(0))
             regalloc._walk_operations(operations)
         stack_depth = regalloc.max_stack_depth
         self.mc.done()
@@ -186,8 +186,8 @@ class Assembler386(object):
         else:
             guard_op._x86_stack_depth = stack_depth
             mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
-            mc.LEA(esp, addr_add(imm32(0), ebp,
-                                 -(stack_depth + RET_BP - 2) * WORD))
+            
+            mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))
             mc.done()
         if we_are_translated():
             self._regalloc = None   # else keep it around for debugging
