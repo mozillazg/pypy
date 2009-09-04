@@ -165,6 +165,7 @@ class Assembler386(object):
         regalloc = RegAlloc(self, tree, self.cpu.translate_support_code,
                             guard_op)
         self._regalloc = regalloc
+        adr_lea = 0
         if guard_op is None:
             inputargs = tree.inputargs
             self.logger.log_loop(tree)
