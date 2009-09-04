@@ -5,6 +5,7 @@ from pypy.tool.pairtype import extendabletype
 from pypy.interpreter import eval, baseobjspace, pycode
 from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
 from pypy.interpreter.error import OperationError
+from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter import pytraceback
 import opcode
 from pypy.rlib.objectmodel import we_are_translated, instantiate
@@ -34,60 +35,12 @@ class PyFrame(eval.Frame):
      * 'valuestack_w', 'blockstack', control the interpretation
     """
     
-    """
-    explanation of the f_back handling:
-    -----------------------------------
-
-    in the non-JIT case, the frames simply form a doubly linked list via the
-    attributes f_back_some and f_forward.
-
-    When the JIT is used, things become more complex, as functions can be
-    inlined into each other. In this case a frame chain can look like this:
-
-    +---------------+
-    | real_frame    |
-    +---------------+
-       |      ^
-       | f_back_some
-       |      |
-       |      | f_forward
-       |  +--------------+
-       |  | virtual frame|
-       |  +--------------+
-       |      ^ 
-       |      | f_forward
-       |  +--------------+
-       |  | virtual frame|
-       |  +--------------+
-       |      ^
-       |      |
-       v      | f_forward
-    +---------------+
-    | real_frame    |
-    +---------------+
-       |
-       |
-       v
-      ...
-    
-    This ensures that the virtual frames don't escape via the f_back of the
-    real frames. For the same reason, the executioncontext's some_frame
-    attribute should only point to real frames.
-
-    All places where a frame can become accessed from applevel-code (like
-    sys._getframe and traceback catching) need to call force_f_back to ensure
-    that the intermediate virtual frames are forced to be real ones.
-
-    """ 
 
     __metaclass__ = extendabletype
 
     frame_finished_execution = False
     last_instr               = -1
     last_exception           = None
-    f_back_some              = None    # these two should be modified together
-    f_forward                = None    # they make a sort of doubly-linked list
-    f_back_forced            = False
     w_f_trace                = None
     # For tracing
     instr_lb                 = 0
@@ -111,6 +64,7 @@ class PyFrame(eval.Frame):
         self.fastlocals_w = [None]*self.numlocals
         make_sure_not_resized(self.fastlocals_w)
         self.f_lineno = code.co_firstlineno
+        ExecutionContext._init_chaining_attributes(self)
 
     def get_builtin(self):
         if self.space.config.objspace.honor__builtins__:
@@ -457,23 +411,10 @@ class PyFrame(eval.Frame):
         pass
 
     def f_back(self):
-        back_some = self.f_back_some
-        if self.f_back_forced:
-            # don't check back_some.f_forward in this case
-            return back_some
-        if back_some is None:
-            return None
-        while back_some.f_forward is not self:
-            back_some = back_some.f_forward
-        return back_some
-    
-    def force_f_back(self):
-        self.f_back_some = f_back = self.f_back()
-        self.f_back_forced = True
-        if f_back is not None:
-            f_back.force_f_back()
-        return f_back
+        return ExecutionContext._extract_back_from_frame(self)
 
+    def force_f_back(self):
+        return ExecutionContext._force_back_of_frame(self)
 
     ### line numbers ###
 
