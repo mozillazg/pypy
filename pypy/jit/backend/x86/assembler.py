@@ -184,7 +184,9 @@ class Assembler386(object):
         if guard_op is None:
             tree._x86_stack_depth = stack_depth
         else:
-            guard_op._x86_stack_depth = stack_depth
+            if not we_are_translated():
+                # for the benefit of tests
+                guard_op._x86_bridge_stack_depth = stack_depth
             mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
             
             mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))

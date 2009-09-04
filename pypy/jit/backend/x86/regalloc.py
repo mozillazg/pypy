@@ -70,7 +70,7 @@ class RegAlloc(object):
             self.inputargs = inpargs
             self.position = -1
             self._update_bindings(locs, inpargs)
-            self.current_stack_depth = guard_op._x86_stack_depth
+            self.current_stack_depth = guard_op._x86_current_stack_depth
             cpu.gc_ll_descr.rewrite_assembler(cpu, guard_op.suboperations)
             self.loop_consts = {}
         else:
@@ -147,7 +147,7 @@ class RegAlloc(object):
         self.assembler.regalloc_perform(op, arglocs, result_loc)
 
     def perform_with_guard(self, op, guard_op, locs, arglocs, result_loc):
-        guard_op._x86_stack_depth = self.current_stack_depth
+        guard_op._x86_current_stack_depth = self.current_stack_depth
         if not we_are_translated():
             self.assembler.dump('%s <- %s(%s) [GUARDED]' % (result_loc, op,
                                                             arglocs))
@@ -155,7 +155,7 @@ class RegAlloc(object):
                                                    arglocs, result_loc)
 
     def perform_guard(self, op, locs, arglocs, result_loc):
-        op._x86_stack_depth = self.current_stack_depth
+        op._x86_current_stack_depth = self.current_stack_depth
         if not we_are_translated():
             if result_loc is not None:
                 self.assembler.dump('%s <- %s(%s)' % (result_loc, op, arglocs))
