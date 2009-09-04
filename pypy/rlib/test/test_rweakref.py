@@ -9,9 +9,8 @@ class Y(X):
     pass
 
 
-def make_test(go_away=True, loop=100):
-    def f():
-        d = RWeakValueDictionary(X)
+def make_test(loop=100):
+    def g(d):
         assert d.get("hello") is None
         x1 = X(); x2 = X(); x3 = X()
         d.set("abc", x1)
@@ -21,16 +20,18 @@ def make_test(go_away=True, loop=100):
         assert d.get("def") is x2
         assert d.get("ghi") is x3
         assert d.get("hello") is None
-        if go_away:
-            x2 = None
-            rgc.collect(); rgc.collect()
+        return x1, x3    # x2 dies
+    def f():
+        d = RWeakValueDictionary(X)
+        x1, x3 = g(d)
+        rgc.collect(); rgc.collect()
         assert d.get("abc") is x1
-        assert d.get("def") is x2
+        assert d.get("def") is None
         assert d.get("ghi") is x3
         assert d.get("hello") is None
         d.set("abc", None)
         assert d.get("abc") is None
-        assert d.get("def") is x2
+        assert d.get("def") is None
         assert d.get("ghi") is x3
         assert d.get("hello") is None
         # resizing should also work
@@ -39,7 +40,7 @@ def make_test(go_away=True, loop=100):
         for i in range(loop):
             assert d.get(str(i)) is x1
         assert d.get("abc") is None
-        assert d.get("def") is x2
+        assert d.get("def") is None
         assert d.get("ghi") is x3
         assert d.get("hello") is None
         # finally, a subclass
@@ -52,9 +53,7 @@ def test_RWeakValueDictionary():
     make_test()()
 
 def test_rpython_RWeakValueDictionary():
-    # we don't implement the correct weakref behavior in lltype when
-    # directly interpreted, but we can still test that the rest works.
-    interpret(make_test(go_away=False, loop=12), [])
+    interpret(make_test(loop=12), [])
 
 def test_rpython_prebuilt():
     d = RWeakValueDictionary(X)
