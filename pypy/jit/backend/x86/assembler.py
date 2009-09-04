@@ -592,31 +592,28 @@ class Assembler386(object):
         #tree.comeback_bootstrap_addr = self.assemble_comeback_bootstrap(pos,
         #                                                locs, stacklocs)
 
-    def patch_jump(self, old_pos, new_pos, oldlocs, newlocs, olddepth, newdepth):
-        for i in range(len(oldlocs)):
-            oldloc = oldlocs[i]
-            newloc = newlocs[i]
-            if isinstance(newloc, MODRM):
-                assert isinstance(oldloc, MODRM)
-                assert newloc.position == oldloc.position
-            else:
-                assert newloc is oldloc
-            # newlocs should be sorted in acending order, excluding the regs
-            if not we_are_translated():
-                locs = [loc.position for loc in newlocs if isinstance(loc, MODRM)]
-                assert locs == sorted(locs)
-        #
-        mc = codebuf.InMemoryCodeBuilder(old_pos, old_pos +
-                                         MachineCodeBlockWrapper.MC_SIZE)
-        mc.SUB(esp, imm(WORD * (newdepth - olddepth)))
-        mc.JMP(rel32(new_pos))
-        mc.done()
+#     def patch_jump(self, old_pos, new_pos, oldlocs, newlocs, olddepth, newdepth):
+#         for i in range(len(oldlocs)):
+#             oldloc = oldlocs[i]
+#             newloc = newlocs[i]
+#             if isinstance(newloc, MODRM):
+#                 assert isinstance(oldloc, MODRM)
+#                 assert newloc.position == oldloc.position
+#             else:
+#                 assert newloc is oldloc
+#             # newlocs should be sorted in acending order, excluding the regs
+#             if not we_are_translated():
+#                 locs = [loc.position for loc in newlocs if isinstance(loc, MODRM)]
+#                 assert locs == sorted(locs)
+#         #
+#         mc = codebuf.InMemoryCodeBuilder(old_pos, old_pos +
+#                                          MachineCodeBlockWrapper.MC_SIZE)
+#         mc.SUB(esp, imm(WORD * (newdepth - olddepth)))
+#         mc.JMP(rel32(new_pos))
+#         mc.done()
 
     def genop_discard_jump(self, op, locs):
-        targetmp = op.jump_target
-        # don't break the following code sequence!
-        mc = self.mc._mc
-        mc.JMP(rel32(targetmp._x86_compiled))
+        self.mc.JMP(rel32(op.jump_target._x86_compiled))
 
     def genop_guard_guard_true(self, op, ign_1, addr, locs, ign_2):
         loc = locs[0]
