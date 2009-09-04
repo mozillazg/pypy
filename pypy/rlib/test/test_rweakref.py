@@ -43,10 +43,23 @@ def make_test(loop=100):
         assert d.get("def") is None
         assert d.get("ghi") is x3
         assert d.get("hello") is None
-        # finally, a subclass
+        # a subclass
         y = Y()
         d.set("hello", y)
         assert d.get("hello") is y
+        # storing a lot of Nones
+        for i in range(loop, loop*2-5):
+            d.set('%dfoobar' % i, x1)
+        for i in range(loop):
+            d.set(str(i), None)
+        for i in range(loop):
+            assert d.get(str(i)) is None
+        assert d.get("abc") is None
+        assert d.get("def") is None
+        assert d.get("ghi") is x3
+        assert d.get("hello") is y
+        for i in range(loop, loop*2-5):
+            assert d.get('%dfoobar' % i) is x1
     return f
 
 def test_RWeakValueDictionary():

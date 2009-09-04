@@ -1,6 +1,7 @@
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rclass, rdict
 from pypy.rpython.lltypesystem.llmemory import weakref_create, weakref_deref
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.rmodel import Repr
 from pypy.rlib.rweakref import RWeakValueDictionary
@@ -97,6 +98,7 @@ def ll_new_weakdict():
 
 def ll_get(d, llkey):
     i = rdict.ll_dict_lookup(d, llkey, llkey.gethash())
+    #llop.debug_print(lltype.Void, i, 'get')
     valueref = d.entries[i].value
     if valueref:
         return weakref_deref(rclass.OBJECTPTR, valueref)
@@ -115,19 +117,22 @@ def ll_set_nonnull(d, llkey, llvalue):
     everused = d.entries.everused(i)
     d.entries[i].key = llkey
     d.entries[i].value = valueref
+    #llop.debug_print(lltype.Void, i, 'stored')
     if not everused:
         d.num_pristine_entries -= 1
         if d.num_pristine_entries <= len(d.entries) / 3:
+            #llop.debug_print(lltype.Void, 'RESIZE')
             ll_weakdict_resize(d)
 
 def ll_set_null(d, llkey):
     i = rdict.ll_dict_lookup(d, llkey, llkey.gethash())
     if d.entries.everused(i):
-        d.entries[i].key = null_str
-        d.entries[i].value = null_valueref
-
-null_str = lltype.nullptr(rstr.STR)
-null_valueref = llmemory.dead_wref
+        # If the entry was ever used, clean up its key and value.
+        # We don't store a NULL value, but a dead weakref, because
+        # the entry must still be marked as everused().
+        d.entries[i].value = llmemory.dead_wref
+        d.entries[i].key = lltype.nullptr(rstr.STR)
+        #llop.debug_print(lltype.Void, i, 'zero')
 
 def ll_weakdict_resize(d):
     # first set num_items to its correct, up-to-date value
