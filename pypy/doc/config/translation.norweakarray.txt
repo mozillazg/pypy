@@ -1,2 +1,0 @@
-This indicates if the backend and GC policy support "weak arrays".
-These arrays are used by pypy.rlib.rweakref.RWeakValueDictionary.

@@ -25,7 +25,6 @@ memoryError = MemoryError()
 
 class SemiSpaceGC(MovingGCBase):
     _alloc_flavor_ = "raw"
-    gcname = "semispace"
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
     malloc_zero_filled = True
@@ -84,8 +83,7 @@ class SemiSpaceGC(MovingGCBase):
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
-                             offset_to_length, can_collect,
-                             contains_weakptr=False):
+                             offset_to_length, can_collect):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
         try:
@@ -102,8 +100,6 @@ class SemiSpaceGC(MovingGCBase):
         self.init_gc_object(result, typeid)
         (result + size_gc_header + offset_to_length).signed[0] = length
         self.free = result + llarena.round_up_for_allocation(totalsize)
-        if contains_weakptr:
-            self.objects_with_weakrefs.append(result + size_gc_header)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
     def obtain_free_space(self, needed):
@@ -520,45 +516,18 @@ class SemiSpaceGC(MovingGCBase):
             if not self.surviving(obj):
                 continue # weakref itself dies
             obj = self.get_forwarding_address(obj)
-            tid = self.get_type_id(obj)
-            offset = self.weakpointer_offset(tid)
-            if self.is_varsize(tid):
-                self.invalidate_weakarray(obj, tid, offset)
-                new_with_weakref.append(obj)
-            else:
-                # a weakref object, with a single weak pointer
-                pointing_to = (obj + offset).address[0]
-                # XXX I think that pointing_to cannot be NULL here
-                if pointing_to:
-                    if self.surviving(pointing_to):
-                        (obj + offset).address[0] = \
-                             self.get_forwarding_address(pointing_to)
-                        new_with_weakref.append(obj)
-                    else:
-                        (obj + offset).address[0] = NULL
-        self.objects_with_weakrefs.delete()
-        self.objects_with_weakrefs = new_with_weakref
-
-    def invalidate_weakarray(self, obj, typeid, weakoffset):
-        # a weakarray: walk over all entries
-        item = obj + self.varsize_offset_to_variable_part(typeid)
-        length = (obj + self.varsize_offset_to_length(typeid)).signed[0]
-        offsets = self.varsize_offsets_to_gcpointers_in_var_part(typeid)
-        itemlength = self.varsize_item_sizes(typeid)
-        while length > 0:
-            pointing_to = (item + weakoffset).address[0]
+            offset = self.weakpointer_offset(self.get_type_id(obj))
+            pointing_to = (obj + offset).address[0]
+            # XXX I think that pointing_to cannot be NULL here
             if pointing_to:
                 if self.surviving(pointing_to):
-                    (item + weakoffset).address[0] = \
-                          self.get_forwarding_address(pointing_to)
+                    (obj + offset).address[0] = self.get_forwarding_address(
+                        pointing_to)
+                    new_with_weakref.append(obj)
                 else:
-                    (item + weakoffset).address[0] = NULL
-                    j = 0
-                    while j < len(offsets):
-                        (item + offsets[j]).address[0] = NULL
-                        j += 1
-            item += itemlength
-            length -= 1
+                    (obj + offset).address[0] = NULL
+        self.objects_with_weakrefs.delete()
+        self.objects_with_weakrefs = new_with_weakref
 
     def update_run_finalizers(self):
         # we are in an inner collection, caused by a finalizer

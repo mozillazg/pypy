@@ -78,7 +78,6 @@ class HybridGC(GenerationGC):
     except that objects above a certain size are handled separately:
     they are allocated via raw_malloc/raw_free in a mark-n-sweep fashion.
     """
-    gcname = "hybrid"
     first_unused_gcflag = _gcflag_next_bit
     prebuilt_gc_objects_are_static_roots = True
     can_realloc = False
@@ -133,12 +132,11 @@ class HybridGC(GenerationGC):
     # 'large'.
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
-                             offset_to_length, can_collect, contains_weakptr):
-        if contains_weakptr or not can_collect:
+                             offset_to_length, can_collect):
+        if not can_collect:
             return SemiSpaceGC.malloc_varsize_clear(self, typeid, length, size,
                                                     itemsize, offset_to_length,
-                                                    can_collect,
-                                                    contains_weakptr)
+                                                    can_collect)
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
 

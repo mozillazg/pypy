@@ -172,7 +172,7 @@ class PyPyTarget(object):
                                           "to translate.py instead of "
                                           "--withmod-_stackless directly")
 
-        if config.translation.norweakref:
+        if not config.translation.rweakref:
             config.objspace.usemodules._weakref = False
 
         if config.translation.jit:
