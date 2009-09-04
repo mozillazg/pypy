@@ -352,6 +352,9 @@ def offsets_to_gc_pointers(TYPE):
 def weakpointer_offset(TYPE):
     if TYPE == WEAKREF:
         return llmemory.offsetof(WEAKREF, "weakptr")
+    if isinstance(TYPE, lltype.GcArray) and 'weakarray' in TYPE._hints:
+        weakfieldname = TYPE._hints['weakarray']
+        return llmemory.offsetof(TYPE.OF, weakfieldname)
     return -1
 
 def gc_pointers_inside(v, adr, mutable_only=False):
