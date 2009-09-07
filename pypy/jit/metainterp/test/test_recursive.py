@@ -4,7 +4,7 @@ from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp import simple_optimize
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
-from pypy.jit.metainterp.warmspot import CannotInlineCanEnterJit
+from pypy.jit.metainterp.warmspot import CannotInlineCanEnterJit, get_stats
 
 class RecursiveTests:
 
@@ -212,6 +212,56 @@ class RecursiveTests:
         print main(100)
         res = self.meta_interp(main, [100], optimizer=simple_optimize, inline=True)
         assert res == 0
+
+    def test_inline_trace_limit(self):
+        from pypy.rpython.annlowlevel import hlstr
+        def p(code, pc):
+            code = hlstr(code)
+            return "%s %d %s" % (code, pc, code[pc])
+        def c(code, pc):
+            return "l" not in hlstr(code)
+        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n'],
+                                get_printable_location=p, can_inline=c)
+        def recursive(n):
+            if n > 0:
+                return recursive(n - 1) + 1
+            return 0
+        def f(code, n):
+            myjitdriver.set_param("threshold", 10)
+            pc = 0
+            while pc < len(code):
+
+                myjitdriver.jit_merge_point(n=n, code=code, pc=pc)
+                op = code[pc]
+                if op == "-":
+                    n -= 1
+                elif op == "r":
+                    n = recursive(n)
+                elif op == "i":
+                    if n % 5 == 1:
+                        return n
+                elif op == "l":
+                    if n > 0:
+                        myjitdriver.can_enter_jit(n=n, code=code, pc=0)
+                        pc = 0
+                        continue
+                else:
+                    assert 0
+                pc += 1
+            return n
+        def main(n):
+            if n < 0:
+                code = "--"
+            else:
+                code = "r-l"
+            return f(code, n)
+        print main(100)
+        TRACE_LIMIT = 66
+        res = self.meta_interp(main, [100], optimizer=simple_optimize, inline=True, trace_limit=TRACE_LIMIT)
+        assert res == 0
+        for loop in get_stats().loops:
+            assert len(loop.operations) <= TRACE_LIMIT + 5 # because we only check once per metainterp bytecode
+        self.check_enter_count(27) # maybe
 
 
 class TestLLtype(RecursiveTests, LLJitMixin):
