@@ -52,13 +52,14 @@ def ll_meta_interp(function, args, backendopt=False, type_system='lltype',
     clear_tcache()
     return jittify_and_run(interp, graph, args, backendopt=backendopt, **kwds)
 
-def jittify_and_run(interp, graph, args, repeat=1, hash_bits=None, backendopt=False,
+def jittify_and_run(interp, graph, args, repeat=1, hash_bits=None, backendopt=False, trace_limit=sys.maxint,
                     **kwds):
     translator = interp.typer.annotator.translator
     translator.config.translation.gc = "boehm"
     warmrunnerdesc = WarmRunnerDesc(translator, backendopt=backendopt, **kwds)
     warmrunnerdesc.state.set_param_threshold(3)          # for tests
     warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
+    warmrunnerdesc.state.set_param_trace_limit(trace_limit)
     warmrunnerdesc.state.create_tables_now()             # for tests
     if hash_bits:
         warmrunnerdesc.state.set_param_hash_bits(hash_bits)
@@ -728,6 +729,9 @@ def make_state_class(warmrunnerdesc):
         def set_param_trace_eagerness(self, value):
             self.trace_eagerness = value
 
+        def set_param_trace_limit(self, value):
+            self.trace_limit = value
+
         def set_param_hash_bits(self, value):
             if value < 1:
                 value = 1
@@ -772,7 +776,13 @@ def make_state_class(warmrunnerdesc):
                     self.create_tables_now()
                     return
                 metainterp = MetaInterp(metainterp_sd)
-                loop = metainterp.compile_and_run_once(*args)
+                try:
+                    loop = metainterp.compile_and_run_once(*args)
+                except warmrunnerdesc.ContinueRunningNormally:
+                    # the trace got too long, reset the counter
+                    self.mccounters[argshash] = 0
+                    raise
+
             else:
                 # machine code was already compiled for these greenargs
                 # (or we have a hash collision)

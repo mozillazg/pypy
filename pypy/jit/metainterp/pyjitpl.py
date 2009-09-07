@@ -1196,6 +1196,7 @@ class MetaInterp(object):
             self.cpu.ts.get_exc_value_box(evalue))
 
     def create_empty_history(self):
+        warmrunnerstate = self.staticdata.state
         self.history = history.History(self.cpu)
         if self.staticdata.stats is not None:
             self.staticdata.stats.history = self.history
@@ -1245,6 +1246,18 @@ class MetaInterp(object):
             op.pc = self.framestack[-1].pc
             op.name = self.framestack[-1].jitcode.name
 
+    def switch_to_blackhole_if_trace_too_long(self):
+        if not self.is_blackholing():
+            warmrunnerstate = self.staticdata.state
+            if len(self.history.operations) > warmrunnerstate.trace_limit:
+                self.history = history.BlackHole(self.cpu)
+                if not we_are_translated():
+                    history.log.event('ABORTING TRACING' + self.history.extratext)
+                elif DEBUG:
+                    debug_print('~~~ ABORTING TRACING', self.history.extratext)
+                self.staticdata.profiler.end_tracing()
+                self.staticdata.profiler.start_blackhole()
+
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
         # a ContinueRunningNormally, or a GenerateMergePoint exception.
@@ -1256,6 +1269,7 @@ class MetaInterp(object):
         try:
             while True:
                 self.framestack[-1].run_one_step()
+                self.switch_to_blackhole_if_trace_too_long()
         finally:
             if self.is_blackholing():
                 self.staticdata.profiler.end_blackhole()
