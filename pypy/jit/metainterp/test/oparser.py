@@ -145,7 +145,10 @@ class OpParser(object):
         argspec = line[num + 1:endnum]
         if not argspec.strip():
             return opnum, [], None
-        allargs = argspec.split(",")
+        if opname == 'debug_merge_point':
+            allargs = [argspec]
+        else:
+            allargs = argspec.split(",")
         args = []
         descr = None
         poss_descr = allargs[-1].strip()
@@ -195,8 +198,6 @@ class OpParser(object):
         ops = []
         newlines = []
         for line in lines:
-            if '#' in line:
-                line = line[:line.index('#')]    # remove comment
             if not line.strip():
                 continue  # a comment or empty line
             newlines.append(line)
