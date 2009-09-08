@@ -1307,6 +1307,7 @@ class MetaInterp(object):
             return self.designate_target_loop(gmp)
 
     def handle_guard_failure(self, exec_result, key):
+        from pypy.jit.metainterp.warmspot import ContinueRunningNormallyBase
         resumedescr = self.initialize_state_from_guard_failure(exec_result)
         assert isinstance(key, compile.ResumeGuardDescr)
         top_history = key.find_toplevel_history()
@@ -1324,7 +1325,7 @@ class MetaInterp(object):
             assert False, "should always raise"
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
-        except self.staticdata.ContinueRunningNormally:
+        except ContinueRunningNormallyBase:
             if not started_as_blackhole:
                 warmrunnerstate = self.staticdata.state
                 warmrunnerstate.reset_counter_from_failure(resumedescr)

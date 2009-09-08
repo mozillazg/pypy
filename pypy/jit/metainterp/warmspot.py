@@ -121,6 +121,9 @@ def debug_checks():
 class JitException(Exception):
     _go_through_llinterp_uncaught_ = True     # ugh
 
+class ContinueRunningNormallyBase(JitException):
+    pass
+
 class CannotInlineCanEnterJit(JitException):
     pass
 
@@ -410,7 +413,7 @@ class WarmRunnerDesc:
             def __str__(self):
                 return 'ExitFrameWithExceptionRef(%s)' % (self.value,)
 
-        class ContinueRunningNormally(JitException):
+        class ContinueRunningNormally(ContinueRunningNormallyBase):
             def __init__(self, argboxes):
                 # accepts boxes as argument, but unpacks them immediately
                 # before we raise the exception -- the boxes' values will
