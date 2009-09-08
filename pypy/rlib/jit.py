@@ -83,7 +83,8 @@ class JitHintError(Exception):
 PARAMETERS = {'threshold': 1000,
               'trace_eagerness': 200,
               'hash_bits': 14,
-              'trace_limit': sys.maxint,
+              'trace_limit': 10000,
+              'inlining': False,
               }
 unroll_parameters = unrolling_iterable(PARAMETERS.keys())
 
