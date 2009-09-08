@@ -50,6 +50,8 @@ class JitMixin:
         assert get_stats().enter_count <= count
     def check_jumps(self, maxcount):
         assert get_stats().exec_jumps <= maxcount
+    def check_aborted_count(self, maxcount):
+        assert get_stats().aborted_count == maxcount
 
     def meta_interp(self, *args, **kwds):
         kwds['CPUClass'] = self.CPUClass

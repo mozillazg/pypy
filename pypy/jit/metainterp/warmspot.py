@@ -871,6 +871,9 @@ def make_state_class(warmrunnerdesc):
             key.counter += 1
             return key.counter >= self.trace_eagerness
 
+        def reset_counter_from_failure(self, key):
+            key.counter = 0
+
         def attach_unoptimized_bridge_from_interp(self, greenkey, bridge):
             greenargs = self.unwrap_greenkey(greenkey)
             newcell = MachineCodeEntryPoint(bridge, *greenargs)

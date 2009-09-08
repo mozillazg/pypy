@@ -1252,6 +1252,7 @@ class MetaInterp(object):
             if len(self.history.operations) > warmrunnerstate.trace_limit:
                 self.history = history.BlackHole(self.cpu)
                 if not we_are_translated():
+                    self.staticdata.stats.aborted_count += 1
                     history.log.event('ABORTING TRACING' + self.history.extratext)
                 elif DEBUG:
                     debug_print('~~~ ABORTING TRACING', self.history.extratext)
@@ -1306,7 +1307,7 @@ class MetaInterp(object):
             return self.designate_target_loop(gmp)
 
     def handle_guard_failure(self, exec_result, key):
-        self.initialize_state_from_guard_failure(exec_result)
+        resumedescr = self.initialize_state_from_guard_failure(exec_result)
         assert isinstance(key, compile.ResumeGuardDescr)
         top_history = key.find_toplevel_history()
         source_loop = top_history.source_link
@@ -1316,12 +1317,18 @@ class MetaInterp(object):
         self.resumekey = key
         self.seen_can_enter_jit = False
         guard_op = key.get_guard_op()
+        started_as_blackhole = self.is_blackholing()
         try:
             self.prepare_resume_from_failure(guard_op.opnum)
             self.interpret()
             assert False, "should always raise"
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
+        except self.staticdata.ContinueRunningNormally:
+            if not started_as_blackhole:
+                warmrunnerstate = self.staticdata.state
+                warmrunnerstate.reset_counter_from_failure(resumedescr)
+            raise
 
     def forget_consts(self, boxes, startindex=0):
         for i in range(startindex, len(boxes)):
@@ -1556,6 +1563,7 @@ class MetaInterp(object):
             # the BlackHole is invalid because it doesn't start with
             # guard_failure.key.guard_op.suboperations, but that's fine
         self.rebuild_state_after_failure(resumedescr, guard_failure.args)
+        return resumedescr
 
     def initialize_virtualizable(self, original_boxes):
         vinfo = self.staticdata.virtualizable_info
