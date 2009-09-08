@@ -26,7 +26,9 @@ from pypy.jit.metainterp.jitprof import Profiler
 # ____________________________________________________________
 # Bootstrapping
 
-def apply_jit(translator, backend_name="auto", debug_level="steps", **kwds):
+def apply_jit(translator, backend_name="auto", debug_level="steps",
+              inline=False,
+              **kwds):
     if 'CPUClass' not in kwds:
         from pypy.jit.backend.detect_cpu import getcpuclass
         kwds['CPUClass'] = getcpuclass(backend_name)
@@ -38,9 +40,9 @@ def apply_jit(translator, backend_name="auto", debug_level="steps", **kwds):
     warmrunnerdesc = WarmRunnerDesc(translator,
                                     translate_support_code=True,
                                     listops=True,
-                                    #inline=True,
                                     profile=profile,
                                     **kwds)
+    warmrunnerdesc.state.set_param_inlining(inline)    
     warmrunnerdesc.finish()
     translator.warmrunnerdesc = warmrunnerdesc    # for later debugging
 
