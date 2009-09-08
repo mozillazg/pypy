@@ -854,10 +854,9 @@ class CrashInJIT(Exception):
 
 class Options:
     logger_noopt = None
-    def __init__(self, specialize=True, listops=False, inline=False):
+    def __init__(self, specialize=True, listops=False):
         self.specialize = specialize
         self.listops = listops
-        self.inline = inline
     def _freeze_(self):
         return True
 

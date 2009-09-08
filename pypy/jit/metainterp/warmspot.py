@@ -53,13 +53,14 @@ def ll_meta_interp(function, args, backendopt=False, type_system='lltype',
     return jittify_and_run(interp, graph, args, backendopt=backendopt, **kwds)
 
 def jittify_and_run(interp, graph, args, repeat=1, hash_bits=None, backendopt=False, trace_limit=sys.maxint,
-                    **kwds):
+                    inline=False, **kwds):
     translator = interp.typer.annotator.translator
     translator.config.translation.gc = "boehm"
     warmrunnerdesc = WarmRunnerDesc(translator, backendopt=backendopt, **kwds)
     warmrunnerdesc.state.set_param_threshold(3)          # for tests
     warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
     warmrunnerdesc.state.set_param_trace_limit(trace_limit)
+    warmrunnerdesc.state.set_param_inlining(inline)
     warmrunnerdesc.state.create_tables_now()             # for tests
     if hash_bits:
         warmrunnerdesc.state.set_param_hash_bits(hash_bits)
@@ -734,6 +735,9 @@ def make_state_class(warmrunnerdesc):
 
         def set_param_trace_limit(self, value):
             self.trace_limit = value
+
+        def set_param_inlining(self, value):
+            self.inlining = value
 
         def set_param_hash_bits(self, value):
             if value < 1:
