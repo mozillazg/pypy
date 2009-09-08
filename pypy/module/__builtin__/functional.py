@@ -394,11 +394,24 @@ class W_Enumerate(Wrappable):
         return space.newtuple([w_index, w_item])
     descr_next.unwrap_spec = ["self", ObjSpace]
 
+    def descr___reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        w_new_inst = mod.get('enumerate_new')
+        w_info = space.newtuple([self.w_iter, self.w_index])
+        return space.newtuple([w_new_inst, w_info])
+    descr___reduce__.unwrap_spec = ["self", ObjSpace]
+
+# exported through _pickle_support
+def _make_enumerate(space, w_iter, w_index):
+    return space.wrap(W_Enumerate(w_iter, w_index))
 
 W_Enumerate.typedef = TypeDef("enumerate",
     __new__=interp2app(W_Enumerate.descr___new__.im_func),
     __iter__=interp2app(W_Enumerate.descr___iter__),
     next=interp2app(W_Enumerate.descr_next),
+    __reduce__=interp2app(W_Enumerate.descr___reduce__),
 )
 
 
@@ -437,10 +450,30 @@ class W_ReversedIterator(Wrappable):
         raise OperationError(space.w_StopIteration, space.w_None)
     descr_next.unwrap_spec = ["self", ObjSpace]
 
+    def descr___reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        w_new_inst = mod.get('reversed_new')
+        info_w = [self.w_sequence, space.wrap(self.remaining)]
+        w_info = space.newtuple(info_w)
+        return space.newtuple([w_new_inst, w_info])
+    descr___reduce__.unwrap_spec = ["self", ObjSpace]
+
 W_ReversedIterator.typedef = TypeDef("reversed",
     __iter__=interp2app(W_ReversedIterator.descr___iter__),
     next=interp2app(W_ReversedIterator.descr_next),
+    __reduce__=interp2app(W_ReversedIterator.descr___reduce__),
 )
+
+# exported through _pickle_support
+def _make_reversed(space, w_seq, w_remaining):
+    w_type = space.gettypeobject(W_ReversedIterator.typedef)
+    iterator = space.allocate_instance(W_ReversedIterator, w_type)
+    iterator.w_sequence = w_seq
+    iterator.remaining = space.int_w(w_remaining)
+    return space.wrap(iterator)
+
 
 
 class W_XRange(Wrappable):

@@ -6,6 +6,8 @@
 #  Java version:  Copyright (C) 1995 Sun Microsystems, Inc.
 #  Translation from C++, Mario Wolczko
 #  Outer loop added by Alex Jacoby
+import pypyjit
+pypyjit.set_param(trace_limit=2000)
 
 # Task IDs
 I_IDLE = 1

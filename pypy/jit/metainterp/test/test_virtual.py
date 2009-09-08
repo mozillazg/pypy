@@ -4,6 +4,7 @@ from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rpython.lltypesystem import lltype, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.ootypesystem import ootype
 from pypy.jit.metainterp import heaptracker
 
 class VirtualTests:
@@ -272,9 +273,9 @@ class VirtualTests:
             return f
 
         res = self.meta_interp(f, [21], repeat=7)
-        # hack
-        assert (getattr(res, "inst_value", -100) == f(21).value or
-                getattr(res, "value", -100) == f(21).value)
+
+        fieldname = self._field_prefix + 'value'
+        assert getattr(res, fieldname, -100) == f(21).value
 
         self.check_tree_loop_count(2)      # the loop and the entry path
         # we get:
@@ -285,9 +286,6 @@ class VirtualTests:
         self.check_enter_count(4)
 
 
-##class TestOOtype(VirtualTests, OOJitMixin):
-##    _new = staticmethod(ootype.new)
-
 # ____________________________________________________________
 # Run 1: all the tests instantiate a real RPython class
 
@@ -296,9 +294,46 @@ class MyClass:
 
 class TestLLtype_Instance(VirtualTests, LLJitMixin):
     _new_op = 'new_with_vtable'
+    _field_prefix = 'inst_'
+    
     @staticmethod
     def _new():
         return MyClass()
+
+    def test_class_with_default_fields(self):
+        class MyClass:
+            value = 2
+
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'res'])
+        def f(n):
+            res = 0
+            node = MyClass()
+            node.value = n # so that the annotator doesn't think that value is constant
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, res=res)
+                myjitdriver.jit_merge_point(n=n, res=res)
+                node = MyClass()
+                res += node.value
+                n -= 1
+            return res
+        assert f(10) == 20
+        res = self.meta_interp(f, [10])
+        assert res == 20
+        self.check_loop_count(1)
+        self.check_loops(new=0, new_with_vtable=0,
+                                getfield_gc=0, setfield_gc=0)
+
+
+
+class TestOOtype_Instance(VirtualTests, OOJitMixin):
+    _new_op = 'new_with_vtable'
+    _field_prefix = 'o'
+    
+    @staticmethod
+    def _new():
+        return MyClass()
+
+    test_class_with_default_fields = TestLLtype_Instance.test_class_with_default_fields.im_func
 
 # ____________________________________________________________
 # Run 2: all the tests use lltype.malloc to make a NODE
@@ -308,10 +343,24 @@ NODE = lltype.GcStruct('NODE', ('value', lltype.Signed),
 
 class TestLLtype_NotObject(VirtualTests, LLJitMixin):
     _new_op = 'new'
-
+    _field_prefix = ''
+    
     @staticmethod
     def _new():
         return lltype.malloc(NODE)
+
+
+OONODE = ootype.Instance('NODE', ootype.ROOT, {})
+OONODE._add_fields({'value': ootype.Signed,
+                    'extra': ootype.Signed})
+
+class TestOOtype_NotObject(VirtualTests, OOJitMixin):
+    _new_op = 'new_with_vtable'
+    _field_prefix = ''
+    
+    @staticmethod
+    def _new():
+        return ootype.new(OONODE)
 
 # ____________________________________________________________
 # Run 3: all the tests use lltype.malloc to make a NODE2
@@ -326,6 +375,8 @@ heaptracker.set_testing_vtable_for_gcstruct(NODE2, vtable2, 'NODE2')
 
 class TestLLtype_Object(VirtualTests, LLJitMixin):
     _new_op = 'new_with_vtable'
+    _field_prefix = ''
+    
     @staticmethod
     def _new():
         p = lltype.malloc(NODE2)
