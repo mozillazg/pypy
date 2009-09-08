@@ -97,6 +97,8 @@ class OpParser(object):
         return vars
 
     def getvar(self, arg):
+        if not arg:
+            return ConstInt(0)
         try:
             return ConstInt(int(arg))
         except ValueError:
@@ -163,6 +165,8 @@ class OpParser(object):
             try:
                 args.append(self.getvar(arg))
             except KeyError:
+                import pdb
+                pdb.set_trace()
                 raise ParseError("Unknown var: %s" % arg)
         if hasattr(descr, '_oparser_uses_descr'):
             descr._oparser_uses_descr(self, args)
