@@ -265,6 +265,32 @@ class RecursiveTests:
         self.check_aborted_count(8)
         self.check_enter_count_at_most(30)
 
+    def test_set_param_inlining(self):
+        myjitdriver = JitDriver(greens=[], reds=['n', 'recurse'])
+        def loop(n, recurse=False):
+            while n:
+                myjitdriver.jit_merge_point(n=n, recurse=recurse)
+                n -= 1
+                if not recurse:
+                    loop(10, True)
+                    myjitdriver.can_enter_jit(n=n, recurse=recurse)
+            return n
+        TRACE_LIMIT = 66
+ 
+        def main(inline):
+            myjitdriver.set_param("threshold", 10)
+            if inline:
+                myjitdriver.set_param('inlining', True)
+            else:
+                myjitdriver.set_param('inlining', False)
+            return loop(100)
+
+        res = self.meta_interp(main, [0], optimizer=simple_optimize, trace_limit=TRACE_LIMIT)
+        self.check_loops(call=1)
+
+        res = self.meta_interp(main, [1], optimizer=simple_optimize, trace_limit=TRACE_LIMIT)
+        self.check_loops(call=0)
+
 
 
 class TestLLtype(RecursiveTests, LLJitMixin):
