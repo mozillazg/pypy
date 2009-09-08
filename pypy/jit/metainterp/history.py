@@ -788,6 +788,7 @@ class Stats(object):
 
     compiled_count = 0
     enter_count = 0
+    aborted_count = 0
 
     def __init__(self):
         self.loops = []
