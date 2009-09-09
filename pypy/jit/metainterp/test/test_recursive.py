@@ -213,7 +213,6 @@ class RecursiveTests:
         res = self.meta_interp(main, [100], optimizer=simple_optimize, inline=True)
         assert res == 0
 
-    @py.test.mark.xfail
     def test_exception_in_inlined_function(self):
         from pypy.rpython.annlowlevel import hlstr
         def p(code, pc):
@@ -254,9 +253,8 @@ class RecursiveTests:
             return n
         def main(n):
             return f("c-l", n)
-        print main(100)
         res = self.meta_interp(main, [100], optimizer=simple_optimize, inline=True)
-        assert res == 0
+        assert res == main(100)
 
     def test_recurse_during_blackholing(self):
         # this passes, if the blackholing shortcut for calls is turned off

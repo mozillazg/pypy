@@ -651,7 +651,6 @@ class MIFrame(object):
             portal_code = self.metainterp.staticdata.portal_code
             greenkey = varargs[1:num_green_args + 1]
             if self.metainterp.staticdata.state.can_inline_callable(greenkey):
-                self.metainterp.in_recursion += 1
                 return self.perform_call(portal_code, varargs[1:])
         return self.execute_with_exc(rop.CALL, varargs, descr=calldescr)
 
@@ -1129,14 +1128,20 @@ class MetaInterp(object):
     def newframe(self, jitcode):
         if not we_are_translated():
             self._debug_history.append(['enter', jitcode, None])
+        if jitcode is self.staticdata.portal_code:
+            self.in_recursion += 1
         f = MIFrame(self, jitcode)
         self.framestack.append(f)
         return f
 
-    def finishframe(self, resultbox):
+    def popframe(self):
         frame = self.framestack.pop()
         if frame.jitcode is self.staticdata.portal_code:
             self.in_recursion -= 1
+        return frame
+
+    def finishframe(self, resultbox):
+        frame = self.popframe()
         if not we_are_translated():
             self._debug_history.append(['leave', frame.jitcode, None])
         if self.framestack:
@@ -1179,10 +1184,28 @@ class MetaInterp(object):
                 return True
             if not we_are_translated():
                 self._debug_history.append(['leave_exc', frame.jitcode, None])
-            self.framestack.pop()
+            self.popframe()
         if not self.is_blackholing():
             self.compile_exit_frame_with_exception(excvaluebox)
         raise self.staticdata.ExitFrameWithExceptionRef(self.cpu, excvaluebox.getref_base())
+
+    def check_recursion_invariant(self):
+        in_recursion = -1
+        for frame in self.framestack:
+            jitcode = frame.jitcode
+            if jitcode is self.staticdata.portal_code:
+                in_recursion += 1
+        if in_recursion != self.in_recursion:
+            print "in_recursion problem!!!"
+            print in_recursion, self.in_recursion
+            for frame in self.framestack:
+                jitcode = frame.jitcode
+                if jitcode is self.staticdata.portal_code:
+                    print "P",
+                else:
+                    print " ",
+                print jitcode.name
+            raise Exception
 
     def raise_overflow_error(self):
         etype, evalue = self.cpu.get_overflow_error()
@@ -1272,6 +1295,8 @@ class MetaInterp(object):
             while True:
                 self.framestack[-1].run_one_step()
                 self.switch_to_blackhole_if_trace_too_long()
+                if not we_are_translated():
+                    self.check_recursion_invariant()
         finally:
             if self.is_blackholing():
                 self.staticdata.profiler.end_blackhole()
@@ -1522,7 +1547,7 @@ class MetaInterp(object):
                                         *args[1:])
 
     def initialize_state_from_start(self, *args):
-        self.in_recursion = 0
+        self.in_recursion = -1 # always one portal around
         self.staticdata._setup_once()
         self.staticdata.profiler.start_tracing()
         self.create_empty_history()
@@ -1539,7 +1564,7 @@ class MetaInterp(object):
 
     def initialize_state_from_guard_failure(self, guard_failure):
         # guard failure: rebuild a complete MIFrame stack
-        self.in_recursion = 0
+        self.in_recursion = -1 # always one portal around
         resumedescr = guard_failure.descr
         assert isinstance(resumedescr, compile.ResumeGuardDescr)
         warmrunnerstate = self.staticdata.state
@@ -1666,10 +1691,7 @@ class MetaInterp(object):
             jitcode, pc, exception_target = resumereader.consume_frame_info()
             env = resumereader.consume_boxes()
             f = self.newframe(jitcode)
-            if jitcode is self.staticdata.portal_code:
-                self.in_recursion += 1
             f.setup_resume_at_op(pc, exception_target, env)
-        self.in_recursion -= 1 # always one portal around
 
     def check_synchronized_virtualizable(self):
         if not we_are_translated():
