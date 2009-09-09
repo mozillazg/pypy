@@ -180,7 +180,7 @@ def test_os_stat_raises_winerror():
         try:
             os.stat("nonexistentdir/nonexistentfile")
         except WindowsError, e:
-            return e.winerror, e.errno
+            return e.winerror
     f = compile(call_stat, [])
     res = f()
     expected = call_stat()
