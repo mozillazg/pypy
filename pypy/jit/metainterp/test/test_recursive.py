@@ -259,7 +259,7 @@ class RecursiveTests:
         assert res == 0
 
     def test_recurse_during_blackholing(self):
-        # this passes, if the blackholing short is turned off
+        # this passes, if the blackholing shortcut for calls is turned off
         # it fails, it is very delicate in terms of parameters,
         # bridge/loop creation order
         from pypy.rpython.annlowlevel import hlstr
