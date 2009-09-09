@@ -258,6 +258,48 @@ class RecursiveTests:
         res = self.meta_interp(main, [100], optimizer=simple_optimize, inline=True)
         assert res == 0
 
+    def test_recurse_during_blackholing(self):
+        # this passes, if the blackholing short is turned off
+        # it fails, it is very delicate in terms of parameters,
+        # bridge/loop creation order
+        from pypy.rpython.annlowlevel import hlstr
+        def p(code, pc):
+            code = hlstr(code)
+            return "%s %d %s" % (code, pc, code[pc])
+        def c(code, pc):
+            return "l" not in hlstr(code)
+        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n'],
+                                get_printable_location=p, can_inline=c)
+        
+        def f(code, n):
+            pc = 0
+            while pc < len(code):
+
+                myjitdriver.jit_merge_point(n=n, code=code, pc=pc)
+                op = code[pc]
+                if op == "-":
+                    n -= 1
+                elif op == "c":
+                    if n < 70 and n % 3 == 1:
+                        print "F"
+                        n = f("--", n)
+                elif op == "l":
+                    if n > 0:
+                        myjitdriver.can_enter_jit(n=n, code=code, pc=0)
+                        pc = 0
+                        continue
+                else:
+                    assert 0
+                pc += 1
+            return n
+        def main(n):
+            myjitdriver.set_param('threshold', 3)
+            myjitdriver.set_param('trace_eagerness', 5)            
+            return f("c-l", n)
+        expected = main(100)
+        res = self.meta_interp(main, [100], optimizer=simple_optimize, inline=True)
+        assert res == expected
+
     def check_max_trace_length(self, length):
         for loop in get_stats().loops:
             assert len(loop.operations) <= length + 5 # because we only check once per metainterp bytecode
