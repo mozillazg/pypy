@@ -27,15 +27,9 @@ class ExecutionContext:
         self.profilefunc = None
         self.w_profilefuncarg = None
 
-    def gettopframe(self):
-        frame = self.some_frame
-        if frame is not None:
-            while frame.f_forward is not None:
-                frame = frame.f_forward
-        return frame
-
     def gettopframe_nohidden(self):
         frame = self.gettopframe()
+        # I guess this should just use getnextframe_nohidden XXX
         while frame and frame.hide():
             frame = frame.f_back()
         return frame
@@ -66,6 +60,13 @@ class ExecutionContext:
     # the methods below are used for chaining frames in JIT-friendly way
     # part of that stuff is obscure
 
+    def gettopframe(self):
+        frame = self.some_frame
+        if frame is not None:
+            while frame.f_forward is not None:
+                frame = frame.f_forward
+        return frame
+
     def _init_frame_chain(self):
         # 'some_frame' points to any frame from this thread's frame stack
         # (although in general it should point to the top one).
@@ -87,10 +88,10 @@ class ExecutionContext:
         +---------------+
         | real_frame    |
         +---------------+
-           |      ^
+           |      
            | f_back_some
-           |      |
-           |      | f_forward
+           |      
+           |      
            |  +--------------+
            |  | virtual frame|
            |  +--------------+
@@ -127,19 +128,29 @@ class ExecutionContext:
         self.framestackdepth += 1
         #
         frame.f_back_some = self.some_frame
-        curtopframe = self.gettopframe()
-        if curtopframe is not None:
+        if self._we_are_jitted():
+            curtopframe = self.gettopframe()
+            assert curtopframe is not None
             curtopframe.f_forward = frame
-        if not self._we_are_jitted():
+        else:
             self.some_frame = frame
 
     def _unchain(self, frame):
         #assert frame is self.gettopframe() --- slowish
-        f_back = frame.f_back()
-        if f_back is not None:
-            f_back.f_forward = None
-        if not self._we_are_jitted() or self.some_frame is frame:
+        if self.some_frame is frame:
             self.some_frame = frame.f_back_some
+        else:
+            f_back = frame.f_back()
+            if f_back is not None:
+                f_back.f_forward = None
+
+
+        #f_back = frame.f_back()
+        #if f_back is not None:
+        #    f_back.f_forward = None # this is the other one, yes # the goal is to set the forward attr only in the jitted case
+        #if not self._we_are_jitted() or self.some_frame is frame:
+        #    self.some_frame = frame.f_back_some
+
         self.framestackdepth -= 1
 
     @staticmethod
@@ -150,9 +161,11 @@ class ExecutionContext:
             return back_some
         if back_some is None:
             return None
-        while back_some.f_forward is not frame:
-            back_some = back_some.f_forward
-        return back_some
+        while True:
+            f_forward = back_some.f_forward
+            if f_forward is frame or f_forward is None:
+                return back_some
+            back_some = f_forward
 
     @staticmethod
     def _force_back_of_frame(frame):
