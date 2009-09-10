@@ -53,6 +53,8 @@ def get_printable_location(next_instr, bytecode):
 
 def leave(next_instr, pycode, frame, ec):
     from pypy.interpreter.executioncontext import ExecutionContext
+    # can't use a method here, since this function is seen later than the main
+    # annotation
     ExecutionContext._jit_rechain_frame(ec, frame)
 
 class PyPyJitDriver(JitDriver):
