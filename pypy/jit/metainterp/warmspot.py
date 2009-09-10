@@ -26,7 +26,9 @@ from pypy.jit.metainterp.jitprof import Profiler
 # ____________________________________________________________
 # Bootstrapping
 
-def apply_jit(translator, backend_name="auto", debug_level="steps", **kwds):
+def apply_jit(translator, backend_name="auto", debug_level="steps",
+              inline=False,
+              **kwds):
     if 'CPUClass' not in kwds:
         from pypy.jit.backend.detect_cpu import getcpuclass
         kwds['CPUClass'] = getcpuclass(backend_name)
@@ -38,9 +40,9 @@ def apply_jit(translator, backend_name="auto", debug_level="steps", **kwds):
     warmrunnerdesc = WarmRunnerDesc(translator,
                                     translate_support_code=True,
                                     listops=True,
-                                    #inline=True,
                                     profile=profile,
                                     **kwds)
+    warmrunnerdesc.state.set_param_inlining(inline)    
     warmrunnerdesc.finish()
     translator.warmrunnerdesc = warmrunnerdesc    # for later debugging
 
@@ -52,13 +54,15 @@ def ll_meta_interp(function, args, backendopt=False, type_system='lltype',
     clear_tcache()
     return jittify_and_run(interp, graph, args, backendopt=backendopt, **kwds)
 
-def jittify_and_run(interp, graph, args, repeat=1, hash_bits=None, backendopt=False,
-                    **kwds):
+def jittify_and_run(interp, graph, args, repeat=1, hash_bits=None, backendopt=False, trace_limit=sys.maxint,
+                    inline=False, **kwds):
     translator = interp.typer.annotator.translator
     translator.config.translation.gc = "boehm"
     warmrunnerdesc = WarmRunnerDesc(translator, backendopt=backendopt, **kwds)
     warmrunnerdesc.state.set_param_threshold(3)          # for tests
     warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
+    warmrunnerdesc.state.set_param_trace_limit(trace_limit)
+    warmrunnerdesc.state.set_param_inlining(inline)
     warmrunnerdesc.state.create_tables_now()             # for tests
     if hash_bits:
         warmrunnerdesc.state.set_param_hash_bits(hash_bits)
@@ -120,6 +124,9 @@ def debug_checks():
 class JitException(Exception):
     _go_through_llinterp_uncaught_ = True     # ugh
 
+class ContinueRunningNormallyBase(JitException):
+    pass
+
 class CannotInlineCanEnterJit(JitException):
     pass
 
@@ -127,18 +134,21 @@ class CannotInlineCanEnterJit(JitException):
 
 class WarmRunnerDesc:
 
-    def __init__(self, translator, policy=None, backendopt=True, **kwds):
+    def __init__(self, translator, policy=None, backendopt=True, CPUClass=None,
+                 **kwds):
         pyjitpl._warmrunnerdesc = self   # this is a global for debugging only!
         if policy is None:
             policy = JitPolicy()
         self.set_translator(translator)
         self.find_portal()
-        graphs = find_all_graphs(self.portal_graph, policy, self.translator)
+        self.make_leave_jit_graph()
+        graphs = find_all_graphs(self.portal_graph, policy, self.translator,
+                                 CPUClass.supports_floats)
         self.check_access_directly_sanity(graphs)
         if backendopt:
             self.prejit_optimizations(policy, graphs)
 
-        self.build_meta_interp(**kwds)
+        self.build_meta_interp(CPUClass, **kwds)
         self.make_args_specification()
         self.rewrite_jit_merge_point()
         self.make_driverhook_graph()
@@ -206,7 +216,7 @@ class WarmRunnerDesc:
                               remove_asserts=True,
                               really_remove_asserts=True)
 
-    def build_meta_interp(self, CPUClass=None, translate_support_code=False,
+    def build_meta_interp(self, CPUClass, translate_support_code=False,
                           view="auto", optimizer=None, profile=None, **kwds):
         assert CPUClass is not None
         opt = history.Options(**kwds)
@@ -224,7 +234,8 @@ class WarmRunnerDesc:
                                                   self.stats, opt,
                                                   optimizer=optimizer,
                                                   profile=profile,
-                                                  warmrunnerdesc=self)
+                                                  warmrunnerdesc=self,
+                                                  leave_graph=self.leave_graph)
 
     def make_enter_function(self):
         WarmEnterState = make_state_class(self)
@@ -259,6 +270,21 @@ class WarmRunnerDesc:
 
         self.maybe_enter_jit_fn = maybe_enter_jit
 
+    def make_leave_jit_graph(self):
+        self.leave_graph = None
+        if self.jitdriver.leave:
+            graph, block, index = self.jit_merge_point_pos
+            op = block.operations[index]
+            args = op.args[2:]
+            s_binding = self.translator.annotator.binding
+            args_s = [s_binding(v) for v in args]            
+            from pypy.annotation import model as annmodel
+            annhelper = MixLevelHelperAnnotator(self.translator.rtyper)
+            s_result = annmodel.s_None
+            self.leave_graph = annhelper.getgraph(self.jitdriver.leave,
+                                                  args_s, s_result)
+            annhelper.finish()
+        
     def make_driverhook_graph(self):
         self.can_inline_ptr = self._make_hook_graph(
             self.jitdriver.can_inline, bool)
@@ -393,6 +419,13 @@ class WarmRunnerDesc:
             def __str__(self):
                 return 'DoneWithThisFrameRef(%s)' % (self.result,)
 
+        class DoneWithThisFrameFloat(JitException):
+            def __init__(self, cpu, result):
+                assert lltype.typeOf(result) is lltype.Float
+                self.result = result
+            def __str__(self):
+                return 'DoneWithThisFrameFloat(%s)' % (self.result,)
+
         class ExitFrameWithExceptionRef(JitException):
             def __init__(self, cpu, value):
                 assert lltype.typeOf(value) == cpu.ts.BASETYPE
@@ -400,7 +433,7 @@ class WarmRunnerDesc:
             def __str__(self):
                 return 'ExitFrameWithExceptionRef(%s)' % (self.value,)
 
-        class ContinueRunningNormally(JitException):
+        class ContinueRunningNormally(ContinueRunningNormallyBase):
             def __init__(self, argboxes):
                 # accepts boxes as argument, but unpacks them immediately
                 # before we raise the exception -- the boxes' values will
@@ -416,11 +449,13 @@ class WarmRunnerDesc:
         self.DoneWithThisFrameVoid = DoneWithThisFrameVoid
         self.DoneWithThisFrameInt = DoneWithThisFrameInt
         self.DoneWithThisFrameRef = DoneWithThisFrameRef
+        self.DoneWithThisFrameFloat = DoneWithThisFrameFloat
         self.ExitFrameWithExceptionRef = ExitFrameWithExceptionRef
         self.ContinueRunningNormally = ContinueRunningNormally
         self.metainterp_sd.DoneWithThisFrameVoid = DoneWithThisFrameVoid
         self.metainterp_sd.DoneWithThisFrameInt = DoneWithThisFrameInt
         self.metainterp_sd.DoneWithThisFrameRef = DoneWithThisFrameRef
+        self.metainterp_sd.DoneWithThisFrameFloat = DoneWithThisFrameFloat
         self.metainterp_sd.ExitFrameWithExceptionRef = ExitFrameWithExceptionRef
         self.metainterp_sd.ContinueRunningNormally = ContinueRunningNormally
         rtyper = self.translator.rtyper
@@ -447,6 +482,9 @@ class WarmRunnerDesc:
                 except DoneWithThisFrameRef, e:
                     assert result_kind == 'ref'
                     return ts.cast_from_ref(RESULT, e.result)
+                except DoneWithThisFrameFloat, e:
+                    assert result_kind == 'float'
+                    return e.result
                 except ExitFrameWithExceptionRef, e:
                     value = ts.cast_to_baseclass(e.value)
                     if not we_are_translated():
@@ -510,7 +548,7 @@ class WarmRunnerDesc:
             op.args[:3] = [closures[funcname]]
 
 
-def find_all_graphs(portal, policy, translator):
+def find_all_graphs(portal, policy, translator, supports_floats):
     from pypy.translator.simplify import get_graph
     all_graphs = [portal]
     seen = set([portal])
@@ -520,13 +558,13 @@ def find_all_graphs(portal, policy, translator):
         for _, op in top_graph.iterblockops():
             if op.opname not in ("direct_call", "indirect_call", "oosend"):
                 continue
-            kind = policy.guess_call_kind(op)
+            kind = policy.guess_call_kind(op, supports_floats)
             if kind != "regular":
                 continue
-            for graph in policy.graphs_from(op):
+            for graph in policy.graphs_from(op, supports_floats):
                 if graph in seen:
                     continue
-                if policy.look_inside_graph(graph):
+                if policy.look_inside_graph(graph, supports_floats):
                     todo.append(graph)
                     all_graphs.append(graph)
                     seen.add(graph)
@@ -552,6 +590,8 @@ def unwrap(TYPE, box):
         return box.getref(TYPE)
     if isinstance(TYPE, ootype.OOType):
         return box.getref(TYPE)
+    if TYPE == lltype.Float:
+        return box.getfloat()
     else:
         return lltype.cast_primitive(TYPE, box.getint())
 unwrap._annspecialcase_ = 'specialize:arg(0)'
@@ -574,6 +614,11 @@ def wrap(cpu, value, in_const_box=False):
             return history.ConstObj(value)
         else:
             return history.BoxObj(value)
+    elif isinstance(value, float):
+        if in_const_box:
+            return history.ConstFloat(value)
+        else:
+            return history.BoxFloat(value)
     else:
         value = intmask(value)
     if in_const_box:
@@ -683,6 +728,9 @@ def make_state_class(warmrunnerdesc):
         elif typecode == 'int':
             intvalue = lltype.cast_primitive(lltype.Signed, value)
             cpu.set_future_value_int(j, intvalue)
+        elif typecode == 'float':
+            assert isinstance(value, float)
+            cpu.set_future_value_float(j, value)
         else:
             assert False
     set_future_value._annspecialcase_ = 'specialize:ll_and_arg(2)'
@@ -703,6 +751,12 @@ def make_state_class(warmrunnerdesc):
 
         def set_param_trace_eagerness(self, value):
             self.trace_eagerness = value
+
+        def set_param_trace_limit(self, value):
+            self.trace_limit = value
+
+        def set_param_inlining(self, value):
+            self.inlining = value
 
         def set_param_hash_bits(self, value):
             if value < 1:
@@ -748,7 +802,13 @@ def make_state_class(warmrunnerdesc):
                     self.create_tables_now()
                     return
                 metainterp = MetaInterp(metainterp_sd)
-                loop = metainterp.compile_and_run_once(*args)
+                try:
+                    loop = metainterp.compile_and_run_once(*args)
+                except warmrunnerdesc.ContinueRunningNormally:
+                    # the trace got too long, reset the counter
+                    self.mccounters[argshash] = 0
+                    raise
+
             else:
                 # machine code was already compiled for these greenargs
                 # (or we have a hash collision)
@@ -836,6 +896,9 @@ def make_state_class(warmrunnerdesc):
         def must_compile_from_failure(self, key):
             key.counter += 1
             return key.counter >= self.trace_eagerness
+
+        def reset_counter_from_failure(self, key):
+            key.counter = 0
 
         def attach_unoptimized_bridge_from_interp(self, greenkey, bridge):
             greenargs = self.unwrap_greenkey(greenkey)

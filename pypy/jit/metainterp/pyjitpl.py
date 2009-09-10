@@ -227,6 +227,9 @@ class MIFrame(object):
                     'int_and', 'int_or', 'int_xor',
                     'int_rshift', 'int_lshift', 'uint_rshift',
                     'uint_lt', 'uint_le', 'uint_gt', 'uint_ge',
+                    'float_add', 'float_sub', 'float_mul', 'float_truediv',
+                    'float_lt', 'float_le', 'float_eq',
+                    'float_ne', 'float_gt', 'float_ge',
                     ]:
         exec py.code.Source('''
             @arguments("box", "box")
@@ -243,7 +246,9 @@ class MIFrame(object):
         ''' % (_opimpl, _opimpl.upper())).compile()
 
     for _opimpl in ['int_is_true', 'int_neg', 'int_invert', 'bool_not',
-                    'cast_ptr_to_int', 'cast_int_to_ptr',
+                    'cast_ptr_to_int', 'cast_float_to_int',
+                    'cast_int_to_float', 'float_neg', 'float_abs',
+                    'float_is_true',
                     ]:
         exec py.code.Source('''
             @arguments("box")
@@ -470,9 +475,8 @@ class MIFrame(object):
     def opimpl_ptr_iszero(self, box):
         self.execute(rop.OOISNULL, [box])
 
-    @arguments("box")
-    def opimpl_oononnull(self, box):
-        self.execute(rop.OONONNULL, [box])
+    opimpl_oononnull = opimpl_ptr_nonzero
+    opimpl_ooisnull = opimpl_ptr_iszero
 
     @arguments("box", "box")
     def opimpl_ptr_eq(self, box1, box2):
@@ -483,6 +487,7 @@ class MIFrame(object):
         self.execute(rop.OOISNOT, [box1, box2])
 
     opimpl_oois = opimpl_ptr_eq
+    opimpl_ooisnot = opimpl_ptr_ne
 
     @arguments("box", "descr")
     def opimpl_getfield_gc(self, box, fielddesc):
@@ -638,14 +643,27 @@ class MIFrame(object):
     def opimpl_residual_call(self, calldescr, varargs):
         return self.execute_with_exc(rop.CALL, varargs, descr=calldescr)
 
+    @arguments("varargs")
+    def opimpl_recursion_leave_prep(self, varargs):
+        warmrunnerstate = self.metainterp.staticdata.state
+        if warmrunnerstate.inlining:
+            num_green_args = self.metainterp.staticdata.num_green_args
+            greenkey = varargs[:num_green_args]
+            if warmrunnerstate.can_inline_callable(greenkey):
+                return False
+        leave_code = self.metainterp.staticdata.leave_code
+        if leave_code is None:
+            return False
+        return self.perform_call(leave_code, varargs)
+        
     @arguments("descr", "varargs")
     def opimpl_recursive_call(self, calldescr, varargs):
-        if self.metainterp.staticdata.options.inline:
+        warmrunnerstate = self.metainterp.staticdata.state
+        if warmrunnerstate.inlining:
             num_green_args = self.metainterp.staticdata.num_green_args
             portal_code = self.metainterp.staticdata.portal_code
             greenkey = varargs[1:num_green_args + 1]
-            if self.metainterp.staticdata.state.can_inline_callable(greenkey):
-                self.metainterp.in_recursion += 1
+            if warmrunnerstate.can_inline_callable(greenkey):
                 return self.perform_call(portal_code, varargs[1:])
         return self.execute_with_exc(rop.CALL, varargs, descr=calldescr)
 
@@ -1000,7 +1018,8 @@ class MetaInterpStaticData(object):
     virtualizable_info = None
 
     def __init__(self, portal_graph, graphs, cpu, stats, options,
-                 optimizer=None, profile=None, warmrunnerdesc=None):
+                 optimizer=None, profile=None, warmrunnerdesc=None,
+                 leave_graph=None):
         self.portal_graph = portal_graph
         self.cpu = cpu
         self.stats = stats
@@ -1033,6 +1052,8 @@ class MetaInterpStaticData(object):
         backendmodule = backendmodule.split('.')[-2]
         self.jit_starting_line = 'JIT starting (%s, %s)' % (optmodule,
                                                             backendmodule)
+
+        self.leave_graph = leave_graph
 
     def _freeze_(self):
         return True
@@ -1070,6 +1091,11 @@ class MetaInterpStaticData(object):
         self._codewriter = codewriter.CodeWriter(self, policy)
         self.portal_code = self._codewriter.make_portal_bytecode(
             self.portal_graph)
+        self.leave_code = None
+        if self.leave_graph:
+            self.leave_code = self._codewriter.make_one_bytecode(
+                                                    (self.leave_graph, None),
+                                                    False)
         self._class_sizes = self._codewriter.class_sizes
 
     # ---------- construction-time interface ----------
@@ -1123,14 +1149,20 @@ class MetaInterp(object):
     def newframe(self, jitcode):
         if not we_are_translated():
             self._debug_history.append(['enter', jitcode, None])
+        if jitcode is self.staticdata.portal_code:
+            self.in_recursion += 1
         f = MIFrame(self, jitcode)
         self.framestack.append(f)
         return f
 
-    def finishframe(self, resultbox):
+    def popframe(self):
         frame = self.framestack.pop()
         if frame.jitcode is self.staticdata.portal_code:
             self.in_recursion -= 1
+        return frame
+
+    def finishframe(self, resultbox):
+        frame = self.popframe()
         if not we_are_translated():
             self._debug_history.append(['leave', frame.jitcode, None])
         if self.framestack:
@@ -1148,6 +1180,8 @@ class MetaInterp(object):
                 raise sd.DoneWithThisFrameInt(resultbox.getint())
             elif sd.result_type == 'ref':
                 raise sd.DoneWithThisFrameRef(self.cpu, resultbox.getref_base())
+            elif sd.result_type == 'float':
+                raise sd.DoneWithThisFrameFloat(resultbox.getfloat())
             else:
                 assert False
 
@@ -1171,10 +1205,28 @@ class MetaInterp(object):
                 return True
             if not we_are_translated():
                 self._debug_history.append(['leave_exc', frame.jitcode, None])
-            self.framestack.pop()
+            self.popframe()
         if not self.is_blackholing():
             self.compile_exit_frame_with_exception(excvaluebox)
         raise self.staticdata.ExitFrameWithExceptionRef(self.cpu, excvaluebox.getref_base())
+
+    def check_recursion_invariant(self):
+        in_recursion = -1
+        for frame in self.framestack:
+            jitcode = frame.jitcode
+            if jitcode is self.staticdata.portal_code:
+                in_recursion += 1
+        if in_recursion != self.in_recursion:
+            print "in_recursion problem!!!"
+            print in_recursion, self.in_recursion
+            for frame in self.framestack:
+                jitcode = frame.jitcode
+                if jitcode is self.staticdata.portal_code:
+                    print "P",
+                else:
+                    print " ",
+                print jitcode.name
+            raise Exception
 
     def raise_overflow_error(self):
         etype, evalue = self.cpu.get_overflow_error()
@@ -1189,6 +1241,7 @@ class MetaInterp(object):
             self.cpu.ts.get_exc_value_box(evalue))
 
     def create_empty_history(self):
+        warmrunnerstate = self.staticdata.state
         self.history = history.History(self.cpu)
         if self.staticdata.stats is not None:
             self.staticdata.stats.history = self.history
@@ -1238,6 +1291,19 @@ class MetaInterp(object):
             op.pc = self.framestack[-1].pc
             op.name = self.framestack[-1].jitcode.name
 
+    def switch_to_blackhole_if_trace_too_long(self):
+        if not self.is_blackholing():
+            warmrunnerstate = self.staticdata.state
+            if len(self.history.operations) > warmrunnerstate.trace_limit:
+                self.history = history.BlackHole(self.cpu)
+                if not we_are_translated():
+                    self.staticdata.stats.aborted_count += 1
+                    history.log.event('ABORTING TRACING' + self.history.extratext)
+                elif DEBUG:
+                    debug_print('~~~ ABORTING TRACING', self.history.extratext)
+                self.staticdata.profiler.end_tracing()
+                self.staticdata.profiler.start_blackhole()
+
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
         # a ContinueRunningNormally, or a GenerateMergePoint exception.
@@ -1249,6 +1315,9 @@ class MetaInterp(object):
         try:
             while True:
                 self.framestack[-1].run_one_step()
+                self.switch_to_blackhole_if_trace_too_long()
+                if not we_are_translated():
+                    self.check_recursion_invariant()
         finally:
             if self.is_blackholing():
                 self.staticdata.profiler.end_blackhole()
@@ -1285,7 +1354,8 @@ class MetaInterp(object):
             return self.designate_target_loop(gmp)
 
     def handle_guard_failure(self, exec_result, key):
-        self.initialize_state_from_guard_failure(exec_result)
+        from pypy.jit.metainterp.warmspot import ContinueRunningNormallyBase
+        resumedescr = self.initialize_state_from_guard_failure(exec_result)
         assert isinstance(key, compile.ResumeGuardDescr)
         top_history = key.find_toplevel_history()
         source_loop = top_history.source_link
@@ -1295,12 +1365,18 @@ class MetaInterp(object):
         self.resumekey = key
         self.seen_can_enter_jit = False
         guard_op = key.get_guard_op()
+        started_as_blackhole = self.is_blackholing()
         try:
             self.prepare_resume_from_failure(guard_op.opnum)
             self.interpret()
             assert False, "should always raise"
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
+        except ContinueRunningNormallyBase:
+            if not started_as_blackhole:
+                warmrunnerstate = self.staticdata.state
+                warmrunnerstate.reset_counter_from_failure(resumedescr)
+            raise
 
     def forget_consts(self, boxes, startindex=0):
         for i in range(startindex, len(boxes)):
@@ -1456,6 +1532,9 @@ class MetaInterp(object):
         elif sd.result_type == 'ref':
             exits = [exitbox]
             loops = sd.cpu.ts.loops_done_with_this_frame_ref
+        elif sd.result_type == 'float':
+            exits = [exitbox]
+            loops = compile.loops_done_with_this_frame_float
         else:
             assert False
         self.history.record(rop.JUMP, exits, None)
@@ -1489,7 +1568,7 @@ class MetaInterp(object):
                                         *args[1:])
 
     def initialize_state_from_start(self, *args):
-        self.in_recursion = 0
+        self.in_recursion = -1 # always one portal around
         self.staticdata._setup_once()
         self.staticdata.profiler.start_tracing()
         self.create_empty_history()
@@ -1506,7 +1585,7 @@ class MetaInterp(object):
 
     def initialize_state_from_guard_failure(self, guard_failure):
         # guard failure: rebuild a complete MIFrame stack
-        self.in_recursion = 0
+        self.in_recursion = -1 # always one portal around
         resumedescr = guard_failure.descr
         assert isinstance(resumedescr, compile.ResumeGuardDescr)
         warmrunnerstate = self.staticdata.state
@@ -1532,6 +1611,7 @@ class MetaInterp(object):
             # the BlackHole is invalid because it doesn't start with
             # guard_failure.key.guard_op.suboperations, but that's fine
         self.rebuild_state_after_failure(resumedescr, guard_failure.args)
+        return resumedescr
 
     def initialize_virtualizable(self, original_boxes):
         vinfo = self.staticdata.virtualizable_info
@@ -1632,10 +1712,7 @@ class MetaInterp(object):
             jitcode, pc, exception_target = resumereader.consume_frame_info()
             env = resumereader.consume_boxes()
             f = self.newframe(jitcode)
-            if jitcode is self.staticdata.portal_code:
-                self.in_recursion += 1
             f.setup_resume_at_op(pc, exception_target, env)
-        self.in_recursion -= 1 # always one portal around
 
     def check_synchronized_virtualizable(self):
         if not we_are_translated():

@@ -16,13 +16,16 @@ py.log.setconsumer('compiler', ansi_log)
 
 # ____________________________________________________________
 
-INT = 'i'
-REF = 'r'
+INT   = 'i'
+REF   = 'r'
+FLOAT = 'f'
 
-def getkind(TYPE):
+def getkind(TYPE, supports_floats=True):
     if TYPE is lltype.Void:
         return "void"
     elif isinstance(TYPE, lltype.Primitive):
+        if TYPE is lltype.Float and supports_floats:
+            return 'float'
         if TYPE in (lltype.Float, lltype.SingleFloat):
             raise NotImplementedError("type %s not supported" % TYPE)
         # XXX fix this for oo...
@@ -68,7 +71,7 @@ class ReprRPython:
         self.seen = {}
     def repr_rpython(self, box, typechars):
         n = self.seen.setdefault(box, len(self.seen))
-        return '%s/%s%d' % (box.get_(), typechars, n)
+        return '%s/%s%d' % (box._get_hash_(), typechars, n)
 
 repr_rpython = ReprRPython().repr_rpython
 
@@ -79,6 +82,9 @@ class AbstractValue(object):
     def getint(self):
         raise NotImplementedError
 
+    def getfloat(self):
+        raise NotImplementedError
+
     def getref_base(self):
         raise NotImplementedError
 
@@ -86,7 +92,7 @@ class AbstractValue(object):
         raise NotImplementedError
     getref._annspecialcase_ = 'specialize:arg(1)'
 
-    def get_(self):
+    def _get_hash_(self):
         raise NotImplementedError
 
     def nonnull(self):
@@ -157,6 +163,8 @@ class Const(AbstractValue):
             return ConstInt(intval)
         elif kind == "ref":
             return cpu.ts.new_ConstRef(x)
+        elif kind == "float":
+            return ConstFloat(x)
         else:
             raise NotImplementedError(kind)
 
@@ -212,7 +220,7 @@ class ConstInt(Const):
     def getaddr(self, cpu):
         return cpu.cast_int_to_adr(self.value)
 
-    def get_(self):
+    def _get_hash_(self):
         return self.value
 
     def nonnull(self):
@@ -258,7 +266,7 @@ class ConstAddr(Const):       # only for constants built before translation
     def getaddr(self, cpu):
         return self.value
 
-    def get_(self):
+    def _get_hash_(self):
         return llmemory.cast_adr_to_int(self.value)
 
     def nonnull(self):
@@ -275,6 +283,38 @@ class ConstAddr(Const):       # only for constants built before translation
 
     def repr_rpython(self):
         return repr_rpython(self, 'ca')
+
+class ConstFloat(Const):
+    type = FLOAT
+    value = 0.0
+    _attrs_ = ('value',)
+
+    def __init__(self, floatval):
+        assert isinstance(floatval, float)
+        self.value = floatval
+
+    def clonebox(self):
+        return BoxFloat(self.value)
+
+    nonconstbox = clonebox
+
+    def getfloat(self):
+        return self.value
+
+    def _get_hash_(self):
+        return hash(self.value)
+
+    def set_future_value(self, cpu, j):
+        cpu.set_future_value_float(j, self.getfloat())
+
+    def equals(self, other):
+        return self.value == other.getfloat()
+
+    def _getrepr_(self):
+        return self.value
+
+    def repr_rpython(self):
+        return repr_rpython(self, 'cf')
 
 class ConstPtr(Const):
     type = REF
@@ -297,7 +337,7 @@ class ConstPtr(Const):
         return lltype.cast_opaque_ptr(PTR, self.getref_base())
     getref._annspecialcase_ = 'specialize:arg(1)'
 
-    def get_(self):
+    def _get_hash_(self):
         return lltype.cast_ptr_to_int(self.value)
 
     def getaddr(self, cpu):
@@ -343,9 +383,9 @@ class ConstObj(Const):
         return ootype.cast_from_object(OBJ, self.getref_base())
     getref._annspecialcase_ = 'specialize:arg(1)'
 
-    def get_(self):
+    def _get_hash_(self):
         if self.value:
-            return ootype.ooidentityhash(self.value) # XXX: check me
+            return ootype.ooidentityhash(self.value)
         else:
             return 0
 
@@ -390,6 +430,8 @@ class Box(AbstractValue):
             # XXX add ootype support?
             ptrval = lltype.cast_opaque_ptr(llmemory.GCREF, x)
             return BoxPtr(ptrval)
+        elif kind == "float":
+            return BoxFloat(x)
         else:
             raise NotImplementedError(kind)
 
@@ -448,7 +490,7 @@ class BoxInt(Box):
     def getaddr(self, cpu):
         return cpu.cast_int_to_adr(self.value)
 
-    def get_(self):
+    def _get_hash_(self):
         return self.value
 
     def nonnull(self):
@@ -467,6 +509,40 @@ class BoxInt(Box):
         self.changevalue_int(srcbox.getint())
 
     changevalue_int = __init__
+
+class BoxFloat(Box):
+    type = FLOAT
+    _attrs_ = ('value',)
+    
+    def __init__(self, floatval=0.0):
+        assert isinstance(floatval, float)
+        self.value = floatval
+
+    def clonebox(self):
+        return BoxFloat(self.value)
+
+    def constbox(self):
+        return ConstFloat(self.value)
+
+    def getfloat(self):
+        return self.value
+
+    def _get_hash_(self):
+        return hash(self.value)
+
+    def set_future_value(self, cpu, j):
+        cpu.set_future_value_float(j, self.value)
+
+    def _getrepr_(self):
+        return self.value
+
+    def repr_rpython(self):
+        return repr_rpython(self, 'bf')
+
+    def changevalue_box(self, srcbox):
+        self.changevalue_float(srcbox.getfloat())
+
+    changevalue_float = __init__
 
 class BoxPtr(Box):
     type = REF
@@ -492,7 +568,7 @@ class BoxPtr(Box):
     def getaddr(self, cpu):
         return llmemory.cast_ptr_to_adr(self.value)
 
-    def get_(self):
+    def _get_hash_(self):
         return lltype.cast_ptr_to_int(self.value)
 
     def nonnull(self):
@@ -534,9 +610,9 @@ class BoxObj(Box):
         return ootype.cast_from_object(OBJ, self.getref_base())
     getref._annspecialcase_ = 'specialize:arg(1)'
 
-    def get_(self):
+    def _get_hash_(self):
         if self.value:
-            return ootype.ooidentityhash(self.value) # XXX: check me
+            return ootype.ooidentityhash(self.value)
         else:
             return 0
 
@@ -577,7 +653,7 @@ def dc_hash(c):
     if isinstance(c.value, Symbolic):
         return id(c.value)
     try:
-        return c.get_()
+        return c._get_hash_()
     except lltype.DelayedPointer:
         return -2      # xxx risk of changing hash...
 
@@ -712,6 +788,7 @@ class Stats(object):
 
     compiled_count = 0
     enter_count = 0
+    aborted_count = 0
 
     def __init__(self):
         self.loops = []
@@ -777,10 +854,9 @@ class CrashInJIT(Exception):
 
 class Options:
     logger_noopt = None
-    def __init__(self, specialize=True, listops=False, inline=False):
+    def __init__(self, specialize=True, listops=False):
         self.specialize = specialize
         self.listops = listops
-        self.inline = inline
     def _freeze_(self):
         return True
 

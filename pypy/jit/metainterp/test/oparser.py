@@ -97,6 +97,8 @@ class OpParser(object):
         return vars
 
     def getvar(self, arg):
+        if not arg:
+            return ConstInt(0)
         try:
             return ConstInt(int(arg))
         except ValueError:
@@ -145,7 +147,10 @@ class OpParser(object):
         argspec = line[num + 1:endnum]
         if not argspec.strip():
             return opnum, [], None
-        allargs = argspec.split(",")
+        if opname == 'debug_merge_point':
+            allargs = [argspec]
+        else:
+            allargs = argspec.split(",")
         args = []
         descr = None
         poss_descr = allargs[-1].strip()
@@ -195,8 +200,15 @@ class OpParser(object):
         ops = []
         newlines = []
         for line in lines:
-            if '#' in line:
-                line = line[:line.index('#')]    # remove comment
+            # for simplicity comments are not allowed on
+            # debug_merge_point lines
+            if '#' in line and 'debug_merge_point(' not in line:
+                if line.lstrip()[0] == '#': # comment only
+                    continue
+                comm = line.rfind('#')
+                rpar = line.find(')') # assume there's a op(...)
+                if comm > rpar:
+                    line = line[:comm].rstrip()
             if not line.strip():
                 continue  # a comment or empty line
             newlines.append(line)

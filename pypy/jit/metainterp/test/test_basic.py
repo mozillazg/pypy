@@ -1,4 +1,5 @@
 import py
+import sys
 from pypy.rlib.jit import JitDriver, we_are_jitted, hint, dont_look_inside
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
@@ -49,6 +50,8 @@ class JitMixin:
         assert get_stats().enter_count <= count
     def check_jumps(self, maxcount):
         assert get_stats().exec_jumps <= maxcount
+    def check_aborted_count(self, maxcount):
+        assert get_stats().aborted_count == maxcount
 
     def meta_interp(self, *args, **kwds):
         kwds['CPUClass'] = self.CPUClass
@@ -70,6 +73,8 @@ class JitMixin:
         class FakeWarmRunnerDesc:
             def attach_unoptimized_bridge_from_interp(self, greenkey, newloop):
                 pass
+
+            trace_limit = sys.maxint
         
         if policy is None:
             policy = JitPolicy()
@@ -89,6 +94,7 @@ class JitMixin:
         metainterp.staticdata.state = FakeWarmRunnerDesc()
         metainterp.staticdata.DoneWithThisFrameInt = DoneWithThisFrame
         metainterp.staticdata.DoneWithThisFrameRef = DoneWithThisFrameRef
+        metainterp.staticdata.DoneWithThisFrameFloat = DoneWithThisFrame
         self.metainterp = metainterp
         try:
             metainterp.compile_and_run_once(*args)
@@ -401,6 +407,24 @@ class BasicTests:
         res = self.interp_operations(f, [42])
         assert res == 210
         self.check_history_(getfield_gc=0)
+
+    def test_setfield_bool(self):
+        class A:
+            def __init__(self):
+                self.flag = True
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'obj'])
+        def f(n):
+            obj = A()
+            res = False
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, obj=obj)
+                myjitdriver.jit_merge_point(n=n, obj=obj)
+                obj.flag = False
+                n -= 1
+            return res
+        res = self.meta_interp(f, [7])
+        assert type(res) == bool
+        assert not res
 
     def test_switch_dict(self):
         def f(x):
@@ -915,16 +939,21 @@ class BaseLLtypeTests(BasicTests):
         lltype.free(x, flavor='raw')
 
     def test_casts(self):
+        if not self.basic:
+            py.test.skip("test written in a style that "
+                         "means it's frontend only")
         from pypy.rpython.lltypesystem import lltype, llmemory
         
         TP = lltype.GcStruct('x')
         def f(p):
             n = lltype.cast_ptr_to_int(p)
-            return lltype.cast_int_to_ptr(lltype.Ptr(TP), n)
+            return n
 
         x = lltype.malloc(TP)
-        expected = lltype.cast_opaque_ptr(llmemory.GCREF, x)
-        assert self.interp_operations(f, [x]) == expected
+        res = self.interp_operations(f, [x])
+        expected = self.metainterp.cpu.do_cast_ptr_to_int(
+            [history.BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, x))]).value
+        assert res == expected
 
 class TestLLtype(BaseLLtypeTests, LLJitMixin):
     pass

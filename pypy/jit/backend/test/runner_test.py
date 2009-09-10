@@ -1,8 +1,8 @@
 
 import py, sys, random
 from pypy.jit.metainterp.history import (BoxInt, Box, BoxPtr, TreeLoop,
-                                         ConstInt, ConstPtr, BoxObj,
-                                         ConstObj)
+                                         ConstInt, ConstPtr, BoxObj, Const,
+                                         ConstObj, BoxFloat, ConstFloat)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
@@ -26,6 +26,11 @@ class Runner(object):
             elif isinstance(box, (BoxPtr, BoxObj)):
                 self.cpu.set_future_value_ref(j, box.getref_base())
                 j += 1
+            elif isinstance(box, BoxFloat):
+                self.cpu.set_future_value_float(j, box.getfloat())
+                j += 1
+            else:
+                assert isinstance(box, Const)
         res = self.cpu.execute_operations(loop)
         if res is loop.operations[-1]:
             self.guard_failed = False
@@ -35,6 +40,8 @@ class Runner(object):
             return BoxInt(self.cpu.get_latest_value_int(0))
         elif result_type == 'ref':
             return BoxPtr(self.cpu.get_latest_value_ref(0))
+        elif result_type == 'float':
+            return BoxFloat(self.cpu.get_latest_value_float(0))
         elif result_type == 'void':
             return None
         else:
@@ -48,6 +55,8 @@ class Runner(object):
             result = BoxInt()
         elif result_type == 'ref':
             result = BoxPtr()
+        elif result_type == 'float':
+            result = BoxFloat()
         else:
             raise ValueError(result_type)
         if result is None:
@@ -209,6 +218,19 @@ class BaseBackendTest(Runner):
                 res = self.execute_operation(opnum, [BoxInt(x)],
                                              'int')
                 assert res.value == y
+
+    def test_float_operations(self):
+        from pypy.jit.metainterp.test.test_executor import get_float_tests
+        for opnum, boxargs, rettype, retvalue in get_float_tests(self.cpu):
+            if len(boxargs) == 2:
+                args_variants = [(boxargs[0], boxargs[1]),
+                                 (boxargs[0], boxargs[1].constbox()),
+                                 (boxargs[0].constbox(), boxargs[1])]
+            else:
+                args_variants = [boxargs]
+            for argboxes in args_variants:
+                res = self.execute_operation(opnum, argboxes, rettype)
+                assert res.value == retvalue
 
     def test_ovf_operations(self, reversed=False):
         minint = -sys.maxint-1
@@ -620,14 +642,10 @@ class LLtypeBackendTest(BaseBackendTest):
         x = lltype.cast_opaque_ptr(llmemory.GCREF, x)
         res = self.execute_operation(rop.CAST_PTR_TO_INT,
                                      [BoxPtr(x)],  'int').value
-        res2 = self.execute_operation(rop.CAST_INT_TO_PTR,
-                                      [BoxInt(res)], 'ref').value
-        x = lltype.cast_opaque_ptr(llmemory.GCREF, x)
+        assert res == self.cpu.cast_gcref_to_int(x)
         res = self.execute_operation(rop.CAST_PTR_TO_INT,
                                      [ConstPtr(x)],  'int').value
-        res2 = self.execute_operation(rop.CAST_INT_TO_PTR,
-                                      [ConstInt(res)], 'ref').value
-        assert res2 == x
+        assert res == self.cpu.cast_gcref_to_int(x)
 
     def test_ooops_non_gc(self):
         x = lltype.malloc(lltype.Struct('x'), flavor='raw')
@@ -851,9 +869,7 @@ class LLtypeBackendTest(BaseBackendTest):
         x = cpu.do_newstr([BoxInt(5)])
         y = cpu.do_cast_ptr_to_int([x])
         assert isinstance(y, BoxInt)
-        z = cpu.do_cast_int_to_ptr([y])
-        assert isinstance(z, BoxPtr)
-        assert z.value == x.value
+        assert y.value == cpu.cast_gcref_to_int(x.value)
 
     def test_sorting_of_fields(self):
         S = self.S

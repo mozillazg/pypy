@@ -8,7 +8,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.jit.metainterp import history
-from pypy.jit.metainterp.history import REF
+from pypy.jit.metainterp.history import REF, INT, FLOAT
 from pypy.jit.metainterp.warmspot import unwrap
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.backend import model
@@ -74,6 +74,7 @@ history.TreeLoop._compiled_version = lltype.nullptr(llimpl.COMPILEDLOOP.TO)
 
 
 class BaseCPU(model.AbstractCPU):
+    supports_floats = True
 
     def __init__(self, rtyper, stats=None, translate_support_code=False,
                  annmixlevel=None, gcdescr=None):
@@ -118,6 +119,8 @@ class BaseCPU(model.AbstractCPU):
             elif isinstance(box, self.ts.BoxRef):
                 TYPE = self.ts.BASETYPE
                 var2index[box] = llimpl.compile_start_ref_var(c, TYPE)
+            elif isinstance(box, history.BoxFloat):
+                var2index[box] = llimpl.compile_start_float_var(c)
             else:
                 raise Exception("box is: %r" % (box,))
         self._compile_branch(c, loop.operations, var2index)
@@ -144,6 +147,8 @@ class BaseCPU(model.AbstractCPU):
                     llimpl.compile_add_ref_const(c, x.value, self.ts.BASETYPE)
                 elif isinstance(x, history.ConstAddr):
                     llimpl.compile_add_int_const(c, x.getint())
+                elif isinstance(x, history.ConstFloat):
+                    llimpl.compile_add_float_const(c, x.value)
                 else:
                     raise Exception("%s args contain: %r" % (op.getopname(),
                                                              x))
@@ -156,6 +161,8 @@ class BaseCPU(model.AbstractCPU):
                     var2index[x] = llimpl.compile_add_int_result(c)
                 elif isinstance(x, self.ts.BoxRef):
                     var2index[x] = llimpl.compile_add_ref_result(c, self.ts.BASETYPE)
+                elif isinstance(x, history.BoxFloat):
+                    var2index[x] = llimpl.compile_add_float_result(c)
                 else:
                     raise Exception("%s.result contain: %r" % (op.getopname(),
                                                                x))
@@ -186,11 +193,17 @@ class BaseCPU(model.AbstractCPU):
     def set_future_value_ref(self, index, objvalue):
         llimpl.set_future_value_ref(index, objvalue)
 
+    def set_future_value_float(self, index, floatvalue):
+        llimpl.set_future_value_float(index, floatvalue)
+
     def get_latest_value_int(self, index):
         return llimpl.frame_int_getvalue(self.latest_frame, index)
 
     def get_latest_value_ref(self, index):
         return llimpl.frame_ptr_getvalue(self.latest_frame, index)
+
+    def get_latest_value_float(self, index):
+        return llimpl.frame_float_getvalue(self.latest_frame, index)
 
     # ----------
 
@@ -227,6 +240,9 @@ class BaseCPU(model.AbstractCPU):
 
     def cast_int_to_adr(self, int):
         return llimpl.cast_int_to_adr(self.memo_cast, int)
+
+    def cast_gcref_to_int(self, gcref):
+        return self.cast_adr_to_int(llmemory.cast_ptr_to_adr(gcref))
 
 
 
@@ -299,9 +315,14 @@ class LLtypeCPU(BaseCPU):
         index = args[1].getint()
         if arraydescr.typeinfo == REF:
             return history.BoxPtr(llimpl.do_getarrayitem_gc_ptr(array, index))
-        else:
+        elif arraydescr.typeinfo == INT:
             return history.BoxInt(llimpl.do_getarrayitem_gc_int(array, index,
                                                                self.memo_cast))
+        elif arraydescr.typeinfo == FLOAT:
+            return history.BoxFloat(llimpl.do_getarrayitem_gc_float(array,
+                                                                    index))
+        else:
+            raise NotImplementedError
 
     def do_getfield_gc(self, args, fielddescr):
         assert isinstance(fielddescr, Descr)
@@ -309,10 +330,16 @@ class LLtypeCPU(BaseCPU):
         if fielddescr.typeinfo == REF:
             return history.BoxPtr(llimpl.do_getfield_gc_ptr(struct,
                                                             fielddescr.ofs))
-        else:
+        elif fielddescr.typeinfo == INT:
             return history.BoxInt(llimpl.do_getfield_gc_int(struct,
                                                             fielddescr.ofs,
                                                             self.memo_cast))
+        elif fielddescr.typeinfo == FLOAT:
+            return history.BoxFloat(llimpl.do_getfield_gc_float(struct,
+                                                            fielddescr.ofs))
+        else:
+            raise NotImplementedError
+
     def do_getfield_raw(self, args, fielddescr):
         assert isinstance(fielddescr, Descr)
         struct = self.cast_int_to_adr(args[0].getint())
@@ -320,10 +347,16 @@ class LLtypeCPU(BaseCPU):
             return history.BoxPtr(llimpl.do_getfield_raw_ptr(struct,
                                                              fielddescr.ofs,
                                                              self.memo_cast))
-        else:
+        elif fielddescr.typeinfo == INT:
             return history.BoxInt(llimpl.do_getfield_raw_int(struct,
                                                              fielddescr.ofs,
                                                              self.memo_cast))
+        elif fielddescr.typeinfo == FLOAT:
+            return history.BoxFloat(llimpl.do_getfield_raw_float(struct,
+                                                             fielddescr.ofs,
+                                                             self.memo_cast))
+        else:
+            raise NotImplementedError
 
     def do_new(self, args, size):
         assert isinstance(size, Descr)
@@ -350,10 +383,15 @@ class LLtypeCPU(BaseCPU):
         if arraydescr.typeinfo == REF:
             newvalue = args[2].getref_base()
             llimpl.do_setarrayitem_gc_ptr(array, index, newvalue)
-        else:
+        elif arraydescr.typeinfo == INT:
             newvalue = args[2].getint()
             llimpl.do_setarrayitem_gc_int(array, index, newvalue,
                                           self.memo_cast)
+        elif arraydescr.typeinfo == FLOAT:
+            newvalue = args[2].getfloat()
+            llimpl.do_setarrayitem_gc_float(array, index, newvalue)
+        else:
+            raise NotImplementedError
 
     def do_setfield_gc(self, args, fielddescr):
         assert isinstance(fielddescr, Descr)
@@ -361,10 +399,15 @@ class LLtypeCPU(BaseCPU):
         if fielddescr.typeinfo == REF:
             newvalue = args[1].getref_base()
             llimpl.do_setfield_gc_ptr(struct, fielddescr.ofs, newvalue)
-        else:
+        elif fielddescr.typeinfo == INT:
             newvalue = args[1].getint()
             llimpl.do_setfield_gc_int(struct, fielddescr.ofs, newvalue,
                                       self.memo_cast)
+        elif fielddescr.typeinfo == FLOAT:
+            newvalue = args[1].getfloat()
+            llimpl.do_setfield_gc_float(struct, fielddescr.ofs, newvalue)
+        else:
+            raise NotImplementedError
 
     def do_setfield_raw(self, args, fielddescr):
         assert isinstance(fielddescr, Descr)
@@ -373,10 +416,16 @@ class LLtypeCPU(BaseCPU):
             newvalue = args[1].getref_base()
             llimpl.do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue,
                                        self.memo_cast)
-        else:
+        elif fielddescr.typeinfo == INT:
             newvalue = args[1].getint()
             llimpl.do_setfield_raw_int(struct, fielddescr.ofs, newvalue,
                                        self.memo_cast)
+        elif fielddescr.typeinfo == FLOAT:
+            newvalue = args[1].getfloat()
+            llimpl.do_setfield_raw_float(struct, fielddescr.ofs, newvalue,
+                                         self.memo_cast)
+        else:
+            raise NotImplementedError
 
     def do_same_as(self, args, descr=None):
         return args[0].clonebox()
@@ -416,16 +465,14 @@ class LLtypeCPU(BaseCPU):
                 llimpl.do_call_pushint(arg.getint())
         if calldescr.typeinfo == REF:
             return history.BoxPtr(llimpl.do_call_ptr(func, self.memo_cast))
-        elif calldescr.typeinfo == 'i':
+        elif calldescr.typeinfo == INT:
             return history.BoxInt(llimpl.do_call_int(func, self.memo_cast))
-        else:  # calldescr.typeinfo == 'v'  # void
+        elif calldescr.typeinfo == FLOAT:
+            return history.BoxFloat(llimpl.do_call_float(func, self.memo_cast))
+        elif calldescr.typeinfo == 'v':  # void
             llimpl.do_call_void(func, self.memo_cast)
-
-    def do_cast_int_to_ptr(self, args, descr=None):
-        assert descr is None
-        return history.BoxPtr(llimpl.cast_from_int(llmemory.GCREF,
-                                                   args[0].getint(),
-                                                   self.memo_cast))
+        else:
+            raise NotImplementedError
 
     def do_cast_ptr_to_int(self, args, descr=None):
         assert descr is None
@@ -573,6 +620,8 @@ def make_getargs(ARGS):
 def boxresult(RESULT, result):
     if isinstance(RESULT, ootype.OOType):
         return history.BoxObj(ootype.cast_to_object(result))
+    elif RESULT is lltype.Float:
+        return history.BoxFloat(result)
     else:
         return history.BoxInt(lltype.cast_primitive(ootype.Signed, result))
 boxresult._annspecialcase_ = 'specialize:arg(0)'
