@@ -235,14 +235,13 @@ class TestFrameChaining(object):
         def _we_are_jitted(self):
             return self.jitted
 
-
         def _get_some_frame(self):
             if self._some_frame:
                 self._some_frame.look_at()
             return self._some_frame
         def _set_some_frame(self, frame):
-            if frame.virtual_with_base_frame:
-                frame.escaped = True
+            if frame is not None:
+                frame.force()
             self._some_frame = frame
         some_frame = property(_get_some_frame, _set_some_frame)
 
@@ -400,7 +399,6 @@ class TestFrameChaining(object):
         assert ec._extract_back_from_frame(frame) is None
 
         assert frame3.f_back() is frame2
-        # now we should unchain
         ec._unchain(frame3)
         assert ec.some_frame is frame2
         assert ec.framestackdepth == 2
@@ -455,7 +453,6 @@ class TestFrameChaining(object):
         assert ec._extract_back_from_frame(frame3) is frame2
         assert ec._extract_back_from_frame(frame2) is frame
         assert ec._extract_back_from_frame(frame) is None
-        # now we should unchain
 
         assert frame3.f_back() is frame2
         ec._unchain(frame3)
@@ -521,7 +518,6 @@ class TestFrameChaining(object):
         assert ec._extract_back_from_frame(frame3) is frame2
         assert ec._extract_back_from_frame(frame2) is frame
         assert ec._extract_back_from_frame(frame) is None
-        # now we should unchain
 
         assert frame3.f_back() is frame2
         ec._unchain(frame3)
@@ -675,6 +671,7 @@ class TestFrameChaining(object):
         # recursive enter/leave seen by the jit
         frame3 = self.Frame(ec, frame)
         ec._chain(frame3)
+        ec._jit_rechain_frame(frame3)
         ec.jitted = False
         frame3.look_at()
         assert not frame2.escaped
@@ -689,15 +686,15 @@ class TestFrameChaining(object):
 
 
     def test_check_escaping_multi_non_jitted_levels(self):
-        py.test.skip("escapes")
         ec, frame, frame2 = self.enter_two_jitted_levels()
 
         # recursive enter/leave seen by the jit
         frame3 = self.Frame(ec, frame)
         ec._chain(frame3)
+        ec._jit_rechain_frame(frame3)
         ec.jitted = False
 
-        frame3.look_at()
+        assert frame3.escaped
         assert not frame2.escaped
         assert frame3.escaped
 
@@ -717,22 +714,23 @@ class TestFrameChaining(object):
         self.leave_two_jitted_levels(ec, frame, frame2)
 
     def test_check_escaping_jitted_with_two_differen_virtualizables(self):
-        py.test.skip("escapes")
         ec, frame, frame2 = self.enter_two_jitted_levels()
 
         frame3 = self.Frame(ec, frame)
         ec._chain(frame3)
         # frame3 is not inlined, but contains a loop itself, for which code has
         # been generated
+        ec._jit_rechain_frame(frame3)
         ec.virtualizable = frame3
 
         frame3.look_at()
         assert not frame2.escaped
         assert frame3.escaped
 
-        frame4 = self.Frame(ec)
+        frame4 = self.Frame(ec, frame3)
         ec._chain(frame4)
         assert ec.framestackdepth == 4
+        assert not frame4.escaped
 
         ec._unchain(frame4)
         assert frame3.escaped
