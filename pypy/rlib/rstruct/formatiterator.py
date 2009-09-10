@@ -103,6 +103,7 @@ class FmtDesc(object):
     def __init__(self, fmtchar, attrs):
         self.fmtchar = fmtchar
         self.alignment = 1      # by default
+        self.mask = self.alignment - 1
         self.needcount = False  # by default
         self.__dict__.update(attrs)
         self.mask = self.alignment - 1
