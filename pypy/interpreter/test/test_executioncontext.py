@@ -303,6 +303,64 @@ class TestFrameChaining(object):
             self._f_forward = frame
         f_forward = property(_get_f_forward, _set_f_forward)
 
+    def test_f_back_no_jit(self):
+        ec = self.EC()
+        frame = self.Frame(ec)
+        frame2 = self.Frame(ec)
+        frame2.f_back_some = frame
+
+        frame3 = self.Frame(ec)
+        frame3.f_back_some = frame2
+
+        assert frame3.f_back() is frame2
+        assert frame2.f_back() is frame
+        assert frame.f_back() is None
+
+    def test_f_back_jit(self):
+        ec = self.EC()
+        frame = self.Frame(ec) # real frame
+        frame2 = self.Frame(ec) # virtual frame
+        frame2.f_back_some = frame
+        frame.f_forward = frame2
+
+        frame3 = self.Frame(ec) # virtual frame
+        frame3.f_back_some = frame
+        frame2.f_forward = frame3
+
+        assert frame3.f_back() is frame2
+        assert frame2.f_back() is frame
+        assert frame.f_back() is None
+
+        frame4 = self.Frame(ec) # real frame again
+        frame4.f_back_some = frame
+        assert frame4.f_back() is frame3
+
+    def test_gettopframe_no_jit(self):
+        ec = self.EC()
+        frame = self.Frame(ec)
+        ec.some_frame = frame
+        assert ec.gettopframe() is frame
+
+    def test_gettopframe_jit(self):
+        ec = self.EC()
+        frame = self.Frame(ec) # real frame
+        ec.some_frame = frame
+        assert ec.gettopframe() is frame
+
+        frame2 = self.Frame(ec) # virtual frame
+        frame2.f_back_some = frame
+        frame.f_forward = frame2
+        assert ec.gettopframe() is frame2
+
+        frame3 = self.Frame(ec) # virtual frame
+        frame3.f_back_some = frame
+        frame2.f_forward = frame3
+        assert ec.gettopframe() is frame3
+
+        frame4 = self.Frame(ec) # real frame again
+        frame4.f_back_some = frame
+        ec.some_frame = frame4
+        assert ec.gettopframe() is frame4
 
     def test_frame_chain(self):
 
@@ -317,28 +375,40 @@ class TestFrameChaining(object):
         assert ec.framestackdepth == 1
         assert frame.f_back_some is None
         assert frame.f_forward is None
+        assert ec.gettopframe() is frame
+        assert ec._extract_back_from_frame(frame) is None
         
         frame2 = self.Frame(ec)
         ec._chain(frame2)
         assert ec.some_frame is frame2
         assert ec.framestackdepth == 2
         assert frame2.f_back_some is frame
-        assert frame.f_forward is frame2
+        assert frame.f_forward is None
         assert frame2.f_forward is None
+        assert ec.gettopframe() is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
        
         frame3 = self.Frame(ec)
         ec._chain(frame3)
         assert ec.some_frame is frame3
         assert frame3.f_back_some is frame2
-        assert frame2.f_forward is frame3
-        # now we should unchain
+        assert frame2.f_forward is None
+        assert ec.gettopframe() is frame3
+        assert ec._extract_back_from_frame(frame3) is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
 
         assert frame3.f_back() is frame2
+        # now we should unchain
         ec._unchain(frame3)
         assert ec.some_frame is frame2
         assert ec.framestackdepth == 2
         assert frame2.f_forward is None
         assert frame3.f_back_some is frame2
+        assert ec.gettopframe() is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
         
         assert frame2.f_back() is frame
         ec._unchain(frame2)
@@ -346,12 +416,15 @@ class TestFrameChaining(object):
         assert ec.framestackdepth == 1
         assert frame.f_forward is None
         assert frame2.f_back_some is frame
+        assert ec.gettopframe() is frame
+        assert ec._extract_back_from_frame(frame) is None
 
         assert frame.f_back() is None
         ec._unchain(frame)
         assert ec.some_frame is None
         assert ec.framestackdepth == 0
         assert frame.f_back_some is None
+        assert ec.gettopframe() is None
 
     def test_frame_chain_forced(self):
 
@@ -359,30 +432,44 @@ class TestFrameChaining(object):
 
         frame = self.Frame(ec)
         ec._chain(frame)
+        assert ec.gettopframe() is frame
+        assert ec._extract_back_from_frame(frame) is None
         
         frame2 = self.Frame(ec)
         ec._chain(frame2)
         assert ec.some_frame is frame2
         assert ec.framestackdepth == 2
         assert frame2.f_back_some is frame
-        assert frame.f_forward is frame2
+        assert frame.f_forward is None
         assert frame2.f_forward is None
         res = frame2.force_f_back()
         assert res is frame
         assert frame.f_back_forced
+        assert ec.gettopframe() is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
         
         frame3 = self.Frame(ec)
         ec._chain(frame3)
+        assert ec.gettopframe() is frame3
+        assert ec._extract_back_from_frame(frame3) is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
         # now we should unchain
 
         assert frame3.f_back() is frame2
         ec._unchain(frame3)
         assert ec.some_frame is frame2
         assert frame3.f_back_some is frame2
+        assert ec.gettopframe() is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
         
         assert frame2.f_back() is frame
         ec._unchain(frame2)
         assert frame2.f_back_some is frame
+        assert ec.gettopframe() is frame
+        assert ec._extract_back_from_frame(frame) is None
 
         assert frame.f_back() is None
         ec._unchain(frame)
@@ -391,6 +478,7 @@ class TestFrameChaining(object):
 
         assert frame2.f_back() is frame
         assert frame.f_back() is None
+        assert ec.gettopframe() is None
 
 
     def test_frame_chain_jitted(self):
@@ -399,6 +487,7 @@ class TestFrameChaining(object):
 
         assert ec.some_frame is None
         assert ec.framestackdepth == 0
+        assert ec.gettopframe() is None
 
         frame = self.Frame(ec)
         ec._chain(frame)
@@ -406,6 +495,8 @@ class TestFrameChaining(object):
         assert ec.framestackdepth == 1
         assert frame.f_back_some is None
         assert frame.f_forward is None
+        assert ec.gettopframe() is frame
+        assert ec._extract_back_from_frame(frame) is None
         
         ec.jitted = True
         ec.virtualizable = frame
@@ -416,6 +507,9 @@ class TestFrameChaining(object):
         assert frame2.f_back_some is frame
         assert frame.f_forward is frame2
         assert frame2.f_forward is None
+        assert ec.gettopframe() is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
 
         # recursive enter/leave seen by the jit
         frame3 = self.Frame(ec, frame)
@@ -423,6 +517,10 @@ class TestFrameChaining(object):
         assert ec.some_frame is frame
         assert frame3.f_back_some is frame
         assert frame2.f_forward is frame3
+        assert ec.gettopframe() is frame3
+        assert ec._extract_back_from_frame(frame3) is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
         # now we should unchain
 
         assert frame3.f_back() is frame2
@@ -433,16 +531,23 @@ class TestFrameChaining(object):
         assert frame3.f_back_some is frame
         assert not frame3.escaped
         assert not frame2.escaped
+        assert ec.gettopframe() is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
        
         # recursive enter/leave not seen by the jit
         ec.jitted = False
         ec.virtualizable = None
         ec._chain(frame3)
+        assert not frame2.escaped
         assert ec.some_frame is frame3
         assert frame3.f_back_some is frame
-        assert frame2.f_forward is frame3
+        assert frame2.f_forward is None
         assert frame3.escaped
-        #assert not frame2.escaped # XXX this is failing!
+        assert ec.gettopframe() is frame3
+        assert ec._extract_back_from_frame(frame3) is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
 
         assert frame3.f_back() is frame2
         ec._unchain(frame3)
@@ -450,6 +555,10 @@ class TestFrameChaining(object):
         assert ec.framestackdepth == 2
         assert frame2.f_forward is None
         assert frame3.f_back_some is frame
+        assert ec.gettopframe() is frame2
+        assert ec._extract_back_from_frame(frame2) is frame
+        assert ec._extract_back_from_frame(frame) is None
+
         ec.jitted = True
         ec.virtualizable = frame
 
@@ -459,6 +568,8 @@ class TestFrameChaining(object):
         assert ec.framestackdepth == 1
         assert frame.f_forward is None
         assert frame2.f_back_some is frame
+        assert ec.gettopframe() is frame
+        assert ec._extract_back_from_frame(frame) is None
 
         ec.jitted = False
         assert frame.f_back() is None
@@ -466,6 +577,7 @@ class TestFrameChaining(object):
         assert ec.some_frame is None
         assert ec.framestackdepth == 0
         assert frame.f_back_some is None
+        assert ec.gettopframe() is None
 
 
     def test_frame_chain_jitted_forced(self):
@@ -541,7 +653,6 @@ class TestFrameChaining(object):
       
 
     def test_check_escaping_not_all_inlined_enter_leave_not_seen(self):
-        py.test.skip("escapes")
         ec, frame, frame2 = self.enter_two_jitted_levels()
 
         ec.jitted = False
@@ -552,7 +663,6 @@ class TestFrameChaining(object):
         assert not frame2.escaped
         assert frame3.escaped
 
-        assert frame3.f_back() is frame2
         ec._unchain(frame3)
         ec.jitted = True
         assert not frame2.escaped
