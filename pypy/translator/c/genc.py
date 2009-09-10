@@ -492,8 +492,14 @@ class CStandaloneBuilder(CBuilder):
             mk.definition('GCMAPFILES', gcmapfiles)
             mk.definition('OBJECTS', '$(ASMLBLFILES) gcmaptable.s')
             mk.rule('%.s', '%.c', '$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)')
-            mk.rule('%.lbl.s %.gcmap', '%.s', '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $*.gcmap')
-            mk.rule('gcmaptable.s', '$(GCMAPFILES)', '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
+            if sys.platform == 'win32':
+                python = sys.executable.replace('\\', '/') + ' '
+            else:
+                python = ""
+            mk.rule('%.lbl.s %.gcmap', '%.s',
+                    python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $*.gcmap')
+            mk.rule('gcmaptable.s', '$(GCMAPFILES)',
+                    python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
 
         mk.write()
         #self.translator.platform,
@@ -785,7 +791,10 @@ def gen_source_standalone(database, modulename, targetdir, eci,
     for key, value in defines.items():
         print >> fi, '#define %s %s' % (key, value)
 
-    print >> fi, '#define Py_BUILD_CORE  /* for Windows: avoid pulling libs in */'
+    if sys.platform == 'win32':
+        print >> fi, '#define Py_BUILD_CORE /* avoid pulling python libs in */'
+        print >> fi, '#define WIN32_LEAN_AND_MEAN /* winsock/winsock2 mess */'
+
     print >> fi, '#include "pyconfig.h"'
 
     eci.write_c_header(fi)
@@ -837,6 +846,9 @@ def gen_source(database, modulename, targetdir, eci, defines={}, split=False):
     print >> f
     for key, value in defines.items():
         print >> fi, '#define %s %s' % (key, value)
+
+    if sys.platform == 'win32':
+        print >> fi, '#define WIN32_LEAN_AND_MEAN /* winsock/winsock2 mess */'
 
     print >> fi, '#include "pyconfig.h"'
 

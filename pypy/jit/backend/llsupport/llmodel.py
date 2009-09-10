@@ -1,8 +1,10 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
+from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values
-from pypy.jit.metainterp.typesystem import llhelper
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
@@ -19,7 +21,7 @@ def _check_addr_range(x):
 
 
 class AbstractLLCPU(AbstractCPU):
-    ts = llhelper
+    from pypy.jit.metainterp.typesystem import llhelper as ts
 
     def __init__(self, rtyper, stats, translate_support_code=False,
                  gcdescr=None):
@@ -37,6 +39,11 @@ class AbstractLLCPU(AbstractCPU):
                                                         translate_support_code)
         self._setup_prebuilt_error('ovf', OverflowError)
         self._setup_prebuilt_error('zer', ZeroDivisionError)
+        if translate_support_code:
+            self._setup_exception_handling_translated()
+        else:
+            self._setup_exception_handling_untranslated()
+        self.clear_exception()
 
     def set_class_sizes(self, class_sizes):
         self.class_sizes = class_sizes
@@ -54,13 +61,99 @@ class AbstractLLCPU(AbstractCPU):
                                             immortal=True)
         setattr(self, '_%s_error_vtable' % prefix,
                 llmemory.cast_ptr_to_adr(ll_inst.typeptr))
-        setattr(self, '_%s_error_inst' % prefix,
-                llmemory.cast_ptr_to_adr(ll_inst))
+        setattr(self, '_%s_error_inst' % prefix, ll_inst)
+
+
+    def _setup_exception_handling_untranslated(self):
+        # for running un-translated only, all exceptions occurring in the
+        # llinterpreter are stored in '_exception_emulator', which is then
+        # read back by the machine code reading at the address given by
+        # pos_exception() and pos_exc_value().
+        _exception_emulator = lltype.malloc(rffi.CArray(lltype.Signed), 2,
+                                            zero=True, flavor='raw')
+        self._exception_emulator = _exception_emulator
+
+        def _store_exception(lle):
+            self._last_exception = lle       # keepalive
+            tp_i = rffi.cast(lltype.Signed, lle.args[0])
+            v_i = rffi.cast(lltype.Signed, lle.args[1])
+            _exception_emulator[0] = tp_i
+            _exception_emulator[1] = v_i
+
+        self.debug_ll_interpreter = LLInterpreter(self.rtyper)
+        self.debug_ll_interpreter._store_exception = _store_exception
+
+        def pos_exception():
+            return rffi.cast(lltype.Signed, _exception_emulator)
+
+        def pos_exc_value():
+            return (rffi.cast(lltype.Signed, _exception_emulator) +
+                    rffi.sizeof(lltype.Signed))
+
+        def save_exception():
+            # copy from _exception_emulator to the real attributes on self
+            tp_i = _exception_emulator[0]
+            v_i  = _exception_emulator[1]
+            _exception_emulator[0] = 0
+            _exception_emulator[1] = 0
+            self.saved_exception = tp_i
+            self.saved_exc_value = self._cast_int_to_gcref(v_i)
+
+        self.pos_exception = pos_exception
+        self.pos_exc_value = pos_exc_value
+        self.save_exception = save_exception
+
+
+    def _setup_exception_handling_translated(self):
+
+        def pos_exception():
+            addr = llop.get_exception_addr(llmemory.Address)
+            return llmemory.cast_adr_to_int(addr)
+
+        def pos_exc_value():
+            addr = llop.get_exc_value_addr(llmemory.Address)
+            return llmemory.cast_adr_to_int(addr)
+
+        def save_exception():
+            addr = llop.get_exception_addr(llmemory.Address)
+            exception = rffi.cast(lltype.Signed, addr.address[0])
+            addr.address[0] = llmemory.NULL
+            addr = llop.get_exc_value_addr(llmemory.Address)
+            exc_value = rffi.cast(llmemory.GCREF, addr.address[0])
+            addr.address[0] = llmemory.NULL
+            # from now on, the state is again consistent -- no more RPython
+            # exception is set.  The following code produces a write barrier
+            # in the assignment to self.saved_exc_value, as needed.
+            self.saved_exception = exception
+            self.saved_exc_value = exc_value
+
+        self.pos_exception = pos_exception
+        self.pos_exc_value = pos_exc_value
+        self.save_exception = save_exception
+
+    _SAVE_EXCEPTION_FUNC = lltype.Ptr(lltype.FuncType([], lltype.Void))
+
+    def get_save_exception_int(self):
+        f = llhelper(self._SAVE_EXCEPTION_FUNC, self.save_exception)
+        return rffi.cast(lltype.Signed, f)
+
+    def get_exception(self):
+        return self.saved_exception
+
+    def get_exc_value(self):
+        return self.saved_exc_value
+
+    def clear_exception(self):
+        self.saved_exception = 0
+        self.saved_exc_value = lltype.nullptr(llmemory.GCREF.TO)
+
 
     # ------------------- helpers and descriptions --------------------
 
     @staticmethod
-    def cast_int_to_gcref(x):
+    def _cast_int_to_gcref(x):
+        # dangerous!  only use if you are sure no collection could occur
+        # between reading the integer and casting it to a pointer
         if not we_are_translated():
             _check_addr_range(x)
         return rffi.cast(llmemory.GCREF, x)
@@ -109,14 +202,14 @@ class AbstractLLCPU(AbstractCPU):
 
     def get_overflow_error(self):
         ovf_vtable = self.cast_adr_to_int(self._ovf_error_vtable)
-        ovf_inst = self.cast_int_to_gcref(
-            self.cast_adr_to_int(self._ovf_error_inst))
+        ovf_inst = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                          self._ovf_error_inst)
         return ovf_vtable, ovf_inst
 
     def get_zero_division_error(self):
         zer_vtable = self.cast_adr_to_int(self._zer_error_vtable)
-        zer_inst = self.cast_int_to_gcref(
-            self.cast_adr_to_int(self._zer_error_inst))
+        zer_inst = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                          self._zer_error_inst)
         return zer_vtable, zer_inst
 
     # ____________________________________________________________
@@ -142,7 +235,7 @@ class AbstractLLCPU(AbstractCPU):
         else:
             raise NotImplementedError("size = %d" % size)
         if ptr:
-            return BoxPtr(self.cast_int_to_gcref(val))
+            return BoxPtr(self._cast_int_to_gcref(val))
         else:
             return BoxInt(val)
 
@@ -207,7 +300,7 @@ class AbstractLLCPU(AbstractCPU):
         else:
             raise NotImplementedError("size = %d" % size)
         if ptr:
-            return BoxPtr(self.cast_int_to_gcref(val))
+            return BoxPtr(self._cast_int_to_gcref(val))
         else:
             return BoxInt(val)
 
@@ -310,9 +403,6 @@ class AbstractLLCPU(AbstractCPU):
 
     def do_cast_ptr_to_int(self, args, descr=None):
         return BoxInt(self.cast_gcref_to_int(args[0].getref_base()))
-
-    def do_cast_int_to_ptr(self, args, descr=None):
-        return BoxPtr(self.cast_int_to_gcref(args[0].getint()))
 
 
 import pypy.jit.metainterp.executor

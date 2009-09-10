@@ -251,7 +251,8 @@ class BytecodeMaker(object):
         graph, oosend_methdescr = graph_key
         self.bytecode = self.codewriter.get_jitcode(graph,
                                              oosend_methdescr=oosend_methdescr)
-        if not codewriter.policy.look_inside_graph(graph):
+        if not codewriter.policy.look_inside_graph(graph,
+                                                   self.cpu.supports_floats):
             assert not portal, "portal has been hidden!"
             graph = make_calling_stub(codewriter.rtyper, graph)
         self.graph = graph
@@ -612,6 +613,9 @@ class BytecodeMaker(object):
     def serialize_op_uint_xor(self, op): self._defl(op, 'int_xor')
     def serialize_op_uint_lshift(self, op): self._defl(op, 'int_lshift')
 
+    def serialize_op_cast_bool_to_float(self, op):
+        self.default_serialize_op(op, 'cast_int_to_float')
+
     serialize_op_unichar_eq = serialize_op_char_eq
     serialize_op_unichar_ne = serialize_op_char_ne
 
@@ -717,7 +721,8 @@ class BytecodeMaker(object):
                 pass
             else:
                 if hasattr(rtti._obj, 'destructor_funcptr'):
-                    self.handle_builtin_call(op)
+                    c_vtable = Constant(vtable, lltype.typeOf(vtable))
+                    self._do_builtin_call(op, 'alloc_with_del', [c_vtable])
                     return
             # store the vtable as an address -- that's fine, because the
             # GC doesn't need to follow them
@@ -751,6 +756,21 @@ class BytecodeMaker(object):
                   self.const_position(cls))
         self.codewriter.register_known_ooclass(cls, TYPE)
         self.register_var(op.result)
+        # initialize fields with a non-default value: while in ootype it's
+        # new() that takes care of it, for the jit we explicitly insert the
+        # corresponding setfields(). This way, the backends don't need to care
+        # about default fields and moreover the resulting code is more similar
+        # to the lltype version, so the optimizer doesn't need to take special
+        # care for them.
+        if isinstance(TYPE, ootype.Instance):
+            fields = TYPE._get_fields_with_different_default()
+            var_inst = self.var_position(op.result)
+            for name, (T, value) in fields:
+                descr = self.cpu.fielddescrof(TYPE, name)
+                self.emit('setfield_gc')
+                self.emit(var_inst)
+                self.emit(self.get_position(descr))
+                self.emit(self.var_position(Constant(value)))
 
     def serialize_op_oonewarray(self, op):
         ARRAY = op.args[0].value
@@ -1003,20 +1023,24 @@ class BytecodeMaker(object):
             self.emit('can_enter_jit')
 
     def serialize_op_direct_call(self, op):
-        kind = self.codewriter.policy.guess_call_kind(op)
+        kind = self.codewriter.policy.guess_call_kind(op,
+                                           self.codewriter.cpu.supports_floats)
         return getattr(self, 'handle_%s_call' % kind)(op)
 
     def serialize_op_indirect_call(self, op):
-        kind = self.codewriter.policy.guess_call_kind(op)
+        kind = self.codewriter.policy.guess_call_kind(op,
+                                           self.codewriter.cpu.supports_floats)
         return getattr(self, 'handle_%s_indirect_call' % kind)(op)
 
     def serialize_op_oosend(self, op):
-        kind = self.codewriter.policy.guess_call_kind(op)
+        kind = self.codewriter.policy.guess_call_kind(op,
+                                           self.codewriter.cpu.supports_floats)
         return getattr(self, 'handle_%s_oosend' % kind)(op)
 
     def handle_regular_call(self, op, oosend_methdescr=None):
         self.minimize_variables()
-        [targetgraph] = self.codewriter.policy.graphs_from(op)
+        [targetgraph] = self.codewriter.policy.graphs_from(op,
+                                           self.codewriter.cpu.supports_floats)
         jitbox = self.codewriter.get_jitcode(targetgraph, self.graph,
                                              oosend_methdescr=oosend_methdescr)
         if oosend_methdescr:
@@ -1063,6 +1087,8 @@ class BytecodeMaker(object):
         calldescr, non_void_args = self.codewriter.getcalldescr(op.args[0],
                                                                 args,
                                                                 op.result)
+        self.emit('recursion_leave_prep')
+        self.emit_varargs(non_void_args)        
         self.emit('recursive_call')
         self.emit(self.get_position(calldescr))
         self.emit_varargs([op.args[0]] + non_void_args)
@@ -1071,7 +1097,8 @@ class BytecodeMaker(object):
     handle_residual_indirect_call = handle_residual_call
 
     def handle_regular_indirect_call(self, op):
-        targets = self.codewriter.policy.graphs_from(op)
+        targets = self.codewriter.policy.graphs_from(op,
+                                           self.codewriter.cpu.supports_floats)
         assert targets is not None
         self.minimize_variables()
         indirectcallset = self.codewriter.get_indirectcallset(targets)
@@ -1101,6 +1128,9 @@ class BytecodeMaker(object):
 
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
+        return self._do_builtin_call(op, oopspec_name, args)
+
+    def _do_builtin_call(self, op, oopspec_name, args):
         argtypes = [v.concretetype for v in args]
         resulttype = op.result.concretetype
         c_func, TP = support.builtin_func_for_spec(self.codewriter.rtyper,

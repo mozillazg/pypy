@@ -126,7 +126,6 @@ _oplist = [
     'OOSEND_PURE',    # ootype operation
     'CALL_PURE',
     #
-    'CAST_INT_TO_PTR',
     'CAST_PTR_TO_INT',
     'INT_ADD',
     'INT_SUB',
@@ -139,6 +138,15 @@ _oplist = [
     'INT_RSHIFT',
     'INT_LSHIFT',
     'UINT_RSHIFT',
+    'FLOAT_ADD',
+    'FLOAT_SUB',
+    'FLOAT_MUL',
+    'FLOAT_TRUEDIV',
+    'FLOAT_NEG',
+    'FLOAT_ABS',
+    'FLOAT_IS_TRUE',
+    'CAST_FLOAT_TO_INT',
+    'CAST_INT_TO_FLOAT',
     #
     '_COMPARISON_FIRST',
     'INT_LT',
@@ -152,6 +160,12 @@ _oplist = [
     'UINT_GT',
     'UINT_GE',
     '_COMPARISON_LAST',
+    'FLOAT_LT',          # maybe these ones should be comparisons too
+    'FLOAT_LE',
+    'FLOAT_EQ',
+    'FLOAT_NE',
+    'FLOAT_GT',
+    'FLOAT_GE',
     #
     'INT_IS_TRUE',
     'INT_NEG',

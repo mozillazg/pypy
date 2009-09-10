@@ -1,6 +1,9 @@
-from pypy.jit.metainterp.policy import ManualJitPolicy
+from pypy.jit.metainterp.policy import JitPolicy
 
-class PyPyJitPolicy(ManualJitPolicy):
+class PyPyJitPolicy(JitPolicy):
+
+    def __init__(self, translator=None):
+        pass       # xxx
 
     def look_inside_function(self, func):
         mod = func.__module__ or '?'
@@ -52,6 +55,9 @@ class PyPyJitPolicy(ManualJitPolicy):
             return False
         # string builder interface
         if mod == 'pypy.rpython.lltypesystem.rbuilder':
+            return False
+        # rweakvaluedict implementation
+        if mod == 'pypy.rlib.rweakrefimpl':
             return False
         #if (mod == 'pypy.rpython.rlist' or
         #    mod == 'pypy.rpython.lltypesystem.rdict' or
