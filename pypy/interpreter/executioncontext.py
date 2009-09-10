@@ -144,13 +144,6 @@ class ExecutionContext:
             if f_back is not None:
                 f_back.f_forward = None
 
-
-        #f_back = frame.f_back()
-        #if f_back is not None:
-        #    f_back.f_forward = None # this is the other one, yes # the goal is to set the forward attr only in the jitted case
-        #if not self._we_are_jitted() or self.some_frame is frame:
-        #    self.some_frame = frame.f_back_some
-
         self.framestackdepth -= 1
 
     @staticmethod
