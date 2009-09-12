@@ -90,18 +90,19 @@ TYPE_NAMESPACE_StaticProtectedNs  = 0x1A
 TYPE_NAMESPACE_SET_NamespaceSet   = 0x15
 
 # Multiname types
-TYPE_MULTINAME_QName              = 0x07
-TYPE_MULTINAME_QNameA             = 0x0D
-TYPE_MULTINAME_Multiname          = 0x09
-TYPE_MULTINAME_MultinameA         = 0x0E
-TYPE_MULTINAME_RtqName            = 0x0F
-TYPE_MULTINAME_RtqNameA           = 0x10
-TYPE_MULTINAME_RtqNameL           = 0x11
-TYPE_MULTINAME_RtqNameLA          = 0x12
-TYPE_MULTINAME_NameL              = 0x13
-TYPE_MULTINAME_NameLA             = 0x14
-TYPE_MULTINAME_MultinameL         = 0x1B
-TYPE_MULTINAME_MultinameLA        = 0x1C
+TYPE_MULTINAME_QName              = 0x07 # o.ns::name   - fully resolved at compile-time
+TYPE_MULTINAME_QNameA             = 0x0D # o.@ns::name
+TYPE_MULTINAME_Multiname          = 0x09 # o.name       - uses an nsset to resolve at runtime
+TYPE_MULTINAME_MultinameA         = 0x0E # o.@name
+TYPE_MULTINAME_RtqName            = 0x0F # o.ns::name   - namespace on stack
+TYPE_MULTINAME_RtqNameA           = 0x10 # o.@ns::name
+TYPE_MULTINAME_RtqNameL           = 0x11 # o.ns::[name] - namespace and name on stack
+TYPE_MULTINAME_RtqNameLA          = 0x12 # o.@ns::name
+TYPE_MULTINAME_NameL              = 0x13 # o.[name]     - implied public namespace, name on stack
+TYPE_MULTINAME_NameLA             = 0x14 # o.@[name]
+TYPE_MULTINAME_MultinameL         = 0x1B # o.[name]     - 
+TYPE_MULTINAME_MultinameLA        = 0x1C # o.@[name]
+TYPE_MULTINAME_TypeName           = 0x16 # o.ns::name.<generic> - used to implement Vector
 
 def py_to_abc(value, pool):
     if value is True:
@@ -166,7 +167,7 @@ class NamespaceSet(object):
         return hash(tuple(self.namespaces))
     
     def __eq__(self, other):
-        return len(self) == len(other) and all(n1 == n2 for n1, n2 in zip(self.namespaces, other.namespaces))
+        return self.namespaces == other.namespaces
 
     def __ne__(self, other):
         return not self == other
@@ -199,13 +200,13 @@ class MultinameL(object):
         self._ns_set_index = None
 
     def __eq__(self, other):
-        return self.kind == other.kind and self.ns_set == other.ns_set
+        return self.KIND == other.KIND and self.ns_set == other.ns_set
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
-        return hash((self.kind, self.ns_set))
+        return hash((self.KIND, self.ns_set))
     
     def write_to_pool(self, pool):
         self._ns_set_index = pool.nsset_pool.index_for(self.ns_set)
@@ -226,13 +227,13 @@ class Multiname(MultinameL):
         self._name_index = None
 
     def __eq__(self, other):
-        return self.kind == other.kind and self.name == other.name
+        return self.KIND == other.KIND and self.name == other.name
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
-        return hash((self.kind, self.name))
+        return hash((self.KIND, self.name))
 
     def write_to_pool(self, pool):
         super(Multiname, self).write_to_pool(pool)
@@ -245,7 +246,7 @@ class Multiname(MultinameL):
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
         assert self._ns_set_index is not None, "Please call write_to_pool before serializing"
-        return chr(self.kind) + u32(self._name_index) + u32(self._ns_set_index)
+        return chr(self.KIND) + u32(self._name_index) + u32(self._ns_set_index)
 
 class MultinameA(Multiname):
     KIND = TYPE_MULTINAME_MultinameA
@@ -254,7 +255,7 @@ class MultinameA(Multiname):
 class QName(object):
     KIND = TYPE_MULTINAME_QName
     
-    def __init__(self, name, ns):
+    def __init__(self, name, ns=None):
         self.name = name
         self.ns = ns
 
@@ -262,13 +263,13 @@ class QName(object):
         self._ns_index = None
 
     def __eq__(self, other):
-        return self.kind == other.kind and self.name == other.name and self.ns == other.ns
+        return self.KIND == other.KIND and self.name == other.name and self.ns == other.ns
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
-        return hash((self.kind, self.name, self.ns))
+        return hash((self.KIND, self.name, self.ns))
     
     def write_to_pool(self, pool):
         assert self.name != ""
@@ -281,7 +282,7 @@ class QName(object):
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
         assert self._ns_index is not None, "Please call write_to_pool before serializing"
-        return chr(self.kind) + u32(self._ns_index) + u32(self._name_index)
+        return chr(self.KIND) + u32(self._ns_index) + u32(self._name_index)
 
 class QNameA(QName):
     KIND = TYPE_MULTINAME_QNameA
@@ -290,16 +291,19 @@ class RtqNameL(object):
     KIND = TYPE_MULTINAME_RtqNameL
     
     def serialize(self):
-        return chr(self.kind)
+        return chr(self.KIND)
 
     def __eq__(self, other):
-        return self.kind == other.kind
+        return self.KIND == other.KIND
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
-        return hash((self.kind))
+        return hash((self.KIND))
+
+    def serialize(self):
+        return chr(self.KIND)
 
 class RtqNameLA(RtqNameL):
     KIND = TYPE_MULTINAME_RtqNameLA
@@ -311,6 +315,15 @@ class RtqName(object):
         self.name = name
         self._name_index = None
 
+    def __eq__(self, other):
+        return self.KIND == other.KIND and self.name == other.name
+
+    def __ne__(self):
+        return not self == other
+
+    def __hash__(self):
+        return hash((self.KIND, self.name))
+    
     def write_to_pool(self, pool):
         assert self.name != ""
         if self.name == "*":
@@ -320,10 +333,39 @@ class RtqName(object):
 
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
+        return chr(self.KIND) + u32(self._name_index)
 
 class RtqNameA(object):
     KIND = TYPE_MULTINAME_RtqNameA
-    
+
+class TypeName(object):
+    KIND = TYPE_MULTINAME_TypeName
+
+    def __init__(self, name, *types):
+        self.name  = name
+        self.types = list(types)
+        
+        self._name_index = None
+        self._types_indices = None
+
+    def __eq__(self, other):
+        return self.KIND == other.KIND and self.name == other.name and self.types == other.types
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __hash__(self):
+        return hash((self.KIND, self.name, tuple(self.types)))
+
+    def write_to_pool(self, pool):
+        self._name_index = pool.mutliname_pool.index_for(self.name)
+        self._types_indices = [pool.multiname_pool.index_for(t) for t in self.types]
+
+    def serialize(self):
+        assert self._name_index is not None, "Please call write_to_pool before serializing"
+        assert self._types_indices is not None, "Please call write_to_pool before serializing"
+        return ''.join([chr(self.KIND), u32(self._name_index), u32(self._types_indices)] + [u32(a) for a in self._types_indices])
+
 # ======================================
 # Constant Pool
 # ======================================
@@ -339,7 +381,7 @@ class ValuePool(object):
         return iter(self.pool)
         
     def index_for(self, value):
-        if value == self.default:
+        if value == self.default or value is None:
             return 0
         
         if value in self.index_map:
@@ -370,17 +412,17 @@ class AbcConstantPool(object):
         self.nsset_pool     = ValuePool(NO_NAMESPACE_SET)
         self.multiname_pool = ValuePool()
         
-    def has_RTNS(self, index):
-        return self.multiname_pool[index].kind in (TYPE_MULTINAME_RtqName,
-                                                   TYPE_MULTINAME_RtqNameA,
-                                                   TYPE_MULTINAME_RtqNameL,
-                                                   TYPE_MULTINAME_RtqNameLA)
+    def has_RTNS(self, m):
+        return m.kind in (TYPE_MULTINAME_RtqName,
+                          TYPE_MULTINAME_RtqNameA,
+                          TYPE_MULTINAME_RtqNameL,
+                          TYPE_MULTINAME_RtqNameLA)
 
-    def has_RTName(self, index):
-        return self.multiname_pool[index].kind in (TYPE_MULTINAME_MultinameL,
-                                                   TYPE_MULTINAME_MultinameLA,
-                                                   TYPE_MULTINAME_RtqNameL,
-                                                   TYPE_MULTINAME_RtqNameLA)
+    def has_RTName(self, m):
+        return m.kind in (TYPE_MULTINAME_MultinameL,
+                          TYPE_MULTINAME_MultinameLA,
+                          TYPE_MULTINAME_RtqNameL,
+                          TYPE_MULTINAME_RtqNameLA)
 
     def serialize(self):
 

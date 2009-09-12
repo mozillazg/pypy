@@ -86,11 +86,15 @@ class _Avm2NamespaceInstruction(_Avm2U30Instruction):
       @needs_specialized
       def _set_assembler_props(self, asm):
             super(_Avm2NamespaceInstruction, self)._set_assembler_props(asm)
-            has_rtns   = asm.constants.has_RTNS(self.argument)
-            has_rtname = asm.constants.has_RTName(self.argument)
+            has_rtns      = asm.constants.has_RTNS(self.multiname)
+            has_rtname    = asm.constants.has_RTName(self.multiname)
+            self.argument = asm.constants.multiname_pool.index_for(self.multiname)
 
             asm.stack_depth -= int(has_rtns) + int(has_rtname)
 
+      def __call__(self, multiname):
+            return self.specialize(multiname=multiname)
+      
 class _Avm2SetLocalInstruction(_Avm2U30Instruction):
       @needs_specialized
       def __call__(self, index):
@@ -196,20 +200,26 @@ class _Avm2CallIDX(_Avm2U30Instruction):
 
       @needs_specialized
       def _set_assembler_props(self, asm):
+            self.index = asm.constants.multiname_pool.index_for(self.multiname)
             asm.stack_depth += 1 - (self.argument + 1) # push object/args; push result
       
-      def __call__(self, index, num_args):
-            return self.specialize(index=index, argument=num_args)
+      def __call__(self, multiname, num_args):
+            return self.specialize(multiname=multiname, argument=num_args)
 
 class _Avm2CallMN(_Avm2CallIDX):
+      is_void = False
       @needs_specialized
       def _set_assembler_props(self, asm):
-            has_rtns = asm.constants.has_rtns(self.index)
-            has_rtname = asm.constants.has_rtname(self.index)
+            has_rtns   = asm.constants.has_RTNS(self.multiname)
+            has_rtname = asm.constants.has_RTName(self.multiname)
             asm.stack_depth += int(self.is_void) - (1 + int(has_rtns) + int(has_rtname) + self.argument)
+            
 
-      def __call__(self, index, num_args, is_void):
-            return self.specialize(index=index, argument=num_args, is_void=is_void)
+      def __call__(self, multiname, num_args):
+            return self.specialize(multiname=multiname, argument=num_args)
+
+class _Avm2CallMNVoid(_Avm2CallMN):
+      is_void = True
 
 class _Avm2NewArray(_Avm2U30Instruction):
       @needs_specialized
@@ -316,8 +326,8 @@ callsuper = _Avm2CallMN(0x45, 'callsuper')
 callproperty = _Avm2CallMN(0x46, 'callproperty')
 constructprop = _Avm2CallMN(0x4A, 'constructprop')
 callproplex = _Avm2CallMN(0x4C, 'callproplex')
-callsupervoid = _Avm2CallMN(0x4E, 'callsupervoid')
-callpropvoid = _Avm2CallMN(0x4F, 'callpropvoid')
+callsupervoid = _Avm2CallMNVoid(0x4E, 'callsupervoid')
+callpropvoid = _Avm2CallMNVoid(0x4F, 'callpropvoid')
 #}
 
 #{ Instructions that do not chage the stack height stack and take one U30 argument.
@@ -395,19 +405,19 @@ ifjump = _Avm2OffsetInstruction(0x10, 'jump')
 debug = _Avm2DebugInstruction(0xEF, 'debug')
 
 label_internal = _Avm2ShortInstruction(0x09, 'label')
-label = _Avm2LabelInstruction(None, 'label');
+label = _Avm2LabelInstruction(None, 'label')
 
 lookupswitch = _Avm2LookupSwitchInstruction(0x1B, 'lookupswitch')
 
-deleteproperty = _Avm2NamespaceInstruction(0x6A, 'deleteproperty', 1, 1)
-getdescendants = _Avm2NamespaceInstruction(0x59, 'getdescendants', 1, 1)
-getproperty = _Avm2NamespaceInstruction(0x66, 'getproperty', 1, 1)
-getsuper = _Avm2NamespaceInstruction(0x04, 'getsuper', 1, 1)
-findproperty = _Avm2NamespaceInstruction(0x5E, 'findproperty', 0, 1)
-findpropstrict = _Avm2NamespaceInstruction(0x5D, 'findpropstrict', 0, 1)
-initproperty = _Avm2NamespaceInstruction(0x68, 'initproperty', 2, 0)
-setproperty = _Avm2NamespaceInstruction(0x61, 'setproperty', 2, 0)
-setsuper = _Avm2NamespaceInstruction(0x05, 'setsuper', 2, 0)
+deleteproperty = _Avm2NamespaceInstruction(0x6A, 'deleteproperty', 0)
+getdescendants = _Avm2NamespaceInstruction(0x59, 'getdescendants', 0)
+getproperty = _Avm2NamespaceInstruction(0x66, 'getproperty', 0)
+getsuper = _Avm2NamespaceInstruction(0x04, 'getsuper', 0)
+findproperty = _Avm2NamespaceInstruction(0x5E, 'findproperty', 1)
+findpropstrict = _Avm2NamespaceInstruction(0x5D, 'findpropstrict', 1)
+initproperty = _Avm2NamespaceInstruction(0x68, 'initproperty', -2)
+setproperty = _Avm2NamespaceInstruction(0x61, 'setproperty', -2)
+setsuper = _Avm2NamespaceInstruction(0x05, 'setsuper', -2)
 
 kill = _Avm2KillInstruction(0x08, 'kill')
 #}
