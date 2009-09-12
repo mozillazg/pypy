@@ -64,16 +64,28 @@ class Avm2ilasm(OOGenerator):
             push_constant(self.db, v.concretetype, v.value, self)
         else:
             self.push_const(v)
+
+    def call_oostring(self, OOTYPE):
+        str_qname = constants.QName("String")
+        self.I(instructions.findpropstrict(str_qname))
+        self.I(instructions.swap())
+        self.I(instructions.callproperty(str_qname, 1))
+        
+    call_oounicode = call_oostring
+
+    def oonewarray(self, TYPE, length=1):
+        arr_qname = constants.QName("Array")
+        self.I(instructions.findpropstrict(arr_qname))
+        self.push_const(length)
+        self.I(instructions.callproperty(arr_qname, 1))
     
     def push_this(self):
         self.I(instructions.getlocal(0))
-
-    def push_arg(self, v):
-        assert v.name in self.registers
-        self.push_local(v)
     
     def push_local(self, v):
         self.push_var(v.name)
+
+    push_arg = push_local
 
     def push_var(self, v):
         assert v in self.registers
