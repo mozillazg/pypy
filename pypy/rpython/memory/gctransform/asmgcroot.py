@@ -69,6 +69,7 @@ class AsmStackRootWalker(BaseRootWalker):
         # The anchor of this linked list is:
         anchor = llop.gc_asmgcroot_static(llmemory.Address, 3)
         initialframedata = anchor.address[1]
+        stackscount = 0
         while initialframedata != anchor:     # while we have not looped back
             self.fill_initial_frame(curframe, initialframedata)
             # Loop over all the frames in the stack
@@ -78,7 +79,13 @@ class AsmStackRootWalker(BaseRootWalker):
                 otherframe = swap
             # Then proceed to the next piece of stack
             initialframedata = initialframedata.address[1]
+            stackscount += 1
         #
+        expected = llop.gc_asmgcroot_static(llmemory.Address, 4)
+        ll_assert(not (stackscount < expected.signed[0]),
+                  "non-closed stacks around")
+        ll_assert(stackscount == expected.signed[0],
+                  "stacks counter corruption?")
         lltype.free(otherframe, flavor='raw')
         lltype.free(curframe, flavor='raw')
 

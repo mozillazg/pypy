@@ -215,7 +215,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     args = ', '.join(['a%d' % i for i in range(len(TP.TO.ARGS))])
     source = py.code.Source(r"""
         def wrapper(%s):    # no *args - no GIL for mallocing the tuple
-            llop.gc_stack_bottom(lltype.Void)    # marker for trackgcroot.py
+            llop.gc_stack_bottom(lltype.Void, +1)   # marker for trackgcroot.py
             if aroundstate is not None:
                 before = aroundstate.before
                 after = aroundstate.after
@@ -244,6 +244,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
             # here we don't hold the GIL any more. As in the wrapper() produced
             # by llexternal, it is essential that no exception checking occurs
             # after the call to before().
+            llop.gc_stack_bottom(lltype.Void, -1)   # marker for trackgcroot.py
             return result
     """ % (args, args))
     miniglobals = locals().copy()

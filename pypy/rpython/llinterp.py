@@ -878,7 +878,7 @@ class LLFrame(object):
     def op_gc_asmgcroot_static(self, index):
         raise NotImplementedError("gc_asmgcroot_static")
 
-    def op_gc_stack_bottom():
+    def op_gc_stack_bottom(self, n):
         pass       # marker for trackgcroot.py
 
     def op_do_malloc_fixedsize_clear(self):
