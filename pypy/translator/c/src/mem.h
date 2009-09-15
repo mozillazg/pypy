@@ -44,6 +44,9 @@ extern void *__gcrootanchor;
                     "0" (p), "m" (__gcnoreorderhack)); \
                _r; })
 
+/* marker for trackgcroot.py */
+#define OP_GC_STACK_BOTTOM(r)  asm volatile ("/* GC_STACK_BOTTOM */" : : )
+
 #define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
                i == 0 ? &__gcmapstart :         \
                i == 1 ? &__gcmapend :           \
