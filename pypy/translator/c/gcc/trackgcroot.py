@@ -116,8 +116,6 @@ class GcRootTracker(object):
             movl   %esp, (%eax)            /* next->prev = self         */
 
             /* note: the Mac OS X 16 bytes aligment must be respected. */
-            /* Pushed a total of 8 words including my return address; */
-            /* please keep this number 8 in sync with asmgcroot.py! */
             call   *%edx                   /* invoke the callback */
 
             /* Detach this ASM_FRAMEDATA from the circular linked list */
