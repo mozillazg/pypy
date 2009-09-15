@@ -50,6 +50,9 @@ long __gcstackscount = 1;
                     "0" (p), "m" (__gcnoreorderhack)); \
                _r; })
 
+#define pypy_asm_keepalive(v)  asm volatile ("/* keepalive %0 */" : : \
+                                             "g" (v))
+
 /* marker for trackgcroot.py */
 #define OP_GC_STACK_BOTTOM(n, r) \
                asm volatile ("/* GC_STACK_BOTTOM */" : : ); \
