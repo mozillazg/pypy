@@ -25,6 +25,10 @@ extern long __gcstackscount;     /* for debugging */
 extern long pypy_asm_stackwalk(void*);
 #define __gcnoreorderhack __gcmapend
 
+#ifndef PYPY_NOT_MAIN_FILE
+long __gcstackscount = 1;
+#endif
+
 /* The following pseudo-instruction is used by --gcrootfinder=asmgcc
    just after a call to tell gcc to put a GCROOT mark on each gc-pointer
    local variable.  All such local variables need to go through a "v =
