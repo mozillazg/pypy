@@ -43,10 +43,11 @@ extern char __gccallshapes;
                     "0" (p), "m" (__gcnoreorderhack)); \
                _r; })
 
-#define OP_LLVM_GCMAPSTART(r)	r = &__gcmapstart
-#define OP_LLVM_GCMAPEND(r)	r = &__gcmapend
-#define OP_LLVM_GCCALLSHAPES(r)	r = &__gccallshapes
-
+#define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
+               i == 0 ? &__gcmapstart :         \
+               i == 1 ? &__gcmapend :           \
+               i == 2 ? &__gccallshapes :       \
+               NULL
 
 #define RAW_MALLOC_ZERO_FILLED 0
 
