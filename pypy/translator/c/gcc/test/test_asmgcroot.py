@@ -104,7 +104,7 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
         c_source = py.code.Source("""
         int mystuff(int(*cb)(int, int))
         {
-            return cb(40, 2);
+            return cb(40, 2) + cb(3, 4);
         }
         """)
         eci = ExternalCompilationInfo(separate_module_sources=[c_source])
@@ -125,7 +125,4 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
             return result * p.x
 
         c_fn = self.getcompiled(f)
-        assert c_fn() == 4200
-
-    #def test_callback_with_collect(self):
-    #    py.test.skip("in-progress")
+        assert c_fn() == 4900
