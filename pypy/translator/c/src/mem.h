@@ -20,6 +20,7 @@ struct rpy_memory_alignment_test2 {
 extern char __gcmapstart;
 extern char __gcmapend;
 extern char __gccallshapes;
+extern void *__gcrootanchor;
 #define __gcnoreorderhack __gcmapend
 
 /* The following pseudo-instruction is used by --gcrootfinder=asmgcc
@@ -47,6 +48,7 @@ extern char __gccallshapes;
                i == 0 ? &__gcmapstart :         \
                i == 1 ? &__gcmapend :           \
                i == 2 ? &__gccallshapes :       \
+               i == 3 ? &__gcrootanchor :       \
                NULL
 
 #define RAW_MALLOC_ZERO_FILLED 0

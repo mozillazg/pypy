@@ -42,8 +42,8 @@ class AsmStackRootWalker(BaseRootWalker):
     def __init__(self, gctransformer):
         BaseRootWalker.__init__(self, gctransformer)
 
-        def _asm_callback(initialframedata):
-            self.walk_stack_from(initialframedata)
+        def _asm_callback():
+            self.walk_stack_from()
         self._asm_callback = _asm_callback
         self._shape_decompressor = ShapeDecompressor()
         if hasattr(gctransformer.translator, '_jit2gc'):
@@ -60,20 +60,31 @@ class AsmStackRootWalker(BaseRootWalker):
         gcdata._gc_collect_stack_root = collect_stack_root
         pypy_asm_stackwalk(llhelper(ASM_CALLBACK_PTR, self._asm_callback))
 
-    def walk_stack_from(self, initialframedata):
+    def walk_stack_from(self):
         curframe = lltype.malloc(WALKFRAME, flavor='raw')
         otherframe = lltype.malloc(WALKFRAME, flavor='raw')
-        self.fill_initial_frame(curframe, initialframedata)
-        # Loop over all the frames in the stack
-        while self.walk_to_parent_frame(curframe, otherframe):
-            swap = curframe
-            curframe = otherframe    # caller becomes callee
-            otherframe = swap
+
+        # Walk over all the pieces of stack.  They are in a circular linked
+        # list of structures of 7 words, the 2 first words being prev/next.
+        # The anchor of this linked list is:
+        anchor = llop.gc_asmgcroot_static(llmemory.Address, 3)
+        initialframedata = anchor.address[1]
+        while initialframedata != anchor:     # while we have not looped back
+            self.fill_initial_frame(curframe, initialframedata)
+            # Loop over all the frames in the stack
+            while self.walk_to_parent_frame(curframe, otherframe):
+                swap = curframe
+                curframe = otherframe    # caller becomes callee
+                otherframe = swap
+            # Then proceed to the next piece of stack
+            initialframedata = initialframedata.address[1]
+        #
         lltype.free(otherframe, flavor='raw')
         lltype.free(curframe, flavor='raw')
 
     def fill_initial_frame(self, curframe, initialframedata):
         # Read the information provided by initialframedata
+        initialframedata += 2*sizeofaddr #skip the prev/next words at the start
         reg = 0
         while reg < CALLEE_SAVED_REGS:
             # NB. 'initialframedata' stores the actual values of the
@@ -339,8 +350,7 @@ CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
 INDEX_OF_EBP      = 3
 FRAME_PTR         = CALLEE_SAVED_REGS    # the frame is at index 4 in the array
 
-ASM_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([llmemory.Address],
-                                              lltype.Void))
+ASM_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([], lltype.Void))
 
 # used internally by walk_stack_from()
 WALKFRAME = lltype.Struct('WALKFRAME',

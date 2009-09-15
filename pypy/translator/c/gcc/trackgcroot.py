@@ -100,21 +100,34 @@ class GcRootTracker(object):
             /* See description in asmgcroot.py */
             movl   4(%esp), %edx     /* my argument, which is the callback */
             movl   %esp, %eax        /* my frame top address */
-            pushl  %eax              /* ASM_FRAMEDATA[4] */
-            pushl  %ebp              /* ASM_FRAMEDATA[3] */
-            pushl  %edi              /* ASM_FRAMEDATA[2] */
-            pushl  %esi              /* ASM_FRAMEDATA[1] */
-            pushl  %ebx              /* ASM_FRAMEDATA[0] */
-            movl   %esp, %eax        /* address of ASM_FRAMEDATA */
-            pushl  %eax              /* respect Mac OS X 16 bytes aligment */ 
-            pushl  %eax              /* the one argument to the callback */
-            call   *%edx             /* invoke the callback */
-            addl   $8, %esp
-            popl   %ebx              /* restore from ASM_FRAMEDATA[0] */
-            popl   %esi              /* restore from ASM_FRAMEDATA[1] */
-            popl   %edi              /* restore from ASM_FRAMEDATA[2] */
-            popl   %ebp              /* restore from ASM_FRAMEDATA[3] */
-            popl   %eax
+            pushl  %eax              /* ASM_FRAMEDATA[6] */
+            pushl  %ebp              /* ASM_FRAMEDATA[5] */
+            pushl  %edi              /* ASM_FRAMEDATA[4] */
+            pushl  %esi              /* ASM_FRAMEDATA[3] */
+            pushl  %ebx              /* ASM_FRAMEDATA[2] */
+
+            /* Add this ASM_FRAMEDATA to the front of the circular linked */
+            /* list.  Let's call it 'self'. */
+            movl   __gcrootanchor+4, %eax  /* next = gcrootanchor->next */
+            pushl  %eax                    /* self->next = next         */
+            pushl  $__gcrootanchor         /* self->prev = gcrootanchor */
+            movl   %esp, __gcrootanchor+4  /* gcrootanchor->next = self */
+            movl   %esp, (%eax)            /* next->prev = self         */
+
+            /* note: the Mac OS X 16 bytes aligment must be respected */ 
+            call   *%edx                   /* invoke the callback */
+
+            /* Detach this ASM_FRAMEDATA from the circular linked list */
+            popl   %ecx                    /* prev = self->prev         */
+            popl   %edx                    /* next = self->next         */
+            movl   %edx, 4(%ecx)           /* prev->next = next         */
+            movl   %ecx, (%edx)            /* next->prev = prev         */
+
+            popl   %ebx              /* restore from ASM_FRAMEDATA[2] */
+            popl   %esi              /* restore from ASM_FRAMEDATA[3] */
+            popl   %edi              /* restore from ASM_FRAMEDATA[4] */
+            popl   %ebp              /* restore from ASM_FRAMEDATA[5] */
+            popl   %edx              /* ignored      ASM_FRAMEDATA[6] */
             ret
 """
         _variant(elf='.size pypy_asm_stackwalk, .-pypy_asm_stackwalk',
@@ -122,6 +135,12 @@ class GcRootTracker(object):
                  mingw32='')
         print >> output, '\t.data'
         print >> output, '\t.align\t4'
+        _globl('__gcrootanchor')
+        _label('__gcrootanchor')
+        print >> output, '\t/* A circular doubly-linked list of all */'
+        print >> output, '\t/* the ASM_FRAMEDATAs currently alive */'
+        print >> output, '\t.long\t__gcrootanchor       /* prev */'
+        print >> output, '\t.long\t__gcrootanchor       /* next */'
         _globl('__gcmapstart')
         _label('__gcmapstart')
         for label, state, is_range in self.gcmaptable:
