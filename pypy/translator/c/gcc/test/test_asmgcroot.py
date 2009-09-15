@@ -95,5 +95,5 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
     # for the individual tests see
     # ====> ../../test/test_newgc.py
 
-    def test_callback_with_collect(self):
-        py.test.skip("in-progress")
+    #def test_callback_with_collect(self):
+    #    py.test.skip("in-progress")
