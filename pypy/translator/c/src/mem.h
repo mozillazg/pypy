@@ -21,6 +21,7 @@ extern char __gcmapstart;
 extern char __gcmapend;
 extern char __gccallshapes;
 extern void *__gcrootanchor;
+extern long __gcstackscount;     /* for debugging */
 #define __gcnoreorderhack __gcmapend
 
 /* The following pseudo-instruction is used by --gcrootfinder=asmgcc
@@ -45,13 +46,16 @@ extern void *__gcrootanchor;
                _r; })
 
 /* marker for trackgcroot.py */
-#define OP_GC_STACK_BOTTOM(r)  asm volatile ("/* GC_STACK_BOTTOM */" : : )
+#define OP_GC_STACK_BOTTOM(n, r) \
+               asm volatile ("/* GC_STACK_BOTTOM */" : : ); \
+               __gcstackscount += n
 
 #define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
                i == 0 ? &__gcmapstart :         \
                i == 1 ? &__gcmapend :           \
                i == 2 ? &__gccallshapes :       \
                i == 3 ? &__gcrootanchor :       \
+               i == 4 ? &__gcstackscount :      \
                NULL
 
 #define RAW_MALLOC_ZERO_FILLED 0
