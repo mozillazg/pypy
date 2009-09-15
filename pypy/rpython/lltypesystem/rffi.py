@@ -205,6 +205,8 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     """ Function creating wrappers for callbacks. Note that this is
     cheating as we assume constant callbacks and we just memoize wrappers
     """
+    from pypy.rpython.lltypesystem import lltype
+    from pypy.rpython.lltypesystem.lloperation import llop
     if hasattr(callable, '_errorcode_'):
         errorcode = callable._errorcode_
     else:
@@ -213,6 +215,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     args = ', '.join(['a%d' % i for i in range(len(TP.TO.ARGS))])
     source = py.code.Source(r"""
         def wrapper(%s):    # no *args - no GIL for mallocing the tuple
+            llop.gc_stack_bottom(lltype.Void)    # marker for trackgcroot.py
             if aroundstate is not None:
                 before = aroundstate.before
                 after = aroundstate.after
