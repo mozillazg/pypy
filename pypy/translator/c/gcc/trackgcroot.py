@@ -115,20 +115,24 @@ class GcRootTracker(object):
             movl   %esp, __gcrootanchor+4  /* gcrootanchor->next = self */
             movl   %esp, (%eax)            /* next->prev = self         */
 
-            /* note: the Mac OS X 16 bytes aligment must be respected */ 
+            /* note: the Mac OS X 16 bytes aligment must be respected. */
+            /* Pushed a total of 8 words including my return address; */
+            /* please keep this number 8 in sync with asmgcroot.py! */
             call   *%edx                   /* invoke the callback */
 
             /* Detach this ASM_FRAMEDATA from the circular linked list */
-            popl   %ecx                    /* prev = self->prev         */
-            popl   %edx                    /* next = self->next         */
-            movl   %edx, 4(%ecx)           /* prev->next = next         */
-            movl   %ecx, (%edx)            /* next->prev = prev         */
+            popl   %esi                    /* prev = self->prev         */
+            popl   %edi                    /* next = self->next         */
+            movl   %edi, 4(%esi)           /* prev->next = next         */
+            movl   %esi, (%edi)            /* next->prev = prev         */
 
             popl   %ebx              /* restore from ASM_FRAMEDATA[2] */
             popl   %esi              /* restore from ASM_FRAMEDATA[3] */
             popl   %edi              /* restore from ASM_FRAMEDATA[4] */
             popl   %ebp              /* restore from ASM_FRAMEDATA[5] */
-            popl   %edx              /* ignored      ASM_FRAMEDATA[6] */
+            popl   %ecx              /* ignored      ASM_FRAMEDATA[6] */
+            /* the return value is the one of the 'call' above, */
+            /* because %eax (and possibly %edx) are unmodified  */
             ret
 """
         _variant(elf='.size pypy_asm_stackwalk, .-pypy_asm_stackwalk',

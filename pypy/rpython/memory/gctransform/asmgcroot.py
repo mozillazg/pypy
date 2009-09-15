@@ -4,7 +4,8 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.rbuiltin import gen_cast
 from pypy.rpython.annlowlevel import llhelper
-from pypy.objspace.flow.model import Constant
+from pypy.objspace.flow.model import Constant, Variable, Block, Link, copygraph
+from pypy.translator.unsimplify import copyvar
 from pypy.rlib.debug import ll_assert
 
 
@@ -35,6 +36,54 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
 
     def build_root_walker(self):
         return AsmStackRootWalker(self)
+
+    def gct_direct_call(self, hop):
+        fnptr = hop.spaceop.args[0].value
+        try:
+            close_stack = fnptr._obj._callable._gctransformer_hint_close_stack_
+        except AttributeError:
+            close_stack = False
+        if close_stack:
+            # obscure hack to continue passing the arguments of the call
+            # across the call to the pypy_asm_stackwalk helper: change the
+            # callee to expect 9 extra arguments in front (!).  This works
+            # because 8 words is the frame size of the intermediate helper
+            # and there is one extra argument passed to the helper...
+            graph = copygraph(fnptr._obj.graph)
+            block2 = graph.startblock
+            block2.isstartblock = False
+            inputvars = [copyvar(None, v) for v in block2.inputargs]
+            dummyvars = []
+            for i in range(9):
+                v = Variable('dummy')
+                v.concretetype = lltype.Signed
+                dummyvars.append(v)
+            block1 = Block(dummyvars + inputvars)
+            block1.closeblock(Link(inputvars, block2))
+            block1.isstartblock = True
+            graph.startblock = block1
+            FUNC1 = lltype.typeOf(fnptr).TO
+            FUNC2 = lltype.FuncType(tuple([lltype.Signed] * len(dummyvars))
+                                    + FUNC1.ARGS,
+                                    FUNC1.RESULT)
+            fnptr2 = lltype.functionptr(FUNC2,
+                                        fnptr._obj._name + '_dummies',
+                                        graph=graph)
+            c_fnptr2 = Constant(fnptr2, lltype.Ptr(FUNC2))
+            HELPERFUNC = lltype.FuncType((lltype.Ptr(FUNC2),) + FUNC1.ARGS,
+                                         FUNC1.RESULT)
+            #
+            livevars = self.push_roots(hop)
+            v_asm_stackwalk = hop.genop("cast_pointer", [c_asm_stackwalk],
+                                        resulttype=lltype.Ptr(HELPERFUNC))
+            hop.genop("indirect_call",
+                      [v_asm_stackwalk, c_fnptr2]
+                      + hop.spaceop.args[1:]
+                      + [Constant(None, lltype.Void)],
+                      resultvar=hop.spaceop.result)
+            self.pop_roots(hop, livevars)
+        else:
+            FrameworkGCTransformer.gct_direct_call(self, hop)
 
 
 class AsmStackRootWalker(BaseRootWalker):
@@ -84,7 +133,7 @@ class AsmStackRootWalker(BaseRootWalker):
         expected = llop.gc_asmgcroot_static(llmemory.Address, 4)
         ll_assert(not (stackscount < expected.signed[0]),
                   "non-closed stacks around")
-        ll_assert(stackscount == expected.signed[0],
+        ll_assert(not (stackscount > expected.signed[0]),
                   "stacks counter corruption?")
         lltype.free(otherframe, flavor='raw')
         lltype.free(curframe, flavor='raw')
@@ -369,9 +418,11 @@ WALKFRAME = lltype.Struct('WALKFRAME',
 
 pypy_asm_stackwalk = rffi.llexternal('pypy_asm_stackwalk',
                                      [ASM_CALLBACK_PTR],
-                                     lltype.Void,
+                                     lltype.Signed,
                                      sandboxsafe=True,
                                      _nowrapper=True)
+c_asm_stackwalk = Constant(pypy_asm_stackwalk,
+                           lltype.typeOf(pypy_asm_stackwalk))
 
 pypy_asm_gcroot = rffi.llexternal('pypy_asm_gcroot',
                                   [llmemory.Address],
