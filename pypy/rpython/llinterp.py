@@ -875,6 +875,9 @@ class LLFrame(object):
     def op_gc_set_max_heap_size(self, maxsize):
         raise NotImplementedError("gc_set_max_heap_size")
 
+    def op_gc_asmgcroot_static(self, index):
+        raise NotImplementedError("gc_asmgcroot_static")
+
     def op_do_malloc_fixedsize_clear(self):
         raise NotImplementedError("do_malloc_fixedsize_clear")
 

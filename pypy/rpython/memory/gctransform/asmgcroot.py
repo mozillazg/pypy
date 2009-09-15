@@ -169,8 +169,8 @@ class AsmStackRootWalker(BaseRootWalker):
         return caller.frame_address != llmemory.NULL
 
     def locate_caller_based_on_retaddr(self, retaddr):
-        gcmapstart = llop.llvm_gcmapstart(llmemory.Address)
-        gcmapend   = llop.llvm_gcmapend(llmemory.Address)
+        gcmapstart = llop.gc_asmgcroot_static(llmemory.Address, 0)
+        gcmapend   = llop.gc_asmgcroot_static(llmemory.Address, 1)
         item = search_in_gcmap(gcmapstart, gcmapend, retaddr)
         if item:
             self._shape_decompressor.setpos(item.signed[1])
@@ -297,7 +297,7 @@ class ShapeDecompressor:
     def setpos(self, pos):
         if pos < 0:
             pos = ~ pos     # can ignore this "range" marker here
-        gccallshapes = llop.llvm_gccallshapes(llmemory.Address)
+        gccallshapes = llop.gc_asmgcroot_static(llmemory.Address, 2)
         self.addr = gccallshapes + pos
 
     def setaddr(self, addr):
