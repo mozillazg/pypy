@@ -144,9 +144,6 @@ class GcRootTracker(object):
         print >> output, '\t/* the ASM_FRAMEDATAs currently alive */'
         print >> output, '\t.long\t__gcrootanchor       /* prev */'
         print >> output, '\t.long\t__gcrootanchor       /* next */'
-        _globl('__gcstackscount')
-        _label('__gcstackscount')
-        print >> output, '\t.long\t1'
         _globl('__gcmapstart')
         _label('__gcmapstart')
         for label, state, is_range in self.gcmaptable:
