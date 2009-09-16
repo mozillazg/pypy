@@ -139,7 +139,10 @@ class AsmStackRootWalker(BaseRootWalker):
             self._extra_gcmapend   = returns_null
 
     def need_thread_support(self, gctransformer, getfn):
-        pass       # threads supported "out of the box" by the rest of the code
+        # Threads supported "out of the box" by the rest of the code.
+        # In particular, we can ignore the gc_thread_prepare,
+        # gc_thread_run and gc_thread_die operations.
+        pass
 
     def walk_stack_roots(self, collect_stack_root):
         gcdata = self.gcdata
