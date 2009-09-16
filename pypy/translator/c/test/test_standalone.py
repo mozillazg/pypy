@@ -307,26 +307,30 @@ class TestThread(object):
         import time
         from pypy.module.thread import ll_thread
         from pypy.rpython.lltypesystem import lltype
+        from pypy.rlib.objectmodel import invoke_around_extcall
 
         class State:
             pass
         state = State()
 
+        def before():
+            ll_thread.release_NOAUTO(state.ll_lock)
+        def after():
+            ll_thread.acquire_NOAUTO(state.ll_lock, True)
+
         def recurse(n):
             if n > 0:
                 return recurse(n-1)+1
             else:
-                state.ll_lock.release()
+                before()
                 time.sleep(0.2)
-                state.ll_lock.acquire(True)
+                after()
                 return 0
 
         def bootstrap():
             # recurse a lot, like 2500 times
-            state.ll_lock.acquire(True)
             recurse(2500)
             state.count += 1
-            state.ll_lock.release()
 
         def entry_point(argv):
             os.write(1, "hello world\n")
@@ -336,17 +340,18 @@ class TestThread(object):
             s1 = State(); s2 = State(); s3 = State()
             s1.x = 0x11111111; s2.x = 0x22222222; s3.x = 0x33333333
             # start 3 new threads
-            state.ll_lock = ll_thread.Lock(ll_thread.allocate_ll_lock())
+            state.ll_lock = ll_thread.allocate_ll_lock()
             state.count = 0
+            invoke_around_extcall(before, after)
             ident1 = ll_thread.start_new_thread(bootstrap, ())
             ident2 = ll_thread.start_new_thread(bootstrap, ())
             ident3 = ll_thread.start_new_thread(bootstrap, ())
             # wait for the 3 threads to finish
             while True:
-                state.ll_lock.acquire(True)
+                after()
                 if state.count == 3:
                     break
-                state.ll_lock.release()
+                before()
                 time.sleep(0.1)
             # check that the malloced structures were not overwritten
             assert s1.x == 0x11111111
@@ -382,10 +387,16 @@ class TestThread(object):
         import time, gc
         from pypy.module.thread import ll_thread
         from pypy.rpython.lltypesystem import lltype
+        from pypy.rlib.objectmodel import invoke_around_extcall
 
         class State:
             pass
         state = State()
+
+        def before():
+            ll_thread.release_NOAUTO(state.ll_lock)
+        def after():
+            ll_thread.acquire_NOAUTO(state.ll_lock, True)
 
         class Cons:
             def __init__(self, head, tail):
@@ -393,34 +404,33 @@ class TestThread(object):
                 self.tail = tail
 
         def bootstrap():
-            state.ll_lock.acquire(True)
             state.xlist.append(Cons(123, Cons(456, None)))
             gc.collect()
-            state.ll_lock.release()
 
         def entry_point(argv):
             os.write(1, "hello world\n")
             state.xlist = []
             x2 = Cons(51, Cons(62, Cons(74, None)))
             # start 5 new threads
-            state.ll_lock = ll_thread.Lock(ll_thread.allocate_ll_lock())
+            state.ll_lock = ll_thread.allocate_ll_lock()
+            invoke_around_extcall(before, after)
             ident1 = ll_thread.start_new_thread(bootstrap, ())
             ident2 = ll_thread.start_new_thread(bootstrap, ())
             #
-            state.ll_lock.acquire(True)
+            after()
             gc.collect()
-            state.ll_lock.release()
+            before()
             #
             ident3 = ll_thread.start_new_thread(bootstrap, ())
             ident4 = ll_thread.start_new_thread(bootstrap, ())
             ident5 = ll_thread.start_new_thread(bootstrap, ())
             # wait for the 5 threads to finish
             while True:
-                state.ll_lock.acquire(True)
+                after()
                 gc.collect()
                 if len(state.xlist) == 5:
                     break
-                state.ll_lock.release()
+                before()
                 time.sleep(0.1)
             # check that the malloced structures were not overwritten
             assert x2.head == 51
