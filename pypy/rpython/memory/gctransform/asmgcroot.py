@@ -46,74 +46,78 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
         except AttributeError:
             close_stack = False
         if close_stack:
-            # We cannot easily pass variable amount of arguments of the call
-            # across the call to the pypy_asm_stackwalk helper.  So we store
-            # them away and restore them.  We need to make a new graph
-            # that starts with restoring the arguments.
-            if self._asmgcc_save_restore_arguments is None:
-                self._asmgcc_save_restore_arguments = {}
-            sradict = self._asmgcc_save_restore_arguments
-            sra = []     # list of pointers to raw-malloced containers for args
-            seen = {}
-            FUNC1 = lltype.typeOf(fnptr).TO
-            for TYPE in FUNC1.ARGS:
-                if isinstance(TYPE, lltype.Ptr):
-                    TYPE = llmemory.Address
-                num = seen.get(TYPE, 0)
-                seen[TYPE] = num + 1
-                key = (TYPE, num)
-                if key not in sradict:
-                    CONTAINER = lltype.FixedSizeArray(TYPE, 1)
-                    p = lltype.malloc(CONTAINER, flavor='raw', zero=True)
-                    sradict[key] = Constant(p, lltype.Ptr(CONTAINER))
-                sra.append(sradict[key])
-            #
-            # store the value of the arguments
-            livevars = self.push_roots(hop)
-            c_item0 = Constant('item0', lltype.Void)
-            for v_arg, c_p in zip(hop.spaceop.args[1:], sra):
-                if isinstance(v_arg.concretetype, lltype.Ptr):
-                    v_arg = hop.genop("cast_ptr_to_adr", [v_arg],
-                                      resulttype=llmemory.Address)
-                hop.genop("bare_setfield", [c_p, c_item0, v_arg])
-            #
-            # make a copy of the graph that will reload the values
-            graph2 = copygraph(fnptr._obj.graph)
-            block2 = graph2.startblock
-            block2.isstartblock = False
-            block1 = Block([])
-            reloadedvars = []
-            for v, c_p in zip(block2.inputargs, sra):
-                v = copyvar(None, v)
-                if isinstance(v.concretetype, lltype.Ptr):
-                    w = Variable('tmp')
-                    w.concretetype = llmemory.Address
-                else:
-                    w = v
-                block1.operations.append(SpaceOperation('getfield',
-                                                        [c_p, c_item0], w))
-                if w is not v:
-                    block1.operations.append(SpaceOperation('cast_adr_to_ptr',
-                                                            [w], v))
-                reloadedvars.append(v)
-            block1.closeblock(Link(reloadedvars, block2))
-            block1.isstartblock = True
-            graph2.startblock = block1
-            FUNC2 = lltype.FuncType([], FUNC1.RESULT)
-            fnptr2 = lltype.functionptr(FUNC2,
-                                        fnptr._obj._name + '_reload',
-                                        graph=graph2)
-            c_fnptr2 = Constant(fnptr2, lltype.Ptr(FUNC2))
-            HELPERFUNC = lltype.FuncType([lltype.Ptr(FUNC2)], FUNC1.RESULT)
-            #
-            v_asm_stackwalk = hop.genop("cast_pointer", [c_asm_stackwalk],
-                                        resulttype=lltype.Ptr(HELPERFUNC))
-            hop.genop("indirect_call",
-                      [v_asm_stackwalk, c_fnptr2, Constant(None, lltype.Void)],
-                      resultvar=hop.spaceop.result)
-            self.pop_roots(hop, livevars)
+            self.handle_call_with_close_stack(hop)
         else:
             FrameworkGCTransformer.gct_direct_call(self, hop)
+
+    def handle_call_with_close_stack(self, hop):
+        fnptr = hop.spaceop.args[0].value
+        # We cannot easily pass variable amount of arguments of the call
+        # across the call to the pypy_asm_stackwalk helper.  So we store
+        # them away and restore them.  We need to make a new graph
+        # that starts with restoring the arguments.
+        if self._asmgcc_save_restore_arguments is None:
+            self._asmgcc_save_restore_arguments = {}
+        sradict = self._asmgcc_save_restore_arguments
+        sra = []     # list of pointers to raw-malloced containers for args
+        seen = {}
+        FUNC1 = lltype.typeOf(fnptr).TO
+        for TYPE in FUNC1.ARGS:
+            if isinstance(TYPE, lltype.Ptr):
+                TYPE = llmemory.Address
+            num = seen.get(TYPE, 0)
+            seen[TYPE] = num + 1
+            key = (TYPE, num)
+            if key not in sradict:
+                CONTAINER = lltype.FixedSizeArray(TYPE, 1)
+                p = lltype.malloc(CONTAINER, flavor='raw', zero=True)
+                sradict[key] = Constant(p, lltype.Ptr(CONTAINER))
+            sra.append(sradict[key])
+        #
+        # store the value of the arguments
+        livevars = self.push_roots(hop)
+        c_item0 = Constant('item0', lltype.Void)
+        for v_arg, c_p in zip(hop.spaceop.args[1:], sra):
+            if isinstance(v_arg.concretetype, lltype.Ptr):
+                v_arg = hop.genop("cast_ptr_to_adr", [v_arg],
+                                  resulttype=llmemory.Address)
+            hop.genop("bare_setfield", [c_p, c_item0, v_arg])
+        #
+        # make a copy of the graph that will reload the values
+        graph2 = copygraph(fnptr._obj.graph)
+        block2 = graph2.startblock
+        block2.isstartblock = False
+        block1 = Block([])
+        reloadedvars = []
+        for v, c_p in zip(block2.inputargs, sra):
+            v = copyvar(None, v)
+            if isinstance(v.concretetype, lltype.Ptr):
+                w = Variable('tmp')
+                w.concretetype = llmemory.Address
+            else:
+                w = v
+            block1.operations.append(SpaceOperation('getfield',
+                                                    [c_p, c_item0], w))
+            if w is not v:
+                block1.operations.append(SpaceOperation('cast_adr_to_ptr',
+                                                        [w], v))
+            reloadedvars.append(v)
+        block1.closeblock(Link(reloadedvars, block2))
+        block1.isstartblock = True
+        graph2.startblock = block1
+        FUNC2 = lltype.FuncType([], FUNC1.RESULT)
+        fnptr2 = lltype.functionptr(FUNC2,
+                                    fnptr._obj._name + '_reload',
+                                    graph=graph2)
+        c_fnptr2 = Constant(fnptr2, lltype.Ptr(FUNC2))
+        HELPERFUNC = lltype.FuncType([lltype.Ptr(FUNC2)], FUNC1.RESULT)
+        #
+        v_asm_stackwalk = hop.genop("cast_pointer", [c_asm_stackwalk],
+                                    resulttype=lltype.Ptr(HELPERFUNC))
+        hop.genop("indirect_call",
+                  [v_asm_stackwalk, c_fnptr2, Constant(None, lltype.Void)],
+                  resultvar=hop.spaceop.result)
+        self.pop_roots(hop, livevars)
 
 
 class AsmStackRootWalker(BaseRootWalker):
@@ -133,6 +137,9 @@ class AsmStackRootWalker(BaseRootWalker):
             returns_null = lambda: llmemory.NULL
             self._extra_gcmapstart = returns_null
             self._extra_gcmapend   = returns_null
+
+    def need_thread_support(self, gctransformer, getfn):
+        pass       # threads supported "out of the box" by the rest of the code
 
     def walk_stack_roots(self, collect_stack_root):
         gcdata = self.gcdata
@@ -160,11 +167,9 @@ class AsmStackRootWalker(BaseRootWalker):
             initialframedata = initialframedata.address[1]
             stackscount += 1
         #
-        expected = llop.gc_asmgcroot_static(llmemory.Address, 4)
-        ll_assert(not (stackscount < expected.signed[0]),
-                  "non-closed stacks around")
-        ll_assert(not (stackscount > expected.signed[0]),
-                  "stacks counter corruption?")
+        expected = rffi.stackcounter.stacks_counter
+        ll_assert(not (stackscount < expected), "non-closed stacks around")
+        ll_assert(not (stackscount > expected), "stacks counter corruption?")
         lltype.free(otherframe, flavor='raw')
         lltype.free(curframe, flavor='raw')
 

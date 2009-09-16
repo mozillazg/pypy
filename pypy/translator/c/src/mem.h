@@ -21,13 +21,8 @@ extern char __gcmapstart;
 extern char __gcmapend;
 extern char __gccallshapes;
 extern void *__gcrootanchor;
-extern long __gcstackscount;     /* for debugging */
 extern long pypy_asm_stackwalk(void*);
 #define __gcnoreorderhack __gcmapend
-
-#ifndef PYPY_NOT_MAIN_FILE
-long __gcstackscount = 1;
-#endif
 
 /* The following pseudo-instruction is used by --gcrootfinder=asmgcc
    just after a call to tell gcc to put a GCROOT mark on each gc-pointer
@@ -54,16 +49,13 @@ long __gcstackscount = 1;
                                              "g" (v))
 
 /* marker for trackgcroot.py */
-#define OP_GC_STACK_BOTTOM(n, r) \
-               asm volatile ("/* GC_STACK_BOTTOM */" : : ); \
-               __gcstackscount += n
+#define OP_GC_STACK_BOTTOM(r)  asm volatile ("/* GC_STACK_BOTTOM */" : : )
 
 #define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
                i == 0 ? (void*)&__gcmapstart :         \
                i == 1 ? (void*)&__gcmapend :           \
                i == 2 ? (void*)&__gccallshapes :       \
                i == 3 ? (void*)&__gcrootanchor :       \
-               i == 4 ? (void*)&__gcstackscount : \
                NULL
 
 #define RAW_MALLOC_ZERO_FILLED 0

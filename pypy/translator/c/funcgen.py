@@ -371,13 +371,13 @@ class FunctionCodeGenerator(object):
         yield 'while (%s) {' % expr
         for op in self.gen_link(enterlink):
             yield '\t' + op
-        yield '\t  block%d_back:' % self.blocknum[headblock]
+        # the semicolon after the colon is needed in case no operation
+        # produces any code after the label
+        yield '\t  block%d_back: ;' % self.blocknum[headblock]
         if headblock.operations:
             for i, op in enumerate(headblock.operations):
                 for line in self.gen_op(op):
                     yield '\t' + line
-        else:
-            yield '\t;'
         yield '}'
         for op in self.gen_link(exitlink):
             yield op
