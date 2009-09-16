@@ -333,8 +333,8 @@ class TestThread(object):
                 return 0
 
         def bootstrap():
-            # recurse a lot, like 2500 times
-            recurse(2500)
+            # recurse a lot, like 19500 times
+            recurse(19500)
             state.count += 1
 
         def entry_point(argv):
@@ -368,7 +368,8 @@ class TestThread(object):
 
         # recursing should crash with only 32 KB of stack,
         # and it should eventually work with more stack
-        for test_kb in [32, 128, 512, 1024, 2048, 4096, 8192, 16384]:
+        for test_kb in [32, 128, 512, 1024, 2048, 4096, 8192, 16384,
+                        32768, 65536]:
             print >> sys.stderr, 'Trying with %d KB of stack...' % (test_kb,),
             try:
                 data = cbuilder.cmdexec(str(test_kb * 1024))
