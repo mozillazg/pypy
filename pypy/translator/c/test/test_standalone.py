@@ -2,6 +2,7 @@ import py
 import sys, os, re
 
 from pypy.rlib.rarithmetic import r_longlong
+from pypy.rlib.debug import ll_assert, debug_print
 from pypy.translator.translator import TranslationContext
 from pypy.translator.backendopt import all
 from pypy.translator.c.genc import CStandaloneBuilder, ExternalCompilationInfo
@@ -314,17 +315,21 @@ class TestThread(object):
         state = State()
 
         def before():
+            debug_print("releasing...")
+            ll_assert(not ll_thread.acquire_NOAUTO(state.ll_lock, False),
+                      "lock not held!")
             ll_thread.release_NOAUTO(state.ll_lock)
+            debug_print("released")
         def after():
+            debug_print("waiting...")
             ll_thread.acquire_NOAUTO(state.ll_lock, True)
+            debug_print("acquired")
 
         def recurse(n):
             if n > 0:
                 return recurse(n-1)+1
             else:
-                before()
-                time.sleep(0.2)
-                after()
+                time.sleep(0.2)      # invokes before/after
                 return 0
 
         def bootstrap():
@@ -341,6 +346,7 @@ class TestThread(object):
             s1.x = 0x11111111; s2.x = 0x22222222; s3.x = 0x33333333
             # start 3 new threads
             state.ll_lock = ll_thread.allocate_ll_lock()
+            after()
             state.count = 0
             invoke_around_extcall(before, after)
             ident1 = ll_thread.start_new_thread(bootstrap, ())
@@ -348,11 +354,9 @@ class TestThread(object):
             ident3 = ll_thread.start_new_thread(bootstrap, ())
             # wait for the 3 threads to finish
             while True:
-                after()
                 if state.count == 3:
                     break
-                before()
-                time.sleep(0.1)
+                time.sleep(0.1)      # invokes before/after
             # check that the malloced structures were not overwritten
             assert s1.x == 0x11111111
             assert s2.x == 0x22222222
@@ -394,6 +398,8 @@ class TestThread(object):
         state = State()
 
         def before():
+            ll_assert(not ll_thread.acquire_NOAUTO(state.ll_lock, False),
+                      "lock not held!")
             ll_thread.release_NOAUTO(state.ll_lock)
         def after():
             ll_thread.acquire_NOAUTO(state.ll_lock, True)
@@ -413,25 +419,22 @@ class TestThread(object):
             x2 = Cons(51, Cons(62, Cons(74, None)))
             # start 5 new threads
             state.ll_lock = ll_thread.allocate_ll_lock()
+            after()
             invoke_around_extcall(before, after)
             ident1 = ll_thread.start_new_thread(bootstrap, ())
             ident2 = ll_thread.start_new_thread(bootstrap, ())
             #
-            after()
             gc.collect()
-            before()
             #
             ident3 = ll_thread.start_new_thread(bootstrap, ())
             ident4 = ll_thread.start_new_thread(bootstrap, ())
             ident5 = ll_thread.start_new_thread(bootstrap, ())
             # wait for the 5 threads to finish
             while True:
-                after()
                 gc.collect()
                 if len(state.xlist) == 5:
                     break
-                before()
-                time.sleep(0.1)
+                time.sleep(0.1)      # invokes before/after
             # check that the malloced structures were not overwritten
             assert x2.head == 51
             assert x2.tail.head == 62
