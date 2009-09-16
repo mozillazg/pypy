@@ -286,9 +286,27 @@ class TestMaemo(TestStandalone):
 
 
 class TestThread(object):
+    gcrootfinder = 'shadowstack'
+
+    def compile(self, entry_point):
+        t = TranslationContext()
+        t.config.translation.gc = "semispace"
+        t.config.translation.gcrootfinder = self.gcrootfinder
+        t.config.translation.thread = True
+        t.buildannotator().build_types(entry_point, [s_list_of_strings])
+        t.buildrtyper().specialize()
+        #
+        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
+        cbuilder.generate_source()
+        cbuilder.compile()
+        #
+        return t, cbuilder
+
+
     def test_stack_size(self):
         import time
         from pypy.module.thread import ll_thread
+        from pypy.rpython.lltypesystem import lltype
 
         class State:
             pass
@@ -337,13 +355,7 @@ class TestThread(object):
             os.write(1, "done\n")
             return 0
 
-        t = TranslationContext()
-        t.buildannotator().build_types(entry_point, [s_list_of_strings])
-        t.buildrtyper().specialize()
-
-        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-        cbuilder.generate_source()
-        cbuilder.compile()
+        t, cbuilder = self.compile(entry_point)
 
         # recursing should crash with only 32 KB of stack,
         # and it should eventually work with more stack
@@ -364,3 +376,70 @@ class TestThread(object):
                 break    # finish
         else:
             py.test.fail("none of the stack sizes worked")
+
+
+    def test_thread_and_gc(self):
+        import time, gc
+        from pypy.module.thread import ll_thread
+        from pypy.rpython.lltypesystem import lltype
+
+        class State:
+            pass
+        state = State()
+
+        class Cons:
+            def __init__(self, head, tail):
+                self.head = head
+                self.tail = tail
+
+        def bootstrap():
+            state.ll_lock.acquire(True)
+            state.xlist.append(Cons(123, Cons(456, None)))
+            gc.collect()
+            state.ll_lock.release()
+
+        def entry_point(argv):
+            os.write(1, "hello world\n")
+            state.xlist = []
+            x2 = Cons(51, Cons(62, Cons(74, None)))
+            # start 5 new threads
+            state.ll_lock = ll_thread.Lock(ll_thread.allocate_ll_lock())
+            ident1 = ll_thread.start_new_thread(bootstrap, ())
+            ident2 = ll_thread.start_new_thread(bootstrap, ())
+            #
+            state.ll_lock.acquire(True)
+            gc.collect()
+            state.ll_lock.release()
+            #
+            ident3 = ll_thread.start_new_thread(bootstrap, ())
+            ident4 = ll_thread.start_new_thread(bootstrap, ())
+            ident5 = ll_thread.start_new_thread(bootstrap, ())
+            # wait for the 5 threads to finish
+            while True:
+                state.ll_lock.acquire(True)
+                gc.collect()
+                if len(state.xlist) == 5:
+                    break
+                state.ll_lock.release()
+                time.sleep(0.1)
+            # check that the malloced structures were not overwritten
+            assert x2.head == 51
+            assert x2.tail.head == 62
+            assert x2.tail.tail.head == 74
+            assert x2.tail.tail.tail is None
+            # check the structures produced by the threads
+            for i in range(5):
+                assert state.xlist[i].head == 123
+                assert state.xlist[i].tail.head == 456
+                assert state.xlist[i].tail.tail is None
+                os.write(1, "%d ok\n" % (i+1))
+            return 0
+
+        t, cbuilder = self.compile(entry_point)
+        data = cbuilder.cmdexec('')
+        assert data.splitlines() == ['hello world',
+                                     '1 ok',
+                                     '2 ok',
+                                     '3 ok',
+                                     '4 ok',
+                                     '5 ok']

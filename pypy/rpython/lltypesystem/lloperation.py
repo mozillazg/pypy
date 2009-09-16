@@ -416,9 +416,7 @@ LL_OPERATIONS = {
     'gc_x_size_header':     LLOp(),
 
     # for asmgcroot support to get the address of various static structures
-    #    0: gcmapstart
-    #    1: gcmapend
-    #    2: gccallshapes
+    # see translator/c/src/mem.h for the valid indices
     'gc_asmgcroot_static':  LLOp(sideeffects=False),
     'gc_stack_bottom':      LLOp(sideeffects=False, canrun=True),
 

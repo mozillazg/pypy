@@ -216,7 +216,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     args = ', '.join(['a%d' % i for i in range(len(TP.TO.ARGS))])
     source = py.code.Source(r"""
         def wrapper(%s):    # no *args - no GIL for mallocing the tuple
-            llop.gc_stack_bottom(lltype.Void, +1)   # marker for trackgcroot.py
+            llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
             if aroundstate is not None:
                 before = aroundstate.before
                 after = aroundstate.after
@@ -226,8 +226,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
             if after:
                 after()
             # from now on we hold the GIL
-            if aroundstate is not None:
-                aroundstate.callback_counter += 1
+            stackcounter.stacks_counter += 1
             try:
                 result = callable(%s)
             except Exception, e:
@@ -238,20 +237,19 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
                     import traceback
                     traceback.print_exc()
                 result = errorcode
-            if aroundstate is not None:
-                aroundstate.callback_counter -= 1
+            stackcounter.stacks_counter -= 1
             if before:
                 before()
             # here we don't hold the GIL any more. As in the wrapper() produced
             # by llexternal, it is essential that no exception checking occurs
             # after the call to before().
-            llop.gc_stack_bottom(lltype.Void, -1)   # marker for trackgcroot.py
             return result
     """ % (args, args))
     miniglobals = locals().copy()
     miniglobals['Exception'] = Exception
     miniglobals['os'] = os
     miniglobals['we_are_translated'] = we_are_translated
+    miniglobals['stackcounter'] = stackcounter
     exec source.compile() in miniglobals
     return miniglobals['wrapper']
 _make_wrapper_for._annspecialcase_ = 'specialize:memo'
@@ -261,10 +259,16 @@ class AroundState:
     def _freeze_(self):
         self.before = None    # or a regular RPython function
         self.after = None     # or a regular RPython function
-        self.callback_counter = 0
         return False
 aroundstate = AroundState()
 aroundstate._freeze_()
+
+class StackCounter:
+    def _freeze_(self):
+        self.stacks_counter = 1     # number of "stack pieces": callbacks
+        return False                # and threads increase it by one
+stackcounter = StackCounter()
+stackcounter._freeze_()
 
 # ____________________________________________________________
 # Few helpers for keeping callback arguments alive
