@@ -1418,7 +1418,7 @@ class MetaInterp(object):
             for i in range(self.staticdata.num_green_args):
                 box1 = original_boxes[i]
                 box2 = live_arg_boxes[i]
-                assert isinstance(box1, Constant)
+                assert isinstance(box1, Const)
                 if not box1.same_constant(box2):
                     break
             else:

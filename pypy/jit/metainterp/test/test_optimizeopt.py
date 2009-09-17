@@ -311,6 +311,66 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(p0)
         """
         self.optimize_loop(ops, 'Not', expected)
+        ops = """
+        [p0]
+        i1 = ooisnull(p0)
+        guard_false(i1)
+          fail()
+        i0 = oononnull(p0)         # p0 != NULL
+        guard_true(i0)
+          fail()
+        jump(p0)
+        """
+        expected = """
+        [p0]
+        i1 = ooisnull(p0)
+        guard_false(i1)
+          fail()
+        jump(p0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_ooisnull_on_null_ptr_1(self):
+        ops = """
+        []
+        p0 = escape()
+        i0 = ooisnull(p0)
+        guard_true(i0)
+          fail()
+        i1 = oononnull(p0)
+        guard_false(i1)
+          fail()
+        jump()
+        """
+        expected = """
+        []
+        p0 = escape()
+        i0 = ooisnull(p0)
+        guard_true(i0)
+          fail()
+        jump()
+        """
+        self.optimize_loop(ops, '', expected)
+        ops = """
+        []
+        p0 = escape()
+        i0 = oononnull(p0)
+        guard_false(i0)
+          fail()
+        i1 = ooisnull(p0)
+        guard_true(i1)
+          fail()
+        jump()
+        """
+        expected = """
+        []
+        p0 = escape()
+        i0 = oononnull(p0)
+        guard_false(i0)
+          fail()
+        jump()
+        """
+        self.optimize_loop(ops, '', expected)
 
     def test_ooisnull_oononnull_via_virtual(self):
         ops = """
