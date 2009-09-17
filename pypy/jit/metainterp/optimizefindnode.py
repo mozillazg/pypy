@@ -8,6 +8,7 @@ from pypy.jit.metainterp.history import AbstractValue, ConstInt, Const
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.executor import _execute_nonspec
 from pypy.jit.metainterp.optimizeutil import av_newdict, _findall, sort_descrs
+from pypy.jit.metainterp.optimizeutil import InvalidLoop
 
 # ____________________________________________________________
 
@@ -341,9 +342,11 @@ class PerfectSpecializationFinder(NodeFinder):
     def intersect(self, inputnode, exitnode):
         assert inputnode.fromstart
         if inputnode.is_constant() and \
-           exitnode.is_constant() and \
-           inputnode.knownvaluebox.same_constant(exitnode.knownvaluebox):
-            return ConstantSpecNode(inputnode.knownvaluebox)
+           exitnode.is_constant():
+            if inputnode.knownvaluebox.same_constant(exitnode.knownvaluebox):
+                return ConstantSpecNode(inputnode.knownvaluebox)
+            else:
+                raise InvalidLoop
         if inputnode.escaped:
             return prebuiltNotSpecNode
         unique = exitnode.unique
@@ -387,7 +390,7 @@ class PerfectSpecializationFinder(NodeFinder):
         if (inputnode.knownclsbox is not None and
             not inputnode.knownclsbox.same_constant(exitnode.knownclsbox)):
             # unique match, but the class is known to be a mismatch
-            return prebuiltNotSpecNode
+            raise InvalidLoop
         #
         fields = self.compute_common_fields(inputnode.origfields,
                                             exitnode.curfields)
