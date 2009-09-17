@@ -217,11 +217,10 @@ class BaseTest(object):
 
 class BaseTestOptimizeFindNode(BaseTest):
 
-    def find_nodes(self, ops, spectext, boxkinds=None, **values):
+    def find_nodes(self, ops, spectext, boxkinds=None):
         assert boxkinds is None or isinstance(boxkinds, dict)
         loop = self.parse(ops, boxkinds=boxkinds)
-        loop.setvalues(**values)
-        perfect_specialization_finder = PerfectSpecializationFinder()
+        perfect_specialization_finder = PerfectSpecializationFinder(self.cpu)
         perfect_specialization_finder.find_nodes_loop(loop)
         self.check_specnodes(loop.specnodes, spectext)
         return (loop.getboxes(), perfect_specialization_finder.getnode)
@@ -740,7 +739,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         p2 = same_as(ConstPtr(myptr))
         jump(p2)
         """
-        self.find_nodes(ops, 'Constant(myptr)', p2=self.myptr)
+        self.find_nodes(ops, 'Constant(myptr)')
 
     def test_find_nodes_store_into_loop_constant_1(self):
         ops = """
@@ -781,7 +780,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         setarrayitem_gc(p2, 0, i3, descr=arraydescr)
         jump(p2)
         """
-        self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1)
+        self.find_nodes(ops, 'VArray(arraydescr, Not)')
 
     def test_find_nodes_arithmetic_propagation_bug_1(self):
         ops = """
@@ -793,7 +792,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         setarrayitem_gc(p2, 0, 5)
         jump(p2)
         """
-        self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1)
+        self.find_nodes(ops, 'VArray(arraydescr, Not)')
 
     def test_find_nodes_arithmetic_propagation_bug_2(self):
         ops = """
@@ -807,7 +806,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         setarrayitem_gc(p2, i0, i3, descr=arraydescr)
         jump(p2)
         """
-        self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1, i0=0)
+        self.find_nodes(ops, 'VArray(arraydescr, Not)')
 
     def test_find_nodes_arithmetic_propagation_bug_3(self):
         ops = """
@@ -821,7 +820,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         setarrayitem_gc(p2, 0, i3, descr=arraydescr)
         jump(p2)
         """
-        self.find_nodes(ops, 'VArray(arraydescr, Not)', i2=1)
+        self.find_nodes(ops, 'VArray(arraydescr, Not)')
 
     def test_find_nodes_bug_1(self):
         ops = """
@@ -888,9 +887,7 @@ class BaseTestOptimizeFindNode(BaseTest):
             fail()
         jump(p58)
         """
-        self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)',
-                        i16=0, i25=0, i39=0, i52=0, i55=0, i59=0,
-                        i43=1, i45=1, i48=1, i40=1)
+        self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)')
 
     def test_bug_2(self):
         py.test.skip("fix me")
@@ -909,13 +906,12 @@ class BaseTestOptimizeFindNode(BaseTest):
     # Bridge tests
 
     def find_bridge(self, ops, inputspectext, outputspectext, boxkinds=None,
-                    mismatch=False, **values):
+                    mismatch=False):
         assert boxkinds is None or isinstance(boxkinds, dict)
         inputspecnodes = self.unpack_specnodes(inputspectext)
         outputspecnodes = self.unpack_specnodes(outputspectext)
         bridge = self.parse(ops, boxkinds=boxkinds)
-        bridge.setvalues(**values)
-        bridge_specialization_finder = BridgeSpecializationFinder()
+        bridge_specialization_finder = BridgeSpecializationFinder(self.cpu)
         bridge_specialization_finder.find_nodes_bridge(bridge, inputspecnodes)
         matches = bridge_specialization_finder.bridge_matches(outputspecnodes)
         if mismatch:
