@@ -1270,6 +1270,23 @@ class BaseTestOptimizeOpt(BaseTest):
         py.test.raises(InvalidLoop, self.optimize_loop,
                        ops, '...', None)
 
+    def test_invalid_loop_3(self):
+        ops = """
+        [p1]
+        p2 = getfield_gc(p1, descr=nextdescr)
+        i1 = ooisnull(p2)
+        guard_true(i1)
+            fail()
+        #
+        p3 = new_with_vtable(ConstClass(node_vtable))
+        p4 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p3, p4, descr=nextdescr)
+        jump(p3)
+        """
+        py.test.raises(InvalidLoop, self.optimize_loop, ops,
+                       'Virtual(node_vtable, nextdescr=Virtual(node_vtable))',
+                       None)
+
     # ----------
 
     def make_fail_descr(self):
