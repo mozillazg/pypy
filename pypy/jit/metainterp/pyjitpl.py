@@ -304,7 +304,7 @@ class MIFrame(object):
         box = self.implement_guard_value(pc, valuebox)
         for i in range(len(constargs)):
             casebox = constargs[i]
-            if box.equals(casebox):
+            if box.same_constant(casebox):
                 self.pc = jumptargets[i]
                 break
 
@@ -996,13 +996,13 @@ class MIFrame(object):
         return guard_op
 
     def implement_guard_value(self, pc, box):
-        if isinstance(box, Box):
+        if isinstance(box, Const):
+            return box     # no promotion needed, already a Const
+        else:
             promoted_box = box.constbox()
             self.generate_guard(pc, rop.GUARD_VALUE, box, [promoted_box])
             self.metainterp.replace_box(box, promoted_box)
             return promoted_box
-        else:
-            return box     # no promotion needed, already a Const
 
     def cls_of_box(self, box):
         return self.metainterp.cpu.ts.cls_of_box(self.metainterp.cpu, box)
@@ -1418,7 +1418,8 @@ class MetaInterp(object):
             for i in range(self.staticdata.num_green_args):
                 box1 = original_boxes[i]
                 box2 = live_arg_boxes[i]
-                if not box1.equals(box2):
+                assert isinstance(box1, Constant)
+                if not box1.same_constant(box2):
                     break
             else:
                 # Found!  Compile it as a loop.
