@@ -220,6 +220,20 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not', expected)
 
+    def test_remove_guard_class_constant(self):
+        ops = """
+        [i0]
+        p0 = same_as(ConstPtr(myptr))
+        guard_class(p0, ConstClass(node_vtable))
+          fail()
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
     def test_remove_consecutive_guard_value_constfold(self):
         ops = """
         []
