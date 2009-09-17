@@ -23,6 +23,10 @@ class AbstractCPU(object):
         """Set the value for the index'th argument for the loop to run."""
         raise NotImplementedError
 
+    def set_future_value_float(self, index, floatvalue):
+        """Set the value for the index'th argument for the loop to run."""
+        raise NotImplementedError
+
     def set_future_value_ref(self, index, objvalue):
         """Set the value for the index'th argument for the loop to run."""
         raise NotImplementedError
@@ -30,6 +34,11 @@ class AbstractCPU(object):
     def get_latest_value_int(self, index):
         """Returns the value for the index'th argument to the
         lastest rop.FAIL.  Returns an int."""
+        raise NotImplementedError
+
+    def get_latest_value_float(self, index):
+        """Returns the value for the index'th argument to the
+        lastest rop.FAIL.  Returns a float."""
         raise NotImplementedError
 
     def get_latest_value_ref(self, index):
