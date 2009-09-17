@@ -1,6 +1,7 @@
 from pypy.jit.metainterp.history import Box, BoxInt
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj, REF
 from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.metainterp.executor import _execute_nonspec
 from pypy.jit.metainterp.specnode import SpecNode, NotSpecNode, ConstantSpecNode
 from pypy.jit.metainterp.specnode import AbstractVirtualStructSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
@@ -38,15 +39,15 @@ LEVEL_CONSTANT   = '\x03'
 
 
 class OptValue(object):
-    _attrs_ = ('box', 'level', 'missing', '_fields')
+    _attrs_ = ('box', 'known_class', 'level', '_fields')
     level = LEVEL_UNKNOWN
-    missing = False   # is True if we don't know the value yet (for virtuals)
     _fields = None
 
     def __init__(self, box):
         self.box = box
         if isinstance(box, Const):
             self.level = LEVEL_CONSTANT
+        # invariant: box is a Const if and only if level == LEVEL_CONSTANT
 
     def force_box(self):
         return self.box
@@ -57,30 +58,34 @@ class OptValue(object):
     def get_args_for_fail(self, modifier):
         pass
 
-    def initialize_if_missing(self, srcbox):
-        if self.missing:
-            dstbox = self.box
-            if dstbox is not None:
-                assert isinstance(dstbox, Box)
-                dstbox.changevalue_box(srcbox)
-            self.missing = False
-
     def is_constant(self):
         return self.level == LEVEL_CONSTANT
 
     def is_null(self):
-        return self.is_constant() and not self.box.nonnull()
+        if self.is_constant():
+            box = self.box
+            assert isinstance(box, Const)
+            return not box.nonnull_constant()
+        return False
 
-    def make_constant(self):
-        """Mark 'self' as actually representing a Const value."""
-        self.box = self.force_box().constbox()
+    def make_constant(self, constbox):
+        """Replace 'self.box' with a Const box."""
+        assert isinstance(constbox, Const)
+        self.box = constbox
         self.level = LEVEL_CONSTANT
 
-    def has_constant_class(self):
-        return self.level >= LEVEL_KNOWNCLASS
+    def get_constant_class(self, cpu):
+        level = self.level
+        if level == LEVEL_KNOWNCLASS:
+            return self.known_class
+        elif level == LEVEL_CONSTANT:
+            return cpu.ts.cls_of_box(cpu, self.box)
+        else:
+            return None
 
-    def make_constant_class(self):
+    def make_constant_class(self, classbox):
         if self.level < LEVEL_KNOWNCLASS:
+            self.known_class = classbox
             self.level = LEVEL_KNOWNCLASS
 
     def is_nonnull(self):
@@ -88,7 +93,9 @@ class OptValue(object):
         if level == LEVEL_NONNULL or level == LEVEL_KNOWNCLASS:
             return True
         elif level == LEVEL_CONSTANT:
-            return self.box.nonnull()
+            box = self.box
+            assert isinstance(box, Const)
+            return box.nonnull_constant()
         else:
             return False
 
@@ -97,6 +104,8 @@ class OptValue(object):
             self.level = LEVEL_NONNULL
 
     def make_null_or_nonnull(self):
+        # I think this needs to change:  the Bool class can easily store
+        # whether to make it a null or a nonnull
         if self.box.nonnull():
             self.make_nonnull()
         else:
@@ -110,13 +119,21 @@ class OptValue(object):
 
 class BoolValue(OptValue):
 
-    def __init__(self, box, fromvalue):
+    def __init__(self, box, fromvalue, reversed):
         OptValue.__init__(self, box)
+        # If later 'box' is turned into a constant False
+        # (resp. True), then 'fromvalue' will be known to
+        # be null (resp. non-null).  If 'reversed', then
+        # this logic is reversed.
         self.fromvalue = fromvalue
+        self.reversed = reversed
 
-    def make_constant(self):
-        OptValue.make_constant(self)
-        self.fromvalue.make_null_or_nonnull()
+    def make_constant(self, constbox):
+        OptValue.make_constant(self, constbox)
+        if constbox.nonnull_constant() ^ self.reversed:
+            self.fromvalue.make_nonnull()
+        else:
+            self.fromvalue.make_null()
 
 class ConstantValue(OptValue):
     level = LEVEL_CONSTANT
@@ -124,7 +141,9 @@ class ConstantValue(OptValue):
     def __init__(self, box):
         self.box = box
 
-CVAL_ZERO    = ConstantValue(ConstInt(0))
+CONST_0      = ConstInt(0)
+CONST_1      = ConstInt(1)
+CVAL_ZERO    = ConstantValue(CONST_0)
 llhelper.CVAL_NULLREF = ConstantValue(ConstPtr(ConstPtr.value))
 oohelper.CVAL_NULLREF = ConstantValue(ConstObj(ConstObj.value))
 
@@ -132,7 +151,7 @@ oohelper.CVAL_NULLREF = ConstantValue(ConstObj(ConstObj.value))
 class AbstractVirtualValue(OptValue):
     _attrs_ = ('optimizer', 'keybox', 'source_op')
     box = None
-    level = LEVEL_KNOWNCLASS
+    level = LEVEL_NONNULL
 
     def __init__(self, optimizer, keybox, source_op=None):
         self.optimizer = optimizer
@@ -195,9 +214,11 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
 
 
 class VirtualValue(AbstractVirtualStructValue):
+    level = LEVEL_KNOWNCLASS
 
     def __init__(self, optimizer, known_class, keybox, source_op=None):
         AbstractVirtualStructValue.__init__(self, optimizer, keybox, source_op)
+        assert isinstance(known_class, Const)
         self.known_class = known_class
 
     def _make_virtual(self, modifier, fielddescrs, fieldboxes):
@@ -281,7 +302,7 @@ class __extend__(NotSpecNode):
 
 class __extend__(ConstantSpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
-        optimizer.make_constant(box)
+        optimizer.make_constant(box, self.constbox)
     def teardown_virtual_node(self, optimizer, value, newexitargs):
         pass
 
@@ -345,10 +366,11 @@ class Optimizer(object):
         self.interned_refs = {}
 
     def getinterned(self, box):
-        if not self.is_constant(box):
+        constbox = self.get_constant_box(box)
+        if constbox is None:
             return box
-        if box.type == REF:
-            value = box.getref_base()
+        if constbox.type == REF:
+            value = constbox.getref_base()
             if not value:
                 return box
             key = self.cpu.ts.cast_ref_to_hashable(self.cpu, value)
@@ -368,23 +390,28 @@ class Optimizer(object):
             value = self.values[box] = OptValue(box)
         return value
 
-    def is_constant(self, box):
+    def get_constant_box(self, box):
         if isinstance(box, Const):
-            return True
+            return box
         try:
-            return self.values[box].is_constant()
+            value = self.values[box]
         except KeyError:
-            return False
+            return None
+        if value.is_constant():
+            constbox = value.box
+            assert isinstance(constbox, Const)
+            return constbox
+        return None
 
     def make_equal_to(self, box, value):
         assert box not in self.values
         self.values[box] = value
 
-    def make_constant(self, box):
-        self.make_equal_to(box, ConstantValue(box.constbox()))
+    def make_constant(self, box, constbox):
+        self.make_equal_to(box, ConstantValue(constbox))
 
-    def known_nonnull(self, box):
-        return self.getvalue(box).is_nonnull()
+    def make_constant_int(self, box, intvalue):
+        self.make_constant(box, ConstInt(intvalue))
 
     def make_virtual(self, known_class, box, source_op=None):
         vvalue = VirtualValue(self, known_class, box, source_op)
@@ -401,8 +428,8 @@ class Optimizer(object):
         self.make_equal_to(box, vvalue)
         return vvalue
 
-    def make_bool(self, box, fromvalue):
-        value = BoolValue(box, fromvalue)
+    def make_bool(self, box, fromvalue, reversed):
+        value = BoolValue(box, fromvalue, reversed)
         self.make_equal_to(box, value)
         return value
 
@@ -464,7 +491,7 @@ class Optimizer(object):
         for i in range(len(op.args)):
             arg = op.args[i]
             if arg in self.values:
-                box = self.values[arg].force_box()
+                box = self.values[arg].force_box() # I think we definitely need box, at least for this but it's unclear I mean is it ok to replace box with Const(..) when we set level==CONSTANT?ah, in this direction. yes, I would expect that to be ok ah yes indeed I see it
                 if box is not arg:
                     if must_clone:
                         op = op.clone()
@@ -527,11 +554,13 @@ class Optimizer(object):
     def optimize_default(self, op):
         if op.is_always_pure():
             for arg in op.args:
-                if not self.is_constant(arg):
+                if self.get_constant_box(arg) is None:
                     break
             else:
                 # all constant arguments: constant-fold away
-                self.make_constant(op.result)
+                argboxes = [self.get_constant_box(arg) for arg in op.args]
+                resbox = _execute_nonspec(self.cpu, op.opnum, argboxes, op.descr)
+                self.make_constant(op.result, resbox.constbox())
                 return
         elif not op.has_no_side_effect() and not op.is_ovf():
             self.clean_fields_of_values()
@@ -551,34 +580,37 @@ class Optimizer(object):
         op2.jump_target = op.jump_target
         self.emit_operation(op2, must_clone=False)
 
-    def optimize_guard(self, op):
+    def optimize_guard(self, op, constbox):
         value = self.getvalue(op.args[0])
         if value.is_constant():
+            box = value.box
+            assert isinstance(box, Const)
+            assert box.same_constant(constbox)
             return
         self.emit_operation(op)
-        value.make_constant()
+        value.make_constant(constbox)
 
     def optimize_GUARD_VALUE(self, op):
-        assert isinstance(op.args[1], Const)
-        if not we_are_translated():
-            assert op.args[0].value == op.args[1].value
-        self.optimize_guard(op)
+        constbox = op.args[1]
+        assert isinstance(constbox, Const)
+        self.optimize_guard(op, constbox)
 
     def optimize_GUARD_TRUE(self, op):
-        assert op.args[0].getint() == 1
-        self.optimize_guard(op)
+        self.optimize_guard(op, CONST_1)
 
     def optimize_GUARD_FALSE(self, op):
-        assert op.args[0].getint() == 0
-        self.optimize_guard(op)
+        self.optimize_guard(op, CONST_0)
 
     def optimize_GUARD_CLASS(self, op):
-        # XXX should probably assert that the class is right
         value = self.getvalue(op.args[0])
-        if value.has_constant_class():
+        expectedclassbox = op.args[1]
+        assert isinstance(expectedclassbox, Const)
+        realclassbox = value.get_constant_class(self.cpu)
+        if realclassbox is not None:
+            assert realclassbox.same_constant(expectedclassbox)
             return
         self.emit_operation(op)
-        value.make_constant_class()
+        value.make_constant_class(expectedclassbox)
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if not self.exception_might_have_happened:
@@ -593,14 +625,13 @@ class Optimizer(object):
 
 
     def _optimize_nullness(self, op, expect_nonnull):
-        if self.known_nonnull(op.args[0]):
-            assert op.result.getint() == expect_nonnull
-            self.make_constant(op.result)
-        elif self.is_constant(op.args[0]): # known to be null
-            assert op.result.getint() == (not expect_nonnull)
-            self.make_constant(op.result)
+        value = self.getvalue(op.args[0])
+        if value.is_nonnull():
+            self.make_constant_int(op.result, expect_nonnull)
+        elif value.is_null():
+            self.make_constant_int(op.result, not expect_nonnull)
         else:
-            self.make_bool(op.result, self.getvalue(op.args[0]))
+            self.make_bool(op.result, value, not expect_nonnull)
             self.emit_operation(op)
 
     def optimize_OONONNULL(self, op):
@@ -612,33 +643,31 @@ class Optimizer(object):
     def optimize_INT_IS_TRUE(self, op):
         self._optimize_nullness(op, True)
 
-    def optimize_OOISNOT(self, op):
+    def _optimize_oois_ooisnot(self, op, expect_isnot, unary_opnum):
         value0 = self.getvalue(op.args[0])
         value1 = self.getvalue(op.args[1])
-        if value0.is_virtual() or value1.is_virtual():
-            self.make_constant(op.result)
+        if value0.is_virtual():
+            if value1.is_virtual():
+                intres = (value0 is value1) ^ expect_isnot
+                self.make_constant_int(op.result, intres)
+            else:
+                self.make_constant_int(op.result, expect_isnot)
+        elif value1.is_virtual():
+            self.make_constant_int(op.result, expect_isnot)
         elif value1.is_null():
-            op = ResOperation(rop.OONONNULL, [op.args[0]], op.result)
-            self.optimize_OONONNULL(op)
+            op = ResOperation(unary_opnum, [op.args[0]], op.result)
+            self._optimize_nullness(op, expect_isnot)
         elif value0.is_null():
-            op = ResOperation(rop.OONONNULL, [op.args[1]], op.result)
-            self.optimize_OONONNULL(op)
+            op = ResOperation(unary_opnum, [op.args[1]], op.result)
+            self._optimize_nullness(op, expect_isnot)
         else:
             self.optimize_default(op)
 
+    def optimize_OOISNOT(self, op):
+        self._optimize_oois_ooisnot(op, True, rop.OONONNULL)
+
     def optimize_OOIS(self, op):
-        value0 = self.getvalue(op.args[0])
-        value1 = self.getvalue(op.args[1])
-        if value0.is_virtual() or value1.is_virtual():
-            self.make_constant(op.result)
-        elif value1.is_null():
-            op = ResOperation(rop.OOISNULL, [op.args[0]], op.result)
-            self.optimize_OOISNULL(op)
-        elif value0.is_null():
-            op = ResOperation(rop.OOISNULL, [op.args[1]], op.result)
-            self.optimize_OOISNULL(op)
-        else:
-            self.optimize_default(op)
+        self._optimize_oois_ooisnot(op, False, rop.OOISNULL)
 
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])
@@ -646,7 +675,6 @@ class Optimizer(object):
             # optimizefindnode should ensure that fieldvalue is found
             fieldvalue = value.getfield(op.descr, None)
             assert fieldvalue is not None
-            fieldvalue.initialize_if_missing(op.result)
             self.make_equal_to(op.result, fieldvalue)
         else:
             # check if the field was read from another getfield_gc just before
@@ -689,37 +717,37 @@ class Optimizer(object):
         self.make_vstruct(op.descr, op.result, op)
 
     def optimize_NEW_ARRAY(self, op):
-        sizebox = op.args[0]
-        if self.is_constant(sizebox):
-            size = sizebox.getint()
-            if not isinstance(sizebox, ConstInt):
-                op = ResOperation(rop.NEW_ARRAY, [ConstInt(size)], op.result,
+        sizebox = self.get_constant_box(op.args[0])
+        if sizebox is not None:
+            # if the original 'op' did not have a ConstInt as argument,
+            # build a new one with the ConstInt argument
+            if not isinstance(op.args[0], ConstInt):
+                op = ResOperation(rop.NEW_ARRAY, [sizebox], op.result,
                                   descr=op.descr)
-            self.make_varray(op.descr, size, op.result, op)
+            self.make_varray(op.descr, sizebox.getint(), op.result, op)
         else:
             self.optimize_default(op)
 
     def optimize_ARRAYLEN_GC(self, op):
         value = self.getvalue(op.args[0])
         if value.is_virtual():
-            assert op.result.getint() == value.getlength()
-            self.make_constant(op.result)
+            self.make_constant_int(op.result, value.getlength())
         else:
             value.make_nonnull()
             self.optimize_default(op)
 
     def optimize_GETARRAYITEM_GC(self, op):
         value = self.getvalue(op.args[0])
-        indexbox = op.args[1]
-        if value.is_virtual() and self.is_constant(indexbox):
-            # optimizefindnode should ensure that itemvalue is found
-            itemvalue = value.getitem(indexbox.getint(), None)
-            assert itemvalue is not None
-            itemvalue.initialize_if_missing(op.result)
-            self.make_equal_to(op.result, itemvalue)
-        else:
-            value.make_nonnull()
-            self.optimize_default(op)
+        if value.is_virtual():
+            indexbox = self.get_constant_box(op.args[1])
+            if indexbox is not None:
+                # optimizefindnode should ensure that itemvalue is found
+                itemvalue = value.getitem(indexbox.getint(), None)
+                assert itemvalue is not None
+                self.make_equal_to(op.result, itemvalue)
+                return
+        value.make_nonnull()
+        self.optimize_default(op)
 
     # note: the following line does not mean that the two operations are
     # completely equivalent, because GETARRAYITEM_GC_PURE is_always_pure().
@@ -727,19 +755,24 @@ class Optimizer(object):
 
     def optimize_SETARRAYITEM_GC(self, op):
         value = self.getvalue(op.args[0])
-        indexbox = op.args[1]
-        if value.is_virtual() and self.is_constant(indexbox):
-            value.setitem(indexbox.getint(), self.getvalue(op.args[2]))
-        else:
-            value.make_nonnull()
-            # don't use optimize_default, because otherwise unrelated struct
-            # fields will be cleared
-            self.emit_operation(op)
+        if value.is_virtual():
+            indexbox = self.get_constant_box(op.args[1])
+            if indexbox is not None:
+                value.setitem(indexbox.getint(), self.getvalue(op.args[2]))
+                return
+        value.make_nonnull()
+        # don't use optimize_default, because otherwise unrelated struct
+        # fields will be cleared
+        self.emit_operation(op)
 
     def optimize_INSTANCEOF(self, op):
         value = self.getvalue(op.args[0])
-        if value.has_constant_class():
-            self.make_constant(op.result)
+        realclassbox = value.get_constant_class(self.cpu)
+        if realclassbox is not None:
+            checkclassbox = self.cpu.typedescr2classbox(op.descr)
+            result = self.cpu.ts.subclassOf(self.cpu, realclassbox, 
+                                                      checkclassbox)
+            self.make_constant_int(op.result, result)
             return
         self.emit_operation(op)
 

@@ -168,6 +168,9 @@ class Const(AbstractValue):
     def same_constant(self, other):
         raise NotImplementedError
 
+    def nonnull_constant(self):
+        raise NotImplementedError
+
     def __repr__(self):
         return 'Const(%s)' % self._getrepr_()
 
@@ -227,6 +230,9 @@ class ConstInt(Const):
         assert isinstance(other, Const)
         return self.value == other.getint()
 
+    def nonnull_constant(self):
+        return self.value != 0
+
     def _getrepr_(self):
         return self.value
 
@@ -271,6 +277,9 @@ class ConstAddr(Const):       # only for constants built before translation
         assert isinstance(other, Const)
         return self.value == other.getaddr(self.cpu)
 
+    def nonnull_constant(self):
+        return bool(self.value)
+
     def _getrepr_(self):
         return self.value
 
@@ -303,6 +312,9 @@ class ConstFloat(Const):
     def same_constant(self, other):
         assert isinstance(other, ConstFloat)
         return self.value == other.value
+
+    def nonnull_constant(self):
+        return self.value != 0.0
 
     def _getrepr_(self):
         return self.value
@@ -343,6 +355,9 @@ class ConstPtr(Const):
     def same_constant(self, other):
         assert isinstance(other, ConstPtr)
         return self.value == other.value
+
+    def nonnull_constant(self):
+        return bool(self.value)
 
     _getrepr_ = repr_pointer
 
@@ -393,6 +408,9 @@ class ConstObj(Const):
     def same_constant(self, other):
         assert isinstance(other, ConstObj)
         return self.value == other.value
+
+    def nonnull_constant(self):
+        return bool(self.value)
 
     _getrepr_ = repr_object
 
