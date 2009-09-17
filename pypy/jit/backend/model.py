@@ -159,7 +159,7 @@ class AbstractCPU(object):
             self.do_call(args[2:], calldescr)
 
     def do_cond_call_gc_malloc(self, args, calldescr):
-        xxx
+        raise NotImplementedError
 
     def do_cast_ptr_to_int(self, args, descr=None):
         raise NotImplementedError
@@ -174,4 +174,8 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def do_instanceof(self, args, descr=None):
+        raise NotImplementedError
+
+    @staticmethod
+    def typedescr2classbox(descr):
         raise NotImplementedError
