@@ -1451,7 +1451,8 @@ class MetaInterp(object):
                 # xxx maybe we could patch history.operations with
                 # Nones after calling self.compile() instead of
                 # before...
-                self.history.operations[:] = oldops
+                del self.history.operations[:]
+                self.history.operations.extend(oldops)
 
         # Otherwise, no loop found so far, so continue tracing.
         start = len(self.history.operations)
