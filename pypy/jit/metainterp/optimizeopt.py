@@ -8,6 +8,7 @@ from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.specnode import VirtualArraySpecNode
 from pypy.jit.metainterp.specnode import VirtualStructSpecNode
 from pypy.jit.metainterp.optimizeutil import av_newdict2, _findall, sort_descrs
+from pypy.jit.metainterp.optimizeutil import InvalidLoop
 from pypy.jit.metainterp import resume, compile
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rlib.objectmodel import we_are_translated
@@ -484,7 +485,7 @@ class Optimizer(object):
         for i in range(len(op.args)):
             arg = op.args[i]
             if arg in self.values:
-                box = self.values[arg].force_box() # I think we definitely need box, at least for this but it's unclear I mean is it ok to replace box with Const(..) when we set level==CONSTANT?ah, in this direction. yes, I would expect that to be ok ah yes indeed I see it
+                box = self.values[arg].force_box()
                 if box is not arg:
                     if must_clone:
                         op = op.clone()
@@ -578,7 +579,8 @@ class Optimizer(object):
         if value.is_constant():
             box = value.box
             assert isinstance(box, Const)
-            assert box.same_constant(constbox)
+            if not box.same_constant(constbox):
+                raise InvalidLoop
             return
         self.emit_operation(op)
         value.make_constant(constbox)
@@ -600,6 +602,9 @@ class Optimizer(object):
         assert isinstance(expectedclassbox, Const)
         realclassbox = value.get_constant_class(self.cpu)
         if realclassbox is not None:
+            # the following assert should always be true for now,
+            # because invalid loops that would fail it are detected
+            # earlier, in optimizefindnode.py.
             assert realclassbox.same_constant(expectedclassbox)
             return
         self.emit_operation(op)

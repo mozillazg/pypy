@@ -7,6 +7,7 @@ from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             BaseTest)
 from pypy.jit.metainterp.optimizefindnode import PerfectSpecializationFinder
 from pypy.jit.metainterp.optimizeopt import optimize_loop_1
+from pypy.jit.metainterp.optimizeutil import InvalidLoop
 from pypy.jit.metainterp.history import AbstractDescr, ConstInt
 from pypy.jit.metainterp import resume, executor, compile
 from pypy.jit.metainterp.resoperation import rop, opname
@@ -221,22 +222,26 @@ class BaseTestOptimizeOpt(BaseTest):
 
     def test_remove_consecutive_guard_value_constfold(self):
         ops = """
-        [i0]
+        []
+        i0 = escape()
         guard_value(i0, 0)
           fail()
         i1 = int_add(i0, 1)
         guard_value(i1, 1)
           fail()
         i2 = int_add(i1, 2)
-        jump(i2)
+        escape(i2)
+        jump()
         """
         expected = """
-        [i0]
+        []
+        i0 = escape()
         guard_value(i0, 0)
-            fail()
-        jump(3)
+          fail()
+        escape(3)
+        jump()
         """
-        self.optimize_loop(ops, 'Not', expected)
+        self.optimize_loop(ops, '', expected)
 
     def test_remove_guard_value_if_constant(self):
         ops = """
@@ -1237,6 +1242,33 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, VArray(arraydescr2, Not)',
                            expected)
+
+    def test_invalid_loop_1(self):
+        ops = """
+        [p1]
+        i1 = ooisnull(p1)
+        guard_true(i1)
+            fail()
+        #
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        jump(p2)
+        """
+        py.test.raises(InvalidLoop, self.optimize_loop,
+                       ops, 'Virtual(node_vtable)', None)
+
+    def test_invalid_loop_2(self):
+        py.test.skip("this would fail if we had Fixed again in the specnodes")
+        ops = """
+        [p1]
+        guard_class(p1, ConstClass(node_vtable2))
+            fail()
+        #
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        escape(p2)      # prevent it from staying Virtual
+        jump(p2)
+        """
+        py.test.raises(InvalidLoop, self.optimize_loop,
+                       ops, '...', None)
 
     # ----------
 

@@ -10,7 +10,7 @@ from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          ConstObj, AbstractDescr)
 from pypy.jit.metainterp.optimizefindnode import PerfectSpecializationFinder
 from pypy.jit.metainterp.optimizefindnode import BridgeSpecializationFinder
-from pypy.jit.metainterp.optimizeutil import sort_descrs
+from pypy.jit.metainterp.optimizeutil import sort_descrs, InvalidLoop
 from pypy.jit.metainterp.specnode import NotSpecNode, prebuiltNotSpecNode
 from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.specnode import VirtualArraySpecNode
@@ -417,9 +417,9 @@ class BaseTestOptimizeFindNode(BaseTest):
         p2 = new_with_vtable(ConstClass(node_vtable2))
         jump(p2)
         """
-        # this must give 'Not', not 'Virtual', because optimizeopt.py would
-        # remove the guard_class for a virtual.
-        self.find_nodes(ops, 'Not')
+        # this is not a valid loop at all, because of the mismatch
+        # between the produced and the consumed class.
+        py.test.raises(InvalidLoop, self.find_nodes, ops, None)
 
     def test_find_nodes_new_aliasing_mismatch(self):
         ops = """
@@ -431,6 +431,8 @@ class BaseTestOptimizeFindNode(BaseTest):
         p2 = new_with_vtable(ConstClass(node_vtable2))
         jump(p2, p2)
         """
+        # this is also not really a valid loop, but it's not detected
+        # because p2 is passed more than once in the jump().
         self.find_nodes(ops, 'Not, Not')
 
     def test_find_nodes_new_escapes(self):
@@ -517,14 +519,14 @@ class BaseTestOptimizeFindNode(BaseTest):
         ops = """
         [p0]
         i0 = getfield_gc(p0, descr=valuedescr)
-        guard_value(i0, 0)
+        guard_value(i0, 5)
           fail()
         p1 = new_with_vtable(ConstClass(node_vtable))
         # the field 'value' has its default value of 0
         jump(p1)
         """
         # The answer must contain the 'value' field, because otherwise
-        # we might get incorrect results: when tracing, maybe i0 was not 0.
+        # we might get incorrect results: when tracing, i0 was 5.
         self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)')
 
     def test_find_nodes_nonvirtual_guard_class(self):
@@ -721,6 +723,15 @@ class BaseTestOptimizeFindNode(BaseTest):
         """
         self.find_nodes(ops, 'Constant(myptr)')
 
+    def test_find_nodes_guard_value_constant_mismatch(self):
+        ops = """
+        [p1]
+        guard_value(p1, ConstPtr(myptr2))
+            fail()
+        jump(ConstPtr(myptr))
+        """
+        py.test.raises(InvalidLoop, self.find_nodes, ops, None)
+
     def test_find_nodes_guard_value_escaping_constant(self):
         ops = """
         [p1]
@@ -889,19 +900,6 @@ class BaseTestOptimizeFindNode(BaseTest):
         """
         self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)')
 
-    def test_bug_2(self):
-        py.test.skip("fix me")
-        ops = """
-        [p1]
-        i1 = ooisnull(p1)
-        guard_true(i1)
-            fail()
-        #
-        p2 = new_with_vtable(ConstClass(node_vtable))
-        jump(p2)
-        """
-        self.find_nodes(ops, 'Not',
-                        i1=1)
     # ------------------------------
     # Bridge tests
 
