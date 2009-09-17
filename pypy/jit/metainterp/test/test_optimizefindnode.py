@@ -1135,6 +1135,22 @@ class BaseTestOptimizeFindNode(BaseTest):
         self.find_bridge(ops, 'Not', 'VArray(arraydescr, Not, Not, Not)',
                          mismatch=True)
 
+    def test_bridge_nested_structs(self):
+        ops = """
+        []
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, p2, descr=nextdescr)
+        jump(p1)
+        """
+        self.find_bridge(ops, '', 'Not')
+        self.find_bridge(ops, '', 'Virtual(node_vtable, nextdescr=Not)')
+        self.find_bridge(ops, '',
+                   'Virtual(node_vtable, nextdescr=Virtual(node_vtable))')
+        self.find_bridge(ops, '',
+                   'Virtual(node_vtable, nextdescr=Virtual(node_vtable2))',
+                   mismatch=True)
+
 
 class TestLLtype(BaseTestOptimizeFindNode, LLtypeMixin):
     pass
