@@ -308,7 +308,6 @@ class __extend__(AbstractVirtualStructSpecNode):
             subbox = optimizer.new_box(ofs)
             subspecnode.setup_virtual_node(optimizer, subbox, newinputargs)
             vvaluefield = optimizer.getvalue(subbox)
-            vvaluefield.missing = True
             vvalue.setfield(ofs, vvaluefield)
     def _setup_virtual_node_1(self, optimizer, box):
         raise NotImplementedError
@@ -334,7 +333,6 @@ class __extend__(VirtualArraySpecNode):
             subspecnode = self.items[index]
             subspecnode.setup_virtual_node(optimizer, subbox, newinputargs)
             vvalueitem = optimizer.getvalue(subbox)
-            vvalueitem.missing = True
             vvalue.setitem(index, vvalueitem)
     def teardown_virtual_node(self, optimizer, value, newexitargs):
         assert value.is_virtual()
