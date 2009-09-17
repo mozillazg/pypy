@@ -1,4 +1,5 @@
 from pypy.tool.pairtype import extendabletype
+from pypy.jit.metainterp.history import Const
 
 
 class SpecNode(object):
