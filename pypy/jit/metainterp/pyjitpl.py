@@ -664,9 +664,6 @@ class MIFrame(object):
 
     @arguments("descr", "varargs")
     def opimpl_residual_call_noexception(self, calldescr, varargs):
-        if not we_are_translated():
-            self.metainterp._debug_history.append(['call',
-                                                  varargs[0], varargs[1:]])
         self.execute_varargs(rop.CALL, varargs, descr=calldescr, exc=False)
 
     @arguments("descr", "varargs")
@@ -959,6 +956,8 @@ class MIFrame(object):
         if resbox is not None:
             self.make_result_box(resbox)
         if not we_are_translated():
+            # this assumes that execute_varargs() is only used for calls,
+            # which is the case so far
             self.metainterp._debug_history.append(['call',
                                                   argboxes[0], argboxes[1:]])
         if exc:
@@ -1192,7 +1191,12 @@ class MetaInterp(object):
         if self.staticdata.stats is not None:
             self.staticdata.stats.history = self.history
 
-    def _all_constants(self, boxes):
+    def _all_constants(self, *boxes):
+        if len(boxes) == 0:
+            return True
+        return isinstance(boxes[0], Const) and self._all_constants(*boxes[1:])
+
+    def _all_constants_varargs(self, boxes):
         for box in boxes:
             if not isinstance(box, Const):
                 return False
@@ -1237,7 +1241,7 @@ class MetaInterp(object):
         return resbox
 
     def _record_helper_pure(self, opnum, resbox, descr, *argboxes): 
-        canfold = self._all_constants(list(argboxes))   # xxx not list()
+        canfold = self._all_constants(*argboxes)
         if canfold:
             resbox = resbox.constbox()       # ensure it is a Const
             return resbox
@@ -1246,7 +1250,7 @@ class MetaInterp(object):
             return self._record_helper_nonpure_varargs(opnum, resbox, descr, list(argboxes))
 
     def _record_helper_pure_varargs(self, opnum, resbox, descr, argboxes): 
-        canfold = self._all_constants(argboxes)
+        canfold = self._all_constants_varargs(argboxes)
         if canfold:
             resbox = resbox.constbox()       # ensure it is a Const
             return resbox
