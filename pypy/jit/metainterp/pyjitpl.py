@@ -366,62 +366,61 @@ class MIFrame(object):
     @arguments("orgpc", "box", "descr", "box")
     def opimpl_check_neg_index(self, pc, arraybox, arraydesc, indexbox):
         negbox = self.metainterp.execute_and_record(
-            rop.INT_LT, [indexbox, ConstInt(0)])
+            rop.INT_LT, None, indexbox, ConstInt(0))
         # xxx inefficient
         negbox = self.implement_guard_value(pc, negbox)
         if negbox.getint():
             # the index is < 0; add the array length to it
             lenbox = self.metainterp.execute_and_record(
-                rop.ARRAYLEN_GC, [arraybox], descr=arraydesc)
+                rop.ARRAYLEN_GC, arraydesc, arraybox)
             indexbox = self.metainterp.execute_and_record(
-                rop.INT_ADD, [indexbox, lenbox])
+                rop.INT_ADD, None, indexbox, lenbox)
         self.make_result_box(indexbox)
 
     @arguments("descr", "descr", "descr", "descr", "box")
     def opimpl_newlist(self, structdescr, lengthdescr, itemsdescr, arraydescr,
                        sizebox):
-        sbox = self.metainterp.execute_and_record(rop.NEW, [],
-                                                  descr=structdescr)
-        self.metainterp.execute_and_record(rop.SETFIELD_GC, [sbox, sizebox],
-                                           descr=lengthdescr)
-        abox = self.metainterp.execute_and_record(rop.NEW_ARRAY, [sizebox],
-                                                  descr=arraydescr)
-        self.metainterp.execute_and_record(rop.SETFIELD_GC, [sbox, abox],
-                                           descr=itemsdescr)
+        sbox = self.metainterp.execute_and_record(rop.NEW, structdescr)
+        self.metainterp.execute_and_record(rop.SETFIELD_GC, lengthdescr, 
+                                           sbox, sizebox)
+        abox = self.metainterp.execute_and_record(rop.NEW_ARRAY, arraydescr,
+                                                  sizebox)
+        self.metainterp.execute_and_record(rop.SETFIELD_GC, itemsdescr,
+                                           sbox, abox)
         self.make_result_box(sbox)
 
     @arguments("box", "descr", "descr", "box")
     def opimpl_getlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox):
         arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
-                                          [listbox], descr=itemsdescr)
+                                                      itemsdescr, listbox)
         self.execute_with_descr(rop.GETARRAYITEM_GC, arraydescr, arraybox, indexbox)
 
     @arguments("box", "descr", "descr", "box", "box")
     def opimpl_setlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox,
                               valuebox):
         arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
-                                          [listbox], descr=itemsdescr) 
+                                                      itemsdescr, listbox)
         self.execute_with_descr(rop.SETARRAYITEM_GC, arraydescr, arraybox, indexbox, valuebox)
 
     @arguments("orgpc", "box", "descr", "box")
     def opimpl_check_resizable_neg_index(self, pc, listbox, lengthdesc,
                                          indexbox):
         negbox = self.metainterp.execute_and_record(
-            rop.INT_LT, [indexbox, ConstInt(0)])
+            rop.INT_LT, None, indexbox, ConstInt(0))
         # xxx inefficient
         negbox = self.implement_guard_value(pc, negbox)
         if negbox.getint():
             # the index is < 0; add the array length to it
             lenbox = self.metainterp.execute_and_record(
-                rop.GETFIELD_GC, [listbox], descr=lengthdesc)
+                rop.GETFIELD_GC, lengthdesc, listbox)
             indexbox = self.metainterp.execute_and_record(
-                rop.INT_ADD, [indexbox, lenbox])
+                rop.INT_ADD, None, indexbox, lenbox)
         self.make_result_box(indexbox)
 
     @arguments("orgpc", "box")
     def opimpl_check_zerodivisionerror(self, pc, box):
         nonzerobox = self.metainterp.execute_and_record(
-            rop.INT_NE, [box, ConstInt(0)])
+            rop.INT_NE, None, box, ConstInt(0))
         # xxx inefficient
         nonzerobox = self.implement_guard_value(pc, nonzerobox)
         if nonzerobox.getint():
@@ -435,11 +434,11 @@ class MIFrame(object):
         # detect the combination "box1 = -sys.maxint-1, box2 = -1".
         import sys
         tmp1 = self.metainterp.execute_and_record(    # combination to detect:
-            rop.INT_ADD, [box1, ConstInt(sys.maxint)])    # tmp1=-1, box2=-1
+            rop.INT_ADD, None, box1, ConstInt(sys.maxint))    # tmp1=-1, box2=-1
         tmp2 = self.metainterp.execute_and_record(
-            rop.INT_AND, [tmp1, box2])                    # tmp2=-1
+            rop.INT_AND, None, tmp1, box2)                    # tmp2=-1
         tmp3 = self.metainterp.execute_and_record(
-            rop.INT_EQ, [tmp2, ConstInt(-1)])             # tmp3?
+            rop.INT_EQ, None, tmp2, ConstInt(-1))             # tmp3?
         # xxx inefficient
         tmp4 = self.implement_guard_value(pc, tmp3)       # tmp4?
         if not tmp4.getint():
@@ -455,7 +454,7 @@ class MIFrame(object):
     @arguments("orgpc", "box")
     def opimpl_int_abs(self, pc, box):
         nonneg = self.metainterp.execute_and_record(
-            rop.INT_GE, [box, ConstInt(0)])
+            rop.INT_GE, None, box, ConstInt(0))
         # xxx inefficient
         nonneg = self.implement_guard_value(pc, nonneg)
         if nonneg.getint():
@@ -511,8 +510,8 @@ class MIFrame(object):
         standard_box = self.metainterp.virtualizable_boxes[-1]
         if standard_box is box:
             return False
-        eqbox = self.metainterp.execute_and_record(rop.OOIS,
-                                                   [box, standard_box])
+        eqbox = self.metainterp.execute_and_record(rop.OOIS, None,
+                                                   box, standard_box)
         eqbox = self.implement_guard_value(pc, eqbox)
         isstandard = eqbox.getint()
         if isstandard:
@@ -562,12 +561,12 @@ class MIFrame(object):
     @arguments("orgpc", "box", "int", "box")
     def opimpl_getarrayitem_vable(self, pc, basebox, arrayindex, indexbox):
         if self._nonstandard_virtualizable(pc, basebox):
-            arraybox = self.metainterp.execute_and_record(
-                rop.GETFIELD_GC, [basebox],
-                descr=self._get_virtualizable_array_field_descr(arrayindex))
-            self.execute(
-                rop.GETARRAYITEM_GC, [arraybox, indexbox],
-                descr=self._get_virtualizable_array_descr(arrayindex))
+            descr = self._get_virtualizable_array_field_descr(arrayindex)
+            arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
+                                                          descr, basebox)
+            descr = self._get_virtualizable_array_descr(arrayindex)
+            self.execute_with_descr(rop.GETARRAYITEM_GC, descr,
+                                    arraybox, indexbox)
             return
         self.metainterp.check_synchronized_virtualizable()
         index = self._get_arrayitem_vable_index(pc, arrayindex, indexbox)
@@ -577,12 +576,12 @@ class MIFrame(object):
     def opimpl_setarrayitem_vable(self, pc, basebox, arrayindex, indexbox,
                                   valuebox):
         if self._nonstandard_virtualizable(pc, basebox):
-            arraybox = self.metainterp.execute_and_record(
-                rop.GETFIELD_GC, [basebox],
-                descr=self._get_virtualizable_array_field_descr(arrayindex))
-            self.execute(
-                rop.SETARRAYITEM_GC, [arraybox, indexbox, valuebox],
-                descr=self._get_virtualizable_array_descr(arrayindex))
+            descr = self._get_virtualizable_array_field_descr(arrayindex)
+            arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
+                                                          descr, basebox)
+            descr = self._get_virtualizable_array_descr(arrayindex)
+            self.execute_with_descr(rop.SETARRAYITEM_GC, descr,
+                                    arraybox, indexbox, valuebox)
             return
         index = self._get_arrayitem_vable_index(pc, arrayindex, indexbox)
         self.metainterp.virtualizable_boxes[index] = valuebox
@@ -591,12 +590,11 @@ class MIFrame(object):
     @arguments("orgpc", "box", "int")
     def opimpl_arraylen_vable(self, pc, basebox, arrayindex):
         if self._nonstandard_virtualizable(pc, basebox):
-            arraybox = self.metainterp.execute_and_record(
-                rop.GETFIELD_GC, [basebox],
-                descr=self._get_virtualizable_array_field_descr(arrayindex))
-            self.execute(
-                rop.ARRAYLEN_GC, [arraybox],
-                descr=self._get_virtualizable_array_descr(arrayindex))
+            descr = self._get_virtualizable_array_field_descr(arrayindex)
+            arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
+                                                          descr, basebox)
+            descr = self._get_virtualizable_array_descr(arrayindex)
+            self.execute_with_descr(rop.ARRAYLEN_GC, descr, arraybox)
             return
         vinfo = self.metainterp.staticdata.virtualizable_info
         virtualizable_box = self.metainterp.virtualizable_boxes[-1]
@@ -950,13 +948,14 @@ class MIFrame(object):
 
     @specialize.arg(1)
     def execute_with_descr(self, opnum, descr, *argboxes):
-        resbox = self.metainterp.execute_and_record(opnum, list(argboxes), descr=descr)
+        resbox = self.metainterp.execute_and_record(opnum, descr, *argboxes)
         if resbox is not None:
             self.make_result_box(resbox)
 
     @specialize.arg(1)
     def execute_varargs(self, opnum, argboxes, descr, exc):
-        resbox = self.metainterp.execute_and_record(opnum, list(argboxes), descr=descr)
+        resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
+                                                            descr=descr)
         if resbox is not None:
             self.make_result_box(resbox)
         if not we_are_translated():
@@ -1200,7 +1199,21 @@ class MetaInterp(object):
         return True
 
     @specialize.arg(1)
-    def execute_and_record(self, opnum, argboxes, descr=None):
+    def execute_and_record(self, opnum, descr, *argboxes):
+        history.check_descr(descr)
+        assert opnum != rop.CALL and opnum != rop.OOSEND
+        # execute the operation
+        profiler = self.staticdata.profiler
+        profiler.count_ops(opnum)
+        resbox = executor.execute(self.cpu, opnum, list(argboxes), descr)
+        if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
+            return self._record_helper_pure(opnum, resbox, descr, *argboxes)
+        else:
+            return self._record_helper_nonpure_varargs(opnum, resbox, descr,
+                                                       list(argboxes))
+
+    @specialize.arg(1)
+    def execute_and_record_varargs(self, opnum, argboxes, descr=None):
         history.check_descr(descr)
         # residual calls require attention to keep virtualizables in-sync.
         # CALL_PURE doesn't need it because so far 'promote_virtualizable'
@@ -1209,30 +1222,43 @@ class MetaInterp(object):
         if require_attention:
             self.before_residual_call()
         # execute the operation
+        profiler = self.staticdata.profiler
+        profiler.count_ops(opnum)
         resbox = executor.execute(self.cpu, opnum, argboxes, descr)
         if require_attention:
             require_attention = self.after_residual_call()
         # check if the operation can be constant-folded away
-        canfold = False
         if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
-            # this part disappears if execute() is specialized for an
-            # opnum that is not within the range
-            canfold = self._all_constants(argboxes)
-            if canfold:
-                resbox = resbox.constbox()       # ensure it is a Const
-            else:
-                resbox = resbox.nonconstbox()    # ensure it is a Box
+            resbox = self._record_helper_pure_varargs(opnum, resbox, descr, argboxes)
         else:
-            assert resbox is None or isinstance(resbox, Box)
-        profiler = self.staticdata.profiler
-        profiler.count_ops(opnum)
-        # record the operation if not constant-folded away
-        if not canfold:
-            op = self.history.record(opnum, argboxes, resbox, descr)
-            profiler.count_ops(opnum, self.history.OPS_KIND)
-            self.attach_debug_info(op)
+            resbox = self._record_helper_nonpure_varargs(opnum, resbox, descr, argboxes)
         if require_attention:
             self.after_generate_residual_call()
+        return resbox
+
+    def _record_helper_pure(self, opnum, resbox, descr, *argboxes): 
+        canfold = self._all_constants(list(argboxes))   # xxx not list()
+        if canfold:
+            resbox = resbox.constbox()       # ensure it is a Const
+            return resbox
+        else:
+            resbox = resbox.nonconstbox()    # ensure it is a Box
+            return self._record_helper_nonpure_varargs(opnum, resbox, descr, list(argboxes))
+
+    def _record_helper_pure_varargs(self, opnum, resbox, descr, argboxes): 
+        canfold = self._all_constants(argboxes)
+        if canfold:
+            resbox = resbox.constbox()       # ensure it is a Const
+            return resbox
+        else:
+            resbox = resbox.nonconstbox()    # ensure it is a Box
+            return self._record_helper_nonpure_varargs(opnum, resbox, descr, argboxes)
+
+    def _record_helper_nonpure_varargs(self, opnum, resbox, descr, argboxes):
+        assert resbox is None or isinstance(resbox, Box)
+        # record the operation
+        op = self.history.record(opnum, argboxes, resbox, descr)
+        self.attach_debug_info(op)
         return resbox
 
     def attach_debug_info(self, op):
@@ -1692,18 +1718,19 @@ class MetaInterp(object):
         if vinfo is not None:
             vbox = self.virtualizable_boxes[-1]
             for i in range(vinfo.num_static_extra_boxes):
-                fieldbox = self.execute_and_record(rop.GETFIELD_GC, [vbox],
-                                        descr=vinfo.static_field_descrs[i])
+                descr = vinfo.static_field_descrs[i]
+                fieldbox = self.execute_and_record(rop.GETFIELD_GC, descr,
+                                                   vbox)
                 self.virtualizable_boxes[i] = fieldbox
             i = vinfo.num_static_extra_boxes
             virtualizable = vinfo.unwrap_virtualizable_box(vbox)
             for k in range(vinfo.num_arrays):
-                abox = self.execute_and_record(rop.GETFIELD_GC, [vbox],
-                                         descr=vinfo.array_field_descrs[k])
+                descr = vinfo.array_field_descrs[k]
+                abox = self.execute_and_record(rop.GETFIELD_GC, descr, vbox)
+                descr = vinfo.array_descrs[k]
                 for j in range(vinfo.get_array_length(virtualizable, k)):
                     itembox = self.execute_and_record(rop.GETARRAYITEM_GC,
-                                                      [abox, ConstInt(j)],
-                                            descr=vinfo.array_descrs[k])
+                                                      descr, abox, ConstInt(j))
                     self.virtualizable_boxes[i] = itembox
                     i += 1
             assert i + 1 == len(self.virtualizable_boxes)
@@ -1715,19 +1742,19 @@ class MetaInterp(object):
             vbox = self.virtualizable_boxes[-1]
             for i in range(vinfo.num_static_extra_boxes):
                 fieldbox = self.virtualizable_boxes[i]
-                self.execute_and_record(rop.SETFIELD_GC, [vbox, fieldbox],
-                                        descr=vinfo.static_field_descrs[i])
+                descr = vinfo.static_field_descrs[i]
+                self.execute_and_record(rop.SETFIELD_GC, descr, vbox, fieldbox)
             i = vinfo.num_static_extra_boxes
             virtualizable = vinfo.unwrap_virtualizable_box(vbox)
             for k in range(vinfo.num_arrays):
-                abox = self.execute_and_record(rop.GETFIELD_GC, [vbox],
-                                         descr=vinfo.array_field_descrs[k])
+                descr = vinfo.array_field_descrs[k]
+                abox = self.execute_and_record(rop.GETFIELD_GC, descr, vbox)
+                descr = vinfo.array_descrs[k]
                 for j in range(vinfo.get_array_length(virtualizable, k)):
                     itembox = self.virtualizable_boxes[i]
                     i += 1
-                    self.execute_and_record(rop.SETARRAYITEM_GC,
-                                            [abox, ConstInt(j), itembox],
-                                            descr=vinfo.array_descrs[k])
+                    self.execute_and_record(rop.SETARRAYITEM_GC, descr,
+                                            abox, ConstInt(j), itembox)
             assert i + 1 == len(self.virtualizable_boxes)
 
     def gen_store_back_in_virtualizable_no_perform(self):
