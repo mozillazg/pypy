@@ -762,31 +762,30 @@ class MIFrame(object):
         pass     # xxx?
 
     def generate_merge_point(self, pc, varargs):
-        if self.metainterp.is_blackholing():
-            if self.metainterp.in_recursion:
-                portal_code = self.metainterp.staticdata.portal_code
-                # small hack: fish for the result box
-                lenenv = len(self.env)
-                raised = self.perform_call(portal_code, varargs)
-                # in general this cannot be assumed, but when blackholing,
-                # perform_call returns True only if an exception is called. In
-                # this case perform_call has called finishframe_exception
-                # already, so we need to return.
-                if raised:
-                    return True
-                if lenenv == len(self.env):
-                    res = None
-                else:
-                    assert lenenv == len(self.env) - 1
-                    res = self.env.pop()
-                self.metainterp.finishframe(res)
-                return True
-            else:
-                raise self.metainterp.staticdata.ContinueRunningNormally(varargs)
         num_green_args = self.metainterp.staticdata.num_green_args
         for i in range(num_green_args):
             varargs[i] = self.implement_guard_value(pc, varargs[i])
-        return False
+
+    def blackhole_reached_merge_point(self, varargs):
+        if self.metainterp.in_recursion:
+            portal_code = self.metainterp.staticdata.portal_code
+            # small hack: fish for the result box
+            lenenv = len(self.env)
+            raised = self.perform_call(portal_code, varargs)
+            # in general this cannot be assumed, but when blackholing,
+            # perform_call returns True only if an exception is called. In
+            # this case perform_call has called finishframe_exception
+            # already, so we need to return.
+            if raised:
+                return
+            if lenenv == len(self.env):
+                res = None
+            else:
+                assert lenenv == len(self.env) - 1
+                res = self.env.pop()
+            self.metainterp.finishframe(res)
+        else:
+            raise self.metainterp.staticdata.ContinueRunningNormally(varargs)
 
     @arguments("orgpc")
     def opimpl_can_enter_jit(self, pc):
@@ -801,13 +800,17 @@ class MIFrame(object):
 
     @arguments("orgpc")
     def opimpl_jit_merge_point(self, pc):
-        res = self.generate_merge_point(pc, self.env)
-        if DEBUG > 0:
-            self.debug_merge_point()
-        if self.metainterp.seen_can_enter_jit:
-            self.metainterp.seen_can_enter_jit = False
-            self.metainterp.reached_can_enter_jit(self.env)
-        return res
+        if self.metainterp.is_blackholing():
+            self.blackhole_reached_merge_point(self.env)
+            return True
+        else:
+            self.generate_merge_point(pc, self.env)
+            if DEBUG > 0:
+                self.debug_merge_point()
+            if self.metainterp.seen_can_enter_jit:
+                self.metainterp.seen_can_enter_jit = False
+                self.metainterp.reached_can_enter_jit(self.env)
+            return False
 
     def debug_merge_point(self):
         # debugging: produce a DEBUG_MERGE_POINT operation
@@ -1089,7 +1092,13 @@ class MetaInterp(object):
             self._debug_history = staticdata.globaldata._debug_history
 
     def is_blackholing(self):
-        return isinstance(self.history, history.BlackHole)
+        return self.history is None
+
+    def blackholing_text(self):
+        if self.history is None:
+            return " (BlackHole)"
+        else:
+            return ""
 
     def newframe(self, jitcode):
         if not we_are_translated():
@@ -1210,6 +1219,8 @@ class MetaInterp(object):
         profiler = self.staticdata.profiler
         profiler.count_ops(opnum)
         resbox = executor.execute(self.cpu, opnum, list(argboxes), descr)
+        if self.is_blackholing():
+            return resbox
         if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
             return self._record_helper_pure(opnum, resbox, descr, *argboxes)
         else:
@@ -1223,19 +1234,21 @@ class MetaInterp(object):
         # CALL_PURE doesn't need it because so far 'promote_virtualizable'
         # as an operation is enough to make the called function non-pure.
         require_attention = (opnum == rop.CALL or opnum == rop.OOSEND)
-        if require_attention:
+        if require_attention and not self.is_blackholing():
             self.before_residual_call()
         # execute the operation
         profiler = self.staticdata.profiler
         profiler.count_ops(opnum)
         resbox = executor.execute(self.cpu, opnum, argboxes, descr)
-        if require_attention:
-            require_attention = self.after_residual_call()
-        # check if the operation can be constant-folded away
-        if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
-            resbox = self._record_helper_pure_varargs(opnum, resbox, descr, argboxes)
-        else:
-            resbox = self._record_helper_nonpure_varargs(opnum, resbox, descr, argboxes)
+        if not self.is_blackholing():
+            if require_attention:
+                require_attention = self.after_residual_call()
+            # check if the operation can be constant-folded away
+            if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
+                resbox = self._record_helper_pure_varargs(opnum, resbox, descr, argboxes)
+            else:
+                resbox = self._record_helper_nonpure_varargs(opnum, resbox, descr, argboxes)
+        # if we are blackholing require_attention has the initial meaning
         if require_attention:
             self.after_generate_residual_call()
         return resbox
@@ -1275,12 +1288,12 @@ class MetaInterp(object):
         if not self.is_blackholing():
             warmrunnerstate = self.staticdata.state
             if len(self.history.operations) > warmrunnerstate.trace_limit:
-                self.history = history.BlackHole(self.cpu)
+                self.history = None   # start blackholing
                 if not we_are_translated():
                     self.staticdata.stats.aborted_count += 1
-                    history.log.event('ABORTING TRACING' + self.history.extratext)
+                    history.log.event('ABORTING TRACING')
                 elif DEBUG:
-                    debug_print('~~~ ABORTING TRACING', self.history.extratext)
+                    debug_print('~~~ ABORTING TRACING')
                 self.staticdata.profiler.end_tracing()
                 self.staticdata.profiler.start_blackhole()
 
@@ -1288,10 +1301,10 @@ class MetaInterp(object):
         # Execute the frames forward until we raise a DoneWithThisFrame,
         # a ContinueRunningNormally, or a GenerateMergePoint exception.
         if not we_are_translated():
-            history.log.event('ENTER' + self.history.extratext)
+            history.log.event('ENTER' + self.blackholing_text())
             self.staticdata.stats.enter_count += 1
         elif DEBUG:
-            debug_print('~~~ ENTER', self.history.extratext)
+            debug_print('~~~ ENTER', self.blackholing_text())
         try:
             while True:
                 self.framestack[-1].run_one_step()
@@ -1304,9 +1317,9 @@ class MetaInterp(object):
             else:
                 self.staticdata.profiler.end_tracing()
             if not we_are_translated():
-                history.log.event('LEAVE' + self.history.extratext)
+                history.log.event('LEAVE' + self.blackholing_text())
             elif DEBUG:
-                debug_print('~~~ LEAVE', self.history.extratext)
+                debug_print('~~~ LEAVE', self.blackholing_text())
 
     def interpret(self):
         if we_are_translated():
@@ -1597,9 +1610,7 @@ class MetaInterp(object):
             self.staticdata.profiler.start_tracing()
         else:
             self.staticdata.profiler.start_blackhole()
-            self.history = history.BlackHole(self.cpu)
-            # the BlackHole is invalid because it doesn't start with
-            # guard_failure.key.guard_op.suboperations, but that's fine
+            self.history = None   # this means that is_blackholing() is true
         self.rebuild_state_after_failure(resumedescr, guard_failure.args)
         return resumedescr
 
@@ -1643,9 +1654,8 @@ class MetaInterp(object):
                 # as it contains the old values (before the call)!
                 self.gen_store_back_in_virtualizable_no_perform()
                 return True    # must call after_generate_residual_call()
-        # xxx don't call after_generate_residual_call() or
-        # in the case of blackholing abuse it to resynchronize
-        return self.is_blackholing()
+        # otherwise, don't call after_generate_residual_call()
+        return False
 
     def after_generate_residual_call(self):
         # Called after generating a residual call, and only if

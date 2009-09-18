@@ -757,27 +757,15 @@ def _list_all_operations(result, operations, omit_fails=True):
 # ____________________________________________________________
 
 
-class RunningMatcher(Base):
+class History(Base):
     def __init__(self, cpu):
         self.cpu = cpu
         self.inputargs = None
         self.operations = []
     def record(self, opnum, argboxes, resbox, descr=None):
-        raise NotImplementedError
-
-class History(RunningMatcher):
-    OPS_KIND = RECORDED_OPS
-    extratext = ''
-    def record(self, opnum, argboxes, resbox, descr=None):
         op = ResOperation(opnum, argboxes, resbox, descr)
         self.operations.append(op)
         return op
-
-class BlackHole(RunningMatcher):
-    OPS_KIND = BLACKHOLED_OPS
-    extratext = ' (BlackHole)'
-    def record(self, opnum, argboxes, resbox, descr=None):
-        return None
 
 # ____________________________________________________________
 
