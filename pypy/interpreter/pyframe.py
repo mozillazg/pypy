@@ -92,7 +92,10 @@ class PyFrame(eval.Frame):
     def set_blocklist(self, lst):
         self.lastblock = None
         self.blockcount = 0
-        for block in lst[::-1]:
+        i = len(lst)
+        while i > 0:
+            block = lst[i-1]
+            i -= 1
             self.append_block(block)
 
     def get_builtin(self):
