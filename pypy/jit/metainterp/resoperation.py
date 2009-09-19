@@ -242,8 +242,7 @@ opwithdescr = [] # mapping numbers to a flag "takes a descr"
 
 
 def setup(debug_print=False):
-    i = 0
-    for name in _oplist:
+    for i, name in enumerate(_oplist):
         if debug_print:
             print '%30s = %d' % (name, i)
         if '/' in name:
@@ -253,12 +252,11 @@ def setup(debug_print=False):
         else:
             arity, withdescr = -1, True       # default
         setattr(rop, name, i)
-        opname[i] = name
+        if not name.startswith('_'):
+            opname[i] = name
         oparity.append(arity)
         opwithdescr.append(withdescr)
-        i += 1
-    assert len(oparity) == i
-    assert len(opwithdescr) == i
+    assert len(oparity) == len(opwithdescr) == len(_oplist)
 
 setup(__name__ == '__main__')   # print out the table when run directly
 del _oplist
