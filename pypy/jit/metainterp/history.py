@@ -8,7 +8,6 @@ from pypy.tool.uid import uid
 from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
-from pypy.jit.metainterp.jitprof import BLACKHOLED_OPS, RECORDED_OPS
 
 import py
 from pypy.tool.ansi_print import ansi_log

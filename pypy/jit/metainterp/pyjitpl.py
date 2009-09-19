@@ -10,7 +10,8 @@ from pypy.jit.metainterp.history import Const, ConstInt, Box
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import codewriter, executor
 from pypy.jit.backend.logger import Logger
-from pypy.jit.metainterp.jitprof import EmptyProfiler, GUARDS
+from pypy.jit.metainterp.jitprof import EmptyProfiler, BLACKHOLED_OPS
+from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 
@@ -1220,6 +1221,7 @@ class MetaInterp(object):
         profiler.count_ops(opnum)
         resbox = executor.execute(self.cpu, opnum, descr, *argboxes)
         if self.is_blackholing():
+            profiler.count_ops(opnum, BLACKHOLED_OPS)            
             return resbox
         if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
             return self._record_helper_pure(opnum, resbox, descr, *argboxes)
@@ -1240,7 +1242,9 @@ class MetaInterp(object):
         profiler = self.staticdata.profiler
         profiler.count_ops(opnum)
         resbox = executor.execute_varargs(self.cpu, opnum, argboxes, descr)
-        if not self.is_blackholing():
+        if self.is_blackholing():
+            profiler.count_ops(opnum, BLACKHOLED_OPS)
+        else:
             if require_attention:
                 require_attention = self.after_residual_call()
             # check if the operation can be constant-folded away
@@ -1274,6 +1278,8 @@ class MetaInterp(object):
     def _record_helper_nonpure_varargs(self, opnum, resbox, descr, argboxes):
         assert resbox is None or isinstance(resbox, Box)
         # record the operation
+        profiler = self.staticdata.profiler
+        profiler.count_ops(opnum, RECORDED_OPS)        
         op = self.history.record(opnum, argboxes, resbox, descr)
         self.attach_debug_info(op)
         return resbox
