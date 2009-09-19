@@ -1218,7 +1218,7 @@ class MetaInterp(object):
         # execute the operation
         profiler = self.staticdata.profiler
         profiler.count_ops(opnum)
-        resbox = executor.execute(self.cpu, opnum, list(argboxes), descr)
+        resbox = executor.execute(self.cpu, opnum, descr, *argboxes)
         if self.is_blackholing():
             return resbox
         if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
@@ -1239,7 +1239,7 @@ class MetaInterp(object):
         # execute the operation
         profiler = self.staticdata.profiler
         profiler.count_ops(opnum)
-        resbox = executor.execute(self.cpu, opnum, argboxes, descr)
+        resbox = executor.execute_varargs(self.cpu, opnum, argboxes, descr)
         if not self.is_blackholing():
             if require_attention:
                 require_attention = self.after_residual_call()
