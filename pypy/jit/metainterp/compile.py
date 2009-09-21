@@ -365,10 +365,10 @@ class ResumeFromInterpDescr(AbstractDescr):
                                                                   new_loop)
         # store the new_loop in compiled_merge_points too
         # XXX it's probably useless to do so when optimizing
-        glob = metainterp_sd.globaldata
-        greenargs = glob.unpack_greenkey(greenkey)
-        old_loops = glob.compiled_merge_points.setdefault(greenargs, [])
-        old_loops.append(new_loop)
+        #glob = metainterp_sd.globaldata
+        #greenargs = glob.unpack_greenkey(greenkey)
+        #old_loops = glob.compiled_merge_points.setdefault(greenargs, [])
+        #old_loops.append(new_loop)
 
 
 def compile_fresh_bridge(metainterp, old_loops, resumekey):
@@ -388,7 +388,7 @@ def compile_fresh_bridge(metainterp, old_loops, resumekey):
     except InvalidLoop:
         assert 0, "InvalidLoop in optimize_bridge?"
         return None
-    # Did it work?  If not, prepare_loop_from_bridge() will probably be used.
+    # Did it work?
     if target_loop is not None:
         # Yes, we managed to create a bridge.  Dispatch to resumekey to
         # know exactly what we must do (ResumeGuardDescr/ResumeFromInterpDescr)
@@ -407,49 +407,3 @@ def prepare_last_operation(new_loop, target_loop):
         descr = target_loop.finishdescr
         new_op = ResOperation(rop.FAIL, op.args, None, descr=descr)
         new_loop.operations[-1] = new_op
-
-
-def prepare_loop_from_bridge(metainterp, resumekey):
-    # To handle this case, we prepend to the history the unoptimized
-    # operations coming from the loop, in order to make a (fake) complete
-    # unoptimized trace.  (Then we will just compile this loop normally.)
-    raise PrepareLoopFromBridgeIsDisabled
-    if not we_are_translated():
-        log.info("completing the bridge into a stand-alone loop")
-    else:
-        debug_print("completing the bridge into a stand-alone loop")
-    operations = metainterp.history.operations
-    metainterp.history.operations = []
-    assert isinstance(resumekey, ResumeGuardDescr)
-    append_full_operations(metainterp.history,
-                           resumekey.history,
-                           resumekey.history_guard_index)
-    metainterp.history.operations.extend(operations)
-
-def append_full_operations(history, sourcehistory, guard_index):
-    prev = sourcehistory.source_link
-    if isinstance(prev, History):
-        append_full_operations(history, prev, sourcehistory.source_guard_index)
-    history.operations.extend(sourcehistory.operations[:guard_index])
-    op = inverse_guard(sourcehistory.operations[guard_index])
-    history.operations.append(op)
-
-def inverse_guard(guard_op):
-    suboperations = guard_op.suboperations
-    assert guard_op.is_guard()
-    if guard_op.opnum == rop.GUARD_TRUE:
-        guard_op = ResOperation(rop.GUARD_FALSE, guard_op.args, None)
-    elif guard_op.opnum == rop.GUARD_FALSE:
-        guard_op = ResOperation(rop.GUARD_TRUE, guard_op.args, None)
-    else:
-        # XXX other guards have no inverse so far
-        raise InverseTheOtherGuardsPlease(guard_op)
-    #
-    guard_op.suboperations = suboperations
-    return guard_op
-
-class InverseTheOtherGuardsPlease(Exception):
-    pass
-
-class PrepareLoopFromBridgeIsDisabled(Exception):
-    pass
