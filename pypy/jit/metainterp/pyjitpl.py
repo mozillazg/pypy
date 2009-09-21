@@ -802,17 +802,19 @@ class MIFrame(object):
 
     @arguments("orgpc")
     def opimpl_jit_merge_point(self, pc):
-        if self.metainterp.is_blackholing():
-            self.blackhole_reached_merge_point(self.env)
-            return True
-        else:
+        if not self.metainterp.is_blackholing():
             self.generate_merge_point(pc, self.env)
             if DEBUG > 0:
                 self.debug_merge_point()
             if self.metainterp.seen_can_enter_jit:
                 self.metainterp.seen_can_enter_jit = False
-                self.metainterp.reached_can_enter_jit(self.env)
-            return False
+                try:
+                    self.metainterp.reached_can_enter_jit(self.env)
+                except GiveUp:
+                    self.metainterp.switch_to_blackhole()
+        if self.metainterp.is_blackholing():
+            self.blackhole_reached_merge_point(self.env)
+        return True
 
     def debug_merge_point(self):
         # debugging: produce a DEBUG_MERGE_POINT operation
@@ -1287,18 +1289,21 @@ class MetaInterp(object):
             op.pc = self.framestack[-1].pc
             op.name = self.framestack[-1].jitcode.name
 
+    def switch_to_blackhole(self):
+        self.history = None   # start blackholing
+        if not we_are_translated():
+            self.staticdata.stats.aborted_count += 1
+            history.log.event('ABORTING TRACING')
+        elif DEBUG:
+            debug_print('~~~ ABORTING TRACING')
+        self.staticdata.profiler.end_tracing()
+        self.staticdata.profiler.start_blackhole()
+
     def switch_to_blackhole_if_trace_too_long(self):
         if not self.is_blackholing():
             warmrunnerstate = self.staticdata.state
             if len(self.history.operations) > warmrunnerstate.trace_limit:
-                self.history = None   # start blackholing
-                if not we_are_translated():
-                    self.staticdata.stats.aborted_count += 1
-                    history.log.event('ABORTING TRACING')
-                elif DEBUG:
-                    debug_print('~~~ ABORTING TRACING')
-                self.staticdata.profiler.end_tracing()
-                self.staticdata.profiler.start_blackhole()
+                self.switch_to_blackhole()
 
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
@@ -1425,16 +1430,7 @@ class MetaInterp(object):
                 else:
                     assert start == 0
                     if self.extra_rebuild_operations >= 0:
-                        # The history only starts at a bridge, not at the
-                        # full loop header.  Complete it as a full loop by
-                        # inserting a copy of the operations from the old
-                        # loop branch before the guard that failed.
-                        start = self.extra_rebuild_operations
-                        assert start >= 0
-                        # clean up, but without shifting the end of the list
-                        for i in range(start):
-                            self.history.operations[i] = None
-                        compile.prepare_loop_from_bridge(self, self.resumekey)
+                        raise GiveUp
                 loop = self.compile(original_boxes, live_arg_boxes, start)
                 if loop is not None:
                     raise GenerateMergePoint(live_arg_boxes, loop)
@@ -1443,7 +1439,7 @@ class MetaInterp(object):
                 # exactly its old list of operations...
                 # xxx maybe we could patch history.operations with
                 # Nones after calling self.compile() instead of
-                # before...
+                # before...  xxx maybe we should just raise GiveUp
                 del self.history.operations[:]
                 self.history.operations.extend(oldops)
 
@@ -1605,9 +1601,7 @@ class MetaInterp(object):
             else:
                 self.history = history.History(self.cpu)
                 extra = len(suboperations) - 1
-                assert extra >= 0
-                for i in range(extra):
-                    self.history.operations.append(suboperations[i])
+                assert extra == 0     # for now
                 self.extra_rebuild_operations = extra
         if must_compile:
             self.staticdata.profiler.start_tracing()
@@ -1814,3 +1808,6 @@ class GenerateMergePoint(Exception):
         assert target_loop is not None
         self.argboxes = args
         self.target_loop = target_loop
+
+class GiveUp(Exception):
+    pass
