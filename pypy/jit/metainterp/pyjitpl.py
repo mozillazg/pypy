@@ -921,7 +921,7 @@ class MIFrame(object):
             moreargs = list(extraargs)
         guard_op = metainterp.history.record(opnum, moreargs, None)
         
-        original_greenkey = self.resumekey.original_greenkey
+        original_greenkey = metainterp.resumekey.original_greenkey
         resumedescr = compile.ResumeGuardDescr(original_greenkey, guard_op)
         
         liveboxes = resumebuilder.finish(resumedescr)
@@ -1352,7 +1352,6 @@ class MetaInterp(object):
         redkey = original_boxes[num_green_args:]
         self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
                                                        redkey)
-        self.extra_rebuild_operations = -1
         self.seen_can_enter_jit = False
         try:
             self.interpret()
@@ -1366,7 +1365,9 @@ class MetaInterp(object):
         assert isinstance(key, compile.ResumeGuardDescr)
         original_greenkey = key.original_greenkey
         # notice that here we just put the greenkey
-        self.current_merge_points = [(original_greenkey, 0)] # xxx
+        # use -1 to mark that we will have to give up
+        # because we cannot reconstruct the beginning of the proper loop
+        self.current_merge_points = [(original_greenkey, -1)]
         self.resumekey = key
         self.seen_can_enter_jit = False
         guard_op = key.get_guard_op()
@@ -1416,7 +1417,7 @@ class MetaInterp(object):
        
         for j in range(len(self.current_merge_points)-1, -1, -1):
             original_boxes, start = self.current_merge_points[j]
-            assert len(original_boxes) == len(live_arg_boxes)
+            assert len(original_boxes) == len(live_arg_boxes) or start < 0
             for i in range(self.staticdata.num_green_args):
                 box1 = original_boxes[i]
                 box2 = live_arg_boxes[i]
@@ -1425,16 +1426,11 @@ class MetaInterp(object):
                     break
             else:
                 # Found!  Compile it as a loop.
+                if start < 0:
+                    # we cannot reconstruct the beginning of the proper loop
+                    raise GiveUp
+
                 oldops = self.history.operations[:]
-                if j > 0:
-                    # clean up, but without shifting the end of the list
-                    # (that would make 'history_guard_index' invalid)
-                    for i in range(start):
-                        self.history.operations[i] = None
-                else:
-                    assert start == 0
-                    if self.extra_rebuild_operations >= 0:
-                        raise GiveUp
                 loop = self.compile(original_boxes, live_arg_boxes, start)
                 if loop is not None:
                     raise GenerateMergePoint(live_arg_boxes, loop)
@@ -1599,15 +1595,8 @@ class MetaInterp(object):
         if must_compile:
             guard_op = resumedescr.get_guard_op()
             suboperations = guard_op.suboperations
-            if suboperations[-1] is not guard_failure:
-                must_compile = False
-                log("ignoring old version of the guard")
-            else:
-                self.history = history.History(self.cpu)
-                extra = len(suboperations) - 1
-                assert extra == 0     # for now
-                self.extra_rebuild_operations = extra
-        if must_compile:
+            assert suboperations[-1] is guard_failure
+            self.history = history.History(self.cpu)
             self.staticdata.profiler.start_tracing()
         else:
             self.staticdata.profiler.start_blackhole()
