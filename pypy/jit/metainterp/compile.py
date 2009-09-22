@@ -14,38 +14,44 @@ from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
 from pypy.rlib.debug import debug_print
 
-def compile_new_loop(metainterp, old_loops, greenkey, start=0):
+class LoopToken(object):
+
+    def __init__(self, specnodes, executable_token):
+        self.specnodes = specnodes
+        self.executable_token = executable_token
+
+def compile_new_loop(metainterp, old_loop_tokens, greenkey, start=0):
     """Try to compile a new loop by closing the current history back
     to the first operation.
     """
     if we_are_translated():
-        return compile_fresh_loop(metainterp, old_loops, greenkey, start)
+        return compile_fresh_loop(metainterp, old_loop_tokens, greenkey, start)
     else:
-        return _compile_new_loop_1(metainterp, old_loops, greenkey, start)
+        return _compile_new_loop_1(metainterp, old_loop_tokens, greenkey, start)
 
-def compile_new_bridge(metainterp, old_loops, resumekey):
+def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     """Try to compile a new bridge leading from the beginning of the history
     to some existing place.
     """
     if we_are_translated():
-        return compile_fresh_bridge(metainterp, old_loops, resumekey)
+        return compile_fresh_bridge(metainterp, old_loop_tokens, resumekey)
     else:
-        return _compile_new_bridge_1(metainterp, old_loops, resumekey)
+        return _compile_new_bridge_1(metainterp, old_loop_tokens, resumekey)
 
 class BridgeInProgress(Exception):
     pass
 
 
 # the following is not translatable
-def _compile_new_loop_1(metainterp, old_loops, greenkey, start):
-    old_loops_1 = old_loops[:]
+def _compile_new_loop_1(metainterp, old_loop_tokens, greenkey, start):
+    old_loop_tokens_1 = old_loop_tokens[:]
     try:
-        loop = compile_fresh_loop(metainterp, old_loops, greenkey, start)
+        loop = compile_fresh_loop(metainterp, old_loop_tokens, greenkey, start)
     except Exception, exc:
         show_loop(metainterp, error=exc)
         raise
     else:
-        if loop in old_loops_1:
+        if loop in old_loop_tokens_1:
             log.info("reusing loop at %r" % (loop,))
         else:
             show_loop(metainterp, loop)
@@ -53,9 +59,9 @@ def _compile_new_loop_1(metainterp, old_loops, greenkey, start):
         loop.check_consistency()
     return loop
 
-def _compile_new_bridge_1(metainterp, old_loops, resumekey):
+def _compile_new_bridge_1(metainterp, old_loop_tokens, resumekey):
     try:
-        target_loop = compile_fresh_bridge(metainterp, old_loops,
+        target_loop = compile_fresh_bridge(metainterp, old_loop_tokens,
                                            resumekey)
     except Exception, exc:
         show_loop(metainterp, error=exc)
@@ -83,15 +89,12 @@ def show_loop(metainterp, loop=None, error=None):
         metainterp.staticdata.stats.view(errmsg=errmsg, extraloops=extraloops)
 
 def create_empty_loop(metainterp):
-    if we_are_translated():
-        name = 'Loop'
-    else:
-        name = 'Loop #%d' % len(metainterp.staticdata.stats.loops)
+    name = metainterp.staticdata.stats.name_for_new_loop()
     return TreeLoop(name)
 
 # ____________________________________________________________
 
-def compile_fresh_loop(metainterp, old_loops, greenkey, start):
+def compile_fresh_loop(metainterp, old_loop_tokens, greenkey, start):
     from pypy.jit.metainterp.pyjitpl import DEBUG
 
     history = metainterp.history
@@ -108,7 +111,7 @@ def compile_fresh_loop(metainterp, old_loops, greenkey, start):
     metainterp_sd = metainterp.staticdata
     try:
         old_loop = metainterp_sd.state.optimize_loop(metainterp_sd.options,
-                                                     old_loops, loop, 
+                                                     old_loop_tokens, loop, 
                                                      metainterp.cpu)
     except InvalidLoop:
         return None
@@ -117,7 +120,7 @@ def compile_fresh_loop(metainterp, old_loops, greenkey, start):
             debug_print("reusing old loop")
         return old_loop
     send_loop_to_backend(metainterp, loop, None, "loop")
-    old_loops.append(loop)
+    old_loop_tokens.append(loop)
     return loop
 
 def send_loop_to_backend(metainterp, loop, guard_op, type):
@@ -129,10 +132,10 @@ def send_loop_to_backend(metainterp, loop, guard_op, type):
         metainterp.cpu.compile_bridge(guard_op)        
     metainterp.staticdata.profiler.end_backend()
     if loop is not None:
-        metainterp.staticdata.stats.loops.append(loop)
+        metainterp.staticdata.stats.add_new_loop(loop)
     if not we_are_translated():
         if type != "entry bridge":
-            metainterp.staticdata.stats.compiled_count += 1
+            metainterp.staticdata.stats.compiled()
         else:
             loop._ignore_during_counting = True
         log.info("compiled new " + type)
@@ -200,54 +203,38 @@ done_with_this_frame_descr_ref = DoneWithThisFrameDescrRef()
 done_with_this_frame_descr_float = DoneWithThisFrameDescrFloat()
 exit_frame_with_exception_descr_ref = ExitFrameWithExceptionDescrRef()
 
-class TerminatingLoop(TreeLoop):
-    pass
 
 prebuiltNotSpecNode = NotSpecNode()
 
-# pseudo-loops to make the life of optimize.py easier
-_loop = TerminatingLoop('done_with_this_frame_int')
-_loop.specnodes = [prebuiltNotSpecNode]
-_loop.inputargs = [BoxInt()]
-_loop.finishdescr = done_with_this_frame_descr_int
-loops_done_with_this_frame_int = [_loop]
+class TerminatingLoopToken(LoopToken):
+    def __init__(self, nargs, finishdescr):
+        LoopToken.__init__(self, [prebuiltNotSpecNode]*nargs, None)
+        self.finishdescr = finishdescr
 
-_loop = TerminatingLoop('done_with_this_frame_ref')
-_loop.specnodes = [prebuiltNotSpecNode]
-_loop.inputargs = [BoxPtr()]
-_loop.finishdescr = done_with_this_frame_descr_ref
-llhelper.loops_done_with_this_frame_ref = [_loop]
-
-_loop = TerminatingLoop('done_with_this_frame_ref')
-_loop.specnodes = [prebuiltNotSpecNode]
-_loop.inputargs = [BoxObj()]
-_loop.finishdescr = done_with_this_frame_descr_ref
-oohelper.loops_done_with_this_frame_ref = [_loop]
-
-_loop = TerminatingLoop('done_with_this_frame_float')
-_loop.specnodes = [prebuiltNotSpecNode]
-_loop.inputargs = [BoxFloat()]
-_loop.finishdescr = done_with_this_frame_descr_float
-loops_done_with_this_frame_float = [_loop]
-
-_loop = TerminatingLoop('done_with_this_frame_void')
-_loop.specnodes = []
-_loop.inputargs = []
-_loop.finishdescr = done_with_this_frame_descr_void
-loops_done_with_this_frame_void = [_loop]
-
-_loop = TerminatingLoop('exit_frame_with_exception_ref')
-_loop.specnodes = [prebuiltNotSpecNode]
-_loop.inputargs = [BoxPtr()]
-_loop.finishdescr = exit_frame_with_exception_descr_ref
-llhelper.loops_exit_frame_with_exception_ref = [_loop]
-
-_loop = TerminatingLoop('exit_frame_with_exception_ref')
-_loop.specnodes = [prebuiltNotSpecNode]
-_loop.inputargs = [BoxObj()]
-_loop.finishdescr = exit_frame_with_exception_descr_ref
-oohelper.loops_exit_frame_with_exception_ref = [_loop]
-del _loop
+# pseudo loop tokens to make the life of optimize.py easier
+loop_tokens_done_with_this_frame_int = [
+    TerminatingLoopToken(1, done_with_this_frame_descr_int)
+    ]
+# xxx they are the same now
+llhelper.loop_tokens_done_with_this_frame_ref = [
+    TerminatingLoopToken(1, done_with_this_frame_descr_ref)
+    ]
+oohelper.loop_tokens_done_with_this_frame_ref = [
+    TerminatingLoopToken(1, done_with_this_frame_descr_ref)
+    ]
+loop_tokens_done_with_this_frame_float = [
+    TerminatingLoopToken(1, done_with_this_frame_descr_float)
+    ]
+loop_tokens_done_with_this_frame_void = [
+    TerminatingLoopToken(0, done_with_this_frame_descr_void)
+    ]
+# xxx they are the same now
+llhelper.loop_tokens_exit_frame_with_exception_ref = [
+    TerminatingLoopToken(1, exit_frame_with_exception_descr_ref)
+    ]
+oohelper.loop_tokens_exit_frame_with_exception_ref = [
+    TerminatingLoopToken(1, exit_frame_with_exception_descr_ref)
+    ]
 
 class ResumeDescr(AbstractDescr):
     def __init__(self, original_greenkey):
@@ -343,27 +330,22 @@ class ResumeFromInterpDescr(ResumeDescr):
         metainterp_sd.state.attach_unoptimized_bridge_from_interp(
             self.original_greenkey,
             new_loop)
-        # store the new_loop in compiled_merge_points too
-        # XXX it's probably useless to do so when optimizing
-        #glob = metainterp_sd.globaldata
-        #greenargs = glob.unpack_greenkey(greenkey)
-        #old_loops = glob.compiled_merge_points.setdefault(greenargs, [])
-        #old_loops.append(new_loop)
 
 
-def compile_fresh_bridge(metainterp, old_loops, resumekey):
+def compile_fresh_bridge(metainterp, old_loop_tokens, resumekey):
     # The history contains new operations to attach as the code for the
     # failure of 'resumekey.guard_op'.
     #
     # Attempt to use optimize_bridge().  This may return None in case
-    # it does not work -- i.e. none of the existing old_loops match.
+    # it does not work -- i.e. none of the existing old_loop_tokens match.
     new_loop = create_empty_loop(metainterp)
     new_loop.operations = metainterp.history.operations
     metainterp_sd = metainterp.staticdata
     options = metainterp_sd.options
     try:
         target_loop = metainterp_sd.state.optimize_bridge(options,
-                                                          old_loops, new_loop,
+                                                          old_loop_tokens,
+                                                          new_loop,
                                                           metainterp.cpu)
     except InvalidLoop:
         assert 0, "InvalidLoop in optimize_bridge?"
