@@ -841,7 +841,9 @@ def make_state_class(warmrunnerdesc):
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception
                 metainterp_sd.profiler.start_running()
-                fail_op = metainterp_sd.cpu.execute_operations(loop)
+                # xxx unhappy
+                executable_token = loop.executable_token
+                fail_op = metainterp_sd.cpu.execute_token(executable_token)
                 metainterp_sd.profiler.end_running()
                 loop = fail_op.descr.handle_fail_op(metainterp_sd, fail_op)
         maybe_compile_and_run._dont_inline_ = True

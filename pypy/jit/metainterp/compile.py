@@ -116,18 +116,20 @@ def compile_fresh_loop(metainterp, old_loops, greenkey, start):
         if we_are_translated() and DEBUG > 0:
             debug_print("reusing old loop")
         return old_loop
-    history.source_link = loop
     send_loop_to_backend(metainterp, loop, None, "loop")
-    metainterp.staticdata.stats.loops.append(loop)
     old_loops.append(loop)
     return loop
 
 def send_loop_to_backend(metainterp, loop, guard_op, type):
-    for box in loop.inputargs:
-        assert isinstance(box, Box)
     metainterp.staticdata.profiler.start_backend()
-    metainterp.cpu.compile_operations(loop, guard_op)
+    if guard_op is None:
+        executable_token = metainterp.cpu.compile_loop(loop)
+        loop.executable_token = executable_token # xxx unhappy
+    else:
+        metainterp.cpu.compile_bridge(guard_op)        
     metainterp.staticdata.profiler.end_backend()
+    if loop is not None:
+        metainterp.staticdata.stats.loops.append(loop)
     if not we_are_translated():
         if type != "entry bridge":
             metainterp.staticdata.stats.compiled_count += 1
@@ -315,22 +317,11 @@ class ResumeGuardDescr(ResumeDescr):
 
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge.  Attach the new operations
-        # to the existing source_loop and recompile the whole thing.
-        source_loop = self.find_source_loop()
-        metainterp.history.source_link = self.history
-        metainterp.history.source_guard_index = self.history_guard_index
+        # to the corrsponding guard_op and compile from there
+        # xxx unhappy
         guard_op = self.get_guard_op()
         guard_op.suboperations = new_loop.operations
-        send_loop_to_backend(metainterp, source_loop, self.get_guard_op(),
-                             "bridge")
-
-    def find_source_loop(self):
-        # Find the TreeLoop object that contains this guard operation.
-        source_loop = self.history.source_link
-        while not isinstance(source_loop, TreeLoop):
-            source_loop = source_loop.source_link
-        return source_loop
-
+        send_loop_to_backend(metainterp, None, guard_op, "bridge")
 
 class ResumeFromInterpDescr(ResumeDescr):
     def __init__(self, original_greenkey, redkey):
@@ -343,16 +334,15 @@ class ResumeFromInterpDescr(ResumeDescr):
         # a loop at all but ends in a jump to the target loop.  It starts
         # with completely unoptimized arguments, as in the interpreter.
         metainterp_sd = metainterp.staticdata
-        metainterp.history.source_link = new_loop
-        metainterp.history.inputargs = redkey
+        metainterp.history.inputargs = self.redkey
         new_loop.greenkey = self.original_greenkey
         new_loop.inputargs = self.redkey
         new_loop.specnodes = [prebuiltNotSpecNode] * len(self.redkey)
         send_loop_to_backend(metainterp, new_loop, None, "entry bridge")
-        metainterp_sd.stats.loops.append(new_loop)
         # send the new_loop to warmspot.py, to be called directly the next time
-        metainterp_sd.state.attach_unoptimized_bridge_from_interp(greenkey,
-                                                                  new_loop)
+        metainterp_sd.state.attach_unoptimized_bridge_from_interp(
+            self.original_greenkey,
+            new_loop)
         # store the new_loop in compiled_merge_points too
         # XXX it's probably useless to do so when optimizing
         #glob = metainterp_sd.globaldata
