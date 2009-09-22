@@ -121,6 +121,30 @@ class BaseBackendTest(Runner):
         res = self.cpu.get_latest_value_int(0)
         assert res == 10
 
+    def test_backends_dont_keep_loops_alive(self):
+        import weakref, gc
+        loop = TreeLoop('single op')
+        i0 = BoxInt()
+        i1 = BoxInt()
+        i2 = BoxInt()
+        loop.operations = [
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.GUARD_TRUE, [i2], None),
+            ResOperation(rop.JUMP, [i1], None),
+            ]
+        loop.inputargs = [i0]
+        loop.operations[2].suboperations = [
+            ResOperation(rop.FAIL, [i1], None)
+            ]
+        loop.operations[-1].jump_target = loop
+        
+        executable_token = self.cpu.compile_loop(loop)        
+        wr = weakref.ref(loop)
+        del loop
+        gc.collect()
+        assert not wr()
+
     def test_compile_bridge(self):
         loop = TreeLoop('single op')
         i0 = BoxInt()
