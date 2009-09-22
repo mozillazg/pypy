@@ -769,6 +769,29 @@ class History(Base):
 # ____________________________________________________________
 
 
+class NoStats(object):
+
+    def set_history(self, history):
+        pass
+
+    def aborted(self):
+        pass
+
+    def entered(self):
+        pass
+
+    def compiled(self):
+        pass
+
+    def add_merge_point_location(self, loc):
+        pass
+
+    def name_for_new_loop(self):
+        return 'Loop'
+
+    def add_new_loop(self, loop):
+        pass
+
 class Stats(object):
     """For tests."""
 
@@ -779,6 +802,29 @@ class Stats(object):
     def __init__(self):
         self.loops = []
         self.locations = []
+
+    def set_history(self, history):
+        self.history = history
+
+    def aborted(self):
+        self.aborted_count += 1
+
+    def entered(self):
+        self.enter_count += 1        
+
+    def compiled(self):
+        self.compiled_count += 1
+
+    def add_merge_point_location(self, loc):
+        self.locations.append(loc)
+
+    def name_for_new_loop(self):
+        return 'Loop #%d' % len(self.loops)
+
+    def add_new_loop(self, loop):
+        self.loops.append(loop)
+        
+    # test read interface
 
     def get_all_loops(self):
         return self.loops

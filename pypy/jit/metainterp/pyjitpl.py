@@ -30,11 +30,12 @@ _DEBUG_LEVEL = {"off":      0,
                 "steps":    1,
                 "detailed": 2}
 
-def log(msg):
+def log(msg, event_kind='info'):
     if not we_are_translated():
-        history.log.info(msg)
+        getattr(history.log, event_kind)(msg)
     elif DEBUG:
         debug_print(msg)
+
 
 class arguments(object):
     def __init__(self, *argtypes):
@@ -873,8 +874,6 @@ class MIFrame(object):
             check_args(*argboxes)
         self.pc = 0
         self.env = argboxes
-        if not we_are_translated():
-            self.metainterp._debug_history[-1][-1] = argboxes
 
     def setup_resume_at_op(self, pc, exception_target, env):
         if not we_are_translated():
@@ -960,11 +959,6 @@ class MIFrame(object):
                                                             descr=descr)
         if resbox is not None:
             self.make_result_box(resbox)
-        if not we_are_translated():
-            # this assumes that execute_varargs() is only used for calls,
-            # which is the case so far
-            self.metainterp._debug_history.append(['call',
-                                                  argboxes[0], argboxes[1:]])
         if exc:
             return self.metainterp.handle_exception()
         return False
@@ -1069,7 +1063,6 @@ class MetaInterpStaticData(object):
 
 class MetaInterpGlobalData(object):
     def __init__(self, staticdata):
-        self._debug_history = []
         self.initialized = False
         #
         state = staticdata.state
@@ -1090,8 +1083,6 @@ class MetaInterp(object):
     def __init__(self, staticdata):
         self.staticdata = staticdata
         self.cpu = staticdata.cpu
-        if not we_are_translated():
-            self._debug_history = staticdata.globaldata._debug_history
 
     def is_blackholing(self):
         return self.history is None
@@ -1103,8 +1094,6 @@ class MetaInterp(object):
             return ""
 
     def newframe(self, jitcode):
-        if not we_are_translated():
-            self._debug_history.append(['enter', jitcode, None])
         if jitcode is self.staticdata.portal_code:
             self.in_recursion += 1
         f = MIFrame(self, jitcode)
@@ -1119,8 +1108,6 @@ class MetaInterp(object):
 
     def finishframe(self, resultbox):
         frame = self.popframe()
-        if not we_are_translated():
-            self._debug_history.append(['leave', frame.jitcode, None])
         if self.framestack:
             if resultbox is not None:
                 self.framestack[-1].make_result_box(resultbox)
@@ -1159,8 +1146,6 @@ class MetaInterp(object):
                 frame.exception_box = exceptionbox
                 frame.exc_value_box = excvaluebox
                 return True
-            if not we_are_translated():
-                self._debug_history.append(['leave_exc', frame.jitcode, None])
             self.popframe()
         if not self.is_blackholing():
             self.compile_exit_frame_with_exception(excvaluebox)
@@ -1199,8 +1184,7 @@ class MetaInterp(object):
     def create_empty_history(self):
         warmrunnerstate = self.staticdata.state
         self.history = history.History(self.cpu)
-        if self.staticdata.stats is not None:
-            self.staticdata.stats.history = self.history
+        self.staticdata.stats.set_history(self.history)
 
     def _all_constants(self, *boxes):
         if len(boxes) == 0:
@@ -1293,11 +1277,8 @@ class MetaInterp(object):
 
     def switch_to_blackhole(self):
         self.history = None   # start blackholing
-        if not we_are_translated():
-            self.staticdata.stats.aborted_count += 1
-            history.log.event('ABORTING TRACING')
-        elif DEBUG:
-            debug_print('~~~ ABORTING TRACING')
+        self.staticdata.stats.aborted()
+        log('~~~ ABORTING TRACING', event_kind='event')
         self.staticdata.profiler.end_tracing()
         self.staticdata.profiler.start_blackhole()
 
@@ -1310,11 +1291,8 @@ class MetaInterp(object):
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
         # a ContinueRunningNormally, or a GenerateMergePoint exception.
-        if not we_are_translated():
-            history.log.event('ENTER' + self.blackholing_text())
-            self.staticdata.stats.enter_count += 1
-        elif DEBUG:
-            debug_print('~~~ ENTER', self.blackholing_text())
+        self.staticdata.stats.entered()
+        log('~~~ ENTER' + self.blackholing_text(), event_kind='event')        
         try:
             while True:
                 self.framestack[-1].run_one_step()
@@ -1326,10 +1304,7 @@ class MetaInterp(object):
                 self.staticdata.profiler.end_blackhole()
             else:
                 self.staticdata.profiler.end_tracing()
-            if not we_are_translated():
-                history.log.event('LEAVE' + self.blackholing_text())
-            elif DEBUG:
-                debug_print('~~~ LEAVE', self.blackholing_text())
+            log('~~~ LEAVE' + self.blackholing_text(), event_kind='event')
 
     def interpret(self):
         if we_are_translated():
@@ -1431,9 +1406,8 @@ class MetaInterp(object):
                     raise GiveUp
 
                 oldops = self.history.operations[:]
-                loop = self.compile(original_boxes, live_arg_boxes, start)
-                if loop is not None:
-                    raise GenerateMergePoint(live_arg_boxes, loop)
+                # raises in case it works -- which is the common case
+                self.compile(original_boxes, live_arg_boxes, start)
                 # creation of the loop was cancelled!  Patch
                 # history.operations so that it contains again
                 # exactly its old list of operations...
@@ -1448,13 +1422,13 @@ class MetaInterp(object):
         self.current_merge_points.append((live_arg_boxes, start))
 
     def designate_target_loop(self, gmp):
-        loop = gmp.target_loop
+        loop_token = gmp.target_loop_token
         num_green_args = self.staticdata.num_green_args
-        residual_args = self.get_residual_args(loop,
+        residual_args = self.get_residual_args(loop_token.specnodes,
                                                gmp.argboxes[num_green_args:])
         history.set_future_values(self.cpu, residual_args)
         self.clean_up_history()
-        return loop
+        return loop_token.executable_token
 
     def clean_up_history(self):
         # Clear the BoxPtrs used in self.history, at the end.  The
@@ -1497,12 +1471,12 @@ class MetaInterp(object):
         greenkey = original_boxes[:num_green_args]
         glob = self.staticdata.globaldata
         greenargs = glob.unpack_greenkey(greenkey)
-        old_loops = glob.compiled_merge_points.setdefault(greenargs, [])
+        old_loop_tokens = glob.compiled_merge_points.setdefault(greenargs, [])
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
-        loop = compile.compile_new_loop(self, old_loops, greenkey, start)
-        if not we_are_translated() and loop is not None:
-            loop._call_history = self._debug_history
-        return loop
+        loop_token = compile.compile_new_loop(self, old_loop_tokens,
+                                              greenkey, start)
+        if loop_token is not None: # raise if it *worked* correctly
+            raise GenerateMergePoint(live_arg_boxes, loop_token)
 
     def compile_bridge(self, live_arg_boxes):
         num_green_args = self.staticdata.num_green_args
@@ -1510,14 +1484,14 @@ class MetaInterp(object):
         glob = self.staticdata.globaldata
         greenargs = glob.unpack_greenkey(greenkey)
         try:
-            old_loops = glob.compiled_merge_points[greenargs]
+            old_loop_tokens = glob.compiled_merge_points[greenargs]
         except KeyError:
             return
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
-        target_loop = compile.compile_new_bridge(self, old_loops,
-                                                 self.resumekey)
-        if target_loop is not None:   # raise if it *worked* correctly
-            raise GenerateMergePoint(live_arg_boxes, target_loop)
+        target_loop_token = compile.compile_new_bridge(self, old_loop_tokens,
+                                                       self.resumekey)
+        if target_loop_token is not None:   # raise if it *worked* correctly
+            raise GenerateMergePoint(live_arg_boxes, target_loop_token)
         self.history.operations.pop()     # remove the JUMP
 
     def compile_done_with_this_frame(self, exitbox):
@@ -1527,37 +1501,39 @@ class MetaInterp(object):
         if sd.result_type == 'void':
             assert exitbox is None
             exits = []
-            loops = compile.loops_done_with_this_frame_void
+            loop_tokens = compile.loop_tokens_done_with_this_frame_void
         elif sd.result_type == 'int':
             exits = [exitbox]
-            loops = compile.loops_done_with_this_frame_int
+            loop_tokens = compile.loop_tokens_done_with_this_frame_int
         elif sd.result_type == 'ref':
             exits = [exitbox]
-            loops = sd.cpu.ts.loops_done_with_this_frame_ref
+            loop_tokens = sd.cpu.ts.loop_tokens_done_with_this_frame_ref
         elif sd.result_type == 'float':
             exits = [exitbox]
-            loops = compile.loops_done_with_this_frame_float
+            loop_tokens = compile.loop_tokens_done_with_this_frame_float
         else:
             assert False
         self.history.record(rop.JUMP, exits, None)
-        target_loop = compile.compile_new_bridge(self, loops, self.resumekey)
-        assert target_loop is loops[0]
+        target_loop_token = compile.compile_new_bridge(self, loop_tokens,
+                                                       self.resumekey)
+        assert target_loop_token is loop_tokens[0]
 
     def compile_exit_frame_with_exception(self, valuebox):
         self.gen_store_back_in_virtualizable()
         # temporarily put a JUMP to a pseudo-loop
         self.history.record(rop.JUMP, [valuebox], None)
-        loops = self.cpu.ts.loops_exit_frame_with_exception_ref
-        target_loop = compile.compile_new_bridge(self, loops, self.resumekey)
-        assert target_loop is loops[0]
+        loop_tokens = self.cpu.ts.loop_tokens_exit_frame_with_exception_ref
+        target_loop_token = compile.compile_new_bridge(self, loop_tokens,
+                                                       self.resumekey)
+        assert target_loop_token is loop_tokens[0]
 
-    def get_residual_args(self, loop, args):
-        if loop.specnodes is None:     # it is None only for tests
+    def get_residual_args(self, specnodes, args):
+        if specnodes is None:     # it is None only for tests
             return args
-        assert len(loop.specnodes) == len(args)
+        assert len(specnodes) == len(args)
         expanded_args = []
-        for i in range(len(loop.specnodes)):
-            specnode = loop.specnodes[i]
+        for i in range(len(specnodes)):
+            specnode = specnodes[i]
             specnode.extract_runtime_data(self.cpu, args[i], expanded_args)
         return expanded_args
 
@@ -1683,8 +1659,6 @@ class MetaInterp(object):
             return False
 
     def rebuild_state_after_failure(self, resumedescr, newboxes):
-        if not we_are_translated():
-            self._debug_history.append(['guard_failure', None, None])
         vinfo = self.staticdata.virtualizable_info
         resumereader = resume.ResumeDataReader(resumedescr, newboxes, self)
         self.framestack = []
@@ -1797,10 +1771,10 @@ class MetaInterp(object):
 
 
 class GenerateMergePoint(Exception):
-    def __init__(self, args, target_loop):
-        assert target_loop is not None
+    def __init__(self, args, target_loop_token):
+        assert target_loop_token is not None
         self.argboxes = args
-        self.target_loop = target_loop
+        self.target_loop_token = target_loop_token
 
 class GiveUp(Exception):
     pass

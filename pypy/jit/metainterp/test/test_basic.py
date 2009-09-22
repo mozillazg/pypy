@@ -232,7 +232,7 @@ class BasicTests:
                     found += 1
             assert found == 1
 
-    @py.test.mark.xfail
+    #@py.test.mark.xfail
     def test_loops_are_transient(self):
         import gc, weakref
         myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res'])
