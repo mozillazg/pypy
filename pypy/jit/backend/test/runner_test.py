@@ -16,8 +16,9 @@ from pypy.rpython.llinterp import LLException
 class Runner(object):
 
     def execute_operation(self, opname, valueboxes, result_type, descr=None):
-        loop = self.get_compiled_single_operation(opname, result_type,
-                                                  valueboxes, descr)
+        loop = self._get_single_operation_loop(opname, result_type,
+                                               valueboxes, descr)
+        executable_token = self.cpu.compile_loop(loop)
         j = 0
         for box in valueboxes:
             if isinstance(box, BoxInt):
@@ -31,7 +32,7 @@ class Runner(object):
                 j += 1
             else:
                 assert isinstance(box, Const)
-        res = self.cpu.execute_operations(loop)
+        res = self.cpu.execute_token(executable_token)
         if res is loop.operations[-1]:
             self.guard_failed = False
         else:
@@ -47,8 +48,8 @@ class Runner(object):
         else:
             assert False
 
-    def get_compiled_single_operation(self, opnum, result_type, valueboxes,
-                                      descr):
+    def _get_single_operation_loop(self, opnum, result_type, valueboxes,
+                                   descr):
         if result_type == 'void':
             result = None
         elif result_type == 'int':
@@ -76,12 +77,90 @@ class Runner(object):
             if isinstance(box, Box):
                 assert box not in loop.inputargs, "repeated box!"
                 loop.inputargs.append(box)
-        self.cpu.compile_operations(loop)
         return loop
 
-
 class BaseBackendTest(Runner):
-    
+
+    def test_compile_linear_loop(self):
+        loop = TreeLoop('single op')
+        i0 = BoxInt()
+        i1 = BoxInt()
+        loop.operations = [
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.FAIL, [i1], None)
+            ]
+        loop.inputargs = [i0]
+        executable_token = self.cpu.compile_loop(loop)
+        self.cpu.set_future_value_int(0, 2)
+        fail_op = self.cpu.execute_token(executable_token)
+        assert fail_op is loop.operations[-1] # xxx unhappy
+        res = self.cpu.get_latest_value_int(0)
+        assert res == 3
+
+    def test_compile_loop(self):
+        loop = TreeLoop('single op')
+        i0 = BoxInt()
+        i1 = BoxInt()
+        i2 = BoxInt()
+        loop.operations = [
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.GUARD_TRUE, [i2], None),
+            ResOperation(rop.JUMP, [i1], None),
+            ]
+        loop.inputargs = [i0]
+        loop.operations[2].suboperations = [
+            ResOperation(rop.FAIL, [i1], None)
+            ]
+        loop.operations[-1].jump_target = loop
+        
+        executable_token = self.cpu.compile_loop(loop)
+        self.cpu.set_future_value_int(0, 2)
+        fail_op = self.cpu.execute_token(executable_token)
+        assert fail_op is loop.operations[2].suboperations[-1] # xxx unhappy
+        res = self.cpu.get_latest_value_int(0)
+        assert res == 10
+
+    def test_compile_bridge(self):
+        loop = TreeLoop('single op')
+        i0 = BoxInt()
+        i1 = BoxInt()
+        i2 = BoxInt()
+        loop.operations = [
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.GUARD_TRUE, [i2], None),
+            ResOperation(rop.JUMP, [i1], None),
+            ]
+        loop.inputargs = [i0]
+        loop.operations[2].suboperations = [
+            ResOperation(rop.FAIL, [i1], None)
+            ]
+        loop.operations[-1].jump_target = loop        
+        executable_token = self.cpu.compile_loop(loop)
+
+        i3 = BoxInt()
+        bridge = [
+            ResOperation(rop.INT_LE, [i1, ConstInt(19)], i3),
+            ResOperation(rop.GUARD_TRUE, [i3], None),
+            ResOperation(rop.JUMP, [i1], None),            
+        ]
+        bridge[1].suboperations = [
+            ResOperation(rop.FAIL, [i1], None)
+            ]        
+        bridge[-1].jump_target = loop
+
+        # xxx unhappy
+        guard_op = loop.operations[2]
+        guard_op.suboperations = bridge
+        self.cpu.compile_bridge(guard_op)        
+
+        self.cpu.set_future_value_int(0, 2)
+        fail_op = self.cpu.execute_token(executable_token)
+        assert fail_op is bridge[1].suboperations[-1] # xxx unhappy
+        res = self.cpu.get_latest_value_int(0)
+        assert res == 20
+         
     def test_do_call(self):
         cpu = self.cpu
         #
@@ -269,13 +348,13 @@ class BaseBackendTest(Runner):
             loop = TreeLoop('name')
             loop.operations = ops
             loop.inputargs = [v1, v2]
-            self.cpu.compile_operations(loop)
+            executable_token = self.cpu.compile_loop(loop)
             for x, y, z in testcases:
                 assert not self.cpu.get_exception()
                 assert not self.cpu.get_exc_value()
                 self.cpu.set_future_value_int(0, x)
                 self.cpu.set_future_value_int(1, y)
-                op = self.cpu.execute_operations(loop)
+                op = self.cpu.execute_token(executable_token)
                 if (z == boom) ^ reversed:
                     assert op is ops[1].suboperations[0]
                 else:
@@ -909,14 +988,14 @@ class LLtypeBackendTest(BaseBackendTest):
         exc_tp = xtp
         exc_ptr = xptr
         loop = parse(ops, self.cpu, namespace=locals())
-        self.cpu.compile_operations(loop)
+        executable_token = self.cpu.compile_loop(loop)
         self.cpu.set_future_value_int(0, 1)
-        self.cpu.execute_operations(loop)
+        self.cpu.execute_token(executable_token)
         assert self.cpu.get_latest_value_int(0) == 0
         assert self.cpu.get_latest_value_ref(1) == xptr
         self.cpu.clear_exception()
         self.cpu.set_future_value_int(0, 0)
-        self.cpu.execute_operations(loop)
+        self.cpu.execute_token(executable_token)
         assert self.cpu.get_latest_value_int(0) == 1
         self.cpu.clear_exception()
 
@@ -932,9 +1011,9 @@ class LLtypeBackendTest(BaseBackendTest):
         exc_tp = ytp
         exc_ptr = yptr
         loop = parse(ops, self.cpu, namespace=locals())
-        self.cpu.compile_operations(loop)
+        executable_token = self.cpu.compile_loop(loop)
         self.cpu.set_future_value_int(0, 1)
-        self.cpu.execute_operations(loop)
+        self.cpu.execute_token(executable_token)
         assert self.cpu.get_latest_value_int(0) == 1
         self.cpu.clear_exception()
 
@@ -948,13 +1027,13 @@ class LLtypeBackendTest(BaseBackendTest):
         fail(0)
         '''
         loop = parse(ops, self.cpu, namespace=locals())
-        self.cpu.compile_operations(loop)
+        executable_token = self.cpu.compile_loop(loop)
         self.cpu.set_future_value_int(0, 1)
-        self.cpu.execute_operations(loop)
+        self.cpu.execute_token(executable_token)
         assert self.cpu.get_latest_value_int(0) == 1
         self.cpu.clear_exception()
         self.cpu.set_future_value_int(0, 0)
-        self.cpu.execute_operations(loop)
+        self.cpu.execute_token(executable_token)
         assert self.cpu.get_latest_value_int(0) == 0
         self.cpu.clear_exception()
 

@@ -103,7 +103,14 @@ class BaseCPU(model.AbstractCPU):
                 size = size.ofs
             llimpl.set_class_size(self.memo_cast, vtable, size)
 
-    def compile_operations(self, loop, bridge=None):
+    def compile_loop(self, loop):
+        self._compile_operations(loop)
+        return loop._compiled_version
+
+    def compile_bridge(self, guard_op):
+        self._compile_operations(guard_op._ll_origloop)
+
+    def _compile_operations(self, loop):
         """In a real assembler backend, this should assemble the given
         list of operations.  Here we just generate a similar CompiledLoop
         instance.  The code here is RPython, whereas the code in llimpl
@@ -123,13 +130,13 @@ class BaseCPU(model.AbstractCPU):
                 var2index[box] = llimpl.compile_start_float_var(c)
             else:
                 raise Exception("box is: %r" % (box,))
-        self._compile_branch(c, loop.operations, var2index)
+        self._compile_branch(c, loop, loop.operations, var2index)
         # We must redirect code jumping to the old loop so that it goes
         # to the new loop.
         if prev_c:
             llimpl.compile_redirect_code(prev_c, c)
 
-    def _compile_branch(self, c, operations, var2index):
+    def _compile_branch(self, c, origloop, operations, var2index):
         for op in operations:
             llimpl.compile_add(c, op.opnum)
             descr = op.descr
@@ -153,8 +160,10 @@ class BaseCPU(model.AbstractCPU):
                     raise Exception("%s args contain: %r" % (op.getopname(),
                                                              x))
             if op.is_guard():
+                op._ll_origloop = origloop
                 c2 = llimpl.compile_suboperations(c)
-                self._compile_branch(c2, op.suboperations, var2index.copy())
+                self._compile_branch(c2, origloop, op.suboperations,
+                                                   var2index.copy())
             x = op.result
             if x is not None:
                 if isinstance(x, history.BoxInt):
@@ -174,13 +183,13 @@ class BaseCPU(model.AbstractCPU):
             llimpl.compile_add_fail(c, len(self.fail_ops))
             self.fail_ops.append(op)
 
-    def execute_operations(self, loop):
+    def execute_token(self, compiled_version):
         """Calls the assembler generated for the given loop.
         Returns the ResOperation that failed, of type rop.FAIL.
         """
         frame = llimpl.new_frame(self.memo_cast, self.is_oo)
         # setup the frame
-        llimpl.frame_clear(frame, loop._compiled_version)
+        llimpl.frame_clear(frame, compiled_version)
         # run the loop
         fail_index = llimpl.frame_execute(frame)
         # we hit a FAIL operation.

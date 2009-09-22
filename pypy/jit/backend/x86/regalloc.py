@@ -71,7 +71,6 @@ class RegAlloc(object):
             inpargs = [arg for arg in guard_op._fail_op.args if
                        isinstance(arg, Box)]
             self._compute_vars_longevity(inpargs, guard_op.suboperations)
-            self.inputargs = inpargs
             self.position = -1
             self._update_bindings(locs, inpargs)
             self.current_stack_depth = guard_op._x86_current_stack_depth
