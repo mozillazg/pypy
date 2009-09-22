@@ -148,7 +148,6 @@ class Assembler386(object):
         # a 'jump' can either close a loop, or end a bridge to some
         # previously-compiled code.
         self._compute_longest_fail_op(operations)
-        self.tree = tree
         self.make_sure_mc_exists()
         newpos = self.mc.tell()
         regalloc = RegAlloc(self, tree, self.cpu.translate_support_code,

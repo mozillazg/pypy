@@ -247,14 +247,16 @@ _loop.finishdescr = exit_frame_with_exception_descr_ref
 oohelper.loops_exit_frame_with_exception_ref = [_loop]
 del _loop
 
+class ResumeDescr(AbstractDescr):
+    def __init__(self, original_greenkey):
+        self.original_greenkey = original_greenkey
 
-class ResumeGuardDescr(AbstractDescr):
+class ResumeGuardDescr(ResumeDescr):
     counter = 0
 
-    def __init__(self, history, history_guard_index):
-        self.history = history
-        assert history_guard_index >= 0
-        self.history_guard_index = history_guard_index
+    def __init__(self, original_greenkey, guard_op):
+        ResumeDescr.__init__(self, original_greenkey)
+        self.guard_op = guard_op
         # this class also gets attributes stored by ResumeDataBuilder.finish()
 
     def handle_fail_op(self, metainterp_sd, fail_op):
@@ -304,7 +306,7 @@ class ResumeGuardDescr(AbstractDescr):
                 assert False
 
     def get_guard_op(self):
-        guard_op = self.history.operations[self.history_guard_index]
+        guard_op = self.guard_op
         assert guard_op.is_guard()
         if guard_op.optimized is not None:   # should always be the case,
             return guard_op.optimized        # except if not optimizing at all
@@ -329,20 +331,11 @@ class ResumeGuardDescr(AbstractDescr):
             source_loop = source_loop.source_link
         return source_loop
 
-    def find_toplevel_history(self):
-        # Find the History that describes the start of the loop containing this
-        # guard operation.
-        history = self.history
-        prevhistory = history.source_link
-        while isinstance(prevhistory, History):
-            history = prevhistory
-            prevhistory = history.source_link
-        return history
 
-
-class ResumeFromInterpDescr(AbstractDescr):
-    def __init__(self, original_boxes):
-        self.original_boxes = original_boxes
+class ResumeFromInterpDescr(ResumeDescr):
+    def __init__(self, original_greenkey, redkey):
+        ResumeDescr.__init__(self, original_greenkey)
+        self.redkey = redkey
 
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge going from the interpreter
@@ -350,14 +343,11 @@ class ResumeFromInterpDescr(AbstractDescr):
         # a loop at all but ends in a jump to the target loop.  It starts
         # with completely unoptimized arguments, as in the interpreter.
         metainterp_sd = metainterp.staticdata
-        num_green_args = metainterp_sd.num_green_args
-        greenkey = self.original_boxes[:num_green_args]
-        redkey = self.original_boxes[num_green_args:]
         metainterp.history.source_link = new_loop
         metainterp.history.inputargs = redkey
-        new_loop.greenkey = greenkey
-        new_loop.inputargs = redkey
-        new_loop.specnodes = [prebuiltNotSpecNode] * len(redkey)
+        new_loop.greenkey = self.original_greenkey
+        new_loop.inputargs = self.redkey
+        new_loop.specnodes = [prebuiltNotSpecNode] * len(self.redkey)
         send_loop_to_backend(metainterp, new_loop, None, "entry bridge")
         metainterp_sd.stats.loops.append(new_loop)
         # send the new_loop to warmspot.py, to be called directly the next time

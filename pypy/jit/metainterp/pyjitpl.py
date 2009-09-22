@@ -920,8 +920,10 @@ class MIFrame(object):
         else:
             moreargs = list(extraargs)
         guard_op = metainterp.history.record(opnum, moreargs, None)
-        resumedescr = compile.ResumeGuardDescr(
-            metainterp.history, len(metainterp.history.operations)-1)
+        
+        original_greenkey = self.resumekey.original_greenkey
+        resumedescr = compile.ResumeGuardDescr(original_greenkey, guard_op)
+        
         liveboxes = resumebuilder.finish(resumedescr)
         self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS) # count
         op = history.ResOperation(rop.FAIL, liveboxes, None, descr=resumedescr)
@@ -1345,7 +1347,11 @@ class MetaInterp(object):
         log('Switching from interpreter to compiler')
         original_boxes = self.initialize_state_from_start(*args)
         self.current_merge_points = [(original_boxes, 0)]
-        self.resumekey = compile.ResumeFromInterpDescr(original_boxes)
+        num_green_args = self.staticdata.num_green_args
+        original_greenkey = original_boxes[:num_green_args]
+        redkey = original_boxes[num_green_args:]
+        self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
+                                                       redkey)
         self.extra_rebuild_operations = -1
         self.seen_can_enter_jit = False
         try:
@@ -1358,11 +1364,9 @@ class MetaInterp(object):
         from pypy.jit.metainterp.warmspot import ContinueRunningNormallyBase
         resumedescr = self.initialize_state_from_guard_failure(exec_result)
         assert isinstance(key, compile.ResumeGuardDescr)
-        top_history = key.find_toplevel_history()
-        source_loop = top_history.source_link
-        assert isinstance(source_loop, history.TreeLoop)
-        original_boxes = source_loop.greenkey + top_history.inputargs
-        self.current_merge_points = [(original_boxes, 0)]
+        original_greenkey = key.original_greenkey
+        # notice that here we just put the greenkey
+        self.current_merge_points = [(original_greenkey, 0)] # xxx
         self.resumekey = key
         self.seen_can_enter_jit = False
         guard_op = key.get_guard_op()
