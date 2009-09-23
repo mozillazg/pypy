@@ -662,6 +662,11 @@ def dc_hash(c):
 class Base(object):
     """Common base class for TreeLoop and History."""
 
+class LoopToken(object):
+    """loop token"""
+    # specnodes
+    # executable_token
+
 class TreeLoop(Base):
     inputargs = None
     specnodes = None
@@ -701,14 +706,19 @@ class TreeLoop(Base):
 
     def check_consistency(self):     # for testing
         "NOT_RPYTHON"
-        for box in self.inputargs:
-            assert isinstance(box, Box), "Loop.inputargs contains %r" % (box,)
-        seen = dict.fromkeys(self.inputargs)
-        assert len(seen) == len(self.inputargs), (
-               "duplicate Box in the Loop.inputargs")
-        self.check_consistency_of_branch(self.operations, seen)
+        self.check_consistency_of(self.inputargs, self.operations)
 
-    def check_consistency_of_branch(self, operations, seen):
+    @staticmethod
+    def check_consistency_of(inputargs, operations):
+        for box in inputargs:
+            assert isinstance(box, Box), "Loop.inputargs contains %r" % (box,)
+        seen = dict.fromkeys(inputargs)
+        assert len(seen) == len(inputargs), (
+               "duplicate Box in the Loop.inputargs")
+        TreeLoop.check_consistency_of_branch(operations, seen)
+        
+    @staticmethod
+    def check_consistency_of_branch(operations, seen):
         "NOT_RPYTHON"
         for op in operations:
             for box in op.args:
@@ -716,7 +726,8 @@ class TreeLoop(Base):
                     assert box in seen
             assert (op.suboperations is not None) == op.is_guard()
             if op.is_guard():
-                self.check_consistency_of_branch(op.suboperations, seen.copy())
+                TreeLoop.check_consistency_of_branch(op.suboperations,
+                                                     seen.copy())
             box = op.result
             if box is not None:
                 assert isinstance(box, Box)
@@ -724,7 +735,9 @@ class TreeLoop(Base):
                 seen[box] = True
         assert operations[-1].is_final()
         if operations[-1].opnum == rop.JUMP:
-            assert isinstance(operations[-1].jump_target, TreeLoop)
+            target = operations[-1].jump_target
+            if target is not None:
+                assert isinstance(target, LoopToken)
 
     def dump(self):
         # RPython-friendly

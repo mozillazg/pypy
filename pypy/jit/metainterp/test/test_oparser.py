@@ -118,7 +118,7 @@ def test_jump_target():
     jump()
     '''
     loop = parse(x)
-    assert loop.operations[0].jump_target is loop
+    assert loop.operations[0].jump_target is None
 
 def test_jump_target_other():
     x = '''
@@ -137,8 +137,8 @@ def test_jump_target_self():
     jump()
     '''
     obj = object()
-    loop = parse(x, jump_targets=[obj, 'self'])
-    assert loop.operations[-1].jump_target is loop
+    loop = parse(x, jump_targets=[obj, None])
+    assert loop.operations[-1].jump_target is None
     assert loop.operations[0].suboperations[0].jump_target is obj
 
 def test_debug_merge_point():

@@ -5,7 +5,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
-from pypy.jit.metainterp.history import TreeLoop, log, Box, History
+from pypy.jit.metainterp.history import TreeLoop, log, Box, History, LoopToken
 from pypy.jit.metainterp.history import AbstractDescr, BoxInt, BoxPtr, BoxObj,\
      BoxFloat, Const
 from pypy.jit.metainterp import history
@@ -13,65 +13,6 @@ from pypy.jit.metainterp.specnode import NotSpecNode
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
 from pypy.rlib.debug import debug_print
-
-class LoopToken(object):
-
-    def __init__(self, specnodes, executable_token):
-        self.specnodes = specnodes
-        self.executable_token = executable_token
-
-def compile_new_loop(metainterp, old_loop_tokens, greenkey, start=0):
-    """Try to compile a new loop by closing the current history back
-    to the first operation.
-    """
-    if we_are_translated():
-        return compile_fresh_loop(metainterp, old_loop_tokens, greenkey, start)
-    else:
-        return _compile_new_loop_1(metainterp, old_loop_tokens, greenkey, start)
-
-def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
-    """Try to compile a new bridge leading from the beginning of the history
-    to some existing place.
-    """
-    if we_are_translated():
-        return compile_fresh_bridge(metainterp, old_loop_tokens, resumekey)
-    else:
-        return _compile_new_bridge_1(metainterp, old_loop_tokens, resumekey)
-
-class BridgeInProgress(Exception):
-    pass
-
-
-# the following is not translatable
-def _compile_new_loop_1(metainterp, old_loop_tokens, greenkey, start):
-    old_loop_tokens_1 = old_loop_tokens[:]
-    try:
-        loop = compile_fresh_loop(metainterp, old_loop_tokens, greenkey, start)
-    except Exception, exc:
-        show_loop(metainterp, error=exc)
-        raise
-    else:
-        if loop in old_loop_tokens_1:
-            log.info("reusing loop at %r" % (loop,))
-        else:
-            show_loop(metainterp, loop)
-    if loop is not None:
-        loop.check_consistency()
-    return loop
-
-def _compile_new_bridge_1(metainterp, old_loop_tokens, resumekey):
-    try:
-        target_loop = compile_fresh_bridge(metainterp, old_loop_tokens,
-                                           resumekey)
-    except Exception, exc:
-        show_loop(metainterp, error=exc)
-        raise
-    else:
-        if target_loop is not None:
-            show_loop(metainterp, target_loop)
-    if target_loop is not None and type(target_loop) is not TerminatingLoop:
-        target_loop.check_consistency()
-    return target_loop
 
 def show_loop(metainterp, loop=None, error=None):
     # debugging
@@ -94,7 +35,10 @@ def create_empty_loop(metainterp):
 
 # ____________________________________________________________
 
-def compile_fresh_loop(metainterp, old_loop_tokens, greenkey, start):
+def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
+    """Try to compile a new loop by closing the current history back
+    to the first operation.
+    """    
     from pypy.jit.metainterp.pyjitpl import DEBUG
 
     history = metainterp.history
@@ -107,32 +51,32 @@ def compile_fresh_loop(metainterp, old_loop_tokens, greenkey, start):
         loop.operations = history.operations[start:]
     else:
         loop.operations = history.operations
-    loop.operations[-1].jump_target = loop
+    loop.operations[-1].jump_target = None
     metainterp_sd = metainterp.staticdata
     try:
-        old_loop = metainterp_sd.state.optimize_loop(metainterp_sd.options,
-                                                     old_loop_tokens, loop, 
-                                                     metainterp.cpu)
+        old_loop_token = metainterp_sd.state.optimize_loop(
+            metainterp_sd.options, old_loop_tokens, loop, metainterp.cpu)
     except InvalidLoop:
         return None
-    if old_loop is not None:
-        if we_are_translated() and DEBUG > 0:
+    if old_loop_token is not None:
+        if DEBUG > 0:
             debug_print("reusing old loop")
-        return old_loop
-    send_loop_to_backend(metainterp, loop, None, "loop")
-    old_loop_tokens.append(loop)
-    return loop
+        return old_loop_token
+    executable_token = send_loop_to_backend(metainterp, loop, "loop")
+    loop_token = LoopToken()
+    loop_token.specnodes = loop.specnodes
+    loop_token.executable_token = executable_token
+    old_loop_tokens.append(loop_token)
+    return loop_token
 
-def send_loop_to_backend(metainterp, loop, guard_op, type):
+def send_loop_to_backend(metainterp, loop, type):    
     metainterp.staticdata.profiler.start_backend()
-    if guard_op is None:
-        executable_token = metainterp.cpu.compile_loop(loop)
-        loop.executable_token = executable_token # xxx unhappy
-    else:
-        metainterp.cpu.compile_bridge(guard_op)        
+    if not we_are_translated():
+        show_loop(metainterp, loop)
+        loop.check_consistency()
+    executable_token = metainterp.cpu.compile_loop(loop)
     metainterp.staticdata.profiler.end_backend()
-    if loop is not None:
-        metainterp.staticdata.stats.add_new_loop(loop)
+    metainterp.staticdata.stats.add_new_loop(loop)
     if not we_are_translated():
         if type != "entry bridge":
             metainterp.staticdata.stats.compiled()
@@ -143,6 +87,23 @@ def send_loop_to_backend(metainterp, loop, guard_op, type):
         from pypy.jit.metainterp.pyjitpl import DEBUG
         if DEBUG > 0:
             debug_print("compiled new " + type)
+    return executable_token
+
+def send_bridge_to_backend(metainterp, guard_op):    
+    metainterp.staticdata.profiler.start_backend()
+    if not we_are_translated():
+        show_loop(metainterp)
+        #TreeLoop.check_consistency_of(xxx unhappy, guard_op.suboperations)
+        pass
+    metainterp.cpu.compile_bridge(guard_op)        
+    metainterp.staticdata.profiler.end_backend()
+    if not we_are_translated():
+        metainterp.staticdata.stats.compiled()
+        log.info("compiled new bridge")
+    else:
+        from pypy.jit.metainterp.pyjitpl import DEBUG
+        if DEBUG > 0:
+            debug_print("compiled new bridge")            
 
 # ____________________________________________________________
 
@@ -208,7 +169,7 @@ prebuiltNotSpecNode = NotSpecNode()
 
 class TerminatingLoopToken(LoopToken):
     def __init__(self, nargs, finishdescr):
-        LoopToken.__init__(self, [prebuiltNotSpecNode]*nargs, None)
+        self.specnodes = [prebuiltNotSpecNode]*nargs
         self.finishdescr = finishdescr
 
 # pseudo loop tokens to make the life of optimize.py easier
@@ -308,7 +269,7 @@ class ResumeGuardDescr(ResumeDescr):
         # xxx unhappy
         guard_op = self.get_guard_op()
         guard_op.suboperations = new_loop.operations
-        send_loop_to_backend(metainterp, None, guard_op, "bridge")
+        send_bridge_to_backend(metainterp, guard_op)
 
 class ResumeFromInterpDescr(ResumeDescr):
     def __init__(self, original_greenkey, redkey):
@@ -324,15 +285,18 @@ class ResumeFromInterpDescr(ResumeDescr):
         metainterp.history.inputargs = self.redkey
         new_loop.greenkey = self.original_greenkey
         new_loop.inputargs = self.redkey
-        new_loop.specnodes = [prebuiltNotSpecNode] * len(self.redkey)
-        send_loop_to_backend(metainterp, new_loop, None, "entry bridge")
+        executable_token = send_loop_to_backend(metainterp, new_loop,
+                                                            "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
         metainterp_sd.state.attach_unoptimized_bridge_from_interp(
             self.original_greenkey,
-            new_loop)
+            executable_token)
 
 
-def compile_fresh_bridge(metainterp, old_loop_tokens, resumekey):
+def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
+    """Try to compile a new bridge leading from the beginning of the history
+    to some existing place.
+    """    
     # The history contains new operations to attach as the code for the
     # failure of 'resumekey.guard_op'.
     #
@@ -343,7 +307,7 @@ def compile_fresh_bridge(metainterp, old_loop_tokens, resumekey):
     metainterp_sd = metainterp.staticdata
     options = metainterp_sd.options
     try:
-        target_loop = metainterp_sd.state.optimize_bridge(options,
+        target_loop_token = metainterp_sd.state.optimize_bridge(options,
                                                           old_loop_tokens,
                                                           new_loop,
                                                           metainterp.cpu)
@@ -351,21 +315,22 @@ def compile_fresh_bridge(metainterp, old_loop_tokens, resumekey):
         assert 0, "InvalidLoop in optimize_bridge?"
         return None
     # Did it work?
-    if target_loop is not None:
+    if target_loop_token is not None:
         # Yes, we managed to create a bridge.  Dispatch to resumekey to
         # know exactly what we must do (ResumeGuardDescr/ResumeFromInterpDescr)
-        prepare_last_operation(new_loop, target_loop)
+        prepare_last_operation(new_loop, target_loop_token)
         resumekey.compile_and_attach(metainterp, new_loop)
-    return target_loop
+    return target_loop_token
 
-def prepare_last_operation(new_loop, target_loop):
+def prepare_last_operation(new_loop, target_loop_token):
     op = new_loop.operations[-1]
-    if not isinstance(target_loop, TerminatingLoop):
+    if not isinstance(target_loop_token, TerminatingLoopToken):
         # normal case
-        op.jump_target = target_loop
+        op.jump_target = target_loop_token
     else:
-        # The target_loop is a pseudo-loop, e.g. done_with_this_frame.
+        # The target_loop_token is a pseudo loop token,
+        # e.g. loop_tokens_done_with_this_frame_void[0]
         # Replace the operation with the real operation we want, i.e. a FAIL.
-        descr = target_loop.finishdescr
+        descr = target_loop_token.finishdescr
         new_op = ResOperation(rop.FAIL, op.args, None, descr=descr)
         new_loop.operations[-1] = new_op
