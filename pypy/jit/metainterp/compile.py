@@ -6,8 +6,8 @@ from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import TreeLoop, log, Box, History, LoopToken
-from pypy.jit.metainterp.history import AbstractDescr, BoxInt, BoxPtr, BoxObj,\
-     BoxFloat, Const
+from pypy.jit.metainterp.history import AbstractFailDescr, BoxInt
+from pypy.jit.metainterp.history import BoxPtr, BoxObj, BoxFloat, Const
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.specnode import NotSpecNode
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
@@ -23,7 +23,7 @@ def show_loop(metainterp, loop=None, error=None):
                 errmsg += ': ' + str(error)
         else:
             errmsg = None
-        if loop is None or type(loop) is TerminatingLoop:
+        if loop is None: # or type(loop) is TerminatingLoop:
             extraloops = []
         else:
             extraloops = [loop]
@@ -66,6 +66,8 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     loop_token = LoopToken()
     loop_token.specnodes = loop.specnodes
     loop_token.executable_token = executable_token
+    if not we_are_translated():
+        loop.token = loop_token
     old_loop_tokens.append(loop_token)
     return loop_token
 
@@ -74,7 +76,8 @@ def send_loop_to_backend(metainterp, loop, type):
     if not we_are_translated():
         show_loop(metainterp, loop)
         loop.check_consistency()
-    executable_token = metainterp.cpu.compile_loop(loop)
+    executable_token = metainterp.cpu.compile_loop(loop.inputargs,
+                                                   loop.operations)
     metainterp.staticdata.profiler.end_backend()
     metainterp.staticdata.stats.add_new_loop(loop)
     if not we_are_translated():
@@ -89,13 +92,13 @@ def send_loop_to_backend(metainterp, loop, type):
             debug_print("compiled new " + type)
     return executable_token
 
-def send_bridge_to_backend(metainterp, guard_op):    
+def send_bridge_to_backend(metainterp, faildescr, inputargs, operations):
     metainterp.staticdata.profiler.start_backend()
     if not we_are_translated():
         show_loop(metainterp)
-        #TreeLoop.check_consistency_of(xxx unhappy, guard_op.suboperations)
+        TreeLoop.check_consistency_of(inputargs, operations)
         pass
-    metainterp.cpu.compile_bridge(guard_op)        
+    metainterp.cpu.compile_bridge(faildescr, inputargs, operations)        
     metainterp.staticdata.profiler.end_backend()
     if not we_are_translated():
         metainterp.staticdata.stats.compiled()
@@ -107,55 +110,34 @@ def send_bridge_to_backend(metainterp, guard_op):
 
 # ____________________________________________________________
 
-class DoneWithThisFrameDescrVoid(AbstractDescr):
-    def handle_fail_op(self, metainterp_sd, fail_op):
+class DoneWithThisFrameDescrVoid(AbstractFailDescr):
+    def handle_fail(self, metainterp_sd):
         assert metainterp_sd.result_type == 'void'
         raise metainterp_sd.DoneWithThisFrameVoid()
 
-class DoneWithThisFrameDescrInt(AbstractDescr):
-    def handle_fail_op(self, metainterp_sd, fail_op):
+class DoneWithThisFrameDescrInt(AbstractFailDescr):
+    def handle_fail(self, metainterp_sd):
         assert metainterp_sd.result_type == 'int'
-        resultbox = fail_op.args[0]
-        if isinstance(resultbox, BoxInt):
-            result = metainterp_sd.cpu.get_latest_value_int(0)
-        else:
-            assert isinstance(resultbox, history.Const)
-            result = resultbox.getint()
+        result = metainterp_sd.cpu.get_latest_value_int(0)
         raise metainterp_sd.DoneWithThisFrameInt(result)
 
-class DoneWithThisFrameDescrRef(AbstractDescr):
-    def handle_fail_op(self, metainterp_sd, fail_op):
+class DoneWithThisFrameDescrRef(AbstractFailDescr):
+    def handle_fail(self, metainterp_sd):
         assert metainterp_sd.result_type == 'ref'
-        resultbox = fail_op.args[0]
         cpu = metainterp_sd.cpu
-        if isinstance(resultbox, cpu.ts.BoxRef):
-            result = cpu.get_latest_value_ref(0)
-        else:
-            assert isinstance(resultbox, history.Const)
-            result = resultbox.getref_base()
+        result = cpu.get_latest_value_ref(0)
         raise metainterp_sd.DoneWithThisFrameRef(cpu, result)
 
-class DoneWithThisFrameDescrFloat(AbstractDescr):
-    def handle_fail_op(self, metainterp_sd, fail_op):
+class DoneWithThisFrameDescrFloat(AbstractFailDescr):
+    def handle_fail(self, metainterp_sd):
         assert metainterp_sd.result_type == 'float'
-        resultbox = fail_op.args[0]
-        if isinstance(resultbox, BoxFloat):
-            result = metainterp_sd.cpu.get_latest_value_float(0)
-        else:
-            assert isinstance(resultbox, history.Const)
-            result = resultbox.getfloat()
+        result = metainterp_sd.cpu.get_latest_value_float(0)
         raise metainterp_sd.DoneWithThisFrameFloat(result)
 
-class ExitFrameWithExceptionDescrRef(AbstractDescr):
-    def handle_fail_op(self, metainterp_sd, fail_op):
-        assert len(fail_op.args) == 1
-        valuebox = fail_op.args[0]
+class ExitFrameWithExceptionDescrRef(AbstractFailDescr):
+    def handle_fail(self, metainterp_sd):
         cpu = metainterp_sd.cpu
-        if isinstance(valuebox, cpu.ts.BoxRef):
-            value = cpu.get_latest_value_ref(0)
-        else:
-            assert isinstance(valuebox, history.Const)
-            value = valuebox.getref_base()
+        value = cpu.get_latest_value_ref(0)
         raise metainterp_sd.ExitFrameWithExceptionRef(cpu, value)
 
 done_with_this_frame_descr_void = DoneWithThisFrameDescrVoid()
@@ -168,6 +150,8 @@ exit_frame_with_exception_descr_ref = ExitFrameWithExceptionDescrRef()
 prebuiltNotSpecNode = NotSpecNode()
 
 class TerminatingLoopToken(LoopToken):
+    terminating = True
+    
     def __init__(self, nargs, finishdescr):
         self.specnodes = [prebuiltNotSpecNode]*nargs
         self.finishdescr = finishdescr
@@ -176,11 +160,7 @@ class TerminatingLoopToken(LoopToken):
 loop_tokens_done_with_this_frame_int = [
     TerminatingLoopToken(1, done_with_this_frame_descr_int)
     ]
-# xxx they are the same now
-llhelper.loop_tokens_done_with_this_frame_ref = [
-    TerminatingLoopToken(1, done_with_this_frame_descr_ref)
-    ]
-oohelper.loop_tokens_done_with_this_frame_ref = [
+loop_tokens_done_with_this_frame_ref = [
     TerminatingLoopToken(1, done_with_this_frame_descr_ref)
     ]
 loop_tokens_done_with_this_frame_float = [
@@ -189,15 +169,11 @@ loop_tokens_done_with_this_frame_float = [
 loop_tokens_done_with_this_frame_void = [
     TerminatingLoopToken(0, done_with_this_frame_descr_void)
     ]
-# xxx they are the same now
-llhelper.loop_tokens_exit_frame_with_exception_ref = [
-    TerminatingLoopToken(1, exit_frame_with_exception_descr_ref)
-    ]
-oohelper.loop_tokens_exit_frame_with_exception_ref = [
+loop_tokens_exit_frame_with_exception_ref = [
     TerminatingLoopToken(1, exit_frame_with_exception_descr_ref)
     ]
 
-class ResumeDescr(AbstractDescr):
+class ResumeDescr(AbstractFailDescr):
     def __init__(self, original_greenkey):
         self.original_greenkey = original_greenkey
 
@@ -209,9 +185,10 @@ class ResumeGuardDescr(ResumeDescr):
         self.guard_op = guard_op
         # this class also gets attributes stored by ResumeDataBuilder.finish()
 
-    def handle_fail_op(self, metainterp_sd, fail_op):
+    def handle_fail(self, metainterp_sd):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
         metainterp = MetaInterp(metainterp_sd)
+        fail_op = self.get_guard_op().suboperations[-1] # xxx unhappy
         patch = self.patch_boxes_temporarily(metainterp_sd, fail_op)
         try:
             return metainterp.handle_guard_failure(fail_op, self)
@@ -268,8 +245,10 @@ class ResumeGuardDescr(ResumeDescr):
         # to the corrsponding guard_op and compile from there
         # xxx unhappy
         guard_op = self.get_guard_op()
-        guard_op.suboperations = new_loop.operations
-        send_bridge_to_backend(metainterp, guard_op)
+        fail_args = guard_op.suboperations[-1].args
+        if not we_are_translated():
+            guard_op._debug_suboperations = new_loop.operations
+        send_bridge_to_backend(metainterp, self, fail_args, new_loop.operations)
 
 class ResumeFromInterpDescr(ResumeDescr):
     def __init__(self, original_greenkey, redkey):
@@ -332,5 +311,5 @@ def prepare_last_operation(new_loop, target_loop_token):
         # e.g. loop_tokens_done_with_this_frame_void[0]
         # Replace the operation with the real operation we want, i.e. a FAIL.
         descr = target_loop_token.finishdescr
-        new_op = ResOperation(rop.FAIL, op.args, None, descr=descr)
+        new_op = ResOperation(rop.FINISH, op.args, None, descr=descr)
         new_loop.operations[-1] = new_op

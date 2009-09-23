@@ -85,7 +85,7 @@ class BaseCPU(model.AbstractCPU):
         self.stats.exec_jumps = 0
         self.stats.exec_conditional_jumps = 0
         self.memo_cast = llimpl.new_memo_cast()
-        self.fail_ops = []
+        self.fail_descrs = []
         llimpl._stats = self.stats
         llimpl._llinterp = LLInterpreter(self.rtyper)
         if translate_support_code:
@@ -103,15 +103,11 @@ class BaseCPU(model.AbstractCPU):
                 size = size.ofs
             llimpl.set_class_size(self.memo_cast, vtable, size)
 
-    def compile_loop(self, loop):
-        return self._compile_operations(loop.inputargs, loop.operations)
+    def compile_bridge(self, faildescr, inputargs, operations):
+        c = self.compile_loop(inputargs, operations)
+        llimpl.compile_redirect_fail(faildescr._compiled_fail, c)        
 
-    def compile_bridge(self, guard_op):
-        inputargs = guard_op._fail_op.args # xxx unhappy
-        c = self._compile_operations(inputargs, guard_op.suboperations)
-        llimpl.compile_redirect_fail(guard_op._compiled_fail, c)        
-
-    def _compile_operations(self, inputargs, operations):
+    def compile_loop(self, inputargs, operations):
         """In a real assembler backend, this should assemble the given
         list of operations.  Here we just generate a similar CompiledLoop
         instance.  The code here is RPython, whereas the code in llimpl
@@ -160,8 +156,6 @@ class BaseCPU(model.AbstractCPU):
                 suboperations = op.suboperations
                 assert len(suboperations) == 1
                 assert suboperations[0].opnum == rop.FAIL
-                op._fail_op = suboperations[0] # xxx unhappy
-                op._compiled_fail = c2
                 self._compile_branch(c2, op.suboperations, var2index.copy())
             x = op.result
             if x is not None:
@@ -184,8 +178,18 @@ class BaseCPU(model.AbstractCPU):
                 target = target.executable_token
             llimpl.compile_add_jump_target(c, target)
         elif op.opnum == rop.FAIL:
-            llimpl.compile_add_fail(c, len(self.fail_ops))
-            self.fail_ops.append(op)
+            faildescr = op.descr
+            assert isinstance(faildescr, history.AbstractFailDescr)
+            faildescr._compiled_fail = c
+            llimpl.compile_add_fail(c, len(self.fail_descrs))
+            self.fail_descrs.append(faildescr)
+        elif op.opnum == rop.FINISH:
+            llimpl.compile_add_fail(c, len(self.fail_descrs))
+            faildescr = op.descr
+            assert isinstance(faildescr, history.AbstractFailDescr)            
+            self.fail_descrs.append(faildescr)            
+        else:
+            assert False, "unknown operation"
 
     def execute_token(self, compiled_version):
         """Calls the assembler generated for the given loop.
@@ -198,7 +202,7 @@ class BaseCPU(model.AbstractCPU):
         fail_index = llimpl.frame_execute(frame)
         # we hit a FAIL operation.
         self.latest_frame = frame
-        return self.fail_ops[fail_index]
+        return self.fail_descrs[fail_index]
 
     def set_future_value_int(self, index, intvalue):
         llimpl.set_future_value_int(index, intvalue)

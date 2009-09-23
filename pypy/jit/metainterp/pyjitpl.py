@@ -1505,7 +1505,7 @@ class MetaInterp(object):
             loop_tokens = compile.loop_tokens_done_with_this_frame_int
         elif sd.result_type == 'ref':
             exits = [exitbox]
-            loop_tokens = sd.cpu.ts.loop_tokens_done_with_this_frame_ref
+            loop_tokens = compile.loop_tokens_done_with_this_frame_ref
         elif sd.result_type == 'float':
             exits = [exitbox]
             loop_tokens = compile.loop_tokens_done_with_this_frame_float
@@ -1520,7 +1520,7 @@ class MetaInterp(object):
         self.gen_store_back_in_virtualizable()
         # temporarily put a JUMP to a pseudo-loop
         self.history.record(rop.JUMP, [valuebox], None)
-        loop_tokens = self.cpu.ts.loop_tokens_exit_frame_with_exception_ref
+        loop_tokens = compile.loop_tokens_exit_frame_with_exception_ref
         target_loop_token = compile.compile_new_bridge(self, loop_tokens,
                                                        self.resumekey)
         assert target_loop_token is loop_tokens[0]

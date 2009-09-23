@@ -4,7 +4,7 @@ in a nicer fashion
 """
 
 from pypy.jit.metainterp.history import TreeLoop, BoxInt, ConstInt,\
-     ConstAddr, ConstObj, ConstPtr, Box
+     ConstAddr, ConstObj, ConstPtr, Box, AbstractFailDescr
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.typesystem import llhelper
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -20,6 +20,9 @@ class ParseError(Exception):
 
 class Boxes(object):
     pass
+
+FailDescr = AbstractFailDescr
+
 
 class ExtendedTreeLoop(TreeLoop):
 
@@ -51,7 +54,7 @@ class ExtendedTreeLoop(TreeLoop):
             getattr(boxes, name).value = value
 
 class OpParser(object):
-    def __init__(self, descr, cpu, namespace, type_system, boxkinds, jump_targets):
+    def __init__(self, descr, cpu, namespace, type_system, boxkinds, jump_targets, invent_fail_descrs=True):
         self.descr = descr
         self.vars = {}
         self.cpu = cpu
@@ -60,6 +63,7 @@ class OpParser(object):
         self.boxkinds = boxkinds or {}
         self.jumps = []
         self.jump_targets = jump_targets
+        self.invent_fail_descrs = invent_fail_descrs
 
     def box_for_var(self, elem):
         try:
@@ -144,30 +148,32 @@ class OpParser(object):
         endnum = line.rfind(')')
         if endnum == -1:
             raise ParseError("invalid line: %s" % line)
-        argspec = line[num + 1:endnum]
-        if not argspec.strip():
-            return opnum, [], None
-        if opname == 'debug_merge_point':
-            allargs = [argspec]
-        else:
-            allargs = argspec.split(",")
         args = []
         descr = None
-        poss_descr = allargs[-1].strip()
-        if poss_descr.startswith('descr='):
-            if poss_descr.startswith('descr=<'):
-                descr = None
+        argspec = line[num + 1:endnum]
+        if argspec.strip():
+            if opname == 'debug_merge_point':
+                allargs = [argspec]
             else:
-                descr = self.consts[poss_descr[len('descr='):]]
-            allargs = allargs[:-1]        
-        for arg in allargs:
-            arg = arg.strip()
-            try:
-                args.append(self.getvar(arg))
-            except KeyError:
-                raise ParseError("Unknown var: %s" % arg)
-        if hasattr(descr, '_oparser_uses_descr'):
-            descr._oparser_uses_descr(self, args)
+                allargs = argspec.split(",")
+
+            poss_descr = allargs[-1].strip()
+            if poss_descr.startswith('descr='):
+                if poss_descr.startswith('descr=<'):
+                    descr = None
+                else:
+                    descr = self.consts[poss_descr[len('descr='):]]
+                allargs = allargs[:-1]        
+            for arg in allargs:
+                arg = arg.strip()
+                try:
+                    args.append(self.getvar(arg))
+                except KeyError:
+                    raise ParseError("Unknown var: %s" % arg)
+            if hasattr(descr, '_oparser_uses_descr'):
+                descr._oparser_uses_descr(self, args)
+        if opnum == rop.FAIL and descr is None and self.invent_fail_descrs:
+            descr = FailDescr()
         return opnum, args, descr
 
     def parse_result_op(self, line):
@@ -260,10 +266,14 @@ class OpParser(object):
         return base_indent, inpargs
 
 def parse(descr, cpu=None, namespace=None, type_system='lltype',
-          boxkinds=None, jump_targets=None):
+          boxkinds=None, jump_targets=None, invent_fail_descrs=True):
     if namespace is None:
         namespace = _default_namespace[type_system]
-    return OpParser(descr, cpu, namespace, type_system, boxkinds, jump_targets).parse()
+    return OpParser(descr, cpu, namespace, type_system, boxkinds, jump_targets, invent_fail_descrs).parse()
+
+def pure_parse(*args, **kwds):
+    kwds['invent_fail_descrs'] = False
+    return parse(*args, **kwds)
 
 def _box_counter_more_than(s):
     if s.isdigit():

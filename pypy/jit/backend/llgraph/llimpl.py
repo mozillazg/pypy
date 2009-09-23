@@ -353,7 +353,6 @@ def compile_add_jump_target(loop, loop_target):
 def compile_add_fail(loop, fail_index):
     loop = _from_opaque(loop)
     op = loop.operations[-1]
-    assert op.opnum == rop.FAIL
     op.fail_index = fail_index
 
 def compile_suboperations(loop):
@@ -440,6 +439,13 @@ class Frame(object):
                         ', '.join(map(str, args)),))
                 self.fail_args = args
                 return op.fail_index
+            elif op.opnum == rop.FINISH:
+                if self.verbose:
+                    log.trace('finished: %s' % (
+                        ', '.join(map(str, args)),))
+                self.fail_args = args
+                return op.fail_index
+ 
             else:
                 assert 0, "unknown final operation %d" % (op.opnum,)
 
