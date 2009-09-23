@@ -2,7 +2,7 @@ import py, sys
 from pypy.rlib.rarithmetic import intmask, LONG_BIT
 from pypy.rpython.lltypesystem import llmemory
 from pypy.jit.backend.test import conftest as demo_conftest
-from pypy.jit.metainterp.history import TreeLoop, BoxInt, ConstInt
+from pypy.jit.metainterp.history import TreeLoop, BoxInt, ConstInt, LoopToken
 from pypy.jit.metainterp.history import BoxPtr, ConstPtr, ConstAddr
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.executor import execute_nonspec
@@ -510,9 +510,10 @@ class RandomLoop(object):
             args = [x.clonebox() for x in subset]
             jump_target = RandomLoop(self.builder.cpu, self.builder.fork,
                                      r, args)
-            self.cpu.compile_loop(jump_target.loop)
+            executable_token = self.cpu.compile_loop(jump_target.loop)
             jump_op = ResOperation(rop.JUMP, subset, None)
-            jump_op.jump_target = jump_target.loop
+            jump_op.jump_target = LoopToken()
+            jump_op.jump_target.executable_token = executable_token
             self.should_fail_by = jump_target.should_fail_by
             self.expected = jump_target.expected
             if self.guard_op is None:

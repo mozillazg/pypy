@@ -206,7 +206,7 @@ class BaseCallDescr(AbstractDescr):
         loop = TreeLoop('call')
         loop.inputargs = args
         loop.operations = operations
-        cpu.compile_operations(loop)
+        cpu.compile_loop(loop)
         self.call_loop = loop
         return loop
 
