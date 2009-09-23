@@ -223,11 +223,9 @@ class OpParser(object):
             raise ParseError("Wrong number of jump targets")
         if self.jump_targets is None:
             for jump in self.jumps:
-                jump.jump_target = loop
+                jump.jump_target = None
         else:
             for jump, jump_target in zip(self.jumps, self.jump_targets):
-                if jump_target == 'self':
-                    jump_target = loop
                 jump.jump_target = jump_target
         loop.operations = ops
         loop.inputargs = inpargs

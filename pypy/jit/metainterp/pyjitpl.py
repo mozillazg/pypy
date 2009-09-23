@@ -918,11 +918,9 @@ class MIFrame(object):
             moreargs = [box] + extraargs
         else:
             moreargs = list(extraargs)
-        guard_op = metainterp.history.record(opnum, moreargs, None)
-        
+        guard_op = metainterp.history.record(opnum, moreargs, None)       
         original_greenkey = metainterp.resumekey.original_greenkey
         resumedescr = compile.ResumeGuardDescr(original_greenkey, guard_op)
-        
         liveboxes = resumebuilder.finish(resumedescr)
         self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS) # count
         op = history.ResOperation(rop.FAIL, liveboxes, None, descr=resumedescr)

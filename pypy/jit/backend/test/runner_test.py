@@ -1,6 +1,7 @@
 
 import py, sys, random
-from pypy.jit.metainterp.history import (BoxInt, Box, BoxPtr, TreeLoop,
+from pypy.jit.metainterp.history import (BoxInt, Box, BoxPtr,
+                                         TreeLoop, LoopToken,
                                          ConstInt, ConstPtr, BoxObj, Const,
                                          ConstObj, BoxFloat, ConstFloat)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
@@ -112,7 +113,7 @@ class BaseBackendTest(Runner):
         loop.operations[2].suboperations = [
             ResOperation(rop.FAIL, [i1], None)
             ]
-        loop.operations[-1].jump_target = loop
+        loop.operations[-1].jump_target = None
         
         executable_token = self.cpu.compile_loop(loop)
         self.cpu.set_future_value_int(0, 2)
@@ -137,7 +138,7 @@ class BaseBackendTest(Runner):
         loop.operations[2].suboperations = [
             ResOperation(rop.FAIL, [i1], None)
             ]
-        loop.operations[-1].jump_target = loop
+        loop.operations[-1].jump_target = None
         
         executable_token = self.cpu.compile_loop(loop)        
         wr = weakref.ref(loop)
@@ -160,8 +161,10 @@ class BaseBackendTest(Runner):
         loop.operations[2].suboperations = [
             ResOperation(rop.FAIL, [i1], None)
             ]
-        loop.operations[-1].jump_target = loop        
+        loop.operations[-1].jump_target = None       
         executable_token = self.cpu.compile_loop(loop)
+        loop_token = LoopToken()
+        loop_token.executable_token = executable_token
 
         i3 = BoxInt()
         bridge = [
@@ -171,8 +174,8 @@ class BaseBackendTest(Runner):
         ]
         bridge[1].suboperations = [
             ResOperation(rop.FAIL, [i1], None)
-            ]        
-        bridge[-1].jump_target = loop
+            ]
+        bridge[-1].jump_target = loop_token
 
         # xxx unhappy
         guard_op = loop.operations[2]
