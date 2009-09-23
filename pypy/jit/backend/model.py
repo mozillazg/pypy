@@ -8,12 +8,12 @@ class AbstractCPU(object):
         """Called once by the front-end when the program starts."""
         pass
 
-    def compile_loop(self, loop):
+    def compile_loop(self, inputargs, operations):
         """Assemble the given loop.
            Return an opaque token to be consumed by execute_token"""
         raise NotImplementedError
 
-    def compile_bridge(self, guard_op): # xxx unhappy
+    def compile_bridge(self, faildescr, inputargs, operations):
         """Assemble the bridge"""
         raise NotImplementedError    
 

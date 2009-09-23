@@ -126,6 +126,9 @@ class AbstractDescr(AbstractValue):
     def repr_of_descr(self):
         return '%r' % (self,)
 
+class AbstractFailDescr(AbstractDescr):
+    pass
+
 class AbstractMethDescr(AbstractDescr):
     # the base class of the result of cpu.methdescrof()
     jitcodes = None
@@ -664,6 +667,7 @@ class Base(object):
 
 class LoopToken(object):
     """loop token"""
+    terminating = False # see TerminatingLoopToken in compile.py
     # specnodes
     # executable_token
 
@@ -726,8 +730,11 @@ class TreeLoop(Base):
                     assert box in seen
             assert (op.suboperations is not None) == op.is_guard()
             if op.is_guard():
-                TreeLoop.check_consistency_of_branch(op.suboperations,
-                                                     seen.copy())
+                if hasattr(op, '_debug_suboperations'):
+                    ops = op._debug_suboperations
+                else:
+                    ops = op.suboperations
+                TreeLoop.check_consistency_of_branch(ops, seen.copy())
             box = op.result
             if box is not None:
                 assert isinstance(box, Box)
@@ -759,12 +766,19 @@ class TreeLoop(Base):
         return '<%s>' % (self.name,)
 
 def _list_all_operations(result, operations, omit_fails=True):
-    if omit_fails and operations[-1].opnum == rop.FAIL:
+    if omit_fails and operations[-1].opnum in (rop.FAIL, rop.FINISH):
+        # xxx obscure
         return
     result.extend(operations)
     for op in operations:
         if op.is_guard():
-            _list_all_operations(result, op.suboperations, omit_fails)
+            if hasattr(op, '_debug_suboperations'):
+                ops = op._debug_suboperations
+            else:
+                if omit_fails:
+                    continue
+                ops = op.suboperations
+            _list_all_operations(result, ops, omit_fails)
 
 # ____________________________________________________________
 
@@ -884,7 +898,7 @@ class Stats(object):
 
     def view(self, errmsg=None, extraloops=[]):
         from pypy.jit.metainterp.graphpage import display_loops
-        loops = self.get_all_loops()
+        loops = self.get_all_loops()[:]
         for loop in extraloops:
             if loop in loops:
                 loops.remove(loop)

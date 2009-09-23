@@ -848,11 +848,10 @@ def make_state_class(warmrunnerdesc):
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception
                 metainterp_sd.profiler.start_running()
-                # xxx unhappy
-                fail_op = metainterp_sd.cpu.execute_token(executable_token)
+                fail_descr = metainterp_sd.cpu.execute_token(executable_token)
                 metainterp_sd.profiler.end_running()
-                executable_token = fail_op.descr.handle_fail_op(metainterp_sd,
-                                                                fail_op)
+                executable_token = fail_descr.handle_fail(metainterp_sd)
+
         maybe_compile_and_run._dont_inline_ = True
 
         def handle_hash_collision(self, firstcell, argshash, *args):

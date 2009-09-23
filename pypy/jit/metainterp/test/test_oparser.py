@@ -18,6 +18,7 @@ def test_basic_parse():
     assert [op.opnum for op in loop.operations] == [rop.INT_ADD, rop.INT_SUB,
                                                     rop.FAIL]
     assert len(loop.inputargs) == 2
+    assert loop.operations[-1].descr
 
 def test_const_ptr_subops():
     x = """
@@ -30,6 +31,7 @@ def test_const_ptr_subops():
     loop = parse(x, None, locals())
     assert len(loop.operations) == 1
     assert len(loop.operations[0].suboperations) == 1
+    assert loop.operations[0].suboperations[-1].descr
 
 def test_descr():
     class Xyz(AbstractDescr):
