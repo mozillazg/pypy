@@ -1,9 +1,11 @@
 
 import py, sys, random
-from pypy.jit.metainterp.history import (AbstractDescr, AbstractFailDescr,
+from pypy.jit.metainterp.history import (AbstractFailDescr,
+                                         BasicFailDescr,
                                          BoxInt, Box, BoxPtr,
                                          LoopToken,
-                                         ConstInt, ConstPtr, BoxObj, Const,
+                                         ConstInt, ConstPtr,
+                                         BoxObj, Const,
                                          ConstObj, BoxFloat, ConstFloat)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
@@ -14,8 +16,6 @@ from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.llinterp import LLException
-
-FailDescr = AbstractFailDescr
 
 class Runner(object):
 
@@ -72,12 +72,12 @@ class Runner(object):
             results = [result]
         operations = [ResOperation(opnum, valueboxes, result),
                       ResOperation(rop.FAIL, results, None,
-                                   descr=FailDescr())]
+                                   descr=BasicFailDescr())]
         operations[0].descr = descr
         if operations[0].is_guard():
             operations[0].suboperations = [ResOperation(rop.FAIL,
                                                         [ConstInt(-13)], None,
-                                                        descr=FailDescr())]
+                                                        descr=BasicFailDescr())]
         inputargs = []
         for box in valueboxes:
             if isinstance(box, Box):
@@ -90,7 +90,7 @@ class BaseBackendTest(Runner):
     def test_compile_linear_loop(self):
         i0 = BoxInt()
         i1 = BoxInt()
-        faildescr = FailDescr()
+        faildescr = BasicFailDescr()
         operations = [
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.FAIL, [i1], None, descr=faildescr)
@@ -107,7 +107,7 @@ class BaseBackendTest(Runner):
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
-        faildescr = FailDescr()        
+        faildescr = BasicFailDescr()        
         operations = [
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
@@ -132,7 +132,7 @@ class BaseBackendTest(Runner):
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
-        faildescr = FailDescr()                
+        faildescr = BasicFailDescr()                
         operations = [
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
@@ -158,8 +158,8 @@ class BaseBackendTest(Runner):
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
-        faildescr1 = FailDescr()
-        faildescr2 = FailDescr()
+        faildescr1 = BasicFailDescr()
+        faildescr2 = BasicFailDescr()
         operations = [
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
@@ -197,7 +197,7 @@ class BaseBackendTest(Runner):
 
     def test_finish(self):
         i0 = BoxInt()
-        faildescr = AbstractDescr() # to check that is not touched
+        faildescr = AbstractFailDescr() # to check that is not touched
         operations = [
             ResOperation(rop.FINISH, [i0], None, descr=faildescr)
             ]
@@ -396,19 +396,19 @@ class BaseBackendTest(Runner):
                 ops = [
                     ResOperation(opnum, [v1, v2], v_res),
                     ResOperation(rop.GUARD_NO_OVERFLOW, [], None),
-                    ResOperation(rop.FAIL, [v_res], None, descr=FailDescr()),
+                    ResOperation(rop.FAIL, [v_res], None, descr=BasicFailDescr()),
                     ]
                 ops[1].suboperations = [ResOperation(rop.FAIL, [], None,
-                                                     descr=FailDescr())]
+                                                     descr=BasicFailDescr())]
             else:
                 v_exc = self.cpu.ts.BoxRef()
                 ops = [
                     ResOperation(opnum, [v1, v2], v_res),
                     ResOperation(rop.GUARD_OVERFLOW, [], None),
-                    ResOperation(rop.FAIL, [], None, descr=FailDescr()),
+                    ResOperation(rop.FAIL, [], None, descr=BasicFailDescr()),
                     ]
                 ops[1].suboperations = [ResOperation(rop.FAIL, [v_res], None,
-                                                     descr=FailDescr())]
+                                                     descr=BasicFailDescr())]
             #
             executable_token = self.cpu.compile_loop([v1, v2], ops)
             for x, y, z in testcases:

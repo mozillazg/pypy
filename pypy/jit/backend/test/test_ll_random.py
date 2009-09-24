@@ -1,10 +1,10 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rffi, rstr
 from pypy.jit.backend.test import test_random
-from pypy.jit.backend.test.test_random import FailDescr
 from pypy.jit.metainterp.resoperation import ResOperation, rop
-from pypy.jit.metainterp.history import ConstInt, ConstPtr, ConstAddr, BoxPtr,\
-     BoxInt
+from pypy.jit.metainterp.history import BasicFailDescr
+from pypy.jit.metainterp.history import ConstInt, ConstPtr
+from pypy.jit.metainterp.history import ConstAddr, BoxPtr, BoxInt
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.llinterp import LLException
@@ -451,7 +451,7 @@ class CallOperation(BaseCallOperation):
         self.put(builder, args, descr)
         op = ResOperation(rop.GUARD_NO_EXCEPTION, [], None)
         op.suboperations = [ResOperation(rop.FAIL, fail_subset, None,
-                                         descr=FailDescr())]
+                                         descr=BasicFailDescr())]
         builder.loop.operations.append(op)
 
 # 5. Non raising-call and GUARD_EXCEPTION
@@ -474,7 +474,7 @@ class CallOperationException(BaseCallOperation):
         op = ResOperation(rop.GUARD_EXCEPTION, [exc_box], BoxPtr())
         subset = builder.subset_of_intvars(r)
         op.suboperations = [ResOperation(rop.FAIL, subset, None,
-                                         descr=FailDescr())]
+                                         descr=BasicFailDescr())]
         op._exc_box = None
         builder.should_fail_by = op.suboperations[0]
         builder.guard_op = op
@@ -497,7 +497,7 @@ class RaisingCallOperation(BaseCallOperation):
         builder.cpu.clear_exception()
         op = ResOperation(rop.GUARD_EXCEPTION, [exc_box], BoxPtr())
         op.suboperations = [ResOperation(rop.FAIL, fail_subset, None,
-                                         descr=FailDescr())]
+                                         descr=BasicFailDescr())]
         builder.loop.operations.append(op)
 
 # 4. raising call and guard_no_exception
@@ -517,7 +517,7 @@ class RaisingCallOperationGuardNoException(BaseCallOperation):
         op._exc_box = ConstAddr(llmemory.cast_ptr_to_adr(exc), builder.cpu)
         subset = builder.subset_of_intvars(r)
         op.suboperations = [ResOperation(rop.FAIL, subset, None,
-                                         descr=FailDescr())]
+                                         descr=BasicFailDescr())]
         builder.should_fail_by = op.suboperations[0]
         builder.guard_op = op
         builder.loop.operations.append(op)
@@ -544,7 +544,7 @@ class RaisingCallOperationWrongGuardException(BaseCallOperation):
         op._exc_box = ConstAddr(llmemory.cast_ptr_to_adr(exc), builder.cpu)
         subset = builder.subset_of_intvars(r)
         op.suboperations = [ResOperation(rop.FAIL, subset, None,
-                                         descr=FailDescr())]
+                                         descr=BasicFailDescr())]
         builder.should_fail_by = op.suboperations[0]
         builder.guard_op = op
         builder.loop.operations.append(op)

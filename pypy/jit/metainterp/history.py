@@ -127,6 +127,9 @@ class AbstractDescr(AbstractValue):
         return '%r' % (self,)
 
 class AbstractFailDescr(AbstractDescr):
+    __slots__ = ()
+
+class BasicFailDescr(AbstractFailDescr):
     pass
 
 class AbstractMethDescr(AbstractDescr):

@@ -2,14 +2,12 @@ import py, sys
 from pypy.rlib.rarithmetic import intmask, LONG_BIT
 from pypy.rpython.lltypesystem import llmemory
 from pypy.jit.backend.test import conftest as demo_conftest
-from pypy.jit.metainterp.history import AbstractFailDescr, TreeLoop
+from pypy.jit.metainterp.history import BasicFailDescr, TreeLoop
 from pypy.jit.metainterp.history import BoxInt, ConstInt, LoopToken
 from pypy.jit.metainterp.history import BoxPtr, ConstPtr, ConstAddr
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.executor import execute_nonspec
 from pypy.jit.metainterp.resoperation import opname
-
-FailDescr = AbstractFailDescr
 
 class PleaseRewriteMe(Exception):
     pass
@@ -249,7 +247,7 @@ class AbstractOvfOperation(AbstractOperation):
         else:
             op = ResOperation(rop.GUARD_NO_OVERFLOW, [], None)
         op.suboperations = [ResOperation(rop.FAIL, fail_subset, None,
-                                         descr=FailDescr())]
+                                         descr=BasicFailDescr())]
         builder.loop.operations.append(op)
 
 class BinaryOvfOperation(AbstractOvfOperation, BinaryOperation):
@@ -268,7 +266,7 @@ class GuardOperation(AbstractOperation):
         builder.loop.operations.append(op)
         subset = builder.subset_of_intvars(r)        
         op.suboperations = [ResOperation(rop.FAIL, subset, None,
-                                         descr=FailDescr())]
+                                         descr=BasicFailDescr())]
         if not passing:
             builder.should_fail_by = op.suboperations[0]
             builder.guard_op = op
@@ -432,7 +430,7 @@ class RandomLoop(object):
                 endvars.append(v)
         r.shuffle(endvars)
         loop.operations.append(ResOperation(rop.FAIL, endvars, None,
-                                            descr=FailDescr()))
+                                            descr=BasicFailDescr()))
         if builder.should_fail_by:
             self.should_fail_by = builder.should_fail_by
             self.guard_op = builder.guard_op
@@ -492,7 +490,7 @@ class RandomLoop(object):
                 op = ResOperation(rop.GUARD_EXCEPTION, [guard_op._exc_box],
                                   BoxPtr())
             op.suboperations = [ResOperation(rop.FAIL, [], None,
-                                             descr=FailDescr())]
+                                             descr=BasicFailDescr())]
             return op
 
         if self.dont_generate_more:

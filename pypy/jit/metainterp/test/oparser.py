@@ -4,7 +4,7 @@ in a nicer fashion
 """
 
 from pypy.jit.metainterp.history import TreeLoop, BoxInt, ConstInt,\
-     ConstAddr, ConstObj, ConstPtr, Box, AbstractFailDescr
+     ConstAddr, ConstObj, ConstPtr, Box, BasicFailDescr
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.typesystem import llhelper
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -20,9 +20,6 @@ class ParseError(Exception):
 
 class Boxes(object):
     pass
-
-FailDescr = AbstractFailDescr
-
 
 class ExtendedTreeLoop(TreeLoop):
 
@@ -173,7 +170,7 @@ class OpParser(object):
             if hasattr(descr, '_oparser_uses_descr'):
                 descr._oparser_uses_descr(self, args)
         if opnum == rop.FAIL and descr is None and self.invent_fail_descrs:
-            descr = FailDescr()
+            descr = BasicFailDescr()
         return opnum, args, descr
 
     def parse_result_op(self, line):

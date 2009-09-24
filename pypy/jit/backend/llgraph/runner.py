@@ -186,7 +186,7 @@ class BaseCPU(model.AbstractCPU):
         elif op.opnum == rop.FINISH:
             llimpl.compile_add_fail(c, len(self.fail_descrs))
             faildescr = op.descr
-            assert isinstance(faildescr, history.AbstractFailDescr)            
+            assert isinstance(faildescr, history.AbstractFailDescr)
             self.fail_descrs.append(faildescr)            
         else:
             assert False, "unknown operation"
