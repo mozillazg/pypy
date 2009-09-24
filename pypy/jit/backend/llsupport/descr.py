@@ -1,7 +1,7 @@
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
-from pypy.jit.metainterp.history import AbstractFailDescr
+from pypy.jit.metainterp.history import BasicFailDescr
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 
 # The point of the class organization in this file is to make instances
@@ -202,9 +202,9 @@ class BaseCallDescr(AbstractDescr):
             ResOperation(rop.CALL, args, result, self),
             ResOperation(rop.GUARD_NO_EXCEPTION, [], None),
             ResOperation(rop.FAIL, result_list, None,
-                         descr=AbstractFailDescr())]
+                         descr=BasicFailDescr())]
         operations[1].suboperations = [ResOperation(rop.FAIL, [], None,
-                                                    descr=AbstractFailDescr())]
+                                              descr=BasicFailDescr())]
         executable_token = cpu.compile_loop(args, operations)
         self.executable_token = executable_token
         return executable_token
