@@ -53,10 +53,58 @@ def convert_to_imm(c):
         raise AssertionError
 
 class RegAlloc(object):
-    max_stack_depth = 0
     exc = False
-    
-    def __init__(self, assembler, tree, translate_support_code=False,
+
+    def __init__(self, assembler, translate_support_code=False):
+        # variables that have place in register
+        self.assembler = assembler
+        self.translate_support_code = translate_support_code
+        self.reg_bindings = newcheckdict()
+        self.stack_bindings = newcheckdict()
+        self.position = -1
+
+    def walk_operations(self, inputargs, operations):
+        cpu = self.assembler.cpu
+        cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
+        self._compute_vars_longevity(inputargs, operations)
+        # compute longevity of variables
+        jump = operations[-1]
+        loop_consts = self._compute_loop_consts(inputargs, jump)
+        self.loop_consts = loop_consts
+        self.current_stack_depth = 0
+        self.free_regs = REGS[:]
+        self.executable_token = self._process_inputargs(inputargs)
+        stack_depth = self._walk_operations(operations)
+        self.assembler.close_back(self.executable_token, stack_depth)
+        return self.executable_token
+
+    def walk_bridge(self, faildescr, inputargs, operations):
+        cpu = self.assembler.cpu        
+        locs = faildescr._x86_faillocs
+        cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
+        self._compute_vars_longevity(inputargs, operations)
+        self.loop_consts = {}
+        self._update_bindings(locs, inputargs)
+        self.current_stack_depth = faildescr._x86_current_stack_depth
+        self.executable_token = None
+        # xxx
+        mc = self.assembler.mc._mc
+        adr_lea = mc.tell()
+        mc.LEA(esp, fixedsize_ebp_ofs(0))
+        stack_depth = self._walk_operations(operations)
+
+        # xxx
+        if not we_are_translated():
+            # for the benefit of tests
+            faildescr._x86_bridge_stack_depth = stack_depth
+
+        RET_BP = 5 # ret ip + bp + bx + esi + edi = 5 words
+        mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
+        mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))
+        mc.done()
+        return adr_lea # start address
+        
+    def x__init__(self, assembler, tree, translate_support_code=False,
                  guard_op=None):
         # variables that have place in register
         self.assembler = assembler
@@ -108,7 +156,7 @@ class RegAlloc(object):
         self._check_invariants()
 
     def _compute_loop_consts(self, inputargs, jump):
-        if jump.opnum != rop.JUMP or jump.jump_target is not self.tree:
+        if jump.opnum != rop.JUMP or jump.jump_target is not None:
             loop_consts = {}
         else:
             loop_consts = {}
@@ -148,22 +196,36 @@ class RegAlloc(object):
             self.assembler.dump('%s <- %s(%s)' % (result_loc, op, arglocs))
         self.assembler.regalloc_perform(op, arglocs, result_loc)
 
-    def perform_with_guard(self, op, guard_op, locs, arglocs, result_loc):
-        guard_op._x86_current_stack_depth = self.current_stack_depth
+    def locs_for_fail(self, guard_op):
+        assert len(guard_op.suboperations) == 1
+        fail_op = guard_op.suboperations[0]
+        assert fail_op.opnum == rop.FAIL
+        return [self.loc(v) for v in fail_op.args]
+
+    def perform_with_guard(self, op, guard_op, arglocs, result_loc):
+        faillocs = self.locs_for_fail(guard_op)
+        self.position += 1
         if not we_are_translated():
             self.assembler.dump('%s <- %s(%s) [GUARDED]' % (result_loc, op,
                                                             arglocs))
-        self.assembler.regalloc_perform_with_guard(op, guard_op, locs,
-                                                   arglocs, result_loc)
+        self.assembler.regalloc_perform_with_guard(op, guard_op, faillocs,
+                                                   arglocs, result_loc,
+                                                   self.current_stack_depth)
+        self.eventually_free_var(op.result)        
+        self.eventually_free_vars(guard_op.suboperations[0].args)
 
-    def perform_guard(self, op, locs, arglocs, result_loc):
-        op._x86_current_stack_depth = self.current_stack_depth
+    def perform_guard(self, guard_op, arglocs, result_loc):
+        faillocs = self.locs_for_fail(guard_op)
         if not we_are_translated():
             if result_loc is not None:
-                self.assembler.dump('%s <- %s(%s)' % (result_loc, op, arglocs))
+                self.assembler.dump('%s <- %s(%s)' % (result_loc, guard_op,
+                                                      arglocs))
             else:
-                self.assembler.dump('%s(%s)' % (op, arglocs))
-        self.assembler.regalloc_perform_guard(op, locs, arglocs, result_loc)
+                self.assembler.dump('%s(%s)' % (guard_op, arglocs))
+        self.assembler.regalloc_perform_guard(guard_op, faillocs, arglocs,
+                                              result_loc,
+                                              self.current_stack_depth)
+        self.eventually_free_vars(guard_op.suboperations[0].args)        
 
     def PerformDiscard(self, op, arglocs):
         if not we_are_translated():
@@ -184,13 +246,13 @@ class RegAlloc(object):
             return False
         return True
 
-    def walk_operations(self, tree):
-        # first pass - walk along the operations in order to find
-        # load/store places
-        self.position = -1
-        operations = tree.operations
-        self.process_inputargs(tree)
-        self._walk_operations(operations)
+##     def walk_operations(self, tree):
+##         # first pass - walk along the operations in order to find
+##         # load/store places
+##         self.position = -1
+##         operations = tree.operations
+##         self.process_inputargs(tree)
+##         self._walk_operations(operations)
 
     #def walk_guard_ops(self, inputargs, operations, exc):
     #    self.exc = exc
@@ -201,7 +263,7 @@ class RegAlloc(object):
 
     def _walk_operations(self, operations):
         i = 0
-        self.operations = operations
+        #self.operations = operations
         while i < len(operations):
             op = operations[i]
             self.position = i
@@ -218,9 +280,7 @@ class RegAlloc(object):
             self._check_invariants()
             i += 1
         assert not self.reg_bindings
-        jmp = operations[-1]
-        self.max_stack_depth = max(self.current_stack_depth,
-                                   self.max_stack_depth)
+        return self.current_stack_depth
 
     def _compute_vars_longevity(self, inputargs, operations):
         # compute a dictionary that maps variables to index in
@@ -490,21 +550,18 @@ class RegAlloc(object):
             loc = self.reg_bindings[result_v]
         return loc
 
-    def locs_for_fail(self, guard_op):
-        assert len(guard_op.suboperations) == 1
-        return [self.loc(v) for v in guard_op.suboperations[0].args]
-
-    def process_inputargs(self, tree):
+    def _process_inputargs(self, inputargs):
         # XXX we can sort out here by longevity if we need something
         # more optimal
-        inputargs = tree.inputargs
         locs = [None] * len(inputargs)
         # Don't use REGS[0] for passing arguments around a loop.
         # Must be kept in sync with consider_jump().
         tmpreg = self.free_regs.pop(0)
         assert tmpreg == REGS[0]
+        argtypes = []
         for i in range(len(inputargs)):
             arg = inputargs[i]
+            argtypes.append(arg.type)
             assert not isinstance(arg, Const)
             reg = None
             if arg not in self.loop_consts and self.longevity[arg][1] > -1:
@@ -517,16 +574,15 @@ class RegAlloc(object):
             # otherwise we have it saved on stack, so no worry
         self.free_regs.insert(0, tmpreg)
         assert tmpreg not in locs
-        tree.arglocs = locs
-        self.assembler.make_merge_point(tree, locs)
+        # xxx think
+        executable_token = self.assembler.make_merge_point(argtypes, locs)
         self.eventually_free_vars(inputargs)
+        return executable_token
 
     def _consider_guard(self, op, ignored):
         loc = self.make_sure_var_in_reg(op.args[0], [])
-        locs = self.locs_for_fail(op)
-        self.perform_guard(op, locs, [loc], None)
+        self.perform_guard(op, [loc], None)
         self.eventually_free_var(op.args[0])
-        self.eventually_free_vars(op.suboperations[0].args)
 
     consider_guard_true = _consider_guard
     consider_guard_false = _consider_guard
@@ -534,13 +590,12 @@ class RegAlloc(object):
     def consider_fail(self, op, ignored):
         # make sure all vars are on stack
         locs = [self.loc(arg) for arg in op.args]
-        self.assembler.generate_failure(self.assembler.mc, op, locs, self.exc)
+        self.assembler.generate_failure(self.assembler.mc, op.descr, op.args,
+                                        locs, self.exc)
         self.eventually_free_vars(op.args)
 
     def consider_guard_no_exception(self, op, ignored):
-        faillocs = self.locs_for_fail(op)
-        self.perform_guard(op, faillocs, [], None)
-        self.eventually_free_vars(op.suboperations[0].args)
+        self.perform_guard(op, [], None)
 
     def consider_guard_exception(self, op, ignored):
         loc = self.make_sure_var_in_reg(op.args[0], [])
@@ -551,9 +606,7 @@ class RegAlloc(object):
             resloc = self.force_allocate_reg(op.result, op.args + [box])
         else:
             resloc = None
-        faillocs = self.locs_for_fail(op)
-        self.perform_guard(op, faillocs, [loc, loc1], resloc)
-        self.eventually_free_vars(op.suboperations[0].args)
+        self.perform_guard(op, [loc, loc1], resloc)
         self.eventually_free_vars(op.args)
         self.eventually_free_var(box)
 
@@ -563,18 +616,14 @@ class RegAlloc(object):
     def consider_guard_value(self, op, ignored):
         x = self.make_sure_var_in_reg(op.args[0], [])
         y = self.loc(op.args[1])
-        faillocs = self.locs_for_fail(op)
-        self.perform_guard(op, faillocs, [x, y], None)
-        self.eventually_free_vars(op.suboperations[0].args)
+        self.perform_guard(op, [x, y], None)
         self.eventually_free_vars(op.args)
 
     def consider_guard_class(self, op, ignored):
         assert isinstance(op.args[0], Box)
         x = self.make_sure_var_in_reg(op.args[0], [])
         y = self.loc(op.args[1])
-        faillocs = self.locs_for_fail(op)
-        self.perform_guard(op, faillocs, [x, y], None)
-        self.eventually_free_vars(op.suboperations[0].args)
+        self.perform_guard(op, [x, y], None)
         self.eventually_free_vars(op.args)
     
     def _consider_binop_part(self, op, ignored):
@@ -653,11 +702,7 @@ class RegAlloc(object):
                                           need_lower_byte=True)
             self.Perform(op, arglocs, loc)
         else:
-            faillocs = self.locs_for_fail(guard_op)
-            self.position += 1
-            self.perform_with_guard(op, guard_op, faillocs, arglocs, None)
-            self.eventually_free_var(op.result)
-            self.eventually_free_vars(guard_op.suboperations[0].args)
+            self.perform_with_guard(op, guard_op, arglocs, None)
 
     consider_int_lt = _consider_compop
     consider_int_gt = _consider_compop
@@ -877,11 +922,7 @@ class RegAlloc(object):
         if guard_op is not None:
             argloc = self.make_sure_var_in_reg(op.args[0], [])
             self.eventually_free_var(op.args[0])
-            faillocs = self.locs_for_fail(guard_op)
-            self.position += 1
-            self.perform_with_guard(op, guard_op, faillocs, [argloc], None)
-            self.eventually_free_var(op.result)
-            self.eventually_free_vars(guard_op.suboperations[0].args)
+            self.perform_with_guard(op, guard_op, [argloc], None)
         else:
             argloc = self.loc(op.args[0])
             self.eventually_free_var(op.args[0])
@@ -927,19 +968,19 @@ class RegAlloc(object):
     consider_unicodegetitem = consider_strgetitem
 
     def consider_jump(self, op, ignored):
-        loop = op.jump_target
+        assembler = self.assembler
+        arglocs = assembler.extract_merge_point(op.jump_target,
+                                                self.executable_token)
         # compute 'tmploc' to be REGS[0] by spilling what is there
         box = TempBox()
         tmploc = self.force_allocate_reg(box, [], selected_reg=REGS[0])
         src_locations = [self.loc(arg) for arg in op.args]
-        dst_locations = loop.arglocs
+        dst_locations = arglocs
         assert tmploc not in dst_locations
-        remap_stack_layout(self.assembler, src_locations,
-                                           dst_locations, tmploc)
+        remap_stack_layout(assembler, src_locations, dst_locations, tmploc)
         self.eventually_free_var(box)
         self.eventually_free_vars(op.args)
-        self.max_stack_depth = op.jump_target._x86_stack_depth    
-        self.PerformDiscard(op, [])
+        assembler.closing_jump(op.jump_target, self.executable_token)
 
     def consider_debug_merge_point(self, op, ignored):
         pass
