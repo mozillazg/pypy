@@ -99,9 +99,9 @@ class BaseBackendTest(Runner):
         executable_token = self.cpu.compile_loop(inputargs, operations)
         self.cpu.set_future_value_int(0, 2)
         fail = self.cpu.execute_token(executable_token)
-        assert fail is faildescr
         res = self.cpu.get_latest_value_int(0)
-        assert res == 3
+        assert res == 3        
+        assert fail is faildescr
 
     def test_compile_loop(self):
         i0 = BoxInt()
@@ -129,6 +129,7 @@ class BaseBackendTest(Runner):
 
     def test_backends_dont_keep_loops_alive(self):
         import weakref, gc
+        self.cpu.dont_keepalive_stuff = True
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
