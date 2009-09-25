@@ -761,9 +761,12 @@ class History(Base):
         self.cpu = cpu
         self.inputargs = None
         self.operations = []
+        self.no_sideeffects_since_last_check = False
     def record(self, opnum, argboxes, resbox, descr=None):
         op = ResOperation(opnum, argboxes, resbox, descr)
         self.operations.append(op)
+        if not op.has_no_side_effect():
+            self.no_sideeffects_since_last_check = False
         return op
 
 # ____________________________________________________________

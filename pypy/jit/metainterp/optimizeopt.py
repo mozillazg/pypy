@@ -346,6 +346,8 @@ class __extend__(VirtualArraySpecNode):
 
 class Optimizer(object):
 
+    no_side_effects_since_last_set = False
+
     def __init__(self, cpu, loop):
         self.cpu = cpu
         self.loop = loop
@@ -493,11 +495,18 @@ class Optimizer(object):
                     op.args[i] = box
         if op.is_guard():
             self.clone_guard(op, op1)
-        elif op.can_raise():
-            self.exception_might_have_happened = True
+        else:
+            if not op.has_no_side_effect():
+                self.no_side_effects_since_last_set = False
+            if op.can_raise():
+                self.exception_might_have_happened = True
         self.newoperations.append(op)
 
     def clone_guard(self, op2, op1):
+        if self.no_side_effects_since_last_set:
+            op2.suboperations = self.last_guard.suboperations
+            op1.optimized = op2
+            return
         assert len(op1.suboperations) == 1
         op_fail = op1.suboperations[0]
         assert op_fail.opnum == rop.FAIL
@@ -529,6 +538,8 @@ class Optimizer(object):
         op_fail.args = newboxes
         op2.suboperations = op1.suboperations
         op1.optimized = op2
+        self.no_side_effects_since_last_set = True
+        self.last_guard = op2
 
     def clean_fields_of_values(self, descr=None):
         if descr is None:

@@ -886,6 +886,9 @@ class BasicTests:
         
 class TestOOtype(BasicTests, OOJitMixin):
 
+    def setup_class(cls):
+        py.test.skip("!!!")
+
     def test_oohash(self):
         def f():
             s = ootype.oostring(5, -1)
