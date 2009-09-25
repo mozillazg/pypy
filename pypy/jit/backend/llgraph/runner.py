@@ -86,6 +86,7 @@ class BaseCPU(model.AbstractCPU):
         self.stats.exec_conditional_jumps = 0
         self.memo_cast = llimpl.new_memo_cast()
         self.fail_ops = []
+        self.fail_memo = {}
         llimpl._stats = self.stats
         llimpl._llinterp = LLInterpreter(self.rtyper)
         if translate_support_code:
@@ -171,8 +172,12 @@ class BaseCPU(model.AbstractCPU):
         if op.opnum == rop.JUMP:
             llimpl.compile_add_jump_target(c, op.jump_target._compiled_version)
         elif op.opnum == rop.FAIL:
-            llimpl.compile_add_fail(c, len(self.fail_ops))
-            self.fail_ops.append(op)
+            num = self.fail_memo.get(op, -1)
+            if num == -1:
+                num = len(self.fail_ops)
+                self.fail_memo[op] = num
+                self.fail_ops.append(op)
+            llimpl.compile_add_fail(c, num)
 
     def execute_operations(self, loop):
         """Calls the assembler generated for the given loop.
