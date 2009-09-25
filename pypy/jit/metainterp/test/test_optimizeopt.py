@@ -121,6 +121,7 @@ class BaseTestOptimizeOpt(BaseTest):
         #
         expected = self.parse(optops)
         self.assert_equal(loop, expected)
+        return loop
 
     def test_simple(self):
         ops = """
@@ -1647,6 +1648,28 @@ class BaseTestOptimizeOpt(BaseTest):
             where p7v is a node_vtable, valuedescr=iv
             ''')
 
+    def test_sharing_of_resumedata(self):
+        ops = """
+        [i0, i1, i2]
+        guard_true(i0)
+          fail(i0, i1, i2)
+        i3 = int_add(i1, i2)
+        guard_true(i1)
+          fail(i2, i1, i0)
+        jump(i0, i1, i2)
+        """
+        expected = """
+        [i0, i1, i2]
+        guard_true(i0)
+          fail(i0, i1, i2)
+        i3 = int_add(i1, i2)
+        guard_true(i1)
+          fail(i0, i1, i2)
+        jump(1, 1, i2)
+        """
+        loop = self.optimize_loop(ops, "Not, Not, Not", expected)
+        assert (loop.operations[0].suboperations is
+                loop.operations[2].suboperations)
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
     pass

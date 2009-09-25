@@ -910,20 +910,29 @@ class MIFrame(object):
             return
         saved_pc = self.pc
         self.pc = pc
-        resumebuilder = resume.ResumeDataBuilder.make(metainterp.framestack)
-        if metainterp.staticdata.virtualizable_info is not None:
-            resumebuilder.generate_boxes(metainterp.virtualizable_boxes)
+        if metainterp.history.no_sideeffects_since_last_check:
+            resumebuilder = None
+        else:
+            resumebuilder = resume.ResumeDataBuilder.make(metainterp.framestack)
+            if metainterp.staticdata.virtualizable_info is not None:
+                resumebuilder.generate_boxes(metainterp.virtualizable_boxes)
         if box is not None:
             moreargs = [box] + extraargs
         else:
             moreargs = list(extraargs)
         guard_op = metainterp.history.record(opnum, moreargs, None)
-        resumedescr = compile.ResumeGuardDescr(
-            metainterp.history, len(metainterp.history.operations)-1)
-        liveboxes = resumebuilder.finish(resumedescr)
-        self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS) # count
-        op = history.ResOperation(rop.FAIL, liveboxes, None, descr=resumedescr)
-        guard_op.suboperations = [op]
+        metainterp.staticdata.profiler.count_ops(opnum, GUARDS) # count
+        if resumebuilder is not None:
+            resumedescr = compile.ResumeGuardDescr(
+                metainterp.history, len(metainterp.history.operations)-1)
+            liveboxes = resumebuilder.finish(resumedescr)
+            op = history.ResOperation(rop.FAIL, liveboxes, None, descr=resumedescr)
+            guard_op.suboperations = [op]
+            metainterp.last_guard_op = guard_op
+        else:
+            guard_op.suboperations = metainterp.last_guard_op.suboperations
+        # guard ops has no reasonable side effects
+        #metainterp.history.no_sideeffects_since_last_check = True
         metainterp.attach_debug_info(guard_op)
         self.pc = saved_pc
         return guard_op
@@ -1601,6 +1610,8 @@ class MetaInterp(object):
         if must_compile:
             guard_op = resumedescr.get_guard_op()
             suboperations = guard_op.suboperations
+            import pdb
+            pdb.set_trace()
             if suboperations[-1] is not guard_failure:
                 must_compile = False
                 log("ignoring old version of the guard")
