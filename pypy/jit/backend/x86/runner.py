@@ -20,7 +20,7 @@ class CPU386(AbstractLLCPU):
         AbstractLLCPU.__init__(self, rtyper, stats, translate_support_code,
                                gcdescr)
         self._bootstrap_cache = {}
-        self._guard_list = []
+        self._faildescr_list = []
         if rtyper is not None: # for tests
             self.lltype2vtable = rtyper.lltype_to_vtable_mapping()
 
@@ -39,24 +39,10 @@ class CPU386(AbstractLLCPU):
     def compile_bridge(self, faildescr, inputargs, operations):
         self.assembler.assemble_bridge(faildescr, inputargs, operations)
 
-    def execute_token(self, executable_token):
-        func = self.get_bootstrap_code(executable_token)
-        guard_index = self.execute_call(func)
-        op = self._guard_list[guard_index] # xxx
-        return op       
-        
-    def get_bootstrap_code(self, executable_token):
-        addr = executable_token._x86_bootstrap_code
-        if not addr:
-            arglocs = executable_token.arglocs
-            addr = self.assembler.assemble_bootstrap_code(
-                executable_token._x86_compiled,
-                arglocs,
-                executable_token.argtypes,
-                executable_token._x86_stack_depth)
-            executable_token._x86_bootstrap_code = addr
-        func = rffi.cast(lltype.Ptr(self.BOOTSTRAP_TP), addr)
-        return func
+    def make_fail_index(self, faildescr):
+        index = len(self._faildescr_list)
+        self._faildescr_list.append(faildescr)
+        return index
 
     def set_future_value_int(self, index, intvalue):
         assert index < MAX_FAIL_BOXES, "overflow!"
@@ -76,7 +62,14 @@ class CPU386(AbstractLLCPU):
             llmemory.GCREF.TO)
         return ptrvalue
 
-    def execute_call(self, func):
+    def execute_token(self, executable_token):
+        addr = executable_token._x86_bootstrap_code
+        func = rffi.cast(lltype.Ptr(self.BOOTSTRAP_TP), addr)
+        faildescr_index = self._execute_call(func)
+        faildescr = self._faildescr_list[faildescr_index]
+        return faildescr       
+
+    def _execute_call(self, func):
         # help flow objspace
         prev_interpreter = None
         if not self.translate_support_code:
@@ -92,11 +85,6 @@ class CPU386(AbstractLLCPU):
             if not self.translate_support_code:
                 LLInterpreter.current_interpreter = prev_interpreter
         return res
-
-    def make_guard_index(self, guard_op):
-        index = len(self._guard_list)
-        self._guard_list.append(guard_op)
-        return index
 
     @staticmethod
     def cast_ptr_to_int(x):

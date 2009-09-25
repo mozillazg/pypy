@@ -66,11 +66,10 @@ class RegAlloc(object):
         self.longevity = None
 
         # to be read/used by the assembler too
-        self.executable_token = None
         self.current_stack_depth = 0
         self.jump_target = None
 
-    def walk_operations(self, inputargs, operations):
+    def prepare_loop(self, inputargs, operations):
         cpu = self.assembler.cpu
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
         # compute longevity of variables
@@ -80,48 +79,16 @@ class RegAlloc(object):
         self.loop_consts = loop_consts
         self.current_stack_depth = 0
         self.free_regs = REGS[:]
-        self.executable_token = self._process_inputargs(inputargs)
-        self._walk_operations(operations)
+        return self._process_inputargs(inputargs)
 
-    def walk_bridge(self, faildescr, inputargs, operations):
+    def prepare_bridge(self, prev_stack_depth, inputargs, arglocs, operations):
         cpu = self.assembler.cpu        
-        locs = faildescr._x86_faillocs
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
         # compute longevity of variables
         self._compute_vars_longevity(inputargs, operations)
         self.loop_consts = {}
-        self._update_bindings(locs, inputargs)
-        self.current_stack_depth = faildescr._x86_current_stack_depth
-        self._walk_operations(operations)
-        
-##     def x__init__(self, assembler, tree, translate_support_code=False,
-##                  guard_op=None):
-##         # variables that have place in register
-##         self.assembler = assembler
-##         self.translate_support_code = translate_support_code
-##         cpu = self.assembler.cpu
-##         self.reg_bindings = newcheckdict()
-##         self.stack_bindings = newcheckdict()
-##         self.tree = tree
-##         if guard_op is not None:
-##             locs = guard_op._x86_faillocs
-##             cpu.gc_ll_descr.rewrite_assembler(cpu, guard_op.suboperations)
-##             inpargs = [arg for arg in guard_op._fail_op.args if
-##                        isinstance(arg, Box)]
-##             self._compute_vars_longevity(inpargs, guard_op.suboperations)
-##             self.position = -1
-##             self._update_bindings(locs, inpargs)
-##             self.current_stack_depth = guard_op._x86_current_stack_depth
-##             self.loop_consts = {}
-##         else:
-##             cpu.gc_ll_descr.rewrite_assembler(cpu, tree.operations)
-##             self._compute_vars_longevity(tree.inputargs, tree.operations)
-##             # compute longevity of variables
-##             jump = tree.operations[-1]
-##             loop_consts = self._compute_loop_consts(tree.inputargs, jump)
-##             self.loop_consts = loop_consts
-##             self.current_stack_depth = 0
-##             self.free_regs = REGS[:]
+        self._update_bindings(arglocs, inputargs)
+        self.current_stack_depth = prev_stack_depth
 
     def _process_inputargs(self, inputargs):
         # XXX we can sort out here by longevity if we need something
@@ -131,10 +98,8 @@ class RegAlloc(object):
         # Must be kept in sync with consider_jump().
         tmpreg = self.free_regs.pop(0)
         assert tmpreg == REGS[0]
-        argtypes = []
         for i in range(len(inputargs)):
             arg = inputargs[i]
-            argtypes.append(arg.type)
             assert not isinstance(arg, Const)
             reg = None
             if arg not in self.loop_consts and self.longevity[arg][1] > -1:
@@ -147,10 +112,8 @@ class RegAlloc(object):
             # otherwise we have it saved on stack, so no worry
         self.free_regs.insert(0, tmpreg)
         assert tmpreg not in locs
-        # xxx think
-        executable_token = self.assembler.make_merge_point(argtypes, locs)
         self.eventually_free_vars(inputargs)
-        return executable_token
+        return locs
 
     def _compute_loop_consts(self, inputargs, jump):
         if jump.opnum != rop.JUMP or jump.jump_target is not None:
@@ -265,22 +228,7 @@ class RegAlloc(object):
             return False
         return True
 
-##     def walk_operations(self, tree):
-##         # first pass - walk along the operations in order to find
-##         # load/store places
-##         self.position = -1
-##         operations = tree.operations
-##         self.process_inputargs(tree)
-##         self._walk_operations(operations)
-
-    #def walk_guard_ops(self, inputargs, operations, exc):
-    #    self.exc = exc
-    #    old_regalloc = self.assembler._regalloc
-    #    self.assembler._regalloc = self
-    #    self._walk_operations(operations)
-    #    self.assembler._regalloc = old_regalloc
-
-    def _walk_operations(self, operations):
+    def walk_operations(self, operations):
         i = 0
         #self.operations = operations
         while i < len(operations):
@@ -330,33 +278,6 @@ class RegAlloc(object):
         for arg in longevity:
             assert isinstance(arg, Box)
         self.longevity = longevity
-
-#     def _compute_inpargs(self, guard):
-#         operations = guard.suboperations
-#         longevity = {}
-#         end = {}
-#         for i in range(len(operations)-1, -1, -1):
-#             op = operations[i]
-#             if op.is_guard():
-#                 for arg in op.suboperations[0].args:
-#                     if isinstance(arg, Box) and arg not in end:
-#                         end[arg] = i
-#             for arg in op.args:
-#                 if isinstance(arg, Box) and arg not in end:
-#                     end[arg] = i
-#             if op.result:
-#                 if op.result in end:
-#                     longevity[op.result] = (i, end[op.result])
-#                     del end[op.result]
-#                 # otherwise this var is never ever used
-#         for v, e in end.items():
-#             longevity[v] = (0, e)
-#         inputargs = end.keys()
-#         for arg in longevity:
-#             assert isinstance(arg, Box)
-#         for arg in inputargs:
-#             assert isinstance(arg, Box)
-#         return inputargs, longevity
 
     def try_allocate_reg(self, v, selected_reg=None, need_lower_byte=False):
         assert not isinstance(v, Const)
@@ -961,8 +882,7 @@ class RegAlloc(object):
         assembler = self.assembler
         assert self.jump_target is None
         self.jump_target = op.jump_target
-        arglocs = assembler.extract_merge_point(self.jump_target,
-                                                self.executable_token)
+        arglocs = assembler.target_arglocs(self.jump_target)
         # compute 'tmploc' to be REGS[0] by spilling what is there
         box = TempBox()
         tmploc = self.force_allocate_reg(box, [], selected_reg=REGS[0])
@@ -972,7 +892,7 @@ class RegAlloc(object):
         remap_stack_layout(assembler, src_locations, dst_locations, tmploc)
         self.eventually_free_var(box)
         self.eventually_free_vars(op.args)
-        assembler.closing_jump(op.jump_target, self.executable_token)
+        assembler.closing_jump(self.jump_target)
 
     def consider_debug_merge_point(self, op, ignored):
         pass

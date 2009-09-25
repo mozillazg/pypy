@@ -320,7 +320,8 @@ class TestX86(LLtypeBackendTest):
                     ops = [
                         ResOperation(op, [b], f),
                         ResOperation(guard, [f], None),
-                        ResOperation(rop.FAIL, [ConstInt(0)], None),
+                        ResOperation(rop.FAIL, [ConstInt(0)], None,
+                                     descr=BasicFailDescr()),
                         ]
                     ops[1].suboperations = [ResOperation(rop.FAIL,
                                                         [ConstInt(1)], None,
@@ -364,7 +365,8 @@ class TestX86(LLtypeBackendTest):
                     ops = [
                         ResOperation(op, [a, b], res),
                         ResOperation(guard, [res], None),
-                        ResOperation(rop.FAIL, [ConstInt(0)], None),
+                        ResOperation(rop.FAIL, [ConstInt(0)], None,
+                                     descr=BasicFailDescr()),
                         ]
                     ops[1].suboperations = [ResOperation(rop.FAIL,
                                                         [ConstInt(1)], None,
