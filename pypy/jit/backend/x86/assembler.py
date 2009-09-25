@@ -141,67 +141,90 @@ class Assembler386(object):
         self.make_sure_mc_exists()
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         self._regalloc = regalloc
-        executable_token = regalloc.walk_operations(inputargs, operations)
+        regalloc.walk_operations(inputargs, operations)
         self.mc.done()
         self.mc2.done()
-        # possibly align, e.g. for Mac OS X
         if we_are_translated() or self.cpu.dont_keepalive_stuff:
             self._regalloc = None   # else keep it around for debugging
+        stack_depth = regalloc.current_stack_depth
+        jump_target = regalloc.jump_target
+        if jump_target is not None:
+            target_stack_depth = jump_target.executable_token._x86_stack_depth
+            stack_depth = max(stack_depth, target_stack_depth)
+        executable_token = regalloc.executable_token
+        # possibly align, e.g. for Mac OS X
+        executable_token._x86_stack_depth = stack_depth
         return executable_token
 
     def assemble_bridge(self, faildescr, inputargs, operations):
         self._compute_longest_fail_op(operations)
         self.make_sure_mc_exists()
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
-        self._regalloc = regalloc        
-        bridgeaddr = regalloc.walk_bridge(faildescr,inputargs, operations)
+        self._regalloc = regalloc
+        # stack adjustment LEA
+        mc = self.mc._mc
+        adr_bridge = mc.tell()
+        mc.LEA(esp, fixedsize_ebp_ofs(0))        
+        regalloc.walk_bridge(faildescr, inputargs, operations)        
         self.mc.done()
         self.mc2.done()
         if we_are_translated() or self.cpu.dont_keepalive_stuff:
             self._regalloc = None   # else keep it around for debugging
+        stack_depth = regalloc.current_stack_depth
+        jump_target = regalloc.jump_target
+        assert jump_target
+        target_stack_depth = jump_target.executable_token._x86_stack_depth
+        stack_depth = max(stack_depth, target_stack_depth)
+        # patch stack adjustment LEA
+        if not we_are_translated():
+            # for the benefit of tests
+            faildescr._x86_bridge_stack_depth = stack_depth
+        mc = codebuf.InMemoryCodeBuilder(adr_bridge, adr_bridge + 128)
+        mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))
+        mc.done()            
         # patch the jump from original guard
         addr = faildescr._x86_addr
         mc = codebuf.InMemoryCodeBuilder(addr, addr + 128)
-        mc.write(packimm32(bridgeddr - addr - 4))
+        mc.write(packimm32(adr_bridge - addr - 4))
         mc.done()
 
-    def xassemble(self, tree, operations, guard_op):
-        # the last operation can be 'jump', 'return' or 'guard_pause';
-        # a 'jump' can either close a loop, or end a bridge to some
-        # previously-compiled code.
-        self._compute_longest_fail_op(operations)
-        self.make_sure_mc_exists()
-        newpos = self.mc.tell()
-        regalloc = RegAlloc(self, tree, self.cpu.translate_support_code,
-                            guard_op)
-        self._regalloc = regalloc
-        adr_lea = 0
-        if guard_op is None:
-            inputargs = tree.inputargs
-            regalloc.walk_operations(tree)
-        else:
-            inputargs = regalloc.inputargs
-            mc = self.mc._mc
-            adr_lea = mc.tell()
-            mc.LEA(esp, fixedsize_ebp_ofs(0))
-            regalloc._walk_operations(operations)
-        stack_depth = regalloc.max_stack_depth
-        self.mc.done()
-        self.mc2.done()
-        # possibly align, e.g. for Mac OS X
-        if guard_op is None:
-            tree._x86_stack_depth = stack_depth
-        else:
-            if not we_are_translated():
-                # for the benefit of tests
-                guard_op._x86_bridge_stack_depth = stack_depth
-            mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
+##     def assemble(self, tree, operations, guard_op):
+##         # the last operation can be 'jump', 'return' or 'guard_pause';
+##         # a 'jump' can either close a loop, or end a bridge to some
+##         # previously-compiled code.
+##         self._compute_longest_fail_op(operations)
+##         self.make_sure_mc_exists()
+##         newpos = self.mc.tell()
+##         regalloc = RegAlloc(self, tree, self.cpu.translate_support_code,
+##                             guard_op)
+##         self._regalloc = regalloc
+##         adr_lea = 0
+##         if guard_op is None:
+##             inputargs = tree.inputargs
+##             regalloc.walk_operations(tree)
+##         else:
+##             inputargs = regalloc.inputargs
+##             mc = self.mc._mc
+##             adr_lea = mc.tell()
+##             mc.LEA(esp, fixedsize_ebp_ofs(0))
+##             regalloc._walk_operations(operations)
+##         stack_depth = regalloc.max_stack_depth
+##         self.mc.done()
+##         self.mc2.done()
+##         # possibly align, e.g. for Mac OS X
+##         if guard_op is None:
+##             tree._x86_stack_depth = stack_depth
+##         else:
+##             if not we_are_translated():
+##                 # for the benefit of tests
+##                 guard_op._x86_bridge_stack_depth = stack_depth
+##             mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
             
-            mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))
-            mc.done()
-        if we_are_translated():
-            self._regalloc = None   # else keep it around for debugging
-        return newpos
+##             mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))
+##             mc.done()
+##         if we_are_translated():
+##             self._regalloc = None   # else keep it around for debugging
+##         return newpos
 
     def assemble_bootstrap_code(self, jumpaddr, arglocs, argtypes, framesize):
         self.make_sure_mc_exists()
@@ -626,13 +649,7 @@ class Assembler386(object):
     def closing_jump(self, loop_token, cur_executable_token):
         executable_token = self._get_executable_token(loop_token,
                                                       cur_executable_token)
-        # xxx delicate
-        cur_executable_token._x86_stack_depth = executable_token._x86_stack_depth
         self.mc.JMP(rel32(executable_token._x86_compiled))
-
-    def close_back(self, executable_token, stack_depth):
-        prev_stack_depth = executable_token._x86_stack_depth
-        executable_token._x86_stack_depth = max(prev_stack_depth, stack_depth)
 
     #def genop_discard_jump(self, op, locs):
     #    self.mc.JMP(rel32(op.jump_target._x86_compiled))
