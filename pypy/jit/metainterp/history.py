@@ -119,15 +119,15 @@ class AbstractValue(object):
 class AbstractDescr(AbstractValue):
     __slots__ = ()
 
-    def handle_fail_op(self, metainterp, fail_op):
-        raise NotImplementedError
-    def compile_and_attach(self, metainterp, new_loop):
-        raise NotImplementedError
     def repr_of_descr(self):
         return '%r' % (self,)
 
 class AbstractFailDescr(AbstractDescr):
-    __slots__ = ()
+
+    def handle_fail(self, metainterp_sd):
+        raise NotImplementedError
+    def compile_and_attach(self, metainterp, new_loop):
+        raise NotImplementedError
 
 class BasicFailDescr(AbstractFailDescr):
     pass

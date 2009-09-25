@@ -40,7 +40,6 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     to the first operation.
     """    
     from pypy.jit.metainterp.pyjitpl import DEBUG
-
     history = metainterp.history
     loop = create_empty_loop(metainterp)
     loop.greenkey = greenkey

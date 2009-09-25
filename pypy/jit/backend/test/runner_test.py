@@ -198,7 +198,10 @@ class BaseBackendTest(Runner):
 
     def test_finish(self):
         i0 = BoxInt()
-        faildescr = AbstractFailDescr() # to check that is not touched
+        class UntouchableFailDescr(AbstractFailDescr):
+            def __setattr__(self, name, value):
+                py.test.fail("finish descrs should not be touched")
+        faildescr = UntouchableFailDescr() # to check that is not touched
         operations = [
             ResOperation(rop.FINISH, [i0], None, descr=faildescr)
             ]

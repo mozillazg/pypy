@@ -2,6 +2,7 @@ import sys, os
 import ctypes
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import Const, Box, BoxPtr, REF
+from pypy.jit.metainterp.history import AbstractFailDescr
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -64,9 +65,10 @@ for name in dir(codebuf.MachineCodeBlock):
         setattr(MachineCodeBlockWrapper, name, _new_method(name))
 
 class ExecutableToken386(object):
-    _x86_compiled = 0
+    _x86_loop_code = 0
     _x86_bootstrap_code = 0
     _x86_stack_depth = 0
+    _x86_arglocs = None
 
 class Assembler386(object):
     mc = None
@@ -125,47 +127,45 @@ class Assembler386(object):
             self.mc = MachineCodeBlockWrapper()
             self.mc2 = MachineCodeBlockWrapper()
 
-    def _compute_longest_fail_op(self, ops):
-        max_so_far = 0
-        for op in ops:
-            if op.opnum == rop.FAIL:
-                max_so_far = max(max_so_far, len(op.args))
-            if op.is_guard():
-                max_so_far = max(max_so_far, self._compute_longest_fail_op(
-                    op.suboperations))
-        assert max_so_far < MAX_FAIL_BOXES
-        return max_so_far
-
     def assemble_loop(self, inputargs, operations):
-        self._compute_longest_fail_op(operations)
         self.make_sure_mc_exists()
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
-        self._regalloc = regalloc
-        regalloc.walk_operations(inputargs, operations)
-        self.mc.done()
-        self.mc2.done()
-        if we_are_translated() or self.cpu.dont_keepalive_stuff:
-            self._regalloc = None   # else keep it around for debugging
-        stack_depth = regalloc.current_stack_depth
-        jump_target = regalloc.jump_target
-        if jump_target is not None:
-            target_stack_depth = jump_target.executable_token._x86_stack_depth
-            stack_depth = max(stack_depth, target_stack_depth)
-        executable_token = regalloc.executable_token
-        # possibly align, e.g. for Mac OS X
+        arglocs = regalloc.prepare_loop(inputargs, operations)
+        executable_token = ExecutableToken386()
+        executable_token._x86_arglocs = arglocs
+        executable_token._x86_bootstrap_code = self.mc.tell()
+        adr_stackadjust = self._assemble_bootstrap_code(inputargs, arglocs)
+        executable_token._x86_loop_code = self.mc.tell()
+        self._executable_token = executable_token
+        stack_depth = self._assemble(regalloc, operations)
+        self._executable_token = None
+        self._patch_stackadjust(adr_stackadjust, stack_depth)
         executable_token._x86_stack_depth = stack_depth
         return executable_token
 
     def assemble_bridge(self, faildescr, inputargs, operations):
-        self._compute_longest_fail_op(operations)
         self.make_sure_mc_exists()
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
+        arglocs = faildescr._x86_faillocs
+        fail_stack_depth = faildescr._x86_current_stack_depth
+        regalloc.prepare_bridge(fail_stack_depth, inputargs, arglocs,
+                                operations)
+        adr_bridge = self.mc.tell()
+        adr_stackadjust = self._patchable_stackadjust()
+        stack_depth = self._assemble(regalloc, operations)
+        self._patch_stackadjust(adr_stackadjust, stack_depth)
+        if not we_are_translated():
+            # for the benefit of tests
+            faildescr._x86_bridge_stack_depth = stack_depth
+        # patch the jump from original guard
+        adr_jump_offset = faildescr._x86_adr_jump_offset
+        mc = codebuf.InMemoryCodeBuilder(adr_jump_offset, adr_jump_offset + 4)
+        mc.write(packimm32(adr_bridge - adr_jump_offset - 4))
+        mc.done()
+
+    def _assemble(self, regalloc, operations):
         self._regalloc = regalloc
-        # stack adjustment LEA
-        mc = self.mc._mc
-        adr_bridge = mc.tell()
-        mc.LEA(esp, fixedsize_ebp_ofs(0))        
-        regalloc.walk_bridge(faildescr, inputargs, operations)        
+        regalloc.walk_operations(operations)        
         self.mc.done()
         self.mc2.done()
         if we_are_translated() or self.cpu.dont_keepalive_stuff:
@@ -175,60 +175,21 @@ class Assembler386(object):
         if jump_target is not None:
             target_stack_depth = jump_target.executable_token._x86_stack_depth
             stack_depth = max(stack_depth, target_stack_depth)
+        return stack_depth
+
+    def _patchable_stackadjust(self):
+        # stack adjustment LEA
+        self.mc.LEA(esp, fixedsize_ebp_ofs(0))
+        return self.mc.tell() - 4
+
+    def _patch_stackadjust(self, adr_lea, stack_depth):
         # patch stack adjustment LEA
-        if not we_are_translated():
-            # for the benefit of tests
-            faildescr._x86_bridge_stack_depth = stack_depth
-        mc = codebuf.InMemoryCodeBuilder(adr_bridge, adr_bridge + 128)
-        mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))
-        mc.done()            
-        # patch the jump from original guard
-        addr = faildescr._x86_addr
-        mc = codebuf.InMemoryCodeBuilder(addr, addr + 128)
-        mc.write(packimm32(adr_bridge - addr - 4))
+        # possibly align, e.g. for Mac OS X        
+        mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 4)
+        mc.write(packimm32(-(stack_depth + RET_BP - 2) * WORD))
         mc.done()
 
-##     def assemble(self, tree, operations, guard_op):
-##         # the last operation can be 'jump', 'return' or 'guard_pause';
-##         # a 'jump' can either close a loop, or end a bridge to some
-##         # previously-compiled code.
-##         self._compute_longest_fail_op(operations)
-##         self.make_sure_mc_exists()
-##         newpos = self.mc.tell()
-##         regalloc = RegAlloc(self, tree, self.cpu.translate_support_code,
-##                             guard_op)
-##         self._regalloc = regalloc
-##         adr_lea = 0
-##         if guard_op is None:
-##             inputargs = tree.inputargs
-##             regalloc.walk_operations(tree)
-##         else:
-##             inputargs = regalloc.inputargs
-##             mc = self.mc._mc
-##             adr_lea = mc.tell()
-##             mc.LEA(esp, fixedsize_ebp_ofs(0))
-##             regalloc._walk_operations(operations)
-##         stack_depth = regalloc.max_stack_depth
-##         self.mc.done()
-##         self.mc2.done()
-##         # possibly align, e.g. for Mac OS X
-##         if guard_op is None:
-##             tree._x86_stack_depth = stack_depth
-##         else:
-##             if not we_are_translated():
-##                 # for the benefit of tests
-##                 guard_op._x86_bridge_stack_depth = stack_depth
-##             mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
-            
-##             mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))
-##             mc.done()
-##         if we_are_translated():
-##             self._regalloc = None   # else keep it around for debugging
-##         return newpos
-
-    def assemble_bootstrap_code(self, jumpaddr, arglocs, argtypes, framesize):
-        self.make_sure_mc_exists()
-        addr = self.mc.tell()
+    def _assemble_bootstrap_code(self, inputargs, arglocs):
         self.mc.PUSH(ebp)
         self.mc.MOV(ebp, esp)
         self.mc.PUSH(ebx)
@@ -236,11 +197,11 @@ class Assembler386(object):
         self.mc.PUSH(edi)
         # NB. exactly 4 pushes above; if this changes, fix stack_pos().
         # You must also keep _get_callshape() in sync.
-        self.mc.SUB(esp, imm(framesize * WORD))
+        adr_stackadjust = self._patchable_stackadjust()
         for i in range(len(arglocs)):
             loc = arglocs[i]
             if not isinstance(loc, REG):
-                if argtypes[i] == REF:
+                if inputargs[i].type == REF:
                     # This uses XCHG to put zeroes in fail_boxes_ptr after
                     # reading them
                     self.mc.XOR(ecx, ecx)
@@ -253,7 +214,7 @@ class Assembler386(object):
         for i in range(len(arglocs)):
             loc = arglocs[i]
             if isinstance(loc, REG):
-                if argtypes[i] == REF:
+                if inputargs[i].type == REF:
                     # This uses XCHG to put zeroes in fail_boxes_ptr after
                     # reading them
                     self.mc.XOR(loc, loc)
@@ -262,9 +223,7 @@ class Assembler386(object):
                 else:
                     self.mc.MOV(loc, addr_add(imm(self.fail_box_int_addr),
                                               imm(i*WORD)))
-        self.mc.JMP(rel32(jumpaddr))
-        self.mc.done()
-        return addr
+        return adr_stackadjust
 
     def dump(self, text):
         if not self.verbose:
@@ -299,6 +258,7 @@ class Assembler386(object):
                                     arglocs, resloc, current_stack_depth):
         fail_op = guard_op.suboperations[0]
         faildescr = fail_op.descr
+        assert isinstance(faildescr, AbstractFailDescr)
         faildescr._x86_current_stack_depth = current_stack_depth
         failargs = fail_op.args
         guard_opnum = guard_op.opnum
@@ -309,10 +269,11 @@ class Assembler386(object):
             dispatch_opnum = guard_opnum
         else:
             dispatch_opnum = op.opnum
-        addr = genop_guard_list[dispatch_opnum](self, op, guard_opnum,
-                                                failaddr, arglocs,
-                                                resloc)
-        faildescr._x86_addr = addr
+        adr_jump_offset = genop_guard_list[dispatch_opnum](self, op,
+                                                           guard_opnum,
+                                                           failaddr, arglocs,
+                                                           resloc)
+        faildescr._x86_adr_jump_offset = adr_jump_offset
 
     def regalloc_perform_guard(self, guard_op, faillocs, arglocs, resloc,
                                current_stack_depth):
@@ -628,32 +589,6 @@ class Assembler386(object):
         else:
             assert 0, itemsize
 
-    def make_merge_point(self, argtypes, locs):
-        executable_token = ExecutableToken386()        
-        pos = self.mc.tell()
-        executable_token.argtypes = argtypes
-        executable_token.arglocs = locs        
-        executable_token._x86_compiled = pos
-        return executable_token
-
-    def _get_executable_token(self, loop_token, cur_executable_token):
-        if loop_token is not None:
-            return loop_token.executable_token
-        return cur_executable_token        
-
-    def extract_merge_point(self, loop_token, cur_executable_token):
-        executable_token = self._get_executable_token(loop_token,
-                                                      cur_executable_token)
-        return executable_token.arglocs
-
-    def closing_jump(self, loop_token, cur_executable_token):
-        executable_token = self._get_executable_token(loop_token,
-                                                      cur_executable_token)
-        self.mc.JMP(rel32(executable_token._x86_compiled))
-
-    #def genop_discard_jump(self, op, locs):
-    #    self.mc.JMP(rel32(op.jump_target._x86_compiled))
-
     def genop_guard_guard_true(self, ign_1, guard_opnum, addr, locs, ign_2):
         loc = locs[0]
         self.mc.TEST(loc, loc)
@@ -709,6 +644,7 @@ class Assembler386(object):
         return addr
 
     def generate_failure(self, mc, faildescr, failargs, locs, exc):
+        assert len(failargs) < MAX_FAIL_BOXES
         pos = mc.tell()
         for i in range(len(locs)):
             loc = locs[i]
@@ -744,8 +680,9 @@ class Assembler386(object):
         # don't break the following code sequence!
         mc = mc._mc
         mc.LEA(esp, addr_add(imm(0), ebp, (-RET_BP + 2) * WORD))
-        guard_index = self.cpu.make_guard_index(faildescr)
-        mc.MOV(eax, imm(guard_index))
+        assert isinstance(faildescr, AbstractFailDescr)
+        fail_index = self.cpu.make_fail_index(faildescr)
+        mc.MOV(eax, imm(fail_index))
         mc.POP(edi)
         mc.POP(esi)
         mc.POP(ebx)
@@ -826,6 +763,20 @@ class Assembler386(object):
             mark = self._regalloc.get_mark_gc_roots(gcrootmap)
             gcrootmap.put(rffi.cast(llmemory.Address, self.mc.tell()), mark)
 
+    def _get_executable_token(self, loop_token):
+        if loop_token is not None:
+            return loop_token.executable_token
+        assert self._executable_token is not None
+        return self._executable_token        
+
+    def target_arglocs(self, loop_token):
+        executable_token = self._get_executable_token(loop_token)
+        return executable_token._x86_arglocs
+
+    def closing_jump(self, loop_token):
+        executable_token = self._get_executable_token(loop_token)
+        self.mc.JMP(rel32(executable_token._x86_loop_code))
+        
 
 genop_discard_list = [Assembler386.not_implemented_op_discard] * rop._LAST
 genop_list = [Assembler386.not_implemented_op] * rop._LAST
