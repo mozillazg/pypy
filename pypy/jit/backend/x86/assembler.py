@@ -172,9 +172,9 @@ class Assembler386(object):
             self._regalloc = None   # else keep it around for debugging
         stack_depth = regalloc.current_stack_depth
         jump_target = regalloc.jump_target
-        assert jump_target
-        target_stack_depth = jump_target.executable_token._x86_stack_depth
-        stack_depth = max(stack_depth, target_stack_depth)
+        if jump_target is not None:
+            target_stack_depth = jump_target.executable_token._x86_stack_depth
+            stack_depth = max(stack_depth, target_stack_depth)
         # patch stack adjustment LEA
         if not we_are_translated():
             # for the benefit of tests
