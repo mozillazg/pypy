@@ -1,5 +1,5 @@
 
-from pypy.jit.metainterp.test.oparser import parse
+from pypy.jit.metainterp.test.oparser import pure_parse
 from pypy.jit.backend import logger
 from pypy.jit.metainterp.typesystem import llhelper
 from StringIO import StringIO
@@ -29,10 +29,10 @@ class TestLogger(object):
         """ parse loop once, then log it and parse again,
         return both
         """
-        loop = parse(inp, namespace=namespace)
+        loop = pure_parse(inp, namespace=namespace)
         logger = Logger(self.ts)
         output = logger.log_loop(loop, namespace)
-        oloop = parse(output, namespace=namespace)
+        oloop = pure_parse(output, namespace=namespace)
         return loop, oloop
     
     def test_simple(self):
