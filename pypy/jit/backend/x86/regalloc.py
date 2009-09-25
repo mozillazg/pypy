@@ -63,75 +63,102 @@ class RegAlloc(object):
         self.stack_bindings = newcheckdict()
         self.position = -1
 
+        # to be read/used by the assembler too
+        self.executable_token = None
+        self.current_stack_depth = 0
+        self.jump_target = None
+
     def walk_operations(self, inputargs, operations):
         cpu = self.assembler.cpu
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
-        self._compute_vars_longevity(inputargs, operations)
         # compute longevity of variables
+        self._compute_vars_longevity(inputargs, operations)
         jump = operations[-1]
         loop_consts = self._compute_loop_consts(inputargs, jump)
         self.loop_consts = loop_consts
         self.current_stack_depth = 0
         self.free_regs = REGS[:]
         self.executable_token = self._process_inputargs(inputargs)
-        stack_depth = self._walk_operations(operations)
-        self.assembler.close_back(self.executable_token, stack_depth)
-        return self.executable_token
+        self._walk_operations(operations)
 
     def walk_bridge(self, faildescr, inputargs, operations):
         cpu = self.assembler.cpu        
         locs = faildescr._x86_faillocs
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
+        # compute longevity of variables
         self._compute_vars_longevity(inputargs, operations)
         self.loop_consts = {}
         self._update_bindings(locs, inputargs)
         self.current_stack_depth = faildescr._x86_current_stack_depth
-        self.executable_token = None
-        # xxx
-        mc = self.assembler.mc._mc
-        adr_lea = mc.tell()
-        mc.LEA(esp, fixedsize_ebp_ofs(0))
-        stack_depth = self._walk_operations(operations)
-
-        # xxx
-        if not we_are_translated():
-            # for the benefit of tests
-            faildescr._x86_bridge_stack_depth = stack_depth
-
-        RET_BP = 5 # ret ip + bp + bx + esi + edi = 5 words
-        mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 128)
-        mc.LEA(esp, fixedsize_ebp_ofs(-(stack_depth + RET_BP - 2) * WORD))
-        mc.done()
-        return adr_lea # start address
+        self._walk_operations(operations)
         
-    def x__init__(self, assembler, tree, translate_support_code=False,
-                 guard_op=None):
-        # variables that have place in register
-        self.assembler = assembler
-        self.translate_support_code = translate_support_code
-        cpu = self.assembler.cpu
-        self.reg_bindings = newcheckdict()
-        self.stack_bindings = newcheckdict()
-        self.tree = tree
-        if guard_op is not None:
-            locs = guard_op._x86_faillocs
-            cpu.gc_ll_descr.rewrite_assembler(cpu, guard_op.suboperations)
-            inpargs = [arg for arg in guard_op._fail_op.args if
-                       isinstance(arg, Box)]
-            self._compute_vars_longevity(inpargs, guard_op.suboperations)
-            self.position = -1
-            self._update_bindings(locs, inpargs)
-            self.current_stack_depth = guard_op._x86_current_stack_depth
-            self.loop_consts = {}
+##     def x__init__(self, assembler, tree, translate_support_code=False,
+##                  guard_op=None):
+##         # variables that have place in register
+##         self.assembler = assembler
+##         self.translate_support_code = translate_support_code
+##         cpu = self.assembler.cpu
+##         self.reg_bindings = newcheckdict()
+##         self.stack_bindings = newcheckdict()
+##         self.tree = tree
+##         if guard_op is not None:
+##             locs = guard_op._x86_faillocs
+##             cpu.gc_ll_descr.rewrite_assembler(cpu, guard_op.suboperations)
+##             inpargs = [arg for arg in guard_op._fail_op.args if
+##                        isinstance(arg, Box)]
+##             self._compute_vars_longevity(inpargs, guard_op.suboperations)
+##             self.position = -1
+##             self._update_bindings(locs, inpargs)
+##             self.current_stack_depth = guard_op._x86_current_stack_depth
+##             self.loop_consts = {}
+##         else:
+##             cpu.gc_ll_descr.rewrite_assembler(cpu, tree.operations)
+##             self._compute_vars_longevity(tree.inputargs, tree.operations)
+##             # compute longevity of variables
+##             jump = tree.operations[-1]
+##             loop_consts = self._compute_loop_consts(tree.inputargs, jump)
+##             self.loop_consts = loop_consts
+##             self.current_stack_depth = 0
+##             self.free_regs = REGS[:]
+
+    def _process_inputargs(self, inputargs):
+        # XXX we can sort out here by longevity if we need something
+        # more optimal
+        locs = [None] * len(inputargs)
+        # Don't use REGS[0] for passing arguments around a loop.
+        # Must be kept in sync with consider_jump().
+        tmpreg = self.free_regs.pop(0)
+        assert tmpreg == REGS[0]
+        argtypes = []
+        for i in range(len(inputargs)):
+            arg = inputargs[i]
+            argtypes.append(arg.type)
+            assert not isinstance(arg, Const)
+            reg = None
+            if arg not in self.loop_consts and self.longevity[arg][1] > -1:
+                reg = self.try_allocate_reg(arg)
+            if reg:
+                locs[i] = reg
+            else:
+                loc = self.stack_loc(arg)
+                locs[i] = loc
+            # otherwise we have it saved on stack, so no worry
+        self.free_regs.insert(0, tmpreg)
+        assert tmpreg not in locs
+        # xxx think
+        executable_token = self.assembler.make_merge_point(argtypes, locs)
+        self.eventually_free_vars(inputargs)
+        return executable_token
+
+    def _compute_loop_consts(self, inputargs, jump):
+        if jump.opnum != rop.JUMP or jump.jump_target is not None:
+            loop_consts = {}
         else:
-            cpu.gc_ll_descr.rewrite_assembler(cpu, tree.operations)
-            self._compute_vars_longevity(tree.inputargs, tree.operations)
-            # compute longevity of variables
-            jump = tree.operations[-1]
-            loop_consts = self._compute_loop_consts(tree.inputargs, jump)
-            self.loop_consts = loop_consts
-            self.current_stack_depth = 0
-            self.free_regs = REGS[:]
+            loop_consts = {}
+            for i in range(len(inputargs)):
+                if inputargs[i] is jump.args[i]:
+                    loop_consts[inputargs[i]] = i
+        return loop_consts
 
     def _update_bindings(self, locs, args):
         newlocs = []
@@ -154,16 +181,6 @@ class RegAlloc(object):
             if reg not in used:
                 self.free_regs.append(reg)
         self._check_invariants()
-
-    def _compute_loop_consts(self, inputargs, jump):
-        if jump.opnum != rop.JUMP or jump.jump_target is not None:
-            loop_consts = {}
-        else:
-            loop_consts = {}
-            for i in range(len(inputargs)):
-                if inputargs[i] is jump.args[i]:
-                    loop_consts[inputargs[i]] = i
-        return loop_consts
 
     def _check_invariants(self):
         if not we_are_translated():
@@ -280,7 +297,6 @@ class RegAlloc(object):
             self._check_invariants()
             i += 1
         assert not self.reg_bindings
-        return self.current_stack_depth
 
     def _compute_vars_longevity(self, inputargs, operations):
         # compute a dictionary that maps variables to index in
@@ -549,35 +565,6 @@ class RegAlloc(object):
             self.reallocate_from_to(v, result_v)
             loc = self.reg_bindings[result_v]
         return loc
-
-    def _process_inputargs(self, inputargs):
-        # XXX we can sort out here by longevity if we need something
-        # more optimal
-        locs = [None] * len(inputargs)
-        # Don't use REGS[0] for passing arguments around a loop.
-        # Must be kept in sync with consider_jump().
-        tmpreg = self.free_regs.pop(0)
-        assert tmpreg == REGS[0]
-        argtypes = []
-        for i in range(len(inputargs)):
-            arg = inputargs[i]
-            argtypes.append(arg.type)
-            assert not isinstance(arg, Const)
-            reg = None
-            if arg not in self.loop_consts and self.longevity[arg][1] > -1:
-                reg = self.try_allocate_reg(arg)
-            if reg:
-                locs[i] = reg
-            else:
-                loc = self.stack_loc(arg)
-                locs[i] = loc
-            # otherwise we have it saved on stack, so no worry
-        self.free_regs.insert(0, tmpreg)
-        assert tmpreg not in locs
-        # xxx think
-        executable_token = self.assembler.make_merge_point(argtypes, locs)
-        self.eventually_free_vars(inputargs)
-        return executable_token
 
     def _consider_guard(self, op, ignored):
         loc = self.make_sure_var_in_reg(op.args[0], [])
@@ -969,7 +956,9 @@ class RegAlloc(object):
 
     def consider_jump(self, op, ignored):
         assembler = self.assembler
-        arglocs = assembler.extract_merge_point(op.jump_target,
+        assert self.jump_target is None
+        self.jump_target = op.jump_target
+        arglocs = assembler.extract_merge_point(self.jump_target,
                                                 self.executable_token)
         # compute 'tmploc' to be REGS[0] by spilling what is there
         box = TempBox()
