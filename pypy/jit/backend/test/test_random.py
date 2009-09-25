@@ -512,6 +512,7 @@ class RandomLoop(object):
         dont_compile = False
         if r.random() < 0.1:
             subset = bridge_builder.subset_of_intvars(r)
+            subset = [i for i in subset if i in fail_args]
             if len(subset) == 0:
                 return False
             args = [x.clonebox() for x in subset]
@@ -524,19 +525,21 @@ class RandomLoop(object):
             jump_op.jump_target.executable_token = executable_token
             self.should_fail_by = rl.should_fail_by
             self.expected = rl.expected
+            assert len(rl.loop.inputargs) == len(args)
             if self.guard_op is None:
                 guard_op.suboperations[-1] = jump_op
             else:
-                print "fix me, I'm a mess"
-                return False # XXX fix me
-                self.guard_op.suboperations[0].args.extend(subset)
-                self.builder.cpu.compile_bridge(guard_op)
+                args = self.guard_op.suboperations[-1].args + fail_args
+                self.guard_op.suboperations[-1].args = args
+                self.builder.cpu.compile_bridge(fail_descr, fail_args,
+                                                guard_op.suboperations)
+                fail_descr_2 = self.guard_op.suboperations[0].descr
+                ops = []
                 if self.guard_op.is_guard_exception():
                     # exception clearing
-                    self.guard_op.suboperations.insert(-1, exc_handling(
-                        self.guard_op))
-                self.guard_op.suboperations[-1] = jump_op
-                self.builder.cpu.compile_bridge(self.guard_op)
+                    ops = [exc_handling(self.guard_op)]
+                ops.append(jump_op)
+                self.builder.cpu.compile_bridge(fail_descr_2, args, ops)
                 dont_compile = True
             self.guard_op = rl.guard_op
             self.prebuilt_ptr_consts += rl.prebuilt_ptr_consts
