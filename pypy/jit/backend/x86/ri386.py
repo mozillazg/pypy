@@ -1,401 +1,133 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
+from pypy.rlib.objectmodel import specialize
+from pypy.rlib.unroll import unrolling_iterable
 
-class OPERAND(object):
-    _attrs_ = []
-    def __repr__(self):
-        return '<%s %s>' % (self.__class__.__name__, self.assembler())
+WORD = 4
 
-class REG(OPERAND):
-    width = 4
-    def __repr__(self):
-        return '<%s>' % self.__class__.__name__.lower()
-    def assembler(self):
-        return '%' + self.__class__.__name__.lower()
-    def lowest8bits(self):
-        if self.op < 4:
-            return registers8[self.op]
-        else:
-            raise ValueError
-
-class FLOATREG(OPERAND):
-    width = 8
-
-    def __repr__(self):
-        return '<ST(%d)>' % self.num
-
-    def assembler(self):
-        raise TypeError("Float registers should not appear in assembler")
-
-class XMMREG(OPERAND):
-    width = 8
-
-    def __repr__(self):
-        return '<XMM(%d)>' % self.op
-
-    def assembler(self):
-        return '%xmm' + str(self.op)
-
-class ST0(FLOATREG): num=0
-class ST1(FLOATREG): num=1
-class ST2(FLOATREG): num=2
-class ST3(FLOATREG): num=3
-class ST4(FLOATREG): num=4
-class ST5(FLOATREG): num=5
-class ST6(FLOATREG): num=6
-class ST7(FLOATREG): num=7
-
-class XMM0(XMMREG): op=0
-class XMM1(XMMREG): op=1
-class XMM2(XMMREG): op=2
-class XMM3(XMMREG): op=3
-class XMM4(XMMREG): op=4
-class XMM5(XMMREG): op=5
-class XMM6(XMMREG): op=6
-class XMM7(XMMREG): op=7
-
-class REG8(OPERAND):
-    width = 1
-    def __repr__(self):
-        return '<%s>' % self.__class__.__name__.lower()
-    def assembler(self):
-        return '%' + self.__class__.__name__.lower()    
-
-class EAX(REG): op=0
-class ECX(REG): op=1
-class EDX(REG): op=2
-class EBX(REG): op=3
-class ESP(REG): op=4
-class EBP(REG): op=5
-class ESI(REG): op=6
-class EDI(REG): op=7
-
-class AL(REG8): op=0
-class CL(REG8): op=1
-class DL(REG8): op=2
-class BL(REG8): op=3
-class AH(REG8): op=4
-class CH(REG8): op=5
-class DH(REG8): op=6
-class BH(REG8): op=7
-
-class IMM32(OPERAND):
-    width = 4
-    value = 0      # annotator hack
-
-    def __init__(self, value):
-        self.value = value
-    def assembler(self):
-        return '$%d' % (self.value,)
-
-    def lowest8bits(self):
-        val = self.value & 0xFF
-        if val > 0x7F:
-            val -= 0x100
-        return IMM8(val)
-
-class IMM8(IMM32):
-    width = 1
-
-class IMM16(OPERAND):  # only for RET
-    width = 2
-    value = 0      # annotator hack
-
-    def __init__(self, value):
-        self.value = value
-    def assembler(self):
-        return '$%d' % (self.value,)
-
-class MODRM(OPERAND):
-    width = 4
-
-    def __init__(self, byte, extradata):
-        self.byte = byte
-        self.extradata = extradata
-
-    def lowest8bits(self):
-        return MODRM8(self.byte, self.extradata)
-
-    def assembler(self):
-        mod = self.byte & 0xC0
-        rm  = self.byte & 0x07
-        if mod == 0xC0:
-            return registers[rm].assembler()
-        if self.byte == 0x05:
-            return '%d' % (unpack(self.extradata),)
-        if mod == 0x00:
-            offset_bytes = 0
-        elif mod == 0x40:
-            offset_bytes = 1
-        else:
-            offset_bytes = 4
-        if rm == 4:
-            SIB = ord(self.extradata[0])
-            scale = (SIB & 0xC0) >> 6
-            index = (SIB & 0x38) >> 3
-            base  = (SIB & 0x07)
-            if base == 5 and mod == 0x00:
-                offset_bytes = 4
-                basename = ''
-            else:
-                basename = registers[base].assembler()
-            if index == 4:
-                # no index
-                s = '(%s)' % (basename,)
-            else:
-                indexname = registers[index].assembler()
-                s = '(%s,%s,%d)' % (basename, indexname, 1 << scale)
-            offset = self.extradata[1:]
-        else:
-            s = '(%s)' % (registers[rm].assembler(),)
-            offset = self.extradata
-
-        assert len(offset) == offset_bytes
-        if offset_bytes > 0:
-            s = '%d%s' % (unpack(offset), s)
-        return s
-
-    def is_register(self):
-        mod = self.byte & 0xC0
-        return mod == 0xC0
-
-    def ofs_relative_to_ebp(self):
-        # very custom: if self is a mem(ebp, ofs) then return ofs
-        # otherwise raise ValueError
-        mod = self.byte & 0xC0
-        rm  = self.byte & 0x07
-        if mod == 0xC0:
-            raise ValueError     # self is just a register
-        if self.byte == 0x05:
-            raise ValueError     # self is just an [immediate]
-        if rm != 5:
-            raise ValueError     # not a simple [ebp+ofs]
-        offset = self.extradata
-        if not offset:
-            return 0
-        else:
-            return unpack(offset)
-
-    def is_relative_to_ebp(self):
-        try:
-            self.ofs_relative_to_ebp()
-        except ValueError:
-            return False
-        else:
-            return True
-
-    def involves_ecx(self):
-        # very custom: is ecx present in this mod/rm?
-        mod = self.byte & 0xC0
-        rm  = self.byte & 0x07
-        if mod != 0xC0 and rm == 4:
-            SIB = ord(self.extradata[0])
-            index = (SIB & 0x38) >> 3
-            base  = (SIB & 0x07)
-            return base == ECX.op or index == ECX.op
-        else:
-            return rm == ECX.op
-
-class MODRM64(MODRM):
-    width = 8
-
-class MODRM8(MODRM):
-    width = 1
-
-class REL32(OPERAND):
-    width = 4
-    def __init__(self, absolute_target):
-        self.absolute_target = absolute_target
-    def assembler(self):
-        return '%d' % (self.absolute_target,)
-
-class MISSING(OPERAND):
-    def __repr__(self):
-        return '<MISSING>'
+eax = 0
+ecx = 1
+edx = 2
+ebx = 3
+esp = 4
+ebp = 5
+esi = 6
+edi = 7
 
 # ____________________________________________________________
-# Public interface: the concrete operands to instructions
-# 
-# NB.: UPPERCASE names represent classes of operands (the same
-#      instruction can have multiple modes, depending on these
-#      classes), while lowercase names are concrete operands.
+# Emit a single char
 
+def encode_char(mc, char, orbyte, *ignored):
+    mc.writechar(chr(char | orbyte))
+    return 0
 
-eax = EAX()
-ecx = ECX()
-edx = EDX()
-ebx = EBX()
-esp = ESP()
-ebp = EBP()
-esi = ESI()
-edi = EDI()
+# ____________________________________________________________
+# Encode a register number in the orbyte
 
-al = AL()
-cl = CL()
-dl = DL()
-bl = BL()
-ah = AH()
-ch = CH()
-dh = DH()
-bh = BH()
+@specialize.arg(1)
+def encode_register(mc, (argnum, factor), orbyte, *args):
+    reg = args[argnum-1]
+    assert 0 <= reg < 8
+    return orbyte | (reg * factor)
 
-st0 = ST0()
-st1 = ST1()
-st2 = ST2()
-st3 = ST3()
-st4 = ST4()
-st5 = ST5()
-st6 = ST6()
-st7 = ST7()
+def register(argnum, factor=1):
+    return encode_register, (argnum, factor)
 
-xmm0 = XMM0()
-xmm1 = XMM1()
-xmm2 = XMM2()
-xmm3 = XMM3()
-xmm4 = XMM4()
-xmm5 = XMM5()
-xmm6 = XMM6()
-xmm7 = XMM7()
+# ____________________________________________________________
+# Encode a constant in the orbyte
 
-registers = [eax, ecx, edx, ebx, esp, ebp, esi, edi]
-registers8 = [al, cl, dl, bl, ah, ch, dh, bh]
-xmm_registers = [xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7]
+def encode_orbyte(mc, constant, orbyte, *ignored):
+    return orbyte | constant
 
-for r in registers + registers8:
-    r.bitmask = 1 << r.op
-del r
+def orbyte(value):
+    return encode_orbyte, value
 
-imm32 = IMM32
-imm8 = IMM8
-imm16 = IMM16
-rel32 = REL32
+# ____________________________________________________________
+# Emit an immediate value
 
-def imm(value):
-    if isinstance(value, ComputedIntSymbolic):
-        value = value.compute_fn()
-    if not we_are_translated():
-        assert type(value) is int
-    if single_byte(value):
-        return imm8(value)
-    else:
-        return imm32(value)
+@specialize.arg(1)
+def encode_immediate(mc, (argnum, width), orbyte, *args):
+    imm = args[argnum-1]
+    assert orbyte == 0
+    mc.writeimm(imm, width)
+    return 0
 
-def memregister(register):
-    assert register.width == 4
-    return MODRM(0xC0 | register.op, '')
+def immediate(argnum, width='i'):
+    return encode_immediate, (argnum, width)
 
-def mem(basereg, offset=0):
-    return memSIB(basereg, None, 0, offset)
+# ____________________________________________________________
+# Emit a mod/rm referencing a stack location
+# This depends on the fact that our function prologue contains
+# exactly 4 PUSHes.
 
-def heap(offset):
-    return memSIB(None, None, 0, offset)
-
-def heap8(offset):
-    return memSIB8(None, None, 0, offset)
-
-def heap64(offset):
-    return memSIB64(None, None, 0, offset)
-
-def mem64(basereg, offset=0):
-    return memSIB64(basereg, None, 0, offset)
-
-def memSIB(base, index, scaleshift, offset):
-    return _SIBencode(MODRM, base, index, scaleshift, offset)
-
-def memSIB64(base, index, scaleshift, offset):
-    return _SIBencode(MODRM64, base, index, scaleshift, offset)    
-
-def memregister8(register):
-    assert register.width == 1
-    return MODRM8(0xC0 | register.op, '')
-
-def mem8(basereg, offset=0):
-    return memSIB8(basereg, None, 0, offset)
-
-def memSIB8(base, index, scaleshift, offset):
-    return _SIBencode(MODRM8, base, index, scaleshift, offset)
-
-def _SIBencode(cls, base, index, scaleshift, offset):
-    assert base is None or isinstance(base, REG)
-    assert index is None or (isinstance(index, REG) and index is not esp)
-    assert 0<=scaleshift<4
-
-    if base is None:
-        if index is None:
-            return cls(0x05, packimm32(offset))
-        if scaleshift > 0:
-            return cls(0x04, chr((scaleshift<<6) | (index.op<<3) | 0x05) +
-                               packimm32(offset))
-        base = index
-        index = None
-
-    if index is not None:
-        SIB = chr((scaleshift<<6) | (index.op<<3) | base.op)
-    elif base is esp:
-        SIB = '\x24'
-    elif offset == 0 and base is not ebp:
-        return cls(base.op, '')
-    elif single_byte(offset):
-        return cls(0x40 | base.op, packimm8(offset))
-    else:
-        return cls(0x80 | base.op, packimm32(offset))
-
-    if offset == 0 and base is not ebp:
-        return cls(0x04, SIB)
-    elif single_byte(offset):
-        return cls(0x44, SIB + packimm8(offset))
-    else:
-        return cls(0x84, SIB + packimm32(offset))
-
-def fixedsize_ebp_ofs(offset):
-    return MODRM(0x80 | EBP.op, packimm32(offset))
+def get_ebp_ofs(position):
+    # Argument is a stack position (0, 1, 2...).
+    # Returns (ebp-16), (ebp-20), (ebp-24)...
+    # This depends on the fact that our function prologue contains
+    # exactly 4 PUSHes.
+    return -WORD * (4 + position)
 
 def single_byte(value):
     return -128 <= value < 128
 
-def packimm32(i):
-    return (chr(i & 0xFF) +
-            chr((i >> 8) & 0xFF) +
-            chr((i >> 16) & 0xFF) +
-            chr((i >> 24) & 0xFF))
-
-def packimm8(i):
-    if i < 0:
-        i += 256
-    return chr(i)
-
-def packimm16(i):
-    return (chr(i & 0xFF) +
-            chr((i >> 8) & 0xFF))
-
-def unpack(s):
-    assert len(s) in (1, 2, 4)
-    if len(s) == 1:
-        a = ord(s[0])
-        if a > 0x7f:
-            a -= 0x100
+@specialize.arg(1)
+def encode_stack(mc, (argnum, allow_single_byte), orbyte, *args):
+    offset = get_ebp_ofs(args[argnum-1])
+    if allow_single_byte and single_byte(offset):
+        mc.writechar(chr(0x40 | ebp | orbyte))
+        mc.writeimm(offset, 'b')
     else:
-        a = ord(s[0]) | (ord(s[1]) << 8)
-        if len(s) == 2:
-            if a > 0x7fff:
-                a -= 0x10000
+        mc.writechar(chr(0x80 | ebp | orbyte))
+        mc.writeimm(offset, 'i')
+    return 0
+
+def stack(argnum, allow_single_byte=True):
+    return encode_stack, (argnum, allow_single_byte)
+
+# ____________________________________________________________
+
+def insn(*encoding):
+    def encode(mc, *args):
+        orbyte = 0
+        for encode_step, encode_static_arg in encoding_steps:
+            orbyte = encode_step(mc, encode_static_arg, orbyte, *args)
+        assert orbyte == 0
+    #
+    encoding_steps = []
+    for step in encoding:
+        if isinstance(step, str):
+            for c in step:
+                encoding_steps.append((encode_char, ord(c)))
         else:
-            a |= (ord(s[2]) << 16) | (ord(s[3]) << 24)
-            a = intmask(a)
-    return a
+            assert type(step) is tuple and len(step) == 2
+            encoding_steps.append(step)
+    encoding_steps = unrolling_iterable(encoding_steps)
+    return encode
 
-missing = MISSING()
+# ____________________________________________________________
 
-# __________________________________________________________
-# Abstract base class, with methods like NOP(), ADD(x, y), etc.
 
 class I386CodeBuilder(object):
+    """Abstract base class."""
 
-    def write(self, data):
+    def writechar(self, char):
         raise NotImplementedError
 
-    def tell(self):
-        raise NotImplementedError
+    @specialize.arg(2)
+    def writeimm(self, imm, width='i'):
+        self.writechar(chr(imm & 0xFF))
+        if width != 'b':     # != byte
+            self.writechar(chr((imm >> 8) & 0xFF))
+            if width != 'h':    # != 2-bytes word
+                self.writechar(chr((imm >> 16) & 0xFF))
+                self.writechar(chr((imm >> 24) & 0xFF))
 
+    MOV_ri = insn(register(1), '\xB8', immediate(2))
+    MOV_si = insn('\xC7', orbyte(0<<3), stack(1), immediate(2))
+    MOV_rr = insn('\x89', register(2,8), register(1), '\xC0')
+    MOV_sr = insn('\x89', register(2,8), stack(1))
+    MOV_rs = insn('\x8B', register(1,8), stack(2))
 
-import ri386setup  # side-effect: add methods to I386CodeBuilder
+    NOP = insn('\x90')
+
+    ADD_rr = insn('\x01', register(2,8), register(1), '\xC0')
