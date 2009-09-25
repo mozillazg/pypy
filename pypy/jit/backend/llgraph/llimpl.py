@@ -439,6 +439,9 @@ class Frame(object):
                 if self.verbose:
                     log.trace('failed: %s' % (
                         ', '.join(map(str, args)),))
+                print op.fail_index
+                import pdb
+                pdb.set_trace()
                 self.fail_args = args
                 return op.fail_index
             else:
