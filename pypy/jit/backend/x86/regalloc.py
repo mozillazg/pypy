@@ -56,12 +56,14 @@ class RegAlloc(object):
     exc = False
 
     def __init__(self, assembler, translate_support_code=False):
+        assert isinstance(translate_support_code, bool)
         # variables that have place in register
         self.assembler = assembler
         self.translate_support_code = translate_support_code
         self.reg_bindings = newcheckdict()
         self.stack_bindings = newcheckdict()
         self.position = -1
+        self.longevity = None
 
         # to be read/used by the assembler too
         self.executable_token = None
@@ -575,11 +577,12 @@ class RegAlloc(object):
     consider_guard_false = _consider_guard
 
     def consider_fail(self, op, ignored):
-        # make sure all vars are on stack
         locs = [self.loc(arg) for arg in op.args]
         self.assembler.generate_failure(self.assembler.mc, op.descr, op.args,
                                         locs, self.exc)
         self.eventually_free_vars(op.args)
+
+    consider_finish = consider_fail # for now
 
     def consider_guard_no_exception(self, op, ignored):
         self.perform_guard(op, [], None)
