@@ -19,7 +19,7 @@ def test_mov_ri():
 
 def test_mov_si():
     s = CodeBuilder()
-    s.MOV_si(5, 1<<24)
+    s.MOV_si(-36, 1<<24)
     assert s.getvalue() == '\xC7\x45\xDC\x00\x00\x00\x01'
 
 def test_mov_rr():
@@ -29,12 +29,12 @@ def test_mov_rr():
 
 def test_mov_sr():
     s = CodeBuilder()
-    s.MOV_sr(5, edx)
+    s.MOV_sr(-36, edx)
     assert s.getvalue() == '\x89\x55\xDC'
 
 def test_mov_rs():
     s = CodeBuilder()
-    s.MOV_rs(edx, 5)
+    s.MOV_rs(edx, -36)
     assert s.getvalue() == '\x8B\x55\xDC'
 
 def test_nop_add_rr():
