@@ -14,58 +14,54 @@ ebp = 5
 esi = 6
 edi = 7
 
+# ____________________________________________________________
+# Emit a single char
 
-class CodeStepWriter(object):
-    def encode(self, mc, args, orbyte):
-        mc.writechar(chr(self.encode_byte(args) | orbyte))
-    def _freeze_(self):
-        return True
-    def __or__(self, other):
-        if isinstance(other, int):
-            other = Constant(other)
-        if hasattr(self, 'encode_byte'):
-            return Compose(self, other)
-        if hasattr(other, 'encode_byte'):
-            return Compose(other, self)
-        return NotImplemented
-    __ror__ = __or__
+def encode_char(mc, _, char, orbyte):
+    mc.writechar(chr(char | orbyte))
+    return 0
 
-class Constant(CodeStepWriter):
-    def __init__(self, charvalue):
-        self.charvalue = charvalue
-    def encode_byte(self, args):
-        return self.charvalue
+# ____________________________________________________________
+# Encode a register number in the orbyte
 
-class Compose(CodeStepWriter):
-    def __init__(self, operand1, operand2):
-        self.operand1 = operand1
-        self.operand2 = operand2
-    def encode(self, mc, args, orbyte):
-        orbyte |= self.operand1.encode_byte(args)
-        self.operand2.encode(mc, args, orbyte)
+@specialize.arg(2)
+def encode_register(mc, arg, factor, orbyte):
+    assert 0 <= arg < 8
+    return orbyte | (arg * factor)
 
-class register(CodeStepWriter):
-    def __init__(self, argnum, shift=0):
-        self.argnum = argnum
-        self.shift = shift
-    def __lshift__(self, num):
-        return register(self.argnum, self.shift + num)
-    def encode_byte(self, args):
-        reg = args[self.argnum-1]
-        assert 0 <= reg < 8
-        return reg << self.shift
+def register(argnum, factor=1):
+    return encode_register, argnum, factor
 
-class imm32(CodeStepWriter):
-    def __init__(self, argnum):
-        self.argnum = argnum
-    def encode(self, mc, args, orbyte):
-        assert orbyte == 0
-        imm = args[self.argnum-1]
-        mc.writechar(chr(imm & 0xFF))
-        mc.writechar(chr((imm >> 8) & 0xFF))
-        mc.writechar(chr((imm >> 16) & 0xFF))
-        mc.writechar(chr((imm >> 24) & 0xFF))
+# ____________________________________________________________
+# Encode a constant in the orbyte
 
+def encode_orbyte(mc, _, constant, orbyte):
+    return orbyte | constant
+
+def orbyte(value):
+    return encode_orbyte, None, value
+
+# ____________________________________________________________
+# Emit an immediate value
+
+@specialize.arg(2)
+def encode_immediate(mc, arg, width, orbyte):
+    assert orbyte == 0
+    if width == 'b':
+        mc.writeimm8(arg)
+    elif width == 'h':
+        mc.writeimm16(arg)
+    else:
+        mc.writeimm32(arg)
+    return 0
+
+def immediate(argnum, width='i'):
+    return encode_immediate, argnum, width
+
+# ____________________________________________________________
+# Emit a mod/rm referencing a stack location
+# This depends on the fact that our function prologue contains
+# exactly 4 PUSHes.
 
 def get_ebp_ofs(position):
     # Argument is a stack position (0, 1, 2...).
@@ -77,36 +73,38 @@ def get_ebp_ofs(position):
 def single_byte(value):
     return -128 <= value < 128
 
-class stack(CodeStepWriter):
-    def __init__(self, argnum, allow_single_byte=True):
-        self.argnum = argnum
-        self.allow_single_byte = allow_single_byte
-    def encode(self, mc, args, orbyte):
-        offset = get_ebp_ofs(args[self.argnum-1])
-        if self.allow_single_byte and single_byte(offset):
-            mc.writechar(chr(0x40 | ebp | orbyte))
-            mc.writechar(chr(offset & 0xFF))
-        else:
-            mc.writechar(chr(0x80 | ebp | orbyte))
-            mc.writechar(chr(offset & 0xFF))
-            mc.writechar(chr((offset >> 8) & 0xFF))
-            mc.writechar(chr((offset >> 16) & 0xFF))
-            mc.writechar(chr((offset >> 24) & 0xFF))
+@specialize.arg(2)
+def encode_stack(mc, arg, allow_single_byte, orbyte):
+    offset = get_ebp_ofs(arg)
+    if allow_single_byte and single_byte(offset):
+        mc.writechar(chr(0x40 | ebp | orbyte))
+        mc.writeimm8(offset)
+    else:
+        mc.writechar(chr(0x80 | ebp | orbyte))
+        mc.writeimm32(offset)
+    return 0
+
+def stack(argnum, allow_single_byte=True):
+    return encode_stack, argnum, allow_single_byte
 
 # ____________________________________________________________
 
 def insn(*encoding):
     def encode(mc, *args):
-        for step in encoding_steps:
-            step.encode(mc, args, 0)
+        orbyte = 0
+        for encode_step, arg, extra in encoding_steps:
+            if arg is not None:
+                arg = args[arg-1]
+            orbyte = encode_step(mc, arg, extra, orbyte)
+        assert orbyte == 0
     #
     encoding_steps = []
     for step in encoding:
         if isinstance(step, str):
             for c in step:
-                encoding_steps.append(Constant(ord(c)))
+                encoding_steps.append((encode_char, None, ord(c)))
         else:
-            assert isinstance(step, CodeStepWriter)
+            assert type(step) is tuple and len(step) == 3
             encoding_steps.append(step)
     encoding_steps = unrolling_iterable(encoding_steps)
     return encode
@@ -120,12 +118,25 @@ class I386CodeBuilder(object):
     def writechar(self, char):
         raise NotImplementedError
 
-    MOV_ri = insn(0xB8 | register(1), imm32(2))
-    MOV_si = insn('\xC7', 0<<3 | stack(1), imm32(2))
-    MOV_rr = insn('\x89', 0xC0 | register(2)<<3 | register(1))
-    MOV_sr = insn('\x89', stack(1) | register(2)<<3)
-    MOV_rs = insn('\x8B', register(1)<<3 | stack(2))
+    def writeimm8(self, imm):
+        self.writechar(chr(imm & 0xFF))
+
+    def writeimm16(self, imm):
+        self.writechar(chr(imm & 0xFF))
+        self.writechar(chr((imm >> 8) & 0xFF))
+
+    def writeimm32(self, imm):
+        self.writechar(chr(imm & 0xFF))
+        self.writechar(chr((imm >> 8) & 0xFF))
+        self.writechar(chr((imm >> 16) & 0xFF))
+        self.writechar(chr((imm >> 24) & 0xFF))
+
+    MOV_ri = insn(register(1), '\xB8', immediate(2))
+    MOV_si = insn('\xC7', orbyte(0<<3), stack(1), immediate(2))
+    MOV_rr = insn('\x89', register(2,8), register(1), '\xC0')
+    MOV_sr = insn('\x89', register(2,8), stack(1))
+    MOV_rs = insn('\x8B', register(1,8), stack(2))
 
     NOP = insn('\x90')
 
-    ADD_rr = insn('\x01', 0xC0 | register(2)<<3 | register(1))
+    ADD_rr = insn('\x01', register(2,8), register(1), '\xC0')
