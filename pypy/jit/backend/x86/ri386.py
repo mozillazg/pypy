@@ -59,29 +59,19 @@ def immediate(argnum, width='i'):
     return encode_immediate, argnum, width
 
 # ____________________________________________________________
-# Emit a mod/rm referencing a stack location
-# This depends on the fact that our function prologue contains
-# exactly 4 PUSHes.
-
-def get_ebp_ofs(position):
-    # Argument is a stack position (0, 1, 2...).
-    # Returns (ebp-16), (ebp-20), (ebp-24)...
-    # This depends on the fact that our function prologue contains
-    # exactly 4 PUSHes.
-    return -WORD * (4 + position)
+# Emit a mod/rm referencing a stack location (%ebp+arg)
 
 def single_byte(value):
     return -128 <= value < 128
 
 @specialize.arg(2)
 def encode_stack(mc, arg, allow_single_byte, orbyte):
-    offset = get_ebp_ofs(arg)
-    if allow_single_byte and single_byte(offset):
+    if allow_single_byte and single_byte(arg):
         mc.writechar(chr(0x40 | ebp | orbyte))
-        mc.writeimm8(offset)
+        mc.writeimm8(arg)
     else:
         mc.writechar(chr(0x80 | ebp | orbyte))
-        mc.writeimm32(offset)
+        mc.writeimm32(arg)
     return 0
 
 def stack(argnum, allow_single_byte=True):
@@ -108,6 +98,23 @@ def insn(*encoding):
             encoding_steps.append(step)
     encoding_steps = unrolling_iterable(encoding_steps)
     return encode
+
+def common_modes(group):
+    base = group * 8
+    INSN_ri8 = insn('\x83', orbyte(group<<3), register(1), '\xC0',
+                    immediate(2,'b'))
+    INSN_ri32 = insn('\x81', orbyte(group<<3), register(1), '\xC0',
+                     immediate(2))
+    INSN_rr = insn(chr(base+1), register(2,8), register(1,1), '\xC0')
+    INSN_rs = insn(chr(base+3), register(1,8), stack(2))
+
+    def INSN_ri(mc, reg, immed):
+        if single_byte(immed):
+            INSN_ri8(mc, reg, immed)
+        else:
+            INSN_ri32(mc, reg, immed)
+
+    return INSN_ri, INSN_rr, INSN_rs
 
 # ____________________________________________________________
 
@@ -137,6 +144,12 @@ class I386CodeBuilder(object):
     MOV_sr = insn('\x89', register(2,8), stack(1))
     MOV_rs = insn('\x8B', register(1,8), stack(2))
 
-    NOP = insn('\x90')
+    ADD_ri, ADD_rr, ADD_rs = common_modes(0)
+    OR_ri,  OR_rr,  OR_rs  = common_modes(1)
+    AND_ri, AND_rr, AND_rs = common_modes(4)
+    SUB_ri, SUB_rr, SUB_rs = common_modes(5)
+    XOR_ri, XOR_rr, XOR_rs = common_modes(6)
+    CMP_ri, CMP_rr, CMP_rs = common_modes(7)
 
-    ADD_rr = insn('\x01', register(2,8), register(1), '\xC0')
+    NOP = insn('\x90')
+    RET = insn('\xC3')
