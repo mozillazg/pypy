@@ -59,11 +59,26 @@ class TestRegalloc(object):
         b0, b1, b2, b3, b4 = boxes
         no_lower_byte_regs = [r2, r3]
         rm = RegisterManager(regs, longevity, no_lower_byte_regs)
-        loc = rm.try_allocate_reg(b0, need_lower_byte=True)
-        assert loc not in no_lower_byte_regs
+        loc0 = rm.try_allocate_reg(b0, need_lower_byte=True)
+        assert loc0 not in no_lower_byte_regs
         loc = rm.try_allocate_reg(b1, need_lower_byte=True)
         assert loc not in no_lower_byte_regs
         loc = rm.try_allocate_reg(b2, need_lower_byte=True)
         assert loc is None
+        loc = rm.try_allocate_reg(b0, need_lower_byte=True)
+        assert loc is loc0
         rm._check_invariants()
-        
+
+    def test_specific_register(self):
+        boxes, longevity = boxes_and_longevity(5)
+        rm = RegisterManager(regs, longevity)
+        loc = rm.try_allocate_reg(boxes[0], selected_reg=r1)
+        assert loc is r1
+        loc = rm.try_allocate_reg(boxes[1], selected_reg=r1)
+        assert loc is None
+        rm._check_invariants()
+        loc = rm.try_allocate_reg(boxes[0], selected_reg=r1)
+        assert loc is r1
+        loc = rm.try_allocate_reg(boxes[0], selected_reg=r2)
+        assert loc is r2
+        rm._check_invariants()
