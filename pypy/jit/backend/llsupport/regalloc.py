@@ -9,12 +9,13 @@ class StackManager(object):
 class RegisterManager(object):
     """ Class that keeps track of register allocations
     """
-    def __init__(self, register_pool, longevity):
+    def __init__(self, register_pool, longevity, no_lower_byte_regs=()):
         self.free_regs = register_pool[:]
         self.all_regs = register_pool
         self.longevity = longevity
         self.reg_bindings = {}
         self.position = 0
+        self.no_lower_byte_regs = no_lower_byte_regs
 
     def next_instruction(self, incr=1):
         self.position += incr
@@ -62,11 +63,11 @@ class RegisterManager(object):
             return None
         if need_lower_byte:
             loc = self.reg_bindings.get(v, None)
-            if loc is not None and loc is not edi and loc is not esi:
+            if loc is not None and loc not in self.no_lower_byte_regs:
                 return loc
             for i in range(len(self.free_regs)):
                 reg = self.free_regs[i]
-                if reg is not edi and reg is not esi:
+                if reg not in self.no_lower_byte_regs:
                     if loc is not None:
                         self.free_regs[i] = loc
                     else:
