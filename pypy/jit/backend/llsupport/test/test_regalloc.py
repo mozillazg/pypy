@@ -1,6 +1,6 @@
 
 from pypy.jit.metainterp.history import BoxInt, ConstInt
-from pypy.jit.backend.llsupport.regalloc import RegisterManager
+from pypy.jit.backend.llsupport.regalloc import RegisterManager, StackManager
 
 def newboxes(*values):
     return [BoxInt(v) for v in values]
@@ -19,6 +19,14 @@ class FakeReg(object):
 
 r0, r1, r2, r3 = [FakeReg() for _ in range(4)]
 regs = [r0, r1, r2, r3]
+
+class TStackManager(StackManager):
+    def stack_pos(self, i):
+        return i
+
+class MockAsm(object):
+    def regalloc_store(self, from_loc, to_loc):
+        pass
 
 class TestRegalloc(object):
     def test_freeing_vars(self):
@@ -82,3 +90,31 @@ class TestRegalloc(object):
         loc = rm.try_allocate_reg(boxes[0], selected_reg=r2)
         assert loc is r2
         rm._check_invariants()
+
+    def test_force_allocate_reg(self):
+        boxes, longevity = boxes_and_longevity(5)
+        b0, b1, b2, b3, b4 = boxes
+        sm = TStackManager()
+        rm = RegisterManager(regs, longevity,
+                             no_lower_byte_regs = [r2, r3],
+                             stack_manager=sm,
+                             assembler=MockAsm())
+        loc = rm.force_allocate_reg(b0, [])
+        assert isinstance(loc, FakeReg)
+        loc = rm.force_allocate_reg(b1, [])
+        assert isinstance(loc, FakeReg)
+        loc = rm.force_allocate_reg(b2, [])
+        assert isinstance(loc, FakeReg)
+        loc = rm.force_allocate_reg(b3, [])
+        assert isinstance(loc, FakeReg)
+        loc = rm.force_allocate_reg(b4, [])
+        assert isinstance(loc, FakeReg)
+        # one of those should be now somewhere else
+        locs = [rm.loc(b) for b in boxes]
+        used_regs = [loc for loc in locs if isinstance(loc, FakeReg)]
+        assert len(used_regs) == len(regs)
+        loc = rm.force_allocate_reg(b0, [], need_lower_byte=True)
+        assert isinstance(loc, FakeReg)
+        assert loc not in [r2, r3]
+        rm._check_invariants()
+        
