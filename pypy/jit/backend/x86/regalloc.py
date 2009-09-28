@@ -17,25 +17,15 @@ from pypy.jit.backend.llsupport.descr import BaseCallDescr
 from pypy.jit.backend.llsupport.regalloc import StackManager, RegisterManager,\
      TempBox
 
-REGS = [eax, ecx, edx, ebx, esi, edi]
 WORD = 4
-
-class checkdict(dict):
-    def __setitem__(self, key, value):
-        assert isinstance(key, Box)
-        dict.__setitem__(self, key, value)
-
-def newcheckdict():
-    if we_are_translated():
-        return {}
-    return checkdict()
 
 class X86RegisterManager(RegisterManager):
 
+    all_regs = [eax, ecx, edx, ebx, esi, edi]
     no_lower_byte_regs = [esi, edi]
     save_around_call_regs = [eax, edx, ecx]
 
-    def result_stored_in_reg(self, v):
+    def call_result_location(self, v):
         return eax
 
     def convert_to_imm(self, c):
@@ -71,29 +61,25 @@ class RegAlloc(object):
         # to be read/used by the assembler too
         self.jump_target = None
 
-    def prepare_loop(self, inputargs, operations):
+    def _prepare(self, inputargs, operations):
         self.sm = X86StackManager()
         cpu = self.assembler.cpu
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
         # compute longevity of variables
         longevity = self._compute_vars_longevity(inputargs, operations)
-        self.rm = X86RegisterManager(REGS, longevity,
+        self.rm = X86RegisterManager(longevity,
                                      stack_manager = self.sm,
                                      assembler = self.assembler)
+
+    def prepare_loop(self, inputargs, operations):
+        self._prepare(inputargs, operations)
         jump = operations[-1]
         loop_consts = self._compute_loop_consts(inputargs, jump)
         self.loop_consts = loop_consts
         return self._process_inputargs(inputargs)
 
     def prepare_bridge(self, prev_stack_depth, inputargs, arglocs, operations):
-        self.sm = X86StackManager()
-        cpu = self.assembler.cpu        
-        cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
-        # compute longevity of variables
-        longevity = self._compute_vars_longevity(inputargs, operations)
-        self.rm = X86RegisterManager(REGS, longevity,
-                                     stack_manager = self.sm,
-                                     assembler = self.assembler)
+        self._prepare(inputargs, operations)
         self.loop_consts = {}
         self._update_bindings(arglocs, inputargs)
         self.sm.stack_depth = prev_stack_depth
@@ -102,10 +88,11 @@ class RegAlloc(object):
         # XXX we can sort out here by longevity if we need something
         # more optimal
         locs = [None] * len(inputargs)
-        # Don't use REGS[0] for passing arguments around a loop.
+        # Don't use all_regs[0] for passing arguments around a loop.
         # Must be kept in sync with consider_jump().
+        # XXX this should probably go to llsupport/regalloc.py
         tmpreg = self.rm.free_regs.pop(0)
-        assert tmpreg == REGS[0]
+        assert tmpreg == X86RegisterManager.all_regs[0]
         for i in range(len(inputargs)):
             arg = inputargs[i]
             assert not isinstance(arg, Const)
@@ -151,7 +138,7 @@ class RegAlloc(object):
             else:
                 self.sm.stack_bindings[v] = loc
         self.rm.free_regs = []
-        for reg in REGS:
+        for reg in X86RegisterManager.all_regs:
             if reg not in used:
                 self.rm.free_regs.append(reg)
         self.rm._check_invariants()
@@ -169,7 +156,7 @@ class RegAlloc(object):
 
     def perform_with_guard(self, op, guard_op, arglocs, result_loc):
         faillocs = self.locs_for_fail(guard_op)
-        self.rm.next_instruction()
+        self.rm.position += 1
         self.assembler.regalloc_perform_with_guard(op, guard_op, faillocs,
                                                    arglocs, result_loc,
                                                    self.sm.stack_depth)
@@ -427,7 +414,7 @@ class RegAlloc(object):
         # See remember_young_pointer() in rpython/memory/gc/generation.py.
         for v, reg in self.rm.reg_bindings.items():
             if ((reg is eax or reg is ecx or reg is edx)
-                and self.rm.longevity[v][1] > self.rm.position
+                and self.rm.stays_alive(v)
                 and reg not in arglocs[3:]):
                 arglocs.append(reg)
         self.PerformDiscard(op, arglocs)
@@ -639,9 +626,10 @@ class RegAlloc(object):
         assert self.jump_target is None
         self.jump_target = op.jump_target
         arglocs = assembler.target_arglocs(self.jump_target)
-        # compute 'tmploc' to be REGS[0] by spilling what is there
+        # compute 'tmploc' to be all_regs[0] by spilling what is there
         box = TempBox()
-        tmploc = self.rm.force_allocate_reg(box, [], selected_reg=REGS[0])
+        tmpreg = X86RegisterManager.all_regs[0]
+        tmploc = self.rm.force_allocate_reg(box, [], selected_reg=tmpreg)
         src_locations = [self.rm.loc(arg) for arg in op.args]
         dst_locations = arglocs
         assert tmploc not in dst_locations

@@ -3,10 +3,6 @@ from pypy.jit.metainterp.history import BoxInt, ConstInt
 from pypy.jit.backend.llsupport.regalloc import StackManager
 from pypy.jit.backend.llsupport.regalloc import RegisterManager as BaseRegMan
 
-class RegisterManager(BaseRegMan):
-    def convert_to_imm(self, v):
-        return v
-
 def newboxes(*values):
     return [BoxInt(v) for v in values]
 
@@ -25,6 +21,11 @@ class FakeReg(object):
 r0, r1, r2, r3 = [FakeReg() for _ in range(4)]
 regs = [r0, r1, r2, r3]
 
+class RegisterManager(BaseRegMan):
+    all_regs = regs
+    def convert_to_imm(self, v):
+        return v
+
 class TStackManager(StackManager):
     def stack_pos(self, i):
         return i
@@ -40,7 +41,7 @@ class TestRegalloc(object):
     def test_freeing_vars(self):
         b0, b1, b2 = newboxes(0, 0, 0)
         longevity = {b0: (0, 1), b1: (0, 2), b2: (0, 2)}
-        rm = RegisterManager(regs, longevity)
+        rm = RegisterManager(longevity)
         rm.next_instruction()
         for b in b0, b1, b2:
             rm.try_allocate_reg(b)
@@ -65,7 +66,7 @@ class TestRegalloc(object):
         
     def test_register_exhaustion(self):
         boxes, longevity = boxes_and_longevity(5)
-        rm = RegisterManager(regs, longevity)
+        rm = RegisterManager(longevity)
         rm.next_instruction()
         for b in boxes[:len(regs)]:
             assert rm.try_allocate_reg(b)
@@ -79,7 +80,7 @@ class TestRegalloc(object):
         class XRegisterManager(RegisterManager):
             no_lower_byte_regs = [r2, r3]
         
-        rm = XRegisterManager(regs, longevity)
+        rm = XRegisterManager(longevity)
         rm.next_instruction()
         loc0 = rm.try_allocate_reg(b0, need_lower_byte=True)
         assert loc0 not in XRegisterManager.no_lower_byte_regs
@@ -93,7 +94,7 @@ class TestRegalloc(object):
 
     def test_specific_register(self):
         boxes, longevity = boxes_and_longevity(5)
-        rm = RegisterManager(regs, longevity)
+        rm = RegisterManager(longevity)
         rm.next_instruction()
         loc = rm.try_allocate_reg(boxes[0], selected_reg=r1)
         assert loc is r1
@@ -114,7 +115,7 @@ class TestRegalloc(object):
         class XRegisterManager(RegisterManager):
             no_lower_byte_regs = [r2, r3]
         
-        rm = XRegisterManager(regs, longevity,
+        rm = XRegisterManager(longevity,
                               stack_manager=sm,
                               assembler=MockAsm())
         rm.next_instruction()
@@ -140,7 +141,7 @@ class TestRegalloc(object):
     def test_make_sure_var_in_reg(self):
         boxes, longevity = boxes_and_longevity(5)
         sm = TStackManager()
-        rm = RegisterManager(regs, longevity, stack_manager=sm,
+        rm = RegisterManager(longevity, stack_manager=sm,
                              assembler=MockAsm())
         rm.next_instruction()
         # allocate a stack position
@@ -156,7 +157,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 1), b1: (1, 3)}
         sm = TStackManager()
         asm = MockAsm()
-        rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        rm = RegisterManager(longevity, stack_manager=sm, assembler=asm)
         rm.next_instruction()
         # first path, var is already in reg and dies
         loc0 = rm.force_allocate_reg(b0)
@@ -172,7 +173,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 2), b1: (1, 3)}
         sm = TStackManager()
         asm = MockAsm()
-        rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        rm = RegisterManager(longevity, stack_manager=sm, assembler=asm)
         rm.next_instruction()
         loc0 = rm.force_allocate_reg(b0)
         rm._check_invariants()
@@ -188,7 +189,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 2), b1: (0, 2), b3: (0, 2), b2: (0, 2), b4: (1, 3)}
         sm = TStackManager()
         asm = MockAsm()
-        rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        rm = RegisterManager(longevity, stack_manager=sm, assembler=asm)
         rm.next_instruction()
         for b in b0, b1, b2, b3:
             rm.force_allocate_reg(b)
@@ -204,7 +205,7 @@ class TestRegalloc(object):
         longevity = {b0: (0, 1), b1: (0, 1)}
         sm = TStackManager()
         asm = MockAsm()
-        rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        rm = RegisterManager(longevity, stack_manager=sm, assembler=asm)
         rm.next_instruction()
         sm.loc(b0)
         rm.force_result_in_reg(b1, b0)
@@ -219,7 +220,7 @@ class TestRegalloc(object):
         asm = MockAsm()
         boxes, longevity = boxes_and_longevity(5)
         sm = TStackManager()
-        rm = RegisterManager(regs, longevity, assembler=asm,
+        rm = RegisterManager(longevity, assembler=asm,
                              stack_manager=sm)
         rm.next_instruction()
         loc = rm.return_constant(ConstInt(0), imm_fine=False)
@@ -241,7 +242,7 @@ class TestRegalloc(object):
         boxes, longevity = boxes_and_longevity(2)
         sm = TStackManager()
         asm = MockAsm()
-        rm = RegisterManager(regs, longevity, stack_manager=sm,
+        rm = RegisterManager(longevity, stack_manager=sm,
                              assembler=asm)
         rm.next_instruction()
         c = ConstInt(0)
@@ -249,7 +250,7 @@ class TestRegalloc(object):
         rm._check_invariants()
 
     def test_loc_of_const(self):
-        rm = RegisterManager(regs, {})
+        rm = RegisterManager({})
         rm.next_instruction()
         assert isinstance(rm.loc(ConstInt(1)), ConstInt)
 
@@ -257,13 +258,13 @@ class TestRegalloc(object):
         class XRegisterManager(RegisterManager):
             save_around_call_regs = [r1, r2]
 
-            def result_stored_in_reg(self, v):
+            def call_result_location(self, v):
                 return r1
 
         sm = TStackManager()
         asm = MockAsm()
         boxes, longevity = boxes_and_longevity(5)
-        rm = XRegisterManager(regs, longevity, stack_manager=sm,
+        rm = XRegisterManager(longevity, stack_manager=sm,
                               assembler=asm)
         for b in boxes[:-1]:
             rm.force_allocate_reg(b)
