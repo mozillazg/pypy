@@ -22,26 +22,27 @@ class StackManager(object):
     def get(self, box):
         return self.stack_bindings.get(box, None)
 
-    def loc(self, box):
+    def loc(self, box, size):
         res = self.get(box)
         if res is not None:
             return res
-        newloc = self.stack_pos(self.stack_depth)
+        newloc = self.stack_pos(self.stack_depth, size)
         self.stack_bindings[box] = newloc
-        self.stack_depth += 1
+        self.stack_depth += size
         return newloc
 
     # abstract methods that need to be overwritten for specific assemblers
     @staticmethod
-    def stack_pos(loc):
+    def stack_pos(loc, size):
         raise NotImplementedError("Purely abstract")
 
 class RegisterManager(object):
     """ Class that keeps track of register allocations
     """
-    all_regs = []
-    no_lower_byte_regs = []
+    all_regs              = []
+    no_lower_byte_regs    = []
     save_around_call_regs = []
+    reg_width             = 1 # in terms of stack space eaten
     
     def __init__(self, longevity, stack_manager=None, assembler=None):
         self.free_regs = self.all_regs[:]
@@ -140,7 +141,7 @@ class RegisterManager(object):
         loc = self.reg_bindings[v_to_spill]
         del self.reg_bindings[v_to_spill]
         if self.stack_manager.get(v_to_spill) is None:
-            newloc = self.stack_manager.loc(v_to_spill)
+            newloc = self.stack_manager.loc(v_to_spill, self.reg_width)
             self.assembler.regalloc_mov(loc, newloc)
         return loc
 
@@ -194,7 +195,7 @@ class RegisterManager(object):
         try:
             return self.reg_bindings[box]
         except KeyError:
-            return self.stack_manager.loc(box)
+            return self.stack_manager.loc(box, self.reg_width)
 
     def return_constant(self, v, forbidden_vars=[], selected_reg=None,
                         imm_fine=True):
@@ -248,7 +249,7 @@ class RegisterManager(object):
             self.reg_bindings[v] = loc
             self.assembler.regalloc_mov(prev_loc, loc)
         else:
-            loc = self.stack_manager.loc(v)
+            loc = self.stack_manager.loc(v, self.reg_width)
             self.assembler.regalloc_mov(prev_loc, loc)
 
     def force_result_in_reg(self, result_v, v, forbidden_vars=[]):
@@ -263,7 +264,7 @@ class RegisterManager(object):
             self.free_regs = [reg for reg in self.free_regs if reg is not loc]
             return loc
         if v not in self.reg_bindings:
-            prev_loc = self.stack_manager.loc(v)
+            prev_loc = self.stack_manager.loc(v, self.reg_width)
             loc = self.force_allocate_reg(v, forbidden_vars)
             self.assembler.regalloc_mov(prev_loc, loc)
         assert v in self.reg_bindings
@@ -283,7 +284,8 @@ class RegisterManager(object):
     def _sync_var(self, v):
         if not self.stack_manager.get(v):
             reg = self.reg_bindings[v]
-            self.assembler.regalloc_mov(reg, self.stack_manager.loc(v))
+            to = self.stack_manager.loc(v, self.reg_width)
+            self.assembler.regalloc_mov(reg, to)
         # otherwise it's clean
 
     def before_call(self, force_store=[]):
