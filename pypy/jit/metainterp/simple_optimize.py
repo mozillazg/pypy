@@ -3,7 +3,7 @@
 """
 
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp import resume
+from pypy.jit.metainterp import resume, compile
 
 def optimize_loop(options, old_loops, loop, cpu=None):
     if old_loops:
@@ -18,7 +18,9 @@ def optimize_loop(options, old_loops, loop, cpu=None):
         for op in loop.operations:
             if op.is_guard():
                 op_fail = op.suboperations[-1]
-                args = resume.flatten_resumedata(op_fail.descr)
+                descr = op_fail.descr
+                assert isinstance(descr, compile.ResumeGuardDescr)
+                args = resume.flatten_resumedata(descr)
                 op_fail.args = args
             newoperations.append(op)
         loop.operations = newoperations
