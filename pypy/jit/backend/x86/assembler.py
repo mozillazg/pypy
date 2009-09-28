@@ -7,8 +7,7 @@ from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.tool.uid import fixid
-from pypy.jit.backend.x86.regalloc import (RegAlloc, WORD, REGS, TempBox,
-                                           lower_byte)
+from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, lower_byte
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.ri386 import *

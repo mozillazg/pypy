@@ -39,13 +39,12 @@ class StackManager(object):
 class RegisterManager(object):
     """ Class that keeps track of register allocations
     """
+    all_regs = []
     no_lower_byte_regs = []
     save_around_call_regs = []
     
-    def __init__(self, register_pool, longevity,
-                 stack_manager=None, assembler=None):
-        self.free_regs = register_pool[:]
-        self.all_regs = register_pool
+    def __init__(self, longevity, stack_manager=None, assembler=None):
+        self.free_regs = self.all_regs[:]
         self.longevity = longevity
         self.reg_bindings = {}
         self.position = -1
@@ -59,7 +58,9 @@ class RegisterManager(object):
         self.position += incr
 
     def possibly_free_var(self, v):
-        """ Variable v might not be used any more, if not used any more
+        """ If v is stored in a register and v is not used beyond the
+            current position, then free it.  Must be called at some
+            point for all variables that might be in registers.
         """
         if isinstance(v, Const) or v not in self.reg_bindings:
             return
@@ -68,7 +69,7 @@ class RegisterManager(object):
             del self.reg_bindings[v]
 
     def possibly_free_vars(self, vars):
-        """ Each of v in vars might not be used any more
+        """ Same as 'possibly_free_var', but for all v in vars.
         """
         for v in vars:
             self.possibly_free_var(v)
@@ -88,12 +89,12 @@ class RegisterManager(object):
                 assert self.longevity[v][1] > self.position
 
     def try_allocate_reg(self, v, selected_reg=None, need_lower_byte=False):
-        """ Try allocate register, if we have on free
+        """ Try to allocate a register, if we have one free.
         need_lower_byte - if True, allocate one that has a lower byte reg
-                          (ie eax has al)
-        selected_reg    - pick a register which you want
+                          (e.g. eax has al)
+        selected_reg    - if not None, force a specific register
 
-        returns allocated register or None, if not possible
+        returns allocated register or None, if not possible.
         """
         assert not isinstance(v, Const)
         if selected_reg is not None:
@@ -134,7 +135,7 @@ class RegisterManager(object):
 
     def _spill_var(self, v, forbidden_vars, selected_reg,
                    need_lower_byte=False):
-        v_to_spill = self.pick_variable_to_spill(v, forbidden_vars,
+        v_to_spill = self._pick_variable_to_spill(v, forbidden_vars,
                                selected_reg, need_lower_byte=need_lower_byte)
         loc = self.reg_bindings[v_to_spill]
         del self.reg_bindings[v_to_spill]
@@ -143,8 +144,8 @@ class RegisterManager(object):
             self.assembler.regalloc_mov(loc, newloc)
         return loc
 
-    def pick_variable_to_spill(self, v, forbidden_vars, selected_reg=None,
-                               need_lower_byte=False):
+    def _pick_variable_to_spill(self, v, forbidden_vars, selected_reg=None,
+                                need_lower_byte=False):
         """ Silly algorithm.
         """
         candidates = []
@@ -164,11 +165,12 @@ class RegisterManager(object):
 
     def force_allocate_reg(self, v, forbidden_vars=[], selected_reg=None,
                            need_lower_byte=False):
-        """ Force allocate register for variable v (which is not yet used)
-        If we don't have a free register, spill some other variable,
-        according to algorithm described in pick_variable_to_spill
+        """ Forcibly allocate a register for the new variable v.
+        It must not be used so far.  If we don't have a free register,
+        spill some other variable, according to algorithm described in
+        '_pick_variable_to_spill'.
 
-        Will not spill a variable from forbidden_vars
+        Will not spill a variable from 'forbidden_vars'.
         """
         if isinstance(v, TempBox):
             self.longevity[v] = (self.position, self.position)
@@ -185,7 +187,7 @@ class RegisterManager(object):
         return loc
 
     def loc(self, box):
-        """ Return a location of box
+        """ Return the location of 'box'.
         """
         if isinstance(box, Const):
             return self.convert_to_imm(box)
@@ -196,8 +198,10 @@ class RegisterManager(object):
 
     def return_constant(self, v, forbidden_vars=[], selected_reg=None,
                         imm_fine=True):
-        """ Return a location of constant v, if imm_fine is set to False
-        will move it's value to register
+        """ Return the location of the constant v.  If 'imm_fine' is False,
+        or if 'selected_reg' is not None, it will first load its value into
+        a register.  See 'force_allocate_reg' for the meaning of 'selected_reg'
+        and 'forbidden_vars'.
         """
         assert isinstance(v, Const)
         if selected_reg or not imm_fine:
@@ -217,8 +221,9 @@ class RegisterManager(object):
 
     def make_sure_var_in_reg(self, v, forbidden_vars=[], selected_reg=None,
                              imm_fine=True, need_lower_byte=False):
-        """ Make sure that a variable v, which is already allocated
-        is in some register
+        """ Make sure that an already-allocated variable v is in some
+        register.  Return the register.  See 'return_constant' and
+        'force_allocate_reg' for the meaning of the optional arguments.
         """
         if isinstance(v, Const):
             return self.return_constant(v, forbidden_vars, selected_reg,
@@ -247,8 +252,9 @@ class RegisterManager(object):
             self.assembler.regalloc_mov(prev_loc, loc)
 
     def force_result_in_reg(self, result_v, v, forbidden_vars=[]):
-        """ Make sure that result is in the same register as v
-        and v is copied away if it's further used
+        """ Make sure that result is in the same register as v.
+        The variable v is copied away if it's further used.  The meaning
+        of 'forbidden_vars' is the same as in 'force_allocate_reg'.
         """
         if isinstance(v, Const):
             loc = self.make_sure_var_in_reg(v, forbidden_vars,
@@ -281,7 +287,10 @@ class RegisterManager(object):
         # otherwise it's clean
 
     def before_call(self, force_store=[]):
-        """ Sync registers before call, ones that we need
+        """ Spill registers before a call, as described by
+        'self.save_around_call_regs'.  Registers are not spilled if
+        they don't survive past the current operation, unless they
+        are listed in 'force_store'.
         """
         for v, reg in self.reg_bindings.items():
             if v not in force_store and self.longevity[v][1] <= self.position:
@@ -297,10 +306,11 @@ class RegisterManager(object):
             self.free_regs.append(reg)
 
     def after_call(self, v):
-        """ Adjust registers according to a call result
+        """ Adjust registers according to the result of the call,
+        which is in variable v.
         """
         if v is not None:
-            r = self.result_stored_in_reg(v)
+            r = self.call_result_location(v)
             self.reg_bindings[v] = r
             self.free_regs = [fr for fr in self.free_regs if fr is not r]
     
@@ -311,8 +321,8 @@ class RegisterManager(object):
         """
         raise NotImplementedError("Abstract")
 
-    def result_stored_in_reg(self, v):
+    def call_result_location(self, v):
         """ Platform specific - tell where the result of a call will
-        be stored by a cpu, according to variable type
+        be stored by the cpu, according to the variable type
         """
         raise NotImplementedError("Abstract")
