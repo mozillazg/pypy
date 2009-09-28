@@ -38,14 +38,16 @@ class StackManager(object):
 class RegisterManager(object):
     """ Class that keeps track of register allocations
     """
-    def __init__(self, register_pool, longevity, no_lower_byte_regs=(),
+    no_lower_byte_regs = ()
+    save_around_call_regs = ()
+    
+    def __init__(self, register_pool, longevity,
                  stack_manager=None, assembler=None):
         self.free_regs = register_pool[:]
         self.all_regs = register_pool
         self.longevity = longevity
         self.reg_bindings = {}
         self.position = -1
-        self.no_lower_byte_regs = no_lower_byte_regs
         self.stack_manager = stack_manager
         self.assembler = assembler
 
@@ -243,7 +245,38 @@ class RegisterManager(object):
             loc = self.reg_bindings[result_v]
         return loc
 
+    def sync_var(self, v):
+        if not self.stack_manager.get(v):
+            reg = self.reg_bindings[v]
+            self.assembler.regalloc_mov(reg, self.stack_manager.loc(v))
+        # otherwise it's clean
+
+    def before_call(self, force_store=[]):
+        for v, reg in self.reg_bindings.items():
+            if v not in force_store and self.longevity[v][1] <= self.position:
+                # variable dies
+                del self.reg_bindings[v]
+                self.free_regs.append(reg)
+                continue
+            if reg not in self.save_around_call_regs:
+                # we don't need to
+                continue
+            self.sync_var(v)
+            del self.reg_bindings[v]
+            self.free_regs.append(reg)
+
+    def after_call(self, v):
+        if v is not None:
+            r = self.result_stored_in_reg(v)
+            self.reg_bindings[v] = r
+            self.free_regs = [fr for fr in self.free_regs if fr is not r]
+    
     # abstract methods, override
 
     def convert_to_imm(self, c):
+        raise NotImplementedError("Abstract")
+
+    def result_stored_in_reg(self, v):
+        # takes a variable and tells where the result will be
+        # stored
         raise NotImplementedError("Abstract")
