@@ -187,7 +187,7 @@ class RegisterManager(object):
             self.free_regs.append(loc)
             self.Load(v, convert_to_imm(v), loc)
             return loc
-        return convert_to_imm(v)
+        return self.convert_to_imm(v)
 
     def make_sure_var_in_reg(self, v, forbidden_vars=[], selected_reg=None,
                              imm_fine=True, need_lower_byte=False):
