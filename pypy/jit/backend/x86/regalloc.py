@@ -403,12 +403,6 @@ class RegAlloc(object):
     consider_oois = _consider_compop
     consider_ooisnot = _consider_compop
 
-    def sync_var(self, v):
-        if v not in self.stack_bindings:
-            reg = self.reg_bindings[v]
-            self.Store(v, reg, self.stack_loc(v))
-        # otherwise it's clean
-
     def _call(self, op, arglocs, force_store=[]):
         self.rm.before_call(force_store)
         self.Perform(op, arglocs, eax)
@@ -427,7 +421,11 @@ class RegAlloc(object):
         assert op.result is None
         arglocs = [self.loc(arg) for arg in op.args]
         # add eax, ecx and edx as extra "arguments" to ensure they are
-        # saved and restored.
+        # saved and restored.  Fish in self.rm to know which of these
+        # registers really need to be saved (a bit of a hack).  Moreover,
+        # we don't save and restore any SSE register because the called
+        # function, a GC write barrier, is known not to touch them.
+        # See remember_young_pointer() in rpython/memory/gc/generation.py.
         for v, reg in self.rm.reg_bindings.items():
             if ((reg is eax or reg is ecx or reg is edx)
                 and self.rm.longevity[v][1] > self.rm.position
