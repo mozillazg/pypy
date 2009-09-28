@@ -1,21 +1,53 @@
 
-from pypy.jit.metainterp.history import Const
+from pypy.jit.metainterp.history import Const, Box
 from pypy.rlib.objectmodel import we_are_translated
+
+class TempBox(Box):
+    def __init__(self):
+        pass
+
+    def __repr__(self):
+        return "<TempVar at %s>" % (id(self),)
+
+class NoVariableToSpill(Exception):
+    pass
 
 class StackManager(object):
     """ Manage stack positions
     """
+    def __init__(self):
+        self.stack_bindings = {}
+        self.stack_depth    = 0
+
+    def get(self, box):
+        return self.stack_bindings.get(box, None)
+
+    def loc(self, box):
+        res = self.get(box)
+        if res is not None:
+            return res
+        newloc = self.stack_pos(self.stack_depth)
+        self.stack_bindings[box] = newloc
+        self.stack_depth += 1
+        return newloc
+
+    # abstract methods that need to be overwritten for specific assemblers
+    def stack_pos(self, loc):
+        raise NotImplementedError("Purely abstract")
 
 class RegisterManager(object):
     """ Class that keeps track of register allocations
     """
-    def __init__(self, register_pool, longevity, no_lower_byte_regs=()):
+    def __init__(self, register_pool, longevity, no_lower_byte_regs=(),
+                 stack_manager=None, assembler=None):
         self.free_regs = register_pool[:]
         self.all_regs = register_pool
         self.longevity = longevity
         self.reg_bindings = {}
         self.position = 0
         self.no_lower_byte_regs = no_lower_byte_regs
+        self.stack_manager = stack_manager
+        self.assembler = assembler
 
     def next_instruction(self, incr=1):
         self.position += incr
@@ -49,7 +81,7 @@ class RegisterManager(object):
         assert not isinstance(v, Const)
         if selected_reg is not None:
             res = self.reg_bindings.get(v, None)
-            if res:
+            if res is not None:
                 if res is selected_reg:
                     return res
                 else:
@@ -83,3 +115,56 @@ class RegisterManager(object):
                 self.reg_bindings[v] = loc
                 return loc
 
+    def _spill_var(self, v, forbidden_vars, selected_reg,
+                   need_lower_byte=False):
+        v_to_spill = self.pick_variable_to_spill(v, forbidden_vars,
+                               selected_reg, need_lower_byte=need_lower_byte)
+        loc = self.reg_bindings[v_to_spill]
+        del self.reg_bindings[v_to_spill]
+        if self.stack_manager.get(v_to_spill) is None:
+            newloc = self.stack_manager.loc(v_to_spill)
+            self.assembler.regalloc_store(loc, newloc)
+        return loc
+
+    def pick_variable_to_spill(self, v, forbidden_vars, selected_reg=None,
+                               need_lower_byte=False):
+        """ Silly algorithm.
+        """
+        candidates = []
+        for next in self.reg_bindings:
+            reg = self.reg_bindings[next]
+            if next in forbidden_vars:
+                continue
+            if selected_reg is not None:
+                if reg is selected_reg:
+                    return next
+                else:
+                    continue
+            if need_lower_byte and reg in self.no_lower_byte_regs:
+                continue
+            return next
+        raise NoVariableToSpill
+
+    def force_allocate_reg(self, v, forbidden_vars=[], selected_reg=None,
+                           need_lower_byte=False):
+        if isinstance(v, TempBox):
+            self.longevity[v] = (self.position, self.position)
+        loc = self.try_allocate_reg(v, selected_reg,
+                                    need_lower_byte=need_lower_byte)
+        if loc:
+            return loc
+        loc = self._spill_var(v, forbidden_vars, selected_reg,
+                              need_lower_byte=need_lower_byte)
+        prev_loc = self.reg_bindings.get(v, None)
+        if prev_loc is not None:
+            self.free_regs.append(prev_loc)
+        self.reg_bindings[v] = loc
+        return loc
+
+    def loc(self, box):
+        # XXX do something
+        assert not isinstance(box, Const)
+        try:
+            return self.reg_bindings[box]
+        except KeyError:
+            return self.stack_manager.loc(box)
