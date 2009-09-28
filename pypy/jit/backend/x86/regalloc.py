@@ -428,9 +428,9 @@ class RegAlloc(object):
         arglocs = [self.loc(arg) for arg in op.args]
         # add eax, ecx and edx as extra "arguments" to ensure they are
         # saved and restored.
-        for v, reg in self.reg_bindings.items():
+        for v, reg in self.rm.reg_bindings.items():
             if ((reg is eax or reg is ecx or reg is edx)
-                and self.longevity[v][1] > self.position
+                and self.rm.longevity[v][1] > self.rm.position
                 and reg not in arglocs[3:]):
                 arglocs.append(reg)
         self.PerformDiscard(op, arglocs)
