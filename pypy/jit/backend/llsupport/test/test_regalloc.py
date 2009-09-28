@@ -75,13 +75,16 @@ class TestRegalloc(object):
     def test_need_lower_byte(self):
         boxes, longevity = boxes_and_longevity(5)
         b0, b1, b2, b3, b4 = boxes
-        no_lower_byte_regs = [r2, r3]
-        rm = RegisterManager(regs, longevity, no_lower_byte_regs)
+
+        class XRegisterManager(RegisterManager):
+            no_lower_byte_regs = [r2, r3]
+        
+        rm = XRegisterManager(regs, longevity)
         rm.next_instruction()
         loc0 = rm.try_allocate_reg(b0, need_lower_byte=True)
-        assert loc0 not in no_lower_byte_regs
+        assert loc0 not in XRegisterManager.no_lower_byte_regs
         loc = rm.try_allocate_reg(b1, need_lower_byte=True)
-        assert loc not in no_lower_byte_regs
+        assert loc not in XRegisterManager.no_lower_byte_regs
         loc = rm.try_allocate_reg(b2, need_lower_byte=True)
         assert loc is None
         loc = rm.try_allocate_reg(b0, need_lower_byte=True)
@@ -107,10 +110,13 @@ class TestRegalloc(object):
         boxes, longevity = boxes_and_longevity(5)
         b0, b1, b2, b3, b4 = boxes
         sm = TStackManager()
-        rm = RegisterManager(regs, longevity,
-                             no_lower_byte_regs = [r2, r3],
-                             stack_manager=sm,
-                             assembler=MockAsm())
+
+        class XRegisterManager(RegisterManager):
+            no_lower_byte_regs = [r2, r3]
+        
+        rm = XRegisterManager(regs, longevity,
+                              stack_manager=sm,
+                              assembler=MockAsm())
         rm.next_instruction()
         loc = rm.force_allocate_reg(b0)
         assert isinstance(loc, FakeReg)
@@ -235,3 +241,26 @@ class TestRegalloc(object):
         rm = RegisterManager(regs, {})
         rm.next_instruction()
         assert isinstance(rm.loc(ConstInt(1)), ConstInt)
+
+    def test_call_support(self):
+        class XRegisterManager(RegisterManager):
+            save_around_call_regs = [r1, r2]
+
+            def result_stored_in_reg(self, v):
+                return r1
+
+        sm = TStackManager()
+        asm = MockAsm()
+        boxes, longevity = boxes_and_longevity(5)
+        rm = XRegisterManager(regs, longevity, stack_manager=sm,
+                              assembler=asm)
+        for b in boxes[:-1]:
+            rm.force_allocate_reg(b)
+        rm.before_call()
+        assert len(rm.reg_bindings) == 2
+        assert sm.stack_depth == 2
+        assert len(asm.moves) == 2
+        rm._check_invariants()
+        rm.after_call(boxes[-1])
+        assert len(rm.reg_bindings) == 3
+        rm._check_invariants()
