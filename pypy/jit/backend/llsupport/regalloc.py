@@ -44,7 +44,7 @@ class RegisterManager(object):
         self.all_regs = register_pool
         self.longevity = longevity
         self.reg_bindings = {}
-        self.position = 0
+        self.position = -1
         self.no_lower_byte_regs = no_lower_byte_regs
         self.stack_manager = stack_manager
         self.assembler = assembler
