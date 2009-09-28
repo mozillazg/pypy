@@ -1,6 +1,11 @@
 
 from pypy.jit.metainterp.history import BoxInt, ConstInt
-from pypy.jit.backend.llsupport.regalloc import RegisterManager, StackManager
+from pypy.jit.backend.llsupport.regalloc import StackManager
+from pypy.jit.backend.llsupport.regalloc import RegisterManager as BaseRegMan
+
+class RegisterManager(BaseRegMan):
+    def convert_to_imm(self, v):
+        return v
 
 def newboxes(*values):
     return [BoxInt(v) for v in values]
@@ -25,8 +30,11 @@ class TStackManager(StackManager):
         return i
 
 class MockAsm(object):
-    def regalloc_store(self, from_loc, to_loc):
-        pass
+    def __init__(self):
+        self.moves = []
+    
+    def regalloc_mov(self, from_loc, to_loc):
+        self.moves.append((from_loc, to_loc))
 
 class TestRegalloc(object):
     def test_freeing_vars(self):
@@ -99,22 +107,114 @@ class TestRegalloc(object):
                              no_lower_byte_regs = [r2, r3],
                              stack_manager=sm,
                              assembler=MockAsm())
-        loc = rm.force_allocate_reg(b0, [])
+        loc = rm.force_allocate_reg(b0)
         assert isinstance(loc, FakeReg)
-        loc = rm.force_allocate_reg(b1, [])
+        loc = rm.force_allocate_reg(b1)
         assert isinstance(loc, FakeReg)
-        loc = rm.force_allocate_reg(b2, [])
+        loc = rm.force_allocate_reg(b2)
         assert isinstance(loc, FakeReg)
-        loc = rm.force_allocate_reg(b3, [])
+        loc = rm.force_allocate_reg(b3)
         assert isinstance(loc, FakeReg)
-        loc = rm.force_allocate_reg(b4, [])
+        loc = rm.force_allocate_reg(b4)
         assert isinstance(loc, FakeReg)
         # one of those should be now somewhere else
         locs = [rm.loc(b) for b in boxes]
         used_regs = [loc for loc in locs if isinstance(loc, FakeReg)]
         assert len(used_regs) == len(regs)
-        loc = rm.force_allocate_reg(b0, [], need_lower_byte=True)
+        loc = rm.force_allocate_reg(b0, need_lower_byte=True)
         assert isinstance(loc, FakeReg)
         assert loc not in [r2, r3]
         rm._check_invariants()
+    
+    def test_make_sure_var_in_reg(self):
+        boxes, longevity = boxes_and_longevity(5)
+        sm = TStackManager()
+        rm = RegisterManager(regs, longevity, stack_manager=sm,
+                             assembler=MockAsm())
+        # allocate a stack position
+        b0, b1, b2, b3, b4 = boxes
+        sp = sm.loc(b0)
+        assert sp == 0
+        loc = rm.make_sure_var_in_reg(b0)
+        assert isinstance(loc, FakeReg)
+        rm._check_invariants()
         
+    def test_force_result_in_reg_1(self):
+        b0, b1 = newboxes(0, 0)
+        longevity = {b0: (0, 1), b1: (1, 3)}
+        sm = TStackManager()
+        asm = MockAsm()
+        rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        # first path, var is already in reg and dies
+        loc0 = rm.force_allocate_reg(b0)
+        rm._check_invariants()
+        rm.next_instruction()
+        loc = rm.force_result_in_reg(b1, b0)
+        assert loc is loc0
+        assert len(asm.moves) == 0
+        rm._check_invariants()
+
+    def test_force_result_in_reg_2(self):
+        b0, b1 = newboxes(0, 0)
+        longevity = {b0: (0, 2), b1: (1, 3)}
+        sm = TStackManager()
+        asm = MockAsm()
+        rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        loc0 = rm.force_allocate_reg(b0)
+        rm._check_invariants()
+        rm.next_instruction()
+        loc = rm.force_result_in_reg(b1, b0)
+        assert loc is loc0
+        assert rm.loc(b0) is not loc0
+        assert len(asm.moves) == 1
+        rm._check_invariants()
+
+    def test_force_result_in_reg_3(self):
+        b0, b1, b2, b3, b4 = newboxes(0, 0, 0, 0, 0)
+        longevity = {b0: (0, 2), b1: (0, 2), b3: (0, 2), b2: (0, 2), b4: (1, 3)}
+        sm = TStackManager()
+        asm = MockAsm()
+        rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        for b in b0, b1, b2, b3:
+            rm.force_allocate_reg(b)
+        assert not len(rm.free_regs)
+        rm._check_invariants()
+        rm.next_instruction()
+        rm.force_result_in_reg(b4, b0)
+        rm._check_invariants()
+        assert len(asm.moves) == 1
+
+    def test_force_result_in_reg_4(self):
+        b0, b1 = newboxes(0, 0)
+        longevity = {b0: (0, 1), b1: (0, 1)}
+        sm = TStackManager()
+        asm = MockAsm()
+        rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        sm.loc(b0)
+        rm.force_result_in_reg(b1, b0)
+        rm._check_invariants()
+        loc = rm.loc(b1)
+        assert isinstance(loc, FakeReg)
+        loc = rm.loc(b0)
+        assert isinstance(loc, int)
+        assert len(asm.moves) == 1
+
+    def test_return_constant(self):
+        asm = MockAsm()
+        rm = RegisterManager(regs, {}, assembler=asm)
+        loc = rm.return_constant(ConstInt(0), imm_fine=False)
+        assert isinstance(loc, FakeReg)
+        loc = rm.return_constant(ConstInt(1), selected_reg=r1)
+        assert loc is r1
+        loc = rm.return_constant(ConstInt(1), selected_reg=r1)
+        assert loc is r1
+
+    def test_force_result_in_reg_const(self):
+        boxes, longevity = boxes_and_longevity(2)
+        sm = TStackManager()
+        asm = MockAsm()
+        rm = RegisterManager(regs, longevity, stack_manager=sm,
+                             assembler=asm)
+        c = ConstInt(0)
+        rm.force_result_in_reg(boxes[0], c)
+        rm._check_invariants()
