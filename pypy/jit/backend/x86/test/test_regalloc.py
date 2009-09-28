@@ -72,6 +72,9 @@ class RegAllocForTests(RegAlloc):
 
 class TestRegallocDirect(object):
 
+    def setup_class(cls):
+        py.test.skip("look and eventually copy, but rather remove")
+
     def test_make_sure_var_in_reg(self):
         regalloc = RegAlloc(MockAssembler())
         boxes = fill_regs(regalloc)

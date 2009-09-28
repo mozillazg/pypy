@@ -68,7 +68,6 @@ class RegAlloc(object):
         # variables that have place in register
         self.assembler = assembler
         self.translate_support_code = translate_support_code
-        self.position = -1
         # to be read/used by the assembler too
         self.jump_target = None
 
@@ -150,7 +149,7 @@ class RegAlloc(object):
                 self.rm.reg_bindings[v] = loc
                 used[loc] = None
             else:
-                self.stack_bindings[v] = loc
+                self.sm.stack_bindings[v] = loc
         self.rm.free_regs = []
         for reg in REGS:
             if reg not in used:
@@ -170,7 +169,7 @@ class RegAlloc(object):
 
     def perform_with_guard(self, op, guard_op, arglocs, result_loc):
         faillocs = self.locs_for_fail(guard_op)
-        self.position += 1
+        self.rm.next_instruction()
         self.assembler.regalloc_perform_with_guard(op, guard_op, faillocs,
                                                    arglocs, result_loc,
                                                    self.sm.stack_depth)
@@ -656,14 +655,12 @@ class RegAlloc(object):
 
     def get_mark_gc_roots(self, gcrootmap):
         shape = gcrootmap.get_basic_shape()
-        for v, val in self.stack_bindings.items():
-            if (isinstance(v, BoxPtr) and
-                self.longevity[v][1] > self.position):
+        for v, val in self.sm.stack_bindings.items():
+            if (isinstance(v, BoxPtr) and self.rm.stays_alive(v)):
                 assert isinstance(val, MODRM)
                 gcrootmap.add_ebp_offset(shape, get_ebp_ofs(val.position))
-        for v, reg in self.reg_bindings.items():
-            if (isinstance(v, BoxPtr) and
-                self.longevity[v][1] > self.position):
+        for v, reg in self.rm.reg_bindings.items():
+            if (isinstance(v, BoxPtr) and self.rm.stays_alive(v)):
                 if reg is ebx:
                     gcrootmap.add_ebx(shape)
                 elif reg is esi:
