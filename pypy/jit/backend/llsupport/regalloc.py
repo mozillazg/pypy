@@ -32,14 +32,15 @@ class StackManager(object):
         return newloc
 
     # abstract methods that need to be overwritten for specific assemblers
-    def stack_pos(self, loc):
+    @staticmethod
+    def stack_pos(loc):
         raise NotImplementedError("Purely abstract")
 
 class RegisterManager(object):
     """ Class that keeps track of register allocations
     """
-    no_lower_byte_regs = ()
-    save_around_call_regs = ()
+    no_lower_byte_regs = []
+    save_around_call_regs = []
     
     def __init__(self, register_pool, longevity,
                  stack_manager=None, assembler=None):
