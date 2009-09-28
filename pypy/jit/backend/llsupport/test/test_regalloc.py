@@ -225,6 +225,8 @@ class TestRegalloc(object):
         assert loc is r1
         loc = rm.return_constant(ConstInt(1), selected_reg=r1)
         assert loc is r1
+        loc = rm.return_constant(ConstInt(1), imm_fine=True)
+        assert isinstance(loc, ConstInt)
 
     def test_force_result_in_reg_const(self):
         boxes, longevity = boxes_and_longevity(2)
