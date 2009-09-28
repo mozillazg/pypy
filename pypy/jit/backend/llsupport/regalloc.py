@@ -51,6 +51,9 @@ class RegisterManager(object):
         self.stack_manager = stack_manager
         self.assembler = assembler
 
+    def stays_alive(self, v):
+        return self.longevity[v][1] > self.position
+
     def next_instruction(self, incr=1):
         self.position += incr
 
@@ -185,7 +188,7 @@ class RegisterManager(object):
                 return loc
             loc = self._spill_var(v, forbidden_vars, selected_reg)
             self.free_regs.append(loc)
-            self.Load(v, convert_to_imm(v), loc)
+            self.assembler.regalloc_mov(self.convert_to_imm(v), loc)
             return loc
         return self.convert_to_imm(v)
 
