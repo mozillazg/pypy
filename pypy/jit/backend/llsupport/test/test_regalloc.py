@@ -217,7 +217,10 @@ class TestRegalloc(object):
 
     def test_return_constant(self):
         asm = MockAsm()
-        rm = RegisterManager(regs, {}, assembler=asm)
+        boxes, longevity = boxes_and_longevity(5)
+        sm = TStackManager()
+        rm = RegisterManager(regs, longevity, assembler=asm,
+                             stack_manager=sm)
         rm.next_instruction()
         loc = rm.return_constant(ConstInt(0), imm_fine=False)
         assert isinstance(loc, FakeReg)
@@ -227,6 +230,12 @@ class TestRegalloc(object):
         assert loc is r1
         loc = rm.return_constant(ConstInt(1), imm_fine=True)
         assert isinstance(loc, ConstInt)
+        for box in boxes[:-1]:
+            rm.force_allocate_reg(box)
+        assert len(asm.moves) == 4
+        loc = rm.return_constant(ConstInt(1), imm_fine=False)
+        assert isinstance(loc, FakeReg)
+        assert len(asm.moves) == 6
 
     def test_force_result_in_reg_const(self):
         boxes, longevity = boxes_and_longevity(2)
