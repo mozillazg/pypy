@@ -41,6 +41,7 @@ class TestRegalloc(object):
         b0, b1, b2 = newboxes(0, 0, 0)
         longevity = {b0: (0, 1), b1: (0, 2), b2: (0, 2)}
         rm = RegisterManager(regs, longevity)
+        rm.next_instruction()
         for b in b0, b1, b2:
             rm.try_allocate_reg(b)
         rm._check_invariants()
@@ -65,6 +66,7 @@ class TestRegalloc(object):
     def test_register_exhaustion(self):
         boxes, longevity = boxes_and_longevity(5)
         rm = RegisterManager(regs, longevity)
+        rm.next_instruction()
         for b in boxes[:len(regs)]:
             assert rm.try_allocate_reg(b)
         assert rm.try_allocate_reg(boxes[-1]) is None
@@ -75,6 +77,7 @@ class TestRegalloc(object):
         b0, b1, b2, b3, b4 = boxes
         no_lower_byte_regs = [r2, r3]
         rm = RegisterManager(regs, longevity, no_lower_byte_regs)
+        rm.next_instruction()
         loc0 = rm.try_allocate_reg(b0, need_lower_byte=True)
         assert loc0 not in no_lower_byte_regs
         loc = rm.try_allocate_reg(b1, need_lower_byte=True)
@@ -88,6 +91,7 @@ class TestRegalloc(object):
     def test_specific_register(self):
         boxes, longevity = boxes_and_longevity(5)
         rm = RegisterManager(regs, longevity)
+        rm.next_instruction()
         loc = rm.try_allocate_reg(boxes[0], selected_reg=r1)
         assert loc is r1
         loc = rm.try_allocate_reg(boxes[1], selected_reg=r1)
@@ -107,6 +111,7 @@ class TestRegalloc(object):
                              no_lower_byte_regs = [r2, r3],
                              stack_manager=sm,
                              assembler=MockAsm())
+        rm.next_instruction()
         loc = rm.force_allocate_reg(b0)
         assert isinstance(loc, FakeReg)
         loc = rm.force_allocate_reg(b1)
@@ -131,6 +136,7 @@ class TestRegalloc(object):
         sm = TStackManager()
         rm = RegisterManager(regs, longevity, stack_manager=sm,
                              assembler=MockAsm())
+        rm.next_instruction()
         # allocate a stack position
         b0, b1, b2, b3, b4 = boxes
         sp = sm.loc(b0)
@@ -145,6 +151,7 @@ class TestRegalloc(object):
         sm = TStackManager()
         asm = MockAsm()
         rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        rm.next_instruction()
         # first path, var is already in reg and dies
         loc0 = rm.force_allocate_reg(b0)
         rm._check_invariants()
@@ -160,6 +167,7 @@ class TestRegalloc(object):
         sm = TStackManager()
         asm = MockAsm()
         rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        rm.next_instruction()
         loc0 = rm.force_allocate_reg(b0)
         rm._check_invariants()
         rm.next_instruction()
@@ -175,6 +183,7 @@ class TestRegalloc(object):
         sm = TStackManager()
         asm = MockAsm()
         rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        rm.next_instruction()
         for b in b0, b1, b2, b3:
             rm.force_allocate_reg(b)
         assert not len(rm.free_regs)
@@ -190,6 +199,7 @@ class TestRegalloc(object):
         sm = TStackManager()
         asm = MockAsm()
         rm = RegisterManager(regs, longevity, stack_manager=sm, assembler=asm)
+        rm.next_instruction()
         sm.loc(b0)
         rm.force_result_in_reg(b1, b0)
         rm._check_invariants()
@@ -202,6 +212,7 @@ class TestRegalloc(object):
     def test_return_constant(self):
         asm = MockAsm()
         rm = RegisterManager(regs, {}, assembler=asm)
+        rm.next_instruction()
         loc = rm.return_constant(ConstInt(0), imm_fine=False)
         assert isinstance(loc, FakeReg)
         loc = rm.return_constant(ConstInt(1), selected_reg=r1)
@@ -215,10 +226,12 @@ class TestRegalloc(object):
         asm = MockAsm()
         rm = RegisterManager(regs, longevity, stack_manager=sm,
                              assembler=asm)
+        rm.next_instruction()
         c = ConstInt(0)
         rm.force_result_in_reg(boxes[0], c)
         rm._check_invariants()
 
     def test_loc_of_const(self):
         rm = RegisterManager(regs, {})
+        rm.next_instruction()
         assert isinstance(rm.loc(ConstInt(1)), ConstInt)
