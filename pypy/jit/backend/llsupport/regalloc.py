@@ -162,8 +162,8 @@ class RegisterManager(object):
         return loc
 
     def loc(self, box):
-        # XXX do something
-        assert not isinstance(box, Const)
+        if isinstance(box, Const):
+            return self.convert_to_imm(box)
         try:
             return self.reg_bindings[box]
         except KeyError:

@@ -218,3 +218,7 @@ class TestRegalloc(object):
         c = ConstInt(0)
         rm.force_result_in_reg(boxes[0], c)
         rm._check_invariants()
+
+    def test_loc_of_const(self):
+        rm = RegisterManager(regs, {})
+        assert isinstance(rm.loc(ConstInt(1)), ConstInt)
