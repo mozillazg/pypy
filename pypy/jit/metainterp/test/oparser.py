@@ -26,9 +26,6 @@ class ExtendedTreeLoop(TreeLoop):
                 yield op.result
                 for box in op.args:
                     yield box
-                if op.suboperations:
-                    for box in opboxes(op.suboperations):
-                        yield box
         def allboxes():
             for box in self.inputargs:
                 yield box
@@ -167,25 +164,44 @@ class OpParser(object):
                     raise ParseError("Unknown var: %s" % arg)
             if hasattr(descr, '_oparser_uses_descr'):
                 descr._oparser_uses_descr(self, args)
-        if opnum == rop.FAIL and descr is None and self.invent_fail_descrs:
-            descr = BasicFailDescr()
-        return opnum, args, descr
+        if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST:
+            if descr is None and self.invent_fail_descrs:
+                descr = BasicFailDescr()
+            i = line.find('[', endnum) + 1
+            j = line.find(']', i)
+            if i <= 0 or j <= 0:
+                raise ParseError("missing fail_args for guard operation")
+            fail_args = []
+            for arg in line[i:j].split(','):
+                arg = arg.strip()
+                try:
+                    fail_args.append(self.vars[arg])
+                except KeyError:
+                    raise ParseError("Unknown var in fail_args: %s" % arg)
+        else:
+            fail_args = None
+            if opnum == rop.FINISH:
+                if descr is None and self.invent_fail_descrs:
+                    descr = BasicFailDescr()
+        return opnum, args, descr, fail_args
 
     def parse_result_op(self, line):
         res, op = line.split("=", 1)
         res = res.strip()
         op = op.strip()
-        opnum, args, descr = self.parse_op(op)
+        opnum, args, descr, fail_args = self.parse_op(op)
         if res in self.vars:
             raise ParseError("Double assign to var %s in line: %s" % (res, line))
         rvar = self.box_for_var(res)
         self.vars[res] = rvar
         res = ResOperation(opnum, args, rvar, descr)
+        res.fail_args = fail_args
         return res
 
     def parse_op_no_result(self, line):
-        opnum, args, descr = self.parse_op(line)
+        opnum, args, descr, fail_args = self.parse_op(line)
         res = ResOperation(opnum, args, None, descr)
+        res.fail_args = fail_args
         if opnum == rop.JUMP:
             self.jumps.append(res)
         return res
@@ -241,10 +257,7 @@ class OpParser(object):
                 # dedent
                 return num, ops
             elif line.startswith(" "*(indent + 1)):
-                # suboperations
-                new_indent = len(line) - len(line.lstrip())
-                num, suboperations = self.parse_ops(new_indent, lines, num)
-                ops[-1].suboperations = suboperations
+                raise ParseError("indentation not valid any more")
             else:
                 ops.append(self.parse_next_op(lines[num].strip()))
                 num += 1
