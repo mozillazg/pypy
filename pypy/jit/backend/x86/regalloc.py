@@ -49,11 +49,35 @@ class X86RegisterManager(RegisterManager):
             print "convert_to_imm: got a %s" % c
             raise AssertionError
 
+class X86XMMRegisterManager(RegisterManager):
+
+    all_regs = [xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7]
+    # we never need lower byte I hope
+    save_around_call_regs = all_regs
+    reg_width = 2
+
+    def convert_to_imm(self, c):
+        xxx # what to do here...
+
+    def after_call(self, v):
+        xxx # test
+        # the result is stored in st0, but we don't have this around,
+        # so we move it to some stack location
+        if v is not None:
+            loc = self.sm.stack_loc(v, 2)
+            self.assembler.regalloc_mov(st0, loc)
+
 class X86StackManager(StackManager):
 
     @staticmethod
     def stack_pos(i, size):
-        res = mem(ebp, get_ebp_ofs(i))
+        if size == 1:
+            res = mem(ebp, get_ebp_ofs(i))
+        elif size == 2:
+            res = mem64(ebp, get_ebp_ofs(i))
+        else:
+            print "Unimplemented size %d" % i
+            raise NotImplementedError("unimplemented size %d" % i)
         res.position = i
         return res
 
@@ -77,6 +101,8 @@ class RegAlloc(object):
         self.rm = X86RegisterManager(longevity,
                                      stack_manager = self.sm,
                                      assembler = self.assembler)
+        self.xrm = X86XMMRegisterManager(longevity, stack_manager = self.sm,
+                                         assembler = self.assembler)
 
     def prepare_loop(self, inputargs, operations):
         self._prepare(inputargs, operations)
@@ -105,7 +131,10 @@ class RegAlloc(object):
             assert not isinstance(arg, Const)
             reg = None
             if arg not in self.loop_consts and self.rm.longevity[arg][1] > -1:
-                reg = self.rm.try_allocate_reg(arg)
+                if arg.type == FLOAT:
+                    reg = self.xrm.try_allocate_reg(arg)
+                else:
+                    reg = self.rm.try_allocate_reg(arg)
             if reg:
                 locs[i] = reg
             else:
@@ -254,6 +283,8 @@ class RegAlloc(object):
         return longevity
 
     def loc(self, v):
+        if v.type == FLOAT:
+            return self.xrm.loc(v)
         return self.rm.loc(v)
 
     def _consider_guard(self, op, ignored):
@@ -395,6 +426,11 @@ class RegAlloc(object):
     consider_uint_ge = _consider_compop
     consider_oois = _consider_compop
     consider_ooisnot = _consider_compop
+
+    def consider_float_add(self, op, ignored):
+        loc0 = self.xrm.force_result_in_reg(op.result, op.args[0], op.args)
+        loc1 = self.xrm.loc(op.args[1])
+        self.Perform(op, [loc0, loc1], loc0)
 
     def _call(self, op, arglocs, force_store=[]):
         self.rm.before_call(force_store)

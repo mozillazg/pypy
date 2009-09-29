@@ -101,6 +101,8 @@ class BaseTestRegalloc(object):
         for i, arg in enumerate(args):
             if isinstance(arg, int):
                 self.cpu.set_future_value_int(i, arg)
+            elif isinstance(arg, float):
+                self.cpu.set_future_value_float(i, arg)
             else:
                 assert isinstance(lltype.typeOf(arg), lltype.Ptr)
                 llgcref = lltype.cast_opaque_ptr(llmemory.GCREF, arg)
@@ -115,8 +117,15 @@ class BaseTestRegalloc(object):
     def getint(self, index):
         return self.cpu.get_latest_value_int(index)
 
+    def getfloat(self, index):
+        return self.cpu.get_latest_value_float(index)
+
     def getints(self, end):
         return [self.cpu.get_latest_value_int(index) for
+                index in range(0, end)]
+
+    def getfloats(self, end):
+        return [self.cpu.get_latest_value_float(index) for
                 index in range(0, end)]
 
     def getptr(self, index, T):
@@ -486,3 +495,13 @@ class TestRegallocMoreRegisters(BaseTestRegalloc):
         s = lltype.malloc(self.A, 3)
         self.interpret(ops, [s, ord('a')])
         assert s[1] == 'a'
+
+class TestRegallocFloats(BaseTestRegalloc):
+    def test_float_adds(self):
+        ops = '''
+        [f0, f1]
+        f2 = float_add(f0, f1)
+        fail(f2, f0, f1)
+        '''
+        self.interpret(ops, [3.0, 1.5])
+        assert self.getfloats(3) == [4.5, 3.0, 1.5]

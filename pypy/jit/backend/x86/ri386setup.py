@@ -11,6 +11,9 @@ from pypy.tool.sourcetools import compile2
 def reg2modrm(builder, reg):
     return memregister(reg)
 
+def reg2modrm64(builder, reg):
+    return memregister64(reg)
+
 def reg2modrm8(builder, reg):
     return memregister8(reg)
 
@@ -45,7 +48,7 @@ type_order = {
     MODRM:   [(MODRM,  None)],
     MODRM8:  [(MODRM8, None)],
     MODRM64: [(MODRM64, None)],
-    XMMREG:  [(XMMREG, None)],
+    XMMREG:  [(XMMREG, None), (MODRM64, reg2modrm64)],
 
     MISSING: [(MISSING, None)],  # missing operands
     }
