@@ -73,8 +73,10 @@ class Runner(object):
         operations = [ResOperation(opnum, valueboxes, result),
                       ResOperation(rop.FINISH, results, None,
                                    descr=BasicFailDescr())]
-        if operations[0].is_guard() and not descr:
-            descr = BasicFailDescr()
+        if operations[0].is_guard():
+            operations[0].fail_args = []
+            if not descr:
+                descr = BasicFailDescr()
         operations[0].descr = descr
         inputargs = []
         for box in valueboxes:
@@ -393,6 +395,7 @@ class BaseBackendTest(Runner):
                     ResOperation(rop.FINISH, [v_res], None,
                                  descr=BasicFailDescr()),
                     ]
+                ops[1].fail_args = []
             else:
                 v_exc = self.cpu.ts.BoxRef()
                 ops = [
