@@ -810,7 +810,7 @@ class BasicTests:
             return r() is None
         #
         assert f(30) == 1
-        res = self.meta_interp(f, [30])
+        res = self.meta_interp(f, [30], no_stats=True)
         assert res == 1
 
     def test_pass_around(self):
