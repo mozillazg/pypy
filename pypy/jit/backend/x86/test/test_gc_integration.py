@@ -8,7 +8,7 @@ from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
 from pypy.jit.backend.x86.runner import CPU
-from pypy.jit.backend.x86.regalloc import RegAlloc, REGS, WORD
+from pypy.jit.backend.x86.regalloc import RegAlloc, WORD
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper

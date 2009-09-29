@@ -3,7 +3,8 @@
 """
 
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
-                                         ResOperation, ConstAddr, BoxPtr)
+                                         ResOperation, ConstAddr, BoxPtr,
+                                         INT, REF, FLOAT)
 from pypy.jit.backend.x86.ri386 import *
 from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
 from pypy.rlib.objectmodel import we_are_translated
@@ -18,6 +19,12 @@ from pypy.jit.backend.llsupport.regalloc import StackManager, RegisterManager,\
      TempBox
 
 WORD = 4
+
+width_of_type = {
+    INT : 1,
+    REF : 1,
+    FLOAT : 2,
+    }
 
 class X86RegisterManager(RegisterManager):
 
@@ -45,7 +52,7 @@ class X86RegisterManager(RegisterManager):
 class X86StackManager(StackManager):
 
     @staticmethod
-    def stack_pos(i):
+    def stack_pos(i, size):
         res = mem(ebp, get_ebp_ofs(i))
         res.position = i
         return res
@@ -102,7 +109,7 @@ class RegAlloc(object):
             if reg:
                 locs[i] = reg
             else:
-                loc = self.sm.loc(arg)
+                loc = self.sm.loc(arg, width_of_type[arg.type])
                 locs[i] = loc
             # otherwise we have it saved on stack, so no worry
         self.rm.free_regs.insert(0, tmpreg)
