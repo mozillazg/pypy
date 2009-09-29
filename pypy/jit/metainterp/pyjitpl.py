@@ -1430,33 +1430,7 @@ class MetaInterp(object):
         residual_args = self.get_residual_args(loop_token.specnodes,
                                                gmp.argboxes[num_green_args:])
         history.set_future_values(self.cpu, residual_args)
-        self.clean_up_history()
         return loop_token.executable_token
-
-    def clean_up_history(self):
-        # Clear the BoxPtrs used in self.history, at the end.  The
-        # purpose of this is to clear the boxes that are also used in
-        # the TreeLoop just produced.  After this, there should be no
-        # reference left to temporary values in long-living BoxPtrs.
-        # A note about recursion: setting to NULL like this should be
-        # safe, because ResumeGuardDescr.restore_patched_boxes should
-        # save and restore all the boxes that are also used by callers.
-        if self.history.inputargs is not None:
-            for box in self.history.inputargs:
-                self.cpu.ts.clean_box(box)
-        lists = [self.history.operations]
-        while lists:
-            for op in lists.pop():
-                if op is None:
-                    continue
-                if op.result is not None:
-                    self.cpu.ts.clean_box(op.result)
-                if op.suboperations is not None:
-                    lists.append(op.suboperations)
-                if op.optimized is not None:
-                    lists.append(op.optimized.suboperations)
-                    if op.optimized.result is not None:
-                        self.cpu.ts.clean_box(op.optimized.result)
 
     def prepare_resume_from_failure(self, opnum):
         if opnum == rop.GUARD_TRUE:     # a goto_if_not that jumps only now
