@@ -1,7 +1,7 @@
 import sys, os
 import ctypes
 from pypy.jit.backend.llsupport import symbolic
-from pypy.jit.metainterp.history import Const, Box, BoxPtr, REF
+from pypy.jit.metainterp.history import Const, Box, BoxPtr, REF, FLOAT
 from pypy.jit.metainterp.history import AbstractFailDescr
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
@@ -85,6 +85,8 @@ class Assembler386(object):
                                             MAX_FAIL_BOXES, zero=True)
         self.fail_boxes_ptr = lltype.malloc(lltype.GcArray(llmemory.GCREF),
                                             MAX_FAIL_BOXES, zero=True)
+        self.fail_boxes_float = lltype.malloc(lltype.GcArray(lltype.Float),
+                                              MAX_FAIL_BOXES, zero=True)
 
     def leave_jitted_hook(self):
         fail_boxes_ptr = self.fail_boxes_ptr
@@ -95,10 +97,13 @@ class Assembler386(object):
         if self.mc is None:
             rffi.cast(lltype.Signed, self.fail_boxes_int)   # workaround
             rffi.cast(lltype.Signed, self.fail_boxes_ptr)   # workaround
+            rffi.cast(lltype.Signed, self.fail_boxes_float) # workaround
             self.fail_box_int_addr = rffi.cast(lltype.Signed,
                 lltype.direct_arrayitems(self.fail_boxes_int))
             self.fail_box_ptr_addr = rffi.cast(lltype.Signed,
                 lltype.direct_arrayitems(self.fail_boxes_ptr))
+            self.fail_box_float_addr = rffi.cast(lltype.Signed,
+                lltype.direct_arrayitems(self.fail_boxes_float))
 
             # the address of the function called by 'new'
             gc_ll_descr = self.cpu.gc_ll_descr
@@ -198,20 +203,30 @@ class Assembler386(object):
         for i in range(len(arglocs)):
             loc = arglocs[i]
             if not isinstance(loc, REG):
-                if inputargs[i].type == REF:
-                    # This uses XCHG to put zeroes in fail_boxes_ptr after
-                    # reading them
-                    self.mc.XOR(ecx, ecx)
-                    self.mc.XCHG(ecx, addr_add(imm(self.fail_box_ptr_addr),
-                                               imm(i*WORD)))
+                if inputargs[i].type == FLOAT:
+                    self.mc.MOVSD(xmm0,
+                                  addr64_add(imm(self.fail_box_float_addr),
+                                             imm(i*WORD*2)))
+                    self.mc.MOVSD(loc, xmm0)
                 else:
-                    self.mc.MOV(ecx, addr_add(imm(self.fail_box_int_addr),
-                                              imm(i*WORD)))
-                self.mc.MOV(loc, ecx)
+                    if inputargs[i].type == REF:
+                        # This uses XCHG to put zeroes in fail_boxes_ptr after
+                        # reading them
+                        self.mc.XOR(ecx, ecx)
+                        self.mc.XCHG(ecx, addr_add(imm(self.fail_box_ptr_addr),
+                                                   imm(i*WORD)))
+                    else:
+                        self.mc.MOV(ecx, addr_add(imm(self.fail_box_int_addr),
+                                                  imm(i*WORD)))
+                    self.mc.MOV(loc, ecx)
         for i in range(len(arglocs)):
             loc = arglocs[i]
             if isinstance(loc, REG):
-                if inputargs[i].type == REF:
+                if inputargs[i].type == FLOAT:
+                    self.mc.MOVSD(loc,
+                                  addr64_add(imm(self.fail_box_float_addr),
+                                             imm(i*WORD*2)))
+                elif inputargs[i].type == REF:
                     # This uses XCHG to put zeroes in fail_boxes_ptr after
                     # reading them
                     self.mc.XOR(loc, loc)
@@ -235,7 +250,10 @@ class Assembler386(object):
     # ------------------------------------------------------------
 
     def regalloc_mov(self, from_loc, to_loc):
-        self.mc.MOV(to_loc, from_loc)
+        if isinstance(from_loc, XMMREG) or isinstance(to_loc, XMMREG):
+            self.mc.MOVSD(to_loc, from_loc)
+        else:
+            self.mc.MOV(to_loc, from_loc)
 
     def regalloc_push(self, loc):
         self.mc.PUSH(loc)
@@ -345,6 +363,7 @@ class Assembler386(object):
     genop_int_and = _binaryop("AND", True)
     genop_int_or  = _binaryop("OR", True)
     genop_int_xor = _binaryop("XOR", True)
+    genop_float_add = _binaryop("ADDSD", True)
 
     genop_int_mul_ovf = genop_int_mul
     genop_int_sub_ovf = genop_int_sub
@@ -644,20 +663,29 @@ class Assembler386(object):
         for i in range(len(locs)):
             loc = locs[i]
             if isinstance(loc, REG):
-                if failargs[i].type == REF:
-                    base = self.fail_box_ptr_addr
+                if failargs[i].type == FLOAT:
+                    mc.MOVSD(addr64_add(imm(self.fail_box_float_addr),
+                                        imm(i*WORD*2)), loc)
                 else:
-                    base = self.fail_box_int_addr
-                mc.MOV(addr_add(imm(base), imm(i*WORD)), loc)
+                    if failargs[i].type == REF:
+                        base = self.fail_box_ptr_addr
+                    else:
+                        base = self.fail_box_int_addr
+                    mc.MOV(addr_add(imm(base), imm(i*WORD)), loc)
         for i in range(len(locs)):
             loc = locs[i]
             if not isinstance(loc, REG):
-                if failargs[i].type == REF:
-                    base = self.fail_box_ptr_addr
+                if failargs[i].type == FLOAT:
+                    mc.MOVSD(xmm0, loc)
+                    mc.MOVSD(addr64_add(imm(self.fail_box_float_addr),
+                                        imm(i*WORD*2)), xmm0)
                 else:
-                    base = self.fail_box_int_addr
-                mc.MOV(eax, loc)
-                mc.MOV(addr_add(imm(base), imm(i*WORD)), eax)
+                    if failargs[i].type == REF:
+                        base = self.fail_box_ptr_addr
+                    else:
+                        base = self.fail_box_int_addr
+                    mc.MOV(eax, loc)
+                    mc.MOV(addr_add(imm(base), imm(i*WORD)), eax)
         if self.debug_markers:
             mc.MOV(eax, imm(pos))
             mc.MOV(addr_add(imm(self.fail_box_int_addr),
@@ -791,31 +819,24 @@ for name, value in Assembler386.__dict__.iteritems():
         num = getattr(rop, opname.upper())
         genop_list[num] = value
 
-def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
-    if isinstance(reg_or_imm1, IMM32):
-        if isinstance(reg_or_imm2, IMM32):
-            return heap(reg_or_imm1.value + offset +
-                        (reg_or_imm2.value << scale))
+def new_addr_add(heap, mem, memsib):
+    def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
+        if isinstance(reg_or_imm1, IMM32):
+            if isinstance(reg_or_imm2, IMM32):
+                return heap(reg_or_imm1.value + offset +
+                            (reg_or_imm2.value << scale))
+            else:
+                return memSIB(None, reg_or_imm2, scale, reg_or_imm1.value + offset)
         else:
-            return memSIB(None, reg_or_imm2, scale, reg_or_imm1.value + offset)
-    else:
-        if isinstance(reg_or_imm2, IMM32):
-            return mem(reg_or_imm1, offset + (reg_or_imm2.value << scale))
-        else:
-            return memSIB(reg_or_imm1, reg_or_imm2, scale, offset)
+            if isinstance(reg_or_imm2, IMM32):
+                return mem(reg_or_imm1, offset + (reg_or_imm2.value << scale))
+            else:
+                return memSIB(reg_or_imm1, reg_or_imm2, scale, offset)
+    return addr_add
 
-def addr8_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
-    if isinstance(reg_or_imm1, IMM32):
-        if isinstance(reg_or_imm2, IMM32):
-            return heap8(reg_or_imm1.value + (offset << scale) +
-                         reg_or_imm2.value)
-        else:
-            return memSIB8(None, reg_or_imm2, scale, reg_or_imm1.value + offset)
-    else:
-        if isinstance(reg_or_imm2, IMM32):
-            return mem8(reg_or_imm1, (offset << scale) + reg_or_imm2.value)
-        else:
-            return memSIB8(reg_or_imm1, reg_or_imm2, scale, offset)
+addr8_add = new_addr_add(heap8, mem8, memSIB8)
+addr_add = new_addr_add(heap, mem, memSIB)
+addr64_add = new_addr_add(heap64, mem64, memSIB64)
 
 def addr_add_const(reg_or_imm1, offset):
     if isinstance(reg_or_imm1, IMM32):
