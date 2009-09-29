@@ -44,8 +44,12 @@ class ExtendedTreeLoop(TreeLoop):
         for name, value in kwds.iteritems():
             getattr(boxes, name).value = value
 
+def default_fail_descr(fail_args=None):
+    return BasicFailDescr()
+
+
 class OpParser(object):
-    def __init__(self, descr, cpu, namespace, type_system, boxkinds, jump_targets, invent_fail_descrs=True):
+    def __init__(self, descr, cpu, namespace, type_system, boxkinds, jump_target, invent_fail_descr=default_fail_descr):
         self.descr = descr
         self.vars = {}
         self.cpu = cpu
@@ -53,9 +57,9 @@ class OpParser(object):
         self.type_system = type_system
         self.boxkinds = boxkinds or {}
         self.jumps = []
-        self.jump_targets = jump_targets
+        self.jump_target = jump_target
         self._cache = namespace.setdefault('_CACHE_', {})
-        self.invent_fail_descrs = invent_fail_descrs
+        self.invent_fail_descr = invent_fail_descr
 
     def box_for_var(self, elem):
         try:
@@ -162,27 +166,28 @@ class OpParser(object):
                     args.append(self.getvar(arg))
                 except KeyError:
                     raise ParseError("Unknown var: %s" % arg)
-            if hasattr(descr, '_oparser_uses_descr'):
-                descr._oparser_uses_descr(self, args)
         if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST:
-            if descr is None and self.invent_fail_descrs:
-                descr = BasicFailDescr()
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if i <= 0 or j <= 0:
                 raise ParseError("missing fail_args for guard operation")
             fail_args = []
-            for arg in line[i:j].split(','):
-                arg = arg.strip()
-                try:
-                    fail_args.append(self.vars[arg])
-                except KeyError:
-                    raise ParseError("Unknown var in fail_args: %s" % arg)
+            if i < j:
+                for arg in line[i:j].split(','):
+                    arg = arg.strip()
+                    try:
+                        fail_args.append(self.vars[arg])
+                    except KeyError:
+                        raise ParseError("Unknown var in fail_args: %s" % arg)
+            if descr is None and self.invent_fail_descr:
+                descr = self.invent_fail_descr(fail_args)
+            if hasattr(descr, '_oparser_uses_descr_of_guard'):
+                descr._oparser_uses_descr_of_guard(self, fail_args)
         else:
             fail_args = None
             if opnum == rop.FINISH:
-                if descr is None and self.invent_fail_descrs:
-                    descr = BasicFailDescr()
+                if descr is None and self.invent_fail_descr:
+                    descr = self.invent_fail_descr()
         return opnum, args, descr, fail_args
 
     def parse_result_op(self, line):
@@ -235,15 +240,12 @@ class OpParser(object):
         if num < len(newlines):
             raise ParseError("unexpected dedent at line: %s" % newlines[num])
         loop = ExtendedTreeLoop("loop")
-        if (self.jump_targets is not None and
-            len(self.jump_targets) != len(self.jumps)):
-            raise ParseError("Wrong number of jump targets")
-        if self.jump_targets is None:
-            for jump in self.jumps:
-                jump.jump_target = None
-        else:
-            for jump, jump_target in zip(self.jumps, self.jump_targets):
-                jump.jump_target = jump_target
+        if len(self.jumps) > 1:
+            raise ParseError("Multiple jumps??")
+        if self.jump_target is not None and len(self.jumps) != 1:
+            raise ParseError("A jump is expected if a jump_target is given")
+        for jump in self.jumps:
+            jump.jump_target = self.jump_target
         loop.operations = ops
         loop.inputargs = inpargs
         return loop
@@ -274,13 +276,15 @@ class OpParser(object):
         return base_indent, inpargs
 
 def parse(descr, cpu=None, namespace=None, type_system='lltype',
-          boxkinds=None, jump_targets=None, invent_fail_descrs=True):
+          boxkinds=None, jump_target=None,
+          invent_fail_descr=default_fail_descr):
     if namespace is None:
         namespace = {}
-    return OpParser(descr, cpu, namespace, type_system, boxkinds, jump_targets, invent_fail_descrs).parse()
+    return OpParser(descr, cpu, namespace, type_system, boxkinds, jump_target,
+                    invent_fail_descr).parse()
 
 def pure_parse(*args, **kwds):
-    kwds['invent_fail_descrs'] = False
+    kwds['invent_fail_descr'] = None
     return parse(*args, **kwds)
 
 def _box_counter_more_than(s):

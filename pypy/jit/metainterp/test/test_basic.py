@@ -224,8 +224,8 @@ class BasicTests:
         if self.basic:
             found = 0
             for op in get_stats().loops[0]._all_operations():
-                if op.getopname() == 'fail':
-                    liveboxes = op.args
+                if op.getopname() == 'guard_true':
+                    liveboxes = op.fail_args
                     assert len(liveboxes) == 3
                     for box in liveboxes:
                         assert isinstance(box, history.BoxInt)
