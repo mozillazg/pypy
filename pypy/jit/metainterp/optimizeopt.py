@@ -833,9 +833,7 @@ class HeapOpOptimizer(object):
         if op.is_guard():
             return
         opnum = op.opnum
-        if (opnum == rop.GETFIELD_GC or opnum == rop.GETFIELD_GC_PURE or 
-            opnum == rop.SETFIELD_GC or
-            opnum == rop.GETARRAYITEM_GC or
+        if (opnum == rop.SETFIELD_GC or
             opnum == rop.SETARRAYITEM_GC or
             opnum == rop.DEBUG_MERGE_POINT):
             return

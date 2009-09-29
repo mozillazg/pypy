@@ -1358,6 +1358,27 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not, Not', expected)
 
+    def test_getarrayitem_pure_does_not_invalidate(self):
+        ops = """
+        [p1, p2]
+        p3 = getarrayitem_gc(p1, 0, descr=arraydescr2)
+        i4 = getfield_gc_pure(ConstPtr(myptr), descr=valuedescr)
+        p5 = getarrayitem_gc(p1, 0, descr=arraydescr2)
+        escape(p3)
+        escape(i4)
+        escape(p5)
+        jump(p1, p2)
+        """
+        expected = """
+        [p1, p2]
+        p3 = getarrayitem_gc(p1, 0, descr=arraydescr2)
+        escape(p3)
+        escape(5)
+        escape(p3)
+        jump(p1, p2)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
     def test_duplicate_getarrayitem_after_setarrayitem_two_arrays(self):
         ops = """
         [p1, p2, p3, p4, i1]
