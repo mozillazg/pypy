@@ -28,6 +28,7 @@ width_of_type = {
 
 class X86RegisterManager(RegisterManager):
 
+    box_types = [INT, REF]
     all_regs = [eax, ecx, edx, ebx, esi, edi]
     no_lower_byte_regs = [esi, edi]
     save_around_call_regs = [eax, edx, ecx]
@@ -53,6 +54,7 @@ BASE_CONSTANT_SIZE = 1000
 
 class X86XMMRegisterManager(RegisterManager):
 
+    box_types = [FLOAT]
     all_regs = [xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7]
     # we never need lower byte I hope
     save_around_call_regs = all_regs
@@ -201,6 +203,7 @@ class RegAlloc(object):
             if reg not in used:
                 self.rm.free_regs.append(reg)
         self.rm._check_invariants()
+        self.xrm._check_invariants()
 
     def Perform(self, op, arglocs, result_loc):
         if not we_are_translated():
@@ -260,6 +263,7 @@ class RegAlloc(object):
         while i < len(operations):
             op = operations[i]
             self.rm.position = i
+            # XXX ^^^ and also self.xrm.position = i.... :-(
             if op.has_no_side_effect() and op.result not in self.longevity:
                 i += 1
                 self.rm.possibly_free_vars(op.args)
@@ -269,10 +273,13 @@ class RegAlloc(object):
                 i += 1
             else:
                 oplist[op.opnum](self, op, None)
-            self.rm.possibly_free_var(op.result)
+            if op.result is not None:
+                self.rm.possibly_free_var(op.result)
             self.rm._check_invariants()
+            self.xrm._check_invariants()
             i += 1
         assert not self.rm.reg_bindings
+        assert not self.xrm.reg_bindings
 
     def _compute_vars_longevity(self, inputargs, operations):
         # compute a dictionary that maps variables to index in

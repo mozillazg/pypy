@@ -39,6 +39,7 @@ class StackManager(object):
 class RegisterManager(object):
     """ Class that keeps track of register allocations
     """
+    box_types             = None       # or a list of acceptable types
     all_regs              = []
     no_lower_byte_regs    = []
     save_around_call_regs = []
@@ -58,11 +59,16 @@ class RegisterManager(object):
     def next_instruction(self, incr=1):
         self.position += incr
 
+    def _check_type(self, v):
+        if not we_are_translated() and self.box_types is not None:
+            assert isinstance(v, TempBox) or v.type in self.box_types
+
     def possibly_free_var(self, v):
         """ If v is stored in a register and v is not used beyond the
             current position, then free it.  Must be called at some
             point for all variables that might be in registers.
         """
+        self._check_type(v)
         if isinstance(v, Const) or v not in self.reg_bindings:
             return
         if v not in self.longevity or self.longevity[v][1] <= self.position:
@@ -97,6 +103,7 @@ class RegisterManager(object):
 
         returns allocated register or None, if not possible.
         """
+        self._check_type(v)
         assert not isinstance(v, Const)
         if selected_reg is not None:
             res = self.reg_bindings.get(v, None)
@@ -173,6 +180,7 @@ class RegisterManager(object):
 
         Will not spill a variable from 'forbidden_vars'.
         """
+        self._check_type(v)
         if isinstance(v, TempBox):
             self.longevity[v] = (self.position, self.position)
         loc = self.try_allocate_reg(v, selected_reg,
@@ -190,6 +198,7 @@ class RegisterManager(object):
     def loc(self, box):
         """ Return the location of 'box'.
         """
+        self._check_type(box)
         if isinstance(box, Const):
             return self.convert_to_imm(box)
         try:
@@ -204,6 +213,7 @@ class RegisterManager(object):
         a register.  See 'force_allocate_reg' for the meaning of 'selected_reg'
         and 'forbidden_vars'.
         """
+        self._check_type(v)
         assert isinstance(v, Const)
         if selected_reg or not imm_fine:
             # this means we cannot have it in IMM, eh
@@ -226,6 +236,7 @@ class RegisterManager(object):
         register.  Return the register.  See 'return_constant' and
         'force_allocate_reg' for the meaning of the optional arguments.
         """
+        self._check_type(v)
         if isinstance(v, Const):
             return self.return_constant(v, forbidden_vars, selected_reg,
                                         imm_fine)
@@ -257,6 +268,8 @@ class RegisterManager(object):
         The variable v is copied away if it's further used.  The meaning
         of 'forbidden_vars' is the same as in 'force_allocate_reg'.
         """
+        self._check_type(result_v)
+        self._check_type(v)
         if isinstance(v, Const):
             loc = self.make_sure_var_in_reg(v, forbidden_vars,
                                             imm_fine=False)
@@ -312,6 +325,7 @@ class RegisterManager(object):
         which is in variable v.
         """
         if v is not None:
+            self._check_type(v)
             r = self.call_result_location(v)
             self.reg_bindings[v] = r
             self.free_regs = [fr for fr in self.free_regs if fr is not r]
