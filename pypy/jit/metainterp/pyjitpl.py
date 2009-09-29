@@ -1565,8 +1565,7 @@ class MetaInterp(object):
             elif boxtype == history.FLOAT:
                 box = history.BoxFloat(cpu.get_latest_value_float(i))
             else:
-                assert False, "should not see %r in guard_failure.args" % (
-                    oldbox,)
+                assert False, "bad box type: num=%d" % ord(boxtype)
             inputargs.append(box)
         return inputargs
 
