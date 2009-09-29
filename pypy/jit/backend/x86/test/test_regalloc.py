@@ -497,7 +497,7 @@ class TestRegallocMoreRegisters(BaseTestRegalloc):
         assert s[1] == 'a'
 
 class TestRegallocFloats(BaseTestRegalloc):
-    def test_float_adds(self):
+    def test_float_add(self):
         ops = '''
         [f0, f1]
         f2 = float_add(f0, f1)
@@ -505,3 +505,13 @@ class TestRegallocFloats(BaseTestRegalloc):
         '''
         self.interpret(ops, [3.0, 1.5])
         assert self.getfloats(3) == [4.5, 3.0, 1.5]
+
+    def test_float_adds_stack(self):
+        ops = '''
+        [f0, f1, f2, f3, f4, f5, f6, f7, f8]
+        f9 = float_add(f0, f1)
+        f10 = float_add(f8, 3.5)
+        fail(f9, f10, f2, f3, f4, f5, f6, f7, f8)
+        '''
+        self.interpret(ops, [0.1, .2, .3, .4, .5, .6, .7, .8, .9])
+        assert self.getfloats(9) == [.1+.2, .9+3.5, .3, .4, .5, .6, .7, .8, .9]

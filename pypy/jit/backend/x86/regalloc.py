@@ -49,6 +49,8 @@ class X86RegisterManager(RegisterManager):
             print "convert_to_imm: got a %s" % c
             raise AssertionError
 
+BASE_CONSTANT_SIZE = 1000
+
 class X86XMMRegisterManager(RegisterManager):
 
     all_regs = [xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7]
@@ -56,9 +58,25 @@ class X86XMMRegisterManager(RegisterManager):
     save_around_call_regs = all_regs
     reg_width = 2
 
-    def convert_to_imm(self, c):
-        xxx # what to do here...
+    def new_const_array(self):
+        return lltype.malloc(rffi.CArray(lltype.Float), BASE_CONSTANT_SIZE,
+                             flavor='raw')
 
+    def __init__(self, *args, **kwds):
+        RegisterManager.__init__(self, *args, **kwds)
+        self.constant_arrays = [self.new_const_array()]
+        self.constant_arrays_counter = 0
+
+    def convert_to_imm(self, c):
+        if self.constant_arrays_counter >= BASE_CONSTANT_SIZE:
+            self.constant_arrays.append(self.new_const_array)
+            self.constant_arrays_counter = 0
+        res = self.constant_arrays_counter
+        self.constant_arrays_counter += 1
+        arr = self.constant_arrays[-1]
+        arr[res] = c.getfloat()
+        return heap64(rffi.cast(lltype.Signed, arr) + res * WORD * 2)
+        
     def after_call(self, v):
         xxx # test
         # the result is stored in st0, but we don't have this around,
