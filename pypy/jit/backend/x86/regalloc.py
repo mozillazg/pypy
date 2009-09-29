@@ -65,14 +65,15 @@ class X86XMMRegisterManager(RegisterManager):
     def __init__(self, *args, **kwds):
         RegisterManager.__init__(self, *args, **kwds)
         self.constant_arrays = [self.new_const_array()]
-        self.constant_arrays_counter = 0
+        self.constant_array_counter = 0
 
     def convert_to_imm(self, c):
-        if self.constant_arrays_counter >= BASE_CONSTANT_SIZE:
-            self.constant_arrays.append(self.new_const_array)
-            self.constant_arrays_counter = 0
-        res = self.constant_arrays_counter
-        self.constant_arrays_counter += 1
+        if self.constant_array_counter >= BASE_CONSTANT_SIZE:
+            xxx # test me
+            self.constant_arrays.append(self.new_const_array())
+            self.constant_array_counter = 0
+        res = self.constant_array_counter
+        self.constant_array_counter += 1
         arr = self.constant_arrays[-1]
         arr[res] = c.getfloat()
         return heap64(rffi.cast(lltype.Signed, arr) + res * WORD * 2)
@@ -116,6 +117,7 @@ class RegAlloc(object):
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
         # compute longevity of variables
         longevity = self._compute_vars_longevity(inputargs, operations)
+        self.longevity = longevity
         self.rm = X86RegisterManager(longevity,
                                      stack_manager = self.sm,
                                      assembler = self.assembler)
@@ -148,8 +150,10 @@ class RegAlloc(object):
             arg = inputargs[i]
             assert not isinstance(arg, Const)
             reg = None
-            if arg not in self.loop_consts and self.rm.longevity[arg][1] > -1:
+            if arg not in self.loop_consts and self.longevity[arg][1] > -1:
                 if arg.type == FLOAT:
+                    # xxx is it really a good idea?  at the first CALL they
+                    # will all be flushed anyway
                     reg = self.xrm.try_allocate_reg(arg)
                 else:
                     reg = self.rm.try_allocate_reg(arg)
@@ -186,7 +190,8 @@ class RegAlloc(object):
         for i in range(len(locs)):
             v = args[i]
             loc = locs[i]
-            if isinstance(loc, REG) and self.rm.longevity[v][1] > -1:
+            if isinstance(loc, REG) and self.longevity[v][1] > -1:
+                # XXX xmm regs
                 self.rm.reg_bindings[v] = loc
                 used[loc] = None
             else:
@@ -244,7 +249,7 @@ class RegAlloc(object):
             return False
         if operations[i + 1].args[0] is not op.result:
             return False
-        if (self.rm.longevity[op.result][1] > i + 1 or
+        if (self.longevity[op.result][1] > i + 1 or
             op.result in operations[i + 1].suboperations[0].args):
             return False
         return True
@@ -255,7 +260,7 @@ class RegAlloc(object):
         while i < len(operations):
             op = operations[i]
             self.rm.position = i
-            if op.has_no_side_effect() and op.result not in self.rm.longevity:
+            if op.has_no_side_effect() and op.result not in self.longevity:
                 i += 1
                 self.rm.possibly_free_vars(op.args)
                 continue
@@ -328,7 +333,7 @@ class RegAlloc(object):
         loc = self.rm.make_sure_var_in_reg(op.args[0])
         box = TempBox()
         loc1 = self.rm.force_allocate_reg(box, op.args)
-        if op.result in self.rm.longevity:
+        if op.result in self.longevity:
             # this means, is it ever used
             resloc = self.rm.force_allocate_reg(op.result, op.args + [box])
         else:
