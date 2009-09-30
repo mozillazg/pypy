@@ -23,7 +23,8 @@ class AbstractCPU(object):
 
     def execute_token(self, looptoken):
         """Execute the generated code referenced by the looptoken.
-        Returns the ResOperation that failed, of type rop.FAIL.
+        Returns the descr of the last executed operation: either the one
+        attached to the failing guard, or the one attached to the FINISH.
         Use set_future_value_xxx() before, and get_latest_value_xxx() after.
         """
         raise NotImplementedError
