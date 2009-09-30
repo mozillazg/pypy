@@ -867,12 +867,12 @@ def new_addr_add(heap, mem, memsib):
                 return heap(reg_or_imm1.value + offset +
                             (reg_or_imm2.value << scale))
             else:
-                return memSIB(None, reg_or_imm2, scale, reg_or_imm1.value + offset)
+                return memsib(None, reg_or_imm2, scale, reg_or_imm1.value + offset)
         else:
             if isinstance(reg_or_imm2, IMM32):
                 return mem(reg_or_imm1, offset + (reg_or_imm2.value << scale))
             else:
-                return memSIB(reg_or_imm1, reg_or_imm2, scale, offset)
+                return memsib(reg_or_imm1, reg_or_imm2, scale, offset)
     return addr_add
 
 addr8_add = new_addr_add(heap8, mem8, memSIB8)
