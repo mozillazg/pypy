@@ -281,6 +281,24 @@ class BaseBackendTest(Runner):
                                          'int', descr=calldescr)
             assert res.value == 2 * num
 
+        if cpu.supports_floats:
+            def func(f0, f1, f2, f3, f4, f5, f6, i0, i1, f7, f8, f9):
+                return f0 + f1 + f2 + f3 + f4 + f5 + f6 + float(i0 + i1) + f7 + f8 + f9
+            F = lltype.Float
+            I = lltype.Signed
+            FUNC = self.FuncType([F] * 7 + [I] * 2 + [F] * 3, F)
+            FPTR = self.Ptr(FUNC)
+            func_ptr = llhelper(FPTR, func)
+            calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+            funcbox = self.get_funcbox(cpu, func_ptr)
+            args = ([BoxFloat(.1) for i in range(7)] +
+                    [BoxInt(1), BoxInt(2), BoxFloat(.2), BoxFloat(.3),
+                     BoxFloat(.4)])
+            res = self.execute_operation(rop.CALL,
+                                         [funcbox] + args,
+                                         'float', descr=calldescr)
+            assert res.value - 4.6 < 0.0001
+
     def test_executor(self):
         cpu = self.cpu
         x = execute(cpu, rop.INT_ADD, None, BoxInt(100), ConstInt(42))

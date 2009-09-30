@@ -570,10 +570,11 @@ class RegAlloc(object):
         self.rm.before_call(force_store)
         self.xrm.before_call(force_store)
         self.Perform(op, arglocs, eax)
-        if op.result.type == FLOAT:
-            self.xrm.after_call(op.result)
-        else:
-            self.rm.after_call(op.result)
+        if op.result is not None:
+            if op.result.type == FLOAT:
+                self.xrm.after_call(op.result)
+            else:
+                self.rm.after_call(op.result)
 
     def consider_call(self, op, ignored):
         calldescr = op.descr
