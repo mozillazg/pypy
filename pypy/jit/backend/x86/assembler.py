@@ -431,6 +431,12 @@ class Assembler386(object):
         self.mc.OR(resloc, loc2)
         self.mc.MOVZX(resloc, lower_byte(resloc))
 
+    def genop_cast_float_to_int(self, op, arglocs, resloc):
+        self.mc.CVTTSD2SI(resloc, arglocs[0])
+
+    def genop_cast_int_to_float(self, op, arglocs, resloc):
+        self.mc.CVTSI2SD(resloc, arglocs[0])
+
     def genop_bool_not(self, op, arglocs, resloc):
         self.mc.XOR(arglocs[0], imm8(1))
 

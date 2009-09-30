@@ -536,6 +536,13 @@ ANDPD = Instruction()
 ANDPD.mode2(XMMREG, XMMREG, ['\x66\x0F\x54', register(1, 8), register(2),
                              '\xC0'])
 
+CVTTSD2SI = Instruction()
+CVTTSD2SI.mode2(REG, XMMREG, ['\xF2\x0F\x2C', register(1, 8), register(2),
+                             '\xC0'])
+
+CVTSI2SD = Instruction()
+CVTSI2SD.mode2(XMMREG, MODRM, ['\xF2\x0F\x2A', register(1, 8), modrm(2)])
+
 # ------------------------------ end of SSE2 -----------------------------
 
 UD2 = Instruction()      # reserved as an illegal instruction
