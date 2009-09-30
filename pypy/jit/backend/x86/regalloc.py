@@ -696,9 +696,9 @@ class RegAlloc(object):
         else:
             need_lower_byte = False
         base_loc = self.rm.make_sure_var_in_reg(op.args[0], op.args)
-        value_loc = self.rm.make_sure_var_in_reg(op.args[1], op.args,
+        value_loc = self.make_sure_var_in_reg(op.args[1], op.args,
                                               need_lower_byte=need_lower_byte)
-        self.rm.possibly_free_vars(op.args)
+        self.possibly_free_vars(op.args)
         self.PerformDiscard(op, [base_loc, ofs_loc, size_loc, value_loc])
 
     consider_setfield_raw = consider_setfield_gc
@@ -733,7 +733,7 @@ class RegAlloc(object):
         ofs_loc, size_loc, _ = self._unpack_fielddescr(op.descr)
         base_loc = self.rm.make_sure_var_in_reg(op.args[0], op.args)
         self.rm.possibly_free_vars(op.args)
-        result_loc = self.rm.force_allocate_reg(op.result)
+        result_loc = self.force_allocate_reg(op.result)
         self.Perform(op, [base_loc, ofs_loc, size_loc], result_loc)
 
     consider_getfield_gc_pure = consider_getfield_gc

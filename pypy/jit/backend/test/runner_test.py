@@ -487,6 +487,14 @@ class BaseBackendTest(Runner):
                                      'ref', descr=fielddescr2)
         assert res.value == null_const.value
 
+        if self.cpu.supports_floats:
+            floatdescr = self.cpu.fielddescrof(self.S, 'float')
+            self.execute_operation(rop.SETFIELD_GC, [t_box, BoxFloat(3.4)],
+                                   'void', descr=floatdescr)
+            res = self.execute_operation(rop.GETFIELD_GC, [t_box],
+                                         'float', descr=floatdescr)
+            assert res.value == 3.4
+
     def test_passing_guards(self):
         for (opname, args) in [(rop.GUARD_TRUE, [BoxInt(1)]),
                                (rop.GUARD_FALSE, [BoxInt(0)]),
@@ -748,7 +756,9 @@ class LLtypeBackendTest(BaseBackendTest):
                                   ('chr1', lltype.Char),
                                   ('chr2', lltype.Char),
                                   ('short', rffi.SHORT),
-                                  ('next', lltype.Ptr(S))))
+                                  ('next', lltype.Ptr(S)),
+                                  ('float', lltype.Float)
+                             ))
     T = lltype.GcStruct('T', ('parent', S),
                              ('next', lltype.Ptr(S)))
     U = lltype.GcStruct('U', ('parent', T),
