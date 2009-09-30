@@ -544,15 +544,19 @@ class Assembler386(object):
         base_loc, ofs_loc, scale, ofs = arglocs
         assert isinstance(ofs, IMM32)
         assert isinstance(scale, IMM32)
-        if scale.value == 0:
-            self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc, ofs.value,
-                                            scale.value))
-        elif scale.value == 2:
-            self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value,
-                                         scale.value))
+        if op.result.type == FLOAT:
+            self.mc.MOVSD(resloc, addr64_add(base_loc, ofs_loc, ofs.value,
+                                             scale.value))
         else:
-            print "[asmgen]setarrayitem unsupported size: %d" % scale.value
-            raise NotImplementedError()
+            if scale.value == 0:
+                self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc, ofs.value,
+                                                scale.value))
+            elif scale.value == 2:
+                self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value,
+                                             scale.value))
+            else:
+                print "[asmgen]setarrayitem unsupported size: %d" % scale.value
+                raise NotImplementedError()
 
     genop_getfield_raw = genop_getfield_gc
     genop_getarrayitem_gc_pure = genop_getarrayitem_gc
@@ -575,14 +579,18 @@ class Assembler386(object):
         base_loc, ofs_loc, value_loc, scale_loc, baseofs = arglocs
         assert isinstance(baseofs, IMM32)
         assert isinstance(scale_loc, IMM32)
-        if scale_loc.value == 2:
-            self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value,
-                                 scale_loc.value), value_loc)
-        elif scale_loc.value == 0:
-            self.mc.MOV(addr8_add(base_loc, ofs_loc, baseofs.value,
-                                 scale_loc.value), lower_byte(value_loc))
+        if op.args[2].type == FLOAT:
+            self.mc.MOVSD(addr64_add(base_loc, ofs_loc, baseofs.value,
+                                     scale_loc.value), value_loc)
         else:
-            raise NotImplementedError("scale = %d" % scale_loc.value)
+            if scale_loc.value == 2:
+                self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value,
+                                     scale_loc.value), value_loc)
+            elif scale_loc.value == 0:
+                self.mc.MOV(addr8_add(base_loc, ofs_loc, baseofs.value,
+                                      scale_loc.value), lower_byte(value_loc))
+            else:
+                raise NotImplementedError("scale = %d" % scale_loc.value)
 
     def genop_discard_strsetitem(self, op, arglocs):
         base_loc, ofs_loc, val_loc = arglocs
