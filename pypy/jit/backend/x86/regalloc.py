@@ -543,7 +543,16 @@ class RegAlloc(object):
         self.xrm.possibly_free_var(tmpbox0)
 
     def consider_cast_float_to_int(self, op, ignored):
-        xxx
+        loc0 = self.xrm.make_sure_var_in_reg(op.args[0], imm_fine=False)
+        loc1 = self.rm.force_allocate_reg(op.result)
+        self.Perform(op, [loc0], loc1)
+        self.xrm.possibly_free_var(op.args[0])
+
+    def consider_cast_int_to_float(self, op, ignored):
+        loc0 = self.rm.loc(op.args[0])
+        loc1 = self.xrm.force_allocate_reg(op.result)
+        self.Perform(op, [loc0], loc1)
+        self.rm.possibly_free_var(op.args[0])
 
     def _call(self, op, arglocs, force_store=[]):
         self.rm.before_call(force_store)
