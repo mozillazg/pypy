@@ -523,6 +523,8 @@ class RegAlloc(object):
 
     def consider_float_neg(self, op, ignored):
         # Following what gcc does...
+        # XXX we can ignore having constant in a reg, but we need
+        #     to be careful with 128-bit alignment
         loc0 = self.xrm.force_result_in_reg(op.result, op.args[0])
         constloc = self.xrm.get_addr_of_const_float(0, 0)
         tmpbox = TempBox()
@@ -533,6 +535,8 @@ class RegAlloc(object):
         self.xrm.possibly_free_var(op.args[0])
 
     def consider_float_abs(self, op, ignored):
+        # XXX we can ignore having constant in a reg, but we need
+        #     to be careful with 128-bit alignment
         loc0 = self.xrm.force_result_in_reg(op.result, op.args[0])
         constloc = self.xrm.get_addr_of_const_float(0, 1)
         tmpbox = TempBox()
