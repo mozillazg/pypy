@@ -652,13 +652,14 @@ class LoopToken(AbstractDescr):
     generated assembler.
     """
     terminating = False # see TerminatingLoopToken in compile.py
-    # specnodes
-    # executable_token
+    # specnodes = ...
+    # and more data specified by the backend when the loop is compiled
 
 class TreeLoop(object):
     inputargs = None
-    specnodes = None
     operations = None
+    token = None
+    specnodes = property(lambda x: crash, lambda x, y: crash)  # XXX temp
 
     def __init__(self, name):
         self.name = name
@@ -729,7 +730,7 @@ class TreeLoop(object):
                 seen[box] = True
         assert operations[-1].is_final()
         if operations[-1].opnum == rop.JUMP:
-            target = operations[-1].jump_target
+            target = operations[-1].descr
             if target is not None:
                 assert isinstance(target, LoopToken)
 
@@ -800,6 +801,9 @@ class NoStats(object):
         return 'Loop'
 
     def add_new_loop(self, loop):
+        pass
+
+    def view(self, **kwds):
         pass
 
 class Stats(object):
