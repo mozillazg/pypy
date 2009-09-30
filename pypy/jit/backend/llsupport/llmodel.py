@@ -4,7 +4,8 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated, specialize
-from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values,\
+     BoxFloat
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
@@ -414,9 +415,12 @@ class AbstractLLCPU(AbstractCPU):
         self.execute_token(executable_token)
         # Note: if an exception is set, the rest of the code does a bit of
         # nonsense but nothing wrong (the return value should be ignored)
+        res = calldescr.get_result_size(self.translate_support_code)
         if calldescr.returns_a_pointer():
             return BoxPtr(self.get_latest_value_ref(0))
-        elif calldescr.get_result_size(self.translate_support_code) != 0:
+        elif res == self.FLOATSIZE:
+            return BoxFloat(self.get_latest_value_float(0))
+        elif res > 0:
             return BoxInt(self.get_latest_value_int(0))
         else:
             return None

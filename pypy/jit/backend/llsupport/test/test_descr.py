@@ -130,7 +130,10 @@ def test_get_call_descr():
     assert isinstance(descr3.get_result_size(True), Symbolic)
     assert descr3.returns_a_pointer()
     assert descr3.arg_classes == "r"
-
+    #
+    c1 = GcCache(True)
+    descr4 = get_call_descr(c1, [lltype.Float, lltype.Float], lltype.Float)
+    assert descr4.get_result_size(False) == rffi.sizeof(lltype.Float)
 
 def test_repr_of_descr():
     c0 = GcCache(False)

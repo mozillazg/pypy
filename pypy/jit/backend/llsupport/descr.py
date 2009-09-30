@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.backend.llsupport import symbolic
-from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
+from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr,\
+     BoxFloat
 from pypy.jit.metainterp.history import BasicFailDescr
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 
@@ -175,6 +176,7 @@ class BaseCallDescr(AbstractDescr):
         result = []
         for c in self.arg_classes:
             if c == 'i': box = BoxInt()
+            elif c == 'f': box = BoxFloat()
             else:        box = BoxPtr()
             result.append(box)
         return result
@@ -189,12 +191,15 @@ class BaseCallDescr(AbstractDescr):
         if self.executable_token is not None:
             return self.executable_token
         args = [BoxInt()] + self.instantiate_arg_classes()
-        if self.get_result_size(cpu.translate_support_code) == 0:
+        res_size = self.get_result_size(cpu.translate_support_code)
+        if res_size == 0:
             result = None
             result_list = []
         else:
             if self.returns_a_pointer():
                 result = BoxPtr()
+            elif res_size == 8:
+                result = BoxFloat()
             else:
                 result = BoxInt()
             result_list = [result]
@@ -240,6 +245,7 @@ def get_call_descr(gccache, ARGS, RESULT):
         kind = getkind(ARG)
         if   kind == 'int': arg_classes.append('i')
         elif kind == 'ref': arg_classes.append('r')
+        elif kind == 'float': arg_classes.append('f')
         else:
             raise NotImplementedError('ARG = %r' % (ARG,))
     arg_classes = ''.join(arg_classes)

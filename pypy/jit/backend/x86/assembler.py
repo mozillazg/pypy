@@ -255,6 +255,9 @@ class Assembler386(object):
         else:
             self.mc.MOV(to_loc, from_loc)
 
+    def regalloc_fstp(self, loc):
+        self.mc.FSTP(loc)
+
     def regalloc_push(self, loc):
         self.mc.PUSH(loc)
 
@@ -780,15 +783,26 @@ class Assembler386(object):
             tmp = ecx
         else:
             tmp = eax
+        p = 0
         for i in range(2, nargs + 2):
             loc = arglocs[i]
             if isinstance(loc, REG):
-                self.mc.MOV(mem(esp, WORD * (i - 2)), loc)
+                if isinstance(loc, XMMREG):
+                    self.mc.MOVSD(mem64(esp, p), loc)
+                    p += 2*WORD
+                else:
+                    self.mc.MOV(mem(esp, p), loc)
+                    p += WORD
+        p = 0
         for i in range(2, nargs + 2):
             loc = arglocs[i]
             if not isinstance(loc, REG):
-                self.mc.MOV(tmp, loc)
-                self.mc.MOV(mem(esp, WORD * (i - 2)), tmp)
+                if isinstance(loc, MODRM64):
+                    xxx
+                else:
+                    self.mc.MOV(tmp, loc)
+                    self.mc.MOV(mem(esp, p), tmp)
+                    p += WORD
         self.mc.CALL(x)
         self.mark_gc_roots()
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
