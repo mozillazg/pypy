@@ -773,7 +773,10 @@ class Assembler386(object):
         assert isinstance(sizeloc, IMM32)
         size = sizeloc.value
         nargs = len(op.args)-1
-        extra_on_stack = self.align_stack_for_call(nargs)
+        extra_on_stack = 0
+        for arg in range(2, nargs + 2):
+            extra_on_stack += round_up_to_4(arglocs[arg].width)
+        extra_on_stack = self.align_stack_for_call(extra_on_stack)
         self.mc.SUB(esp, imm(WORD * extra_on_stack))
         if isinstance(op.args[0], Const):
             x = rel32(op.args[0].getint())
