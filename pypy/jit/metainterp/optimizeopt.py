@@ -458,7 +458,7 @@ class Optimizer(object):
 
     def setup_virtuals_and_constants(self):
         inputargs = self.loop.inputargs
-        specnodes = self.loop.specnodes
+        specnodes = self.loop.token.specnodes
         assert len(inputargs) == len(specnodes)
         newinputargs = []
         for i in range(len(inputargs)):

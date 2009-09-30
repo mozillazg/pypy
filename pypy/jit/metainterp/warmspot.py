@@ -696,8 +696,8 @@ def make_state_class(warmrunnerdesc):
     #
     class MachineCodeEntryPoint(object):
         next = None    # linked list
-        def __init__(self, entry_executable_token, *greenargs):
-            self.entry_executable_token = entry_executable_token
+        def __init__(self, entry_loop_token, *greenargs):
+            self.entry_loop_token = entry_loop_token
             i = 0
             for name in green_args_names:
                 setattr(self, 'green_' + name, greenargs[i])
@@ -825,7 +825,7 @@ def make_state_class(warmrunnerdesc):
                     return
                 metainterp = MetaInterp(metainterp_sd)
                 try:
-                    executable_token = metainterp.compile_and_run_once(*args)
+                    loop_token = metainterp.compile_and_run_once(*args)
                 except warmrunnerdesc.ContinueRunningNormally:
                     # the trace got too long, reset the counter
                     self.mccounters[argshash] = 0
@@ -837,21 +837,20 @@ def make_state_class(warmrunnerdesc):
                 cell = self.mcentrypoints[argshash]
                 if not cell.equalkey(*greenargs):
                     # hash collision
-                    executable_token = self.handle_hash_collision(cell,
-                                                                  argshash,
-                                                                  *args)
-                    if executable_token is None:
+                    loop_token = self.handle_hash_collision(cell, argshash,
+                                                            *args)
+                    if loop_token is None:
                         return
                 else:
                     # get the assembler and fill in the boxes
                     cell.set_future_values(*args[num_green_args:])
-                    executable_token = cell.entry_executable_token
+                    loop_token = cell.entry_loop_token
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception
                 metainterp_sd.profiler.start_running()
-                fail_descr = metainterp_sd.cpu.execute_token(executable_token)
+                fail_descr = metainterp_sd.cpu.execute_token(loop_token)
                 metainterp_sd.profiler.end_running()
-                executable_token = fail_descr.handle_fail(metainterp_sd)
+                loop_token = fail_descr.handle_fail(metainterp_sd)
 
         maybe_compile_and_run._dont_inline_ = True
 
@@ -867,7 +866,7 @@ def make_state_class(warmrunnerdesc):
                     nextcell.next = firstcell
                     self.mcentrypoints[argshash] = nextcell
                     nextcell.set_future_values(*args[num_green_args:])
-                    return nextcell.entry_executable_token
+                    return nextcell.entry_loop_token
                 cell = nextcell
             # not found at all, do profiling
             counter = self.mccounters[argshash]
@@ -927,9 +926,9 @@ def make_state_class(warmrunnerdesc):
             key.counter = 0
 
         def attach_unoptimized_bridge_from_interp(self, greenkey,
-                                                  entry_executable_token):
+                                                  entry_loop_token):
             greenargs = self.unwrap_greenkey(greenkey)
-            newcell = MachineCodeEntryPoint(entry_executable_token, *greenargs)
+            newcell = MachineCodeEntryPoint(entry_loop_token, *greenargs)
             argshash = self.getkeyhash(*greenargs) & self.hashtablemask
             oldcell = self.mcentrypoints[argshash]
             newcell.next = oldcell     # link

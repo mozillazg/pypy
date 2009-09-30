@@ -299,7 +299,7 @@ class NodeFinder(object):
         for box in op.args:
             self.getnode(box).set_unique_nodes()
 
-    def find_nodes_FAIL(self, op):
+    def find_nodes_FINISH(self, op):
         # only for bridges, and only for the ones that end in a 'return'
         # or 'raise'; all other cases end with a JUMP.
         for box in op.args:
@@ -337,7 +337,7 @@ class PerfectSpecializationFinder(NodeFinder):
             inputnode = self.inputnodes[i]
             exitnode = self.getnode(op.args[i])
             specnodes.append(self.intersect(inputnode, exitnode))
-        loop.specnodes = specnodes
+        loop.token.specnodes = specnodes
 
     def intersect(self, inputnode, exitnode):
         assert inputnode.fromstart

@@ -147,12 +147,11 @@ class BaseTestOptimizeOpt(BaseTest):
             cpu = self.cpu
             perfect_specialization_finder = PerfectSpecializationFinder(cpu)
             perfect_specialization_finder.find_nodes_loop(loop)
-            self.check_specnodes(loop.specnodes, spectext)
+            self.check_specnodes(loop.token.specnodes, spectext)
         else:
             # for cases where we want to see how optimizeopt behaves with
             # combinations different from the one computed by optimizefindnode
-            loop.specnodes = self.unpack_specnodes(spectext)
-        loop.token.specnodes = loop.specnodes
+            loop.token.specnodes = self.unpack_specnodes(spectext)
         #
         optimize_loop_1(self.cpu, loop)
         #
