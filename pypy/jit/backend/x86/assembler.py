@@ -771,12 +771,24 @@ class Assembler386(object):
         size = sizeloc.value
         nargs = len(op.args)-1
         extra_on_stack = self.align_stack_for_call(nargs)
-        for i in range(nargs+1, 1, -1):
-            self.mc.PUSH(arglocs[i])
+        self.mc.SUB(esp, imm(WORD * extra_on_stack))
         if isinstance(op.args[0], Const):
             x = rel32(op.args[0].getint())
         else:
             x = arglocs[1]
+        if x is eax:
+            tmp = ecx
+        else:
+            tmp = eax
+        for i in range(2, nargs + 2):
+            loc = arglocs[i]
+            if isinstance(loc, REG):
+                self.mc.MOV(mem(esp, WORD * (i - 2)), loc)
+        for i in range(2, nargs + 2):
+            loc = arglocs[i]
+            if not isinstance(loc, REG):
+                self.mc.MOV(tmp, loc)
+                self.mc.MOV(mem(esp, WORD * (i - 2)), tmp)
         self.mc.CALL(x)
         self.mark_gc_roots()
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
