@@ -53,9 +53,11 @@ class X86RegisterManager(RegisterManager):
 BASE_CONSTANT_SIZE = 1000
 
 # cheat cheat cheat....
-# XXX why not -0.0? People tell me it's platform-dependent
+#  why not -0.0? People tell me it's platform-dependent
+#  nan is not portable
 import struct
 NEG_ZERO, = struct.unpack('d', struct.pack('ll', 0, -2147483648))
+NAN, = struct.unpack('d', struct.pack('ll', -1, 2147483647))
 
 class X86XMMRegisterManager(RegisterManager):
 
@@ -73,7 +75,8 @@ class X86XMMRegisterManager(RegisterManager):
         RegisterManager.__init__(self, *args, **kwds)
         self.constant_arrays = [self.new_const_array()]
         self.constant_arrays[-1][0] = NEG_ZERO
-        self.constant_array_counter = 1
+        self.constant_arrays[-1][1] = NAN
+        self.constant_array_counter = 2
 
     def convert_to_imm(self, c):
         if self.constant_array_counter >= BASE_CONSTANT_SIZE:
@@ -518,6 +521,28 @@ class RegAlloc(object):
         self.xrm.possibly_free_var(op.args[0])
 
     def consider_float_abs(self, op, ignored):
+        loc0 = self.xrm.force_result_in_reg(op.result, op.args[0])
+        constloc = self.xrm.get_addr_of_const_float(0, 1)
+        tmpbox = TempBox()
+        loc1 = self.xrm.force_allocate_reg(tmpbox, op.args)
+        self.assembler.regalloc_mov(constloc, loc1)
+        self.Perform(op, [loc0, loc1], loc0)
+        self.xrm.possibly_free_var(tmpbox)
+        self.xrm.possibly_free_var(op.args[0])
+
+    def consider_float_is_true(self, op, ignored):
+        tmpbox0 = TempBox()
+        tmpbox1 = TempBox()
+        loc0 = self.xrm.force_allocate_reg(tmpbox0)
+        loc1 = self.xrm.loc(op.args[0])
+        loc2 = self.rm.force_allocate_reg(tmpbox1, need_lower_byte=True)
+        loc3 = self.rm.force_allocate_reg(op.result, need_lower_byte=True)
+        self.Perform(op, [loc0, loc1, loc2], loc3)
+        self.rm.possibly_free_var(tmpbox1)
+        self.xrm.possibly_free_var(op.args[0])
+        self.xrm.possibly_free_var(tmpbox0)
+
+    def consider_cast_float_to_int(self, op, ignored):
         xxx
 
     def _call(self, op, arglocs, force_store=[]):
