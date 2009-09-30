@@ -791,7 +791,7 @@ class Assembler386(object):
                     self.mc.MOVSD(mem64(esp, p), loc)
                 else:
                     self.mc.MOV(mem(esp, p), loc)
-            p += loc.width
+            p += round_up_to_4(loc.width)
         p = 0
         for i in range(2, nargs + 2):
             loc = arglocs[i]
@@ -802,7 +802,7 @@ class Assembler386(object):
                 else:
                     self.mc.MOV(tmp, loc)
                     self.mc.MOV(mem(esp, p), tmp)
-            p += loc.width
+            p += round_up_to_4(loc.width)
         self.mc.CALL(x)
         self.mark_gc_roots()
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
@@ -920,3 +920,8 @@ def addr_add_const(reg_or_imm1, offset):
         return heap(reg_or_imm1.value + offset)
     else:
         return mem(reg_or_imm1, offset)
+
+def round_up_to_4(size):
+    if size < 4:
+        return 4
+    return size
