@@ -533,6 +533,8 @@ class Assembler386(object):
             self.mc.MOVZX(resloc, addr_add(base_loc, ofs_loc))
         elif size == WORD:
             self.mc.MOV(resloc, addr_add(base_loc, ofs_loc))
+        elif size == 8:
+            self.mc.MOVSD(resloc, addr64_add(base_loc, ofs_loc))
         else:
             raise NotImplementedError("getfield size = %d" % size)
 
@@ -563,7 +565,9 @@ class Assembler386(object):
         base_loc, ofs_loc, size_loc, value_loc = arglocs
         assert isinstance(size_loc, IMM32)
         size = size_loc.value
-        if size == WORD:
+        if size == WORD * 2:
+            self.mc.MOVSD(addr64_add(base_loc, ofs_loc), value_loc)
+        elif size == WORD:
             self.mc.MOV(addr_add(base_loc, ofs_loc), value_loc)
         elif size == 2:
             self.mc.MOV16(addr_add(base_loc, ofs_loc), value_loc)
