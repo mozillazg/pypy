@@ -35,9 +35,11 @@ class PyPyJitPolicy(JitPolicy):
             # gc_id operation
             if func.__name__ == 'id__ANY':
                 return False
-        # floats
         if mod == 'pypy.rlib.rbigint':
             #if func.__name__ == '_bigint_true_divide':
+            return False
+        if mod == 'pypy.rpython.lltypesystem.ll_math':
+            # XXX temporary, contains force_cast
             return False
         if '_geninterp_' in func.func_globals: # skip all geninterped stuff
             return False
