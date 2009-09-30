@@ -423,12 +423,10 @@ class Assembler386(object):
         self.mc.ANDPD(arglocs[0], arglocs[1])
 
     def genop_float_is_true(self, op, arglocs, resloc):
-        loc0, loc1, loc2 = arglocs
+        loc0, loc1 = arglocs
         self.mc.XORPD(loc0, loc0)
         self.mc.UCOMISD(loc1, loc0)
         self.mc.SETNE(lower_byte(resloc))
-        self.mc.SETP(lower_byte(loc2))
-        self.mc.OR(resloc, loc2)
         self.mc.MOVZX(resloc, lower_byte(resloc))
 
     def genop_cast_float_to_int(self, op, arglocs, resloc):

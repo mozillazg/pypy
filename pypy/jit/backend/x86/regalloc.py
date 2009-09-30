@@ -548,13 +548,10 @@ class RegAlloc(object):
 
     def consider_float_is_true(self, op, ignored):
         tmpbox0 = TempBox()
-        tmpbox1 = TempBox()
         loc0 = self.xrm.force_allocate_reg(tmpbox0)
         loc1 = self.xrm.loc(op.args[0])
-        loc2 = self.rm.force_allocate_reg(tmpbox1, need_lower_byte=True)
-        loc3 = self.rm.force_allocate_reg(op.result, need_lower_byte=True)
-        self.Perform(op, [loc0, loc1, loc2], loc3)
-        self.rm.possibly_free_var(tmpbox1)
+        loc2 = self.rm.force_allocate_reg(op.result, need_lower_byte=True)
+        self.Perform(op, [loc0, loc1], loc2)
         self.xrm.possibly_free_var(op.args[0])
         self.xrm.possibly_free_var(tmpbox0)
 
