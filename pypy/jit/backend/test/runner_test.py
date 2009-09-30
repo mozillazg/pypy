@@ -241,6 +241,19 @@ class BaseBackendTest(Runner):
              BoxInt(ord('A'))],
             calldescr)
         assert x.value == ord('B')
+        if cpu.supports_floats:
+            def func(f, i):
+                return float(i) + f
+            FPTR = self.Ptr(self.FuncType([lltype.Float, lltype.Signed],
+                                          lltype.Float))
+            func_ptr = llhelper(FPTR, func)
+            FTP = deref(FPTR)
+            calldescr = cpu.calldescrof(FTP, FTP.ARGS, FTP.RESULT)
+            x = cpu.do_call(
+                [self.get_funcbox(cpu, func_ptr),
+                 BoxFloat(3.5), BoxInt(42)],
+                calldescr)
+            assert x.value == 42 + 3.5
 
     def test_call(self):
 
