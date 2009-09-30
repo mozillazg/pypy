@@ -221,7 +221,7 @@ class RegisterManager(object):
                 self.assembler.regalloc_mov(self.convert_to_imm(v), selected_reg)
                 return selected_reg
             if selected_reg is None and self.free_regs:
-                loc = self.free_regs.pop()
+                loc = self.free_regs[-1]
                 self.assembler.regalloc_mov(self.convert_to_imm(v), loc)
                 return loc
             loc = self._spill_var(v, forbidden_vars, selected_reg)

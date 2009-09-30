@@ -233,10 +233,11 @@ class TestRegalloc(object):
         assert isinstance(loc, ConstInt)
         for box in boxes[:-1]:
             rm.force_allocate_reg(box)
-        assert len(asm.moves) == 4
+        assert len(asm.moves) == 3
         loc = rm.return_constant(ConstInt(1), imm_fine=False)
         assert isinstance(loc, FakeReg)
-        assert len(asm.moves) == 6
+        assert len(asm.moves) == 5
+        assert len(rm.reg_bindings) == 3
 
     def test_force_result_in_reg_const(self):
         boxes, longevity = boxes_and_longevity(2)
