@@ -789,20 +789,20 @@ class Assembler386(object):
             if isinstance(loc, REG):
                 if isinstance(loc, XMMREG):
                     self.mc.MOVSD(mem64(esp, p), loc)
-                    p += 2*WORD
                 else:
                     self.mc.MOV(mem(esp, p), loc)
-                    p += WORD
+            p += loc.width
         p = 0
         for i in range(2, nargs + 2):
             loc = arglocs[i]
             if not isinstance(loc, REG):
                 if isinstance(loc, MODRM64):
-                    xxx
+                    self.mc.MOVSD(xmm0, loc)
+                    self.mc.MOVSD(mem64(esp, p), xmm0)
                 else:
                     self.mc.MOV(tmp, loc)
                     self.mc.MOV(mem(esp, p), tmp)
-                    p += WORD
+            p += loc.width
         self.mc.CALL(x)
         self.mark_gc_roots()
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
