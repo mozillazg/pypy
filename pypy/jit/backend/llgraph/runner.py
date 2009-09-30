@@ -466,9 +466,10 @@ class LLtypeCPU(BaseCPU):
         assert isinstance(calldescr, Descr)
         func = args[0].getint()
         for arg in args[1:]:
-            if (isinstance(arg, history.BoxPtr) or
-                isinstance(arg, history.ConstPtr)):
+            if arg.type == REF:
                 llimpl.do_call_pushptr(arg.getref_base())
+            elif arg.type == FLOAT:
+                llimpl.do_call_pushfloat(arg.getfloat())
             else:
                 llimpl.do_call_pushint(arg.getint())
         if calldescr.typeinfo == REF:
