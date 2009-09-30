@@ -43,17 +43,20 @@ class AbstractCPU(object):
 
     def get_latest_value_int(self, index):
         """Returns the value for the index'th argument to the
-        last executed operation.  Returns an int."""
+        last executed operation (from 'fail_args' if it was a guard,
+        or from 'args' if it was a FINISH).  Returns an int."""
         raise NotImplementedError
 
     def get_latest_value_float(self, index):
         """Returns the value for the index'th argument to the
-        last executed operation.  Returns a float."""
+        last executed operation (from 'fail_args' if it was a guard,
+        or from 'args' if it was a FINISH).  Returns a float."""
         raise NotImplementedError
 
     def get_latest_value_ref(self, index):
         """Returns the value for the index'th argument to the
-        last executed operation.  Returns a ptr or an obj."""
+        last executed operation (from 'fail_args' if it was a guard,
+        or from 'args' if it was a FINISH).  Returns a ptr or an obj."""
         raise NotImplementedError
 
     def get_exception(self):
