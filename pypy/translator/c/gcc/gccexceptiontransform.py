@@ -1,7 +1,9 @@
-from pypy.rpython.lltypesystem import lltype
-from pypy.objspace.flow.model import Constant
+from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.objspace.flow.model import Block, Link, Constant, Variable
+from pypy.objspace.flow.model import SpaceOperation, c_last_exception
 from pypy.annotation import model as annmodel
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+from pypy.translator.exceptiontransform import error_constant
 
 
 class ExceptionTransformer(object):
@@ -27,9 +29,10 @@ class ExceptionTransformer(object):
         def rpyexc_clear():
             pass
 
+        exit = rffi.llexternal('return', [lltype.Signed], lltype.Void,
+                               _nowrapper=True)
         def rpyexc_raise(etype, evalue):
-            # XXX!
-            pass
+            exit(0)     # XXX!
 
         self.rpyexc_occured_ptr = self.build_func(
             "RPyExceptionOccurred",
@@ -72,4 +75,26 @@ class ExceptionTransformer(object):
         return Constant(fn_ptr, lltype.Ptr(FUNC_TYPE))
 
     def create_exception_handling(self, graph):
-        pass
+        for block in list(graph.iterblocks()):
+            self.transform_block(graph, block)
+        self.transform_except_block(graph, graph.exceptblock)
+
+    def transform_block(self, graph, block):
+        if block.exitswitch == c_last_exception:
+            assert block.exits[0].exitcase is None
+            block.exits = block.exits[:1]
+            block.exitswitch = None
+
+    def transform_except_block(self, graph, block):
+        # attach an except block -- let's hope that nobody uses it
+        graph.exceptblock = Block([Variable('etype'),   # exception class
+                                   Variable('evalue')])  # exception value
+        graph.exceptblock.operations = ()
+        graph.exceptblock.closeblock()
+        
+        result = Variable()
+        result.concretetype = lltype.Void
+        block.operations = [SpaceOperation(
+           "direct_call", [self.rpyexc_raise_ptr] + block.inputargs, result)]
+        l = Link([error_constant(graph.returnblock.inputargs[0].concretetype)], graph.returnblock)
+        block.recloseblock(l)
