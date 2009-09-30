@@ -93,12 +93,11 @@ class X86XMMRegisterManager(RegisterManager):
         return heap64(rffi.cast(lltype.Signed, arr) + num_pos * WORD * 2)
         
     def after_call(self, v):
-        xxx # test
         # the result is stored in st0, but we don't have this around,
         # so we move it to some stack location
         if v is not None:
-            loc = self.sm.stack_loc(v, 2)
-            self.assembler.regalloc_mov(st0, loc)
+            loc = self.stack_manager.loc(v, 2)
+            self.assembler.regalloc_fstp(loc)
 
 class X86StackManager(StackManager):
 
@@ -569,8 +568,12 @@ class RegAlloc(object):
 
     def _call(self, op, arglocs, force_store=[]):
         self.rm.before_call(force_store)
+        self.xrm.before_call(force_store)
         self.Perform(op, arglocs, eax)
-        self.rm.after_call(op.result)
+        if op.result.type == FLOAT:
+            self.xrm.after_call(op.result)
+        else:
+            self.rm.after_call(op.result)
 
     def consider_call(self, op, ignored):
         calldescr = op.descr
