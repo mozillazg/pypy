@@ -318,6 +318,13 @@ class Assembler386(object):
                 getattr(self.mc, 'SET' + cond)(lower_byte(result_loc))
         return genop_cmp
 
+    def _cmpop_float(cond):
+        def genop_cmp(self, op, arglocs, result_loc):
+            self.mc.UCOMISD(arglocs[0], arglocs[1])
+            self.mc.MOV(result_loc, imm8(0))
+            getattr(self.mc, 'SET' + cond)(lower_byte(result_loc))
+        return genop_cmp
+
     def _cmpop_guard(cond, rev_cond, false_cond, false_rev_cond):
         def genop_cmp_guard(self, op, guard_opnum, addr, arglocs, result_loc):
             if isinstance(op.args[0], Const):
@@ -364,6 +371,9 @@ class Assembler386(object):
     genop_int_or  = _binaryop("OR", True)
     genop_int_xor = _binaryop("XOR", True)
     genop_float_add = _binaryop("ADDSD", True)
+    genop_float_sub = _binaryop('SUBSD')
+    genop_float_mul = _binaryop('MULSD', True)
+    genop_float_truediv = _binaryop('DIVSD')
 
     genop_int_mul_ovf = genop_int_mul
     genop_int_sub_ovf = genop_int_sub
@@ -377,6 +387,13 @@ class Assembler386(object):
     genop_ooisnot = genop_int_ne
     genop_int_gt = _cmpop("G", "L")
     genop_int_ge = _cmpop("GE", "LE")
+
+    genop_float_lt = _cmpop_float('B')
+    genop_float_le = _cmpop_float('BE')
+    genop_float_eq = _cmpop_float('E')
+    genop_float_ne = _cmpop_float('NE')
+    genop_float_gt = _cmpop_float('A')
+    genop_float_ge = _cmpop_float('AE')
 
     genop_uint_gt = _cmpop("A", "B")
     genop_uint_lt = _cmpop("B", "A")
@@ -398,6 +415,9 @@ class Assembler386(object):
     # for now all chars are being considered ints, although we should make
     # a difference at some point
     xxx_genop_char_eq = genop_int_eq
+
+    def genop_float_neg(self, op, arglocs, resloc):
+        self.mc.XORPD(arglocs[0], arglocs[1])
 
     def genop_bool_not(self, op, arglocs, resloc):
         self.mc.XOR(arglocs[0], imm8(1))
@@ -769,16 +789,19 @@ class Assembler386(object):
         mc.overwrite(jz_location-1, chr(offset))
 
     def not_implemented_op_discard(self, op, arglocs):
-        print "not implemented operation: %s" % op.getopname()
-        raise NotImplementedError
+        msg = "not implemented operation: %s" % op.getopname()
+        print msg
+        raise NotImplementedError(msg)
 
     def not_implemented_op(self, op, arglocs, resloc):
-        print "not implemented operation with res: %s" % op.getopname()
-        raise NotImplementedError
+        msg = "not implemented operation with res: %s" % op.getopname()
+        print msg
+        raise NotImplementedError(msg)
 
     def not_implemented_op_guard(self, op, regalloc, arglocs, resloc, descr):
-        print "not implemented operation (guard): %s" % op.getopname()
-        raise NotImplementedError
+        msg = "not implemented operation (guard): %s" % op.getopname()
+        print msg
+        raise NotImplementedError(msg)
 
     def mark_gc_roots(self):
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap

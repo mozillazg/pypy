@@ -52,6 +52,11 @@ class X86RegisterManager(RegisterManager):
 
 BASE_CONSTANT_SIZE = 1000
 
+# cheat cheat cheat....
+# XXX why not -0.0? People tell me it's platform-dependent
+import struct
+NEG_ZERO, = struct.unpack('d', struct.pack('ll', 0, -2147483648))
+
 class X86XMMRegisterManager(RegisterManager):
 
     box_types = [FLOAT]
@@ -67,7 +72,8 @@ class X86XMMRegisterManager(RegisterManager):
     def __init__(self, *args, **kwds):
         RegisterManager.__init__(self, *args, **kwds)
         self.constant_arrays = [self.new_const_array()]
-        self.constant_array_counter = 0
+        self.constant_arrays[-1][0] = NEG_ZERO
+        self.constant_array_counter = 1
 
     def convert_to_imm(self, c):
         if self.constant_array_counter >= BASE_CONSTANT_SIZE:
@@ -77,7 +83,11 @@ class X86XMMRegisterManager(RegisterManager):
         self.constant_array_counter += 1
         arr = self.constant_arrays[-1]
         arr[res] = c.getfloat()
-        return heap64(rffi.cast(lltype.Signed, arr) + res * WORD * 2)
+        return self.get_addr_of_const_float(-1, res)
+
+    def get_addr_of_const_float(self, num_arr, num_pos):
+        arr = self.constant_arrays[num_arr]
+        return heap64(rffi.cast(lltype.Signed, arr) + num_pos * WORD * 2)
         
     def after_call(self, v):
         xxx # test
@@ -468,11 +478,47 @@ class RegAlloc(object):
     consider_oois = _consider_compop
     consider_ooisnot = _consider_compop
 
-    def consider_float_add(self, op, ignored):
+    def _consider_float_op(self, op, ignored):
         loc0 = self.xrm.force_result_in_reg(op.result, op.args[0], op.args)
         loc1 = self.xrm.loc(op.args[1])
         self.Perform(op, [loc0, loc1], loc0)
         self.xrm.possibly_free_vars(op.args)
+
+    consider_float_add = _consider_float_op
+    consider_float_sub = _consider_float_op
+    consider_float_mul = _consider_float_op
+    consider_float_truediv = _consider_float_op
+
+    def _consider_float_cmp(self, op, ignored):
+        assert ignored is None
+        # XXX so far we don't have guards here, but we want them
+        loc0 = self.xrm.make_sure_var_in_reg(op.args[0], op.args,
+                                             imm_fine=False)
+        loc1 = self.xrm.loc(op.args[1])
+        res = self.rm.force_allocate_reg(op.result, need_lower_byte=True)
+        self.Perform(op, [loc0, loc1], res)
+        self.xrm.possibly_free_vars(op.args)        
+
+    consider_float_lt = _consider_float_cmp
+    consider_float_le = _consider_float_cmp
+    consider_float_eq = _consider_float_cmp
+    consider_float_ne = _consider_float_cmp
+    consider_float_gt = _consider_float_cmp
+    consider_float_ge = _consider_float_cmp
+
+    def consider_float_neg(self, op, ignored):
+        # Following what gcc does...
+        loc0 = self.xrm.force_result_in_reg(op.result, op.args[0])
+        constloc = self.xrm.get_addr_of_const_float(0, 0)
+        tmpbox = TempBox()
+        loc1 = self.xrm.force_allocate_reg(tmpbox, op.args)
+        self.assembler.regalloc_mov(constloc, loc1)
+        self.Perform(op, [loc0, loc1], loc0)
+        self.xrm.possibly_free_var(tmpbox)
+        self.xrm.possibly_free_var(op.args[0])
+
+    def consider_float_abs(self, op, ignored):
+        xxx
 
     def _call(self, op, arglocs, force_store=[]):
         self.rm.before_call(force_store)
@@ -745,8 +791,9 @@ class RegAlloc(object):
         return gcrootmap.compress_callshape(shape)
 
     def not_implemented_op(self, op, ignored):
-        print "[regalloc] Not implemented operation: %s" % op.getopname()
-        raise NotImplementedError
+        msg = "[regalloc] Not implemented operation: %s" % op.getopname()
+        print msg
+        raise NotImplementedError(msg)
 
 oplist = [RegAlloc.not_implemented_op] * rop._LAST
 
