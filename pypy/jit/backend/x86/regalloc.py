@@ -71,7 +71,6 @@ class X86XMMRegisterManager(RegisterManager):
 
     def convert_to_imm(self, c):
         if self.constant_array_counter >= BASE_CONSTANT_SIZE:
-            xxx # test me
             self.constant_arrays.append(self.new_const_array())
             self.constant_array_counter = 0
         res = self.constant_array_counter
@@ -167,8 +166,19 @@ class RegAlloc(object):
             # otherwise we have it saved on stack, so no worry
         self.rm.free_regs.insert(0, tmpreg)
         assert tmpreg not in locs
-        self.rm.possibly_free_vars(inputargs)
+        for arg in inputargs:
+            self.possibly_free_var(arg)
         return locs
+
+    def possibly_free_var(self, var):
+        if var.type == FLOAT:
+            self.xrm.possibly_free_var(var)
+        else:
+            self.rm.possibly_free_var(var)
+
+    def possibly_free_vars(self, vars):
+        for var in vars:
+            self.possibly_free_var(var)
 
     def _compute_loop_consts(self, inputargs, jump):
         if jump.opnum != rop.JUMP or jump.jump_target is not None:
@@ -219,6 +229,7 @@ class RegAlloc(object):
     def perform_with_guard(self, op, guard_op, arglocs, result_loc):
         faillocs = self.locs_for_fail(guard_op)
         self.rm.position += 1
+        self.xrm.position += 1
         self.assembler.regalloc_perform_with_guard(op, guard_op, faillocs,
                                                    arglocs, result_loc,
                                                    self.sm.stack_depth)
@@ -263,7 +274,7 @@ class RegAlloc(object):
         while i < len(operations):
             op = operations[i]
             self.rm.position = i
-            # XXX ^^^ and also self.xrm.position = i.... :-(
+            self.xrm.position = i
             if op.has_no_side_effect() and op.result not in self.longevity:
                 i += 1
                 self.rm.possibly_free_vars(op.args)
@@ -274,7 +285,7 @@ class RegAlloc(object):
             else:
                 oplist[op.opnum](self, op, None)
             if op.result is not None:
-                self.rm.possibly_free_var(op.result)
+                self.possibly_free_var(op.result)
             self.rm._check_invariants()
             self.xrm._check_invariants()
             i += 1
@@ -329,7 +340,7 @@ class RegAlloc(object):
         locs = [self.loc(arg) for arg in op.args]
         self.assembler.generate_failure(self.assembler.mc, op.descr, op.args,
                                         locs, self.exc)
-        self.rm.possibly_free_vars(op.args)
+        self.possibly_free_vars(op.args)
 
     consider_finish = consider_fail # for now
 
@@ -461,6 +472,7 @@ class RegAlloc(object):
         loc0 = self.xrm.force_result_in_reg(op.result, op.args[0], op.args)
         loc1 = self.xrm.loc(op.args[1])
         self.Perform(op, [loc0, loc1], loc0)
+        self.xrm.possibly_free_vars(op.args)
 
     def _call(self, op, arglocs, force_store=[]):
         self.rm.before_call(force_store)

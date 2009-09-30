@@ -8,7 +8,8 @@ from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
 from pypy.jit.backend.x86.runner import CPU
-from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, X86RegisterManager
+from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, X86RegisterManager,\
+     BASE_CONSTANT_SIZE
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
@@ -515,3 +516,12 @@ class TestRegallocFloats(BaseTestRegalloc):
         '''
         self.interpret(ops, [0.1, .2, .3, .4, .5, .6, .7, .8, .9])
         assert self.getfloats(9) == [.1+.2, .9+3.5, .3, .4, .5, .6, .7, .8, .9]
+
+    def test_float_overflow_const_list(self):
+        ops = ['[f0]']
+        for i in range(BASE_CONSTANT_SIZE * 2):
+            ops.append('f%d = float_add(f%d, 3.5)' % (i + 1, i))
+        ops.append('fail(f%d)' % (BASE_CONSTANT_SIZE * 2))
+        ops = "\n".join(ops)
+        self.interpret(ops, [0.1])
+        assert self.getfloat(0) - (1 + BASE_CONSTANT_SIZE * 2) * 3.5 + 0.1 < 0.00001
