@@ -8,17 +8,21 @@ class AbstractCPU(object):
         """Called once by the front-end when the program starts."""
         pass
 
-    def compile_loop(self, inputargs, operations):
+    def compile_loop(self, inputargs, operations, looptoken):
         """Assemble the given loop.
-           Return an opaque token to be consumed by execute_token"""
+        Extra attributes should be put in the LoopToken to
+        point to the compiled loop in assembler.
+        """
         raise NotImplementedError
 
     def compile_bridge(self, faildescr, inputargs, operations):
-        """Assemble the bridge"""
+        """Assemble the bridge.
+        The FailDescr is the descr of the original guard that failed.
+        """
         raise NotImplementedError    
 
-    def execute_token(self, executable_token):
-        """Execute the generated code referenced by the executable_token
+    def execute_token(self, looptoken):
+        """Execute the generated code referenced by the looptoken.
         Returns the ResOperation that failed, of type rop.FAIL.
         Use set_future_value_xxx() before, and get_latest_value_xxx() after.
         """
