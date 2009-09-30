@@ -666,6 +666,22 @@ class BaseBackendTest(Runner):
                                    'int', descr=arraydescr)
         assert r.value == 1
 
+        if self.cpu.supports_floats:
+            a_box, A = self.alloc_array_of(lltype.Float, 31)
+            arraydescr = self.cpu.arraydescrof(A)
+            self.execute_operation(rop.SETARRAYITEM_GC, [a_box, BoxInt(1),
+                                                         BoxFloat(3.5)],
+                                   'void', descr=arraydescr)
+            self.execute_operation(rop.SETARRAYITEM_GC, [a_box, BoxInt(2),
+                                                         BoxFloat(4.5)],
+                                   'void', descr=arraydescr)
+            r = self.execute_operation(rop.GETARRAYITEM_GC, [a_box, BoxInt(1)],
+                                       'float', descr=arraydescr)
+            assert r.value == 3.5
+            r = self.execute_operation(rop.GETARRAYITEM_GC, [a_box, BoxInt(2)],
+                                       'float', descr=arraydescr)
+            assert r.value == 4.5
+
     def test_string_basic(self):
         s_box = self.alloc_string("hello\xfe")
         r = self.execute_operation(rop.STRLEN, [s_box], 'int')

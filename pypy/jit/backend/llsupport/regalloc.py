@@ -273,6 +273,9 @@ class RegisterManager(object):
         if isinstance(v, Const):
             loc = self.make_sure_var_in_reg(v, forbidden_vars,
                                             imm_fine=False)
+            # note that calling make_sure_var_in_reg with imm_fine=False
+            # will not allocate place in reg_bindings, we need to do it
+            # on our own
             self.reg_bindings[result_v] = loc
             self.free_regs = [reg for reg in self.free_regs if reg is not loc]
             return loc

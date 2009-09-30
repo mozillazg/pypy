@@ -193,6 +193,18 @@ class RegAlloc(object):
         for var in vars:
             self.possibly_free_var(var)
 
+    def make_sure_var_in_reg(self, var, forbidden_vars=[], **kwds):
+        if var.type == FLOAT:
+            return self.xrm.make_sure_var_in_reg(var, forbidden_vars, **kwds)
+        else:
+            return self.rm.make_sure_var_in_reg(var, forbidden_vars, **kwds)
+
+    def force_allocate_reg(self, var, forbidden_vars=[], **kwds):
+        if var.type == FLOAT:
+            return self.xrm.force_allocate_reg(var, forbidden_vars, **kwds)
+        else:
+            return self.rm.force_allocate_reg(var, forbidden_vars, **kwds)
+
     def _compute_loop_consts(self, inputargs, jump):
         if jump.opnum != rop.JUMP or jump.jump_target is not None:
             loop_consts = {}
@@ -707,10 +719,10 @@ class RegAlloc(object):
             need_lower_byte = True
         else:
             need_lower_byte = False
-        value_loc = self.rm.make_sure_var_in_reg(op.args[2], op.args,
-                                              need_lower_byte=need_lower_byte)
+        value_loc = self.make_sure_var_in_reg(op.args[2], op.args,
+                                          need_lower_byte=need_lower_byte)
         ofs_loc = self.rm.make_sure_var_in_reg(op.args[1], op.args)
-        self.rm.possibly_free_vars(op.args)
+        self.possibly_free_vars(op.args)
         self.PerformDiscard(op, [base_loc, ofs_loc, value_loc,
                                  imm(scale), imm(ofs)])
 
@@ -730,7 +742,7 @@ class RegAlloc(object):
         base_loc = self.rm.make_sure_var_in_reg(op.args[0], op.args)
         ofs_loc = self.rm.make_sure_var_in_reg(op.args[1], op.args)
         self.rm.possibly_free_vars(op.args)
-        result_loc = self.rm.force_allocate_reg(op.result)
+        result_loc = self.force_allocate_reg(op.result)
         self.Perform(op, [base_loc, ofs_loc, imm(scale), imm(ofs)], result_loc)
 
     consider_getfield_raw = consider_getfield_gc
