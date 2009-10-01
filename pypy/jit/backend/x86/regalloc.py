@@ -161,8 +161,10 @@ class RegAlloc(object):
         # Don't use all_regs[0] for passing arguments around a loop.
         # Must be kept in sync with consider_jump().
         # XXX this should probably go to llsupport/regalloc.py
+        xmmtmp = self.xrm.free_regs.pop(0)
         tmpreg = self.rm.free_regs.pop(0)
         assert tmpreg == X86RegisterManager.all_regs[0]
+        assert xmmtmp == X86XMMRegisterManager.all_regs[0]
         for i in range(len(inputargs)):
             arg = inputargs[i]
             assert not isinstance(arg, Const)
@@ -181,9 +183,10 @@ class RegAlloc(object):
                 locs[i] = loc
             # otherwise we have it saved on stack, so no worry
         self.rm.free_regs.insert(0, tmpreg)
+        self.xrm.free_regs.insert(0, xmmtmp)
         assert tmpreg not in locs
-        for arg in inputargs:
-            self.possibly_free_var(arg)
+        assert xmmtmp not in locs
+        self.possibly_free_vars(inputargs)
         return locs
 
     def possibly_free_var(self, var):
@@ -271,7 +274,7 @@ class RegAlloc(object):
                                                    arglocs, result_loc,
                                                    self.sm.stack_depth)
         self.rm.possibly_free_var(op.result)
-        self.rm.possibly_free_vars(guard_op.suboperations[0].args)
+        self.possibly_free_vars(guard_op.suboperations[0].args)
 
     def perform_guard(self, guard_op, arglocs, result_loc):
         faillocs = self.locs_for_fail(guard_op)
@@ -284,7 +287,7 @@ class RegAlloc(object):
         self.assembler.regalloc_perform_guard(guard_op, faillocs, arglocs,
                                               result_loc,
                                               self.sm.stack_depth)
-        self.rm.possibly_free_vars(guard_op.suboperations[0].args)        
+        self.possibly_free_vars(guard_op.suboperations[0].args)        
 
     def PerformDiscard(self, op, arglocs):
         if not we_are_translated():
@@ -401,10 +404,10 @@ class RegAlloc(object):
     consider_guard_overflow    = consider_guard_no_exception
 
     def consider_guard_value(self, op, ignored):
-        x = self.rm.make_sure_var_in_reg(op.args[0])
+        x = self.make_sure_var_in_reg(op.args[0])
         y = self.loc(op.args[1])
         self.perform_guard(op, [x, y], None)
-        self.rm.possibly_free_vars(op.args)
+        self.possibly_free_vars(op.args)
 
     def consider_guard_class(self, op, ignored):
         assert isinstance(op.args[0], Box)
@@ -785,8 +788,8 @@ class RegAlloc(object):
 
     def consider_same_as(self, op, ignored):
         argloc = self.loc(op.args[0])
-        self.rm.possibly_free_var(op.args[0])
-        resloc = self.rm.force_allocate_reg(op.result)
+        self.possibly_free_var(op.args[0])
+        resloc = self.force_allocate_reg(op.result)
         self.Perform(op, [argloc], resloc)
     consider_cast_ptr_to_int = consider_same_as
 
@@ -823,14 +826,19 @@ class RegAlloc(object):
         arglocs = assembler.target_arglocs(self.jump_target)
         # compute 'tmploc' to be all_regs[0] by spilling what is there
         box = TempBox()
+        box1 = TempBox()
         tmpreg = X86RegisterManager.all_regs[0]
-        tmploc = self.rm.force_allocate_reg(box, [], selected_reg=tmpreg)
-        src_locations = [self.rm.loc(arg) for arg in op.args]
+        tmploc = self.rm.force_allocate_reg(box, selected_reg=tmpreg)
+        xmmtmp = X86XMMRegisterManager.all_regs[0]
+        xmmtmploc = self.xrm.force_allocate_reg(box1, selected_reg=xmmtmp)
+        src_locations = [self.loc(arg) for arg in op.args]
         dst_locations = arglocs
         assert tmploc not in dst_locations
-        remap_stack_layout(assembler, src_locations, dst_locations, tmploc)
+        remap_stack_layout(assembler, src_locations, dst_locations, tmploc,
+                           xmmtmp)
         self.rm.possibly_free_var(box)
-        self.rm.possibly_free_vars(op.args)
+        self.xrm.possibly_free_var(box1)
+        self.possibly_free_vars(op.args)
         assembler.closing_jump(self.jump_target)
 
     def consider_debug_merge_point(self, op, ignored):
