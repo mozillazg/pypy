@@ -252,7 +252,7 @@ class RegAlloc(object):
                 if isinstance(loc, IMM8) or isinstance(loc, IMM32):
                     continue
                 if isinstance(loc, REG):
-                    self.rm.bindings[arg] = loc
+                    self.rm.reg_bindings[arg] = loc
                     used[loc] = None
                 else:
                     self.sm.stack_bindings[arg] = loc
