@@ -297,7 +297,7 @@ class BaseBackendTest(Runner):
             res = self.execute_operation(rop.CALL,
                                          [funcbox] + args,
                                          'float', descr=calldescr)
-            assert res.value - 4.6 < 0.0001
+            assert abs(res.value - 4.6) < 0.0001
 
     def test_executor(self):
         cpu = self.cpu
