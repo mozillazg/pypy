@@ -906,7 +906,7 @@ class BaseBackendTest(Runner):
         self.cpu.compile_bridge(faildescr1, fboxes2, bridge)
 
         for i in range(len(fboxes)):
-            self.cpu.set_future_value_int(i, 13.5 + 6.73 * i)
+            self.cpu.set_future_value_float(i, 13.5 + 6.73 * i)
         fail = self.cpu.execute_token(executable_token)
         assert fail is faildescr2
         res = self.cpu.get_latest_value_float(0)
