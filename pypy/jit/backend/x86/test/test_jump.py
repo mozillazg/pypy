@@ -36,22 +36,22 @@ class MockAssembler:
 
 def test_trivial():
     assembler = MockAssembler()
-    remap_stack_layout(assembler, [], [], '?')
+    remap_stack_layout(assembler, [], [], '?', '?')
     assert assembler.ops == []
     remap_stack_layout(assembler, [eax, ebx, ecx, edx, esi, edi],
-                                  [eax, ebx, ecx, edx, esi, edi], '?')
+                                  [eax, ebx, ecx, edx, esi, edi], '?', '?')
     assert assembler.ops == []
     s8 = stack_pos(1, 1)
     s12 = stack_pos(31, 1)
     s20 = stack_pos(6, 1)
     remap_stack_layout(assembler, [eax, ebx, ecx, s20, s8, edx, s12, esi, edi],
                                   [eax, ebx, ecx, s20, s8, edx, s12, esi, edi],
-                                  '?')
+                                  '?', '?')
     assert assembler.ops == []
 
 def test_simple_registers():
     assembler = MockAssembler()
-    remap_stack_layout(assembler, [eax, ebx, ecx], [edx, esi, edi], '?')
+    remap_stack_layout(assembler, [eax, ebx, ecx], [edx, esi, edi], '?', '?')
     assert assembler.ops == [('mov', eax, edx),
                              ('mov', ebx, esi),
                              ('mov', ecx, edi)]
@@ -62,7 +62,7 @@ def test_simple_stacklocs():
     s12 = stack_pos(13, 1)
     s20 = stack_pos(20, 1)
     s24 = stack_pos(221, 1)
-    remap_stack_layout(assembler, [s8, eax, s12], [s20, s24, edi], edx)
+    remap_stack_layout(assembler, [s8, eax, s12], [s20, s24, edi], edx, '?')
     assert assembler.ops == [('mov', s8, edx),
                              ('mov', edx, s20),
                              ('mov', eax, s24),
@@ -75,7 +75,7 @@ def test_reordering():
     s20 = stack_pos(19, 1)
     s24 = stack_pos(1, 1)
     remap_stack_layout(assembler, [eax, s8, s20, ebx],
-                                  [s8, ebx, eax, edi], '?')
+                                  [s8, ebx, eax, edi], '?', '?')
     assert assembler.got([('mov', ebx, edi),
                           ('mov', s8, ebx),
                           ('mov', eax, s8),
@@ -88,7 +88,7 @@ def test_cycle():
     s20 = stack_pos(19, 1)
     s24 = stack_pos(1, 1)
     remap_stack_layout(assembler, [eax, s8, s20, ebx],
-                                  [s8, ebx, eax, s20], '?')
+                                  [s8, ebx, eax, s20], '?', '?')
     assert assembler.got([('push', s8),
                           ('mov', eax, s8),
                           ('mov', s20, eax),
@@ -106,7 +106,7 @@ def test_cycle_2():
     remap_stack_layout(assembler,
                        [eax, s8, edi, s20, eax, s20, s24, esi, s2, s3],
                        [s8, s20, edi, eax, edx, s24, ebx, s12, s3, s2],
-                       ecx)
+                       ecx, '?')
     assert assembler.got([('mov', eax, edx),
                           ('mov', s24, ebx),
                           ('mov', esi, s12),
@@ -124,11 +124,11 @@ def test_cycle_2():
 def test_constants():
     assembler = MockAssembler()
     c3 = imm(3)
-    remap_stack_layout(assembler, [c3], [eax], '?')
+    remap_stack_layout(assembler, [c3], [eax], '?', '?')
     assert assembler.ops == [('mov', c3, eax)]
     assembler = MockAssembler()
     s12 = stack_pos(12, 1)
-    remap_stack_layout(assembler, [c3], [s12], '?')
+    remap_stack_layout(assembler, [c3], [s12], '?', '?')
     assert assembler.ops == [('mov', c3, s12)]
 
 def test_constants_and_cycle():
@@ -136,8 +136,28 @@ def test_constants_and_cycle():
     c3 = imm(3)
     s12 = stack_pos(13, 1)
     remap_stack_layout(assembler, [ebx, c3,  s12],
-                                  [s12, eax, ebx], edi)
+                                  [s12, eax, ebx], edi, '?')
     assert assembler.ops == [('mov', c3, eax),
                              ('push', s12),
                              ('mov', ebx, s12),
                              ('pop', ebx)]
+
+def test_floats():
+    assembler = MockAssembler()
+    s3 = stack_pos(3, 2)
+    remap_stack_layout(assembler, [xmm1, xmm2, s3],
+                       [s3, xmm3, xmm1], edi, xmm0)
+    assert assembler.ops == [('mov', xmm2, xmm3),
+                             ('push', s3),
+                             ('mov', xmm1, s3),
+                             ('pop', xmm1)]
+
+def test_floats_need_tmp():
+    assembler = MockAssembler()
+    s3 = stack_pos(3, 2)
+    s5 = stack_pos(5, 2)
+    remap_stack_layout(assembler, [s3, s5], [s5, s3], edi, xmm0)
+    assert assembler.ops == [('push', s5),
+                             ('mov', s3, xmm0),
+                             ('mov', xmm0, s5),
+                             ('pop', s3)]
