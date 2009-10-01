@@ -236,21 +236,17 @@ class RegAlloc(object):
 
     def _update_bindings(self, locs, args):
         # XXX this should probably go to llsupport/regalloc.py
-        nonfloatlocs, floatlocs = locs
         used = {}
         for i in range(len(args)):
             arg = args[i]
+            loc = locs[i]
             if arg.type == FLOAT:
-                loc = floatlocs[i]
                 if isinstance(loc, REG):
                     self.xrm.reg_bindings[arg] = loc
                     used[loc] = None
                 else:
                     self.sm.stack_bindings[arg] = loc
             else:
-                loc = nonfloatlocs[i]
-                if isinstance(loc, IMM8) or isinstance(loc, IMM32):
-                    continue
                 if isinstance(loc, REG):
                     self.rm.reg_bindings[arg] = loc
                     used[loc] = None
@@ -264,6 +260,7 @@ class RegAlloc(object):
         for reg in X86XMMRegisterManager.all_regs:
             if reg not in used:
                 self.xrm.free_regs.append(reg)
+        self.possibly_free_vars(args)
         self.rm._check_invariants()
         self.xrm._check_invariants()
 
@@ -279,16 +276,7 @@ class RegAlloc(object):
         return self.locs_for_op(fail_op)
 
     def locs_for_op(self, fail_op):
-        nonfloatlocs = [None] * len(fail_op.args)
-        floatlocs    = [None] * len(fail_op.args)
-        for i in range(len(fail_op.args)):
-            v = fail_op.args[i]
-            loc = self.loc(v)
-            if v.type == FLOAT:
-                floatlocs[i] = loc
-            else:
-                nonfloatlocs[i] = loc
-        return nonfloatlocs, floatlocs
+        return [self.loc(v) for v in fail_op.args]
 
     def perform_with_guard(self, op, guard_op, arglocs, result_loc):
         faillocs = self.locs_for_fail(guard_op)
