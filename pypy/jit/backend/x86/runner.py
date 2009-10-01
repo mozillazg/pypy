@@ -12,7 +12,6 @@ from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
 class CPU386(AbstractLLCPU):
     debug = True
     supports_floats = True
-    FLOATSIZE = 8
 
     BOOTSTRAP_TP = lltype.FuncType([], lltype.Signed)
     dont_keepalive_stuff = False # for tests
