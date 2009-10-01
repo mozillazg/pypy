@@ -527,11 +527,12 @@ class BaseBackendTest(Runner):
             assert res.value == 3.4
 
     def test_passing_guards(self):
-        for (opname, args) in [(rop.GUARD_TRUE, [BoxInt(1)]),
-                               (rop.GUARD_FALSE, [BoxInt(0)]),
-                               (rop.GUARD_VALUE, [BoxInt(42), BoxInt(42)]),
-                               #(rop.GUARD_VALUE_INVERSE, [BoxInt(42), BoxInt(41)]),
-                               ]:
+        all = [(rop.GUARD_TRUE, [BoxInt(1)]),
+               (rop.GUARD_FALSE, [BoxInt(0)]),
+               (rop.GUARD_VALUE, [BoxInt(42), BoxInt(42)])]
+        if self.cpu.supports_floats:
+            all.append((rop.GUARD_VALUE, [BoxFloat(3.5), BoxFloat(3.5)]))
+        for (opname, args) in all:
             assert self.execute_operation(opname, args, 'void') == None
             assert not self.guard_failed
 
@@ -545,16 +546,18 @@ class BaseBackendTest(Runner):
         #                       'void')
 
     def test_failing_guards(self):
-        for opname, args in [(rop.GUARD_TRUE, [BoxInt(0)]),
-                             (rop.GUARD_FALSE, [BoxInt(1)]),
-                             (rop.GUARD_VALUE, [BoxInt(42), BoxInt(41)]),
-                             ]:
+        all = [(rop.GUARD_TRUE, [BoxInt(0)]),
+               (rop.GUARD_FALSE, [BoxInt(1)]),
+               (rop.GUARD_VALUE, [BoxInt(42), BoxInt(41)])]
+        if self.cpu.supports_floats:
+            all.append((rop.GUARD_VALUE, [BoxFloat(-1.0), BoxFloat(1.0)]))
+        for opname, args in all:
             assert self.execute_operation(opname, args, 'void') == None
             assert self.guard_failed
 
     def test_failing_guard_class(self):
         t_box, T_box = self.alloc_instance(self.T)
-        u_box, U_box = self.alloc_instance(self.U)        
+        u_box, U_box = self.alloc_instance(self.U)
         #null_box = ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, lltype.nullptr(T)))
         for opname, args in [(rop.GUARD_CLASS, [t_box, U_box]),
                              (rop.GUARD_CLASS, [u_box, T_box]),
