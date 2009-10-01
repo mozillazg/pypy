@@ -8,6 +8,7 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          BoxObj, Const,
                                          ConstObj, BoxFloat, ConstFloat)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.typesystem import deref
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
 from pypy.rpython.ootypesystem import ootype
@@ -868,6 +869,47 @@ class BaseBackendTest(Runner):
                     assert 0
                 assert type(got) == type(val)
                 assert got == val
+
+    def test_unused_result_int(self):
+        # check operations with no side effect and whose result
+        # is not used.  The backend is free to do nothing from them.
+        # This is a "did not crash" kind of test.
+        from pypy.jit.metainterp.test import test_executor
+        # XXX added on trunk only so far
+        assert not hasattr(test_executor, 'get_int_tests')   # yet
+
+    def test_unused_result_float(self):
+        # same as test_unused_result_int, for float operations
+        from pypy.jit.metainterp.test.test_executor import get_float_tests
+        float_tests = list(get_float_tests(self.cpu))
+        inputargs = []
+        operations = []
+        for opnum, boxargs, rettype, retvalue in float_tests:
+            inputargs += boxargs
+            if rettype == 'int':
+                boxres = BoxInt()
+            elif rettype == 'float':
+                boxres = BoxFloat()
+            else:
+                assert 0
+            operations.append(ResOperation(opnum, boxargs, boxres))
+        faildescr = BasicFailDescr()
+        operations.append(ResOperation(rop.FINISH, [], None,
+                                       descr=faildescr))
+        operations[-1].jump_target = None
+        #
+        executable_token = self.cpu.compile_loop(inputargs, operations)
+        #
+        for i, box in enumerate(inputargs):
+            if isinstance(box, BoxInt):
+                self.cpu.set_future_value_int(i, box.getint())
+            elif isinstance(box, BoxFloat):
+                self.cpu.set_future_value_float(i, box.getfloat())
+            else:
+                assert 0
+        #
+        fail = self.cpu.execute_token(executable_token)
+        assert fail is faildescr
 
 
 class LLtypeBackendTest(BaseBackendTest):
