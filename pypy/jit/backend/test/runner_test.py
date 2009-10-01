@@ -772,16 +772,17 @@ class BaseBackendTest(Runner):
             assert r.value == 5.5
 
     def test_jump(self):
-        # this test generate small loops where the JUMP passes many
+        # this test generates small loops where the JUMP passes many
         # arguments of various types, shuffling them around.
         if self.cpu.supports_floats:
             numkinds = 3
         else:
             numkinds = 2
-        for _ in range(50):
+        for nb_args in range(50):
+            print 'Passing %d arguments around...' % nb_args
             #
             inputargs = []
-            for k in range(random.randrange(1, 16)):
+            for k in range(nb_args):
                 kind = random.randrange(0, numkinds)
                 if kind == 0:
                     inputargs.append(BoxInt())
