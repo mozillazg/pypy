@@ -38,7 +38,7 @@ class PyPyJitPolicy(JitPolicy):
         if mod == 'pypy.rlib.rbigint':
             #if func.__name__ == '_bigint_true_divide':
             return False
-        if mod == 'pypy.rpython.lltypesystem.ll_math':
+        if mod == 'pypy.rpython.lltypesystem.module.ll_math':
             # XXX temporary, contains force_cast
             return False
         if '_geninterp_' in func.func_globals: # skip all geninterped stuff
