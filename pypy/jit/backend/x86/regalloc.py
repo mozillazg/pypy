@@ -58,6 +58,9 @@ BASE_CONSTANT_SIZE = 1000
 import struct
 NEG_ZERO, = struct.unpack('d', struct.pack('ll', 0, -2147483648))
 NAN, = struct.unpack('d', struct.pack('ll', -1, 2147483647))
+# XXX These are actually masks for float_neg and float_abs.
+# They should not be converted to 'double' and given
+# names that reflect their float value.
 
 class X86XMMRegisterManager(RegisterManager):
 
