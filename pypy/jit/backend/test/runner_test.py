@@ -766,6 +766,108 @@ class BaseBackendTest(Runner):
         u_box = self.alloc_unicode(u"hello\u1234")
         r = self.execute_operation(rop.SAME_AS, [u_box.constbox()], 'ref')
         assert r.value == u_box.value
+        if self.cpu.supports_floats:
+            r = self.execute_operation(rop.SAME_AS, [ConstFloat(5.5)], 'float')
+            assert r.value == 5.5
+
+    def test_jump(self):
+        # this test generate small loops where the JUMP passes many
+        # arguments of various types, shuffling them around.
+        if self.cpu.supports_floats:
+            numkinds = 3
+        else:
+            numkinds = 2
+        for _ in range(50):
+            #
+            inputargs = []
+            for k in range(random.randrange(1, 16)):
+                kind = random.randrange(0, numkinds)
+                if kind == 0:
+                    inputargs.append(BoxInt())
+                elif kind == 1:
+                    inputargs.append(BoxPtr())
+                else:
+                    inputargs.append(BoxFloat())
+            jumpargs = []
+            remixing = []
+            for srcbox in inputargs:
+                n = random.randrange(0, len(inputargs))
+                otherbox = inputargs[n]
+                if otherbox.type == srcbox.type:
+                    remixing.append((srcbox, otherbox))
+                else:
+                    otherbox = srcbox
+                jumpargs.append(otherbox)
+            #
+            index_counter = random.randrange(0, len(inputargs)+1)
+            i0 = BoxInt()
+            i1 = BoxInt()
+            i2 = BoxInt()
+            inputargs.insert(index_counter, i0)
+            jumpargs.insert(index_counter, i1)
+            #
+            faildescr = BasicFailDescr()        
+            operations = [
+                ResOperation(rop.INT_SUB, [i0, ConstInt(1)], i1),
+                ResOperation(rop.INT_GE, [i1, ConstInt(0)], i2),
+                ResOperation(rop.GUARD_TRUE, [i2], None),
+                ResOperation(rop.JUMP, jumpargs, None),
+                ]
+            operations[2].suboperations = [
+                ResOperation(rop.FAIL, inputargs[:], None, descr=faildescr)
+                ]
+            operations[-1].jump_target = None
+            #
+            executable_token = self.cpu.compile_loop(inputargs, operations)
+            #
+            values = []
+            S = lltype.GcStruct('S')
+            for box in inputargs:
+                if isinstance(box, BoxInt):
+                    values.append(random.randrange(-10000, 10000))
+                elif isinstance(box, BoxPtr):
+                    p = lltype.malloc(S)
+                    values.append(lltype.cast_opaque_ptr(llmemory.GCREF, p))
+                elif isinstance(box, BoxFloat):
+                    values.append(random.random())
+                else:
+                    assert 0
+            values[index_counter] = 11
+            #
+            for i, (box, val) in enumerate(zip(inputargs, values)):
+                if isinstance(box, BoxInt):
+                    self.cpu.set_future_value_int(i, val)
+                elif isinstance(box, BoxPtr):
+                    self.cpu.set_future_value_ref(i, val)
+                elif isinstance(box, BoxFloat):
+                    self.cpu.set_future_value_float(i, val)
+                else:
+                    assert 0
+            #
+            fail = self.cpu.execute_token(executable_token)
+            assert fail is faildescr
+            #
+            dstvalues = values[:]
+            for _ in range(11):
+                expected = dstvalues[:]
+                for tgtbox, srcbox in remixing:
+                    v = dstvalues[inputargs.index(srcbox)]
+                    expected[inputargs.index(tgtbox)] = v
+                dstvalues = expected
+            #
+            assert dstvalues[index_counter] == 11
+            dstvalues[index_counter] = 0
+            for i, (box, val) in enumerate(zip(inputargs, dstvalues)):
+                if isinstance(box, BoxInt):
+                    got = self.cpu.get_latest_value_int(i)
+                elif isinstance(box, BoxPtr):
+                    got = self.cpu.get_latest_value_ref(i)
+                elif isinstance(box, BoxFloat):
+                    got = self.cpu.get_latest_value_float(i)
+                else:
+                    assert 0
+                assert type(got) == type(val)
+                assert got == val
 
 
 class LLtypeBackendTest(BaseBackendTest):
