@@ -1031,6 +1031,19 @@ class LLtypeBackendTest(BaseBackendTest):
             descrfld_rx)
         assert rs.x == '!'
         #
+
+        if self.cpu.supports_floats:
+            descrfld_z = cpu.fielddescrof(S, 'z')
+            cpu.do_setfield_gc(
+                BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
+                BoxFloat(3.5),
+                descrfld_z)
+            assert s.z == 3.5
+            s.z = 3.2
+            x = cpu.do_getfield_gc(
+                BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
+                descrfld_z)
+            assert x.getfloat() == 3.2
         ### we don't support in the JIT for now GC pointers
         ### stored inside non-GC structs.
         #descrfld_ry = cpu.fielddescrof(RS, 'y')
