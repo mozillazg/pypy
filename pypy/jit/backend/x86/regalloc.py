@@ -110,7 +110,7 @@ class X86StackManager(StackManager):
         if size == 1:
             res = mem(ebp, get_ebp_ofs(i))
         elif size == 2:
-            res = mem64(ebp, get_ebp_ofs(i))
+            res = mem64(ebp, get_ebp_ofs(i + 1))
         else:
             print "Unimplemented size %d" % i
             raise NotImplementedError("unimplemented size %d" % i)
@@ -157,7 +157,8 @@ class RegAlloc(object):
     def _process_inputargs(self, inputargs):
         # XXX we can sort out here by longevity if we need something
         # more optimal
-        locs = [None] * len(inputargs)
+        floatlocs = [None] * len(inputargs)
+        nonfloatlocs = [None] * len(inputargs)
         # Don't use all_regs[0] for passing arguments around a loop.
         # Must be kept in sync with consider_jump().
         # XXX this should probably go to llsupport/regalloc.py
@@ -177,17 +178,20 @@ class RegAlloc(object):
                 else:
                     reg = self.rm.try_allocate_reg(arg)
             if reg:
-                locs[i] = reg
+                loc = reg
             else:
                 loc = self.sm.loc(arg, width_of_type[arg.type])
-                locs[i] = loc
+            if arg.type == FLOAT:
+                floatlocs[i] = loc
+            else:
+                nonfloatlocs[i] = loc
             # otherwise we have it saved on stack, so no worry
         self.rm.free_regs.insert(0, tmpreg)
         self.xrm.free_regs.insert(0, xmmtmp)
-        assert tmpreg not in locs
-        assert xmmtmp not in locs
+        assert tmpreg not in nonfloatlocs
+        assert xmmtmp not in floatlocs
         self.possibly_free_vars(inputargs)
-        return locs
+        return nonfloatlocs, floatlocs
 
     def possibly_free_var(self, var):
         if var.type == FLOAT:
@@ -317,7 +321,7 @@ class RegAlloc(object):
             self.xrm.position = i
             if op.has_no_side_effect() and op.result not in self.longevity:
                 i += 1
-                self.rm.possibly_free_vars(op.args)
+                self.possibly_free_vars(op.args)
                 continue
             if self.can_optimize_cmp_op(op, i, operations):
                 oplist[op.opnum](self, op, operations[i + 1])
@@ -823,7 +827,7 @@ class RegAlloc(object):
         assembler = self.assembler
         assert self.jump_target is None
         self.jump_target = op.jump_target
-        arglocs = assembler.target_arglocs(self.jump_target)
+        nonfloatlocs, floatlocs = assembler.target_arglocs(self.jump_target)
         # compute 'tmploc' to be all_regs[0] by spilling what is there
         box = TempBox()
         box1 = TempBox()
@@ -831,11 +835,15 @@ class RegAlloc(object):
         tmploc = self.rm.force_allocate_reg(box, selected_reg=tmpreg)
         xmmtmp = X86XMMRegisterManager.all_regs[0]
         xmmtmploc = self.xrm.force_allocate_reg(box1, selected_reg=xmmtmp)
-        src_locations = [self.loc(arg) for arg in op.args]
-        dst_locations = arglocs
-        assert tmploc not in dst_locations
-        remap_stack_layout(assembler, src_locations, dst_locations, tmploc,
-                           xmmtmp)
+        # Part about non-floats
+        src_locations = [self.loc(arg) for arg in op.args if arg.type != FLOAT]
+        assert tmploc not in nonfloatlocs
+        dst_locations = [loc for loc in nonfloatlocs if loc is not None]
+        remap_stack_layout(assembler, src_locations, dst_locations, tmploc)
+        # Part about floats
+        src_locations = [self.loc(arg) for arg in op.args if arg.type == FLOAT]
+        dst_locations = [loc for loc in floatlocs if loc is not None]
+        remap_stack_layout(assembler, src_locations, dst_locations, xmmtmp)
         self.rm.possibly_free_var(box)
         self.xrm.possibly_free_var(box1)
         self.possibly_free_vars(op.args)

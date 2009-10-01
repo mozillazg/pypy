@@ -7,7 +7,8 @@ from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.tool.uid import fixid
-from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, lower_byte
+from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, lower_byte,\
+     X86RegisterManager, X86XMMRegisterManager, get_ebp_ofs
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.ri386 import *
@@ -192,6 +193,7 @@ class Assembler386(object):
         mc.done()
 
     def _assemble_bootstrap_code(self, inputargs, arglocs):
+        nonfloatlocs, floatlocs = arglocs
         self.mc.PUSH(ebp)
         self.mc.MOV(ebp, esp)
         self.mc.PUSH(ebx)
@@ -200,41 +202,37 @@ class Assembler386(object):
         # NB. exactly 4 pushes above; if this changes, fix stack_pos().
         # You must also keep _get_callshape() in sync.
         adr_stackadjust = self._patchable_stackadjust()
-        for i in range(len(arglocs)):
-            loc = arglocs[i]
-            if not isinstance(loc, REG):
-                if inputargs[i].type == FLOAT:
-                    self.mc.MOVSD(xmm0,
-                                  addr64_add(imm(self.fail_box_float_addr),
-                                             imm(i*WORD*2)))
-                    self.mc.MOVSD(loc, xmm0)
-                else:
-                    if inputargs[i].type == REF:
-                        # This uses XCHG to put zeroes in fail_boxes_ptr after
-                        # reading them
-                        self.mc.XOR(ecx, ecx)
-                        self.mc.XCHG(ecx, addr_add(imm(self.fail_box_ptr_addr),
-                                                   imm(i*WORD)))
-                    else:
-                        self.mc.MOV(ecx, addr_add(imm(self.fail_box_int_addr),
-                                                  imm(i*WORD)))
-                    self.mc.MOV(loc, ecx)
-        for i in range(len(arglocs)):
-            loc = arglocs[i]
+        tmp = X86RegisterManager.all_regs[0]
+        xmmtmp = X86XMMRegisterManager.all_regs[0]
+        for i in range(len(nonfloatlocs)):
+            loc = nonfloatlocs[i]
+            if loc is None:
+                continue
             if isinstance(loc, REG):
-                if inputargs[i].type == FLOAT:
-                    self.mc.MOVSD(loc,
-                                  addr64_add(imm(self.fail_box_float_addr),
-                                             imm(i*WORD*2)))
-                elif inputargs[i].type == REF:
-                    # This uses XCHG to put zeroes in fail_boxes_ptr after
-                    # reading them
-                    self.mc.XOR(loc, loc)
-                    self.mc.XCHG(loc, addr_add(imm(self.fail_box_ptr_addr),
-                                               imm(i*WORD)))
-                else:
-                    self.mc.MOV(loc, addr_add(imm(self.fail_box_int_addr),
+                target = loc
+            else:
+                target = tmp
+            if inputargs[i].type == REF:
+                # This uses XCHG to put zeroes in fail_boxes_ptr after
+                # reading them
+                self.mc.XOR(target, target)
+                self.mc.XCHG(target, addr_add(imm(self.fail_box_ptr_addr),
                                               imm(i*WORD)))
+            else:
+                self.mc.MOV(target, addr_add(imm(self.fail_box_int_addr),
+                                             imm(i*WORD)))
+            self.mc.MOV(loc, target)
+        for i in range(len(floatlocs)):
+            loc = floatlocs[i]
+            if loc is None:
+                continue
+            if isinstance(loc, REG):
+                self.mc.MOVSD(loc, addr64_add(imm(self.fail_box_float_addr),
+                                              imm(i*WORD*2)))
+            else:
+                self.mc.MOVSD(xmmtmp, addr64_add(imm(self.fail_box_float_addr),
+                                               imm(i*WORD*2)))
+                self.mc.MOVSD(loc, xmmtmp)
         return adr_stackadjust
 
     def dump(self, text):
@@ -261,10 +259,26 @@ class Assembler386(object):
         self.mc.FSTP(loc)
 
     def regalloc_push(self, loc):
-        self.mc.PUSH(loc)
+        if isinstance(loc, XMMREG):
+            self.mc.SUB(esp, imm(2*WORD))
+            self.mc.MOVSD(mem64(esp, 0), loc)
+        elif isinstance(loc, MODRM64):
+            # XXX evil trick
+            self.mc.PUSH(mem(ebp, get_ebp_ofs(loc.position)))
+            self.mc.PUSH(mem(ebp, get_ebp_ofs(loc.position + 1)))
+        else:
+            self.mc.PUSH(loc)
 
     def regalloc_pop(self, loc):
-        self.mc.POP(loc)
+        if isinstance(loc, XMMREG):
+            self.mc.MOVSD(loc, mem64(esp, 0))
+            self.mc.ADD(esp, imm(2*WORD))
+        elif isinstance(loc, MODRM64):
+            # XXX evil trick
+            self.mc.POP(mem(ebp, get_ebp_ofs(loc.position + 1)))
+            self.mc.POP(mem(ebp, get_ebp_ofs(loc.position)))
+        else:
+            self.mc.POP(loc)
 
     def regalloc_perform(self, op, arglocs, resloc):
         genop_list[op.opnum](self, op, arglocs, resloc)
@@ -472,7 +486,7 @@ class Assembler386(object):
             return self.implement_guard(addr, self.mc.JNZ)
 
     def genop_guard_ooisnull(self, op, guard_op, addr, arglocs, resloc):
-        guard_opnum == guard_op.opnum
+        guard_opnum = guard_op.opnum
         loc = arglocs[0]
         self.mc.TEST(loc, loc)
         if guard_opnum == rop.GUARD_TRUE:
@@ -786,7 +800,7 @@ class Assembler386(object):
         for arg in range(2, nargs + 2):
             extra_on_stack += round_up_to_4(arglocs[arg].width)
         extra_on_stack = self.align_stack_for_call(extra_on_stack)
-        self.mc.SUB(esp, imm(WORD * extra_on_stack))
+        self.mc.SUB(esp, imm(extra_on_stack))
         if isinstance(op.args[0], Const):
             x = rel32(op.args[0].getint())
         else:
@@ -817,7 +831,7 @@ class Assembler386(object):
             p += round_up_to_4(loc.width)
         self.mc.CALL(x)
         self.mark_gc_roots()
-        self.mc.ADD(esp, imm(WORD * extra_on_stack))
+        self.mc.ADD(esp, imm(extra_on_stack))
         if size == 1:
             self.mc.AND(eax, imm(0xff))
         elif size == 2:
