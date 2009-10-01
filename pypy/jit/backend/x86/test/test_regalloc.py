@@ -524,7 +524,7 @@ class TestRegallocFloats(BaseTestRegalloc):
         ops.append('fail(f%d)' % (BASE_CONSTANT_SIZE * 2))
         ops = "\n".join(ops)
         self.interpret(ops, [0.1])
-        assert self.getfloat(0) - (1 + BASE_CONSTANT_SIZE * 2) * 3.5 + 0.1 < 0.00001
+        assert abs(self.getfloat(0) - (1 + BASE_CONSTANT_SIZE * 2) * 3.5 + 0.1) < 0.00001
 
     def test_lt_const(self):
         ops = '''
