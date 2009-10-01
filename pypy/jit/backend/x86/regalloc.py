@@ -193,17 +193,26 @@ class RegAlloc(object):
         for var in vars:
             self.possibly_free_var(var)
 
-    def make_sure_var_in_reg(self, var, forbidden_vars=[], **kwds):
+    def make_sure_var_in_reg(self, var, forbidden_vars=[],
+                             selected_reg=None, imm_fine=True,
+                             need_lower_byte=False):
         if var.type == FLOAT:
-            return self.xrm.make_sure_var_in_reg(var, forbidden_vars, **kwds)
+            return self.xrm.make_sure_var_in_reg(var, forbidden_vars,
+                                                 selected_reg, imm_fine,
+                                                 need_lower_byte)
         else:
-            return self.rm.make_sure_var_in_reg(var, forbidden_vars, **kwds)
+            return self.rm.make_sure_var_in_reg(var, forbidden_vars,
+                                                selected_reg, imm_fine,
+                                                need_lower_byte)
 
-    def force_allocate_reg(self, var, forbidden_vars=[], **kwds):
+    def force_allocate_reg(self, var, forbidden_vars=[], selected_reg=None,
+                           need_lower_byte=False):
         if var.type == FLOAT:
-            return self.xrm.force_allocate_reg(var, forbidden_vars, **kwds)
+            return self.xrm.force_allocate_reg(var, forbidden_vars,
+                                               selected_reg, need_lower_byte)
         else:
-            return self.rm.force_allocate_reg(var, forbidden_vars, **kwds)
+            return self.rm.force_allocate_reg(var, forbidden_vars,
+                                              selected_reg, need_lower_byte)
 
     def _compute_loop_consts(self, inputargs, jump):
         if jump.opnum != rop.JUMP or jump.jump_target is not None:
