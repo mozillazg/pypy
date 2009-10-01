@@ -875,6 +875,45 @@ class BaseBackendTest(Runner):
                 assert type(got) == type(val)
                 assert got == val
 
+    def test_compile_bridge_float(self):
+        if not self.cpu.supports_floats:
+            py.test.skip("requires floats")
+        fboxes = [BoxFloat() for i in range(12)]
+        i2 = BoxInt()
+        faildescr1 = BasicFailDescr()
+        faildescr2 = BasicFailDescr()
+        operations = [
+            ResOperation(rop.FLOAT_LE, [fboxes[0], ConstFloat(9.2)], i2),
+            ResOperation(rop.GUARD_TRUE, [i2], None),
+            ResOperation(rop.FINISH, fboxes, None, descr=faildescr2),
+            ]
+        operations[-2].suboperations = [
+            ResOperation(rop.FAIL, fboxes, None, descr=faildescr1)
+            ]
+        operations[-1].jump_target = None       
+        executable_token = self.cpu.compile_loop(fboxes, operations)
+        loop_token = LoopToken()
+        loop_token.executable_token = executable_token
+
+        fboxes2 = [BoxFloat() for i in range(12)]
+        f3 = BoxFloat()
+        bridge = [
+            ResOperation(rop.FLOAT_SUB, [fboxes2[0], ConstFloat(1.0)], f3),
+            ResOperation(rop.JUMP, [f3] + fboxes2[1:], None),
+        ]
+        bridge[-1].jump_target = loop_token
+
+        self.cpu.compile_bridge(faildescr1, fboxes2, bridge)
+
+        for i in range(len(fboxes)):
+            self.cpu.set_future_value_int(i, 13.5 + 6.73 * i)
+        fail = self.cpu.execute_token(executable_token)
+        assert fail is faildescr2
+        res = self.cpu.get_latest_value_float(0)
+        assert res == 8.5
+        for i in range(1, len(fboxes)):
+            assert self.cpu.get_latest_value_float(i) == fboxes[i].value
+
     def test_unused_result_int(self):
         # check operations with no side effect and whose result
         # is not used.  The backend is free to do nothing from them.
