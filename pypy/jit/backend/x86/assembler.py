@@ -67,7 +67,7 @@ class ExecutableToken386(object):
     _x86_loop_code = 0
     _x86_bootstrap_code = 0
     _x86_stack_depth = 0
-    _x86_arglocs = None
+    _x86_arglocs = (None, None)
 
 class Assembler386(object):
     mc = None
