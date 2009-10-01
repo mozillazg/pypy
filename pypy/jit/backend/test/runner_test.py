@@ -961,6 +961,19 @@ class LLtypeBackendTest(BaseBackendTest):
             descr_B)
         assert isinstance(x, BoxPtr)
         assert x.getref(lltype.Ptr(A)) == a
+        C = lltype.GcArray(lltype.Float)
+        c = lltype.malloc(C, 6)
+        c[3] = 3.5
+        descr_C = cpu.arraydescrof(C)
+        x = cpu.do_getarrayitem_gc(
+            BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, c)), BoxInt(3),
+            descr_C)
+        assert isinstance(x, BoxFloat)
+        assert x.getfloat() == 3.5
+        cpu.do_setarrayitem_gc(
+            BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, c)), BoxInt(4),
+            BoxFloat(4.5), descr_C)
+        assert c[4] == 4.5
         #
         s = rstr.mallocstr(6)
         x = cpu.do_strlen(
