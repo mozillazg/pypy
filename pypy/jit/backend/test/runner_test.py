@@ -778,12 +778,16 @@ class BaseBackendTest(Runner):
             numkinds = 3
         else:
             numkinds = 2
+        seed = random.randrange(0, 10000)
+        print 'Seed is', seed    # or choose it by changing the previous line
+        r = random.Random()
+        r.seed(seed)
         for nb_args in range(50):
             print 'Passing %d arguments around...' % nb_args
             #
             inputargs = []
             for k in range(nb_args):
-                kind = random.randrange(0, numkinds)
+                kind = r.randrange(0, numkinds)
                 if kind == 0:
                     inputargs.append(BoxInt())
                 elif kind == 1:
@@ -793,7 +797,7 @@ class BaseBackendTest(Runner):
             jumpargs = []
             remixing = []
             for srcbox in inputargs:
-                n = random.randrange(0, len(inputargs))
+                n = r.randrange(0, len(inputargs))
                 otherbox = inputargs[n]
                 if otherbox.type == srcbox.type:
                     remixing.append((srcbox, otherbox))
@@ -801,7 +805,7 @@ class BaseBackendTest(Runner):
                     otherbox = srcbox
                 jumpargs.append(otherbox)
             #
-            index_counter = random.randrange(0, len(inputargs)+1)
+            index_counter = r.randrange(0, len(inputargs)+1)
             i0 = BoxInt()
             i1 = BoxInt()
             i2 = BoxInt()
@@ -826,12 +830,12 @@ class BaseBackendTest(Runner):
             S = lltype.GcStruct('S')
             for box in inputargs:
                 if isinstance(box, BoxInt):
-                    values.append(random.randrange(-10000, 10000))
+                    values.append(r.randrange(-10000, 10000))
                 elif isinstance(box, BoxPtr):
                     p = lltype.malloc(S)
                     values.append(lltype.cast_opaque_ptr(llmemory.GCREF, p))
                 elif isinstance(box, BoxFloat):
-                    values.append(random.random())
+                    values.append(r.random())
                 else:
                     assert 0
             values[index_counter] = 11
