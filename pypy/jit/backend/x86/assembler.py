@@ -732,29 +732,36 @@ class Assembler386(object):
         return addr
 
     def generate_failure(self, mc, faildescr, failargs, locs, exc):
+        nonfloatlocs, floatlocs = locs
         assert len(failargs) < MAX_FAIL_BOXES
         pos = mc.tell()
-        for i in range(len(locs)):
-            loc = locs[i]
-            if isinstance(loc, REG):
-                if failargs[i].type == FLOAT:
+        for i in range(len(failargs)):
+            arg = failargs[i]
+            if arg.type == FLOAT:
+                loc = floatlocs[i]
+                if isinstance(loc, REG):
                     mc.MOVSD(addr64_add(imm(self.fail_box_float_addr),
                                         imm(i*WORD*2)), loc)
-                else:
-                    if failargs[i].type == REF:
+            else:
+                loc = nonfloatlocs[i]
+                if isinstance(loc, REG):
+                    if arg.type == REF:
                         base = self.fail_box_ptr_addr
                     else:
                         base = self.fail_box_int_addr
                     mc.MOV(addr_add(imm(base), imm(i*WORD)), loc)
-        for i in range(len(locs)):
-            loc = locs[i]
-            if not isinstance(loc, REG):
-                if failargs[i].type == FLOAT:
+        for i in range(len(failargs)):
+            arg = failargs[i]
+            if arg.type == FLOAT:
+                loc = floatlocs[i]
+                if not isinstance(loc, REG):
                     mc.MOVSD(xmm0, loc)
                     mc.MOVSD(addr64_add(imm(self.fail_box_float_addr),
                                         imm(i*WORD*2)), xmm0)
-                else:
-                    if failargs[i].type == REF:
+            else:
+                loc = nonfloatlocs[i]
+                if not isinstance(loc, REG):
+                    if arg.type == REF:
                         base = self.fail_box_ptr_addr
                     else:
                         base = self.fail_box_int_addr
@@ -763,7 +770,7 @@ class Assembler386(object):
         if self.debug_markers:
             mc.MOV(eax, imm(pos))
             mc.MOV(addr_add(imm(self.fail_box_int_addr),
-                                 imm(len(locs) * WORD)),
+                                 imm(len(nonfloatlocs) * WORD)),
                                  eax)
 
         # we call a provided function that will
