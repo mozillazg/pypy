@@ -912,7 +912,7 @@ class BaseBackendTest(Runner):
         res = self.cpu.get_latest_value_float(0)
         assert res == 8.5
         for i in range(1, len(fboxes)):
-            assert self.cpu.get_latest_value_float(i) == fboxes[i].value
+            assert self.cpu.get_latest_value_float(i) == 13.5 + 6.73 * i
 
     def test_unused_result_int(self):
         # check operations with no side effect and whose result
