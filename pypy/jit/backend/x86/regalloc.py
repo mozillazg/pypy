@@ -71,8 +71,9 @@ class X86XMMRegisterManager(RegisterManager):
         return lltype.malloc(rffi.CArray(lltype.Float), BASE_CONSTANT_SIZE,
                              flavor='raw')
 
-    def __init__(self, *args, **kwds):
-        RegisterManager.__init__(self, *args, **kwds)
+    def __init__(self, longevity, stack_manager=None, assembler=None):
+        RegisterManager.__init__(self, longevity, stack_manager=stack_manager,
+                                 assembler=assembler)
         self.constant_arrays = [self.new_const_array()]
         self.constant_arrays[-1][0] = NEG_ZERO
         self.constant_arrays[-1][1] = NAN
