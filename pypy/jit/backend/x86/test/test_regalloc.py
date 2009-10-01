@@ -524,7 +524,7 @@ class TestRegallocFloats(BaseTestRegalloc):
         ops.append('fail(f%d)' % (BASE_CONSTANT_SIZE * 2))
         ops = "\n".join(ops)
         self.interpret(ops, [0.1])
-        assert abs(self.getfloat(0) - (1 + BASE_CONSTANT_SIZE * 2) * 3.5 + 0.1) < 0.00001
+        assert abs(self.getfloat(0) - (BASE_CONSTANT_SIZE * 2) * 3.5 - 0.1) < 0.00001
 
     def test_lt_const(self):
         ops = '''
@@ -534,3 +534,24 @@ class TestRegallocFloats(BaseTestRegalloc):
         '''
         self.interpret(ops, [0.1])
         assert self.getint(0) == 0
+
+    def test_bug_wrong_stack_adj(self):
+        ops = '''
+        [i0, i1, i2, i3, i4, i5, i6, i7, i8]
+        guard_true(i0)
+            fail(3.5, i0, i1, i2, i3, i4, i5, i6, i7, i8)
+        fail(4.5, i0, i1, i2, i3, i4, i5, i6, i7, i8)
+        '''
+        loop = self.interpret(ops, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+        assert self.getint(0) == 0
+        bridge_ops = '''
+        [i0, i1, i2, i3, i4, i5, i6, i7, i8]
+        call(ConstClass(raising_fptr), 0, descr=raising_calldescr)
+        fail(i0, i1, i2, i3, i4, i5, i6, i7, i8)
+        '''
+        self.attach_bridge(bridge_ops, loop, 0)
+        for i in range(9):
+            self.cpu.set_future_value_int(i, i)
+        self.run(loop)
+        assert self.getints(9) == range(9)
+        assert self.getfloat(0) == 3.5
