@@ -19,7 +19,7 @@ class __extend__(MODRM):
         return self.position
 
 
-def remap_stack_layout(assembler, src_locations, dst_locations, tmpreg):
+def remap_stack_layout(assembler, src_locations, dst_locations, tmpreg, xmmtmp):
     pending_dests = len(dst_locations)
     srccount = {}    # maps dst_locations to how many times the same
                      # location appears in src_locations
@@ -50,7 +50,7 @@ def remap_stack_layout(assembler, src_locations, dst_locations, tmpreg):
                     key = src._getregkey()
                     if key in srccount:
                         srccount[key] -= 1
-                _move(assembler, src, dst, tmpreg)
+                _move(assembler, src, dst, tmpreg, xmmtmp)
                 progress = True
         if not progress:
             # we are left with only pure disjoint cycles
@@ -74,16 +74,20 @@ def remap_stack_layout(assembler, src_locations, dst_locations, tmpreg):
                         src = sources[key]
                         if src._getregkey() == originalkey:
                             break
-                        _move(assembler, src, dst, tmpreg)
+                        _move(assembler, src, dst, tmpreg, xmmtmp)
                         dst = src
                     assembler.regalloc_pop(dst)
             assert pending_dests == 0
 
-def _move(assembler, src, dst, tmpreg):
+def _move(assembler, src, dst, tmpreg, xmmtmp):
     if isinstance(dst, MODRM):
         if isinstance(src, MODRM):
-            assembler.regalloc_mov(src, tmpreg)
-            src = tmpreg
+            if src.width == 8:
+                tmp = xmmtmp
+            else:
+                tmp = tmpreg
+            assembler.regalloc_mov(src, tmp)
+            src = tmp
         assembler.regalloc_mov(src, dst)
     else:
         assembler.regalloc_mov(src, dst)
