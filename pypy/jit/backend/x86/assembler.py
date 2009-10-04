@@ -10,10 +10,10 @@ from pypy.tool.uid import fixid
 from pypy.jit.backend.x86.regalloc import (RegAlloc, WORD, REGS, TempBox,
                                            lower_byte, stack_pos)
 from pypy.rlib.objectmodel import we_are_translated, specialize
-from pypy.jit.backend.x86 import codebuf
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86 import codebuf, ri386
+from pypy.jit.backend.x86.ri386 import WORD
+from pypy.jit.backend.x86.ri386 import eax, ecx, edx, ebx, esp, ebp, esi, edi
 from pypy.jit.metainterp.resoperation import rop
-
 
 
 # our calling convention - we pass first 6 args in registers
@@ -59,9 +59,8 @@ def _new_method(name):
     method.func_name = name
     return method
 
-for name in dir(codebuf.MachineCodeBlock):
-    if name.upper() == name:
-        setattr(MachineCodeBlockWrapper, name, _new_method(name))
+for name in ri386.all_instructions:
+    setattr(MachineCodeBlockWrapper, name, _new_method(name))
 
 class ExecutableToken386(object):
     _x86_loop_code = 0
@@ -177,28 +176,28 @@ class Assembler386(object):
 
     def _patchable_stackadjust(self):
         # stack adjustment LEA
-        self.mc.LEA(esp, fixedsize_ebp_ofs(0))
+        self.mc.LEA32_rs(esp, 0)
         return self.mc.tell() - 4
 
     def _patch_stackadjust(self, adr_lea, stack_depth):
         # patch stack adjustment LEA
         # possibly align, e.g. for Mac OS X        
         mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 4)
-        mc.write(packimm32(-(stack_depth + RET_BP - 2) * WORD))
+        mc.writeimm32(-(stack_depth + RET_BP - 2) * WORD)
         mc.done()
 
     def _assemble_bootstrap_code(self, inputargs, arglocs):
-        self.mc.PUSH(ebp)
-        self.mc.MOV(ebp, esp)
-        self.mc.PUSH(ebx)
-        self.mc.PUSH(esi)
-        self.mc.PUSH(edi)
+        self.mc.PUSH_r(ebp)
+        self.mc.MOV_rr(ebp, esp)
+        self.mc.PUSH_r(ebx)
+        self.mc.PUSH_r(esi)
+        self.mc.PUSH_r(edi)
         # NB. exactly 4 pushes above; if this changes, fix stack_pos().
         # You must also keep _get_callshape() in sync.
         adr_stackadjust = self._patchable_stackadjust()
         for i in range(len(arglocs)):
             loc = arglocs[i]
-            if not isinstance(loc, REG):
+            if is_stack(loc):
                 if inputargs[i].type == REF:
                     # This uses XCHG to put zeroes in fail_boxes_ptr after
                     # reading them
@@ -825,3 +824,9 @@ def addr_add_const(reg_or_imm1, offset):
         return heap(reg_or_imm1.value + offset)
     else:
         return mem(reg_or_imm1, offset)
+
+def is_reg(loc):
+    return loc >= 0
+
+def is_stack(loc):
+    return loc < 0
