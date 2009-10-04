@@ -1,5 +1,5 @@
 import py
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86.rx86 import *
 
 class CodeBuilder(I386CodeBuilder):
     def __init__(self):
