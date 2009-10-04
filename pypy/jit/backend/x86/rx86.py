@@ -85,7 +85,7 @@ def encode_immediate(mc, immediate, width, orbyte):
         mc.writeimm8(immediate)
     elif width == 'h':
         mc.writeimm16(immediate)
-    elif width == 'q':
+    elif width == 'q' and mc.WORD == 8:
         mc.writeimm64(immediate)
     else:
         mc.writeimm32(immediate)
@@ -350,21 +350,17 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         self.writeimm32(imm >> 32)
 
     # MOV_ri from the parent class is not wrong, but add a better encoding
-    # for the common case where the immediate bits in 32 bits
+    # for the common case where the immediate fits in 32 bits
     _MOV_ri32 = insn(rex_w, '\xC7', register(1), '\xC0', immediate(2, 'i'))
-    _MOV_ri64 = insn(rex_w, register(1), '\xB8', immediate(2, 'q'))
 
     def MOV_ri(self, reg, immed):
         if fits_in_32bits(immed):
             self._MOV_ri32(reg, immed)
         else:
-            self._MOV_ri64(reg, immed)
+            AbstractX86CodeBuilder.MOV_ri(self, reg, immed)
 
 # ____________________________________________________________
 
 all_instructions = [name for name in AbstractX86CodeBuilder.__dict__
                     if name.split('_')[0].isupper()]
-all_instructions += [name for name in X86_32_CodeBuilder.__dict__
-                     if name.split('_')[0].isupper()]
-all_instructions.remove('WORD')
 all_instructions.sort()
