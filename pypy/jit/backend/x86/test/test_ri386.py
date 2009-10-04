@@ -6,7 +6,7 @@ class CodeBuilder(I386CodeBuilder):
         self.buffer = []
 
     def writechar(self, c):
-        self.buffer.append(c)    # extend the list of characters
+        self.buffer.append(c)    # append a character
 
     def getvalue(self):
         return ''.join(self.buffer)
@@ -42,3 +42,13 @@ def test_nop_add_rr():
     s.NOP()
     s.ADD_rr(eax, eax)
     assert s.getvalue() == '\x90\x01\xC0'
+
+def test_lea_rs():
+    s = CodeBuilder()
+    s.LEA_rs(ecx, -36)
+    assert s.getvalue() == '\x8D\x4D\xDC'
+
+def test_lea32_rs():
+    s = CodeBuilder()
+    s.LEA32_rs(ecx, -36)
+    assert s.getvalue() == '\x8D\x8D\xDC\xFF\xFF\xFF'

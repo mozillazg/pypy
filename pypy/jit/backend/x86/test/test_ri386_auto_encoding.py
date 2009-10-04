@@ -3,8 +3,8 @@ import py
 from pypy.jit.backend.x86 import ri386
 from pypy.tool.udir import udir
 
-INPUTNAME = str(udir.join('checkfile.s'))
-FILENAME = str(udir.join('checkfile.tmp'))
+INPUTNAME = str(udir.join('checkfile_%s.s'))
+FILENAME = str(udir.join('checkfile_%s.o'))
 BEGIN_TAG = '<<<ri386-test-begin>>>'
 END_TAG =   '<<<ri386-test-end>>>'
 
@@ -77,10 +77,7 @@ def assembler_operand_reg(regnum):
     return regnames[regnum]
 
 def assembler_operand_stack(position):
-    if position == 0:
-        return '(%ebp)'
-    else:
-        return '%d(%%ebp)' % position
+    return '%d(%%ebp)' % position
 
 def assembler_operand_imm(value):
     return '$%d' % value
@@ -91,11 +88,11 @@ assembler_operand = {
     'i': assembler_operand_imm,
     }
 
-def run_test(instrname, argmodes, args_lists):
+def run_test(methname, instrname, argmodes, args_lists):
     global labelcount
     labelcount = 0
     oplist = []
-    g = open(INPUTNAME, 'w')
+    g = open(INPUTNAME % methname, 'w')
     g.write('\x09.string "%s"\n' % BEGIN_TAG)
     for args in args_lists:
         suffix = ""
@@ -132,9 +129,9 @@ def run_test(instrname, argmodes, args_lists):
         oplist.append(op)
     g.write('\t.string "%s"\n' % END_TAG)
     g.close()
-    os.system('as "%s" -o "%s"' % (INPUTNAME, FILENAME))
+    os.system('as "%s" -o "%s"' % (INPUTNAME % methname, FILENAME % methname))
     try:
-        f = open(FILENAME, 'rb')
+        f = open(FILENAME % methname, 'rb')
     except IOError:
         raise Exception("Assembler error")
     data = f.read()
@@ -227,7 +224,7 @@ def complete_test(methname):
         instrname, argmodes = methname, ''
     print "Testing %s with argmodes=%r" % (instrname, argmodes)
     ilist = make_all_tests(methname, argmodes)
-    oplist, as_code = run_test(instrname, argmodes, ilist)
+    oplist, as_code = run_test(methname, instrname, argmodes, ilist)
     cc = CodeChecker(as_code)
     for op, args in zip(oplist, ilist):
         if op:
@@ -246,12 +243,10 @@ def test_auto():
     def do_test(name):
         if name in ('CMOVPE', 'CMOVPO'):
             py.test.skip("why doesn't 'as' know about CMOVPE/CMOVPO?")
+        if name.split('_')[0][-1].isdigit():
+            print "artificial instruction: %r" % (name,)
+            return
         complete_test(name)
 
-    for name in all_instructions:
+    for name in ri386.all_instructions:
         yield do_test, name
-
-
-all_instructions = [name for name in ri386.I386CodeBuilder.__dict__
-                    if name.split('_')[0].isupper()]
-all_instructions.sort()

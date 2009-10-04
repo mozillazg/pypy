@@ -65,8 +65,8 @@ def single_byte(value):
     return -128 <= value < 128
 
 @specialize.arg(2)
-def encode_stack(mc, arg, allow_single_byte, orbyte):
-    if allow_single_byte and single_byte(arg):
+def encode_stack(mc, arg, force_32bits, orbyte):
+    if not force_32bits and single_byte(arg):
         mc.writechar(chr(0x40 | ebp | orbyte))
         mc.writeimm8(arg)
     else:
@@ -74,8 +74,8 @@ def encode_stack(mc, arg, allow_single_byte, orbyte):
         mc.writeimm32(arg)
     return 0
 
-def stack(argnum, allow_single_byte=True):
-    return encode_stack, argnum, allow_single_byte
+def stack(argnum, force_32bits=False):
+    return encode_stack, argnum, force_32bits
 
 # ____________________________________________________________
 
@@ -153,3 +153,14 @@ class I386CodeBuilder(object):
 
     NOP = insn('\x90')
     RET = insn('\xC3')
+
+    PUSH_r = insn(register(1), '\x50')
+
+    LEA_rs = insn('\x8D', register(1,8), stack(2))
+    LEA32_rs = insn('\x8D', register(1,8), stack(2, force_32bits=True))
+
+# ____________________________________________________________
+
+all_instructions = [name for name in I386CodeBuilder.__dict__
+                    if name.split('_')[0].isupper()]
+all_instructions.sort()
