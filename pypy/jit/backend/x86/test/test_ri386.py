@@ -37,6 +37,38 @@ def test_mov_rs():
     s.MOV_rs(edx, -36)
     assert s.getvalue() == '\x8B\x55\xDC'
 
+def test_mov_rm():
+    s = CodeBuilder()
+    s.MOV_rm(edx, reg_offset(edi, 0))
+    s.MOV_rm(edx, reg_offset(edi, -128))
+    s.MOV_rm(edx, reg_offset(edi, 128))
+    assert s.getvalue() == '\x8B\x17\x8B\x57\x80\x8B\x97\x80\x00\x00\x00'
+
+def test_mov_mr():
+    s = CodeBuilder()
+    s.MOV_mr(reg_offset(edi, 0), edx)
+    s.MOV_mr(reg_offset(edi, -128), edx)
+    s.MOV_mr(reg_offset(edi, 128), edx)
+    assert s.getvalue() == '\x89\x17\x89\x57\x80\x89\x97\x80\x00\x00\x00'
+
+def test_mov_ra():
+    s = CodeBuilder()
+    s.MOV_ra(edx, reg_reg_scaleshift_offset(esi, edi, 2, 0))
+    s.MOV_ra(edx, reg_reg_scaleshift_offset(esi, edi, 2, -128))
+    s.MOV_ra(edx, reg_reg_scaleshift_offset(esi, edi, 2, 128))
+    assert s.getvalue() == ('\x8B\x14\xBE' +
+                            '\x8B\x54\xBE\x80' +
+                            '\x8B\x94\xBE\x80\x00\x00\x00')
+
+def test_mov_ar():
+    s = CodeBuilder()
+    s.MOV_ar(reg_reg_scaleshift_offset(esi, edi, 2, 0), edx)
+    s.MOV_ar(reg_reg_scaleshift_offset(esi, edi, 2, -128), edx)
+    s.MOV_ar(reg_reg_scaleshift_offset(esi, edi, 2, 128), edx)
+    assert s.getvalue() == ('\x89\x14\xBE' +
+                            '\x89\x54\xBE\x80' +
+                            '\x89\x94\xBE\x80\x00\x00\x00')
+
 def test_nop_add_rr():
     s = CodeBuilder()
     s.NOP()
