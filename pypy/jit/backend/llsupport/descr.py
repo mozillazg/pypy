@@ -67,11 +67,14 @@ class BaseFieldDescr(AbstractDescr):
     def get_field_size(self, translate_support_code):
         raise NotImplementedError
 
+    _is_pointer_field = False   # unless overridden by GcPtrFieldDescr
+    _is_float_field = False     # unless overridden by FloatFieldDescr
+
     def is_pointer_field(self):
-        return False        # unless overridden by GcPtrFieldDescr
+        return self._is_pointer_field
 
     def is_float_field(self):
-        return False        # unless overridden by FloatFieldDescr
+        return self._is_float_field
 
     def repr_of_descr(self):
         return '<%s %s>' % (self._clsname, self.offset)
@@ -84,13 +87,12 @@ class NonGcPtrFieldDescr(BaseFieldDescr):
 
 class GcPtrFieldDescr(NonGcPtrFieldDescr):
     _clsname = 'GcPtrFieldDescr'
-    def is_pointer_field(self):
-        return True
+    _is_pointer_field = True
 
 def getFieldDescrClass(TYPE):
     return getDescrClass(TYPE, BaseFieldDescr, GcPtrFieldDescr,
                          NonGcPtrFieldDescr, 'Field', 'get_field_size',
-                         'is_float_field')
+                         '_is_float_field')
 
 def get_field_descr(gccache, STRUCT, fieldname):
     cache = gccache._cache_field
@@ -126,11 +128,14 @@ class BaseArrayDescr(AbstractDescr):
     def get_item_size(self, translate_support_code):
         raise NotImplementedError
 
+    _is_array_of_pointers = False      # unless overridden by GcPtrArrayDescr
+    _is_array_of_floats   = False      # unless overridden by FloatArrayDescr
+
     def is_array_of_pointers(self):
-        return False        # unless overridden by GcPtrArrayDescr
+        return self._is_array_of_pointers
 
     def is_array_of_floats(self):
-        return False        # unless overridden by FloatArrayDescr
+        return self._is_array_of_floats
 
     def repr_of_descr(self):
         return '<%s>' % self._clsname
@@ -143,13 +148,12 @@ class NonGcPtrArrayDescr(BaseArrayDescr):
 
 class GcPtrArrayDescr(NonGcPtrArrayDescr):
     _clsname = 'GcPtrArrayDescr'
-    def is_array_of_pointers(self):
-        return True
+    _is_array_of_pointers = True
 
 def getArrayDescrClass(ARRAY):
     return getDescrClass(ARRAY.OF, BaseArrayDescr, GcPtrArrayDescr,
                          NonGcPtrArrayDescr, 'Array', 'get_item_size',
-                         'is_array_of_floats')
+                         '_is_array_of_floats')
 
 def get_array_descr(gccache, ARRAY):
     cache = gccache._cache_array
@@ -188,11 +192,14 @@ class BaseCallDescr(AbstractDescr):
             result.append(box)
         return result
 
+    _returns_a_pointer = False        # unless overridden by GcPtrCallDescr
+    _returns_a_float   = False        # unless overridden by FloatCallDescr
+
     def returns_a_pointer(self):
-        return False         # unless overridden by GcPtrCallDescr
+        return self._returns_a_pointer
 
     def returns_a_float(self):
-        return False         # unless overridden by FloatCallDescr
+        return self._returns_a_float
 
     def get_result_size(self, translate_support_code):
         raise NotImplementedError
@@ -234,8 +241,7 @@ class NonGcPtrCallDescr(BaseCallDescr):
 
 class GcPtrCallDescr(NonGcPtrCallDescr):
     _clsname = 'GcPtrCallDescr'
-    def returns_a_pointer(self):
-        return True
+    _returns_a_pointer = True
 
 class VoidCallDescr(NonGcPtrCallDescr):
     _clsname = 'VoidCallDescr'
@@ -247,7 +253,7 @@ def getCallDescrClass(RESULT):
         return VoidCallDescr
     return getDescrClass(RESULT, BaseCallDescr, GcPtrCallDescr,
                          NonGcPtrCallDescr, 'Call', 'get_result_size',
-                         'returns_a_float')
+                         '_returns_a_float')
 
 def get_call_descr(gccache, ARGS, RESULT):
     arg_classes = []
@@ -273,7 +279,7 @@ def get_call_descr(gccache, ARGS, RESULT):
 # ____________________________________________________________
 
 def getDescrClass(TYPE, BaseDescr, GcPtrDescr, NonGcPtrDescr,
-                  nameprefix, methodname, floatcheckname, _cache={}):
+                  nameprefix, methodname, floatattrname, _cache={}):
     if isinstance(TYPE, lltype.Ptr):
         if TYPE.TO._gckind == 'gc':
             return GcPtrDescr
@@ -292,9 +298,7 @@ def getDescrClass(TYPE, BaseDescr, GcPtrDescr, NonGcPtrDescr,
         setattr(Descr, methodname, method)
         #
         if TYPE is lltype.Float:
-            def is_float(self):
-                return True
-            setattr(Descr, floatcheckname, is_float)
+            setattr(Descr, floatattrname, True)
         #
         _cache[nameprefix, TYPE] = Descr
         return Descr
