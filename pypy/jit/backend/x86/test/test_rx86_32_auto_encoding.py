@@ -35,11 +35,10 @@ def hexdump(s):
 # ____________________________________________________________
 
 COUNT1 = 15
-COUNT2 = 25
 suffixes = {0:'', 1:'b', 2:'w', 4:'l', 8:'q'}
 
 
-class TestRx86_32:
+class TestRx86_32(object):
     WORD = 4
     TESTDIR = 'rx86_32'
     X86_CodeBuilder = rx86.X86_32_CodeBuilder
