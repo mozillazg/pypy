@@ -114,7 +114,7 @@ def stack(argnum, force_32bits=False):
 # Emit a mod/rm referencing a memory location [reg1+offset]
 
 def reg_offset(reg, offset):
-    # returns a 64-bit integer encoding "reg1+offset".
+    # returns a 64-bits integer encoding "reg1+offset".
     # * 'offset' is stored as bytes 1-4 of the result;
     # * 'reg1' is stored as byte 5 of the result.
     assert reg != esp and reg != ebp
@@ -159,7 +159,7 @@ def mem_reg_plus_const(argnum):
 # Emit a mod/rm referencing an array memory location [reg1+reg2*scale+offset]
 
 def reg_reg_scaleshift_offset(reg1, reg2, scaleshift, offset):
-    # returns a 64-bit integer encoding "reg1+reg2<<scaleshift+offset".
+    # returns a 64-bits integer encoding "reg1+reg2<<scaleshift+offset".
     # * 'offset' is stored as bytes 1-4 of the result;
     # * the SIB byte is computed and stored as byte 5 of the result;
     # * for 64-bits mode, the optional REX.B and REX.X flags go to byte 6.
@@ -214,7 +214,7 @@ def mem_reg_plus_scaled_reg_plus_const(argnum):
             rex_mem_reg_plus_scaled_reg_plus_const)
 
 # ____________________________________________________________
-# For 64-bit mode: the REX.W, REX.R, REX.X, REG.B prefixes
+# For 64-bits mode: the REX.W, REX.R, REX.X, REG.B prefixes
 
 REX_W = 8
 REX_R = 4
