@@ -22,8 +22,7 @@ class TestRx86_64(test_rx86_32_auto_encoding.TestRx86_32):
                  (random.randrange(0,65536)<<32) |
                  (random.randrange(0,65536)<<16) |
                  (random.randrange(0,65536)<<0))
-            if not rx86.fits_in_32bits(x):
-                v.append(x)
+            v.append(x)
         return v + self._old_imm32_tests()
 
     def test_extra_MOV_ri64(self):
