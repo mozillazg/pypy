@@ -103,6 +103,7 @@ def encode_stack(mc, offset, force_32bits, orbyte):
         mc.writechar(chr(0x40 | orbyte | ebp))
         mc.writeimm8(offset)
     else:
+        assert fits_in_32bits(offset)
         mc.writechar(chr(0x80 | orbyte | ebp))
         mc.writeimm32(offset)
     return 0
@@ -118,6 +119,7 @@ def reg_offset(reg, offset):
     # * 'offset' is stored as bytes 1-4 of the result;
     # * 'reg1' is stored as byte 5 of the result.
     assert reg != esp and reg != ebp
+    assert fits_in_32bits(offset)
     return (r_ulonglong(reg) << 32) | r_ulonglong(rffi.r_uint(offset))
 
 def encode_mem_reg_plus_const(mc, reg1_offset, _, orbyte):
@@ -128,8 +130,8 @@ def encode_mem_reg_plus_const(mc, reg1_offset, _, orbyte):
     # 64-bits special cases for reg1 == r12 or r13
     # (which look like esp or ebp after being truncated to 3 bits)
     if mc.WORD == 8:
-        if reg1 == esp:
-            SIB = (esp<<3) | esp
+        if reg1 == esp:             # forces an SIB byte:
+            SIB = (esp<<3) | esp    #   use [r12+(no index)+offset]
         elif reg1 == ebp:
             no_offset = False
     # end of 64-bits special cases
@@ -304,6 +306,7 @@ class AbstractX86CodeBuilder(object):
         self.writechar(chr((imm >> 16) & 0xFF))
         self.writechar(chr((imm >> 24) & 0xFF))
 
+    MOV_ri = insn(rex_w, register(1), '\xB8', immediate(2, 'q'))
     #MOV_si = insn(rex_w, '\xC7', orbyte(0<<3), stack(1), immediate(2))
     MOV_rr = insn(rex_w, '\x89', register(2,8), register(1), '\xC0')
     MOV_sr = insn(rex_w, '\x89', register(2,8), stack(1))
@@ -338,12 +341,16 @@ class AbstractX86CodeBuilder(object):
 class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 4
 
-    MOV_ri = insn(register(1), '\xB8', immediate(2))
-
 
 class X86_64_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 8
 
+    def writeimm64(self, imm):
+        self.writeimm32(intmask(rffi.cast(rffi.INT, imm)))
+        self.writeimm32(imm >> 32)
+
+    # MOV_ri from the parent class is not wrong, but add a better encoding
+    # for the common case where the immediate bits in 32 bits
     _MOV_ri32 = insn(rex_w, '\xC7', register(1), '\xC0', immediate(2, 'i'))
     _MOV_ri64 = insn(rex_w, register(1), '\xB8', immediate(2, 'q'))
 
