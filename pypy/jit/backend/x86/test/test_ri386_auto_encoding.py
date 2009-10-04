@@ -1,6 +1,7 @@
 import os, random, struct
 import py
 from pypy.jit.backend.x86 import ri386
+from pypy.rlib.rarithmetic import intmask
 from pypy.tool.udir import udir
 
 INPUTNAME = str(udir.join('checkfile_%s.s'))
@@ -16,10 +17,27 @@ suffixes = {0:'', 1:'b', 2:'w', 4:'l'}
 def reg_tests():
     return range(8)
 
-def stack_tests():
+def stack_tests(count=COUNT1):
     return ([0, 4, -4, 124, 128, -128, -132] +
             [random.randrange(-0x20000000, 0x20000000) * 4
-             for i in range(COUNT1)])
+             for i in range(count)])
+
+def memory_tests():
+    return [ri386.reg_offset(reg, ofs)
+                for reg in [ri386.eax, ri386.ecx, ri386.edx, ri386.ebx,
+                            ri386.esi, ri386.edi]
+                for ofs in stack_tests(5)
+            ]
+
+def array_tests():
+    return [ri386.reg_reg_scaleshift_offset(reg1, reg2, scaleshift, ofs)
+                for reg1 in [ri386.eax, ri386.ecx, ri386.edx, ri386.ebx,
+                             ri386.esi, ri386.edi]  #, ri386.esp
+                for reg2 in [ri386.eax, ri386.ecx, ri386.edx, ri386.ebx,
+                             ri386.esi, ri386.edi]  #, ri386.ebp
+                for scaleshift in [0, 1, 2, 3]
+                for ofs in stack_tests(1)
+            ]
 
 def imm8_tests():
     v = [-128,-1,0,1,127] + [random.randrange(-127, 127) for i in range(COUNT1)]
@@ -69,6 +87,8 @@ def modrm8_tests():
 tests = {
     'r': reg_tests,
     's': stack_tests,
+    'm': memory_tests,
+    'a': array_tests,
     'i': imm32_tests,
     }
 
@@ -79,12 +99,30 @@ def assembler_operand_reg(regnum):
 def assembler_operand_stack(position):
     return '%d(%%ebp)' % position
 
+def assembler_operand_memory(reg1_offset):
+    reg1 = intmask(reg1_offset >> 32)
+    offset = intmask(reg1_offset)
+    if not offset: offset = ''
+    return '%s(%s)' % (offset, regnames[reg1])
+
+def assembler_operand_array(reg1_reg2_scaleshift_offset):
+    SIB = intmask(reg1_reg2_scaleshift_offset >> 32)
+    offset = intmask(reg1_reg2_scaleshift_offset)
+    if not offset: offset = ''
+    reg1 = SIB & 7
+    reg2 = (SIB >> 3) & 7
+    scaleshift = SIB >> 6
+    return '%s(%s,%s,%d)' % (offset, regnames[reg1], regnames[reg2],
+                             1<<scaleshift)
+
 def assembler_operand_imm(value):
     return '$%d' % value
 
 assembler_operand = {
     'r': assembler_operand_reg,
     's': assembler_operand_stack,
+    'm': assembler_operand_memory,
+    'a': assembler_operand_array,
     'i': assembler_operand_imm,
     }
 
