@@ -536,3 +536,21 @@ class TestRegallocFloats(BaseTestRegalloc):
         self.run(loop)
         assert self.getints(9) == range(9)
         assert self.getfloat(0) == 3.5
+
+    def test_bug_float_is_true_stack(self):
+        ops = '''
+        [f0, f1, f2, f3, f4, f5, f6, f7, f8, f9]
+        i0 = float_is_true(f0)
+        i1 = float_is_true(f1)
+        i2 = float_is_true(f2)
+        i3 = float_is_true(f3)
+        i4 = float_is_true(f4)
+        i5 = float_is_true(f5)
+        i6 = float_is_true(f6)
+        i7 = float_is_true(f7)
+        i8 = float_is_true(f8)
+        i9 = float_is_true(f9)
+        finish(i0, i1, i2, i3, i4, i5, i6, i7, i8, i9)
+        '''
+        loop = self.interpret(ops, [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9])
+        assert self.getints(9) == [0, 1, 1, 1, 1, 1, 1, 1, 1]
