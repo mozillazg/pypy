@@ -751,10 +751,15 @@ class TypeDescr(OODescr):
         self.getarraylength = getarraylength
         self.instanceof = instanceof
         self._is_array_of_pointers = (history.getkind(TYPE) == 'ref')
+        self._is_array_of_floats = (history.getkind(TYPE) == 'float')
 
     def is_array_of_pointers(self):
         # for arrays, TYPE is the type of the array item.
         return self._is_array_of_pointers
+
+    def is_array_of_floats(self):
+        # for arrays, TYPE is the type of the array item.
+        return self._is_array_of_floats
 
     def __repr__(self):
         return '<TypeDescr %s>' % self.TYPE._short_name()

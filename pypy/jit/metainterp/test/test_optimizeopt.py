@@ -902,6 +902,23 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not', expected)
 
+    def test_varray_float(self):
+        ops = """
+        [f1]
+        p1 = new_array(3, descr=floatarraydescr)
+        i3 = arraylen_gc(p1, descr=floatarraydescr)
+        guard_value(i3, 3) []
+        setarrayitem_gc(p1, 1, f1, descr=floatarraydescr)
+        setarrayitem_gc(p1, 0, 3.5, descr=floatarraydescr)
+        f2 = getarrayitem_gc(p1, 1, descr=floatarraydescr)
+        jump(f2)
+        """
+        expected = """
+        [f1]
+        jump(f1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
     def test_array_non_optimized(self):
         ops = """
         [i1, p0]
