@@ -247,28 +247,14 @@ class BaseBackendTest(Runner):
     def test_int_operations(self):
         from pypy.jit.metainterp.test.test_executor import get_int_tests
         for opnum, boxargs, retvalue in get_int_tests():
-            if len(boxargs) == 2:
-                args_variants = [(boxargs[0], boxargs[1]),
-                                 (boxargs[0], boxargs[1].constbox()),
-                                 (boxargs[0].constbox(), boxargs[1])]
-            else:
-                args_variants = [boxargs]
-            for argboxes in args_variants:
-                res = self.execute_operation(opnum, argboxes, 'int')
-                assert res.value == retvalue
+            res = self.execute_operation(opnum, boxargs, 'int')
+            assert res.value == retvalue
         
     def test_float_operations(self):
         from pypy.jit.metainterp.test.test_executor import get_float_tests
         for opnum, boxargs, rettype, retvalue in get_float_tests(self.cpu):
-            if len(boxargs) == 2:
-                args_variants = [(boxargs[0], boxargs[1]),
-                                 (boxargs[0], boxargs[1].constbox()),
-                                 (boxargs[0].constbox(), boxargs[1])]
-            else:
-                args_variants = [boxargs]
-            for argboxes in args_variants:
-                res = self.execute_operation(opnum, argboxes, rettype)
-                assert res.value == retvalue
+            res = self.execute_operation(opnum, boxargs, rettype)
+            assert res.value == retvalue
 
     def test_ovf_operations(self, reversed=False):
         minint = -sys.maxint-1
