@@ -584,6 +584,23 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not, Virtual(node_vtable, valuedescr=Not)',
                            expected, checkspecnodes=False)
 
+    @py.test.mark.xfail()
+    def test_virtual_float(self):
+        ops = """
+        [f, p0]
+        f0 = getfield_gc(p0, descr=floatdescr)
+        f1 = float_add(f0, f)
+        setfield_gc(p0, f1, descr=floatdescr)
+        jump(f, p0)
+        """
+        expected = """
+        [f, f2]
+        f1 = int_add(f2, f)
+        jump(f, f1)
+        """
+        self.optimize_loop(ops, 'Not, Virtual(node_vtable, floatdescr=Not)',
+                           expected, checkspecnodes=False)        
+
     def test_virtual_2(self):
         ops = """
         [i, p0]
