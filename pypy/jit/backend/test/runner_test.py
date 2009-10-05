@@ -834,13 +834,24 @@ class BaseBackendTest(Runner):
         for i in range(1, len(fboxes)):
             assert self.cpu.get_latest_value_float(i) == 13.5 + 6.73 * i
 
+    def test_unused_result_int(self):
+        # test pure operations on integers whose result is not used
+        from pypy.jit.metainterp.test.test_executor import get_int_tests
+        int_tests = list(get_int_tests())
+        int_tests = [(opnum, boxargs, 'int', retvalue)
+                     for opnum, boxargs, retvalue in int_tests]
+        self._test_unused_result(int_tests)
+
     def test_unused_result_float(self):
         # same as test_unused_result_int, for float operations
         from pypy.jit.metainterp.test.test_executor import get_float_tests
         float_tests = list(get_float_tests(self.cpu))
+        self._test_unused_result(float_tests)
+
+    def _test_unused_result(self, tests):
         inputargs = []
         operations = []
-        for opnum, boxargs, rettype, retvalue in float_tests:
+        for opnum, boxargs, rettype, retvalue in tests:
             inputargs += boxargs
             if rettype == 'int':
                 boxres = BoxInt()
