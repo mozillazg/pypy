@@ -63,12 +63,6 @@ for name in dir(codebuf.MachineCodeBlock):
     if name.upper() == name:
         setattr(MachineCodeBlockWrapper, name, _new_method(name))
 
-class ExecutableToken386(object):
-    _x86_loop_code = 0
-    _x86_bootstrap_code = 0
-    _x86_stack_depth = 0
-    _x86_arglocs = (None, None)
-
 class Assembler386(object):
     mc = None
     mc2 = None
@@ -724,22 +718,19 @@ class Assembler386(object):
         self.mc.CMP(mem(locs[0], offset), locs[1])
         return self.implement_guard(addr, self.mc.JNE)
 
-    def _no_const_locs(self, args, locs):
-        """ returns those locs which correspond to non-const args
+    def _no_const_locs(self, args):
+        """ assert that all args are actually Boxes
         """
-        newlocs = []
-        for i in range(len(args)):
-            arg = args[i]
-            if isinstance(arg, Box):
-                newlocs.append(locs[i])
-        return newlocs
+        for arg in args:
+            assert isinstance(arg, Box)
 
     def implement_guard_recovery(self, guard_opnum, faildescr, failargs,
                                                                fail_locs):
+        self._no_const_locs(failargs)
         addr = self.mc2.tell()
         exc = (guard_opnum == rop.GUARD_EXCEPTION or
                guard_opnum == rop.GUARD_NO_EXCEPTION)
-        faildescr._x86_faillocs = self._no_const_locs(failargs, fail_locs)
+        faildescr._x86_faillocs = fail_locs
         self.generate_failure(self.mc2, faildescr, failargs, fail_locs, exc)
         return addr
 
@@ -749,12 +740,11 @@ class Assembler386(object):
         for i in range(len(failargs)):
             arg = failargs[i]
             loc = locs[i]
-            if arg.type == FLOAT:
-                if isinstance(loc, REG):
+            if isinstance(loc, REG):
+                if arg.type == FLOAT:
                     mc.MOVSD(addr64_add(imm(self.fail_box_float_addr),
                                         imm(i*WORD*2)), loc)
-            else:
-                if isinstance(loc, REG):
+                else:
                     if arg.type == REF:
                         base = self.fail_box_ptr_addr
                     else:
@@ -763,13 +753,12 @@ class Assembler386(object):
         for i in range(len(failargs)):
             arg = failargs[i]
             loc = locs[i]
-            if arg.type == FLOAT:
-                if not isinstance(loc, REG):
+            if not isinstance(loc, REG):
+                if arg.type == FLOAT:
                     mc.MOVSD(xmm0, loc)
                     mc.MOVSD(addr64_add(imm(self.fail_box_float_addr),
                                         imm(i*WORD*2)), xmm0)
-            else:
-                if not isinstance(loc, REG):
+                else:
                     if arg.type == REF:
                         base = self.fail_box_ptr_addr
                     else:
