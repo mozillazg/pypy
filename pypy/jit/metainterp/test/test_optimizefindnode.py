@@ -67,6 +67,7 @@ class LLtypeMixin(object):
     otherdescr = cpu.fielddescrof(NODE2, 'other')
 
     arraydescr = cpu.arraydescrof(lltype.GcArray(lltype.Signed))
+    floatarraydescr = cpu.arraydescrof(lltype.GcArray(lltype.Float))
 
     # a GcStruct not inheriting from OBJECT
     S = lltype.GcStruct('TUPLE', ('a', lltype.Signed), ('b', lltype.Ptr(NODE)))
@@ -129,6 +130,7 @@ class OOtypeMixin(object):
     nodesize2 = cpu.typedescrof(NODE2)
 
     arraydescr = cpu.arraydescrof(ootype.Array(ootype.Signed))
+    floatarraydescr = cpu.arraydescrof(ootype.Array(ootype.Float))
 
     # a plain Record
     S = ootype.Record({'a': ootype.Signed, 'b': NODE})
