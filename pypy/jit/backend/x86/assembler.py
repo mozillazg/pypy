@@ -360,17 +360,18 @@ class Assembler386(object):
                     name = 'J' + false_cond
                     return self.implement_guard(addr, getattr(self.mc, name))
         return genop_cmp_guard
-            
-    def align_stack_for_call(self, nargs):
-        # xxx do something when we don't use push anymore for calls
-        extra_on_stack = align_stack_words(nargs)
-        for i in range(extra_on_stack-nargs):
-            self.mc.PUSH(imm(0))
-        return extra_on_stack
+
+##    XXX redo me
+##    def align_stack_for_call(self, nargs):
+##        # xxx do something when we don't use push anymore for calls
+##        extra_on_stack = align_stack_words(nargs)
+##        for i in range(extra_on_stack-nargs):
+##            self.mc.PUSH(imm(0))   --- or just use a single SUB(esp, imm)
+##        return extra_on_stack
 
     def call(self, addr, args, res):
         nargs = len(args)
-        extra_on_stack = self.align_stack_for_call(nargs)
+        extra_on_stack = nargs #self.align_stack_for_call(nargs)
         for i in range(nargs-1, -1, -1):
             self.mc.PUSH(args[i])
         self.mc.CALL(rel32(addr))
@@ -804,7 +805,7 @@ class Assembler386(object):
         extra_on_stack = 0
         for arg in range(2, nargs + 2):
             extra_on_stack += round_up_to_4(arglocs[arg].width)
-        extra_on_stack = self.align_stack_for_call(extra_on_stack)
+        #extra_on_stack = self.align_stack_for_call(extra_on_stack)
         self.mc.SUB(esp, imm(extra_on_stack))
         if isinstance(op.args[0], Const):
             x = rel32(op.args[0].getint())
