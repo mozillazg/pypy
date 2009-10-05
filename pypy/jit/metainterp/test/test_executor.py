@@ -196,6 +196,7 @@ def _float_comparison_operations():
         yield (rop.FLOAT_NE, [10.125, y], 'int', 10.125 != y)
         yield (rop.FLOAT_GT, [10.125, y], 'int', 10.125 > y)
         yield (rop.FLOAT_GE, [10.125, y], 'int', 10.125 >= y)
+    yield (rop.FLOAT_EQ, [0.0, -0.0], 'int', 0.0 == -0.0)
 
 def _float_unary_operations():
     yield (rop.FLOAT_NEG, [-5.9], 'float', 5.9)
@@ -204,6 +205,7 @@ def _float_unary_operations():
     yield (rop.FLOAT_ABS, [15.9], 'float', 15.9)
     yield (rop.FLOAT_IS_TRUE, [-5.9], 'int', 1)
     yield (rop.FLOAT_IS_TRUE, [0.0], 'int', 0)
+    yield (rop.FLOAT_IS_TRUE, [-0.0], 'int', 0)
     yield (rop.CAST_FLOAT_TO_INT, [-5.9], 'int', -5)
     yield (rop.CAST_FLOAT_TO_INT, [5.9], 'int', 5)
     yield (rop.CAST_INT_TO_FLOAT, [123], 'float', 123.0)
