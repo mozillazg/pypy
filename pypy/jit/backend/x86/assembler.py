@@ -447,7 +447,7 @@ class Assembler386(object):
     def genop_float_is_true(self, op, arglocs, resloc):
         loc0, loc1 = arglocs
         self.mc.XORPD(loc0, loc0)
-        self.mc.UCOMISD(loc1, loc0)
+        self.mc.UCOMISD(loc0, loc1)
         self.mc.SETNE(lower_byte(resloc))
         self.mc.MOVZX(resloc, lower_byte(resloc))
 
