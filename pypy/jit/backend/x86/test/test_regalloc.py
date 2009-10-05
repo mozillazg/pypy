@@ -130,6 +130,8 @@ class BaseTestRegalloc(object):
         guard_op = loop.operations[guard_op_index]
         assert guard_op.is_guard()
         bridge = self.parse(ops, **kwds)
+        assert ([box.type for box in bridge.inputargs] ==
+                [box.type for box in guard_op.fail_args])
         faildescr = guard_op.descr
         self.cpu.compile_bridge(faildescr, bridge.inputargs, bridge.operations)
         return bridge
@@ -513,21 +515,22 @@ class TestRegallocFloats(BaseTestRegalloc):
         self.interpret(ops, [0.1])
         assert self.getint(0) == 0
 
+    @py.test.mark.xfail    # this test is bogus in the branch floats-via-sse2
     def test_bug_wrong_stack_adj(self):
         ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8]
-        f0 = same_as(3.5)
-        guard_true(i0) [f0, i0, i1, i2, i3, i4, i5, i6, i7, i8]
-        finish(4.5, i0, i1, i2, i3, i4, i5, i6, i7, i8)
+        guard_true(i0)
+            fail(3.5, i0, i1, i2, i3, i4, i5, i6, i7, i8)
+        fail(4.5, i0, i1, i2, i3, i4, i5, i6, i7, i8)
         '''
         loop = self.interpret(ops, [0, 1, 2, 3, 4, 5, 6, 7, 8])
         assert self.getint(0) == 0
         bridge_ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8]
         call(ConstClass(raising_fptr), 0, descr=raising_calldescr)
-        finish(i0, i1, i2, i3, i4, i5, i6, i7, i8)
+        fail(i0, i1, i2, i3, i4, i5, i6, i7, i8)
         '''
-        self.attach_bridge(bridge_ops, loop, 1)
+        self.attach_bridge(bridge_ops, loop, 0)
         for i in range(9):
             self.cpu.set_future_value_int(i, i)
         self.run(loop)
