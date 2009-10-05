@@ -147,7 +147,6 @@ def _int_comparison_operations():
         for i in range(20):
             x = pick()
             y = pick()
-            res = execute_nonspec(cpu, opnum, [BoxInt(x), BoxInt(y)])
             z = int(operation(x, y))
             yield opnum, [x, y], z
 
