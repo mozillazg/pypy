@@ -852,7 +852,7 @@ class BaseBackendTest(Runner):
         inputargs = []
         operations = []
         for opnum, boxargs, rettype, retvalue in tests:
-            inputargs += boxargs
+            inputargs += [box for box in boxargs if isinstance(box, Box)]
             if rettype == 'int':
                 boxres = BoxInt()
             elif rettype == 'float':

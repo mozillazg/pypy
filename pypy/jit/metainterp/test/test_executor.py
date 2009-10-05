@@ -168,6 +168,10 @@ def get_int_tests():
             list(_int_comparison_operations()) +
             list(_int_unary_operations())):
         yield opnum, [BoxInt(x) for x in args], retvalue
+        if len(args) > 1:
+            assert len(args) == 2
+            yield opnum, [BoxInt(args[0]), ConstInt(args[1])], retvalue
+            yield opnum, [ConstInt(args[0]), BoxInt(args[1])], retvalue
 
 
 def test_int_ops():
@@ -224,6 +228,10 @@ def get_float_tests(cpu):
             else:
                 boxargs.append(BoxInt(x))
         yield opnum, boxargs, rettype, retvalue
+        if len(args) > 1:
+            assert len(args) == 2
+            yield opnum, [boxargs[0], boxargs[1].constbox()], rettype, retvalue
+            yield opnum, [boxargs[0].constbox(), boxargs[1]], rettype, retvalue
 
 def test_float_ops():
     cpu = FakeCPU()
