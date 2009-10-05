@@ -584,7 +584,6 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not, Virtual(node_vtable, valuedescr=Not)',
                            expected, checkspecnodes=False)
 
-    @py.test.mark.xfail()
     def test_virtual_float(self):
         ops = """
         [f, p0]
@@ -595,7 +594,7 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         expected = """
         [f, f2]
-        f1 = int_add(f2, f)
+        f1 = float_add(f2, f)
         jump(f, f1)
         """
         self.optimize_loop(ops, 'Not, Virtual(node_vtable, floatdescr=Not)',

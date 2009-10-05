@@ -107,6 +107,7 @@ class OOtypeMixin(object):
     cpu = runner.OOtypeCPU(None)
     NODE = ootype.Instance('NODE', ootype.ROOT, {})
     NODE._add_fields({'value': ootype.Signed,
+                      'floatval' : ootype.Float,
                       'next': NODE})
     NODE2 = ootype.Instance('NODE2', NODE, {'other': NODE})
 
@@ -121,6 +122,7 @@ class OOtypeMixin(object):
     myptr2 = ootype.cast_to_object(ootype.new(NODE))
     nodebox2 = BoxObj(ootype.cast_to_object(node))
     valuedescr = cpu.fielddescrof(NODE, 'value')
+    floatdescr = cpu.fielddescrof(NODE, 'floatval')
     nextdescr = cpu.fielddescrof(NODE, 'next')
     otherdescr = cpu.fielddescrof(NODE2, 'other')
     nodesize = cpu.typedescrof(NODE)

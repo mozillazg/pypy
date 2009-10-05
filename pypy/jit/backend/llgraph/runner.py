@@ -47,8 +47,14 @@ class Descr(history.AbstractDescr):
     def is_pointer_field(self):
         return self.typeinfo == REF
 
+    def is_float_field(self):
+        return self.typeinfo == FLOAT
+
     def is_array_of_pointers(self):
         return self.typeinfo == REF
+
+    def is_array_of_floats(self):
+        return self.typeinfo == FLOAT
 
     def equals(self, other):
         if not isinstance(other, Descr):
@@ -775,12 +781,16 @@ class FieldDescr(OODescr):
         self.getfield = getfield
         self.setfield = setfield
         self._is_pointer_field = (history.getkind(T) == 'ref')
+        self._is_float_field = (history.getkind(T) == 'float')
 
     def sort_key(self):
         return self._keys.getkey((self.TYPE, self.fieldname))
 
     def is_pointer_field(self):
         return self._is_pointer_field
+
+    def is_float_field(self):
+        return self._is_float_field
 
     def equals(self, other):
         return self.TYPE == other.TYPE and \
