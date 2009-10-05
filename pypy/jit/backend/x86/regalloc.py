@@ -472,7 +472,8 @@ class RegAlloc(object):
         assert l0 is eax
         assert l1 is ecx
         assert l2 is resultreg
-        self.rm.possibly_free_vars(op.args + [tmpvar])
+        self.rm.possibly_free_vars(op.args)
+        self.rm.possibly_free_var(tmpvar)
 
     def consider_int_mod(self, op, ignored):
         self._consider_int_div_or_mod(op, edx, eax)
@@ -668,9 +669,11 @@ class RegAlloc(object):
         # XXX kill this function at some point
         if isinstance(v, Box):
             loc = self.rm.make_sure_var_in_reg(v, [v])
-            other_loc = self.rm.force_allocate_reg(TempBox(), [v])
+            tempbox = TempBox()
+            other_loc = self.rm.force_allocate_reg(tempbox, [v])
             self.assembler.load_effective_addr(loc, ofs_items,scale, other_loc)
         else:
+            tempbox = None
             other_loc = imm(ofs_items + (v.getint() << scale))
         self._call(ResOperation(rop.NEW, [v], res_v),
                    [other_loc], [v])
@@ -678,6 +681,8 @@ class RegAlloc(object):
         assert self.loc(res_v) == eax
         # now we have to reload length to some reasonable place
         self.rm.possibly_free_var(v)
+        if tempbox is not None:
+            self.rm.possibly_free_var(tempbox)
         self.PerformDiscard(ResOperation(rop.SETFIELD_GC, [], None),
                             [eax, imm(ofs_length), imm(WORD), loc])
 
