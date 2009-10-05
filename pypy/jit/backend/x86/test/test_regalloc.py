@@ -516,7 +516,8 @@ class TestRegallocFloats(BaseTestRegalloc):
     def test_bug_wrong_stack_adj(self):
         ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8]
-        guard_true(i0) [i0, i1, i2, i3, i4, i5, i6, i7, i8]
+        f0 = same_as(3.5)
+        guard_true(i0) [f0, i0, i1, i2, i3, i4, i5, i6, i7, i8]
         finish(4.5, i0, i1, i2, i3, i4, i5, i6, i7, i8)
         '''
         loop = self.interpret(ops, [0, 1, 2, 3, 4, 5, 6, 7, 8])
@@ -526,9 +527,9 @@ class TestRegallocFloats(BaseTestRegalloc):
         call(ConstClass(raising_fptr), 0, descr=raising_calldescr)
         finish(i0, i1, i2, i3, i4, i5, i6, i7, i8)
         '''
-        self.attach_bridge(bridge_ops, loop, 0)
+        self.attach_bridge(bridge_ops, loop, 1)
         for i in range(9):
             self.cpu.set_future_value_int(i, i)
         self.run(loop)
         assert self.getints(9) == range(9)
-
+        assert self.getfloat(0) == 3.5
