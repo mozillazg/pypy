@@ -395,6 +395,13 @@ def op_get_group_member(TYPE, grpptr, memberoffset):
     return lltype.cast_pointer(TYPE, member)
 op_get_group_member.need_result_type = True
 
+def op_get_next_group_member(TYPE, grpptr, memberoffset, skipoffset):
+    from pypy.rpython.lltypesystem import llgroup
+    assert isinstance(memberoffset, llgroup.GroupMemberOffset)
+    member = memberoffset._get_next_group_member(grpptr, skipoffset)
+    return lltype.cast_pointer(TYPE, member)
+op_get_next_group_member.need_result_type = True
+
 # ____________________________________________________________
 
 def get_op_impl(opname):

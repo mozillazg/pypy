@@ -55,6 +55,24 @@ class TestLLGroup(object):
         pnew = lltype.malloc(self.S2, immortal=True)
         assert member_of_group(pnew) is None
 
+    def test_next_group_member(self):
+        self.build()
+        grpptr = self.grpptr
+        S1 = self.S1
+        S2 = self.S2
+        Ptr = lltype.Ptr
+        p = llop.get_next_group_member(Ptr(S2), grpptr,
+                                       self.g1a, llmemory.sizeof(S1))
+        assert p == self.p2a
+        #
+        p = llop.get_next_group_member(Ptr(S2), grpptr,
+                                       self.g2a, llmemory.sizeof(S2))
+        assert p == self.p2b
+        #
+        p = llop.get_next_group_member(Ptr(S1), grpptr,
+                                       self.g2b, llmemory.sizeof(S2))
+        assert p == self.p1b
+
     def test_rpython(self):
         self.build()
         grpptr = self.grpptr

@@ -26,6 +26,7 @@ class group(lltype._container):
         assert TYPE.TO._gckind == 'raw'
         struct = structptr._as_obj()
         assert struct not in _membership,"cannot be a member of several groups"
+        assert struct._parentstructure() is None
         self.members.append(struct)
         _membership[struct] = self
 
@@ -48,10 +49,20 @@ class GroupMemberOffset(llmemory.Symbolic):
 
     def __init__(self, grp, member):
         assert lltype.typeOf(grp) == Group
-        assert member._as_obj() in grp.members
         self.grpptr = grp._as_ptr()
         self.member = member._as_ptr()
+        self.index = grp.members.index(member._as_obj())
 
     def _get_group_member(self, grpptr):
         assert grpptr == self.grpptr, "get_group_member: wrong group!"
         return self.member
+
+    def _get_next_group_member(self, grpptr, skipoffset):
+        # ad-hoc: returns a pointer to the group member that follows this one,
+        # given information in 'skipoffset' about how much to skip -- which
+        # is the size of the current member.
+        assert grpptr == self.grpptr, "get_next_group_member: wrong group!"
+        assert isinstance(skipoffset, llmemory.ItemOffset)
+        assert skipoffset.TYPE == lltype.typeOf(self.member).TO
+        assert skipoffset.repeat == 1
+        return self.grpptr._as_obj().members[self.index + 1]._as_ptr()
