@@ -411,6 +411,7 @@ LL_OPERATIONS = {
     'cast_adr_to_int':      LLOp(sideeffects=False),
     'cast_int_to_adr':      LLOp(canfold=True),   # not implemented in llinterp
     'get_group_member':     LLOp(canfold=True),
+    'get_next_group_member':LLOp(canfold=True),
 
     # __________ used by the JIT ________
 
