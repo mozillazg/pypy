@@ -33,7 +33,7 @@ class group(lltype._container):
 def member_of_group(structptr):
     return _membership.get(structptr._as_obj(), None)
 
-_membership = weakref.WeakKeyDictionary()
+_membership = weakref.WeakValueDictionary()
 
 
 class GroupMemberOffset(llmemory.Symbolic):
