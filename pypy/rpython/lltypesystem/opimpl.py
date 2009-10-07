@@ -388,6 +388,13 @@ def op_gc_stack_bottom():
 def op_promote_virtualizable(object, fieldname, flags):
     pass # XXX should do something
 
+def op_get_group_member(TYPE, grpptr, memberoffset):
+    from pypy.rpython.lltypesystem import llgroup
+    assert isinstance(memberoffset, llgroup.GroupMemberOffset)
+    member = memberoffset._get_group_member(grpptr)
+    return lltype.cast_pointer(TYPE, member)
+op_get_group_member.need_result_type = True
+
 # ____________________________________________________________
 
 def get_op_impl(opname):
