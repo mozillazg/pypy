@@ -701,5 +701,9 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         fn = self.getcompiled(llf)
         fn()
 
-
-        
+    def test_llgroup(self):
+        from pypy.rpython.lltypesystem.test import test_llgroup
+        f = test_llgroup.build_test()
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 42

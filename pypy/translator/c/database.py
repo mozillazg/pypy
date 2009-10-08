@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem.lltype import \
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.llmemory import WeakRef, _WeakRefType, GCREF
 from pypy.rpython.lltypesystem.rffi import CConstant
+from pypy.rpython.lltypesystem import llgroup
 from pypy.tool.sourcetools import valid_identifier
 from pypy.translator.c.primitive import PrimitiveName, PrimitiveType
 from pypy.translator.c.node import StructDefNode, ArrayDefNode
@@ -141,6 +142,8 @@ class LowLevelDatabase(object):
                 #raise Exception("don't know about opaque type %r" % (T,))
                 return 'struct %s @' % (
                     valid_identifier('pypy_opaque_' + T.tag),)
+        elif isinstance(T, llgroup.GroupType):
+            return 'XXX-dont-use-me @'
         else:
             raise Exception("don't know about type %r" % (T,))
 
