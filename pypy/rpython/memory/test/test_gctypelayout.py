@@ -1,6 +1,8 @@
 from pypy.rpython.memory.gctypelayout import TypeLayoutBuilder, GCData
 from pypy.rpython.memory.gctypelayout import offsets_to_gc_pointers
 from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.test.test_llinterp import get_interpreter
+from pypy.objspace.flow.model import Constant
 
 def getname(T):
     try:
@@ -40,3 +42,29 @@ def test_layout_builder():
         lst1 = gcdata.q_varsize_offsets_to_gcpointers_in_var_part(tid1)
         lst2 = gcdata.q_offsets_to_gc_pointers(tid2)
         assert len(lst1) == len(lst2)
+
+def test_constfold():
+    layoutbuilder = TypeLayoutBuilder()
+    tid1 = layoutbuilder.get_type_id(GC_A)
+    tid2 = layoutbuilder.get_type_id(GC_S3)
+    class MockGC:
+        def set_query_functions(self, is_varsize,
+                                has_gcptr_in_varsize,
+                                is_gcarrayofgcptr,
+                                *rest):
+            self.is_varsize = is_varsize
+            self.has_gcptr_in_varsize = has_gcptr_in_varsize
+            self.is_gcarrayofgcptr = is_gcarrayofgcptr
+    gc = MockGC()
+    layoutbuilder.initialize_gc_query_function(gc)
+    #
+    def f():
+        return (1 * gc.is_varsize(tid1) +
+               10 * gc.has_gcptr_in_varsize(tid1) +
+              100 * gc.is_gcarrayofgcptr(tid1) +
+             1000 * gc.is_varsize(tid2) +
+            10000 * gc.has_gcptr_in_varsize(tid2) +
+           100000 * gc.is_gcarrayofgcptr(tid2))
+    interp, graph = get_interpreter(f, [], backendopt=True)
+    assert interp.eval_graph(graph, []) == 11001
+    assert graph.startblock.exits[0].args == [Constant(11001, lltype.Signed)]
