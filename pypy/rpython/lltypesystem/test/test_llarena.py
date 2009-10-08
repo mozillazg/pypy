@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem.llarena import arena_malloc, arena_reset
 from pypy.rpython.lltypesystem.llarena import arena_reserve, arena_free
 from pypy.rpython.lltypesystem.llarena import round_up_for_allocation
 from pypy.rpython.lltypesystem.llarena import ArenaError, arena_new_view
+from pypy.rpython.lltypesystem.llarena import arena_swap_header
 
 def test_arena():
     S = lltype.Struct('S', ('x',lltype.Signed))
@@ -217,13 +218,15 @@ def test_address_eq_as_int():
     assert llmemory.cast_adr_to_int(a) == llmemory.cast_adr_to_int(a1)
     assert llmemory.cast_adr_to_int(a+1) == llmemory.cast_adr_to_int(a1) + 1
 
-def test_replace_object_with_stub():
+def test_replace_object_header():
     from pypy.rpython.memory.gcheader import GCHeaderBuilder
     HDR = lltype.Struct('HDR', ('x', lltype.Signed))
+    STUB = lltype.Struct('STUB', ('t', lltype.Char))
     S = lltype.GcStruct('S', ('y', lltype.Signed), ('z', lltype.Signed))
-    STUB = lltype.GcStruct('STUB', ('t', lltype.Char))
     gcheaderbuilder = GCHeaderBuilder(HDR)
     size_gc_header = gcheaderbuilder.size_gc_header
+    gcstubbuilder = GCHeaderBuilder(STUB)
+    size_stub = gcstubbuilder.size_gc_header
     ssize = llmemory.raw_malloc_usage(llmemory.sizeof(S))
 
     a = arena_malloc(13*ssize, True)
@@ -231,31 +234,28 @@ def test_replace_object_with_stub():
     arena_reserve(hdraddr, size_gc_header + llmemory.sizeof(S))
     hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(HDR))
     hdr.x = 42
-    obj = llmemory.cast_adr_to_ptr(hdraddr + size_gc_header, lltype.Ptr(S))
+    objaddr = hdraddr + size_gc_header
+    obj = llmemory.cast_adr_to_ptr(objaddr, lltype.Ptr(S))
     obj.y = -5
     obj.z = -6
 
-    hdraddr = llmemory.cast_ptr_to_adr(obj) - size_gc_header
-    arena_reset(hdraddr, size_gc_header + llmemory.sizeof(S), False)
-    arena_reserve(hdraddr, size_gc_header + llmemory.sizeof(STUB))
+    arena_swap_header(objaddr, size_gc_header, size_stub)
+    assert obj.y == -5
+    assert obj.z == -6
+    stubaddr = objaddr - size_stub
+    stub = llmemory.cast_adr_to_ptr(stubaddr, lltype.Ptr(STUB))
+    stub.t = 'A'
+    py.test.raises(RuntimeError, "hdr.x")
+    py.test.raises(KeyError, "objaddr - size_gc_header")
 
-    # check that it possible to reach the newly reserved HDR+STUB
-    # via the header of the old 'obj' pointer, both via the existing
-    # 'hdraddr':
-    hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(HDR))
-    hdr.x = 46
-    stub = llmemory.cast_adr_to_ptr(hdraddr + size_gc_header, lltype.Ptr(STUB))
-    stub.t = '!'
-
-    # and via a (now-invalid) pointer to the old 'obj': (this is needed
-    # because during a garbage collection there are still pointers to
-    # the old 'obj' around to be fixed)
-    hdraddr = llmemory.cast_ptr_to_adr(obj) - size_gc_header
-    hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(HDR))
-    assert hdr.x == 46
-    stub = llmemory.cast_adr_to_ptr(hdraddr + size_gc_header,
-                                    lltype.Ptr(STUB))
-    assert stub.t == '!'
+    arena_swap_header(objaddr, size_stub, size_gc_header)
+    hdr2addr = objaddr - size_gc_header
+    hdr2 = llmemory.cast_adr_to_ptr(hdr2addr, lltype.Ptr(HDR))
+    hdr2.x = 42
+    assert obj.y == -5
+    assert obj.z == -6
+    py.test.raises(RuntimeError, "stub.t")
+    py.test.raises(KeyError, "objaddr - size_stub")
 
 
 def test_llinterpreted():
