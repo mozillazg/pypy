@@ -28,8 +28,10 @@ class group(lltype._container):
         struct = structptr._as_obj()
         assert struct not in _membership,"cannot be a member of several groups"
         assert struct._parentstructure() is None
+        index = len(self.members)
         self.members.append(struct)
         _membership[struct] = self
+        return GroupMemberOffset(self, index)
 
 def member_of_group(structptr):
     return _membership.get(structptr._as_obj(), None)
@@ -48,11 +50,11 @@ class GroupMemberOffset(llmemory.Symbolic):
     def lltype(self):
         return rffi.USHORT
 
-    def __init__(self, grp, member):
+    def __init__(self, grp, memberindex):
         assert lltype.typeOf(grp) == Group
         self.grpptr = grp._as_ptr()
-        self.member = member._as_ptr()
-        self.index = grp.members.index(member._as_obj())
+        self.index = memberindex
+        self.member = grp.members[memberindex]._as_ptr()
 
     def _get_group_member(self, grpptr):
         assert grpptr == self.grpptr, "get_group_member: wrong group!"

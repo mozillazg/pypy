@@ -707,3 +707,37 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         fn = self.getcompiled(f)
         res = fn()
         assert res == 42
+
+    def test_llgroup_size_limit(self):
+        yield self._test_size_limit, True
+        yield self._test_size_limit, False
+
+    def _test_size_limit(self, toobig):
+        from pypy.rpython.lltypesystem import llgroup
+        from pypy.rpython.lltypesystem.lloperation import llop
+        from pypy.translator.platform import CompilationError
+        grp = llgroup.group("big")
+        S1 = Struct('S1', ('x', Signed), ('y', Signed),
+                          ('z', Signed), ('u', Signed),
+                          ('x2', Signed), ('y2', Signed),
+                          ('z2', Signed), ('u2', Signed),
+                          ('x3', Signed), ('y3', Signed),
+                          ('z3', Signed), ('u3', Signed),
+                          ('x4', Signed), ('y4', Signed),
+                          ('z4', Signed), ('u4', Signed))
+        goffsets = []
+        for i in range(4096 + toobig):
+            goffsets.append(grp.add_member(malloc(S1, immortal=True)))
+        grpptr = grp._as_ptr()
+        def f(n):
+            p = llop.get_group_member(Ptr(S1), grpptr, goffsets[n])
+            q = llop.get_group_member(Ptr(S1), grpptr, goffsets[0])
+            p.x = 5
+            q.x = 666
+            return p.x
+        if toobig:
+            py.test.raises(CompilationError, self.getcompiled, f, [int])
+        else:
+            fn = self.getcompiled(f, [int])
+            res = fn(-1)
+            assert res == 5

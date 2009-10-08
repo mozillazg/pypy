@@ -20,14 +20,10 @@ class TestLLGroup(object):
         p1b.x = 456
         p2a.y = 789
         p2b.z = -12
-        grp.add_member(p1a)
-        grp.add_member(p2a)
-        grp.add_member(p2b)
-        grp.add_member(p1b)
-        self.g1a = GroupMemberOffset(grp, p1a)
-        self.g1b = GroupMemberOffset(grp, p1b)
-        self.g2a = GroupMemberOffset(grp, p2a)
-        self.g2b = GroupMemberOffset(grp, p2b)
+        self.g1a = grp.add_member(p1a)
+        self.g2a = grp.add_member(p2a)
+        self.g2b = grp.add_member(p2b)
+        self.g1b = grp.add_member(p1b)
         self.p1a = p1a
         self.p1b = p1b
         self.p2a = p2a
