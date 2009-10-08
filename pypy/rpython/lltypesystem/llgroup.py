@@ -9,6 +9,7 @@ class GroupType(lltype.ContainerType):
     is limited to 18 or 19 bits (= the 16 bits in a USHORT, plus 2 or
     3 bits at the end that are zero and so don't need to be stored).
     """
+    _gckind = 'raw'
 
 Group = GroupType()
 
