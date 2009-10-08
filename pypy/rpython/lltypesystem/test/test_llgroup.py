@@ -55,35 +55,46 @@ class TestLLGroup(object):
         pnew = lltype.malloc(self.S2, immortal=True)
         assert member_of_group(pnew) is None
 
-    def test_next_group_member(self):
-        self.build()
-        grpptr = self.grpptr
-        S1 = self.S1
-        S2 = self.S2
-        Ptr = lltype.Ptr
-        p = llop.get_next_group_member(Ptr(S2), grpptr,
-                                       self.g1a, llmemory.sizeof(S1))
-        assert p == self.p2a
-        #
-        p = llop.get_next_group_member(Ptr(S2), grpptr,
-                                       self.g2a, llmemory.sizeof(S2))
-        assert p == self.p2b
-        #
-        p = llop.get_next_group_member(Ptr(S1), grpptr,
-                                       self.g2b, llmemory.sizeof(S2))
-        assert p == self.p1b
+    def test_interpreted(self):
+        f = build_test()
+        res = f()
+        assert res == 42
 
     def test_rpython(self):
-        self.build()
-        grpptr = self.grpptr
-        def f():
-            p = llop.get_group_member(lltype.Ptr(self.S1), grpptr, self.g1a)
-            assert p == self.p1a
-            p = llop.get_group_member(lltype.Ptr(self.S1), grpptr, self.g1b)
-            assert p == self.p1b
-            p = llop.get_group_member(lltype.Ptr(self.S2), grpptr, self.g2a)
-            assert p == self.p2a
-            p = llop.get_group_member(lltype.Ptr(self.S2), grpptr, self.g2b)
-            assert p == self.p2b
-            return 3
-        assert interpret(f, []) == 3
+        f = build_test()
+        res = interpret(f, [])
+        assert res == 42
+
+
+def build_test():
+    test = TestLLGroup()
+    test.build()
+    grpptr = test.grpptr
+    g1x = [test.g1a, test.g1b]
+    def f():
+        p = llop.get_group_member(lltype.Ptr(test.S1), grpptr, test.g1a)
+        assert p == test.p1a
+        p = llop.get_group_member(lltype.Ptr(test.S1), grpptr, test.g1b)
+        assert p == test.p1b
+        p = llop.get_group_member(lltype.Ptr(test.S2), grpptr, test.g2a)
+        assert p == test.p2a
+        p = llop.get_group_member(lltype.Ptr(test.S2), grpptr, test.g2b)
+        assert p == test.p2b
+        #
+        p = llop.get_next_group_member(lltype.Ptr(test.S2), grpptr,
+                                       test.g1a, llmemory.sizeof(test.S1))
+        assert p == test.p2a
+        p = llop.get_next_group_member(lltype.Ptr(test.S2), grpptr,
+                                       test.g2a, llmemory.sizeof(test.S2))
+        assert p == test.p2b
+        p = llop.get_next_group_member(lltype.Ptr(test.S1), grpptr,
+                                       test.g2b, llmemory.sizeof(test.S2))
+        assert p == test.p1b
+        #
+        expected = [123, 456]
+        for i in range(2):
+            p = llop.get_group_member(lltype.Ptr(test.S1), grpptr, g1x[i])
+            assert p.x == expected[i]
+        #
+        return 42
+    return f
