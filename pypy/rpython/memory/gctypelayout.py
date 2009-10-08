@@ -40,15 +40,15 @@ class GCData(object):
         self.type_info_group_ptr = type_info_group._as_ptr()
 
     def get(self, typeid):
-        if we_are_translated():
-            ll_assert(typeid, "invalid type_id")
+        ll_assert(not llop.is_group_member_zero(lltype.Bool, typeid),
+                  "invalid type_id")
         return llop.get_group_member(GCData.TYPE_INFO_PTR,
                                      self.type_info_group_ptr,
                                      typeid)
 
     def get_varsize(self, typeid):
-        if we_are_translated():
-            ll_assert(typeid, "invalid type_id")
+        ll_assert(not llop.is_group_member_zero(lltype.Bool, typeid),
+                  "invalid type_id")
         return llop.get_group_member(GCData.VARSIZE_TYPE_INFO_PTR,
                                      self.type_info_group_ptr,
                                      typeid)
@@ -194,9 +194,6 @@ class TypeLayoutBuilder(object):
             assert self.can_add_new_types
             assert isinstance(TYPE, (lltype.GcStruct, lltype.GcArray))
             # Record the new type_id description as a TYPE_INFO structure.
-            # It goes into a list for now, which will be turned into a
-            # TYPE_INFO_TABLE in flatten_table() by the gc transformer.
-
             # build the TYPE_INFO structure
             if not TYPE._is_varsize():
                 fullinfo = lltype.malloc(GCData.TYPE_INFO,
@@ -214,6 +211,16 @@ class TypeLayoutBuilder(object):
             type_id = self.type_info_group.add_member(fullinfo)
             self.id_of_type[TYPE] = type_id
             return type_id
+
+    def get_info(self, type_id):
+        return llop.get_group_member(GCData.TYPE_INFO_PTR,
+                                     self.type_info_group._as_ptr(),
+                                     type_id)
+
+    def get_info_varsize(self, type_id):
+        return llop.get_group_member(GCData.VARSIZE_TYPE_INFO_PTR,
+                                     self.type_info_group._as_ptr(),
+                                     type_id)
 
     def encode_type_shapes_now(self):
         if not self.can_encode_type_shape:
@@ -240,20 +247,11 @@ class TypeLayoutBuilder(object):
             self.offsettable_cache[TYPE] = cachedarray
             return cachedarray
 
-    def flatten_table(self):
+    def close_table(self):
+        # make sure we no longer add members to the type_info_group.
         self.can_add_new_types = False
         self.offsettable_cache = None
-        table = lltype.malloc(GCData.TYPE_INFO_TABLE, len(self.type_info_list),
-                              immortal=True)
-        fieldnames = GCData.TYPE_INFO._names
-        for tableentry, newcontent in zip(table, self.type_info_list):
-            if newcontent is None:    # empty entry
-                tableentry.infobits = 0
-                tableentry.ofstolength = -1
-            else:
-                for name in fieldnames:
-                    setattr(tableentry, name, getattr(newcontent, name))
-        return table
+        return self.type_info_group
 
     def finalizer_funcptr_for_type(self, TYPE):
         if TYPE in self.finalizer_funcptrs:

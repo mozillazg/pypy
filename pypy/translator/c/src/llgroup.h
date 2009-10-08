@@ -11,6 +11,9 @@
 #define OP_GET_NEXT_GROUP_MEMBER(groupptr, compactoffset, skipoffset, r)  \
   r = ((char*)groupptr) + ((long)compactoffset)*sizeof(long) + skipoffset
 
+#define OP_IS_GROUP_MEMBER_ZERO(compactoffset, r) \
+  r = (compactoffset == 0)
+
 /* A macro to crash at compile-time if sizeof(group) is too large.
    Uses a hack that I've found on some random forum.  Haaaaaaaaaackish. */
 #define PYPY_GROUP_CHECK_SIZE(groupname)                              \
