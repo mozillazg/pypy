@@ -4,7 +4,7 @@ from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
 from pypy.rpython.memory.support import AddressDict
-from pypy.rpython.lltypesystem import lltype, llmemory, llarena
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi
 from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -13,8 +13,7 @@ from pypy.rpython.memory.gc.base import MovingGCBase
 
 import sys, os, time
 
-TYPEID_MASK = 0xffff
-first_gcflag = 1 << 16
+first_gcflag = 1
 GCFLAG_FORWARDED = first_gcflag
 # GCFLAG_EXTERNAL is set on objects not living in the semispace:
 # either immortal objects or (for HybridGC) externally raw_malloc'ed
@@ -22,6 +21,21 @@ GCFLAG_EXTERNAL = first_gcflag << 1
 GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
 
 memoryError = MemoryError()
+
+# Handlers for the adt methods getflags() etc. on the HDR.
+# These are mostly just workarounds for the limited support
+# for 16-bits integer, providing the necessary casts.
+def _hdr_getflags(hdr):
+    return lltype.cast_primitive(lltype.Signed, hdr.flags16)
+def _hdr_setflags(hdr, flags):
+    hdr.flags16 = lltype.cast_primitive(rffi.USHORT, flags)
+def _hdr_addflag(hdr, flag):
+    flags = lltype.cast_primitive(lltype.Signed, hdr.flags16)
+    hdr.flags16 = lltype.cast_primitive(rffi.USHORT, flags | flag)
+def _hdr_delflag(hdr, flag):
+    flags = lltype.cast_primitive(lltype.Signed, hdr.flags16)
+    hdr.flags16 = lltype.cast_primitive(rffi.USHORT, flags & ~flag)
+
 
 class SemiSpaceGC(MovingGCBase):
     _alloc_flavor_ = "raw"
@@ -32,7 +46,14 @@ class SemiSpaceGC(MovingGCBase):
     total_collection_time = 0.0
     total_collection_count = 0
 
-    HDR = lltype.Struct('header', ('tid', lltype.Signed))
+    HDR = lltype.Struct('header', ('typeid16', rffi.USHORT),
+                                  ('flags16', rffi.USHORT),
+                        adtmeths = {
+                            'getflags': _hdr_getflags,
+                            'setflags': _hdr_setflags,
+                            'addflag': _hdr_addflag,
+                            'delflag': _hdr_delflag,
+                        })
     FORWARDSTUB = lltype.GcStruct('forwarding_stub',
                                   ('forw', llmemory.Address))
     FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)
@@ -350,12 +371,12 @@ class SemiSpaceGC(MovingGCBase):
         return self.is_forwarded(obj)
 
     def is_forwarded(self, obj):
-        return self.header(obj).tid & GCFLAG_FORWARDED != 0
+        return self.header(obj).getflags() & GCFLAG_FORWARDED != 0
         # note: all prebuilt objects also have this flag set
 
     def get_forwarding_address(self, obj):
-        tid = self.header(obj).tid
-        if tid & GCFLAG_EXTERNAL:
+        flags = self.header(obj).getflags()
+        if flags & GCFLAG_EXTERNAL:
             self.visit_external_object(obj)
             return obj      # external or prebuilt objects are "forwarded"
                             # to themselves
@@ -373,35 +394,38 @@ class SemiSpaceGC(MovingGCBase):
         # writes after translation to C.
         size_gc_header = self.size_gc_header()
         stubsize = llmemory.sizeof(self.FORWARDSTUB)
-        tid = self.header(obj).tid
-        ll_assert(tid & GCFLAG_EXTERNAL == 0,  "unexpected GCFLAG_EXTERNAL")
-        ll_assert(tid & GCFLAG_FORWARDED == 0, "unexpected GCFLAG_FORWARDED")
+        flags = self.header(obj).getflags()
+        ll_assert(flags & GCFLAG_EXTERNAL == 0,  "unexpected GCFLAG_EXTERNAL")
+        ll_assert(flags & GCFLAG_FORWARDED == 0, "unexpected GCFLAG_FORWARDED")
         # replace the object at 'obj' with a FORWARDSTUB.
         hdraddr = obj - size_gc_header
         llarena.arena_reset(hdraddr, size_gc_header + objsize, False)
         llarena.arena_reserve(hdraddr, size_gc_header + stubsize)
         hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(self.HDR))
-        hdr.tid = tid | GCFLAG_FORWARDED
+        hdr.addflag(GCFLAG_FORWARDED)
         stub = llmemory.cast_adr_to_ptr(obj, self.FORWARDSTUBPTR)
         stub.forw = newobj
 
     def get_type_id(self, addr):
-        tid = self.header(addr).tid
-        ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
+        hdr = self.header(addr)
+        flg = hdr.getflags()
+        ll_assert(flg & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
                   "get_type_id on forwarded obj")
         # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
         # Although calling get_type_id() on a forwarded object works by itself,
         # we catch it as an error because it's likely that what is then
         # done with the typeid is bogus.
-        return tid & TYPEID_MASK
+        return hdr.typeid16
 
     def init_gc_object(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = typeid | flags
+        hdr.typeid16 = typeid
+        hdr.setflags(flags)
 
     def init_gc_object_immortal(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = typeid | flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED
+        hdr.typeid16 = typeid
+        hdr.setflags(flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED)
         # immortal objects always have GCFLAG_FORWARDED set;
         # see get_forwarding_address().
 
@@ -466,13 +490,13 @@ class SemiSpaceGC(MovingGCBase):
         if self.surviving(obj):
             newobj = self.get_forwarding_address(obj)
             hdr = self.header(newobj)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
+            if hdr.getflags() & GCFLAG_FINALIZATION_ORDERING:
                 return 2
             else:
                 return 3
         else:
             hdr = self.header(obj)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
+            if hdr.getflags() & GCFLAG_FINALIZATION_ORDERING:
                 return 1
             else:
                 return 0
@@ -481,7 +505,7 @@ class SemiSpaceGC(MovingGCBase):
         ll_assert(self._finalization_state(obj) == 0,
                   "unexpected finalization state != 0")
         hdr = self.header(obj)
-        hdr.tid |= GCFLAG_FINALIZATION_ORDERING
+        hdr.addflag(GCFLAG_FINALIZATION_ORDERING)
 
     def _recursively_bump_finalization_state_from_2_to_3(self, obj):
         ll_assert(self._finalization_state(obj) == 2,
@@ -493,8 +517,10 @@ class SemiSpaceGC(MovingGCBase):
         while pending.non_empty():
             y = pending.pop()
             hdr = self.header(y)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:     # state 2 ?
-                hdr.tid &= ~GCFLAG_FINALIZATION_ORDERING   # change to state 3
+            flags = hdr.getflags()
+            if flags & GCFLAG_FINALIZATION_ORDERING:     # state 2 ?
+                flags &= ~GCFLAG_FINALIZATION_ORDERING   # change to state 3
+                hdr.setflags(flags)
                 self.trace(y, self._append_if_nonnull, pending)
 
     def _recursively_bump_finalization_state_from_1_to_2(self, obj, scan):
@@ -540,21 +566,22 @@ class SemiSpaceGC(MovingGCBase):
         self.run_finalizers = new_run_finalizer
 
     def _is_external(self, obj):
-        return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
+        return (self.header(obj).getflags() & GCFLAG_EXTERNAL) != 0
 
     def debug_check_object(self, obj):
         """Check the invariants about 'obj' that should be true
         between collections."""
-        tid = self.header(obj).tid
-        if tid & GCFLAG_EXTERNAL:
-            ll_assert(tid & GCFLAG_FORWARDED, "bug: external+!forwarded")
+        flags = self.header(obj).getflags()
+        if flags & GCFLAG_EXTERNAL:
+            ll_assert(flags & GCFLAG_FORWARDED, "bug: external+!forwarded")
             ll_assert(not (self.tospace <= obj < self.free),
                       "external flag but object inside the semispaces")
         else:
-            ll_assert(not (tid & GCFLAG_FORWARDED), "bug: !external+forwarded")
+            ll_assert(not (flags & GCFLAG_FORWARDED),
+                      "bug: !external+forwarded")
             ll_assert(self.tospace <= obj < self.free,
                       "!external flag but object outside the semispaces")
-        ll_assert(not (tid & GCFLAG_FINALIZATION_ORDERING),
+        ll_assert(not (flags & GCFLAG_FINALIZATION_ORDERING),
                   "unexpected GCFLAG_FINALIZATION_ORDERING")
 
     def debug_check_can_copy(self, obj):
