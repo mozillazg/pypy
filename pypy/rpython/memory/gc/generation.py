@@ -244,7 +244,7 @@ class GenerationGC(SemiSpaceGC):
         newobj = SemiSpaceGC.make_a_copy(self, obj, objsize)
         # During a full collect, all copied objects might implicitly come
         # from the nursery.  In case they do, we must add this flag:
-        self.header(newobj).tid |= GCFLAG_NO_YOUNG_PTRS
+        self.header(newobj).addflag(GCFLAG_NO_YOUNG_PTRS)
         return newobj
         # history: this was missing and caused an object to become old but without the
         # flag set.  Such an object is bogus in the sense that the write_barrier doesn't
@@ -263,7 +263,7 @@ class GenerationGC(SemiSpaceGC):
         while oldlist.non_empty():
             obj = oldlist.pop()
             hdr = self.header(obj)
-            hdr.tid |= GCFLAG_NO_YOUNG_PTRS
+            hdr.addflag(GCFLAG_NO_YOUNG_PTRS)
 
     def weakrefs_grow_older(self):
         while self.young_objects_with_weakrefs.non_empty():
@@ -293,7 +293,7 @@ class GenerationGC(SemiSpaceGC):
         self.last_generation_root_objects = self.AddressStack()
         while stack.non_empty():
             obj = stack.pop()
-            self.header(obj).tid |= GCFLAG_NO_HEAP_PTRS
+            self.header(obj).addflag(GCFLAG_NO_HEAP_PTRS)
             # ^^^ the flag we just added will be removed immediately if
             # the object still contains pointers to younger objects
             self.trace(obj, self._trace_external_obj, obj)
@@ -360,7 +360,7 @@ class GenerationGC(SemiSpaceGC):
             count += 1
             obj = oldlist.pop()
             hdr = self.header(obj)
-            hdr.tid |= GCFLAG_NO_YOUNG_PTRS
+            hdr.addflag(GCFLAG_NO_YOUNG_PTRS)
             self.trace_and_drag_out_of_nursery(obj)
         if self.config.gcconfig.debugprint:
             llop.debug_print(lltype.Void, "collect_oldrefs_to_nursery", count)
@@ -423,10 +423,10 @@ class GenerationGC(SemiSpaceGC):
     # for the JIT: a minimal description of the write_barrier() method
     # (the JIT assumes it is of the shape
     #  "if newvalue.int0 & JIT_WB_IF_FLAG: remember_young_pointer()")
-    JIT_WB_IF_FLAG = GCFLAG_NO_YOUNG_PTRS
+    JIT_WB_IF_FLAG = "XXXX"  # GCFLAG_NO_YOUNG_PTRS
 
     def write_barrier(self, newvalue, addr_struct):
-        if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
+        if self.header(addr_struct).getflags() & GCFLAG_NO_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
 
     def _setup_wb(self):
@@ -444,7 +444,7 @@ class GenerationGC(SemiSpaceGC):
                          "nursery object with GCFLAG_NO_YOUNG_PTRS")
             if self.is_in_nursery(addr):
                 self.old_objects_pointing_to_young.append(addr_struct)
-                self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
+                self.header(addr_struct).delflag(GCFLAG_NO_YOUNG_PTRS)
             elif addr == NULL:
                 return
             self.write_into_last_generation_obj(addr_struct, addr)
@@ -453,23 +453,25 @@ class GenerationGC(SemiSpaceGC):
 
     def assume_young_pointers(self, addr_struct):
         objhdr = self.header(addr_struct)
-        if objhdr.tid & GCFLAG_NO_YOUNG_PTRS:
+        flags = objhdr.getflags()
+        if flags & GCFLAG_NO_YOUNG_PTRS:
             self.old_objects_pointing_to_young.append(addr_struct)
-            objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
-        if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
-            objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+            objhdr.delflag(GCFLAG_NO_YOUNG_PTRS)
+        if flags & GCFLAG_NO_HEAP_PTRS:
+            objhdr.delflag(GCFLAG_NO_HEAP_PTRS)
             self.last_generation_root_objects.append(addr_struct)
 
     def write_into_last_generation_obj(self, addr_struct, addr):
         objhdr = self.header(addr_struct)
-        if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
+        flags = objhdr.getflags()
+        if flags & GCFLAG_NO_HEAP_PTRS:
             if not self.is_last_generation(addr):
-                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+                objhdr.delflag(GCFLAG_NO_HEAP_PTRS)
                 self.last_generation_root_objects.append(addr_struct)
 
     def is_last_generation(self, obj):
         # overridden by HybridGC
-        return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
+        return (self.header(obj).getflags() & GCFLAG_EXTERNAL) != 0
 
     def _compute_id(self, obj):
         if self.is_in_nursery(obj):
@@ -500,15 +502,15 @@ class GenerationGC(SemiSpaceGC):
         """Check the invariants about 'obj' that should be true
         between collections."""
         SemiSpaceGC.debug_check_object(self, obj)
-        tid = self.header(obj).tid
-        if tid & GCFLAG_NO_YOUNG_PTRS:
+        flags = self.header(obj).getflags()
+        if flags & GCFLAG_NO_YOUNG_PTRS:
             ll_assert(not self.is_in_nursery(obj),
                       "nursery object with GCFLAG_NO_YOUNG_PTRS")
             self.trace(obj, self._debug_no_nursery_pointer, None)
         elif not self.is_in_nursery(obj):
             ll_assert(self._d_oopty.contains(obj),
                       "missing from old_objects_pointing_to_young")
-        if tid & GCFLAG_NO_HEAP_PTRS:
+        if flags & GCFLAG_NO_HEAP_PTRS:
             ll_assert(self.is_last_generation(obj),
                       "GCFLAG_NO_HEAP_PTRS on non-3rd-generation object")
             self.trace(obj, self._debug_no_gen1or2_pointer, None)
@@ -537,10 +539,10 @@ class GenerationGC(SemiSpaceGC):
                 self._debug_check_flag_2, None)
 
     def _debug_check_flag_1(self, obj, ignored):
-        ll_assert(not (self.header(obj).tid & GCFLAG_NO_YOUNG_PTRS),
+        ll_assert(not (self.header(obj).getflags() & GCFLAG_NO_YOUNG_PTRS),
                   "unexpected GCFLAG_NO_YOUNG_PTRS")
     def _debug_check_flag_2(self, obj, ignored):
-        ll_assert(not (self.header(obj).tid & GCFLAG_NO_HEAP_PTRS),
+        ll_assert(not (self.header(obj).getflags() & GCFLAG_NO_HEAP_PTRS),
                   "unexpected GCFLAG_NO_HEAP_PTRS")
 
     def debug_check_can_copy(self, obj):
