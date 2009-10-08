@@ -301,7 +301,6 @@ class FunctionGcRootTracker(object):
         try:
             if not self.list_call_insns():
                 return []
-            self.findprevinsns()
             self.findframesize()
             self.fixlocalvars()
             self.trackgcroots()
@@ -363,6 +362,18 @@ class FunctionGcRootTracker(object):
                 assert label not in self.labels, "duplicate label"
                 self.labels[label] = Label(label, lineno)
 
+    def append_instruction(self, insn):
+        # Add the instruction to the list, and link it to the previous one.
+        previnsn = self.insns[-1]
+        self.insns.append(insn)
+
+        try:
+            lst = insn.previous_insns
+        except AttributeError:
+            lst = insn.previous_insns = []
+        if not isinstance(previnsn, InsnStop):
+            lst.append(previnsn)
+
     def parse_instructions(self):
         self.insns = [InsnFunctionStart()]
         ignore_insns = False
@@ -390,10 +401,13 @@ class FunctionGcRootTracker(object):
                 match = r_label.match(line)
                 if match:
                     insn = self.labels[match.group(1)]
+
             if isinstance(insn, list):
-                self.insns.extend(insn)
+                for i in insn:
+                    self.append_instruction(i)
             else:
-                self.insns.append(insn)
+                self.append_instruction(insn)
+
             del self.currentlineno
 
     def find_missing_visit_method(self, opname):
@@ -406,20 +420,6 @@ class FunctionGcRootTracker(object):
         visit_nop = FunctionGcRootTracker.__dict__['visit_nop']
         setattr(FunctionGcRootTracker, 'visit_' + opname, visit_nop)
         return self.visit_nop
-
-    def findprevinsns(self):
-        # builds the previous_insns of each Insn.  For Labels, all jumps
-        # to them are already registered; all that is left to do is to
-        # make each Insn point to the Insn just before it.
-        for i in range(len(self.insns)-1):
-            previnsn = self.insns[i]
-            nextinsn = self.insns[i+1]
-            try:
-                lst = nextinsn.previous_insns
-            except AttributeError:
-                lst = nextinsn.previous_insns = []
-            if not isinstance(previnsn, InsnStop):
-                lst.append(previnsn)
 
     def list_call_insns(self):
         return [insn for insn in self.insns if isinstance(insn, InsnCall)]
