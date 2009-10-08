@@ -38,7 +38,7 @@ def test_layout_builder():
     for T1, T2 in [(GC_A, GC_S), (GC_A2, GC_S2), (GC_S3, GC_S2)]:
         tid1 = layoutbuilder.get_type_id(T1)
         tid2 = layoutbuilder.get_type_id(T2)
-        gcdata = GCData(layoutbuilder.type_info_list)
+        gcdata = GCData(layoutbuilder.type_info_group)
         lst1 = gcdata.q_varsize_offsets_to_gcpointers_in_var_part(tid1)
         lst2 = gcdata.q_offsets_to_gc_pointers(tid2)
         assert len(lst1) == len(lst2)

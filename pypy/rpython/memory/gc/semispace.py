@@ -85,7 +85,7 @@ class SemiSpaceGC(MovingGCBase):
     # This class only defines the malloc_{fixed,var}size_clear() methods
     # because the spaces are filled with zeroes in advance.
 
-    def malloc_fixedsize_clear(self, typeid, size, can_collect,
+    def malloc_fixedsize_clear(self, typeid16, size, can_collect,
                                has_finalizer=False, contains_weakptr=False):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
@@ -95,7 +95,7 @@ class SemiSpaceGC(MovingGCBase):
                 raise memoryError
             result = self.obtain_free_space(totalsize)
         llarena.arena_reserve(result, totalsize)
-        self.init_gc_object(result, typeid)
+        self.init_gc_object(result, typeid16)
         self.free = result + totalsize
         if has_finalizer:
             self.objects_with_finalizers.append(result + size_gc_header)
@@ -103,7 +103,7 @@ class SemiSpaceGC(MovingGCBase):
             self.objects_with_weakrefs.append(result + size_gc_header)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
-    def malloc_varsize_clear(self, typeid, length, size, itemsize,
+    def malloc_varsize_clear(self, typeid16, length, size, itemsize,
                              offset_to_length, can_collect):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
@@ -118,7 +118,7 @@ class SemiSpaceGC(MovingGCBase):
                 raise memoryError
             result = self.obtain_free_space(totalsize)
         llarena.arena_reserve(result, totalsize)
-        self.init_gc_object(result, typeid)
+        self.init_gc_object(result, typeid16)
         (result + size_gc_header + offset_to_length).signed[0] = length
         self.free = result + llarena.round_up_for_allocation(totalsize)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
@@ -417,14 +417,14 @@ class SemiSpaceGC(MovingGCBase):
         # done with the typeid is bogus.
         return hdr.typeid16
 
-    def init_gc_object(self, addr, typeid, flags=0):
+    def init_gc_object(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.typeid16 = typeid
+        hdr.typeid16 = typeid16
         hdr.setflags(flags)
 
-    def init_gc_object_immortal(self, addr, typeid, flags=0):
+    def init_gc_object_immortal(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.typeid16 = typeid
+        hdr.typeid16 = typeid16
         hdr.setflags(flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED)
         # immortal objects always have GCFLAG_FORWARDED set;
         # see get_forwarding_address().
