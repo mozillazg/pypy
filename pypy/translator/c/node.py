@@ -926,6 +926,7 @@ class GroupNode(ContainerNode):
 
     def forward_declaration(self):
         self._fix_members()
+        yield ''
         ctype = ['%s {' % cdecl(self.implementationtypename, '')]
         for i, member in enumerate(self.obj.members):
             structtypename = self.db.gettype(typeOf(member))
@@ -935,10 +936,13 @@ class GroupNode(ContainerNode):
         yield '%s;' % (
             forward_cdecl(ctype, self.name, self.db.standalone,
                           self.is_thread_local()))
+        yield '#include "src/llgroup.h"'
+        yield 'PYPY_GROUP_CHECK_SIZE(%s);' % self.name
         for i, member in enumerate(self.obj.members):
             structnode = self.db.getcontainernode(member)
             yield '#define %s %s.member%d' % (structnode.name,
                                               self.name, i)
+        yield ''
 
     def initializationexpr(self):
         self._fix_members()
