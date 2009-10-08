@@ -16,17 +16,17 @@ class GCHeaderBuilder(object):
 
     def header_of_object(self, gcptr):
         # XXX hackhackhack
-        gcptr = gcptr._as_obj(check=False)
+        gcptr = gcptr._as_obj()
         if isinstance(gcptr, llmemory._gctransformed_wref):
-            return self.obj2header[gcptr._ptr._as_obj(check=False)]
+            return self.obj2header[gcptr._ptr._as_obj()]
         return self.obj2header[gcptr]
 
     def object_from_header(headerptr):
-        return header2obj[headerptr._as_obj(check=False)]
+        return header2obj[headerptr._as_obj()]
     object_from_header = staticmethod(object_from_header)
 
     def get_header(self, gcptr):
-        return self.obj2header.get(gcptr._as_obj(check=False), None)
+        return self.obj2header.get(gcptr._as_obj(), None)
 
     def attach_header(self, gcptr, headerptr):
         gcobj = gcptr._as_obj()
@@ -37,6 +37,12 @@ class GCHeaderBuilder(object):
         assert not gcobj._parentstructure()
         self.obj2header[gcobj] = headerptr
         header2obj[headerptr._obj] = gcptr._as_ptr()
+
+    def detach_header(self, gcptr, headerptr):
+        gcobj = gcptr._as_obj()
+        assert self.obj2header[gcobj] == headerptr
+        del self.obj2header[gcobj]
+        del header2obj[headerptr._obj]
 
     def new_header(self, gcptr):
         headerptr = lltype.malloc(self.HDR, immortal=True)
