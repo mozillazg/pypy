@@ -103,48 +103,6 @@ class Arena(object):
         Arena.object_arena_location[container] = self, offset
         Arena.old_object_arena_location[container] = self, offset
 
-    def get_header_ofs(self, obj, oldheadersize):
-        headers = []
-        for offset, ptr in self.objectptrs.items():
-            size = self.objectsizes[offset]
-            if offset >= obj:      # object is at or after 'obj'
-                continue
-            if offset + size < obj:   # object is before the header
-                continue
-            headers.append(offset)
-        assert len(headers) >= 1, "header not found"
-        assert len(headers) == 1, "uh? multiple headers?"
-        offset = headers[0]
-        size = self.objectsizes[offset]
-        assert offset + size == obj + self.objectsizes[obj], "not a header?"
-        assert obj - offset == llmemory.raw_malloc_usage(oldheadersize)
-        return offset
-
-    def swap_header(self, startobj, oldheadersize, newheadersize):
-        prev_end = [0]
-        for offset, ptr in self.objectptrs.items():
-            size = self.objectsizes[offset]
-            if offset + size < startobj:
-                prev_end.append((offset + size))
-        prev_end = max(prev_end)
-        new_bytes = llmemory.raw_malloc_usage(newheadersize)
-        assert prev_end <= startobj - new_bytes, "new header too big"
-        old_offset = self.get_header_ofs(startobj, oldheadersize)
-        assert isinstance(newheadersize, llmemory.GCHeaderOffset)
-        obj = self.objectptrs[startobj]
-        oldheaderptr = self.objectptrs.pop(old_offset)
-        oldheadersize.gcheaderbuilder.detach_header(obj, oldheaderptr)
-        newheader = newheadersize.gcheaderbuilder.new_header(obj)
-        newheader = llmemory.cast_ptr_to_adr(newheader)
-        #
-        del self.objectsizes[old_offset]
-        self.setobject(newheader, startobj - new_bytes,
-                       new_bytes + self.objectsizes[startobj])
-        oldheaderobj = oldheaderptr._as_obj()
-        del Arena.object_arena_location[oldheaderobj]
-        oldheaderobj._free()
-
-
 class fakearenaaddress(llmemory.fakeaddress):
 
     def __init__(self, arena, offset):
@@ -350,13 +308,6 @@ def arena_new_view(ptr):
     """Return a fresh memory view on an arena
     """
     return Arena(ptr.arena.nbytes, False).getaddr(0)
-
-def arena_swap_header(obj, oldheadersize, newheadersize):
-    """Free the old header attached to 'obj', and attach one
-    of the size 'newheadersize' instead."""
-    arena_addr = _getfakearenaaddress(obj)
-    arena_addr.arena.swap_header(arena_addr.offset, oldheadersize,
-                                 newheadersize)
 
 # ____________________________________________________________
 #
