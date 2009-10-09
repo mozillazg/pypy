@@ -4,6 +4,9 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.test.test_llinterp import get_interpreter
 from pypy.objspace.flow.model import Constant
 
+class FakeGC:
+    object_minimal_size = 0
+
 def getname(T):
     try:
         return "field:" + T._name
@@ -34,7 +37,7 @@ def test_struct():
 
 def test_layout_builder():
     # XXX a very minimal test
-    layoutbuilder = TypeLayoutBuilder()
+    layoutbuilder = TypeLayoutBuilder(FakeGC)
     for T1, T2 in [(GC_A, GC_S), (GC_A2, GC_S2), (GC_S3, GC_S2)]:
         tid1 = layoutbuilder.get_type_id(T1)
         tid2 = layoutbuilder.get_type_id(T2)
@@ -44,7 +47,7 @@ def test_layout_builder():
         assert len(lst1) == len(lst2)
 
 def test_constfold():
-    layoutbuilder = TypeLayoutBuilder()
+    layoutbuilder = TypeLayoutBuilder(FakeGC)
     tid1 = layoutbuilder.get_type_id(GC_A)
     tid2 = layoutbuilder.get_type_id(GC_S3)
     class MockGC:

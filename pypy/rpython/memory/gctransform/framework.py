@@ -130,7 +130,7 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(translator, '_jit2gc'):
             self.layoutbuilder = translator._jit2gc['layoutbuilder']
         else:
-            self.layoutbuilder = TransformerLayoutBuilder()
+            self.layoutbuilder = TransformerLayoutBuilder(GCClass)
         self.layoutbuilder.transformer = self
         self.get_type_id = self.layoutbuilder.get_type_id
 

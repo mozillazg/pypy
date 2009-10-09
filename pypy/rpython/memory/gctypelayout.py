@@ -23,6 +23,7 @@ class GCData(object):
         ("finalizer",      FINALIZERTYPE),
         ("fixedsize",      lltype.Signed),
         ("ofstoptrs",      lltype.Ptr(OFFSETS_TO_GC_PTR)),
+        hints={'immutable': True},
         )
     VARSIZE_TYPE_INFO = lltype.Struct("varsize_type_info",
         ("header",         TYPE_INFO),
@@ -30,6 +31,7 @@ class GCData(object):
         ("ofstovar",       lltype.Signed),
         ("ofstolength",    lltype.Signed),
         ("varofstoptrs",   lltype.Ptr(OFFSETS_TO_GC_PTR)),
+        hints={'immutable': True},
         )
     TYPE_INFO_PTR = lltype.Ptr(TYPE_INFO)
     VARSIZE_TYPE_INFO_PTR = lltype.Ptr(VARSIZE_TYPE_INFO)
@@ -121,7 +123,7 @@ def encode_type_shape(builder, info, TYPE):
     info.finalizer = builder.make_finalizer_funcptr_for_type(TYPE)
     if not TYPE._is_varsize():
         info.fixedsize = llarena.round_up_for_allocation(
-            llmemory.sizeof(TYPE))
+            llmemory.sizeof(TYPE), builder.GCClass.object_minimal_size)
         # note about round_up_for_allocation(): in the 'info' table
         # we put a rounded-up size only for fixed-size objects.  For
         # varsize ones, the GC must anyway compute the size at run-time
@@ -163,7 +165,8 @@ class TypeLayoutBuilder(object):
     can_add_new_types = True
     can_encode_type_shape = True    # set to False initially by the JIT
 
-    def __init__(self):
+    def __init__(self, GCClass):
+        self.GCClass = GCClass
         self.make_type_info_group()
         self.id_of_type = {}      # {LLTYPE: type_id}
         self.seen_roots = {}
