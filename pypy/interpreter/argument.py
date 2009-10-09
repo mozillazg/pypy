@@ -4,189 +4,7 @@ Arguments objects.
 
 from pypy.interpreter.error import OperationError
 
-class AbstractArguments:
-
-    def parse_into_scope(self, w_firstarg,
-                         scope_w, fnname, signature, defaults_w=[]):
-        """Parse args and kwargs to initialize a frame
-        according to the signature of code object.
-        Store the argumentvalues into scope_w.
-        scope_w must be big enough for signature.
-        """
-        argnames, varargname, kwargname = signature
-        has_vararg = varargname is not None
-        has_kwarg = kwargname is not None
-        try:
-            return self._match_signature(w_firstarg,
-                                         scope_w, argnames, has_vararg,
-                                         has_kwarg, defaults_w, 0)
-        except ArgErr, e:
-            raise OperationError(self.space.w_TypeError,
-                                 self.space.wrap(e.getmsg(fnname)))
-
-    def _parse(self, w_firstarg, signature, defaults_w, blindargs=0):
-        """Parse args and kwargs according to the signature of a code object,
-        or raise an ArgErr in case of failure.
-        """
-        argnames, varargname, kwargname = signature
-        scopelen = len(argnames)
-        has_vararg = varargname is not None
-        has_kwarg = kwargname is not None
-        if has_vararg:
-            scopelen += 1
-        if has_kwarg:
-            scopelen += 1
-        scope_w = [None] * scopelen
-        self._match_signature(w_firstarg, scope_w, argnames, has_vararg, has_kwarg, defaults_w, blindargs)
-        return scope_w    
-
-    def parse(self, fnname, signature, defaults_w=[], blindargs=0):
-        """Parse args and kwargs to initialize a frame
-        according to the signature of code object.
-        """
-        try:
-            return self._parse(None, signature, defaults_w, blindargs)
-        except ArgErr, e:
-            raise OperationError(self.space.w_TypeError,
-                                 self.space.wrap(e.getmsg(fnname)))
-
-    # xxx have only this one
-    def parse_obj(self, w_firstarg,
-                  fnname, signature, defaults_w=[], blindargs=0):
-        """Parse args and kwargs to initialize a frame
-        according to the signature of code object.
-        """
-        try:
-            return self._parse(w_firstarg, signature, defaults_w, blindargs)
-        except ArgErr, e:
-            raise OperationError(self.space.w_TypeError,
-                                 self.space.wrap(e.getmsg(fnname)))        
-
-    def frompacked(space, w_args=None, w_kwds=None):
-        """Convenience static method to build an Arguments
-           from a wrapped sequence and a wrapped dictionary."""
-        return Arguments(space, [], w_stararg=w_args, w_starstararg=w_kwds)
-    frompacked = staticmethod(frompacked)
-
-    def topacked(self):
-        """Express the Argument object as a pair of wrapped w_args, w_kwds."""
-        space = self.space
-        args_w, kwds_w = self.unpack()
-        w_args = space.newtuple(args_w)
-        w_kwds = space.newdict()
-        for key, w_value in kwds_w.items():
-            space.setitem(w_kwds, space.wrap(key), w_value)
-        return w_args, w_kwds
-
-    def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
-        args_w = data_w[:shape_cnt]
-        p = shape_cnt
-        kwds_w = {}
-        for i in range(len(shape_keys)):
-            kwds_w[shape_keys[i]] = data_w[p]
-            p += 1
-        if shape_star:
-            w_star = data_w[p]
-            p += 1
-        else:
-            w_star = None
-        if shape_stst:
-            w_starstar = data_w[p]
-            p += 1
-        else:
-            w_starstar = None
-        return Arguments(space, args_w, kwds_w, w_star, w_starstar)
-    fromshape = staticmethod(fromshape)
-
-    def match_signature(self, signature, defaults_w):
-        """Parse args and kwargs according to the signature of a code object,
-        or raise an ArgErr in case of failure.
-        """
-        return self._parse(None, signature, defaults_w)
-
-    def unmatch_signature(self, signature, data_w):
-        """kind of inverse of match_signature"""
-        args_w, kwds_w = self.unpack()
-        need_cnt = len(args_w)
-        need_kwds = kwds_w.keys()
-        space = self.space
-        argnames, varargname, kwargname = signature
-        cnt = len(argnames)
-        data_args_w = data_w[:cnt]
-        if varargname:
-            data_w_stararg = data_w[cnt]
-            cnt += 1
-        else:
-            data_w_stararg = space.newtuple([])
-
-        unfiltered_kwds_w = {}
-        if kwargname:
-            data_w_starargarg = data_w[cnt]
-            for w_key in space.unpackiterable(data_w_starargarg):
-                key = space.str_w(w_key)
-                w_value = space.getitem(data_w_starargarg, w_key)
-                unfiltered_kwds_w[key] = w_value            
-            cnt += 1
-        assert len(data_w) == cnt
-        
-        ndata_args_w = len(data_args_w)
-        if ndata_args_w >= need_cnt:
-            args_w = data_args_w[:need_cnt]
-            for argname, w_arg in zip(argnames[need_cnt:], data_args_w[need_cnt:]):
-                unfiltered_kwds_w[argname] = w_arg
-            assert not space.is_true(data_w_stararg)
-        else:
-            stararg_w = space.unpackiterable(data_w_stararg)
-            datalen = len(data_args_w)
-            args_w = [None] * (datalen + len(stararg_w))
-            for i in range(0, datalen):
-                args_w[i] = data_args_w[i]
-            for i in range(0, len(stararg_w)):
-                args_w[i + datalen] = stararg_w[i]
-            assert len(args_w) == need_cnt
-            
-        kwds_w = {}
-        for key in need_kwds:
-            kwds_w[key] = unfiltered_kwds_w[key]
-                    
-        return Arguments(self.space, args_w, kwds_w)
-
-    def normalize(self):
-        """Return an instance of the Arguments class.  (Instances of other
-        classes may not be suitable for long-term storage or multiple
-        usage.)  Also force the type and validity of the * and ** arguments
-        to be checked now.
-        """
-        args_w, kwds_w = self.unpack()
-        return Arguments(self.space, args_w, kwds_w)
-
-    def unpack(self):
-        """ Purely abstract
-        """
-        raise NotImplementedError()
-
-    def firstarg(self):
-        """ Purely abstract
-        """
-        raise NotImplementedError()
-
-    def prepend(self, w_firstarg):
-        """ Purely abstract
-        """
-        raise NotImplementedError()    
-
-    def _match_signature(self, w_firstarg, scope_w, argnames, has_vararg=False, has_kwarg=False, defaults_w=[], blindargs=0):
-        """ Purely abstract
-        """
-        raise NotImplementedError()
-    
-    def fixedunpack(self, argcount):
-        """ Purely abstract
-        """
-        raise NotImplementedError()
-
-
-class Arguments(AbstractArguments):
+class Arguments(object):
     """
     Collects the arguments of a function call.
     
@@ -229,6 +47,7 @@ class Arguments(AbstractArguments):
             return 'Arguments(%s, %s, %s)' % (self.arguments_w,
                                               self.kwds_w,
                                               self.w_stararg)
+
 
     ###  Manipulation  ###
 
@@ -468,6 +287,162 @@ class Arguments(AbstractArguments):
         if shape_stst:
             data_w.append(self.w_starstararg)
         return (shape_cnt, shape_keys, shape_star, shape_stst), data_w
+
+
+    def parse_into_scope(self, w_firstarg,
+                         scope_w, fnname, signature, defaults_w=[]):
+        """Parse args and kwargs to initialize a frame
+        according to the signature of code object.
+        Store the argumentvalues into scope_w.
+        scope_w must be big enough for signature.
+        """
+        argnames, varargname, kwargname = signature
+        has_vararg = varargname is not None
+        has_kwarg = kwargname is not None
+        try:
+            return self._match_signature(w_firstarg,
+                                         scope_w, argnames, has_vararg,
+                                         has_kwarg, defaults_w, 0)
+        except ArgErr, e:
+            raise OperationError(self.space.w_TypeError,
+                                 self.space.wrap(e.getmsg(fnname)))
+
+    def _parse(self, w_firstarg, signature, defaults_w, blindargs=0):
+        """Parse args and kwargs according to the signature of a code object,
+        or raise an ArgErr in case of failure.
+        """
+        argnames, varargname, kwargname = signature
+        scopelen = len(argnames)
+        has_vararg = varargname is not None
+        has_kwarg = kwargname is not None
+        if has_vararg:
+            scopelen += 1
+        if has_kwarg:
+            scopelen += 1
+        scope_w = [None] * scopelen
+        self._match_signature(w_firstarg, scope_w, argnames, has_vararg, has_kwarg, defaults_w, blindargs)
+        return scope_w    
+
+    def parse(self, fnname, signature, defaults_w=[], blindargs=0):
+        """Parse args and kwargs to initialize a frame
+        according to the signature of code object.
+        """
+        try:
+            return self._parse(None, signature, defaults_w, blindargs)
+        except ArgErr, e:
+            raise OperationError(self.space.w_TypeError,
+                                 self.space.wrap(e.getmsg(fnname)))
+
+    # xxx have only this one
+    def parse_obj(self, w_firstarg,
+                  fnname, signature, defaults_w=[], blindargs=0):
+        """Parse args and kwargs to initialize a frame
+        according to the signature of code object.
+        """
+        try:
+            return self._parse(w_firstarg, signature, defaults_w, blindargs)
+        except ArgErr, e:
+            raise OperationError(self.space.w_TypeError,
+                                 self.space.wrap(e.getmsg(fnname)))        
+
+    def frompacked(space, w_args=None, w_kwds=None):
+        """Convenience static method to build an Arguments
+           from a wrapped sequence and a wrapped dictionary."""
+        return Arguments(space, [], w_stararg=w_args, w_starstararg=w_kwds)
+    frompacked = staticmethod(frompacked)
+
+    def topacked(self):
+        """Express the Argument object as a pair of wrapped w_args, w_kwds."""
+        space = self.space
+        args_w, kwds_w = self.unpack()
+        w_args = space.newtuple(args_w)
+        w_kwds = space.newdict()
+        for key, w_value in kwds_w.items():
+            space.setitem(w_kwds, space.wrap(key), w_value)
+        return w_args, w_kwds
+
+    def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
+        args_w = data_w[:shape_cnt]
+        p = shape_cnt
+        kwds_w = {}
+        for i in range(len(shape_keys)):
+            kwds_w[shape_keys[i]] = data_w[p]
+            p += 1
+        if shape_star:
+            w_star = data_w[p]
+            p += 1
+        else:
+            w_star = None
+        if shape_stst:
+            w_starstar = data_w[p]
+            p += 1
+        else:
+            w_starstar = None
+        return Arguments(space, args_w, kwds_w, w_star, w_starstar)
+    fromshape = staticmethod(fromshape)
+
+    def match_signature(self, signature, defaults_w):
+        """Parse args and kwargs according to the signature of a code object,
+        or raise an ArgErr in case of failure.
+        """
+        return self._parse(None, signature, defaults_w)
+
+    def unmatch_signature(self, signature, data_w):
+        """kind of inverse of match_signature"""
+        args_w, kwds_w = self.unpack()
+        need_cnt = len(args_w)
+        need_kwds = kwds_w.keys()
+        space = self.space
+        argnames, varargname, kwargname = signature
+        cnt = len(argnames)
+        data_args_w = data_w[:cnt]
+        if varargname:
+            data_w_stararg = data_w[cnt]
+            cnt += 1
+        else:
+            data_w_stararg = space.newtuple([])
+
+        unfiltered_kwds_w = {}
+        if kwargname:
+            data_w_starargarg = data_w[cnt]
+            for w_key in space.unpackiterable(data_w_starargarg):
+                key = space.str_w(w_key)
+                w_value = space.getitem(data_w_starargarg, w_key)
+                unfiltered_kwds_w[key] = w_value            
+            cnt += 1
+        assert len(data_w) == cnt
+        
+        ndata_args_w = len(data_args_w)
+        if ndata_args_w >= need_cnt:
+            args_w = data_args_w[:need_cnt]
+            for argname, w_arg in zip(argnames[need_cnt:], data_args_w[need_cnt:]):
+                unfiltered_kwds_w[argname] = w_arg
+            assert not space.is_true(data_w_stararg)
+        else:
+            stararg_w = space.unpackiterable(data_w_stararg)
+            datalen = len(data_args_w)
+            args_w = [None] * (datalen + len(stararg_w))
+            for i in range(0, datalen):
+                args_w[i] = data_args_w[i]
+            for i in range(0, len(stararg_w)):
+                args_w[i + datalen] = stararg_w[i]
+            assert len(args_w) == need_cnt
+            
+        kwds_w = {}
+        for key in need_kwds:
+            kwds_w[key] = unfiltered_kwds_w[key]
+                    
+        return Arguments(self.space, args_w, kwds_w)
+
+    def normalize(self):
+        """Return an instance of the Arguments class.  (Instances of other
+        classes may not be suitable for long-term storage or multiple
+        usage.)  Also force the type and validity of the * and ** arguments
+        to be checked now.
+        """
+        args_w, kwds_w = self.unpack()
+        return Arguments(self.space, args_w, kwds_w)
+
 
 def rawshape(args, nextra=0):
     return args._rawshape(nextra)

@@ -18,7 +18,7 @@ from pypy.interpreter import eval
 from pypy.interpreter.function import Function, Method, ClassMethod
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable
 from pypy.interpreter.baseobjspace import Wrappable, SpaceCache, DescrMismatch
-from pypy.interpreter.argument import Arguments, AbstractArguments
+from pypy.interpreter.argument import Arguments
 from pypy.tool.sourcetools import NiceCompile, compile2
 from pypy.rlib.rarithmetic import r_longlong, r_int, r_ulonglong, r_uint
 
@@ -865,7 +865,7 @@ class ApplevelClass:
             else:
                 args = args_w[-1]
                 assert args is not None
-                if not isinstance(args, AbstractArguments):
+                if not isinstance(args, Arguments):
                     args = Arguments(space, list(args_w))
                 else:
                     # ...which is merged with the previous arguments, if any
