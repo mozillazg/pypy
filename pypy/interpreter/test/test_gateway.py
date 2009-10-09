@@ -593,7 +593,7 @@ class TestPassThroughArguments:
         w_res = space.call_function(w_g, w_self)
         assert space.is_true(space.eq(w_res, space.wrap(('g', 'self'))))
         assert len(called) == 1
-        assert isinstance(called[0], argument.AbstractArguments)        
+        assert isinstance(called[0], argument.Arguments)        
         called = []
         
         w_res = space.appexec([w_g], """(g):
@@ -601,7 +601,7 @@ class TestPassThroughArguments:
         """)
         assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 11))))
         assert len(called) == 1
-        assert isinstance(called[0], argument.AbstractArguments)                
+        assert isinstance(called[0], argument.Arguments)                
         called = []
 
         w_res = space.appexec([w_g], """(g):
@@ -617,7 +617,7 @@ y = a.m(33)
         """)
         assert space.is_true(w_res)
         assert len(called) == 1
-        assert isinstance(called[0], argument.AbstractArguments)
+        assert isinstance(called[0], argument.Arguments)
 
 class TestPassThroughArguments_CALL_METHOD(TestPassThroughArguments):
 
