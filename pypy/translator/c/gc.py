@@ -328,14 +328,16 @@ class FrameworkGcPolicy(BasicGcPolicy):
         # expands to a number of steps, as per rpython/lltypesystem/opimpl.py,
         # all implemented by a single call to a C macro.
         [v_obj, c_grpptr, c_skipoffset, c_vtableinfo] = op.args
+        typename = funcgen.db.gettype(op.result.concretetype)
         fieldname = c_vtableinfo.value[2]
         return (
-            'OP_GET_NEXT_GROUP_MEMBER(%s, (unsigned short)%s->_%s, %s, %s);'
-            % (funcgen.expr(c_grpptr),
+        '%s = (%s)_OP_GET_NEXT_GROUP_MEMBER(%s, (unsigned short)%s->_%s, %s);'
+            % (funcgen.expr(op.result),
+               cdecl(typename, ''),
+               funcgen.expr(c_grpptr),
                funcgen.expr(v_obj),
                fieldname,
-               funcgen.expr(c_skipoffset),
-               funcgen.expr(op.result)))
+               funcgen.expr(c_skipoffset)))
 
 class AsmGcRootFrameworkGcPolicy(FrameworkGcPolicy):
     transformerclass = asmgcroot.AsmGcRootFrameworkGCTransformer
