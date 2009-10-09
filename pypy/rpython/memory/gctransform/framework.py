@@ -130,7 +130,9 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(translator, '_jit2gc'):
             self.layoutbuilder = translator._jit2gc['layoutbuilder']
         else:
-            self.layoutbuilder = TransformerLayoutBuilder(GCClass)
+            lltype2vtable = translator.rtyper.lltype2vtable
+            self.layoutbuilder = TransformerLayoutBuilder(GCClass,
+                                                          lltype2vtable)
         self.layoutbuilder.transformer = self
         self.get_type_id = self.layoutbuilder.get_type_id
 
@@ -402,6 +404,13 @@ class FrameworkGCTransformer(GCTransformer):
         for fldname in HDR._names:
             FLDTYPE = getattr(HDR, fldname)
             fields.append(('_' + fldname, FLDTYPE))
+
+        size_gc_header = self.gcdata.gc.gcheaderbuilder.size_gc_header
+        vtableinfo = (HDR, size_gc_header, self.gcdata.gc.typeid_is_in_field,
+                      llmemory.sizeof(gcdata.TYPE_INFO))
+        self.c_vtableinfo = rmodel.inputconst(lltype.Void, vtableinfo)
+        tig = self.layoutbuilder.type_info_group._as_ptr()
+        self.c_type_info_group = rmodel.inputconst(lltype.typeOf(tig), tig)
 
     def build_root_walker(self):
         return ShadowStackRootWalker(self)
@@ -768,6 +777,33 @@ class FrameworkGCTransformer(GCTransformer):
                                       v_newvalue,
                                       v_structaddr])
         hop.rename('bare_' + opname)
+
+    def transform_getfield_typeptr(self, hop):
+        # this would become quite a lot of operations, even if it compiles
+        # to C code that is just as efficient as "obj->typeptr".  To avoid
+        # that, we just generate a single custom operation instead.
+        hop.genop('getfield_typeptr_group', [hop.spaceop.args[0],
+                                             self.c_type_info_group,
+                                             self.c_vtableinfo],
+                  resultvar = hop.spaceop.result)
+
+    def transform_setfield_typeptr(self, hop):
+        # replace such a setfield with an assertion that the typeptr is right
+        pass # XXX later
+
+    def gct_getfield(self, hop):
+        if (hop.spaceop.args[1].value == 'typeptr' and
+            hop.spaceop.args[0].concretetype.TO._hints.get('typeptr')):
+            self.transform_getfield_typeptr(hop)
+        else:
+            GCTransformer.gct_getfield(self, hop)
+
+    def gct_setfield(self, hop):
+        if (hop.spaceop.args[1].value == 'typeptr' and
+            hop.spaceop.args[0].concretetype.TO._hints.get('typeptr')):
+            self.transform_setfield_typeptr(hop)
+        else:
+            GCTransformer.gct_setfield(self, hop)
 
     def var_needs_set_transform(self, var):
         return var_needsgc(var)

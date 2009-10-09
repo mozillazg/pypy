@@ -67,6 +67,12 @@ class StructDefNode:
                                                   bare=True)
             self.prefix = somelettersfrom(STRUCT._name) + '_'
         self.dependencies = {}
+        #
+        self.fieldnames = STRUCT._names
+        if STRUCT._hints.get('typeptr', False):
+            if db.gcpolicy.need_no_typeptr:
+                assert self.fieldnames == ('typeptr',)
+                self.fieldnames = ()
 
     def setup(self):
         # this computes self.fields
@@ -80,7 +86,7 @@ class StructDefNode:
         if needs_gcheader(self.STRUCT):
             for fname, T in db.gcpolicy.struct_gcheader_definition(self):
                 self.fields.append((fname, db.gettype(T, who_asks=self)))
-        for name in STRUCT._names:
+        for name in self.fieldnames:
             T = self.c_struct_field_type(name)
             if name == STRUCT._arrayfld:
                 typename = db.gettype(T, varlength=self.varlength,
@@ -147,8 +153,7 @@ class StructDefNode:
             yield line
 
     def visitor_lines(self, prefix, on_field):
-        STRUCT = self.STRUCT
-        for name in STRUCT._names:
+        for name in self.fieldnames:
             FIELD_T = self.c_struct_field_type(name)
             cname = self.c_struct_field_name(name)
             for line in on_field('%s.%s' % (prefix, cname),
@@ -157,8 +162,7 @@ class StructDefNode:
 
     def debug_offsets(self):
         # generate number exprs giving the offset of the elements in the struct
-        STRUCT = self.STRUCT
-        for name in STRUCT._names:
+        for name in self.fieldnames:
             FIELD_T = self.c_struct_field_type(name)
             if FIELD_T is Void:
                 yield '-1'
@@ -518,7 +522,7 @@ class StructNode(ContainerNode):
             for i, thing in enumerate(self.db.gcpolicy.struct_gcheader_initdata(self)):
                 data.append(('gcheader%d'%i, thing))
         
-        for name in self.T._names:
+        for name in defnode.fieldnames:
             data.append((name, getattr(self.obj, name)))
         
         # Reasonably, you should only initialise one of the fields of a union

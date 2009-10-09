@@ -18,7 +18,9 @@ class GCManagedHeap(object):
         self.gc.setup()
 
     def prepare_graphs(self, flowgraphs):
+        lltype2vtable = self.llinterp.typer.lltype2vtable
         layoutbuilder = DirectRunLayoutBuilder(self.gc.__class__,
+                                               lltype2vtable,
                                                self.llinterp)
         self.get_type_id = layoutbuilder.get_type_id
         layoutbuilder.initialize_gc_query_function(self.gc)
@@ -160,9 +162,9 @@ class LLInterpRootWalker:
 
 class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
-    def __init__(self, GCClass, llinterp):
+    def __init__(self, GCClass, lltype2vtable, llinterp):
         self.llinterp = llinterp
-        super(DirectRunLayoutBuilder, self).__init__(GCClass)
+        super(DirectRunLayoutBuilder, self).__init__(GCClass, lltype2vtable)
 
     def make_finalizer_funcptr_for_type(self, TYPE):
         from pypy.rpython.memory.gctransform.support import get_rtti, \

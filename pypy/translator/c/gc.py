@@ -11,6 +11,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 class BasicGcPolicy(object):
     requires_stackless = False
+    need_no_typeptr = False
     
     def __init__(self, db, thread_enabled=False):
         self.db = db
@@ -277,6 +278,7 @@ class NoneGcPolicy(BoehmGcPolicy):
 
 class FrameworkGcPolicy(BasicGcPolicy):
     transformerclass = framework.FrameworkGCTransformer
+    need_no_typeptr = True
 
     def struct_setup(self, structdefnode, rtti):
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):

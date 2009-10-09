@@ -367,6 +367,8 @@ class BaseGCTransformer(object):
     gct_setarrayitem = gct_setfield
     gct_setinteriorfield = gct_setfield
 
+    gct_getfield = default
+
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 

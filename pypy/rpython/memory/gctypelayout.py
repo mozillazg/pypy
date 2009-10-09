@@ -165,8 +165,11 @@ class TypeLayoutBuilder(object):
     can_add_new_types = True
     can_encode_type_shape = True    # set to False initially by the JIT
 
-    def __init__(self, GCClass):
+    size_of_fixed_type_info = llmemory.sizeof(GCData.TYPE_INFO)
+
+    def __init__(self, GCClass, lltype2vtable):
         self.GCClass = GCClass
+        self.lltype2vtable = lltype2vtable
         self.make_type_info_group()
         self.id_of_type = {}      # {LLTYPE: type_id}
         self.seen_roots = {}
@@ -213,6 +216,13 @@ class TypeLayoutBuilder(object):
             # store it
             type_id = self.type_info_group.add_member(fullinfo)
             self.id_of_type[TYPE] = type_id
+            # store the vtable of the type (if any) immediately thereafter
+            vtable = self.lltype2vtable.get(TYPE, None)
+            if vtable is not None:
+                # check that if we have a vtable, we are not varsize
+                assert lltype.typeOf(fullinfo) == GCData.TYPE_INFO_PTR
+                vtable = lltype.normalizeptr(vtable)
+                self.type_info_group.add_member(vtable)
             return type_id
 
     def get_info(self, type_id):
