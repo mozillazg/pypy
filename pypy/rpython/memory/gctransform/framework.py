@@ -406,11 +406,12 @@ class FrameworkGCTransformer(GCTransformer):
             fields.append(('_' + fldname, FLDTYPE))
 
         size_gc_header = self.gcdata.gc.gcheaderbuilder.size_gc_header
-        vtableinfo = (HDR, size_gc_header, self.gcdata.gc.typeid_is_in_field,
-                      llmemory.sizeof(gcdata.TYPE_INFO))
+        vtableinfo = (HDR, size_gc_header, self.gcdata.gc.typeid_is_in_field)
         self.c_vtableinfo = rmodel.inputconst(lltype.Void, vtableinfo)
         tig = self.layoutbuilder.type_info_group._as_ptr()
         self.c_type_info_group = rmodel.inputconst(lltype.typeOf(tig), tig)
+        sko = llmemory.sizeof(gcdata.TYPE_INFO)
+        self.c_vtinfo_skip_offset = rmodel.inputconst(lltype.typeOf(sko), sko)
 
     def build_root_walker(self):
         return ShadowStackRootWalker(self)
@@ -782,17 +783,19 @@ class FrameworkGCTransformer(GCTransformer):
         # this would become quite a lot of operations, even if it compiles
         # to C code that is just as efficient as "obj->typeptr".  To avoid
         # that, we just generate a single custom operation instead.
-        hop.genop('getfield_typeptr_group', [hop.spaceop.args[0],
-                                             self.c_type_info_group,
-                                             self.c_vtableinfo],
+        hop.genop('gc_gettypeptr_group', [hop.spaceop.args[0],
+                                          self.c_type_info_group,
+                                          self.c_vtinfo_skip_offset,
+                                          self.c_vtableinfo],
                   resultvar = hop.spaceop.result)
 
     def transform_setfield_typeptr(self, hop):
         # replace such a setfield with an assertion that the typeptr is right
         v_new = hop.spaceop.args[2]
-        v_old = hop.genop('getfield_typeptr_group', [hop.spaceop.args[0],
-                                                     self.c_type_info_group,
-                                                     self.c_vtableinfo],
+        v_old = hop.genop('gc_gettypeptr_group', [hop.spaceop.args[0],
+                                                  self.c_type_info_group,
+                                                  self.c_vtinfo_skip_offset,
+                                                  self.c_vtableinfo],
                           resulttype = v_new.concretetype)
         v_eq = hop.genop("ptr_eq", [v_old, v_new],
                          resulttype = lltype.Bool)

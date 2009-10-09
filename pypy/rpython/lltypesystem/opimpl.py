@@ -433,11 +433,10 @@ def op_combine_ushort(ushort, rest):
     from pypy.rpython.lltypesystem import llgroup
     return llgroup.CombinedSymbolic(ushort, rest)
 
-def op_getfield_typeptr_group(TYPE, obj, grpptr, vtableinfo):
+def op_gc_gettypeptr_group(TYPE, obj, grpptr, skipoffset, vtableinfo):
     HDR            = vtableinfo[0]
     size_gc_header = vtableinfo[1]
     fieldname      = vtableinfo[2]
-    skipoffset     = vtableinfo[3]
     objaddr = llmemory.cast_ptr_to_adr(obj)
     hdraddr = objaddr - size_gc_header
     hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(HDR))
@@ -445,7 +444,7 @@ def op_getfield_typeptr_group(TYPE, obj, grpptr, vtableinfo):
     if lltype.typeOf(typeid) == lltype.Signed:
         typeid = op_extract_ushort(typeid)
     return op_get_next_group_member(TYPE, grpptr, typeid, skipoffset)
-op_getfield_typeptr_group.need_result_type = True
+op_gc_gettypeptr_group.need_result_type = True
 
 # ____________________________________________________________
 
