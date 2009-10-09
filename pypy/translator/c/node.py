@@ -921,6 +921,8 @@ class GroupNode(ContainerNode):
             yield member._as_ptr()
 
     def _fix_members(self):
+        if self.obj.outdated:
+            raise Exception(self.obj.outdated)
         if self.count_members is None:
             self.count_members = len(self.obj.members)
         else:
