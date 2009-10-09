@@ -11,11 +11,14 @@
 #define OP_GET_NEXT_GROUP_MEMBER(groupptr, compactoffset, skipoffset, r)  \
   r = ((char*)groupptr) + ((long)compactoffset)*sizeof(long) + skipoffset
 
-#define OP_IS_GROUP_MEMBER_ZERO(compactoffset, r) \
+#define OP_IS_GROUP_MEMBER_ZERO(compactoffset, r)  \
   r = (compactoffset == 0)
 
-#define OP_EXTRACT_USHORT(value, r) \
+#define OP_EXTRACT_USHORT(value, r)  \
   r = (unsigned short)value
+
+#define OP_COMBINE_USHORT(ushort, rest, r)  \
+  r = ((long)ushort) | rest;
 
 /* A macro to crash at compile-time if sizeof(group) is too large.
    Uses a hack that I've found on some random forum.  Haaaaaaaaaackish. */

@@ -182,6 +182,13 @@ def op_int_and(x, y):
     assert isinstance(y, int)
     return x & y
 
+def op_int_or(x, y):
+    if not isinstance(x, int):
+        from pypy.rpython.lltypesystem import llgroup
+        assert isinstance(x, llgroup.CombinedSymbolic)
+    assert isinstance(y, int)
+    return x | y
+
 def op_int_mul(x, y):
     assert isinstance(x, (int, llmemory.AddressOffset))
     assert isinstance(y, (int, llmemory.AddressOffset))
@@ -421,6 +428,10 @@ def op_extract_ushort(combinedoffset):
     from pypy.rpython.lltypesystem import llgroup
     assert isinstance(combinedoffset, llgroup.CombinedSymbolic)
     return combinedoffset.lowpart
+
+def op_combine_ushort(ushort, rest):
+    from pypy.rpython.lltypesystem import llgroup
+    return llgroup.CombinedSymbolic(ushort, rest)
 
 # ____________________________________________________________
 
