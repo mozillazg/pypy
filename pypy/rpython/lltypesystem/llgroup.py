@@ -16,6 +16,7 @@ Group = GroupType()
 
 class group(lltype._container):
     _TYPE = Group
+    outdated = None
 
     def __init__(self, name):
         self.name = name
@@ -26,7 +27,10 @@ class group(lltype._container):
         assert isinstance(TYPE.TO, lltype.Struct)
         assert TYPE.TO._gckind == 'raw'
         struct = structptr._as_obj()
-        assert struct not in _membership,"cannot be a member of several groups"
+        prevgroup = _membership.get(struct)
+        if prevgroup is not None:
+            prevgroup.outdated = (
+                "structure %s was inserted into another group" % (struct,))
         assert struct._parentstructure() is None
         index = len(self.members)
         self.members.append(struct)
