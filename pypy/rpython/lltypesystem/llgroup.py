@@ -92,3 +92,7 @@ class CombinedSymbolic(llmemory.Symbolic):
     def __and__(self, other):
         assert (other & 0xFFFF) == 0
         return self.rest & other
+
+    def __or__(self, other):
+        assert (other & 0xFFFF) == 0
+        return CombinedSymbolic(self.lowpart, self.rest | other)
