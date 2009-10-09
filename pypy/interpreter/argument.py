@@ -27,8 +27,8 @@ class Arguments(object):
     @staticmethod
     def factory(space, args_w, kwds_w=None,
                 w_stararg=None, w_starstararg=None):
-        return Argument(space, args_w, kwds_w,
-                        w_stararg, w_starstararg)
+        return Arguments(space, args_w, kwds_w,
+                         w_stararg, w_starstararg)
 
     def num_args(self): # only used in module/__builtin__/interp_classobj.py
         self._unpack()
@@ -335,6 +335,7 @@ class Arguments(object):
             raise OperationError(self.space.w_TypeError,
                                  self.space.wrap(e.getmsg(fnname)))        
 
+    @staticmethod
     def frompacked(space, w_args=None, w_kwds=None):
         # used by
         # ./module/_stackless/interp_coroutine.py
@@ -344,8 +345,7 @@ class Arguments(object):
         # ./interpreter/baseobjspace.py
         """Convenience static method to build an Arguments
            from a wrapped sequence and a wrapped dictionary."""
-        return self.factory(space, [], w_stararg=w_args, w_starstararg=w_kwds)
-    frompacked = staticmethod(frompacked)
+        return Arguments(space, [], w_stararg=w_args, w_starstararg=w_kwds)
 
     def topacked(self):
         # used by ./module/_stackless/interp_coroutine.py
@@ -450,6 +450,10 @@ class ArgumentsForTranslation(Arguments):
                     
         return ArgumentsForTranslation(self.space, args_w, kwds_w)
 
+    @staticmethod
+    def frompacked(space, w_args=None, w_kwds=None):
+        raise NotImplementedError("go away")
+    
     def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
         # used by
         # ./rpython/callparse.py
