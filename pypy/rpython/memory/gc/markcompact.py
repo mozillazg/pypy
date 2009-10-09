@@ -70,6 +70,7 @@ BYTES_PER_TID = rffi.sizeof(TID_TYPE)
 
 class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed))
+    typeid_is_in_field = 'tid'
     TID_BACKUP = lltype.Array(TID_TYPE, hints={'nolength':True})
     WEAKREF_OFFSETS = lltype.Array(lltype.Signed)
 

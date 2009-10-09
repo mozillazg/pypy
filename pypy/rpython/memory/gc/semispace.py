@@ -54,6 +54,7 @@ class SemiSpaceGC(MovingGCBase):
                             'addflag': _hdr_addflag,
                             'delflag': _hdr_delflag,
                         })
+    typeid_is_in_field = 'typeid16'
     FORWARDSTUB = lltype.GcStruct('forwarding_stub',
                                   ('forw', llmemory.Address))
     FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)

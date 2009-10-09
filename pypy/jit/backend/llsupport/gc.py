@@ -322,14 +322,16 @@ class GcLLDescr_framework(GcLLDescription):
 
         # make a TransformerLayoutBuilder and save it on the translator
         # where it can be fished and reused by the FrameworkGCTransformer
-        self.layoutbuilder = framework.TransformerLayoutBuilder()
+        self.GCClass, _ = choose_gc_from_config(gcdescr.config)
+        lltype2vtable = translator.rtyper.lltype2vtable
+        self.layoutbuilder = framework.TransformerLayoutBuilder(self.GCClass,
+                                                                lltype2vtable)
         self.layoutbuilder.delay_encoding()
         self.translator._jit2gc = {
             'layoutbuilder': self.layoutbuilder,
             'gcmapstart': lambda: gcrootmap.gcmapstart(),
             'gcmapend': lambda: gcrootmap.gcmapend(),
             }
-        self.GCClass, _ = choose_gc_from_config(gcdescr.config)
         self.moving_gc = self.GCClass.moving_gc
         self.HDRPTR = lltype.Ptr(self.GCClass.HDR)
         self.gcheaderbuilder = GCHeaderBuilder(self.HDRPTR.TO)

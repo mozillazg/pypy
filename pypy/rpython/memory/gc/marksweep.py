@@ -29,6 +29,7 @@ class MarkSweepGC(GCBase):
                                        ('mark', lltype.Bool),
                                        ('curpool_flag', lltype.Bool),
                                        ('next', HDRPTR)))
+    typeid_is_in_field = 'typeid16'
 
     POOL = lltype.GcStruct('gc_pool')
     POOLPTR = lltype.Ptr(POOL)
