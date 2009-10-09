@@ -789,7 +789,16 @@ class FrameworkGCTransformer(GCTransformer):
 
     def transform_setfield_typeptr(self, hop):
         # replace such a setfield with an assertion that the typeptr is right
-        pass # XXX later
+        v_new = hop.spaceop.args[2]
+        v_old = hop.genop('getfield_typeptr_group', [hop.spaceop.args[0],
+                                                     self.c_type_info_group,
+                                                     self.c_vtableinfo],
+                          resulttype = v_new.concretetype)
+        v_eq = hop.genop("ptr_eq", [v_old, v_new],
+                         resulttype = lltype.Bool)
+        c_errmsg = rmodel.inputconst(lltype.Void,
+                                     "setfield_typeptr: wrong type")
+        hop.genop('debug_assert', [v_eq, c_errmsg])
 
     def gct_getfield(self, hop):
         if (hop.spaceop.args[1].value == 'typeptr' and
