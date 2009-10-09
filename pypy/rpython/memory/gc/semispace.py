@@ -58,6 +58,8 @@ class SemiSpaceGC(MovingGCBase):
                                   ('forw', llmemory.Address))
     FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)
 
+    object_minimal_size = llmemory.sizeof(FORWARDSTUB)
+
     # the following values override the default arguments of __init__ when
     # translating to a real backend.
     TRANSLATION_PARAMS = {'space_size': 8*1024*1024} # XXX adjust
