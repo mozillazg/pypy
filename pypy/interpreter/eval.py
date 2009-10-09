@@ -59,12 +59,7 @@ class Code(Wrappable):
         return space.w_None
 
     def funcrun(self, func, args):
-        frame = func.space.createframe(self, func.w_func_globals,
-                                        func.closure)
-        sig = self.signature()
-        scope_w = args.parse(func.name, sig, func.defs_w)
-        frame.setfastscope(scope_w)
-        return frame.run()
+        raise NotImplementedError("purely abstract")
 
     def funcrun_obj(self, func, w_obj, args):
         return self.funcrun(func, args.prepend(w_obj))

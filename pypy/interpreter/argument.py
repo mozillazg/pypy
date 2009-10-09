@@ -24,11 +24,11 @@ class Arguments(object):
         self.w_stararg = w_stararg
         self.w_starstararg = w_starstararg
 
-    def num_args(self):
+    def num_args(self): # only used in module/__builtin__/interp_classobj.py
         self._unpack()
         return len(self.arguments_w)
 
-    def num_kwds(self):
+    def num_kwds(self): # only used in module/__builtin__/interp_classobj.py
         self._unpack()
         return len(self.kwds_w)
         
@@ -51,12 +51,12 @@ class Arguments(object):
 
     ###  Manipulation  ###
 
-    def unpack(self):
+    def unpack(self): # used often
         "Return a ([w1,w2...], {'kw':w3...}) pair."
         self._unpack()
         return self.arguments_w, self.kwds_w
 
-    def prepend(self, w_firstarg):
+    def prepend(self, w_firstarg): # used often
         "Return a new Arguments with a new argument inserted first."
         return Arguments(self.space, [w_firstarg] + self.arguments_w,
                          self.kwds_w, self.w_stararg, self.w_starstararg)
@@ -99,14 +99,14 @@ class Arguments(object):
             self.kwds_w = d
             self.w_starstararg = None
 
-    def has_keywords(self):
-        return bool(self.kwds_w) or (self.w_starstararg is not None and
-                                     self.space.is_true(self.w_starstararg))
-
     def fixedunpack(self, argcount):
+        # used by ./objspace/std/typeobject.py
+        # ./objspace/std/objecttype.py
+        # ./annotation/description.py
         """The simplest argument parsing: get the 'argcount' arguments,
         or raise a real ValueError if the length is wrong."""
-        if self.has_keywords():
+        if bool(self.kwds_w) or (self.w_starstararg is not None and
+                                     self.space.is_true(self.w_starstararg)):
             raise ValueError, "no keyword arguments expected"
         if len(self.arguments_w) > argcount:
             raise ValueError, "too many arguments (%d expected)" % argcount
@@ -120,6 +120,10 @@ class Arguments(object):
         return self.arguments_w
 
     def firstarg(self):
+        # used by
+        # ./module/_random/interp_random.py
+        # ./interpreter/gateway.py
+        # ./interpreter/function.py
         "Return the first argument for inspection."
         if self.arguments_w:
             return self.arguments_w[0]
@@ -266,27 +270,6 @@ class Arguments(object):
 
         return co_argcount + has_vararg + has_kwarg
     
-    ### Argument <-> list of w_objects together with "shape" information
-
-    def _rawshape(self, nextra=0):
-        shape_cnt  = len(self.arguments_w)+nextra        # Number of positional args
-        if self.kwds_w:
-            shape_keys = self.kwds_w.keys()           # List of keywords (strings)
-        else:
-            shape_keys = []
-        shape_star = self.w_stararg is not None   # Flag: presence of *arg
-        shape_stst = self.w_starstararg is not None # Flag: presence of **kwds
-        shape_keys.sort()
-        return shape_cnt, tuple(shape_keys), shape_star, shape_stst # shape_keys are sorted
-
-    def flatten(self):
-        shape_cnt, shape_keys, shape_star, shape_stst = self._rawshape()
-        data_w = self.arguments_w + [self.kwds_w[key] for key in shape_keys]
-        if shape_star:
-            data_w.append(self.w_stararg)
-        if shape_stst:
-            data_w.append(self.w_starstararg)
-        return (shape_cnt, shape_keys, shape_star, shape_stst), data_w
 
 
     def parse_into_scope(self, w_firstarg,
@@ -324,18 +307,17 @@ class Arguments(object):
         return scope_w    
 
     def parse(self, fnname, signature, defaults_w=[], blindargs=0):
+        # used by geninterped code
         """Parse args and kwargs to initialize a frame
         according to the signature of code object.
         """
-        try:
-            return self._parse(None, signature, defaults_w, blindargs)
-        except ArgErr, e:
-            raise OperationError(self.space.w_TypeError,
-                                 self.space.wrap(e.getmsg(fnname)))
+        return self.parse_obj(None, fnname, signature, defaults_w,
+                              blindargs)
 
     # xxx have only this one
     def parse_obj(self, w_firstarg,
                   fnname, signature, defaults_w=[], blindargs=0):
+        # used by ./interpreter/gateway.py
         """Parse args and kwargs to initialize a frame
         according to the signature of code object.
         """
@@ -346,12 +328,19 @@ class Arguments(object):
                                  self.space.wrap(e.getmsg(fnname)))        
 
     def frompacked(space, w_args=None, w_kwds=None):
+        # used by
+        # ./module/_stackless/interp_coroutine.py
+        # ./module/thread/os_thread.py
+        # ./objspace/fake/checkmodule.py
+        # ./interpreter/gateway.py
+        # ./interpreter/baseobjspace.py
         """Convenience static method to build an Arguments
            from a wrapped sequence and a wrapped dictionary."""
         return Arguments(space, [], w_stararg=w_args, w_starstararg=w_kwds)
     frompacked = staticmethod(frompacked)
 
     def topacked(self):
+        # used by ./module/_stackless/interp_coroutine.py
         """Express the Argument object as a pair of wrapped w_args, w_kwds."""
         space = self.space
         args_w, kwds_w = self.unpack()
@@ -362,6 +351,11 @@ class Arguments(object):
         return w_args, w_kwds
 
     def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
+        # used by
+        # geninterped code
+        # ./rpython/callparse.py
+        # ./rpython/rbuiltin.py
+        # ./annotation/bookkeeper.py
         args_w = data_w[:shape_cnt]
         p = shape_cnt
         kwds_w = {}
@@ -380,6 +374,18 @@ class Arguments(object):
             w_starstar = None
         return Arguments(space, args_w, kwds_w, w_star, w_starstar)
     fromshape = staticmethod(fromshape)
+
+
+    def normalize(self):
+        """Return an instance of the Arguments class.  (Instances of other
+        classes may not be suitable for long-term storage or multiple
+        usage.)  Also force the type and validity of the * and ** arguments
+        to be checked now.
+        """
+        args_w, kwds_w = self.unpack()
+        return Arguments(self.space, args_w, kwds_w)
+
+    # ------------- used only by the translation toolchain -------------------
 
     def match_signature(self, signature, defaults_w):
         """Parse args and kwargs according to the signature of a code object,
@@ -434,17 +440,30 @@ class Arguments(object):
                     
         return Arguments(self.space, args_w, kwds_w)
 
-    def normalize(self):
-        """Return an instance of the Arguments class.  (Instances of other
-        classes may not be suitable for long-term storage or multiple
-        usage.)  Also force the type and validity of the * and ** arguments
-        to be checked now.
-        """
-        args_w, kwds_w = self.unpack()
-        return Arguments(self.space, args_w, kwds_w)
+    def flatten(self):
+        # used by ./objspace/flow/objspace.py
+        """ Argument <-> list of w_objects together with "shape" information """
+        shape_cnt, shape_keys, shape_star, shape_stst = self._rawshape()
+        data_w = self.arguments_w + [self.kwds_w[key] for key in shape_keys]
+        if shape_star:
+            data_w.append(self.w_stararg)
+        if shape_stst:
+            data_w.append(self.w_starstararg)
+        return (shape_cnt, shape_keys, shape_star, shape_stst), data_w
 
+    def _rawshape(self, nextra=0):
+        shape_cnt  = len(self.arguments_w)+nextra        # Number of positional args
+        if self.kwds_w:
+            shape_keys = self.kwds_w.keys()           # List of keywords (strings)
+        else:
+            shape_keys = []
+        shape_star = self.w_stararg is not None   # Flag: presence of *arg
+        shape_stst = self.w_starstararg is not None # Flag: presence of **kwds
+        shape_keys.sort()
+        return shape_cnt, tuple(shape_keys), shape_star, shape_stst # shape_keys are sorted
 
 def rawshape(args, nextra=0):
+    # used by ./annotation/description.py
     return args._rawshape(nextra)
 
 
