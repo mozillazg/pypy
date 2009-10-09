@@ -24,6 +24,12 @@ class Arguments(object):
         self.w_stararg = w_stararg
         self.w_starstararg = w_starstararg
 
+    @staticmethod
+    def factory(space, args_w, kwds_w=None,
+                w_stararg=None, w_starstararg=None):
+        return Argument(space, args_w, kwds_w,
+                        w_stararg, w_starstararg)
+
     def num_args(self): # only used in module/__builtin__/interp_classobj.py
         self._unpack()
         return len(self.arguments_w)
@@ -33,20 +39,22 @@ class Arguments(object):
         return len(self.kwds_w)
         
     def __repr__(self):
+        """ NOT_RPYTHON """
         if self.w_starstararg is not None:
-            return 'Arguments(%s, %s, %s, %s)' % (self.arguments_w,
-                                                  self.kwds_w,
-                                                  self.w_stararg,
-                                                  self.w_starstararg)
+            return '%s(%s, %s, %s, %s)' % (self.__class__,
+                                           self.arguments_w,
+                                           self.kwds_w,
+                                           self.w_stararg,
+                                           self.w_starstararg)
         if self.w_stararg is None:
             if not self.kwds_w:
-                return 'Arguments(%s)' % (self.arguments_w,)
+                return '%s(%s)' % (self.__class__, self.arguments_w,)
             else:
-                return 'Arguments(%s, %s)' % (self.arguments_w, self.kwds_w)
+                return '%s(%s, %s)' % (self.__class__, self.arguments_w,
+                                       self.kwds_w)
         else:
-            return 'Arguments(%s, %s, %s)' % (self.arguments_w,
-                                              self.kwds_w,
-                                              self.w_stararg)
+            return '%s(%s, %s, %s)' % (self.__class__, self.arguments_w,
+                                       self.kwds_w, self.w_stararg)
 
 
     ###  Manipulation  ###
@@ -58,8 +66,8 @@ class Arguments(object):
 
     def prepend(self, w_firstarg): # used often
         "Return a new Arguments with a new argument inserted first."
-        return Arguments(self.space, [w_firstarg] + self.arguments_w,
-                         self.kwds_w, self.w_stararg, self.w_starstararg)
+        return self.factory(self.space, [w_firstarg] + self.arguments_w,
+                            self.kwds_w, self.w_stararg, self.w_starstararg)
             
     def _unpack(self):
         "unpack the *arg and **kwd into w_arguments and kwds_w"
@@ -336,7 +344,7 @@ class Arguments(object):
         # ./interpreter/baseobjspace.py
         """Convenience static method to build an Arguments
            from a wrapped sequence and a wrapped dictionary."""
-        return Arguments(space, [], w_stararg=w_args, w_starstararg=w_kwds)
+        return self.factory(space, [], w_stararg=w_args, w_starstararg=w_kwds)
     frompacked = staticmethod(frompacked)
 
     def topacked(self):
@@ -351,11 +359,7 @@ class Arguments(object):
         return w_args, w_kwds
 
     def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
-        # used by
-        # geninterped code
-        # ./rpython/callparse.py
-        # ./rpython/rbuiltin.py
-        # ./annotation/bookkeeper.py
+        # used by geninterped code
         args_w = data_w[:shape_cnt]
         p = shape_cnt
         kwds_w = {}
@@ -385,7 +389,13 @@ class Arguments(object):
         args_w, kwds_w = self.unpack()
         return Arguments(self.space, args_w, kwds_w)
 
-    # ------------- used only by the translation toolchain -------------------
+
+class ArgumentsForTranslation(Arguments):
+    @staticmethod
+    def factory(space, args_w, kwds_w=None,
+                w_stararg=None, w_starstararg=None):
+        return ArgumentsForTranslation(space, args_w, kwds_w,
+                                       w_stararg, w_starstararg)
 
     def match_signature(self, signature, defaults_w):
         """Parse args and kwargs according to the signature of a code object,
@@ -438,7 +448,31 @@ class Arguments(object):
         for key in need_kwds:
             kwds_w[key] = unfiltered_kwds_w[key]
                     
-        return Arguments(self.space, args_w, kwds_w)
+        return ArgumentsForTranslation(self.space, args_w, kwds_w)
+
+    def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
+        # used by
+        # ./rpython/callparse.py
+        # ./rpython/rbuiltin.py
+        # ./annotation/bookkeeper.py
+        args_w = data_w[:shape_cnt]
+        p = shape_cnt
+        kwds_w = {}
+        for i in range(len(shape_keys)):
+            kwds_w[shape_keys[i]] = data_w[p]
+            p += 1
+        if shape_star:
+            w_star = data_w[p]
+            p += 1
+        else:
+            w_star = None
+        if shape_stst:
+            w_starstar = data_w[p]
+            p += 1
+        else:
+            w_starstar = None
+        return ArgumentsForTranslation(space, args_w, kwds_w, w_star, w_starstar)
+    fromshape = staticmethod(fromshape)
 
     def flatten(self):
         # used by ./objspace/flow/objspace.py

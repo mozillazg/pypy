@@ -900,7 +900,7 @@ class __extend__(pyframe.PyFrame):
         if n_keywords:
             keywords = f.popstrdictvalues(n_keywords)
         arguments = f.popvalues(n_arguments)
-        args = Arguments(f.space, arguments, keywords, w_star, w_starstar)
+        args = f.argument_factory(arguments, keywords, w_star, w_starstar)
         w_function  = f.popvalue()
         if we_are_jitted():
             w_result = f.space.call_args(w_function, args)
