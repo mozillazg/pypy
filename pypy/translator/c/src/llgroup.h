@@ -11,8 +11,8 @@
 #define OP_GET_NEXT_GROUP_MEMBER(groupptr, compactoffset, skipoffset, r)  \
   r = ((char*)groupptr) + ((long)compactoffset)*sizeof(long) + skipoffset
 
-#define OP_IS_GROUP_MEMBER_ZERO(compactoffset, r)  \
-  r = (compactoffset == 0)
+#define OP_IS_GROUP_MEMBER_NONZERO(compactoffset, r)  \
+  r = (compactoffset != 0)
 
 #define OP_EXTRACT_USHORT(value, r)  \
   r = (unsigned short)value

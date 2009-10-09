@@ -410,9 +410,10 @@ LL_OPERATIONS = {
     'cast_adr_to_ptr':      LLOp(canfold=True),
     'cast_adr_to_int':      LLOp(sideeffects=False),
     'cast_int_to_adr':      LLOp(canfold=True),   # not implemented in llinterp
+
     'get_group_member':     LLOp(canfold=True),
     'get_next_group_member':LLOp(canfold=True),
-    'is_group_member_zero': LLOp(canfold=True),
+    'is_group_member_nonzero':LLOp(canfold=True),
     'extract_ushort':       LLOp(canfold=True),
     'combine_ushort':       LLOp(canfold=True),
     'gc_gettypeptr_group':  LLOp(canfold=True),

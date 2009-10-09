@@ -42,14 +42,14 @@ class GCData(object):
         self.type_info_group_ptr = type_info_group._as_ptr()
 
     def get(self, typeid):
-        ll_assert(not llop.is_group_member_zero(lltype.Bool, typeid),
+        ll_assert(llop.is_group_member_nonzero(lltype.Bool, typeid),
                   "invalid type_id")
         return llop.get_group_member(GCData.TYPE_INFO_PTR,
                                      self.type_info_group_ptr,
                                      typeid)
 
     def get_varsize(self, typeid):
-        ll_assert(not llop.is_group_member_zero(lltype.Bool, typeid),
+        ll_assert(llop.is_group_member_nonzero(lltype.Bool, typeid),
                   "invalid type_id")
         return llop.get_group_member(GCData.VARSIZE_TYPE_INFO_PTR,
                                      self.type_info_group_ptr,

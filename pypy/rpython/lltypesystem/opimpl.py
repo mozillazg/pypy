@@ -416,13 +416,13 @@ def op_get_next_group_member(TYPE, grpptr, memberoffset, skipoffset):
     return lltype.cast_pointer(TYPE, member)
 op_get_next_group_member.need_result_type = True
 
-def op_is_group_member_zero(memberoffset):
+def op_is_group_member_nonzero(memberoffset):
     from pypy.rpython.lltypesystem import llgroup
     if isinstance(memberoffset, llgroup.GroupMemberOffset):
-        return memberoffset.index == 0
+        return memberoffset.index != 0
     else:
         assert isinstance(memberoffset, int)
-        return memberoffset == 0
+        return memberoffset != 0
 
 def op_extract_ushort(combinedoffset):
     from pypy.rpython.lltypesystem import llgroup
