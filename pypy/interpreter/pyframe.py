@@ -282,6 +282,9 @@ class PyFrame(eval.Frame):
     def make_arguments(self, nargs):
         return Arguments(self.space, self.peekvalues(nargs))
 
+    def argument_factory(self, arguments, keywords, w_star, w_starstar):
+        return Arguments(self.space, arguments, keywords, w_star, w_starstar)
+
     @jit.dont_look_inside
     def descr__reduce__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
