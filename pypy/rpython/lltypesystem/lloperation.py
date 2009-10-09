@@ -415,7 +415,7 @@ LL_OPERATIONS = {
     'is_group_member_zero': LLOp(canfold=True),
     'extract_ushort':       LLOp(canfold=True),
     'combine_ushort':       LLOp(canfold=True),
-    'getfield_typeptr_group':LLOp(canfold=True),
+    'gc_gettypeptr_group':  LLOp(canfold=True),
 
     # __________ used by the JIT ________
 
