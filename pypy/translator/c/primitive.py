@@ -50,8 +50,9 @@ def name_signed(value, db):
         elif type(value) == GCHeaderOffset:
             return '0'
         elif type(value) == RoundedUpForAllocation:
-            return 'ROUND_UP_FOR_ALLOCATION(%s)' % (
-                name_signed(value.basesize, db))
+            return 'ROUND_UP_FOR_ALLOCATION(%s, %s)' % (
+                name_signed(value.basesize, db),
+                name_signed(value.minsize, db))
         elif isinstance(value, CDefinedIntSymbolic):
             return str(value.expr)
         elif isinstance(value, ComputedIntSymbolic):
