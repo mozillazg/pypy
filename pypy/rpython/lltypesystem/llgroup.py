@@ -69,3 +69,26 @@ class GroupMemberOffset(llmemory.Symbolic):
         assert skipoffset.TYPE == lltype.typeOf(self.member).TO
         assert skipoffset.repeat == 1
         return self.grpptr._as_obj().members[self.index + 1]._as_ptr()
+
+
+class CombinedSymbolic(llmemory.Symbolic):
+    """A general-purpose Signed symbolic that combines a USHORT and the
+    rest of the word (typically flags).  Only supports extracting the USHORT
+    with 'llop.extract_ushort', and extracting the rest of the word with
+    '&~0xFFFF' or with a direct masking like '&0x10000'.
+    """
+    def annotation(self):
+        from pypy.annotation import model
+        return model.SomeInteger()
+
+    def lltype(self):
+        return lltype.Signed
+
+    def __init__(self, lowpart, rest):
+        assert (rest & 0xFFFF) == 0
+        self.lowpart = lowpart
+        self.rest = rest
+
+    def __and__(self, other):
+        assert (other & 0xFFFF) == 0
+        return self.rest & other

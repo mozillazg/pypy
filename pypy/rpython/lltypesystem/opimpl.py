@@ -175,6 +175,13 @@ def op_int_add(x, y):
     assert isinstance(y, (int, llmemory.AddressOffset))
     return intmask(x + y)
 
+def op_int_and(x, y):
+    if not isinstance(x, int):
+        from pypy.rpython.lltypesystem import llgroup
+        assert isinstance(x, llgroup.CombinedSymbolic)
+    assert isinstance(y, int)
+    return x & y
+
 def op_int_mul(x, y):
     assert isinstance(x, (int, llmemory.AddressOffset))
     assert isinstance(y, (int, llmemory.AddressOffset))
@@ -409,6 +416,11 @@ def op_is_group_member_zero(memberoffset):
     else:
         assert isinstance(memberoffset, int)
         return memberoffset == 0
+
+def op_extract_ushort(combinedoffset):
+    from pypy.rpython.lltypesystem import llgroup
+    assert isinstance(combinedoffset, llgroup.CombinedSymbolic)
+    return combinedoffset.lowpart
 
 # ____________________________________________________________
 
