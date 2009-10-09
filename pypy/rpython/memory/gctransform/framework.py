@@ -457,6 +457,10 @@ class FrameworkGCTransformer(GCTransformer):
 
         newgcdependencies = []
         newgcdependencies.append(ll_static_roots_inside)
+        # also add the type_info_group's members into newgcdependencies,
+        # to make sure that they are all followed (only a part of them
+        # might have been followed by a previous enum_dependencies()).
+        newgcdependencies.extend(self.layoutbuilder.type_info_group.members)
         self.write_typeid_list()
         return newgcdependencies
 

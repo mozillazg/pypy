@@ -143,7 +143,7 @@ class LowLevelDatabase(object):
                 return 'struct %s @' % (
                     valid_identifier('pypy_opaque_' + T.tag),)
         elif isinstance(T, llgroup.GroupType):
-            return 'XXX-dont-use-me @'
+            return "/*don't use me*/ void @"
         else:
             raise Exception("don't know about type %r" % (T,))
 
