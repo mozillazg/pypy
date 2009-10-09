@@ -413,6 +413,7 @@ LL_OPERATIONS = {
     'get_group_member':     LLOp(canfold=True),
     'get_next_group_member':LLOp(canfold=True),
     'is_group_member_zero': LLOp(canfold=True),
+    'extract_ushort':       LLOp(canfold=True),
 
     # __________ used by the JIT ________
 

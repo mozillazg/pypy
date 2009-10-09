@@ -14,6 +14,9 @@
 #define OP_IS_GROUP_MEMBER_ZERO(compactoffset, r) \
   r = (compactoffset == 0)
 
+#define OP_EXTRACT_USHORT(value, r) \
+  r = (unsigned short)value
+
 /* A macro to crash at compile-time if sizeof(group) is too large.
    Uses a hack that I've found on some random forum.  Haaaaaaaaaackish. */
 #define PYPY_GROUP_CHECK_SIZE(groupname)                              \

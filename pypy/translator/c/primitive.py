@@ -57,6 +57,8 @@ def name_signed(value, db):
             return str(value.expr)
         elif isinstance(value, ComputedIntSymbolic):
             value = value.compute_fn()
+        elif isinstance(value, llgroup.CombinedSymbolic):
+            return '(%s|%dL)' % (name_ushort(value.lowpart, db), value.rest)
         else:
             raise Exception("unimplemented symbolic %r"%value)
     if value is None:
