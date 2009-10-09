@@ -195,7 +195,6 @@ class GenericGCTests(GCTest):
         assert heap_size < 16000 * INT_SIZE / 4 # xxx
 
     def test_nongc_static_root(self):
-        from pypy.rpython.lltypesystem import lltype
         T1 = lltype.GcStruct("C", ('x', lltype.Signed))
         T2 = lltype.Struct("C", ('p', lltype.Ptr(T1)))
         static = lltype.malloc(T2, immortal=True)
@@ -552,7 +551,7 @@ class GenericMovingGCTests(GenericGCTests):
         class A(object):
             pass
         def f():
-            from pypy.rpython.lltypesystem import lltype, rffi
+            from pypy.rpython.lltypesystem import rffi
             alist = [A() for i in range(50)]
             idarray = lltype.malloc(rffi.INTP.TO, len(alist), flavor='raw')
             # Compute the id of all the elements of the list.  The goal is
@@ -592,7 +591,11 @@ class GenericMovingGCTests(GenericGCTests):
         def fix_graph_of_g(translator):
             from pypy.translator.translator import graphof
             from pypy.objspace.flow.model import Constant
-            layoutbuilder = framework.TransformerLayoutBuilder()
+            from pypy.rpython.lltypesystem import rffi
+            GCClass = self.gcpolicy.transformerclass.GCClass
+            lltype2vtable = translator.rtyper.lltype2vtable
+            layoutbuilder = framework.TransformerLayoutBuilder(GCClass,
+                                                               lltype2vtable)
             layoutbuilder.delay_encoding()
             translator._jit2gc = {
                 'layoutbuilder': layoutbuilder,
@@ -603,7 +606,7 @@ class GenericMovingGCTests(GenericGCTests):
             graph = graphof(translator, g)
             for op in graph.startblock.operations:
                 if op.opname == 'do_malloc_fixedsize_clear':
-                    op.args = [Constant(type_id, lltype.Signed),
+                    op.args = [Constant(type_id, rffi.USHORT),
                                Constant(llmemory.sizeof(P), lltype.Signed),
                                Constant(True, lltype.Bool),  # can_collect
                                Constant(False, lltype.Bool), # has_finalizer
@@ -628,7 +631,11 @@ class GenericMovingGCTests(GenericGCTests):
         def fix_graph_of_g(translator):
             from pypy.translator.translator import graphof
             from pypy.objspace.flow.model import Constant
-            layoutbuilder = framework.TransformerLayoutBuilder()
+            from pypy.rpython.lltypesystem import rffi
+            GCClass = self.gcpolicy.transformerclass.GCClass
+            lltype2vtable = translator.rtyper.lltype2vtable
+            layoutbuilder = framework.TransformerLayoutBuilder(GCClass,
+                                                               lltype2vtable)
             layoutbuilder.delay_encoding()
             translator._jit2gc = {
                 'layoutbuilder': layoutbuilder,
@@ -639,7 +646,7 @@ class GenericMovingGCTests(GenericGCTests):
             graph = graphof(translator, g)
             for op in graph.startblock.operations:
                 if op.opname == 'do_malloc_fixedsize_clear':
-                    op.args = [Constant(type_id, lltype.Signed),
+                    op.args = [Constant(type_id, rffi.USHORT),
                                Constant(llmemory.sizeof(P), lltype.Signed),
                                Constant(True, lltype.Bool),  # can_collect
                                Constant(False, lltype.Bool), # has_finalizer
@@ -934,7 +941,6 @@ class TestGenerationGC(GenericMovingGCTests):
         assert res == 20 + 20
 
     def test_nongc_static_root_minor_collect(self):
-        from pypy.rpython.lltypesystem import lltype
         T1 = lltype.GcStruct("C", ('x', lltype.Signed))
         T2 = lltype.Struct("C", ('p', lltype.Ptr(T1)))
         static = lltype.malloc(T2, immortal=True)
@@ -957,7 +963,6 @@ class TestGenerationGC(GenericMovingGCTests):
 
 
     def test_static_root_minor_collect(self):
-        from pypy.rpython.lltypesystem import lltype
         class A:
             pass
         class B:
