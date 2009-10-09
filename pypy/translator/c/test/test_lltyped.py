@@ -741,3 +741,34 @@ class TestLowLevelType(test_typed.CompilationTestCase):
             fn = self.getcompiled(f, [int])
             res = fn(-1)
             assert res == 5
+
+    def test_round_up_for_allocation(self):
+        from pypy.rpython.lltypesystem import llmemory, llarena
+        S = Struct('S', ('x', Char), ('y', Char))
+        M = Struct('M', ('x', Char), ('y', Signed))
+        #
+        def g():
+            ssize = llarena.round_up_for_allocation(llmemory.sizeof(S))
+            msize = llarena.round_up_for_allocation(llmemory.sizeof(M))
+            smsize = llarena.round_up_for_allocation(llmemory.sizeof(S),
+                                                     llmemory.sizeof(M))
+            mssize = llarena.round_up_for_allocation(llmemory.sizeof(M),
+                                                     llmemory.sizeof(S))
+            return ssize, msize, smsize, mssize
+        #
+        glob_sizes = g()
+        #
+        def check((ssize, msize, smsize, mssize)):
+            assert ssize == llmemory.sizeof(Signed)
+            assert msize == llmemory.sizeof(Signed) * 2
+            assert smsize == msize
+            assert mssize == msize
+        #
+        def f():
+            check(glob_sizes)
+            check(g())
+            return 42
+        #
+        fn = self.getcompiled(f, [])
+        res = fn()
+        assert res == 42
