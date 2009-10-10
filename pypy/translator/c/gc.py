@@ -1,4 +1,5 @@
 import sys
+from pypy.objspace.flow.model import Constant
 from pypy.translator.c.support import cdecl
 from pypy.translator.c.node import ContainerNode
 from pypy.rpython.lltypesystem.lltype import \
@@ -314,8 +315,11 @@ class FrameworkGcPolicy(BasicGcPolicy):
         return framework.convert_weakref_to(ptarget)
 
     def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op):
-        args = [funcgen.expr(v) for v in op.args]
-        return '%s = %s; /* for moving GCs */' % (args[1], args[0])
+        if isinstance(op.args[1], Constant):
+            return '/* %s */' % (op,)
+        else:
+            args = [funcgen.expr(v) for v in op.args]
+            return '%s = %s; /* for moving GCs */' % (args[1], args[0])
 
     def common_gcheader_definition(self, defnode):
         return defnode.db.gctransformer.gc_fields()

@@ -94,9 +94,20 @@ class CombinedSymbolic(llmemory.Symbolic):
         self.rest = rest
 
     def __and__(self, other):
-        assert (other & 0xFFFF) == 0
-        return self.rest & other
+        if (other & 0xFFFF) == 0:
+            return self.rest & other
+        if (other & 0xFFFF) == 0xFFFF:
+            return CombinedSymbolic(self.lowpart, self.rest & other)
+        raise Exception("other=0x%x" % other)
 
     def __or__(self, other):
         assert (other & 0xFFFF) == 0
         return CombinedSymbolic(self.lowpart, self.rest | other)
+
+    def __add__(self, other):
+        assert (other & 0xFFFF) == 0
+        return CombinedSymbolic(self.lowpart, self.rest + other)
+
+    def __sub__(self, other):
+        assert (other & 0xFFFF) == 0
+        return CombinedSymbolic(self.lowpart, self.rest - other)
