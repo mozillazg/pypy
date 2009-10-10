@@ -467,12 +467,14 @@ class FrameworkGCTransformer(GCTransformer):
 
         newgcdependencies = []
         newgcdependencies.append(ll_static_roots_inside)
-        # also add the type_info_group's members into newgcdependencies,
-        # to make sure that they are all followed (only a part of them
-        # might have been followed by a previous enum_dependencies()).
-        newgcdependencies.extend(self.layoutbuilder.type_info_group.members)
         self.write_typeid_list()
         return newgcdependencies
+
+    def get_final_dependencies(self):
+        # returns an iterator enumerating the type_info_group's members,
+        # to make sure that they are all followed (only a part of them
+        # might have been followed by a previous enum_dependencies()).
+        return iter(self.layoutbuilder.type_info_group.members)
 
     def write_typeid_list(self):
         """write out the list of type ids together with some info"""
@@ -791,17 +793,19 @@ class FrameworkGCTransformer(GCTransformer):
 
     def transform_setfield_typeptr(self, hop):
         # replace such a setfield with an assertion that the typeptr is right
-        v_new = hop.spaceop.args[2]
-        v_old = hop.genop('gc_gettypeptr_group', [hop.spaceop.args[0],
-                                                  self.c_type_info_group,
-                                                  self.c_vtinfo_skip_offset,
-                                                  self.c_vtableinfo],
-                          resulttype = v_new.concretetype)
-        v_eq = hop.genop("ptr_eq", [v_old, v_new],
-                         resulttype = lltype.Bool)
-        c_errmsg = rmodel.inputconst(lltype.Void,
-                                     "setfield_typeptr: wrong type")
-        hop.genop('debug_assert', [v_eq, c_errmsg])
+        # (xxx not very useful right now, so disabled)
+        if 0:
+            v_new = hop.spaceop.args[2]
+            v_old = hop.genop('gc_gettypeptr_group', [hop.spaceop.args[0],
+                                                      self.c_type_info_group,
+                                                      self.c_vtinfo_skip_offset,
+                                                      self.c_vtableinfo],
+                              resulttype = v_new.concretetype)
+            v_eq = hop.genop("ptr_eq", [v_old, v_new],
+                             resulttype = lltype.Bool)
+            c_errmsg = rmodel.inputconst(lltype.Void,
+                                         "setfield_typeptr: wrong type")
+            hop.genop('debug_assert', [v_eq, c_errmsg])
 
     def gct_getfield(self, hop):
         if (hop.spaceop.args[1].value == 'typeptr' and
