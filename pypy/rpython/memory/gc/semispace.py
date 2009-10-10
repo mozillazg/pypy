@@ -13,7 +13,7 @@ from pypy.rpython.memory.gc.base import MovingGCBase
 
 import sys, os, time
 
-first_gcflag = 1
+first_gcflag = 1 << 16
 GCFLAG_FORWARDED = first_gcflag
 # GCFLAG_EXTERNAL is set on objects not living in the semispace:
 # either immortal objects or (for HybridGC) externally raw_malloc'ed
@@ -21,20 +21,6 @@ GCFLAG_EXTERNAL = first_gcflag << 1
 GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
 
 memoryError = MemoryError()
-
-# Handlers for the adt methods getflags() etc. on the HDR.
-# These are mostly just workarounds for the limited support
-# for 16-bits integer, providing the necessary casts.
-def _hdr_getflags(hdr):
-    return lltype.cast_primitive(lltype.Signed, hdr.flags16)
-def _hdr_setflags(hdr, flags):
-    hdr.flags16 = lltype.cast_primitive(rffi.USHORT, flags)
-def _hdr_addflag(hdr, flag):
-    flags = lltype.cast_primitive(lltype.Signed, hdr.flags16)
-    hdr.flags16 = lltype.cast_primitive(rffi.USHORT, flags | flag)
-def _hdr_delflag(hdr, flag):
-    flags = lltype.cast_primitive(lltype.Signed, hdr.flags16)
-    hdr.flags16 = lltype.cast_primitive(rffi.USHORT, flags & ~flag)
 
 
 class SemiSpaceGC(MovingGCBase):
@@ -46,15 +32,8 @@ class SemiSpaceGC(MovingGCBase):
     total_collection_time = 0.0
     total_collection_count = 0
 
-    HDR = lltype.Struct('header', ('typeid16', rffi.USHORT),
-                                  ('flags16', rffi.USHORT),
-                        adtmeths = {
-                            'getflags': _hdr_getflags,
-                            'setflags': _hdr_setflags,
-                            'addflag': _hdr_addflag,
-                            'delflag': _hdr_delflag,
-                        })
-    typeid_is_in_field = 'typeid16'
+    HDR = lltype.Struct('header', ('tid', lltype.Signed))   # XXX or rffi.INT?
+    typeid_is_in_field = 'tid'
     FORWARDSTUB = lltype.GcStruct('forwarding_stub',
                                   ('forw', llmemory.Address))
     FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)
@@ -374,11 +353,11 @@ class SemiSpaceGC(MovingGCBase):
         return self.is_forwarded(obj)
 
     def is_forwarded(self, obj):
-        return self.header(obj).getflags() & GCFLAG_FORWARDED != 0
+        return self.header(obj).tid & GCFLAG_FORWARDED != 0
         # note: all prebuilt objects also have this flag set
 
     def get_forwarding_address(self, obj):
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         if flags & GCFLAG_EXTERNAL:
             self.visit_external_object(obj)
             return obj      # external or prebuilt objects are "forwarded"
@@ -397,7 +376,7 @@ class SemiSpaceGC(MovingGCBase):
         # writes after translation to C.
         size_gc_header = self.size_gc_header()
         stubsize = llmemory.sizeof(self.FORWARDSTUB)
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         ll_assert(flags & GCFLAG_EXTERNAL == 0,  "unexpected GCFLAG_EXTERNAL")
         ll_assert(flags & GCFLAG_FORWARDED == 0, "unexpected GCFLAG_FORWARDED")
         # replace the object at 'obj' with a FORWARDSTUB.
@@ -405,30 +384,32 @@ class SemiSpaceGC(MovingGCBase):
         llarena.arena_reset(hdraddr, size_gc_header + objsize, False)
         llarena.arena_reserve(hdraddr, size_gc_header + stubsize)
         hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(self.HDR))
-        hdr.addflag(GCFLAG_FORWARDED)
+        hdr.tid |= GCFLAG_FORWARDED
         stub = llmemory.cast_adr_to_ptr(obj, self.FORWARDSTUBPTR)
         stub.forw = newobj
 
+    def combine(self, typeid16, flags):
+        return llop.combine_ushort(lltype.Signed, typeid16, flags)
+
     def get_type_id(self, addr):
         hdr = self.header(addr)
-        flg = hdr.getflags()
+        flg = hdr.tid
         ll_assert(flg & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
                   "get_type_id on forwarded obj")
         # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
         # Although calling get_type_id() on a forwarded object works by itself,
         # we catch it as an error because it's likely that what is then
         # done with the typeid is bogus.
-        return hdr.typeid16
+        return llop.extract_ushort(rffi.USHORT, hdr.tid)
 
     def init_gc_object(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.typeid16 = typeid16
-        hdr.setflags(flags)
+        hdr.tid = self.combine(typeid16, flags)
 
     def init_gc_object_immortal(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.typeid16 = typeid16
-        hdr.setflags(flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED)
+        flags |= GCFLAG_EXTERNAL | GCFLAG_FORWARDED
+        hdr.tid = self.combine(typeid16, flags)
         # immortal objects always have GCFLAG_FORWARDED set;
         # see get_forwarding_address().
 
@@ -493,13 +474,13 @@ class SemiSpaceGC(MovingGCBase):
         if self.surviving(obj):
             newobj = self.get_forwarding_address(obj)
             hdr = self.header(newobj)
-            if hdr.getflags() & GCFLAG_FINALIZATION_ORDERING:
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
                 return 2
             else:
                 return 3
         else:
             hdr = self.header(obj)
-            if hdr.getflags() & GCFLAG_FINALIZATION_ORDERING:
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
                 return 1
             else:
                 return 0
@@ -508,7 +489,7 @@ class SemiSpaceGC(MovingGCBase):
         ll_assert(self._finalization_state(obj) == 0,
                   "unexpected finalization state != 0")
         hdr = self.header(obj)
-        hdr.addflag(GCFLAG_FINALIZATION_ORDERING)
+        hdr.tid |= GCFLAG_FINALIZATION_ORDERING
 
     def _recursively_bump_finalization_state_from_2_to_3(self, obj):
         ll_assert(self._finalization_state(obj) == 2,
@@ -520,10 +501,8 @@ class SemiSpaceGC(MovingGCBase):
         while pending.non_empty():
             y = pending.pop()
             hdr = self.header(y)
-            flags = hdr.getflags()
-            if flags & GCFLAG_FINALIZATION_ORDERING:     # state 2 ?
-                flags &= ~GCFLAG_FINALIZATION_ORDERING   # change to state 3
-                hdr.setflags(flags)
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:     # state 2 ?
+                hdr.tid &= ~GCFLAG_FINALIZATION_ORDERING   # change to state 3
                 self.trace(y, self._append_if_nonnull, pending)
 
     def _recursively_bump_finalization_state_from_1_to_2(self, obj, scan):
@@ -569,12 +548,12 @@ class SemiSpaceGC(MovingGCBase):
         self.run_finalizers = new_run_finalizer
 
     def _is_external(self, obj):
-        return (self.header(obj).getflags() & GCFLAG_EXTERNAL) != 0
+        return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
 
     def debug_check_object(self, obj):
         """Check the invariants about 'obj' that should be true
         between collections."""
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         if flags & GCFLAG_EXTERNAL:
             ll_assert(flags & GCFLAG_FORWARDED, "bug: external+!forwarded")
             ll_assert(not (self.tospace <= obj < self.free),

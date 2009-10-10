@@ -171,9 +171,18 @@ def op_bool_not(b):
     return not b
 
 def op_int_add(x, y):
-    assert isinstance(x, (int, llmemory.AddressOffset))
+    if not isinstance(x, (int, llmemory.AddressOffset)):
+        from pypy.rpython.lltypesystem import llgroup
+        assert isinstance(x, llgroup.CombinedSymbolic)
     assert isinstance(y, (int, llmemory.AddressOffset))
     return intmask(x + y)
+
+def op_int_sub(x, y):
+    if not isinstance(x, int):
+        from pypy.rpython.lltypesystem import llgroup
+        assert isinstance(x, llgroup.CombinedSymbolic)
+    assert isinstance(y, int)
+    return intmask(x - y)
 
 def op_int_and(x, y):
     if not isinstance(x, int):

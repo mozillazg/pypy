@@ -252,7 +252,7 @@ class HybridGC(GenerationGC):
         return llmemory.cast_adr_to_ptr(result + size_gc_header, llmemory.GCREF)
 
     def can_move(self, addr):
-        return not (self.header(addr).getflags() & GCFLAG_EXTERNAL)
+        return not (self.header(addr).tid & GCFLAG_EXTERNAL)
 
     def malloc_varsize_collecting_nursery(self, totalsize):
         result = self.collect_nursery()
@@ -341,9 +341,9 @@ class HybridGC(GenerationGC):
             self._nonmoving_copy_size = 0
 
     def _set_gcflag_unvisited(self, obj, ignored):
-        ll_assert(not (self.header(obj).getflags() & GCFLAG_UNVISITED),
+        ll_assert(not (self.header(obj).tid & GCFLAG_UNVISITED),
                   "bogus GCFLAG_UNVISITED on gen3 obj")
-        self.header(obj).addflag(GCFLAG_UNVISITED)
+        self.header(obj).tid |= GCFLAG_UNVISITED
 
     def collect_roots(self):
         if not self.is_collecting_gen3():
@@ -362,20 +362,20 @@ class HybridGC(GenerationGC):
         # ones with GCFLAG_FORWARDED set and GCFLAG_UNVISITED not set.
         # This is equivalent to self.is_forwarded() for all objects except
         # the ones obtained by raw_malloc.
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         return ((flags & (GCFLAG_FORWARDED|GCFLAG_UNVISITED)) ==
                 GCFLAG_FORWARDED)
 
     def is_last_generation(self, obj):
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         return ((flags & (GCFLAG_EXTERNAL|GCFLAG_AGE_MASK)) ==
                 (GCFLAG_EXTERNAL|GCFLAG_AGE_MAX))
 
     def visit_external_object(self, obj):
         hdr = self.header(obj)
-        if hdr.getflags() & GCFLAG_UNVISITED:
+        if hdr.tid & GCFLAG_UNVISITED:
             # This is a not-visited-yet raw_malloced object.
-            hdr.delflag(GCFLAG_UNVISITED)
+            hdr.tid &= ~GCFLAG_UNVISITED
             self.rawmalloced_objects_to_trace.append(obj)
 
     def make_a_copy(self, obj, objsize):
@@ -384,7 +384,7 @@ class HybridGC(GenerationGC):
         # If they don't, we count how many times they are copied and when
         # some threshold is reached we make the copy a non-movable "external"
         # object.  The threshold is MAX_SEMISPACE_AGE.
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         # XXX the following logic is not doing exactly what is explained
         # above: any object without GCFLAG_NO_YOUNG_PTRS has its age not
         # incremented.  This is accidental: it means that objects that
@@ -403,7 +403,7 @@ class HybridGC(GenerationGC):
         # skip GenerationGC.make_a_copy() as we already did the right
         # thing about GCFLAG_NO_YOUNG_PTRS
         newobj = SemiSpaceGC.make_a_copy(self, obj, objsize)
-        self.header(newobj).setflags(flags)
+        self.header(newobj).tid = flags
         return newobj
 
     def make_a_nonmoving_copy(self, obj, objsize):
@@ -420,7 +420,7 @@ class HybridGC(GenerationGC):
         llmemory.raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
         newobj = newaddr + self.size_gc_header()
         hdr = self.header(newobj)
-        hdr.addflag(self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS)
+        hdr.tid |= self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS
         # GCFLAG_UNVISITED is not set
         # GCFLAG_NO_HEAP_PTRS is not set either, conservatively.  It may be
         # set by the next collection's collect_last_generation_roots().
@@ -485,7 +485,7 @@ class HybridGC(GenerationGC):
             newgen3roots = self.AddressStack()
             while gen3roots.non_empty():
                 obj = gen3roots.pop()
-                if not (self.header(obj).getflags() & GCFLAG_UNVISITED):
+                if not (self.header(obj).tid & GCFLAG_UNVISITED):
                     newgen3roots.append(obj)
             gen3roots.delete()
             self.last_generation_root_objects = newgen3roots
@@ -500,7 +500,7 @@ class HybridGC(GenerationGC):
         alive_count = alive_size = dead_count = dead_size = 0
         while objects.non_empty():
             obj = objects.pop()
-            flags = self.header(obj).getflags()
+            flags = self.header(obj).tid
             if flags & GCFLAG_UNVISITED:
                 if self.config.gcconfig.debugprint:
                     dead_count+=1
@@ -526,12 +526,12 @@ class HybridGC(GenerationGC):
                         # the object stays in generation 2
                         flags |= GCFLAG_UNVISITED
                         surviving_objects.append(obj)
-                    self.header(obj).setflags(flags)
+                    self.header(obj).tid = flags
                 elif generation == -2:
                     # the object stays in generation -2
                     flags |= GCFLAG_UNVISITED
                     surviving_objects.append(obj)
-                    self.header(obj).setflags(flags)
+                    self.header(obj).tid = flags
         objects.delete()
         if generation == 2:
             self.gen2_rawmalloced_objects = surviving_objects
@@ -575,7 +575,7 @@ class HybridGC(GenerationGC):
         """Check the invariants about 'obj' that should be true
         between collections."""
         GenerationGC.debug_check_object(self, obj)
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         if flags & GCFLAG_UNVISITED:
             ll_assert(self._d_gen2ro.contains(obj),
                       "GCFLAG_UNVISITED on non-gen2 object")
@@ -589,7 +589,7 @@ class HybridGC(GenerationGC):
             self.gen3_rawmalloced_objects.foreach(self._debug_check_gen3, None)
 
     def _debug_check_gen2(self, obj, ignored):
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         ll_assert(bool(flags & GCFLAG_EXTERNAL),
                   "gen2: missing GCFLAG_EXTERNAL")
         ll_assert(bool(flags & GCFLAG_UNVISITED),
@@ -597,7 +597,7 @@ class HybridGC(GenerationGC):
         ll_assert((flags & GCFLAG_AGE_MASK) < GCFLAG_AGE_MAX,
                   "gen2: age field too large")
     def _debug_check_gen3(self, obj, ignored):
-        flags = self.header(obj).getflags()
+        flags = self.header(obj).tid
         ll_assert(bool(flags & GCFLAG_EXTERNAL),
                   "gen3: missing GCFLAG_EXTERNAL")
         ll_assert(not (flags & GCFLAG_UNVISITED),
