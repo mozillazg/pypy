@@ -288,6 +288,8 @@ class LowLevelDatabase(object):
             finish_callbacks.append(('Stackless transformer: finished',
                                      self.stacklesstransformer.finish))
         if self.gctransformer:
+            finish_callbacks.append(('GC transformer: tracking vtables',
+                                    self.gctransformer.get_final_dependencies))
             finish_callbacks.append(('GC transformer: finished tables',
                                      self.gctransformer.finish_tables))
 
