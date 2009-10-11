@@ -12,8 +12,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 class BasicGcPolicy(object):
     requires_stackless = False
-    need_no_typeptr = False
-    
+
     def __init__(self, db, thread_enabled=False):
         self.db = db
         self.thread_enabled = thread_enabled
@@ -50,6 +49,9 @@ class BasicGcPolicy(object):
                               ],
             post_include_bits=['typedef void *GC_hidden_pointer;']
             )
+
+    def need_no_typeptr(self):
+        return False
 
     def gc_startup_code(self):
         return []
@@ -279,7 +281,6 @@ class NoneGcPolicy(BoehmGcPolicy):
 
 class FrameworkGcPolicy(BasicGcPolicy):
     transformerclass = framework.FrameworkGCTransformer
-    need_no_typeptr = True
 
     def struct_setup(self, structdefnode, rtti):
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
@@ -327,6 +328,10 @@ class FrameworkGcPolicy(BasicGcPolicy):
     def common_gcheader_initdata(self, defnode):
         o = top_container(defnode.obj)
         return defnode.db.gctransformer.gc_field_values_for(o)
+
+    def need_no_typeptr(self):
+        config = self.db.translator.config
+        return config.translation.gcconfig.removetypeptr
 
     def OP_GC_GETTYPEPTR_GROUP(self, funcgen, op):
         # expands to a number of steps, as per rpython/lltypesystem/opimpl.py,

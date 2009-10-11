@@ -42,15 +42,13 @@ class GCData(object):
         self.type_info_group_ptr = type_info_group._as_ptr()
 
     def get(self, typeid):
-        ll_assert(llop.is_group_member_nonzero(lltype.Bool, typeid),
-                  "invalid type_id")
+        _check_typeid(typeid)
         return llop.get_group_member(GCData.TYPE_INFO_PTR,
                                      self.type_info_group_ptr,
                                      typeid)
 
     def get_varsize(self, typeid):
-        ll_assert(llop.is_group_member_nonzero(lltype.Bool, typeid),
-                  "invalid type_id")
+        _check_typeid(typeid)
         return llop.get_group_member(GCData.VARSIZE_TYPE_INFO_PTR,
                                      self.type_info_group_ptr,
                                      typeid)
@@ -113,6 +111,10 @@ T_IS_VARSIZE           = 0x01
 T_HAS_GCPTR_IN_VARSIZE = 0x02
 T_IS_GCARRAY_OF_GCPTR  = 0x04
 T_IS_WEAKREF           = 0x08
+
+def _check_typeid(typeid):
+    ll_assert(llop.is_group_member_nonzero(lltype.Bool, typeid),
+              "invalid type_id")
 
 
 def encode_type_shape(builder, info, TYPE):
@@ -217,6 +219,8 @@ class TypeLayoutBuilder(object):
             type_id = self.type_info_group.add_member(fullinfo)
             self.id_of_type[TYPE] = type_id
             # store the vtable of the type (if any) immediately thereafter
+            # (note that if gcconfig.removetypeptr is False, lltype2vtable
+            # is empty)
             vtable = self.lltype2vtable.get(TYPE, None)
             if vtable is not None:
                 # check that if we have a vtable, we are not varsize
@@ -234,6 +238,9 @@ class TypeLayoutBuilder(object):
         return llop.get_group_member(GCData.VARSIZE_TYPE_INFO_PTR,
                                      self.type_info_group._as_ptr(),
                                      type_id)
+
+    def is_weakref(self, type_id):
+        return self.get_info(type_id).infobits & T_IS_WEAKREF
 
     def encode_type_shapes_now(self):
         if not self.can_encode_type_shape:

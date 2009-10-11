@@ -130,7 +130,10 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(translator, '_jit2gc'):
             self.layoutbuilder = translator._jit2gc['layoutbuilder']
         else:
-            lltype2vtable = translator.rtyper.lltype2vtable
+            if translator.config.translation.gcconfig.removetypeptr:
+                lltype2vtable = translator.rtyper.lltype2vtable
+            else:
+                lltype2vtable = {}
             self.layoutbuilder = TransformerLayoutBuilder(GCClass,
                                                           lltype2vtable)
         self.layoutbuilder.transformer = self
@@ -809,14 +812,16 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_getfield(self, hop):
         if (hop.spaceop.args[1].value == 'typeptr' and
-            hop.spaceop.args[0].concretetype.TO._hints.get('typeptr')):
+            hop.spaceop.args[0].concretetype.TO._hints.get('typeptr') and
+            self.translator.config.translation.gcconfig.removetypeptr):
             self.transform_getfield_typeptr(hop)
         else:
             GCTransformer.gct_getfield(self, hop)
 
     def gct_setfield(self, hop):
         if (hop.spaceop.args[1].value == 'typeptr' and
-            hop.spaceop.args[0].concretetype.TO._hints.get('typeptr')):
+            hop.spaceop.args[0].concretetype.TO._hints.get('typeptr') and
+            self.translator.config.translation.gcconfig.removetypeptr):
             self.transform_setfield_typeptr(hop)
         else:
             GCTransformer.gct_setfield(self, hop)
@@ -908,6 +913,14 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         else:
             fptr = lltype.nullptr(gctypelayout.GCData.FINALIZERTYPE.TO)
         return fptr
+
+
+class JITTransformerLayoutBuilder(TransformerLayoutBuilder):
+    # for the JIT: currently does not support removetypeptr
+    def __init__(self, config):
+        from pypy.rpython.memory.gc.base import choose_gc_from_config
+        GCClass, _ = choose_gc_from_config(config)
+        TransformerLayoutBuilder.__init__(self, GCClass, {})
 
 
 def gen_zero_gc_pointers(TYPE, v, llops, previous_steps=None):
