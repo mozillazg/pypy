@@ -70,7 +70,7 @@ class StructDefNode:
         #
         self.fieldnames = STRUCT._names
         if STRUCT._hints.get('typeptr', False):
-            if db.gcpolicy.need_no_typeptr:
+            if db.gcpolicy.need_no_typeptr():
                 assert self.fieldnames == ('typeptr',)
                 self.fieldnames = ()
 
