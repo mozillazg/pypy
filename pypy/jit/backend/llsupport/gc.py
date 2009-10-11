@@ -343,9 +343,9 @@ class GcLLDescr_framework(GcLLDescription):
              symbolic.get_array_token(lltype.GcArray(lltype.Signed), True)
 
         # make a malloc function, with three arguments
-        def malloc_basic(size, combined):
-            type_id = llop.extract_ushort(rffi.USHORT, combined)
-            has_finalizer = bool(combined & (1<<16))
+        def malloc_basic(size, tid):
+            type_id = llop.extract_ushort(rffi.USHORT, tid)
+            has_finalizer = bool(tid & (1<<16))
             _check_typeid(type_id)
             res = llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
                                                   type_id, size, True,
@@ -359,8 +359,8 @@ class GcLLDescr_framework(GcLLDescription):
         self.WB_FUNCPTR = lltype.Ptr(lltype.FuncType(
             [llmemory.Address, llmemory.Address], lltype.Void))
         #
-        def malloc_array(itemsize, combined, num_elem):
-            type_id = llop.extract_ushort(rffi.USHORT, combined)
+        def malloc_array(itemsize, tid, num_elem):
+            type_id = llop.extract_ushort(rffi.USHORT, tid)
             _check_typeid(type_id)
             return llop1.do_malloc_varsize_clear(
                 llmemory.GCREF,
@@ -398,30 +398,23 @@ class GcLLDescr_framework(GcLLDescription):
 
     def init_size_descr(self, S, descr):
         type_id = self.layoutbuilder.get_type_id(S)
-        has_finalizer = bool(self.layoutbuilder.has_finalizer(S))
         assert not self.layoutbuilder.is_weakref(type_id)
-        descr.type_id = type_id
-        descr.has_finalizer = has_finalizer
+        has_finalizer = bool(self.layoutbuilder.has_finalizer(S))
+        flags = int(has_finalizer) << 16
+        descr.tid = llop.combine_ushort(lltype.Signed, type_id, flags)
 
     def init_array_descr(self, A, descr):
         type_id = self.layoutbuilder.get_type_id(A)
-        descr.type_id = type_id
+        descr.tid = llop.combine_ushort(lltype.Signed, type_id, 0)
 
     def gc_malloc(self, sizedescr):
         assert isinstance(sizedescr, BaseSizeDescr)
-        size = sizedescr.size
-        type_id = sizedescr.type_id
-        has_finalizer = sizedescr.has_finalizer
-        combined = llop.combine_ushort(lltype.Signed, type_id,
-                                       int(has_finalizer) << 16)
-        return self.malloc_basic(size, combined)
+        return self.malloc_basic(sizedescr.size, sizedescr.tid)
 
     def gc_malloc_array(self, arraydescr, num_elem):
         assert isinstance(arraydescr, BaseArrayDescr)
         itemsize = arraydescr.get_item_size(self.translate_support_code)
-        type_id = arraydescr.type_id
-        combined = llop.combine_ushort(lltype.Signed, type_id, 0)
-        return self.malloc_array(itemsize, combined, num_elem)
+        return self.malloc_array(itemsize, arraydescr.tid, num_elem)
 
     def gc_malloc_str(self, num_elem):
         return self.malloc_str(num_elem)
@@ -431,19 +424,12 @@ class GcLLDescr_framework(GcLLDescription):
 
     def args_for_new(self, sizedescr):
         assert isinstance(sizedescr, BaseSizeDescr)
-        size = sizedescr.size
-        type_id = sizedescr.type_id                # a USHORT
-        has_finalizer = sizedescr.has_finalizer    # a Bool
-        combined = llop.combine_ushort(lltype.Signed, type_id,
-                                       int(has_finalizer) << 16)
-        return [size, combined]
+        return [sizedescr.size, sizedescr.tid]
 
     def args_for_new_array(self, arraydescr):
         assert isinstance(arraydescr, BaseArrayDescr)
         itemsize = arraydescr.get_item_size(self.translate_support_code)
-        type_id = arraydescr.type_id
-        combined = llop.combine_ushort(lltype.Signed, type_id, 0)
-        return [itemsize, combined]
+        return [itemsize, arraydescr.tid]
 
     def get_funcptr_for_new(self):
         return llhelper(self.GC_MALLOC_BASIC, self.malloc_basic)
