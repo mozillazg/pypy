@@ -1390,7 +1390,7 @@ def _get_empty_instance_of_struct_variety(flds):
 class _struct(_parentable):
     _kind = "structure"
 
-    __slots__ = ()
+    __slots__ = ('_hash_cache_',)
 
     def __new__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
         my_variety = _struct_variety(TYPE._names)
@@ -1839,6 +1839,26 @@ def runtime_type_info(p):
                                  "        returned: %s,\n"
                                  "should have been: %s" % (p, result2, result))
     return result
+
+def hash_gc_object(p):
+    """Returns the lltype-level hash of the given GcStruct."""
+    p = normalizeptr(p)
+    if not p:
+        return 0      # hash(NULL)
+    try:
+        return p._obj._hash_cache_
+    except AttributeError:
+        result = p._obj._hash_cache_ = intmask(id(p._obj))
+        return result
+
+def init_hash_gc_object(p, value):
+    """For a prebuilt object p, initialize its hash value to 'value'."""
+    p = normalizeptr(p)
+    if not p:
+        raise ValueError("cannot change hash(NULL)!")
+    if hasattr(p._obj, '_hash_cache_'):
+        raise ValueError("the hash of %r was already computed" % (p,))
+    p._obj._hash_cache_ = intmask(value)
 
 def isCompatibleType(TYPE1, TYPE2):
     return TYPE1._is_compatible(TYPE2)
