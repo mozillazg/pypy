@@ -739,3 +739,30 @@ def test_subarray_keeps_array_alive():
     del ptr
     import gc; gc.collect(); gc.collect()
     ptr2[0] = 5    # crashes if the array was deallocated
+
+def test_hash_gc_object():
+    S = GcStruct('S', ('x', Signed))
+    S2 = GcStruct('S2', ('super', S))
+    S3 = GcStruct('S3', ('super', S2))
+
+    s3 = malloc(S3)
+    hash3 = hash_gc_object(s3.super)
+    assert hash3 == hash_gc_object(s3)
+    assert hash3 == hash_gc_object(s3.super)
+    assert hash3 == hash_gc_object(s3.super.super)
+    py.test.raises(ValueError, init_hash_gc_object, s3, hash3^1)
+    py.test.raises(ValueError, init_hash_gc_object, s3.super, hash3^4)
+    py.test.raises(ValueError, init_hash_gc_object, s3.super.super, hash3^9)
+
+    s3 = malloc(S3)
+    init_hash_gc_object(s3.super, -123)
+    assert -123 == hash_gc_object(s3)
+    assert -123 == hash_gc_object(s3.super)
+    assert -123 == hash_gc_object(s3.super.super)
+    py.test.raises(ValueError, init_hash_gc_object, s3, 4313)
+    py.test.raises(ValueError, init_hash_gc_object, s3.super, 0)
+    py.test.raises(ValueError, init_hash_gc_object, s3.super.super, -124)
+
+    from pypy.rpython.lltypesystem import llmemory
+    p3 = cast_opaque_ptr(llmemory.GCREF, s3)
+    assert -123 == hash_gc_object(p3)
