@@ -165,6 +165,18 @@ class TestFramework:
         self.gc_ll_descr = gc_ll_descr
         self.fake_cpu = FakeCPU()
 
+    def test_args_for_new(self):
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        sizedescr = get_size_descr(self.gc_ll_descr, S)
+        args = self.gc_ll_descr.args_for_new(sizedescr)
+        for x in args:
+            assert lltype.typeOf(x) == lltype.Signed
+        A = lltype.GcArray(lltype.Signed)
+        arraydescr = get_array_descr(self.gc_ll_descr, A)
+        args = self.gc_ll_descr.args_for_new(sizedescr)
+        for x in args:
+            assert lltype.typeOf(x) == lltype.Signed
+
     def test_gc_malloc(self):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         sizedescr = get_size_descr(self.gc_ll_descr, S)
@@ -172,7 +184,8 @@ class TestFramework:
         assert self.llop1.record == [("fixedsize", sizedescr.type_id,
                                       repr(sizedescr.size), False, p)]
         assert repr(self.gc_ll_descr.args_for_new(sizedescr)) == repr(
-            [sizedescr.size, sizedescr.type_id, False])
+            [sizedescr.size,
+             llgroup.CombinedSymbolic(sizedescr.type_id, 0)])
 
     def test_gc_malloc_array(self):
         A = lltype.GcArray(lltype.Signed)
@@ -184,7 +197,8 @@ class TestFramework:
                                       repr(arraydescr.get_ofs_length(True)),
                                       p)]
         assert repr(self.gc_ll_descr.args_for_new_array(arraydescr)) == repr(
-            [arraydescr.get_item_size(True), arraydescr.type_id])
+            [arraydescr.get_item_size(True),
+             llgroup.CombinedSymbolic(arraydescr.type_id, 0)])
 
     def test_gc_malloc_str(self):
         p = self.gc_ll_descr.gc_malloc_str(10)
