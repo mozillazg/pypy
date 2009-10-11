@@ -957,10 +957,12 @@ class TestOOtype(BasicTests, OOJitMixin):
         assert res == ootype.oohash(ootype.oostring(5, -1))
 
     def test_ooidentityhash(self):
+        A = ootype.Instance("A", ootype.ROOT)
         def f():
-            s1 = ootype.oostring(5, -1)
-            s2 = ootype.oostring(6, -1)
-            return ootype.ooidentityhash(s1) == ootype.ooidentityhash(s2)
+            obj1 = ootype.new(A)
+            obj2 = ootype.new(A)
+            return ootype.ooidentityhash(obj1) == ootype.ooidentityhash(obj2)
+        assert not f()
         res = self.interp_operations(f, [])
         assert not res
 
