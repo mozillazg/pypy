@@ -360,6 +360,12 @@ class FlowObjSpace(ObjSpace):
         return self.do_operation_with_implicit_exceptions('setitem', w_obj, 
                                                           w_key, w_val)
 
+    def call_function(self, w_func, *args_w):
+        from pypy.interpreter.argument import ArgumentsForTranslation
+        nargs = len(args_w)
+        args = ArgumentsForTranslation(self, list(args_w))
+        return self.call_args(w_func, args)
+
     def call_args(self, w_callable, args):
         try:
             fn = self.unwrap(w_callable)

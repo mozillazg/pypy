@@ -77,7 +77,7 @@ class TestBuiltinCode:
                                                    gateway.W_Root,
                                                    gateway.Arguments])
         w = self.space.wrap
-        args = argument.Arguments(self.space, [w(123), w(23)], {},
+        args = argument.Arguments(self.space, [w(123), w(23)], [], [],
                                   w_stararg = w((0, True)),
                                   w_starstararg = w({'boo': 10}))
         w_result = code.funcrun(FakeFunc(self.space, "c"), args)
@@ -116,8 +116,7 @@ class TestGateway:
         gg = gateway.app2interp_temp(app_general)
         args = gateway.Arguments(self.space, [w(6), w(7)])
         assert self.space.int_w(gg(self.space, w(3), args)) == 23
-        args = gateway.Arguments(self.space, [w(6)], {'hello': w(7),
-                                                      'world': w(8)})
+        args = gateway.Arguments(self.space, [w(6)], ['hello', 'world'], [w(7), w(8)])
         assert self.space.int_w(gg(self.space, w(3), args)) == 213
 
     def test_interp2app(self):
