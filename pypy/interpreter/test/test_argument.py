@@ -1,4 +1,4 @@
-from pypy.interpreter.argument import Arguments
+from pypy.interpreter.argument import Arguments, ArgumentsForTranslation
 
 
 class DummySpace(object):
@@ -31,60 +31,64 @@ class DummySpace(object):
 
     w_dict = dict
 
-class TestArguments(object):
+class TestArgumentsForTranslation(object):
 
 
     def test_unmatch_signature(self):
         space = DummySpace()
-        args = Arguments(space, [1,2,3])
+        args = ArgumentsForTranslation(space, [1,2,3])
         sig = (['a', 'b', 'c'], None, None)
         data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
-        args = Arguments(space, [1])
+        args = ArgumentsForTranslation(space, [1])
         sig = (['a', 'b', 'c'], None, None)
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
-        args = Arguments(space, [1,2,3,4,5])
+        args = ArgumentsForTranslation(space, [1,2,3,4,5])
         sig = (['a', 'b', 'c'], 'r', None)
         data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
-        args = Arguments(space, [1], {'c': 3, 'b': 2})
+        args = ArgumentsForTranslation(space, [1], {'c': 3, 'b': 2})
         sig = (['a', 'b', 'c'], None, None)
         data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
-        args = Arguments(space, [1], {'c': 5})
+        args = ArgumentsForTranslation(space, [1], {'c': 5})
         sig = (['a', 'b', 'c'], None, None)
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
-        args = Arguments(space, [1], {'c': 5, 'd': 7})
+        args = ArgumentsForTranslation(space, [1], {'c': 5, 'd': 7})
         sig = (['a', 'b', 'c'], None, 'kw')
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
-        args = Arguments(space, [1,2,3,4,5], {'e': 5, 'd': 7})
+        args = ArgumentsForTranslation(space, [1,2,3,4,5], {'e': 5, 'd': 7})
         sig = (['a', 'b', 'c'], 'r', 'kw')
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
-        args = Arguments(space, [], {}, w_stararg=[1], w_starstararg={'c': 5, 'd': 7})
+        args = ArgumentsForTranslation(space, [], {},
+                                       w_stararg=[1],
+                                       w_starstararg={'c': 5, 'd': 7})
         sig = (['a', 'b', 'c'], None, 'kw')
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
-        args = Arguments(space, [1,2], {'g': 9}, w_stararg=[3,4,5], w_starstararg={'e': 5, 'd': 7})
+        args = ArgumentsForTranslation(space, [1,2], {'g': 9},
+                                       w_stararg=[3,4,5],
+                                       w_starstararg={'e': 5, 'd': 7})
         sig = (['a', 'b', 'c'], 'r', 'kw')
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
