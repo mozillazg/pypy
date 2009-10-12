@@ -136,9 +136,13 @@ def free_non_gc_object(obj):
 
 def compute_hash(x):
     """RPython equivalent of hash(x), where 'x' is an immutable
-    RPython-level object.  For strings or unicodes it computes the
-    hash as in Python.  For tuples it calls compute_hash()
+    RPython-level or low-level object.  For strings or unicodes it
+    computes the hash as in Python.  For tuples it calls compute_hash()
     recursively.  For instances it uses compute_identity_hash().
+    For low-level objects it returns the hash of the original RPython-
+    level object, if any, or just compute_identity_hash() otherwise.
+    It cannot be used on llmemory.GCREF.
+
     Note that this can return 0 or -1 too.
 
     Behavior across translation:
@@ -164,11 +168,11 @@ def compute_hash(x):
 
 def compute_identity_hash(x):
     """RPython equivalent of object.__hash__(x).  This returns the
-    so-called 'identity hash', which is the non-overridable default
-    hash of Python.  Can be called for any RPython-level object
-    that turns into a GC object, or for any low-level GC object.
-    The value is not guaranteed to be the same before and after
-    translation, except for RPython instances on the lltypesystem.
+    so-called 'identity hash', which is the non-overridable default hash
+    of Python.  Can be called for any RPython-level object that turns
+    into a GC object, or for any low-level GC object, including
+    llmemory.GCREF.  The value is not guaranteed to be the same before
+    and after translation, except for RPython instances on the lltypesystem.
     """
     result = object.__hash__(x)
     try:
@@ -227,14 +231,16 @@ def _hash_float(f):
 TAKE_NEXT = float(2**31)
 
 def _hash_tuple(t):
-    """NOT_RPYTHON.  The algorithm behind compute_hash() for a tuple."""
+    """NOT_RPYTHON.  The algorithm behind compute_hash() for a tuple.
+    It is modelled after the old algorithm of Python 2.3, which is
+    slightly faster than the one introduced by Python 2.4.  We assume
+    that nested tuples are very uncommon in RPython, making the case
+    unlikely.
+    """
     x = 0x345678
-    mult = 1000003
-    length = len(t)
     for item in t:
         y = compute_hash(item)
-        x = (x ^ y) * mult
-        mult += intmask(82520 + len + len)
+        x = (1000003 * x) ^ y
     return x
 
 # ----------
