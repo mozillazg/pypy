@@ -442,9 +442,9 @@ LL_OPERATIONS = {
 
     # ------- JIT & GC interaction, only for some GCs ----------
     
-    'gc_adr_of_nursery_pointer' : LLOp(),
-    # ^^^ returns an address of nursery pointer, for later modifications
-    'gc_adr_of_nursery_end' : LLOp(),
+    'gc_adr_of_nursery_free' : LLOp(),
+    # ^^^ returns an address of nursery free pointer, for later modifications
+    'gc_adr_of_nursery_top' : LLOp(),
     # ^^^ returns an address of pointer, since it can change at runtime
     
     # experimental operations in support of thread cloning, only
