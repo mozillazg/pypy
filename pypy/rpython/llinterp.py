@@ -848,7 +848,7 @@ class LLFrame(object):
     def op_gc_restore_exception(self, exc):
         raise NotImplementedError("gc_restore_exception")
 
-    def op_gc_nursery_size(self):
+    def op_gc_adr_of_nursery_end(self):
         raise NotImplementedError
 
     def op_gc_adr_of_nursery_pointer(self):
