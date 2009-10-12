@@ -35,8 +35,7 @@ OPERAND         =           r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
 r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
 r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
 r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
-r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"\s*$")
-r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text")
+r_jmp_source    = re.compile(r"\d+[(](%[\w]+),")
 r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
 r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|"+LABEL)
 r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
@@ -767,7 +766,14 @@ class FunctionGcRootTracker(object):
             def walker(insn, locs):
                 sources = []
                 for loc in locs:
-                    sources.extend(insn.all_sources_of(loc))
+                    for s in insn.all_sources_of(loc):
+                        # if the source looks like 8(%eax,%edx,4)
+                        # %eax is the real source, %edx is an offset
+                        match = r_jmp_source.match(s)
+                        if match:
+                            sources.append(match.group(1))
+                        else:
+                            sources.append(s)
                 for source in sources:
                     label_match = re.compile(LABEL).match(source)
                     if label_match:
@@ -778,8 +784,9 @@ class FunctionGcRootTracker(object):
             insn.previous_insns = [self.insns[-1]]
             self.walk_instructions_backwards(walker, insn, (operand,))
 
-            # Probably an indirect tail-call.
-            tablelabels = [label for label in tablelabels if label in self.labels]
+            # Remove probable tail-calls
+            tablelabels = [label for label in tablelabels
+                           if label in self.labels]
         assert len(tablelabels) <= 1
         if tablelabels:
             tablelin = self.labels[tablelabels[0]].lineno + 1
