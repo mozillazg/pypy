@@ -331,25 +331,6 @@ class Arguments(object):
             space.setitem(w_kwds, space.wrap(key), w_value)
         return w_args, w_kwds
 
-    @staticmethod
-    def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
-        # used by geninterped code
-        args_w = data_w[:shape_cnt]
-        p = end_keys = shape_cnt + len(shape_keys)
-        if shape_star:
-            w_star = data_w[p]
-            p += 1
-        else:
-            w_star = None
-        if shape_stst:
-            w_starstar = data_w[p]
-            p += 1
-        else:
-            w_starstar = None
-        return Arguments(space, args_w, list(shape_keys),
-                         data_w[shape_cnt:end_keys], w_star,
-                          w_starstar)
-
 class ArgumentsForTranslation(Arguments):
     def __init__(self, space, args_w, keywords=None, keywords_w=None,
                  w_stararg=None, w_starstararg=None):

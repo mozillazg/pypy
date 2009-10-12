@@ -52,7 +52,7 @@ from pypy.objspace.flow.model import c_last_exception, checkgraph
 from pypy.interpreter.pycode import CO_VARARGS, CO_VARKEYWORDS
 from types import FunctionType, CodeType, ModuleType, MethodType
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.argument import Arguments
+from pypy.interpreter.argument import ArgumentsForTranslation, Arguments
 from pypy.translator.backendopt.ssa import SSI_to_SSA
 
 from pypy.translator.translator import TranslationContext
@@ -71,7 +71,7 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("geninterp")
 py.log.setconsumer("geninterp", ansi_log)
 
-GI_VERSION = '1.1.26'  # bump this for substantial changes
+GI_VERSION = '1.2.1'  # bump this for substantial changes
 # ____________________________________________________________
 
 try:
@@ -264,16 +264,21 @@ class GenRpy:
             v = op.args[0]
             exv = self.expr(v, localscope)
             fmt = (
-                "_args = %(Arg)s.fromshape(space, %(shape)s, [%(data_w)s])\n"
+                "_args = %(Arg)s(space, [%(args_w)s], %(keywords)s, [%(keywords_w)s], %(w_stararg)s, %(w_starstararg)s)\n"
                 "%(res)s = space.call_args(%(func)s, _args)")
             assert isinstance(op.args[1], Constant)
             shape = op.args[1].value
             # make a list out of the second shape elt.
             shape = shape[0], list(shape[1]), shape[2], shape[3]
+            arglist = [self.expr(arg, localscope) for arg in op.args[2:]]
+            args = ArgumentsForTranslation.fromshape(None, shape, arglist)
             return fmt % {"res": self.expr(op.result, localscope),
                           "func": exv,
-                          "shape": repr(shape),
-                          "data_w": self.arglist(op.args[2:], localscope),
+                          "args_w": ", ".join(args.arguments_w),
+                          "keywords": args.keywords,
+                          "keywords_w": ", ".join(args.keywords_w),
+                          "w_stararg": args.w_stararg,
+                          "w_starstararg": args.w_starstararg,
                           'Arg': self.nameof(Arguments) }
         if op.opname == "hint":
             return "%s = %s" % (self.expr(op.result, localscope),
