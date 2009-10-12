@@ -493,11 +493,11 @@ class ArgumentsForTranslation(Arguments):
         shape_cnt  = len(self.arguments_w)+nextra        # Number of positional args
         if self.kwds_w:
             shape_keys = self.kwds_w.keys()           # List of keywords (strings)
+            shape_keys.sort()
         else:
             shape_keys = []
         shape_star = self.w_stararg is not None   # Flag: presence of *arg
         shape_stst = self.w_starstararg is not None # Flag: presence of **kwds
-        shape_keys.sort()
         return shape_cnt, tuple(shape_keys), shape_star, shape_stst # shape_keys are sorted
 
 def rawshape(args, nextra=0):
