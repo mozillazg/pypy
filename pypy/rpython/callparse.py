@@ -178,6 +178,7 @@ class RPythonCallsSpace:
                 raise ValueError
             return list(items)
         raise CallPatternTooComplex, "'*' argument must be a tuple"
+    viewiterable = unpackiterable
 
     def is_w(self, one, other):
         return one is other

@@ -30,12 +30,6 @@ class Arguments(object):
         make_sure_not_resized(self.arguments_w)
         self._combine_wrapped(w_stararg, w_starstararg)
 
-    @staticmethod
-    def factory(space, args_w, kwds_w=None,
-                w_stararg=None, w_starstararg=None):
-        return Arguments(space, args_w, kwds_w,
-                         w_stararg, w_starstararg)
-
     def num_args(self): # only used in module/__builtin__/interp_classobj.py
         return len(self.arguments_w)
 
@@ -64,8 +58,8 @@ class Arguments(object):
 
     def prepend(self, w_firstarg): # used often
         "Return a new Arguments with a new argument inserted first."
-        return self.factory(self.space, [w_firstarg] + self.arguments_w,
-                            self.keywords, self.keywords_w)
+        return Arguments(self.space, [w_firstarg] + self.arguments_w,
+                         self.keywords, self.keywords_w)
             
     def _combine_wrapped(self, w_stararg, w_starstararg):
         "unpack the *arg and **kwd into arguments_w and keywords_w"
@@ -159,7 +153,6 @@ class Arguments(object):
             upfront = 0
         
         args_w = self.arguments_w
-        assert args_w is not None, "tried to match arguments again"
         num_args = len(args_w)
 
         keywords = self.keywords
@@ -184,7 +177,9 @@ class Arguments(object):
         # the code assumes that keywords can potentially be large, but that
         # argnames is typically not too large
         num_remainingkwds = num_kwds
+        used_keywords = None
         if keywords:
+            used_keywords = [False] * num_kwds
             for i in range(num_kwds):
                 name = keywords[i]
                 try:
@@ -202,7 +197,7 @@ class Arguments(object):
                 else:
                     assert scope_w[j] is None
                     scope_w[j] = keywords_w[i]
-                    keywords[i] = None # mark as used
+                    used_keywords[i] = True # mark as used
                     num_remainingkwds -= 1
         missing = 0
         if input_argcount < co_argcount:
@@ -242,21 +237,18 @@ class Arguments(object):
             w_kwds = self.space.newdict()
             if num_remainingkwds:
                 for i in range(len(keywords)):
-                    key = keywords[i]
-                    if key is not None:
+                    if not used_keywords[i]:
+                        key = keywords[i]
                         self.space.setitem(w_kwds, self.space.wrap(key), keywords_w[i])
             scope_w[co_argcount + has_vararg] = w_kwds
         elif num_remainingkwds:
-            raise ArgErrUnknownKwds(num_remainingkwds, keywords)
+            raise ArgErrUnknownKwds(num_remainingkwds, keywords, used_keywords)
 
         if missing:
             raise ArgErrCount(avail, num_kwds,
                               (co_argcount, has_vararg, has_kwarg),
                               defaults_w, missing)
 
-        self.arguments_w = None
-        self.keywords = None
-        self.keywords_w = None
         return co_argcount + has_vararg + has_kwarg
     
 
@@ -358,17 +350,6 @@ class Arguments(object):
                          data_w[shape_cnt:end_keys], w_star,
                           w_starstar)
 
-    def copy(self):
-        if self.keywords is None:
-            keywords = None
-            keywords_w = None
-        else:
-            keywords = self.keywords[:]
-            keywords_w = self.keywords_w[:]
-        return Arguments(self.space, self.arguments_w[:], keywords,
-                         keywords_w)
-
-
 class ArgumentsForTranslation(Arguments):
     def __init__(self, space, args_w, keywords=None, keywords_w=None,
                  w_stararg=None, w_starstararg=None):
@@ -383,23 +364,19 @@ class ArgumentsForTranslation(Arguments):
         self._combine_wrapped(self.w_stararg, self.w_starstararg)
         self.combine_has_happened = True
 
-    @staticmethod
-    def factory(space, args_w, kwds_w=None,
-                w_stararg=None, w_starstararg=None):
-        return ArgumentsForTranslation(space, args_w, kwds_w,
-                                       w_stararg, w_starstararg)
-
-    def copy(self):
-        if self.keywords is None:
-            keywords = None
-            keywords_w = None
-        else:
-            keywords = self.keywords[:]
-            keywords_w = self.keywords_w[:]
-        return ArgumentsForTranslation(self.space, self.arguments_w[:], keywords,
-                                       keywords_w, self.w_stararg,
+    def prepend(self, w_firstarg): # used often
+        "Return a new Arguments with a new argument inserted first."
+        return ArgumentsForTranslation(self.space, [w_firstarg] + self.arguments_w,
+                                       self.keywords, self.keywords_w, self.w_stararg,
                                        self.w_starstararg)
 
+    def copy(self):
+        return ArgumentsForTranslation(self.space, self.arguments_w,
+                                       self.keywords, self.keywords_w, self.w_stararg,
+                                       self.w_starstararg)
+
+
+            
     def _match_signature(self, w_firstarg, scope_w, argnames, has_vararg=False,
                          has_kwarg=False, defaults_w=[], blindargs=0):
         self.combine_if_necessary()
@@ -598,13 +575,13 @@ class ArgErrMultipleValues(ArgErr):
 
 class ArgErrUnknownKwds(ArgErr):
 
-    def __init__(self, num_remainingkwds, keywords):
+    def __init__(self, num_remainingkwds, keywords, used_keywords):
         self.kwd_name = ''
         self.num_kwds = num_remainingkwds
         if num_remainingkwds == 1:
-            for kwd_name in keywords:
-                if kwd_name is not None:
-                    self.kwd_name = kwd_name
+            for i in range(len(keywords)):
+                if not used_keywords[i]:
+                    self.kwd_name = keywords[i]
                     break
 
     def getmsg(self, fnname):

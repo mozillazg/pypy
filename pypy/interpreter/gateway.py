@@ -870,10 +870,11 @@ class ApplevelClass:
                 else:
                     # ...which is merged with the previous arguments, if any
                     if len(args_w) > 1:
+                        # XXXXXXXXX
                         more_args_w, more_kwds_w = args.unpack()
                         args = Arguments(space,
                                          list(args_w[:-1]) + more_args_w,
-                                         more_kwds_w)
+                                         more_kwds_w.keys(), more_kwds_w.values())
             w_func = self.wget(space, name) 
             return space.call_args(w_func, args)
         def get_function(space):

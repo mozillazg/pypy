@@ -241,43 +241,43 @@ class TestArgumentsForTranslation(object):
         space = DummySpace()
         args = make_arguments_for_translation(space, [1,2,3])
         sig = (['a', 'b', 'c'], None, None)
-        data = args.copy().match_signature(sig, [])
+        data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1])
         sig = (['a', 'b', 'c'], None, None)
-        data = args.copy().match_signature(sig, [2, 3])
+        data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1,2,3,4,5])
         sig = (['a', 'b', 'c'], 'r', None)
-        data = args.copy().match_signature(sig, [])
+        data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1], {'c': 3, 'b': 2})
         sig = (['a', 'b', 'c'], None, None)
-        data = args.copy().match_signature(sig, [])
+        data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1], {'c': 5})
         sig = (['a', 'b', 'c'], None, None)
-        data = args.copy().match_signature(sig, [2, 3])
+        data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1], {'c': 5, 'd': 7})
         sig = (['a', 'b', 'c'], None, 'kw')
-        data = args.copy().match_signature(sig, [2, 3])
+        data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1,2,3,4,5], {'e': 5, 'd': 7})
         sig = (['a', 'b', 'c'], 'r', 'kw')
-        data = args.copy().match_signature(sig, [2, 3])
+        data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
@@ -285,7 +285,7 @@ class TestArgumentsForTranslation(object):
                                        w_stararg=[1],
                                        w_starstararg={'c': 5, 'd': 7})
         sig = (['a', 'b', 'c'], None, 'kw')
-        data = args.copy().match_signature(sig, [2, 3])
+        data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
@@ -293,7 +293,7 @@ class TestArgumentsForTranslation(object):
                                        w_stararg=[3,4,5],
                                        w_starstararg={'e': 5, 'd': 7})
         sig = (['a', 'b', 'c'], 'r', 'kw')
-        data = args.copy().match_signature(sig, [2, 3])
+        data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 

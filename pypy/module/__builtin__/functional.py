@@ -121,7 +121,7 @@ def min_max(space, arguments, implementation_of):
         w_key = kwargs["key"]
     except KeyError:
         w_key = None
-    if len(kwargs) != 1:
+    if len(kwargs) > 1:
         msg = "%s() got unexpected keyword argument" % (implementation_of,)
         raise OperationError(space.w_TypeError, space.wrap(msg))
     w_iter = space.iter(w_sequence)
