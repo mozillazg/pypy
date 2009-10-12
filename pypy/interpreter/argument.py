@@ -316,13 +316,13 @@ class Arguments(object):
 
     def parse(self, fnname, signature, defaults_w=[], blindargs=0):
         # used by geninterped code
+        # and ./objspace/std/fake.py
         """Parse args and kwargs to initialize a frame
         according to the signature of code object.
         """
         return self.parse_obj(None, fnname, signature, defaults_w,
                               blindargs)
 
-    # xxx have only this one
     def parse_obj(self, w_firstarg,
                   fnname, signature, defaults_w=[], blindargs=0):
         # used by ./interpreter/gateway.py
