@@ -848,6 +848,12 @@ class LLFrame(object):
     def op_gc_restore_exception(self, exc):
         raise NotImplementedError("gc_restore_exception")
 
+    def op_gc_nursery_size(self):
+        raise NotImplementedError
+
+    def op_gc_adr_of_nursery_pointer(self):
+        raise NotImplementedError
+
     def op_gc_call_rtti_destructor(self, rtti, addr):
         if hasattr(rtti._obj, 'destructor_funcptr'):
             d = rtti._obj.destructor_funcptr
