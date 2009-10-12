@@ -409,3 +409,11 @@ class AppTestProxy(object):
         a = A()
         assert _weakref.ref(a) == a
     
+    def test_strange_arguments(self):
+        import _weakref
+        class A(object):
+            pass
+
+        a = A()
+        raises(TypeError, _weakref.ref, a, lambda x: None, 3)
+        raises(TypeError, _weakref.ref, a, lambda x: None, b=3)
