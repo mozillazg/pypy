@@ -461,27 +461,32 @@ class FunctionGcRootTracker(object):
                         insn1.framesize = size_at_insn1
 
     def fixlocalvars(self):
+        def fixvar(localvar):
+            match = r_localvar_esp.match(localvar)
+            if match:
+                if localvar == '0(%esp)': # for pushl and popl, by
+                    hint = None           # default ebp addressing is
+                else:                     # a bit nicer
+                    hint = 'esp'
+                ofs_from_esp = int(match.group(1) or '0')
+                localvar = ofs_from_esp - insn.framesize
+                assert localvar != 0    # that's the return address
+                return LocalVar(localvar, hint=hint)
+            elif self.uses_frame_pointer:
+                match = r_localvar_ebp.match(localvar)
+                if match:
+                    ofs_from_ebp = int(match.group(1) or '0')
+                    localvar = ofs_from_ebp - 4
+                    assert localvar != 0    # that's the return address
+                    return LocalVar(localvar, hint='ebp')
+            return localvar
+
         for insn in self.insns:
-            if hasattr(insn, 'framesize'):
-                for name in insn._locals_:
-                    localvar = getattr(insn, name)
-                    match = r_localvar_esp.match(localvar)
-                    if match:
-                        if localvar == '0(%esp)': # for pushl and popl, by
-                            hint = None           # default ebp addressing is
-                        else:                     # a bit nicer
-                            hint = 'esp'
-                        ofs_from_esp = int(match.group(1) or '0')
-                        localvar = ofs_from_esp - insn.framesize
-                        assert localvar != 0    # that's the return address
-                        setattr(insn, name, LocalVar(localvar, hint=hint))
-                    elif self.uses_frame_pointer:
-                        match = r_localvar_ebp.match(localvar)
-                        if match:
-                            ofs_from_ebp = int(match.group(1) or '0')
-                            localvar = ofs_from_ebp - 4
-                            assert localvar != 0    # that's the return address
-                            setattr(insn, name, LocalVar(localvar, hint='ebp'))
+            if not hasattr(insn, 'framesize'):
+                continue
+            for name in insn._locals_:
+                localvar = getattr(insn, name)
+                setattr(insn, name, fixvar(localvar))
 
     def trackgcroots(self):
 
