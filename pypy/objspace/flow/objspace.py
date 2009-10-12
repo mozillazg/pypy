@@ -370,7 +370,7 @@ class FlowObjSpace(ObjSpace):
             return sc(self, fn, args)
 
         try:
-            args_w, kwds_w = args.unpack()
+            args_w, kwds_w = args.copy().unpack()
         except UnwrapException:
             args_w, kwds_w = '?', '?'
         # NOTE: annrpython needs to know about the following two operations!

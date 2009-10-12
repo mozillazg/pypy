@@ -397,5 +397,5 @@ class FlowExecutionContext(ExecutionContext):
 class FlowSpaceFrame(pyframe.PyFrame):
     def make_arguments(self, nargs):
         return ArgumentsForTranslation(self.space, self.peekvalues(nargs))
-    def argument_factory(self, arguments, keywords, w_star, w_starstar):
-        return ArgumentsForTranslation(self.space, arguments, keywords, w_star, w_starstar)
+    def argument_factory(self, *args):
+        return ArgumentsForTranslation(self.space, *args)

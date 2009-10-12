@@ -108,6 +108,7 @@ def min_max(space, arguments, implementation_of):
         compare = space.gt
     else:
         compare = space.lt
+    # XXXXXXXXX
     args, kwargs = arguments.unpack()
     if len(args) > 1:
         w_sequence = space.newtuple(args)
@@ -120,9 +121,7 @@ def min_max(space, arguments, implementation_of):
         w_key = kwargs["key"]
     except KeyError:
         w_key = None
-    else:
-        del kwargs["key"]
-    if kwargs:
+    if len(kwargs) != 1:
         msg = "%s() got unexpected keyword argument" % (implementation_of,)
         raise OperationError(space.w_TypeError, space.wrap(msg))
     w_iter = space.iter(w_sequence)

@@ -480,20 +480,20 @@ class TestMethod:
         w_meth1 = descr_function_get(space, func, obj1, space.type(obj1))
         meth1 = space.unwrap(w_meth1)
         assert isinstance(meth1, Method)
-        assert meth1.call_args(args) == obj1
+        assert meth1.call_args(args.copy()) == obj1
         # Check method returned from method.__get__()
         # --- meth1 is already bound so meth1.__get__(*) is meth1.
         w_meth2 = meth1.descr_method_get(obj2, space.type(obj2))
         meth2 = space.unwrap(w_meth2)
         assert isinstance(meth2, Method)
-        assert meth2.call_args(args) == obj1
+        assert meth2.call_args(args.copy()) == obj1
         # Check method returned from unbound_method.__get__()
         w_meth3 = descr_function_get(space, func, None, space.type(obj2))
         meth3 = space.unwrap(w_meth3)
         w_meth4 = meth3.descr_method_get(obj2, space.w_None)
         meth4 = space.unwrap(w_meth4)
         assert isinstance(meth4, Method)
-        assert meth4.call_args(args) == obj2
+        assert meth4.call_args(args.copy()) == obj2
         # Check method returned from unbound_method.__get__()
         # --- with an incompatible class
         w_meth5 = meth3.descr_method_get(space.wrap('hello'), space.w_str)

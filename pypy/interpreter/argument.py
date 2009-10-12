@@ -3,6 +3,7 @@ Arguments objects.
 """
 
 from pypy.interpreter.error import OperationError
+from pypy.rlib.debug import make_sure_not_resized
 
 class Arguments(object):
     """
@@ -13,16 +14,21 @@ class Arguments(object):
 
     ###  Construction  ###
 
-    def __init__(self, space, args_w, kwds_w=None,
+    def __init__(self, space, args_w, keywords=None, keywords_w=None,
                  w_stararg=None, w_starstararg=None):
         self.space = space
         assert isinstance(args_w, list)
         self.arguments_w = args_w
-        from pypy.rlib.debug import make_sure_not_resized
+        self.keywords = keywords
+        self.keywords_w = keywords_w
+        if keywords is not None:
+            assert keywords_w is not None
+            assert len(keywords_w) == len(keywords)
+            make_sure_not_resized(self.keywords)
+            make_sure_not_resized(self.keywords_w)
+
         make_sure_not_resized(self.arguments_w)
-        self.kwds_w = kwds_w
-        self.w_stararg = w_stararg
-        self.w_starstararg = w_starstararg
+        self._combine_wrapped(w_stararg, w_starstararg)
 
     @staticmethod
     def factory(space, args_w, kwds_w=None,
@@ -31,65 +37,52 @@ class Arguments(object):
                          w_stararg, w_starstararg)
 
     def num_args(self): # only used in module/__builtin__/interp_classobj.py
-        self._unpack()
         return len(self.arguments_w)
 
     def num_kwds(self): # only used in module/__builtin__/interp_classobj.py
-        self._unpack()
-        return len(self.kwds_w)
+        return len(self.keywords)
         
     def __repr__(self):
         """ NOT_RPYTHON """
-        if self.w_starstararg is not None:
-            return '%s(%s, %s, %s, %s)' % (self.__class__,
-                                           self.arguments_w,
-                                           self.kwds_w,
-                                           self.w_stararg,
-                                           self.w_starstararg)
-        if self.w_stararg is None:
-            if not self.kwds_w:
-                return '%s(%s)' % (self.__class__, self.arguments_w,)
-            else:
-                return '%s(%s, %s)' % (self.__class__, self.arguments_w,
-                                       self.kwds_w)
+        if not self.keywords:
+            return '%s(%s)' % (self.__class__, self.arguments_w,)
         else:
             return '%s(%s, %s, %s)' % (self.__class__, self.arguments_w,
-                                       self.kwds_w, self.w_stararg)
+                                       self.keywords, self.keywords_w)
 
 
     ###  Manipulation  ###
 
     def unpack(self): # used often
         "Return a ([w1,w2...], {'kw':w3...}) pair."
-        self._unpack()
-        return self.arguments_w, self.kwds_w
+        # XXX may want to change that later
+        kwds_w = {}
+        if self.keywords:
+            for i in range(len(self.keywords)):
+                kwds_w[self.keywords[i]] = self.keywords_w[i]
+        return self.arguments_w, kwds_w
 
     def prepend(self, w_firstarg): # used often
         "Return a new Arguments with a new argument inserted first."
         return self.factory(self.space, [w_firstarg] + self.arguments_w,
-                            self.kwds_w, self.w_stararg, self.w_starstararg)
+                            self.keywords, self.keywords_w)
             
-    def _unpack(self):
-        "unpack the *arg and **kwd into w_arguments and kwds_w"
-        # --- unpack the * argument now ---
-        if self.w_stararg is not None:
+    def _combine_wrapped(self, w_stararg, w_starstararg):
+        "unpack the *arg and **kwd into arguments_w and keywords_w"
+        # unpack the * arguments 
+        if w_stararg is not None:
             self.arguments_w = (self.arguments_w +
-                                self.space.unpackiterable(self.w_stararg))
-            self.w_stararg = None
-        # --- unpack the ** argument now ---
-        if self.kwds_w is None:
-            self.kwds_w = {}
-        if self.w_starstararg is not None:
+                                self.space.viewiterable(w_stararg))
+        # unpack the ** arguments
+        if w_starstararg is not None:
             space = self.space
-            w_starstararg = self.w_starstararg
-            # maybe we could allow general mappings?
             if not space.is_true(space.isinstance(w_starstararg, space.w_dict)):
                 raise OperationError(space.w_TypeError,
                                      space.wrap("argument after ** must be "
                                                 "a dictionary"))
-            # don't change the original yet,
-            # in case something goes wrong               
-            d = self.kwds_w.copy()
+            keywords_w = [None] * space.int_w(space.len(w_starstararg))
+            keywords = [None] * space.int_w(space.len(w_starstararg))
+            i = 0
             for w_key in space.unpackiterable(w_starstararg):
                 try:
                     key = space.str_w(w_key)
@@ -98,14 +91,20 @@ class Arguments(object):
                         raise
                     raise OperationError(space.w_TypeError,
                                          space.wrap("keywords must be strings"))
-                if key in d:
+                if self.keywords and key in self.keywords:
                     raise OperationError(self.space.w_TypeError,
                                          self.space.wrap("got multiple values "
                                                          "for keyword argument "
                                                          "'%s'" % key))
-                d[key] = space.getitem(w_starstararg, w_key)
-            self.kwds_w = d
-            self.w_starstararg = None
+                keywords[i] = key
+                keywords_w[i] = space.getitem(w_starstararg, w_key)
+                i += 1
+            if self.keywords is None:
+                self.keywords = keywords
+                self.keywords_w = keywords_w
+            else:
+                self.keywords += keywords
+                self.keywords_w += keywords_w
 
     def fixedunpack(self, argcount):
         # used by ./objspace/std/typeobject.py
@@ -113,16 +112,10 @@ class Arguments(object):
         # ./annotation/description.py
         """The simplest argument parsing: get the 'argcount' arguments,
         or raise a real ValueError if the length is wrong."""
-        if bool(self.kwds_w) or (self.w_starstararg is not None and
-                                     self.space.is_true(self.w_starstararg)):
+        if self.keywords:
             raise ValueError, "no keyword arguments expected"
         if len(self.arguments_w) > argcount:
             raise ValueError, "too many arguments (%d expected)" % argcount
-        if self.w_stararg is not None:
-            self.arguments_w = (self.arguments_w +
-                                self.space.viewiterable(self.w_stararg,
-                                         argcount - len(self.arguments_w)))
-            self.w_stararg = None
         elif len(self.arguments_w) < argcount:
             raise ValueError, "not enough arguments (%d expected)" % argcount
         return self.arguments_w
@@ -135,15 +128,7 @@ class Arguments(object):
         "Return the first argument for inspection."
         if self.arguments_w:
             return self.arguments_w[0]
-        if self.w_stararg is None:
-            return None
-        w_iter = self.space.iter(self.w_stararg)
-        try:
-            return self.space.next(w_iter)
-        except OperationError, e:
-            if not e.match(self.space, self.space.w_StopIteration):
-                raise
-            return None
+        return None
         
     ###  Parsing for function calls  ###
 
@@ -173,27 +158,15 @@ class Arguments(object):
         else:
             upfront = 0
         
-        if self.w_stararg is not None:
-            # There is a case where we don't have to unpack() a w_stararg:
-            # if it matches exactly a *arg in the signature.
-            if (len(self.arguments_w) + upfront == co_argcount and
-                has_vararg and
-                self.space.is_w(self.space.type(self.w_stararg),
-                                self.space.w_tuple)):
-                pass
-            else:
-                self._unpack()   # sets self.w_stararg to None
-        # always unpack the ** arguments
-        if self.w_starstararg is not None:
-            self._unpack()
-
         args_w = self.arguments_w
+        assert args_w is not None, "tried to match arguments again"
         num_args = len(args_w)
 
-        kwds_w = self.kwds_w
+        keywords = self.keywords
+        keywords_w = self.keywords_w
         num_kwds = 0
-        if kwds_w is not None:
-            num_kwds = len(kwds_w)
+        if keywords is not None:
+            num_kwds = len(keywords)
 
         avail = num_args + upfront
 
@@ -208,29 +181,36 @@ class Arguments(object):
                 scope_w[i + input_argcount] = args_w[i]
             input_argcount += take
 
-        # check that no keyword argument conflicts with these
-        # note that for this purpose we ignore the first blindargs,
-        # which were put into place by prepend().  This way, keywords do
-        # not conflict with the hidden extra argument bound by methods.
-        if kwds_w and input_argcount > blindargs:
-            for name in argnames[blindargs:input_argcount]:
-                if name in kwds_w:
-                    raise ArgErrMultipleValues(name)
-
-        remainingkwds_w = self.kwds_w
+        # the code assumes that keywords can potentially be large, but that
+        # argnames is typically not too large
+        num_remainingkwds = num_kwds
+        if keywords:
+            for i in range(num_kwds):
+                name = keywords[i]
+                try:
+                    j = argnames.index(name)
+                except ValueError:
+                    continue
+                if j < input_argcount:
+                    # check that no keyword argument conflicts with these note
+                    # that for this purpose we ignore the first blindargs,
+                    # which were put into place by prepend().  This way,
+                    # keywords do not conflict with the hidden extra argument
+                    # bound by methods.
+                    if blindargs <= j:
+                        raise ArgErrMultipleValues(name)
+                else:
+                    assert scope_w[j] is None
+                    scope_w[j] = keywords_w[i]
+                    keywords[i] = None # mark as used
+                    num_remainingkwds -= 1
         missing = 0
         if input_argcount < co_argcount:
-            if remainingkwds_w is None:
-                remainingkwds_w = {}
-            else:
-                remainingkwds_w = remainingkwds_w.copy()            
-            # not enough args, fill in kwargs or defaults if exists
             def_first = co_argcount - len(defaults_w)
             for i in range(input_argcount, co_argcount):
                 name = argnames[i]
-                if name in remainingkwds_w:
-                    scope_w[i] = remainingkwds_w[name]
-                    del remainingkwds_w[name]
+                if scope_w[i] is not None:
+                    pass
                 elif i >= def_first:
                     scope_w[i] = defaults_w[i-def_first]
                 else:
@@ -239,23 +219,19 @@ class Arguments(object):
                     # keyword arguments, which will be checked for below.
                     missing += 1
 
-        
         # collect extra positional arguments into the *vararg
         if has_vararg:
-            if self.w_stararg is None:   # common case
-                args_left = co_argcount - upfront
-                if args_left < 0:  # check required by rpython
-                    assert extravarargs is not None
-                    starargs_w = extravarargs
-                    if num_args:
-                        starargs_w = starargs_w + args_w
-                elif num_args > args_left:
-                    starargs_w = args_w[args_left:]
-                else:
-                    starargs_w = []
-                scope_w[co_argcount] = self.space.newtuple(starargs_w)
-            else:      # shortcut for the non-unpack() case above
-                scope_w[co_argcount] = self.w_stararg
+            args_left = co_argcount - upfront
+            if args_left < 0:  # check required by rpython
+                assert extravarargs is not None
+                starargs_w = extravarargs
+                if num_args:
+                    starargs_w = starargs_w + args_w
+            elif num_args > args_left:
+                starargs_w = args_w[args_left:]
+            else:
+                starargs_w = []
+            scope_w[co_argcount] = self.space.newtuple(starargs_w)
         elif avail > co_argcount:
             raise ArgErrCount(avail, num_kwds,
                               (co_argcount, has_vararg, has_kwarg),
@@ -264,18 +240,23 @@ class Arguments(object):
         # collect extra keyword arguments into the **kwarg
         if has_kwarg:
             w_kwds = self.space.newdict()
-            if remainingkwds_w:
-                for key, w_value in remainingkwds_w.items():
-                    self.space.setitem(w_kwds, self.space.wrap(key), w_value)
+            if num_remainingkwds:
+                for i in range(len(keywords)):
+                    key = keywords[i]
+                    if key is not None:
+                        self.space.setitem(w_kwds, self.space.wrap(key), keywords_w[i])
             scope_w[co_argcount + has_vararg] = w_kwds
-        elif remainingkwds_w:
-            raise ArgErrUnknownKwds(remainingkwds_w)
+        elif num_remainingkwds:
+            raise ArgErrUnknownKwds(num_remainingkwds, keywords)
 
         if missing:
             raise ArgErrCount(avail, num_kwds,
                               (co_argcount, has_vararg, has_kwarg),
                               defaults_w, missing)
 
+        self.arguments_w = None
+        self.keywords = None
+        self.keywords_w = None
         return co_argcount + has_vararg + has_kwarg
     
 
@@ -358,14 +339,11 @@ class Arguments(object):
             space.setitem(w_kwds, space.wrap(key), w_value)
         return w_args, w_kwds
 
+    @staticmethod
     def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
         # used by geninterped code
         args_w = data_w[:shape_cnt]
-        p = shape_cnt
-        kwds_w = {}
-        for i in range(len(shape_keys)):
-            kwds_w[shape_keys[i]] = data_w[p]
-            p += 1
+        p = end_keys = shape_cnt + len(shape_keys)
         if shape_star:
             w_star = data_w[p]
             p += 1
@@ -376,26 +354,63 @@ class Arguments(object):
             p += 1
         else:
             w_starstar = None
-        return Arguments(space, args_w, kwds_w, w_star, w_starstar)
-    fromshape = staticmethod(fromshape)
+        return Arguments(space, args_w, list(shape_keys),
+                         data_w[shape_cnt:end_keys], w_star,
+                          w_starstar)
 
-
-    def normalize(self):
-        """Return an instance of the Arguments class.  (Instances of other
-        classes may not be suitable for long-term storage or multiple
-        usage.)  Also force the type and validity of the * and ** arguments
-        to be checked now.
-        """
-        args_w, kwds_w = self.unpack()
-        return Arguments(self.space, args_w, kwds_w)
+    def copy(self):
+        if self.keywords is None:
+            keywords = None
+            keywords_w = None
+        else:
+            keywords = self.keywords[:]
+            keywords_w = self.keywords_w[:]
+        return Arguments(self.space, self.arguments_w[:], keywords,
+                         keywords_w)
 
 
 class ArgumentsForTranslation(Arguments):
+    def __init__(self, space, args_w, keywords=None, keywords_w=None,
+                 w_stararg=None, w_starstararg=None):
+        self.w_stararg = w_stararg
+        self.w_starstararg = w_starstararg
+        self.combine_has_happened = False
+        Arguments.__init__(self, space, args_w, keywords, keywords_w)
+
+    def combine_if_necessary(self):
+        if self.combine_has_happened:
+            return
+        self._combine_wrapped(self.w_stararg, self.w_starstararg)
+        self.combine_has_happened = True
+
     @staticmethod
     def factory(space, args_w, kwds_w=None,
                 w_stararg=None, w_starstararg=None):
         return ArgumentsForTranslation(space, args_w, kwds_w,
                                        w_stararg, w_starstararg)
+
+    def copy(self):
+        if self.keywords is None:
+            keywords = None
+            keywords_w = None
+        else:
+            keywords = self.keywords[:]
+            keywords_w = self.keywords_w[:]
+        return ArgumentsForTranslation(self.space, self.arguments_w[:], keywords,
+                                       keywords_w, self.w_stararg,
+                                       self.w_starstararg)
+
+    def _match_signature(self, w_firstarg, scope_w, argnames, has_vararg=False,
+                         has_kwarg=False, defaults_w=[], blindargs=0):
+        self.combine_if_necessary()
+        # _match_signature is destructive
+        return Arguments._match_signature(
+               self, w_firstarg, scope_w, argnames, has_vararg, has_kwarg,
+               defaults_w, blindargs)
+
+    def unpack(self):
+        self.combine_if_necessary()
+        return Arguments.unpack(self)
 
     def match_signature(self, signature, defaults_w):
         """Parse args and kwargs according to the signature of a code object,
@@ -444,27 +459,26 @@ class ArgumentsForTranslation(Arguments):
                 args_w[i + datalen] = stararg_w[i]
             assert len(args_w) == need_cnt
             
-        kwds_w = {}
+        keywords = []
+        keywords_w = []
         for key in need_kwds:
-            kwds_w[key] = unfiltered_kwds_w[key]
+            keywords.append(key)
+            keywords_w.append(unfiltered_kwds_w[key])
                     
-        return ArgumentsForTranslation(self.space, args_w, kwds_w)
+        return ArgumentsForTranslation(self.space, args_w, keywords, keywords_w)
 
     @staticmethod
     def frompacked(space, w_args=None, w_kwds=None):
         raise NotImplementedError("go away")
     
+    @staticmethod
     def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
         # used by
         # ./rpython/callparse.py
         # ./rpython/rbuiltin.py
         # ./annotation/bookkeeper.py
         args_w = data_w[:shape_cnt]
-        p = shape_cnt
-        kwds_w = {}
-        for i in range(len(shape_keys)):
-            kwds_w[shape_keys[i]] = data_w[p]
-            p += 1
+        p = end_keys = shape_cnt + len(shape_keys)
         if shape_star:
             w_star = data_w[p]
             p += 1
@@ -475,14 +489,16 @@ class ArgumentsForTranslation(Arguments):
             p += 1
         else:
             w_starstar = None
-        return ArgumentsForTranslation(space, args_w, kwds_w, w_star, w_starstar)
-    fromshape = staticmethod(fromshape)
+        return ArgumentsForTranslation(space, args_w, list(shape_keys),
+                                       data_w[shape_cnt:end_keys], w_star,
+                                       w_starstar)
 
     def flatten(self):
         # used by ./objspace/flow/objspace.py
         """ Argument <-> list of w_objects together with "shape" information """
         shape_cnt, shape_keys, shape_star, shape_stst = self._rawshape()
-        data_w = self.arguments_w + [self.kwds_w[key] for key in shape_keys]
+        data_w = self.arguments_w + [self.keywords_w[self.keywords.index(key)]
+                                         for key in shape_keys]
         if shape_star:
             data_w.append(self.w_stararg)
         if shape_stst:
@@ -490,9 +506,10 @@ class ArgumentsForTranslation(Arguments):
         return (shape_cnt, shape_keys, shape_star, shape_stst), data_w
 
     def _rawshape(self, nextra=0):
+        assert not self.combine_has_happened
         shape_cnt  = len(self.arguments_w)+nextra        # Number of positional args
-        if self.kwds_w:
-            shape_keys = self.kwds_w.keys()           # List of keywords (strings)
+        if self.keywords:
+            shape_keys = self.keywords[:]                # List of keywords (strings)
             shape_keys.sort()
         else:
             shape_keys = []
@@ -581,11 +598,14 @@ class ArgErrMultipleValues(ArgErr):
 
 class ArgErrUnknownKwds(ArgErr):
 
-    def __init__(self, kwds_w):
+    def __init__(self, num_remainingkwds, keywords):
         self.kwd_name = ''
-        self.num_kwds = len(kwds_w)
-        if self.num_kwds == 1:
-            self.kwd_name = kwds_w.keys()[0]
+        self.num_kwds = num_remainingkwds
+        if num_remainingkwds == 1:
+            for kwd_name in keywords:
+                if kwd_name is not None:
+                    self.kwd_name = kwd_name
+                    break
 
     def getmsg(self, fnname):
         if self.num_kwds == 1:
