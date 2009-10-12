@@ -37,6 +37,8 @@ r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
 r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
 r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"\s*$")
 r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text")
+r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
+r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|"+LABEL)
 r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
 LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
 LOCALVARFP      = LOCALVAR + r"|-?\d*[(]%ebp[)]"
@@ -462,6 +464,11 @@ class FunctionGcRootTracker(object):
 
     def fixlocalvars(self):
         def fixvar(localvar):
+            if localvar is None:
+                return None
+            elif isinstance(localvar, (list, tuple)):
+                return [fixvar(var) for var in localvar]
+
             match = r_localvar_esp.match(localvar)
             if match:
                 if localvar == '0(%esp)': # for pushl and popl, by
@@ -597,6 +604,7 @@ class FunctionGcRootTracker(object):
 
     def visit_addl(self, line, sign=+1):
         match = r_binaryinsn.match(line)
+        source = match.group(1)
         target = match.group(2)
         if target == '%esp':
             count = match.group(1)
@@ -605,7 +613,7 @@ class FunctionGcRootTracker(object):
                 return InsnCannotFollowEsp()
             return InsnStackAdjust(sign * int(count[1:]))
         elif self.r_localvar.match(target):
-            return InsnSetLocal(target)
+            return InsnSetLocal(target, [source, target])
         else:
             return []
 
@@ -624,6 +632,7 @@ class FunctionGcRootTracker(object):
         match = r_binaryinsn.match(line)
         if not match:
             raise UnrecognizedOperation(line)
+        source = match.group(1)
         target = match.group(2)
         if self.r_localvar.match(target):
             return InsnSetLocal(target)
@@ -694,7 +703,7 @@ class FunctionGcRootTracker(object):
             if self.r_localvar.match(source):
                 return [InsnCopyLocal(source, target)]
             else:
-                return [InsnSetLocal(target)]
+                return [InsnSetLocal(target, [source])]
         else:
             return []
 
@@ -742,31 +751,38 @@ class FunctionGcRootTracker(object):
         return InsnRet()
 
     def visit_jmp(self, line):
-        tablelabel = None
+        tablelabels = []
         match = r_jmp_switch.match(line)
         if match:
             # this is a jmp *Label(%index), used for table-based switches.
             # Assume that the table is just a list of lines looking like
             # .long LABEL or .long 0, ending in a .text or .section .text.hot.
-            tablelabel = match.group(1)
+            tablelabels.append(match.group(1))
         elif r_unaryinsn_star.match(line):
             # maybe a jmp similar to the above, but stored in a
             # registry:
             #     movl L9341(%eax), %eax
             #     jmp *%eax
             operand = r_unaryinsn_star.match(line).group(1)[1:]
-            prev_line = self.lines[self.currentlineno-1]
-            match = r_insn.match(prev_line)
-            binaryinsn = r_binaryinsn.match(prev_line)
-            if (match and binaryinsn and
-                match.group(1) == 'movl' and binaryinsn.group(2) == operand
-                and '(' in binaryinsn.group(1)):
-                tablelabel = binaryinsn.group(1).split('(')[0]
-                if tablelabel not in self.labels:
-                    # Probably an indirect tail-call.
-                    tablelabel = None
-        if tablelabel:
-            tablelin = self.labels[tablelabel].lineno + 1
+            def walker(insn, locs):
+                sources = []
+                for loc in locs:
+                    sources.extend(insn.all_sources_of(loc))
+                for source in sources:
+                    label_match = re.compile(LABEL).match(source)
+                    if label_match:
+                        tablelabels.append(label_match.group(0))
+                        return
+                yield tuple(sources)
+            insn = InsnStop()
+            insn.previous_insns = [self.insns[-1]]
+            self.walk_instructions_backwards(walker, insn, (operand,))
+
+            # Probably an indirect tail-call.
+            tablelabels = [label for label in tablelabels if label in self.labels]
+        assert len(tablelabels) <= 1
+        if tablelabels:
+            tablelin = self.labels[tablelabels[0]].lineno + 1
             while not r_jmptable_end.match(self.lines[tablelin]):
                 match = r_jmptable_item.match(self.lines[tablelin])
                 if not match:
@@ -920,6 +936,13 @@ class Insn(object):
     def source_of(self, localvar, tag):
         return localvar
 
+    def all_sources_of(self, localvar):
+        source = self.source_of(localvar, None)
+        if source is somenewvalue:
+            return []
+        else:
+            return [source]
+
 class Label(Insn):
     _args_ = ['label', 'lineno']
     def __init__(self, label, lineno):
@@ -952,14 +975,19 @@ class InsnFunctionStart(Insn):
         return self.arguments[localvar]
 
 class InsnSetLocal(Insn):
-    _args_ = ['target']
-    _locals_ = ['target']
-    def __init__(self, target):
+    _args_ = ['target', 'sources']
+    _locals_ = ['target', 'sources']
+    def __init__(self, target, sources=()):
         self.target = target
+        self.sources = sources
     def source_of(self, localvar, tag):
         if localvar == self.target:
             return somenewvalue
         return localvar
+    def all_sources_of(self, localvar):
+        if localvar == self.target:
+            return self.sources
+        return [localvar]
 
 class InsnCopyLocal(Insn):
     _args_ = ['source', 'target']
