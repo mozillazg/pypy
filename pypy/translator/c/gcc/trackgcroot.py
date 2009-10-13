@@ -35,7 +35,7 @@ OPERAND         =           r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
 r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
 r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
 r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
-r_jmp_source    = re.compile(r"\d+[(](%[\w]+)[,)]")
+r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
 r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
 r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|\t\.align|"+LABEL)
 r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
@@ -771,7 +771,16 @@ class FunctionGcRootTracker(object):
                         # %eax is the real source, %edx is an offset
                         match = r_jmp_source.match(s)
                         if match:
-                            sources.append(match.group(1))
+                            if r_localvar_esp.match(s):
+                                # obscure: skip the source if it seems
+                                # to be an argument passed to the
+                                # function.  XXX It's theorically
+                                # possible that the address is stored
+                                # on the stack; let's say this is
+                                # improbable for table-based switches.
+                                pass
+                            else:
+                                sources.append(match.group(1))
                         else:
                             sources.append(s)
                 for source in sources:
