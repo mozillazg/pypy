@@ -731,12 +731,14 @@ class FrameworkGCTransformer(GCTransformer):
         hop.cast_result(v_addr)
 
     def gct_gc_identityhash(self, hop):
+        livevars = self.push_roots(hop)
         [v_ptr] = hop.spaceop.args
         v_adr = hop.genop("cast_ptr_to_adr", [v_ptr],
                           resulttype=llmemory.Address)
         hop.genop("direct_call",
                   [self.identityhash_ptr, self.c_const_gc, v_adr],
                   resultvar=hop.spaceop.result)
+        self.pop_roots(hop, livevars)
 
     def gct_gc_id(self, hop):
         if self.id_ptr is not None:
