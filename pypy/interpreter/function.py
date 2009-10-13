@@ -10,7 +10,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.eval import Code
-from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
+from pypy.interpreter.argument import Arguments
 from pypy.rlib.jit import hint
 
 funccallunrolling = unrolling_iterable(range(4))
@@ -82,7 +82,7 @@ class Function(Wrappable):
                     if i < nargs:
                         new_frame.fastlocals_w[i] = args_w[i]
                 return new_frame.run()                                    
-        elif nargs >= 1 and fast_natural_arity == -1:
+        elif nargs >= 1 and fast_natural_arity == Code.PASSTHROUGHARGS1:
             assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
             return code.funcrun_obj(self, args_w[0],
                                     Arguments(self.space,
@@ -115,25 +115,23 @@ class Function(Wrappable):
                 return code.fastcall_4(self.space, self, frame.peekvalue(3),
                                        frame.peekvalue(2), frame.peekvalue(1),
                                         frame.peekvalue(0))
-        elif (nargs|PyCode.FLATPYCALL) == fast_natural_arity:
+        elif (nargs|Code.FLATPYCALL) == fast_natural_arity:
             assert isinstance(code, PyCode)
             return self._flat_pycall(code, nargs, frame)
-        elif fast_natural_arity == -1 and nargs >= 1:
+        elif fast_natural_arity&Code.FLATPYCALL:
+            natural_arity = fast_natural_arity&0xff
+            if natural_arity > nargs >= natural_arity-len(self.defs_w):
+                assert isinstance(code, PyCode)
+                return self._flat_pycall_defaults(code, nargs, frame,
+                                                  natural_arity-nargs)
+        elif fast_natural_arity == Code.PASSTHROUGHARGS1 and nargs >= 1:
             assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
             w_obj = frame.peekvalue(nargs-1)
             args = frame.make_arguments(nargs-1)
-            try:
-                return code.funcrun_obj(self, w_obj, args)
-            finally:
-                if isinstance(args, ArgumentsFromValuestack):
-                    args.frame = None
+            return code.funcrun_obj(self, w_obj, args)
                     
         args = frame.make_arguments(nargs)
-        try:
-            return self.call_args(args)
-        finally:
-            if isinstance(args, ArgumentsFromValuestack):
-                args.frame = None
+        return self.call_args(args)
 
     def _flat_pycall(self, code, nargs, frame):
         # code is a PyCode
@@ -142,6 +140,24 @@ class Function(Wrappable):
         for i in xrange(nargs):
             w_arg = frame.peekvalue(nargs-1-i)
             new_frame.fastlocals_w[i] = w_arg
+            
+        return new_frame.run()                        
+
+    def _flat_pycall_defaults(self, code, nargs, frame, defs_to_load):
+        # code is a PyCode
+        new_frame = self.space.createframe(code, self.w_func_globals,
+                                                   self.closure)
+        for i in xrange(nargs):
+            w_arg = frame.peekvalue(nargs-1-i)
+            new_frame.fastlocals_w[i] = w_arg
+            
+        defs_w = self.defs_w
+        ndefs = len(defs_w)
+        start = ndefs-defs_to_load
+        i = nargs
+        for j in xrange(start, ndefs):
+            new_frame.fastlocals_w[i] = defs_w[j]
+            i += 1
         return new_frame.run()                        
 
     def getdict(self):
