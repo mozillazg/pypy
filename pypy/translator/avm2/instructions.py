@@ -11,8 +11,11 @@ def needs_specialized(fn, self, *args, **kwargs):
             raise ValueError, "Instruction needs to be specialized"
       return fn(self, *args, **kwargs)
 
+class _Avm2SpecializedInstruction(object):
+      pass
+
 class _Avm2ShortInstruction(object):
-      specialized = False
+      specialized=False
       def __init__(self, opcode, name, stack=0, scope=0, flags=0):
             self.opcode = opcode
             self.name   = name
@@ -32,18 +35,21 @@ class _Avm2ShortInstruction(object):
 
       def _serialize(self):
             return chr(self.opcode)
-
-      serialize = _serialize
-      set_assembler_props = _set_assembler_props
-      __repr__ = _repr
       
       def specialize(self, **kwargs):
-            return type("Avm2_%s_Instruction" % self.name,
-                        (self.__class__), dict(kwargs.items(),
-                            specialized=True,
-                            serialize=self._serialize,
-                            set_assembler_props=self._set_assembler_props,
-                            __repr__=self._repr))
+            return type("_Avm2_Instruction_%s" % self.name,
+                         (_Avm2SpecializedInstruction, self.__class__),
+                         dict(kwargs.items(),
+                               specialized=True,
+                               set_assembler_props=self._set_assembler_props,
+                               serialize=self._serialize,
+                               __repr__=self._repr,
+                               opcode=self.opcode, name=self.name, stack=self.stack, scope=self.scope,
+                         ))()
+            
+
+      def __call__(self):
+            return self.specialize()
 
 class _Avm2DebugInstruction(_Avm2ShortInstruction):
       @needs_specialized
@@ -53,6 +59,9 @@ class _Avm2DebugInstruction(_Avm2ShortInstruction):
                    u32(self.index) + \
                    chr(self.reg & 0xFF) + \
                    u32(self.extra)
+
+      def __call__(self, debug_type, index, reg, extra):
+            return self.specialize(debug_type=debug_type, index=index, reg=reg, extra=extra)
 
 class _Avm2U8Instruction(_Avm2ShortInstruction):
       @needs_specialized

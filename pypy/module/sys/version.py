@@ -13,7 +13,7 @@ PYPY_VERSION               = (1, 1, 0, "beta", '?')
 TRIM_URL_UP_TO = 'svn/pypy/'
 SVN_URL = """$HeadURL$"""[10:-28]
 
-REV = """$LastChangedRevision$"""[22:-2]
+REV = """68301"""
 
 
 import pypy

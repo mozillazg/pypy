@@ -22,6 +22,20 @@ def serialize_s24(value):
         raise ValueError, "value does not fit in a s24"
     return m[:3]
 
+def camel_case_match(string):
+    """
+    Properly matches the camelCase naming style so that a name like
+    writeXMLDocument gets parsed as ["write", "XML", "Document"].
+    """
+    return re.findall('(^[a-z]+|[A-Z][a-z]+|[A-Z]+|[0-9])(?![a-z])', string)
+
+def camel_case_convert(string):
+    """
+    Properly converts the camelCase naming style to underscore style so that
+    writeXMLDocument gets converted to write_xml_document.
+    """
+    return '_'.join(s.lower() for s in camel_case_match(string))
+
 Avm2Backpatch = namedtuple("Avm2Backpatch", "location base lbl")
 
 class Avm2Label(object):
