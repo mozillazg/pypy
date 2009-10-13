@@ -175,6 +175,7 @@ class GCDescrFastpathMalloc(GcLLDescription):
         # 64 bytes
         def malloc_slowpath(size):
             from pypy.rlib.rarithmetic import r_ulonglong
+            assert size == 8
             nadr = rffi.cast(lltype.Signed, self.nursery)
             self.addrs[0] = 99999    # should be overridden by the caller
             return ((r_ulonglong(nadr + size) << 32) |     # this part in edx
