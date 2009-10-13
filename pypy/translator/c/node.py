@@ -37,11 +37,12 @@ class defaultproperty(object):
 
 class StructDefNode:
     typetag = 'struct'
-    def __init__(self, db, STRUCT, varlength=1):
+    def __init__(self, db, STRUCT, varlength=1, hash_at_end=False):
         self.db = db
         self.STRUCT = STRUCT
         self.LLTYPE = STRUCT
         self.varlength = varlength
+        self.hash_at_end = hash_at_end
         if varlength == 1:
             basename = STRUCT._name
             with_number = True
@@ -49,6 +50,8 @@ class StructDefNode:
             basename = db.gettypedefnode(STRUCT).barename
             basename = '%s_len%d' % (basename, varlength)
             with_number = False
+        if hash_at_end:
+            basename += '_hash'
         if STRUCT._hints.get('union'):
             self.typetag = 'union'
             assert STRUCT._gckind == 'raw'   # not supported: "GcUnion"
@@ -94,6 +97,8 @@ class StructDefNode:
             else:
                 typename = db.gettype(T, who_asks=self)
             self.fields.append((self.c_struct_field_name(name), typename))
+        if self.hash_at_end:
+            self.fields.append(('_hash', 'long @'))
         self.gcinfo  # force it to be computed
 
     def computegcinfo(self):
@@ -149,8 +154,6 @@ class StructDefNode:
         if is_empty:
             yield '\t' + 'char _dummy; /* this struct is empty */'
         yield '};'
-        for line in self.db.gcpolicy.struct_after_definition(self):
-            yield line
 
     def visitor_lines(self, prefix, on_field):
         for name in self.fieldnames:
@@ -448,7 +451,8 @@ class ContainerNode(object):
         self.obj = obj
         #self.dependencies = {}
         self.typename = db.gettype(T)  #, who_asks=self)
-        self.implementationtypename = db.gettype(T, varlength=self.getlength())
+        self.implementationtypename = db.gettype(T, varlength=self.getlength(),
+                                       needs_hash=hasattr(obj, '_hash_cache_'))
         parent, parentindex = parentlink(obj)
         if parent is None:
             self.name = db.namespace.uniquename('g_' + self.basename())
@@ -519,7 +523,8 @@ class StructNode(ContainerNode):
         data = []
 
         if needs_gcheader(self.T):
-            for i, thing in enumerate(self.db.gcpolicy.struct_gcheader_initdata(self)):
+            hdr = self.db.gcpolicy.struct_gcheader_initdata(self)
+            for i, thing in enumerate(hdr):
                 data.append(('gcheader%d'%i, thing))
         
         for name in defnode.fieldnames:
@@ -532,6 +537,9 @@ class StructNode(ContainerNode):
         # arbitrarily.
         if hasattr(self.T, "_hints") and self.T._hints.get('union'):
             data = data[0:1]
+
+        if hasattr(self.obj, '_hash_cache_'):
+            data.append(('_hash', self.obj._hash_cache_))
 
         for name, value in data:
             c_expr = defnode.access_expr(self.name, name)
