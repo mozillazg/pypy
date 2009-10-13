@@ -918,12 +918,12 @@ class Assembler386(object):
         mc.CALL(rel32(slowpath_addr))
         if push_arg is not None:
             mc.POP(ecx)
-        mc.MOV(addr_add(eax, imm(0)), imm(tid))
-        mc.MOV(heap(nursery_free_adr), edx)
         offset = mc.get_relative_pos() - jmp_adr
         assert 0 < offset <= 127
         mc.overwrite(jmp_adr-1, chr(offset))
-
+        mc.MOV(addr_add(eax, imm(0)), imm(tid))
+        mc.MOV(heap(nursery_free_adr), edx)
+        
 genop_discard_list = [Assembler386.not_implemented_op_discard] * rop._LAST
 genop_list = [Assembler386.not_implemented_op] * rop._LAST
 genop_guard_list = [Assembler386.not_implemented_op_guard] * rop._LAST
