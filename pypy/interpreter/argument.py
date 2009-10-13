@@ -101,8 +101,8 @@ class Arguments(object):
                 self.keywords = keywords
                 self.keywords_w = keywords_w
             else:
-                self.keywords += keywords
-                self.keywords_w += keywords_w
+                self.keywords = self.keywords + keywords
+                self.keywords_w = self.keywords_w + keywords_w
 
     def fixedunpack(self, argcount):
         # used by ./objspace/std/typeobject.py
