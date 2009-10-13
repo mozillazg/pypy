@@ -1,4 +1,4 @@
-c
+
 import struct
 from pypy.translator.avm2.util import serialize_u32 as u32
 
@@ -302,9 +302,6 @@ class RtqNameL(object):
     def __hash__(self):
         return hash((self.KIND))
 
-    def serialize(self):
-        return chr(self.KIND)
-
 class RtqNameLA(RtqNameL):
     KIND = TYPE_MULTINAME_RtqNameLA
 
@@ -318,7 +315,7 @@ class RtqName(object):
     def __eq__(self, other):
         return self.KIND == other.KIND and self.name == other.name
 
-    def __ne__(self):
+    def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
@@ -329,7 +326,7 @@ class RtqName(object):
         if self.name == "*":
             self._name_index = 0
         else:
-            self._name_index = pool.utf8_pool.index_for(name)
+            self._name_index = pool.utf8_pool.index_for(self.name)
 
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
@@ -364,7 +361,7 @@ class TypeName(object):
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
         assert self._types_indices is not None, "Please call write_to_pool before serializing"
-        return ''.join([chr(self.KIND), u32(self._name_index), u32(self._types_indices)] + [u32(a) for a in self._types_indices])
+        return ''.join([chr(self.KIND), u32(self._name_index), u32(len(self._types_indices))] + [u32(a) for a in self._types_indices])
 
 # ======================================
 # Constant Pool
@@ -376,6 +373,9 @@ class ValuePool(object):
         self.index_map = {}
         self.pool      = []
         self.default = default
+
+    def __contains__(self, value):
+        return value in self.index_map
 
     def __iter__(self):
         return iter(self.pool)
