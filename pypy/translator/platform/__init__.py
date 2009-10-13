@@ -112,6 +112,8 @@ class Platform(object):
             stderrlines = stderr.splitlines()
             for line in stderrlines:
                 log.ERROR(line)
+            for line in stdout.splitlines():
+                log.ERROR(line)
             raise CompilationError(stdout, stderr)
 
     
