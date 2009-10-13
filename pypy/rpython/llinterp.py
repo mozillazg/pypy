@@ -1207,7 +1207,7 @@ class LLFrame(object):
 class Tracer(object):
     Counter = 0
     file = None
-    TRACE = False
+    TRACE = int(os.getenv('PYPY_TRACE') or '0')
 
     HEADER = """<html><head>
         <script language=javascript type='text/javascript'>
