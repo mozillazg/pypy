@@ -7,6 +7,7 @@ from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
      BoxPtr, ConstPtr, TreeLoop
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
+from pypy.jit.backend.llsupport.gc import GcLLDescription
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.backend.x86.regalloc import RegAlloc, WORD
 from pypy.jit.metainterp.test.oparser import parse
@@ -20,6 +21,7 @@ from pypy.jit.backend.x86.test.test_regalloc import MockAssembler
 from pypy.jit.backend.x86.test.test_regalloc import BaseTestRegalloc
 from pypy.jit.backend.x86.regalloc import X86RegisterManager, X86StackManager,\
      X86XMMRegisterManager
+from pypy.rpython.annlowlevel import llhelper
 
 class MockGcRootMap(object):
     def get_basic_shape(self):
@@ -159,3 +161,70 @@ class TestRegallocGcIntegration(BaseTestRegalloc):
         jump(i0, i1, 1, 17, i4, ConstPtr(ptr0), i6, i7, i24)
         '''
         self.interpret(ops, [0, 0, 0, 0, 0, 0, 0, 0, 0], run=False)
+
+class GCDescrFastpathMalloc(GcLLDescription):
+    def __init__(self):
+        GcCache.__init__(self, False)
+        # create a nursery
+        NTP = rffi.CArray(lltype.Signed)
+        self.nursery = lltype.malloc(NTP, 100, flavor='raw')
+        self.addrs = lltype.malloc(rffi.CArray(lltype.Signed), 2,
+                                   flavor='raw')
+        self.addrs[0] = rffi.cast(lltype.Signed, self.nursery)
+        self.addrs[1] = self.addrs[0] + 400
+        # 400 bytes
+        def new(size):
+            xxx
+        self.new = new
+        self.NEW_TP = lltype.FuncType([lltype.Signed],
+                                      llmemory.GCREF)
+        self._counter = 123
+
+    def can_inline_malloc(self, descr):
+        return True
+
+    def get_funcptr_for_new(self):
+        return llhelper(lltype.Ptr(self.NEW_TP), self.new)
+
+    def init_size_descr(self, S, descr):
+        descr.type_id = self._counter
+        self._counter += 1
+
+    def get_nursery_free_addr(self):
+        return rffi.cast(lltype.Signed, self.addrs)
+
+    def get_nursery_top_addr(self):
+        return rffi.cast(lltype.Signed, self.addrs) + 4
+
+    def get_malloc_fixedsize_slowpath_addr(self):
+        return 123
+
+    get_funcptr_for_newarray = None
+    get_funcptr_for_newstr = None
+    get_funcptr_for_newunicode = None
+
+class TestMallocFastpath(BaseTestRegalloc):
+    cpu = CPU(None, None)
+    cpu.gc_ll_descr = GCDescrFastpathMalloc()
+
+    NODE = lltype.GcStruct('node', ('tid', lltype.Signed),
+                           ('value', lltype.Signed))
+    nodedescr = cpu.sizeof(NODE)
+    valuedescr = cpu.fielddescrof(NODE, 'value')
+
+    namespace = locals().copy()
+    
+    def test_malloc_fastpath(self):
+        ops = '''
+        [i0]
+        p0 = new(descr=nodedescr)
+        setfield_gc(p0, i0, descr=valuedescr)
+        finish(p0)
+        '''
+        self.interpret(ops, [42])
+        # check the nursery
+        gc_ll_descr = self.cpu.gc_ll_descr
+        assert gc_ll_descr.nursery[0] == self.nodedescr.type_id
+        assert gc_ll_descr.nursery[1] == 42
+        assert gc_ll_descr.addrs[0] == gc_ll_descr.nursery + 8
+        #assert self.nursery[0] == 15

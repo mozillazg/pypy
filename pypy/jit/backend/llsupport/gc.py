@@ -27,6 +27,8 @@ class GcLLDescription(GcCache):
         pass
     def rewrite_assembler(self, cpu, operations):
         pass
+    def can_inline_malloc(self, descr):
+        return False
 
 # ____________________________________________________________
 
