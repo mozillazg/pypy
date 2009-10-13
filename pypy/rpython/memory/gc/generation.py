@@ -384,7 +384,8 @@ class GenerationGC(SemiSpaceGC):
         while scan < self.free:
             curr = scan + self.size_gc_header()
             self.trace_and_drag_out_of_nursery(curr)
-            scan += self.size_gc_header() + self.get_size(curr)
+            scan += (self.size_gc_header() + self.get_size(curr)
+                                           + self.extra_hash_space(curr))
         return scan
 
     def trace_and_drag_out_of_nursery(self, obj):

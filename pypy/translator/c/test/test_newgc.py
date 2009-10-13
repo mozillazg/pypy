@@ -88,6 +88,7 @@ class TestUsingFramework(object):
         if not args:
             args = (-1, )
         num = self.name_to_func[name]
+        print
         print 'Running %r (test number %d)' % (name, num)
         res = self.c_allfuncs(num, *args)
         if self.funcsstr[num]:
@@ -734,8 +735,7 @@ class TestUsingFramework(object):
                 x1 = x2
                 i += 1
             return x1
-        def h(n):
-            xr = x1 = g(n)
+        def build(xr, n):
             i = 0
             while i < n:
                 xr.hash = compute_identity_hash(xr)
@@ -743,25 +743,30 @@ class TestUsingFramework(object):
                 xr = xr.prev
                 i += 1
             assert xr is None
-            i = 0
-            xr = x1
+        def check(xr, n):
             i = 0
             while i < n:
                 if xr.hash != compute_identity_hash(xr):
-                    return i
+                    os.write(2, "wrong hash! i=%d, n=%d\n" % (i, n))
+                    raise ValueError
                 xr = xr.prev
                 i += 1
             assert xr is None
-            return -1
+        def h(n):
+            x1 = g(n)
+            build(x1, n)
+            check(x1, n)
+            x2 = g(n//2)      # allocate more and try again
+            build(x2, n//2)
+            check(x1, n)
+            check(x2, n//2)
         def f():
             # numbers optimized for a 8MB space
-            for n in [225000, 250000, 300000, 380000,
+            for n in [100000, 225000, 250000, 300000, 380000,
                       460000, 570000, 800000]:
                 os.write(2, 'case %d\n' % n)
                 rgc.collect()
-                err = h(n)
-                if err >= 0:
-                    return err
+                h(n)
             return -42
         return f
 
