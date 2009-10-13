@@ -18,10 +18,17 @@ class BasicGcPolicy(object):
         self.thread_enabled = thread_enabled
 
     def common_gcheader_definition(self, defnode):
-        return []
+        if defnode.db.gctransformer is not None:
+            HDR = defnode.db.gctransformer.HDR
+            return [(name, HDR._flds[name]) for name in HDR._names]
+        else:
+            return []
 
     def common_gcheader_initdata(self, defnode):
-        return []
+        if defnode.db.gctransformer is not None:
+            raise NotImplementedError
+        else:
+            return []
 
     def struct_gcheader_definition(self, defnode):
         return self.common_gcheader_definition(defnode)
@@ -101,13 +108,6 @@ from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
 class RefcountingGcPolicy(BasicGcPolicy):
     transformerclass = refcounting.RefcountingGCTransformer
-
-    def common_gcheader_definition(self, defnode):
-        if defnode.db.gctransformer is not None:
-            HDR = defnode.db.gctransformer.HDR
-            return [(name, HDR._flds[name]) for name in HDR._names]
-        else:
-            return []
 
     def common_gcheader_initdata(self, defnode):
         if defnode.db.gctransformer is not None:
@@ -192,6 +192,15 @@ class BoehmInfo:
 
 class BoehmGcPolicy(BasicGcPolicy):
     transformerclass = boehm.BoehmGCTransformer
+
+    def common_gcheader_initdata(self, defnode):
+        if defnode.db.gctransformer is not None:
+            return [lltype.identityhash(defnode.obj._as_ptr())]
+        else:
+            return []
+
+    def get_header_fields(self, obj):
+        return [lltype.identityhash(obj._as_ptr())]
 
     def array_setup(self, arraydefnode):
         pass
