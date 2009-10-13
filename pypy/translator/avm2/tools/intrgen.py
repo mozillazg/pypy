@@ -89,7 +89,7 @@ def parse_file(file):
                 rettype = get_ootype(arglist[arglist.rfind(":")+2:], Resolved)
                 
             args = [arg for arg in arglist[:arglist.find(")")].split(",")]
-            args = [(get_ootype(arg.strip().split(":")[1], Resolved) if ":" in arg else arg) for arg in args]
+            args = [(get_ootype(arg.strip().split(":")[1], Resolved) if ":" in arg else ("*args" if "..." in arg else arg.strip())) for arg in args]
 
             if name in ("get", "set"):
                 
