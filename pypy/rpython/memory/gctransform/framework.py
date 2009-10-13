@@ -337,6 +337,10 @@ class FrameworkGCTransformer(GCTransformer):
                 [annmodel.SomeBool()],
                 s_gcref)
 
+        self.identityhash_ptr = getfn(GCClass.identityhash.im_func,
+                                      [s_gc, s_gcref],
+                                      annmodel.SomeInteger())
+
         if GCClass.moving_gc:
             self.id_ptr = getfn(GCClass.id.im_func,
                                 [s_gc, s_gcref], annmodel.SomeInteger(),
@@ -435,7 +439,20 @@ class FrameworkGCTransformer(GCTransformer):
     def gc_field_values_for(self, obj):
         hdr = self.gcdata.gc.gcheaderbuilder.header_of_object(obj)
         HDR = self._gc_HDR
-        return [getattr(hdr, fldname) for fldname in HDR._names]
+        withhash, flag = self.gcdata.gc.withhash_flag_is_in_field
+        result = []
+        for fldname in HDR._names:
+            x = getattr(hdr, fldname)
+            if fldname == withhash:
+                TYPE = lltype.typeOf(x)
+                x = lltype.cast_primitive(lltype.Signed, x)
+                if hasattr(obj._normalizedcontainer(), '_hash_cache_'):
+                    x |= flag
+                else:
+                    x &= ~flag
+                x = lltype.cast_primitive(TYPE, x)
+            result.append(x)
+        return result
 
     def finish_tables(self):
         group = self.layoutbuilder.close_table()
@@ -712,6 +729,14 @@ class FrameworkGCTransformer(GCTransformer):
                            [self.weakref_deref_ptr, v_wref],
                            resulttype=llmemory.Address)
         hop.cast_result(v_addr)
+
+    def gct_gc_identityhash(self, hop):
+        [v_ptr] = hop.spaceop.args
+        v_adr = hop.genop("cast_ptr_to_adr", [v_ptr],
+                          resulttype=llmemory.Address)
+        hop.genop("direct_call",
+                  [self.identityhash_ptr, self.c_const_gc, v_adr],
+                  resultvar=hop.spaceop.result)
 
     def gct_gc_id(self, hop):
         if self.id_ptr is not None:

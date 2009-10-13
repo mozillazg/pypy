@@ -440,7 +440,7 @@ LL_OPERATIONS = {
     'gc_pop_alive_pyobj':   LLOp(),
     'gc_reload_possibly_moved': LLOp(),
     # see rlib/objectmodel for gc_identityhash and gc_id
-    'gc_identityhash':      LLOp(canraise=(MemoryError,), sideeffects=False),
+    'gc_identityhash':      LLOp(sideeffects=False),
     'gc_id':                LLOp(canraise=(MemoryError,), sideeffects=False),
     'gc_set_max_heap_size': LLOp(),
     'gc_can_move'         : LLOp(sideeffects=False),

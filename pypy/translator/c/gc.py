@@ -12,6 +12,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 class BasicGcPolicy(object):
     requires_stackless = False
+    stores_hash_at_the_end = False
 
     def __init__(self, db, thread_enabled=False):
         self.db = db
@@ -41,9 +42,6 @@ class BasicGcPolicy(object):
 
     def array_gcheader_initdata(self, defnode):
         return self.common_gcheader_initdata(defnode)
-
-    def struct_after_definition(self, defnode):
-        return []
 
     def compilation_info(self):
         if not self.db:
@@ -290,6 +288,7 @@ class NoneGcPolicy(BoehmGcPolicy):
 
 class FrameworkGcPolicy(BasicGcPolicy):
     transformerclass = framework.FrameworkGCTransformer
+    stores_hash_at_the_end = True
 
     def struct_setup(self, structdefnode, rtti):
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
