@@ -959,7 +959,7 @@ class __extend__(pyframe.PyFrame):
     def MAKE_FUNCTION(f, numdefaults, *ignored):
         w_codeobj = f.popvalue()
         codeobj = f.space.interp_w(PyCode, w_codeobj)
-        defaultarguments = f.popvalues_mutable(numdefaults)
+        defaultarguments = f.popvalues(numdefaults)
         fn = function.Function(f.space, codeobj, f.w_globals, defaultarguments)
         f.pushvalue(f.space.wrap(fn))
 
