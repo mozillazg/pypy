@@ -30,9 +30,11 @@ registerimplementation(W_ListObject)
 EMPTY_LIST = W_ListObject([])
 
 def init__List(space, w_list, __args__):
-    w_iterable, = __args__.parse('list',
-                               (['sequence'], None, None),   # signature
-                               [EMPTY_LIST])                 # default argument
+    # this is on the silly side
+    w_iterable, = __args__.parse_obj(
+            None, 'list',
+            (['sequence'], None, None),   # signature
+            [EMPTY_LIST])                 # default argument
     #
     # this is the old version of the loop at the end of this function:
     #
