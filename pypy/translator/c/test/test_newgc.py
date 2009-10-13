@@ -88,6 +88,7 @@ class TestUsingFramework(object):
         if not args:
             args = (-1, )
         num = self.name_to_func[name]
+        print 'Running %r (test number %d)' % (name, num)
         res = self.c_allfuncs(num, *args)
         if self.funcsstr[num]:
             return res
@@ -719,6 +720,54 @@ class TestUsingFramework(object):
     def test_hash_preservation(self):
         res = self.run('hash_preservation')
         assert res == 42
+
+    def define_hash_overflow(self):
+        from pypy.rlib.objectmodel import compute_identity_hash
+        class X(object):
+            pass
+        def g(n):
+            x1 = None
+            i = 0
+            while i < n:
+                x2 = X()
+                x2.prev = x1
+                x1 = x2
+                i += 1
+            return x1
+        def h(n):
+            xr = x1 = g(n)
+            i = 0
+            while i < n:
+                xr.hash = compute_identity_hash(xr)
+                # ^^^ likely to trigger a collection
+                xr = xr.prev
+                i += 1
+            assert xr is None
+            i = 0
+            xr = x1
+            i = 0
+            while i < n:
+                if xr.hash != compute_identity_hash(xr):
+                    return i
+                xr = xr.prev
+                i += 1
+            assert xr is None
+            return -1
+        def f():
+            # numbers optimized for a 8MB space
+            for n in [225000, 250000, 300000, 380000,
+                      460000, 570000, 800000]:
+                os.write(2, 'case %d\n' % n)
+                rgc.collect()
+                err = h(n)
+                if err >= 0:
+                    return err
+            return -42
+        return f
+
+    def test_hash_overflow(self):
+        res = self.run('hash_overflow')
+        assert res == -42
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"

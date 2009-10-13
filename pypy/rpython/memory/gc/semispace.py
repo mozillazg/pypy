@@ -36,7 +36,9 @@ class SemiSpaceGC(MovingGCBase):
 
     HDR = lltype.Struct('header', ('tid', lltype.Signed))   # XXX or rffi.INT?
     typeid_is_in_field = 'tid'
-    withhash_flag_is_in_field = 'tid', (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD)
+    withhash_flag_is_in_field = 'tid', GCFLAG_HASHFIELD
+    # ^^^ all prebuilt objects have GCFLAG_HASHTAKEN, but only some have
+    #     GCFLAG_HASHFIELD (and then they are one word longer).
     FORWARDSTUB = lltype.GcStruct('forwarding_stub',
                                   ('forw', llmemory.Address))
     FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)
@@ -430,7 +432,7 @@ class SemiSpaceGC(MovingGCBase):
 
     def init_gc_object_immortal(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        flags |= GCFLAG_EXTERNAL | GCFLAG_FORWARDED
+        flags |= GCFLAG_EXTERNAL | GCFLAG_FORWARDED | GCFLAG_HASHTAKEN
         hdr.tid = self.combine(typeid16, flags)
         # immortal objects always have GCFLAG_FORWARDED set;
         # see get_forwarding_address().
@@ -593,12 +595,33 @@ class SemiSpaceGC(MovingGCBase):
 
     STATISTICS_NUMBERS = 0
 
-    def identityhash(self, obj):
-        obj = llmemory.cast_ptr_to_adr(obj)
-        hdr = self.header(obj)
-        if hdr.tid & GCFLAG_HASHFIELD:
-            obj += self.get_size(obj)
-            return obj.signed[0]
-        else:
-            hdr.tid |= GCFLAG_HASHTAKEN
-            return llmemory.cast_adr_to_int(obj)
+    def identityhash(self, gcobj):
+        # The following code should run at most twice.
+        while 1:
+            obj = llmemory.cast_ptr_to_adr(gcobj)
+            hdr = self.header(obj)
+            #
+            if hdr.tid & GCFLAG_HASHFIELD:  # the hash is in a field at the end
+                obj += self.get_size(obj)
+                return obj.signed[0]
+            #
+            if not (hdr.tid & GCFLAG_HASHTAKEN):
+                # It's the first time we ask for a hash, and it's not an
+                # external object.  Shrink the top of space by the extra
+                # hash word that will be needed after a collect.
+                shrunk_top = self.top_of_space - llmemory.sizeof(lltype.Signed)
+                if shrunk_top < self.free:
+                    # Cannot shrink!  Do a collection, asking for at least
+                    # one word of free space, and try again.  May raise
+                    # MemoryError.  Obscure: not called directly, but
+                    # across an llop, to make sure that there is the
+                    # correct push_roots/pop_roots around the call...
+                    llop.gc_obtain_free_space(llmemory.Address,
+                                              llmemory.sizeof(lltype.Signed))
+                    continue
+                # Now we can have side-effects: set GCFLAG_HASHTAKEN
+                # and lower the top of space.
+                self.top_of_space = shrunk_top
+                hdr.tid |= GCFLAG_HASHTAKEN
+            #
+            return llmemory.cast_adr_to_int(obj)  # direct case
