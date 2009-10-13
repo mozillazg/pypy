@@ -494,7 +494,7 @@ def rtype_cast_int_to_ptr(hop):
 
 def rtype_identity_hash(hop):
     vlist = hop.inputargs(hop.args_r[0])
-    return hop.genop('identityhash', vlist, resulttype=lltype.Signed)
+    return hop.genop('gc_identityhash', vlist, resulttype=lltype.Signed)
 
 def rtype_runtime_type_info(hop):
     assert isinstance(hop.args_r[0], rptr.PtrRepr)

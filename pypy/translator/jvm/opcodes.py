@@ -82,7 +82,8 @@ opcodes = _proc_dict({
     'instanceof':               [CastTo, StoreResult],
     'subclassof':               [PushAllArgs, jvm.SWAP, jvm.CLASSISASSIGNABLEFROM, StoreResult],
     'classof':                  [PushAllArgs, jvm.OBJECTGETCLASS, StoreResult],
-    'identityhash':             [PushAllArgs, jvm.SYSTEMIDENTITYHASH, StoreResult], 
+    'gc_id':                    [PushAllArgs, jvm.SYSTEMIDENTITYHASH, StoreResult],   # XXX not implemented
+    'gc_identityhash':          [PushAllArgs, jvm.SYSTEMIDENTITYHASH, StoreResult], 
     'oostring':                 [OOString, StoreResult],
     'oounicode':                [OOUnicode, StoreResult],
     'ooparse_float':            jvm.PYPYOOPARSEFLOAT,
