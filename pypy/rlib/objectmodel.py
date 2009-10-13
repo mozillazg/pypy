@@ -278,7 +278,7 @@ class Entry(ExtRegistryEntry):
             from pypy.rpython.error import TyperError
             raise TyperError("compute_identity_hash() cannot be applied to"
                              " %r" % (vobj.concretetype,))
-        return hop.genop('identityhash', [vobj], resulttype=lltype.Signed)
+        return hop.genop('gc_identityhash', [vobj], resulttype=lltype.Signed)
 
 class Entry(ExtRegistryEntry):
     _about_ = compute_unique_id
@@ -319,7 +319,7 @@ class Entry(ExtRegistryEntry):
         elif hop.rtyper.type_system.name == 'ootypesystem':
             from pypy.rpython.ootypesystem import ootype
             if isinstance(vobj.concretetype, ootype.Instance):
-                return hop.genop('identityhash', [vobj],
+                return hop.genop('gc_identityhash', [vobj],
                                  resulttype = ootype.Signed)
         from pypy.rpython.error import TyperError
         raise TyperError("current_object_addr_as_int() cannot be applied to"

@@ -801,9 +801,6 @@ class LLFrame(object):
         checkadr(adr)
         return llmemory.cast_adr_to_int(adr)
 
-    def op_identityhash(self, obj):
-        return lltype.identityhash(obj)
-
     def op_weakref_create(self, v_obj):
         def objgetter():    # special support for gcwrapper.py
             return self.getval(v_obj)
@@ -877,6 +874,9 @@ class LLFrame(object):
         else:
             self.setvar(v_ptr, p)
     op_gc_reload_possibly_moved.specialform = True
+
+    def op_gc_identityhash(self, obj):
+        return lltype.identityhash(obj)
 
     def op_gc_id(self, v_ptr):
         return self.heap.gc_id(v_ptr)

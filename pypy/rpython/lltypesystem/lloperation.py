@@ -378,7 +378,6 @@ LL_OPERATIONS = {
     'direct_arrayitems':    LLOp(canfold=True),
     'direct_ptradd':        LLOp(canfold=True),
     'cast_opaque_ptr':      LLOp(sideeffects=False),
-    'identityhash':         LLOp(sideeffects=False),  # see rlib/objectmodel
 
     # __________ address operations __________
 
@@ -440,6 +439,8 @@ LL_OPERATIONS = {
     'gc_push_alive_pyobj':  LLOp(),
     'gc_pop_alive_pyobj':   LLOp(),
     'gc_reload_possibly_moved': LLOp(),
+    # see rlib/objectmodel for gc_identityhash and gc_id
+    'gc_identityhash':      LLOp(canraise=(MemoryError,), sideeffects=False),
     'gc_id':                LLOp(canraise=(MemoryError,), sideeffects=False),
     'gc_set_max_heap_size': LLOp(),
     'gc_can_move'         : LLOp(sideeffects=False),
