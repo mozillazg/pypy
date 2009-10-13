@@ -1,6 +1,7 @@
 import py
 from pypy.interpreter.argument import Arguments, ArgumentsForTranslation, ArgErr
-from pypy.interpreter.argument import ArgErrUnknownKwds, rawshape
+from pypy.interpreter.argument import ArgErrUnknownKwds, ArgErrMultipleValues
+from pypy.interpreter.argument import ArgErrCount, rawshape
 from pypy.interpreter.error import OperationError
 
 
@@ -394,6 +395,46 @@ class TestArgumentsNormal(object):
         assert args.keywords_w[args.keywords.index('b')] == 3        
                                  
 
+class TestErrorHandling(object):
+    def test_missing_args(self):
+        # got_nargs, nkwds, expected_nargs, has_vararg, has_kwarg,
+        # defaults_w, missing_args
+        err = ArgErrCount(1, 0, 0, False, False, [], 0)
+        s = err.getmsg('foo')
+        assert s == "foo() takes no argument (1 given)"
+        err = ArgErrCount(0, 0, 1, False, False, [], 1)
+        s = err.getmsg('foo')
+        assert s == "foo() takes exactly 1 argument (0 given)"
+        err = ArgErrCount(3, 0, 2, False, False, [], 0)
+        s = err.getmsg('foo')
+        assert s == "foo() takes exactly 2 arguments (3 given)"
+        err = ArgErrCount(1, 0, 2, True, False, [], 1)
+        s = err.getmsg('foo')
+        assert s == "foo() takes at least 2 arguments (1 given)"
+        err = ArgErrCount(3, 0, 2, True, False, ['a'], 0)
+        s = err.getmsg('foo')
+        assert s == "foo() takes at most 2 arguments (3 given)"
+        err = ArgErrCount(0, 1, 2, True, False, ['a'], 1)
+        s = err.getmsg('foo')
+        assert s == "foo() takes at least 1 non-keyword argument (0 given)"
+        err = ArgErrCount(2, 1, 1, False, True, [], 0)
+        s = err.getmsg('foo')
+        assert s == "foo() takes exactly 1 non-keyword argument (2 given)"
+
+
+    def test_unknown_keywords(self):
+        err = ArgErrUnknownKwds(1, ['a', 'b'], [True, False])
+        s = err.getmsg('foo')
+        assert s == "foo() got an unexpected keyword argument 'b'"
+        err = ArgErrUnknownKwds(2, ['a', 'b', 'c'], [True, False, False])
+        s = err.getmsg('foo')
+        assert s == "foo() got 2 unexpected keyword arguments"
+
+    def test_multiple_values(self):
+        err = ArgErrMultipleValues('bla')
+        s = err.getmsg('foo')
+        assert s == "foo() got multiple values for keyword argument 'bla'"
+
 def make_arguments_for_translation(space, args_w, keywords_w={},
                                    w_stararg=None, w_starstararg=None):
     return ArgumentsForTranslation(space, args_w, keywords_w.keys(),
@@ -401,6 +442,15 @@ def make_arguments_for_translation(space, args_w, keywords_w={},
                                    w_starstararg)
 
 class TestArgumentsForTranslation(object):
+
+    def test_prepend(self):
+        space = DummySpace()
+        args = ArgumentsForTranslation(space, ["0"])
+        args1 = args.prepend("thingy")
+        assert args1 is not args
+        assert args1.arguments_w == ["thingy", "0"]
+        assert args1.keywords is args.keywords
+        assert args1.keywords_w is args.keywords_w
 
     def test_unmatch_signature(self):
         space = DummySpace()
@@ -495,6 +545,15 @@ class TestArgumentsForTranslation(object):
                                        w_starstararg={'e': 5, 'd': 7})
         assert rawshape(args) == (2, ('g', ), True, True)
 
+    def test_copy_and_shape(self):
+        space = DummySpace()        
+        args = ArgumentsForTranslation(space, ['a'], ['x'], [1],
+                                       ['w1'], {'y': 'w2'})
+        args1 = args.copy()
+        args.combine_if_necessary()
+        assert rawshape(args1) == (1, ('x',), True, True)
+
+
     def test_flatten(self):
         space = DummySpace()
         args = make_arguments_for_translation(space, [1,2,3])
@@ -577,3 +636,4 @@ class TestArgumentsForTranslation(object):
         shape = ((2, ('g', ), True, True), [1, 2, 9, [3, 4, 5], {'e': 5, 'd': 7}])
         args = ArgumentsForTranslation.fromshape(space, *shape)
         assert args.flatten() == shape
+
