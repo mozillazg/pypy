@@ -801,6 +801,9 @@ class LLFrame(object):
         checkadr(adr)
         return llmemory.cast_adr_to_int(adr)
 
+    def op_identityhash(self, obj):
+        return lltype.identityhash(obj)
+
     def op_weakref_create(self, v_obj):
         def objgetter():    # special support for gcwrapper.py
             return self.getval(v_obj)
@@ -1180,9 +1183,6 @@ class LLFrame(object):
             raise RuntimeError("calling abstract method %r" % (m,))
         return self.perform_call(m, (lltype.typeOf(inst),)+lltype.typeOf(m).ARGS, [inst]+args)
 
-    def op_ooidentityhash(self, inst):
-        return ootype.ooidentityhash(inst)
-
     def op_oostring(self, obj, base):
         return ootype.oostring(obj, base)
 
@@ -1203,9 +1203,6 @@ class LLFrame(object):
             return ootype.ooparse_float(s)
         except ValueError:
             self.make_llexception()
-
-    def op_oohash(self, s):
-        return ootype.oohash(s)
 
 class Tracer(object):
     Counter = 0
