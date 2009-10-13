@@ -155,7 +155,7 @@ def slotnames(cls):
     import copy_reg
     slotnames = copy_reg._slotnames(cls)
     if not isinstance(slotnames, list) and slotnames is not None:
-        raise TypeError, "copy_reg._slotnames didn't return a list or None"
+        raise TypeError, "copy_reg._slotnames didn\'t return a list or None"
     return slotnames
 ''', filename=__file__)
 
