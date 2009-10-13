@@ -230,9 +230,9 @@ TAKE_NEXT = float(2**31)
 def _hash_tuple(t):
     """NOT_RPYTHON.  The algorithm behind compute_hash() for a tuple.
     It is modelled after the old algorithm of Python 2.3, which is
-    slightly faster than the one introduced by Python 2.4.  We assume
-    that nested tuples are very uncommon in RPython, making the case
-    unlikely.
+    a bit faster than the one introduced by Python 2.4.  We assume
+    that nested tuples are very uncommon in RPython, making the bad
+    case unlikely.
     """
     from pypy.rlib.rarithmetic import intmask
     x = 0x345678
@@ -266,13 +266,13 @@ class Entry(ExtRegistryEntry):
         return annmodel.SomeInteger()
 
     def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
         vobj, = hop.inputargs(hop.args_r[0])
         if hop.rtyper.type_system.name == 'lltypesystem':
-            from pypy.rpython.lltypesystem import lltype
             ok = (isinstance(vobj.concretetype, lltype.Ptr) and
                   vobj.concretetype.TO._gckind == 'gc')
         else:
-            from pypy.rpython.lltypesystem import ootype
+            from pypy.rpython.ootypesystem import ootype
             ok = isinstance(vobj.concretetype, ootype.OOType)
         if not ok:
             from pypy.rpython.error import TyperError
@@ -288,23 +288,19 @@ class Entry(ExtRegistryEntry):
         return annmodel.SomeInteger()
 
     def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
         vobj, = hop.inputargs(hop.args_r[0])
         if hop.rtyper.type_system.name == 'lltypesystem':
-            from pypy.rpython.lltypesystem import lltype
-            if isinstance(vobj.concretetype, lltype.Ptr):
-                return hop.genop('gc_id', [vobj],
-                                 resulttype = lltype.Signed)
-        elif hop.rtyper.type_system.name == 'ootypesystem':
+            ok = (isinstance(vobj.concretetype, lltype.Ptr) and
+                  vobj.concretetype.TO._gckind == 'gc')
+        else:
             from pypy.rpython.ootypesystem import ootype
-            if isinstance(vobj.concretetype, ootype.Instance):
-                # XXX wrong implementation for now, fix me
-                from pypy.rpython.rmodel import warning
-                warning("compute_unique_id() is not fully supported on ootype")
-                return hop.genop('identityhash', [vobj],
-                                 resulttype = ootype.Signed)
-        from pypy.rpython.error import TyperError
-        raise TyperError("compute_unique_id() cannot be applied to %r" % (
-            vobj.concretetype,))
+            ok = isinstance(vobj.concretetype, ootype.Instance)
+        if not ok:
+            from pypy.rpython.error import TyperError
+            raise TyperError("compute_unique_id() cannot be applied to"
+                             " %r" % (vobj.concretetype,))
+        return hop.genop('gc_id', [vobj], resulttype=lltype.Signed)
 
 class Entry(ExtRegistryEntry):
     _about_ = current_object_addr_as_int
