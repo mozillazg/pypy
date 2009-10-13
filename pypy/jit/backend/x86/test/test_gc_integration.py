@@ -187,7 +187,7 @@ class GCDescrFastpathMalloc(GcLLDescription):
         return llhelper(lltype.Ptr(self.NEW_TP), self.new)
 
     def init_size_descr(self, S, descr):
-        descr.type_id = self._counter
+        descr.tid = self._counter
         self._counter += 1
 
     def get_nursery_free_addr(self):
@@ -207,9 +207,9 @@ class TestMallocFastpath(BaseTestRegalloc):
     cpu = CPU(None, None)
     cpu.gc_ll_descr = GCDescrFastpathMalloc()
 
-    NODE = lltype.GcStruct('node', ('tid', lltype.Signed),
-                           ('value', lltype.Signed))
-    nodedescr = cpu.sizeof(NODE)
+    NODE = lltype.Struct('node', ('tid', lltype.Signed),
+                                 ('value', lltype.Signed))
+    nodedescr = cpu.sizeof(NODE)     # xxx hack: NODE is not a GcStruct
     valuedescr = cpu.fielddescrof(NODE, 'value')
 
     namespace = locals().copy()
@@ -224,7 +224,8 @@ class TestMallocFastpath(BaseTestRegalloc):
         self.interpret(ops, [42])
         # check the nursery
         gc_ll_descr = self.cpu.gc_ll_descr
-        assert gc_ll_descr.nursery[0] == self.nodedescr.type_id
+        assert gc_ll_descr.nursery[0] == self.nodedescr.tid
         assert gc_ll_descr.nursery[1] == 42
-        assert gc_ll_descr.addrs[0] == gc_ll_descr.nursery + 8
+        nurs_adr = rffi.cast(lltype.Signed, gc_ll_descr.nursery)
+        assert gc_ll_descr.addrs[0] == nurs_adr + 8
         #assert self.nursery[0] == 15

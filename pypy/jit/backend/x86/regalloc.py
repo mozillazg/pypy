@@ -641,7 +641,7 @@ class RegAlloc(object):
             self.assembler.malloc_cond_fixedsize(
                 gc_ll_descr.get_nursery_free_addr(),
                 gc_ll_descr.get_nursery_top_addr(),
-                op.descr.size, op.descr.type_id, push_reg,
+                op.descr.size, op.descr.tid, push_reg,
                 gc_ll_descr.get_malloc_fixedsize_slowpath_addr(),
                 )
             self.rm.possibly_free_var(tmp0)
