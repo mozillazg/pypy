@@ -2,9 +2,9 @@ from weakref import WeakValueDictionary
 from pypy.tool.pairtype import pairtype
 from pypy.rpython.error import TyperError
 from pypy.rlib.objectmodel import malloc_zero_filled, we_are_translated
+from pypy.rlib.objectmodel import _hash_string
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
-from pypy.rlib.rarithmetic import _hash_string
 from pypy.rpython.rmodel import inputconst, IntegerRepr
 from pypy.rpython.rstr import AbstractStringRepr,AbstractCharRepr,\
      AbstractUniCharRepr, AbstractStringIteratorRepr,\

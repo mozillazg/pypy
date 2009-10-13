@@ -1119,6 +1119,14 @@ class _abstract_ptr(object):
             return callb(*args)
         raise TypeError("%r instance is not a function" % (self._T,))
 
+    def _identityhash(self):
+        p = normalizeptr(self)
+        try:
+            return p._obj._hash_cache_
+        except AttributeError:
+            result = p._obj._hash_cache_ = hash(p._obj)
+            return result
+
 class _ptr(_abstract_ptr):
     __slots__ = ('_TYPE', 
                  '_weak', '_solid',
@@ -1840,19 +1848,18 @@ def runtime_type_info(p):
                                  "should have been: %s" % (p, result2, result))
     return result
 
-def hash_gc_object(p):
-    """Returns the lltype-level hash of the given GcStruct."""
-    p = normalizeptr(p)
-    if not p:
-        return 0      # hash(NULL)
-    try:
-        return p._obj._hash_cache_
-    except AttributeError:
-        result = p._obj._hash_cache_ = intmask(id(p._obj))
-        return result
+def identityhash(p):
+    """Returns the lltype-level hash of the given GcStruct.
+    Also works with most ootype objects.  Not for NULL.
+    See rlib.objectmodel.compute_identiy_hash() for more
+    information about the RPython-level meaning of this.
+    """
+    assert p
+    return p._identityhash()
 
-def init_hash_gc_object(p, value):
+def init_identity_hash(p, value):
     """For a prebuilt object p, initialize its hash value to 'value'."""
+    assert isinstance(typeOf(p), Ptr)
     p = normalizeptr(p)
     if not p:
         raise ValueError("cannot change hash(NULL)!")

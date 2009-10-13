@@ -378,6 +378,7 @@ LL_OPERATIONS = {
     'direct_arrayitems':    LLOp(canfold=True),
     'direct_ptradd':        LLOp(canfold=True),
     'cast_opaque_ptr':      LLOp(sideeffects=False),
+    'identityhash':         LLOp(sideeffects=False),  # see rlib/objectmodel
 
     # __________ address operations __________
 
@@ -530,11 +531,9 @@ LL_OPERATIONS = {
     'instanceof':           LLOp(oo=True, canfold=True),
     'classof':              LLOp(oo=True, canfold=True),
     'subclassof':           LLOp(oo=True, canfold=True),
-    'ooidentityhash':       LLOp(oo=True, sideeffects=False),  # not an id()!
     'oostring':             LLOp(oo=True, sideeffects=False),
     'ooparse_int':          LLOp(oo=True, canraise=(ValueError,)),
     'ooparse_float':        LLOp(oo=True, canraise=(ValueError,)),
-    'oohash':               LLOp(oo=True, sideeffects=False),
     'oounicode':            LLOp(oo=True, canraise=(UnicodeDecodeError,)),
 
     # _____ read frame var support ___
