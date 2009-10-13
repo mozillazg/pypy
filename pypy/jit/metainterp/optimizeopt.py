@@ -2,6 +2,7 @@ from pypy.jit.metainterp.history import Box, BoxInt, LoopToken, BoxFloat,\
      ConstFloat
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj, REF
 from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.metainterp.jitprof import OPT_OPS, OPT_GUARDS, OPT_FORCINGS
 from pypy.jit.metainterp.executor import execute_nonspec
 from pypy.jit.metainterp.specnode import SpecNode, NotSpecNode, ConstantSpecNode
 from pypy.jit.metainterp.specnode import AbstractVirtualStructSpecNode
@@ -15,21 +16,21 @@ from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype
 
-def optimize_loop_1(cpu, loop):
+def optimize_loop_1(metainterp_sd, loop):
     """Optimize loop.operations to make it match the input of loop.specnodes
     and to remove internal overheadish operations.  Note that loop.specnodes
     must be applicable to the loop; you will probably get an AssertionError
     if not.
     """
-    optimizer = Optimizer(cpu, loop)
+    optimizer = Optimizer(metainterp_sd, loop)
     optimizer.setup_virtuals_and_constants()
     optimizer.propagate_forward()
 
-def optimize_bridge_1(cpu, bridge):
+def optimize_bridge_1(metainterp_sd, bridge):
     """The same, but for a bridge.  The only difference is that we don't
     expect 'specnodes' on the bridge.
     """
-    optimizer = Optimizer(cpu, bridge)
+    optimizer = Optimizer(metainterp_sd, bridge)
     optimizer.propagate_forward()
 
 # ____________________________________________________________
@@ -55,11 +56,6 @@ class OptValue(object):
 
     def get_key_box(self):
         return self.box
-
-    def register_value(self, modifier):
-        box = self.get_key_box()   # may be a Const, too
-        if modifier.register_box(box):
-            self.get_args_for_fail(modifier)
 
     def get_args_for_fail(self, modifier):
         pass
@@ -144,9 +140,7 @@ CONST_0      = ConstInt(0)
 CONST_1      = ConstInt(1)
 CVAL_ZERO    = ConstantValue(CONST_0)
 CVAL_ZERO_FLOAT = ConstantValue(ConstFloat(0.0))
-llhelper.CONST_NULL = ConstPtr(ConstPtr.value)
 llhelper.CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
-oohelper.CONST_NULL = ConstObj(ConstObj.value)
 oohelper.CVAL_NULLREF = ConstantValue(oohelper.CONST_NULL)
 
 
@@ -166,6 +160,12 @@ class AbstractVirtualValue(OptValue):
             return self.keybox
         return self.box
 
+    def force_box(self):
+        if self.box is None:
+            self.optimizer.forget_numberings(self.keybox)
+            self._really_force()
+        return self.box
+
 
 class AbstractVirtualStructValue(AbstractVirtualValue):
     _attrs_ = ('_fields', '_cached_sorted_fields')
@@ -182,24 +182,22 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
         assert isinstance(fieldvalue, OptValue)
         self._fields[ofs] = fieldvalue
 
-    def force_box(self):
-        if self.box is None:
-            assert self.source_op is not None
-            newoperations = self.optimizer.newoperations
-            newoperations.append(self.source_op)
-            self.box = box = self.source_op.result
-            #
-            iteritems = self._fields.iteritems()
-            if not we_are_translated(): #random order is fine, except for tests
-                iteritems = list(iteritems)
-                iteritems.sort(key = lambda (x,y): x.sort_key())
-            for ofs, value in iteritems:
-                subbox = value.force_box()
-                op = ResOperation(rop.SETFIELD_GC, [box, subbox], None,
-                                  descr=ofs)
-                newoperations.append(op)
-            self._fields = None
-        return self.box
+    def _really_force(self):
+        assert self.source_op is not None
+        newoperations = self.optimizer.newoperations
+        newoperations.append(self.source_op)
+        self.box = box = self.source_op.result
+        #
+        iteritems = self._fields.iteritems()
+        if not we_are_translated(): #random order is fine, except for tests
+            iteritems = list(iteritems)
+            iteritems.sort(key = lambda (x,y): x.sort_key())
+        for ofs, value in iteritems:
+            subbox = value.force_box()
+            op = ResOperation(rop.SETFIELD_GC, [box, subbox], None,
+                              descr=ofs)
+            newoperations.append(op)
+        self._fields = None
 
     def _get_field_descr_list(self):
         # this shares only per instance and not per type, but better than nothing
@@ -214,8 +212,9 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
         return lst
 
     def get_args_for_fail(self, modifier):
-        if self.box is None and not modifier.is_virtual(self.keybox):
-            # modifier.is_virtual() checks for recursion: it is False unless
+        if self.box is None and not modifier.already_seen_virtual(self.keybox):
+            # modifier.already_seen_virtual()
+            # checks for recursion: it is False unless
             # we have already seen the very same keybox
             lst = self._get_field_descr_list()
             fieldboxes = [self._fields[ofs].get_key_box() for ofs in lst]
@@ -272,25 +271,24 @@ class VArrayValue(AbstractVirtualValue):
         assert isinstance(itemvalue, OptValue)
         self._items[index] = itemvalue
 
-    def force_box(self):
-        if self.box is None:
-            assert self.source_op is not None
-            newoperations = self.optimizer.newoperations
-            newoperations.append(self.source_op)
-            self.box = box = self.source_op.result
-            for index in range(len(self._items)):
-                subvalue = self._items[index]
-                if subvalue is not None:
-                    subbox = subvalue.force_box()
-                    op = ResOperation(rop.SETARRAYITEM_GC,
-                                      [box, ConstInt(index), subbox], None,
-                                      descr=self.arraydescr)
-                    newoperations.append(op)
-        return self.box
+    def _really_force(self):
+        assert self.source_op is not None
+        newoperations = self.optimizer.newoperations
+        newoperations.append(self.source_op)
+        self.box = box = self.source_op.result
+        for index in range(len(self._items)):
+            subvalue = self._items[index]
+            if subvalue is not None:
+                subbox = subvalue.force_box()
+                op = ResOperation(rop.SETARRAYITEM_GC,
+                                  [box, ConstInt(index), subbox], None,
+                                  descr=self.arraydescr)
+                newoperations.append(op)
 
     def get_args_for_fail(self, modifier):
-        if self.box is None and not modifier.is_virtual(self.keybox):
-            # modifier.is_virtual() checks for recursion: it is False unless
+        if self.box is None and not modifier.already_seen_virtual(self.keybox):
+            # modifier.already_seen_virtual()
+            # checks for recursion: it is False unless
             # we have already seen the very same keybox
             itemboxes = []
             const = self.optimizer.new_const_item(self.arraydescr)
@@ -365,13 +363,18 @@ class __extend__(VirtualArraySpecNode):
 
 class Optimizer(object):
 
-    def __init__(self, cpu, loop):
-        self.cpu = cpu
+    def __init__(self, metainterp_sd, loop):
+        self.metainterp_sd = metainterp_sd
+        self.cpu = metainterp_sd.cpu
         self.loop = loop
         self.values = {}
         self.interned_refs = {}
-        self.resumedata_memo = resume.ResumeDataLoopMemo(cpu)
+        self.resumedata_memo = resume.ResumeDataLoopMemo(self.cpu)
         self.heap_op_optimizer = HeapOpOptimizer(self)
+
+    def forget_numberings(self, virtualbox):
+        self.metainterp_sd.profiler.count(OPT_FORCINGS)
+        self.resumedata_memo.forget_numberings(virtualbox)
 
     def getinterned(self, box):
         constbox = self.get_constant_box(box)
@@ -513,7 +516,9 @@ class Optimizer(object):
                         op = op.clone()
                         must_clone = False
                     op.args[i] = box
+        self.metainterp_sd.profiler.count(OPT_OPS)
         if op.is_guard():
+            self.metainterp_sd.profiler.count(OPT_GUARDS)
             self.store_final_boxes_in_guard(op)
         elif op.can_raise():
             self.exception_might_have_happened = True
@@ -523,7 +528,6 @@ class Optimizer(object):
         descr = op.descr
         assert isinstance(descr, compile.ResumeGuardDescr)
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
-        modifier.walk_snapshots(self.values)
         newboxes = modifier.finish(self.values)
         descr.store_final_boxes(op, newboxes)
 

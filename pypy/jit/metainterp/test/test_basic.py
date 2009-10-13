@@ -493,6 +493,25 @@ class BasicTests:
         res = self.meta_interp(f, [-5])
         assert res == 5+4+3+2+1+0+1+2+3+4+5+6+7+8+9
 
+    def test_float(self):
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res'])
+        def f(x, y):
+            x = float(x)
+            y = float(y)
+            res = 0.0
+            while y > 0.0:
+                myjitdriver.can_enter_jit(x=x, y=y, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res)
+                res += x
+                y -= 1.0
+            return res
+        res = self.meta_interp(f, [6, 7])
+        assert res == 42.0
+        self.check_loop_count(1)
+        self.check_loops({'guard_true': 1,
+                          'float_add': 1, 'float_sub': 1, 'float_gt': 1,
+                          'jump': 1})
+
     def test_print(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
@@ -926,6 +945,32 @@ class BasicTests:
         res = self.interp_operations(f, [-10])
         assert res == 456 * 2
 
+    def test_residual_external_call(self):
+        class CustomPolicy(JitPolicy):
+            def look_inside_function(self, func):
+                mod = func.__module__ or '?'
+                if mod == 'pypy.rpython.lltypesystem.module.ll_math':
+                    # XXX temporary, contains force_cast
+                    return False
+                return super(CustomPolicy, self).look_inside_function(func)
+
+        import math
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res'])
+        def f(x, y):
+            x = float(x)
+            res = 0
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res)
+                rpart, ipart = math.modf(x)
+                res += ipart
+                y -= 1
+            return res
+        res = self.meta_interp(f, [6, 7], policy=CustomPolicy())
+        assert res == 42
+        self.check_loop_count(1)
+
+
 class TestOOtype(BasicTests, OOJitMixin):
 
     def test_oohash(self):
@@ -1009,6 +1054,7 @@ class TestOOtype(BasicTests, OOJitMixin):
                                policy=StopAtXPolicy(getcls),
                                optimizer=OPTIMIZER_SIMPLE)
         assert res
+
 
 
 

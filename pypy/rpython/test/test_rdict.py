@@ -451,9 +451,9 @@ class BaseTestRdict(BaseRtypingTest):
     def test_tuple_dict(self):
         def f(i):
             d = {}
-            d[(1, 2)] = 4
-            d[(1, 3)] = 6
-            return d[(1, i)]
+            d[(1, 4.5, (str(i), 2), 2)] = 4
+            d[(1, 4.5, (str(i), 2), 3)] = 6
+            return d[(1, 4.5, (str(i), 2), i)]
 
         res = self.interpret(f, [2])
         assert res == f(2)
@@ -555,6 +555,14 @@ class BaseTestRdict(BaseRtypingTest):
                 d[key] = 42
             return d['a']
         assert self.interpret(func, []) == 42
+
+    def test_dict_of_floats(self):
+        d = {3.0: 42, 3.1: 43, 3.2: 44, 3.3: 45, 3.4: 46}
+        def fn(f):
+            return d[f]
+
+        res = self.interpret(fn, [3.0])
+        assert res == 42
 
 
 class TestLLtype(BaseTestRdict, LLRtypeMixin):
