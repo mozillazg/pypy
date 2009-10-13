@@ -339,7 +339,12 @@ class FrameworkGCTransformer(GCTransformer):
 
         self.identityhash_ptr = getfn(GCClass.identityhash.im_func,
                                       [s_gc, s_gcref],
-                                      annmodel.SomeInteger())
+                                      annmodel.SomeInteger(),
+                                      minimal_transform=False)
+        if getattr(GCClass, 'obtain_free_space', False):
+            self.obtainfreespace_ptr = getfn(GCClass.obtain_free_space.im_func,
+                                             [s_gc, annmodel.SomeInteger()],
+                                             annmodel.SomeAddress())
 
         if GCClass.moving_gc:
             self.id_ptr = getfn(GCClass.id.im_func,
@@ -751,6 +756,14 @@ class FrameworkGCTransformer(GCTransformer):
             self.pop_roots(hop, livevars)
         else:
             hop.rename('cast_ptr_to_int')     # works nicely for non-moving GCs
+
+    def gct_gc_obtain_free_space(self, hop):
+        livevars = self.push_roots(hop)
+        [v_number] = hop.spaceop.args
+        hop.genop("direct_call",
+                  [self.obtainfreespace_ptr, self.c_const_gc, v_number],
+                  resultvar=hop.spaceop.result)
+        self.pop_roots(hop, livevars)
 
     def gct_gc_set_max_heap_size(self, hop):
         [v_size] = hop.spaceop.args

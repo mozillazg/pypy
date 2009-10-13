@@ -442,6 +442,7 @@ LL_OPERATIONS = {
     # see rlib/objectmodel for gc_identityhash and gc_id
     'gc_identityhash':      LLOp(canraise=(MemoryError,), sideeffects=False),
     'gc_id':                LLOp(canraise=(MemoryError,), sideeffects=False),
+    'gc_obtain_free_space': LLOp(),
     'gc_set_max_heap_size': LLOp(),
     'gc_can_move'         : LLOp(sideeffects=False),
     'gc_thread_prepare'   : LLOp(canraise=(MemoryError,)),
