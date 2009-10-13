@@ -49,6 +49,48 @@ class DummySpace(object):
     w_dict = dict
 
 class TestArgumentsNormal(object):
+
+    def test_create(self):
+        space = DummySpace()
+        args_w = []
+        args = Arguments(space, args_w)
+        assert args.arguments_w is args_w
+        assert args.keywords is None
+        assert args.keywords_w is None
+
+        assert args.firstarg() is None
+
+        args = Arguments(space, args_w, w_stararg=["*"],
+                         w_starstararg={"k": 1})
+        assert args.arguments_w == ["*"]
+        assert args.keywords == ["k"]
+        assert args.keywords_w == [1]
+
+        assert args.firstarg() == "*"
+
+    def test_prepend(self):
+        space = DummySpace()
+        args = Arguments(space, ["0"])
+        args1 = args.prepend("thingy")
+        assert args1 is not args
+        assert args1.arguments_w == ["thingy", "0"]
+        assert args1.keywords is args.keywords
+        assert args1.keywords_w is args.keywords_w
+
+    def test_fixedunpacked(self):
+        space = DummySpace()
+        
+        args = Arguments(space, [], ["k"], [1])
+        py.test.raises(ValueError, args.fixedunpack, 1)
+
+        args = Arguments(space, ["a", "b"])
+        py.test.raises(ValueError, args.fixedunpack, 0)
+        py.test.raises(ValueError, args.fixedunpack, 1)        
+        py.test.raises(ValueError, args.fixedunpack, 3)
+        py.test.raises(ValueError, args.fixedunpack, 4)
+
+        assert args.fixedunpack(2) == ['a', 'b']
+    
     def test_match0(self):
         space = DummySpace()
         args = Arguments(space, [])
@@ -228,6 +270,129 @@ class TestArgumentsNormal(object):
             py.test.raises(ArgErrUnknownKwds, args._match_signature, None, l,
                            ["a", "b"], blindargs=2)
 
+    def test_args_parsing(self):
+        space = DummySpace()
+        args = Arguments(space, [])
+
+        calls = []
+
+        def _match_signature(w_firstarg, scope_w, argnames, has_vararg=False,
+                             has_kwarg=False, defaults_w=[], blindargs=0):
+            calls.append((w_firstarg, scope_w, argnames, has_vararg,
+                          has_kwarg, defaults_w, blindargs))
+        args._match_signature = _match_signature
+
+        scope_w = args.parse_obj(None, "foo", (["a", "b"], None, None))
+        assert len(calls) == 1
+        assert calls[0] == (None, [None, None], ["a", "b"], False, False,
+                            [], 0)
+        assert calls[0][1] is scope_w
+        calls = []
+            
+        scope_w = args.parse_obj(None, "foo", (["a", "b"], "args", None),
+                                 blindargs=1)
+        assert len(calls) == 1
+        assert calls[0] == (None, [None, None, None], ["a", "b"], True, False,
+                            [], 1)
+        calls = []
+
+        scope_w = args.parse_obj(None, "foo", (["a", "b"], "args", "kw"),
+                             defaults_w=['x', 'y'])
+        assert len(calls) == 1
+        assert calls[0] == (None, [None, None, None, None], ["a", "b"],
+                            True, True,
+                            ["x", "y"], 0)
+        calls = []
+        
+        scope_w = args.parse_obj("obj", "foo", (["a", "b"], "args", "kw"),
+                             defaults_w=['x', 'y'], blindargs=1)
+        assert len(calls) == 1
+        assert calls[0] == ("obj", [None, None, None, None], ["a", "b"],
+                            True, True,
+                            ["x", "y"], 1)
+
+        class FakeArgErr(ArgErr):
+
+            def getmsg(self, fname):
+                return "msg "+fname
+
+        def _match_signature(*args):
+            raise FakeArgErr()
+        args._match_signature = _match_signature
+
+
+        excinfo = py.test.raises(OperationError, args.parse_obj, "obj", "foo",
+                       (["a", "b"], None, None))
+        assert excinfo.value.w_type is TypeError
+        assert excinfo.value.w_value == "msg foo"
+
+
+    def test_args_parsing_into_scope(self):
+        space = DummySpace()
+        args = Arguments(space, [])
+
+        calls = []
+
+        def _match_signature(w_firstarg, scope_w, argnames, has_vararg=False,
+                             has_kwarg=False, defaults_w=[], blindargs=0):
+            calls.append((w_firstarg, scope_w, argnames, has_vararg,
+                          has_kwarg, defaults_w, blindargs))
+        args._match_signature = _match_signature
+
+        scope_w = [None, None]
+        args.parse_into_scope(None, scope_w, "foo", (["a", "b"], None, None))
+        assert len(calls) == 1
+        assert calls[0] == (None, scope_w, ["a", "b"], False, False,
+                            [], 0)
+        assert calls[0][1] is scope_w
+        calls = []
+
+        scope_w = [None, None, None, None]
+        args.parse_into_scope(None, scope_w, "foo", (["a", "b"], "args", "kw"),
+                              defaults_w=['x', 'y'])
+        assert len(calls) == 1
+        assert calls[0] == (None, scope_w, ["a", "b"],
+                            True, True,
+                            ["x", "y"], 0)
+        calls = []
+
+        scope_w = [None, None, None, None]        
+        args.parse_into_scope("obj", scope_w, "foo", (["a", "b"],
+                                                      "args", "kw"),
+                              defaults_w=['x', 'y'])
+        assert len(calls) == 1
+        assert calls[0] == ("obj", scope_w, ["a", "b"],
+                            True, True,
+                            ["x", "y"], 0)
+
+        class FakeArgErr(ArgErr):
+
+            def getmsg(self, fname):
+                return "msg "+fname
+
+        def _match_signature(*args):
+            raise FakeArgErr()
+        args._match_signature = _match_signature
+
+
+        excinfo = py.test.raises(OperationError, args.parse_into_scope,
+                                 "obj", [None, None], "foo",
+                                 (["a", "b"], None, None))
+        assert excinfo.value.w_type is TypeError
+        assert excinfo.value.w_value == "msg foo"
+
+    def test_topacked_frompacked(self):
+        space = DummySpace()
+        args = Arguments(space, [1], ['a', 'b'], [2, 3])
+        w_args, w_kwds = args.topacked()
+        assert w_args == (1,)
+        assert w_kwds == {'a': 2, 'b': 3}
+        args1 = Arguments.frompacked(space, w_args, w_kwds)
+        assert args.arguments_w == [1]
+        assert set(args.keywords) == set(['a', 'b'])
+        assert args.keywords_w[args.keywords.index('a')] == 2
+        assert args.keywords_w[args.keywords.index('b')] == 3        
+                                 
 
 def make_arguments_for_translation(space, args_w, keywords_w={},
                                    w_stararg=None, w_starstararg=None):

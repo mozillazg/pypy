@@ -1269,7 +1269,7 @@ else:
 
             print >> f, '    defaults_w = [%s]' % ", ".join(name_of_defaults)
 
-            print >> f, '    %s__args__.parse(funcname, signature, defaults_w)' % (
+            print >> f, '    %s__args__.parse_obj(None, funcname, signature, defaults_w)' % (
                 tupassstr(fast_args),)
             print >> f, '    return %s(%s)' % (fast_name, ', '.join(["space"]+fast_args))
 

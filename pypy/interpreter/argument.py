@@ -29,12 +29,6 @@ class Arguments(object):
 
         make_sure_not_resized(self.arguments_w)
         self._combine_wrapped(w_stararg, w_starstararg)
-
-    def num_args(self): # only used in module/__builtin__/interp_classobj.py
-        return len(self.arguments_w)
-
-    def num_kwds(self): # only used in module/__builtin__/interp_classobj.py
-        return len(self.keywords)
         
     def __repr__(self):
         """ NOT_RPYTHON """
@@ -48,9 +42,8 @@ class Arguments(object):
 
     ###  Manipulation  ###
 
-    def unpack(self): # used often
+    def unpack(self): # slowish
         "Return a ([w1,w2...], {'kw':w3...}) pair."
-        # XXX may want to change that later
         kwds_w = {}
         if self.keywords:
             for i in range(len(self.keywords)):
@@ -61,7 +54,7 @@ class Arguments(object):
         "Return a new Arguments with a args_w as positional arguments."
         return Arguments(self.space, args_w, self.keywords, self.keywords_w)
 
-    def prepend(self, w_firstarg): # used often
+    def prepend(self, w_firstarg):
         "Return a new Arguments with a new argument inserted first."
         return self.replace_arguments([w_firstarg] + self.arguments_w)
 
@@ -105,9 +98,6 @@ class Arguments(object):
                 self.keywords_w = self.keywords_w + keywords_w
 
     def fixedunpack(self, argcount):
-        # used by ./objspace/std/typeobject.py
-        # ./objspace/std/objecttype.py
-        # ./annotation/description.py
         """The simplest argument parsing: get the 'argcount' arguments,
         or raise a real ValueError if the length is wrong."""
         if self.keywords:
@@ -119,10 +109,6 @@ class Arguments(object):
         return self.arguments_w
 
     def firstarg(self):
-        # used by
-        # ./module/_random/interp_random.py
-        # ./interpreter/gateway.py
-        # ./interpreter/function.py
         "Return the first argument for inspection."
         if self.arguments_w:
             return self.arguments_w[0]
@@ -283,26 +269,16 @@ class Arguments(object):
         scopelen = len(argnames)
         has_vararg = varargname is not None
         has_kwarg = kwargname is not None
-        if has_vararg:
-            scopelen += 1
-        if has_kwarg:
-            scopelen += 1
+        scopelen += has_vararg
+        scopelen += has_kwarg
         scope_w = [None] * scopelen
-        self._match_signature(w_firstarg, scope_w, argnames, has_vararg, has_kwarg, defaults_w, blindargs)
+        self._match_signature(w_firstarg, scope_w, argnames, has_vararg,
+                              has_kwarg, defaults_w, blindargs)
         return scope_w    
 
-    def parse(self, fnname, signature, defaults_w=[], blindargs=0):
-        # used by geninterped code
-        # and ./objspace/std/fake.py
-        """Parse args and kwargs to initialize a frame
-        according to the signature of code object.
-        """
-        return self.parse_obj(None, fnname, signature, defaults_w,
-                              blindargs)
 
     def parse_obj(self, w_firstarg,
                   fnname, signature, defaults_w=[], blindargs=0):
-        # used by ./interpreter/gateway.py
         """Parse args and kwargs to initialize a frame
         according to the signature of code object.
         """
@@ -314,18 +290,11 @@ class Arguments(object):
 
     @staticmethod
     def frompacked(space, w_args=None, w_kwds=None):
-        # used by
-        # ./module/_stackless/interp_coroutine.py
-        # ./module/thread/os_thread.py
-        # ./objspace/fake/checkmodule.py
-        # ./interpreter/gateway.py
-        # ./interpreter/baseobjspace.py
         """Convenience static method to build an Arguments
            from a wrapped sequence and a wrapped dictionary."""
         return Arguments(space, [], w_stararg=w_args, w_starstararg=w_kwds)
 
     def topacked(self):
-        # used by ./module/_stackless/interp_coroutine.py
         """Express the Argument object as a pair of wrapped w_args, w_kwds."""
         space = self.space
         args_w, kwds_w = self.unpack()
@@ -435,10 +404,6 @@ class ArgumentsForTranslation(Arguments):
     
     @staticmethod
     def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
-        # used by
-        # ./rpython/callparse.py
-        # ./rpython/rbuiltin.py
-        # ./annotation/bookkeeper.py
         args_w = data_w[:shape_cnt]
         p = end_keys = shape_cnt + len(shape_keys)
         if shape_star:
@@ -456,7 +421,6 @@ class ArgumentsForTranslation(Arguments):
                                        w_starstar)
 
     def flatten(self):
-        # used by ./objspace/flow/objspace.py
         """ Argument <-> list of w_objects together with "shape" information """
         shape_cnt, shape_keys, shape_star, shape_stst = self._rawshape()
         data_w = self.arguments_w + [self.keywords_w[self.keywords.index(key)]
@@ -480,7 +444,6 @@ class ArgumentsForTranslation(Arguments):
         return shape_cnt, tuple(shape_keys), shape_star, shape_stst # shape_keys are sorted
 
 def rawshape(args, nextra=0):
-    # used by ./annotation/description.py
     return args._rawshape(nextra)
 
 
