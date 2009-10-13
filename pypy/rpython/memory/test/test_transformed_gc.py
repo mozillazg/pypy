@@ -1044,19 +1044,23 @@ class TestGenerationGC(GenericMovingGCTests):
         #  * the GcArray pointer from gc.object_id_dict.
 
     def test_adr_of_nursery(self):
+        class A(object):
+            pass
+        
         def f():
-            # allocate a couple of objs
-            nf0 = llop.gc_adr_of_nursery_free(llmemory.Address)
-            nt0 = llop.gc_adr_of_nursery_top(llmemory.Address)
-            l0 = [a for a in range(10)]
-            l1 = [a for a in range(10)]
-            nf1 = llop.gc_adr_of_nursery_free(llmemory.Address)
-            nt1 = llop.gc_adr_of_nursery_top(llmemory.Address)
-            #assert nf1 > nf0
-            #assert nt0 > nf1
-            #assert nt0 == nt1
-            #assert nf1 != nf0
-            # er, assert something here
+            # we need at least 1 obj to allocate a nursery
+            a = A()
+            nf_a = llop.gc_adr_of_nursery_free(llmemory.Address)
+            nt_a = llop.gc_adr_of_nursery_top(llmemory.Address)
+            nf0 = nf_a.address[0]
+            nt0 = nt_a.address[0]
+            a0 = A()
+            a1 = A()
+            nf1 = nf_a.address[0]
+            nt1 = nt_a.address[0]
+            assert nf1 > nf0
+            assert nt1 > nf1
+            assert nt1 == nt0
         run = self.runner(f, nbargs=0)
         res = run([])        
 
