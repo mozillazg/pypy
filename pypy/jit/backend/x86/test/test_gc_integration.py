@@ -257,3 +257,6 @@ class TestMallocFastpath(BaseTestRegalloc):
         '''
         self.interpret(ops, [])
         # this should call slow path once
+        gc_ll_descr = self.cpu.gc_ll_descr
+        nadr = rffi.cast(lltype.Signed, gc_ll_descr.nursery)
+        assert gc_ll_descr.addrs[0] == nadr + 8
