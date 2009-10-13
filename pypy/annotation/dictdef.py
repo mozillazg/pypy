@@ -2,7 +2,7 @@ from pypy.annotation.model import SomeObject, s_ImpossibleValue
 from pypy.annotation.model import SomeInteger, s_Bool, unionof
 from pypy.annotation.model import SomeInstance
 from pypy.annotation.listdef import ListItem
-from pypy.rlib.objectmodel import compute_identity_hash
+from pypy.rlib.objectmodel import compute_hash
 
 
 class DictKey(ListItem):
@@ -133,10 +133,7 @@ class DictDef:
         self.dictvalue.generalize(s_value)
 
     def seen_prebuilt_key(self, x):
-        try:
-            compute_identity_hash(x)
-        except TypeError:
-            pass     # e.g. if x is an int
+        compute_hash(x)
 
     def __repr__(self):
         return '<{%r: %r}>' % (self.dictkey.s_value, self.dictvalue.s_value)
