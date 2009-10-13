@@ -71,7 +71,7 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("geninterp")
 py.log.setconsumer("geninterp", ansi_log)
 
-GI_VERSION = '1.2.1'  # bump this for substantial changes
+GI_VERSION = '1.2.5'  # bump this for substantial changes
 # ____________________________________________________________
 
 try:
@@ -206,6 +206,9 @@ class GenRpy:
         self._labeltable = {} # unique label names, reused per func
 
         self._space_arities = None
+
+        self._signature_cache = {}
+        self._defaults_cache = {}
         
     def expr(self, v, localscope, wrapped = True):
         if isinstance(v, Variable):
@@ -804,9 +807,6 @@ else:
                 if isinstance(value, staticmethod) and value.__get__(1) not in self.translator.flowgraphs and self.translator.frozen:
                     log.WARNING("skipped staticmethod: %s" % value)
                     continue
-##                 if isinstance(value, FunctionType) and value not in self.translator.flowgraphs and self.translator.frozen:
-##                     log.WARNING("skipped function: %s" % value)
-##                     continue
                 if isinstance(value, MethodType) and value.im_self is cls:
                     log.WARNING("skipped classmethod: %s" % value)
                     continue
@@ -1158,6 +1158,29 @@ else:
             return rel.replace('\\', '/')
         return name # no success
 
+    def getsignature(self, argnamelist, varargname, varkwname):
+        key = (argnamelist, varargname, varkwname)
+        try:
+            return self._signature_cache[key]
+        except KeyError:
+            pass
+        signame = self.uniquename('sig')
+        self._signature_cache[key] = signame
+        self.initcode.append("%s = %r, %r, %r" % (signame, list(argnamelist),
+                                                  varargname, varkwname))
+        return signame
+
+    def getdefaults(self, names):
+        key = tuple(names)
+        try:
+            return self._defaults_cache[key]
+        except KeyError:
+            pass
+        defaultsname = self.uniquename('default')
+        self._defaults_cache[key] = defaultsname
+        self.initcode.append("%s = [%s]" % (defaultsname, ', '.join(names)))
+        return defaultsname
+
     def gen_rpyfunction(self, func):
         try:
             graph = self.translator.buildflowgraph(func, True)
@@ -1189,15 +1212,6 @@ else:
         assert cname.startswith('gfunc_')
         f_name = 'f_' + cname[6:]
 
-##        # collect all the local variables
-##        graph = self.translator.getflowgraph(func)
-##        localslst = []
-##        def visit(node):
-##            if isinstance(node, Block):
-##                localslst.extend(node.getvariables())
-##        traverse(visit, graph)
-##        localnames = [self.expr(a, localscope) for a in uniqueitems(localslst)]
-
         # collect all the arguments
         vararg = varkw = None
         varargname = varkwname = None
@@ -1212,6 +1226,7 @@ else:
             vararg = graph.getargs()[p]
             varargname = func.func_code.co_varnames[p]
         positional_args = all_args[:p]
+        argnamelist = func.func_code.co_varnames[:func.func_code.co_argcount]
 
         fast_args = [self.expr(a, localscope) for a in positional_args]
         if vararg is not None:
@@ -1261,17 +1276,12 @@ else:
                 print >> f, docstr
                 print >> f
 
-            print >> f, '    funcname = "%s"' % func.__name__
-            kwlist = list(func.func_code.co_varnames[:func.func_code.co_argcount])
-            signature = '    signature = %r' % kwlist
-            signature = ", ".join([signature, repr(varargname), repr(varkwname)])
-            print >> f, signature
-
-            print >> f, '    defaults_w = [%s]' % ", ".join(name_of_defaults)
-
-            print >> f, '    %s__args__.parse_obj(None, funcname, signature, defaults_w)' % (
-                tupassstr(fast_args),)
-            print >> f, '    return %s(%s)' % (fast_name, ', '.join(["space"]+fast_args))
+            signame = self.getsignature(argnamelist, varargname, varkwname)
+            defaultsname = self.getdefaults(name_of_defaults)
+            print >> f, '    %s__args__.parse_obj(None, %r, %s, %s)' % (
+                tupassstr(fast_args), func.__name__, signame, defaultsname)
+            print >> f, '    return %s(%s)' % (fast_name,
+                                               ', '.join(["space"]+fast_args))
 
             for line in install_func(f_name, name):
                 print >> f, line
@@ -1281,15 +1291,6 @@ else:
         print >> f, fast_function_header
         if docstr is not None:
             print >> f, docstr
-
-##        fast_locals = [arg for arg in localnames if arg not in fast_set]
-##        # if goto is specialized, the false detection of
-##        # uninitialized variables goes away.
-##        if fast_locals and not self.specialize_goto:
-##            print >> f
-##            for line in self.large_initialize(fast_locals):
-##                print >> f, "    %s" % line
-##            print >> f
 
         # print the body
         for line in body:
@@ -1385,10 +1386,6 @@ else:
                     q = "elif"
                 link = exits[-1]
                 yield "else:"
-                # debug only, creates lots of fluffy C code
-                ##yield "    assert %s == %s" % (self.expr(block.exitswitch,
-                ##                                    localscope),
-                ##                                    link.exitcase)
                 for op in self.gen_link(exits[-1], localscope, blocknum, block):
                     yield "    %s" % op
 
