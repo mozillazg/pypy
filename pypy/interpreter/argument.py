@@ -297,11 +297,11 @@ class Arguments(object):
     def topacked(self):
         """Express the Argument object as a pair of wrapped w_args, w_kwds."""
         space = self.space
-        args_w, kwds_w = self.unpack()
-        w_args = space.newtuple(args_w)
+        w_args = space.newtuple(self.arguments_w)
         w_kwds = space.newdict()
-        for key, w_value in kwds_w.items():
-            space.setitem(w_kwds, space.wrap(key), w_value)
+        for i in range(len(self.keywords)):
+            space.setitem(w_kwds, space.wrap(self.keywords[i]),
+                                  self.keywords_w[i])
         return w_args, w_kwds
 
 class ArgumentsForTranslation(Arguments):
