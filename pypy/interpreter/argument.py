@@ -38,10 +38,11 @@ class Arguments(object):
         
     def __repr__(self):
         """ NOT_RPYTHON """
+        name = self.__class__.__name__
         if not self.keywords:
-            return '%s(%s)' % (self.__class__, self.arguments_w,)
+            return '%s(%s)' % (name, self.arguments_w,)
         else:
-            return '%s(%s, %s, %s)' % (self.__class__, self.arguments_w,
+            return '%s(%s, %s, %s)' % (name, self.arguments_w,
                                        self.keywords, self.keywords_w)
 
 
