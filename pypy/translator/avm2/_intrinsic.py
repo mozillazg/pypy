@@ -35,8 +35,8 @@ desc = ClassDesc()
 desc.FullName = 'Array'
 desc.BaseType = ''
 desc.Methods = [
-  ('!CONSTRUCTOR!', ['...rest'], None),
-  ('concat', ['...rest'], 'ootype.List'),
+  ('!CONSTRUCTOR!', ['*args'], None),
+  ('concat', ['*args'], 'ootype.List'),
   ('every', ['Function', ''], 'ootype.Bool'),
   ('filter', ['Function', ''], 'ootype.List'),
   ('forEach', ['Function', ''], 'ootype.Void'),
@@ -45,15 +45,15 @@ desc.Methods = [
   ('lastIndexOf', ['', ''], 'ootype.SignedLongLong'),
   ('map', ['Function', ''], 'ootype.List'),
   ('pop', [''], ''),
-  ('push', ['...rest'], 'ootype.UnsignedLongLong'),
+  ('push', ['*args'], 'ootype.UnsignedLongLong'),
   ('reverse', [''], 'ootype.List'),
   ('shift', [''], ''),
   ('slice', ['', ''], 'ootype.List'),
   ('some', ['Function', ''], 'ootype.Bool'),
-  ('sort', ['...rest'], ''),
+  ('sort', ['*args'], ''),
   ('sortOn', ['', ''], ''),
-  ('splice', ['ootype.SignedLongLong', 'ootype.UnsignedLongLong', ' ...rest'], ''),
-  ('unshift', ['...rest'], 'ootype.UnsignedLongLong'),
+  ('splice', ['ootype.SignedLongLong', 'ootype.UnsignedLongLong', '*args'], ''),
+  ('unshift', ['*args'], 'ootype.UnsignedLongLong'),
 ]
 desc.StaticMethods = []
 desc.Fields = []
@@ -149,7 +149,7 @@ desc.Methods = [
 ]
 desc.StaticMethods = [
   ('parse', [''], 'ootype.Float'),
-  ('UTC', ['', '', '', '', '', '', '', ' ...rest'], 'ootype.Float'),
+  ('UTC', ['', '', '', '', '', '', '', '*args'], 'ootype.Float'),
 ]
 desc.Fields = []
 desc.StaticFields = [
@@ -199,7 +199,7 @@ desc.Methods = [
 ]
 desc.StaticMethods = [
   ('getErrorMessage', ['ootype.SignedLongLong'], 'ootype.String'),
-  ('throwError', ['Class', 'ootype.UnsignedLongLong', ' ...rest'], ''),
+  ('throwError', ['Class', 'ootype.UnsignedLongLong', '*args'], ''),
 ]
 desc.Fields = []
 desc.StaticFields = [
@@ -228,7 +228,7 @@ desc.FullName = 'Function'
 desc.BaseType = ''
 desc.Methods = [
   ('apply', ['', ''], ''),
-  ('call', ['', ' ...rest'], ''),
+  ('call', ['', '*args'], ''),
   ('!CONSTRUCTOR!', [''], None),
 ]
 desc.StaticMethods = []
@@ -279,8 +279,8 @@ desc.StaticMethods = [
   ('exp', ['ootype.Float'], 'ootype.Float'),
   ('floor', ['ootype.Float'], 'ootype.Float'),
   ('log', ['ootype.Float'], 'ootype.Float'),
-  ('max', ['ootype.Float', 'ootype.Float', ' ...rest'], 'ootype.Float'),
-  ('min', ['ootype.Float', 'ootype.Float', ' ...rest'], 'ootype.Float'),
+  ('max', ['ootype.Float', 'ootype.Float', '*args'], 'ootype.Float'),
+  ('min', ['ootype.Float', 'ootype.Float', '*args'], 'ootype.Float'),
   ('pow', ['ootype.Float', 'ootype.Float'], 'ootype.Float'),
   ('random', [''], 'ootype.Float'),
   ('round', ['ootype.Float'], 'ootype.Float'),
@@ -451,7 +451,7 @@ desc.BaseType = ''
 desc.Methods = [
   ('charAt', ['ootype.Float'], 'ootype.String'),
   ('charCodeAt', ['ootype.Float'], 'ootype.Float'),
-  ('concat', ['...rest'], 'ootype.String'),
+  ('concat', ['*args'], 'ootype.String'),
   ('indexOf', ['ootype.String', 'ootype.Float'], 'ootype.SignedLongLong'),
   ('lastIndexOf', ['ootype.String', 'ootype.Float'], 'ootype.SignedLongLong'),
   ('localeCompare', ['ootype.String'], 'ootype.SignedLongLong'),
@@ -471,7 +471,7 @@ desc.Methods = [
   ('valueOf', [''], 'ootype.String'),
 ]
 desc.StaticMethods = [
-  ('fromCharCode', ['...rest'], 'ootype.String'),
+  ('fromCharCode', ['*args'], 'ootype.String'),
 ]
 desc.Fields = []
 desc.StaticFields = [
@@ -499,7 +499,7 @@ desc = ClassDesc()
 desc.FullName = ''
 desc.BaseType = ''
 desc.Methods = [
-  ('trace', ['...arguments'], 'ootype.Void'),
+  ('trace', ['*args'], 'ootype.Void'),
   ('decodeURI', ['ootype.String'], 'ootype.String'),
   ('decodeURIComponent', ['ootype.String'], 'ootype.String'),
   ('encodeURI', ['ootype.String'], 'ootype.String'),
@@ -586,7 +586,7 @@ desc.FullName = 'Vector.<T>'
 desc.BaseType = ''
 desc.Methods = [
   ('Vector', ['ootype.UnsignedLongLong', 'ootype.Bool'], 'oolean'),
-  ('concat', ['...args'], 'ootype.Array'),
+  ('concat', ['*args'], 'ootype.Array'),
   ('every', ['Function', 'ootype.Dict'], 'ootype.Bool'),
   ('filter', ['Function', 'ootype.Dict'], 'ootype.Array'),
   ('forEach', ['Function', 'ootype.Dict'], 'ootype.Void'),
@@ -595,16 +595,16 @@ desc.Methods = [
   ('lastIndexOf', ['T', 'ootype.SignedLongLong'], 'ootype.SignedLongLong'),
   ('map', ['Function', 'ootype.Dict'], 'ootype.Array'),
   ('pop', [''], 'T'),
-  ('push', ['...args'], 'ootype.UnsignedLongLong'),
+  ('push', ['*args'], 'ootype.UnsignedLongLong'),
   ('reverse', [''], 'ootype.Array'),
   ('shift', [''], 'T'),
   ('slice', ['ootype.SignedLongLong', 'ootype.SignedLongLong'], 'ootype.Array'),
   ('some', ['Function', 'ootype.Dict'], 'ootype.Bool'),
   ('sort', ['Function'], 'ootype.Array'),
-  ('splice', ['ootype.SignedLongLong', 'ootype.UnsignedLongLong', ' ...items'], 'ootype.Array'),
+  ('splice', ['ootype.SignedLongLong', 'ootype.UnsignedLongLong', '*args'], 'ootype.Array'),
   ('toString', [''], 'ootype.String'),
   ('toLocaleString', [''], 'ootype.String'),
-  ('unshift', ['...args'], 'ootype.UnsignedLongLong'),
+  ('unshift', ['*args'], 'ootype.UnsignedLongLong'),
 ]
 desc.StaticMethods = []
 desc.Fields = []
@@ -995,7 +995,7 @@ desc.BaseType = ''
 desc.Methods = [
   ('addCallback', ['ootype.String', 'Function'], 'ootype.Void'),
   ('!CONSTRUCTOR!', [''], None),
-  ('call', ['ootype.String', ' ...rest'], ''),
+  ('call', ['ootype.String', '*args'], ''),
 ]
 desc.StaticMethods = []
 desc.Fields = []
@@ -2254,7 +2254,7 @@ desc.BaseType = ''
 desc.Methods = [
   ('clone', [''], 'flash.events.Event'),
   ('!CONSTRUCTOR!', ['ootype.String', 'ootype.Bool', 'ootype.Bool'], None),
-  ('formatToString', ['ootype.String', ' ...rest'], 'ootype.String'),
+  ('formatToString', ['ootype.String', '*args'], 'ootype.String'),
   ('isDefaultPrevented', [''], 'ootype.Bool'),
   ('preventDefault', [''], 'ootype.Void'),
   ('stopImmediatePropagation', [''], 'ootype.Void'),
@@ -2716,7 +2716,7 @@ desc.Methods = [
 ]
 desc.StaticMethods = [
   ('addCallback', ['ootype.String', 'Function'], 'ootype.Void'),
-  ('call', ['ootype.String', ' ...rest'], ''),
+  ('call', ['ootype.String', '*args'], ''),
 ]
 desc.Fields = []
 desc.StaticFields = [
@@ -3566,12 +3566,12 @@ desc = ClassDesc()
 desc.FullName = 'flash.net.LocalConnection'
 desc.BaseType = ''
 desc.Methods = [
-  ('allowDomain', ['...rest'], 'ootype.Void'),
-  ('allowInsecureDomain', ['...rest'], 'ootype.Void'),
+  ('allowDomain', ['*args'], 'ootype.Void'),
+  ('allowInsecureDomain', ['*args'], 'ootype.Void'),
   ('close', [''], 'ootype.Void'),
   ('connect', ['ootype.String'], 'ootype.Void'),
   ('!CONSTRUCTOR!', [''], None),
-  ('send', ['ootype.String', 'ootype.String', ' ...rest'], 'ootype.Void'),
+  ('send', ['ootype.String', 'ootype.String', '*args'], 'ootype.Void'),
 ]
 desc.StaticMethods = []
 desc.Fields = []
@@ -3587,9 +3587,9 @@ desc.FullName = 'flash.net.NetConnection'
 desc.BaseType = ''
 desc.Methods = [
   ('addHeader', ['ootype.String', 'ootype.Bool', 'ootype.Dict'], 'ootype.Void'),
-  ('call', ['ootype.String', 'flash.net.Responder', ' ...rest'], 'ootype.Void'),
+  ('call', ['ootype.String', 'flash.net.Responder', '*args'], 'ootype.Void'),
   ('close', [''], 'ootype.Void'),
-  ('connect', ['ootype.String', ' ...rest'], 'ootype.Void'),
+  ('connect', ['ootype.String', '*args'], 'ootype.Void'),
   ('!CONSTRUCTOR!', [''], None),
 ]
 desc.StaticMethods = []
@@ -3624,7 +3624,7 @@ desc.Methods = [
   ('!CONSTRUCTOR!', ['flash.net.NetConnection', 'ootype.String'], None),
   ('onPeerConnect', ['flash.net.NetStream'], 'ootype.Bool'),
   ('pause', [''], 'ootype.Void'),
-  ('play', ['...rest'], 'ootype.Void'),
+  ('play', ['*args'], 'ootype.Void'),
   ('play2', ['flash.net.NetStreamPlayOptions'], 'ootype.Void'),
   ('publish', ['ootype.String', 'ootype.String'], 'ootype.Void'),
   ('receiveAudio', ['ootype.Bool'], 'ootype.Void'),
@@ -3632,7 +3632,7 @@ desc.Methods = [
   ('receiveVideoFPS', ['ootype.Float'], 'ootype.Void'),
   ('resume', [''], 'ootype.Void'),
   ('seek', ['ootype.Float'], 'ootype.Void'),
-  ('send', ['ootype.String', ' ...rest'], 'ootype.Void'),
+  ('send', ['ootype.String', '*args'], 'ootype.Void'),
   ('togglePause', [''], 'ootype.Void'),
 ]
 desc.StaticMethods = []
@@ -3779,7 +3779,7 @@ desc.Methods = [
   ('close', [''], 'ootype.Void'),
   ('connect', ['flash.net.NetConnection', 'ootype.String'], 'ootype.Void'),
   ('flush', ['ootype.SignedLongLong'], 'ootype.String'),
-  ('send', ['...rest'], 'ootype.Void'),
+  ('send', ['*args'], 'ootype.Void'),
   ('setDirty', ['ootype.String'], 'ootype.Void'),
   ('setProperty', ['ootype.String', 'ootype.Dict'], 'ootype.Void'),
   ('!CONSTRUCTOR!', [''], None),
@@ -4297,8 +4297,8 @@ desc.Methods = [
   ('!CONSTRUCTOR!', [''], None),
 ]
 desc.StaticMethods = [
-  ('allowDomain', ['...rest'], 'ootype.Void'),
-  ('allowInsecureDomain', ['...rest'], 'ootype.Void'),
+  ('allowDomain', ['*args'], 'ootype.Void'),
+  ('allowInsecureDomain', ['*args'], 'ootype.Void'),
   ('loadPolicyFile', ['ootype.String'], 'ootype.Void'),
   ('showSettings', ['ootype.String'], 'ootype.Void'),
 ]
@@ -5801,8 +5801,8 @@ desc = ClassDesc()
 desc.FullName = ''
 desc.BaseType = ''
 desc.Methods = [
-  ('setInterval', ['Function', 'ootype.Float', ' ...arguments'], 'ootype.UnsignedLongLong'),
-  ('setTimeout', ['Function', 'ootype.Float', ' ...arguments'], 'ootype.UnsignedLongLong'),
+  ('setInterval', ['Function', 'ootype.Float', '*args'], 'ootype.UnsignedLongLong'),
+  ('setTimeout', ['Function', 'ootype.Float', '*args'], 'ootype.UnsignedLongLong'),
   ('clearInterval', ['ootype.UnsignedLongLong'], 'ootype.Void'),
   ('clearTimeout', ['ootype.UnsignedLongLong'], 'ootype.Void'),
   ('describeType', [''], 'XML'),
