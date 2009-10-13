@@ -349,8 +349,10 @@ class TestLLtype(BaseTestObjectModel, LLRtypeMixin):
         q = Foo()
 
         def f(i):
+            assert compute_hash(None) == 0
             assert compute_hash(i) == h_42
             assert compute_hash(i+1.0) == h_43_dot_0
+            assert compute_hash((i+3)/6.0) == h_7_dot_5
             assert compute_hash("Hello" + str(i)) == h_Hello42
             if i == 42:
                 p = None
@@ -362,6 +364,7 @@ class TestLLtype(BaseTestObjectModel, LLRtypeMixin):
             return i*2
         h_42       = compute_hash(42)
         h_43_dot_0 = compute_hash(43.0)
+        h_7_dot_5  = compute_hash(7.5)
         h_Hello42  = compute_hash("Hello42")
         h_None     = compute_hash(None)
         h_tuple    = compute_hash(("world", None, 42, 7.5))
