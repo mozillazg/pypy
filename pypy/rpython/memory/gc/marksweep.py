@@ -707,9 +707,7 @@ class MarkSweepGC(GCBase):
 
     def identityhash(self, obj):
         obj = llmemory.cast_ptr_to_adr(obj)
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        gc_info = obj - size_gc_header
-        hdr = llmemory.cast_adr_to_ptr(gc_info, self.HDRPTR)
+        hdr = self.header(obj)
         if ord(hdr.flags) & FL_WITHHASH:
             obj += self.get_size(obj)
             return obj.signed[0]

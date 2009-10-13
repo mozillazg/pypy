@@ -702,11 +702,17 @@ class TestUsingFramework(object):
         h_t = compute_hash(("Hi", None, (7.5, 2, d)))
         #
         def f():
-            d2 = D()
-            if compute_hash(d2) != current_object_addr_as_int(d2): return 11
             if compute_hash(c) != compute_hash(c): return 12
             if compute_hash(d) != h_d: return 13
             if compute_hash(("Hi", None, (7.5, 2, d))) != h_t: return 14
+            c2 = C()
+            h_c2 = compute_hash(c2)
+            if compute_hash(c2) != h_c2: return 15
+            i = 0
+            while i < 6:
+                rgc.collect()
+                if compute_hash(c2) != h_c2: return i
+                i += 1
             return 42
         return f
 
