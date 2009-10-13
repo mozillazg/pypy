@@ -916,6 +916,10 @@ class Assembler386(object):
             assert push_arg is ecx
             mc.PUSH(ecx)
         mc.CALL(rel32(slowpath_addr))
+        # note that slowpath_addr returns a "long long", or more precisely
+        # two results, which end up in eax and edx.
+        # eax should contain the result of allocation, edx new value
+        # of nursery_free_adr
         if push_arg is not None:
             mc.POP(ecx)
         offset = mc.get_relative_pos() - jmp_adr

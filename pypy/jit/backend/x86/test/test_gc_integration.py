@@ -167,24 +167,29 @@ class GCDescrFastpathMalloc(GcLLDescription):
         GcCache.__init__(self, False)
         # create a nursery
         NTP = rffi.CArray(lltype.Signed)
-        self.nursery = lltype.malloc(NTP, 100, flavor='raw')
+        self.nursery = lltype.malloc(NTP, 16, flavor='raw')
         self.addrs = lltype.malloc(rffi.CArray(lltype.Signed), 2,
                                    flavor='raw')
         self.addrs[0] = rffi.cast(lltype.Signed, self.nursery)
-        self.addrs[1] = self.addrs[0] + 400
-        # 400 bytes
-        def new(size):
-            xxx
-        self.new = new
-        self.NEW_TP = lltype.FuncType([lltype.Signed],
-                                      llmemory.GCREF)
+        self.addrs[1] = self.addrs[0] + 64
+        # 64 bytes
+        def malloc_slowpath(size):
+            from pypy.rlib.rarithmetic import r_ulonglong
+            nadr = rffi.cast(lltype.Signed, self.nursery)
+            self.addrs[0] = 99999    # should be overridden by the caller
+            return ((r_ulonglong(nadr + size) << 32) |     # this part in edx
+                     r_ulonglong(nadr))                    # this part in eax
+        self.malloc_slowpath = malloc_slowpath
+        self.MALLOC_SLOWPATH = lltype.FuncType([lltype.Signed],
+                                               lltype.UnsignedLongLong)
         self._counter = 123
 
     def can_inline_malloc(self, descr):
         return True
 
     def get_funcptr_for_new(self):
-        return llhelper(lltype.Ptr(self.NEW_TP), self.new)
+        return 42
+#        return llhelper(lltype.Ptr(self.NEW_TP), self.new)
 
     def init_size_descr(self, S, descr):
         descr.tid = self._counter
@@ -197,22 +202,28 @@ class GCDescrFastpathMalloc(GcLLDescription):
         return rffi.cast(lltype.Signed, self.addrs) + 4
 
     def get_malloc_fixedsize_slowpath_addr(self):
-        return 123
+        fptr = llhelper(lltype.Ptr(self.MALLOC_SLOWPATH), self.malloc_slowpath)
+        return rffi.cast(lltype.Signed, fptr)
 
     get_funcptr_for_newarray = None
     get_funcptr_for_newstr = None
     get_funcptr_for_newunicode = None
 
 class TestMallocFastpath(BaseTestRegalloc):
-    cpu = CPU(None, None)
-    cpu.gc_ll_descr = GCDescrFastpathMalloc()
 
-    NODE = lltype.Struct('node', ('tid', lltype.Signed),
-                                 ('value', lltype.Signed))
-    nodedescr = cpu.sizeof(NODE)     # xxx hack: NODE is not a GcStruct
-    valuedescr = cpu.fielddescrof(NODE, 'value')
+    def setup_method(self, method):
+        cpu = CPU(None, None)
+        cpu.gc_ll_descr = GCDescrFastpathMalloc()
 
-    namespace = locals().copy()
+        NODE = lltype.Struct('node', ('tid', lltype.Signed),
+                                     ('value', lltype.Signed))
+        nodedescr = cpu.sizeof(NODE)     # xxx hack: NODE is not a GcStruct
+        valuedescr = cpu.fielddescrof(NODE, 'value')
+
+        self.namespace = locals().copy()
+        self.cpu = cpu
+        self.nodedescr = nodedescr
+        self.valuedescr = valuedescr
     
     def test_malloc_fastpath(self):
         ops = '''
@@ -228,4 +239,20 @@ class TestMallocFastpath(BaseTestRegalloc):
         assert gc_ll_descr.nursery[1] == 42
         nurs_adr = rffi.cast(lltype.Signed, gc_ll_descr.nursery)
         assert gc_ll_descr.addrs[0] == nurs_adr + 8
-        #assert self.nursery[0] == 15
+
+    def test_malloc_slowpath(self):
+        ops = '''
+        []
+        p0 = new(descr=nodedescr)
+        p1 = new(descr=nodedescr)
+        p2 = new(descr=nodedescr)
+        p3 = new(descr=nodedescr)
+        p4 = new(descr=nodedescr)
+        p5 = new(descr=nodedescr)
+        p6 = new(descr=nodedescr)
+        p7 = new(descr=nodedescr)
+        p8 = new(descr=nodedescr)
+        finish(p0, p1, p2, p3, p4, p5, p6, p7, p8)
+        '''
+        self.interpret(ops, [])
+        # this should call slow path once
