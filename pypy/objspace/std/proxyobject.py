@@ -22,11 +22,9 @@ def transparent_class(name, BaseCls):
             self.space = space
     
         def descr_call_mismatch(self, space, name, reqcls, args):
-            # xxx fishing
             args_w = args.arguments_w[:]
             args_w[0] = space.wrap(name)
-            args = argument.Arguments(space, args_w,  args.keywords,
-                                                      args.keywords_w)
+            args = args.replace_arguments(args_w)
             return space.call_args(self.w_controller, args)
     
         def getclass(self, space):

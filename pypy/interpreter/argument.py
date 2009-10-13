@@ -57,11 +57,14 @@ class Arguments(object):
                 kwds_w[self.keywords[i]] = self.keywords_w[i]
         return self.arguments_w, kwds_w
 
+    def replace_arguments(self, args_w):
+        "Return a new Arguments with a args_w as positional arguments."
+        return Arguments(self.space, args_w, self.keywords, self.keywords_w)
+
     def prepend(self, w_firstarg): # used often
         "Return a new Arguments with a new argument inserted first."
-        return Arguments(self.space, [w_firstarg] + self.arguments_w,
-                         self.keywords, self.keywords_w)
-            
+        return self.replace_arguments([w_firstarg] + self.arguments_w)
+
     def _combine_wrapped(self, w_stararg, w_starstararg):
         "unpack the *arg and **kwd into arguments_w and keywords_w"
         # unpack the * arguments 
