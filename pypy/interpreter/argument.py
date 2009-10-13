@@ -39,6 +39,14 @@ class Signature(object):
         scopelen += self.has_kwarg()
         return scopelen
 
+    def getallvarnames(self):
+        argnames = self.argnames
+        if self.varargname is not None:
+            argnames = argnames + [self.varargname]
+        if self.kwargname is not None:
+            argnames = argnames + [self.kwargname]
+        return argnames
+
     def __repr__(self):
         return "Signature(%r, %r, %r)" % (
                 self.argnames, self.varargname, self.kwargname)
