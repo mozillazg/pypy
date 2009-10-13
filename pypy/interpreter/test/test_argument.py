@@ -1,8 +1,52 @@
 import py
 from pypy.interpreter.argument import Arguments, ArgumentsForTranslation, ArgErr
 from pypy.interpreter.argument import ArgErrUnknownKwds, ArgErrMultipleValues
-from pypy.interpreter.argument import ArgErrCount, rawshape
+from pypy.interpreter.argument import ArgErrCount, rawshape, Signature
 from pypy.interpreter.error import OperationError
+
+
+class TestSignature(object):
+    def test_helpers(self):
+        sig = Signature(["a", "b", "c"], None, None)
+        assert sig.num_argnames() == 3
+        assert not sig.has_vararg()
+        assert not sig.has_kwarg()
+        assert sig.scope_length() == 3
+        sig = Signature(["a", "b", "c"], "c", None)
+        assert sig.num_argnames() == 3
+        assert sig.has_vararg()
+        assert not sig.has_kwarg()
+        assert sig.scope_length() == 4
+        sig = Signature(["a", "b", "c"], None, "c")
+        assert sig.num_argnames() == 3
+        assert not sig.has_vararg()
+        assert sig.has_kwarg()
+        assert sig.scope_length() == 4
+        sig = Signature(["a", "b", "c"], "d", "c")
+        assert sig.num_argnames() == 3
+        assert sig.has_vararg()
+        assert sig.has_kwarg()
+        assert sig.scope_length() == 5
+
+    def test_eq(self):
+        sig1 = Signature(["a", "b", "c"], "d", "c")
+        sig2 = Signature(["a", "b", "c"], "d", "c")
+        assert sig1 == sig2
+
+
+    def test_find_argname(self):
+        sig = Signature(["a", "b", "c"], None, None)
+        assert sig.find_argname("a") == 0
+        assert sig.find_argname("b") == 1
+        assert sig.find_argname("c") == 2
+        assert sig.find_argname("d") == -1
+
+    def test_tuply(self):
+        sig = Signature(["a", "b", "c"], "d", "e")
+        x, y, z = sig
+        assert x == ["a", "b", "c"]
+        assert y == "d"
+        assert z == "e"
 
 
 class DummySpace(object):
@@ -96,36 +140,35 @@ class TestArgumentsNormal(object):
         space = DummySpace()
         args = Arguments(space, [])
         l = []
-        args._match_signature(None, l, [])
+        args._match_signature(None, l, Signature([]))
         assert len(l) == 0
         l = [None, None]
         args = Arguments(space, [])
-        py.test.raises(ArgErr, args._match_signature, None, l, ["a"])
+        py.test.raises(ArgErr, args._match_signature, None, l, Signature(["a"]))
         args = Arguments(space, [])
-        py.test.raises(ArgErr, args._match_signature, None, l, ["a"],
-                       has_vararg=True)
+        py.test.raises(ArgErr, args._match_signature, None, l, Signature(["a"], "*"))
         args = Arguments(space, [])
         l = [None]
-        args._match_signature(None, l, ["a"], defaults_w=[1])
+        args._match_signature(None, l, Signature(["a"]), defaults_w=[1])
         assert l == [1]
         args = Arguments(space, [])
         l = [None]
-        args._match_signature(None, l, [], has_vararg=True)
+        args._match_signature(None, l, Signature([], "*"))
         assert l == [()]
         args = Arguments(space, [])
         l = [None]
-        args._match_signature(None, l, [], has_kwarg=True)
+        args._match_signature(None, l, Signature([], None, "**"))
         assert l == [{}]
         args = Arguments(space, [])
         l = [None, None]
-        py.test.raises(ArgErr, args._match_signature, 41, l, [])
+        py.test.raises(ArgErr, args._match_signature, 41, l, Signature([]))
         args = Arguments(space, [])
         l = [None]
-        args._match_signature(1, l, ["a"])
+        args._match_signature(1, l, Signature(["a"]))
         assert l == [1]
         args = Arguments(space, [])
         l = [None]
-        args._match_signature(1, l, [], has_vararg=True)
+        args._match_signature(1, l, Signature([], "*"))
         assert l == [(1,)]
 
     def test_match4(self):
@@ -141,30 +184,29 @@ class TestArgumentsNormal(object):
                     firstarg = None
                 args = Arguments(space, arglist, w_stararg=starargs)
                 l = [None, None, None, None]
-                args._match_signature(firstarg, l, ["a", "b", "c", "d"])
+                args._match_signature(firstarg, l, Signature(["a", "b", "c", "d"]))
                 assert l == [4, 5, 6, 7]
                 args = Arguments(space, arglist, w_stararg=starargs)
                 l = [None, None, None, None, None, None]
-                py.test.raises(ArgErr, args._match_signature, firstarg, l, ["a"])
+                py.test.raises(ArgErr, args._match_signature, firstarg, l, Signature(["a"]))
                 args = Arguments(space, arglist, w_stararg=starargs)
                 l = [None, None, None, None, None, None]
-                py.test.raises(ArgErr, args._match_signature, firstarg, l, ["a", "b", "c", "d", "e"])
+                py.test.raises(ArgErr, args._match_signature, firstarg, l, Signature(["a", "b", "c", "d", "e"]))
                 args = Arguments(space, arglist, w_stararg=starargs)
                 l = [None, None, None, None, None, None]
-                py.test.raises(ArgErr, args._match_signature, firstarg, l, ["a", "b", "c", "d", "e"],
-                               has_vararg=True)
+                py.test.raises(ArgErr, args._match_signature, firstarg, l, Signature(["a", "b", "c", "d", "e"], "*"))
                 l = [None, None, None, None, None]
                 args = Arguments(space, arglist, w_stararg=starargs)
-                args._match_signature(firstarg, l, ["a", "b", "c", "d", "e"], defaults_w=[1])
+                args._match_signature(firstarg, l, Signature(["a", "b", "c", "d", "e"]), defaults_w=[1])
                 assert l == [4, 5, 6, 7, 1]
                 for j in range(len(values)):
                     l = [None] * (j + 1)
                     args = Arguments(space, arglist, w_stararg=starargs)
-                    args._match_signature(firstarg, l, ["a", "b", "c", "d", "e"][:j], has_vararg=True)
+                    args._match_signature(firstarg, l, Signature(["a", "b", "c", "d", "e"][:j], "*"))
                     assert l == values[:j] + [tuple(values[j:])]
                 l = [None, None, None, None, None]
                 args = Arguments(space, arglist, w_stararg=starargs)
-                args._match_signature(firstarg, l, ["a", "b", "c", "d"], has_kwarg=True)
+                args._match_signature(firstarg, l, Signature(["a", "b", "c", "d"], None, "**"))
                 assert l == [4, 5, 6, 7, {}]
 
     def test_match_kwds(self):
@@ -180,27 +222,27 @@ class TestArgumentsNormal(object):
             assert len(keywords) == len(keywords_w)
             args = Arguments(space, [1, 2], keywords[:], keywords_w[:], w_starstararg=w_kwds)
             l = [None, None, None]
-            args._match_signature(None, l, ["a", "b", "c"], defaults_w=[4])
+            args._match_signature(None, l, Signature(["a", "b", "c"]), defaults_w=[4])
             assert l == [1, 2, 3]
             args = Arguments(space, [1, 2], keywords[:], keywords_w[:], w_starstararg=w_kwds)
             l = [None, None, None, None]
-            args._match_signature(None, l, ["a", "b", "b1", "c"], defaults_w=[4, 5])
+            args._match_signature(None, l, Signature(["a", "b", "b1", "c"]), defaults_w=[4, 5])
             assert l == [1, 2, 4, 3]
             args = Arguments(space, [1, 2], keywords[:], keywords_w[:], w_starstararg=w_kwds)
             l = [None, None, None, None]
-            args._match_signature(None, l, ["a", "b", "c", "d"], defaults_w=[4, 5])
+            args._match_signature(None, l, Signature(["a", "b", "c", "d"]), defaults_w=[4, 5])
             assert l == [1, 2, 3, 5]
             args = Arguments(space, [1, 2], keywords[:], keywords_w[:], w_starstararg=w_kwds)
             l = [None, None, None, None]
             py.test.raises(ArgErr, args._match_signature, None, l,
-                           ["c", "b", "a", "d"], defaults_w=[4, 5])
+                           Signature(["c", "b", "a", "d"]), defaults_w=[4, 5])
             args = Arguments(space, [1, 2], keywords[:], keywords_w[:], w_starstararg=w_kwds)
             l = [None, None, None, None]
             py.test.raises(ArgErr, args._match_signature, None, l,
-                           ["a", "b", "c1", "d"], defaults_w=[4, 5])
+                           Signature(["a", "b", "c1", "d"]), defaults_w=[4, 5])
             args = Arguments(space, [1, 2], keywords[:], keywords_w[:], w_starstararg=w_kwds)
             l = [None, None, None]
-            args._match_signature(None, l, ["a", "b"], has_kwarg=True)
+            args._match_signature(None, l, Signature(["a", "b"], None, "**"))
             assert l == [1, 2, {'c': 3}]
 
     def test_match_kwds2(self):
@@ -215,7 +257,7 @@ class TestArgumentsNormal(object):
                 w_kwds = None
             args = Arguments(space, [1, 2], keywords, keywords_w, w_starstararg=w_kwds)
             l = [None, None, None, None]
-            args._match_signature(None, l, ["a", "b", "c"], has_kwarg=True)
+            args._match_signature(None, l, Signature(["a", "b", "c"], None, "**"))
             assert l == [1, 2, 3, {'d': 4}]
 
     def test_duplicate_kwds(self):
@@ -263,13 +305,13 @@ class TestArgumentsNormal(object):
             args = Arguments(space, [1, 2], keywords[:], keywords_w[:],
                              w_starstararg=w_kwds)
             l = [None, None, None]
-            args._match_signature(None, l, ["a", "b"], has_kwarg=True, blindargs=2)
+            args._match_signature(None, l, Signature(["a", "b"], None, "**"), blindargs=2)
             assert l == [1, 2, {'a':3, 'b': 4}]
             args = Arguments(space, [1, 2], keywords[:], keywords_w[:],
                              w_starstararg=w_kwds)
             l = [None, None, None]
             py.test.raises(ArgErrUnknownKwds, args._match_signature, None, l,
-                           ["a", "b"], blindargs=2)
+                           Signature(["a", "b"]), blindargs=2)
 
     def test_args_parsing(self):
         space = DummySpace()
@@ -277,27 +319,27 @@ class TestArgumentsNormal(object):
 
         calls = []
 
-        def _match_signature(w_firstarg, scope_w, argnames, has_vararg=False,
-                             has_kwarg=False, defaults_w=[], blindargs=0):
-            calls.append((w_firstarg, scope_w, argnames, has_vararg,
-                          has_kwarg, defaults_w, blindargs))
+        def _match_signature(w_firstarg, scope_w, signature,
+                             defaults_w=[], blindargs=0):
+            calls.append((w_firstarg, scope_w, signature.argnames, signature.has_vararg(),
+                          signature.has_kwarg(), defaults_w, blindargs))
         args._match_signature = _match_signature
 
-        scope_w = args.parse_obj(None, "foo", (["a", "b"], None, None))
+        scope_w = args.parse_obj(None, "foo", Signature(["a", "b"], None, None))
         assert len(calls) == 1
         assert calls[0] == (None, [None, None], ["a", "b"], False, False,
                             [], 0)
         assert calls[0][1] is scope_w
         calls = []
             
-        scope_w = args.parse_obj(None, "foo", (["a", "b"], "args", None),
+        scope_w = args.parse_obj(None, "foo", Signature(["a", "b"], "args", None),
                                  blindargs=1)
         assert len(calls) == 1
         assert calls[0] == (None, [None, None, None], ["a", "b"], True, False,
                             [], 1)
         calls = []
 
-        scope_w = args.parse_obj(None, "foo", (["a", "b"], "args", "kw"),
+        scope_w = args.parse_obj(None, "foo", Signature(["a", "b"], "args", "kw"),
                              defaults_w=['x', 'y'])
         assert len(calls) == 1
         assert calls[0] == (None, [None, None, None, None], ["a", "b"],
@@ -305,7 +347,7 @@ class TestArgumentsNormal(object):
                             ["x", "y"], 0)
         calls = []
         
-        scope_w = args.parse_obj("obj", "foo", (["a", "b"], "args", "kw"),
+        scope_w = args.parse_obj("obj", "foo", Signature(["a", "b"], "args", "kw"),
                              defaults_w=['x', 'y'], blindargs=1)
         assert len(calls) == 1
         assert calls[0] == ("obj", [None, None, None, None], ["a", "b"],
@@ -323,7 +365,7 @@ class TestArgumentsNormal(object):
 
 
         excinfo = py.test.raises(OperationError, args.parse_obj, "obj", "foo",
-                       (["a", "b"], None, None))
+                       Signature(["a", "b"], None, None))
         assert excinfo.value.w_type is TypeError
         assert excinfo.value.w_value == "msg foo"
 
@@ -334,14 +376,14 @@ class TestArgumentsNormal(object):
 
         calls = []
 
-        def _match_signature(w_firstarg, scope_w, argnames, has_vararg=False,
-                             has_kwarg=False, defaults_w=[], blindargs=0):
-            calls.append((w_firstarg, scope_w, argnames, has_vararg,
-                          has_kwarg, defaults_w, blindargs))
+        def _match_signature(w_firstarg, scope_w, signature,
+                             defaults_w=[], blindargs=0):
+            calls.append((w_firstarg, scope_w, signature.argnames, signature.has_vararg(),
+                          signature.has_kwarg(), defaults_w, blindargs))
         args._match_signature = _match_signature
 
         scope_w = [None, None]
-        args.parse_into_scope(None, scope_w, "foo", (["a", "b"], None, None))
+        args.parse_into_scope(None, scope_w, "foo", Signature(["a", "b"], None, None))
         assert len(calls) == 1
         assert calls[0] == (None, scope_w, ["a", "b"], False, False,
                             [], 0)
@@ -349,7 +391,7 @@ class TestArgumentsNormal(object):
         calls = []
 
         scope_w = [None, None, None, None]
-        args.parse_into_scope(None, scope_w, "foo", (["a", "b"], "args", "kw"),
+        args.parse_into_scope(None, scope_w, "foo", Signature(["a", "b"], "args", "kw"),
                               defaults_w=['x', 'y'])
         assert len(calls) == 1
         assert calls[0] == (None, scope_w, ["a", "b"],
@@ -358,7 +400,7 @@ class TestArgumentsNormal(object):
         calls = []
 
         scope_w = [None, None, None, None]        
-        args.parse_into_scope("obj", scope_w, "foo", (["a", "b"],
+        args.parse_into_scope("obj", scope_w, "foo", Signature(["a", "b"],
                                                       "args", "kw"),
                               defaults_w=['x', 'y'])
         assert len(calls) == 1
@@ -378,7 +420,7 @@ class TestArgumentsNormal(object):
 
         excinfo = py.test.raises(OperationError, args.parse_into_scope,
                                  "obj", [None, None], "foo",
-                                 (["a", "b"], None, None))
+                                 Signature(["a", "b"], None, None))
         assert excinfo.value.w_type is TypeError
         assert excinfo.value.w_value == "msg foo"
 
@@ -455,43 +497,43 @@ class TestArgumentsForTranslation(object):
     def test_unmatch_signature(self):
         space = DummySpace()
         args = make_arguments_for_translation(space, [1,2,3])
-        sig = (['a', 'b', 'c'], None, None)
+        sig = Signature(['a', 'b', 'c'], None, None)
         data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1])
-        sig = (['a', 'b', 'c'], None, None)
+        sig = Signature(['a', 'b', 'c'], None, None)
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1,2,3,4,5])
-        sig = (['a', 'b', 'c'], 'r', None)
+        sig = Signature(['a', 'b', 'c'], 'r', None)
         data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1], {'c': 3, 'b': 2})
-        sig = (['a', 'b', 'c'], None, None)
+        sig = Signature(['a', 'b', 'c'], None, None)
         data = args.match_signature(sig, [])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1], {'c': 5})
-        sig = (['a', 'b', 'c'], None, None)
+        sig = Signature(['a', 'b', 'c'], None, None)
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1], {'c': 5, 'd': 7})
-        sig = (['a', 'b', 'c'], None, 'kw')
+        sig = Signature(['a', 'b', 'c'], None, 'kw')
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
 
         args = make_arguments_for_translation(space, [1,2,3,4,5], {'e': 5, 'd': 7})
-        sig = (['a', 'b', 'c'], 'r', 'kw')
+        sig = Signature(['a', 'b', 'c'], 'r', 'kw')
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
@@ -499,7 +541,7 @@ class TestArgumentsForTranslation(object):
         args = make_arguments_for_translation(space, [], {},
                                        w_stararg=[1],
                                        w_starstararg={'c': 5, 'd': 7})
-        sig = (['a', 'b', 'c'], None, 'kw')
+        sig = Signature(['a', 'b', 'c'], None, 'kw')
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()
@@ -507,7 +549,7 @@ class TestArgumentsForTranslation(object):
         args = make_arguments_for_translation(space, [1,2], {'g': 9},
                                        w_stararg=[3,4,5],
                                        w_starstararg={'e': 5, 'd': 7})
-        sig = (['a', 'b', 'c'], 'r', 'kw')
+        sig = Signature(['a', 'b', 'c'], 'r', 'kw')
         data = args.match_signature(sig, [2, 3])
         new_args = args.unmatch_signature(sig, data)
         assert args.unpack() == new_args.unpack()

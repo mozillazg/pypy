@@ -18,14 +18,14 @@ from pypy.interpreter import eval
 from pypy.interpreter.function import Function, Method, ClassMethod
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable
 from pypy.interpreter.baseobjspace import Wrappable, SpaceCache, DescrMismatch
-from pypy.interpreter.argument import Arguments
+from pypy.interpreter.argument import Arguments, Signature
 from pypy.tool.sourcetools import NiceCompile, compile2
 from pypy.rlib.rarithmetic import r_longlong, r_int, r_ulonglong, r_uint
 
 # internal non-translatable parts: 
 import py
 
-class Signature:
+class SignatureBuilder:
     "NOT_RPYTHON"
     def __init__(self, func=None, argnames=None, varargname=None,
                  kwargname=None, name = None):
@@ -44,7 +44,7 @@ class Signature:
         self.argnames.append(argname)
 
     def signature(self):
-        return self.argnames, self.varargname, self.kwargname
+        return Signature(self.argnames, self.varargname, self.kwargname)
 
 #________________________________________________________________
 
@@ -446,8 +446,8 @@ class BuiltinCode(eval.Code):
                 "descrmismatch without a self-type specified")
  
 
-        orig_sig = Signature(func, argnames, varargname, kwargname)
-        app_sig = Signature(func)
+        orig_sig = SignatureBuilder(func, argnames, varargname, kwargname)
+        app_sig = SignatureBuilder(func)
 
         UnwrapSpec_Check(orig_sig).apply_over(unwrap_spec,
                                               app_sig #to populate

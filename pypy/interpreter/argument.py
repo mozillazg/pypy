@@ -4,6 +4,69 @@ Arguments objects.
 
 from pypy.interpreter.error import OperationError
 from pypy.rlib.debug import make_sure_not_resized
+from pypy.rlib.jit import purefunction
+
+
+class Signature(object):
+    _immutable_ = True
+    _immutable_fields_ = ["argnames[*]"]
+    __slots__ = ("argnames", "varargname", "kwargname")
+
+    def __init__(self, argnames, varargname=None, kwargname=None):
+        self.argnames = argnames
+        self.varargname = varargname
+        self.kwargname = kwargname
+
+    @purefunction
+    def find_argname(self, name):
+        try:
+            return self.argnames.index(name)
+        except ValueError:
+            return -1
+
+    def num_argnames(self):
+        return len(self.argnames)
+
+    def has_vararg(self):
+        return self.varargname is not None
+
+    def has_kwarg(self):
+        return self.kwargname is not None
+
+    def scope_length(self):
+        scopelen = len(self.argnames)
+        scopelen += self.has_vararg()
+        scopelen += self.has_kwarg()
+        return scopelen
+
+    def __repr__(self):
+        return "Signature(%r, %r, %r)" % (
+                self.argnames, self.varargname, self.kwargname)
+
+    def __eq__(self, other):
+        return (self.argnames == other.argnames and
+                self.varargname == other.varargname and
+                self.kwargname == other.kwargname)
+
+    def __ne__(self, other):
+        return not self == other
+
+
+    # make it look tuply for the annotator
+
+    def __len__(self):
+        return 3
+
+    def __getitem__(self, i):
+        if i == 0:
+            return self.argnames
+        if i == 1:
+            return self.varargname
+        if i == 2:
+            return self.kwargname
+        raise IndexError
+        
+
 
 class Arguments(object):
     """
@@ -116,8 +179,8 @@ class Arguments(object):
         
     ###  Parsing for function calls  ###
 
-    def _match_signature(self, w_firstarg, scope_w, argnames, has_vararg=False,
-                         has_kwarg=False, defaults_w=[], blindargs=0):
+    def _match_signature(self, w_firstarg, scope_w, signature, defaults_w=[],
+                         blindargs=0):
         """Parse args and kwargs according to the signature of a code object,
         or raise an ArgErr in case of failure.
         Return the number of arguments filled in.
@@ -128,7 +191,9 @@ class Arguments(object):
         #   argnames = list of formal parameter names
         #   scope_w = resulting list of wrapped values
         #
-        co_argcount = len(argnames) # expected formal arguments, without */**
+        co_argcount = signature.num_argnames() # expected formal arguments, without */**
+        has_vararg = signature.has_vararg()
+        has_kwarg = signature.has_kwarg()
         extravarargs = None
         input_argcount =  0
 
@@ -172,11 +237,10 @@ class Arguments(object):
             used_keywords = [False] * num_kwds
             for i in range(num_kwds):
                 name = keywords[i]
-                try:
-                    j = argnames.index(name)
-                except ValueError:
+                j = signature.find_argname(name)
+                if j < 0:
                     continue
-                if j < input_argcount:
+                elif j < input_argcount:
                     # check that no keyword argument conflicts with these note
                     # that for this purpose we ignore the first blindargs,
                     # which were put into place by prepend().  This way,
@@ -193,7 +257,6 @@ class Arguments(object):
         if input_argcount < co_argcount:
             def_first = co_argcount - len(defaults_w)
             for i in range(input_argcount, co_argcount):
-                name = argnames[i]
                 if scope_w[i] is not None:
                     pass
                 elif i >= def_first:
@@ -250,13 +313,9 @@ class Arguments(object):
         Store the argumentvalues into scope_w.
         scope_w must be big enough for signature.
         """
-        argnames, varargname, kwargname = signature
-        has_vararg = varargname is not None
-        has_kwarg = kwargname is not None
         try:
             return self._match_signature(w_firstarg,
-                                         scope_w, argnames, has_vararg,
-                                         has_kwarg, defaults_w, 0)
+                                         scope_w, signature, defaults_w, 0)
         except ArgErr, e:
             raise OperationError(self.space.w_TypeError,
                                  self.space.wrap(e.getmsg(fnname)))
@@ -265,15 +324,10 @@ class Arguments(object):
         """Parse args and kwargs according to the signature of a code object,
         or raise an ArgErr in case of failure.
         """
-        argnames, varargname, kwargname = signature
-        scopelen = len(argnames)
-        has_vararg = varargname is not None
-        has_kwarg = kwargname is not None
-        scopelen += has_vararg
-        scopelen += has_kwarg
+        scopelen = signature.scope_length()
         scope_w = [None] * scopelen
-        self._match_signature(w_firstarg, scope_w, argnames, has_vararg,
-                              has_kwarg, defaults_w, blindargs)
+        self._match_signature(w_firstarg, scope_w, signature, defaults_w,
+                              blindargs)
         return scope_w    
 
 
@@ -331,12 +385,12 @@ class ArgumentsForTranslation(Arguments):
 
 
             
-    def _match_signature(self, w_firstarg, scope_w, argnames, has_vararg=False,
-                         has_kwarg=False, defaults_w=[], blindargs=0):
+    def _match_signature(self, w_firstarg, scope_w, signature, defaults_w=[],
+                         blindargs=0):
         self.combine_if_necessary()
         # _match_signature is destructive
         return Arguments._match_signature(
-               self, w_firstarg, scope_w, argnames, has_vararg, has_kwarg,
+               self, w_firstarg, scope_w, signature,
                defaults_w, blindargs)
 
     def unpack(self):

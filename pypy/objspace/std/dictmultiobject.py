@@ -1,6 +1,7 @@
 import py
 from pypy.objspace.std.objspace import *
 from pypy.interpreter import gateway
+from pypy.interpreter.argument import Signature
 from pypy.module.__builtin__.__init__ import BUILTIN_TO_INDEX, OPTIMIZED_BUILTINS
 
 from pypy.rlib.objectmodel import r_dict, we_are_translated
@@ -921,11 +922,14 @@ class W_DictMultiObject(W_Object):
 registerimplementation(W_DictMultiObject)
 
 
+init_signature = Signature(['seq_or_map'], None, 'kwargs')
+init_defaults = [None]
+
 def init__DictMulti(space, w_dict, __args__):
     w_src, w_kwds = __args__.parse_obj(
             None, 'dict',
-            (['seq_or_map'], None, 'kwargs'), # signature
-            [None])                           # default argument
+            init_signature, # signature
+            init_defaults)                           # default argument
     if w_src is None:
         pass
     elif space.findattr(w_src, space.wrap("keys")) is None:
