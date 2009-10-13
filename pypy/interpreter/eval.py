@@ -33,8 +33,7 @@ class Code(Wrappable):
         return frame.run()
 
     def signature(self):
-        "([list-of-arg-names], vararg-name-or-None, kwarg-name-or-None)."
-        return [], None, None
+        raise NotImplementedError
 
     def getvarnames(self):
         """List of names including the arguments, vararg and kwarg,

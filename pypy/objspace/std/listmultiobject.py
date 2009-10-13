@@ -5,6 +5,7 @@ from pypy.objspace.std.sliceobject import W_SliceObject
 
 from pypy.objspace.std import slicetype
 from pypy.interpreter import gateway, baseobjspace
+from pypy.interpreter.argument import Signature
 from pypy.rlib.listsort import TimSort
 
 
@@ -882,6 +883,7 @@ class State(object):
     def __init__(self, space):
         self.empty_impl = EmptyListImplementation(space)
         self.empty_list = W_ListMultiObject(space, self.empty_impl)
+        self.list_of_empty_list = [EMPTY_LIST]
 
 
 def _adjust_index(space, index, length, indexerrormsg):
@@ -893,12 +895,14 @@ def _adjust_index(space, index, length, indexerrormsg):
     return index
 
 
+init_signature = Signature(['sequence'], None, None)
+
 def init__ListMulti(space, w_list, __args__):
-    EMPTY_LIST = space.fromcache(State).empty_list
+    init_defaults = space.fromcache(State).list_of_empty_list
     w_iterable, = __args__.parse_obj(
             None, 'list',
-            (['sequence'], None, None),   # signature
-            [EMPTY_LIST])                 # default argument
+            init_signature,
+            init_defaults)
     if w_iterable is not EMPTY_LIST:
         list_w = space.unpackiterable(w_iterable)
         if list_w:
