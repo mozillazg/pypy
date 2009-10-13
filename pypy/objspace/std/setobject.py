@@ -600,15 +600,17 @@ cmp__Frozenset_settypedef = cmp__Set_settypedef
 cmp__Frozenset_frozensettypedef = cmp__Set_settypedef
 
 def init__Set(space, w_set, __args__):
-    w_iterable, = __args__.parse('set',
-                            (['some_iterable'], None, None),
-                            [space.newtuple([])])
+    w_iterable, = __args__.parse_obj(
+            None, 'set',
+            (['some_iterable'], None, None),
+            [space.newtuple([])])
     _initialize_set(space, w_set, w_iterable)
 
 def init__Frozenset(space, w_set, __args__):
-    w_iterable, = __args__.parse('set',
-                            (['some_iterable'], None, None),
-                            [space.newtuple([])])
+    w_iterable, = __args__.parse_obj(
+            None, 'set',
+            (['some_iterable'], None, None),
+            [space.newtuple([])])
     if w_set.hash == -1:
         _initialize_set(space, w_set, w_iterable)
         hash__Frozenset(space, w_set)

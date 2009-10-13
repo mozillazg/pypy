@@ -922,12 +922,13 @@ registerimplementation(W_DictMultiObject)
 
 
 def init__DictMulti(space, w_dict, __args__):
-    w_src, w_kwds = __args__.parse('dict',
-                          (['seq_or_map'], None, 'kwargs'), # signature
-                          [W_DictMultiObject(space)])            # default argument
-    # w_dict.implementation = space.emptydictimpl
-    #                              ^^^ disabled only for CPython compatibility
-    if space.findattr(w_src, space.wrap("keys")) is None:
+    w_src, w_kwds = __args__.parse_obj(
+            None, 'dict',
+            (['seq_or_map'], None, 'kwargs'), # signature
+            [None])                           # default argument
+    if w_src is None:
+        pass
+    elif space.findattr(w_src, space.wrap("keys")) is None:
         list_of_w_pairs = space.unpackiterable(w_src)
         for w_pair in list_of_w_pairs:
             pair = space.unpackiterable(w_pair)

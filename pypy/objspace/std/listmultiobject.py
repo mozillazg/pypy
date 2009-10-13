@@ -895,9 +895,10 @@ def _adjust_index(space, index, length, indexerrormsg):
 
 def init__ListMulti(space, w_list, __args__):
     EMPTY_LIST = space.fromcache(State).empty_list
-    w_iterable, = __args__.parse('list',
-                               (['sequence'], None, None),   # signature
-                               [EMPTY_LIST])                 # default argument
+    w_iterable, = __args__.parse_obj(
+            None, 'list',
+            (['sequence'], None, None),   # signature
+            [EMPTY_LIST])                 # default argument
     if w_iterable is not EMPTY_LIST:
         list_w = space.unpackiterable(w_iterable)
         if list_w:
