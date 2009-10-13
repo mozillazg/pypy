@@ -439,7 +439,7 @@ class FrameworkGCTransformer(GCTransformer):
     def gc_field_values_for(self, obj):
         hdr = self.gcdata.gc.gcheaderbuilder.header_of_object(obj)
         HDR = self._gc_HDR
-        withhash, flag = self.gcdata.gc.withhash_flag_is_in_field
+        withhash, flags = self.gcdata.gc.withhash_flag_is_in_field
         result = []
         for fldname in HDR._names:
             x = getattr(hdr, fldname)
@@ -447,9 +447,9 @@ class FrameworkGCTransformer(GCTransformer):
                 TYPE = lltype.typeOf(x)
                 x = lltype.cast_primitive(lltype.Signed, x)
                 if hasattr(obj._normalizedcontainer(), '_hash_cache_'):
-                    x |= flag
+                    x |= flags       # set the flag(s) in the header
                 else:
-                    x &= ~flag
+                    x &= ~flags      # clear the flag(s) in the header
                 x = lltype.cast_primitive(TYPE, x)
             result.append(x)
         return result

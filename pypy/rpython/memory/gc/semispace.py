@@ -19,6 +19,8 @@ GCFLAG_FORWARDED = first_gcflag
 # either immortal objects or (for HybridGC) externally raw_malloc'ed
 GCFLAG_EXTERNAL = first_gcflag << 1
 GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
+GCFLAG_HASHTAKEN = first_gcflag << 3      # someone already asked for the hash
+GCFLAG_HASHFIELD = first_gcflag << 4      # we have an extra hash field
 
 memoryError = MemoryError()
 
@@ -28,12 +30,13 @@ class SemiSpaceGC(MovingGCBase):
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
     malloc_zero_filled = True
-    first_unused_gcflag = first_gcflag << 3
+    first_unused_gcflag = first_gcflag << 5
     total_collection_time = 0.0
     total_collection_count = 0
 
     HDR = lltype.Struct('header', ('tid', lltype.Signed))   # XXX or rffi.INT?
     typeid_is_in_field = 'tid'
+    withhash_flag_is_in_field = 'tid', (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD)
     FORWARDSTUB = lltype.GcStruct('forwarding_stub',
                                   ('forw', llmemory.Address))
     FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)
@@ -297,11 +300,19 @@ class SemiSpaceGC(MovingGCBase):
             if free_after_collection < self.space_size // 5:
                 self.red_zone += 1
 
+    def extra_hash_space(self, obj):
+        hdr = self.header(obj)
+        if hdr.tid & GCFLAG_HASHFIELD:
+            return llmemory.sizeof(lltype.Signed)
+        else:
+            return 0
+
     def scan_copied(self, scan):
         while scan < self.free:
             curr = scan + self.size_gc_header()
             self.trace_and_copy(curr)
-            scan += self.size_gc_header() + self.get_size(curr)
+            scan += (self.size_gc_header() + self.get_size(curr)
+                                           + self.extra_hash_space(curr))
         return scan
 
     def collect_roots(self):
@@ -331,9 +342,21 @@ class SemiSpaceGC(MovingGCBase):
     def make_a_copy(self, obj, objsize):
         totalsize = self.size_gc_header() + objsize
         newaddr = self.free
-        self.free += totalsize
         llarena.arena_reserve(newaddr, totalsize)
         raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
+        #
+        # check if we need to write a hash value at the end of the new obj
+        newhdr = llmemory.cast_adr_to_ptr(newaddr, lltype.Ptr(self.HDR))
+        if newhdr.tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
+            if newhdr.tid & GCFLAG_HASHFIELD:
+                hash = (obj + self.get_size(obj)).signed[0]
+            else:
+                hash = llmemory.cast_adr_to_int(obj)
+                newhdr.tid |= GCFLAG_HASHFIELD
+            (newaddr + totalsize).signed[0] = hash
+            totalsize += llmemory.sizeof(lltype.Signed)
+        #
+        self.free += totalsize
         newobj = newaddr + self.size_gc_header()
         return newobj
 
@@ -570,3 +593,12 @@ class SemiSpaceGC(MovingGCBase):
 
     STATISTICS_NUMBERS = 0
 
+    def identityhash(self, obj):
+        obj = llmemory.cast_ptr_to_adr(obj)
+        hdr = self.header(obj)
+        if hdr.tid & GCFLAG_HASHFIELD:
+            obj += self.get_size(obj)
+            return obj.signed[0]
+        else:
+            hdr.tid |= GCFLAG_HASHTAKEN
+            return llmemory.cast_adr_to_int(obj)
