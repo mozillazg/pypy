@@ -300,6 +300,7 @@ def ll_deallocator(addr):
 
     def gct_gc_identityhash(self, hop):
         v_obj = hop.spaceop.args[0]
-        v_adr = gen_cast(hop.llops, llmemory.Address, v_obj)
+        v_adr = hop.genop("cast_ptr_to_adr", [v_obj],
+                          resulttype=llmemory.Address)
         hop.genop("direct_call", [self.identityhash_ptr, v_adr],
                   resultvar=hop.spaceop.result)
