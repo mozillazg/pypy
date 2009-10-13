@@ -902,7 +902,27 @@ class Assembler386(object):
 
     def closing_jump(self, loop_token):
         self.mc.JMP(rel32(loop_token._x86_loop_code))
-        
+
+    def malloc_cond_fixedsize(self, nursery_free_adr, nursery_top_adr,
+                              size, tid, push_arg, slowpath_addr):
+        # don't use self.mc
+        mc = self.mc._mc
+        mc.MOV(eax, heap(nursery_free_adr))
+        mc.LEA(edx, addr_add(eax, imm(size)))
+        mc.CMP(edx, heap(nursery_top_adr))
+        mc.write('\x76\x00') # JNA after the block
+        jmp_adr = mc.get_relative_pos()
+        if push_arg is not None:
+            assert push_arg is ecx
+            mc.PUSH(ecx)
+        mc.CALL(rel32(slowpath_addr))
+        if push_arg is not None:
+            mc.POP(ecx)
+        mc.MOV(addr_add(eax, imm(0)), imm(tid))
+        mc.MOV(heap(nursery_free_adr), edx)
+        offset = mc.get_relative_pos() - jmp_adr
+        assert 0 < offset <= 127
+        mc.overwrite(jmp_adr-1, chr(offset))
 
 genop_discard_list = [Assembler386.not_implemented_op_discard] * rop._LAST
 genop_list = [Assembler386.not_implemented_op] * rop._LAST
