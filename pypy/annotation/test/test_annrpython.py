@@ -3187,15 +3187,6 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [int])
         assert s.const == 0
 
-    def test_hash(self):
-        class A(object):
-            pass
-        def f():
-            return hash(A()) + hash(None)
-        a = self.RPythonAnnotator()
-        s = a.build_types(f, [])
-        assert s.knowntype == int
-
     def test_contains_of_empty_dict(self):
         class A(object):
             def meth(self):
