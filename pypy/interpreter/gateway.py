@@ -860,22 +860,22 @@ class ApplevelClass:
                     if ret_w is not None: # it was RPython
                         return ret_w
             # the last argument can be an Arguments
+            w_func = self.wget(space, name)
             if not args_w:
-                args = Arguments(space, [])
+                return space.call_function(w_func)
             else:
                 args = args_w[-1]
                 assert args is not None
                 if not isinstance(args, Arguments):
-                    args = Arguments(space, list(args_w))
+                    return space.call_function(w_func, *args_w)
                 else:
-                    # ...which is merged with the previous arguments, if any
-                    if len(args_w) > 1:
-                        # XXXXXXXXX
-                        more_args_w, more_kwds_w = args.unpack()
-                        args = Arguments(space,
-                                         list(args_w[:-1]) + more_args_w,
-                                         more_kwds_w.keys(), more_kwds_w.values())
-            w_func = self.wget(space, name) 
+                    if len(args_w) == 2:
+                        return space.call_obj_args(w_func, args_w[0], args)
+                    elif len(args_w) > 2:
+                        # xxx is this used at all?
+                        # ...which is merged with the previous arguments, if any
+                        args = args.replace_arguments(list(args_w[:-1]) +
+                                                      args.arguments_w)
             return space.call_args(w_func, args)
         def get_function(space):
             w_func = self.wget(space, name) 
