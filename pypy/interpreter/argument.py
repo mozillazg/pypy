@@ -219,7 +219,7 @@ class Arguments(object):
             scope_w[co_argcount] = self.space.newtuple(starargs_w)
         elif avail > co_argcount:
             raise ArgErrCount(avail, num_kwds,
-                              (co_argcount, has_vararg, has_kwarg),
+                              co_argcount, has_vararg, has_kwarg,
                               defaults_w, 0)
 
         # collect extra keyword arguments into the **kwarg
@@ -236,7 +236,7 @@ class Arguments(object):
 
         if missing:
             raise ArgErrCount(avail, num_kwds,
-                              (co_argcount, has_vararg, has_kwarg),
+                              co_argcount, has_vararg, has_kwarg,
                               defaults_w, missing)
 
         return co_argcount + has_vararg + has_kwarg
@@ -459,28 +459,31 @@ class ArgErr(Exception):
 
 class ArgErrCount(ArgErr):
 
-    def __init__(self, nargs, nkwds, signature, defaults_w, missing_args):
-        self.signature    = signature
+    def __init__(self, got_nargs, nkwds, expected_nargs, has_vararg, has_kwarg,
+                 defaults_w, missing_args):
+        self.expected_nargs = expected_nargs
+        self.has_vararg = has_vararg
+        self.has_kwarg = has_kwarg
+        
         self.num_defaults = len(defaults_w)
         self.missing_args = missing_args
-        self.num_args = nargs
+        self.num_args = got_nargs
         self.num_kwds = nkwds
         
     def getmsg(self, fnname):
         args = None
-        num_args, has_vararg, has_kwarg = self.signature
         #args_w, kwds_w = args.unpack()
-        if has_kwarg or (self.num_kwds and self.num_defaults):
+        if self.has_kwarg or (self.num_kwds and self.num_defaults):
             msg2 = "non-keyword "
             if self.missing_args:
-                required_args = num_args - self.num_defaults
+                required_args = self.expected_nargs - self.num_defaults
                 nargs = required_args - self.missing_args
             else:
                 nargs = self.num_args
         else:
             msg2 = ""
             nargs = self.num_args + self.num_kwds
-        n = num_args
+        n = self.expected_nargs
         if n == 0:
             msg = "%s() takes no %sargument (%d given)" % (
                 fnname, 
@@ -488,7 +491,7 @@ class ArgErrCount(ArgErr):
                 nargs)
         else:
             defcount = self.num_defaults
-            if defcount == 0 and not has_vararg:
+            if defcount == 0 and not self.has_vararg:
                 msg1 = "exactly"
             elif not self.missing_args:
                 msg1 = "at most"
