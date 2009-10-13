@@ -626,9 +626,6 @@ class RegAlloc(object):
     def consider_new(self, op, ignored):
         gc_ll_descr = self.assembler.cpu.gc_ll_descr
         if gc_ll_descr.can_inline_malloc(op.descr):
-            descr = op.descr
-            # since we're in a very hand-crafted code, we can assume things
-            # about descr
             tmp0 = TempBox()
             self.rm.force_allocate_reg(op.result, selected_reg=eax)
             self.rm.force_allocate_reg(tmp0, selected_reg=edx)
