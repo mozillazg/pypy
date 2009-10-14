@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem.lltype import \
      GcStruct, GcArray, RttiStruct, ContainerType, \
      parentlink, Ptr, PyObject, Void, OpaqueType, Float, \
      RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray
-from pypy.rpython.lltypesystem import lltype, llmemory, llgroup
+from pypy.rpython.lltypesystem import llmemory, llgroup
 from pypy.translator.c.funcgen import FunctionCodeGenerator
 from pypy.translator.c.external import CExternalFunctionCodeGenerator
 from pypy.translator.c.support import USESLOTS # set to False if necessary while refactoring
@@ -37,12 +37,11 @@ class defaultproperty(object):
 
 class StructDefNode:
     typetag = 'struct'
-    def __init__(self, db, STRUCT, varlength=1, hash_at_end=False):
+    def __init__(self, db, STRUCT, varlength=1):
         self.db = db
         self.STRUCT = STRUCT
         self.LLTYPE = STRUCT
         self.varlength = varlength
-        self.hash_at_end = hash_at_end
         if varlength == 1:
             basename = STRUCT._name
             with_number = True
@@ -50,8 +49,6 @@ class StructDefNode:
             basename = db.gettypedefnode(STRUCT).barename
             basename = '%s_len%d' % (basename, varlength)
             with_number = False
-        if hash_at_end:
-            basename += '_hash'
         if STRUCT._hints.get('union'):
             self.typetag = 'union'
             assert STRUCT._gckind == 'raw'   # not supported: "GcUnion"
@@ -97,8 +94,6 @@ class StructDefNode:
             else:
                 typename = db.gettype(T, who_asks=self)
             self.fields.append((self.c_struct_field_name(name), typename))
-        if self.hash_at_end:
-            self.fields.append(('_hash', 'long @'))
         self.gcinfo  # force it to be computed
 
     def computegcinfo(self):
@@ -451,7 +446,7 @@ class ContainerNode(object):
         self.obj = obj
         #self.dependencies = {}
         self.typename = db.gettype(T)  #, who_asks=self)
-        self.implementationtypename = self.getimpltypename()
+        self.implementationtypename = db.gettype(T, varlength=self.getlength())
         parent, parentindex = parentlink(obj)
         if parent is None:
             self.name = db.namespace.uniquename('g_' + self.basename())
@@ -467,9 +462,6 @@ class ContainerNode(object):
             self.ptrname = '((%s)(void*)%s)' % (cdecl(ptrtypename, ''),
                                                 self.ptrname)
 
-    def getimpltypename(self):
-        return self.db.gettype(self.T, varlength=self.getlength())
-
     def is_thread_local(self):
         return hasattr(self.T, "_hints") and self.T._hints.get('thread_local')
 
@@ -484,15 +476,11 @@ class ContainerNode(object):
         if llgroup.member_of_group(self.obj):
             return []
         lines = list(self.initializationexpr())
-        name = self.get_implementation_name()
         lines[0] = '%s = %s' % (
-            cdecl(self.implementationtypename, name, self.is_thread_local()),
+            cdecl(self.implementationtypename, self.name, self.is_thread_local()),
             lines[0])
         lines[-1] += ';'
         return lines
-
-    def get_implementation_name(self):
-        return self.name
 
     def startupcode(self):
         return []
@@ -521,62 +509,15 @@ class StructNode(ContainerNode):
             array = getattr(self.obj, self.T._arrayfld)
             return len(array.items)
 
-    def get_prebuilt_hash(self, outermostonly):
-        # for prebuilt objects that need to have their hash stored and
-        # restored.  Note that only structures that are StructNodes all
-        # the way have their hash stored (and not e.g. structs with var-
-        # sized arrays at the end).
-        if self.db.gcpolicy.stores_hash_at_the_end:
-            obj = lltype.top_container(self.obj)
-            if outermostonly:
-                if obj is not self.obj:
-                    return None
-            if ContainerNodeFactory[typeOf(obj).__class__] is StructNode:
-                return getattr(obj, '_hash_cache_', None)
-        return None
-
-    def getimpltypename(self):
-        basetypename = ContainerNode.getimpltypename(self)
-        if self.get_prebuilt_hash(True) is not None:
-            return 'struct %s @' % (
-                self.db.namespace.uniquename(self.basename() + '_hash'),)
-        return basetypename
-
-    def forward_declaration(self):
-        if self.get_prebuilt_hash(True) is not None:
-            basetypename = ContainerNode.getimpltypename(self)
-            hash_offset = self.db.gctransformer.get_hash_offset(self.T)
-            yield '%s {' % cdecl(self.implementationtypename, '')
-            yield '\tunion {'
-            yield '\t\t%s;' % cdecl(basetypename, 'head')
-            yield '\t\tchar pad[%s];' % name_signed(hash_offset, self.db)
-            yield '\t} u;'
-            yield '\tlong hash;'
-            yield '};'
-            yield '%s;' % (
-                forward_cdecl(self.implementationtypename,
-                              '_' + self.name, self.db.standalone,
-                              self.is_thread_local()),)
-            yield '#define %s _%s.u.head' % (self.name, self.name)
-        else:
-            for line in ContainerNode.forward_declaration(self):
-                yield line
-
-    def get_implementation_name(self):
-        if self.get_prebuilt_hash(True) is not None:
-            return '_' + self.name
-        return self.name
-
     def initializationexpr(self, decoration=''):
         is_empty = True
+        yield '{'
         defnode = self.db.gettypedefnode(self.T)
 
         data = []
 
         if needs_gcheader(self.T):
-            needs_hash = self.get_prebuilt_hash(False) is not None
-            hdr = self.db.gcpolicy.struct_gcheader_initdata(self, needs_hash)
-            for i, thing in enumerate(hdr):
+            for i, thing in enumerate(self.db.gcpolicy.struct_gcheader_initdata(self)):
                 data.append(('gcheader%d'%i, thing))
         
         for name in defnode.fieldnames:
@@ -590,11 +531,6 @@ class StructNode(ContainerNode):
         if hasattr(self.T, "_hints") and self.T._hints.get('union'):
             data = data[0:1]
 
-        hash = self.get_prebuilt_hash(True)
-        if hash is not None:
-            yield '{ {'
-
-        yield '{'
         for name, value in data:
             c_expr = defnode.access_expr(self.name, name)
             lines = generic_initializationexpr(self.db, value, c_expr,
@@ -604,13 +540,53 @@ class StructNode(ContainerNode):
             if not lines[0].startswith('/*'):
                 is_empty = False
         if is_empty:
-            yield '\t0'
+            yield '\t%s' % '0,'
         yield '}'
 
-        if hash is not None:
-            yield '}, %s /* hash */ }' % name_signed(hash, self.db)
-
 assert not USESLOTS or '__dict__' not in dir(StructNode)
+
+class GcStructNodeWithHash(StructNode):
+    # for the outermost level of nested structures, if it has a _hash_cache_.
+    nodekind = 'struct'
+    if USESLOTS:
+        __slots__ = ()
+
+    def get_hash_typename(self):
+        return 'struct _hashT_%s @' % self.name
+
+    def forward_declaration(self):
+        hash_typename = self.get_hash_typename()
+        hash_offset = self.db.gctransformer.get_hash_offset(self.T)
+        yield '%s {' % cdecl(hash_typename, '')
+        yield '\tunion {'
+        yield '\t\t%s;' % cdecl(self.implementationtypename, 'head')
+        yield '\t\tchar pad[%s];' % name_signed(hash_offset, self.db)
+        yield '\t} u;'
+        yield '\tlong hash;'
+        yield '};'
+        yield '%s;' % (
+            forward_cdecl(hash_typename, '_hash_' + self.name,
+                          self.db.standalone, self.is_thread_local()),)
+        yield '#define %s _hash_%s.u.head' % (self.name, self.name)
+
+    def implementation(self):
+        hash_typename = self.get_hash_typename()
+        hash = self.db.gcpolicy.get_prebuilt_hash(self.obj)
+        assert hash is not None
+        lines = list(self.initializationexpr())
+        lines.insert(0, '%s = { {' % (
+            cdecl(hash_typename, '_hash_' + self.name,
+                  self.is_thread_local()),))
+        lines.append('}, %s /* hash */ };' % name_signed(hash, self.db))
+        return lines
+
+def gcstructnode_factory(db, T, obj):
+    if db.gcpolicy.get_prebuilt_hash(obj) is not None:
+        cls = GcStructNodeWithHash
+    else:
+        cls = StructNode
+    return cls(db, T, obj)
+
 
 class ArrayNode(ContainerNode):
     nodekind = 'array'
@@ -1035,7 +1011,7 @@ class GroupNode(ContainerNode):
 
 ContainerNodeFactory = {
     Struct:       StructNode,
-    GcStruct:     StructNode,
+    GcStruct:     gcstructnode_factory,
     Array:        ArrayNode,
     GcArray:      ArrayNode,
     FixedSizeArray: FixedSizeArrayNode,
