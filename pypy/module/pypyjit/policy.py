@@ -3,8 +3,8 @@ from pypy.jit.metainterp.policy import JitPolicy
 class PyPyJitPolicy(JitPolicy):
 
     def look_inside_pypy_module(self, modname):
-        if mod.startswith('pypy.module.__builtin__'):
-            if mod.endswith('operation') or mod.endswith('abstractinst'):
+        if modname.startswith('pypy.module.__builtin__'):
+            if modname.endswith('operation') or modname.endswith('abstractinst'):
                 return True
 
         modname, _ = modname.split('.', 1)
