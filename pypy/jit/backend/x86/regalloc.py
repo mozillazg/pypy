@@ -623,37 +623,46 @@ class RegAlloc(object):
         self.PerformDiscard(op, arglocs)
         self.rm.possibly_free_vars(op.args)
 
+    def _fastpath_malloc(self, op, descr):
+        gc_ll_descr = self.assembler.cpu.gc_ll_descr
+        tmp0 = TempBox()
+        self.rm.force_allocate_reg(op.result, selected_reg=eax)
+        self.rm.force_allocate_reg(tmp0, selected_reg=edx)
+        for k, v in self.rm.reg_bindings.items():
+            if v is ecx:
+                push_reg = ecx
+                break
+        else:
+            push_reg = None
+        self.assembler.malloc_cond_fixedsize(
+            gc_ll_descr.get_nursery_free_addr(),
+            gc_ll_descr.get_nursery_top_addr(),
+            descr.size, descr.tid, push_reg,
+            gc_ll_descr.get_malloc_fixedsize_slowpath_addr(),
+            )
+        self.rm.possibly_free_var(tmp0)
+
     def consider_new(self, op, ignored):
         gc_ll_descr = self.assembler.cpu.gc_ll_descr
         if gc_ll_descr.can_inline_malloc(op.descr):
-            tmp0 = TempBox()
-            self.rm.force_allocate_reg(op.result, selected_reg=eax)
-            self.rm.force_allocate_reg(tmp0, selected_reg=edx)
-            for k, v in self.rm.reg_bindings.items():
-                if v is ecx:
-                    push_reg = ecx
-                    break
-            else:
-                push_reg = None
-            self.assembler.malloc_cond_fixedsize(
-                gc_ll_descr.get_nursery_free_addr(),
-                gc_ll_descr.get_nursery_top_addr(),
-                op.descr.size, op.descr.tid, push_reg,
-                gc_ll_descr.get_malloc_fixedsize_slowpath_addr(),
-                )
-            self.rm.possibly_free_var(tmp0)
-            return
-        args = gc_ll_descr.args_for_new(op.descr)
-        arglocs = [imm(x) for x in args]
-        return self._call(op, arglocs)
+            self._fastpath_malloc(op, op.descr)
+        else:
+            args = gc_ll_descr.args_for_new(op.descr)
+            arglocs = [imm(x) for x in args]
+            return self._call(op, arglocs)
 
     def consider_new_with_vtable(self, op, ignored):
         classint = op.args[0].getint()
         descrsize = self.assembler.cpu.class_sizes[classint]
-        args = self.assembler.cpu.gc_ll_descr.args_for_new(descrsize)
-        arglocs = [imm(x) for x in args]
-        arglocs.append(self.loc(op.args[0]))
-        return self._call(op, arglocs)
+        if self.assembler.cpu.gc_ll_descr.can_inline_malloc(descrsize):
+            self._fastpath_malloc(op, descrsize)
+            self.assembler.set_vtable(eax, imm(classint))
+            # result of fastpath malloc is in eax
+        else:
+            args = self.assembler.cpu.gc_ll_descr.args_for_new(descrsize)
+            arglocs = [imm(x) for x in args]
+            arglocs.append(self.loc(op.args[0]))
+            return self._call(op, arglocs)
 
     def consider_newstr(self, op, ignored):
         gc_ll_descr = self.assembler.cpu.gc_ll_descr
