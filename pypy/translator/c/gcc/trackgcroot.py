@@ -934,6 +934,7 @@ class LocalVar(object):
 class Insn(object):
     _args_ = []
     _locals_ = []
+
     def __repr__(self):
         return '%s(%s)' % (self.__class__.__name__,
                            ', '.join([str(getattr(self, name))
@@ -945,11 +946,7 @@ class Insn(object):
         return localvar
 
     def all_sources_of(self, localvar):
-        source = self.source_of(localvar, None)
-        if source is somenewvalue:
-            return []
-        else:
-            return [source]
+        return [localvar]
 
 class Label(Insn):
     _args_ = ['label', 'lineno']
@@ -965,6 +962,7 @@ class InsnFunctionStart(Insn):
         self.arguments = {}
         for reg in CALLEE_SAVE_REGISTERS:
             self.arguments[reg] = somenewvalue
+
     def source_of(self, localvar, tag):
         if localvar not in self.arguments:
             if localvar in ('%eax', '%edx', '%ecx'):
@@ -988,13 +986,16 @@ class InsnFunctionStart(Insn):
 class InsnSetLocal(Insn):
     _args_ = ['target', 'sources']
     _locals_ = ['target', 'sources']
+
     def __init__(self, target, sources=()):
         self.target = target
         self.sources = sources
+
     def source_of(self, localvar, tag):
         if localvar == self.target:
             return somenewvalue
         return localvar
+
     def all_sources_of(self, localvar):
         if localvar == self.target:
             return self.sources
@@ -1003,13 +1004,20 @@ class InsnSetLocal(Insn):
 class InsnCopyLocal(Insn):
     _args_ = ['source', 'target']
     _locals_ = ['source', 'target']
+
     def __init__(self, source, target):
         self.source = source
         self.target = target
+
     def source_of(self, localvar, tag):
         if localvar == self.target:
             return self.source
         return localvar
+
+    def all_sources_of(self, localvar):
+        if localvar == self.target:
+            return [self.source]
+        return [localvar]
 
 class InsnStackAdjust(Insn):
     _args_ = ['delta']
