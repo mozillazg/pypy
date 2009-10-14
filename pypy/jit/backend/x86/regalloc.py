@@ -629,19 +629,24 @@ class RegAlloc(object):
         tmp0 = TempBox()
         self.rm.force_allocate_reg(op.result, selected_reg=eax)
         self.rm.force_allocate_reg(tmp0, selected_reg=edx)
-        for k, v in self.rm.reg_bindings.items():
-            if v is ecx:
-                push_reg = ecx
+        for v, reg in self.rm.reg_bindings.items():
+            if reg is ecx:
+                to_sync = v
                 break
         else:
-            push_reg = None
+            to_sync = None
+        if to_sync is not None:
+            self.rm._sync_var(to_sync)
+            del self.rm.reg_bindings[to_sync]
+            self.rm.free_regs.append(ecx)
+        # we need to do it here, so edx is not in reg_bindings
+        self.rm.possibly_free_var(tmp0)
         self.assembler.malloc_cond_fixedsize(
             gc_ll_descr.get_nursery_free_addr(),
             gc_ll_descr.get_nursery_top_addr(),
-            descr.size, descr.tid, push_reg,
+            descr.size, descr.tid,
             gc_ll_descr.get_malloc_fixedsize_slowpath_addr(),
             )
-        self.rm.possibly_free_var(tmp0)
 
     def consider_new(self, op, ignored):
         gc_ll_descr = self.assembler.cpu.gc_ll_descr
