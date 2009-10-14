@@ -2,7 +2,6 @@
 Pure Python implementation of string utilities.
 """
 
-from pypy.rlib.jit import purefunction
 from pypy.rlib.rarithmetic import ovfcheck, break_up_float, parts_to_float
 from pypy.interpreter.error import OperationError
 import math
@@ -10,7 +9,6 @@ import math
 # XXX factor more functions out of stringobject.py.
 # This module is independent from PyPy.
 
-@purefunction
 def strip_spaces(s):
     # XXX this is not locale-dependent
     p = 0
@@ -91,7 +89,6 @@ class NumberStringParser:
         else:
             return -1
 
-@purefunction
 def string_to_int(s, base=10):
     """Utility to converts a string to an integer (or possibly a long).
     If base is 0, the proper base is guessed based on the leading
@@ -118,7 +115,6 @@ def string_to_int(s, base=10):
 def string_to_long(space, s, base=10, parser=None):
     return string_to_w_long(space, s, base, parser).longval()
 
-@purefunction
 def string_to_w_long(space, s, base=10, parser=None):
     """As string_to_int(), but ignores an optional 'l' or 'L' suffix."""
     if parser is None:
@@ -325,7 +321,6 @@ def applevel_string_to_float(s):
 # for comments, see above.
 # XXX probably this very specific thing should go into longobject?
 
-@purefunction
 def interp_string_to_float(space, s):
     """
     Conversion of string to float.
