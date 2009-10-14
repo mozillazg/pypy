@@ -12,6 +12,7 @@ from pypy.jit.backend.llsupport.descr import BaseSizeDescr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import GcCache, get_field_descr
 from pypy.jit.backend.llsupport.descr import GcPtrFieldDescr
 from pypy.jit.backend.llsupport.descr import get_call_descr
+from pypy.rlib.rarithmetic import r_ulonglong
 
 # ____________________________________________________________
 
@@ -343,6 +344,8 @@ class GcLLDescr_framework(GcLLDescription):
                                                lltype.Void)
         (self.array_basesize, _, self.array_length_ofs) = \
              symbolic.get_array_token(lltype.GcArray(lltype.Signed), True)
+        min_ns = self.GCClass.TRANSLATION_PARAMS['min_nursery_size']
+        self.max_size_of_young_obj = self.GCClass.get_young_fixedsize(min_ns)
 
         # make a malloc function, with three arguments
         def malloc_basic(size, tid):
@@ -393,6 +396,26 @@ class GcLLDescr_framework(GcLLDescription):
         self.malloc_unicode = malloc_unicode
         self.GC_MALLOC_STR_UNICODE = lltype.Ptr(lltype.FuncType(
             [lltype.Signed], llmemory.GCREF))
+        def malloc_fixedsize_slowpath(size):
+            gcref = llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
+                                        0, size, True, False, False)
+            res = rffi.cast(lltype.Signed, gcref)
+            nurs_free = llop1.gc_adr_of_nursery_free(lltype.Signed)
+            return r_ulonglong(nurs_free) << 32 | r_ulonglong(res)
+        self.malloc_fixedsize_slowpath = malloc_fixedsize_slowpath
+        self.MALLOC_FIXEDSIZE_SLOWPATH = lltype.FuncType([lltype.Signed],
+                                                 lltype.UnsignedLongLong)
+
+    def get_nursery_free_addr(self):
+        return llop.gc_adr_of_nursery_free(lltype.Signed)
+
+    def get_nursery_top_addr(self):
+        return llop.gc_adr_of_nursery_top(lltype.Signed)
+
+    def get_malloc_fixedsize_slowpath_addr(self):
+        fptr = llhelper(lltype.Ptr(self.MALLOC_FIXEDSIZE_SLOWPATH),
+                        self.malloc_fixedsize_slowpath)
+        return rffi.cast(lltype.Signed, fptr)
 
     def initialize(self):
         self.gcrefs.initialize()
@@ -520,6 +543,15 @@ class GcLLDescr_framework(GcLLDescription):
         args = [v_tid, self.c_jit_wb_if_flag, c_func, v_base, v_value]
         newops.append(ResOperation(rop.COND_CALL_GC_WB, args, None,
                                    descr=self.calldescr_jit_wb))
+
+    def can_inline_malloc(self, descr):
+        assert isinstance(descr, BaseSizeDescr)
+        if descr.size < self.max_size_of_young_obj:
+            has_finalizer = bool(descr.tid & (1<<16))
+            if has_finalizer:
+                return False
+            return True
+        return False
 
 # ____________________________________________________________
 
