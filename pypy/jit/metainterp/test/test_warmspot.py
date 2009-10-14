@@ -2,6 +2,7 @@ import py
 from pypy.jit.metainterp.warmspot import ll_meta_interp, cast_whatever_to_int
 from pypy.jit.metainterp.warmspot import get_stats
 from pypy.rlib.jit import JitDriver, OPTIMIZER_FULL, OPTIMIZER_SIMPLE
+from pypy.rlib.jit import unrollsafe
 from pypy.jit.backend.llgraph import runner
 
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
@@ -239,6 +240,36 @@ class WarmspotTests(object):
         assert 'ENTER' in err
         assert 'LEAVE' in err
         assert "Running asm" in err
+
+    def test_unwanted_loops(self):
+        mydriver = JitDriver(reds = ['n', 'total', 'm'], greens = [])
+
+        def loop1(n):
+            # the jit should not look here, as there is a loop
+            res = 0
+            for i in range(n):
+                res += i
+            return res
+
+        @unrollsafe
+        def loop2(n):
+            # the jit looks here, due to the decorator
+            for i in range(5):
+                n += 1
+            return n
+
+        def f(m):
+            total = 0
+            n = 0
+            while n < m:
+                mydriver.can_enter_jit(n=n, total=total, m=m)
+                mydriver.jit_merge_point(n=n, total=total, m=m)
+                total += loop1(n)
+                n = loop2(n)
+            return total
+        self.meta_interp(f, [50])
+        self.check_enter_count_at_most(2)
+
 
 class TestLLWarmspot(WarmspotTests, LLJitMixin):
     CPUClass = runner.LLtypeCPU
