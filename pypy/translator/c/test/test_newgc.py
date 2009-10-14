@@ -918,6 +918,9 @@ class TestMarkCompactGC(TestSemiSpaceGC):
     gcpolicy = "markcompact"
     should_be_moving = True
 
+    def setup_class(cls):
+        py.test.skip("Disabled for now")
+
     def test_gc_set_max_heap_size(self):
         py.test.skip("not implemented")
 
