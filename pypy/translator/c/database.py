@@ -65,17 +65,12 @@ class LowLevelDatabase(object):
 
         self.instrument_ncounter = 0
 
-    def gettypedefnode(self, T, varlength=1, needs_hash=False):
+    def gettypedefnode(self, T, varlength=1):
         if varlength <= 1:
             varlength = 1   # it's C after all
             key = T
         else:
             key = T, varlength
-        if needs_hash:
-            if self.gcpolicy.stores_hash_at_the_end:
-                key = key, 'hash'
-            else:
-                needs_hash = False
         try:
             node = self.structdefnodes[key]
         except KeyError:
@@ -83,7 +78,7 @@ class LowLevelDatabase(object):
                 if isinstance(T, FixedSizeArray):
                     node = FixedSizeArrayDefNode(self, T)
                 else:
-                    node = StructDefNode(self, T, varlength, needs_hash)
+                    node = StructDefNode(self, T, varlength)
             elif isinstance(T, Array):
                 if barebonearray(T):
                     node = BareBoneArrayDefNode(self, T, varlength)
@@ -100,8 +95,7 @@ class LowLevelDatabase(object):
             self.pendingsetupnodes.append(node)
         return node
 
-    def gettype(self, T, varlength=1, who_asks=None, argnames=[],
-                needs_hash=False):
+    def gettype(self, T, varlength=1, who_asks=None, argnames=[]):
         if isinstance(T, Primitive) or T == GCREF:
             return PrimitiveType[T]
         elif isinstance(T, Ptr):
@@ -115,8 +109,7 @@ class LowLevelDatabase(object):
             typename = self.gettype(T.TO)   # who_asks not propagated
             return typename.replace('@', '*@')
         elif isinstance(T, (Struct, Array, _WeakRefType)):
-            node = self.gettypedefnode(T, varlength=varlength,
-                                       needs_hash=needs_hash)
+            node = self.gettypedefnode(T, varlength=varlength)
             if who_asks is not None:
                 who_asks.dependencies[node] = True
             return node.gettype()

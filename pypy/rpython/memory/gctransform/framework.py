@@ -441,23 +441,28 @@ class FrameworkGCTransformer(GCTransformer):
     def gc_fields(self):
         return self._gc_fields
 
-    def gc_field_values_for(self, obj):
+    def gc_field_values_for(self, obj, needs_hash=False):
         hdr = self.gcdata.gc.gcheaderbuilder.header_of_object(obj)
         HDR = self._gc_HDR
-        withhash, flags = self.gcdata.gc.withhash_flag_is_in_field
+        withhash, flag = self.gcdata.gc.withhash_flag_is_in_field
         result = []
         for fldname in HDR._names:
             x = getattr(hdr, fldname)
             if fldname == withhash:
                 TYPE = lltype.typeOf(x)
                 x = lltype.cast_primitive(lltype.Signed, x)
-                if hasattr(obj._normalizedcontainer(), '_hash_cache_'):
-                    x |= flags       # set the flag(s) in the header
+                if needs_hash:
+                    x |= flag       # set the flag in the header
                 else:
-                    x &= ~flags      # clear the flag(s) in the header
+                    x &= ~flag      # clear the flag in the header
                 x = lltype.cast_primitive(TYPE, x)
             result.append(x)
         return result
+
+    def get_hash_offset(self, T):
+        type_id = self.get_type_id(T)
+        assert not self.gcdata.q_is_varsize(type_id)
+        return self.gcdata.q_fixed_size(type_id)
 
     def finish_tables(self):
         group = self.layoutbuilder.close_table()

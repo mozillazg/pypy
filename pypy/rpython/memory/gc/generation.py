@@ -1,6 +1,7 @@
 import sys
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC
 from pypy.rpython.memory.gc.semispace import GCFLAG_EXTERNAL, GCFLAG_FORWARDED
+from pypy.rpython.memory.gc.semispace import GCFLAG_HASHTAKEN
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
@@ -218,7 +219,8 @@ class GenerationGC(SemiSpaceGC):
     # flags exposed for the HybridGC subclass
     GCFLAGS_FOR_NEW_YOUNG_OBJECTS = 0   # NO_YOUNG_PTRS never set on young objs
     GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS = (GCFLAG_EXTERNAL | GCFLAG_FORWARDED |
-                                        GCFLAG_NO_YOUNG_PTRS)
+                                        GCFLAG_NO_YOUNG_PTRS |
+                                        GCFLAG_HASHTAKEN)
 
     # ____________________________________________________________
     # Support code for full collections

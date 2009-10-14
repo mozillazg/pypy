@@ -694,6 +694,7 @@ class TestUsingFramework(object):
 
     def define_hash_preservation(cls):
         from pypy.rlib.objectmodel import compute_hash
+        from pypy.rlib.objectmodel import compute_identity_hash
         from pypy.rlib.objectmodel import current_object_addr_as_int
         class C:
             pass
@@ -703,14 +704,19 @@ class TestUsingFramework(object):
         d = D()
         h_d = compute_hash(d)     # force to be cached on 'd', but not on 'c'
         h_t = compute_hash(("Hi", None, (7.5, 2, d)))
+        S = lltype.GcStruct('S', ('x', lltype.Signed),
+                                 ('a', lltype.Array(lltype.Signed)))
+        s = lltype.malloc(S, 15, zero=True)
+        h_s = compute_identity_hash(s)   # varsized: hash not saved/restored
         #
         def f():
-            if compute_hash(c) != compute_hash(c): return 12
+            if compute_hash(c) != compute_identity_hash(c): return 12
             if compute_hash(d) != h_d: return 13
             if compute_hash(("Hi", None, (7.5, 2, d))) != h_t: return 14
             c2 = C()
             h_c2 = compute_hash(c2)
             if compute_hash(c2) != h_c2: return 15
+            if compute_identity_hash(s) == h_s: return 16   # unlikely
             i = 0
             while i < 6:
                 rgc.collect()
