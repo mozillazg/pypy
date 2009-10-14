@@ -27,6 +27,18 @@ class JitPolicy(object):
         mod = func.__module__ or '?'
         if mod.startswith('pypy.rpython.module.'):
             return False
+        if mod == 'pypy.rpython.lltypesystem.module.ll_math':
+            # XXX temporary, contains force_cast
+            return False
+        if mod.startswith('pypy.translator.'): # XXX wtf?
+            return False
+        # string builder interface
+        if mod == 'pypy.rpython.lltypesystem.rbuilder':
+            return False
+        # rweakvaluedict implementation
+        if mod == 'pypy.rlib.rweakrefimpl':
+            return False
+        
         return True
 
     def look_inside_graph(self, graph, supports_floats):
