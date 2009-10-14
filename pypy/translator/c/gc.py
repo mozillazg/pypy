@@ -55,7 +55,7 @@ class BasicGcPolicy(object):
             post_include_bits=['typedef void *GC_hidden_pointer;']
             )
 
-    def get_prebuilt_hash(self, obj, outermostonly):
+    def get_prebuilt_hash(self, obj):
         return None
 
     def need_no_typeptr(self):
