@@ -6,11 +6,12 @@ from pypy.rlib.objectmodel import compute_hash
 
 
 class DictKey(ListItem):
-    custom_eq_hash = False
+    s_rdict_eqfn = s_ImpossibleValue
+    s_rdict_hashfn = s_ImpossibleValue
 
     def __init__(self, bookkeeper, s_value, is_r_dict=False):
         ListItem.__init__(self, bookkeeper, s_value)
-        self.is_r_dict = is_r_dict
+        self.custom_eq_hash = is_r_dict
 
     def patch(self):
         for dictdef in self.itemof:
@@ -33,11 +34,9 @@ class DictKey(ListItem):
         return updated
 
     def update_rdict_annotations(self, s_eqfn, s_hashfn, other=None):
-        if not self.custom_eq_hash:
-            self.custom_eq_hash = True
-        else:
-            s_eqfn = unionof(s_eqfn, self.s_rdict_eqfn)
-            s_hashfn = unionof(s_hashfn, self.s_rdict_hashfn)
+        assert self.custom_eq_hash
+        s_eqfn = unionof(s_eqfn, self.s_rdict_eqfn)
+        s_hashfn = unionof(s_hashfn, self.s_rdict_hashfn)
         self.s_rdict_eqfn = s_eqfn
         self.s_rdict_hashfn = s_hashfn
         self.emulate_rdict_calls(other=other)
@@ -137,7 +136,7 @@ class DictDef:
         # Note that if the custom hashing function ends up asking for
         # the hash of x, then it must use compute_hash() itself, so it
         # works out.
-        if not self.dictkey.is_r_dict:
+        if not self.dictkey.custom_eq_hash:
             compute_hash(x)
 
     def __repr__(self):
