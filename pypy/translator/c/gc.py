@@ -34,8 +34,8 @@ class BasicGcPolicy(object):
     def struct_gcheader_definition(self, defnode):
         return self.common_gcheader_definition(defnode)
 
-    def struct_gcheader_initdata(self, defnode, needs_hash=False):
-        return self.common_gcheader_initdata(defnode, needs_hash)
+    def struct_gcheader_initdata(self, defnode):
+        return self.common_gcheader_initdata(defnode)
 
     def array_gcheader_definition(self, defnode):
         return self.common_gcheader_definition(defnode)
@@ -54,6 +54,9 @@ class BasicGcPolicy(object):
                               ],
             post_include_bits=['typedef void *GC_hidden_pointer;']
             )
+
+    def get_prebuilt_hash(self, obj, outermostonly):
+        return None
 
     def need_no_typeptr(self):
         return False
@@ -333,9 +336,19 @@ class FrameworkGcPolicy(BasicGcPolicy):
     def common_gcheader_definition(self, defnode):
         return defnode.db.gctransformer.gc_fields()
 
-    def common_gcheader_initdata(self, defnode, needs_hash=False):
+    def common_gcheader_initdata(self, defnode):
         o = top_container(defnode.obj)
+        needs_hash = self.get_prebuilt_hash(o) is not None
         return defnode.db.gctransformer.gc_field_values_for(o, needs_hash)
+
+    def get_prebuilt_hash(self, obj):
+        # for prebuilt objects that need to have their hash stored and
+        # restored.  Note that only structures that are StructNodes all
+        # the way have their hash stored (and not e.g. structs with var-
+        # sized arrays at the end).  'obj' must be the top_container.
+        if not isinstance(typeOf(obj), lltype.GcStruct):
+            return None
+        return getattr(obj, '_hash_cache_', None)
 
     def need_no_typeptr(self):
         config = self.db.translator.config
