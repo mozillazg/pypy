@@ -635,7 +635,7 @@ class FunctionGcRootTracker(object):
         source = match.group(1)
         target = match.group(2)
         if self.r_localvar.match(target):
-            return InsnSetLocal(target)
+            return InsnSetLocal(target, [source])
         elif target == '%esp':
             raise UnrecognizedOperation(line)
         else:
@@ -769,19 +769,10 @@ class FunctionGcRootTracker(object):
                 for loc in locs:
                     for s in insn.all_sources_of(loc):
                         # if the source looks like 8(%eax,%edx,4)
-                        # %eax is the real source, %edx is an offset
+                        # %eax is the real source, %edx is an offset.
                         match = r_jmp_source.match(s)
-                        if match:
-                            if r_localvar_esp.match(s):
-                                # obscure: skip the source if it seems
-                                # to be an argument passed to the
-                                # function.  XXX It's theorically
-                                # possible that the address is stored
-                                # on the stack; let's say this is
-                                # improbable for table-based switches.
-                                pass
-                            else:
-                                sources.append(match.group(1))
+                        if match and not r_localvar_esp.match(s):
+                            sources.append(match.group(1))
                         else:
                             sources.append(s)
                 for source in sources:
@@ -991,6 +982,9 @@ class InsnFunctionStart(Insn):
             self.arguments[localvar] = somenewvalue
         return self.arguments[localvar]
 
+    def all_sources_of(self, localvar):
+        return []
+
 class InsnSetLocal(Insn):
     _args_ = ['target', 'sources']
     _locals_ = ['target', 'sources']
@@ -1074,6 +1068,9 @@ class InsnCall(Insn):
             "conflicting entries for InsnCall.gcroots[%s]:\n%r and %r" % (
             localvar, tag1, tag))
         return localvar
+
+    def all_sources_of(self, localvar):
+        return [localvar]
 
 class InsnGCROOT(Insn):
     _args_ = ['loc']
