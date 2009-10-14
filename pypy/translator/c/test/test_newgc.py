@@ -26,6 +26,7 @@ class TestUsingFramework(object):
     def _makefunc2(cls, f):
         t = Translation(f, [int, int], gc=cls.gcpolicy,
                         policy=annpolicy.StrictAnnotatorPolicy())
+        t.config.translation.gcconfig.debugprint = True
         t.config.translation.gcconfig.removetypeptr = cls.removetypeptr
         t.disable(['backendopt'])
         t.set_backend_extra_options(c_isolated=True, c_debug_defines=True)
@@ -726,7 +727,9 @@ class TestUsingFramework(object):
         from pypy.rlib.objectmodel import compute_identity_hash
         class X(object):
             pass
+
         def g(n):
+            "Make a chain of n objects."
             x1 = None
             i = 0
             while i < n:
@@ -735,7 +738,9 @@ class TestUsingFramework(object):
                 x1 = x2
                 i += 1
             return x1
+
         def build(xr, n):
+            "Build the identity hashes of all n objects of the chain."
             i = 0
             while i < n:
                 xr.hash = compute_identity_hash(xr)
@@ -743,23 +748,39 @@ class TestUsingFramework(object):
                 xr = xr.prev
                 i += 1
             assert xr is None
-        def check(xr, n):
+
+        def check(xr, n, step):
+            "Check that the identity hashes are still correct."
             i = 0
             while i < n:
                 if xr.hash != compute_identity_hash(xr):
-                    os.write(2, "wrong hash! i=%d, n=%d\n" % (i, n))
+                    os.write(2, "wrong hash! i=%d, n=%d, step=%d\n" % (i, n,
+                                                                       step))
                     raise ValueError
                 xr = xr.prev
                 i += 1
             assert xr is None
+
         def h(n):
+            x3 = g(3)
+            x4 = g(3)
             x1 = g(n)
-            build(x1, n)
-            check(x1, n)
-            x2 = g(n//2)      # allocate more and try again
+            build(x1, n)       # can collect!
+            check(x1, n, 1)
+            build(x3, 3)
+            x2 = g(n//2)       # allocate more and try again
             build(x2, n//2)
-            check(x1, n)
-            check(x2, n//2)
+            check(x1, n, 11)
+            check(x2, n//2, 12)
+            build(x4, 3)
+            check(x3, 3, 13)   # check these old objects too
+            check(x4, 3, 14)   # check these old objects too
+            rgc.collect()
+            check(x1, n, 21)
+            check(x2, n//2, 22)
+            check(x3, 3, 23)
+            check(x4, 3, 24)
+
         def f():
             # numbers optimized for a 8MB space
             for n in [100000, 225000, 250000, 300000, 380000,
@@ -768,6 +789,7 @@ class TestUsingFramework(object):
                 rgc.collect()
                 h(n)
             return -42
+
         return f
 
     def test_hash_overflow(self):

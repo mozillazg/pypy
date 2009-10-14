@@ -440,12 +440,17 @@ LL_OPERATIONS = {
     'gc_pop_alive_pyobj':   LLOp(),
     'gc_reload_possibly_moved': LLOp(),
     # see rlib/objectmodel for gc_identityhash and gc_id
-    'gc_identityhash':      LLOp(canraise=(MemoryError,), sideeffects=False),
+    'gc_identityhash':      LLOp(canraise=(MemoryError,), sideeffects=False,
+                                 canunwindgc=True),
     'gc_id':                LLOp(canraise=(MemoryError,), sideeffects=False),
+                                 # ^^^ but canunwindgc=False, as it is
+                                 # allocating non-GC structures only
     'gc_obtain_free_space': LLOp(),
     'gc_set_max_heap_size': LLOp(),
     'gc_can_move'         : LLOp(sideeffects=False),
     'gc_thread_prepare'   : LLOp(canraise=(MemoryError,)),
+                                 # ^^^ but canunwindgc=False, as it is
+                                 # allocating non-GC structures only
     'gc_thread_run'       : LLOp(),
     'gc_thread_die'       : LLOp(),
     'gc_assume_young_pointers': LLOp(),
