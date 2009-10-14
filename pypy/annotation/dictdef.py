@@ -133,7 +133,12 @@ class DictDef:
         self.dictvalue.generalize(s_value)
 
     def seen_prebuilt_key(self, x):
-        compute_hash(x)
+        # In case we are an r_dict, we don't ask for the hash ourselves.
+        # Note that if the custom hashing function ends up asking for
+        # the hash of x, then it must use compute_hash() itself, so it
+        # works out.
+        if not self.dictkey.is_r_dict:
+            compute_hash(x)
 
     def __repr__(self):
         return '<{%r: %r}>' % (self.dictkey.s_value, self.dictvalue.s_value)
