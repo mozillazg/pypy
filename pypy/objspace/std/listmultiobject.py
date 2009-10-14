@@ -883,7 +883,6 @@ class State(object):
     def __init__(self, space):
         self.empty_impl = EmptyListImplementation(space)
         self.empty_list = W_ListMultiObject(space, self.empty_impl)
-        self.list_of_empty_list = [EMPTY_LIST]
 
 
 def _adjust_index(space, index, length, indexerrormsg):
@@ -896,14 +895,14 @@ def _adjust_index(space, index, length, indexerrormsg):
 
 
 init_signature = Signature(['sequence'], None, None)
+init_defaults = [None]
 
 def init__ListMulti(space, w_list, __args__):
-    init_defaults = space.fromcache(State).list_of_empty_list
     w_iterable, = __args__.parse_obj(
             None, 'list',
             init_signature,
             init_defaults)
-    if w_iterable is not EMPTY_LIST:
+    if w_iterable is not None:
         list_w = space.unpackiterable(w_iterable)
         if list_w:
             w_list.implementation = make_implementation(space, list_w)
