@@ -907,7 +907,7 @@ class Assembler386(object):
         self.mc.JMP(rel32(loop_token._x86_loop_code))
 
     def malloc_cond_fixedsize(self, nursery_free_adr, nursery_top_adr,
-                              size, tid, push_arg, slowpath_addr):
+                              size, tid, slowpath_addr):
         # don't use self.mc
         mc = self.mc._mc
         mc.MOV(eax, heap(nursery_free_adr))
@@ -915,20 +915,14 @@ class Assembler386(object):
         mc.CMP(edx, heap(nursery_top_adr))
         mc.write('\x76\x00') # JNA after the block
         jmp_adr = mc.get_relative_pos()
-        if push_arg is not None:
-            assert push_arg is ecx
-            mc.PUSH(ecx)
         mc.PUSH(imm(size))
         mc.CALL(rel32(slowpath_addr))
+        self.mark_gc_roots()
         # note that slowpath_addr returns a "long long", or more precisely
         # two results, which end up in eax and edx.
         # eax should contain the result of allocation, edx new value
         # of nursery_free_adr
-        if push_arg is not None:
-            mc.POP(ecx)
-            mc.POP(ecx)
-        else:
-            mc.ADD(esp, imm(4))
+        mc.ADD(esp, imm(4))
         offset = mc.get_relative_pos() - jmp_adr
         assert 0 < offset <= 127
         mc.overwrite(jmp_adr-1, chr(offset))

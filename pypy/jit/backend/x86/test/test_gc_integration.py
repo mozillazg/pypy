@@ -163,6 +163,8 @@ class TestRegallocGcIntegration(BaseTestRegalloc):
         self.interpret(ops, [0, 0, 0, 0, 0, 0, 0, 0, 0], run=False)
 
 class GCDescrFastpathMalloc(GcLLDescription):
+    gcrootmap = None
+    
     def __init__(self):
         GcCache.__init__(self, False)
         # create a nursery
