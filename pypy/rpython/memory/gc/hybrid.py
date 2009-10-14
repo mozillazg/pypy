@@ -223,6 +223,8 @@ class HybridGC(GenerationGC):
     def realloc(self, ptr, newlength, fixedsize, itemsize, lengthofs, grow):
         size_gc_header = self.size_gc_header()
         addr = llmemory.cast_ptr_to_adr(ptr)
+        ll_assert(self.header(addr).tid & GCFLAG_EXTERNAL,
+                  "realloc() on a non-external object")
         nonvarsize = size_gc_header + fixedsize
         try:
             varsize = ovfcheck(itemsize * newlength)
@@ -408,8 +410,8 @@ class HybridGC(GenerationGC):
         # NB. the object can have a finalizer or be a weakref, but
         # it's not an issue.
         totalsize = self.size_gc_header() + objsize
-        oldhdr = self.header(obj)
-        if oldhdr.tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
+        tid = self.header(obj).tid
+        if tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
             totalsize_incl_hash = totalsize + llmemory.sizeof(lltype.Signed)
         else:
             totalsize_incl_hash = totalsize
@@ -421,23 +423,22 @@ class HybridGC(GenerationGC):
             self._nonmoving_copy_size += raw_malloc_usage(totalsize)
 
         llmemory.raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
-        newobj = newaddr + self.size_gc_header()
-        hdr = self.header(newobj)
-        hdr.tid |= self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS
-        # GCFLAG_UNVISITED is not set
-        # GCFLAG_NO_HEAP_PTRS is not set either, conservatively.  It may be
-        # set by the next collection's collect_last_generation_roots().
-        #
         # check if we need to write a hash value at the end of the new obj
-        if hdr.tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
-            if hdr.tid & GCFLAG_HASHFIELD:
+        if tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
+            if tid & GCFLAG_HASHFIELD:
                 hash = (obj + objsize).signed[0]
             else:
                 hash = llmemory.cast_adr_to_int(obj)
-                hdr.tid |= GCFLAG_HASHFIELD
+                tid |= GCFLAG_HASHFIELD
             (newaddr + totalsize).signed[0] = hash
         #
+        # GCFLAG_UNVISITED is not set
+        # GCFLAG_NO_HEAP_PTRS is not set either, conservatively.  It may be
+        # set by the next collection's collect_last_generation_roots().
         # This old object is immediately put at generation 3.
+        newobj = newaddr + self.size_gc_header()
+        hdr = self.header(newobj)
+        hdr.tid = tid | self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS
         ll_assert(self.is_last_generation(newobj),
                   "make_a_nonmoving_copy: object too young")
         self.gen3_rawmalloced_objects.append(newobj)
@@ -605,6 +606,8 @@ class HybridGC(GenerationGC):
         tid = self.header(obj).tid
         ll_assert(bool(tid & GCFLAG_EXTERNAL),
                   "gen2: missing GCFLAG_EXTERNAL")
+        ll_assert(bool(tid & GCFLAG_HASHTAKEN),
+                  "gen2: missing GCFLAG_HASHTAKEN")
         ll_assert(bool(tid & GCFLAG_UNVISITED),
                   "gen2: missing GCFLAG_UNVISITED")
         ll_assert((tid & GCFLAG_AGE_MASK) < GCFLAG_AGE_MAX,
@@ -613,6 +616,8 @@ class HybridGC(GenerationGC):
         tid = self.header(obj).tid
         ll_assert(bool(tid & GCFLAG_EXTERNAL),
                   "gen3: missing GCFLAG_EXTERNAL")
+        ll_assert(bool(tid & GCFLAG_HASHTAKEN),
+                  "gen3: missing GCFLAG_HASHTAKEN")
         ll_assert(not (tid & GCFLAG_UNVISITED),
                   "gen3: unexpected GCFLAG_UNVISITED")
         ll_assert((tid & GCFLAG_AGE_MASK) == GCFLAG_AGE_MAX,

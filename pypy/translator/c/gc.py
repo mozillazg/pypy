@@ -34,8 +34,8 @@ class BasicGcPolicy(object):
     def struct_gcheader_definition(self, defnode):
         return self.common_gcheader_definition(defnode)
 
-    def struct_gcheader_initdata(self, defnode):
-        return self.common_gcheader_initdata(defnode)
+    def struct_gcheader_initdata(self, defnode, needs_hash=False):
+        return self.common_gcheader_initdata(defnode, needs_hash)
 
     def array_gcheader_definition(self, defnode):
         return self.common_gcheader_definition(defnode)
@@ -333,9 +333,9 @@ class FrameworkGcPolicy(BasicGcPolicy):
     def common_gcheader_definition(self, defnode):
         return defnode.db.gctransformer.gc_fields()
 
-    def common_gcheader_initdata(self, defnode):
+    def common_gcheader_initdata(self, defnode, needs_hash=False):
         o = top_container(defnode.obj)
-        return defnode.db.gctransformer.gc_field_values_for(o)
+        return defnode.db.gctransformer.gc_field_values_for(o, needs_hash)
 
     def need_no_typeptr(self):
         config = self.db.translator.config
