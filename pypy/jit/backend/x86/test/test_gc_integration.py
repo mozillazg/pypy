@@ -214,6 +214,7 @@ class TestMallocFastpath(BaseTestRegalloc):
 
     def setup_method(self, method):
         cpu = CPU(None, None)
+        cpu.vtable_offset = 4
         cpu.gc_ll_descr = GCDescrFastpathMalloc()
 
         NODE = lltype.Struct('node', ('tid', lltype.Signed),
@@ -221,11 +222,19 @@ class TestMallocFastpath(BaseTestRegalloc):
         nodedescr = cpu.sizeof(NODE)     # xxx hack: NODE is not a GcStruct
         valuedescr = cpu.fielddescrof(NODE, 'value')
 
-        self.namespace = locals().copy()
         self.cpu = cpu
         self.nodedescr = nodedescr
-        self.valuedescr = valuedescr
-    
+        vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
+        vtable_int = cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable))
+        NODE2 = lltype.Struct('node2', ('tid', lltype.Signed),
+                                  ('vtable', lltype.Ptr(rclass.OBJECT_VTABLE)))
+        descrsize = cpu.sizeof(NODE2)
+        cpu.set_class_sizes({vtable_int: descrsize})
+        self.descrsize = descrsize
+        self.vtable_int = vtable_int
+
+        self.namespace = locals().copy()
+        
     def test_malloc_fastpath(self):
         ops = '''
         [i0]
@@ -260,3 +269,18 @@ class TestMallocFastpath(BaseTestRegalloc):
         gc_ll_descr = self.cpu.gc_ll_descr
         nadr = rffi.cast(lltype.Signed, gc_ll_descr.nursery)
         assert gc_ll_descr.addrs[0] == nadr + 8
+
+    def test_new_with_vtable(self):
+        ops = '''
+        [i0, i1]
+        p0 = new_with_vtable(ConstClass(vtable))
+        guard_class(p0, ConstClass(vtable)) [i0]
+        finish(i1)
+        '''
+        self.interpret(ops, [0, 1])
+        assert self.getint(0) == 1
+        gc_ll_descr = self.cpu.gc_ll_descr
+        assert gc_ll_descr.nursery[0] == self.descrsize.tid
+        assert gc_ll_descr.nursery[1] == self.vtable_int
+        nurs_adr = rffi.cast(lltype.Signed, gc_ll_descr.nursery)
+        assert gc_ll_descr.addrs[0] == nurs_adr + 8

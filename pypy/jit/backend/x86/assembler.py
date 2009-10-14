@@ -523,7 +523,10 @@ class Assembler386(object):
         arglocs = arglocs[:-1]
         self.call(self.malloc_func_addr, arglocs, eax)
         # xxx ignore NULL returns for now
-        self.mc.MOV(mem(eax, self.cpu.vtable_offset), loc_vtable)
+        self.set_vtable(eax, loc_vtable)
+
+    def set_vtable(self, loc, loc_vtable):
+        self.mc.MOV(mem(loc, self.cpu.vtable_offset), loc_vtable)
 
     # XXX genop_new is abused for all varsized mallocs with Boehm, for now
     # (instead of genop_new_array, genop_newstr, genop_newunicode)
