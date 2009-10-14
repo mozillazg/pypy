@@ -89,6 +89,7 @@ class JitMixin:
                                             **kwds)
         cw = codewriter.CodeWriter(metainterp.staticdata, policy)
         graph = rtyper.annotator.translator.graphs[0]
+        graph.func._jit_unroll_safe_ = True
         graph_key = (graph, None)
         maingraph = cw.make_one_bytecode(graph_key, False)
         cw.finish_making_bytecodes()
