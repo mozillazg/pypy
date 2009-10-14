@@ -270,7 +270,9 @@ class BytecodeMaker(object):
                 name = "portal_runner"
             else:
                 name = self.bytecode.name
-            self.bytecode.dump(open(str(dir.join(name)), "w"))
+            f = dir.join(name).open("w")
+            self.bytecode.dump(f)
+            f.close()
 
     def const_position(self, constvalue):
         """Generate a constant of the given value.
