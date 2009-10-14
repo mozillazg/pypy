@@ -14,7 +14,7 @@ from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.x86.jump import remap_stack_layout
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.llsupport.descr import BaseFieldDescr, BaseArrayDescr
-from pypy.jit.backend.llsupport.descr import BaseCallDescr
+from pypy.jit.backend.llsupport.descr import BaseCallDescr, BaseSizeDescr
 from pypy.jit.backend.llsupport.regalloc import StackManager, RegisterManager,\
      TempBox
 
@@ -624,6 +624,7 @@ class RegAlloc(object):
         self.rm.possibly_free_vars(op.args)
 
     def _fastpath_malloc(self, op, descr):
+        assert isinstance(descr, BaseSizeDescr)
         gc_ll_descr = self.assembler.cpu.gc_ll_descr
         tmp0 = TempBox()
         self.rm.force_allocate_reg(op.result, selected_reg=eax)
