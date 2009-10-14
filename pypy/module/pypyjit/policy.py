@@ -13,6 +13,8 @@ class PyPyJitPolicy(JitPolicy):
         return False
 
     def look_inside_function(self, func):
+        # this function should never actually return True directly
+        # but instead call the base implementation
         mod = func.__module__ or '?'
         
         if mod.startswith('pypy.objspace.'):
@@ -21,9 +23,6 @@ class PyPyJitPolicy(JitPolicy):
                 return False
         if mod == 'pypy.rlib.rbigint':
             #if func.__name__ == '_bigint_true_divide':
-            return False
-        if mod == 'pypy.rpython.lltypesystem.module.ll_math':
-            # XXX temporary, contains force_cast
             return False
         if '_geninterp_' in func.func_globals: # skip all geninterped stuff
             return False
@@ -36,13 +35,4 @@ class PyPyJitPolicy(JitPolicy):
             if not self.look_inside_pypy_module(modname):
                 return False
             
-        if mod.startswith('pypy.translator.'): # XXX wtf?
-            return False
-        # string builder interface
-        if mod == 'pypy.rpython.lltypesystem.rbuilder':
-            return False
-        # rweakvaluedict implementation
-        if mod == 'pypy.rlib.rweakrefimpl':
-            return False
-        
         return super(PyPyJitPolicy, self).look_inside_function(func)
