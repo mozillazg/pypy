@@ -10,7 +10,6 @@ from pypy.interpreter.baseobjspace import Wrappable, W_Root, ObjSpace, \
 from pypy.interpreter.error import OperationError
 from pypy.tool.sourcetools import compile2, func_with_new_name
 from pypy.rlib.objectmodel import instantiate, compute_identity_hash
-from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.jit import hint
 
 class TypeDef:
@@ -48,8 +47,7 @@ class TypeDef:
 #  Hash support
 
 def default_identity_hash(space, w_obj):
-    hash = compute_identity_hash(w_obj)
-    return space.wrap(intmask(hash))
+    return space.wrap(compute_identity_hash(w_obj))
 
 def descr__hash__unhashable(space, w_obj):
     typename = space.type(w_obj).getname(space, '?')
