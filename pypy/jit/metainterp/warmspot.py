@@ -155,6 +155,7 @@ class WarmRunnerDesc:
         self.make_leave_jit_graph()
         graphs = find_all_graphs(self.portal_graph, policy, self.translator,
                                  CPUClass.supports_floats)
+        policy.dump_unsafe_loops()
         self.check_access_directly_sanity(graphs)
         if backendopt:
             self.prejit_optimizations(policy, graphs)
@@ -208,8 +209,10 @@ class WarmRunnerDesc:
         assert len(dict.fromkeys(graph.getargs())) == len(graph.getargs())
         self.translator.graphs.append(graph)
         self.portal_graph = graph
-        if hasattr(graph, "func"):
-            graph.func._dont_inline_ = True
+        # it's a bit unbelievable to have a portal without func
+        assert hasattr(graph, "func")
+        graph.func._dont_inline_ = True
+        graph.func._jit_unroll_safe_ = True
         self.jitdriver = block.operations[pos].args[1].value
 
     def check_access_directly_sanity(self, graphs):

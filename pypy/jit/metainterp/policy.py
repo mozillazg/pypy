@@ -1,8 +1,19 @@
 from pypy.translator.simplify import get_funcobj
 from pypy.jit.metainterp import support, history
 from pypy.rpython.lltypesystem import lltype, rclass
+from pypy.tool.udir import udir
 
 class JitPolicy(object):
+    def __init__(self):
+        self.unsafe_loopy_graphs = set()
+
+    def dump_unsafe_loops(self):
+        f = udir.join("unsafe-loops.txt").open('w')
+        strs = [str(graph) for graph in self.unsafe_loopy_graphs]
+        strs.sort()
+        for graph in strs:
+            print >> f, graph
+        f.close()
 
     portal_runner_ptr = None # set by WarmRunnerDesc.rewrite_jit_merge_point
 
@@ -19,15 +30,24 @@ class JitPolicy(object):
         return True
 
     def look_inside_graph(self, graph, supports_floats):
+        from pypy.translator.backendopt.support import find_backedges
+        contains_loop = bool(find_backedges(graph))
+        unsupported = contains_unsupported_variable_type(graph,
+                                                         supports_floats)
         try:
             func = graph.func
         except AttributeError:
             see_function = True
         else:
             see_function = self.look_inside_function(func)
-        return (see_function and
-                not contains_unsupported_variable_type(graph,
-                                                       supports_floats))
+            contains_loop = contains_loop and not getattr(
+                    func, '_jit_unroll_safe_', False)
+
+        res = (see_function and not contains_loop and
+               not unsupported)
+        if not res and see_function and not unsupported:
+            self.unsafe_loopy_graphs.add(graph)
+        return res
 
     def graphs_from(self, op, rtyper, supports_floats):
         if op.opname == 'direct_call':
@@ -107,6 +127,7 @@ def contains_unsupported_variable_type(graph, supports_floats):
 
 class StopAtXPolicy(JitPolicy):
     def __init__(self, *funcs):
+        JitPolicy.__init__(self)
         self.funcs = funcs
 
     def look_inside_function(self, func):

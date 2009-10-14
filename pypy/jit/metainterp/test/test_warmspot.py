@@ -2,7 +2,7 @@ import py
 from pypy.jit.metainterp.warmspot import ll_meta_interp, cast_whatever_to_int
 from pypy.jit.metainterp.warmspot import get_stats
 from pypy.rlib.jit import JitDriver, OPTIMIZER_FULL, OPTIMIZER_SIMPLE
-from pypy.rlib.jit import unrollsafe
+from pypy.rlib.jit import unroll_safe
 from pypy.jit.backend.llgraph import runner
 
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
@@ -251,7 +251,7 @@ class WarmspotTests(object):
                 res += i
             return res
 
-        @unrollsafe
+        @unroll_safe
         def loop2(n):
             # the jit looks here, due to the decorator
             for i in range(5):
