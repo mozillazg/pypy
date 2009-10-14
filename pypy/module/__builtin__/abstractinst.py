@@ -115,6 +115,7 @@ def _issubclass_recurse(space, w_derived, w_top):
     return False
 
 
+@jit.unroll_safe
 def abstract_issubclass_w(space, w_derived, w_klass_or_tuple):
     """Implementation for the full 'issubclass(derived, klass_or_tuple)'."""
 
@@ -138,6 +139,7 @@ def abstract_issubclass_w(space, w_derived, w_klass_or_tuple):
     # from here on, we are sure that w_derived is a class-like object
 
     # -- case (class-like-object, tuple-of-classes)
+    # XXX it might be risky that the JIT sees this
     if space.is_true(space.isinstance(w_klass_or_tuple, space.w_tuple)):
         for w_klass in space.viewiterable(w_klass_or_tuple):
             if abstract_issubclass_w(space, w_derived, w_klass):
