@@ -19,24 +19,24 @@ class TestBuiltinCode:
                                                    gateway.W_Root,
                                                    gateway.W_Root,
                                                    'args_w'])
-        assert code.signature() == (['x', 'y'], 'hello', None)
+        assert code.signature() == argument.Signature(['x', 'y'], 'hello', None)
         def d(self, w_boo):
             pass
         code = gateway.BuiltinCode(d, unwrap_spec= ['self',
                                                    gateway.W_Root], self_type=gateway.Wrappable)
-        assert code.signature() == (['self', 'boo'], None, None)
+        assert code.signature() == argument.Signature(['self', 'boo'], None, None)
         def e(space, w_x, w_y, __args__):
             pass
         code = gateway.BuiltinCode(e, unwrap_spec=[gateway.ObjSpace,
                                                    gateway.W_Root,
                                                    gateway.W_Root,
                                                    gateway.Arguments])
-        assert code.signature() == (['x', 'y'], 'args', 'keywords')
+        assert code.signature() == argument.Signature(['x', 'y'], 'args', 'keywords')
 
         def f(space, index):
             pass
         code = gateway.BuiltinCode(f, unwrap_spec=[gateway.ObjSpace, "index"])
-        assert code.signature() == (["index"], None, None)
+        assert code.signature() == argument.Signature(["index"], None, None)
 
 
     def test_call(self):
