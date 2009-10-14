@@ -302,19 +302,18 @@ class SemiSpaceGC(MovingGCBase):
             if free_after_collection < self.space_size // 5:
                 self.red_zone += 1
 
-    def extra_hash_space(self, obj):
+    def get_size_incl_hash(self, obj):
+        size = self.get_size(obj)
         hdr = self.header(obj)
         if hdr.tid & GCFLAG_HASHFIELD:
-            return llmemory.sizeof(lltype.Signed)
-        else:
-            return 0
+            size += llmemory.sizeof(lltype.Signed)
+        return size
 
     def scan_copied(self, scan):
         while scan < self.free:
             curr = scan + self.size_gc_header()
             self.trace_and_copy(curr)
-            scan += (self.size_gc_header() + self.get_size(curr)
-                                           + self.extra_hash_space(curr))
+            scan += self.size_gc_header() + self.get_size_incl_hash(curr)
         return scan
 
     def collect_roots(self):
@@ -341,26 +340,31 @@ class SemiSpaceGC(MovingGCBase):
             self.set_forwarding_address(obj, newobj, objsize)
             return newobj
 
-    def make_a_copy(self, obj, objsize):
+    def _make_a_copy_with_tid(self, obj, objsize, tid):
         totalsize = self.size_gc_header() + objsize
         newaddr = self.free
         llarena.arena_reserve(newaddr, totalsize)
         raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
         #
         # check if we need to write a hash value at the end of the new obj
-        newhdr = llmemory.cast_adr_to_ptr(newaddr, lltype.Ptr(self.HDR))
-        if newhdr.tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
-            if newhdr.tid & GCFLAG_HASHFIELD:
-                hash = (obj + self.get_size(obj)).signed[0]
+        if tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
+            if tid & GCFLAG_HASHFIELD:
+                hash = (obj + objsize).signed[0]
             else:
                 hash = llmemory.cast_adr_to_int(obj)
-                newhdr.tid |= GCFLAG_HASHFIELD
+                tid |= GCFLAG_HASHFIELD
             (newaddr + totalsize).signed[0] = hash
             totalsize += llmemory.sizeof(lltype.Signed)
         #
         self.free += totalsize
+        newhdr = llmemory.cast_adr_to_ptr(newaddr, lltype.Ptr(self.HDR))
+        newhdr.tid = tid
         newobj = newaddr + self.size_gc_header()
         return newobj
+
+    def make_a_copy(self, obj, objsize):
+        tid = self.header(obj).tid
+        return self._make_a_copy_with_tid(obj, objsize, tid)
 
     def trace_and_copy(self, obj):
         self.trace(obj, self._trace_copy, None)

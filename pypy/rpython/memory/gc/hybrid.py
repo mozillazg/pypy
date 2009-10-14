@@ -2,6 +2,7 @@ import sys
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC
 from pypy.rpython.memory.gc.generation import GenerationGC
 from pypy.rpython.memory.gc.semispace import GCFLAG_EXTERNAL, GCFLAG_FORWARDED
+from pypy.rpython.memory.gc.semispace import GCFLAG_HASHTAKEN, GCFLAG_HASHFIELD
 from pypy.rpython.memory.gc.generation import GCFLAG_NO_YOUNG_PTRS
 from pypy.rpython.memory.gc.generation import GCFLAG_NO_HEAP_PTRS
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
@@ -401,15 +402,18 @@ class HybridGC(GenerationGC):
             tid &= ~GCFLAG_AGE_MASK
         # skip GenerationGC.make_a_copy() as we already did the right
         # thing about GCFLAG_NO_YOUNG_PTRS
-        newobj = SemiSpaceGC.make_a_copy(self, obj, objsize)
-        self.header(newobj).tid = tid
-        return newobj
+        return self._make_a_copy_with_tid(obj, objsize, tid)
 
     def make_a_nonmoving_copy(self, obj, objsize):
         # NB. the object can have a finalizer or be a weakref, but
         # it's not an issue.
         totalsize = self.size_gc_header() + objsize
-        newaddr = self.allocate_external_object(totalsize)
+        oldhdr = self.header(obj)
+        if oldhdr.tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
+            totalsize_incl_hash = totalsize + llmemory.sizeof(lltype.Signed)
+        else:
+            totalsize_incl_hash = totalsize
+        newaddr = self.allocate_external_object(totalsize_incl_hash)
         if not newaddr:
             return llmemory.NULL   # can't raise MemoryError during a collect()
         if self.config.gcconfig.debugprint:
@@ -423,6 +427,16 @@ class HybridGC(GenerationGC):
         # GCFLAG_UNVISITED is not set
         # GCFLAG_NO_HEAP_PTRS is not set either, conservatively.  It may be
         # set by the next collection's collect_last_generation_roots().
+        #
+        # check if we need to write a hash value at the end of the new obj
+        if hdr.tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD):
+            if hdr.tid & GCFLAG_HASHFIELD:
+                hash = (obj + objsize).signed[0]
+            else:
+                hash = llmemory.cast_adr_to_int(obj)
+                hdr.tid |= GCFLAG_HASHFIELD
+            (newaddr + totalsize).signed[0] = hash
+        #
         # This old object is immediately put at generation 3.
         ll_assert(self.is_last_generation(newobj),
                   "make_a_nonmoving_copy: object too young")
@@ -503,13 +517,13 @@ class HybridGC(GenerationGC):
             if tid & GCFLAG_UNVISITED:
                 if self.config.gcconfig.debugprint:
                     dead_count+=1
-                    dead_size+=raw_malloc_usage(self.get_size(obj))
+                    dead_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
                 addr = obj - self.gcheaderbuilder.size_gc_header
                 llmemory.raw_free(addr)
             else:
                 if self.config.gcconfig.debugprint:
                     alive_count+=1
-                    alive_size+=raw_malloc_usage(self.get_size(obj))
+                    alive_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
                 if generation == 3:
                     surviving_objects.append(obj)
                 elif generation == 2:
