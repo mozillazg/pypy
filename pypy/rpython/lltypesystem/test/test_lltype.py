@@ -768,3 +768,10 @@ def test_identityhash():
     from pypy.rpython.lltypesystem import llmemory
     p3 = cast_opaque_ptr(llmemory.GCREF, s3)
     assert -123 == identityhash(p3)
+
+    A = GcArray(Signed)
+    a = malloc(A, 3)
+    hash1 = identityhash(a)
+    assert hash1 == identityhash(a)
+    p = cast_opaque_ptr(llmemory.GCREF, a)
+    assert hash1 == identityhash(p)

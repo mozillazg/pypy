@@ -1124,7 +1124,11 @@ class _abstract_ptr(object):
         try:
             return p._obj._hash_cache_
         except AttributeError:
-            result = p._obj._hash_cache_ = hash(p._obj)
+            result = hash(p._obj)
+            try:
+                p._obj._hash_cache_ = result
+            except AttributeError:
+                pass
             return result
 
 class _ptr(_abstract_ptr):
