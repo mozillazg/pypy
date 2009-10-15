@@ -158,6 +158,12 @@ def test_compute_hash():
     assert h == getattr(foo, '__precomputed_identity_hash')
     assert compute_hash(None) == 0
 
+def test_compute_hash_float():
+    from pypy.rlib.rarithmetic import INFINITY, NAN
+    assert compute_hash(INFINITY) == 314159
+    assert compute_hash(-INFINITY) == -271828
+    assert compute_hash(NAN) == 0
+
 def test_compute_identity_hash():
     class Foo(object):
         def __hash__(self):
@@ -325,6 +331,10 @@ class BaseTestObjectModel(BaseRtypingTest):
                     compute_hash(("world", None, 42, 7.5)))
             q = Foo()
             assert compute_hash(q) == compute_identity_hash(q)
+            from pypy.rlib.rarithmetic import INFINITY, NAN
+            assert compute_hash(INFINITY) == 314159
+            assert compute_hash(-INFINITY) == -271828
+            assert compute_hash(NAN) == 0
             return i*2
         res = self.interpret(f, [42])
         assert res == 84
