@@ -3,11 +3,11 @@ from pypy.jit.metainterp.policy import JitPolicy
 class PyPyJitPolicy(JitPolicy):
 
     def look_inside_pypy_module(self, modname):
-        print modname
         if modname == '__builtin__.operation' or modname == '__builtin__.abstractinst':
             return True
 
-        modname, _ = modname.split('.', 1)
+        if '.' in modname:
+            modname, _ = modname.split('.', 1)
         if modname in ['pypyjit', 'signal', 'micronumpy', 'math']:
             return True
         return False

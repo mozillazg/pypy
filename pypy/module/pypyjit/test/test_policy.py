@@ -31,7 +31,12 @@ def test_pypy_module():
     assert pypypolicy.look_inside_pypy_module('__builtin__.operation')
     assert pypypolicy.look_inside_pypy_module('__builtin__.abstractinst')
     for modname in 'pypyjit', 'signal', 'micronumpy', 'math':
-        assert pypypolicy.look_inside_pypy_module('%s.__init__' % modname)
+        assert pypypolicy.look_inside_pypy_module(modname)
+        assert pypypolicy.look_inside_pypy_module(modname + '.foo')
 
 def test_see_jit_module():
     assert pypypolicy.look_inside_pypy_module('pypyjit.interp_jit')
+
+def test_module_with_stuff_in_init():
+    from pypy.module.sys import Module
+    assert not pypypolicy.look_inside_function(Module.getdictvalue.im_func)
