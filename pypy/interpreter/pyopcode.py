@@ -171,6 +171,7 @@ class __extend__(pyframe.PyFrame):
             next_instr = block.handle(self, unroller)
             return next_instr
 
+    @jit.unroll_safe
     def dispatch_bytecode(self, co_code, next_instr, ec):
         space = self.space
         while True:
