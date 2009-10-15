@@ -948,10 +948,10 @@ class BasicTests:
 class TestOOtype(BasicTests, OOJitMixin):
 
     def test_oohash(self):
-        def f():
-            s = ootype.oostring(5, -1)
+        def f(n):
+            s = ootype.oostring(n, -1)
             return s.ll_hash()
-        res = self.interp_operations(f, [])
+        res = self.interp_operations(f, [5])
         assert res == ootype.oostring(5, -1).ll_hash()
 
     def test_identityhash(self):
