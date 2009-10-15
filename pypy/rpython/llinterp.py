@@ -881,8 +881,13 @@ class LLFrame(object):
     def op_gc_identityhash(self, obj):
         return lltype.identityhash(obj)
 
-    def op_gc_id(self, v_ptr):
-        return self.heap.gc_id(v_ptr)
+    def op_gc_id(self, ptr):
+        PTR = lltype.typeOf(ptr)
+        if isinstance(PTR, lltype.Ptr):
+            return self.heap.gc_id(ptr)
+        elif isinstance(PTR, ootype.OOType):
+            return ootype.identityhash(ptr)     # XXX imprecise
+        raise NotImplementedError("gc_id on %r" % (PTR,))
 
     def op_gc_set_max_heap_size(self, maxsize):
         raise NotImplementedError("gc_set_max_heap_size")

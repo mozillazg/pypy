@@ -286,6 +286,8 @@ class LLHelpers(AbstractLLHelpers):
         x = s.hash
         if x == 0:
             x = _hash_string(s.chars)
+            if x == 0:
+                x = 29872897
             s.hash = x
         return x
     ll_strhash._pure_function_ = True # it's pure but it does not look like it
