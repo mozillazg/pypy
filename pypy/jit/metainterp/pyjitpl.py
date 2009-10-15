@@ -325,10 +325,6 @@ class MIFrame(object):
     def opimpl_subclassof(self, box1, box2):
         self.execute(rop.SUBCLASSOF, box1, box2)
 
-    @arguments("box")
-    def opimpl_gc_identityhash(self, box):
-        self.execute(rop.IDENTITYHASH, box)
-
     @arguments("descr", "box")
     def opimpl_new_array(self, itemsize, countbox):
         self.execute_with_descr(rop.NEW_ARRAY, itemsize, countbox)

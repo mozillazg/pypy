@@ -145,10 +145,6 @@ def do_ooisnot(cpu, box1, box2):
         assert False
     return ConstInt(x)
 
-def do_identityhash(cpu, box1):
-    obj = box1.getref_base()
-    return ConstInt(lltype.identityhash(obj))
-
 def do_subclassof(cpu, box1, box2):
     return ConstInt(cpu.ts.subclassOf(cpu, box1, box2))
 
