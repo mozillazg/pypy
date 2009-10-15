@@ -9,13 +9,13 @@ class TypeSystemTests(object):
         d = self.helper.new_ref_dict()
         ref1 = self.fresh_ref()
         ref2 = self.fresh_ref()
-        ref3 = self.null_ref()
+        ref3 = self.fresh_ref()
         d[ref1] = 123
         d[ref2] = 456
         d[ref3] = 789
         ref1b = self.duplicate_ref(ref1)
         ref2b = self.duplicate_ref(ref2)
-        ref3b = self.null_ref()
+        ref3b = self.duplicate_ref(ref3)
         assert d[ref1b] == 123
         assert d[ref2b] == 456
         assert d[ref3b] == 789

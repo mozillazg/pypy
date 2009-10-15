@@ -118,9 +118,9 @@ class LLTypeHelper(TypeSystemHelper):
     # It is an r_dict on lltype.  Two copies, to avoid conflicts with
     # the value type.  Note that NULL is not allowed as a key.
     def new_ref_dict(self):
-        return r_dict(ll_rd_eq, ll_rd_hash)
+        return r_dict(rd_eq, rd_hash)
     def new_ref_dict_2(self):
-        return r_dict(ll_rd_eq, ll_rd_hash)
+        return r_dict(rd_eq, rd_hash)
 
     def cast_vtable_to_hashable(self, cpu, ptr):
         adr = llmemory.cast_ptr_to_adr(ptr)
@@ -137,10 +137,10 @@ class LLTypeHelper(TypeSystemHelper):
     def getaddr_for_box(self, cpu, box):
         return box.getaddr(cpu)
 
-def ll_rd_eq(ref1, ref2):
+def rd_eq(ref1, ref2):
     return ref1 == ref2
 
-def ll_rd_hash(ref):
+def rd_hash(ref):
     assert ref
     return lltype.identityhash(ref)
 
