@@ -123,6 +123,9 @@ class GCBase(object):
     def malloc_nonmovable(self, typeid, length=0, zero=False):
         return self.malloc(typeid, length, zero)
 
+    def id(self, ptr):
+        return lltype.cast_ptr_to_int(ptr)
+
     def can_move(self, addr):
         return False
 
