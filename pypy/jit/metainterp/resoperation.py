@@ -185,9 +185,9 @@ _oplist = [
     'GETARRAYITEM_GC_PURE/2d',
     'UNICODELEN/1',
     'UNICODEGETITEM/2',
+    'IDENTITYHASH/1',
     #
     # ootype operations
-    'OOIDENTITYHASH/1',
     'INSTANCEOF/1d',
     'SUBCLASSOF/2',
     #

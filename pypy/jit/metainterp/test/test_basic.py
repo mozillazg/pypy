@@ -950,18 +950,16 @@ class TestOOtype(BasicTests, OOJitMixin):
     def test_oohash(self):
         def f():
             s = ootype.oostring(5, -1)
-            return ootype.oohash(s)
+            return s.ll_hash()
         res = self.interp_operations(f, [])
-        # xxx can we rely on oohash() returning the same value in and out of
-        # translation?
-        assert res == ootype.oohash(ootype.oostring(5, -1))
+        assert res == ootype.oostring(5, -1).ll_hash()
 
-    def test_ooidentityhash(self):
+    def test_identityhash(self):
         A = ootype.Instance("A", ootype.ROOT)
         def f():
             obj1 = ootype.new(A)
             obj2 = ootype.new(A)
-            return ootype.ooidentityhash(obj1) == ootype.ooidentityhash(obj2)
+            return ootype.identityhash(obj1) == ootype.identityhash(obj2)
         assert not f()
         res = self.interp_operations(f, [])
         assert not res
@@ -1034,6 +1032,16 @@ class TestOOtype(BasicTests, OOJitMixin):
 
 
 class BaseLLtypeTests(BasicTests):
+
+    def test_identityhash(self):
+        A = lltype.GcStruct("A")
+        def f():
+            obj1 = lltype.malloc(A)
+            obj2 = lltype.malloc(A)
+            return lltype.identityhash(obj1) == lltype.identityhash(obj2)
+        assert not f()
+        res = self.interp_operations(f, [])
+        assert not res
 
     def test_oops_on_nongc(self):
         from pypy.rpython.lltypesystem import lltype
