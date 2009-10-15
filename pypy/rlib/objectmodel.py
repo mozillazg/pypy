@@ -203,7 +203,7 @@ def _hash_string(s):
     from pypy.rlib.rarithmetic import intmask
     length = len(s)
     if length == 0:
-        return 0
+        return -1
     x = ord(s[0]) << 7
     i = 0
     while i < length:
