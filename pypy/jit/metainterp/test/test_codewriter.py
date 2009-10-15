@@ -51,6 +51,35 @@ def test_find_all_graphs_without_floats():
     funcs = [graph.func for graph in res]
     assert funcs == [f]
 
+def test_find_all_graphs_loops():
+    def g(x):
+        i = 0
+        while i < x:
+            i += 1
+        return i
+    @jit.unroll_safe
+    def h(x):
+        i = 0
+        while i < x:
+            i += 1
+        return i
+
+    def f(x):
+        i = 0
+        while i < x*x:
+            i += g(x) + h(x)
+        return i
+
+    rtyper = support.annotate(f, [7])
+    cw = CodeWriter(rtyper)
+    jitpolicy = JitPolicy()
+    translator = rtyper.annotator.translator
+    res = cw.find_all_graphs(translator.graphs[0], None, jitpolicy,
+                             supports_floats=True)
+    funcs = set([graph.func for graph in res])
+    assert funcs == set([f, h])
+    
+
 def test_find_all_graphs_str_join():
     def i(x, y):
         return "hello".join([str(x), str(y), "bye"])

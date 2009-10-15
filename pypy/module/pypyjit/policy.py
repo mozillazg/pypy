@@ -35,4 +35,4 @@ class PyPyJitPolicy(JitPolicy):
             if not self.look_inside_pypy_module(modname):
                 return False
             
-        return super(PyPyJitPolicy, self).look_inside_function(func)
+        return True

@@ -6,6 +6,10 @@ from pypy.tool.udir import udir
 class JitPolicy(object):
     def __init__(self):
         self.unsafe_loopy_graphs = set()
+        self.supports_floats = False
+
+    def set_supports_floats(self, flag):
+        self.supports_floats = flag
 
     def dump_unsafe_loops(self):
         f = udir.join("unsafe-loops.txt").open('w')
@@ -16,40 +20,44 @@ class JitPolicy(object):
         f.close()
 
     def look_inside_function(self, func):
+        return True # look into everything by default
+
+    def _reject_function(self, func):
         if hasattr(func, '_jit_look_inside_'):
-            return func._jit_look_inside_
+            return not func._jit_look_inside_
         # explicitly pure functions are always opaque
         if getattr(func, '_pure_function_', False):
-            return False
+            return True
         # pypy.rpython.module.* are opaque helpers
         mod = func.__module__ or '?'
         if mod.startswith('pypy.rpython.module.'):
-            return False
+            return True
         if mod == 'pypy.rpython.lltypesystem.module.ll_math':
             # XXX temporary, contains force_cast
-            return False
+            return True
         if mod.startswith('pypy.translator.'): # XXX wtf?
-            return False
+            return True
         # string builder interface
         if mod == 'pypy.rpython.lltypesystem.rbuilder':
-            return False
+            return True
         # rweakvaluedict implementation
         if mod == 'pypy.rlib.rweakrefimpl':
-            return False
+            return True
         
-        return True
+        return False
 
-    def look_inside_graph(self, graph, supports_floats):
+    def look_inside_graph(self, graph):
         from pypy.translator.backendopt.support import find_backedges
         contains_loop = bool(find_backedges(graph))
         unsupported = contains_unsupported_variable_type(graph,
-                                                         supports_floats)
+                                                         self.supports_floats)
         try:
             func = graph.func
         except AttributeError:
             see_function = True
         else:
-            see_function = self.look_inside_function(func)
+            see_function = (self.look_inside_function(func) and not
+                            self._reject_function(func))
             contains_loop = contains_loop and not getattr(
                     func, '_jit_unroll_safe_', False)
 
@@ -82,6 +90,4 @@ class StopAtXPolicy(JitPolicy):
         self.funcs = funcs
 
     def look_inside_function(self, func):
-        if func in self.funcs:
-            return False
-        return super(StopAtXPolicy, self).look_inside_function(func)
+        return func not in self.funcs

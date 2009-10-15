@@ -74,7 +74,8 @@ class CodeWriter(object):
                         policy, supports_floats):
         from pypy.translator.simplify import get_graph
         def is_candidate(graph):
-            return policy.look_inside_graph(graph, supports_floats)
+            return policy.look_inside_graph(graph)
+        policy.set_supports_floats(supports_floats)
         
         todo = [portal_graph]
         if leave_graph is not None:
