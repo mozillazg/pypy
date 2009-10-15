@@ -1119,16 +1119,17 @@ class _abstract_ptr(object):
             return callb(*args)
         raise TypeError("%r instance is not a function" % (self._T,))
 
-    def _identityhash(self):
+    def _identityhash(self, cache=True):
         p = normalizeptr(self)
         try:
             return p._obj._hash_cache_
         except AttributeError:
             result = hash(p._obj)
-            try:
-                p._obj._hash_cache_ = result
-            except AttributeError:
-                pass
+            if cache:
+                try:
+                    p._obj._hash_cache_ = result
+                except AttributeError:
+                    pass
             return result
 
 class _ptr(_abstract_ptr):
@@ -1869,6 +1870,8 @@ def init_identity_hash(p, value):
         raise ValueError("cannot change hash(NULL)!")
     if hasattr(p._obj, '_hash_cache_'):
         raise ValueError("the hash of %r was already computed" % (p,))
+    if typeOf(p).TO._is_varsize():
+        raise ValueError("init_identity_hash(): not for varsized types")
     p._obj._hash_cache_ = intmask(value)
 
 def isCompatibleType(TYPE1, TYPE2):
