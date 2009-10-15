@@ -56,8 +56,10 @@ class AppTestAppFloatTest:
             32,              # answer on 32-bit machines
             137438953472)    # answer on 64-bit machines
         # testing special overflow values
-        assert hash(1e200 * 1e200) == 314159
-        assert hash(-1e200 * 1e200) == -271828
+        inf = 1e200 * 1e200
+        assert hash(inf) == 314159
+        assert hash(-inf) == -271828
+        assert hash(inf/inf) == 0
 
     def test_int_float(self):
         assert int(42.1234) == 42
