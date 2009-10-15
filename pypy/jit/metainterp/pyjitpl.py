@@ -1024,7 +1024,7 @@ class MetaInterpStaticData(object):
     def _setup_class_sizes(self):
         class_sizes = {}
         for vtable, sizedescr in self._class_sizes:
-            vtable = self.cpu.ts.cast_baseclass_to_hashable(self.cpu, vtable)
+            vtable = self.cpu.ts.cast_vtable_to_hashable(self.cpu, vtable)
             class_sizes[vtable] = sizedescr
         self.cpu.set_class_sizes(class_sizes)
 
