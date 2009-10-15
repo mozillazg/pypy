@@ -59,7 +59,10 @@ class AppTestAppFloatTest:
         inf = 1e200 * 1e200
         assert hash(inf) == 314159
         assert hash(-inf) == -271828
-        assert hash(inf/inf) == 0
+        x = hash(inf/inf)
+        # ^^^ assert did not crash, even though the result is a bit random
+        #     e.g. it appears to be -32768 on Win32 and 0 on Linux
+        assert x == hash(inf/inf)
 
     def test_int_float(self):
         assert int(42.1234) == 42
