@@ -11,6 +11,7 @@ class AppTestUserObject:
         import random
         def fn_rand():
             return cls.space.wrap(random.randrange(0, 5))
+        fn_rand.unwrap_spec = []
         if conftest.option.runappdirect:
             cls.w_rand = fn_rand
         else:
