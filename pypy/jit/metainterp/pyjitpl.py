@@ -326,8 +326,8 @@ class MIFrame(object):
         self.execute(rop.SUBCLASSOF, box1, box2)
 
     @arguments("box")
-    def opimpl_ooidentityhash(self, box):
-        self.execute(rop.OOIDENTITYHASH, box)
+    def opimpl_gc_identityhash(self, box):
+        self.execute(rop.IDENTITYHASH, box)
 
     @arguments("descr", "box")
     def opimpl_new_array(self, itemsize, countbox):
