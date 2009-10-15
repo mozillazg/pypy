@@ -196,12 +196,9 @@ class BoehmGcPolicy(BasicGcPolicy):
 
     def common_gcheader_initdata(self, defnode):
         if defnode.db.gctransformer is not None:
-            return [lltype.identityhash(defnode.obj._as_ptr())]
+            return [defnode.obj._as_ptr()._identityhash(cache=False)]
         else:
             return []
-
-    def get_header_fields(self, obj):
-        return [lltype.identityhash(obj._as_ptr())]
 
     def array_setup(self, arraydefnode):
         pass
@@ -346,7 +343,8 @@ class FrameworkGcPolicy(BasicGcPolicy):
         # restored.  Note that only structures that are StructNodes all
         # the way have their hash stored (and not e.g. structs with var-
         # sized arrays at the end).  'obj' must be the top_container.
-        if not isinstance(typeOf(obj), lltype.GcStruct):
+        TYPE = typeOf(obj)
+        if not isinstance(TYPE, lltype.GcStruct):
             return None
         return getattr(obj, '_hash_cache_', None)
 
