@@ -3,9 +3,9 @@ from pypy.jit.metainterp.policy import JitPolicy
 class PyPyJitPolicy(JitPolicy):
 
     def look_inside_pypy_module(self, modname):
-        if modname.startswith('pypy.module.__builtin__'):
-            if modname.endswith('operation') or modname.endswith('abstractinst'):
-                return True
+        print modname
+        if modname == '__builtin__.operation' or modname == '__builtin__.abstractinst':
+            return True
 
         modname, _ = modname.split('.', 1)
         if modname in ['pypyjit', 'signal', 'micronumpy', 'math']:
@@ -31,7 +31,7 @@ class PyPyJitPolicy(JitPolicy):
         if mod.startswith('pypy.interpreter.pyparser.'):
             return False
         if mod.startswith('pypy.module.'):
-            modname = mod[len('pypy.'):]
+            modname = mod[len('pypy.module.'):]
             if not self.look_inside_pypy_module(modname):
                 return False
             
