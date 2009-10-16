@@ -346,6 +346,8 @@ class FrameworkGcPolicy(BasicGcPolicy):
         TYPE = typeOf(obj)
         if not isinstance(TYPE, lltype.GcStruct):
             return None
+        if TYPE._is_varsize():
+            return None
         return getattr(obj, '_hash_cache_', None)
 
     def need_no_typeptr(self):

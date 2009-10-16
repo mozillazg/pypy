@@ -802,6 +802,20 @@ class TestUsingFramework(object):
         res = self.run('hash_overflow')
         assert res == -42
 
+    def define_hash_varsized(self):
+        S = lltype.GcStruct('S', ('abc', lltype.Signed),
+                                 ('def', lltype.Array(lltype.Signed)))
+        s = lltype.malloc(S, 3, zero=True)
+        h_s = lltype.identityhash(s)
+        def f():
+            return lltype.identityhash(s) - h_s    # != 0 (so far),
+                                # because S is a varsized structure.
+        return f
+
+    def test_hash_varsized(self):
+        res = self.run('hash_varsized')
+        assert res != 0
+
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
     should_be_moving = True
