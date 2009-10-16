@@ -693,6 +693,8 @@ class AbstractTestRstr(BaseRtypingTest):
         res = self.interpret(f, [const('a'), 0])
         assert self.ll_to_string(res) == ""
 
+    EMPTY_STRING_HASH = -1     # unless overridden
+
     def test_hash(self):
         from pypy.rlib.objectmodel import compute_hash
         const = self.const
@@ -703,7 +705,7 @@ class AbstractTestRstr(BaseRtypingTest):
                 s = const("xxx")
             return compute_hash(s)
         res = self.interpret(fn, [0])
-        assert res == -1          # empty string hash
+        assert res == self.EMPTY_STRING_HASH
         res = self.interpret(fn, [1])
         assert typeOf(res) == Signed
 
