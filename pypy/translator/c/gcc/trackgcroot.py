@@ -1,6 +1,9 @@
 #! /usr/bin/env python
+import autopath
 
 import re, sys, os, random
+
+from pypy.translator.c.gcc.instruction import *
 
 LABEL               = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
 r_functionstart_elf = re.compile(r"\t.type\s+"+LABEL+",\s*[@]function\s*$")
@@ -48,6 +51,120 @@ r_localvarfp    = re.compile(LOCALVARFP)
 r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
 r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
 
+class AssemblerParser(object):
+    def __init__(self, verbose=0, shuffle=False):
+        self.verbose = verbose
+        self.shuffle = shuffle
+        self.gcmaptable = []
+        self.seen_main = False
+
+    def process(self, iterlines, newfile, entrypoint='main', filename='?'):
+        for in_function, lines in self.find_functions(iterlines):
+            if in_function:
+                lines = self.process_function(lines, entrypoint, filename)
+            newfile.writelines(lines)
+        if self.verbose == 1:
+            sys.stderr.write('\n')
+
+    def process_function(self, lines, entrypoint, filename):
+        tracker = FunctionGcRootTracker(lines, filetag=getidentifier(filename),
+                                        format=self.format)
+        is_main = tracker.funcname == entrypoint
+        tracker.is_stack_bottom = is_main
+        if self.verbose == 1:
+            sys.stderr.write('.')
+        elif self.verbose > 1:
+            print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
+                                                          tracker.funcname)
+        table = tracker.computegcmaptable(self.verbose)
+        if self.verbose > 1:
+            for label, state in table:
+                print >> sys.stderr, label, '\t', format_callshape(state)
+        table = compress_gcmaptable(table)
+        if self.shuffle and random.random() < 0.5:
+            self.gcmaptable[:0] = table
+        else:
+            self.gcmaptable.extend(table)
+        self.seen_main |= is_main
+        return tracker.lines
+
+class ElfAssemblerParser(AssemblerParser):
+    format = "elf"
+
+    @classmethod
+    def find_functions(cls, iterlines):
+        functionlines = []
+        in_function = False
+        for line in iterlines:
+            if r_functionstart_elf.match(line):
+                assert not in_function, (
+                    "missed the end of the previous function")
+                yield False, functionlines
+                in_function = True
+                functionlines = []
+            functionlines.append(line)
+            if r_functionend_elf.match(line):
+                assert in_function, (
+                    "missed the start of the current function")
+                yield True, functionlines
+                in_function = False
+                functionlines = []
+        assert not in_function, (
+            "missed the end of the previous function")
+        yield False, functionlines
+
+class DarwinAssemblerParser(AssemblerParser):
+    format = "darwin"
+
+    @classmethod
+    def find_functions(cls, iterlines):
+        functionlines = []
+        in_text = False
+        in_function = False
+        for n, line in enumerate(iterlines):
+            if r_textstart.match(line):
+                assert not in_text, "unexpected repeated .text start: %d" % n
+                in_text = True
+            elif r_sectionstart.match(line):
+                if in_function:
+                    yield in_function, functionlines
+                    functionlines = []
+                in_text = False
+                in_function = False
+            elif in_text and r_functionstart_darwin.match(line):
+                yield in_function, functionlines
+                functionlines = []
+                in_function = True
+            functionlines.append(line)
+
+        if functionlines:
+            yield in_function, functionlines
+
+    def process_function(self, lines, entrypoint, filename):
+        entrypoint = '_' + entrypoint
+        return super(DarwinAssemblerParser, self).process_function(
+            lines, entrypoint, filename)
+
+class Mingw32AssemblerParser(DarwinAssemblerParser):
+    format = "mingw32"
+
+    @classmethod
+    def find_functions(cls, iterlines):
+        functionlines = []
+        in_text = False
+        in_function = False
+        for n, line in enumerate(iterlines):
+            if r_textstart.match(line):
+                in_text = True
+            elif r_sectionstart.match(line):
+                in_text = False
+            elif in_text and r_functionstart_darwin.match(line):
+                yield in_function, functionlines
+                functionlines = []
+                in_function = True
+            functionlines.append(line)
+        if functionlines:
+            yield in_function, functionlines
 
 class GcRootTracker(object):
 
@@ -55,9 +172,6 @@ class GcRootTracker(object):
         self.verbose = verbose
         self.shuffle = shuffle     # to debug the sorting logic in asmgcroot.py
         self.format = format
-        self.clear()
-
-    def clear(self):
         self.gcmaptable = []
         self.seen_main = False
 
@@ -172,102 +286,20 @@ class GcRootTracker(object):
         _label('__gccallshapes')
         output.writelines(shapelines)
 
-    def find_functions(self, iterlines):
-        _find_functions = getattr(self, '_find_functions_' + self.format)
-        return _find_functions(iterlines)
-            
-    def _find_functions_elf(self, iterlines):
-        functionlines = []
-        in_function = False
-        for line in iterlines:
-            if r_functionstart_elf.match(line):
-                assert not in_function, (
-                    "missed the end of the previous function")
-                yield False, functionlines
-                in_function = True
-                functionlines = []
-            functionlines.append(line)
-            if r_functionend_elf.match(line):
-                assert in_function, (
-                    "missed the start of the current function")
-                yield True, functionlines
-                in_function = False
-                functionlines = []
-        assert not in_function, (
-            "missed the end of the previous function")
-        yield False, functionlines
-
-    def _find_functions_darwin(self, iterlines):
-        functionlines = []
-        in_text = False
-        in_function = False
-        for n, line in enumerate(iterlines):
-            if r_textstart.match(line):
-                assert not in_text, "unexpected repeated .text start: %d" % n
-                in_text = True
-            elif r_sectionstart.match(line):
-                if in_function:
-                    yield in_function, functionlines
-                    functionlines = []
-                in_text = False
-                in_function = False
-            elif in_text and r_functionstart_darwin.match(line):
-                yield in_function, functionlines
-                functionlines = []
-                in_function = True
-            functionlines.append(line)
-
-        if functionlines:
-            yield in_function, functionlines
-
-    def _find_functions_mingw32(self, iterlines):
-        functionlines = []
-        in_text = False
-        in_function = False
-        for n, line in enumerate(iterlines):
-            if r_textstart.match(line):
-                in_text = True
-            elif r_sectionstart.match(line):
-                in_text = False
-            elif in_text and r_functionstart_darwin.match(line):
-                yield in_function, functionlines
-                functionlines = []
-                in_function = True
-            functionlines.append(line)
-        if functionlines:
-            yield in_function, functionlines
-
     def process(self, iterlines, newfile, entrypoint='main', filename='?'):
-        if self.format in ('darwin', 'mingw32'):
-            entrypoint = '_' + entrypoint
-        for in_function, lines in self.find_functions(iterlines):
+        cls = globals()[self.format.title() + "AssemblerParser"]
+        parser = cls(verbose=self.verbose, shuffle=self.shuffle)
+        for in_function, lines in parser.find_functions(iterlines):
             if in_function:
-                lines = self.process_function(lines, entrypoint, filename)
+                lines = parser.process_function(lines, entrypoint, filename)
             newfile.writelines(lines)
         if self.verbose == 1:
             sys.stderr.write('\n')
-
-    def process_function(self, lines, entrypoint, filename):
-        tracker = FunctionGcRootTracker(lines, filetag=getidentifier(filename),
-                                        format=self.format)
-        is_main = tracker.funcname == entrypoint
-        tracker.is_stack_bottom = is_main
-        if self.verbose == 1:
-            sys.stderr.write('.')
-        elif self.verbose > 1:
-            print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
-                                                          tracker.funcname)
-        table = tracker.computegcmaptable(self.verbose)
-        if self.verbose > 1:
-            for label, state in table:
-                print >> sys.stderr, label, '\t', format_callshape(state)
-        table = compress_gcmaptable(table)
         if self.shuffle and random.random() < 0.5:
-            self.gcmaptable[:0] = table
+            self.gcmaptable[:0] = parser.gcmaptable
         else:
-            self.gcmaptable.extend(table)
-        self.seen_main |= is_main
-        return tracker.lines
+            self.gcmaptable.extend(parser.gcmaptable)
+        self.seen_main |= parser.seen_main
 
 
 class FunctionGcRootTracker(object):
@@ -893,213 +925,6 @@ class UnrecognizedOperation(Exception):
 class NoPatternMatch(Exception):
     pass
 
-class SomeNewValue(object):
-    pass
-somenewvalue = SomeNewValue()
-
-class LocalVar(object):
-    # A local variable location at position 'ofs_from_frame_end',
-    # which is counted from the end of the stack frame (so it is always
-    # negative, unless it refers to arguments of the current function).
-    def __init__(self, ofs_from_frame_end, hint=None):
-        self.ofs_from_frame_end = ofs_from_frame_end
-        self.hint = hint
-
-    def __repr__(self):
-        return '<%+d;%s>' % (self.ofs_from_frame_end, self.hint or 'e*p')
-
-    def __hash__(self):
-        return hash(self.ofs_from_frame_end)
-
-    def __cmp__(self, other):
-        if isinstance(other, LocalVar):
-            return cmp(self.ofs_from_frame_end, other.ofs_from_frame_end)
-        else:
-            return 1
-
-    def getlocation(self, framesize, uses_frame_pointer):
-        if (self.hint == 'esp' or not uses_frame_pointer
-            or self.ofs_from_frame_end % 2 != 0):
-            # try to use esp-relative addressing
-            ofs_from_esp = framesize + self.ofs_from_frame_end
-            if ofs_from_esp % 2 == 0:
-                return frameloc(LOC_ESP_BASED, ofs_from_esp)
-            # we can get an odd value if the framesize is marked as bogus
-            # by visit_andl()
-        assert uses_frame_pointer
-        ofs_from_ebp = self.ofs_from_frame_end + 4
-        return frameloc(LOC_EBP_BASED, ofs_from_ebp)
-
-
-class Insn(object):
-    _args_ = []
-    _locals_ = []
-
-    def __repr__(self):
-        return '%s(%s)' % (self.__class__.__name__,
-                           ', '.join([str(getattr(self, name))
-                                      for name in self._args_]))
-    def requestgcroots(self, tracker):
-        return {}
-
-    def source_of(self, localvar, tag):
-        return localvar
-
-    def all_sources_of(self, localvar):
-        return [localvar]
-
-class Label(Insn):
-    _args_ = ['label', 'lineno']
-    def __init__(self, label, lineno):
-        self.label = label
-        self.lineno = lineno
-        self.previous_insns = []   # all insns that jump (or fallthrough) here
-
-class InsnFunctionStart(Insn):
-    framesize = 0
-    previous_insns = ()
-    def __init__(self):
-        self.arguments = {}
-        for reg in CALLEE_SAVE_REGISTERS:
-            self.arguments[reg] = somenewvalue
-
-    def source_of(self, localvar, tag):
-        if localvar not in self.arguments:
-            if localvar in ('%eax', '%edx', '%ecx'):
-                # xxx this might show a bug in trackgcroot.py failing to
-                # figure out which instruction stored a value in these
-                # registers.  However, this case also occurs when the
-                # the function's calling convention was optimized by gcc:
-                # the 3 registers above are then used to pass arguments
-                pass
-            else:
-                assert (isinstance(localvar, LocalVar) and
-                        localvar.ofs_from_frame_end > 0), (
-                    "must come from an argument to the function, got %r" %
-                    (localvar,))
-            self.arguments[localvar] = somenewvalue
-        return self.arguments[localvar]
-
-    def all_sources_of(self, localvar):
-        return []
-
-class InsnSetLocal(Insn):
-    _args_ = ['target', 'sources']
-    _locals_ = ['target', 'sources']
-
-    def __init__(self, target, sources=()):
-        self.target = target
-        self.sources = sources
-
-    def source_of(self, localvar, tag):
-        if localvar == self.target:
-            return somenewvalue
-        return localvar
-
-    def all_sources_of(self, localvar):
-        if localvar == self.target:
-            return self.sources
-        return [localvar]
-
-class InsnCopyLocal(Insn):
-    _args_ = ['source', 'target']
-    _locals_ = ['source', 'target']
-
-    def __init__(self, source, target):
-        self.source = source
-        self.target = target
-
-    def source_of(self, localvar, tag):
-        if localvar == self.target:
-            return self.source
-        return localvar
-
-    def all_sources_of(self, localvar):
-        if localvar == self.target:
-            return [self.source]
-        return [localvar]
-
-class InsnStackAdjust(Insn):
-    _args_ = ['delta']
-    def __init__(self, delta):
-        assert delta % 2 == 0     # should be "% 4", but there is the special
-        self.delta = delta        # case of 'pushw' to handle
-
-class InsnCannotFollowEsp(InsnStackAdjust):
-    def __init__(self):
-        self.delta = -7     # use an odd value as marker
-
-class InsnStop(Insn):
-    pass
-
-class InsnRet(InsnStop):
-    framesize = 0
-    def requestgcroots(self, tracker):
-        # no need to track the value of these registers in the caller
-        # function if we are the main(), or if we are flagged as a
-        # "bottom" function (a callback from C code)
-        if tracker.is_stack_bottom:
-            return {}
-        else:
-            return dict(zip(CALLEE_SAVE_REGISTERS, CALLEE_SAVE_REGISTERS))
-
-class InsnCall(Insn):
-    _args_ = ['lineno', 'gcroots']
-    def __init__(self, lineno):
-        # 'gcroots' is a dict built by side-effect during the call to
-        # FunctionGcRootTracker.trackgcroots().  Its meaning is as
-        # follows: the keys are the locations that contain gc roots
-        # (register names or LocalVar instances).  The value
-        # corresponding to a key is the "tag", which is None for a
-        # normal gc root, or else the name of a callee-saved register.
-        # In the latter case it means that this is only a gc root if the
-        # corresponding register in the caller was really containing a
-        # gc pointer.  A typical example:
-        #
-        #   InsnCall({LocalVar(-8)': None,
-        #             '%esi': '%esi',
-        #             LocalVar(-12)': '%ebx'})
-        #
-        # means that the value at -8 from the frame end is a gc root
-        # across this call; that %esi is a gc root if it was in the
-        # caller (typically because %esi is not modified at all in the
-        # current function); and that the value at -12 from the frame
-        # end is a gc root if %ebx was a gc root in the caller
-        # (typically because the current function saves and restores
-        # %ebx from there in the prologue and epilogue).
-        self.gcroots = {}
-        self.lineno = lineno
-
-    def source_of(self, localvar, tag):
-        tag1 = self.gcroots.setdefault(localvar, tag)
-        assert tag1 == tag, (
-            "conflicting entries for InsnCall.gcroots[%s]:\n%r and %r" % (
-            localvar, tag1, tag))
-        return localvar
-
-    def all_sources_of(self, localvar):
-        return [localvar]
-
-class InsnGCROOT(Insn):
-    _args_ = ['loc']
-    _locals_ = ['loc']
-    def __init__(self, loc):
-        self.loc = loc
-    def requestgcroots(self, tracker):
-        return {self.loc: None}
-
-class InsnPrologue(Insn):
-    def __setattr__(self, attr, value):
-        if attr == 'framesize':
-            assert value == 4, ("unrecognized function prologue - "
-                                "only supports push %ebp; movl %esp, %ebp")
-        Insn.__setattr__(self, attr, value)
-
-class InsnEpilogue(Insn):
-    def __init__(self, framesize=None):
-        if framesize is not None:
-            self.framesize = framesize
-
 
 if sys.platform != 'win32':
     FUNCTIONS_NOT_RETURNING = {
@@ -1116,24 +941,6 @@ else:
         '__assert': None,
         '__wassert': None,
         }
-
-CALLEE_SAVE_REGISTERS_NOEBP = ['%ebx', '%esi', '%edi']
-CALLEE_SAVE_REGISTERS = CALLEE_SAVE_REGISTERS_NOEBP + ['%ebp']
-
-LOC_NOWHERE   = 0
-LOC_REG       = 1
-LOC_EBP_BASED = 2
-LOC_ESP_BASED = 3
-LOC_MASK      = 0x03
-
-REG2LOC = {}
-for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS):
-    REG2LOC[_reg] = LOC_REG | (_i<<2)
-
-def frameloc(base, offset):
-    assert base in (LOC_EBP_BASED, LOC_ESP_BASED)
-    assert offset % 4 == 0
-    return base | offset
 
 # __________ debugging output __________
 
@@ -1314,6 +1121,5 @@ if __name__ == '__main__':
             f.close()
             if output_raw_table:
                 tracker.dump_raw_table(sys.stdout)
-                tracker.clear()
     if not output_raw_table:
         tracker.dump(sys.stdout)
