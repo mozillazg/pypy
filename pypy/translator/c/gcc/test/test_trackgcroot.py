@@ -4,7 +4,8 @@ from pypy.translator.c.gcc.trackgcroot import format_location
 from pypy.translator.c.gcc.trackgcroot import format_callshape
 from pypy.translator.c.gcc.trackgcroot import LOC_NOWHERE, LOC_REG
 from pypy.translator.c.gcc.trackgcroot import LOC_EBP_BASED, LOC_ESP_BASED
-from pypy.translator.c.gcc.trackgcroot import GcRootTracker
+from pypy.translator.c.gcc.trackgcroot import ElfAssemblerParser
+from pypy.translator.c.gcc.trackgcroot import DarwinAssemblerParser
 from pypy.translator.c.gcc.trackgcroot import FunctionGcRootTracker
 from pypy.translator.c.gcc.trackgcroot import compress_callshape
 from pypy.translator.c.gcc.trackgcroot import decompress_callshape
@@ -63,7 +64,7 @@ def test_find_functions_elf():
 \tMORE STUFF
 """
     lines = source.splitlines(True)
-    parts = list(GcRootTracker().find_functions(iter(lines)))
+    parts = list(ElfAssemblerParser().find_functions(iter(lines)))
     assert len(parts) == 5
     assert parts[0] == (False, lines[:2])
     assert parts[1] == (True,  lines[2:5])
@@ -96,7 +97,7 @@ _pypy_g_RPyRaiseException:
 \t.section stuff
 """
     lines = source.splitlines(True)
-    parts = list(GcRootTracker(format='darwin').find_functions(iter(lines)))
+    parts = list(DarwinAssemblerParser().find_functions(iter(lines)))
     assert len(parts) == 7
     assert parts[0] == (False, lines[:3])
     assert parts[1] == (True,  lines[3:7])
