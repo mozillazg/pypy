@@ -6,10 +6,10 @@ from pypy.translator.c.gcc.trackgcroot import LOC_NOWHERE, LOC_REG
 from pypy.translator.c.gcc.trackgcroot import LOC_EBP_BASED, LOC_ESP_BASED
 from pypy.translator.c.gcc.trackgcroot import ElfAssemblerParser
 from pypy.translator.c.gcc.trackgcroot import DarwinAssemblerParser
-from pypy.translator.c.gcc.trackgcroot import FunctionGcRootTracker
 from pypy.translator.c.gcc.trackgcroot import compress_callshape
 from pypy.translator.c.gcc.trackgcroot import decompress_callshape
 from pypy.translator.c.gcc.trackgcroot import OFFSET_LABELS
+from pypy.translator.c.gcc.trackgcroot import PARSERS
 from StringIO import StringIO
 
 this_dir = py.path.local(__file__).dirpath()
@@ -129,7 +129,7 @@ def check_computegcmaptable(format, path):
     print path.basename
     lines = path.readlines()
     expectedlines = lines[:]
-    tracker = FunctionGcRootTracker(lines, format=format)
+    tracker = PARSERS[format].FunctionGcRootTracker(lines)
     table = tracker.computegcmaptable(verbose=sys.maxint)
     tabledict = {}
     seen = {}

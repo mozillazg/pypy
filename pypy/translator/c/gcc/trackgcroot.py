@@ -51,275 +51,9 @@ r_localvarfp    = re.compile(LOCALVARFP)
 r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
 r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
 
-class AssemblerParser(object):
-    def __init__(self, verbose=0, shuffle=False):
-        self.verbose = verbose
-        self.shuffle = shuffle
-        self.gcmaptable = []
-        self.seen_main = False
-
-    def process(self, iterlines, newfile, entrypoint='main', filename='?'):
-        for in_function, lines in self.find_functions(iterlines):
-            if in_function:
-                lines = self.process_function(lines, entrypoint, filename)
-            newfile.writelines(lines)
-        if self.verbose == 1:
-            sys.stderr.write('\n')
-
-    def process_function(self, lines, entrypoint, filename):
-        tracker = FunctionGcRootTracker(lines, filetag=getidentifier(filename),
-                                        format=self.format)
-        is_main = tracker.funcname == entrypoint
-        tracker.is_stack_bottom = is_main
-        if self.verbose == 1:
-            sys.stderr.write('.')
-        elif self.verbose > 1:
-            print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
-                                                          tracker.funcname)
-        table = tracker.computegcmaptable(self.verbose)
-        if self.verbose > 1:
-            for label, state in table:
-                print >> sys.stderr, label, '\t', format_callshape(state)
-        table = compress_gcmaptable(table)
-        if self.shuffle and random.random() < 0.5:
-            self.gcmaptable[:0] = table
-        else:
-            self.gcmaptable.extend(table)
-        self.seen_main |= is_main
-        return tracker.lines
-
-class ElfAssemblerParser(AssemblerParser):
-    format = "elf"
-
-    @classmethod
-    def find_functions(cls, iterlines):
-        functionlines = []
-        in_function = False
-        for line in iterlines:
-            if r_functionstart_elf.match(line):
-                assert not in_function, (
-                    "missed the end of the previous function")
-                yield False, functionlines
-                in_function = True
-                functionlines = []
-            functionlines.append(line)
-            if r_functionend_elf.match(line):
-                assert in_function, (
-                    "missed the start of the current function")
-                yield True, functionlines
-                in_function = False
-                functionlines = []
-        assert not in_function, (
-            "missed the end of the previous function")
-        yield False, functionlines
-
-class DarwinAssemblerParser(AssemblerParser):
-    format = "darwin"
-
-    @classmethod
-    def find_functions(cls, iterlines):
-        functionlines = []
-        in_text = False
-        in_function = False
-        for n, line in enumerate(iterlines):
-            if r_textstart.match(line):
-                assert not in_text, "unexpected repeated .text start: %d" % n
-                in_text = True
-            elif r_sectionstart.match(line):
-                if in_function:
-                    yield in_function, functionlines
-                    functionlines = []
-                in_text = False
-                in_function = False
-            elif in_text and r_functionstart_darwin.match(line):
-                yield in_function, functionlines
-                functionlines = []
-                in_function = True
-            functionlines.append(line)
-
-        if functionlines:
-            yield in_function, functionlines
-
-    def process_function(self, lines, entrypoint, filename):
-        entrypoint = '_' + entrypoint
-        return super(DarwinAssemblerParser, self).process_function(
-            lines, entrypoint, filename)
-
-class Mingw32AssemblerParser(DarwinAssemblerParser):
-    format = "mingw32"
-
-    @classmethod
-    def find_functions(cls, iterlines):
-        functionlines = []
-        in_text = False
-        in_function = False
-        for n, line in enumerate(iterlines):
-            if r_textstart.match(line):
-                in_text = True
-            elif r_sectionstart.match(line):
-                in_text = False
-            elif in_text and r_functionstart_darwin.match(line):
-                yield in_function, functionlines
-                functionlines = []
-                in_function = True
-            functionlines.append(line)
-        if functionlines:
-            yield in_function, functionlines
-
-class GcRootTracker(object):
-
-    def __init__(self, verbose=0, shuffle=False, format='elf'):
-        self.verbose = verbose
-        self.shuffle = shuffle     # to debug the sorting logic in asmgcroot.py
-        self.format = format
-        self.gcmaptable = []
-        self.seen_main = False
-
-    def dump_raw_table(self, output):
-        print >> output, "seen_main = %d" % (self.seen_main,)
-        for entry in self.gcmaptable:
-            print >> output, entry
-
-    def reload_raw_table(self, input):
-        firstline = input.readline()
-        assert firstline.startswith("seen_main = ")
-        self.seen_main |= bool(int(firstline[len("seen_main = "):].strip()))
-        for line in input:
-            entry = eval(line)
-            assert type(entry) is tuple
-            self.gcmaptable.append(entry)
-
-    def dump(self, output):
-        assert self.seen_main
-        shapes = {}
-        shapelines = []
-        shapeofs = 0
-        def _globalname(name):
-            if self.format in ('darwin', 'mingw32'):
-                return '_' + name
-            return name
-        def _globl(name):
-            print >> output, "\t.globl %s" % _globalname(name)
-        def _label(name):
-            print >> output, "%s:" % _globalname(name)
-        def _variant(**kwargs):
-            txt = kwargs[self.format]
-            print >> output, "\t%s" % txt
-
-        print >> output, "\t.text"
-        _globl('pypy_asm_stackwalk')
-        _variant(elf='.type pypy_asm_stackwalk, @function',
-                 darwin='',
-                 mingw32='')
-        _label('pypy_asm_stackwalk')
-        print >> output, """\
-            /* See description in asmgcroot.py */
-            movl   4(%esp), %edx     /* my argument, which is the callback */
-            movl   %esp, %eax        /* my frame top address */
-            pushl  %eax              /* ASM_FRAMEDATA[6] */
-            pushl  %ebp              /* ASM_FRAMEDATA[5] */
-            pushl  %edi              /* ASM_FRAMEDATA[4] */
-            pushl  %esi              /* ASM_FRAMEDATA[3] */
-            pushl  %ebx              /* ASM_FRAMEDATA[2] */
-
-            /* Add this ASM_FRAMEDATA to the front of the circular linked */
-            /* list.  Let's call it 'self'. */
-            movl   __gcrootanchor+4, %eax  /* next = gcrootanchor->next */
-            pushl  %eax                    /* self->next = next         */
-            pushl  $__gcrootanchor         /* self->prev = gcrootanchor */
-            movl   %esp, __gcrootanchor+4  /* gcrootanchor->next = self */
-            movl   %esp, (%eax)            /* next->prev = self         */
-
-            /* note: the Mac OS X 16 bytes aligment must be respected. */
-            call   *%edx                   /* invoke the callback */
-
-            /* Detach this ASM_FRAMEDATA from the circular linked list */
-            popl   %esi                    /* prev = self->prev         */
-            popl   %edi                    /* next = self->next         */
-            movl   %edi, 4(%esi)           /* prev->next = next         */
-            movl   %esi, (%edi)            /* next->prev = prev         */
-
-            popl   %ebx              /* restore from ASM_FRAMEDATA[2] */
-            popl   %esi              /* restore from ASM_FRAMEDATA[3] */
-            popl   %edi              /* restore from ASM_FRAMEDATA[4] */
-            popl   %ebp              /* restore from ASM_FRAMEDATA[5] */
-            popl   %ecx              /* ignored      ASM_FRAMEDATA[6] */
-            /* the return value is the one of the 'call' above, */
-            /* because %eax (and possibly %edx) are unmodified  */
-            ret
-""".replace("__gcrootanchor", _globalname("__gcrootanchor"))
-        _variant(elf='.size pypy_asm_stackwalk, .-pypy_asm_stackwalk',
-                 darwin='',
-                 mingw32='')
-        print >> output, '\t.data'
-        print >> output, '\t.align\t4'
-        _globl('__gcrootanchor')
-        _label('__gcrootanchor')
-        print >> output, """\
-            /* A circular doubly-linked list of all */
-            /* the ASM_FRAMEDATAs currently alive */
-            .long\t__gcrootanchor       /* prev */
-            .long\t__gcrootanchor       /* next */
-""".replace("__gcrootanchor", _globalname("__gcrootanchor"))
-        _globl('__gcmapstart')
-        _label('__gcmapstart')
-        for label, state, is_range in self.gcmaptable:
-            try:
-                n = shapes[state]
-            except KeyError:
-                n = shapes[state] = shapeofs
-                bytes = [str(b) for b in compress_callshape(state)]
-                shapelines.append('\t/*%d*/\t.byte\t%s\n' % (
-                    shapeofs,
-                    ', '.join(bytes)))
-                shapeofs += len(bytes)
-            if is_range:
-                n = ~ n
-            print >> output, '\t.long\t%s-%d' % (label, OFFSET_LABELS)
-            print >> output, '\t.long\t%d' % (n,)
-        _globl('__gcmapend')
-        _label('__gcmapend')
-        _variant(elf='.section\t.rodata',
-                 darwin='.const',
-                 mingw32='')
-        _globl('__gccallshapes')
-        _label('__gccallshapes')
-        output.writelines(shapelines)
-
-    def process(self, iterlines, newfile, entrypoint='main', filename='?'):
-        cls = globals()[self.format.title() + "AssemblerParser"]
-        parser = cls(verbose=self.verbose, shuffle=self.shuffle)
-        for in_function, lines in parser.find_functions(iterlines):
-            if in_function:
-                lines = parser.process_function(lines, entrypoint, filename)
-            newfile.writelines(lines)
-        if self.verbose == 1:
-            sys.stderr.write('\n')
-        if self.shuffle and random.random() < 0.5:
-            self.gcmaptable[:0] = parser.gcmaptable
-        else:
-            self.gcmaptable.extend(parser.gcmaptable)
-        self.seen_main |= parser.seen_main
-
-
 class FunctionGcRootTracker(object):
 
-    def __init__(self, lines, filetag=0, format='elf'):
-        if format == 'elf':
-            match = r_functionstart_elf.match(lines[0])
-            funcname = match.group(1)
-            match = r_functionend_elf.match(lines[-1])
-            assert funcname == match.group(1)
-            assert funcname == match.group(2)
-        elif format == 'darwin':
-            match = r_functionstart_darwin.match(lines[0])
-            funcname = '_'+match.group(1)
-        elif format == 'mingw32':
-            match = r_functionstart_darwin.match(lines[0])
-            funcname = '_'+match.group(1)
-        else:
-            assert False, "unknown format: %s" % format
-
+    def __init__(self, funcname, lines, filetag=0):
         self.funcname = funcname
         self.lines = lines
         self.uses_frame_pointer = False
@@ -420,7 +154,8 @@ class FunctionGcRootTracker(object):
                     try:
                         meth = getattr(self, 'visit_' + opname)
                     except AttributeError:
-                        meth = self.find_missing_visit_method(opname)
+                        self.find_missing_visit_method(opname)
+                        meth = getattr(self, 'visit_' + opname)
                     insn = meth(line)
             elif r_gcroot_marker.match(line):
                 insn = self._visit_gcroot_marker(line)
@@ -443,16 +178,15 @@ class FunctionGcRootTracker(object):
 
             del self.currentlineno
 
-    def find_missing_visit_method(self, opname):
+    @classmethod
+    def find_missing_visit_method(cls, opname):
         # only for operations that are no-ops as far as we are concerned
         prefix = opname
-        while prefix not in self.IGNORE_OPS_WITH_PREFIXES:
+        while prefix not in cls.IGNORE_OPS_WITH_PREFIXES:
             prefix = prefix[:-1]
             if not prefix:
                 raise UnrecognizedOperation(opname)
-        visit_nop = FunctionGcRootTracker.__dict__['visit_nop']
-        setattr(FunctionGcRootTracker, 'visit_' + opname, visit_nop)
-        return self.visit_nop
+        setattr(cls, 'visit_' + opname, cls.visit_nop)
 
     def list_call_insns(self):
         return [insn for insn in self.insns if isinstance(insn, InsnCall)]
@@ -917,6 +651,289 @@ class FunctionGcRootTracker(object):
             if match and '@' in target:
                 insns.append(InsnStackAdjust(int(target.split('@')[1])))
         return insns
+
+
+class ElfFunctionGcRootTracker(FunctionGcRootTracker):
+    format = 'elf'
+
+    def __init__(self, lines, filetag=0):
+        match = r_functionstart_elf.match(lines[0])
+        funcname = match.group(1)
+        match = r_functionend_elf.match(lines[-1])
+        assert funcname == match.group(1)
+        assert funcname == match.group(2)
+        super(ElfFunctionGcRootTracker, self).__init__(
+            funcname, lines, filetag)
+
+class DarwinFunctionGcRootTracker(FunctionGcRootTracker):
+    format = 'darwin'
+
+    def __init__(self, lines, filetag=0):
+        match = r_functionstart_darwin.match(lines[0])
+        funcname = '_'+match.group(1)
+        super(DarwinFunctionGcRootTracker, self).__init__(
+            funcname, lines, filetag)
+
+class Mingw32FunctionGcRootTracker(DarwinFunctionGcRootTracker):
+    format = 'mingw32'
+
+class AssemblerParser(object):
+    def __init__(self, verbose=0, shuffle=False):
+        self.verbose = verbose
+        self.shuffle = shuffle
+        self.gcmaptable = []
+        self.seen_main = False
+
+    def process(self, iterlines, newfile, entrypoint='main', filename='?'):
+        for in_function, lines in self.find_functions(iterlines):
+            if in_function:
+                lines = self.process_function(lines, entrypoint, filename)
+            newfile.writelines(lines)
+        if self.verbose == 1:
+            sys.stderr.write('\n')
+
+    def process_function(self, lines, entrypoint, filename):
+        tracker = self.FunctionGcRootTracker(
+            lines, filetag=getidentifier(filename))
+        is_main = tracker.funcname == entrypoint
+        tracker.is_stack_bottom = is_main
+        if self.verbose == 1:
+            sys.stderr.write('.')
+        elif self.verbose > 1:
+            print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
+                                                          tracker.funcname)
+        table = tracker.computegcmaptable(self.verbose)
+        if self.verbose > 1:
+            for label, state in table:
+                print >> sys.stderr, label, '\t', format_callshape(state)
+        table = compress_gcmaptable(table)
+        if self.shuffle and random.random() < 0.5:
+            self.gcmaptable[:0] = table
+        else:
+            self.gcmaptable.extend(table)
+        self.seen_main |= is_main
+        return tracker.lines
+
+class ElfAssemblerParser(AssemblerParser):
+    format = "elf"
+    FunctionGcRootTracker = ElfFunctionGcRootTracker
+
+    @classmethod
+    def find_functions(cls, iterlines):
+        functionlines = []
+        in_function = False
+        for line in iterlines:
+            if r_functionstart_elf.match(line):
+                assert not in_function, (
+                    "missed the end of the previous function")
+                yield False, functionlines
+                in_function = True
+                functionlines = []
+            functionlines.append(line)
+            if r_functionend_elf.match(line):
+                assert in_function, (
+                    "missed the start of the current function")
+                yield True, functionlines
+                in_function = False
+                functionlines = []
+        assert not in_function, (
+            "missed the end of the previous function")
+        yield False, functionlines
+
+class DarwinAssemblerParser(AssemblerParser):
+    format = "darwin"
+    FunctionGcRootTracker = DarwinFunctionGcRootTracker
+
+    @classmethod
+    def find_functions(cls, iterlines):
+        functionlines = []
+        in_text = False
+        in_function = False
+        for n, line in enumerate(iterlines):
+            if r_textstart.match(line):
+                assert not in_text, "unexpected repeated .text start: %d" % n
+                in_text = True
+            elif r_sectionstart.match(line):
+                if in_function:
+                    yield in_function, functionlines
+                    functionlines = []
+                in_text = False
+                in_function = False
+            elif in_text and r_functionstart_darwin.match(line):
+                yield in_function, functionlines
+                functionlines = []
+                in_function = True
+            functionlines.append(line)
+
+        if functionlines:
+            yield in_function, functionlines
+
+    def process_function(self, lines, entrypoint, filename):
+        entrypoint = '_' + entrypoint
+        return super(DarwinAssemblerParser, self).process_function(
+            lines, entrypoint, filename)
+
+class Mingw32AssemblerParser(DarwinAssemblerParser):
+    format = "mingw32"
+    FunctionGcRootTracker = Mingw32FunctionGcRootTracker
+
+    @classmethod
+    def find_functions(cls, iterlines):
+        functionlines = []
+        in_text = False
+        in_function = False
+        for n, line in enumerate(iterlines):
+            if r_textstart.match(line):
+                in_text = True
+            elif r_sectionstart.match(line):
+                in_text = False
+            elif in_text and r_functionstart_darwin.match(line):
+                yield in_function, functionlines
+                functionlines = []
+                in_function = True
+            functionlines.append(line)
+        if functionlines:
+            yield in_function, functionlines
+
+PARSERS = {
+    'elf': ElfAssemblerParser,
+    'darwin': DarwinAssemblerParser,
+    'mingw32': Mingw32AssemblerParser,
+    }
+
+class GcRootTracker(object):
+
+    def __init__(self, verbose=0, shuffle=False, format='elf'):
+        self.verbose = verbose
+        self.shuffle = shuffle     # to debug the sorting logic in asmgcroot.py
+        self.format = format
+        self.gcmaptable = []
+        self.seen_main = False
+
+    def dump_raw_table(self, output):
+        print >> output, "seen_main = %d" % (self.seen_main,)
+        for entry in self.gcmaptable:
+            print >> output, entry
+
+    def reload_raw_table(self, input):
+        firstline = input.readline()
+        assert firstline.startswith("seen_main = ")
+        self.seen_main |= bool(int(firstline[len("seen_main = "):].strip()))
+        for line in input:
+            entry = eval(line)
+            assert type(entry) is tuple
+            self.gcmaptable.append(entry)
+
+    def dump(self, output):
+        assert self.seen_main
+        shapes = {}
+        shapelines = []
+        shapeofs = 0
+        def _globalname(name):
+            if self.format in ('darwin', 'mingw32'):
+                return '_' + name
+            return name
+        def _globl(name):
+            print >> output, "\t.globl %s" % _globalname(name)
+        def _label(name):
+            print >> output, "%s:" % _globalname(name)
+        def _variant(**kwargs):
+            txt = kwargs[self.format]
+            print >> output, "\t%s" % txt
+
+        print >> output, "\t.text"
+        _globl('pypy_asm_stackwalk')
+        _variant(elf='.type pypy_asm_stackwalk, @function',
+                 darwin='',
+                 mingw32='')
+        _label('pypy_asm_stackwalk')
+        print >> output, """\
+            /* See description in asmgcroot.py */
+            movl   4(%esp), %edx     /* my argument, which is the callback */
+            movl   %esp, %eax        /* my frame top address */
+            pushl  %eax              /* ASM_FRAMEDATA[6] */
+            pushl  %ebp              /* ASM_FRAMEDATA[5] */
+            pushl  %edi              /* ASM_FRAMEDATA[4] */
+            pushl  %esi              /* ASM_FRAMEDATA[3] */
+            pushl  %ebx              /* ASM_FRAMEDATA[2] */
+
+            /* Add this ASM_FRAMEDATA to the front of the circular linked */
+            /* list.  Let's call it 'self'. */
+            movl   __gcrootanchor+4, %eax  /* next = gcrootanchor->next */
+            pushl  %eax                    /* self->next = next         */
+            pushl  $__gcrootanchor         /* self->prev = gcrootanchor */
+            movl   %esp, __gcrootanchor+4  /* gcrootanchor->next = self */
+            movl   %esp, (%eax)            /* next->prev = self         */
+
+            /* note: the Mac OS X 16 bytes aligment must be respected. */
+            call   *%edx                   /* invoke the callback */
+
+            /* Detach this ASM_FRAMEDATA from the circular linked list */
+            popl   %esi                    /* prev = self->prev         */
+            popl   %edi                    /* next = self->next         */
+            movl   %edi, 4(%esi)           /* prev->next = next         */
+            movl   %esi, (%edi)            /* next->prev = prev         */
+
+            popl   %ebx              /* restore from ASM_FRAMEDATA[2] */
+            popl   %esi              /* restore from ASM_FRAMEDATA[3] */
+            popl   %edi              /* restore from ASM_FRAMEDATA[4] */
+            popl   %ebp              /* restore from ASM_FRAMEDATA[5] */
+            popl   %ecx              /* ignored      ASM_FRAMEDATA[6] */
+            /* the return value is the one of the 'call' above, */
+            /* because %eax (and possibly %edx) are unmodified  */
+            ret
+""".replace("__gcrootanchor", _globalname("__gcrootanchor"))
+        _variant(elf='.size pypy_asm_stackwalk, .-pypy_asm_stackwalk',
+                 darwin='',
+                 mingw32='')
+        print >> output, '\t.data'
+        print >> output, '\t.align\t4'
+        _globl('__gcrootanchor')
+        _label('__gcrootanchor')
+        print >> output, """\
+            /* A circular doubly-linked list of all */
+            /* the ASM_FRAMEDATAs currently alive */
+            .long\t__gcrootanchor       /* prev */
+            .long\t__gcrootanchor       /* next */
+""".replace("__gcrootanchor", _globalname("__gcrootanchor"))
+        _globl('__gcmapstart')
+        _label('__gcmapstart')
+        for label, state, is_range in self.gcmaptable:
+            try:
+                n = shapes[state]
+            except KeyError:
+                n = shapes[state] = shapeofs
+                bytes = [str(b) for b in compress_callshape(state)]
+                shapelines.append('\t/*%d*/\t.byte\t%s\n' % (
+                    shapeofs,
+                    ', '.join(bytes)))
+                shapeofs += len(bytes)
+            if is_range:
+                n = ~ n
+            print >> output, '\t.long\t%s-%d' % (label, OFFSET_LABELS)
+            print >> output, '\t.long\t%d' % (n,)
+        _globl('__gcmapend')
+        _label('__gcmapend')
+        _variant(elf='.section\t.rodata',
+                 darwin='.const',
+                 mingw32='')
+        _globl('__gccallshapes')
+        _label('__gccallshapes')
+        output.writelines(shapelines)
+
+    def process(self, iterlines, newfile, entrypoint='main', filename='?'):
+        parser = PARSERS[format](verbose=self.verbose, shuffle=self.shuffle)
+        for in_function, lines in parser.find_functions(iterlines):
+            if in_function:
+                lines = parser.process_function(lines, entrypoint, filename)
+            newfile.writelines(lines)
+        if self.verbose == 1:
+            sys.stderr.write('\n')
+        if self.shuffle and random.random() < 0.5:
+            self.gcmaptable[:0] = parser.gcmaptable
+        else:
+            self.gcmaptable.extend(parser.gcmaptable)
+        self.seen_main |= parser.seen_main
 
 
 class UnrecognizedOperation(Exception):
