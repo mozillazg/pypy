@@ -25,6 +25,8 @@ extern long pypy_asm_stackwalk(void*);
    __gcnoreorderhack input argument.  Any memory input argument would
    have this effect: as far as gcc knows the call instruction can modify
    arbitrary memory, thus creating the order dependency that we want. */
+#ifndef _MSC_VER
+
 #define pypy_asm_gcroot(p) ({void*_r; \
                asm ("/* GCROOT %0 */" : "=g" (_r) : \
                     "0" (p), "m" (__gcnoreorderhack)); \
@@ -35,6 +37,21 @@ extern long pypy_asm_stackwalk(void*);
 
 /* marker for trackgcroot.py */
 #define pypy_asm_stack_bottom()  asm volatile ("/* GC_STACK_BOTTOM */" : : )
+
+#else
+/* Microsoft Compiler */
+static __forceinline
+void* pypy_asm_gcroot(void* _r1)
+{
+    __asm test _r1, 0
+    return _r1;
+}
+#define pypy_asm_keepalive(v)    __asm { }
+#define pypy_asm_stack_bottom()  /* GC_STACK_BOTTOM */
+
+#endif
+
+
 
 #define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
                i == 0 ? (void*)&__gcmapstart :         \

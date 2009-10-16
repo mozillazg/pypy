@@ -494,15 +494,25 @@ class CStandaloneBuilder(CBuilder):
             mk.definition('GCMAPFILES', gcmapfiles)
             mk.definition('DEBUGFLAGS', '-O2 -fomit-frame-pointer -g')
             mk.definition('OBJECTS', '$(ASMLBLFILES) gcmaptable.s')
-            mk.rule('%.s', '%.c', '$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)')
+
             if sys.platform == 'win32':
                 python = sys.executable.replace('\\', '/') + ' '
             else:
-                python = ""
-            mk.rule('%.lbl.s %.gcmap', '%.s',
-                    python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $*.gcmap')
-            mk.rule('gcmaptable.s', '$(GCMAPFILES)',
-                    python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
+                python = ''
+
+            if self.translator.platform.name == 'msvc':
+                mk.rule('.c.gcmap', '',
+                        ['$(CC) $(CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
+                         python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $*.s > $@']
+                        )
+                mk.rule('gcmaptable.s', '$(GCMAPFILES)',
+                        python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
+            else:
+                mk.rule('%.s', '%.c', '$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)')
+                mk.rule('%.lbl.s %.gcmap', '%.s',
+                        python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $*.gcmap')
+                mk.rule('gcmaptable.s', '$(GCMAPFILES)',
+                        python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
 
         else:
             mk.definition('DEBUGFLAGS', '-O1 -g')
