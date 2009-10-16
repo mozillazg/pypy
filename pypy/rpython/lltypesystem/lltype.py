@@ -1862,6 +1862,12 @@ def identityhash(p):
     assert p
     return p._identityhash()
 
+def identityhash_nocache(p):
+    """Version of identityhash() to use from backends that don't care about
+    caching."""
+    assert p
+    return p._identityhash(cache=False)
+
 def init_identity_hash(p, value):
     """For a prebuilt object p, initialize its hash value to 'value'."""
     assert isinstance(typeOf(p), Ptr)

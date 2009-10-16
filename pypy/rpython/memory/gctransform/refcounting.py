@@ -194,7 +194,7 @@ class RefcountingGCTransformer(GCTransformer):
             if not self.gcheaderbuilder.get_header(p):
                 hdr = self.gcheaderbuilder.new_header(p)
                 hdr.refcount = sys.maxint // 2
-                hdr.hash = lltype.identityhash(p)
+                hdr.hash = lltype.identityhash_nocache(p)
 
     def static_deallocation_funcptr_for_type(self, TYPE):
         if TYPE in self.static_deallocator_funcptrs:

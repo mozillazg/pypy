@@ -196,7 +196,7 @@ class BoehmGcPolicy(BasicGcPolicy):
 
     def common_gcheader_initdata(self, defnode):
         if defnode.db.gctransformer is not None:
-            return [defnode.obj._as_ptr()._identityhash(cache=False)]
+            return [lltype.identityhash_nocache(defnode.obj._as_ptr())]
         else:
             return []
 
