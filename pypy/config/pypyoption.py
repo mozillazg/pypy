@@ -357,6 +357,7 @@ def set_pypy_opt_level(config, level):
     if level in ['2', '3', 'jit']:
         config.objspace.opcodes.suggest(CALL_METHOD=True)
         config.objspace.std.suggest(withmultidict=True)
+        config.objspace.std.suggest(withsmallint=True)
         config.objspace.std.suggest(withshadowtracking=True)
         config.objspace.std.suggest(withrangelist=True)
         config.objspace.std.suggest(withmethodcache=True)
