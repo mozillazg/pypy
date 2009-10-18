@@ -33,14 +33,10 @@ r_label         = re.compile(LABEL+"[:]\s*$")
 r_globl         = re.compile(r"\t[.]globl\t"+LABEL+"\s*$")
 r_globllabel    = re.compile(LABEL+r"=[.][+]%d\s*$"%OFFSET_LABELS)
 r_insn          = re.compile(r"\t([a-z]\w*)\s")
-OPERAND         =           r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
-r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
-r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
 r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
 r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
 r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
 r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|\t\.align|"+LABEL)
-r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
 LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
 LOCALVARFP      = LOCALVAR + r"|-?\d*[(]%ebp[)]"
 r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
@@ -51,6 +47,11 @@ r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
 r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
 
 class FunctionGcRootTracker(object):
+
+    OPERAND         =            r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
+    r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
+    r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
+    r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<source>"+OPERAND+"),\s*(?P<target>"+OPERAND+")\s*$")
 
     r_jump          = re.compile(r"\tj\w+\s+"+LABEL+"\s*$")
 
@@ -370,9 +371,9 @@ class FunctionGcRootTracker(object):
     visit_xorw = visit_nop
 
     def visit_addl(self, line, sign=+1):
-        match = r_binaryinsn.match(line)
-        source = match.group(1)
-        target = match.group(2)
+        match = self.r_binaryinsn.match(line)
+        source = match.group("source")
+        target = match.group("target")
         if target == '%esp':
             count = match.group(1)
             if not count.startswith('$'):
@@ -388,7 +389,7 @@ class FunctionGcRootTracker(object):
         return self.visit_addl(line, sign=-1)
 
     def unary_insn(self, line):
-        match = r_unaryinsn.match(line)
+        match = self.r_unaryinsn.match(line)
         target = match.group(1)
         if self.r_localvar.match(target):
             return InsnSetLocal(target)
@@ -396,11 +397,11 @@ class FunctionGcRootTracker(object):
             return []
 
     def binary_insn(self, line):
-        match = r_binaryinsn.match(line)
+        match = self.r_binaryinsn.match(line)
         if not match:
             raise UnrecognizedOperation(line)
-        source = match.group(1)
-        target = match.group(2)
+        source = match.group("source")
+        target = match.group("target")
         if self.r_localvar.match(target):
             return InsnSetLocal(target, [source])
         elif target == '%esp':
@@ -428,8 +429,8 @@ class FunctionGcRootTracker(object):
     visit_cmovno = binary_insn
 
     def visit_andl(self, line):
-        match = r_binaryinsn.match(line)
-        target = match.group(2)
+        match = self.r_binaryinsn.match(line)
+        target = match.group("target")
         if target == '%esp':
             # only for  andl $-16, %esp  used to align the stack in main().
             # The exact amount of adjutment is not known yet, so we use
@@ -440,11 +441,11 @@ class FunctionGcRootTracker(object):
             return self.binary_insn(line)
 
     def visit_leal(self, line):
-        match = r_binaryinsn.match(line)
-        target = match.group(2)
+        match = self.r_binaryinsn.match(line)
+        target = match.group("target")
         if target == '%esp':
             # only for  leal -12(%ebp), %esp  in function epilogues
-            source = match.group(1)
+            source = match.group("source")
             match = r_localvar_ebp.match(source)
             if match:
                 if not self.uses_frame_pointer:
@@ -475,9 +476,9 @@ class FunctionGcRootTracker(object):
             return []
 
     def visit_movl(self, line):
-        match = r_binaryinsn.match(line)
-        source = match.group(1)
-        target = match.group(2)
+        match = self.r_binaryinsn.match(line)
+        source = match.group("source")
+        target = match.group("target")
         if source == '%esp' and target == '%ebp':
             return self._visit_prologue()
         elif source == '%ebp' and target == '%esp':
@@ -485,7 +486,7 @@ class FunctionGcRootTracker(object):
         return self.insns_for_copy(source, target)
 
     def visit_pushl(self, line):
-        match = r_unaryinsn.match(line)
+        match = self.r_unaryinsn.match(line)
         source = match.group(1)
         return [InsnStackAdjust(-4)] + self.insns_for_copy(source, '0(%esp)')
 
@@ -496,7 +497,7 @@ class FunctionGcRootTracker(object):
         return self.insns_for_copy('0(%esp)', target) + [InsnStackAdjust(+4)]
 
     def visit_popl(self, line):
-        match = r_unaryinsn.match(line)
+        match = self.r_unaryinsn.match(line)
         target = match.group(1)
         return self._visit_pop(target)
 
@@ -525,12 +526,12 @@ class FunctionGcRootTracker(object):
             # Assume that the table is just a list of lines looking like
             # .long LABEL or .long 0, ending in a .text or .section .text.hot.
             tablelabels.append(match.group(1))
-        elif r_unaryinsn_star.match(line):
+        elif self.r_unaryinsn_star.match(line):
             # maybe a jmp similar to the above, but stored in a
             # registry:
             #     movl L9341(%eax), %eax
             #     jmp *%eax
-            operand = r_unaryinsn_star.match(line).group(1)[1:]
+            operand = self.r_unaryinsn_star.match(line).group(1)[1:]
             def walker(insn, locs):
                 sources = []
                 for loc in locs:
@@ -567,7 +568,7 @@ class FunctionGcRootTracker(object):
                     self.register_jump_to(label)
                 tablelin += 1
             return InsnStop()
-        if r_unaryinsn_star.match(line):
+        if self.r_unaryinsn_star.match(line):
             # that looks like an indirect tail-call.
             # tail-calls are equivalent to RET for us
             return InsnRet()
@@ -575,7 +576,7 @@ class FunctionGcRootTracker(object):
             self.conditional_jump(line)
         except KeyError:
             # label not found: check if it's a tail-call turned into a jump
-            match = r_unaryinsn.match(line)
+            match = self.r_unaryinsn.match(line)
             target = match.group(1)
             assert not target.startswith('.')
             # tail-calls are equivalent to RET for us
@@ -615,17 +616,17 @@ class FunctionGcRootTracker(object):
     def visit_xchgl(self, line):
         # only support the format used in VALGRIND_DISCARD_TRANSLATIONS
         # which is to use a marker no-op "xchgl %ebx, %ebx"
-        match = r_binaryinsn.match(line)
-        source = match.group(1)
-        target = match.group(2)
+        match = self.r_binaryinsn.match(line)
+        source = match.group("source")
+        target = match.group("target")
         if source == target:
             return []
         raise UnrecognizedOperation(line)
 
     def visit_call(self, line):
-        match = r_unaryinsn.match(line)
+        match = self.r_unaryinsn.match(line)
         if match is None:
-            assert r_unaryinsn_star.match(line)   # indirect call
+            assert self.r_unaryinsn_star.match(line)   # indirect call
         else:
             target = match.group(1)
             if target in FUNCTIONS_NOT_RETURNING:
@@ -682,6 +683,12 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     format = 'msvc'
 
     r_functionstart = re.compile(r"PUBLIC\t"+LABEL+"$")
+
+    OPERAND         =            r'(?:\w+|(?:DWORD PTR )?[_\w$]*\[[-+\w0-9]+\])'
+    r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
+    r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
+    r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<target>"+OPERAND+"),\s*(?P<source>"+OPERAND+")\s*(?:;.+)?$")
+
     r_jump          = re.compile(r"\tj\w+\s+(?:SHORT )?"+LABEL+"\s*$")
 
     def __init__(self, lines, filetag=0):
@@ -691,8 +698,8 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
             funcname, lines, filetag)
 
     for name in '''
-        push mov
-        xor sub
+        push pop mov lea
+        xor sub add
         '''.split():
         locals()['visit_' + name] = getattr(FunctionGcRootTracker,
                                             'visit_' + name + 'l')
