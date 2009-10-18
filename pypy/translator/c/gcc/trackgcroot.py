@@ -33,7 +33,6 @@ r_label         = re.compile(LABEL+"[:]\s*$")
 r_globl         = re.compile(r"\t[.]globl\t"+LABEL+"\s*$")
 r_globllabel    = re.compile(LABEL+r"=[.][+]%d\s*$"%OFFSET_LABELS)
 r_insn          = re.compile(r"\t([a-z]\w*)\s")
-r_jump          = re.compile(r"\tj\w+\s+"+LABEL+"\s*$")
 OPERAND         =           r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
 r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
 r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
@@ -52,6 +51,8 @@ r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
 r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
 
 class FunctionGcRootTracker(object):
+
+    r_jump          = re.compile(r"\tj\w+\s+"+LABEL+"\s*$")
 
     def __init__(self, funcname, lines, filetag=0):
         self.funcname = funcname
@@ -585,7 +586,7 @@ class FunctionGcRootTracker(object):
         self.labels[label].previous_insns.append(self.insns[-1])
 
     def conditional_jump(self, line):
-        match = r_jump.match(line)
+        match = self.r_jump.match(line)
         if not match:
             raise UnrecognizedOperation(line)
         label = match.group(1)
@@ -676,6 +677,25 @@ class DarwinFunctionGcRootTracker(FunctionGcRootTracker):
 
 class Mingw32FunctionGcRootTracker(DarwinFunctionGcRootTracker):
     format = 'mingw32'
+
+class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
+    format = 'msvc'
+
+    r_functionstart = re.compile(r"PUBLIC\t"+LABEL+"$")
+    r_jump          = re.compile(r"\tj\w+\s+(?:SHORT )?"+LABEL+"\s*$")
+
+    def __init__(self, lines, filetag=0):
+        match = self.r_functionstart.match(lines[0])
+        funcname = match.group(1)
+        super(MsvcFunctionGcRootTracker, self).__init__(
+            funcname, lines, filetag)
+
+    for name in '''
+        push mov
+        xor sub
+        '''.split():
+        locals()['visit_' + name] = getattr(FunctionGcRootTracker,
+                                            'visit_' + name + 'l')
 
 class AssemblerParser(object):
     def __init__(self, verbose=0, shuffle=False):
@@ -795,10 +815,15 @@ class Mingw32AssemblerParser(DarwinAssemblerParser):
         if functionlines:
             yield in_function, functionlines
 
+class MsvcAssemblerParser(AssemblerParser):
+    format = "msvc"
+    FunctionGcRootTracker = MsvcFunctionGcRootTracker
+
 PARSERS = {
     'elf': ElfAssemblerParser,
     'darwin': DarwinAssemblerParser,
     'mingw32': Mingw32AssemblerParser,
+    'msvc': MsvcAssemblerParser,
     }
 
 class GcRootTracker(object):
