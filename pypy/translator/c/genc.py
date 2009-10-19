@@ -505,7 +505,7 @@ class CStandaloneBuilder(CBuilder):
                 mk.definition('OBJECTS', '$(ASMLBLOBJFILES) gcmaptable.obj')
                 mk.rule('.SUFFIXES', '.s', [])
                 mk.rule('.s.obj', '',
-                        'ml $(CFLAGS) /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
+                        'ml /Cx /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
                 mk.rule('.c.gcmap', '',
                         ['$(CC) $(CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
                          'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $*.s > $@']
