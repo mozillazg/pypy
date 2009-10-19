@@ -27,6 +27,7 @@ else:
 
 implements_inaccessible = llarena_impl.implements_inaccessible
 getpagesize = llarena_impl.getpagesize
+OutOfMemoryError = llarena_impl.OutOfMemoryError
 
 register_external(arena_malloc, [int, int], llmemory.Address,
                   'll_arena.arena_malloc',
