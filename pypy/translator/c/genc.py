@@ -493,7 +493,6 @@ class CStandaloneBuilder(CBuilder):
             mk.definition('ASMLBLFILES', lblsfiles)
             mk.definition('GCMAPFILES', gcmapfiles)
             mk.definition('DEBUGFLAGS', '-O2 -fomit-frame-pointer -g')
-            mk.definition('OBJECTS', '$(ASMLBLFILES) gcmaptable.s')
 
             if sys.platform == 'win32':
                 python = sys.executable.replace('\\', '/') + ' '
@@ -501,13 +500,20 @@ class CStandaloneBuilder(CBuilder):
                 python = ''
 
             if self.translator.platform.name == 'msvc':
+                lblofiles = ['%s.lbl.obj' % (cfile[:-2],) for cfile in mk.cfiles]
+                mk.definition('ASMLBLOBJFILES', lblofiles)
+                mk.definition('OBJECTS', '$(ASMLBLOBJFILES) gcmaptable.obj')
+                mk.rule('.SUFFIXES', '.s')
+                mk.rule('.s.obj', '',
+                        'c:\masm32\bin\ml $(CFLAGS) /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
                 mk.rule('.c.gcmap', '',
                         ['$(CC) $(CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
-                         python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $*.s > $@']
+                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $*.s > $@']
                         )
                 mk.rule('gcmaptable.s', '$(GCMAPFILES)',
-                        python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
+                        'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
             else:
+                mk.definition('OBJECTS', '$(ASMLBLFILES) gcmaptable.s')
                 mk.rule('%.s', '%.c', '$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)')
                 mk.rule('%.lbl.s %.gcmap', '%.s',
                         python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $*.gcmap')
