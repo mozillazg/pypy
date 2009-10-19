@@ -12,12 +12,12 @@ implements_inaccessible = True
 # ____________________________________________________________
 
 class CConfig:
-    _compilation_info_ = ExternalCompilationInfo(
+    _compilation_info_ = rffi_platform.ExternalCompilationInfo(
         includes=['windows.h'])
 
-        SYSTEM_INFO = rffi_platform.Struct(
-            'SYSTEM_INFO', [
-                ("dwPageSize", DWORD),
+    SYSTEM_INFO = rffi_platform.Struct(
+        'SYSTEM_INFO', [
+            ("dwPageSize", DWORD),
             ])
 
 config = rffi_platform.configure(CConfig)
