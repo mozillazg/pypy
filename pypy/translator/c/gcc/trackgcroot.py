@@ -48,12 +48,13 @@ r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
 
 class FunctionGcRootTracker(object):
 
-    OPERAND         =            r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
-    r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
-    r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
-    r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<source>"+OPERAND+"),\s*(?P<target>"+OPERAND+")\s*$")
+    @classmethod
+    def init_regexp(cls):
+        cls.r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+cls.OPERAND+")\s*$")
+        cls.r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+cls.OPERAND+")\s*$")
+        cls.r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<source>"+cls.OPERAND+"),\s*(?P<target>"+cls.OPERAND+")\s*$")
 
-    r_jump          = re.compile(r"\tj\w+\s+"+LABEL+"\s*$")
+        cls.r_jump          = re.compile(r"\tj\w+\s+"+cls.LABEL+"\s*$")
 
     def __init__(self, funcname, lines, filetag=0):
         self.funcname = funcname
@@ -158,6 +159,7 @@ class FunctionGcRootTracker(object):
                     except AttributeError:
                         self.find_missing_visit_method(opname)
                         meth = getattr(self, 'visit_' + opname)
+                    line = line.rsplit(';', 1)[0]
                     insn = meth(line)
             elif r_gcroot_marker.match(line):
                 insn = self._visit_gcroot_marker(line)
@@ -374,12 +376,12 @@ class FunctionGcRootTracker(object):
         match = self.r_binaryinsn.match(line)
         source = match.group("source")
         target = match.group("target")
-        if target == '%esp':
-            count = match.group(1)
-            if not count.startswith('$'):
+        if target == self.ESP:
+            count = self.extract_immediate(source)
+            if count is None:
                 # strange instruction - I've seen 'subl %eax, %esp'
                 return InsnCannotFollowEsp()
-            return InsnStackAdjust(sign * int(count[1:]))
+            return InsnStackAdjust(sign * count)
         elif self.r_localvar.match(target):
             return InsnSetLocal(target, [source, target])
         else:
@@ -404,7 +406,7 @@ class FunctionGcRootTracker(object):
         target = match.group("target")
         if self.r_localvar.match(target):
             return InsnSetLocal(target, [source])
-        elif target == '%esp':
+        elif target == self.ESP:
             raise UnrecognizedOperation(line)
         else:
             return []
@@ -431,7 +433,7 @@ class FunctionGcRootTracker(object):
     def visit_andl(self, line):
         match = self.r_binaryinsn.match(line)
         target = match.group("target")
-        if target == '%esp':
+        if target == self.ESP:
             # only for  andl $-16, %esp  used to align the stack in main().
             # The exact amount of adjutment is not known yet, so we use
             # an odd-valued estimate to make sure the real value is not used
@@ -443,7 +445,7 @@ class FunctionGcRootTracker(object):
     def visit_leal(self, line):
         match = self.r_binaryinsn.match(line)
         target = match.group("target")
-        if target == '%esp':
+        if target == self.ESP:
             # only for  leal -12(%ebp), %esp  in function epilogues
             source = match.group("source")
             match = r_localvar_ebp.match(source)
@@ -465,7 +467,7 @@ class FunctionGcRootTracker(object):
             return self.binary_insn(line)
 
     def insns_for_copy(self, source, target):
-        if source == '%esp' or target == '%esp':
+        if source == self.ESP or target == self.ESP:
             raise UnrecognizedOperation('%s -> %s' % (source, target))
         elif self.r_localvar.match(target):
             if self.r_localvar.match(source):
@@ -479,9 +481,9 @@ class FunctionGcRootTracker(object):
         match = self.r_binaryinsn.match(line)
         source = match.group("source")
         target = match.group("target")
-        if source == '%esp' and target == '%ebp':
+        if source == self.ESP and target == '%ebp':
             return self._visit_prologue()
-        elif source == '%ebp' and target == '%esp':
+        elif source == '%ebp' and target == self.ESP:
             return self._visit_epilogue()
         return self.insns_for_copy(source, target)
 
@@ -658,6 +660,10 @@ class FunctionGcRootTracker(object):
 class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     format = 'elf'
 
+    ESP      = '%esp'
+    OPERAND  = r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
+    LABEL    = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
+
     def __init__(self, lines, filetag=0):
         match = r_functionstart_elf.match(lines[0])
         funcname = match.group(1)
@@ -667,14 +673,20 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
         super(ElfFunctionGcRootTracker, self).__init__(
             funcname, lines, filetag)
 
-class DarwinFunctionGcRootTracker(FunctionGcRootTracker):
+    def extract_immediate(self, value):
+        if not value.startswith('$'):
+            return None
+        return int(value[1:])
+
+ElfFunctionGcRootTracker.init_regexp()
+
+class DarwinFunctionGcRootTracker(ElfFunctionGcRootTracker):
     format = 'darwin'
 
     def __init__(self, lines, filetag=0):
         match = r_functionstart_darwin.match(lines[0])
         funcname = '_'+match.group(1)
-        super(DarwinFunctionGcRootTracker, self).__init__(
-            funcname, lines, filetag)
+        FunctionGcRootTracker.__init__(self, funcname, lines, filetag)
 
 class Mingw32FunctionGcRootTracker(DarwinFunctionGcRootTracker):
     format = 'mingw32'
@@ -684,12 +696,16 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
 
     r_functionstart = re.compile(r"PUBLIC\t"+LABEL+"$")
 
-    OPERAND         =            r'(?:\w+|(?:DWORD PTR )?[_\w$]*\[[-+\w0-9]+\])'
-    r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
-    r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
-    r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<target>"+OPERAND+"),\s*(?P<source>"+OPERAND+")\s*(?:;.+)?$")
+    ESP = 'esp'
 
-    r_jump          = re.compile(r"\tj\w+\s+(?:SHORT )?"+LABEL+"\s*$")
+    OPERAND  = r'(?:\w+|(?:DWORD PTR )?[_\w$]*\[[-+\w0-9]+\])'
+    LABEL    = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
+
+    @classmethod
+    def init_regexp(cls):
+        super(MsvcFunctionGcRootTracker, cls).init_regexp()
+        cls.r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<target>"+cls.OPERAND+"),\s*(?P<source>"+cls.OPERAND+")\s*(?:;.+)?$")
+        cls.r_jump = re.compile(r"\tj\w+\s+(?:SHORT )?"+LABEL+"\s*$")
 
     def __init__(self, lines, filetag=0):
         match = self.r_functionstart.match(lines[0])
@@ -703,6 +719,14 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
         '''.split():
         locals()['visit_' + name] = getattr(FunctionGcRootTracker,
                                             'visit_' + name + 'l')
+
+    def extract_immediate(self, value):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+
+MsvcFunctionGcRootTracker.init_regexp()
 
 class AssemblerParser(object):
     def __init__(self, verbose=0, shuffle=False):

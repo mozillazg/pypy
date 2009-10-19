@@ -126,7 +126,7 @@ r_expected = re.compile(r"\s*;;\s*expected\s+([{].+[}])")
 
 def check_computegcmaptable(format, path):
     print
-    print path.basename
+    print path.dirpath().basename + '/' + path.basename
     lines = path.readlines()
     expectedlines = lines[:]
     tracker = PARSERS[format].FunctionGcRootTracker(lines)
