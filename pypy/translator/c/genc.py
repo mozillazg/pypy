@@ -503,9 +503,9 @@ class CStandaloneBuilder(CBuilder):
                 lblofiles = ['%s.lbl.obj' % (cfile[:-2],) for cfile in mk.cfiles]
                 mk.definition('ASMLBLOBJFILES', lblofiles)
                 mk.definition('OBJECTS', '$(ASMLBLOBJFILES) gcmaptable.obj')
-                mk.rule('.SUFFIXES', '.s')
+                mk.rule('.SUFFIXES', '.s', [])
                 mk.rule('.s.obj', '',
-                        'c:\masm32\bin\ml $(CFLAGS) /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
+                        'ml $(CFLAGS) /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
                 mk.rule('.c.gcmap', '',
                         ['$(CC) $(CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
                          'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $*.s > $@']

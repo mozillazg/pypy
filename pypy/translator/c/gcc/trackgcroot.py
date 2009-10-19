@@ -324,14 +324,18 @@ class FunctionGcRootTracker(object):
                     break
                 k += 1
             self.labels[label] = None
-            # These global symbols are not directly labels pointing to the
-            # code location because such global labels in the middle of
-            # functions confuse gdb.  Instead, we add to the global symbol's
-            # value a big constant, which is subtracted again when we need
-            # the original value for gcmaptable.s.  That's a hack.
-            self.lines.insert(call.lineno+1, '%s=.+%d\n' % (label,
-                                                            OFFSET_LABELS))
-            self.lines.insert(call.lineno+1, '\t.globl\t%s\n' % (label,))
+            if self.format == 'msvc':
+                self.lines.insert(call.lineno+1, '%s::\n' % (label,))
+                #self.lines.insert(call.lineno+1, 'PUBLIC\t%s\n' % (label,))
+            else:
+                # These global symbols are not directly labels pointing to the
+                # code location because such global labels in the middle of
+                # functions confuse gdb.  Instead, we add to the global symbol's
+                # value a big constant, which is subtracted again when we need
+                # the original value for gcmaptable.s.  That's a hack.
+                self.lines.insert(call.lineno+1, '%s=.+%d\n' % (label,
+                                                                OFFSET_LABELS))
+                self.lines.insert(call.lineno+1, '\t.globl\t%s\n' % (label,))
         call.global_label = label
 
     # ____________________________________________________________
