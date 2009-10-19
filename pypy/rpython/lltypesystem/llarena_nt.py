@@ -71,10 +71,10 @@ class VirtualAllocMemoryError(Exception):
     pass
 
 def _virtual_alloc(arena_addr, nbytes, flags, protect):
-    result = VirtualFree(arena_addr,
-                         rffi.cast(rffi.SIZE_T, nbytes),
-                         rffi.cast(DWORD, flags),
-                         rffi.cast(DWORD, protect))
+    result = VirtualAlloc(arena_addr,
+                          rffi.cast(rffi.SIZE_T, nbytes),
+                          rffi.cast(DWORD, flags),
+                          rffi.cast(DWORD, protect))
     if result == llmemory.NULL:
         raise VirtualAllocMemoryError
     return result
