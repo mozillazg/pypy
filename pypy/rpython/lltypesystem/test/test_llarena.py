@@ -5,13 +5,19 @@ from pypy.rpython.lltypesystem.llarena import arena_malloc, arena_reset
 from pypy.rpython.lltypesystem.llarena import arena_reserve, arena_free
 from pypy.rpython.lltypesystem.llarena import round_up_for_allocation
 from pypy.rpython.lltypesystem.llarena import ArenaError, arena_new_view
+from pypy.rpython.lltypesystem.llarena import Z_DONT_CLEAR
+from pypy.rpython.lltypesystem.llarena import Z_CLEAR_LARGE_AREA
+from pypy.rpython.lltypesystem.llarena import Z_CLEAR_SMALL_AREA
+from pypy.rpython.lltypesystem.llarena import Z_INACCESSIBLE
+from pypy.rpython.lltypesystem.llarena import Z_ACCESSIBLE
+from pypy.rpython.lltypesystem.llarena import InaccessibleArenaError
 
 def test_arena():
     S = lltype.Struct('S', ('x',lltype.Signed))
     SPTR = lltype.Ptr(S)
     ssize = llmemory.raw_malloc_usage(llmemory.sizeof(S))
     myarenasize = 2*ssize+1
-    a = arena_malloc(myarenasize, False)
+    a = arena_malloc(myarenasize, Z_DONT_CLEAR)
     assert a != llmemory.NULL
     assert a + 3 != llmemory.NULL
 
@@ -51,7 +57,7 @@ def test_arena():
     py.test.raises(ArenaError, arena_reserve, a+2*ssize+1, llmemory.sizeof(S),
                    False)
 
-    arena_reset(a, myarenasize, True)
+    arena_reset(a, myarenasize, Z_CLEAR_LARGE_AREA)
     py.test.raises(ArenaError, cast_adr_to_ptr, a, SPTR)
     arena_reserve(a, llmemory.sizeof(S))
     s1_ptr1 = cast_adr_to_ptr(a, SPTR)
@@ -100,12 +106,12 @@ def eq(x, y):
 
 
 def test_address_order():
-    a = arena_malloc(24, False)
+    a = arena_malloc(24, Z_DONT_CLEAR)
     assert eq(a, a)
     assert lt(a, a+1)
     assert lt(a+5, a+20)
 
-    b = arena_malloc(24, False)
+    b = arena_malloc(24, Z_DONT_CLEAR)
     if a > b:
         a, b = b, a
     assert lt(a, b)
@@ -137,28 +143,28 @@ precomputed_size = round_up_for_allocation(llmemory.sizeof(SX))
 def test_look_inside_object():
     # this code is also used in translation tests below
     myarenasize = 50
-    a = arena_malloc(myarenasize, False)
+    a = arena_malloc(myarenasize, Z_DONT_CLEAR)
     b = a + round_up_for_allocation(llmemory.sizeof(lltype.Char))
     arena_reserve(b, precomputed_size)
     (b + llmemory.offsetof(SX, 'x')).signed[0] = 123
     assert llmemory.cast_adr_to_ptr(b, SPTR).x == 123
     llmemory.cast_adr_to_ptr(b, SPTR).x += 1
     assert (b + llmemory.offsetof(SX, 'x')).signed[0] == 124
-    arena_reset(a, myarenasize, True)
+    arena_reset(a, myarenasize, Z_CLEAR_LARGE_AREA)
     arena_reserve(b, round_up_for_allocation(llmemory.sizeof(SX)))
     assert llmemory.cast_adr_to_ptr(b, SPTR).x == 0
-    arena_free(a)
+    arena_free(a, myarenasize)
     return 42
 
 def test_arena_new_view():
-    a = arena_malloc(50, False)
+    a = arena_malloc(50, Z_DONT_CLEAR)
     arena_reserve(a, precomputed_size)
     # we can now allocate the same space in new view
     b = arena_new_view(a)
     arena_reserve(b, precomputed_size)
 
 def test_partial_arena_reset():
-    a = arena_malloc(72, False)
+    a = arena_malloc(72, Z_DONT_CLEAR)
     def reserve(i):
         b = a + i * llmemory.raw_malloc_usage(precomputed_size)
         arena_reserve(b, precomputed_size)
@@ -171,7 +177,8 @@ def test_partial_arena_reset():
         blist.append(b)
         plist.append(llmemory.cast_adr_to_ptr(b, SPTR))
     # clear blist[1] and blist[2] but not blist[0] nor blist[3]
-    arena_reset(blist[1], llmemory.raw_malloc_usage(precomputed_size)*2, False)
+    arena_reset(blist[1], llmemory.raw_malloc_usage(precomputed_size)*2,
+                Z_DONT_CLEAR)
     py.test.raises(RuntimeError, "plist[1].x")     # marked as freed
     py.test.raises(RuntimeError, "plist[2].x")     # marked as freed
     # re-reserve object at index 1 and 2
@@ -194,7 +201,8 @@ def test_partial_arena_reset():
     py.test.raises(lltype.UninitializedMemoryAccess,
           "(blist[2] + llmemory.offsetof(SX, 'x')).signed[0]")
     # clear and zero-fill the area over blist[0] and blist[1]
-    arena_reset(blist[0], llmemory.raw_malloc_usage(precomputed_size)*2, True)
+    arena_reset(blist[0], llmemory.raw_malloc_usage(precomputed_size)*2,
+                Z_CLEAR_LARGE_AREA)
     # re-reserve and check it's zero
     blist[0] = reserve(0)
     blist[1] = reserve(1)
@@ -205,7 +213,7 @@ def test_partial_arena_reset():
           "(blist[2] + llmemory.offsetof(SX, 'x')).signed[0]")
 
 def test_address_eq_as_int():
-    a = arena_malloc(50, False)
+    a = arena_malloc(50, Z_DONT_CLEAR)
     arena_reserve(a, precomputed_size)
     p = llmemory.cast_adr_to_ptr(a, SPTR)
     a1 = llmemory.cast_ptr_to_adr(p)
@@ -226,7 +234,7 @@ def test_replace_object_with_stub():
     size_gc_header = gcheaderbuilder.size_gc_header
     ssize = llmemory.raw_malloc_usage(llmemory.sizeof(S))
 
-    a = arena_malloc(13*ssize, True)
+    a = arena_malloc(13*ssize, Z_CLEAR_LARGE_AREA)
     hdraddr = a + 3*ssize
     arena_reserve(hdraddr, size_gc_header + llmemory.sizeof(S))
     hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(HDR))
@@ -236,7 +244,7 @@ def test_replace_object_with_stub():
     obj.z = -6
 
     hdraddr = llmemory.cast_ptr_to_adr(obj) - size_gc_header
-    arena_reset(hdraddr, size_gc_header + llmemory.sizeof(S), False)
+    arena_reset(hdraddr, size_gc_header + llmemory.sizeof(S), Z_DONT_CLEAR)
     arena_reserve(hdraddr, size_gc_header + llmemory.sizeof(STUB))
 
     # check that it possible to reach the newly reserved HDR+STUB
@@ -268,3 +276,78 @@ def test_compiled():
     fn = compile(test_look_inside_object, [])
     res = fn()
     assert res == 42
+
+def fn_protection(i):
+    #
+    a = arena_malloc(32768, Z_INACCESSIBLE)
+    if i == -1:
+        arena_reserve(a, llmemory.sizeof(SX))
+        s1 = cast_adr_to_ptr(a, SPTR)
+        s1.x = 5        # crash: memory is inaccessible
+        return 1
+    #
+    arena_reset(a, 16384, Z_ACCESSIBLE)
+    arena_reserve(a, llmemory.sizeof(SX))
+    s1 = cast_adr_to_ptr(a, SPTR)
+    assert s1.x == 0
+    s1.x = 42
+    #
+    arena_reset(a, 16384, Z_CLEAR_LARGE_AREA)
+    arena_reserve(a, llmemory.sizeof(SX))
+    s1 = cast_adr_to_ptr(a, SPTR)
+    assert s1.x == 0
+    s1.x = 43
+    #
+    arena_reset(a, 16384, Z_CLEAR_SMALL_AREA)
+    arena_reserve(a, llmemory.sizeof(SX))
+    s1 = cast_adr_to_ptr(a, SPTR)
+    assert s1.x == 0
+    s1.x = 44
+    #
+    if i == -2:
+        arena_reserve(a + 16384, llmemory.sizeof(SX))
+        s1 = cast_adr_to_ptr(a + 16384, SPTR)
+        s1.x = 5        # crash: memory is inaccessible
+        return 1
+    #
+    if i == -4:
+        arena_reset(a, 16384, Z_INACCESSIBLE)
+        arena_reserve(a, llmemory.sizeof(SX))
+        s1 = cast_adr_to_ptr(a, SPTR)
+        s1.x = 5        # crash if Z_INACCESSIBLE is correctly implemented
+        return 1
+    #
+    if i == -3:
+        arena_reset(a, 16384, Z_DONT_CLEAR)
+        arena_reserve(a, llmemory.sizeof(SX))
+        s1 = cast_adr_to_ptr(a, SPTR)
+        # crash when not translated: memory was reset but not cleared
+        print s1.x
+    #
+    arena_free(a, 32768)
+    return 0
+
+def test_protection():
+    res = fn_protection(0)
+    assert res == 0
+    py.test.raises(InaccessibleArenaError, fn_protection, -1)
+    py.test.raises(InaccessibleArenaError, fn_protection, -2)
+    py.test.raises(lltype.UninitializedMemoryAccess, fn_protection, -3)
+    py.test.raises(InaccessibleArenaError, fn_protection, -4)
+
+def test_compiled_protection():
+    from pypy.translator.interactive import Translation
+    def fn_wrap(argv):
+        return fn_protection(int(argv[1]))
+    t = Translation(fn_wrap, standalone=True)
+    t.disable(['backendopt'])
+    path = t.compile_c()
+    def run(n):
+        return py.process.cmdexec('%s %d' % (path, n))
+    run(0)
+    py.test.raises(py.error.Error, run, -1)   # segfault
+    py.test.raises(py.error.Error, run, -2)   # segfault
+    py.test.raises(py.error.Error, run, -4)   # segfault
+    res = run(-3)
+    # good enough, although it should ideally crash:
+    assert '44\n' in res
