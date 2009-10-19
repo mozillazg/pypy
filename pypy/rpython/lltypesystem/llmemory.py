@@ -474,8 +474,8 @@ class fakeaddress(object):
     def _fixup(self):
         if self.ptr is not None and self.ptr._was_freed():
             # hack to support llarena.test_replace_object_with_stub()
-            from pypy.rpython.lltypesystem import llarena
-            return llarena._getfakearenaaddress(self)
+            from pypy.rpython.lltypesystem import llarena_llinterp
+            return llarena_llinterp._getfakearenaaddress(self)
         else:
             return self
 
