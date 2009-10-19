@@ -294,8 +294,8 @@ class RoundedUpForAllocation(llmemory.AddressOffset):
 Z_DONT_CLEAR       = 0   # it's ok to keep random bytes in the area
 Z_CLEAR_LARGE_AREA = 1   # clear, optimized for a large area of memory
 Z_CLEAR_SMALL_AREA = 2   # clear, optimized for a small or medium area of mem
-Z_INACCESSIBLE     = 3   # make the memory inaccessible (not reserved)
-Z_ACCESSIBLE       = 4   # make the memory accessible again
+Z_INACCESSIBLE     = 3   # make the pages inaccessible (i.e. not reserved)
+Z_ACCESSIBLE       = 4   # make the pages accessible again
 
 # Note that Z_CLEAR_LARGE_AREA, Z_INACCESSIBLE and Z_ACCESSIBLE are
 # restricted to whole pages (at least one), and you must not try to make
