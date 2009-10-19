@@ -9,6 +9,12 @@ from pypy.rlib.rwin32 import DWORD, BOOL
 
 implements_inaccessible = True
 
+class OutOfMemoryError(Exception):
+    pass
+
+class VirtualFreeInternalError(Exception):
+    pass
+
 # ____________________________________________________________
 
 class CConfig:
@@ -76,7 +82,7 @@ def _virtual_alloc(arena_addr, nbytes, flags, protect):
                           rffi.cast(DWORD, flags),
                           rffi.cast(DWORD, protect))
     if result == llmemory.NULL:
-        raise VirtualAllocMemoryError
+        raise OutOfMemoryError
     return result
 
 def _virtual_free(arena_addr, nbytes, flags):
@@ -84,7 +90,7 @@ def _virtual_free(arena_addr, nbytes, flags):
                          rffi.cast(rffi.SIZE_T, nbytes),
                          rffi.cast(DWORD, flags))
     if rffi.cast(lltype.Signed, result) == 0:
-        raise VirtualAllocMemoryError
+        raise VirtualFreeInternalError
 
 def llimpl_arena_malloc(nbytes, zero):
     flAllocationType = MEM_RESERVE

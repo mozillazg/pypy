@@ -61,11 +61,9 @@ class SemiSpaceGC(MovingGCBase):
             self.program_start_time = time.time()
         self.tospace = llarena.arena_malloc(self.space_size,
                                             llarena.Z_CLEAR_LARGE_AREA)
-        ll_assert(bool(self.tospace), "couldn't allocate tospace")
         self.top_of_space = self.tospace + self.space_size
         self.fromspace = llarena.arena_malloc(self.space_size,
                                               llarena.Z_CLEAR_LARGE_AREA)
-        ll_assert(bool(self.fromspace), "couldn't allocate fromspace")
         self.free = self.tospace
         MovingGCBase.setup(self)
         self.objects_with_finalizers = self.AddressDeque()
@@ -155,8 +153,10 @@ class SemiSpaceGC(MovingGCBase):
         old_fromspace = self.fromspace
         oldsize = self.space_size
         newsize = self.space_size * 2
-        newspace = llarena.arena_malloc(newsize, llarena.Z_CLEAR_LARGE_AREA)
-        if not newspace:
+        try:
+            newspace = llarena.arena_malloc(newsize,
+                                            llarena.Z_CLEAR_LARGE_AREA)
+        except llarena.OutOfMemoryError:
             return False    # out of memory
         llarena.arena_free(old_fromspace, oldsize)
         self.fromspace = newspace
@@ -169,8 +169,10 @@ class SemiSpaceGC(MovingGCBase):
         # and self.fromspace is the old smaller space, now empty
         llarena.arena_free(self.fromspace, oldsize)
 
-        newspace = llarena.arena_malloc(newsize, llarena.Z_CLEAR_LARGE_AREA)
-        if not newspace:
+        try:
+            newspace = llarena.arena_malloc(newsize,
+                                            llarena.Z_CLEAR_LARGE_AREA)
+        except llarena.OutOfMemoryError:
             # Complex failure case: we have in self.tospace a big chunk
             # of memory, and the two smaller original spaces are already gone.
             # Unsure if it's worth these efforts, but we can artificially

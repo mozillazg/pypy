@@ -7,6 +7,12 @@ from pypy.rpython.lltypesystem.llarena_llinterp import Z_ACCESSIBLE
 
 implements_inaccessible = True
 
+class OutOfMemoryError(Exception):
+    pass
+
+class MMapInternalError(Exception):
+    pass
+
 # ____________________________________________________________
 
 posix_getpagesize = rffi.llexternal('getpagesize', [], rffi.INT,
@@ -122,9 +128,6 @@ posix_mprotect = rffi.llexternal('mprotect',
                                  rffi.INT,
                                  sandboxsafe=True, _nowrapper=True)
 
-class MMapMemoryError(Exception):
-    pass
-
 def llimpl_arena_malloc(nbytes, zero):
     flags = MAP_PRIVATE | MAP_ANONYMOUS
     if zero == Z_INACCESSIBLE:
@@ -140,20 +143,20 @@ def llimpl_arena_malloc(nbytes, zero):
                         rffi.cast(rffi.INT, -1),
                         rffi.cast(off_t, 0))
     if rffi.cast(lltype.Signed, result) == -1:
-        raise MMapMemoryError
+        raise OutOfMemoryError
     return result
 
 def llimpl_arena_free(arena_addr, nbytes):
     result = posix_munmap(arena_addr, rffi.cast(rffi.SIZE_T, nbytes))
     if rffi.cast(lltype.Signed, result) == -1:
-        raise MMapMemoryError
+        raise MMapInternalError
 
 def _arena_protect(arena_addr, size, flags):
     res = posix_mprotect(arena_addr,
                          rffi.cast(rffi.SIZE_T, size),
                          rffi.cast(rffi.INT, flags))
     if rffi.cast(lltype.Signed, res) != 0:
-        raise MMapMemoryError
+        raise OutOfMemoryError
 
 def llimpl_arena_reset(arena_addr, size, zero):
     if zero == Z_CLEAR_LARGE_AREA:
