@@ -1,11 +1,3 @@
-PUBLIC	_pypy_g_ll_join_strs__Signed_arrayPtr
-; Function compile flags: /Ogtpy
-;	COMDAT _pypy_g_ll_join_strs__Signed_arrayPtr
-_TEXT	SEGMENT
-_l_result_2$ = -8					; size = 4
-_l_v405$ = -4						; size = 4
-_l_num_items_0$ = 8					; size = 4
-_l_items_2$ = 12					; size = 4
 _pypy_g_ll_join_strs__Signed_arrayPtr PROC		; COMDAT
 
 ; 1457 : struct pypy_rpy_string0 *pypy_g_ll_join_strs__Signed_arrayPtr(long l_num_items_0, struct pypy_array0 *l_items_2) {
