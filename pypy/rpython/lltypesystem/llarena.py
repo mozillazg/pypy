@@ -19,8 +19,8 @@ from pypy.rpython.lltypesystem import rffi
 
 if os.name == 'posix':
     from pypy.rpython.lltypesystem import llarena_posix as llarena_impl
-#elif os.name == 'win32':
-#   ...
+elif os.name == 'nt':
+    from pypy.rpython.lltypesystem import llarena_nt as llarena_impl
 else:
     from pypy.rpython.lltypesystem import llarena_generic as llarena_impl
 
