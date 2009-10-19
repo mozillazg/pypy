@@ -902,9 +902,9 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
             s.append("abcd")
             s.append("defg")
             s.append("rty")
-            s.append_multiple_char('y', 1000)
+            s.append_multiple_char('z', 1000)
             gc.collect()
-            s.append_multiple_char('y', 1000)
+            s.append_multiple_char('u', 1000)
             res = s.build()
             gc.collect()
             return res
@@ -912,7 +912,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
 
     def test_string_builder_over_allocation(self):
         res = self.run('string_builder_over_allocation')
-        assert res[1000] == 'y'
+        assert res == 'abcddefgrty' * 1000*'z' + 1000*'u'
 
 class TestGenerationalGC(TestSemiSpaceGC):
     gcpolicy = "generation"
