@@ -1216,9 +1216,10 @@ class _ptr(_abstract_ptr):
         if isinstance(self._T, FuncType):
             return llmemory.fakeaddress(self)
         elif self._was_freed():
-            # hack to support llarena.test_replace_object_with_stub()
-            from pypy.rpython.lltypesystem import llarena
-            return llarena._oldobj_to_address(self._getobj(check=False))
+            # hack to support test_llarena.test_replace_object_with_stub()
+            from pypy.rpython.lltypesystem import llarena_llinterp
+            return llarena_llinterp._oldobj_to_address(
+                self._getobj(check=False))
         elif isinstance(self._obj, _subarray):
             return llmemory.fakeaddress(self)
 ##            # return an address built as an offset in the whole array

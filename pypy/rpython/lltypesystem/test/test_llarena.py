@@ -11,6 +11,7 @@ from pypy.rpython.lltypesystem.llarena import Z_CLEAR_SMALL_AREA
 from pypy.rpython.lltypesystem.llarena import Z_INACCESSIBLE
 from pypy.rpython.lltypesystem.llarena import Z_ACCESSIBLE
 from pypy.rpython.lltypesystem.llarena import InaccessibleArenaError
+from pypy.rpython.lltypesystem.llarena import implements_inaccessible
 
 def test_arena():
     S = lltype.Struct('S', ('x',lltype.Signed))
@@ -345,9 +346,10 @@ def test_compiled_protection():
     def run(n):
         return py.process.cmdexec('%s %d' % (path, n))
     run(0)
-    py.test.raises(py.error.Error, run, -1)   # segfault
-    py.test.raises(py.error.Error, run, -2)   # segfault
-    py.test.raises(py.error.Error, run, -4)   # segfault
+    if implements_inaccessible:
+        py.test.raises(py.error.Error, run, -1)   # segfault
+        py.test.raises(py.error.Error, run, -2)   # segfault
+        py.test.raises(py.error.Error, run, -4)   # segfault
     res = run(-3)
     # good enough, although it should ideally crash:
     assert '44\n' in res
