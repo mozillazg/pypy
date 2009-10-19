@@ -13,6 +13,9 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 class ArenaError(Exception):
     pass
 
+class InaccessibleArenaError(ArenaError):
+    pass
+
 class Arena(object):
     object_arena_location = {}     # {container: (arena, offset)}
     old_object_arena_location = weakref.WeakKeyDictionary()
@@ -44,10 +47,24 @@ class Arena(object):
                 del self.objectptrs[offset]
                 del self.objectsizes[offset]
                 obj._free()
-        if zero:
+        if zero == Z_DONT_CLEAR:
+            initialbyte = "#"
+        elif zero in (Z_CLEAR_LARGE_AREA, Z_CLEAR_SMALL_AREA):
+            initialbyte = "0"
+        elif zero == Z_INACCESSIBLE:
+            prev  = self.usagemap[start:stop].tostring()
+            assert '!' not in prev, (
+                "Z_INACCESSIBLE must be called only on a "
+                "previously-accessible memory range")
+            initialbyte = "!"
+        elif zero == Z_ACCESSIBLE:
+            prev  = self.usagemap[start:stop].tostring()
+            assert prev == '!'*len(prev), (
+                "Z_ACCESSIBLE must be called only on a "
+                "previously-inaccessible memory range")
             initialbyte = "0"
         else:
-            initialbyte = "#"
+            raise ValueError("argument 'zero' got bogus value %r" % (zero,))
         self.usagemap[start:stop] = array.array('c', initialbyte*(stop-start))
 
     def check(self):
@@ -74,6 +91,8 @@ class Arena(object):
                 pass
             elif c == '#':
                 zero = False
+            elif c == '!':
+                raise InaccessibleArenaError
             else:
                 raise ArenaError("new object overlaps a previous object")
         assert offset not in self.objectptrs
@@ -269,27 +288,39 @@ class RoundedUpForAllocation(llmemory.AddressOffset):
 # work with fakearenaaddresses on which arbitrary arithmetic is
 # possible even on top of the llinterpreter.
 
-# arena_new_view(ptr) is a no-op when translated, returns fresh view
-# on previous arena when run on top of llinterp
+# arena_malloc() and arena_reset() take as argument one of the
+# following values:
+
+Z_DONT_CLEAR       = 0   # it's ok to keep random bytes in the area
+Z_CLEAR_LARGE_AREA = 1   # clear, optimized for a large area of memory
+Z_CLEAR_SMALL_AREA = 2   # clear, optimized for a small or medium area of mem
+Z_INACCESSIBLE     = 3   # make the memory inaccessible (not reserved)
+Z_ACCESSIBLE       = 4   # make the memory accessible again
+
+# Note that Z_INACCESSIBLE and Z_ACCESSIBLE are restricted to whole
+# pages, and you must not try to make inaccessible pages that are already
+# inaccessible, nor make accessible pages that are already accessible.
+# When they go through the Z_INACCESSIBLE-Z_ACCESSIBLE trip, pages are
+# cleared.
 
 def arena_malloc(nbytes, zero):
-    """Allocate and return a new arena, optionally zero-initialized."""
+    """Allocate and return a new arena, optionally zero-initialized.
+    The value of 'zero' is one the Z_xxx values.
+    """
     return Arena(nbytes, zero).getaddr(0)
 
-def arena_free(arena_addr):
+def arena_free(arena_addr, nbytes):
     """Release an arena."""
     assert isinstance(arena_addr, fakearenaaddress)
     assert arena_addr.offset == 0
-    arena_addr.arena.reset(False)
+    assert nbytes == arena_addr.arena.nbytes
+    arena_addr.arena.reset(Z_DONT_CLEAR)
     arena_addr.arena.freed = True
 
 def arena_reset(arena_addr, size, zero):
     """Free all objects in the arena, which can then be reused.
     This can also be used on a subrange of the arena.
-    The value of 'zero' is:
-      * 0: don't fill the area with zeroes
-      * 1: clear, optimized for a very large area of memory
-      * 2: clear, optimized for a small or medium area of memory
+    The value of 'zero' is one of the Z_xxx values.
     """
     arena_addr = _getfakearenaaddress(arena_addr)
     arena_addr.arena.reset(zero, arena_addr.offset, size)
@@ -316,7 +347,8 @@ def _round_up_for_allocation(size, minsize):    # internal
     return RoundedUpForAllocation(size, minsize)
 
 def arena_new_view(ptr):
-    """Return a fresh memory view on an arena
+    """This is a no-op when translated, returns fresh view
+    on previous arena when run on top of llinterp.
     """
     return Arena(ptr.arena.nbytes, False).getaddr(0)
 
@@ -331,6 +363,31 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.extfunc import register_external
 from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
+# ---------- getting the page size ----------
+
+if os.name == 'posix':
+    posix_getpagesize = rffi.llexternal('getpagesize', [], rffi.INT,
+                                        sandboxsafe=True, _nowrapper=True)
+    class PosixPageSize:
+        def __init__(self):
+            self.pagesize = 0
+        _freeze_ = __init__
+    posix_pagesize = PosixPageSize()
+
+    def getpagesize():
+        pagesize = posix_pagesize.pagesize
+        if pagesize == 0:
+            pagesize = rffi.cast(lltype.Signed, posix_getpagesize())
+            posix_pagesize.pagesize = pagesize
+        return pagesize
+
+else:
+    # XXX a random value, but nothing really depends on it
+    def getpagesize():
+        return 4096
+
+# ---------- clearing a large range of memory ----------
+
 if sys.platform == 'linux2':
     # This only works with linux's madvise(), which is really not a memory
     # usage hint but a real command.  It guarantees that after MADV_DONTNEED
@@ -342,20 +399,9 @@ if sys.platform == 'linux2':
                                     [llmemory.Address, rffi.SIZE_T, rffi.INT],
                                     rffi.INT,
                                     sandboxsafe=True, _nowrapper=True)
-    linux_getpagesize = rffi.llexternal('getpagesize', [], rffi.INT,
-                                        sandboxsafe=True, _nowrapper=True)
-
-    class LinuxPageSize:
-        def __init__(self):
-            self.pagesize = 0
-        _freeze_ = __init__
-    linuxpagesize = LinuxPageSize()
 
     def clear_large_memory_chunk(baseaddr, size):
-        pagesize = linuxpagesize.pagesize
-        if pagesize == 0:
-            pagesize = rffi.cast(lltype.Signed, linux_getpagesize())
-            linuxpagesize.pagesize = pagesize
+        pagesize = getpagesize()
         if size > 2 * pagesize:
             lowbits = rffi.cast(lltype.Signed, baseaddr) & (pagesize - 1)
             if lowbits:     # clear the initial misaligned part, if any
@@ -421,31 +467,119 @@ else:
     # them immediately.
     clear_large_memory_chunk = llmemory.raw_memclear
 
+# ---------- platform-specific version of llimpl_arena_* ----------
 
-def llimpl_arena_malloc(nbytes, zero):
-    addr = llmemory.raw_malloc(nbytes)
-    if zero and bool(addr):
-        clear_large_memory_chunk(addr, nbytes)
-    return addr
-register_external(arena_malloc, [int, bool], llmemory.Address,
+if os.name == 'posix':
+    # llimpl_arena_*() functions based on mmap
+    from pypy.rpython.tool import rffi_platform
+    from pypy.translator.tool.cbuild import ExternalCompilationInfo
+    class CConfig:
+        _compilation_info_ = ExternalCompilationInfo(
+            includes=['sys/mman.h'])
+        off_t = rffi_platform.SimpleType('off_t')
+        PROT_NONE     = rffi_platform.ConstantInteger('PROT_NONE')
+        PROT_READ     = rffi_platform.ConstantInteger('PROT_READ')
+        PROT_WRITE    = rffi_platform.ConstantInteger('PROT_WRITE')
+        MAP_PRIVATE   = rffi_platform.ConstantInteger('MAP_PRIVATE')
+        MAP_ANON      = rffi_platform.DefinedConstantInteger('MAP_ANON')
+        MAP_ANONYMOUS = rffi_platform.DefinedConstantInteger('MAP_ANONYMOUS')
+        MAP_NORESERVE = rffi_platform.DefinedConstantInteger('MAP_NORESERVE')
+    globals().update(rffi_platform.configure(CConfig))
+    if MAP_ANONYMOUS is None:
+        MAP_ANONYMOUS = MAP_ANON
+        assert MAP_ANONYMOUS is not None
+    del MAP_ANON
+
+    posix_mmap = rffi.llexternal('mmap',
+                                 [llmemory.Address, rffi.SIZE_T, rffi.INT,
+                                  rffi.INT, rffi.INT, off_t],
+                                 llmemory.Address,
+                                 sandboxsafe=True, _nowrapper=True)
+    posix_munmap = rffi.llexternal('munmap',
+                                   [llmemory.Address, rffi.SIZE_T],
+                                   rffi.INT,
+                                   sandboxsafe=True, _nowrapper=True)
+    posix_mprotect = rffi.llexternal('mprotect',
+                                     [llmemory.Address, rffi.SIZE_T,
+                                      rffi.INT],
+                                     rffi.INT,
+                                     sandboxsafe=True, _nowrapper=True)
+
+    class MMapMemoryError(Exception):
+        pass
+
+    def llimpl_arena_malloc(nbytes, zero):
+        flags = MAP_PRIVATE | MAP_ANONYMOUS
+        if zero == Z_INACCESSIBLE:
+            prot = PROT_NONE
+            if MAP_NORESERVE is not None:
+                flags |= MAP_NORESERVE
+        else:
+            prot = PROT_READ | PROT_WRITE
+        result = posix_mmap(llmemory.NULL,
+                            rffi.cast(rffi.SIZE_T, nbytes),
+                            rffi.cast(rffi.INT, prot),
+                            rffi.cast(rffi.INT, flags),
+                            rffi.cast(rffi.INT, -1),
+                            rffi.cast(off_t, 0))
+        if rffi.cast(lltype.Signed, result) == -1:
+            raise MMapMemoryError
+        return result
+
+    def llimpl_arena_free(arena_addr, nbytes):
+        result = posix_munmap(arena_addr, rffi.cast(rffi.SIZE_T, nbytes))
+        if rffi.cast(lltype.Signed, result) == -1:
+            raise MMapMemoryError
+
+    def _arena_protect(arena_addr, size, flags):
+        res = posix_mprotect(arena_addr,
+                             rffi.cast(rffi.SIZE_T, size),
+                             rffi.cast(rffi.INT, flags))
+        if rffi.cast(lltype.Signed, res) != 0:
+            raise MMapMemoryError
+
+    def llimpl_arena_reset(arena_addr, size, zero):
+        if zero == Z_CLEAR_LARGE_AREA:
+            clear_large_memory_chunk(arena_addr, size)
+        elif zero == Z_CLEAR_SMALL_AREA:
+            llmemory.raw_memclear(arena_addr, size)
+        elif zero == Z_ACCESSIBLE:
+            _arena_protect(arena_addr, size, PROT_READ | PROT_WRITE)
+        elif zero == Z_INACCESSIBLE:
+            clear_large_memory_chunk(arena_addr, size)
+            _arena_protect(arena_addr, size, PROT_NONE)
+
+else:
+    # llimpl_arena_*() functions based on raw_malloc
+    def llimpl_arena_malloc(nbytes, zero):
+        addr = llmemory.raw_malloc(nbytes)
+        if zero in (Z_CLEAR_LARGE_AREA, Z_CLEAR_SMALL_AREA) and bool(addr):
+            clear_large_memory_chunk(addr, nbytes)
+        return addr
+
+    def llimpl_arena_free(arena_addr, nbytes):
+        llmemory.raw_free(arena_addr)
+
+    def llimpl_arena_reset(arena_addr, size, zero):
+        if zero in (Z_CLEAR_LARGE_AREA, Z_INACCESSIBLE):
+            clear_large_memory_chunk(arena_addr, size)
+        elif zero == Z_CLEAR_SMALL_AREA:
+            llmemory.raw_memclear(arena_addr, size)
+
+# ----------
+
+register_external(arena_malloc, [int, int], llmemory.Address,
                   'll_arena.arena_malloc',
                   llimpl=llimpl_arena_malloc,
                   llfakeimpl=arena_malloc,
                   sandboxsafe=True)
 
-def llimpl_arena_free(arena_addr):
-    llmemory.raw_free(arena_addr)
-register_external(arena_free, [llmemory.Address], None, 'll_arena.arena_free',
+register_external(arena_free, [llmemory.Address, int], None,
+                  'll_arena.arena_free',
                   llimpl=llimpl_arena_free,
                   llfakeimpl=arena_free,
                   sandboxsafe=True)
 
-def llimpl_arena_reset(arena_addr, size, zero):
-    if zero:
-        if zero == 1:
-            clear_large_memory_chunk(arena_addr, size)
-        else:
-            llmemory.raw_memclear(arena_addr, size)
 register_external(arena_reset, [llmemory.Address, int, int], None,
                   'll_arena.arena_reset',
                   llimpl=llimpl_arena_reset,
