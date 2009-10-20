@@ -1105,7 +1105,7 @@ class MetaInterpGlobalData(object):
             _jitcell_dict = {}
             def jit_cell_at_key(greenkey):
                 greenkey = tuple(greenkey)
-                return _jitcell_dict.setdefaut(greenkey, JitCell())
+                return _jitcell_dict.setdefault(greenkey, JitCell())
             self.jit_cell_at_key = jit_cell_at_key
         if staticdata.virtualizable_info:
             self.blackhole_virtualizable = staticdata.virtualizable_info.null_vable
