@@ -505,13 +505,13 @@ class CStandaloneBuilder(CBuilder):
                 mk.definition('OBJECTS', 'gcmaptable.obj $(ASMLBLOBJFILES)')
                 mk.rule('.SUFFIXES', '.s', [])
                 mk.rule('.s.obj', '',
-                        'cmd /c $(MASM) /nologo /Cx /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
+                        'cmd /c $(MASM) /nologo /Cx /Cp /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
                 mk.rule('.c.gcmap', '',
                         ['$(CC) /nologo $(CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
-                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $*.s > $@']
+                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc -t $*.s > $@']
                         )
                 mk.rule('gcmaptable.s', '$(GCMAPFILES)',
-                        'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
+                        'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc $(GCMAPFILES) > $@')
             else:
                 mk.definition('OBJECTS', '$(ASMLBLFILES) gcmaptable.s')
                 mk.rule('%.s', '%.c', '$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)')

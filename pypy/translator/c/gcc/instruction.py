@@ -10,6 +10,7 @@ LOC_MASK      = 0x03
 REG2LOC = {}
 for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS):
     REG2LOC[_reg] = LOC_REG | (_i<<2)
+    REG2LOC[_reg[1:]] = LOC_REG | (_i<<2)
 
 def frameloc(base, offset):
     assert base in (LOC_EBP_BASED, LOC_ESP_BASED)

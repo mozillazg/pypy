@@ -34,16 +34,10 @@ r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
 r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
 r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
 r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|\t\.align|"+LABEL)
-LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
-LOCALVARFP      = LOCALVAR + r"|-?\d*[(]%ebp[)]"
-r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
 r_bottom_marker = re.compile(r"\t/[*] GC_STACK_BOTTOM [*]/")
-r_localvarnofp  = re.compile(LOCALVAR)
-r_localvarfp    = re.compile(LOCALVARFP)
-r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
-r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
 
 class FunctionGcRootTracker(object):
+    skip = 0
 
     @classmethod
     def init_regexp(cls):
@@ -57,7 +51,7 @@ class FunctionGcRootTracker(object):
         self.funcname = funcname
         self.lines = lines
         self.uses_frame_pointer = False
-        self.r_localvar = r_localvarnofp
+        self.r_localvar = self.r_localvarnofp
         self.filetag = filetag
         # a "stack bottom" function is either main() or a callback from C code
         self.is_stack_bottom = False
@@ -76,6 +70,9 @@ class FunctionGcRootTracker(object):
             if verbose > 2:
                 self.dump()
         return self.gettable()
+
+    def replace_symbols(self, operand):
+        return operand
 
     def gettable(self):
         """Returns a list [(label_after_call, callshape_tuple)]
@@ -145,6 +142,8 @@ class FunctionGcRootTracker(object):
         self.insns = [InsnFunctionStart()]
         ignore_insns = False
         for lineno, line in enumerate(self.lines):
+            if lineno < self.skip:
+                continue
             self.currentlineno = lineno
             insn = []
             match = r_insn.match(line)
@@ -158,7 +157,7 @@ class FunctionGcRootTracker(object):
                         meth = getattr(self, 'visit_' + opname)
                     line = line.rsplit(';', 1)[0]
                     insn = meth(line)
-            elif r_gcroot_marker.match(line):
+            elif self.r_gcroot_marker.match(line):
                 insn = self._visit_gcroot_marker(line)
             elif r_bottom_marker.match(line):
                 self.is_stack_bottom = True
@@ -235,18 +234,20 @@ class FunctionGcRootTracker(object):
             elif isinstance(localvar, (list, tuple)):
                 return [fixvar(var) for var in localvar]
 
-            match = r_localvar_esp.match(localvar)
+            match = self.r_localvar_esp.match(localvar)
             if match:
-                if localvar == '0(%esp)': # for pushl and popl, by
-                    hint = None           # default ebp addressing is
-                else:                     # a bit nicer
+                if localvar == self.TOP_OF_STACK: # for pushl and popl, by
+                    hint = None                   # default ebp addressing is
+                else:                             # a bit nicer
                     hint = 'esp'
                 ofs_from_esp = int(match.group(1) or '0')
+                if self.format == 'msvc':
+                    ofs_from_esp += int(match.group(2) or '0')
                 localvar = ofs_from_esp - insn.framesize
                 assert localvar != 0    # that's the return address
                 return LocalVar(localvar, hint=hint)
             elif self.uses_frame_pointer:
-                match = r_localvar_ebp.match(localvar)
+                match = self.r_localvar_ebp.match(localvar)
                 if match:
                     ofs_from_ebp = int(match.group(1) or '0')
                     localvar = ofs_from_ebp - 4
@@ -341,9 +342,9 @@ class FunctionGcRootTracker(object):
     # ____________________________________________________________
 
     def _visit_gcroot_marker(self, line):
-        match = r_gcroot_marker.match(line)
+        match = self.r_gcroot_marker.match(line)
         loc = match.group(1)
-        return InsnGCROOT(loc)
+        return InsnGCROOT(self.replace_symbols(loc))
 
     def visit_nop(self, line):
         return []
@@ -449,7 +450,7 @@ class FunctionGcRootTracker(object):
         if target == self.ESP:
             # only for  leal -12(%ebp), %esp  in function epilogues
             source = match.group("source")
-            match = r_localvar_ebp.match(source)
+            match = self.r_localvar_ebp.match(source)
             if match:
                 if not self.uses_frame_pointer:
                     raise UnrecognizedOperation('epilogue without prologue')
@@ -457,7 +458,7 @@ class FunctionGcRootTracker(object):
                 assert ofs_from_ebp <= 0
                 framesize = 4 - ofs_from_ebp
             else:
-                match = r_localvar_esp.match(source)
+                match = self.r_localvar_esp.match(source)
                 # leal 12(%esp), %esp
                 if match:
                     return InsnStackAdjust(int(match.group(1)))
@@ -468,6 +469,8 @@ class FunctionGcRootTracker(object):
             return self.binary_insn(line)
 
     def insns_for_copy(self, source, target):
+        source = self.replace_symbols(source)
+        target = self.replace_symbols(target)
         if source == self.ESP or target == self.ESP:
             raise UnrecognizedOperation('%s -> %s' % (source, target))
         elif self.r_localvar.match(target):
@@ -482,22 +485,22 @@ class FunctionGcRootTracker(object):
         match = self.r_binaryinsn.match(line)
         source = match.group("source")
         target = match.group("target")
-        if source == self.ESP and target == '%ebp':
+        if source == self.ESP and target == self.EBP:
             return self._visit_prologue()
-        elif source == '%ebp' and target == self.ESP:
+        elif source == self.EBP and target == self.ESP:
             return self._visit_epilogue()
         return self.insns_for_copy(source, target)
 
     def visit_pushl(self, line):
         match = self.r_unaryinsn.match(line)
         source = match.group(1)
-        return [InsnStackAdjust(-4)] + self.insns_for_copy(source, '0(%esp)')
+        return [InsnStackAdjust(-4)] + self.insns_for_copy(source, self.TOP_OF_STACK)
 
     def visit_pushw(self, line):
         return [InsnStackAdjust(-2)]   # rare but not impossible
 
     def _visit_pop(self, target):
-        return self.insns_for_copy('0(%esp)', target) + [InsnStackAdjust(+4)]
+        return self.insns_for_copy(self.TOP_OF_STACK, target) + [InsnStackAdjust(+4)]
 
     def visit_popl(self, line):
         match = self.r_unaryinsn.match(line)
@@ -507,7 +510,7 @@ class FunctionGcRootTracker(object):
     def _visit_prologue(self):
         # for the prologue of functions that use %ebp as frame pointer
         self.uses_frame_pointer = True
-        self.r_localvar = r_localvarfp
+        self.r_localvar = self.r_localvarfp
         return [InsnPrologue()]
 
     def _visit_epilogue(self):
@@ -516,7 +519,7 @@ class FunctionGcRootTracker(object):
         return [InsnEpilogue(4)]
 
     def visit_leave(self, line):
-        return self._visit_epilogue() + self._visit_pop('%ebp')
+        return self._visit_epilogue() + self._visit_pop(self.EBP)
 
     def visit_ret(self, line):
         return InsnRet()
@@ -542,7 +545,7 @@ class FunctionGcRootTracker(object):
                         # if the source looks like 8(%eax,%edx,4)
                         # %eax is the real source, %edx is an offset.
                         match = r_jmp_source.match(s)
-                        if match and not r_localvar_esp.match(s):
+                        if match and not self.r_localvar_esp.match(s):
                             sources.append(match.group(1))
                         else:
                             sources.append(s)
@@ -648,13 +651,13 @@ class FunctionGcRootTracker(object):
                     assert  lineoffset in (1,2)
                     return [InsnStackAdjust(-4)]
         insns = [InsnCall(self.currentlineno),
-                 InsnSetLocal('%eax')]      # the result is there
+                 InsnSetLocal(self.EAX)]      # the result is there
         if sys.platform == 'win32':
             # handle __stdcall calling convention:
             # Stack cleanup is performed by the called function,
             # Function name is decorated with "@N" where N is the stack size
             if match and '@' in target:
-                insns.append(InsnStackAdjust(int(target.split('@')[1])))
+                insns.append(InsnStackAdjust(int(target.rsplit('@', 1)[1])))
         return insns
 
 
@@ -662,11 +665,21 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     format = 'elf'
 
     ESP     = '%esp'
+    EBP     = '%ebp'
+    EAX     = '%eax'
     OPERAND = r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
     LABEL   = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
+    TOP_OF_STACK = '0(%esp)'
 
     r_functionstart = re.compile(r"\t.type\s+"+LABEL+",\s*[@]function\s*$")
     r_functionend   = re.compile(r"\t.size\s+"+LABEL+",\s*[.]-"+LABEL+"\s*$")
+    LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
+    LOCALVARFP      = LOCALVAR + r"|-?\d*[(]%ebp[)]"
+    r_localvarnofp  = re.compile(LOCALVAR)
+    r_localvarfp    = re.compile(LOCALVARFP)
+    r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
+    r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
+    r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
 
     def __init__(self, lines, filetag=0):
         match = self.r_functionstart.match(lines[0])
@@ -700,13 +713,26 @@ class Mingw32FunctionGcRootTracker(DarwinFunctionGcRootTracker):
 class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     format = 'msvc'
 
-    r_functionstart = re.compile(LABEL+r"\s+PROC\s*(:?;.+)\n$")
-    r_functionend   = re.compile(LABEL+r"\s+ENDP\s*$")
-
     ESP = 'esp'
+    EBP = 'ebp'
+    EAX = 'eax'
+    TOP_OF_STACK = 'DWORD PTR [esp]'
 
-    OPERAND = r'(?:(:?WORD|DWORD|BYTE) PTR |OFFSET )?[_\w?@$]*(?:[-+0-9]+)?(:?\[[-+*\w0-9]+\])?'
+    OPERAND = r'(?:(:?WORD|DWORD|BYTE) PTR |OFFSET )?[_\w?:@$]*(?:[-+0-9]+)?(:?\[[-+*\w0-9]+\])?'
     LABEL   = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
+
+    r_functionstart = re.compile(r"; Function compile flags: ")
+    r_codestart     = re.compile(LABEL+r"\s+PROC\s*(:?;.+)?\n$")
+    r_functionend   = re.compile(LABEL+r"\s+ENDP\s*$")
+    r_symboldefine =  re.compile(r"([_a-z0-9]+\$) = ([-0-9]+)\s*;.+\n")
+
+    LOCALVAR        = r"eax|edx|ecx|ebx|esi|edi|ebp|DWORD PTR [-+]?\d*\[esp[-+]\d+\]"
+    LOCALVARFP      = LOCALVAR + r"|-?\d*\[ebp\]"
+    r_localvarnofp  = re.compile(LOCALVAR)
+    r_localvarfp    = re.compile(LOCALVARFP)
+    r_gcroot_marker = re.compile(r";.+ = pypy_asm_gcroot\(")
+    r_localvar_esp  = re.compile(r"DWORD PTR ([-+]?\d+)?\[esp([-+]?\d+)?\]")
+    r_localvar_ebp  = re.compile(r"DWORD PTR ([-+]?\d+)?\[ebp([-+]?\d+)?\]")
 
     @classmethod
     def init_regexp(cls):
@@ -715,10 +741,28 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
         cls.r_jump = re.compile(r"\tj\w+\s+(?:SHORT |DWORD PTR )?"+LABEL+"\s*$")
 
     def __init__(self, lines, filetag=0):
-        match = self.r_functionstart.match(lines[0])
+        self.defines = {}
+        for i, line in enumerate(lines):
+            if self.r_symboldefine.match(line):
+                match = self.r_symboldefine.match(line)
+                name = match.group(1)
+                value = int(match.group(2))
+                self.defines[name] = value
+                continue
+
+            match = self.r_codestart.match(line)
+            if match:
+                self.skip = i
+                break
+
         funcname = match.group(1)
         super(MsvcFunctionGcRootTracker, self).__init__(
             funcname, lines, filetag)
+
+    def replace_symbols(self, operand):
+        for name, value in self.defines.items():
+            operand = operand.replace(name, str(value))
+        return operand
 
     for name in '''
         push pop mov lea
@@ -736,6 +780,13 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
             return int(value)
         except ValueError:
             return None
+
+    def _visit_gcroot_marker(self, line):
+        assert self.lines[self.currentlineno + 1] == "\n"
+        assert self.lines[self.currentlineno + 2].startswith("\ttest\tDWORD PTR")
+        match = self.r_binaryinsn.match(self.lines[self.currentlineno + 2])
+        loc = match.group("target")
+        return InsnGCROOT(self.replace_symbols(loc))
 
 MsvcFunctionGcRootTracker.init_regexp()
 
@@ -909,6 +960,9 @@ class MsvcAssemblerParser(AssemblerParser):
 
             newlines.append(line)
 
+            if line == "\t.model\tflat\n":
+                newlines.append("\tassume fs:nothing\n")
+
         newfile.writelines(newlines)
 
 PARSERS = {
@@ -982,13 +1036,13 @@ class GcRootTracker(object):
             if self.format == 'msvc':
                 print >> output, "\tpush\t%s\t\t; %s" % (source, comment)
             else:
-                print >> output, "\tpushl\t%s\t\t/* %s */ " % (target, comment)
+                print >> output, "\tpushl\t%s\t\t/* %s */ " % (source, comment)
 
         def _popl(source, comment):
             if self.format == 'msvc':
                 print >> output, "\tpop\t%s\t\t; %s" % (source, comment)
             else:
-                print >> output, "\tpopl\t%s\t\t/* %s */ " % (target, comment)
+                print >> output, "\tpopl\t%s\t\t/* %s */ " % (source, comment)
 
 
         def _register(name, disp=""):
@@ -1332,6 +1386,12 @@ if __name__ == '__main__':
     verbose = 1
     shuffle = False
     output_raw_table = False
+    if sys.platform == 'darwin':
+        format = 'darwin'
+    elif sys.platform == 'win32':
+        format = 'mingw32'
+    else:
+        format = 'elf'
     while len(sys.argv) > 1:
         if sys.argv[1] == '-v':
             del sys.argv[1]
@@ -1342,14 +1402,11 @@ if __name__ == '__main__':
         elif sys.argv[1] == '-t':
             del sys.argv[1]
             output_raw_table = True
+        elif sys.argv[1].startswith('-f'):
+            format = sys.argv[1][2:]
+            del sys.argv[1]
         else:
             break
-    if sys.platform == 'darwin':
-        format = 'darwin'
-    elif sys.platform == 'win32':
-        format = 'msvc'
-    else:
-        format = 'elf'
     tracker = GcRootTracker(verbose=verbose, shuffle=shuffle, format=format)
     for fn in sys.argv[1:]:
         f = open(fn, 'r')
