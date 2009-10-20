@@ -1,8 +1,10 @@
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.metainterp.warmstate import wrap, unwrap
 from pypy.jit.metainterp.warmstate import equal_whatever, hash_whatever
+from pypy.jit.metainterp.warmstate import WarmEnterState
 from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr
 from pypy.jit.metainterp.history import ConstInt, ConstFloat, ConstPtr
 
@@ -52,3 +54,82 @@ def test_hash_equal_whatever_ootype():
         assert equal_whatever(ootype.typeOf(s1), s1, s2)
     fn(ord('y'))
     interpret(fn, [ord('y')], type_system='ootype')
+
+
+def test_make_jitcell_getter_default():
+    class FakeWarmRunnerDesc:
+        green_args_spec = [lltype.Signed, lltype.Float]
+    class FakeJitCell:
+        pass
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    get_jitcell = state.make_jitcell_getter_default(FakeJitCell)
+    cell1 = get_jitcell((42, 42.5))
+    assert isinstance(cell1, FakeJitCell)
+    cell2 = get_jitcell((42, 42.5))
+    assert cell1 is cell2
+    cell3 = get_jitcell((41, 42.5))
+    cell4 = get_jitcell((42, 0.25))
+    assert cell1 is not cell3 is not cell4 is not cell1
+
+def test_make_jitcell_getter():
+    class FakeWarmRunnerDesc:
+        green_args_spec = [lltype.Float]
+        get_jitcell_at_ptr = None
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    get_jitcell = state.make_jitcell_getter()
+    cell1 = get_jitcell((1.75,))
+    cell2 = get_jitcell((1.75,))
+    assert cell1 is cell2
+
+def test_make_jitcell_getter_custom():
+    class FakeJitCell:
+        _TYPE = llmemory.GCREF
+    celldict = {}
+    def getter(x, y):
+        return celldict[x, y]
+    def setter(newcell, x, y):
+        newcell.x = x
+        newcell.y = y
+        celldict[x, y] = newcell
+    GETTER = lltype.Ptr(lltype.FuncType([lltype.Signed, lltype.Float],
+                                        llmemory.GCREF))
+    SETTER = lltype.Ptr(lltype.FuncType([llmemory.GCREF, lltype.Signed,
+                                         lltype.Float], lltype.Void))
+    class FakeWarmRunnerDesc:
+        rtyper = None
+        cpu = None
+        get_jitcell_at_ptr = llhelper(GETTER, getter)
+        set_jitcell_at_ptr = llhelper(SETTER, setter)
+    #
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    get_jitcell = state.make_jitcell_getter_custom(FakeJitCell)
+    cell1 = get_jitcell((5, 42.5))
+    assert isinstance(cell1, FakeJitCell)
+    assert cell1.x == 5
+    assert cell1.y == 42.5
+    cell2 = get_jitcell((5, 42.5))
+    assert cell2 is cell1
+    cell3 = get_jitcell((41, 42.5))
+    cell4 = get_jitcell((42, 0.25))
+    assert cell1 is not cell3 is not cell4 is not cell1
+
+def test_make_set_future_values():
+    future_values = {}
+    class FakeCPU:
+        def set_future_value_int(self, j, value):
+            future_values[j] = "int", value
+        def set_future_value_float(self, j, value):
+            future_values[j] = "float", value
+    class FakeWarmRunnerDesc:
+        cpu = FakeCPU()
+        red_args_types = ["int", "float"]
+        class metainterp_sd:
+            virtualizable_info = None
+    #
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    set_future_values = state.make_set_future_values()
+    set_future_values(5, 42.5)
+    assert future_values == {
+        0: ("int", 5),
+        1: ("float", 42.5),
+    }
