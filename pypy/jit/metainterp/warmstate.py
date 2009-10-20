@@ -1,13 +1,15 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.annlowlevel import hlstr
+from pypy.rpython.annlowlevel import hlstr, cast_base_ptr_to_instance
+from pypy.rpython.annlowlevel import cast_object_to_ptr
 from pypy.rlib.objectmodel import specialize, we_are_translated, r_dict
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.nonconst import NonConstant
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.jit import PARAMETERS, OPTIMIZER_SIMPLE, OPTIMIZER_FULL
 from pypy.rlib.jit import DEBUG_PROFILE
+from pypy.rlib.jit import BaseJitCell
 from pypy.jit.metainterp import support, history
 
 # ____________________________________________________________
@@ -266,7 +268,7 @@ class WarmEnterState(object):
         if hasattr(self, 'jit_getter'):
             return self.jit_getter
         #
-        class JitCell(object):
+        class JitCell(BaseJitCell):
             counter = 0
             compiled_merge_points = None
         #
@@ -324,22 +326,41 @@ class WarmEnterState(object):
         rtyper = self.warmrunnerdesc.rtyper
         get_jitcell_at_ptr = self.warmrunnerdesc.get_jitcell_at_ptr
         set_jitcell_at_ptr = self.warmrunnerdesc.set_jitcell_at_ptr
-        cpu = self.warmrunnerdesc.cpu
+        lltohlhack = {}
         #
         def get_jitcell(*greenargs):
             fn = support.maybe_on_top_of_llinterp(rtyper, get_jitcell_at_ptr)
-            try:
-                cellref = fn(*greenargs)
-                if we_are_translated():
-                    cell = cast_base_ptr_to_instance(JitCell, cellref)
+            cellref = fn(*greenargs)
+            # <hacks>
+            if we_are_translated():
+                BASEJITCELL = lltype.typeOf(cellref)
+                cell = cast_base_ptr_to_instance(JitCell, cellref)
+            elif isinstance(cellref, (BaseJitCell, type(None))):
+                BASEJITCELL = None
+                cell = cellref
+            else:
+                BASEJITCELL = lltype.typeOf(cellref)
+                if cellref:
+                    cell = lltohlhack[rtyper.type_system.deref(cellref)]
                 else:
-                    cell = cellref
-            except KeyError:
+                    cell = None
+            # </hacks>
+            if cell is None:
                 cell = JitCell()
+                # <hacks>
                 if we_are_translated():
-                    cellref = cpu.ts.cast_instance_to_base_ref(cell)
-                else:
+                    cellref = cast_object_to_ptr(BASEJITCELL, cell)
+                elif BASEJITCELL is None:
                     cellref = cell
+                else:
+                    if isinstance(BASEJITCELL, lltype.Ptr):
+                        cellref = lltype.malloc(BASEJITCELL.TO)
+                    elif isinstance(BASEJITCELL, ootype.Instance):
+                        cellref = ootype.new(BASEJITCELL)
+                    else:
+                        assert False, "no clue"
+                    lltohlhack[rtyper.type_system.deref(cellref)] = cell
+                # </hacks>
                 fn = support.maybe_on_top_of_llinterp(rtyper,
                                                       set_jitcell_at_ptr)
                 fn(cellref, *greenargs)
@@ -367,6 +388,7 @@ class WarmEnterState(object):
                 set_future_values_from_vinfo(*redargs)
         #
         if vinfo is not None:
+            i0 = len(warmrunnerdesc.red_args_types)
             num_green_args = warmrunnerdesc.num_green_args
             vable_static_fields = unrolling_iterable(
                 zip(vinfo.static_extra_types, vinfo.static_fields))
@@ -376,6 +398,7 @@ class WarmEnterState(object):
             getarrayitem = cpu.ts.getarrayitem
             #
             def set_future_values_from_vinfo(*redargs):
+                i = i0
                 virtualizable = redargs[vinfo.index_of_virtualizable -
                                         num_green_args]
                 virtualizable = vinfo.cast_to_vtype(virtualizable)

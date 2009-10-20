@@ -87,7 +87,7 @@ def test_make_jitcell_getter_custom():
         _TYPE = llmemory.GCREF
     celldict = {}
     def getter(x, y):
-        return celldict[x, y]
+        return celldict.get((x, y))
     def setter(newcell, x, y):
         newcell.x = x
         newcell.y = y

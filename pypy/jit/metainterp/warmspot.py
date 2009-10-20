@@ -309,33 +309,37 @@ class WarmRunnerDesc:
             annhelper.finish()
         
     def make_driverhook_graphs(self):
+        from pypy.rlib.jit import BaseJitCell
+        bk = self.rtyper.annotator.bookkeeper
+        classdef = bk.getuniqueclassdef(BaseJitCell)
+        s_BaseJitCell_or_None = annmodel.SomeInstance(classdef,
+                                                      can_be_None=True)
+        s_BaseJitCell_not_None = annmodel.SomeInstance(classdef)
+        s_Str = annmodel.SomeString()
+        #
         annhelper = MixLevelHelperAnnotator(self.translator.rtyper)
-        blackboxtype = self.cpu.ts.BASETYPE
         self.set_jitcell_at_ptr = self._make_hook_graph(
-            annhelper, self.jitdriver.set_jitcell_at, None, blackboxtype)
+            annhelper, self.jitdriver.set_jitcell_at, annmodel.s_None,
+            s_BaseJitCell_not_None)
         self.get_jitcell_at_ptr = self._make_hook_graph(
-            annhelper, self.jitdriver.get_jitcell_at, blackboxtype)
+            annhelper, self.jitdriver.get_jitcell_at, s_BaseJitCell_or_None)
         self.can_inline_ptr = self._make_hook_graph(
-            annhelper, self.jitdriver.can_inline, bool)
+            annhelper, self.jitdriver.can_inline, annmodel.s_Bool)
         self.get_printable_location_ptr = self._make_hook_graph(
-            annhelper, self.jitdriver.get_printable_location, str)
+            annhelper, self.jitdriver.get_printable_location, s_Str)
         annhelper.finish()
 
-    def _make_hook_graph(self, annhelper, func, rettype, first_arg_type=None):
-        from pypy.annotation.signature import annotationoftype
+    def _make_hook_graph(self, annhelper, func, s_result, s_first_arg=None):
         if func is None:
             return None
-        if rettype is not None:
-            s_result = annotationoftype(rettype)
-            RETTYPE = annhelper.rtyper.getrepr(s_result).lowleveltype
-        else:
-            RETTYPE = lltype.Void
-        FUNC, PTR = self.cpu.ts.get_FuncType(self.green_args_spec, RETTYPE)
+        #
+        extra_args_s = []
+        if s_first_arg is not None:
+            extra_args_s.append(s_first_arg)
+        #
         args_s = self.portal_args_s[:len(self.green_args_spec)]
-        if first_arg_type is not None:
-            args_s.insert(0, annotationoftype(first_arg_type))
-        graph = annhelper.getgraph(func, args_s, s_result)
-        funcptr = annhelper.graph2delayed(graph, FUNC)
+        graph = annhelper.getgraph(func, extra_args_s + args_s, s_result)
+        funcptr = annhelper.graph2delayed(graph)
         return funcptr
 
     def make_args_specification(self):
