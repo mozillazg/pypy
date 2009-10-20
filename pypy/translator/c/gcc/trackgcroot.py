@@ -1160,7 +1160,7 @@ class GcRootTracker(object):
         _comment("A circular doubly-linked list of all")
         _comment("the ASM_FRAMEDATAs currently alive")
         if self.format == 'msvc':
-            print >> output, '%s DD ?' % _globalname("__gcrootanchor")
+            print >> output, '%s:' % _globalname("__gcrootanchor")
             print >> output, '\tDD FLAT:___gcrootanchor  ; prev'
             print >> output, '\tDD FLAT:___gcrootanchor  ; next'
         else:
@@ -1174,7 +1174,7 @@ class GcRootTracker(object):
 
         _globl('__gcmapstart')
         if self.format == 'msvc':
-            print >> output, '%s DD ?' % _globalname('__gcmapstart')
+            print >> output, '%s:' % _globalname('__gcmapstart')
         else:
             _label('__gcmapstart')
         for label, state, is_range in self.gcmaptable:
@@ -1184,7 +1184,7 @@ class GcRootTracker(object):
                 n = shapes[state] = shapeofs
                 bytes = [str(b) for b in compress_callshape(state)]
                 if self.format == 'msvc':
-                    shapelines.append('\tDD\t%s\t;%s\n' % (
+                    shapelines.append('\tDB\t%s\t;%s\n' % (
                         ', '.join(bytes),
                         shapeofs))
                 else:
@@ -1195,7 +1195,7 @@ class GcRootTracker(object):
             if is_range:
                 n = ~ n
             if self.format == 'msvc':
-                print >> output, '\tDD\t%s-%d' % (label, OFFSET_LABELS)
+                print >> output, '\tDD\t%s' % (label,)
                 print >> output, '\tDD\t%d' % (n,)
             else:
                 print >> output, '\t.long\t%s-%d' % (label, OFFSET_LABELS)
@@ -1210,7 +1210,7 @@ class GcRootTracker(object):
 
         _globl('__gccallshapes')
         if self.format == 'msvc':
-            print >> output, '%s DD ?' % _globalname('__gccallshapes')
+            print >> output, '%s:' % _globalname('__gccallshapes')
         else:
             _label('__gccallshapes')
         output.writelines(shapelines)
