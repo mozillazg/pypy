@@ -1,9 +1,12 @@
-
+import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rpython.ootypesystem import ootype
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, we_are_translated, r_dict
 from pypy.rlib.rarithmetic import intmask
-from pypy.jit.metainterp import history
+from pypy.rlib.nonconst import NonConstant
+from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.jit import PARAMETERS, OPTIMIZER_SIMPLE, OPTIMIZER_FULL
+from pypy.jit.metainterp import support, history
 
 # ____________________________________________________________
 
@@ -82,3 +85,250 @@ def hash_whatever(TYPE, x):
             return 0
     else:
         return lltype.cast_primitive(lltype.Signed, x)
+
+@specialize.ll_and_arg(3)
+def set_future_value(cpu, j, value, typecode):
+    if typecode == 'ref':
+        refvalue = cpu.ts.cast_to_ref(value)
+        cpu.set_future_value_ref(j, refvalue)
+    elif typecode == 'int':
+        intvalue = lltype.cast_primitive(lltype.Signed, value)
+        cpu.set_future_value_int(j, intvalue)
+    elif typecode == 'float':
+        assert isinstance(value, float)
+        cpu.set_future_value_float(j, value)
+    else:
+        assert False
+
+# ____________________________________________________________
+
+
+class WarmEnterState(object):
+    THRESHOLD_LIMIT = sys.maxint // 2
+    default_jitcell_dict = None
+
+    def __init__(self, warmrunnerdesc):
+        "NOT_RPYTHON"
+        self.warmrunnerdesc = warmrunnerdesc
+        try:
+            self.profiler = warmrunnerdesc.metainterp_sd.profiler
+        except AttributeError:       # for tests
+            self.profiler = None
+        # initialize the state with the default values of the
+        # parameters specified in rlib/jit.py
+        for name, default_value in PARAMETERS.items():
+            meth = getattr(self, 'set_param_' + name)
+            meth(default_value)
+
+    def set_param_threshold(self, threshold):
+        if threshold < 2:
+            threshold = 2
+        self.increment_threshold = (self.THRESHOLD_LIMIT // threshold) + 1
+        # the number is at least 1, and at most about half THRESHOLD_LIMIT
+
+    def set_param_trace_eagerness(self, value):
+        self.trace_eagerness = value
+
+    def set_param_trace_limit(self, value):
+        self.trace_limit = value
+
+    def set_param_inlining(self, value):
+        self.inlining = value
+
+    def set_param_optimizer(self, optimizer):
+        if optimizer == OPTIMIZER_SIMPLE:
+            from pypy.jit.metainterp import simple_optimize
+            self.optimize_loop = simple_optimize.optimize_loop
+            self.optimize_bridge = simple_optimize.optimize_bridge
+        elif optimizer == OPTIMIZER_FULL:
+            from pypy.jit.metainterp import optimize
+            self.optimize_loop = optimize.optimize_loop
+            self.optimize_bridge = optimize.optimize_bridge
+        else:
+            raise ValueError("unknown optimizer")
+
+    def set_param_debug(self, value):
+        self.debug_level = value
+        if self.profiler is not None:
+            self.profiler.set_printing(value >= DEBUG_PROFILE)
+
+    # ----------
+
+    def make_entry_point(self):
+        "NOT_RPYTHON"
+        metainterp_sd = warmrunnerdesc.metainterp_sd
+        globaldata = metainterp_sd.globaldata
+        vinfo = metainterp_sd.virtualizable_info
+        ContinueRunningNormally = self.warmrunnerdesc.ContinueRunningNormally
+        get_jitcell = self.make_jitcell_getter()
+        set_future_values = self.make_set_future_values()
+
+        def maybe_compile_and_run(*args):
+            """Entry point to the JIT.  Called at the point with the
+            can_enter_jit() hint.
+            """
+            if NonConstant(False):
+                # make sure we always see the saner optimizer from an
+                # annotation point of view, otherwise we get lots of
+                # blocked ops
+                self.set_param_optimizer(OPTIMIZER_FULL)
+
+            if vinfo is not None:
+                virtualizable = args[vinfo.index_of_virtualizable]
+                virtualizable = vinfo.cast_to_vtype(virtualizable)
+                assert virtualizable != globaldata.blackhole_virtualizable, (
+                    "reentering same frame via blackhole")
+
+            # look for the cell corresponding to the current greenargs
+            greenargs = args[:self.num_green_args]
+            cell = get_jitcell(greenargs)
+
+            if cell.counter >= 0:
+                # update the profiling counter
+                n = cell.counter + self.increment_threshold
+                if n <= self.THRESHOLD_LIMIT:       # bound not reached
+                    cell.counter = n
+                    return
+                # bound reached; start tracing
+                from pypy.jit.metainterp.pyjitpl import MetaInterp
+                metainterp = MetaInterp(metainterp_sd)
+                try:
+                    loop_token = metainterp.compile_and_run_once(*args)
+                except ContinueRunningNormally:
+                    # the trace got too long, reset the counter
+                    cell.counter = 0
+                    raise
+            else:
+                # machine code was already compiled for these greenargs
+                # get the assembler and fill in the boxes
+                set_future_values(*args[self.num_green_args:])
+                loop_token = cell.entry_loop_token
+
+            # ---------- execute assembler ----------
+            while True:     # until interrupted by an exception
+                metainterp_sd.profiler.start_running()
+                fail_index = metainterp_sd.cpu.execute_token(loop_token)
+                metainterp_sd.profiler.end_running()
+                fail_descr = globaldata.get_fail_descr_from_number(fail_index)
+                loop_token = fail_descr.handle_fail(metainterp_sd)
+
+        maybe_compile_and_run._dont_inline_ = True
+        return maybe_compile_and_run
+
+    # ----------
+
+    def make_jitcell_getter(self):
+        "NOT_RPYTHON"
+        #
+        class JitCell(object):
+            counter = 0
+        #
+        if self.warmrunnerdesc.get_jitcell_at_ptr is None:
+            return self.make_jitcell_getter_default(JitCell)
+        else:
+            return self.make_jitcell_getter_custom(JitCell)
+
+    def make_jitcell_getter_default(self, JitCell):
+        "NOT_RPYTHON"
+        warmrunnerdesc = self.warmrunnerdesc
+        green_args_spec = unrolling_iterable(warmrunnerdesc.green_args_spec)
+        #
+        def comparekey(greenargs1, greenargs2):
+            i = 0
+            for TYPE in green_args_spec:
+                if not equal_whatever(TYPE, greenargs1[i], greenargs2[i]):
+                    return False
+                i = i + 1
+            return True
+        #
+        def hashkey(greenargs):
+            x = 0x345678
+            i = 0
+            for TYPE in green_args_spec:
+                item = greenargs[i]
+                y = hash_whatever(TYPE, item)
+                x = intmask((1000003 * x) ^ y)
+                i = i + 1
+            return x
+        #
+        jitcell_dict = r_dict(comparekey, hashkey)
+        #
+        def get_jitcell(greenargs):
+            try:
+                cell = jitcell_dict[greenargs]
+            except KeyError:
+                cell = JitCell()
+                jitcell_dict[greenargs] = cell
+            return cell
+        return get_jitcell
+
+    def make_jitcell_getter_custom(self, JitCell):
+        "NOT_RPYTHON"
+        rtyper = self.warmrunnerdesc.rtyper
+        get_jitcell_at_ptr = self.warmrunnerdesc.get_jitcell_at_ptr
+        set_jitcell_at_ptr = self.warmrunnerdesc.set_jitcell_at_ptr
+        cpu = self.warmrunnerdesc.cpu
+        #
+        def get_jitcell(greenargs):
+            fn = support.maybe_on_top_of_llinterp(rtyper, get_jitcell_at_ptr)
+            try:
+                cellref = fn(*greenargs)
+                if we_are_translated():
+                    cell = cast_base_ptr_to_instance(JitCell, cellref)
+                else:
+                    cell = cellref
+            except KeyError:
+                cell = JitCell()
+                if we_are_translated():
+                    cellref = cpu.ts.cast_instance_to_base_ref(cell)
+                else:
+                    cellref = cell
+                fn = support.maybe_on_top_of_llinterp(rtyper,
+                                                      set_jitcell_at_ptr)
+                fn(cellref, *greenargs)
+            return cell
+        return get_jitcell
+
+    # ----------
+
+    def make_set_future_values(self):
+        "NOT_RPYTHON"
+        warmrunnerdesc = self.warmrunnerdesc
+        cpu = warmrunnerdesc.cpu
+        vinfo = warmrunnerdesc.metainterp_sd.virtualizable_info
+        red_args_types = unrolling_iterable(warmrunnerdesc.red_args_types)
+        #
+        def set_future_values(*redargs):
+            i = 0
+            for typecode in red_args_types:
+                set_future_value(cpu, i, redargs[i], typecode)
+                i = i + 1
+            if vinfo is not None:
+                virtualizable = redargs[vinfo.index_of_virtualizable -
+                                        num_green_args]
+                set_future_values_from_vinfo(virtualizable)
+        #
+        if vinfo is not None:
+            vable_static_fields = unrolling_iterable(
+                zip(vinfo.static_extra_types, vinfo.static_fields))
+            vable_array_fields = unrolling_iterable(
+                zip(vinfo.arrayitem_extra_types, vinfo.array_fields))
+            getlength = cpu.ts.getlength
+            getarrayitem = cpu.ts.getarrayitem
+            #
+            def set_future_values_from_vinfo(virtualizable):
+                virtualizable = vinfo.cast_to_vtype(virtualizable)
+                for typecode, fieldname in vable_static_fields:
+                    x = getattr(virtualizable, fieldname)
+                    set_future_value(cpu, i, x, typecode)
+                    i = i + 1
+                for typecode, fieldname in vable_array_fields:
+                    lst = getattr(virtualizable, fieldname)
+                    for j in range(getlength(lst)):
+                        x = getarrayitem(lst, j)
+                        set_future_value(cpu, i, x, typecode)
+                        i = i + 1
+        else:
+            set_future_values_from_vinfo = None
+        #
+        return set_future_values
