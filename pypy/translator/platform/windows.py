@@ -241,12 +241,20 @@ class MsvcPlatform(Platform):
 
         rules = [
             ('all', '$(DEFAULT_TARGET)', []),
-            ('$(TARGET)', '$(OBJECTS)', '$(CC_LINK) /nologo $(LDFLAGS) $(OBJECTS) /out:$@ $(LIBDIRS) $(LIBS)'),
             ('.c.o', '', '$(CC) $(CFLAGS) /Fo$@ /c $< $(INCLUDEDIRS)'),
             ]
 
         for rule in rules:
             m.rule(*rule)
+
+        if self.version < 80:
+            m.rule('$(TARGET)', '$(OBJECTS)',
+                   '$(CC_LINK) /nologo $(LDFLAGS) $(OBJECTS) /out:$@ $(LIBDIRS) $(LIBS)')
+        else:
+            m.rule('$(TARGET)', '$(OBJECTS)',
+                   ['$(CC_LINK) /nologo $(LDFLAGS) $(OBJECTS) /out:$@ $(LIBDIRS) $(LIBS) /MANIFESTFILE:$*.manifest',
+                    'mt.exe -nologo -manifest $*.manifest -outputresource:$@;1',
+                    ])
 
         return m
 

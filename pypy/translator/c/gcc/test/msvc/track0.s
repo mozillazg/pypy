@@ -1,3 +1,10 @@
+; Function compile flags: /Ogtpy
+;	COMDAT _pypy_g_ll_join_strs__Signed_arrayPtr
+_TEXT	SEGMENT
+_l_result_2$ = -8					; size = 4
+_l_v405$ = -4						; size = 4
+_l_num_items_0$ = 8					; size = 4
+_l_items_2$ = 12					; size = 4
 _pypy_g_ll_join_strs__Signed_arrayPtr PROC		; COMDAT
 
 ; 1457 : struct pypy_rpy_string0 *pypy_g_ll_join_strs__Signed_arrayPtr(long l_num_items_0, struct pypy_array0 *l_items_2) {
@@ -57,7 +64,7 @@ $block6$40044:
 	jl	SHORT $LN15@pypy_g_ll_@139
 $LN14@pypy_g_ll_@139:
 	call	_RPyAbort
-    ;; expected {24(%esp) | %ebx, %esi, %edi, %ebp | }
+    ;; expected {24(%esp) | %ebx, %esi, %edi, %ebp | 32(%esp)}
 $LN15@pypy_g_ll_@139:
 
 ; 1529 : 	l_v420 = l_v419;
@@ -69,7 +76,7 @@ $LN15@pypy_g_ll_@139:
 	test	ebx, ebx
 	jne	SHORT $LN16@pypy_g_ll_@139
 	call	_RPyAbort
-    ;; expected {24(%esp) | %ebx, %esi, %edi, %ebp | }
+    ;; expected {24(%esp) | %ebx, %esi, %edi, %ebp | 32(%esp)}
 $LN16@pypy_g_ll_@139:
 
 ; 1531 : 	OP_INT_ADD(l_v402, l_v421, l_v422);
@@ -99,7 +106,7 @@ $block2$40046:
 
 	push	edi
 	call	_pypy_g_mallocstr__Signed
-    ;; expected {28(%esp) | %ebx, %esi, %edi, %ebp | }
+    ;; expected {28(%esp) | %ebx, %esi, %edi, %ebp | 36(%esp)}
 
 ; 1486 : 	l_v405 = (void*)l_items_2;
 

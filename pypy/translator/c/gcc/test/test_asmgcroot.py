@@ -51,7 +51,7 @@ class AbstractTestAsmGCRoot:
 
         def run(arg0, arg1):
             lines = []
-            print >> sys.stderr, 'RUN: starting', exe_name
+            print >> sys.stderr, 'RUN: starting', exe_name, arg0, arg1
             g = os.popen('"%s" %d %d' % (exe_name, arg0, arg1), 'r')
             for line in g:
                 print >> sys.stderr, 'RUN:', line.rstrip()
