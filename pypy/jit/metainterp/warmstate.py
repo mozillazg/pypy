@@ -7,6 +7,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.nonconst import NonConstant
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.jit import PARAMETERS, OPTIMIZER_SIMPLE, OPTIMIZER_FULL
+from pypy.rlib.jit import DEBUG_PROFILE
 from pypy.jit.metainterp import support, history
 
 # ____________________________________________________________
@@ -174,9 +175,9 @@ class WarmEnterState(object):
             return self.maybe_compile_and_run
 
         metainterp_sd = self.warmrunnerdesc.metainterp_sd
-        globaldata = metainterp_sd.globaldata
         vinfo = metainterp_sd.virtualizable_info
         ContinueRunningNormally = self.warmrunnerdesc.ContinueRunningNormally
+        num_green_args = self.warmrunnerdesc.num_green_args
         get_jitcell = self.make_jitcell_getter()
         set_future_values = self.make_set_future_values()
         self.make_jitdriver_callbacks()
@@ -185,6 +186,7 @@ class WarmEnterState(object):
             """Entry point to the JIT.  Called at the point with the
             can_enter_jit() hint.
             """
+            globaldata = metainterp_sd.globaldata
             if NonConstant(False):
                 # make sure we always see the saner optimizer from an
                 # annotation point of view, otherwise we get lots of
@@ -198,7 +200,7 @@ class WarmEnterState(object):
                     "reentering same frame via blackhole")
 
             # look for the cell corresponding to the current greenargs
-            greenargs = args[:self.num_green_args]
+            greenargs = args[:num_green_args]
             cell = get_jitcell(*greenargs)
 
             if cell.counter >= 0:
@@ -219,7 +221,7 @@ class WarmEnterState(object):
             else:
                 # machine code was already compiled for these greenargs
                 # get the assembler and fill in the boxes
-                set_future_values(*args[self.num_green_args:])
+                set_future_values(*args[num_green_args:])
                 loop_token = cell.entry_loop_token
 
             # ---------- execute assembler ----------
@@ -266,6 +268,7 @@ class WarmEnterState(object):
         #
         class JitCell(object):
             counter = 0
+            compiled_merge_points = None
         #
         if self.warmrunnerdesc.get_jitcell_at_ptr is None:
             jit_getter = self._make_jitcell_getter_default(JitCell)
@@ -361,11 +364,10 @@ class WarmEnterState(object):
                 set_future_value(cpu, i, redargs[i], typecode)
                 i = i + 1
             if vinfo is not None:
-                virtualizable = redargs[vinfo.index_of_virtualizable -
-                                        num_green_args]
-                set_future_values_from_vinfo(virtualizable)
+                set_future_values_from_vinfo(*redargs)
         #
         if vinfo is not None:
+            num_green_args = warmrunnerdesc.num_green_args
             vable_static_fields = unrolling_iterable(
                 zip(vinfo.static_extra_types, vinfo.static_fields))
             vable_array_fields = unrolling_iterable(
@@ -373,7 +375,9 @@ class WarmEnterState(object):
             getlength = cpu.ts.getlength
             getarrayitem = cpu.ts.getarrayitem
             #
-            def set_future_values_from_vinfo(virtualizable):
+            def set_future_values_from_vinfo(*redargs):
+                virtualizable = redargs[vinfo.index_of_virtualizable -
+                                        num_green_args]
                 virtualizable = vinfo.cast_to_vtype(virtualizable)
                 for typecode, fieldname in vable_static_fields:
                     x = getattr(virtualizable, fieldname)
