@@ -1064,7 +1064,10 @@ class GcRootTracker(object):
                 return "$%s" % _globalname(name)
 
         def _call(arg, comment):
-            return "call\t%s\t\t;%s" % (arg, comment)
+            if self.format == 'msvc':
+                print >> output, "\tcall\t%s\t\t;%s" % (arg, comment)
+            else:
+                print >> output, "\tcall\t%s\t\t/* %s */" % (arg, comment)
 
         def _indirectjmp(arg):
             if self.format == 'msvc':
@@ -1128,7 +1131,7 @@ class GcRootTracker(object):
         _popl(_register("esi"),                                       "restore from ASM_FRAMEDATA[3]")
         _popl(_register("edi"),                                       "restore from ASM_FRAMEDATA[4]")
         _popl(_register("ebp"),                                       "restore from ASM_FRAMEDATA[5]")
-        _popl(_register("ecx"),                                       "restore from ASM_FRAMEDATA[6]")
+        _popl(_register("ecx"),                                       "ignored      ASM_FRAMEDATA[6]")
         _comment("the return value is the one of the 'call' above,")
         _comment("because %eax (and possibly %edx) are unmodified")
 
