@@ -1,6 +1,7 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.annlowlevel import hlstr
 from pypy.rlib.objectmodel import specialize, we_are_translated, r_dict
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.nonconst import NonConstant
@@ -152,16 +153,33 @@ class WarmEnterState(object):
         if self.profiler is not None:
             self.profiler.set_printing(value >= DEBUG_PROFILE)
 
+    def must_compile_from_failure(self, key):
+        key.counter += 1
+        return key.counter >= self.trace_eagerness
+
+    def reset_counter_from_failure(self, key):
+        key.counter = 0
+
+    def attach_unoptimized_bridge_from_interp(self, greenkey,
+                                              entry_loop_token):
+        cell = self.jit_cell_at_key(greenkey)
+        cell.counter = -1
+        cell.entry_loop_token = entry_loop_token
+
     # ----------
 
     def make_entry_point(self):
         "NOT_RPYTHON"
-        metainterp_sd = warmrunnerdesc.metainterp_sd
+        if hasattr(self, 'maybe_compile_and_run'):
+            return self.maybe_compile_and_run
+
+        metainterp_sd = self.warmrunnerdesc.metainterp_sd
         globaldata = metainterp_sd.globaldata
         vinfo = metainterp_sd.virtualizable_info
         ContinueRunningNormally = self.warmrunnerdesc.ContinueRunningNormally
         get_jitcell = self.make_jitcell_getter()
         set_future_values = self.make_set_future_values()
+        self.make_jitdriver_callbacks()
 
         def maybe_compile_and_run(*args):
             """Entry point to the JIT.  Called at the point with the
@@ -181,7 +199,7 @@ class WarmEnterState(object):
 
             # look for the cell corresponding to the current greenargs
             greenargs = args[:self.num_green_args]
-            cell = get_jitcell(greenargs)
+            cell = get_jitcell(*greenargs)
 
             if cell.counter >= 0:
                 # update the profiling counter
@@ -213,22 +231,58 @@ class WarmEnterState(object):
                 loop_token = fail_descr.handle_fail(metainterp_sd)
 
         maybe_compile_and_run._dont_inline_ = True
+        self.maybe_compile_and_run = maybe_compile_and_run
         return maybe_compile_and_run
+
+    # ----------
+
+    def make_unwrap_greenkey(self):
+        "NOT_RPYTHON"
+        if hasattr(self, 'unwrap_greenkey'):
+            return self.unwrap_greenkey
+        #
+        warmrunnerdesc = self.warmrunnerdesc
+        green_args_spec = unrolling_iterable(warmrunnerdesc.green_args_spec)
+        #
+        def unwrap_greenkey(greenkey):
+            greenargs = ()
+            i = 0
+            for TYPE in green_args_spec:
+                value = unwrap(TYPE, greenkey[i])
+                greenargs += (value,)
+                i = i + 1
+            return greenargs
+        #
+        unwrap_greenkey._always_inline_ = True
+        self.unwrap_greenkey = unwrap_greenkey
+        return unwrap_greenkey
 
     # ----------
 
     def make_jitcell_getter(self):
         "NOT_RPYTHON"
+        if hasattr(self, 'jit_getter'):
+            return self.jit_getter
         #
         class JitCell(object):
             counter = 0
         #
         if self.warmrunnerdesc.get_jitcell_at_ptr is None:
-            return self.make_jitcell_getter_default(JitCell)
+            jit_getter = self._make_jitcell_getter_default(JitCell)
         else:
-            return self.make_jitcell_getter_custom(JitCell)
+            jit_getter = self._make_jitcell_getter_custom(JitCell)
+        #
+        unwrap_greenkey = self.make_unwrap_greenkey()
+        #
+        def jit_cell_at_key(greenkey):
+            greenargs = unwrap_greenkey(greenkey)
+            return jit_getter(*greenargs)
+        self.jit_cell_at_key = jit_cell_at_key
+        self.jit_getter = jit_getter
+        #
+        return jit_getter
 
-    def make_jitcell_getter_default(self, JitCell):
+    def _make_jitcell_getter_default(self, JitCell):
         "NOT_RPYTHON"
         warmrunnerdesc = self.warmrunnerdesc
         green_args_spec = unrolling_iterable(warmrunnerdesc.green_args_spec)
@@ -253,7 +307,7 @@ class WarmEnterState(object):
         #
         jitcell_dict = r_dict(comparekey, hashkey)
         #
-        def get_jitcell(greenargs):
+        def get_jitcell(*greenargs):
             try:
                 cell = jitcell_dict[greenargs]
             except KeyError:
@@ -262,14 +316,14 @@ class WarmEnterState(object):
             return cell
         return get_jitcell
 
-    def make_jitcell_getter_custom(self, JitCell):
+    def _make_jitcell_getter_custom(self, JitCell):
         "NOT_RPYTHON"
         rtyper = self.warmrunnerdesc.rtyper
         get_jitcell_at_ptr = self.warmrunnerdesc.get_jitcell_at_ptr
         set_jitcell_at_ptr = self.warmrunnerdesc.set_jitcell_at_ptr
         cpu = self.warmrunnerdesc.cpu
         #
-        def get_jitcell(greenargs):
+        def get_jitcell(*greenargs):
             fn = support.maybe_on_top_of_llinterp(rtyper, get_jitcell_at_ptr)
             try:
                 cellref = fn(*greenargs)
@@ -293,6 +347,9 @@ class WarmEnterState(object):
 
     def make_set_future_values(self):
         "NOT_RPYTHON"
+        if hasattr(self, 'set_future_values'):
+            return self.set_future_values
+
         warmrunnerdesc = self.warmrunnerdesc
         cpu = warmrunnerdesc.cpu
         vinfo = warmrunnerdesc.metainterp_sd.virtualizable_info
@@ -331,4 +388,42 @@ class WarmEnterState(object):
         else:
             set_future_values_from_vinfo = None
         #
+        self.set_future_values = set_future_values
         return set_future_values
+
+    # ----------
+
+    def make_jitdriver_callbacks(self):
+        if hasattr(self, 'get_location_str'):
+            return
+        #
+        can_inline_ptr = self.warmrunnerdesc.can_inline_ptr
+        if can_inline_ptr is None:
+            def can_inline_callable(greenkey):
+                return True
+        else:
+            rtyper = self.warmrunnerdesc.rtyper
+            unwrap_greenkey = self.make_unwrap_greenkey()
+            #
+            def can_inline_callable(greenkey):
+                greenargs = unwrap_greenkey(greenkey)
+                fn = support.maybe_on_top_of_llinterp(rtyper, can_inline_ptr)
+                return fn(*greenargs)
+        self.can_inline_callable = can_inline_callable
+        #
+        get_location_ptr = self.warmrunnerdesc.get_printable_location_ptr
+        if get_location_ptr is None:
+            def get_location_str(greenkey):
+                return '(no jitdriver.get_printable_location!)'
+        else:
+            rtyper = self.warmrunnerdesc.rtyper
+            unwrap_greenkey = self.make_unwrap_greenkey()
+            #
+            def get_location_str(greenkey):
+                greenargs = unwrap_greenkey(greenkey)
+                fn = support.maybe_on_top_of_llinterp(rtyper, get_location_ptr)
+                res = fn(*greenargs)
+                if not we_are_translated() and not isinstance(res, str):
+                    res = hlstr(res)
+                return res
+        self.get_location_str = get_location_str
