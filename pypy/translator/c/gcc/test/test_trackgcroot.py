@@ -121,10 +121,14 @@ def test_computegcmaptable():
     for format, _, path in tests:
         yield check_computegcmaptable, format, path
 
-r_globallabel = re.compile(r"([\w]+)=[.]+")
+
 r_expected = re.compile(r"\s*;;\s*expected\s+([{].+[}])")
 
 def check_computegcmaptable(format, path):
+    if format == 'msvc':
+        r_globallabel = re.compile(r"([\w]+)::")
+    else:
+        r_globallabel = re.compile(r"([\w]+)=[.]+")
     print
     print path.dirpath().basename + '/' + path.basename
     lines = path.readlines()
@@ -149,10 +153,16 @@ def check_computegcmaptable(format, path):
             got = tabledict[label]
             assert format_callshape(got) == expected
             seen[label] = True
-            expectedlines.insert(i-2, '\t.globl\t%s\n' % (label,))
-            expectedlines.insert(i-1, '%s=.+%d\n' % (label, OFFSET_LABELS))
+            if format == 'msvc':
+                expectedlines.insert(i-2, 'PUBLIC\t%s\n' % (label,))
+                expectedlines.insert(i-1, '%s::\n' % (label,))
+            else:
+                expectedlines.insert(i-2, '\t.globl\t%s\n' % (label,))
+                expectedlines.insert(i-1, '%s=.+%d\n' % (label, OFFSET_LABELS))
         prevline = line
     assert len(seen) == len(tabledict), (
         "computed table contains unexpected entries:\n%r" %
         [key for key in tabledict if key not in seen])
+    print lines
+    print expectedlines
     assert lines == expectedlines

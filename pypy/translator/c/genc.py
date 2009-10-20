@@ -502,12 +502,12 @@ class CStandaloneBuilder(CBuilder):
             if self.translator.platform.name == 'msvc':
                 lblofiles = ['%s.lbl.obj' % (cfile[:-2],) for cfile in mk.cfiles]
                 mk.definition('ASMLBLOBJFILES', lblofiles)
-                mk.definition('OBJECTS', '$(ASMLBLOBJFILES) gcmaptable.obj')
+                mk.definition('OBJECTS', 'gcmaptable.obj $(ASMLBLOBJFILES)')
                 mk.rule('.SUFFIXES', '.s', [])
                 mk.rule('.s.obj', '',
-                        'ml /Cx /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
+                        'cmd /c $(MASM) /nologo /Cx /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
                 mk.rule('.c.gcmap', '',
-                        ['$(CC) $(CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
+                        ['$(CC) /nologo $(CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
                          'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $*.s > $@']
                         )
                 mk.rule('gcmaptable.s', '$(GCMAPFILES)',
