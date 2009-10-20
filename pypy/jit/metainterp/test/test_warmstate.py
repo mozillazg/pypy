@@ -62,13 +62,13 @@ def test_make_jitcell_getter_default():
     class FakeJitCell:
         pass
     state = WarmEnterState(FakeWarmRunnerDesc())
-    get_jitcell = state.make_jitcell_getter_default(FakeJitCell)
-    cell1 = get_jitcell((42, 42.5))
+    get_jitcell = state._make_jitcell_getter_default(FakeJitCell)
+    cell1 = get_jitcell(42, 42.5)
     assert isinstance(cell1, FakeJitCell)
-    cell2 = get_jitcell((42, 42.5))
+    cell2 = get_jitcell(42, 42.5)
     assert cell1 is cell2
-    cell3 = get_jitcell((41, 42.5))
-    cell4 = get_jitcell((42, 0.25))
+    cell3 = get_jitcell(41, 42.5)
+    cell4 = get_jitcell(42, 0.25)
     assert cell1 is not cell3 is not cell4 is not cell1
 
 def test_make_jitcell_getter():
@@ -77,9 +77,10 @@ def test_make_jitcell_getter():
         get_jitcell_at_ptr = None
     state = WarmEnterState(FakeWarmRunnerDesc())
     get_jitcell = state.make_jitcell_getter()
-    cell1 = get_jitcell((1.75,))
-    cell2 = get_jitcell((1.75,))
+    cell1 = get_jitcell(1.75)
+    cell2 = get_jitcell(1.75)
     assert cell1 is cell2
+    assert get_jitcell is state.make_jitcell_getter()
 
 def test_make_jitcell_getter_custom():
     class FakeJitCell:
@@ -102,15 +103,15 @@ def test_make_jitcell_getter_custom():
         set_jitcell_at_ptr = llhelper(SETTER, setter)
     #
     state = WarmEnterState(FakeWarmRunnerDesc())
-    get_jitcell = state.make_jitcell_getter_custom(FakeJitCell)
-    cell1 = get_jitcell((5, 42.5))
+    get_jitcell = state._make_jitcell_getter_custom(FakeJitCell)
+    cell1 = get_jitcell(5, 42.5)
     assert isinstance(cell1, FakeJitCell)
     assert cell1.x == 5
     assert cell1.y == 42.5
-    cell2 = get_jitcell((5, 42.5))
+    cell2 = get_jitcell(5, 42.5)
     assert cell2 is cell1
-    cell3 = get_jitcell((41, 42.5))
-    cell4 = get_jitcell((42, 0.25))
+    cell3 = get_jitcell(41, 42.5)
+    cell4 = get_jitcell(42, 0.25)
     assert cell1 is not cell3 is not cell4 is not cell1
 
 def test_make_set_future_values():
@@ -133,3 +134,70 @@ def test_make_set_future_values():
         0: ("int", 5),
         1: ("float", 42.5),
     }
+    assert set_future_values is state.make_set_future_values()
+
+def test_make_unwrap_greenkey():
+    class FakeWarmRunnerDesc:
+        green_args_spec = [lltype.Signed, lltype.Float]
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    unwrap_greenkey = state.make_unwrap_greenkey()
+    greenargs = unwrap_greenkey([BoxInt(42), BoxFloat(42.5)])
+    assert greenargs == (42, 42.5)
+    assert type(greenargs[0]) is int
+
+def test_attach_unoptimized_bridge_from_interp():
+    class FakeWarmRunnerDesc:
+        green_args_spec = [lltype.Signed, lltype.Float]
+        get_jitcell_at_ptr = None
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    get_jitcell = state.make_jitcell_getter()
+    state.attach_unoptimized_bridge_from_interp([BoxInt(5), BoxFloat(2.25)],
+                                                "entry loop token")
+    cell1 = get_jitcell(5, 2.25)
+    assert cell1.counter < 0
+    assert cell1.entry_loop_token == "entry loop token"
+
+def test_make_jitdriver_callbacks_1():
+    class FakeWarmRunnerDesc:
+        can_inline_ptr = None
+        get_printable_location_ptr = None
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    state.make_jitdriver_callbacks()
+    res = state.can_inline_callable([BoxInt(5), BoxFloat(42.5)])
+    assert res is True
+    res = state.get_location_str([BoxInt(5), BoxFloat(42.5)])
+    assert res == '(no jitdriver.get_printable_location!)'
+
+def test_make_jitdriver_callbacks_2():
+    def can_inline(x, y):
+        assert x == 5
+        assert y == 42.5
+        return False
+    CAN_INLINE = lltype.Ptr(lltype.FuncType([lltype.Signed, lltype.Float],
+                                            lltype.Bool))
+    class FakeWarmRunnerDesc:
+        rtyper = None
+        green_args_spec = [lltype.Signed, lltype.Float]
+        can_inline_ptr = llhelper(CAN_INLINE, can_inline)
+        get_printable_location_ptr = None
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    state.make_jitdriver_callbacks()
+    res = state.can_inline_callable([BoxInt(5), BoxFloat(42.5)])
+    assert res is False
+
+def test_make_jitdriver_callbacks_3():
+    def get_location(x, y):
+        assert x == 5
+        assert y == 42.5
+        return "hi there"    # abuse the return type, but nobody checks it
+    GET_LOCATION = lltype.Ptr(lltype.FuncType([lltype.Signed, lltype.Float],
+                                              lltype.Ptr(rstr.STR)))
+    class FakeWarmRunnerDesc:
+        rtyper = None
+        green_args_spec = [lltype.Signed, lltype.Float]
+        can_inline_ptr = None
+        get_printable_location_ptr = llhelper(GET_LOCATION, get_location)
+    state = WarmEnterState(FakeWarmRunnerDesc())
+    state.make_jitdriver_callbacks()
+    res = state.get_location_str([BoxInt(5), BoxFloat(42.5)])
+    assert res == "hi there"
