@@ -250,6 +250,8 @@ class FunctionGcRootTracker(object):
                 match = self.r_localvar_ebp.match(localvar)
                 if match:
                     ofs_from_ebp = int(match.group(1) or '0')
+                    if self.format == 'msvc':
+                        ofs_from_ebp += int(match.group(2) or '0')
                     localvar = ofs_from_ebp - 4
                     assert localvar != 0    # that's the return address
                     return LocalVar(localvar, hint='ebp')
@@ -727,7 +729,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     r_symboldefine =  re.compile(r"([_a-z0-9]+\$) = ([-0-9]+)\s*;.+\n")
 
     LOCALVAR        = r"eax|edx|ecx|ebx|esi|edi|ebp|DWORD PTR [-+]?\d*\[esp[-+]\d+\]"
-    LOCALVARFP      = LOCALVAR + r"|-?\d*\[ebp\]"
+    LOCALVARFP      = LOCALVAR + r"|DWORD PTR -?\d*\[ebp\]"
     r_localvarnofp  = re.compile(LOCALVAR)
     r_localvarfp    = re.compile(LOCALVARFP)
     r_gcroot_marker = re.compile(r";.+ = pypy_asm_gcroot\(")
@@ -1004,10 +1006,16 @@ class GcRootTracker(object):
             if self.format in ('darwin', 'mingw32', 'msvc'):
                 name = '_' + name
 
-            if disp:
-                return "%s + %s" % (name, disp)
+            if self.format == 'msvc':
+                if disp:
+                    return "DWORD PTR [%s+%s]" % (name, disp)
+                else:
+                    return name
             else:
-                return name
+                if disp:
+                    return "%s + %s" % (name, disp)
+                else:
+                    return name
 
         def _globl(name):
             if self.format == 'msvc':
@@ -1059,7 +1067,7 @@ class GcRootTracker(object):
 
         def _offset(name):
             if self.format == 'msvc':
-                return "OFFSET %s" % _globalname(name)
+                return "DWORD PTR [%s]" % _globalname(name)
             else:
                 return "$%s" % _globalname(name)
 
@@ -1071,7 +1079,7 @@ class GcRootTracker(object):
 
         def _indirectjmp(arg):
             if self.format == 'msvc':
-                return arg
+                return "DWORD PTR " + arg
             else:
                 return "*%" + arg
 
