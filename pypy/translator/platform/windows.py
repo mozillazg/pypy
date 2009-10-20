@@ -96,6 +96,15 @@ class MsvcPlatform(Platform):
             # Probably not a msvc compiler...
             self.version = 0
 
+        # Try to find a masm assembler
+        returncode, stdout, stderr = _run_subprocess('ml.exe', '',
+                                                     env=self.c_environ)
+        r = re.search('Macro Assembler', stderr)
+        if r is None and os.path.exists('c:/masm32/bin/ml.exe'):
+            self.masm = 'c:/masm32/bin/ml.exe'
+        else:
+            self.masm = 'ml.exe'
+
         # Install debug options only when interpreter is in debug mode
         if sys.executable.lower().endswith('_d.exe'):
             self.cflags = ['/MDd', '/Z7', '/Od']
@@ -177,10 +186,8 @@ class MsvcPlatform(Platform):
             errorfile = outname.new(ext='errors')
             errorfile.write(stderr)
             stderrlines = stderr.splitlines()
-            for line in stderrlines[:5]:
+            for line in stderrlines:
                 log.ERROR(line)
-            if len(stderrlines) > 5:
-                log.ERROR('...')
             raise CompilationError(stdout, stderr)
 
 
@@ -225,15 +232,17 @@ class MsvcPlatform(Platform):
             ('INCLUDEDIRS', self._includedirs(rel_includedirs)),
             ('CFLAGS', self.cflags + list(eci.compile_extra)),
             ('LDFLAGS', self.link_flags + list(eci.link_extra)),
-            ('CC', self.cc)
+            ('CC', self.cc),
+            ('CC_LINK', self.link),
+            ('MASM', self.masm),
             ]
         for args in definitions:
             m.definition(*args)
 
         rules = [
             ('all', '$(DEFAULT_TARGET)', []),
-            ('$(TARGET)', '$(OBJECTS)', '$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)'),
-            ('%.obj', '%.c', '$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)'),
+            ('$(TARGET)', '$(OBJECTS)', '$(CC_LINK) /nologo $(LDFLAGS) $(OBJECTS) /out:$@ $(LIBDIRS) $(LIBS)'),
+            ('.c.o', '', '$(CC) $(CFLAGS) /Fo$@ /c $< $(INCLUDEDIRS)'),
             ]
 
         for rule in rules:
@@ -251,14 +260,29 @@ class MsvcPlatform(Platform):
         try:
             returncode, stdout, stderr = _run_subprocess(
                 'nmake',
-                ['/f', str(path.join('Makefile'))])
+                ['/nologo', '/f', str(path.join('Makefile'))])
         finally:
             oldcwd.chdir()
 
         self._handle_error(returncode, stdout, stderr, path.join('make'))
 
 class NMakefile(posix.GnuMakefile):
-    pass # for the moment
+    def write(self, out=None):
+        # nmake expands macros when it parses rules.
+        # Write all macros before the rules.
+        if out is None:
+            f = self.makefile_dir.join('Makefile').open('w')
+        else:
+            f = out
+        for line in self.lines:
+            if not isinstance(line, posix.Rule):
+                line.write(f)
+        for line in self.lines:
+            if isinstance(line, posix.Rule):
+                line.write(f)
+        f.flush()
+        if out is None:
+            f.close()
 
 
 class MingwPlatform(posix.BasePosix):
