@@ -7,6 +7,7 @@ from pypy.jit.metainterp.warmstate import equal_whatever, hash_whatever
 from pypy.jit.metainterp.warmstate import WarmEnterState
 from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr
 from pypy.jit.metainterp.history import ConstInt, ConstFloat, ConstPtr
+from pypy.rlib.jit import BaseJitCell
 
 
 def test_unwrap():
@@ -59,7 +60,7 @@ def test_hash_equal_whatever_ootype():
 def test_make_jitcell_getter_default():
     class FakeWarmRunnerDesc:
         green_args_spec = [lltype.Signed, lltype.Float]
-    class FakeJitCell:
+    class FakeJitCell(BaseJitCell):
         pass
     state = WarmEnterState(FakeWarmRunnerDesc())
     get_jitcell = state._make_jitcell_getter_default(FakeJitCell)
@@ -83,8 +84,11 @@ def test_make_jitcell_getter():
     assert get_jitcell is state.make_jitcell_getter()
 
 def test_make_jitcell_getter_custom():
-    class FakeJitCell:
-        _TYPE = llmemory.GCREF
+    from pypy.rpython.typesystem import LowLevelTypeSystem
+    class FakeRTyper:
+        type_system = LowLevelTypeSystem.instance
+    class FakeJitCell(BaseJitCell):
+        pass
     celldict = {}
     def getter(x, y):
         return celldict.get((x, y))
@@ -97,7 +101,7 @@ def test_make_jitcell_getter_custom():
     SETTER = lltype.Ptr(lltype.FuncType([llmemory.GCREF, lltype.Signed,
                                          lltype.Float], lltype.Void))
     class FakeWarmRunnerDesc:
-        rtyper = None
+        rtyper = FakeRTyper()
         cpu = None
         get_jitcell_at_ptr = llhelper(GETTER, getter)
         set_jitcell_at_ptr = llhelper(SETTER, setter)
