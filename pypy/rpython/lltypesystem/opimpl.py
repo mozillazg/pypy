@@ -390,7 +390,13 @@ def op_adr_delta(addr1, addr2):
 
 def op_getfield(p, name):
     checkptr(p)
-    if not lltype.typeOf(p).TO._hints.get('immutable'):
+    TYPE = lltype.typeOf(p).TO
+    if TYPE._hints.get('immutable'):
+        pass
+    elif ('immutable_fields' in TYPE._hints and
+          name in TYPE._hints['immutable_fields'].fields):
+        pass
+    else:
         raise TypeError("cannot fold getfield on mutable struct")
     return getattr(p, name)
 
