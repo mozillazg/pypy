@@ -96,6 +96,27 @@ def test_is_pure():
     assert llop.getfield.is_pure([v_s3, Constant('x')])
     assert not llop.getfield.is_pure([v_s3, Constant('y')])
 
+def test_getfield_pure():
+    S1 = lltype.GcStruct('S', ('x', lltype.Signed), ('y', lltype.Signed))
+    S2 = lltype.GcStruct('S', ('x', lltype.Signed), ('y', lltype.Signed),
+                         hints={'immutable': True})
+    accessor = rclass.FieldListAccessor()
+    S3 = lltype.GcStruct('S', ('x', lltype.Signed), ('y', lltype.Signed),
+                         hints={'immutable_fields': accessor})
+    accessor.initialize(S3, ['x'])
+    #
+    s1 = lltype.malloc(S1); s1.x = 45
+    py.test.raises(TypeError, llop.getfield, lltype.Signed, s1, 'x')
+    s2 = lltype.malloc(S2); s2.x = 45
+    assert llop.getfield(lltype.Signed, s2, 'x') == 45
+    s3 = lltype.malloc(S3); s3.x = 46; s3.y = 47
+    assert llop.getfield(lltype.Signed, s3, 'x') == 46
+    py.test.raises(TypeError, llop.getfield, lltype.Signed, s3, 'y')
+    #
+    py.test.raises(TypeError, llop.getinteriorfield, lltype.Signed, s1, 'x')
+    assert llop.getinteriorfield(lltype.Signed, s2, 'x') == 45
+    assert llop.getinteriorfield(lltype.Signed, s3, 'x') == 46
+    py.test.raises(TypeError, llop.getinteriorfield, lltype.Signed, s3, 'y')
 
 # ___________________________________________________________________________
 # This tests that the LLInterpreter and the LL_OPERATIONS tables are in sync.
