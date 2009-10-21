@@ -1,4 +1,4 @@
-import sys
+import sys, os
 from pypy.jit.metainterp.history import Box, Const, ConstInt, INT, REF
 from pypy.jit.metainterp.resoperation import rop
 from pypy.rpython.lltypesystem import rffi
@@ -9,8 +9,6 @@ from pypy.rlib.objectmodel import we_are_translated
 # guard operation, and to decode it again.  This is a bit advanced,
 # because it needs to support optimize.py which encodes virtuals with
 # arbitrary cycles and also to compress the information
-
-debug = False
 
 class Snapshot(object):
     __slots__ = ('prev', 'boxes')
@@ -181,9 +179,10 @@ _frame_info_placeholder = (None, 0, 0)
 
 class ResumeDataVirtualAdder(object):
 
-    def __init__(self, storage, memo):
+    def __init__(self, storage, memo, debug_storage=None):
         self.storage = storage
         self.memo = memo
+        self.debug_storage = debug_storage
         #self.virtuals = []
         #self.vfieldboxes = []
 
@@ -259,8 +258,8 @@ class ResumeDataVirtualAdder(object):
         self._number_virtuals(liveboxes)
 
         storage.rd_consts = self.memo.consts
-        if debug:
-            dump_storage(storage, liveboxes)
+        if self.debug_storage:
+            dump_storage(self.debug_storage, storage, liveboxes)
         return liveboxes[:]
 
     def _number_virtuals(self, liveboxes):
@@ -426,16 +425,17 @@ class ResumeDataReader(object):
 
 # ____________________________________________________________
 
-def dump_storage(storage, liveboxes):
+def dump_storage(logname, storage, liveboxes):
     "For profiling only."
     import os
     from pypy.rlib import objectmodel
-    fd = os.open('log.storage', os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0666)
+    fd = os.open(logname, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0666)
     os.write(fd, 'Log(%d, [\n' % objectmodel.compute_unique_id(storage))
     frameinfo = storage.rd_frame_info_list
     while True:
-        os.write(fd, '\t("%s", %d, %d),\n' % (
-            frameinfo.jitcode, frameinfo.pc, frameinfo.exception_target))
+        os.write(fd, '\t("%s", %d, %d, %xd),\n' % (
+            frameinfo.jitcode, frameinfo.pc, frameinfo.exception_target,
+            objectmodel.compute_unique_id(frameinfo)))
         frameinfo = frameinfo.prev
         if frameinfo is None:
             break
