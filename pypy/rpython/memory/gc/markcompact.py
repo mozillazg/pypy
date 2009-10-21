@@ -34,24 +34,24 @@ memoryError = MemoryError()
 # differencies. The main difference is that we have separate phases of
 # marking and assigning pointers, hence order of objects is preserved.
 # This means we can reuse the same space if it did not grow enough.
-# More importantly, in case we need to resize space we can copy it bit by
-# bit, hence avoiding double memory consumption at peak times
 
-# so the algorithm itself is performed in 3 stages (module weakrefs and
+# so the algorithm itself is performed in 3 stages (modulo weakrefs and
 # finalizers)
 
 # 1. We mark alive objects
 # 2. We walk all objects and assign forward pointers in the same order,
 #    also updating all references
-# 3. We compact the space by moving. In case we move to the same space,
-#    we use arena_new_view trick, which looks like new space to tests,
-#    but compiles to the same pointer. Also we use raw_memmove in case
-#    objects overlap.
+# 3. We compact the space by moving. In order to move to the same space,
+#    we use the 'arena_new_view' trick, which looks like a new space to
+#    tests, but compiles to the same pointer. Also we use raw_memmove in
+#    case the object overlaps.
 
-# Exact algorithm for space resizing: we keep allocated more space than needed
-# (2x, can be even more), but it's full of zeroes. After each collection,
-# we bump next_collect_after which is a marker where to start each collection.
-# It should be exponential (but less than 2) from the size occupied by objects
+# Exact algorithm for space resizing: at process start, we "reserve" a
+# large range of pages, mostly unused (on Unix it is full of zeroes; on
+# Windows it is obtained with VirtualAlloc MEM_RESERVE, not MEM_COMMIT).
+# A marker, 'next_collect_after', tells us when to start each
+# collection.  It should be initialized at a multiple (e.g. 2x) of the
+# size occupied by live objects after a collection.
 
 # field optimization - we don't need forward pointer and flags at the same
 # time. Instead we copy list of tids when we know how many objects are alive
