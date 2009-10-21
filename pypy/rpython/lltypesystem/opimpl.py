@@ -142,7 +142,12 @@ def op_getinteriorfield(obj, *offsets):
     # we can constant-fold this if the innermost structure from which we
     # read the final field is immutable.
     T = lltype.typeOf(innermostcontainer).TO
-    if not T._hints.get('immutable'):
+    if T._hints.get('immutable'):
+        pass
+    elif ('immutable_fields' in T._hints and
+          offsets[-1] in T._hints['immutable_fields'].fields):
+        pass
+    else:
         raise TypeError("cannot fold getinteriorfield on mutable struct")
     assert not isinstance(ob, lltype._interior_ptr)
     return ob
