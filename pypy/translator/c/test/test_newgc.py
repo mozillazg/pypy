@@ -931,7 +931,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
 
     def test_string_builder_over_allocation(self):
         res = self.run('string_builder_over_allocation')
-        assert res == 'abcddefgrty' * 1000*'z' + 1000*'u'
+        assert res == 'abcddefgrty' + 1000*'z' + 1000*'u'
 
 class TestGenerationalGC(TestSemiSpaceGC):
     gcpolicy = "generation"
