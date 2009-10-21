@@ -20,6 +20,8 @@ from pypy.tool.stdlib_opcode import opcodedesc, HAVE_ARGUMENT
 from opcode import opmap
 from pypy.rlib.objectmodel import we_are_translated
 
+PyCode.jit_cells = None
+
 PyFrame._virtualizable2_ = ['last_instr', 'pycode',
                             'valuestackdepth', 'valuestack_w[*]',
                             'fastlocals_w[*]', 'f_forward',
@@ -53,6 +55,19 @@ def leave(next_instr, pycode, frame, ec):
     # annotation       XXX no longer true, could be fixed
     ExecutionContext._jit_rechain_frame(ec, frame)
 
+def get_jitcell_at(next_instr, bytecode):
+    d = bytecode.jit_cells
+    if d is None:
+        return None
+    return d.get(next_instr, None)
+
+def set_jitcell_at(newcell, next_instr, bytecode):
+    d = bytecode.jit_cells
+    if d is None:
+        d = bytecode.jit_cells = {}
+    d[next_instr] = newcell
+
+
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
     greens = ['next_instr', 'pycode']
@@ -68,7 +83,9 @@ class PyPyJitDriver(JitDriver):
 
 pypyjitdriver = PyPyJitDriver(can_inline = can_inline,
                               get_printable_location = get_printable_location,
-                              leave = leave)
+                              leave = leave,
+                              get_jitcell_at = get_jitcell_at,
+                              set_jitcell_at = set_jitcell_at)
 
 class __extend__(PyFrame):
 
