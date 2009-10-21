@@ -20,8 +20,6 @@ from pypy.tool.stdlib_opcode import opcodedesc, HAVE_ARGUMENT
 from opcode import opmap
 from pypy.rlib.objectmodel import we_are_translated
 
-PyCode.jit_cells = None
-
 PyFrame._virtualizable2_ = ['last_instr', 'pycode',
                             'valuestackdepth', 'valuestack_w[*]',
                             'fastlocals_w[*]', 'f_forward',
@@ -56,16 +54,10 @@ def leave(next_instr, pycode, frame, ec):
     ExecutionContext._jit_rechain_frame(ec, frame)
 
 def get_jitcell_at(next_instr, bytecode):
-    d = bytecode.jit_cells
-    if d is None:
-        return None
-    return d.get(next_instr, None)
+    return bytecode.jit_cells.get(next_instr, None)
 
 def set_jitcell_at(newcell, next_instr, bytecode):
-    d = bytecode.jit_cells
-    if d is None:
-        d = bytecode.jit_cells = {}
-    d[next_instr] = newcell
+    bytecode.jit_cells[next_instr] = newcell
 
 
 class PyPyJitDriver(JitDriver):
@@ -110,6 +102,20 @@ class __extend__(PyFrame):
         pypyjitdriver.can_enter_jit(frame=f, ec=ec, next_instr=jumpto,
                                     pycode=f.getcode())
         return jumpto
+
+
+PyCode__initialize = PyCode._initialize
+
+class __extend__(PyCode):
+    __metaclass__ = extendabletype
+
+    def _initialize(self):
+        PyCode__initialize(self)
+        self.jit_cells = {}
+
+    def _freeze_(self):
+        self.jit_cells = {}
+        return False
 
 # ____________________________________________________________
 #
