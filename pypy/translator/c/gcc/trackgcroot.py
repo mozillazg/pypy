@@ -34,7 +34,6 @@ r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
 r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
 r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
 r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|\t\.align|"+LABEL)
-r_bottom_marker = re.compile(r"\t/[*] GC_STACK_BOTTOM [*]/")
 
 class FunctionGcRootTracker(object):
     skip = 0
@@ -91,7 +90,7 @@ class FunctionGcRootTracker(object):
             shape = [retaddr]
             # the first gcroots are always the ones corresponding to
             # the callee-saved registers
-            for reg in CALLEE_SAVE_REGISTERS:
+            for reg in self.CALLEE_SAVE_REGISTERS:
                 shape.append(LOC_NOWHERE)
             gcroots = []
             for localvar, tag in insn.gcroots.items():
@@ -99,17 +98,17 @@ class FunctionGcRootTracker(object):
                     loc = localvar.getlocation(insn.framesize,
                                                self.uses_frame_pointer)
                 else:
-                    assert localvar in REG2LOC, "%s: %s" % (self.funcname,
-                                                            localvar)
-                    loc = REG2LOC[localvar]
+                    assert localvar in self.REG2LOC, "%s: %s" % (self.funcname,
+                                                                 localvar)
+                    loc = self.REG2LOC[localvar]
                 assert isinstance(loc, int)
                 if tag is None:
                     gcroots.append(loc)
                 else:
-                    regindex = CALLEE_SAVE_REGISTERS.index(tag)
+                    regindex = self.CALLEE_SAVE_REGISTERS.index(tag)
                     shape[1 + regindex] = loc
             if LOC_NOWHERE in shape and not self.is_stack_bottom:
-                reg = CALLEE_SAVE_REGISTERS[shape.index(LOC_NOWHERE) - 1]
+                reg = self.CALLEE_SAVE_REGISTERS[shape.index(LOC_NOWHERE) - 1]
                 raise AssertionError("cannot track where register %s is saved"
                                      % (reg,))
             gcroots.sort()
@@ -139,7 +138,7 @@ class FunctionGcRootTracker(object):
             lst.append(previnsn)
 
     def parse_instructions(self):
-        self.insns = [InsnFunctionStart()]
+        self.insns = [InsnFunctionStart(self.CALLEE_SAVE_REGISTERS)]
         ignore_insns = False
         for lineno, line in enumerate(self.lines):
             if lineno < self.skip:
@@ -147,7 +146,10 @@ class FunctionGcRootTracker(object):
             self.currentlineno = lineno
             insn = []
             match = r_insn.match(line)
-            if match:
+
+            if self.r_bottom_marker.match(line):
+                self.is_stack_bottom = True
+            elif match:
                 if not ignore_insns:
                     opname = match.group(1)
                     try:
@@ -159,8 +161,6 @@ class FunctionGcRootTracker(object):
                     insn = meth(line)
             elif self.r_gcroot_marker.match(line):
                 insn = self._visit_gcroot_marker(line)
-            elif r_bottom_marker.match(line):
-                self.is_stack_bottom = True
             elif line == '\t/* ignore_in_trackgcroot */\n':
                 ignore_insns = True
             elif line == '\t/* end_ignore_in_trackgcroot */\n':
@@ -176,7 +176,7 @@ class FunctionGcRootTracker(object):
             else:
                 self.append_instruction(insn)
 
-            del self.currentlineno
+        del self.currentlineno
 
     @classmethod
     def find_missing_visit_method(cls, opname):
@@ -524,7 +524,7 @@ class FunctionGcRootTracker(object):
         return self._visit_epilogue() + self._visit_pop(self.EBP)
 
     def visit_ret(self, line):
-        return InsnRet()
+        return InsnRet(self.CALLEE_SAVE_REGISTERS)
 
     def visit_jmp(self, line):
         tablelabels = []
@@ -579,7 +579,7 @@ class FunctionGcRootTracker(object):
         if self.r_unaryinsn_star.match(line):
             # that looks like an indirect tail-call.
             # tail-calls are equivalent to RET for us
-            return InsnRet()
+            return InsnRet(self.CALLEE_SAVE_REGISTERS)
         try:
             self.conditional_jump(line)
         except KeyError:
@@ -588,7 +588,7 @@ class FunctionGcRootTracker(object):
             target = match.group(1)
             assert not target.startswith('.')
             # tail-calls are equivalent to RET for us
-            return InsnRet()
+            return InsnRet(self.CALLEE_SAVE_REGISTERS)
         return InsnStop()
 
     def register_jump_to(self, label):
@@ -669,6 +669,9 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     ESP     = '%esp'
     EBP     = '%ebp'
     EAX     = '%eax'
+    CALLEE_SAVE_REGISTERS = ['%ebx', '%esi', '%edi', '%ebp']
+    REG2LOC = dict((_reg, LOC_REG | (_i<<2))
+                   for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS))
     OPERAND = r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
     LABEL   = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
     TOP_OF_STACK = '0(%esp)'
@@ -679,9 +682,11 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     LOCALVARFP      = LOCALVAR + r"|-?\d*[(]%ebp[)]"
     r_localvarnofp  = re.compile(LOCALVAR)
     r_localvarfp    = re.compile(LOCALVARFP)
-    r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
     r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
     r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
+
+    r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
+    r_bottom_marker = re.compile(r"\t/[*] GC_STACK_BOTTOM [*]/")
 
     def __init__(self, lines, filetag=0):
         match = self.r_functionstart.match(lines[0])
@@ -718,6 +723,9 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     ESP = 'esp'
     EBP = 'ebp'
     EAX = 'eax'
+    CALLEE_SAVE_REGISTERS = ['ebx', 'esi', 'edi', 'ebp']
+    REG2LOC = dict((_reg, LOC_REG | (_i<<2))
+                   for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS))
     TOP_OF_STACK = 'DWORD PTR [esp]'
 
     OPERAND = r'(?:(:?WORD|DWORD|BYTE) PTR |OFFSET )?[_\w?:@$]*(?:[-+0-9]+)?(:?\[[-+*\w0-9]+\])?'
@@ -728,13 +736,15 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     r_functionend   = re.compile(LABEL+r"\s+ENDP\s*$")
     r_symboldefine =  re.compile(r"([_a-z0-9]+\$) = ([-0-9]+)\s*;.+\n")
 
-    LOCALVAR        = r"eax|edx|ecx|ebx|esi|edi|ebp|DWORD PTR [-+]?\d*\[esp[-+]\d+\]"
+    LOCALVAR        = r"eax|edx|ecx|ebx|esi|edi|ebp|DWORD PTR [-+]?\d*\[esp[-+]?\d*\]"
     LOCALVARFP      = LOCALVAR + r"|DWORD PTR -?\d*\[ebp\]"
     r_localvarnofp  = re.compile(LOCALVAR)
     r_localvarfp    = re.compile(LOCALVARFP)
-    r_gcroot_marker = re.compile(r";.+ = pypy_asm_gcroot\(")
     r_localvar_esp  = re.compile(r"DWORD PTR ([-+]?\d+)?\[esp([-+]?\d+)?\]")
     r_localvar_ebp  = re.compile(r"DWORD PTR ([-+]?\d+)?\[ebp([-+]?\d+)?\]")
+
+    r_gcroot_marker = re.compile(r";.+ = pypy_asm_gcroot\(")
+    r_bottom_marker = re.compile(r"\tcall\t_pypy_asm_stack_bottom\s*")
 
     @classmethod
     def init_regexp(cls):
@@ -1096,8 +1106,6 @@ class GcRootTracker(object):
                  mingw32='\t.text',
                  msvc='_TEXT\tSEGMENT')
 
-        _globl('__gcrootanchor')
-
         _globl('pypy_asm_stackwalk')
         _variant(elf='.type pypy_asm_stackwalk, @function',
                  darwin='',
@@ -1160,12 +1168,13 @@ class GcRootTracker(object):
         _comment("A circular doubly-linked list of all")
         _comment("the ASM_FRAMEDATAs currently alive")
         if self.format == 'msvc':
-            print >> output, '%s:' % _globalname("__gcrootanchor")
-            print >> output, '\tDD FLAT:___gcrootanchor  ; prev'
+            _globl('__gcrootanchor')
+            print >> output, '%s\tDD FLAT:___gcrootanchor  ; prev' % _globalname("__gcrootanchor")
             print >> output, '\tDD FLAT:___gcrootanchor  ; next'
         else:
             print >> output, '\t.data'
             print >> output, '\t.align\t4'
+            _globl('__gcrootanchor')
             _label('__gcrootanchor')
             print >> output, """\
             .long\t__gcrootanchor       /* prev */
@@ -1174,7 +1183,7 @@ class GcRootTracker(object):
 
         _globl('__gcmapstart')
         if self.format == 'msvc':
-            print >> output, '%s:' % _globalname('__gcmapstart')
+            print >> output, '%s' % _globalname('__gcmapstart'),
         else:
             _label('__gcmapstart')
         for label, state, is_range in self.gcmaptable:
@@ -1202,7 +1211,10 @@ class GcRootTracker(object):
                 print >> output, '\t.long\t%d' % (n,)
 
         _globl('__gcmapend')
-        _label('__gcmapend')
+        if self.format == 'msvc':
+            print >> output, '%s DD ?' % _globalname('__gcmapend')
+        else:
+            _label('__gcmapend')
         _variant(elf='.section\t.rodata',
                  darwin='.const',
                  mingw32='',
@@ -1210,7 +1222,7 @@ class GcRootTracker(object):
 
         _globl('__gccallshapes')
         if self.format == 'msvc':
-            print >> output, '%s:' % _globalname('__gccallshapes')
+            print >> output, _globalname('__gccallshapes'),
         else:
             _label('__gccallshapes')
         output.writelines(shapelines)
@@ -1272,7 +1284,7 @@ def format_location(loc):
     elif kind == LOC_REG:
         reg = loc >> 2
         assert 0 <= reg <= 3
-        return CALLEE_SAVE_REGISTERS[reg]
+        return ElfFunctionGcRootTracker.CALLEE_SAVE_REGISTERS[reg]
     else:
         if kind == LOC_EBP_BASED:
             result = '(%ebp)'
