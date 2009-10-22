@@ -94,7 +94,7 @@ $block2$34378:
 	jle	SHORT $LN17@pypy_g_foo
 $LN16@pypy_g_foo:
 	call	_LL_stack_too_big_slowpath
-	;; expected {24(%esp) | %ebx, %esi, %edi, %ebp | %ebx, %edi, %ebp, 44(%esp), 48(%esp), 52(%esp)}
+	;; expected {24(%esp) | 12(%esp), (%esp), 4(%esp), 8(%esp) | %ebx, %edi, %ebp, 44(%esp), 48(%esp), 52(%esp)}
 	test	eax, eax
 	jne	$LN71@pypy_g_foo
 $LN17@pypy_g_foo:
@@ -147,7 +147,7 @@ $block3$34382:
 	push	OFFSET _pypy_g_pypy_rpython_memory_gc_semispace_SemiSpaceGC
 $block11$34394:
 	call	_pypy_g_SemiSpaceGC_obtain_free_space
-	;; expected {32(%esp) | %ebx, %esi, %edi, %ebp | %ebx, %edi, %ebp, 52(%esp), 56(%esp), 60(%esp)}
+	;; expected {32(%esp) | 20(%esp), 8(%esp), 12(%esp), 16(%esp) | %ebx, %edi, %ebp, 52(%esp), 56(%esp), 60(%esp)}
 	add	esp, 8
 
 ; 1192 : 	l_v425 = RPyField((&pypy_g_ExcData), ed_exc_type);
@@ -293,7 +293,7 @@ $block6$34416:
 $block7$34426:
 	mov	DWORD PTR [esi+4], OFFSET _pypy_g_src8_A_vtable
 	call	_pypy_g_foo
-	;; expected {52(%esp) | %ebx, %esi, %edi, %ebp | %ebx, %esi, %edi, %ebp, 72(%esp), 76(%esp), 80(%esp)}
+	;; expected {52(%esp) | 40(%esp), 28(%esp), 32(%esp), 36(%esp) | %ebx, %esi, %edi, %ebp, 72(%esp), 76(%esp), 80(%esp)}
 	add	esp, 28					; 0000001cH
 
 ; 1125 : 	l_v376 = (void*)l_a2_1;
@@ -389,7 +389,7 @@ $block7$34426:
 	push	eax
 $block8$34437:
 	call	_pypy_g_foo
-	;; expected {52(%esp) | %ebx, %esi, %edi, %ebp | %ebx, %edi, %ebp, 72(%esp), 76(%esp), 80(%esp)}
+	;; expected {52(%esp) | 40(%esp), 28(%esp), 32(%esp), 36(%esp) | %ebx, %edi, %ebp, 72(%esp), 76(%esp), 80(%esp)}
 	add	esp, 28					; 0000001cH
 
 ; 1156 : 	l_v401 = (void*)l_a2_1;

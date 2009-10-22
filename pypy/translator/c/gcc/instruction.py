@@ -1,22 +1,13 @@
-CALLEE_SAVE_REGISTERS_NOEBP = ['%ebx', '%esi', '%edi']
-CALLEE_SAVE_REGISTERS = CALLEE_SAVE_REGISTERS_NOEBP + ['%ebp']
-
 LOC_NOWHERE   = 0
 LOC_REG       = 1
 LOC_EBP_BASED = 2
 LOC_ESP_BASED = 3
 LOC_MASK      = 0x03
 
-REG2LOC = {}
-for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS):
-    REG2LOC[_reg] = LOC_REG | (_i<<2)
-    REG2LOC[_reg[1:]] = LOC_REG | (_i<<2)
-
 def frameloc(base, offset):
     assert base in (LOC_EBP_BASED, LOC_ESP_BASED)
     assert offset % 4 == 0
     return base | offset
-
 
 
 class SomeNewValue(object):
@@ -84,9 +75,9 @@ class Label(Insn):
 class InsnFunctionStart(Insn):
     framesize = 0
     previous_insns = ()
-    def __init__(self):
+    def __init__(self, registers):
         self.arguments = {}
-        for reg in CALLEE_SAVE_REGISTERS:
+        for reg in registers:
             self.arguments[reg] = somenewvalue
 
     def source_of(self, localvar, tag):
@@ -160,6 +151,9 @@ class InsnStop(Insn):
 
 class InsnRet(InsnStop):
     framesize = 0
+    def __init__(self, registers):
+        self.registers = registers
+
     def requestgcroots(self, tracker):
         # no need to track the value of these registers in the caller
         # function if we are the main(), or if we are flagged as a
@@ -167,7 +161,7 @@ class InsnRet(InsnStop):
         if tracker.is_stack_bottom:
             return {}
         else:
-            return dict(zip(CALLEE_SAVE_REGISTERS, CALLEE_SAVE_REGISTERS))
+            return dict(zip(self.registers, self.registers))
 
 class InsnCall(Insn):
     _args_ = ['lineno', 'gcroots']
