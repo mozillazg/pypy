@@ -32,8 +32,6 @@ r_globllabel    = re.compile(LABEL+r"=[.][+]%d\s*$"%OFFSET_LABELS)
 r_insn          = re.compile(r"\t([a-z]\w*)\s")
 r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
 r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
-r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
-r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|\t\.align|"+LABEL)
 
 class FunctionGcRootTracker(object):
     skip = 0
@@ -41,7 +39,6 @@ class FunctionGcRootTracker(object):
     @classmethod
     def init_regexp(cls):
         cls.r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+cls.OPERAND+")\s*$")
-        cls.r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+cls.OPERAND+")\s*$")
         cls.r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<source>"+cls.OPERAND+"),\s*(?P<target>"+cls.OPERAND+")\s*$")
 
         cls.r_jump          = re.compile(r"\tj\w+\s+"+cls.LABEL+"\s*$")
@@ -539,7 +536,7 @@ class FunctionGcRootTracker(object):
             # registry:
             #     movl L9341(%eax), %eax
             #     jmp *%eax
-            operand = self.r_unaryinsn_star.match(line).group(1)[1:]
+            operand = self.r_unaryinsn_star.match(line).group(1)
             def walker(insn, locs):
                 sources = []
                 for loc in locs:
@@ -567,10 +564,10 @@ class FunctionGcRootTracker(object):
         assert len(tablelabels) <= 1
         if tablelabels:
             tablelin = self.labels[tablelabels[0]].lineno + 1
-            while not r_jmptable_end.match(self.lines[tablelin]):
-                match = r_jmptable_item.match(self.lines[tablelin])
+            while not self.r_jmptable_end.match(self.lines[tablelin]):
+                match = self.r_jmptable_item.match(self.lines[tablelin])
                 if not match:
-                    raise NoPatternMatch(self.lines[tablelin])
+                    raise NoPatternMatch(repr(self.lines[tablelin]))
                 label = match.group(1)
                 if label != '0':
                     self.register_jump_to(label)
@@ -660,6 +657,10 @@ class FunctionGcRootTracker(object):
             # Function name is decorated with "@N" where N is the stack size
             if match and '@' in target:
                 insns.append(InsnStackAdjust(int(target.rsplit('@', 1)[1])))
+            # XXX some functions seem use the "fastcall" calling convention
+            # without their declaration, how can we guess the stack effect?
+            if match and target in ['__alldiv', '__allrem', '__allmul']:
+                insns.append(InsnStackAdjust(16))
         return insns
 
 
@@ -684,6 +685,10 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     r_localvarfp    = re.compile(LOCALVARFP)
     r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
     r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
+
+    r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+[*]("+OPERAND+")\s*$")
+    r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
+    r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|\t\.align|"+LABEL)
 
     r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
     r_bottom_marker = re.compile(r"\t/[*] GC_STACK_BOTTOM [*]/")
@@ -745,6 +750,10 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
 
     r_gcroot_marker = re.compile(r";.+ = pypy_asm_gcroot\(")
     r_bottom_marker = re.compile(r"\tcall\t_pypy_asm_stack_bottom\s*")
+
+    r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+DWORD PTR ("+OPERAND+")\s*$")
+    r_jmptable_item = re.compile(r"\tDD\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
+    r_jmptable_end  = re.compile(r"[^\t]")
 
     @classmethod
     def init_regexp(cls):
@@ -1264,10 +1273,13 @@ if sys.platform != 'win32':
 else:
     FUNCTIONS_NOT_RETURNING = {
         '_abort': None,
-        '__imp__abort': None,
         '__exit': None,
         '__assert': None,
         '__wassert': None,
+        '__imp__abort': None,
+        '__imp___wassert': None,
+        'DWORD PTR __imp__abort': None,
+        'DWORD PTR __imp___wassert': None,
         }
 
 # __________ debugging output __________
