@@ -47,7 +47,7 @@ void* pypy_asm_gcroot(void* _r1)
     return _r1;
 }
 #define pypy_asm_keepalive(v)    __asm { }
-static __declspec(noinline) void* pypy_asm_stack_bottom() { }
+static __declspec(noinline) void pypy_asm_stack_bottom() { }
 
 #endif
 
