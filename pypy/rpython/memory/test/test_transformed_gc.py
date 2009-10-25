@@ -13,6 +13,7 @@ from pypy.rlib.debug import ll_assert
 from pypy.rlib import rgc
 from pypy import conftest
 from pypy.rlib.rstring import StringBuilder
+from pypy.rlib.objectmodel import keepalive_until_here
 
 INT_SIZE = struct.calcsize("i")   # only for estimates
 
@@ -798,23 +799,34 @@ class GenericMovingGCTests(GenericGCTests):
 
     def define_gc_dump_heap(cls):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
+        l = []
         
-        def f(fd, ign):
-            l = []
+        def f():
             for i in range(10):
                 l.append(lltype.malloc(S))
-            rgc.dump_heap(fd)
-            return 0
+            # We cheat here and only read the table which we later on
+            # process ourselves, otherwise this test takes ages
+            tb = rgc._dump_heap()
+            a = 0
+            nr = 0
+            b = 0
+            c = 0
+            for i in range(len(tb)):
+                if tb[i].count == 10:
+                    a += 1
+                    nr = i
+            for i in range(len(tb)):
+                if tb[i].count == 1:
+                    b += 1
+                    c = tb[i].links[nr]
+            rgc._clear_dump_heap(tb)
+            return c * 100 + b * 10 + a
         return f
 
     def test_gc_dump_heap(self):
-        from pypy.tool.udir import udir
-        f = udir.join("gcdump.log")
-        handle = open(str(f), "w")
         run = self.runner("gc_dump_heap")
-        run([handle.fileno(), 0])
-        handle.close()
-        assert f.read() == 'xxx'
+        res = run([])
+        assert res == 1011
         
 # ________________________________________________________________
 

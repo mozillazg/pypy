@@ -9,7 +9,8 @@ from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rpython.memory.gc.base import MovingGCBase
+from pypy.rpython.memory.gc.base import MovingGCBase, ARRAY_TYPEID_MAP,\
+     TYPEID_MAP
 
 import sys, os, time
 
@@ -23,9 +24,6 @@ GCFLAG_HASHTAKEN = first_gcflag << 3      # someone already asked for the hash
 GCFLAG_HASHFIELD = first_gcflag << 4      # we have an extra hash field
 
 memoryError = MemoryError()
-
-ARRAY_OF_SIGNED = lltype.Array(lltype.Signed)
-
 
 class SemiSpaceGC(MovingGCBase):
     _alloc_flavor_ = "raw"
@@ -639,24 +637,38 @@ class SemiSpaceGC(MovingGCBase):
             #
             return llmemory.cast_adr_to_int(obj)  # direct case
 
-    def _dump_heap_extraarg(self, addr, ignored):
+    def _dump_heap_extraarg(self, addr, parent):
+        parent_idx = llop.get_member_index(lltype.Signed,
+                                           self.get_type_id(parent))
+        idx = llop.get_member_index(lltype.Signed,
+                                    self.get_type_id(addr.address[0]))
+        self._ll_typeid_map[parent_idx].links[idx] += 1
         self._dump_heap(addr)
 
-    def _dump_heap(self, addr):
-        os.write(self._fd_dump, "X")
-        self.trace(addr, self._dump_heap_extraarg, None)
+    def _dump_heap(self, root):
+        adr = root.address[0]
+        idx = llop.get_member_index(lltype.Signed, self.get_type_id(adr))
+        self._ll_typeid_map[idx].count += 1
+        self.trace(adr, self._dump_heap_extraarg, adr)
 
-    def dump_heap(self, fd):
-        ll_typeid_usage = lltype.nullptr(ARRAY_OF_SIGNED)
-        self._fd_dump = fd
-        try:
-            ll_typeid_usage = lltype.malloc(ARRAY_OF_SIGNED,
-                             self.root_walker.gcdata.max_type_id, flavor='raw')
-            self.root_walker.walk_roots(
-                SemiSpaceGC._dump_heap,  # stack roots
-                SemiSpaceGC._dump_heap,  # static in prebuilt non-gc structures
-                SemiSpaceGC._dump_heap)  # static in prebuilt gc objects
-        finally:
-            if ll_typeid_usage:
-                lltype.free(ll_typeid_usage, flavor='raw')
-            self._fd_dump = -1
+    def dump_heap(self):
+        max_tid = self.root_walker.gcdata.max_type_id
+        ll_typeid_map = lltype.malloc(ARRAY_TYPEID_MAP, max_tid,
+                                        flavor='raw')
+        i = 0
+        while i < max_tid:
+            ll_typeid_map[i] = lltype.malloc(TYPEID_MAP, max_tid,
+                                             flavor='raw')
+            ll_typeid_map[i].count = 0
+            j = 0
+            while j < max_tid:
+                ll_typeid_map[i].links[j] = 0
+                j += 1
+            i += 1
+        self._ll_typeid_map = ll_typeid_map
+        self.root_walker.walk_roots(
+            SemiSpaceGC._dump_heap,  # stack roots
+            SemiSpaceGC._dump_heap,  # static in prebuilt non-gc structures
+            SemiSpaceGC._dump_heap)  # static in prebuilt gc objects
+        self._ll_typeid_map = lltype.nullptr(ARRAY_TYPEID_MAP)
+        return ll_typeid_map
