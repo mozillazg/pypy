@@ -116,6 +116,7 @@ class FrameworkGCTransformer(GCTransformer):
 
     def __init__(self, translator):
         from pypy.rpython.memory.gc.base import choose_gc_from_config
+        from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
         super(FrameworkGCTransformer, self).__init__(translator, inline=True)
         if hasattr(self, 'GC_PARAMS'):
             # for tests: the GC choice can be specified as class attributes
@@ -271,10 +272,8 @@ class FrameworkGCTransformer(GCTransformer):
                 annmodel.s_None)
 
         if hasattr(GCClass, 'dump_heap'):
-            self.dump_heap_ptr = getfn(
-                GCClass.dump_heap.im_func,
-                [s_gc, annmodel.SomeInteger()],
-                annmodel.s_None)
+            self.dump_heap_ptr = getfn(GCClass.dump_heap.im_func,
+                    [s_gc], annmodel.SomePtr(lltype.Ptr(ARRAY_TYPEID_MAP)))
 
         # in some GCs we can inline the common case of
         # malloc_fixedsize(typeid, size, True, False, False)
@@ -647,9 +646,8 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_gc_dump_heap(self, hop):
         op = hop.spaceop
-        v_fd = op.args[0]
-        hop.genop("direct_call", [self.dump_heap_ptr,
-                                  self.c_const_gc, v_fd])
+        hop.genop("direct_call", [self.dump_heap_ptr, self.c_const_gc],
+                  resultvar=op.result)
 
     def gct_gc_adr_of_nursery_free(self, hop):
         if getattr(self.gcdata.gc, 'nursery_free', None) is None:
