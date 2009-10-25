@@ -52,7 +52,8 @@ class GCBase(object):
                             varsize_offset_to_variable_part,
                             varsize_offset_to_length,
                             varsize_offsets_to_gcpointers_in_var_part,
-                            weakpointer_offset):
+                            weakpointer_offset,
+                            member_index):
         self.getfinalizer = getfinalizer
         self.is_varsize = is_varsize
         self.has_gcptr_in_varsize = has_gcptr_in_varsize
@@ -64,6 +65,10 @@ class GCBase(object):
         self.varsize_offset_to_length = varsize_offset_to_length
         self.varsize_offsets_to_gcpointers_in_var_part = varsize_offsets_to_gcpointers_in_var_part
         self.weakpointer_offset = weakpointer_offset
+        self.member_index = member_index
+
+    def get_member_index(self, type_id):
+        return self.member_index(type_id)
 
     def set_root_walker(self, root_walker):
         self.root_walker = root_walker
