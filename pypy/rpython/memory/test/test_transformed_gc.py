@@ -796,6 +796,26 @@ class GenericMovingGCTests(GenericGCTests):
         run = self.runner("do_malloc_operations_in_call")
         run([])
 
+    def define_gc_dump_heap(cls):
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        
+        def f(fd, ign):
+            l = []
+            for i in range(10):
+                l.append(lltype.malloc(S))
+            rgc.dump_heap(fd)
+            return 0
+        return f
+
+    def test_gc_dump_heap(self):
+        from pypy.tool.udir import udir
+        f = udir.join("gcdump.log")
+        handle = open(str(f), "w")
+        run = self.runner("gc_dump_heap")
+        run([handle.fileno(), 0])
+        handle.close()
+        assert f.read() == 'xxx'
+        
 # ________________________________________________________________
 
 class TestMarkSweepGC(GenericGCTests):

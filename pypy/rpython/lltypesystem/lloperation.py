@@ -459,6 +459,7 @@ LL_OPERATIONS = {
     'gc_thread_run'       : LLOp(),
     'gc_thread_die'       : LLOp(),
     'gc_assume_young_pointers': LLOp(),
+    'gc_dump_heap'        : LLOp(),
 
     # ------- JIT & GC interaction, only for some GCs ----------
     
