@@ -274,6 +274,10 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(GCClass, 'dump_heap'):
             self.dump_heap_ptr = getfn(GCClass.dump_heap.im_func,
                     [s_gc], annmodel.SomePtr(lltype.Ptr(ARRAY_TYPEID_MAP)))
+            self.get_member_index_ptr = getfn(
+                GCClass.get_member_index.im_func,
+                [s_gc, annmodel.SomeInteger(knowntype=rffi.r_ushort)],
+                annmodel.SomeInteger())
 
         # in some GCs we can inline the common case of
         # malloc_fixedsize(typeid, size, True, False, False)
@@ -514,7 +518,6 @@ class FrameworkGCTransformer(GCTransformer):
         newgcdependencies = []
         newgcdependencies.append(ll_static_roots_inside)
         ll_instance.inst_max_type_id = len(group.members)
-
         self.write_typeid_list()
         return newgcdependencies
 
@@ -648,6 +651,12 @@ class FrameworkGCTransformer(GCTransformer):
         op = hop.spaceop
         hop.genop("direct_call", [self.dump_heap_ptr, self.c_const_gc],
                   resultvar=op.result)
+
+    def gct_get_member_index(self, hop):
+        op = hop.spaceop
+        v_typeid = op.args[0]
+        hop.genop("direct_call", [self.get_member_index_ptr, self.c_const_gc,
+                                  v_typeid], resultvar=op.result)
 
     def gct_gc_adr_of_nursery_free(self, hop):
         if getattr(self.gcdata.gc, 'nursery_free', None) is None:
