@@ -24,6 +24,8 @@ GCFLAG_HASHFIELD = first_gcflag << 4      # we have an extra hash field
 
 memoryError = MemoryError()
 
+ARRAY_OF_SIGNED = lltype.Array(lltype.Signed)
+
 
 class SemiSpaceGC(MovingGCBase):
     _alloc_flavor_ = "raw"
@@ -636,3 +638,25 @@ class SemiSpaceGC(MovingGCBase):
                 hdr.tid |= GCFLAG_HASHTAKEN
             #
             return llmemory.cast_adr_to_int(obj)  # direct case
+
+    def _dump_heap_extraarg(self, addr, ignored):
+        self._dump_heap(addr)
+
+    def _dump_heap(self, addr):
+        os.write(self._fd_dump, "X")
+        self.trace(addr, self._dump_heap_extraarg, None)
+
+    def dump_heap(self, fd):
+        ll_typeid_usage = lltype.nullptr(ARRAY_OF_SIGNED)
+        self._fd_dump = fd
+        try:
+            ll_typeid_usage = lltype.malloc(ARRAY_OF_SIGNED,
+                             self.root_walker.gcdata.max_type_id, flavor='raw')
+            self.root_walker.walk_roots(
+                SemiSpaceGC._dump_heap,  # stack roots
+                SemiSpaceGC._dump_heap,  # static in prebuilt non-gc structures
+                SemiSpaceGC._dump_heap)  # static in prebuilt gc objects
+        finally:
+            if ll_typeid_usage:
+                lltype.free(ll_typeid_usage, flavor='raw')
+            self._fd_dump = -1

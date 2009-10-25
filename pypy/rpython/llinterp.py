@@ -824,6 +824,9 @@ class LLFrame(object):
     def op_gc_assume_young_pointers(self, addr):
         raise NotImplementedError
 
+    def op_gc_dump_heap(self, fd):
+        raise NotImplementedError # impossible
+
     def op_gc_obtain_free_space(self, size):
         raise NotImplementedError
 
