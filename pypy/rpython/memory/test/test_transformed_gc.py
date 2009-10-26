@@ -819,7 +819,6 @@ class GenericMovingGCTests(GenericGCTests):
                 if tb[i].count == 1:
                     b += 1
                     c = tb[i].links[nr]
-            rgc._clear_dump_heap(tb)
             return c * 100 + b * 10 + a
         return f
 

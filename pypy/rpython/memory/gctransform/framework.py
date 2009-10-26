@@ -273,7 +273,8 @@ class FrameworkGCTransformer(GCTransformer):
 
         if hasattr(GCClass, 'dump_heap'):
             self.dump_heap_ptr = getfn(GCClass.dump_heap.im_func,
-                    [s_gc], annmodel.SomePtr(lltype.Ptr(ARRAY_TYPEID_MAP)))
+                    [s_gc], annmodel.SomePtr(lltype.Ptr(ARRAY_TYPEID_MAP)),
+                    minimal_transform=False)
             self.get_member_index_ptr = getfn(
                 GCClass.get_member_index.im_func,
                 [s_gc, annmodel.SomeInteger(knowntype=rffi.r_ushort)],

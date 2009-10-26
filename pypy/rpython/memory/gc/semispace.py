@@ -653,18 +653,9 @@ class SemiSpaceGC(MovingGCBase):
 
     def dump_heap(self):
         max_tid = self.root_walker.gcdata.max_type_id
-        ll_typeid_map = lltype.malloc(ARRAY_TYPEID_MAP, max_tid,
-                                        flavor='raw')
-        i = 0
-        while i < max_tid:
-            ll_typeid_map[i] = lltype.malloc(TYPEID_MAP, max_tid,
-                                             flavor='raw')
-            ll_typeid_map[i].count = 0
-            j = 0
-            while j < max_tid:
-                ll_typeid_map[i].links[j] = 0
-                j += 1
-            i += 1
+        ll_typeid_map = lltype.malloc(ARRAY_TYPEID_MAP, max_tid, zero=True)
+        for i in range(max_tid):
+            ll_typeid_map[i] = lltype.malloc(TYPEID_MAP, max_tid, zero=True)
         self._ll_typeid_map = ll_typeid_map
         self.root_walker.walk_roots(
             SemiSpaceGC._dump_heap,  # stack roots
