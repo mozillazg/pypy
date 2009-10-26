@@ -20,6 +20,7 @@ class W_Root(object):
     in a 'normal' object space like StdObjSpace."""
     __slots__ = ()
     _settled_ = True
+    user_overridden_class = False
 
     def getdict(self):
         return None
