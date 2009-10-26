@@ -281,8 +281,7 @@ class W_TypeObject(W_Object):
         if w_self.lazyloaders:
             w_self._freeze_()    # force un-lazification
         space = w_self.space
-        newdic = space.newdict()
-        newdic.initialize_from_strdict_shared(w_self.dict_w)
+        newdic = space.newdict(from_strdict_shared=w_self.dict_w)
         return W_DictProxyObject(newdic)
 
     def unwrap(w_self, space):

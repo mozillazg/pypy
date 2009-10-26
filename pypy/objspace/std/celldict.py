@@ -133,7 +133,7 @@ class ModuleDictIteratorImplementation(IteratorImplementation):
     def next_entry(self):
         # note that this 'for' loop only runs once, at most
         for key, cell in self.iterator:
-            return (key, cell.w_value)
+            return (self.space.wrap(key), cell.w_value)
         else:
             return None, None
 
