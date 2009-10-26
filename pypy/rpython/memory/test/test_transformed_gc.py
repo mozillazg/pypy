@@ -799,13 +799,21 @@ class GenericMovingGCTests(GenericGCTests):
 
     def define_gc_dump_heap(cls):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
-        l = []
+        l1 = []
+        l2 = []
+        l3 = []
+        l4 = []
         
         def f():
             for i in range(10):
-                l.append(lltype.malloc(S))
+                s = lltype.malloc(S)
+                l1.append(s)
+                l2.append(s)
+                l3.append(s)
+                l4.append(s)
             # We cheat here and only read the table which we later on
             # process ourselves, otherwise this test takes ages
+            llop.gc__collect(lltype.Void)
             tb = rgc._dump_heap()
             a = 0
             nr = 0
@@ -816,16 +824,16 @@ class GenericMovingGCTests(GenericGCTests):
                     a += 1
                     nr = i
             for i in range(len(tb)):
-                if tb[i].count == 1:
+                if tb[i].count == 4:
                     b += 1
-                    c = tb[i].links[nr]
+                    c += tb[i].links[nr]
             return c * 100 + b * 10 + a
         return f
 
     def test_gc_dump_heap(self):
         run = self.runner("gc_dump_heap")
         res = run([])
-        assert res == 1011
+        assert res == 4011
         
 # ________________________________________________________________
 
