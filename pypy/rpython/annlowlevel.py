@@ -145,6 +145,7 @@ class MixLevelHelperAnnotator:
         self.delayedconsts = []
         self.delayedfuncs = []
         self.newgraphs = {}
+        self.c_final_funcs = []
 
     def getgraph(self, ll_function, args_s, s_result):
         # get the graph of the mix-level helper ll_function and prepare it for
@@ -235,6 +236,10 @@ class MixLevelHelperAnnotator:
         else:
             return repr.convert_const(obj)
 
+    def register_atexit(self, ll_function):
+        c_func = self.constfunc(ll_function, [], annmodel.s_None)
+        self.c_final_funcs.append(c_func)
+
     def finish(self):
         self.finish_annotate()
         self.finish_rtype()
@@ -288,9 +293,13 @@ class MixLevelHelperAnnotator:
             assert FUNCTYPE == REAL
             p._become(real_p)
         rtyper.specialize_more_blocks()
+        for c_func in self.c_final_funcs:
+            from pypy.translator.unsimplify import write_call_to_final_function
+            write_call_to_final_function(rtyper.annotator.translator, c_func)
         self.delayedreprs.clear()
         del self.delayedconsts[:]
         del self.delayedfuncs[:]
+        del self.c_final_funcs[:]
         for graph in translator.graphs[original_graph_count:]:
             self.newgraphs[graph] = True
 

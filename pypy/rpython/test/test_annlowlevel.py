@@ -2,13 +2,45 @@
 """ Few tests for annlowlevel helpers
 """
 
+import os
+from pypy.tool.udir import udir
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.rpython.lltypesystem.rstr import mallocstr, mallocunicode
+from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import hlstr, llstr, oostr
 from pypy.rpython.annlowlevel import hlunicode, llunicode
 
-class TestLLType(BaseRtypingTest, LLRtypeMixin):
+
+class AnnLowLevelTests(BaseRtypingTest):
+
+    def test_register_atexit(self):
+        from pypy.annotation import model as annmodel
+        from pypy.rpython.extregistry import ExtRegistryEntry
+        def callback():
+            pass
+        class CallbackEntry(ExtRegistryEntry):
+            _about_ = callback
+            def compute_result_annotation(self):
+                return annmodel.s_None
+            def specialize_call(self, hop):
+                annhelper = hop.rtyper.getannmixlevel()
+                annhelper.register_atexit(atexit)
+                return hop.inputconst(lltype.Void, None)
+        def f(n):
+            callback()
+            return n * 5
+        def atexit():
+            fd = os.open(tmpfn, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0666)
+            os.close(fd)
+        tmpfn = str(udir.join('%s.test_register_atexit' %
+                              self.__class__.__name__))
+        res = self.interpret(f, [5])
+        assert res == 25
+        assert os.path.exists(tmpfn)
+
+
+class TestLLType(AnnLowLevelTests, LLRtypeMixin):
     def test_hlstr(self):
         s = mallocstr(3)
         s.chars[0] = "a"
@@ -54,7 +86,7 @@ class TestLLType(BaseRtypingTest, LLRtypeMixin):
         assert res == 3
 
 
-class TestOOType(BaseRtypingTest, OORtypeMixin):
+class TestOOType(AnnLowLevelTests, OORtypeMixin):
     def test_hlstr(self):
         s = ootype.make_string("abc")
         assert hlstr(s) == "abc"
