@@ -7,7 +7,8 @@ from pypy.rpython.memory.support import AddressDict
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 
 TYPEID_MAP = lltype.GcStruct('TYPEID_MAP', ('count', lltype.Signed),
-                           ('links', lltype.Array(lltype.Signed)))
+                             ('size', lltype.Signed),
+                             ('links', lltype.Array(lltype.Signed)))
 ARRAY_TYPEID_MAP = lltype.GcArray(lltype.Ptr(TYPEID_MAP))
 
 class GCBase(object):

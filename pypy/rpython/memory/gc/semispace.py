@@ -648,10 +648,10 @@ class SemiSpaceGC(MovingGCBase):
     def track_heap(self, adr):
         if self._tracked_dict.contains(adr):
             return
-        llop.debug_print(lltype.Void, adr)
         self._tracked_dict.add(adr)
         idx = llop.get_member_index(lltype.Signed, self.get_type_id(adr))
         self._ll_typeid_map[idx].count += 1
+        self._ll_typeid_map[idx].size = self.get_size(adr)
         self.trace(adr, self.track_heap_parent, adr)
 
     def _track_heap_root(self, root):
