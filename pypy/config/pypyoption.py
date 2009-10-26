@@ -236,10 +236,10 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "about dictionaries",
                    default=False),
 
-        BoolOption("withbucketdict",
-                   "use dictionaries with chained hash tables "
-                   "(default is open addressing)",
-                   default=False),
+        BoolOption("withinlineddict",
+                   "make instances more compact by revoming a level of indirection",
+                   default=False,
+                   requires=[("objspace.std.withshadowtracking", False)]),
 
         BoolOption("withrangelist",
                    "enable special range list implementation that does not "
