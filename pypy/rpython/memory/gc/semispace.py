@@ -637,29 +637,40 @@ class SemiSpaceGC(MovingGCBase):
             #
             return llmemory.cast_adr_to_int(obj)  # direct case
 
-    def _dump_heap_extraarg(self, addr, parent):
+    def track_heap_parent(self, obj, parent):
+        addr = obj.address[0]
         parent_idx = llop.get_member_index(lltype.Signed,
                                            self.get_type_id(parent))
-        idx = llop.get_member_index(lltype.Signed,
-                                    self.get_type_id(addr.address[0]))
+        idx = llop.get_member_index(lltype.Signed, self.get_type_id(addr))
         self._ll_typeid_map[parent_idx].links[idx] += 1
-        self._dump_heap(addr)
+        self.track_heap(addr)
 
-    def _dump_heap(self, root):
-        adr = root.address[0]
+    def track_heap(self, adr):
+        if self._tracked_dict.contains(adr):
+            return
+        llop.debug_print(lltype.Void, adr)
+        self._tracked_dict.add(adr)
         idx = llop.get_member_index(lltype.Signed, self.get_type_id(adr))
         self._ll_typeid_map[idx].count += 1
-        self.trace(adr, self._dump_heap_extraarg, adr)
+        self.trace(adr, self.track_heap_parent, adr)
 
+    def _track_heap_root(self, root):
+        self.track_heap(root.address[0])
+
+    def dump_heap_walk_roots(self):
+        self.root_walker.walk_roots(
+            SemiSpaceGC._track_heap_root,
+            SemiSpaceGC._track_heap_root,
+            SemiSpaceGC._track_heap_root)
+        
     def dump_heap(self):
+        self._tracked_dict = self.AddressDict()
         max_tid = self.root_walker.gcdata.max_type_id
         ll_typeid_map = lltype.malloc(ARRAY_TYPEID_MAP, max_tid, zero=True)
         for i in range(max_tid):
             ll_typeid_map[i] = lltype.malloc(TYPEID_MAP, max_tid, zero=True)
         self._ll_typeid_map = ll_typeid_map
-        self.root_walker.walk_roots(
-            SemiSpaceGC._dump_heap,  # stack roots
-            SemiSpaceGC._dump_heap,  # static in prebuilt non-gc structures
-            SemiSpaceGC._dump_heap)  # static in prebuilt gc objects
+        self.dump_heap_walk_roots()
         self._ll_typeid_map = lltype.nullptr(ARRAY_TYPEID_MAP)
+        self._tracked_dict.delete()
         return ll_typeid_map
