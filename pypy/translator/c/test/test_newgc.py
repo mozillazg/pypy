@@ -902,14 +902,16 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
 
     def define_gc_dump_heap(cls):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
-        l = []
+        l1 = []
+        l2 = []
+        l3 = []
         
         def f():
-            fd = os.open("/tmp/x.log", os.O_WRONLY | os.O_CREAT, 0777)
             for i in range(10):
-                l.append(lltype.malloc(S))
-            rgc.dump_heap(fd)
-            os.close(fd)
+                s = lltype.malloc(S)
+                l1.append(s)
+                l2.append(s)
+                l3.append(s)
             tb = rgc._dump_heap()
             a = 0
             nr = 0
@@ -920,17 +922,17 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
                     a += 1
                     nr = i
             for i in range(len(tb)):
-                if tb[i].count == 1:
+                if tb[i].count == 3:
                     b += 1
                     c += tb[i].links[nr]
             # we don't count b here since there can be more singletons,
             # important one is c, a is for check
-            return c * 10 + a
+            return c * 100 + b * 10 + a
         return f
 
     def test_gc_dump_heap(self):
         res = self.run("gc_dump_heap")
-        assert res == 101
+        assert res == 3011
 
     def definestr_string_builder(cls):
         def fn(_):
