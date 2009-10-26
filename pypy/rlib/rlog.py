@@ -2,7 +2,10 @@ import py, os, time, struct
 from pypy.tool.ansi_print import ansi_log
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import r_uint, r_singlefloat
+from pypy.rlib.objectmodel import we_are_translated
+from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.rpython.annlowlevel import hlstr
 
 _log = py.log.Producer("rlog") 
 py.log.setconsumer("rlog", ansi_log) 
@@ -43,19 +46,39 @@ class DebugLogEntry(ExtRegistryEntry):
         return annmodel.s_None
 
     def specialize_call(self, hop, **kwds_i):
+        from pypy.annotation import model as annmodel
         from pypy.rpython.lltypesystem import lltype
-        translator = self.bookkeeper.annotator.translator
+        translator = hop.rtyper.annotator.translator
         logwriter = translator._logwriter
         if logwriter is None:
             logwriter = translator._logwriter = LLLogWriter()
             logwriter._register(hop.rtyper)
         cat = translator._logcategories[hop.args_s[0].const]
-        args_v = []
+        ann = {
+            'd': annmodel.SomeInteger(),
+            'f': annmodel.SomeFloat(),
+            's': annmodel.SomeString(can_be_None=True),
+            }
+        annhelper = hop.rtyper.getannmixlevel()
+        args_s = [ann[t] for t in cat.types]
+        c_func = annhelper.constfunc(cat.gen_call(logwriter), args_s,
+                                     annmodel.s_None)
+        args_v = [c_func]
         for name, typechar in cat.entries:
-            assert typechar == 'd'
-            args_v.append(hop.inputarg(lltype.Signed, arg=kwds_i[name]))
+            arg = kwds_i['i_'+name]
+            if typechar == 'd':
+                v = hop.inputarg(lltype.Signed, arg=arg)
+            elif typechar == 'f':
+                v = hop.inputarg(lltype.Float, arg=arg)
+            elif typechar == 's':
+                v = hop.inputarg(hop.rtyper.type_system.rstr.string_repr,
+                                 arg=arg)
+            else:
+                assert 0, typechar
+            args_v.append(v)
         hop.exception_cannot_occur()
-        hop.gendirectcall(cat.gen_call(logwriter), *args_v)
+        hop.genop('direct_call', args_v)
+        return hop.inputconst(lltype.Void, None)
 
 # ____________________________________________________________
 
@@ -93,6 +116,7 @@ class LogCategory(object):
                         methname = 'add_subentry_' + typechar
                         getattr(logwriter, methname)(args[i])
                         i = i + 1
+            call = func_with_new_name(call, 'debug_log_' + self.category)
             call._always_inline_ = True
             self.call = call
         else:
@@ -160,9 +184,17 @@ class AbstractLogWriter(object):
         if self.enabled:
             self.write_int(num)
 
-    def add_subentry_s(self, str):
+    def add_subentry_s(self, llstr):
         if self.enabled:
-            self.write_str(str)
+            if llstr:
+                s = hlstr(llstr)
+            else:
+                s = '(null)'
+            self.write_str(s)
+
+    def add_subentry_f(self, float):
+        if self.enabled:
+            self.write_float(float)
 
 # ____________________________________________________________
 
@@ -172,25 +204,23 @@ class LLLogWriter(AbstractLogWriter):
     SIZEOF_FLOAT = struct.calcsize("f")
 
     def do_write(self, fd, buf, size):
-        "NOT_RPYTHON (too slow :-)"
-        l = [buf[i] for i in range(size)]
-        s = ''.join(l)
-        os.write(fd, s)
+        if we_are_translated():
+            from pypy.rpython.lltypesystem import rffi
+            self._os_write(rffi.cast(rffi.INT, fd),
+                           buf,
+                           rffi.cast(rffi.SIZE_T, size))
+        else:
+            l = [buf[i] for i in range(size)]
+            s = ''.join(l)
+            os.write(fd, s)
         self.writecount += 1
 
     def _register(self, rtyper):
         from pypy.rpython.lltypesystem import rffi
         from pypy.rpython.module.ll_os import underscore_on_windows
-        # attach 'do_write' to self, overwriting the NOT_RPYTHON method
-        def do_write(fd, buf, size):
-            os_write(rffi.cast(rffi.INT, fd),
-                     buf,
-                     rffi.cast(rffi.SIZE_T), size)
-            self.writecount += 1
-        self.do_write = do_write
-        os_write = rffi.llexternal(underscore_on_windows+'write',
-                                   [rffi.INT, rffi.CHARP, rffi.SIZE_T],
-                                   rffi.SIZE_T)
+        self._os_write = rffi.llexternal(underscore_on_windows+'write',
+                                         [rffi.INT, rffi.CCHARP, rffi.SIZE_T],
+                                         rffi.SIZE_T)
         # register flush() to be called at program exit
         def flush_log_cache():
             if self.initialized_file:

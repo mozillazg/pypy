@@ -1,7 +1,8 @@
-import struct
-from pypy.rlib import rlog
+import struct, os
+from pypy.rlib import rlog, rlog_parsing
 from pypy.rlib.rarithmetic import intmask
 from pypy.tool.udir import udir
+from pypy.rpython.test.test_llinterp import interpret
 
 
 def test_log_direct():
@@ -87,7 +88,6 @@ def test_logcategory_call():
         17, 0.0, 2873, "woooooorld"]
 
 
-TIMESTAMP = object()
 SIZEOF_FLOAT = rlog.LLLogWriter.SIZEOF_FLOAT
 
 class TestLLLogWriter:
@@ -128,9 +128,7 @@ class TestLLLogWriter:
         header = f.read(5)
         assert header == 'RLog\n'
         for expect in [-1, 1.0] + expected:
-            if expect is TIMESTAMP:
-                f.read(SIZEOF_FLOAT)        # ignore result
-            elif isinstance(expect, int):
+            if isinstance(expect, int):
                 result = self.read_uint(f)
                 assert intmask(result) == expect
             elif isinstance(expect, str):
@@ -199,6 +197,13 @@ class TestLLLogWriter:
         assert logwriter.writecount <= 6
 
 
+class roughly(float):
+    def __eq__(self, other):
+        return abs(self - other) < 1E-6
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
 class TestCompiled:
     COUNTER = 0
 
@@ -219,6 +224,25 @@ class TestCompiled:
         else:
             os.environ['PYPYLOG'] = self.old_pypylog
 
-    #def test_interpret(self):
-    #    self.interpret(self.f.im_func, [132])
-    #    ...
+    def check_result(self):
+        entries = list(rlog_parsing.parse_log(self.pypylog))
+        assert len(entries) == 2
+        #
+        assert isinstance(entries[0][0], float)
+        assert isinstance(entries[1][0], float)
+        #
+        Aa = entries[0][1]
+        Ab = entries[1][1]
+        assert Aa.category == 'Aa'
+        assert Aa.message == 'hello %(foo)d %(bar)f'
+        assert Aa.entries == [('foo', 'd'), ('bar', 'f')]
+        assert Ab.category == 'Ab'
+        assert Ab.message == '<<%(baz)s>>'
+        assert Ab.entries == [('baz', 's')]
+        #
+        assert entries[0][2] == [132, roughly(-7.3)]
+        assert entries[1][2] == ['hi there']
+
+    def test_interpret(self):
+        interpret(self.f.im_func, [132], malloc_check=False)
+        self.check_result()
