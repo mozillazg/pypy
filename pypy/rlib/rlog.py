@@ -13,10 +13,31 @@ py.log.setconsumer("rlog", ansi_log)
 # ____________________________________________________________
 
 
+def has_log():
+    return True
+
 def debug_log(_category, _message, **_kwds):
     getattr(_log, _category)(_message % _kwds)
 
 # ____________________________________________________________
+
+
+class HasLogEntry(ExtRegistryEntry):
+    _about_ = has_log
+
+    def compute_result_annotation(self):
+        from pypy.annotation import model as annmodel
+        return annmodel.s_Bool
+
+    def specialize_call(self, hop):
+        from pypy.annotation import model as annmodel
+        from pypy.rpython.lltypesystem import lltype
+        logwriter = get_logwriter(hop.rtyper)
+        annhelper = hop.rtyper.getannmixlevel()
+        c_func = annhelper.constfunc(logwriter.has_log, [],
+                                     annmodel.s_Bool)
+        hop.exception_cannot_occur()
+        return hop.genop('direct_call', [c_func], resulttype=lltype.Bool)
 
 
 class DebugLogEntry(ExtRegistryEntry):
@@ -31,7 +52,6 @@ class DebugLogEntry(ExtRegistryEntry):
             logcategories = translator._logcategories
         except AttributeError:
             logcategories = translator._logcategories = {}
-            translator._logwriter = None
         try:
             cat = logcategories[s_category.const]
         except KeyError:
@@ -48,11 +68,8 @@ class DebugLogEntry(ExtRegistryEntry):
     def specialize_call(self, hop, **kwds_i):
         from pypy.annotation import model as annmodel
         from pypy.rpython.lltypesystem import lltype
+        logwriter = get_logwriter(hop.rtyper)
         translator = hop.rtyper.annotator.translator
-        logwriter = translator._logwriter
-        if logwriter is None:
-            logwriter = translator._logwriter = LLLogWriter()
-            logwriter._register(hop.rtyper)
         cat = translator._logcategories[hop.args_s[0].const]
         ann = {
             'd': annmodel.SomeInteger(),
@@ -79,6 +96,15 @@ class DebugLogEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         hop.genop('direct_call', args_v)
         return hop.inputconst(lltype.Void, None)
+
+def get_logwriter(rtyper):
+    try:
+        return rtyper.annotator.translator._logwriter
+    except AttributeError:
+        logwriter = LLLogWriter()
+        logwriter._register(rtyper)
+        rtyper.annotator.translator._logwriter = logwriter
+        return logwriter
 
 # ____________________________________________________________
 
@@ -138,6 +164,12 @@ class AbstractLogWriter(object):
         self.initialized_index = {}
         self.fd = -1
         self.curtime = 0.0
+        #
+        def has_log():
+            if not self.initialized_file:
+                self.open_file()
+            return self.enabled
+        self.has_log = has_log
 
     def get_filename(self):
         return os.environ.get('PYPYLOG')

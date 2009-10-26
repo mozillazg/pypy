@@ -209,9 +209,11 @@ class TestCompiled:
     COUNTER = 0
 
     def f(x):
+        assert rlog.has_log()
         rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x, bar=-7.3)
         rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x+1, bar=x+0.5)
         rlog.debug_log("Ab", "<<%(baz)s>>", baz="hi there")
+        assert rlog.has_log()
 
     def setup_method(self, _):
         self.old_pypylog = os.environ.get('PYPYLOG')
