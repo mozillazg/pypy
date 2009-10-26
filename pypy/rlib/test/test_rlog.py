@@ -74,12 +74,13 @@ def test_logwriter():
         5, 0.0]
 
 def test_logcategory_call():
+    from pypy.rpython.annlowlevel import llstr
     message = "abc%(foo)ddef%(bar)sghi"
     cat = rlog.LogCategory("Aa", message, 17)
     logwriter = MyLogWriter()
     call = cat.gen_call(logwriter)
-    call(515, "hellooo")
-    call(2873, "woooooorld")
+    call(515, llstr("hellooo"))
+    call(2873, llstr("woooooorld"))
     #
     assert logwriter.content == [
         ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 1.0,
@@ -209,6 +210,7 @@ class TestCompiled:
 
     def f(x):
         rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x, bar=-7.3)
+        rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x+1, bar=x+0.5)
         rlog.debug_log("Ab", "<<%(baz)s>>", baz="hi there")
 
     def setup_method(self, _):
@@ -226,13 +228,15 @@ class TestCompiled:
 
     def check_result(self):
         entries = list(rlog_parsing.parse_log(self.pypylog))
-        assert len(entries) == 2
+        assert len(entries) == 3
         #
         assert isinstance(entries[0][0], float)
         assert isinstance(entries[1][0], float)
+        assert isinstance(entries[2][0], float)
         #
         Aa = entries[0][1]
-        Ab = entries[1][1]
+        Ab = entries[2][1]
+        assert entries[1][1] is Aa
         assert Aa.category == 'Aa'
         assert Aa.message == 'hello %(foo)d %(bar)f'
         assert Aa.entries == [('foo', 'd'), ('bar', 'f')]
@@ -241,7 +245,8 @@ class TestCompiled:
         assert Ab.entries == [('baz', 's')]
         #
         assert entries[0][2] == [132, roughly(-7.3)]
-        assert entries[1][2] == ['hi there']
+        assert entries[1][2] == [133, 132.5]
+        assert entries[2][2] == ['hi there']
 
     def test_interpret(self):
         interpret(self.f.im_func, [132], malloc_check=False)
