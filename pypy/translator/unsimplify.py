@@ -158,7 +158,6 @@ def no_links_to_startblock(graph):
 def call_final_function(translator, final_func, annhelper=None):
     """When the program finishes normally, call 'final_func()'."""
     from pypy.annotation import model as annmodel
-    from pypy.rpython.lltypesystem import lltype
     from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 
     own_annhelper = (annhelper is None)
@@ -167,7 +166,10 @@ def call_final_function(translator, final_func, annhelper=None):
     c_final_func = annhelper.constfunc(final_func, [], annmodel.s_None)
     if own_annhelper:
         annhelper.finish()
+    write_call_to_final_function(translator, c_final_func)
 
+def write_call_to_final_function(translator, c_final_func):
+    from pypy.rpython.lltypesystem import lltype
     entry_point = translator.graphs[0]
     v = copyvar(translator.annotator, entry_point.getreturnvar())
     extrablock = Block([v])
