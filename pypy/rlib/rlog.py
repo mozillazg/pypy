@@ -104,12 +104,14 @@ class LogCategory(object):
 
 
 class AbstractLogWriter(object):
+    get_time = time.time
 
     def __init__(self):
         self.enabled = True
         self.initialized_file = False
         self.initialized_index = {}
         self.fd = -1
+        self.curtime = 0.0
 
     def get_filename(self):
         return os.environ.get('PYPYLOG')
@@ -146,7 +148,13 @@ class AbstractLogWriter(object):
         if cat.index not in self.initialized_index:
             self.define_new_category(cat)
         if self.enabled:
+            now = self.get_time()
+            timestamp_delta = now - self.curtime
+            self.curtime = now
             self.write_int(cat.index)
+            self.write_float(timestamp_delta)
+            # NB. we store the delta since the last log entry to get a good
+            # precision even though it's encoded as a 4-bytes 'C float'
 
     def add_subentry_d(self, num):
         if self.enabled:

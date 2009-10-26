@@ -32,6 +32,8 @@ def test_logcategory():
 class MyLogWriter(rlog.AbstractLogWriter):
     _path = udir.join('test_rlog.logwriter')
 
+    def get_time(self):
+        return 123.0
     def get_filename(self):
         return str(self._path)
     def create_buffer(self):
@@ -64,11 +66,11 @@ def test_logwriter():
     assert logwriter.content == [
         ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 1.0,
         0, 5, "F5", "foobar",
-        5,
-        5,
+        5, 123.0,
+        5, 0.0,
         0, 7, "F7", "baz",
-        7,
-        5]
+        7, 0.0,
+        5, 0.0]
 
 def test_logcategory_call():
     message = "abc%(foo)ddef%(bar)sghi"
@@ -81,8 +83,8 @@ def test_logcategory_call():
     assert logwriter.content == [
         ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 1.0,
         0, 17, "Aa", message,
-        17, 515, "hellooo",
-        17, 2873, "woooooorld"]
+        17, 123.0, 515, "hellooo",
+        17, 0.0, 2873, "woooooorld"]
 
 
 TIMESTAMP = object()
@@ -201,7 +203,7 @@ class TestCompiled:
     COUNTER = 0
 
     def f(x):
-        rlog.debug_log("Aa", "hello %(foo)d %(bar)d", foo=x, bar=7)
+        rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x, bar=-7.3)
         rlog.debug_log("Ab", "<<%(baz)s>>", baz="hi there")
 
     def setup_method(self, _):
