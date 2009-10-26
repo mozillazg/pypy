@@ -819,15 +819,18 @@ class GenericMovingGCTests(GenericGCTests):
             nr = 0
             b = 0
             c = 0
+            d = 0
             for i in range(len(tb)):
                 if tb[i].count == 10:
                     a += 1
                     nr = i
+                if tb[i].count > 50:
+                    d += 1
             for i in range(len(tb)):
                 if tb[i].count == 4:
                     b += 1
                     c += tb[i].links[nr]
-            return c * 100 + b * 10 + a
+            return d * 1000 + c * 100 + b * 10 + a
         return f
 
     def test_gc_dump_heap(self):
