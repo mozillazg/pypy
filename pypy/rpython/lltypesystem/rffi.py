@@ -494,7 +494,8 @@ CHAR = lltype.Char
 DOUBLE = lltype.Float
 
 # float - corresponds to pypy.rlib.rarithmetic.r_float, and supports no
-#         operation except rffi.cast() between FLOAT and DOUBLE
+#         operation except casts between FLOAT and DOUBLE, by using
+#         r_singlefloat(x) or float(x).
 FLOAT = lltype.SingleFloat
 r_singlefloat = rarithmetic.r_singlefloat
 

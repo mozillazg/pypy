@@ -1,7 +1,7 @@
-import py, os, time
+import py, os, time, struct
 from pypy.tool.ansi_print import ansi_log
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.rarithmetic import r_uint
+from pypy.rlib.rarithmetic import r_uint, r_singlefloat
 from pypy.rpython.extregistry import ExtRegistryEntry
 
 _log = py.log.Producer("rlog") 
@@ -61,7 +61,7 @@ class DebugLogEntry(ExtRegistryEntry):
 
 import re
 
-r_entry = re.compile(r"%\((\w+)\)([sd])")
+r_entry = re.compile(r"%\((\w+)\)([sdf])")
 
 
 class LogCategory(object):
@@ -128,7 +128,7 @@ class AbstractLogWriter(object):
             for c in 'RLog\n':
                 self.write_int(ord(c))
             self.write_int(-1)
-            self.write_int(0)
+            self.write_float(1.0)
         self.initialized_file = True
 
     def define_new_category(self, cat):
@@ -161,9 +161,10 @@ class AbstractLogWriter(object):
 
 class LLLogWriter(AbstractLogWriter):
     BUFSIZE = 8192
+    SIZEOF_FLOAT = struct.calcsize("f")
 
     def do_write(self, fd, buf, size):
-        "NOT_RPYTHON"
+        "NOT_RPYTHON (too slow :-)"
         l = [buf[i] for i in range(size)]
         s = ''.join(l)
         os.write(fd, s)
@@ -223,6 +224,15 @@ class LLLogWriter(AbstractLogWriter):
             for i in range(len(s)):
                 buf[p + i] = s[i]
             self.buffer_position = p + len(s)
+
+    def write_float(self, f):
+        from pypy.rpython.lltypesystem import rffi
+        p = self.buffer_position
+        ptr = rffi.cast(rffi.FLOATP, rffi.ptradd(self.buffer, p))
+        ptr[0] = r_singlefloat(f)
+        self.buffer_position = p + self.SIZEOF_FLOAT
+        if self.buffer_position > self.BUFSIZE-48:
+            self._flush()
 
     def _flush(self):
         if self.buffer_position > 0:
