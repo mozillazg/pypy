@@ -650,8 +650,10 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_gc_dump_heap(self, hop):
         op = hop.spaceop
+        livevars = self.push_roots(hop)
         hop.genop("direct_call", [self.dump_heap_ptr, self.c_const_gc],
                   resultvar=op.result)
+        self.pop_roots(hop, livevars)
 
     def gct_get_member_index(self, hop):
         op = hop.spaceop
