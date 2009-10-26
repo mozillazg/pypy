@@ -670,6 +670,11 @@ class SemiSpaceGC(MovingGCBase):
         for i in range(max_tid):
             ll_typeid_map[i] = lltype.malloc(TYPEID_MAP, max_tid, zero=True)
         self._ll_typeid_map = ll_typeid_map
+        self._tracked_dict.add(llmemory.cast_ptr_to_adr(ll_typeid_map))
+        i = 0
+        while i < max_tid:
+            self._tracked_dict.add(llmemory.cast_ptr_to_adr(ll_typeid_map[i]))
+            i += 1
         self.dump_heap_walk_roots()
         self._ll_typeid_map = lltype.nullptr(ARRAY_TYPEID_MAP)
         self._tracked_dict.delete()
