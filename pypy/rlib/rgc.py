@@ -184,15 +184,6 @@ class CanMoveEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('gc_can_move', hop.args_v, resulttype=hop.r_result)
 
-def dump_heap(fd):
-    import os
-    
-    tb = _dump_heap()
-    for i in range(len(tb)):
-        next = tb[i]
-        os.write(fd, str(next.count) + " " + ",".join([
-            str(next.links[j]) for j in range(len(tb))]) + "\n")
-
 def _dump_heap():
     raise NotImplementedError # can't be run directly
 
