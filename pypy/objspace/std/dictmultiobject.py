@@ -110,21 +110,21 @@ class W_DictMultiObject(W_Object):
         raise NotImplementedError("abstract base class")
 
     def impl_setitem_str(self,  w_key, w_value, shadows_type=True):
-        #return implementation
         raise NotImplementedError("abstract base class")
 
     def impl_setitem(self,  w_key, w_value):
-        #return implementation
         raise NotImplementedError("abstract base class")
 
     def impl_delitem(self, w_key):
-        #return implementation
         raise NotImplementedError("abstract base class")
  
     def impl_length(self):
         raise NotImplementedError("abstract base class")
 
     def impl_iter(self):
+        raise NotImplementedError("abstract base class")
+
+    def impl_clear(self):
         raise NotImplementedError("abstract base class")
 
     def impl_keys(self):
@@ -150,7 +150,7 @@ class W_DictMultiObject(W_Object):
         result = []
         while 1:
             w_key, w_value = iterator.next()
-            if w_item is not None:
+            if w_key is not None:
                 result.append(self.space.newtuple([w_key, w_value]))
             else:
                 return result
@@ -160,7 +160,7 @@ class W_DictMultiObject(W_Object):
     # by the annotator
     def impl_get_builtin_indexed(self, i):
         w_key = self.space.wrap(OPTIMIZED_BUILTINS[i])
-        return self.getitem(w_key)
+        return self.impl_getitem(w_key)
 
     # this method will only be seen whan a certain config option is used
     def impl_shadows_anything(self):
@@ -197,40 +197,55 @@ class W_DictMultiObject(W_Object):
     def impl_fallback_items(self):
         return [self.space.newtuple([w_key, w_val])
                     for w_key, w_val in self.r_dict_content.iteritems()]
+
     def impl_fallback_clear(self):
         self.r_dict_content.clear()
 
+    def impl_fallback_get_builtin_indexed(self, i):
+        w_key = self.space.wrap(OPTIMIZED_BUILTINS[i])
+        return self.impl_fallback_getitem(w_key)
+
+    def impl_fallback_shadows_anything(self):
+        return True
+
+    def impl_fallback_set_shadows_anything(self):
+        pass
+
+
 implementation_methods = [
-    "getitem",
-    "length",
-    "setitem_str",
-    "setitem",
-    "delitem",
-    "iter",
-    "items",
-    "values",
-    "keys",
-    "clear",
-    "get_builtin_indexed",
-    "shadows_anything",
-    "set_shadows_anything",
+    ("getitem", 1),
+    ("length", 0),
+    ("setitem_str", 3),
+    ("setitem", 2),
+    ("delitem", 1),
+    ("iter", 0),
+    ("items", 0),
+    ("values", 0),
+    ("keys", 0),
+    ("clear", 0),
+    ("get_builtin_indexed", 1),
+    ("shadows_anything", 0),
+    ("set_shadows_anything", 0),
 ]
 
 
-def _make_method(name, fallback):
-    def implementation_method(self, *args):
+def _make_method(name, implname, fallback, numargs):
+    args = ", ".join(["a" + str(i) for i in range(numargs)])
+    code = """def %s(self, %s):
         if self.r_dict_content is not None:
-            if not hasattr(self, fallback):
-                return getattr(W_DictMultiObject, name)(self, *args)
-            return getattr(self, fallback)(*args)
-        return getattr(self, name)(*args)
+            return self.%s(%s)
+        return self.%s(%s)""" % (name, args, fallback, args, implname, args)
+    d = {}
+    exec py.code.Source(code).compile() in d
+    implementation_method = d[name]
+    implementation_method.func_defaults = getattr(W_DictMultiObject, implname).func_defaults
     return implementation_method
 
 def _install_methods():
-    for name in implementation_methods:
+    for name, numargs in implementation_methods:
         implname = "impl_" + name
         fallbackname = "impl_fallback_" + name
-        func = _make_method(implname, fallbackname)
+        func = _make_method(name, implname, fallbackname, numargs)
         setattr(W_DictMultiObject, name, func)
 _install_methods()
 
@@ -354,8 +369,8 @@ class StrIteratorImplementation(IteratorImplementation):
 
     def next_entry(self):
         # note that this 'for' loop only runs once, at most
-        for item in self.iterator:
-            return item
+        for str, w_value in self.iterator:
+            return self.space.wrap(str), w_value
         else:
             return None, None
 
@@ -373,7 +388,7 @@ class ShadowDetectingDictImplementation(StrDictImplementation):
     def impl_setitem_str(self, w_key, w_value, shadows_type=True):
         if shadows_type:
             self._shadows_anything = True
-        StrDictImplementation.setitem_str(
+        StrDictImplementation.impl_setitem_str(
             self, w_key, w_value, shadows_type)
 
     def impl_setitem(self, w_key, w_value):
@@ -383,7 +398,7 @@ class ShadowDetectingDictImplementation(StrDictImplementation):
                 w_obj = self.w_type.lookup(space.str_w(w_key))
                 if w_obj is not None:
                     self._shadows_anything = True
-            StrDictImplementation.setitem_str(
+            StrDictImplementation.impl_setitem_str(
                 self, w_key, w_value, False)
         else:
             self._as_rdict().setitem(w_key, w_value)

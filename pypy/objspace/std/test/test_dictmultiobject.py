@@ -603,6 +603,7 @@ class FakeSpace:
     StringObjectCls = None  # xxx untested: shortcut in StrDictImpl.getitem
     w_dict = None
     iter = iter
+    viewiterable = list
 
 
 class Config:
