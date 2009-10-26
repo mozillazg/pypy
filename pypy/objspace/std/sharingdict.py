@@ -108,6 +108,7 @@ class SharedDictImplementation(W_DictMultiObject):
         i = self.structure.lookup_position(key)
         if i != -1:
             self.entries[i] = w_value
+            return
         new_structure = self.structure.get_next_structure(key)
         if new_structure.length > len(self.entries):
             new_entries = [None] * new_structure.size_estimate()
@@ -174,8 +175,8 @@ class SharedIteratorImplementation(IteratorImplementation):
     def next_entry(self):
         implementation = self.dictimplementation
         assert isinstance(implementation, SharedDictImplementation)
-        for w_key, index in self.iterator:
+        for key, index in self.iterator:
             w_value = implementation.entries[index]
-            return w_key, w_value
+            return self.space.wrap(key), w_value
         else:
             return None, None

@@ -610,12 +610,14 @@ class StdObjSpace(ObjSpace, DescrOperation):
         user-defined type, without actually __init__ializing the instance."""
         w_type = self.gettypeobject(cls.typedef)
         if self.is_w(w_type, w_subtype):
-            instance =  instantiate(cls)
+            instance = instantiate(cls)
         elif cls.typedef.acceptable_as_base_class:
             # the purpose of the above check is to avoid the code below
             # to be annotated at all for 'cls' if it is not necessary
             w_subtype = w_type.check_user_subclass(w_subtype)
-            subcls = get_unique_interplevel_subclass(cls, w_subtype.hasdict, w_subtype.nslots != 0, w_subtype.needsdel, w_subtype.weakrefable)
+            subcls = get_unique_interplevel_subclass(
+                    self.config, cls, w_subtype.hasdict, w_subtype.nslots != 0,
+                    w_subtype.needsdel, w_subtype.weakrefable)
             instance = instantiate(subcls)
             instance.user_setup(self, w_subtype)
         else:
