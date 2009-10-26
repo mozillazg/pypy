@@ -77,13 +77,13 @@ class LogCategory(object):
                 "duplicate name %r in the log message %r" % (name, message))
             seen[name] = True
             self.entries.append((name, typechar))
+        self.types = [typechar for name, typechar in self.entries]
         self.call = None
 
     def gen_call(self, logwriter):
         if self.call is None:
             self.logwriter = logwriter
-            types = [typechar for name, typechar in self.entries]
-            types = unrolling_iterable(types)
+            types = unrolling_iterable(self.types)
             #
             def call(*args):
                 if logwriter.enabled:
