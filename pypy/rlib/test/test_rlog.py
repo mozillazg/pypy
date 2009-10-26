@@ -1,9 +1,13 @@
+import struct
 from pypy.rlib import rlog
 from pypy.rlib.rarithmetic import intmask
 from pypy.tool.udir import udir
 
 
 def test_log_direct():
+    # this should produce some output via py.log...
+    rlog.debug_log("Aa", "hello %(foo)d %(bar)d", foo=5, bar=7)
+    # let's replace py.log with our own class to check
     messages = []
     class MyLog:
         def Aa(self, msg):
@@ -38,6 +42,9 @@ class MyLogWriter(rlog.AbstractLogWriter):
     def write_str(self, s):
         assert isinstance(s, str)
         self.content.append(s)
+    def write_float(self, f):
+        assert isinstance(f, float)
+        self.content.append(f)
 
 def test_logwriter():
     class FakeCategory:
@@ -55,7 +62,7 @@ def test_logwriter():
     logwriter.add_entry(cat5)
     #
     assert logwriter.content == [
-        ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 0,
+        ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 1.0,
         0, 5, "F5", "foobar",
         5,
         5,
@@ -72,11 +79,14 @@ def test_logcategory_call():
     call(2873, "woooooorld")
     #
     assert logwriter.content == [
-        ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 0,
+        ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 1.0,
         0, 17, "Aa", message,
         17, 515, "hellooo",
         17, 2873, "woooooorld"]
 
+
+TIMESTAMP = object()
+SIZEOF_FLOAT = rlog.LLLogWriter.SIZEOF_FLOAT
 
 class TestLLLogWriter:
     COUNTER = 0
@@ -105,6 +115,9 @@ class TestLLLogWriter:
         result |= (lastbyte << shift)
         return result
 
+    def read_float(self, f):
+        return struct.unpack("f", f.read(SIZEOF_FLOAT))[0]
+
     def check(self, expected):
         f = self.path.open('rb')
         f.seek(0, 2)
@@ -112,8 +125,10 @@ class TestLLLogWriter:
         f.seek(0, 0)
         header = f.read(5)
         assert header == 'RLog\n'
-        for expect in [-1, 0] + expected:
-            if isinstance(expect, int):
+        for expect in [-1, 1.0] + expected:
+            if expect is TIMESTAMP:
+                f.read(SIZEOF_FLOAT)        # ignore result
+            elif isinstance(expect, int):
                 result = self.read_uint(f)
                 assert intmask(result) == expect
             elif isinstance(expect, str):
@@ -121,6 +136,9 @@ class TestLLLogWriter:
                 assert length < totalsize
                 got = f.read(length)
                 assert got == expect
+            elif isinstance(expect, float):
+                result = self.read_float(f)
+                assert abs(result - expect) < 1E-6
             else:
                 assert 0, expect
         moredata = f.read(10)
@@ -167,3 +185,38 @@ class TestLLLogWriter:
         logwriter._close()
         self.check(slist)
         assert logwriter.writecount <= 9
+
+    def test_write_float(self):
+        import math
+        logwriter = self.open()
+        flist = [math.log(x+0.1) for x in range(logwriter.BUFSIZE)]
+        for f in flist:
+            logwriter.write_float(f)
+        logwriter._close()
+        self.check(flist)
+        assert logwriter.writecount <= 6
+
+
+class TestCompiled:
+    COUNTER = 0
+
+    def f(x):
+        rlog.debug_log("Aa", "hello %(foo)d %(bar)d", foo=x, bar=7)
+        rlog.debug_log("Ab", "<<%(baz)s>>", baz="hi there")
+
+    def setup_method(self, _):
+        self.old_pypylog = os.environ.get('PYPYLOG')
+        self.pypylog = str(udir.join('test_rlog.TestCompiled%d' %
+                                     TestCompiled.COUNTER))
+        TestCompiled.COUNTER += 1
+        os.environ['PYPYLOG'] = self.pypylog
+
+    def teardown_method(self, _):
+        if self.old_pypylog is None:
+            del os.environ['PYPYLOG']
+        else:
+            os.environ['PYPYLOG'] = self.old_pypylog
+
+    #def test_interpret(self):
+    #    self.interpret(self.f.im_func, [132])
+    #    ...
