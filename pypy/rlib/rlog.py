@@ -109,13 +109,15 @@ class LogCategory(object):
             types = unrolling_iterable(self.types)
             #
             def call(*args):
-                if logwriter.enabled:
-                    logwriter.add_entry(self)
-                    i = 0
-                    for typechar in types:
-                        methname = 'add_subentry_' + typechar
-                        getattr(logwriter, methname)(args[i])
-                        i = i + 1
+                if not logwriter.enabled:
+                    return
+                if not logwriter.add_entry(self):
+                    return
+                i = 0
+                for typechar in types:
+                    methname = 'add_subentry_' + typechar
+                    getattr(logwriter, methname)(args[i])
+                    i = i + 1
             call = func_with_new_name(call, 'debug_log_' + self.category)
             call._always_inline_ = True
             self.call = call
@@ -153,6 +155,9 @@ class AbstractLogWriter(object):
             self.create_buffer()
             for c in 'RLog\n':
                 self.write_int(ord(c))
+            # Write two numbers at the start, to ensure that the log is
+            # considered invalid on machines with different endianness
+            # or word size.  They also play the role of version numbers.
             self.write_int(-1)
             self.write_float(1.0)
         self.initialized_file = True
@@ -166,35 +171,34 @@ class AbstractLogWriter(object):
             self.write_int(cat.index)
             self.write_str(cat.category)
             self.write_str(cat.message)
-        self.initialized_index[cat.index] = None
+            self.initialized_index[cat.index] = None
 
     def add_entry(self, cat):
         if cat.index not in self.initialized_index:
             self.define_new_category(cat)
-        if self.enabled:
-            now = self.get_time()
-            timestamp_delta = now - self.curtime
-            self.curtime = now
-            self.write_int(cat.index)
-            self.write_float(timestamp_delta)
-            # NB. we store the delta since the last log entry to get a good
-            # precision even though it's encoded as a 4-bytes 'C float'
+            if not self.enabled:
+                return False
+        now = self.get_time()
+        timestamp_delta = now - self.curtime
+        self.curtime = now
+        self.write_int(cat.index)
+        self.write_float(timestamp_delta)
+        # NB. we store the time delta since the previous log entry to get a
+        # good precision even though it's encoded as a 4-bytes 'C float'
+        return True
 
     def add_subentry_d(self, num):
-        if self.enabled:
-            self.write_int(num)
+        self.write_int(num)
 
     def add_subentry_s(self, llstr):
-        if self.enabled:
-            if llstr:
-                s = hlstr(llstr)
-            else:
-                s = '(null)'
-            self.write_str(s)
+        if llstr:
+            s = hlstr(llstr)
+        else:
+            s = '(null)'
+        self.write_str(s)
 
     def add_subentry_f(self, float):
-        if self.enabled:
-            self.write_float(float)
+        self.write_float(float)
 
 # ____________________________________________________________
 
