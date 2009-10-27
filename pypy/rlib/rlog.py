@@ -16,7 +16,7 @@ py.log.setconsumer("rlog", ansi_log)
 def has_log():
     return True
 
-def debug_log(_category, _message, **_kwds):
+def debug_log(_category, _message, _time=None, **_kwds):
     getattr(_log, _category)(_message % _kwds)
 
 # ____________________________________________________________
@@ -66,13 +66,19 @@ class DebugLogEntry(ExtRegistryEntry):
                 cat = logcategories[s_category.const]
             except KeyError:
                 num = len(logcategories) + 1
-                logcategories[s_category.const] = LogCategory(s_category.const,
-                                                              s_message.const,
-                                                              num)
+                cat = LogCategory(s_category.const, s_message.const, num)
+                logcategories[s_category.const] = cat
             else:
                 assert cat.message == s_message.const, (
                     "log category %r is used with different messages:\n\t%s\n"
                     "\t%s" % (s_category.const, cat.message, s_message.const))
+            for entry, _ in cat.entries:
+                name = 's_' + entry
+                assert name in kwds_s, "missing log entry %r" % (entry,)
+                del kwds_s[name]
+            if 's__time' in kwds_s:
+                del kwds_s['s__time']
+            assert not kwds_s, "unexpected log entries %r" % (kwds_s.keys(),)
         return annmodel.s_None
 
     def specialize_call(self, hop, **kwds_i):
@@ -83,17 +89,22 @@ class DebugLogEntry(ExtRegistryEntry):
             logwriter = get_logwriter(hop.rtyper)
             translator = hop.rtyper.annotator.translator
             cat = translator._logcategories[hop.args_s[0].const]
+            types = cat.types
+            entries = cat.entries
+            if 'i__time' in kwds_i:
+                types = types + ['f']
+                entries = entries + [('_time', 'f')]
             ann = {
                 'd': annmodel.SomeInteger(),
                 'f': annmodel.SomeFloat(),
                 's': annmodel.SomeString(can_be_None=True),
                 }
             annhelper = hop.rtyper.getannmixlevel()
-            args_s = [ann[t] for t in cat.types]
+            args_s = [ann[t] for t in types]
             c_func = annhelper.constfunc(cat.gen_call(logwriter), args_s,
                                          annmodel.s_None)
             args_v = [c_func]
-            for name, typechar in cat.entries:
+            for name, typechar in entries:
                 arg = kwds_i['i_'+name]
                 if typechar == 'd':
                     v = hop.inputarg(lltype.Signed, arg=arg)
@@ -149,7 +160,11 @@ class LogCategory(object):
             def call(*args):
                 if not logwriter.enabled:
                     return
-                if not logwriter.add_entry(self):
+                if len(args) > len(self.types):
+                    now = args[len(self.types)]
+                else:
+                    now = 0.0
+                if not logwriter.add_entry(self, now):
                     return
                 i = 0
                 for typechar in types:
@@ -205,6 +220,7 @@ class AbstractLogWriter(object):
             self.write_int(-1)
             self.write_float(1.0)
         self.initialized_file = True
+    open_file._dont_inline_ = True
 
     def define_new_category(self, cat):
         if not self.initialized_file:
@@ -216,13 +232,15 @@ class AbstractLogWriter(object):
             self.write_str(cat.category)
             self.write_str(cat.message)
             self.initialized_index[cat.index] = None
+    define_new_category._dont_inline_ = True
 
-    def add_entry(self, cat):
+    def add_entry(self, cat, now=0.0):
         if cat.index not in self.initialized_index:
             self.define_new_category(cat)
             if not self.enabled:
                 return False
-        now = self.get_time()
+        if now == 0.0:
+            now = self.get_time()
         timestamp_delta = now - self.curtime
         self.curtime = now
         self.write_int(cat.index)
