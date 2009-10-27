@@ -1,5 +1,5 @@
 import struct, os
-from pypy.rlib import rlog, rlog_parsing
+from pypy.rlib import rlog, rlog_ll, rlog_parsing
 from pypy.rlib.rarithmetic import intmask
 from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret
@@ -35,8 +35,8 @@ class MyLogWriter(rlog.AbstractLogWriter):
 
     def get_time(self):
         return 123.0
-    def get_filename(self):
-        return str(self._path)
+    def do_open_file(self):
+        self.enabled = True
     def create_buffer(self):
         self.content = []
     def write_int(self, n):
@@ -51,6 +51,7 @@ class MyLogWriter(rlog.AbstractLogWriter):
 
 def test_logwriter():
     class FakeCategory:
+        seen_by = None
         def __init__(self, index, category, message):
             self.index = index
             self.category = category
@@ -88,26 +89,8 @@ def test_logcategory_call():
         17, 123.0, 515, "hellooo",
         17, 0.0, 2873, "woooooorld"]
 
-def test_logwriter_force_time():
-    class FakeCategory:
-        def __init__(self, index, category, message):
-            self.index = index
-            self.category = category
-            self.message = message
-    #
-    logwriter = MyLogWriter()
-    cat5 = FakeCategory(5, "F5", "foobar")
-    logwriter.add_entry(cat5, now=100.0)
-    logwriter.add_entry(cat5)
-    #
-    assert logwriter.content == [
-        ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 1.0,
-        0, 5, "F5", "foobar",
-        5, 100.0,
-        5, 23.0]
 
-
-SIZEOF_FLOAT = rlog.LLLogWriter.SIZEOF_FLOAT
+SIZEOF_FLOAT = rlog.SIZEOF_FLOAT
 
 class TestLLLogWriter:
     COUNTER = 0
@@ -117,9 +100,10 @@ class TestLLLogWriter:
         self.path = path
         TestLLLogWriter.COUNTER += 1
         #
-        class MyLLLogWriter(rlog.LLLogWriter):
-            def get_filename(self):
-                return str(path)
+        class MyLLLogWriter(rlog_ll.LLLogWriter):
+            def ll_get_filename(self):
+                from pypy.rpython.lltypesystem import rffi
+                return rffi.str2charp(str(path))
         #
         logwriter = MyLLLogWriter()
         logwriter.open_file()
@@ -203,7 +187,7 @@ class TestLLLogWriter:
             logwriter.write_str(s)
         logwriter._close()
         self.check(slist)
-        assert logwriter.writecount <= 9
+        assert logwriter.writecount <= 10
 
     def test_write_float(self):
         import math
@@ -228,8 +212,7 @@ class TestCompiled:
 
     def f(x):
         assert rlog.has_log()
-        rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x, bar=-7.3,
-                       _time=0.5)
+        rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x, bar=-7.3)
         rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x+1, bar=x+0.5)
         rlog.debug_log("Ab", "<<%(baz)s>>", baz="hi there")
         assert rlog.has_log()
@@ -251,7 +234,7 @@ class TestCompiled:
         entries = list(rlog_parsing.parse_log(self.pypylog))
         assert len(entries) == 3
         #
-        assert entries[0][0] == 0.5
+        assert isinstance(entries[0][0], float)
         assert isinstance(entries[1][0], float)
         assert isinstance(entries[2][0], float)
         #
