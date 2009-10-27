@@ -651,7 +651,8 @@ class SemiSpaceGC(MovingGCBase):
         self._tracked_dict.add(adr)
         idx = llop.get_member_index(lltype.Signed, self.get_type_id(adr))
         self._ll_typeid_map[idx].count += 1
-        self._ll_typeid_map[idx].size = self.get_size(adr)
+        totsize = self.get_size(adr) + self.size_gc_header()
+        self._ll_typeid_map[idx].size += llmemory.raw_malloc_usage(totsize)
         self.trace(adr, self.track_heap_parent, adr)
 
     def _track_heap_root(self, root):

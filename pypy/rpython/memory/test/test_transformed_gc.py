@@ -4,7 +4,7 @@ import struct, inspect
 from pypy.translator.c import gc
 from pypy.annotation import model as annmodel
 from pypy.annotation import policy as annpolicy
-from pypy.rpython.lltypesystem import lltype, llmemory, llarena
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi
 from pypy.rpython.memory.gctransform import framework
 from pypy.rpython.lltypesystem.lloperation import llop, void
 from pypy.rpython.memory.gc.marksweep import X_CLONE, X_POOL, X_POOL_PTR
@@ -809,8 +809,9 @@ class GenericMovingGCTests(GenericGCTests):
                 s = lltype.malloc(S)
                 l1.append(s)
                 l2.append(s)
-                l3.append(s)
-                l4.append(s)
+                if i < 3:
+                    l3.append(s)
+                    l4.append(s)
             # We cheat here and only read the table which we later on
             # process ourselves, otherwise this test takes ages
             llop.gc__collect(lltype.Void)
@@ -820,6 +821,7 @@ class GenericMovingGCTests(GenericGCTests):
             b = 0
             c = 0
             d = 0
+            e = 0
             for i in range(len(tb)):
                 if tb[i].count == 10:
                     a += 1
@@ -830,13 +832,19 @@ class GenericMovingGCTests(GenericGCTests):
                 if tb[i].count == 4:
                     b += 1
                     c += tb[i].links[nr]
+                    e += tb[i].size
             return d * 1000 + c * 100 + b * 10 + a
         return f
 
     def test_gc_dump_heap(self):
         run = self.runner("gc_dump_heap")
         res = run([])
-        assert res == 4011
+        assert res % 10000 == 2611
+        totsize = (res / 10000)
+        size_of_int = rffi.sizeof(lltype.Signed)
+        assert (totsize - 26 * size_of_int) % 4 == 0
+        # ^^^ a crude assumption that totsize - varsize would be dividable by 4
+        #     (and give fixedsize)
         
 # ________________________________________________________________
 
