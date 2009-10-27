@@ -274,12 +274,12 @@ def _builduserclswithfeature(config, supercls, *features):
                 if space.config.objspace.std.withshadowtracking:
                     self.w__dict__.set_shadows_anything()
 
-            def getdictvalue_attr_is_in_class(self, space, w_name):
+            def getdictvalue_attr_is_in_class(self, space, name):
                 w_dict = self.w__dict__
                 if space.config.objspace.std.withshadowtracking:
                     if not w_dict.shadows_anything():
                         return None
-                return space.finditem(w_dict, w_name)
+                return space.finditem_str(w_dict, name)
 
         add(Proto)
 

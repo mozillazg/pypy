@@ -550,7 +550,11 @@ class AppTestModuleDict(object):
         raises(KeyError, "d['def']")
 
 
-class C: pass
+
+class FakeString(str):
+    def unwrap(self, space):
+        self.unwrapped = True
+        return str(self)
 
 # the minimal 'space' needed to use a W_DictMultiObject
 class FakeSpace:
@@ -600,7 +604,7 @@ class FakeSpace:
 
     w_StopIteration = StopIteration
     w_None = None
-    StringObjectCls = None  # xxx untested: shortcut in StrDictImpl.getitem
+    StringObjectCls = FakeString
     w_dict = None
     iter = iter
     viewiterable = list
@@ -658,12 +662,14 @@ class BaseTestRDictImplementation:
         self.impl.setitem(self.string, 1000)
         assert self.impl.length() == 1
         assert self.impl.getitem(self.string) == 1000
+        assert self.impl.getitem_str(self.string) == 1000
         self.check_not_devolved()
 
     def test_setitem_str(self):
         self.impl.setitem_str(self.fakespace.str_w(self.string), 1000)
         assert self.impl.length() == 1
         assert self.impl.getitem(self.string) == 1000
+        assert self.impl.getitem_str(self.string) == 1000
         self.check_not_devolved()
 
     def test_delitem(self):
@@ -719,6 +725,12 @@ class BaseTestRDictImplementation:
 class TestStrDictImplementation(BaseTestRDictImplementation):
     ImplementionClass = StrDictImplementation
 
+    def test_str_shortcut(self):
+        self.fill_impl()
+        s = FakeString(self.string)
+        assert self.impl.getitem(s) == 1000
+        assert s.unwrapped
+
 ## class TestMeasuringDictImplementation(BaseTestRDictImplementation):
 ##     ImplementionClass = MeasuringDictImplementation
 ##     DevolvedClass = MeasuringDictImplementation
@@ -734,7 +746,6 @@ class TestModuleDictImplementationWithBuiltinNames(BaseTestRDictImplementation):
 
 class TestSharedDictImplementation(BaseTestRDictImplementation):
     ImplementionClass = SharedDictImplementation
-
 
 
 class BaseTestDevolvedDictImplementation(BaseTestRDictImplementation):

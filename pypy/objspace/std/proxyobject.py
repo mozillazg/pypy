@@ -34,6 +34,9 @@ def transparent_class(name, BaseCls):
             raise OperationError(space.w_TypeError,
                                  space.wrap("You cannot override __class__ for transparent proxies"))
         
+        def getdictvalue_w(self, space, attr):
+            return self.getdictvalue(space, space.wrap(attr))
+
         def getdictvalue(self, space, w_attr):
             try:
                 return space.call_function(self.w_controller, space.wrap('__getattribute__'),
