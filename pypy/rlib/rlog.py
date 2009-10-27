@@ -1,8 +1,6 @@
-import py, os, time, struct
+import py, time, struct
 from pypy.tool.ansi_print import ansi_log
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.rarithmetic import r_uint, r_singlefloat
-from pypy.rlib.objectmodel import we_are_translated
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.annlowlevel import hlstr
@@ -16,7 +14,7 @@ py.log.setconsumer("rlog", ansi_log)
 def has_log():
     return True
 
-def debug_log(_category, _message, _time=None, **_kwds):
+def debug_log(_category, _message, **_kwds):
     getattr(_log, _category)(_message % _kwds)
 
 # ____________________________________________________________
@@ -76,8 +74,6 @@ class DebugLogEntry(ExtRegistryEntry):
                 name = 's_' + entry
                 assert name in kwds_s, "missing log entry %r" % (entry,)
                 del kwds_s[name]
-            if 's__time' in kwds_s:
-                del kwds_s['s__time']
             assert not kwds_s, "unexpected log entries %r" % (kwds_s.keys(),)
         return annmodel.s_None
 
@@ -89,22 +85,17 @@ class DebugLogEntry(ExtRegistryEntry):
             logwriter = get_logwriter(hop.rtyper)
             translator = hop.rtyper.annotator.translator
             cat = translator._logcategories[hop.args_s[0].const]
-            types = cat.types
-            entries = cat.entries
-            if 'i__time' in kwds_i:
-                types = types + ['f']
-                entries = entries + [('_time', 'f')]
             ann = {
                 'd': annmodel.SomeInteger(),
                 'f': annmodel.SomeFloat(),
                 's': annmodel.SomeString(can_be_None=True),
                 }
             annhelper = hop.rtyper.getannmixlevel()
-            args_s = [ann[t] for t in types]
+            args_s = [ann[t] for t in cat.types]
             c_func = annhelper.constfunc(cat.gen_call(logwriter), args_s,
                                          annmodel.s_None)
             args_v = [c_func]
-            for name, typechar in entries:
+            for name, typechar in cat.entries:
                 arg = kwds_i['i_'+name]
                 if typechar == 'd':
                     v = hop.inputarg(lltype.Signed, arg=arg)
@@ -124,6 +115,8 @@ def get_logwriter(rtyper):
     try:
         return rtyper.annotator.translator._logwriter
     except AttributeError:
+        # XXX detect lltype vs. ootype
+        from pypy.rlib.rlog_ll import LLLogWriter
         logwriter = LLLogWriter()
         logwriter._register(rtyper)
         rtyper.annotator.translator._logwriter = logwriter
@@ -135,8 +128,11 @@ import re
 
 r_entry = re.compile(r"%\((\w+)\)([sdf])")
 
+SIZEOF_FLOAT = struct.calcsize("f")
+
 
 class LogCategory(object):
+    seen_by = None
 
     def __init__(self, category, message, index):
         self.category = category
@@ -160,11 +156,7 @@ class LogCategory(object):
             def call(*args):
                 if not logwriter.enabled:
                     return
-                if len(args) > len(self.types):
-                    now = args[len(self.types)]
-                else:
-                    now = 0.0
-                if not logwriter.add_entry(self, now):
+                if not logwriter.add_entry(self):
                     return
                 i = 0
                 for typechar in types:
@@ -178,9 +170,6 @@ class LogCategory(object):
             assert self.logwriter is logwriter
         return self.call
 
-    def _freeze_(self):
-        return True
-
 
 class AbstractLogWriter(object):
     get_time = time.time
@@ -188,8 +177,6 @@ class AbstractLogWriter(object):
     def __init__(self):
         self.enabled = True
         self.initialized_file = False
-        self.initialized_index = {}
-        self.fd = -1
         self.curtime = 0.0
         #
         def has_log():
@@ -198,17 +185,8 @@ class AbstractLogWriter(object):
             return self.enabled
         self.has_log = has_log
 
-    def get_filename(self):
-        return os.environ.get('PYPYLOG')
-
     def open_file(self):
-        from pypy.rpython.lltypesystem import lltype, rffi
-        filename = self.get_filename()
-        if filename:
-            self.fd = os.open(filename,
-                              os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                              0666)
-        self.enabled = self.fd >= 0
+        self.do_open_file()
         # write the header
         if self.enabled:
             self.create_buffer()
@@ -231,16 +209,15 @@ class AbstractLogWriter(object):
             self.write_int(cat.index)
             self.write_str(cat.category)
             self.write_str(cat.message)
-            self.initialized_index[cat.index] = None
+            cat.seen_by = self
     define_new_category._dont_inline_ = True
 
-    def add_entry(self, cat, now=0.0):
-        if cat.index not in self.initialized_index:
+    def add_entry(self, cat):
+        if cat.seen_by is not self:
             self.define_new_category(cat)
             if not self.enabled:
                 return False
-        if now == 0.0:
-            now = self.get_time()
+        now = self.get_time()
         timestamp_delta = now - self.curtime
         self.curtime = now
         self.write_int(cat.index)
@@ -261,88 +238,3 @@ class AbstractLogWriter(object):
 
     def add_subentry_f(self, float):
         self.write_float(float)
-
-# ____________________________________________________________
-
-
-class LLLogWriter(AbstractLogWriter):
-    BUFSIZE = 8192
-    SIZEOF_FLOAT = struct.calcsize("f")
-
-    def do_write(self, fd, buf, size):
-        if we_are_translated():
-            from pypy.rpython.lltypesystem import rffi
-            self._os_write(rffi.cast(rffi.INT, fd),
-                           buf,
-                           rffi.cast(rffi.SIZE_T, size))
-        else:
-            l = [buf[i] for i in range(size)]
-            s = ''.join(l)
-            os.write(fd, s)
-        self.writecount += 1
-
-    def _register(self, rtyper):
-        from pypy.rpython.lltypesystem import rffi
-        from pypy.rpython.module.ll_os import underscore_on_windows
-        self._os_write = rffi.llexternal(underscore_on_windows+'write',
-                                         [rffi.INT, rffi.CCHARP, rffi.SIZE_T],
-                                         rffi.SIZE_T)
-        # register flush() to be called at program exit
-        def flush_log_cache():
-            if self.initialized_file:
-                self._flush()
-        annhelper = rtyper.getannmixlevel()
-        annhelper.register_atexit(flush_log_cache)
-
-    def create_buffer(self):
-        from pypy.rpython.lltypesystem import lltype, rffi
-        self.buffer = lltype.malloc(rffi.CCHARP.TO, self.BUFSIZE, flavor='raw')
-        self.buffer_position = 0
-        self.writecount = 0
-
-    def write_int(self, n):
-        self._write_int_noflush(n)
-        if self.buffer_position > self.BUFSIZE-48:
-            self._flush()
-
-    def _write_int_noflush(self, n):
-        p = self.buffer_position
-        buf = self.buffer
-        n = r_uint(n)
-        while n > 0x7F:
-            buf[p] = chr((n & 0x7F) | 0x80)
-            p += 1
-            n >>= 7
-        buf[p] = chr(n)
-        self.buffer_position = p + 1
-
-    def write_str(self, s):
-        self._write_int_noflush(len(s))
-        p = self.buffer_position
-        if p + len(s) > self.BUFSIZE-24:
-            self._flush()
-            os.write(self.fd, s)
-            self.writecount += 1
-        else:
-            buf = self.buffer
-            for i in range(len(s)):
-                buf[p + i] = s[i]
-            self.buffer_position = p + len(s)
-
-    def write_float(self, f):
-        from pypy.rpython.lltypesystem import rffi
-        p = self.buffer_position
-        ptr = rffi.cast(rffi.FLOATP, rffi.ptradd(self.buffer, p))
-        ptr[0] = r_singlefloat(f)
-        self.buffer_position = p + self.SIZEOF_FLOAT
-        if self.buffer_position > self.BUFSIZE-48:
-            self._flush()
-
-    def _flush(self):
-        if self.buffer_position > 0:
-            self.do_write(self.fd, self.buffer, self.buffer_position)
-        self.buffer_position = 0
-
-    def _close(self):
-        self._flush()
-        os.close(self.fd)

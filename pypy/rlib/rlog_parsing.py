@@ -3,7 +3,7 @@ import struct
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import rlog
 
-SIZEOF_FLOAT = rlog.LLLogWriter.SIZEOF_FLOAT
+SIZEOF_FLOAT = rlog.SIZEOF_FLOAT
 
 
 class LogParser(object):
