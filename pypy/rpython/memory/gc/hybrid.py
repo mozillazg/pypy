@@ -10,6 +10,7 @@ from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib import rlog
 from pypy.rpython.lltypesystem import rffi
 
 #   _______in the semispaces_________      ______external (non-moving)_____
@@ -117,7 +118,7 @@ class HybridGC(GenerationGC):
 
     def setup(self):
         self.large_objects_collect_trigger = self.param_space_size
-        if self.config.gcconfig.debugprint:
+        if self.config.rlog:
             self._initial_trigger = self.large_objects_collect_trigger
         self.rawmalloced_objects_to_trace = self.AddressStack()
         self.count_semispaceonly_collects = 0
@@ -271,11 +272,10 @@ class HybridGC(GenerationGC):
     def _check_rawsize_alloced(self, size_estimate, can_collect=True):
         self.large_objects_collect_trigger -= size_estimate
         if can_collect and self.large_objects_collect_trigger < 0:
-            if self.config.gcconfig.debugprint:
-                llop.debug_print(lltype.Void, "allocated",
-                                 self._initial_trigger -
-                                     self.large_objects_collect_trigger,
-                                 "bytes, triggering full collection")
+            rlog.debug_log("gc-full-trigger",
+                "allocated %(bytes)d bytes, triggering full collection",
+                bytes = self._initial_trigger -
+                            self.large_objects_collect_trigger)
             self.semispace_collect()
 
     def malloc_varsize_marknsweep(self, totalsize, resizable=False):
@@ -341,7 +341,7 @@ class HybridGC(GenerationGC):
                                                   None)
         ll_assert(not self.rawmalloced_objects_to_trace.non_empty(),
                   "rawmalloced_objects_to_trace should be empty at start")
-        if self.config.gcconfig.debugprint:
+        if self.config.rlog:
             self._nonmoving_copy_count = 0
             self._nonmoving_copy_size = 0
 
@@ -419,7 +419,7 @@ class HybridGC(GenerationGC):
         newaddr = self.allocate_external_object(totalsize_incl_hash)
         if not newaddr:
             return llmemory.NULL   # can't raise MemoryError during a collect()
-        if self.config.gcconfig.debugprint:
+        if self.config.rlog:
             self._nonmoving_copy_count += 1
             self._nonmoving_copy_size += raw_malloc_usage(totalsize)
 
@@ -464,11 +464,12 @@ class HybridGC(GenerationGC):
     def finished_full_collect(self):
         ll_assert(not self.rawmalloced_objects_to_trace.non_empty(),
                   "rawmalloced_objects_to_trace should be empty at end")
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void,
-                             "| [hybrid] made nonmoving:         ",
-                             self._nonmoving_copy_size, "bytes in",
-                             self._nonmoving_copy_count, "objs")
+        if self.config.rlog:
+            rlog.debug_log("gc-hybr-1",
+                "| made nonmoving:                  "
+                "%(nonmoving_size)d bytes in %(nonmoving_objs)d objs",
+                nonmoving_size = self._nonmoving_copy_size,
+                nonmoving_objs = self._nonmoving_copy_count)
         # sweep the nonmarked rawmalloced objects
         if self.is_collecting_gen3():
             self.sweep_rawmalloced_objects(generation=3)
@@ -479,7 +480,7 @@ class HybridGC(GenerationGC):
         self.large_objects_collect_trigger = self.space_size
         if self.is_collecting_gen3():
             self.count_semispaceonly_collects = 0
-        if self.config.gcconfig.debugprint:
+        if self.config.rlog:
             self._initial_trigger = self.large_objects_collect_trigger
 
     def sweep_rawmalloced_objects(self, generation):
@@ -513,17 +514,18 @@ class HybridGC(GenerationGC):
         surviving_objects = self.AddressStack()
         # Help the flow space
         alive_count = alive_size = dead_count = dead_size = 0
+        counting_sizes = rlog.has_log()
         while objects.non_empty():
             obj = objects.pop()
             tid = self.header(obj).tid
             if tid & GCFLAG_UNVISITED:
-                if self.config.gcconfig.debugprint:
+                if counting_sizes:
                     dead_count+=1
                     dead_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
                 addr = obj - self.gcheaderbuilder.size_gc_header
                 llmemory.raw_free(addr)
             else:
-                if self.config.gcconfig.debugprint:
+                if counting_sizes:
                     alive_count+=1
                     alive_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
                 if generation == 3:
@@ -554,17 +556,16 @@ class HybridGC(GenerationGC):
             self.gen3_rawmalloced_objects = surviving_objects
         elif generation == -2:
             self.gen2_resizable_objects = surviving_objects
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void,
-                             "| [hyb] gen", generation,
-                             "nonmoving now alive: ",
-                             alive_size, "bytes in",
-                             alive_count, "objs")
-            llop.debug_print(lltype.Void,
-                             "| [hyb] gen", generation,
-                             "nonmoving freed:     ",
-                             dead_size, "bytes in",
-                             dead_count, "objs")
+        rlog.debug_log("gc-hybr-2",
+            "| gen %(sweep_gen)d nonmoving now alive:       "
+            "%(alive_size)d bytes in %(alive_count)d objs\n"
+            "|     freed:                       "
+            "%(dead_size)d bytes in %(dead_count)d objs",
+            sweep_gen   = generation,
+            alive_size  = alive_size,
+            alive_count = alive_count,
+            dead_size   = dead_size,
+            dead_count  = dead_count)
 
     def id(self, ptr):
         obj = llmemory.cast_ptr_to_adr(ptr)
