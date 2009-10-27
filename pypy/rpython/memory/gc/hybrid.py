@@ -118,8 +118,7 @@ class HybridGC(GenerationGC):
 
     def setup(self):
         self.large_objects_collect_trigger = self.param_space_size
-        if self.config.rlog:
-            self._initial_trigger = self.large_objects_collect_trigger
+        self._initial_trigger = self.large_objects_collect_trigger
         self.rawmalloced_objects_to_trace = self.AddressStack()
         self.count_semispaceonly_collects = 0
 
@@ -480,8 +479,7 @@ class HybridGC(GenerationGC):
         self.large_objects_collect_trigger = self.space_size
         if self.is_collecting_gen3():
             self.count_semispaceonly_collects = 0
-        if self.config.rlog:
-            self._initial_trigger = self.large_objects_collect_trigger
+        self._initial_trigger = self.large_objects_collect_trigger
 
     def sweep_rawmalloced_objects(self, generation):
         # free all the rawmalloced objects of the specified generation
