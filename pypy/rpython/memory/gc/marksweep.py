@@ -8,6 +8,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib import rlog
 from pypy.rpython.memory.gc.base import GCBase
 
 
@@ -241,9 +242,7 @@ class MarkSweepGC(GCBase):
         # 3. walk the list of objects-with-del and for the ones not marked:
         #    call __del__, move the object to the list of object-without-del
         import time
-        from pypy.rpython.lltypesystem.lloperation import llop
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void, 'collecting...')
+        rlog.debug_log("gc-{", "collecting...")
         start_time = time.time()
         self.collect_in_progress = True
         size_gc_header = self.gcheaderbuilder.size_gc_header
@@ -406,31 +405,22 @@ class MarkSweepGC(GCBase):
                                             256 * 1024 * 1024)
         self.total_collection_time += collect_time
         self.prev_collect_end_time = end_time
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void,
-                             "  malloced since previous collection:",
-                             old_malloced, "bytes")
-            llop.debug_print(lltype.Void,
-                             "  heap usage at start of collection: ",
-                             self.heap_usage + old_malloced, "bytes")
-            llop.debug_print(lltype.Void,
-                             "  freed:                             ",
-                             freed_size, "bytes")
-            llop.debug_print(lltype.Void,
-                             "  new heap usage:                    ",
-                             curr_heap_size, "bytes")
-            llop.debug_print(lltype.Void,
-                             "  total time spent collecting:       ",
-                             self.total_collection_time, "seconds")
-            llop.debug_print(lltype.Void,
-                             "  collecting time:                   ",
-                             collect_time)
-            llop.debug_print(lltype.Void,
-                             "  computing time:                    ",
-                             collect_time)
-            llop.debug_print(lltype.Void,
-                             "  new threshold:                     ",
-                             self.bytes_malloced_threshold)
+        rlog.debug_log("gc-}",
+            "  malloced since previous collect.:  %(old_malloced)d bytes\n"
+            "  heap usage at start of collection: %(old_heap)d bytes\n"
+            "  freed:                             %(freed_size)d bytes\n"
+            "  new heap usage:                    %(new_heap)d bytes\n"
+            "  total time spent collecting:       %(total_col_time)f seconds\n"
+            "  collecting time:                   %(collect_time)f\n"
+            "  new threshold:                     %(threshold)d\n",
+            old_malloced = old_malloced,
+            old_heap = self.heap_usage + old_malloced,
+            freed_size = freed_size,
+            new_heap = curr_heap_size,
+            total_col_time = self.total_collection_time,
+            collect_time = collect_time,
+            threshold = self.bytes_malloced_threshold)
+
 ##        llop.debug_view(lltype.Void, self.malloced_objects, self.poolnodes,
 ##                        size_gc_header)
         assert self.heap_usage + old_malloced == curr_heap_size + freed_size
