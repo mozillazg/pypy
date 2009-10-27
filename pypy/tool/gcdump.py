@@ -38,17 +38,18 @@ def getname(name, _cache = {}):
         return '(%d) %s' % (no, name)
 
 def process(f, gcdump, typeids):
-    f.write("events: B\n\n")
+    f.write("events: number B\n\n")
     for tid, name in enumerate(typeids):
         if not tid % 100:
             sys.stderr.write("%d%%.." % (tid / len(typeids) * 100))
         f.write("fn=%s\n" % getname(name))
-        f.write("0 %d\n" % (gcdump[tid].count * gcdump[tid].size))
+        f.write("0 %d %d\n" % (gcdump[tid].count, gcdump[tid].size))
         for subtid, no in enumerate(gcdump[tid].links):
             if no != 0:
                 f.write("cfn=%s\n" % getname(typeids[subtid]))
                 f.write("calls=0 %d\n" % no)
-                f.write("0 %d\n" % (gcdump[subtid].count * gcdump[subtid].size))
+                f.write("0 %d %d\n" % (gcdump[subtid].count,
+                                       gcdump[subtid].size))
         f.write("\n")
     sys.stderr.write("100%\n")
 
