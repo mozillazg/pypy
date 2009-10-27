@@ -85,15 +85,17 @@ class SharedDictImplementation(W_DictMultiObject):
         space = self.space
         w_lookup_type = space.type(w_lookup)
         if space.is_w(w_lookup_type, space.w_str):
-            lookup = space.str_w(w_lookup)
-            i = self.structure.lookup_position(lookup)
-            if i == -1:
-                return None
-            return self.entries[i]
+            return self.impl_getitem_str(space.str_w(w_lookup))
         elif _is_sane_hash(space, w_lookup_type):
             return None
         else:
-            return self._as_rdict().get(w_lookup)
+            return self._as_rdict().getitem(w_lookup)
+
+    def impl_getitem_str(self, lookup):
+        i = self.structure.lookup_position(lookup)
+        if i == -1:
+            return None
+        return self.entries[i]
 
     def impl_setitem(self, w_key, w_value):
         space = self.space
@@ -155,9 +157,9 @@ class SharedDictImplementation(W_DictMultiObject):
         return [space.newtuple([space.wrap(key), self.entries[item]])
                     for (key, item) in self.structure.keys.iteritems()]
     def impl_clear(self):
-        SharedDictImplementation.__init__(self, self.space)
-
-
+        space = self.space
+        self.structure = space.fromcache(State).empty_structure
+        self.entries = space.fromcache(State).emptylist
     def _as_rdict(self):
         r_dict_content = self.initialize_as_rdict()
         for k, i in self.structure.keys.items():

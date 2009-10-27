@@ -708,7 +708,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         e = None
         if w_descr is not None:
             if not self.is_data_descr(w_descr):
-                w_value = w_obj.getdictvalue_attr_is_in_class(self, w_name)
+                w_value = w_obj.getdictvalue_attr_is_in_class(self, name)
                 if w_value is not None:
                     return w_value
             try:
@@ -717,7 +717,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 if not e.match(self, self.w_AttributeError):
                     raise
         else:
-            w_value = w_obj.getdictvalue(self, w_name)
+            w_value = w_obj.getdictvalue_w(self, name)
             if w_value is not None:
                 return w_value
 
@@ -728,6 +728,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
             raise e
         else:
             raiseattrerror(self, w_obj, name)
+
+    def finditem_str(self, w_obj, key):
+        # performance shortcut to avoid creating the OperationError(KeyError)
+        if (isinstance(w_obj, self.DictObjectCls) and
+                not w_obj.user_overridden_class):
+            return w_obj.getitem_str(key)
+        return ObjSpace.finditem_str(self, w_obj, key)
 
     def finditem(self, w_obj, w_key):
         # performance shortcut to avoid creating the OperationError(KeyError)

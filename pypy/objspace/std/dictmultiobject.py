@@ -109,6 +109,10 @@ class W_DictMultiObject(W_Object):
         #return w_value or None
         raise NotImplementedError("abstract base class")
 
+    def impl_getitem_str(self, w_key):
+        #return w_value or None
+        raise NotImplementedError("abstract base class")
+
     def impl_setitem_str(self,  w_key, w_value, shadows_type=True):
         raise NotImplementedError("abstract base class")
 
@@ -159,8 +163,8 @@ class W_DictMultiObject(W_Object):
     # CALL_LIKELY_BUILTIN opcode is set. Otherwise it won't even be seen
     # by the annotator
     def impl_get_builtin_indexed(self, i):
-        w_key = self.space.wrap(OPTIMIZED_BUILTINS[i])
-        return self.impl_getitem(w_key)
+        key = OPTIMIZED_BUILTINS[i]
+        return self.impl_getitem_str(key)
 
     # this method will only be seen whan a certain config option is used
     def impl_shadows_anything(self):
@@ -187,6 +191,9 @@ class W_DictMultiObject(W_Object):
     def impl_fallback_getitem(self, w_key):
         return self.r_dict_content.get(w_key, None)
 
+    def impl_fallback_getitem_str(self, key):
+        return self.r_dict_content.get(self.space.wrap(key), None)
+
     def impl_fallback_iter(self):
         return RDictIteratorImplementation(self.space, self)
 
@@ -202,8 +209,8 @@ class W_DictMultiObject(W_Object):
         self.r_dict_content.clear()
 
     def impl_fallback_get_builtin_indexed(self, i):
-        w_key = self.space.wrap(OPTIMIZED_BUILTINS[i])
-        return self.impl_fallback_getitem(w_key)
+        key = OPTIMIZED_BUILTINS[i]
+        return self.impl_fallback_getitem_str(key)
 
     def impl_fallback_shadows_anything(self):
         return True
@@ -214,6 +221,7 @@ class W_DictMultiObject(W_Object):
 
 implementation_methods = [
     ("getitem", 1),
+    ("getitem_str", 1),
     ("length", 0),
     ("setitem_str", 3),
     ("setitem", 2),
@@ -322,15 +330,18 @@ class StrDictImplementation(W_DictMultiObject):
     def impl_length(self):
         return len(self.content)
 
+    def impl_getitem_str(self, key):
+        return self.content.get(key, None)
+
     def impl_getitem(self, w_key):
         space = self.space
         # -- This is called extremely often.  Hack for performance --
         if type(w_key) is space.StringObjectCls:
-            return self.content.get(w_key.unwrap(space), None)
+            return self.impl_getitem_str(w_key.unwrap(space))
         # -- End of performance hack --
         w_lookup_type = space.type(w_key)
         if space.is_w(w_lookup_type, space.w_str):
-            return self.content.get(space.str_w(w_key), None)
+            return self.impl_getitem_str(space.str_w(w_key))
         elif _is_sane_hash(space, w_lookup_type):
             return None
         else:
@@ -562,6 +573,8 @@ class MeasuringDictImplementation(W_DictMultiObject):
     def impl_length(self):
         self.info.lengths += 1
         return len(self.content)
+    def impl_getitem_str(self, key):
+        return self.impl_getitem(self.space.wrap(key))
     def impl_getitem(self, w_key):
         self.info.gets += 1
         self._read(w_key)

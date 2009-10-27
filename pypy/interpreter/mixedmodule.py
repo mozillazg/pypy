@@ -41,32 +41,42 @@ class MixedModule(Module):
         w_builtin = self.get(name) 
         return self.space.call_function(w_builtin, *args_w)
 
+    def getdictvalue_w(self, space, name):
+        w_value = space.finditem_str(self.w_dict, name)
+        if self.lazy and w_value is None:
+            return self._load_lazily(space, name)
+        return w_value
+
     def getdictvalue(self, space, w_name):
         w_value = space.finditem(self.w_dict, w_name)
         if self.lazy and w_value is None:
-            name = space.str_w(w_name)
-            w_name = space.new_interned_w_str(w_name)
-            try: 
-                loader = self.loaders[name]
-            except KeyError: 
-                return None 
-            else: 
-                #print "trying to load", name
-                w_value = loader(space) 
-                #print "loaded", w_value 
-                # obscure
-                func = space.interpclass_w(w_value)
-                if type(func) is Function:
-                    try:
-                        bltin = func._builtinversion_
-                    except AttributeError:
-                        bltin = BuiltinFunction(func)
-                        bltin.w_module = self.w_name
-                        func._builtinversion_ = bltin
-                        bltin.name = name
-                    w_value = space.wrap(bltin)
-                space.setitem(self.w_dict, w_name, w_value) 
+            return self._load_lazily(space, space.str_w(w_name))
         return w_value
+
+    def _load_lazily(self, space, name):
+        w_name = space.new_interned_str(name)
+        try: 
+            loader = self.loaders[name]
+        except KeyError: 
+            return None 
+        else: 
+            #print "trying to load", name
+            w_value = loader(space) 
+            #print "loaded", w_value 
+            # obscure
+            func = space.interpclass_w(w_value)
+            if type(func) is Function:
+                try:
+                    bltin = func._builtinversion_
+                except AttributeError:
+                    bltin = BuiltinFunction(func)
+                    bltin.w_module = self.w_name
+                    func._builtinversion_ = bltin
+                    bltin.name = name
+                w_value = space.wrap(bltin)
+            space.setitem(self.w_dict, w_name, w_value) 
+            return w_value
+
 
     def getdict(self): 
         if self.lazy: 

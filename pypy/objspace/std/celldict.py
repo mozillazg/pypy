@@ -80,14 +80,18 @@ class ModuleDictImplementation(W_DictMultiObject):
         space = self.space
         w_lookup_type = space.type(w_lookup)
         if space.is_w(w_lookup_type, space.w_str):
-            res = self.getcell(space.str_w(w_lookup), False)
-            if res is None:
-                return None
-            return res.w_value
+            return self.impl_getitem_str(space.str_w(w_lookup))
+
         elif _is_sane_hash(space, w_lookup_type):
             return None
         else:
             return self._as_rdict().getitem(w_lookup)
+
+    def impl_getitem_str(self, lookup):
+        res = self.getcell(lookup, False)
+        if res is None:
+            return None
+        return res.w_value
 
     def impl_iter(self):
         return ModuleDictIteratorImplementation(self.space, self)

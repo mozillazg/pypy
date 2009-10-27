@@ -26,7 +26,10 @@ class W_Root(object):
         return None
 
     def getdictvalue_w(self, space, attr):
-        return self.getdictvalue(space, space.wrap(attr))
+        w_dict = self.getdict()
+        if w_dict is not None:
+            return space.finditem_str(w_dict, attr)
+        return None
 
     def getdictvalue(self, space, w_attr):
         w_dict = self.getdict()
@@ -34,8 +37,8 @@ class W_Root(object):
             return space.finditem(w_dict, w_attr)
         return None
 
-    def getdictvalue_attr_is_in_class(self, space, w_attr):
-        return self.getdictvalue(space, w_attr)
+    def getdictvalue_attr_is_in_class(self, space, attr):
+        return self.getdictvalue_w(space, attr)
 
     def setdictvalue(self, space, w_attr, w_value, shadows_type=True):
         w_dict = self.getdict()
@@ -551,12 +554,6 @@ class ObjSpace(object):
     # that can be defined in term of more primitive ones.  Subclasses
     # may also override specific functions for performance.
 
-    #def is_(self, w_x, w_y):   -- not really useful.  Must be subclassed
-    #    "'x is y'."
-    #    w_id_x = self.id(w_x)
-    #    w_id_y = self.id(w_y)
-    #    return self.eq(w_id_x, w_id_y)
-
     def not_(self, w_obj):
         return self.wrap(not self.is_true(w_obj))
 
@@ -574,6 +571,9 @@ class ObjSpace(object):
 
     def set_str_keyed_item(self, w_obj, w_key, w_value, shadows_type=True):
         return self.setitem(w_obj, w_key, w_value)
+
+    def finditem_str(self, w_obj, key):
+        return self.finditem(w_obj, self.wrap(key))
 
     def finditem(self, w_obj, w_key):
         try:
