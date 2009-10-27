@@ -9,6 +9,7 @@ from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib import rlog
 from pypy.rpython.memory.gc.base import MovingGCBase
 
 import sys, os, time
@@ -61,8 +62,7 @@ class SemiSpaceGC(MovingGCBase):
         self.max_space_size = self.param_max_space_size
         self.red_zone = 0
 
-        if self.config.gcconfig.debugprint:
-            self.program_start_time = time.time()
+        self.program_start_time = time.time()
         self.tospace = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.tospace), "couldn't allocate tospace")
         self.top_of_space = self.tospace + self.space_size
@@ -213,18 +213,8 @@ class SemiSpaceGC(MovingGCBase):
         # (this is also a hook for the HybridGC)
 
     def semispace_collect(self, size_changing=False):
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void)
-            llop.debug_print(lltype.Void,
-                             ".----------- Full collection ------------------")
-            start_usage = self.free - self.tospace
-            llop.debug_print(lltype.Void,
-                             "| used before collection:          ",
-                             start_usage, "bytes")
-            start_time = time.time()
-        else:
-            start_time = 0 # Help the flow space
-            start_usage = 0 # Help the flow space
+        start_time = time.time()
+        start_usage = self.free - self.tospace
         #llop.debug_print(lltype.Void, 'semispace_collect', int(size_changing))
 
         # Switch the spaces.  We copy everything over to the empty space
@@ -254,41 +244,39 @@ class SemiSpaceGC(MovingGCBase):
             self.record_red_zone()
             self.execute_finalizers()
         #llop.debug_print(lltype.Void, 'collected', self.space_size, size_changing, self.top_of_space - self.free)
-        if self.config.gcconfig.debugprint:
+        if rlog.has_log():
+            rlog.debug_log("gc-full-{",
+                ".----------- Full collection ------------------\n"
+                "| used before collection:          %(start_usage)d bytes",
+                start_usage=start_usage,
+                _time=start_time)
             end_time = time.time()
             elapsed_time = end_time - start_time
             self.total_collection_time += elapsed_time
             self.total_collection_count += 1
             total_program_time = end_time - self.program_start_time
             end_usage = self.free - self.tospace
-            llop.debug_print(lltype.Void,
-                             "| used after collection:           ",
-                             end_usage, "bytes")
-            llop.debug_print(lltype.Void,
-                             "| freed:                           ",
-                             start_usage - end_usage, "bytes")
-            llop.debug_print(lltype.Void,
-                             "| size of each semispace:          ",
-                             self.space_size, "bytes")
-            llop.debug_print(lltype.Void,
-                             "| fraction of semispace now used:  ",
-                             end_usage * 100.0 / self.space_size, "%")
             ct = self.total_collection_time
             cc = self.total_collection_count
-            llop.debug_print(lltype.Void,
-                             "| number of semispace_collects:    ",
-                             cc)
-            llop.debug_print(lltype.Void,
-                             "|                         i.e.:    ",
-                             cc / total_program_time, "per second")
-            llop.debug_print(lltype.Void,
-                             "| total time in semispace_collect: ",
-                             ct, "seconds")
-            llop.debug_print(lltype.Void,
-                             "|                            i.e.: ",
-                             ct * 100.0 / total_program_time, "%")
-            llop.debug_print(lltype.Void,
-                             "`----------------------------------------------")
+            rlog.debug_log(
+                "gc-full-}",
+                "| used after collection:           %(end_usage)d bytes\n"
+                "| freed:                           %(freed)d bytes\n"
+                "| size of each semispace:          %(semispace)d bytes\n"
+                "| fraction of semispace now used:  %(now_used)f %%\n"
+                "| number of semispace_collects:    %(cc)d\n"
+                "|                         i.e.:    %(cc_sec)f per second\n"
+                "| total time in semispace_collect: %(ct)f seconds\n"
+                "|                            i.e.: %(ct_frac)f %%\n"
+                "`----------------------------------------------",
+                end_usage = end_usage,
+                freed     = start_usage - end_usage,
+                semispace = self.space_size,
+                now_used  = end_usage * 100.0 / self.space_size,
+                cc        = cc,
+                cc_sec    = cc / total_program_time,
+                ct        = ct,
+                ct_frac   = ct * 100.0 / total_program_time)
 
     def starting_full_collect(self):
         pass    # hook for the HybridGC

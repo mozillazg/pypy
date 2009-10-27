@@ -88,6 +88,24 @@ def test_logcategory_call():
         17, 123.0, 515, "hellooo",
         17, 0.0, 2873, "woooooorld"]
 
+def test_logwriter_force_time():
+    class FakeCategory:
+        def __init__(self, index, category, message):
+            self.index = index
+            self.category = category
+            self.message = message
+    #
+    logwriter = MyLogWriter()
+    cat5 = FakeCategory(5, "F5", "foobar")
+    logwriter.add_entry(cat5, now=100.0)
+    logwriter.add_entry(cat5)
+    #
+    assert logwriter.content == [
+        ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 1.0,
+        0, 5, "F5", "foobar",
+        5, 100.0,
+        5, 23.0]
+
 
 SIZEOF_FLOAT = rlog.LLLogWriter.SIZEOF_FLOAT
 
@@ -210,7 +228,8 @@ class TestCompiled:
 
     def f(x):
         assert rlog.has_log()
-        rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x, bar=-7.3)
+        rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x, bar=-7.3,
+                       _time=0.5)
         rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x+1, bar=x+0.5)
         rlog.debug_log("Ab", "<<%(baz)s>>", baz="hi there")
         assert rlog.has_log()
@@ -232,7 +251,7 @@ class TestCompiled:
         entries = list(rlog_parsing.parse_log(self.pypylog))
         assert len(entries) == 3
         #
-        assert isinstance(entries[0][0], float)
+        assert entries[0][0] == 0.5
         assert isinstance(entries[1][0], float)
         assert isinstance(entries[2][0], float)
         #

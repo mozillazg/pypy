@@ -1,3 +1,4 @@
+import autopath
 import struct
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import rlog
@@ -71,3 +72,17 @@ class LogParser(object):
 def parse_log(filename):
     logparser = LogParser(open(filename, 'rb'))
     return logparser.enum_entries()
+
+
+if __name__ == '__main__':
+    import sys, re
+    r_replace = re.compile(r"%\(\w+\)")
+    for curtime, cat, entries in parse_log(sys.argv[1]):
+        try:
+            printcode = cat.printcode
+        except AttributeError:
+            code = cat.category + ' '
+            message = cat.message.replace('\n', '\n' + ' '*len(code))
+            message = r_replace.sub("%", message)
+            printcode = cat.printcode = code + message
+        print printcode % tuple(entries)
