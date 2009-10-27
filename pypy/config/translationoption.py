@@ -41,6 +41,11 @@ translation_optiondescription = OptionDescription(
                      },
                  cmdline="-b --backend"),
 
+    BoolOption("rlog",
+               "Includes logging code (at runtime, set PYPYLOG=file)",
+               default=True,
+               cmdline="--rlog"),
+
     # gc
     ChoiceOption("gc", "Garbage Collection Strategy",
                  ["boehm", "ref", "marksweep", "semispace", "statistics",
