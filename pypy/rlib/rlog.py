@@ -26,18 +26,26 @@ class HasLogEntry(ExtRegistryEntry):
     _about_ = has_log
 
     def compute_result_annotation(self):
-        from pypy.annotation import model as annmodel
-        return annmodel.s_Bool
+        translator = self.bookkeeper.annotator.translator
+        if translator.config.translation.rlog:
+            from pypy.annotation import model as annmodel
+            return annmodel.s_Bool
+        else:
+            return self.bookkeeper.immutablevalue(False)
 
     def specialize_call(self, hop):
-        from pypy.annotation import model as annmodel
         from pypy.rpython.lltypesystem import lltype
-        logwriter = get_logwriter(hop.rtyper)
-        annhelper = hop.rtyper.getannmixlevel()
-        c_func = annhelper.constfunc(logwriter.has_log, [],
-                                     annmodel.s_Bool)
-        hop.exception_cannot_occur()
-        return hop.genop('direct_call', [c_func], resulttype=lltype.Bool)
+        translator = hop.rtyper.annotator.translator
+        if translator.config.translation.rlog:
+            from pypy.annotation import model as annmodel
+            logwriter = get_logwriter(hop.rtyper)
+            annhelper = hop.rtyper.getannmixlevel()
+            c_func = annhelper.constfunc(logwriter.has_log, [],
+                                         annmodel.s_Bool)
+            hop.exception_cannot_occur()
+            return hop.genop('direct_call', [c_func], resulttype=lltype.Bool)
+        else:
+            return hop.inputconst(lltype.Bool, False)
 
 
 class DebugLogEntry(ExtRegistryEntry):
@@ -45,56 +53,60 @@ class DebugLogEntry(ExtRegistryEntry):
 
     def compute_result_annotation(self, s_category, s_message, **kwds_s):
         from pypy.annotation import model as annmodel
-        assert s_category.is_constant()
-        assert s_message.is_constant()
         translator = self.bookkeeper.annotator.translator
-        try:
-            logcategories = translator._logcategories
-        except AttributeError:
-            logcategories = translator._logcategories = {}
-        try:
-            cat = logcategories[s_category.const]
-        except KeyError:
-            num = len(logcategories) + 1
-            logcategories[s_category.const] = LogCategory(s_category.const,
-                                                          s_message.const,
-                                                          num)
-        else:
-            assert cat.message == s_message.const, (
-                "log category %r is used with different messages:\n\t%s\n\t%s"
-                % (s_category.const, cat.message, s_message.const))
+        if translator.config.translation.rlog:
+            assert s_category.is_constant()
+            assert s_message.is_constant()
+            translator = self.bookkeeper.annotator.translator
+            try:
+                logcategories = translator._logcategories
+            except AttributeError:
+                logcategories = translator._logcategories = {}
+            try:
+                cat = logcategories[s_category.const]
+            except KeyError:
+                num = len(logcategories) + 1
+                logcategories[s_category.const] = LogCategory(s_category.const,
+                                                              s_message.const,
+                                                              num)
+            else:
+                assert cat.message == s_message.const, (
+                    "log category %r is used with different messages:\n\t%s\n"
+                    "\t%s" % (s_category.const, cat.message, s_message.const))
         return annmodel.s_None
 
     def specialize_call(self, hop, **kwds_i):
-        from pypy.annotation import model as annmodel
         from pypy.rpython.lltypesystem import lltype
-        logwriter = get_logwriter(hop.rtyper)
         translator = hop.rtyper.annotator.translator
-        cat = translator._logcategories[hop.args_s[0].const]
-        ann = {
-            'd': annmodel.SomeInteger(),
-            'f': annmodel.SomeFloat(),
-            's': annmodel.SomeString(can_be_None=True),
-            }
-        annhelper = hop.rtyper.getannmixlevel()
-        args_s = [ann[t] for t in cat.types]
-        c_func = annhelper.constfunc(cat.gen_call(logwriter), args_s,
-                                     annmodel.s_None)
-        args_v = [c_func]
-        for name, typechar in cat.entries:
-            arg = kwds_i['i_'+name]
-            if typechar == 'd':
-                v = hop.inputarg(lltype.Signed, arg=arg)
-            elif typechar == 'f':
-                v = hop.inputarg(lltype.Float, arg=arg)
-            elif typechar == 's':
-                v = hop.inputarg(hop.rtyper.type_system.rstr.string_repr,
-                                 arg=arg)
-            else:
-                assert 0, typechar
-            args_v.append(v)
-        hop.exception_cannot_occur()
-        hop.genop('direct_call', args_v)
+        if translator.config.translation.rlog:
+            from pypy.annotation import model as annmodel
+            logwriter = get_logwriter(hop.rtyper)
+            translator = hop.rtyper.annotator.translator
+            cat = translator._logcategories[hop.args_s[0].const]
+            ann = {
+                'd': annmodel.SomeInteger(),
+                'f': annmodel.SomeFloat(),
+                's': annmodel.SomeString(can_be_None=True),
+                }
+            annhelper = hop.rtyper.getannmixlevel()
+            args_s = [ann[t] for t in cat.types]
+            c_func = annhelper.constfunc(cat.gen_call(logwriter), args_s,
+                                         annmodel.s_None)
+            args_v = [c_func]
+            for name, typechar in cat.entries:
+                arg = kwds_i['i_'+name]
+                if typechar == 'd':
+                    v = hop.inputarg(lltype.Signed, arg=arg)
+                elif typechar == 'f':
+                    v = hop.inputarg(lltype.Float, arg=arg)
+                elif typechar == 's':
+                    v = hop.inputarg(hop.rtyper.type_system.rstr.string_repr,
+                                     arg=arg)
+                else:
+                    assert 0, typechar
+                args_v.append(v)
+            hop.exception_cannot_occur()
+            hop.genop('direct_call', args_v)
         return hop.inputconst(lltype.Void, None)
 
 def get_logwriter(rtyper):

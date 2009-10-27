@@ -250,6 +250,19 @@ class TestCompiled:
         assert entries[1][2] == [133, 132.5]
         assert entries[2][2] == ['hi there']
 
-    def test_interpret(self):
+    def test_interpret_f(self):
         interpret(self.f.im_func, [132], malloc_check=False)
         self.check_result()
+
+    def test_interpret_g(self):
+        def never_called():
+            xyz
+        def g():
+            rlog.debug_log("Aa", "hello %(foo)d", foo=5)
+            if rlog.has_log():
+                never_called()
+        from pypy.config import translationoption
+        config = translationoption.get_combined_translation_config(
+            overrides={"translation.rlog": False})
+        interpret(g, [], config=config)
+        assert not os.path.exists(self.pypylog)
