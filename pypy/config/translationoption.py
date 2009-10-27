@@ -99,7 +99,7 @@ translation_optiondescription = OptionDescription(
     BoolOption("jit", "generate a JIT",
                default=False,
                requires=[("translation.thread", False),
-                         ("translation.gcconfig.removetypeptr", False)],
+                         ("translation.gcremovetypeptr", False)],
                suggests=[("translation.gc", "hybrid"),     # or "boehm"
                          ("translation.gcrootfinder", "asmgcc"),
                          ("translation.list_comprehension_operations", True)]),
@@ -364,7 +364,7 @@ def set_opt_level(config, level):
         elif word == 'jit':
             config.translation.suggest(jit=True)
         elif word == 'removetypeptr':
-            config.translation.gcconfig.suggest(removetypeptr=True)
+            config.translation.suggest(gcremovetypeptr=True)
         else:
             raise ValueError(word)
 
