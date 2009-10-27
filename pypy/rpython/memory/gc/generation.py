@@ -346,7 +346,6 @@ class GenerationGC(SemiSpaceGC):
                 self.update_young_objects_with_id()
             # mark the nursery as free and fill it with zeroes again
             llarena.arena_reset(self.nursery, self.nursery_size, 2)
-            self.nursery_free = self.nursery
             rlog.debug_log("gc-minor-}",
                 "|       tracked older objects:           %(oldobj)d\n"
                 "`------ survived (fraction of the size): %(survived)f",
@@ -360,7 +359,7 @@ class GenerationGC(SemiSpaceGC):
             self.nursery = self.free
             self.nursery_top = self.nursery + self.nursery_size
             self.free = self.nursery_top
-            self.nursery_free = self.nursery
+        self.nursery_free = self.nursery
         return self.nursery_free
 
     # NB. we can use self.copy() to move objects out of the nursery,
