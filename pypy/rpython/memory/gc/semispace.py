@@ -213,8 +213,18 @@ class SemiSpaceGC(MovingGCBase):
         # (this is also a hook for the HybridGC)
 
     def semispace_collect(self, size_changing=False):
-        start_time = time.time()
-        start_usage = self.free - self.tospace
+        if rlog.has_log():
+            start_usage = self.free - self.tospace
+            start_time = time.time()
+            rlog.debug_log("gc-full-{",
+                ".----------- Full collection ------------------\n"
+                "| used before collection:          %(start_usage)d bytes",
+                start_usage = start_usage)
+            if size_changing:
+                rlog.debug_log("gc-full-s", "| size changing")
+        else:
+            start_time = 0 # Help the flow space
+            start_usage = 0 # Help the flow space
         #llop.debug_print(lltype.Void, 'semispace_collect', int(size_changing))
 
         # Switch the spaces.  We copy everything over to the empty space
@@ -245,11 +255,6 @@ class SemiSpaceGC(MovingGCBase):
             self.execute_finalizers()
         #llop.debug_print(lltype.Void, 'collected', self.space_size, size_changing, self.top_of_space - self.free)
         if rlog.has_log():
-            rlog.debug_log("gc-full-{",
-                ".----------- Full collection ------------------\n"
-                "| used before collection:          %(start_usage)d bytes",
-                start_usage=start_usage,
-                _time=start_time)
             end_time = time.time()
             elapsed_time = end_time - start_time
             self.total_collection_time += elapsed_time
@@ -258,8 +263,7 @@ class SemiSpaceGC(MovingGCBase):
             end_usage = self.free - self.tospace
             ct = self.total_collection_time
             cc = self.total_collection_count
-            rlog.debug_log(
-                "gc-full-}",
+            rlog.debug_log("gc-full-}",
                 "| used after collection:           %(end_usage)d bytes\n"
                 "| freed:                           %(freed)d bytes\n"
                 "| size of each semispace:          %(semispace)d bytes\n"
