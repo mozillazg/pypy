@@ -75,6 +75,9 @@ class ReprRPython:
     def repr_rpython(self, box, typechars):
         n = self.seen.setdefault(box, len(self.seen))
         return '%s/%s%d' % (box._get_hash_(), typechars, n)
+    def _freeze_(self):
+        self.seen.clear()
+        return False
 
 repr_rpython = ReprRPython().repr_rpython
 
