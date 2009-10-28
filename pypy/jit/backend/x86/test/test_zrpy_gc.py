@@ -5,7 +5,7 @@ however, is the correct handling of GC, i.e. if objects are freed as
 soon as possible (at least in a simple case).
 """
 
-import weakref, random
+import weakref, random, os
 import py
 from pypy.annotation import policy as annpolicy
 from pypy.rlib import rgc
@@ -144,7 +144,11 @@ class TestCompileHybrid(object):
             x.foo = 5
             return weakref.ref(x)
         def main_allfuncs(name, n, x):
-            num = name_to_func[name]            
+            try:
+                num = name_to_func[name]
+            except KeyError:
+                os.write(2, "unknown name: '" + name + "'\n")
+                raise
             n, x, x0, x1, x2, x3, x4, x5, x6, x7, l, s = funcs[num][0](n, x)
             while n > 0:
                 myjitdriver.can_enter_jit(num=num, n=n, x=x, x0=x0, x1=x1,
