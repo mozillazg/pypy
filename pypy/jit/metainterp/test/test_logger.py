@@ -3,18 +3,30 @@ from pypy.jit.metainterp.test.oparser import pure_parse
 from pypy.jit.metainterp import logger
 from pypy.jit.metainterp.typesystem import llhelper
 from StringIO import StringIO
+from pypy.rlib import rlog
 from pypy.jit.metainterp.test.test_optimizeopt import equaloplists
 from pypy.jit.metainterp.history import AbstractDescr, LoopToken, BasicFailDescr
 
 class Descr(AbstractDescr):
     pass
 
+def capturing(func, *args, **kwds):
+    log_stream = StringIO()
+    def write_to_log_stream(_cat, _msg, **_kwds):
+        print >> log_stream, _msg % _kwds
+    old_debug_log = rlog.debug_log
+    try:
+        rlog.debug_log = write_to_log_stream
+        func(*args, **kwds)
+    finally:
+        rlog.debug_log = old_debug_log
+    return log_stream.getvalue()
+
 class Logger(logger.Logger):
     def log_loop(self, loop, namespace={}):
-        self.log_stream = StringIO()
         self.namespace = namespace
-        logger.Logger.log_loop(self, loop.inputargs, loop.operations)
-        return self.log_stream.getvalue()
+        return capturing(logger.Logger.log_loop, self,
+                         loop.inputargs, loop.operations)
 
     def repr_of_descr(self, descr):
         for k, v in self.namespace.items():
@@ -92,7 +104,7 @@ class TestLogger(object):
         loop = pure_parse(inp, namespace=namespace)
         logger = Logger(self.ts)
         output = logger.log_loop(loop)
-        assert output.splitlines()[-1] == "jump(i0, descr=<Loop3>)"
+        assert output.splitlines()[-2] == "jump(i0, descr=<Loop3>)"
         pure_parse(output)
         
     def test_guard(self):
@@ -104,7 +116,7 @@ class TestLogger(object):
         loop = pure_parse(inp, namespace=namespace)
         logger = Logger(self.ts, guard_number=True)
         output = logger.log_loop(loop)
-        assert output.splitlines()[-1] == "guard_true(i0, descr=<Guard4>) [i0]"
+        assert output.splitlines()[-2] == "guard_true(i0, descr=<Guard4>) [i0]"
         pure_parse(output)
         
         def boom():
@@ -112,20 +124,16 @@ class TestLogger(object):
         namespace['fdescr'].get_index = boom
         logger = Logger(self.ts, guard_number=False)
         output = logger.log_loop(loop)
-        assert output.splitlines()[-1].startswith("guard_true(i0, descr=<")
+        assert output.splitlines()[-2].startswith("guard_true(i0, descr=<")
 
     def test_intro_loop(self):
         bare_logger = logger.Logger(self.ts)
-        bare_logger.log_stream = StringIO()
-        bare_logger.log_loop([], [], 1, "foo")
-        output = bare_logger.log_stream.getvalue()
+        output = capturing(bare_logger.log_loop, [], [], 1, "foo")
         assert output.splitlines()[0] == "# Loop1 (foo), 0 ops"
         pure_parse(output)
 
     def test_intro_bridge(self):
         bare_logger = logger.Logger(self.ts)
-        bare_logger.log_stream = StringIO()
-        bare_logger.log_bridge([], [], 3)
-        output = bare_logger.log_stream.getvalue()
-        assert output.splitlines()[0] == "# bridge out of Guard3, 0 ops"        
+        output = capturing(bare_logger.log_bridge, [], [], 3)
+        assert output.splitlines()[0] == "# Bridge out of Guard3, 0 ops"
         pure_parse(output)
