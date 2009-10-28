@@ -81,7 +81,7 @@ def test_logcategory_call():
     logwriter = MyLogWriter()
     call = cat.gen_call(logwriter)
     call(515, llstr("hellooo"))
-    call(2873, llstr("woooooorld"))
+    call(2873, "woooooorld")
     #
     assert logwriter.content == [
         ord('R'), ord('L'), ord('o'), ord('g'), ord('\n'), -1, 1.0,
@@ -216,6 +216,8 @@ class TestCompiled:
         rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x+1, bar=x+0.5)
         rlog.debug_log("Ab", "<<%(baz)s>>", baz="hi there")
         rlog.debug_log("Ac", "[%(foo)r]", foo="\x00")
+        rlog.debug_log("Ac", "[%(foo)r]", foo="")
+        rlog.debug_log("Ac", "[%(foo)r]", foo=None)
         assert rlog.has_log()
 
     def setup_method(self, _):
@@ -233,17 +235,17 @@ class TestCompiled:
 
     def check_result(self):
         entries = list(rlog_parsing.parse_log(self.pypylog))
-        assert len(entries) == 4
+        assert len(entries) == 6
         #
-        assert isinstance(entries[0][0], float)
-        assert isinstance(entries[1][0], float)
-        assert isinstance(entries[2][0], float)
-        assert isinstance(entries[3][0], float)
+        for entry in entries:
+            assert isinstance(entry[0], float)
         #
         Aa = entries[0][1]
         Ab = entries[2][1]
         Ac = entries[3][1]
         assert entries[1][1] is Aa
+        assert entries[4][1] is Ac
+        assert entries[5][1] is Ac
         assert Aa.category == 'Aa'
         assert Aa.message == 'hello %(foo)d %(bar)f'
         assert Aa.entries == [('foo', 'd'), ('bar', 'f')]
@@ -258,6 +260,8 @@ class TestCompiled:
         assert entries[1][2] == [133, 132.5]
         assert entries[2][2] == ['hi there']
         assert entries[3][2] == ['\x00']
+        assert entries[4][2] == ['']
+        assert entries[5][2] == ['(null)']
 
     def test_interpret_f(self):
         interpret(self.f.im_func, [132], malloc_check=False)

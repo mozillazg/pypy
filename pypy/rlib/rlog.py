@@ -260,12 +260,19 @@ class AbstractLogWriter(object):
     def add_subentry_d(self, num):
         self.write_int(num)
 
-    def add_subentry_s(self, llstr):
-        if llstr:
-            s = hlstr(llstr)
+    def add_subentry_s(self, s):
+        if s is None:
+            s = '(null)'     # 's' is a high-level string -- but None right now
+        elif isinstance(s, str):
+            pass             # 's' is already a high-level string
         else:
-            s = '(null)'
+            # in this case, assume that 's' is a low-level string
+            if s:
+                s = hlstr(s)
+            else:
+                s = '(null)'
         self.write_str(s)
+    add_subentry_s._annspecialcase_ = 'specialize:argtype(1)'
 
     add_subentry_r = add_subentry_s
 

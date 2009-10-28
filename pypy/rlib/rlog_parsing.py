@@ -84,7 +84,7 @@ if __name__ == '__main__':
         try:
             printcode = cat.printcode
         except AttributeError:
-            code = cat.category + ' '
+            code = '[%s] ' % cat.category
             message = cat.message.replace('\n', '\n' + ' '*len(code))
             message = r_replace.sub("%", message)
             printcode = cat.printcode = code + message
