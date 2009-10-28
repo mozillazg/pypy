@@ -1,9 +1,19 @@
 import autopath
-import struct
+import struct, re, fnmatch
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import rlog
 
 SIZEOF_FLOAT = rlog.SIZEOF_FLOAT
+
+
+class LogCategory(object):
+
+    def __init__(self, category, message, index):
+        self.category = category
+        self.message = message
+        self.index = index
+        self.types = re.findall(r"%\(\w+\)(\w)", message)
+        self.messagestr = re.sub(r"%\(\w+\)", "%", message)
 
 
 class LogParser(object):
@@ -64,7 +74,7 @@ class LogParser(object):
                 category = self.read_str()
                 message = self.read_str()
                 assert index not in categories
-                categories[index] = rlog.LogCategory(category, message, index)
+                categories[index] = LogCategory(category, message, index)
             else:
                 curtime += self.read_float()
                 cat = categories[c]
@@ -77,8 +87,6 @@ def parse_log(filename):
     return logparser.enum_entries()
 
 def dump_log(filename, limit='*', highlight=False):
-    import re
-    r_replace = re.compile(r"%\(\w+\)")
     for curtime, cat, entries in parse_log(filename):
         if not fnmatch.fnmatch(cat.category, limit):
             continue
@@ -86,8 +94,7 @@ def dump_log(filename, limit='*', highlight=False):
             printcode = cat.printcode
         except AttributeError:
             code = '[%s] ' % cat.category
-            message = cat.message.replace('\n', '\n' + ' '*len(code))
-            message = r_replace.sub("%", message)
+            message = cat.messagestr.replace('\n', '\n' + ' '*len(code))
             printcode = code + message
             if highlight:
                 if cat.category.endswith('{'):
@@ -97,9 +104,24 @@ def dump_log(filename, limit='*', highlight=False):
             cat.printcode = printcode
         print printcode % tuple(entries)
 
+def extract_sections(filename, limit):
+    """Extract sections between 'limit-{' and 'limit-}'.
+    Yields multiline strings, each a complete section.
+    Accept * and ? in 'limit'.
+    """
+    pieces = None
+    for curtime, cat, entries in parse_log(filename):
+        if fnmatch.fnmatch(cat.category, limit + '-{'):
+            pieces = []
+        if pieces is not None:
+            pieces.append(cat.messagestr % tuple(entries))
+            if fnmatch.fnmatch(cat.category, limit + '-}'):
+                yield '\n'.join(pieces)
+                pieces = None
+
 
 if __name__ == '__main__':
-    import sys, fnmatch
+    import sys
     filename = sys.argv[1]
     if len(sys.argv) > 2:
         limit = sys.argv[2] + '*'
