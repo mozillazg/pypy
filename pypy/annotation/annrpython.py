@@ -224,7 +224,12 @@ class RPythonAnnotator(object):
             # graph -- it's already low-level operations!
             for a, s_newarg in zip(graph.getargs(), cells):
                 s_oldarg = self.binding(a)
-                assert s_oldarg.contains(s_newarg)
+                assert (s_oldarg == s_newarg or
+                        pair(s_oldarg, s_newarg).union() == s_oldarg)
+                # Note that we don't use s_oldarg.contains(s_newarg) here,
+                # to let merging occur.  E.g. if the old function has an
+                # argument which is a list of strings, the new call site
+                # argument will be unified with it.
         else:
             assert not self.frozen
             for a in cells:

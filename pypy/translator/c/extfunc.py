@@ -30,52 +30,6 @@ def predeclare_common_types(db, rtyper):
     if LIST_OF_STR is not None:
         yield ('RPyListOfString', LIST_OF_STR)
 
-def predeclare_utility_functions(db, rtyper):
-    # Common utility functions
-    def RPyString_New(length=lltype.Signed):
-        return mallocstr(length)
-
-    # !!!
-    # be extremely careful passing a gc tracked object
-    # from such an helper result to another one
-    # as argument, this could result in leaks
-    # Such result should be only from C code
-    # returned directly as results
-
-    LIST_OF_STR = find_list_of_str(rtyper)
-    if LIST_OF_STR is not None:
-        p = lltype.Ptr(LIST_OF_STR)
-
-        def _RPyListOfString_New(length=lltype.Signed):
-            return LIST_OF_STR.ll_newlist(length)
-
-        def _RPyListOfString_New(length=lltype.Signed):
-            return LIST_OF_STR.ll_newlist(length)
-
-        def _RPyListOfString_SetItem(l=p,
-                                    index=lltype.Signed,
-                                    newstring=lltype.Ptr(STR)):
-            rlist.ll_setitem_nonneg(rlist.dum_nocheck, l, index, newstring)
-
-        def _RPyListOfString_GetItem(l=p,
-                                    index=lltype.Signed):
-            return rlist.ll_getitem_fast(l, index)
-
-        def _RPyListOfString_Length(l=p):
-            return rlist.ll_length(l)
-
-    for fname, f in locals().items():
-        if isinstance(f, types.FunctionType):
-            # XXX this is painful :(
-            if (LIST_OF_STR, fname) in db.helper2ptr:
-                yield (fname, db.helper2ptr[LIST_OF_STR, fname])
-            else:
-                # hack: the defaults give the type of the arguments
-                graph = rtyper.annotate_helper(f, f.func_defaults)
-                db.helper2ptr[LIST_OF_STR, fname] = graph
-                yield (fname, graph)
-
-
 def predeclare_extfuncs(db, rtyper):
     modules = {}
     def module_name(c_name):
@@ -128,7 +82,6 @@ def predeclare_exception_data(db, rtyper):
 
 def predeclare_all(db, rtyper):
     for fn in [predeclare_common_types,
-               predeclare_utility_functions,
                predeclare_exception_data,
                predeclare_extfuncs,
                ]:
@@ -138,7 +91,6 @@ def predeclare_all(db, rtyper):
 
 def get_all(db, rtyper):
     for fn in [predeclare_common_types,
-               predeclare_utility_functions,
                predeclare_exception_data,
                predeclare_extfuncs,
                ]:

@@ -26,15 +26,7 @@ int main(int argc, char *argv[])
     errmsg = RPython_StartupCode();
     if (errmsg) goto error;
 
-    list = _RPyListOfString_New(argc);
-    if (RPyExceptionOccurred()) goto memory_out;
-    for (i=0; i<argc; i++) {
-        RPyString *s = RPyString_FromString(argv[i]);
-        if (RPyExceptionOccurred()) goto memory_out;
-        _RPyListOfString_SetItem(list, i, s);
-    }
-
-    exitcode = STANDALONE_ENTRY_POINT(list);
+    exitcode = STANDALONE_ENTRY_POINT(argc, argv);
     if (RPyExceptionOccurred()) {
         /* fish for the exception type, at least */
 #ifndef AVR
@@ -45,8 +37,6 @@ int main(int argc, char *argv[])
     }
     return exitcode;
 
- memory_out:
-    errmsg = "out of memory";
  error:
 #ifndef AVR
     fprintf(stderr, "Fatal error during initialization: %s\n", errmsg);
