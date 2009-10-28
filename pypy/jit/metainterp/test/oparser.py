@@ -51,7 +51,7 @@ def default_fail_descr(fail_args=None):
 
 class OpParser(object):
     def __init__(self, input, cpu, namespace, type_system, boxkinds,
-                 invent_fail_descr=default_fail_descr):
+                 invent_fail_descr=default_fail_descr, enforce_fail_args=True):
         self.input = input
         self.vars = {}
         self.cpu = cpu
@@ -63,6 +63,7 @@ class OpParser(object):
         else:
             self._cache = {}
         self.invent_fail_descr = invent_fail_descr
+        self.enforce_fail_args = enforce_fail_args
         self.looptoken = LoopToken()
 
     def get_const(self, name, typ):
@@ -203,8 +204,12 @@ class OpParser(object):
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if i <= 0 or j <= 0:
-                raise ParseError("missing fail_args for guard operation")
-            fail_args = []
+                if self.enforce_fail_args:
+                    raise ParseError("missing fail_args for guard operation")
+                i = j = -1
+                fail_args = None
+            else:
+                fail_args = []
             if i < j:
                 for arg in line[i:j].split(','):
                     arg = arg.strip()
@@ -306,11 +311,11 @@ class OpParser(object):
 
 def parse(input, cpu=None, namespace=None, type_system='lltype',
           boxkinds=None, invent_fail_descr=default_fail_descr,
-          no_namespace=False):
+          no_namespace=False, enforce_fail_args=True):
     if namespace is None and not no_namespace:
         namespace = {}
     return OpParser(input, cpu, namespace, type_system, boxkinds,
-                    invent_fail_descr).parse()
+                    invent_fail_descr, enforce_fail_args).parse()
 
 def pure_parse(*args, **kwds):
     kwds['invent_fail_descr'] = None
