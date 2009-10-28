@@ -165,10 +165,10 @@ examplelog = '''\
 # Loop0 (loop), 12 ops
 [i0, i1]
 debug_merge_point('(no jitdriver.get_printable_location!)')
-i3 = call(ConstClass(cls2), i0, descr=<Descr object at 0xb18a86c>)
+i3 = call(ConstAddr(adr2), i0, descr=<Descr object at 0xb18a86c>)
 guard_no_exception(, descr=<Guard5>) [i0, i1, i3]
 i5 = int_add(i1, 2)
-i7 = call(ConstClass(cls6), i0, descr=<Descr object at 0xb18a86c>)
+i7 = call(ConstAddr(adr6), i0, descr=<Descr object at 0xb18a86c>)
 p9 = guard_exception(4, descr=<Guard6>) [i5, i0, i7]
 i11 = int_sub(i5, 1)
 i12 = int_sub(i0, 1)
@@ -179,10 +179,10 @@ jump(i12, i11, descr=<Loop0>)
 # Loop1 (entry bridge), 12 ops
 [i0, i1]
 debug_merge_point('(no jitdriver.get_printable_location!)')
-i3 = call(ConstClass(cls2), i0, descr=<Descr object at 0xb18a86c>)
+i3 = call(ConstAddr(adr2), i0, descr=<Descr object at 0xb18a86c>)
 p5 = guard_exception(4, descr=<Guard8>) [i0, i1, i3]
 i7 = int_add(i1, 1)
-i9 = call(ConstClass(cls8), i0, descr=<Descr object at 0xb18a86c>)
+i9 = call(ConstAddr(adr8), i0, descr=<Descr object at 0xb18a86c>)
 p11 = guard_exception(4, descr=<Guard9>) [i7, i0, i9]
 i12 = int_sub(i7, 1)
 i13 = int_sub(i0, 1)
@@ -194,7 +194,7 @@ jump(i13, i12, descr=<Loop0>)
 [i0, i1, i2]
 p4 = guard_exception(4, descr=<Guard11>) [i0, i1, i2]
 i6 = int_add(i1, 1)
-i8 = call(ConstClass(cls7), i0, descr=<Descr object at 0xb18a86c>)
+i8 = call(ConstAddr(adr7), i0, descr=<Descr object at 0xb18a86c>)
 p10 = guard_exception(4, descr=<Guard12>) [i6, i0, i8]
 i11 = int_sub(i6, 1)
 i12 = int_sub(i0, 1)

@@ -147,8 +147,8 @@ class OpParser(object):
                 info = arg.strip("'\"")
                 return ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF,
                                                        llstr(info)))
-            if arg.startswith('ConstClass('):
-                name = arg[len('ConstClass('):-1]
+            if arg.startswith('ConstAddr('):
+                name = arg[len('ConstAddr('):-1]
                 return self.get_const(name, 'class')
             elif arg == 'None':
                 return None
@@ -160,6 +160,9 @@ class OpParser(object):
             elif arg.startswith('ConstPtr('):
                 name = arg[len('ConstPtr('):-1]
                 return self.get_const(name, 'ptr')
+            elif arg.startswith('ConstClass('):      # compatibility
+                name = arg[len('ConstClass('):-1]
+                return self.get_const(name, 'class')
             return self.vars[arg]
 
     def parse_op(self, line):

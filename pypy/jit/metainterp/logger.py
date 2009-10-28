@@ -66,7 +66,7 @@ class Logger(object):
         elif isinstance(arg, BoxFloat):
             return 'f' + str(mv)
         elif isinstance(arg, self.ts.ConstAddr):
-            return 'ConstClass(cls' + str(mv) + ')'
+            return 'ConstAddr(adr' + str(mv) + ')'
         else:
             return '?'
 
