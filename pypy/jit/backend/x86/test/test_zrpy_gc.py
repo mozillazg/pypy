@@ -77,7 +77,6 @@ def compile(f, gc, **kwds):
     #
     t = TranslationContext()
     t.config.translation.gc = gc
-    t.config.translation.gcconfig.debugprint = True
     for name, value in kwds.items():
         setattr(t.config.translation, name, value)
     ann = t.buildannotator(policy=annpolicy.StrictAnnotatorPolicy())
