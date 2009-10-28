@@ -50,22 +50,6 @@ class TestMixin(object):
         assert obj.getdictvalue(self.fakespace, "hello") == 4
         assert obj.getdictvalue(self.fakespace, "world") == 5
 
-    def test_dict_devolves_via_object(self):
-        obj = self.make_obj()
-        obj.setdictvalue(self.fakespace, 4, 1)
-        obj.setdictvalue(self.fakespace, 5, 2)
-        w_dict = obj.w__dict__
-        assert w_dict is not None
-        assert dict(w_dict.r_dict_content) == {4: 1, 5: 2, "hello": 1, "world": 2}
-        assert obj.getdictvalue(self.fakespace, "hello") == 1
-        assert obj.getdictvalue(self.fakespace, "world") == 2
-        assert obj.getdictvalue(self.fakespace, 4) == 1
-        assert obj.getdictvalue(self.fakespace, 5) == 2
-        obj.deldictvalue(self.fakespace, "world")
-        assert obj.getdictvalue(self.fakespace, "world") is None
-        obj.deldictvalue(self.fakespace, "hello")
-        assert obj.getdictvalue(self.fakespace, "hello") is None
-
     def test_dict_devolves_via_dict(self):
         obj = self.make_obj()
         w_dict = obj.getdict()

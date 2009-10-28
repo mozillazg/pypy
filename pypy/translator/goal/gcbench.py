@@ -87,9 +87,21 @@ def make_tree(depth):
     else:
         return Node(make_tree(depth-1), make_tree(depth-1))
 
+def get_memory_usage():
+    import os
+    pid = os.getpid()
+    f = file("/proc/%s/status" % (pid, ))
+    lines = f.readlines()
+    f.close()
+    for l in lines:
+        if l.startswith("VmData:\t"):
+            return int(l[len("VmData:\t"):-len(" kB")])
+    print "\n".join(lines)
+    assert 0
+
 def print_diagnostics():
     "ought to print free/total memory"
-    pass
+    print "total memory:", get_memory_usage()
 
 def time_construction(depth):
     niters = num_iters(depth)

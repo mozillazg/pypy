@@ -46,12 +46,11 @@ class ModuleDictImplementation(W_DictMultiObject):
     def impl_setitem(self, w_key, w_value):
         space = self.space
         if space.is_w(space.type(w_key), space.w_str):
-            self.impl_setitem_str(w_key, w_value)
+            self.impl_setitem_str(self.space.str_w(w_key), w_value)
         else:
             self._as_rdict().setitem(w_key, w_value)
 
-    def impl_setitem_str(self, w_key, w_value, shadows_type=True):
-        name = self.space.str_w(w_key)
+    def impl_setitem_str(self, name, w_value, shadows_type=True):
         self.getcell(name).w_value = w_value
         
         if name in self.unshadowed_builtins:
@@ -221,5 +220,5 @@ def load_global_fill_cache(f, nameindex):
         if cell is not None:
             f.cache_for_globals[nameindex] = cell
             return cell.w_value
-    return f._load_global(f.getname_w(nameindex))
+    return f._load_global(f.getname_u(nameindex))
 load_global_fill_cache._dont_inline_ = True

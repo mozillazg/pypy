@@ -100,13 +100,12 @@ class SharedDictImplementation(W_DictMultiObject):
     def impl_setitem(self, w_key, w_value):
         space = self.space
         if space.is_w(space.type(w_key), space.w_str):
-            self.impl_setitem_str(w_key, w_value)
+            self.impl_setitem_str(self.space.str_w(w_key), w_value)
         else:
             self._as_rdict().setitem(w_key, w_value)
 
     @unroll_safe
-    def impl_setitem_str(self, w_key, w_value, shadows_type=True):
-        key = self.space.str_w(w_key)
+    def impl_setitem_str(self, key, w_value, shadows_type=True):
         i = self.structure.lookup_position(key)
         if i != -1:
             self.entries[i] = w_value

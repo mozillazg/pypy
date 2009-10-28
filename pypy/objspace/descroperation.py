@@ -54,7 +54,7 @@ class Object:
                 space.set(w_descr, w_obj, w_value)
                 return
             shadows_type = True
-        if w_obj.setdictvalue(space, w_name, w_value, shadows_type):
+        if w_obj.setdictvalue(space, name, w_value, shadows_type):
             return
         raiseattrerror(space, w_obj, name, w_descr)
 
