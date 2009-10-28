@@ -76,14 +76,8 @@ def parse_log(filename):
     logparser = LogParser(open(filename, 'rb'))
     return logparser.enum_entries()
 
-
-if __name__ == '__main__':
-    import sys, re, fnmatch
-    filename = sys.argv[1]
-    if len(sys.argv) > 2:
-        limit = sys.argv[2] + '*'
-    else:
-        limit = '*'
+def dump_log(filename, limit='*', highlight=False):
+    import re
     r_replace = re.compile(r"%\(\w+\)")
     for curtime, cat, entries in parse_log(filename):
         if not fnmatch.fnmatch(cat.category, limit):
@@ -94,5 +88,22 @@ if __name__ == '__main__':
             code = '[%s] ' % cat.category
             message = cat.message.replace('\n', '\n' + ' '*len(code))
             message = r_replace.sub("%", message)
-            printcode = cat.printcode = code + message
+            printcode = code + message
+            if highlight:
+                if cat.category.endswith('{'):
+                    printcode = '\x1B[1m%s\x1B[0m' % (printcode,)
+                elif cat.category.endswith('}'):
+                    printcode = '\x1B[31m%s\x1B[0m' % (printcode,)
+            cat.printcode = printcode
         print printcode % tuple(entries)
+
+
+if __name__ == '__main__':
+    import sys, fnmatch
+    filename = sys.argv[1]
+    if len(sys.argv) > 2:
+        limit = sys.argv[2] + '*'
+    else:
+        limit = '*'
+    highlight = sys.stdout.isatty()
+    dump_log(filename, limit, highlight)
