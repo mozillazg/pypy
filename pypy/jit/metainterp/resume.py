@@ -3,6 +3,7 @@ from pypy.jit.metainterp.history import Box, Const, ConstInt, INT, REF
 from pypy.jit.metainterp.resoperation import rop
 from pypy.rpython.lltypesystem import rffi
 from pypy.rlib import rarithmetic
+from pypy.rlib import rlog
 from pypy.rlib.objectmodel import we_are_translated
 
 # Logic to encode the chain of frames and the state of the boxes at a
@@ -179,10 +180,9 @@ _frame_info_placeholder = (None, 0, 0)
 
 class ResumeDataVirtualAdder(object):
 
-    def __init__(self, storage, memo, debug_storage=None):
+    def __init__(self, storage, memo):
         self.storage = storage
         self.memo = memo
-        self.debug_storage = debug_storage
         #self.virtuals = []
         #self.vfieldboxes = []
 
@@ -258,8 +258,8 @@ class ResumeDataVirtualAdder(object):
         self._number_virtuals(liveboxes)
 
         storage.rd_consts = self.memo.consts
-        if self.debug_storage:
-            dump_storage(self.debug_storage, storage, liveboxes)
+        if rlog.has_log():
+            dump_storage(storage, liveboxes)
         return liveboxes[:]
 
     def _number_virtuals(self, liveboxes):
@@ -425,38 +425,48 @@ class ResumeDataReader(object):
 
 # ____________________________________________________________
 
-def dump_storage(logname, storage, liveboxes):
+def dump_storage(storage, liveboxes):
     "For profiling only."
-    import os
     from pypy.rlib import objectmodel
-    assert logname is not None    # annotator hack
-    fd = os.open(logname, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0666)
-    os.write(fd, 'Log(%d, [\n' % objectmodel.compute_unique_id(storage))
-    frameinfo = storage.rd_frame_info_list
-    while True:
-        os.write(fd, '\t("%s", %d, %d) at %xd,\n' % (
-            frameinfo.jitcode, frameinfo.pc, frameinfo.exception_target,
-            objectmodel.compute_unique_id(frameinfo)))
-        frameinfo = frameinfo.prev
-        if frameinfo is None:
-            break
-    os.write(fd, '\t],\n\t[\n')
+    rlog.debug_log("jit-resume-{",
+                   "Storage entry %(id)d",
+                   id = objectmodel.compute_unique_id(storage))
+    try:
+        frameinfo = storage.rd_frame_info_list
+    except AttributeError:
+        pass     # for tests
+    else:
+        while True:
+            rlog.debug_log("jit-resume-frameinfo",
+                "(%(jitcode)r, %(pc)d, %(exception_target)d) at %(id)d",
+                jitcode          = frameinfo.jitcode,
+                pc               = frameinfo.pc,
+                exception_target = frameinfo.exception_target,
+                id               = objectmodel.compute_unique_id(frameinfo))
+            frameinfo = frameinfo.prev
+            if frameinfo is None:
+                break
     numb = storage.rd_numb
     while True:
-        os.write(fd, '\t\t%s at %xd,\n' % ([untag(i) for i in numb.nums],
-                                           objectmodel.compute_unique_id(numb)))
+        rlog.debug_log("jit-resume-numb",
+                       "%(nums)s at %(id)d",
+                       nums = str([untag(i) for i in numb.nums]),
+                       id   = objectmodel.compute_unique_id(numb))
         numb = numb.prev
         if numb is None:
             break
-    os.write(fd, '\t], [\n')
     for const in storage.rd_consts:
-        os.write(fd, '\t"%s",\n' % (const.repr_rpython(),))
-    os.write(fd, '\t], [\n')
+        rlog.debug_log("jit-resume-const",
+                       "%(const)s",
+                       const = const.repr_rpython())
     for box in liveboxes:
-        os.write(fd, '\t"%s",\n' % (box.repr_rpython(),))
-    os.write(fd, '\t], [\n')
+        rlog.debug_log("jit-resume-box",
+                       "%(box)s",
+                       box = box.repr_rpython())
     if storage.rd_virtuals is not None:
         for virtual in storage.rd_virtuals:
-            os.write(fd, '\t%s,\n' % (virtual.repr_rpython(),))
-    os.write(fd, '\t])\n')
-    os.close(fd)
+            rlog.debug_log("jit-resume-virtual",
+                           "%(virtual)s",
+                           virtual = virtual.repr_rpython())
+    rlog.debug_log("jit-resume-}",
+                   "End")

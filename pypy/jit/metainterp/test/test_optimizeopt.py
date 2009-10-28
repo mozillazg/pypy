@@ -25,7 +25,6 @@ class FakeFrame(object):
 
 class Fake(object):
     failargs_limit = 1000
-    storedebug = None
 
 class FakeMetaInterpStaticData(object):
 

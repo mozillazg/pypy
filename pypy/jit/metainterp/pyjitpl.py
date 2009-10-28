@@ -1027,9 +1027,6 @@ class MetaInterpStaticData(object):
                 self.profiler.start()
                 self.profiler.initialized = True
             self.globaldata.initialized = True
-            self.logger_noopt.create_log('.noopt')
-            self.logger_ops.create_log('.ops')
-            self.globaldata.storedebug = os.environ.get('PYPYJITRESUMELOG')
 
     def _setup_class_sizes(self):
         class_sizes = {}

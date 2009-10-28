@@ -4,7 +4,7 @@ from pypy.rlib.jit import JitDriver, we_are_jitted, hint, dont_look_inside
 from pypy.rlib.jit import OPTIMIZER_FULL, OPTIMIZER_SIMPLE
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
-from pypy.jit.metainterp import support, codewriter, pyjitpl, history
+from pypy.jit.metainterp import support, codewriter, pyjitpl, history, resume
 from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
 from pypy import conftest
 from pypy.rlib.rarithmetic import ovfcheck
@@ -830,7 +830,12 @@ class BasicTests:
             return r() is None
         #
         assert f(30) == 1
-        res = self.meta_interp(f, [30], no_stats=True)
+        old_dump_storage = resume.dump_storage
+        resume.dump_storage = lambda *args: None
+        try:
+            res = self.meta_interp(f, [30], no_stats=True)
+        finally:
+            resume.dump_storage = old_dump_storage
         assert res == 1
 
     def test_pass_around(self):
