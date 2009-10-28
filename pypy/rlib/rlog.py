@@ -1,6 +1,5 @@
 import py, time, struct
 from pypy.tool.ansi_print import ansi_log
-from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.nonconst import NonConstant
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.extregistry import ExtRegistryEntry
@@ -183,37 +182,39 @@ class LogCategory(object):
     def gen_call(self, logwriter):
         if self.call is None:
             self.logwriter = logwriter
-            types = unrolling_iterable(self.types)
+            # argh argh, can't use '*args' in RPython if we want to be
+            # sure that we don't use the GC on lltype
+            argnames = ', '.join([name for name, typechar in self.entries])
             #
-            def really_call(*args):
-                if NonConstant(False):
-                    logwriter.add_subentry_d(NonConstant(-123))
-                    logwriter.add_subentry_s(NonConstant('abc'))
-                    logwriter.add_subentry_s(None)
-                    logwriter.add_subentry_s(llstr('abc'))
-                    logwriter.add_subentry_r(NonConstant('abc'))
-                    logwriter.add_subentry_r(None)
-                    logwriter.add_subentry_r(llstr('abc'))
-                    logwriter.add_subentry_f(NonConstant(123.4))
-                    # ^^^ annotation hacks
-                if not logwriter.add_entry(self):
-                    return
-                i = 0
-                for typechar in types:
-                    methname = 'add_subentry_' + typechar
-                    getattr(logwriter, methname)(args[i])
-                    i = i + 1
-                if logwriter.always_flush:
-                    logwriter._flush()
-            really_call = func_with_new_name(really_call,
-                                             'debug_log_' + self.category)
+            source = """
+                def really_call(%s):
+                    if not logwriter.add_entry(cat):
+                        return
+            """ % argnames
             #
-            def call(*args):
-                if logwriter.enabled:
-                    really_call(*args)
-            call._always_inline_ = True
+            for name, typechar in self.entries:
+                source += """
+                    logwriter.add_subentry_%s(%s)
+                """ % (typechar, name)
             #
-            self.call = call
+            source += """
+                    if logwriter.always_flush:
+                        logwriter._flush()
+
+                really_call = func_with_new_name(really_call,
+                                                 'debug_log_' + cat.category)
+
+                def call(%s):
+                    if logwriter.enabled:
+                        really_call(%s)
+                call._always_inline_ = True
+            """ % (argnames, argnames)
+            #
+            miniglobals = {'logwriter': logwriter,
+                           'cat': self,
+                           'func_with_new_name': func_with_new_name}
+            exec py.code.Source(source).compile() in miniglobals
+            self.call = miniglobals['call']
         else:
             assert self.logwriter is logwriter
         return self.call
@@ -262,6 +263,16 @@ class AbstractLogWriter(object):
     define_new_category._dont_inline_ = True
 
     def add_entry(self, cat):
+        if NonConstant(False):
+            self.add_subentry_d(NonConstant(-123))
+            self.add_subentry_s(NonConstant('abc'))
+            self.add_subentry_s(None)
+            self.add_subentry_s(llstr('abc'))
+            self.add_subentry_r(NonConstant('abc'))
+            self.add_subentry_r(None)
+            self.add_subentry_r(llstr('abc'))
+            self.add_subentry_f(NonConstant(123.4))
+            # ^^^ annotation hacks
         if cat.seen_by is not self:
             self.define_new_category(cat)
             if not self.enabled:
