@@ -156,7 +156,7 @@ class CBuilder(object):
         list(db.gcpolicy.gc_startup_code())
 
         # build entrypoint and eventually other things to expose
-        pf = self.getentrypointptr()
+        pf = self.getentrypointptr(db)
         if isinstance(pf, list):
             for one_pf in pf:
                 db.get(one_pf)
@@ -214,7 +214,7 @@ class CBuilder(object):
 
         if db is None:
             db = self.build_database()
-        pf = self.getentrypointptr()
+        pf = self.getentrypointptr(db)
         if self.modulename is None:
             self.modulename = uniquemodulename('testing')
         modulename = self.modulename
@@ -306,7 +306,7 @@ class CExtModuleBuilder(CBuilder):
     _module = None
     _wrapper = None
 
-    def getentrypointptr(self): # xxx
+    def getentrypointptr(self, db): # xxx
         if self._wrapper is None:
             self._wrapper = new_wrapper(self.entrypoint, self.translator)
         return self._wrapper
@@ -314,7 +314,7 @@ class CExtModuleBuilder(CBuilder):
     def compile(self):
         assert self.c_source_filename 
         assert not self._compiled
-        export_symbols = [self.db.get(self.getentrypointptr()),
+        export_symbols = [self.db.get(self.getentrypointptr(self.db)),
                           'RPython_StartupCode',
                           ]
         if self.config.translation.countmallocs:
@@ -338,7 +338,7 @@ class CExtModuleBuilder(CBuilder):
         fname = 'wrap_' + self.c_source_filename.purebasename
         modfile = self.c_source_filename.new(purebasename=fname, ext=".py")
 
-        entrypoint_ptr = self.getentrypointptr()
+        entrypoint_ptr = self.getentrypointptr(self.db)
         wrapped_entrypoint_c_name = self.db.get(entrypoint_ptr)
         
         CODE = """
@@ -405,6 +405,7 @@ _rpython_startup()
 class CStandaloneBuilder(CBuilder):
     standalone = True
     executable_name = None
+    _ll_entrypoint_ptr = None
 
     def getprofbased(self):
         profbased = None
@@ -424,11 +425,30 @@ class CStandaloneBuilder(CBuilder):
         return (profbased and isinstance(profbased, tuple)
                 and profbased[0] is ProfOpt)
 
-    def getentrypointptr(self):
-        # XXX check that the entrypoint has the correct
-        # signature:  list-of-strings -> int
-        bk = self.translator.annotator.bookkeeper
-        return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
+    def getentrypointptr(self, db):
+        if self._ll_entrypoint_ptr is None:
+            #
+            # Annotate and rtype a '_ll_entrypoint(int argc, char *argv[])'
+            # function, using rffi to decode the arguments into a real
+            # list of strings to call self.entrypoint().
+            from pypy.annotation import model as annmodel
+            from pypy.rpython.lltypesystem import rffi
+            from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+            real_entrypoint = self.entrypoint
+            #
+            def _ll_entrypoint(argc, argv):
+                list = [rffi.charp2str(argv[i]) for i in range(argc)]
+                return real_entrypoint(list)
+            #
+            annhelper = MixLevelHelperAnnotator(db.translator.rtyper)
+            self._ll_entrypoint_ptr = annhelper.delayedfunction(
+                _ll_entrypoint,
+                [annmodel.SomeInteger(),
+                 annmodel.lltype_to_annotation(rffi.CCHARPP)],
+                annmodel.SomeInteger())
+            annhelper.finish()
+            #
+        return self._ll_entrypoint_ptr
 
     def cmdexec(self, args='', env=None):
         assert self._compiled

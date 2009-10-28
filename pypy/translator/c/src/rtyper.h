@@ -16,7 +16,6 @@
 
 char *RPyString_AsCharP(RPyString *rps);
 void RPyString_FreeCache(void);
-RPyString *RPyString_FromString(char *buf);
 
 
 /* implementations */
@@ -49,14 +48,6 @@ void RPyString_FreeCache(void)
 		_RPyString_dump = dump->next;
 		free(dump);
 	}
-}
-
-RPyString *RPyString_FromString(char *buf)
-{
-	int length = strlen(buf);
-	RPyString *rps = RPyString_New(length);
-	memcpy(rps->rs_chars.items, buf, length);
-	return rps;
 }
 
 #endif /* PYPY_NOT_MAIN_FILE */
