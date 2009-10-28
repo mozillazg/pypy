@@ -1,5 +1,15 @@
+"""
+Utilities to parse a log file.  When used from the command-line,
+the syntax is:
+
+   python rlog_parsing.py [-f|--follow] [-l|--limit=..] logfile
+
+    -f, --follow      wait for file growth and display it too
+    -l, --limit=CAT   only shows log entries of category 'CAT*'
+                      (supports * and ? special characters)
+"""
 import autopath
-import struct, re, fnmatch
+import struct, re, fnmatch, time
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import rlog
 
@@ -86,8 +96,28 @@ def parse_log(filename):
     logparser = LogParser(open(filename, 'rb'))
     return logparser.enum_entries()
 
-def dump_log(filename, limit='*', highlight=False):
-    for curtime, cat, entries in parse_log(filename):
+
+class FollowFile(object):
+    def __init__(self, f):
+        self.tell = f.tell
+        self.seek = f.seek
+        self._read = f.read
+    def read(self, size):
+        buf = self._read(size)
+        try:
+            while len(buf) < size:
+                time.sleep(1)
+                buf += self._read(size - len(buf))
+        except KeyboardInterrupt:
+            sys.exit(0)
+        return buf
+
+def dump_log(filename, limit='*', highlight=False, follow=False):
+    f = open(filename, 'rb')
+    if follow:
+        f = FollowFile(f)
+    logparser = LogParser(f)
+    for curtime, cat, entries in logparser.enum_entries():
         if not fnmatch.fnmatch(cat.category, limit):
             continue
         try:
@@ -121,11 +151,15 @@ def extract_sections(filename, limit):
 
 
 if __name__ == '__main__':
-    import sys
-    filename = sys.argv[1]
-    if len(sys.argv) > 2:
-        limit = sys.argv[2] + '*'
-    else:
-        limit = '*'
+    import sys, getopt
+    options, args = getopt.gnu_getopt(sys.argv[1:], 'l:f',
+                                      ['limit=', 'follow'])
+    if len(args) != 1:
+        print __doc__
+        sys.exit(2)
+    [filename] = args
+    options = dict(options)
+    limit = options.get('-l', options.get('--limit', '')) + '*'
+    follow = '-f' in options or '--follow' in options
     highlight = sys.stdout.isatty()
-    dump_log(filename, limit, highlight)
+    dump_log(filename, limit=limit, highlight=highlight, follow=follow)
