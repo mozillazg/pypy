@@ -4,7 +4,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.nonconst import NonConstant
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.rpython.annlowlevel import hlstr
+from pypy.rpython.annlowlevel import llstr, hlstr
 
 _log = py.log.Producer("rlog") 
 py.log.setconsumer("rlog", ansi_log) 
@@ -187,10 +187,14 @@ class LogCategory(object):
             #
             def call(*args):
                 if NonConstant(False):
-                    logwriter.add_subentry_d(123)
-                    logwriter.add_subentry_s('abc')
-                    logwriter.add_subentry_r('abc')
-                    logwriter.add_subentry_f(123.4)
+                    logwriter.add_subentry_d(NonConstant(-123))
+                    logwriter.add_subentry_s(NonConstant('abc'))
+                    logwriter.add_subentry_s(None)
+                    logwriter.add_subentry_s(llstr('abc'))
+                    logwriter.add_subentry_r(NonConstant('abc'))
+                    logwriter.add_subentry_r(None)
+                    logwriter.add_subentry_r(llstr('abc'))
+                    logwriter.add_subentry_f(NonConstant(123.4))
                     # ^^^ annotation hacks
                 if not logwriter.enabled:
                     return
