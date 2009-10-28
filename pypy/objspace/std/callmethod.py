@@ -54,7 +54,7 @@ def LOOKUP_METHOD(f, nameindex, *ignored):
         if w_descr is None:
             # this handles directly the common case
             #   module.function(args..)
-            w_value = w_obj.getdictvalue_w(space, name)
+            w_value = w_obj.getdictvalue(space, name)
         elif type(w_descr) is function.Function:
             w_value = w_obj.getdictvalue_attr_is_in_class(space, name)
             if w_value is None:

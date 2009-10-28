@@ -717,7 +717,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 if not e.match(self, self.w_AttributeError):
                     raise
         else:
-            w_value = w_obj.getdictvalue_w(self, name)
+            w_value = w_obj.getdictvalue(self, name)
             if w_value is not None:
                 return w_value
 

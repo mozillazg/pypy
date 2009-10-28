@@ -32,7 +32,7 @@ class MixedModule(Module):
 
     def get(self, name):
         space = self.space
-        w_value = self.getdictvalue_w(space, name) 
+        w_value = self.getdictvalue(space, name) 
         if w_value is None: 
             raise OperationError(space.w_AttributeError, space.wrap(name))
         return w_value 
@@ -41,16 +41,10 @@ class MixedModule(Module):
         w_builtin = self.get(name) 
         return self.space.call_function(w_builtin, *args_w)
 
-    def getdictvalue_w(self, space, name):
+    def getdictvalue(self, space, name):
         w_value = space.finditem_str(self.w_dict, name)
         if self.lazy and w_value is None:
             return self._load_lazily(space, name)
-        return w_value
-
-    def getdictvalue(self, space, w_name):
-        w_value = space.finditem(self.w_dict, w_name)
-        if self.lazy and w_value is None:
-            return self._load_lazily(space, space.str_w(w_name))
         return w_value
 
     def _load_lazily(self, space, name):

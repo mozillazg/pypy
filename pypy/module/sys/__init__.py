@@ -100,9 +100,9 @@ class Module(MixedModule):
         w_modules = self.get('modules')
         self.space.setitem(w_modules, w_name, w_module)
 
-    def getdictvalue_w(self, space, attr):
+    def getdictvalue(self, space, attr):
         """ specialize access to dynamic exc_* attributes. """ 
-        value = MixedModule.getdictvalue_w(self, space, attr) 
+        value = MixedModule.getdictvalue(self, space, attr) 
         if value is not None: 
             return value
         if attr == 'exc_type':
@@ -124,9 +124,6 @@ class Module(MixedModule):
             else:
                 return space.wrap(operror.application_traceback)
         return None 
-
-    def getdictvalue(self, space, w_attr): 
-        return self.getdictvalue_w(space, space.str_w(w_attr))
 
     def get_w_default_encoder(self):
         if self.w_default_encoder is not None:
