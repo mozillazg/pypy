@@ -78,9 +78,16 @@ def parse_log(filename):
 
 
 if __name__ == '__main__':
-    import sys, re
+    import sys, re, fnmatch
+    filename = sys.argv[1]
+    if len(sys.argv) > 2:
+        limit = sys.argv[2] + '*'
+    else:
+        limit = '*'
     r_replace = re.compile(r"%\(\w+\)")
-    for curtime, cat, entries in parse_log(sys.argv[1]):
+    for curtime, cat, entries in parse_log(filename):
+        if not fnmatch.fnmatch(cat.category, limit):
+            continue
         try:
             printcode = cat.printcode
         except AttributeError:
