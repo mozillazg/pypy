@@ -437,9 +437,14 @@ def dump_storage(storage, liveboxes):
         pass     # for tests
     else:
         while True:
+            try:
+                jitcodename = frameinfo.jitcode.name
+            except AttributeError:
+                jitcodename = str(objectmodel.compute_unique_id(
+                    frameinfo.jitcode))
             rlog.debug_log("jit-resume-frameinfo",
-                "(%(jitcode)r, %(pc)d, %(exception_target)d) at %(id)d",
-                jitcode          = frameinfo.jitcode,
+                "(%(jitcode)s, %(pc)d, %(exception_target)d) at %(id)d",
+                jitcode          = jitcodename,
                 pc               = frameinfo.pc,
                 exception_target = frameinfo.exception_target,
                 id               = objectmodel.compute_unique_id(frameinfo))
