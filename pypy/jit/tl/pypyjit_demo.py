@@ -1,7 +1,6 @@
 base = object
 
 class Number(base):
-    __slots__ = ('val', )
     def __init__(self, val=0):
         self.val = val
 
@@ -28,10 +27,10 @@ def f(n, x, inc):
     return x
 
 import time
-#t1 = time.time()
-#f(10000000, Number(), 1)
-#t2 = time.time()
-#print t2 - t1
+t1 = time.time()
+f(10000000, Number(), 1)
+t2 = time.time()
+print t2 - t1
 t1 = time.time()
 f(10000000, 0, 1)
 t2 = time.time()

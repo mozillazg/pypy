@@ -100,8 +100,8 @@ class W_DictMultiObject(W_Object):
         else:
             return None
 
-    def set_str_keyed_item(w_dict, w_key, w_value, shadows_type=True):
-        w_dict.setitem_str(w_key, w_value, shadows_type)
+    def set_str_keyed_item(w_dict, key, w_value, shadows_type=True):
+        w_dict.setitem_str(key, w_value, shadows_type)
 
     # _________________________________________________________________ 
     # implementation methods
@@ -113,7 +113,7 @@ class W_DictMultiObject(W_Object):
         #return w_value or None
         raise NotImplementedError("abstract base class")
 
-    def impl_setitem_str(self,  w_key, w_value, shadows_type=True):
+    def impl_setitem_str(self,  key, w_value, shadows_type=True):
         raise NotImplementedError("abstract base class")
 
     def impl_setitem(self,  w_key, w_value):
@@ -179,8 +179,8 @@ class W_DictMultiObject(W_Object):
     def impl_fallback_setitem(self, w_key, w_value):
         self.r_dict_content[w_key] = w_value
 
-    def impl_fallback_setitem_str(self, w_key, w_value, shadows_type=True):
-        return self.impl_fallback_setitem(w_key, w_value)
+    def impl_fallback_setitem_str(self, key, w_value, shadows_type=True):
+        return self.impl_fallback_setitem(self.space.wrap(key), w_value)
 
     def impl_fallback_delitem(self, w_key):
         del self.r_dict_content[w_key]
@@ -309,12 +309,12 @@ class StrDictImplementation(W_DictMultiObject):
     def impl_setitem(self, w_key, w_value):
         space = self.space
         if space.is_w(space.type(w_key), space.w_str):
-            self.impl_setitem_str(w_key, w_value)
+            self.impl_setitem_str(self.space.str_w(w_key), w_value)
         else:
             self._as_rdict().setitem(w_key, w_value)
 
-    def impl_setitem_str(self, w_key, w_value, shadows_type=True):
-        self.content[self.space.str_w(w_key)] = w_value
+    def impl_setitem_str(self, key, w_value, shadows_type=True):
+        self.content[key] = w_value
 
     def impl_delitem(self, w_key):
         space = self.space
@@ -396,11 +396,11 @@ class ShadowDetectingDictImplementation(StrDictImplementation):
         else:
             self._shadows_anything = False
 
-    def impl_setitem_str(self, w_key, w_value, shadows_type=True):
+    def impl_setitem_str(self, key, w_value, shadows_type=True):
         if shadows_type:
             self._shadows_anything = True
         StrDictImplementation.impl_setitem_str(
-            self, w_key, w_value, shadows_type)
+            self, key, w_value, shadows_type)
 
     def impl_setitem(self, w_key, w_value):
         space = self.space
@@ -410,7 +410,7 @@ class ShadowDetectingDictImplementation(StrDictImplementation):
                 if w_obj is not None:
                     self._shadows_anything = True
             StrDictImplementation.impl_setitem_str(
-                self, w_key, w_value, False)
+                self, self.space.str_w(w_key), w_value, False)
         else:
             self._as_rdict().setitem(w_key, w_value)
 
@@ -426,8 +426,7 @@ class WaryDictImplementation(StrDictImplementation):
         StrDictImplementation.__init__(self, space)
         self.shadowed = [None] * len(BUILTIN_TO_INDEX)
 
-    def impl_setitem_str(self, w_key, w_value, shadows_type=True):
-        key = self.space.str_w(w_key)
+    def impl_setitem_str(self, key, w_value, shadows_type=True):
         i = BUILTIN_TO_INDEX.get(key, -1)
         if i != -1:
             self.shadowed[i] = w_value
@@ -557,9 +556,9 @@ class MeasuringDictImplementation(W_DictMultiObject):
         self.info.writes += 1
         self.content[w_key] = w_value
         self.info.maxcontents = max(self.info.maxcontents, len(self.content))
-    def impl_setitem_str(self, w_key, w_value, shadows_type=True):
+    def impl_setitem_str(self, key, w_value, shadows_type=True):
         self.info.setitem_strs += 1
-        self.impl_setitem(w_key, w_value)
+        self.impl_setitem(self.space.wrap(key), w_value)
     def impl_delitem(self, w_key):
         if not self.info.seen_non_string_in_write \
                and not self.info.seen_non_string_in_read_first \
