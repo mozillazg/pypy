@@ -23,9 +23,11 @@ class LogParser(object):
         nextc = self.f.read(1)
         if not nextc:
             raise EOFError
+        lastbyte = ord(nextc)
+        if lastbyte < 0x80:
+            return lastbyte
         shift = 0
         result = 0
-        lastbyte = ord(nextc)
         while lastbyte & 0x80:
             result |= ((lastbyte & 0x7F) << shift)
             shift += 7
@@ -47,6 +49,7 @@ class LogParser(object):
         readers = {
             'd': self.read_int,
             's': self.read_str,
+            'r': self.read_str,
             'f': self.read_float,
             }
         curtime = 0.0
