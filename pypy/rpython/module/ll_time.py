@@ -76,11 +76,11 @@ class RegisterTime(BaseLazyRegistering):
             if self.GETTIMEOFDAY_NO_TZ:
                 c_gettimeofday = self.llexternal('gettimeofday',
                                  [self.TIMEVALP], rffi.INT,
-                                  _nowrapper=True, threadsafe=False)
+                                  _nowrapper=True)
             else:
                 c_gettimeofday = self.llexternal('gettimeofday',
                                  [self.TIMEVALP, rffi.VOIDP], rffi.INT,
-                                  _nowrapper=True, threadsafe=False)
+                                  _nowrapper=True)
         else:
             c_gettimeofday = None
 
@@ -88,12 +88,12 @@ class RegisterTime(BaseLazyRegistering):
             self.configure(CConfigForFTime)
             c_ftime = self.llexternal(FTIME, [lltype.Ptr(self.TIMEB)],
                                       lltype.Void,
-                                      _nowrapper=True, threadsafe=False)
+                                      _nowrapper=True)
         else:
             c_ftime = None    # to not confuse the flow space
 
         c_time = self.llexternal('time', [rffi.VOIDP], rffi.TIME_T,
-                                 _nowrapper=True, threadsafe=False)
+                                 _nowrapper=True)
 
         def time_time_llimpl():
             void = lltype.nullptr(rffi.VOIDP.TO)
