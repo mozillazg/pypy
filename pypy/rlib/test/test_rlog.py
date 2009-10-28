@@ -215,6 +215,7 @@ class TestCompiled:
         rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x, bar=-7.3)
         rlog.debug_log("Aa", "hello %(foo)d %(bar)f", foo=x+1, bar=x+0.5)
         rlog.debug_log("Ab", "<<%(baz)s>>", baz="hi there")
+        rlog.debug_log("Ac", "[%(foo)r]", foo="\x00")
         assert rlog.has_log()
 
     def setup_method(self, _):
@@ -232,14 +233,16 @@ class TestCompiled:
 
     def check_result(self):
         entries = list(rlog_parsing.parse_log(self.pypylog))
-        assert len(entries) == 3
+        assert len(entries) == 4
         #
         assert isinstance(entries[0][0], float)
         assert isinstance(entries[1][0], float)
         assert isinstance(entries[2][0], float)
+        assert isinstance(entries[3][0], float)
         #
         Aa = entries[0][1]
         Ab = entries[2][1]
+        Ac = entries[3][1]
         assert entries[1][1] is Aa
         assert Aa.category == 'Aa'
         assert Aa.message == 'hello %(foo)d %(bar)f'
@@ -247,10 +250,14 @@ class TestCompiled:
         assert Ab.category == 'Ab'
         assert Ab.message == '<<%(baz)s>>'
         assert Ab.entries == [('baz', 's')]
+        assert Ac.category == 'Ac'
+        assert Ac.message == '[%(foo)r]'
+        assert Ac.entries == [('foo', 'r')]
         #
         assert entries[0][2] == [132, roughly(-7.3)]
         assert entries[1][2] == [133, 132.5]
         assert entries[2][2] == ['hi there']
+        assert entries[3][2] == ['\x00']
 
     def test_interpret_f(self):
         interpret(self.f.im_func, [132], malloc_check=False)

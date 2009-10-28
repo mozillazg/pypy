@@ -12,9 +12,39 @@ py.log.setconsumer("rlog", ansi_log)
 
 
 def has_log():
+    """Check if logging is enabled.  If translated with --no-rjit, this
+    returns the constant False.  Otherwise, it returns True or False
+    depending on the presence of the PYPYLOG env var.  (Note that the
+    debug_log() function also checks has_log() by itself, so it's only
+    useful to explicitly call has_log() to protect large pieces of code.)
+    """
     return True
 
 def debug_log(_category, _message, **_kwds):
+    """Logging main function.  If translated with --no-rjit, all calls to
+    this function are ignored.  Otherwise, if the PYPYLOG env var is set,
+    it records an entry in the log.  Arguments:
+
+      * category: a short string, more or less of the form
+        'mainarea-subarea-exactlocation'.  To make log parsing easier,
+        whenever multiple log entries belong together, start with
+        an entry 'mainarea-subarea-{' and end with 'mainarea-subarea-}'.
+        Note that the category should be unique (use different
+        'exactlocation' if needed).
+
+      * message: freeform string displayed to the user, with embedded
+        %-formatting commands like '%(foo)d' and '%(bar)s'.  The message
+        must be a constant string; it is only recorded once per log file.
+
+      * keywords arguments: values to record in the entry, like foo=5
+        and bar='hello'.
+
+    Supported argument types:
+      'd': signed integer
+      'f': float
+      's': printable string or none
+      'r': random binary string or none
+    """
     getattr(_log, _category)(_message % _kwds)
 
 # ____________________________________________________________
@@ -89,6 +119,7 @@ class DebugLogEntry(ExtRegistryEntry):
                 'd': annmodel.SomeInteger(),
                 'f': annmodel.SomeFloat(),
                 's': annmodel.SomeString(can_be_None=True),
+                'r': annmodel.SomeString(can_be_None=True),
                 }
             annhelper = hop.rtyper.getannmixlevel()
             args_s = [ann[t] for t in cat.types]
@@ -101,7 +132,7 @@ class DebugLogEntry(ExtRegistryEntry):
                     v = hop.inputarg(lltype.Signed, arg=arg)
                 elif typechar == 'f':
                     v = hop.inputarg(lltype.Float, arg=arg)
-                elif typechar == 's':
+                elif typechar == 's' or typechar == 'r':
                     v = hop.inputarg(hop.rtyper.type_system.rstr.string_repr,
                                      arg=arg)
                 else:
@@ -126,7 +157,7 @@ def get_logwriter(rtyper):
 
 import re
 
-r_entry = re.compile(r"%\((\w+)\)([sdf])")
+r_entry = re.compile(r"%\((\w+)\)([srdf])")
 
 SIZEOF_FLOAT = struct.calcsize("f")
 
@@ -235,6 +266,8 @@ class AbstractLogWriter(object):
         else:
             s = '(null)'
         self.write_str(s)
+
+    add_subentry_r = add_subentry_s
 
     def add_subentry_f(self, float):
         self.write_float(float)
