@@ -163,6 +163,7 @@ SIZEOF_FLOAT = struct.calcsize("f")
 
 
 class LogCategory(object):
+    _alloc_flavor_ = 'raw'
     seen_by = None
 
     def __init__(self, category, message, index):
@@ -221,6 +222,7 @@ class LogCategory(object):
 
 
 class AbstractLogWriter(object):
+    _alloc_flavor_ = "raw"
     get_time = time.time
     always_flush = False
 
@@ -240,8 +242,11 @@ class AbstractLogWriter(object):
         # write the header
         if self.enabled:
             self.create_buffer()
-            for c in 'RLog\n':
-                self.write_int(ord(c))
+            self.write_int(ord('R'))
+            self.write_int(ord('L'))
+            self.write_int(ord('o'))
+            self.write_int(ord('g'))
+            self.write_int(ord('\n'))
             # Write two numbers at the start, to ensure that the log is
             # considered invalid on machines with different endianness
             # or word size.  They also play the role of version numbers.
