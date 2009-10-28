@@ -437,7 +437,11 @@ class CStandaloneBuilder(CBuilder):
             real_entrypoint = self.entrypoint
             #
             def _ll_entrypoint(argc, argv):
-                list = [rffi.charp2str(argv[i]) for i in range(argc)]
+                list = [''] * argc
+                i = 0
+                while i < argc:
+                    list[i] = rffi.charp2str(argv[i])
+                    i += 1
                 return real_entrypoint(list)
             #
             annhelper = MixLevelHelperAnnotator(db.translator.rtyper)
