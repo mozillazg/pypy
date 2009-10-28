@@ -31,6 +31,9 @@ class LLLogWriter(AbstractLogWriter):
     def do_open_file(self):
         l_result = self.ll_get_filename()
         if l_result and l_result[0] != '\x00':
+            if l_result[0] == '+':
+                self.always_flush = True
+                l_result = rffi.ptradd(l_result, 1)
             flags = rffi.cast(rffi.INT, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
             mode = rffi.cast(rffi.MODE_T, 0666)
             self.fd = rffi.cast(lltype.Signed, os_open(l_result, flags, mode))

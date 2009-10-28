@@ -185,7 +185,7 @@ class LogCategory(object):
             self.logwriter = logwriter
             types = unrolling_iterable(self.types)
             #
-            def call(*args):
+            def really_call(*args):
                 if NonConstant(False):
                     logwriter.add_subentry_d(NonConstant(-123))
                     logwriter.add_subentry_s(NonConstant('abc'))
@@ -196,8 +196,6 @@ class LogCategory(object):
                     logwriter.add_subentry_r(llstr('abc'))
                     logwriter.add_subentry_f(NonConstant(123.4))
                     # ^^^ annotation hacks
-                if not logwriter.enabled:
-                    return
                 if not logwriter.add_entry(self):
                     return
                 i = 0
@@ -205,8 +203,16 @@ class LogCategory(object):
                     methname = 'add_subentry_' + typechar
                     getattr(logwriter, methname)(args[i])
                     i = i + 1
-            call = func_with_new_name(call, 'debug_log_' + self.category)
+                if logwriter.always_flush:
+                    logwriter._flush()
+            really_call = func_with_new_name(really_call,
+                                             'debug_log_' + self.category)
+            #
+            def call(*args):
+                if logwriter.enabled:
+                    really_call(*args)
             call._always_inline_ = True
+            #
             self.call = call
         else:
             assert self.logwriter is logwriter
@@ -215,6 +221,7 @@ class LogCategory(object):
 
 class AbstractLogWriter(object):
     get_time = time.time
+    always_flush = False
 
     def __init__(self):
         self.enabled = True
