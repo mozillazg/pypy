@@ -604,9 +604,13 @@ class LLFrame(object):
 
     def op_setfield(self, obj, fieldname, fieldvalue):
         # obj should be pointer
-        FIELDTYPE = getattr(lltype.typeOf(obj).TO, fieldname)
-        if FIELDTYPE is not lltype.Void:
+        STRUCT = lltype.typeOf(obj).TO
+        FIELDTYPE = getattr(STRUCT, fieldname)
+        if (STRUCT._gckind == 'gc' and isinstance(FIELDTYPE, lltype.Ptr)
+                                   and FIELDTYPE.TO._gckind == 'gc'):
             self.heap.setfield(obj, fieldname, fieldvalue)
+        elif FIELDTYPE is not lltype.Void:
+            setattr(obj, fieldname, fieldvalue)
 
     def op_bare_setfield(self, obj, fieldname, fieldvalue):
         # obj should be pointer
@@ -654,9 +658,13 @@ class LLFrame(object):
 
     def op_setarrayitem(self, array, index, item):
         # array should be a pointer
-        ITEMTYPE = lltype.typeOf(array).TO.OF
-        if ITEMTYPE is not lltype.Void:
+        ARRAY = lltype.typeOf(array).TO
+        ITEMTYPE = ARRAY.OF
+        if (ARRAY._gckind == 'gc' and isinstance(ITEMTYPE, lltype.Ptr)
+                                  and ITEMTYPE.TO._gckind == 'gc'):
             self.heap.setarrayitem(array, index, item)
+        elif ITEMTYPE is not lltype.Void:
+            array[index] = item
 
     def op_bare_setarrayitem(self, array, index, item):
         # array should be a pointer
@@ -721,9 +729,12 @@ class LLFrame(object):
             result = self.heap.malloc(obj, zero=zero, flavor='raw')
             self.alloca_objects.append(result)
             return result
-        ptr = self.heap.malloc(obj, zero=zero, flavor=flavor)
-        if flavor == 'raw' and self.llinterpreter.malloc_check:
-            self.llinterpreter.remember_malloc(ptr, self)
+        if flavor == 'raw':
+            ptr = lltype.malloc(obj, zero=zero, flavor=flavor)
+            if self.llinterpreter.malloc_check:
+                self.llinterpreter.remember_malloc(ptr, self)
+        else:
+            ptr = self.heap.malloc(obj, zero=zero, flavor=flavor)
         return ptr
 
     def op_malloc_varsize(self, obj, flags, size):
@@ -731,9 +742,12 @@ class LLFrame(object):
         zero = flags.get('zero', False)
         assert flavor in ('gc', 'raw')
         try:
-            ptr = self.heap.malloc(obj, size, zero=zero, flavor=flavor)
-            if flavor == 'raw' and self.llinterpreter.malloc_check:
-                self.llinterpreter.remember_malloc(ptr, self)
+            if flavor == 'raw':
+                ptr = lltype.malloc(obj, size, zero=zero, flavor=flavor)
+                if self.llinterpreter.malloc_check:
+                    self.llinterpreter.remember_malloc(ptr, self)
+            else:
+                ptr = self.heap.malloc(obj, size, zero=zero, flavor=flavor)
             return ptr
         except MemoryError:
             self.make_llexception()
@@ -761,9 +775,12 @@ class LLFrame(object):
 
     def op_free(self, obj, flavor):
         assert isinstance(flavor, str)
-        if flavor == 'raw' and self.llinterpreter.malloc_check:
-            self.llinterpreter.remember_free(obj)
-        self.heap.free(obj, flavor=flavor)
+        if flavor == 'raw':
+            if self.llinterpreter.malloc_check:
+                self.llinterpreter.remember_free(obj)
+            lltype.free(obj, flavor=flavor)
+        else:
+            self.heap.free(obj, flavor=flavor)
 
     def op_zero_gc_pointers_inside(self, obj):
         raise NotImplementedError("zero_gc_pointers_inside")

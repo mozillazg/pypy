@@ -2,7 +2,7 @@ import struct, os
 from pypy.rlib import rlog, rlog_ll, rlog_parsing
 from pypy.rlib.rarithmetic import intmask
 from pypy.tool.udir import udir
-from pypy.rpython.test.test_llinterp import interpret
+from pypy.rpython.test.test_llinterp import interpret, get_interpreter
 
 
 def test_log_direct():
@@ -267,7 +267,9 @@ class TestCompiled:
         assert entries[5][2] == ['(null)']
 
     def test_interpret_f(self):
-        interpret(self.f.im_func, [132], malloc_check=False)
+        interp, graph = get_interpreter(self.f.im_func, [132])
+        interp.heap = None    # make sure this does not use any GC operation
+        interp.eval_graph(graph, [132])
         self.check_result()
 
     def test_interpret_g(self):

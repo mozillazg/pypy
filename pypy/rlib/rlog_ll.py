@@ -8,10 +8,10 @@ from pypy.rpython.module.ll_os import underscore_on_windows
 
 os_write = rffi.llexternal(underscore_on_windows+'write',
                            [rffi.INT, rffi.CCHARP, rffi.SIZE_T],
-                           rffi.SIZE_T)
+                           rffi.SIZE_T, _nowrapper=True)
 os_open = rffi.llexternal(underscore_on_windows+'open',
                           [rffi.CCHARP, rffi.INT, rffi.MODE_T],
-                          rffi.INT)
+                          rffi.INT, _nowrapper=True)
 
 l_pypylog = rffi.str2charp('PYPYLOG')
 
@@ -21,6 +21,7 @@ l_pypylog = rffi.str2charp('PYPYLOG')
 #
 
 class LLLogWriter(AbstractLogWriter):
+    _alloc_flavor_ = "raw"
     BUFSIZE = 8192
 
     fd = -1
