@@ -248,13 +248,16 @@ class TestCompiled:
         assert entries[5][1] is Ac
         assert Aa.category == 'Aa'
         assert Aa.message == 'hello %(foo)d %(bar)f'
-        assert Aa.entries == [('foo', 'd'), ('bar', 'f')]
+        assert Aa.messagestr == 'hello %d %f'
+        assert Aa.types == ['d', 'f']
         assert Ab.category == 'Ab'
         assert Ab.message == '<<%(baz)s>>'
-        assert Ab.entries == [('baz', 's')]
+        assert Ab.messagestr == '<<%s>>'
+        assert Ab.types == ['s']
         assert Ac.category == 'Ac'
         assert Ac.message == '[%(foo)r]'
-        assert Ac.entries == [('foo', 'r')]
+        assert Ac.messagestr == '[%r]'
+        assert Ac.types == ['r']
         #
         assert entries[0][2] == [132, roughly(-7.3)]
         assert entries[1][2] == [133, 132.5]

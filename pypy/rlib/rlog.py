@@ -1,6 +1,7 @@
 import py, time, struct
 from pypy.tool.ansi_print import ansi_log
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.nonconst import NonConstant
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.annlowlevel import hlstr
@@ -185,6 +186,12 @@ class LogCategory(object):
             types = unrolling_iterable(self.types)
             #
             def call(*args):
+                if NonConstant(False):
+                    logwriter.add_subentry_d(123)
+                    logwriter.add_subentry_s('abc')
+                    logwriter.add_subentry_r('abc')
+                    logwriter.add_subentry_f(123.4)
+                    # ^^^ annotation hacks
                 if not logwriter.enabled:
                     return
                 if not logwriter.add_entry(self):
