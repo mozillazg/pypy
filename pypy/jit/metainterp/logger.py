@@ -10,28 +10,44 @@ class Logger(object):
         self.ts = ts
         self.guard_number=guard_number
 
-    def log_loop(self, inputargs, operations, number=-1, type="unoptimized"):
+    def log_loop(self, inputargs, operations, number=0, type=None):
         if not rlog.has_log():
             return
-        rlog.debug_log("jit-log-loop-{",
-                       "# Loop%(number)d (%(type)s), %(length)d ops",
-                       number = number,
-                       type   = type,
-                       length = len(operations))
-        self._log_operations(inputargs, operations, {})
-        rlog.debug_log("jit-log-loop-}",
-                       "# End")
+        if type is None:
+            rlog.debug_log("jit-log-noopt-loop-{",
+                           "# Unoptimized loop, %(length)d ops",
+                           length = len(operations))
+            self._log_operations(inputargs, operations, {})
+            rlog.debug_log("jit-log-noopt-loop-}",
+                           "# End")
+        else:
+            rlog.debug_log("jit-log-opt-loop-{",
+                           "# Loop%(number)d (%(type)s), %(length)d ops",
+                           number = number,
+                           type   = type,
+                           length = len(operations))
+            self._log_operations(inputargs, operations, {})
+            rlog.debug_log("jit-log-opt-loop-}",
+                           "# End")
 
     def log_bridge(self, inputargs, operations, number=-1):
         if not rlog.has_log():
             return
-        rlog.debug_log("jit-log-bridge-{",
-                       "# Bridge out of Guard%(guard)d, %(length)d ops",
-                       guard  = number,
-                       length = len(operations))
-        self._log_operations(inputargs, operations, {})
-        rlog.debug_log("jit-log-bridge-}",
-                       "# End")
+        if number == -1:
+            rlog.debug_log("jit-log-noopt-bridge-{",
+                           "# Unoptimized bridge, %(length)d ops",
+                           length = len(operations))
+            self._log_operations(inputargs, operations, {})
+            rlog.debug_log("jit-log-noopt-bridge-}",
+                           "# End")
+        else:
+            rlog.debug_log("jit-log-opt-bridge-{",
+                           "# Bridge out of Guard%(guard)d, %(length)d ops",
+                           guard  = number,
+                           length = len(operations))
+            self._log_operations(inputargs, operations, {})
+            rlog.debug_log("jit-log-opt-bridge-}",
+                           "# End")
 
     def repr_of_descr(self, descr):
         return descr.repr_of_descr()
