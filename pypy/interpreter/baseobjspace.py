@@ -25,20 +25,14 @@ class W_Root(object):
     def getdict(self):
         return None
 
-    def getdictvalue_w(self, space, attr):
+    def getdictvalue(self, space, attr):
         w_dict = self.getdict()
         if w_dict is not None:
             return space.finditem_str(w_dict, attr)
         return None
 
-    def getdictvalue(self, space, w_attr):
-        w_dict = self.getdict()
-        if w_dict is not None:
-            return space.finditem(w_dict, w_attr)
-        return None
-
     def getdictvalue_attr_is_in_class(self, space, attr):
-        return self.getdictvalue_w(space, attr)
+        return self.getdictvalue(space, attr)
 
     def setdictvalue(self, space, w_attr, w_value, shadows_type=True):
         w_dict = self.getdict()
@@ -285,7 +279,7 @@ class ObjSpace(object):
                 self.timer.stop("startup " + modname)
 
     def finish(self):
-        w_exitfunc = self.sys.getdictvalue_w(self, 'exitfunc')
+        w_exitfunc = self.sys.getdictvalue(self, 'exitfunc')
         if w_exitfunc is not None:
             self.call_function(w_exitfunc)
         from pypy.interpreter.module import Module
@@ -778,7 +772,7 @@ class ObjSpace(object):
         w_type = self.type(w_obj)
         w_mro = self.getattr(w_type, self.wrap("__mro__"))
         for w_supertype in self.unpackiterable(w_mro):
-            w_value = w_supertype.getdictvalue_w(self, name)
+            w_value = w_supertype.getdictvalue(self, name)
             if w_value is not None:
                 return w_value
         return None

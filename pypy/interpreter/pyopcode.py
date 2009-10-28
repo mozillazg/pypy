@@ -673,25 +673,24 @@ class __extend__(pyframe.PyFrame):
                 return
         f.LOAD_GLOBAL(nameindex)    # fall-back
 
-    def _load_global(f, w_varname):
-        w_value = f.space.finditem(f.w_globals, w_varname)
+    def _load_global(f, varname):
+        w_value = f.space.finditem_str(f.w_globals, varname)
         if w_value is None:
             # not in the globals, now look in the built-ins
-            w_value = f.get_builtin().getdictvalue(f.space, w_varname)
+            w_value = f.get_builtin().getdictvalue(f.space, varname)
             if w_value is None:
-                f._load_global_failed(w_varname)
+                f._load_global_failed(varname)
         return w_value
     _load_global._always_inline_ = True
 
-    def _load_global_failed(f, w_varname):
-        varname = f.space.str_w(w_varname)
+    def _load_global_failed(f, varname):
         message = "global name '%s' is not defined" % varname
         raise OperationError(f.space.w_NameError,
                              f.space.wrap(message))
     _load_global_failed._dont_inline_ = True
 
     def LOAD_GLOBAL(f, nameindex, *ignored):
-        f.pushvalue(f._load_global(f.getname_w(nameindex)))
+        f.pushvalue(f._load_global(f.getname_u(nameindex)))
     LOAD_GLOBAL._always_inline_ = True
 
     def DELETE_FAST(f, varindex, *ignored):
@@ -782,7 +781,7 @@ class __extend__(pyframe.PyFrame):
         else:
             w_flag = None
 
-        w_import = f.get_builtin().getdictvalue_w(f.space, '__import__')
+        w_import = f.get_builtin().getdictvalue(f.space, '__import__')
         if w_import is None:
             raise OperationError(space.w_ImportError,
                                  space.wrap("__import__ not found"))
@@ -989,8 +988,8 @@ class __extend__(pyframe.PyFrame):
     def CALL_LIKELY_BUILTIN(f, oparg, *ignored):
         # overridden by faster version in the standard object space.
         from pypy.module.__builtin__ import OPTIMIZED_BUILTINS
-        w_varname = f.space.wrap(OPTIMIZED_BUILTINS[oparg >> 8])
-        w_function = f._load_global(w_varname)
+        varname = OPTIMIZED_BUILTINS[oparg >> 8]
+        w_function = f._load_global(varname)
         nargs = oparg&0xFF
         try:
             w_result = f.space.call_valuestack(w_function, nargs, f)

@@ -38,7 +38,7 @@ class Object:
                 return space.get(w_descr, w_obj)
             w_value = w_obj.getdictvalue_attr_is_in_class(space, name)
         else:
-            w_value = w_obj.getdictvalue_w(space, name)
+            w_value = w_obj.getdictvalue(space, name)
         if w_value is not None:
             return w_value
         if w_descr is not None:

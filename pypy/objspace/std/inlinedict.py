@@ -83,20 +83,14 @@ def make_inlinedict_mixin(dictimplclass, attrname):
         def _inlined_dict_valid(self):
             return getattr(self, attrname) is not None
 
-        def getdictvalue_w(self, space, attr):
+        def getdictvalue(self, space, attr):
             if self._inlined_dict_valid():
                 return self.impl_getitem_str(attr)
             w_dict = self.getdict()
             return w_dict.getitem_str(attr)
 
-        def getdictvalue(self, space, w_attr):
-            if self._inlined_dict_valid():
-                return self.impl_getitem(w_attr)
-            w_dict = self.getdict()
-            return w_dict.getitem(w_attr)
-
         def getdictvalue_attr_is_in_class(self, space, attr):
-            return self.getdictvalue_w(space, attr)
+            return self.getdictvalue(space, attr)
 
         def setdictvalue(self, space, w_attr, w_value, shadows_type=True):
             if self._inlined_dict_valid():
