@@ -3,7 +3,6 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rarithmetic import r_uint, r_singlefloat
 from pypy.rlib.rlog import AbstractLogWriter, SIZEOF_FLOAT
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.rpython.module.ll_os_environ import os_getenv
 from pypy.rpython.module.ll_os import underscore_on_windows
 
 os_write = rffi.llexternal(underscore_on_windows+'write',
@@ -12,6 +11,8 @@ os_write = rffi.llexternal(underscore_on_windows+'write',
 os_open = rffi.llexternal(underscore_on_windows+'open',
                           [rffi.CCHARP, rffi.INT, rffi.MODE_T],
                           rffi.INT, _nowrapper=True)
+os_getenv = rffi.llexternal('getenv', [rffi.CCHARP], rffi.CCHARP,
+                            _nowrapper=True)
 
 l_pypylog = rffi.str2charp('PYPYLOG')
 
