@@ -301,6 +301,14 @@ class ModuleWithCleanup(object):
             pass
 
 
+class CTestBuilder(CBuilder):
+    # only for tests
+    standalone = True
+    def getentrypointptr(self, db):
+        bk = self.translator.annotator.bookkeeper
+        return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
+
+
 class CExtModuleBuilder(CBuilder):
     standalone = False
     _module = None
