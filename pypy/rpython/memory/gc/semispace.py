@@ -61,6 +61,7 @@ class SemiSpaceGC(MovingGCBase):
         self.space_size = self.param_space_size
         self.max_space_size = self.param_max_space_size
         self.red_zone = 0
+        self.collection_in_progress = False
 
         self.program_start_time = time.time()
         self.tospace = llarena.arena_malloc(self.space_size, True)
@@ -213,6 +214,18 @@ class SemiSpaceGC(MovingGCBase):
         # (this is also a hook for the HybridGC)
 
     def semispace_collect(self, size_changing=False):
+        ll_assert(not self.collection_in_progress,
+                  "allocating memory while the GC is collecting!")
+        self.collection_in_progress = True
+        # temporarily set 'top_of_space' to a value that will prevent
+        # all mallocs from succeeding and cause semispace_collect()
+        # to be called again -- and hitting the ll_assert() above.
+        tospace = self.fromspace
+        fromspace = self.tospace
+        self.fromspace = fromspace
+        self.tospace = tospace
+        self.top_of_space = tospace
+
         if rlog.has_log():
             start_usage = self.free - self.tospace
             start_time = time.time()
@@ -225,17 +238,11 @@ class SemiSpaceGC(MovingGCBase):
         else:
             start_time = 0 # Help the flow space
             start_usage = 0 # Help the flow space
-        #llop.debug_print(lltype.Void, 'semispace_collect', int(size_changing))
 
         # Switch the spaces.  We copy everything over to the empty space
         # (self.fromspace at the beginning of the collection), and clear the old
         # one (self.tospace at the beginning).  Their purposes will be reversed
         # for the next collection.
-        tospace = self.fromspace
-        fromspace = self.tospace
-        self.fromspace = fromspace
-        self.tospace = tospace
-        self.top_of_space = tospace + self.space_size
         scan = self.free = tospace
         self.starting_full_collect()
         self.collect_roots()
@@ -248,6 +255,9 @@ class SemiSpaceGC(MovingGCBase):
             self.invalidate_weakrefs()
         self.update_objects_with_id()
         self.finished_full_collect()
+        self.top_of_space = self.tospace + self.space_size
+        ll_assert(self.free <= self.top_of_space, "space overflowed")
+        self.collection_in_progress = False
         self.debug_check_consistency()
         if not size_changing:
             llarena.arena_reset(fromspace, self.space_size, True)
@@ -601,6 +611,8 @@ class SemiSpaceGC(MovingGCBase):
     def identityhash(self, gcobj):
         # The following code should run at most twice.
         while 1:
+            ll_assert(not self.collection_in_progress,
+                      "identityhash() while the GC is collecting!")
             obj = llmemory.cast_ptr_to_adr(gcobj)
             hdr = self.header(obj)
             #

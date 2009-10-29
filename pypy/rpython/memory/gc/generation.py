@@ -328,10 +328,16 @@ class GenerationGC(SemiSpaceGC):
     def collect_nursery(self):
         if self.nursery_size > self.top_of_space - self.free:
             # the semispace is running out, do a full collect
+            # (also handles the case of a recursive collect done by mistake)
             self.obtain_free_space(self.nursery_size)
             ll_assert(self.nursery_size <= self.top_of_space - self.free,
                          "obtain_free_space failed to do its job")
         if self.nursery:
+            ll_assert(not self.collection_in_progress,
+                      "should not reach this point")
+            self.collection_in_progress = True
+            old_top_of_space = self.top_of_space
+            self.top_of_space = self.free     # temp., to detect recursion
             rlog.debug_log("gc-minor-{", ".--- minor collect ---")
             # a nursery-only collection
             scan = beginning = self.free
@@ -351,6 +357,8 @@ class GenerationGC(SemiSpaceGC):
                 "`------ survived (fraction of the size): %(survived)f",
                 oldobj   = oldobj_count,
                 survived = float(scan - beginning) / self.nursery_size)
+            self.top_of_space = old_top_of_space
+            self.collection_in_progress = False
             #self.debug_check_consistency()   # -- quite expensive
         else:
             # no nursery - this occurs after a full collect, triggered either
