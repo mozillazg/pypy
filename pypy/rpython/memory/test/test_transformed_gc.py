@@ -98,7 +98,7 @@ class GCTest(object):
                 cleanup()
             return res
 
-        from pypy.translator.c.genc import CStandaloneBuilder
+        from pypy.translator.c.genc import CTestBuilder
 
         s_args = annmodel.SomePtr(lltype.Ptr(ARGS))
         t = rtype(entrypoint, [s_args], gcname=cls.gcname,
@@ -109,11 +109,10 @@ class GCTest(object):
             if fixup:
                 fixup(t)
 
-        cbuild = CStandaloneBuilder(t, entrypoint, config=t.config,
-                                    gcpolicy=cls.gcpolicy)
+        cbuild = CTestBuilder(t, entrypoint, config=t.config,
+                              gcpolicy=cls.gcpolicy)
         db = cbuild.generate_graphs_for_llinterp()
-        entrypointptr = cbuild.getentrypointptr()
-        entrygraph = entrypointptr._obj.graph
+        entrygraph = t._graphof(cbuild.entrypoint)
         if conftest.option.view:
             t.viewcg()
 
