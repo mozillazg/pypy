@@ -227,7 +227,7 @@ class SemiSpaceGC(MovingGCBase):
         self.top_of_space = tospace
 
         if rlog.has_log():
-            start_usage = self.free - self.tospace
+            start_usage = self.free - fromspace
             start_time = time.time()
             rlog.debug_log("gc-full-{",
                 ".----------- Full collection ------------------\n"
