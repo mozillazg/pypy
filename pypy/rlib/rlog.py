@@ -12,7 +12,7 @@ py.log.setconsumer("rlog", ansi_log)
 
 
 def has_log():
-    """Check if logging is enabled.  If translated with --no-rjit, this
+    """Check if logging is enabled.  If translated with --no-rlog, this
     returns the constant False.  Otherwise, it returns True or False
     depending on the presence of the PYPYLOG env var.  (Note that the
     debug_log() function also checks has_log() by itself, so it's only
@@ -21,7 +21,7 @@ def has_log():
     return True
 
 def debug_log(_category, _message, **_kwds):
-    """Logging main function.  If translated with --no-rjit, all calls to
+    """Logging main function.  If translated with --no-rlog, all calls to
     this function are ignored.  Otherwise, if the PYPYLOG env var is set,
     it records an entry in the log.  Arguments:
 
