@@ -182,6 +182,8 @@ class HybridGC(GenerationGC):
         # In order to keep malloc_varsize_clear() as compact as possible,
         # we recompute what we need in this slow path instead of passing
         # it all as function arguments.
+        ll_assert(not self.collection_in_progress,
+                 "malloc_varsize_slowpath() while a collection is in progress")
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + self.fixed_size(typeid)
         itemsize = self.varsize_item_sizes(typeid)
@@ -222,6 +224,8 @@ class HybridGC(GenerationGC):
         return llmemory.cast_ptr_to_adr(gcref)
 
     def realloc(self, ptr, newlength, fixedsize, itemsize, lengthofs, grow):
+        ll_assert(not self.collection_in_progress,
+                  "realloc() while a collection is in progress")
         size_gc_header = self.size_gc_header()
         addr = llmemory.cast_ptr_to_adr(ptr)
         ll_assert(self.header(addr).tid & GCFLAG_EXTERNAL,
