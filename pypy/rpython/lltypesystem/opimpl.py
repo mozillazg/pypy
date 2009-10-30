@@ -413,11 +413,12 @@ def op_getarrayitem(p, index):
     return p[index]
 
 def _normalize(x):
-    TYPE = lltype.typeOf(x)
-    if (isinstance(TYPE, lltype.Ptr) and TYPE.TO._name == 'rpy_string'
-        or getattr(TYPE, '_name', '') == 'String'):    # ootype
-        from pypy.rpython.annlowlevel import hlstr
-        return hlstr(x)
+    if not isinstance(x, str):
+        TYPE = lltype.typeOf(x)
+        if (isinstance(TYPE, lltype.Ptr) and TYPE.TO._name == 'rpy_string'
+            or getattr(TYPE, '_name', '') == 'String'):    # ootype
+            from pypy.rpython.annlowlevel import hlstr
+            return hlstr(x)
     return x
 
 def op_debug_print(*args):
