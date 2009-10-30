@@ -2,7 +2,7 @@ import py
 import sys, os, re
 
 from pypy.rlib.rarithmetic import r_longlong
-from pypy.rlib.debug import ll_assert, debug_print
+from pypy.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
 from pypy.translator.translator import TranslationContext
 from pypy.translator.backendopt import all
 from pypy.translator.c.genc import CStandaloneBuilder, ExternalCompilationInfo
@@ -11,9 +11,22 @@ from pypy.tool.udir import udir
 from pypy.tool.autopath import pypydir
 
 
-class TestStandalone(object):
+class StandaloneTests(object):
     config = None
-    
+
+    def compile(self, entry_point):
+        t = TranslationContext(self.config)
+        t.buildannotator().build_types(entry_point, [s_list_of_strings])
+        t.buildrtyper().specialize()
+
+        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
+        cbuilder.generate_source()
+        cbuilder.compile()
+        return t, cbuilder
+
+
+class TestStandalone(StandaloneTests):
+
     def test_hello_world(self):
         def entry_point(argv):
             os.write(1, "hello world\n")
@@ -23,13 +36,7 @@ class TestStandalone(object):
                 os.write(1, "   '" + str(s) + "'\n")
             return 0
 
-        t = TranslationContext(self.config)
-        t.buildannotator().build_types(entry_point, [s_list_of_strings])
-        t.buildrtyper().specialize()
-
-        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-        cbuilder.generate_source()
-        cbuilder.compile()
+        t, cbuilder = self.compile(entry_point)
         data = cbuilder.cmdexec('hi there')
         assert data.startswith('''hello world\nargument count: 2\n   'hi'\n   'there'\n''')
 
@@ -43,13 +50,7 @@ class TestStandalone(object):
             print [len(s) for s in argv]
             return 0
 
-        t = TranslationContext(self.config)
-        t.buildannotator().build_types(entry_point, [s_list_of_strings])
-        t.buildrtyper().specialize()
-
-        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-        cbuilder.generate_source()
-        cbuilder.compile()
+        t, cbuilder = self.compile(entry_point)
         data = cbuilder.cmdexec('hi there')
         assert data.startswith('''hello simpler world\n'''
                                '''argument count: 2\n'''
@@ -130,13 +131,7 @@ class TestStandalone(object):
             print m, x
             return 0
 
-        t = TranslationContext(self.config)
-        t.buildannotator().build_types(entry_point, [s_list_of_strings])
-        t.buildrtyper().specialize()
-
-        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-        cbuilder.generate_source()
-        cbuilder.compile()
+        t, cbuilder = self.compile(entry_point)
         data = cbuilder.cmdexec('hi there')
         assert map(float, data.split()) == [0.0, 0.0]
 
@@ -173,13 +168,8 @@ class TestStandalone(object):
                 os.setpgrp()
                 return 0
 
-            t = TranslationContext(self.config)
-            t.buildannotator().build_types(entry_point, [s_list_of_strings])
-            t.buildrtyper().specialize()
-
-            cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-            cbuilder.generate_source()
-            cbuilder.compile()
+            t, cbuilder = self.compile(entry_point)
+            cbuilder.cmdexec("")
 
 
     def test_profopt_mac_osx_bug(self):
@@ -223,12 +213,7 @@ class TestStandalone(object):
                 print "BAD POS"
             os.close(fd)
             return 0
-        t = TranslationContext(self.config)
-        t.buildannotator().build_types(entry_point, [s_list_of_strings])
-        t.buildrtyper().specialize()
-        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-        cbuilder.generate_source()
-        cbuilder.compile()
+        t, cbuilder = self.compile(entry_point)
         data = cbuilder.cmdexec('hi there')
         assert data.strip() == "OK"
 
@@ -269,6 +254,36 @@ class TestStandalone(object):
         assert "translator/c/src" not in makefile
         assert "  ll_strtod.h" in makefile
         assert "  ll_strtod.o" in makefile
+
+    def test_debug_print_start_stop(self):
+        def entry_point(argv):
+            debug_start("mycat")
+            debug_print("foo", 2, "bar", 3)
+            debug_stop("mycat")
+            return 0
+        t, cbuilder = self.compile(entry_point)
+        # check with PYPYLOG undefined
+        out, err = cbuilder.cmdexec("", err=True, env={})
+        assert not out
+        assert not err
+        # check with PYPYLOG defined to an empty string
+        out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': ''})
+        assert not out
+        assert not err
+        # check with PYPYLOG=-
+        out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': '-'})
+        assert not out
+        assert 'mycat' in err
+        assert 'foo 2 bar 3' in err
+        # check with PYPYLOG=somefilename
+        path = udir.join('test_debug_xxx.log')
+        out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': str(path)})
+        assert not out
+        assert not err
+        assert path.check(file=1)
+        assert 'mycat' in path.read()
+        assert 'foo 2 bar 3' in path.read()
+
 
 class TestMaemo(TestStandalone):
     def setup_class(cls):
