@@ -40,6 +40,9 @@ translation_optiondescription = OptionDescription(
                      },
                  cmdline="-b --backend"),
 
+    BoolOption("log", "Include debug prints in the translation (PYPYLOG=...)",
+               default=True, cmdline="--log"),
+
     # gc
     ChoiceOption("gc", "Garbage Collection Strategy",
                  ["boehm", "ref", "marksweep", "semispace", "statistics",
