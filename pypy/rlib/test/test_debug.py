@@ -1,6 +1,7 @@
 
 import py
 from pypy.rlib.debug import check_annotation, make_sure_not_resized
+from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.rpython.test.test_llinterp import interpret
 
 def test_check_annotation():
@@ -37,3 +38,41 @@ def test_make_sure_not_resized():
 
     py.test.raises(TooLateForChange, interpret, f, [], 
                    list_comprehension_operations=True)
+
+
+class DebugTests:
+
+    def test_debug_print_start_stop(self):
+        import sys
+        from cStringIO import StringIO
+
+        def f(x):
+            debug_start("mycat")
+            debug_print("foo", 2, "bar", x)
+            debug_stop("mycat")
+
+        olderr = sys.stderr
+        try:
+            sys.stderr = c = StringIO()
+            f(3)
+        finally:
+            sys.stderr = olderr
+        assert 'mycat' in c.getvalue()
+        assert 'foo 2 bar 3' in c.getvalue()
+
+        try:
+            sys.stderr = c = StringIO()
+            self.interpret(f, [3])
+        finally:
+            sys.stderr = olderr
+        assert 'mycat' in c.getvalue()
+        assert 'foo 2 bar 3' in c.getvalue()
+
+
+class TestLLType(DebugTests):
+    def interpret(self, f, args):
+        interpret(f, args, type_system='lltype')
+
+class TestOOType(DebugTests):
+    def interpret(self, f, args):
+        interpret(f, args, type_system='ootype')

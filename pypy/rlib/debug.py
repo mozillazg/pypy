@@ -1,4 +1,4 @@
-
+import sys, time
 from pypy.rpython.extregistry import ExtRegistryEntry
 
 def ll_assert(x, msg):
@@ -21,7 +21,6 @@ class Entry(ExtRegistryEntry):
 
 
 def debug_print(*args):
-    import sys
     for arg in args:
         print >> sys.stderr, arg,
     print >> sys.stderr
@@ -36,6 +35,26 @@ class Entry(ExtRegistryEntry):
         vlist = hop.inputargs(*hop.args_r)
         hop.exception_cannot_occur()
         hop.genop('debug_print', vlist)
+
+
+def debug_start(category):
+    print >> sys.stderr, '[%s] debug_start %s' % (time.clock(), category)
+
+def debug_stop(category):
+    print >> sys.stderr, '[%s] debug_stop  %s' % (time.clock(), category)
+
+class Entry(ExtRegistryEntry):
+    _about_ = debug_start, debug_stop
+
+    def compute_result_annotation(self, s_category):
+        return None
+
+    def specialize_call(self, hop):
+        fn = self.instance
+        string_repr = hop.rtyper.type_system.rstr.string_repr
+        vlist = hop.inputargs(string_repr)
+        hop.exception_cannot_occur()
+        hop.genop(fn.__name__, vlist)
 
 
 def llinterpcall(RESTYPE, pythonfunction, *args):
