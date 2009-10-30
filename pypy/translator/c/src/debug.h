@@ -125,10 +125,10 @@ static void display_startstop(const char *prefix, const char *postfix,
 
 void pypy_debug_start(const char *category)
 {
+  pypy_debug_ensure_opened();
   if (debug_profile)
     {
       /* profiling version */
-      pypy_debug_ensure_opened();
       pypy_ignoring_nested_prints++;    /* disable nested debug_print */
     }
   else
@@ -140,7 +140,6 @@ void pypy_debug_start(const char *category)
           pypy_ignoring_nested_prints++;
           return;
         }
-      pypy_debug_ensure_opened();
       if (!debug_prefix || !startswith(category, debug_prefix))
         {
           /* wrong section name, or no PYPYLOG at all, skip it */

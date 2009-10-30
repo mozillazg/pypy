@@ -259,8 +259,6 @@ class TestStandalone(StandaloneTests):
     def test_debug_print_start_stop(self):
         def entry_point(argv):
             x = "got:"
-            if have_debug_prints(): x += "a"
-            debug_print("toplevel")
             debug_start  ("mycat")
             if have_debug_prints(): x += "b"
             debug_print    ("foo", 2, "bar", 3)
@@ -271,6 +269,8 @@ class TestStandalone(StandaloneTests):
             if have_debug_prints(): x += "d"
             debug_print    ("bok")
             debug_stop   ("mycat")
+            if have_debug_prints(): x += "a"
+            debug_print("toplevel")
             os.write(1, x + '.\n')
             return 0
         t, cbuilder = self.compile(entry_point)
@@ -294,25 +294,29 @@ class TestStandalone(StandaloneTests):
         assert 'bok' not in err
         # check with PYPYLOG=:- (means print to stderr)
         out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': ':-'})
-        assert out.strip() == 'got:abcd.'
+        assert out.strip() == 'got:bcda.'
         assert 'toplevel' in err
-        assert 'mycat' in err
+        assert '{mycat' in err
+        assert 'mycat}' in err
         assert 'foo 2 bar 3' in err
-        assert 'cat2' in err
+        assert '{cat2' in err
+        assert 'cat2}' in err
         assert 'baz' in err
         assert 'bok' in err
         # check with PYPYLOG=:somefilename
         path = udir.join('test_debug_xxx.log')
         out, err = cbuilder.cmdexec("", err=True,
                                     env={'PYPYLOG': ':%s' % path})
-        assert out.strip() == 'got:abcd.'
+        assert out.strip() == 'got:bcda.'
         assert not err
         assert path.check(file=1)
         data = path.read()
         assert 'toplevel' in data
-        assert 'mycat' in data
+        assert '{mycat' in data
+        assert 'mycat}' in data
         assert 'foo 2 bar 3' in data
-        assert 'cat2' in data
+        assert '{cat2' in data
+        assert 'cat2}' in data
         assert 'baz' in data
         assert 'bok' in data
         # check with PYPYLOG=somefilename
@@ -323,22 +327,25 @@ class TestStandalone(StandaloneTests):
         assert path.check(file=1)
         data = path.read()
         assert 'toplevel' in data
-        assert 'mycat' in data
+        assert '{mycat' in data
+        assert 'mycat}' in data
         assert 'foo 2 bar 3' not in data
-        assert 'cat2' in data
+        assert '{cat2' in data
+        assert 'cat2}' in data
         assert 'baz' not in data
         assert 'bok' not in data
         # check with PYPYLOG=myc:somefilename   (includes mycat but not cat2)
         path = udir.join('test_debug_xxx_myc.log')
         out, err = cbuilder.cmdexec("", err=True,
                                     env={'PYPYLOG': 'myc:%s' % path})
-        assert out.strip() == 'got:abd.'
+        assert out.strip() == 'got:bda.'
         assert not err
         assert path.check(file=1)
         data = path.read()
-        assert 'toplevel' in path.read()
-        assert 'mycat' in path.read()
-        assert 'foo 2 bar 3' in path.read()
+        assert 'toplevel' in data
+        assert '{mycat' in data
+        assert 'mycat}' in data
+        assert 'foo 2 bar 3' in data
         assert 'cat2' not in data
         assert 'baz' not in data
         assert 'bok' in data
