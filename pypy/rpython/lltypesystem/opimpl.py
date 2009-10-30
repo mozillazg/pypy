@@ -429,8 +429,8 @@ def op_debug_start(category):
 def op_debug_stop(category):
     debug.debug_stop(_normalize(category))
 
-def op_debug_level():
-    return debug.debug_level()
+def op_have_debug_prints():
+    return debug.have_debug_prints()
 
 def op_gc_stack_bottom():
     pass       # marker for trackgcroot.py

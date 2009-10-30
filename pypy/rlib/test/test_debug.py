@@ -1,7 +1,8 @@
 
 import py
 from pypy.rlib.debug import check_annotation, make_sure_not_resized
-from pypy.rlib.debug import debug_print, debug_start, debug_stop, debug_level
+from pypy.rlib.debug import debug_print, debug_start, debug_stop
+from pypy.rlib.debug import have_debug_prints
 from pypy.rpython.test.test_llinterp import interpret
 
 def test_check_annotation():
@@ -50,13 +51,13 @@ class DebugTests:
             debug_start("mycat")
             debug_print("foo", 2, "bar", x)
             debug_stop("mycat")
-            return debug_level()
+            return have_debug_prints()
 
         olderr = sys.stderr
         try:
             sys.stderr = c = StringIO()
             res = f(3)
-            assert res == 2
+            assert res == True
         finally:
             sys.stderr = olderr
         assert 'mycat' in c.getvalue()
@@ -65,7 +66,7 @@ class DebugTests:
         try:
             sys.stderr = c = StringIO()
             res = self.interpret(f, [3])
-            assert res == 2
+            assert res == True
         finally:
             sys.stderr = olderr
         assert 'mycat' in c.getvalue()
