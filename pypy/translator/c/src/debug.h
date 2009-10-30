@@ -45,11 +45,15 @@ extern FILE *pypy_debug_file;
 #ifndef PYPY_NOT_MAIN_FILE
 #include <sys/time.h>
 #include <string.h>
+#include <unistd.h>
 
 int pypy_ignoring_nested_prints = 0;
 FILE *pypy_debug_file = NULL;
 static bool_t debug_ready = 0;
 static bool_t debug_profile = 0;
+static char *debug_start_colors_1 = "";
+static char *debug_start_colors_2 = "";
+static char *debug_stop_colors = "";
 static char *debug_prefix = NULL;
 
 static void pypy_debug_open(void)
@@ -76,7 +80,15 @@ static void pypy_debug_open(void)
         pypy_debug_file = fopen(filename, "w");
     }
   if (!pypy_debug_file)
-    pypy_debug_file = stderr;
+    {
+      pypy_debug_file = stderr;
+      if (isatty(2))
+        {
+          debug_start_colors_1 = "\033[1m\033[31m";
+          debug_start_colors_2 = "\033[31m";
+          debug_stop_colors = "\033[0m";
+        }
+    }
   debug_ready = 1;
 }
 
@@ -100,11 +112,15 @@ static bool_t startswith(const char *str, const char *substr)
   return 1;
 }
 
-static void display_startstop(const char *start, const char *category)
+static void display_startstop(const char *prefix, const char *postfix,
+                              const char *category, const char *colors)
 {
   long long timestamp;
   READ_TIMESTAMP(timestamp);
-  fprintf(pypy_debug_file, "{%llx} -%s- %s\n", timestamp, start, category);
+  fprintf(pypy_debug_file, "%s[%llx] %s%s%s\n%s",
+          colors,
+          timestamp, prefix, category, postfix,
+          debug_stop_colors);
 }
 
 void pypy_debug_start(const char *category)
@@ -132,7 +148,7 @@ void pypy_debug_start(const char *category)
           return;
         }
     }
-  display_startstop("start", category);
+  display_startstop("{", "", category, debug_start_colors_1);
 }
 
 void pypy_debug_stop(const char *category)
@@ -143,7 +159,7 @@ void pypy_debug_stop(const char *category)
       if (!debug_profile)
         return;
     }
-  display_startstop("stop", category);
+  display_startstop("", "}", category, debug_start_colors_2);
 }
 
 #endif /* PYPY_NOT_MAIN_FILE */
