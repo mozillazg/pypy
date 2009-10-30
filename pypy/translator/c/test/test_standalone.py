@@ -266,11 +266,11 @@ class TestStandalone(StandaloneTests):
         out, err = cbuilder.cmdexec("", err=True, env={})
         assert not out
         assert not err
-        # check with PYPYLOG defined to an empty string
+        # check with PYPYLOG defined to an empty string (same as undefined)
         out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': ''})
         assert not out
         assert not err
-        # check with PYPYLOG=-
+        # check with PYPYLOG=- (means print to stderr)
         out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': '-'})
         assert not out
         assert 'mycat' in err
@@ -283,6 +283,15 @@ class TestStandalone(StandaloneTests):
         assert path.check(file=1)
         assert 'mycat' in path.read()
         assert 'foo 2 bar 3' in path.read()
+        # check with PYPYLOG=prof:somefilename   (only start/stop events)
+        path = udir.join('test_debug_xxx_prof.log')
+        out, err = cbuilder.cmdexec("", err=True,
+                                    env={'PYPYLOG': 'prof:%s' % path})
+        assert not out
+        assert not err
+        assert path.check(file=1)
+        assert 'mycat' in path.read()
+        assert 'foo 2 bar 3' not in path.read()
 
 
 class TestMaemo(TestStandalone):
