@@ -2,8 +2,8 @@ import py
 import sys, os, re
 
 from pypy.rlib.rarithmetic import r_longlong
-from pypy.rlib.debug import ll_assert
-from pypy.rlib.debug import debug_print, debug_start, debug_stop, debug_level
+from pypy.rlib.debug import ll_assert, have_debug_prints
+from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.translator.translator import TranslationContext
 from pypy.translator.backendopt import all
 from pypy.translator.c.genc import CStandaloneBuilder, ExternalCompilationInfo
@@ -258,42 +258,104 @@ class TestStandalone(StandaloneTests):
 
     def test_debug_print_start_stop(self):
         def entry_point(argv):
-            os.write(1, str(debug_level()) + '\n')
-            debug_start("mycat")
-            debug_print("foo", 2, "bar", 3)
-            debug_stop("mycat")
+            x = "got:"
+            if have_debug_prints(): x += "a"
+            debug_print("toplevel")
+            debug_start  ("mycat")
+            if have_debug_prints(): x += "b"
+            debug_print    ("foo", 2, "bar", 3)
+            debug_start      ("cat2")
+            if have_debug_prints(): x += "c"
+            debug_print        ("baz")
+            debug_stop       ("cat2")
+            if have_debug_prints(): x += "d"
+            debug_print    ("bok")
+            debug_stop   ("mycat")
+            os.write(1, x + '.\n')
             return 0
         t, cbuilder = self.compile(entry_point)
         # check with PYPYLOG undefined
         out, err = cbuilder.cmdexec("", err=True, env={})
-        assert out.strip() == '0'
-        assert not err
+        assert out.strip() == 'got:a.'
+        assert 'toplevel' in err
+        assert 'mycat' not in err
+        assert 'foo 2 bar 3' not in err
+        assert 'cat2' not in err
+        assert 'baz' not in err
+        assert 'bok' not in err
         # check with PYPYLOG defined to an empty string (same as undefined)
         out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': ''})
-        assert out.strip() == '0'
-        assert not err
-        # check with PYPYLOG=- (means print to stderr)
-        out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': '-'})
-        assert out.strip() == '2'
+        assert out.strip() == 'got:a.'
+        assert 'toplevel' in err
+        assert 'mycat' not in err
+        assert 'foo 2 bar 3' not in err
+        assert 'cat2' not in err
+        assert 'baz' not in err
+        assert 'bok' not in err
+        # check with PYPYLOG=:- (means print to stderr)
+        out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': ':-'})
+        assert out.strip() == 'got:abcd.'
+        assert 'toplevel' in err
         assert 'mycat' in err
         assert 'foo 2 bar 3' in err
-        # check with PYPYLOG=somefilename
+        assert 'cat2' in err
+        assert 'baz' in err
+        assert 'bok' in err
+        # check with PYPYLOG=:somefilename
         path = udir.join('test_debug_xxx.log')
-        out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': str(path)})
-        assert out.strip() == '2'
+        out, err = cbuilder.cmdexec("", err=True,
+                                    env={'PYPYLOG': ':%s' % path})
+        assert out.strip() == 'got:abcd.'
         assert not err
         assert path.check(file=1)
+        data = path.read()
+        assert 'toplevel' in data
+        assert 'mycat' in data
+        assert 'foo 2 bar 3' in data
+        assert 'cat2' in data
+        assert 'baz' in data
+        assert 'bok' in data
+        # check with PYPYLOG=somefilename
+        path = udir.join('test_debug_xxx_prof.log')
+        out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': str(path)})
+        assert out.strip() == 'got:a.'
+        assert not err
+        assert path.check(file=1)
+        data = path.read()
+        assert 'toplevel' in data
+        assert 'mycat' in data
+        assert 'foo 2 bar 3' not in data
+        assert 'cat2' in data
+        assert 'baz' not in data
+        assert 'bok' not in data
+        # check with PYPYLOG=myc:somefilename   (includes mycat but not cat2)
+        path = udir.join('test_debug_xxx_myc.log')
+        out, err = cbuilder.cmdexec("", err=True,
+                                    env={'PYPYLOG': 'myc:%s' % path})
+        assert out.strip() == 'got:abd.'
+        assert not err
+        assert path.check(file=1)
+        data = path.read()
+        assert 'toplevel' in path.read()
         assert 'mycat' in path.read()
         assert 'foo 2 bar 3' in path.read()
-        # check with PYPYLOG=prof:somefilename   (only start/stop events)
-        path = udir.join('test_debug_xxx_prof.log')
+        assert 'cat2' not in data
+        assert 'baz' not in data
+        assert 'bok' in data
+        # check with PYPYLOG=cat:somefilename   (includes cat2 but not mycat)
+        path = udir.join('test_debug_xxx_cat.log')
         out, err = cbuilder.cmdexec("", err=True,
-                                    env={'PYPYLOG': 'prof:%s' % path})
-        assert out.strip() == '1'
+                                    env={'PYPYLOG': 'cat:%s' % path})
+        assert out.strip() == 'got:a.'
         assert not err
         assert path.check(file=1)
-        assert 'mycat' in path.read()
+        data = path.read()
+        assert 'toplevel' in path.read()
+        assert 'mycat' not in path.read()
         assert 'foo 2 bar 3' not in path.read()
+        assert 'cat2' not in data      # because it is nested
+        assert 'baz' not in data
+        assert 'bok' not in data
         #
         # finally, check compiling with logging disabled
         from pypy.config.pypyoption import get_pypy_config
@@ -302,8 +364,10 @@ class TestStandalone(StandaloneTests):
         self.config = config
         t, cbuilder = self.compile(entry_point)
         path = udir.join('test_debug_does_not_show_up.log')
-        out = cbuilder.cmdexec("", env={'PYPYLOG': str(path)})
-        assert out.strip() == '0'
+        out, err = cbuilder.cmdexec("", err=True,
+                                    env={'PYPYLOG': ':%s' % path})
+        assert out.strip() == 'got:.'
+        assert not err
         assert path.check(file=0)
 
 

@@ -744,8 +744,9 @@ class FunctionCodeGenerator(object):
                 raise Exception("don't know how to debug_print %r" % (T,))
             argv.append(self.expr(arg))
         argv.insert(0, c_string_constant(' '.join(format) + '\n'))
-        return ("if (PYPY_DEBUG_ENABLED) { fprintf(PYPY_DEBUG_FILE, %s); %s}"
-                % (', '.join(argv), free_line))
+        return (
+            "if (PYPY_HAVE_DEBUG_PRINTS) { fprintf(PYPY_DEBUG_FILE, %s); %s}"
+            % (', '.join(argv), free_line))
 
     def OP_DEBUG_START(self, op):
         arg = op.args[0]

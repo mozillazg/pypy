@@ -61,35 +61,30 @@ class Entry(ExtRegistryEntry):
             hop.genop(fn.__name__, vlist)
 
 
-def debug_level():
-    """Returns the current debug level.  It is:
-         0: all calls to debug_print/debug_start/debug_stop are ignored
-         1: profiling: debug_start/debug_stop handled, but debug_print ignored
-         2: all handled
-    The value returned depend on the runtime presence of the PYPYLOG env var,
-    unless debuglevel == 0 in the config.
-    """
-    return 2
+def have_debug_prints():
+    # returns True if the next calls to debug_print show up,
+    # and False if they would not have any effect.
+    return True
 
 class Entry(ExtRegistryEntry):
-    _about_ = debug_level
+    _about_ = have_debug_prints
 
     def compute_result_annotation(self):
         from pypy.annotation import model as annmodel
         t = self.bookkeeper.annotator.translator
         if t.config.translation.log:
-            return annmodel.SomeInteger()
+            return annmodel.s_Bool
         else:
-            return self.bookkeeper.immutablevalue(0)
+            return self.bookkeeper.immutablevalue(False)
 
     def specialize_call(self, hop):
         from pypy.rpython.lltypesystem import lltype
         t = hop.rtyper.annotator.translator
         hop.exception_cannot_occur()
         if t.config.translation.log:
-            return hop.genop('debug_level', [], resulttype=lltype.Signed)
+            return hop.genop('have_debug_prints', [], resulttype=lltype.Bool)
         else:
-            return hop.inputconst(lltype.Signed, 0)
+            return hop.inputconst(lltype.Bool, False)
 
 
 def llinterpcall(RESTYPE, pythonfunction, *args):
