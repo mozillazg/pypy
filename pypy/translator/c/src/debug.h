@@ -11,21 +11,33 @@
 
 
 /* macros used by the generated code */
-#define PYPY_DEBUG_ENABLED     (pypy_debug_full && pypy_debug_is_ready())
-#define PYPY_DEBUG_FILE        pypy_debug_file
-#define PYPY_DEBUG_START(cat)  if (pypy_debug_profiling) pypy_debug_start(cat)
-#define PYPY_DEBUG_STOP(cat)   if (pypy_debug_profiling) pypy_debug_stop(cat)
+#define PYPY_DEBUG_ENABLED        \
+           (pypy_debug_level >= PYDEBUG_FULL && pypy_debug_is_ready_full())
+#define PYPY_DEBUG_FILE           \
+           pypy_debug_file
+#define PYPY_DEBUG_START(cat)     \
+           if (pypy_debug_level >= PYDEBUG_PROFILE) pypy_debug_start(cat)
+#define PYPY_DEBUG_STOP(cat)      \
+           if (pypy_debug_level >= PYDEBUG_PROFILE) pypy_debug_stop(cat)
+#define OP_DEBUG_LEVEL(r)         \
+           if (pypy_debug_level == PYDEBUG_UNINITIALIZED) pypy_debug_open(); \
+           r = pypy_debug_level
 
 
 /************************************************************/
 
+#define PYDEBUG_OFF             0
+#define PYDEBUG_PROFILE         1
+#define PYDEBUG_FULL            2
+#define PYDEBUG_UNINITIALIZED   3
+
 /* prototypes (internal use only) */
-bool_t pypy_debug_is_ready(void);
+void pypy_debug_open(void);
+bool_t pypy_debug_is_ready_full(void);
 void pypy_debug_start(const char *category);
 void pypy_debug_stop(const char *category);
 
-extern bool_t pypy_debug_full;
-extern bool_t pypy_debug_profiling;
+extern int pypy_debug_level;
 extern FILE *pypy_debug_file;
 
 
@@ -34,15 +46,13 @@ extern FILE *pypy_debug_file;
 #ifndef PYPY_NOT_MAIN_FILE
 #include <sys/time.h>
 
-static bool_t pypy_debug_initialized = 0;
-bool_t pypy_debug_full = 1;      /* set to 0 if PYPYLOG is not defined
-                                    or starts with 'prof:'             */
-bool_t pypy_debug_profiling = 1; /* set to 0 if PYPYLOG is not defined */
+int pypy_debug_level = PYDEBUG_UNINITIALIZED;
 FILE *pypy_debug_file;
 
-static void pypy_debug_open(void)
+void pypy_debug_open(void)
 {
   char *filename = getenv("PYPYLOG");
+  pypy_debug_level = PYDEBUG_FULL;
   if (filename && filename[0])
     {
       if (filename[0] == 'p' &&
@@ -51,7 +61,7 @@ static void pypy_debug_open(void)
           filename[3] == 'f' &&
           filename[4] == ':')
         {
-          pypy_debug_full = 0;
+          pypy_debug_level = PYDEBUG_PROFILE;
           filename += 5;
         }
       if (filename[0] == '-' && filename[1] == 0)
@@ -63,16 +73,15 @@ static void pypy_debug_open(void)
     {
       pypy_debug_file = NULL;
     }
-  pypy_debug_full      &= (pypy_debug_file != NULL);
-  pypy_debug_profiling &= (pypy_debug_file != NULL);
-  pypy_debug_initialized = 1;
+  if (pypy_debug_file == NULL)
+    pypy_debug_level = PYDEBUG_OFF;
 }
 
-bool_t pypy_debug_is_ready(void)
+bool_t pypy_debug_is_ready_full(void)
 {
-  if (!pypy_debug_initialized)
+  if (pypy_debug_level == PYDEBUG_UNINITIALIZED)
     pypy_debug_open();
-  return pypy_debug_full;
+  return pypy_debug_level == PYDEBUG_FULL;
 }
 
 
@@ -84,9 +93,9 @@ bool_t pypy_debug_is_ready(void)
 static void pypy_debug_category(const char *start, const char *category)
 {
   long long timestamp;
-  if (!pypy_debug_initialized)
+  if (!pypy_debug_level == PYDEBUG_UNINITIALIZED)
     pypy_debug_open();
-  if (!pypy_debug_profiling)
+  if (pypy_debug_level < PYDEBUG_PROFILE)
     return;
   READ_TIMESTAMP(timestamp);
   fprintf(pypy_debug_file, "{%llx} -%s- %s\n", timestamp, start, category);

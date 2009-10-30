@@ -2,7 +2,8 @@ import py
 import sys, os, re
 
 from pypy.rlib.rarithmetic import r_longlong
-from pypy.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
+from pypy.rlib.debug import ll_assert
+from pypy.rlib.debug import debug_print, debug_start, debug_stop, debug_level
 from pypy.translator.translator import TranslationContext
 from pypy.translator.backendopt import all
 from pypy.translator.c.genc import CStandaloneBuilder, ExternalCompilationInfo
@@ -257,6 +258,7 @@ class TestStandalone(StandaloneTests):
 
     def test_debug_print_start_stop(self):
         def entry_point(argv):
+            os.write(1, str(debug_level()) + '\n')
             debug_start("mycat")
             debug_print("foo", 2, "bar", 3)
             debug_stop("mycat")
@@ -264,21 +266,21 @@ class TestStandalone(StandaloneTests):
         t, cbuilder = self.compile(entry_point)
         # check with PYPYLOG undefined
         out, err = cbuilder.cmdexec("", err=True, env={})
-        assert not out
+        assert out.strip() == '0'
         assert not err
         # check with PYPYLOG defined to an empty string (same as undefined)
         out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': ''})
-        assert not out
+        assert out.strip() == '0'
         assert not err
         # check with PYPYLOG=- (means print to stderr)
         out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': '-'})
-        assert not out
+        assert out.strip() == '2'
         assert 'mycat' in err
         assert 'foo 2 bar 3' in err
         # check with PYPYLOG=somefilename
         path = udir.join('test_debug_xxx.log')
         out, err = cbuilder.cmdexec("", err=True, env={'PYPYLOG': str(path)})
-        assert not out
+        assert out.strip() == '2'
         assert not err
         assert path.check(file=1)
         assert 'mycat' in path.read()
@@ -287,7 +289,7 @@ class TestStandalone(StandaloneTests):
         path = udir.join('test_debug_xxx_prof.log')
         out, err = cbuilder.cmdexec("", err=True,
                                     env={'PYPYLOG': 'prof:%s' % path})
-        assert not out
+        assert out.strip() == '1'
         assert not err
         assert path.check(file=1)
         assert 'mycat' in path.read()
