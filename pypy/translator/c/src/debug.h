@@ -53,6 +53,7 @@ void pypy_debug_open(void)
 {
   char *filename = getenv("PYPYLOG");
   pypy_debug_level = PYDEBUG_FULL;
+  pypy_debug_file = NULL;
   if (filename && filename[0])
     {
       if (filename[0] == 'p' &&
@@ -68,10 +69,6 @@ void pypy_debug_open(void)
         pypy_debug_file = stderr;
       else
         pypy_debug_file = fopen(filename, "w");
-    }
-  else
-    {
-      pypy_debug_file = NULL;
     }
   if (pypy_debug_file == NULL)
     pypy_debug_level = PYDEBUG_OFF;
@@ -93,7 +90,7 @@ bool_t pypy_debug_is_ready_full(void)
 static void pypy_debug_category(const char *start, const char *category)
 {
   long long timestamp;
-  if (!pypy_debug_level == PYDEBUG_UNINITIALIZED)
+  if (pypy_debug_level == PYDEBUG_UNINITIALIZED)
     pypy_debug_open();
   if (pypy_debug_level < PYDEBUG_PROFILE)
     return;

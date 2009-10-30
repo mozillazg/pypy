@@ -34,7 +34,9 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         vlist = hop.inputargs(*hop.args_r)
         hop.exception_cannot_occur()
-        hop.genop('debug_print', vlist)
+        t = hop.rtyper.annotator.translator
+        if t.config.translation.log:
+            hop.genop('debug_print', vlist)
 
 
 def debug_start(category):
@@ -54,7 +56,9 @@ class Entry(ExtRegistryEntry):
         string_repr = hop.rtyper.type_system.rstr.string_repr
         vlist = hop.inputargs(string_repr)
         hop.exception_cannot_occur()
-        hop.genop(fn.__name__, vlist)
+        t = hop.rtyper.annotator.translator
+        if t.config.translation.log:
+            hop.genop(fn.__name__, vlist)
 
 
 def debug_level():

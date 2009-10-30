@@ -294,6 +294,17 @@ class TestStandalone(StandaloneTests):
         assert path.check(file=1)
         assert 'mycat' in path.read()
         assert 'foo 2 bar 3' not in path.read()
+        #
+        # finally, check compiling with logging disabled
+        from pypy.config.pypyoption import get_pypy_config
+        config = get_pypy_config(translating=True)
+        config.translation.log = False
+        self.config = config
+        t, cbuilder = self.compile(entry_point)
+        path = udir.join('test_debug_does_not_show_up.log')
+        out = cbuilder.cmdexec("", env={'PYPYLOG': str(path)})
+        assert out.strip() == '0'
+        assert path.check(file=0)
 
 
 class TestMaemo(TestStandalone):
