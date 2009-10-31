@@ -20,10 +20,23 @@ class Entry(ExtRegistryEntry):
         hop.genop('debug_assert', vlist)
 
 
+class DebugLog(list):
+    def debug_print(self, *args):
+        self.append(('debug_print',) + args)
+    def debug_start(self, category):
+        self.append(('debug_start', category))
+    def debug_stop(self, category):
+        self.append(('debug_stop', category))
+
+_log = None       # patched from tests to be an object of class DebugLog
+                  # or compatible
+
 def debug_print(*args):
     for arg in args:
         print >> sys.stderr, arg,
     print >> sys.stderr
+    if _log is not None:
+        _log.debug_print(*args)
 
 class Entry(ExtRegistryEntry):
     _about_ = debug_print
@@ -51,10 +64,14 @@ else:
 def debug_start(category):
     print >> sys.stderr, '%s[%s] {%s%s' % (_start_colors_1, time.clock(),
                                            category, _stop_colors)
+    if _log is not None:
+        _log.debug_start(category)
 
 def debug_stop(category):
     print >> sys.stderr, '%s[%s] %s}%s' % (_start_colors_2, time.clock(),
                                            category, _stop_colors)
+    if _log is not None:
+        _log.debug_stop(category)
 
 class Entry(ExtRegistryEntry):
     _about_ = debug_start, debug_stop

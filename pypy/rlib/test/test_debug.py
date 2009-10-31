@@ -3,6 +3,7 @@ import py
 from pypy.rlib.debug import check_annotation, make_sure_not_resized
 from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.rlib.debug import have_debug_prints
+from pypy.rlib import debug
 from pypy.rpython.test.test_llinterp import interpret
 
 def test_check_annotation():
@@ -44,33 +45,31 @@ def test_make_sure_not_resized():
 class DebugTests:
 
     def test_debug_print_start_stop(self):
-        import sys
-        from cStringIO import StringIO
-
         def f(x):
             debug_start("mycat")
             debug_print("foo", 2, "bar", x)
             debug_stop("mycat")
             return have_debug_prints()
 
-        olderr = sys.stderr
         try:
-            sys.stderr = c = StringIO()
+            debug._log = dlog = debug.DebugLog()
             res = f(3)
             assert res == True
         finally:
-            sys.stderr = olderr
-        assert 'mycat' in c.getvalue()
-        assert 'foo 2 bar 3' in c.getvalue()
+            debug._log = None
+        assert ('debug_start', 'mycat') in dlog
+        assert ('debug_print', 'foo', 2, 'bar', 3) in dlog
+        assert ('debug_stop', 'mycat') in dlog
 
         try:
-            sys.stderr = c = StringIO()
+            debug._log = dlog = debug.DebugLog()
             res = self.interpret(f, [3])
             assert res == True
         finally:
-            sys.stderr = olderr
-        assert 'mycat' in c.getvalue()
-        assert 'foo 2 bar 3' in c.getvalue()
+            debug._log = None
+        assert ('debug_start', 'mycat') in dlog
+        assert ('debug_print', 'foo', 2, 'bar', 3) in dlog
+        assert ('debug_stop', 'mycat') in dlog
 
 
 class TestLLType(DebugTests):
