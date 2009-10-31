@@ -94,9 +94,9 @@ def get_timeline_image(log, width=900, height=150):
             color = getcolor(category1)
             if firstx1 is None:
                 firstx1 = x1
-            if x2 <= x1 + 1:
-                x2 = x1 + 1   # not wide enough: don't show start and end lines
-            else:
+            if x2 <= x1:
+                x2 = x1 + 1   # minimal width
+            elif x2 >= x1 + 4:
                 draw.line([x1, y1+1, x1, y2-1], fill=getlightercolor(color))
                 x1 += 1
                 x2 -= 1
