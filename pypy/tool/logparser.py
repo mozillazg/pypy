@@ -4,7 +4,7 @@ Syntax:
     python logparser.py <action> <logfilename> <options...>
 
 Actions:
-    draw-time   draw a timeline image of the log (format PPM)
+    draw-time   draw a timeline image of the log (format PNG by default)
 """
 import autopath
 import sys, re
@@ -123,7 +123,7 @@ def get_timeline_image(log, width=900, height=150):
 def draw_timeline_image(log, output=None, **kwds):
     image = get_timeline_image(log, **kwds)
     if output is None:
-        image.save(sys.stdout, 'png')
+        image.save(sys.stdout, format='png')
     else:
         image.save(output)
 
