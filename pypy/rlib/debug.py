@@ -39,11 +39,22 @@ class Entry(ExtRegistryEntry):
             hop.genop('debug_print', vlist)
 
 
+if sys.stderr.isatty():
+    _start_colors_1 = "\033[1m\033[31m"
+    _start_colors_2 = "\033[31m"
+    _stop_colors = "\033[0m"
+else:
+    _start_colors_1 = ""
+    _start_colors_2 = ""
+    _stop_colors = ""
+
 def debug_start(category):
-    print >> sys.stderr, '[%s] debug_start %s' % (time.clock(), category)
+    print >> sys.stderr, '%s[%s] {%s%s' % (_start_colors_1, time.clock(),
+                                           category, _stop_colors)
 
 def debug_stop(category):
-    print >> sys.stderr, '[%s] debug_stop  %s' % (time.clock(), category)
+    print >> sys.stderr, '%s[%s] %s}%s' % (_start_colors_2, time.clock(),
+                                           category, _stop_colors)
 
 class Entry(ExtRegistryEntry):
     _about_ = debug_start, debug_stop
