@@ -57,9 +57,11 @@ class DebugTests:
             assert res == True
         finally:
             debug._log = None
-        assert ('debug_start', 'mycat') in dlog
-        assert ('debug_print', 'foo', 2, 'bar', 3) in dlog
-        assert ('debug_stop', 'mycat') in dlog
+        assert dlog == [
+            ("mycat", [
+                ('debug_print', 'foo', 2, 'bar', 3),
+                ]),
+            ]
 
         try:
             debug._log = dlog = debug.DebugLog()
@@ -67,9 +69,11 @@ class DebugTests:
             assert res == True
         finally:
             debug._log = None
-        assert ('debug_start', 'mycat') in dlog
-        assert ('debug_print', 'foo', 2, 'bar', 3) in dlog
-        assert ('debug_stop', 'mycat') in dlog
+        assert dlog == [
+            ("mycat", [
+                ('debug_print', 'foo', 2, 'bar', 3),
+                ]),
+            ]
 
 
 class TestLLType(DebugTests):

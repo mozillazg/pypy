@@ -23,10 +23,25 @@ class Entry(ExtRegistryEntry):
 class DebugLog(list):
     def debug_print(self, *args):
         self.append(('debug_print',) + args)
-    def debug_start(self, category):
-        self.append(('debug_start', category))
-    def debug_stop(self, category):
-        self.append(('debug_stop', category))
+    def debug_start(self, category, time=None):
+        self.append(('debug_start', category, time))
+    def debug_stop(self, category, time=None):
+        for i in xrange(len(self)-1, -1, -1):
+            if self[i][0] == 'debug_start':
+                assert self[i][1] == category, (
+                    "nesting error: starts with %r but stops with %r" %
+                    (self[i][1], category))
+                starttime = self[i][2]
+                if starttime is not None or time is not None:
+                    self[i:] = [(category, starttime, time, self[i+1:])]
+                else:
+                    self[i:] = [(category, self[i+1:])]
+                return
+        assert False, ("nesting error: no start corresponding to stop %r" %
+                       (category,))
+    def __repr__(self):
+        import pprint
+        return pprint.pformat(list(self))
 
 _log = None       # patched from tests to be an object of class DebugLog
                   # or compatible
