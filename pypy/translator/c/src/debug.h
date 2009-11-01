@@ -99,9 +99,24 @@ void pypy_debug_ensure_opened(void)
 }
 
 
-/* XXXXXXXXXX   x86 Pentium only! */
-#define READ_TIMESTAMP(val) \
-     __asm__ __volatile__("rdtsc" : "=A" (val))
+#ifndef READ_TIMESTAMP
+/* asm_xxx.h may contain a specific implementation of READ_TIMESTAMP.
+ * This is the default generic timestamp implementation.
+ */
+#  ifdef WIN32
+#    define READ_TIMESTAMP(val)  QueryPerformanceCounter(&(val))
+#  else
+#    include <time.h>
+#    define READ_TIMESTAMP(val)  (val) = pypy_read_timestamp()
+
+     static long long pypy_read_timestamp(void)
+     {
+       struct timespec tspec;
+       clock_gettime(CLOCK_MONOTONIC, &tspec);
+       return ((long long)tspec.tv_sec) * 1000000000LL + tspec.tv_nsec;
+     }
+#  endif
+#endif
 
 
 static bool_t startswith(const char *str, const char *substr)
