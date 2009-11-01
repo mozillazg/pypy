@@ -1018,9 +1018,9 @@ class MetaInterpStaticData(object):
     def _setup_once(self):
         """Runtime setup needed by the various components of the JIT."""
         if not self.globaldata.initialized:
+            debug_print(self.jit_starting_line)
             self._setup_class_sizes()
             self.cpu.setup_once()
-            debug_print(self.jit_starting_line)
             if not self.profiler.initialized:
                 self.profiler.start()
                 self.profiler.initialized = True
@@ -1365,8 +1365,8 @@ class MetaInterp(object):
                 raise
 
     def compile_and_run_once(self, *args):
-        self.staticdata._setup_once()
         debug_start('jit-tracing')
+        self.staticdata._setup_once()
         self.create_empty_history()
         try:
             return self._compile_and_run_once(*args)
