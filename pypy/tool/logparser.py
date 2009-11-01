@@ -14,19 +14,28 @@ from pypy.rlib.debug import DebugLog
 def parse_log_file(filename):
     r_start = re.compile(r"\[([0-9a-f]+)\] \{([\w-]+)$")
     r_stop  = re.compile(r"\[([0-9a-f]+)\] ([\w-]+)\}$")
+    lasttime = 0
     log = DebugLog()
     f = open(filename, 'r')
     for line in f:
         line = line.rstrip()
         match = r_start.match(line)
         if match:
-            log.debug_start(match.group(2), time=int(match.group(1), 16))
-            continue
-        match = r_stop.match(line)
-        if match:
-            log.debug_stop(match.group(2), time=int(match.group(1), 16))
-            continue
-        log.debug_print(line)
+            record = log.debug_start
+        else:
+            match = r_stop.match(line)
+            if match:
+                record = log.debug_stop
+            else:
+                log.debug_print(line)
+                continue
+        time = int(int(match.group(1), 16))
+        if time < lasttime:
+            raise Exception("The time decreases!  The log file may have been"
+                            " produced on a multi-CPU machine and the process"
+                            " moved between CPUs.")
+        lasttime = time
+        record(match.group(2), time=int(match.group(1), 16))
     f.close()
     return log
 
