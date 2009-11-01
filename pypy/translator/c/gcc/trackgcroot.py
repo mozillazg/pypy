@@ -588,7 +588,7 @@ class FunctionGcRootTracker(object):
         # arithmetic operations should not produce GC pointers
         'inc', 'dec', 'not', 'neg', 'or', 'and', 'sbb', 'adc',
         'shl', 'shr', 'sal', 'sar', 'rol', 'ror', 'mul', 'imul', 'div', 'idiv',
-        'bswap', 'bt',
+        'bswap', 'bt', 'rdtsc',
         # zero-extending moves should not produce GC pointers
         'movz',
         ])
