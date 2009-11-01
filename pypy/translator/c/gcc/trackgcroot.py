@@ -1297,6 +1297,7 @@ if __name__ == '__main__':
         f = open(fn, 'r')
         firstline = f.readline()
         f.seek(0)
+        assert firstline, "file %r is empty!" % (fn,)
         if firstline.startswith('seen_main = '):
             tracker.reload_raw_table(f)
             f.close()
