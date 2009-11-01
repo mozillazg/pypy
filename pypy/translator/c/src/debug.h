@@ -112,7 +112,7 @@ void pypy_debug_ensure_opened(void)
      static long long pypy_read_timestamp(void)
      {
        struct timespec tspec;
-       clock_gettime(CLOCK_MONOTONIC, &tspec);
+       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &tspec);
        return ((long long)tspec.tv_sec) * 1000000000LL + tspec.tv_nsec;
      }
 #  endif
