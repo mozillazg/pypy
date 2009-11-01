@@ -635,7 +635,7 @@ class FunctionGcRootTracker(object):
         else:
             target = match.group(1)
             if target in FUNCTIONS_NOT_RETURNING:
-                return InsnStop()
+                return [InsnStop(), InsnCannotFollowEsp()]
             if sys.platform == 'win32' and target == '__alloca':
                 # in functions with large stack requirements, windows
                 # needs a call to _alloca(), to turn reserved pages
