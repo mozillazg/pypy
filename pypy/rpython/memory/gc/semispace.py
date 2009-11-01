@@ -12,7 +12,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.memory.gc.base import MovingGCBase
 
-import sys, os, time
+import sys, os
 
 first_gcflag = 1 << 16
 GCFLAG_FORWARDED = first_gcflag
@@ -55,14 +55,14 @@ class SemiSpaceGC(MovingGCBase):
         MovingGCBase.__init__(self, config, chunk_size)
 
     def setup(self):
-        self.total_collection_time = 0.0
+        #self.total_collection_time = 0.0
         self.total_collection_count = 0
 
         self.space_size = self.param_space_size
         self.max_space_size = self.param_max_space_size
         self.red_zone = 0
 
-        self.program_start_time = time.time()
+        #self.program_start_time = time.time()
         self.tospace = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.tospace), "couldn't allocate tospace")
         self.top_of_space = self.tospace + self.space_size
@@ -219,7 +219,7 @@ class SemiSpaceGC(MovingGCBase):
         start_usage = self.free - self.tospace
         debug_print("| used before collection:          ",
                     start_usage, "bytes")
-        start_time = time.time()
+        #start_time = time.time()
         #llop.debug_print(lltype.Void, 'semispace_collect', int(size_changing))
 
         # Switch the spaces.  We copy everything over to the empty space
@@ -250,11 +250,11 @@ class SemiSpaceGC(MovingGCBase):
             self.execute_finalizers()
         #llop.debug_print(lltype.Void, 'collected', self.space_size, size_changing, self.top_of_space - self.free)
         if have_debug_prints():
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            self.total_collection_time += elapsed_time
+            #end_time = time.time()
+            #elapsed_time = end_time - start_time
+            #self.total_collection_time += elapsed_time
             self.total_collection_count += 1
-            total_program_time = end_time - self.program_start_time
+            #total_program_time = end_time - self.program_start_time
             end_usage = self.free - self.tospace
             debug_print("| used after collection:           ",
                         end_usage, "bytes")
@@ -264,16 +264,16 @@ class SemiSpaceGC(MovingGCBase):
                         self.space_size, "bytes")
             debug_print("| fraction of semispace now used:  ",
                         end_usage * 100.0 / self.space_size, "%")
-            ct = self.total_collection_time
+            #ct = self.total_collection_time
             cc = self.total_collection_count
             debug_print("| number of semispace_collects:    ",
                         cc)
-            debug_print("|                         i.e.:    ",
-                        cc / total_program_time, "per second")
-            debug_print("| total time in semispace_collect: ",
-                        ct, "seconds")
-            debug_print("|                            i.e.: ",
-                        ct * 100.0 / total_program_time, "%")
+            #debug_print("|                         i.e.:    ",
+            #            cc / total_program_time, "per second")
+            #debug_print("| total time in semispace_collect: ",
+            #            ct, "seconds")
+            #debug_print("|                            i.e.: ",
+            #            ct * 100.0 / total_program_time, "%")
             debug_print("`----------------------------------------------")
         debug_stop("gc-collect")
 
