@@ -61,6 +61,8 @@ def make_inlinedict_mixin(dictimplclass, attrname):
                                              "init_dictattributes")
     make_rdict = func_with_new_name(dictimplclass._as_rdict.im_func,
                                     "make_rdict")
+    clear_fields = func_with_new_name(dictimplclass._clear_fields.im_func,
+                                      "clear_fields")
 
     class InlineDictMixin(object):
 
@@ -116,7 +118,7 @@ def make_inlinedict_mixin(dictimplclass, attrname):
             return True
 
         def setdict(self, space, w_dict):
-            make_rdict(self) # invalidate attributes on self
+            self._clear_fields() # invalidate attributes on self
             self.w__dict__ = check_new_dictionary(space, w_dict)
 
         def _as_rdict(self):
@@ -125,6 +127,8 @@ def make_inlinedict_mixin(dictimplclass, attrname):
 
         def initialize_as_rdict(self):
             return self.getdict().initialize_as_rdict()
+        
+        _clear_fields = clear_fields
 
     for methname, _ in implementation_methods:
         implname = "impl_" + methname

@@ -124,9 +124,12 @@ class ModuleDictImplementation(W_DictMultiObject):
             cell.invalidate()
         for k in self.unshadowed_builtins:
             self.invalidate_unshadowed_builtin(k)
+        self._clear_fields()
+        return self
+
+    def _clear_fields(self):
         self.content = None
         self.unshadowed_builtins = None
-        return self
 
 class ModuleDictIteratorImplementation(IteratorImplementation):
     def __init__(self, space, dictimplementation):
