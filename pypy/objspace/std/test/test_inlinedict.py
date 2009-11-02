@@ -40,7 +40,7 @@ class TestMixin(object):
     def test_getdict(self):
         obj = self.make_obj()
         w_dict = obj.getdict()
-        assert obj.getdict() or w_dict # always get the same dict
+        assert obj.getdict() is w_dict # always get the same dict
         assert obj.w__dict__ is w_dict
 
         assert w_dict.getitem("hello") == 1
@@ -49,6 +49,22 @@ class TestMixin(object):
         w_dict.setitem("world", 5)
         assert obj.getdictvalue(self.fakespace, "hello") == 4
         assert obj.getdictvalue(self.fakespace, "world") == 5
+
+    def test_setdict(self):
+        obj1 = self.make_obj()
+        w_dict1 = obj1.getdict()
+        obj2 = self.make_obj()
+        w_dict2 = obj2.getdict()
+        w_dict2.setitem(4, 1) # devolve dict
+        w_dict2.setitem(5, 2)
+        obj2.setdict(self.space, w_dict1)
+        assert obj2.getdictvalue(self.fakespace, "hello") == 1
+        assert obj2.getdictvalue(self.fakespace, "world") == 2
+        obj1.setdictvalue(self.fakespace, "hello", 4)
+        obj1.setdictvalue(self.fakespace, "world", 5)
+        assert obj2.getdictvalue(self.fakespace, "hello") == 4
+        assert obj2.getdictvalue(self.fakespace, "world") == 5
+
 
     def test_dict_devolves_via_dict(self):
         obj = self.make_obj()

@@ -163,10 +163,12 @@ class SharedDictImplementation(W_DictMultiObject):
         r_dict_content = self.initialize_as_rdict()
         for k, i in self.structure.keys.items():
             r_dict_content[self.space.wrap(k)] = self.entries[i]
-        self.structure = None
-        self.entries = None
+        self._clear_fields()
         return self
 
+    def _clear_fields(self):
+        self.structure = None
+        self.entries = None
 
 class SharedIteratorImplementation(IteratorImplementation):
     def __init__(self, space, dictimplementation):

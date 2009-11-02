@@ -370,8 +370,11 @@ class StrDictImplementation(W_DictMultiObject):
         r_dict_content = self.initialize_as_rdict()
         for k, w_v in self.content.items():
             r_dict_content[self.space.wrap(k)] = w_v
-        self.content = None
+        self._clear_fields()
         return self
+
+    def _clear_fields(self):
+        self.content = None
 
 class StrIteratorImplementation(IteratorImplementation):
     def __init__(self, space, dictimplementation):
