@@ -98,7 +98,7 @@ def make_inlinedict_mixin(dictimplclass, attrname):
                 self.impl_setitem_str(attr, w_value)
                 return True
             w_dict = self.getdict()
-            w_dict.setitem(w_attr, w_value)
+            w_dict.setitem_str(attr, w_value)
             return True
 
         def deldictvalue(self, space, w_attr):
