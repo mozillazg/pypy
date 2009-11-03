@@ -949,6 +949,19 @@ class TestHybridGC(TestGenerationalGC):
 class TestHybridGCRemoveTypePtr(TestHybridGC):
     removetypeptr = True
 
+    def definestr_str_instance(cls):
+        class AbcDef:
+            pass
+        def fn(_):
+            a = AbcDef()
+            return str(a)
+        return fn
+
+    def test_str_instance(self):
+        res = self.run('str_instance')
+        assert res.startswith('<') and res.endswith('>')
+        assert 'AbcDef' in res
+
 
 class TestMarkCompactGC(TestSemiSpaceGC):
     gcpolicy = "markcompact"
