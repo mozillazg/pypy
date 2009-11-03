@@ -51,7 +51,7 @@ class AbcFile(object):
 
 class AbcMethodInfo(object):
 
-    def __init__(self, name, param_types, return_type, flags, options=None, param_names=None):
+    def __init__(self, name, param_types, return_type, flags=0, options=None, param_names=None):
         self.name = name
         self._name_index = None
         
@@ -221,10 +221,10 @@ class AbcClassInfo(object):
 
         return code
     
-    def write_to_file(self, abc):
+    def write_to_abc(self, abc):
         self._cinit_index = abc.methods.index_for(self.cinit)
         for trait in self.traits:
-            trait.write_to_file(abc)
+            trait.write_to_abc(abc)
 
     def write_to_pool(self, pool):
         for trait in self.traits:
@@ -248,10 +248,10 @@ class AbcScriptInfo(object):
 
         return code
     
-    def write_to_file(self, abc):
+    def write_to_abc(self, abc):
         self._init_index = abc.methods.index_for(self.init)
         for trait in self.traits:
-            trait.write_to_file(abc)
+            trait.write_to_abc(abc)
 
     def write_to_pool(self, pool):
         for trait in self.traits:
@@ -287,10 +287,10 @@ class AbcMethodBodyInfo(object):
 
         return code
 
-    def write_to_file(self, abc):
+    def write_to_abc(self, abc):
         self._method_info_index = abc.methods.index_for(self.methodinfo)
         for trait in self.traits:
-            trait.write_to_file(abc)
+            trait.write_to_abc(abc)
 
     def write_to_pool(self, pool):
         for trait in self.traits:

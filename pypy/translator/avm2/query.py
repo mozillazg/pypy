@@ -171,8 +171,8 @@ class ClassDesc(object):
     def group_methods(self, methods, overload, meth, Meth):
         from pypy.translator.avm2.runtime import OverloadingResolver
         groups = {}
-        for name, args, result in methods:
-            groups.setdefault(name, []).append((args, result))
+        for name, args, result, AS3 in methods:
+            groups[name] = args, result, AS3
 
         res = {}
         attrs = dict(resolver=OverloadingResolver)

@@ -4,6 +4,7 @@ import struct
 from pypy.translator.avm1.records import RecordHeader, ShapeWithStyle, Matrix, CXForm
 from pypy.translator.avm1.avm1 import Block
 from pypy.translator.avm1.util import BitStream
+from pypy.translator.avm2.abc import AbcFile
 
 next_character_id = 1
 
@@ -40,6 +41,19 @@ class DoAction(SwfTag, Block):
 
     def serialize_data(self):
         return Block.serialize(self)
+
+class DoABC(SwfTag, AbcFile):
+
+    TAG_TYPE = 82
+    TAG_MIN_VERSION = 9
+
+    def __init__(self, name="PyPy", flags=0):
+        AbcFile.__init__(self)
+        self.name  = name
+        self.flags = flags
+    
+    def serialize_data(self):
+        return struct.pack("<L", self.flags) + self.name + "\0" + AbcFile.serialize(self)
     
 class DefineShape(SwfTag):
 

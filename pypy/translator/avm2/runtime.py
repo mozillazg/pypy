@@ -6,7 +6,7 @@ from pypy.annotation.model import SomeObject, SomeInstance, SomeOOInstance, Some
 # from pypy.annotation.unaryop import immutablevalue
 # from pypy.annotation.binaryop import _make_none_union
 from pypy.annotation import model as annmodel
-from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
+# from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rpython.error import TyperError
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.rmodel import Repr
@@ -14,7 +14,7 @@ from pypy.rpython.rint import IntegerRepr
 from pypy.rpython.ootypesystem.rootype import OOInstanceRepr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import Meth, StaticMethod
-from pypy.translator.avm2 import constants
+# from pypy.translator.avm2 import constants
 
 ## Annotation model
 
@@ -233,23 +233,6 @@ class _static_meth(object):
     def _get_desc(self, ARGS):
         #assert ARGS == self._TYPE.ARGS
         return self
-
-
-class _overloaded_static_meth(object):
-    def __init__(self, *overloadings, **attrs):
-        resolver = attrs.pop('resolver', OverloadingResolver)
-        assert not attrs
-        self._resolver = resolver(overloadings)
-
-    def _set_attrs(self, cls, name):
-        for meth in self._resolver.overloadings:
-            meth._set_attrs(cls, name)
-
-    def _get_desc(self, ARGS):
-        meth = self._resolver.resolve(ARGS)
-        assert isinstance(meth, _static_meth)
-        return meth._get_desc(ARGS)
-
 
 class NativeInstance(ootype.Instance):
     def __init__(self, namespace, name, superclass,
@@ -529,7 +512,7 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         c_type, v_length = hop.inputargs(*hop.args_r)
         hop.exception_cannot_occur()
-        return hop.genop('newvector', [c_type, v_length], hop.r_result.lowleveltype)
+        return hop.genop('avm2_newvector', [c_type, v_length], hop.r_result.lowleveltype)
 
 
 class Entry(ExtRegistryEntry):
@@ -552,10 +535,7 @@ class Entry(ExtRegistryEntry):
         c_type, v_elems = vlist[0], vlist[1:]
         c_length = hop.inputconst(ootype.Signed, len(v_elems))
         hop.exception_cannot_occur()
-        v_array = hop.genop('newvector', [c_type, c_length], hop.r_result.lowleveltype)
-        #for i, v_elem in enumerate(v_elems):
-        #    c_index = hop.inputconst(ootype.Signed, i)
-        #    hop.genop('cli_setelem', [v_array, c_index, v_elem], ootype.Void)
+        v_array = hop.genop('avm2_initvector', [c_type, v_elems], hop.r_result.lowleveltype)
         return v_array
 
 # def typeof(Class_or_type):
