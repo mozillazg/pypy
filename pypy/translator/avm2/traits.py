@@ -127,8 +127,8 @@ class AbcFunctionTrait(AbcTrait):
         self.function = function
         self._function_index = None
 
-    def write_to_file(self, abc):
-        super(AbcFunctionTrait, self).write_to_file(abc)
+    def write_to_abc(self, abc):
+        super(AbcFunctionTrait, self).write_to_abc(abc)
         self._function_index = abc.methods.index_for(func)
 
     @property
@@ -144,8 +144,8 @@ class AbcMethodTrait(AbcTrait):
         self.method = method
         self._method_index = None
 
-    def write_to_file(self, abc):
-        super(AbcMethodTrait, self).write_to_file(abc)
+    def write_to_abc(self, abc):
+        super(AbcMethodTrait, self).write_to_abc(abc)
         self._method_index = abc.methods.index_for(self.method)
 
     @property

@@ -230,6 +230,11 @@ class _Avm2CallMN(_Avm2CallIDX):
 class _Avm2CallMNVoid(_Avm2CallMN):
       is_void = True
 
+class _Avm2ApplyType(_Avm2U30Instruction):
+      @needs_specialized
+      def _set_assembler_props(self, asm):
+            asm.stack_depth += 1 - self.argument
+
 class _Avm2NewArray(_Avm2U30Instruction):
       @needs_specialized
       def _set_assembler_props(self, asm):
@@ -383,6 +388,7 @@ hasnext2 = _Avm2U30Instruction(0x32, 'hasnext2', 1)
 #{ Instructions that push/pop values to the stack (depends on arg) and take one U30 argument.
 newarray = _Avm2NewArray(0x56, 'newarray')
 newobject = _Avm2NewObject(0x55, 'newobject')
+applytype = _Avm2ApplyType(0x53, 'applytype')
 #}
 
 #{ Instructions that take one U8 argument.

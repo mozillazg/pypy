@@ -185,8 +185,10 @@ ANY_NAMESPACE = Namespace(TYPE_NAMESPACE_Namespace, "*")
 
 PACKAGE_NAMESPACE = Namespace(TYPE_NAMESPACE_PackageNamespace, "")
 PRIVATE_NAMESPACE = Namespace(TYPE_NAMESPACE_PrivateNamespace, "private")
+AS3_NAMESPACE     = Namespace(TYPE_NAMESPACE_Namespace, "http://adobe.com/AS3/2006/builtin")
 
 NO_NAMESPACE_SET = NamespaceSet()
+METHOD_NAMESPACE_SET = NamespaceSet(AS3_NAMESPACE, NO_NAMESPACE, PRIVATE_NAMESPACE)
 
 # ======================================
 # Multinames

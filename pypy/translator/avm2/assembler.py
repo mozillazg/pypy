@@ -25,7 +25,7 @@ class Avm2CodeAssembler(object):
         instruction.set_assembler_props(self)
         self.code += instruction.serialize()
         
-    def add_instructions(self, *instructions):
+    def add_instructions(self, instructions):
         for i in instructions:
             self.add_instruction(i)
     
