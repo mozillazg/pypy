@@ -102,6 +102,16 @@ class GenerationGC(SemiSpaceGC):
         self.nursery_free = NULL
 
     def set_nursery_size(self, newsize):
+        # Invariants: nursery <= nursery_free <= nursery_top
+        #             nursery_size == nursery_top - nursery
+        #
+        # In the usual case: nursery_size == allocated_nursery_size
+        #                                 == next_nursery_size
+        #
+        # In the presence of resize_nursery(), however, the nursery currently
+        # in use may be only a fraction of the larger allocated nursery.
+        # next_nursery_size <= nursery_size <= allocated_nursery_size
+        #
         debug_start("gc-set-nursery-size")
         if newsize < self.min_nursery_size:
             newsize = self.min_nursery_size
@@ -111,6 +121,9 @@ class GenerationGC(SemiSpaceGC):
         # Compute the new bounds for how large young objects can be
         # (larger objects are allocated directly old).   XXX adjust
         self.nursery_size = newsize
+        self.allocated_nursery_size = newsize
+        self.next_nursery_size = newsize
+        self.minimal_setting_for_nursery_size = newsize
         self.largest_young_fixedsize = self.get_young_fixedsize(newsize)
         self.largest_young_var_basesize = self.get_young_var_basesize(newsize)
         scale = 0
@@ -321,41 +334,56 @@ class GenerationGC(SemiSpaceGC):
     # Implementation of nursery-only collections
 
     def collect_nursery(self):
-        if self.nursery_size > self.top_of_space - self.free:
+        while self.nursery_size > self.top_of_space - self.free:
             # the semispace is running out, do a full collect
             self.obtain_free_space(self.nursery_size)
-            ll_assert(self.nursery_size <= self.top_of_space - self.free,
-                         "obtain_free_space failed to do its job")
+            # in rare cases it is possible that self.nursery_size changed
+            # when we ran the finalizers...  that's why we loop.
         if self.nursery:
             debug_start("gc-minor")
-            debug_print("--- minor collect ---")
-            debug_print("nursery:", self.nursery, "to", self.nursery_top)
-            # a nursery-only collection
-            scan = beginning = self.free
-            self.collect_oldrefs_to_nursery()
-            self.collect_roots_in_nursery()
-            scan = self.scan_objects_just_copied_out_of_nursery(scan)
-            # at this point, all static and old objects have got their
-            # GCFLAG_NO_YOUNG_PTRS set again by trace_and_drag_out_of_nursery
-            if self.young_objects_with_weakrefs.non_empty():
-                self.invalidate_young_weakrefs()
-            if self.young_objects_with_id.length() > 0:
-                self.update_young_objects_with_id()
+            self.minor_collection()
             # mark the nursery as free and fill it with zeroes again
             llarena.arena_reset(self.nursery, self.nursery_size, 2)
-            debug_print("survived (fraction of the size):",
-                        float(scan - beginning) / self.nursery_size)
             debug_stop("gc-minor")
             #self.debug_check_consistency()   # -- quite expensive
         else:
             # no nursery - this occurs after a full collect, triggered either
             # just above or by some previous non-nursery-based allocation.
             # Grab a piece of the current space for the nursery.
+            self.allocated_nursery_size = self.next_nursery_size
             self.nursery = self.free
-            self.nursery_top = self.nursery + self.nursery_size
-            self.free = self.nursery_top
+            self.free += self.allocated_nursery_size
+        self.nursery_size = self.next_nursery_size
+        self.nursery_top = self.nursery + self.nursery_size
         self.nursery_free = self.nursery
         return self.nursery_free
+
+    def drop_nursery(self):
+        while self.nursery:
+            if self.nursery_size <= self.top_of_space - self.free:
+                self.minor_collection()
+                # mark as free, but don't bother filling it with zeroes
+                llarena.arena_reset(self.nursery, self.nursery_size, 0)
+                self.reset_nursery()
+                return
+            self.obtain_free_space(self.nursery_size)
+
+    def minor_collection(self):
+        debug_print("--- minor collect ---")
+        debug_print("nursery:", self.nursery, "to", self.nursery_top)
+        # a nursery-only collection
+        scan = beginning = self.free
+        self.collect_oldrefs_to_nursery()
+        self.collect_roots_in_nursery()
+        scan = self.scan_objects_just_copied_out_of_nursery(scan)
+        # at this point, all static and old objects have got their
+        # GCFLAG_NO_YOUNG_PTRS set again by trace_and_drag_out_of_nursery
+        if self.young_objects_with_weakrefs.non_empty():
+            self.invalidate_young_weakrefs()
+        if self.young_objects_with_id.length() > 0:
+            self.update_young_objects_with_id()
+        debug_print("survived (fraction of the size):",
+                    float(scan - beginning) / self.nursery_size)
 
     # NB. we can use self.copy() to move objects out of the nursery,
     # but only if the object was really in the nursery.
@@ -563,6 +591,48 @@ class GenerationGC(SemiSpaceGC):
             pass    # it's ok to copy an object out of the nursery
         else:
             SemiSpaceGC.debug_check_can_copy(self, obj)
+
+    # ---------- resizing the nursery at runtime ----------
+
+    def resize_nursery(self, newsize):
+        debug_start("gc-resize-nursery")
+        if newsize < self.minimal_setting_for_nursery_size:
+            newsize = self.minimal_setting_for_nursery_size
+        if not self.nursery or newsize > self.allocated_nursery_size:
+            self.drop_nursery()
+            self.nursery_size = newsize
+            self.allocated_nursery_size = newsize
+            self.next_nursery_size = newsize
+        else:
+            # situation of the nursery:   [###########.......|...........]
+            #                             \-- nursery_size --/
+            #                             \--- allocated_nursery_size ---/
+            #
+            # we have to change in-place the nursery_size and nursery_top.
+            #
+            self.next_nursery_size = newsize
+            if self.nursery_size < self.next_nursery_size:
+                # restore this invariant, i.e. grow nursery_top
+                self.nursery_size = self.next_nursery_size
+                self.nursery_top = self.nursery + self.nursery_size
+            else:
+                # this is the case where nursery_size is larger than
+                # next_nursery_size.  If it is *much* larger, then it might
+                # still have room for more than newsize bytes (in addition
+                # to the already-allocated objects).  In that case limit
+                # that extra space to newsize bytes.
+                currently_free = self.nursery_top - self.nursery_free
+                if currently_free > newsize:
+                    self.nursery_top = self.nursery_free + newsize
+                    self.nursery_size = self.nursery_top - self.nursery
+            ll_assert(self.next_nursery_size <= self.nursery_size,
+                      "bogus invariant in resize_nursery (1)")
+            ll_assert(self.nursery + self.nursery_size == self.nursery_top,
+                      "bogus invariant in resize_nursery (2)")
+            ll_assert(self.nursery_free <= self.nursery_top,
+                      "bogus invariant in resize_nursery (3)")
+            #
+        debug_stop("gc-resize-nursery")
 
 # ____________________________________________________________
 

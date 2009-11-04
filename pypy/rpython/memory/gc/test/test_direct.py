@@ -271,6 +271,8 @@ class TestSemiSpaceGC(DirectGCTest):
 class TestGenerationGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.generation import GenerationGC as GCClass
 
+    GC_PARAMS = {'nursery_size': 128}
+
     def test_collect_gen(self):
         gc = self.gc
         old_semispace_collect = gc.semispace_collect
@@ -312,6 +314,107 @@ class TestGenerationGC(TestSemiSpaceGC):
         self.gc.collect(0)
 
         assert s0.next.x == 1
+
+    def test_resize_nursery(self):
+        if self.GC_PARAMS['nursery_size'] != 128:
+            py.test.skip("test only for nursery_size == 128")
+
+        gc = self.gc
+        old_minor_collection = gc.minor_collection
+        counters = [0, 0]
+
+        def minor_collection():
+            counters[1] += 1
+            return old_minor_collection()
+        gc.minor_collection = minor_collection
+
+        def alloc():
+            counters[0] += 1
+            self.stackroots.append(self.malloc(S))
+
+        # for a default nursery size of 128, and a space size of 4096
+        while counters[1] == 0:
+            alloc()
+        assert counters[1] == 1
+        assert counters[0] in (5, 9)
+        # nursery contains 1 object (out of a maximum of 4/8)
+
+        # almost fill the nursery again
+        for i in range(counters[0]-3):
+            alloc()
+        assert counters[1] == 1
+        assert counters[0] in (7, 15)
+        # nursery contains 3/7 objects
+
+        # now make the nursery grow to 1024
+        gc.resize_nursery(1024)
+        assert counters[1] == 2
+        assert counters[0] in (7, 15)
+        counters[0] = 0      # empty
+
+        # check its size
+        while counters[1] == 2:
+            alloc()
+        assert counters[1] == 3
+        assert counters[0] in (33, 65)
+
+        # almost fill it again
+        for i in range(counters[0]-3):
+            alloc()
+        assert counters[1] == 3
+        assert counters[0] in (63, 127)
+
+        # now mark it as "must shrink back"
+        gc.resize_nursery(0)
+        assert counters[1] == 3
+        assert counters[0] in (63, 127)
+
+        # check that it will shrink back after two allocations
+        alloc()
+        assert counters[1] == 3
+        alloc()
+        assert counters[1] == 4
+        counters[0] = 1      # only the most recently allocated object
+
+        # check its size
+        while counters[1] == 4:
+            alloc()
+        assert counters[1] == 5
+        assert counters[0] in (5, 9)
+
+        # flush the nursery
+        gc.collect()
+        assert counters[1] == 5
+        assert counters[0] in (5, 9)
+        counters[0] = 0      # nursery not allocated at all
+
+        # resize from a fresh nursery: should not do another collect
+        gc.resize_nursery(512)
+        assert counters[1] == 5
+
+        # fill it partially only
+        for i in range(20):
+            alloc()
+        assert counters[1] == 5
+        assert counters[0] == 20
+
+        # now mark it as "must shrink back",
+        # which should still leave room for 4/8 objects
+        gc.resize_nursery(0)
+        assert counters[1] == 5
+        assert counters[0] == 20
+
+        # check its size
+        while counters[1] == 5:
+            alloc()
+        assert counters[1] == 6
+        assert counters[0] in (25, 29)
+
+        # it should now have shrunk to the standard size of 4/8 objects
+        while counters[1] == 6:
+            alloc()
+        assert counters[1] == 7
+        assert counters[0] in (29, 37)
 
 
 class TestHybridGC(TestGenerationGC):
