@@ -932,9 +932,53 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
         res = self.run('string_builder_over_allocation')
         assert res[1000] == 'y'
 
+
 class TestGenerationalGC(TestSemiSpaceGC):
     gcpolicy = "generation"
     should_be_moving = True
+
+    def define_resize_nursery(self):
+        # this is only a "does not crash" kind of test
+        from pypy.rlib.objectmodel import compute_identity_hash
+        import random
+        seed = random.randrange(0, 10000)
+        print 'resize_nursery: random seed =', seed
+        r = random.Random(seed)
+        events = []
+        maxcount = 10000000
+        for i in range(50):
+            events.append((r.randrange(0, maxcount),
+                           r.randrange(0, 9000)*1024))
+        events.sort()
+        events.append((maxcount, 0))   # sentinel
+        #
+        class A:
+            pass
+        def fn():
+            prev = None
+            i = 0
+            j = 0
+            while i < maxcount:
+                if i == events[j][0]:
+                    llop.gc_resize_nursery(lltype.Void, events[j][1])
+                    j += 1
+                a = A()
+                a.thehash = compute_identity_hash(a)
+                a.prev = prev
+                prev = a
+                i += 1
+            while i > 0:
+                i -= 1
+                assert a.thehash == compute_identity_hash(a)
+                a = a.prev
+            assert a is None
+            return 0
+        return fn
+
+    def test_resize_nursery(self):
+        res = self.run('resize_nursery')
+        assert res == 0
+
 
 class TestHybridGC(TestGenerationalGC):
     gcpolicy = "hybrid"
