@@ -1079,6 +1079,20 @@ class MetaInterpStaticData(object):
     def log(self, msg):
         debug_print(msg)
 
+    # ---- tweaking the size of the GC nursery --------
+
+    def enlarge_nursery(self, enlarge):
+        warmrunnerdesc = self.warmrunnerdesc
+        if warmrunnerdesc is not None and warmrunnerdesc.can_resize_nursery:
+            from pypy.rpython.lltypesystem import lltype, lloperation
+            if enlarge:
+                newsize = 10*1024*1024         # XXX a rather custom number
+                if sys.maxint > 2147483647:
+                    newsize *= 2
+            else:
+                newsize = 0
+            lloperation.llop.gc_resize_nursery(lltype.Void, newsize)
+
 # ____________________________________________________________
 
 class MetaInterpGlobalData(object):
@@ -1367,10 +1381,12 @@ class MetaInterp(object):
     def compile_and_run_once(self, *args):
         debug_start('jit-tracing')
         self.staticdata._setup_once()
+        self.staticdata.enlarge_nursery(True)
         self.create_empty_history()
         try:
             return self._compile_and_run_once(*args)
         finally:
+            self.staticdata.enlarge_nursery(False)
             if self.history is None:
                 debug_stop('jit-blackhole')
             else:
@@ -1397,12 +1413,15 @@ class MetaInterp(object):
         must_compile = warmrunnerstate.must_compile_from_failure(key)
         if must_compile:
             debug_start('jit-tracing')
+            self.staticdata.enlarge_nursery(True)
         else:
             debug_start('jit-blackhole')
         self.initialize_state_from_guard_failure(key, must_compile)
         try:
             return self._handle_guard_failure(key)
         finally:
+            if must_compile:
+                self.staticdata.enlarge_nursery(False)
             if self.history is None:
                 debug_stop('jit-blackhole')
             else:

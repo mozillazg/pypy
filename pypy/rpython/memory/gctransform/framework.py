@@ -806,8 +806,7 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_gc_resize_nursery(self, hop):
         if not hasattr(self, 'resizenursery_ptr'):
-            raise NotImplementedError("gc_resize_nursery: "
-                                      "only for generational gcs")
+            return    # only for generational gcs
         livevars = self.push_roots(hop)
         [v_number] = hop.spaceop.args
         hop.genop("direct_call",
