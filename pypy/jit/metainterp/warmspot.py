@@ -192,6 +192,8 @@ class WarmRunnerDesc:
         self.translator = translator
         self.rtyper = translator.rtyper
         self.gcdescr = gc.get_description(translator.config)
+        self.can_resize_nursery = (
+            translator.config.translation.gctransformer == "framework")
 
     def find_portal(self):
         graphs = self.translator.graphs
