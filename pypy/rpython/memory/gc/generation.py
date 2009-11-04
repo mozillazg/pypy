@@ -115,8 +115,11 @@ class GenerationGC(SemiSpaceGC):
         debug_start("gc-set-nursery-size")
         if newsize < self.min_nursery_size:
             newsize = self.min_nursery_size
-        if newsize > self.space_size // 2:
-            newsize = self.space_size // 2
+        # --- the following lines are commented out: if we want a nursery
+        # --- that is too large for the current space, well, then the
+        # --- space will be resized in collect_nursery().
+        #if newsize > self.space_size // 2:
+        #    newsize = self.space_size // 2
 
         # Compute the new bounds for how large young objects can be
         # (larger objects are allocated directly old).   XXX adjust
