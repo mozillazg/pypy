@@ -1090,7 +1090,7 @@ class MetaInterpStaticData(object):
                     newsize *= 2
             else:
                 newsize = 0
-            lloperation.llop.gc_resize_nursery(lltype.Void, newsize)
+            lloperation.llop.gc_resize_nursery(lltype.Void, newsize, enlarge)
 
 # ____________________________________________________________
 

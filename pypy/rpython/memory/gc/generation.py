@@ -602,11 +602,11 @@ class GenerationGC(SemiSpaceGC):
 
     # ---------- resizing the nursery at runtime ----------
 
-    def resize_nursery(self, newsize):
+    def resize_nursery(self, newsize, forced):
         debug_start("gc-resize-nursery")
         if newsize < self.minimal_setting_for_nursery_size:
             newsize = self.minimal_setting_for_nursery_size
-        if not self.nursery or newsize > self.allocated_nursery_size:
+        if forced or not self.nursery or newsize > self.allocated_nursery_size:
             self.drop_nursery()
             self.nursery_size = newsize
             self.allocated_nursery_size = newsize

@@ -347,7 +347,7 @@ class TestGenerationGC(TestSemiSpaceGC):
         # nursery contains 3/7 objects
 
         # now make the nursery grow to 1024
-        gc.resize_nursery(1024)
+        gc.resize_nursery(1024, False)
         assert counters[1] == 2
         assert counters[0] in (7, 15)
         counters[0] = 0      # empty
@@ -365,7 +365,7 @@ class TestGenerationGC(TestSemiSpaceGC):
         assert counters[0] in (63, 127)
 
         # now mark it as "must shrink back"
-        gc.resize_nursery(0)
+        gc.resize_nursery(0, False)
         assert counters[1] == 3
         assert counters[0] in (63, 127)
 
@@ -389,7 +389,7 @@ class TestGenerationGC(TestSemiSpaceGC):
         counters[0] = 0      # nursery not allocated at all
 
         # resize from a fresh nursery: should not do another collect
-        gc.resize_nursery(512)
+        gc.resize_nursery(512, False)
         assert counters[1] == 5
 
         # fill it partially only
@@ -400,7 +400,7 @@ class TestGenerationGC(TestSemiSpaceGC):
 
         # now mark it as "must shrink back",
         # which should still leave room for 4/8 objects
-        gc.resize_nursery(0)
+        gc.resize_nursery(0, False)
         assert counters[1] == 5
         assert counters[0] == 20
 
