@@ -1,4 +1,4 @@
-import py, os
+import py, os, sys
 from pypy.rpython.lltypesystem import llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated
@@ -419,7 +419,6 @@ class MIFrame(object):
     @arguments("orgpc", "box", "box")
     def opimpl_check_div_overflow(self, pc, box1, box2):
         # detect the combination "box1 = -sys.maxint-1, box2 = -1".
-        import sys
         tmp1 = self.metainterp.execute_and_record(    # combination to detect:
             rop.INT_ADD, None, box1, ConstInt(sys.maxint))    # tmp1=-1, box2=-1
         tmp2 = self.metainterp.execute_and_record(
@@ -1373,7 +1372,6 @@ class MetaInterp(object):
             try:
                 self._interpret()
             except:
-                import sys
                 if sys.exc_info()[0] is not None:
                     codewriter.log.info(sys.exc_info()[0].__name__)
                 raise
