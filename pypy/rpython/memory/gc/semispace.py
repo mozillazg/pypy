@@ -283,14 +283,14 @@ class SemiSpaceGC(MovingGCBase):
     def finished_full_collect(self):
         pass    # hook for the HybridGC
 
-    def record_red_zone(self):
+    def record_red_zone(self, overhead=0):
         # red zone: if the space is more than 80% full, the next collection
         # should double its size.  If it is more than 66% full twice in a row,
         # then it should double its size too.  (XXX adjust)
         # The goal is to avoid many repeated collection that don't free a lot
         # of memory each, if the size of the live object set is just below the
         # size of the space.
-        free_after_collection = self.top_of_space - self.free
+        free_after_collection = self.top_of_space - self.free - overhead
         if free_after_collection > self.space_size // 3:
             self.red_zone = 0
         else:

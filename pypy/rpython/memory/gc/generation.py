@@ -265,6 +265,11 @@ class GenerationGC(SemiSpaceGC):
         self.reset_nursery()
         SemiSpaceGC.semispace_collect(self, size_changing)
 
+    def record_red_zone(self, overhead=0):
+        if not self.nursery:
+            overhead += self.next_nursery_size
+        SemiSpaceGC.record_red_zone(self, overhead)
+
     def make_a_copy(self, obj, objsize):
         tid = self.header(obj).tid
         # During a full collect, all copied objects might implicitly come
