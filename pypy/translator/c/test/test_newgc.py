@@ -960,7 +960,7 @@ class TestGenerationalGC(TestSemiSpaceGC):
             j = 0
             while i < maxcount:
                 if i == events[j][0]:
-                    llop.gc_resize_nursery(lltype.Void, events[j][1])
+                    llop.gc_resize_nursery(lltype.Void, events[j][1], False)
                     j += 1
                 a = A()
                 a.thehash = compute_identity_hash(a)
