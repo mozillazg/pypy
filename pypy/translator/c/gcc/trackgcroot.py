@@ -630,9 +630,9 @@ class FunctionGcRootTracker(object):
             assert self.r_unaryinsn_star.match(line)   # indirect call
         else:
             target = match.group(1)
-            if target in FUNCTIONS_NOT_RETURNING:
+            if target in self.FUNCTIONS_NOT_RETURNING:
                 return [InsnStop(), InsnCannotFollowEsp()]
-            if sys.platform == 'win32' and target == '__alloca':
+            if self.format == 'mingw32' and target == '__alloca':
                 # in functions with large stack requirements, windows
                 # needs a call to _alloca(), to turn reserved pages
                 # into committed memory.
@@ -647,7 +647,7 @@ class FunctionGcRootTracker(object):
                     return [InsnStackAdjust(-4)]
         insns = [InsnCall(self.currentlineno),
                  InsnSetLocal(self.EAX)]      # the result is there
-        if sys.platform == 'win32':
+        if self.format in ('mingw32', 'msvc'):
             # On win32, the address of a foreign function must be
             # computed, the optimizer may store it in a register.  We
             # could ignore this, except when the function has a
@@ -716,6 +716,14 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
     r_bottom_marker = re.compile(r"\t/[*] GC_STACK_BOTTOM [*]/")
 
+    FUNCTIONS_NOT_RETURNING = {
+        'abort': None,
+        '_exit': None,
+        '__assert_fail': None,
+        '___assert_rtn': None,
+        'L___assert_rtn$stub': None
+        }
+
     def __init__(self, lines, filetag=0):
         match = self.r_functionstart.match(lines[0])
         funcname = match.group(1)
@@ -778,6 +786,17 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+DWORD PTR ("+OPERAND+")\s*$")
     r_jmptable_item = re.compile(r"\tDD\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
     r_jmptable_end  = re.compile(r"[^\t]")
+
+    FUNCTIONS_NOT_RETURNING = {
+        '_abort': None,
+        '__exit': None,
+        '__assert': None,
+        '__wassert': None,
+        '__imp__abort': None,
+        '__imp___wassert': None,
+        'DWORD PTR __imp__abort': None,
+        'DWORD PTR __imp___wassert': None,
+        }
 
     @classmethod
     def init_regexp(cls):
@@ -1374,26 +1393,6 @@ class UnrecognizedOperation(Exception):
 class NoPatternMatch(Exception):
     pass
 
-
-if sys.platform != 'win32':
-    FUNCTIONS_NOT_RETURNING = {
-        'abort': None,
-        '_exit': None,
-        '__assert_fail': None,
-        '___assert_rtn': None,
-        'L___assert_rtn$stub': None
-        }
-else:
-    FUNCTIONS_NOT_RETURNING = {
-        '_abort': None,
-        '__exit': None,
-        '__assert': None,
-        '__wassert': None,
-        '__imp__abort': None,
-        '__imp___wassert': None,
-        'DWORD PTR __imp__abort': None,
-        'DWORD PTR __imp___wassert': None,
-        }
 
 # __________ debugging output __________
 
