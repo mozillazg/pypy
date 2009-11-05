@@ -13,15 +13,15 @@ from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.metainterp.resoperation import rop
-
-
+from pypy.jit.backend.x86.support import NonmovableGrowableArrayFloat,\
+     NonmovableGrowableArraySigned, NonmovableGrowableArrayGCREF,\
+     CHUNK_SIZE
 
 # our calling convention - we pass first 6 args in registers
 # and the rest stays on the stack
 
 RET_BP = 5 # ret ip + bp + bx + esi + edi = 5 words
 
-MAX_FAIL_BOXES = 1000
 if sys.platform == 'darwin':
     # darwin requires the stack to be 16 bytes aligned on calls
     CALL_ALIGN = 4
@@ -76,30 +76,23 @@ class Assembler386(object):
         self.malloc_array_func_addr = 0
         self.malloc_str_func_addr = 0
         self.malloc_unicode_func_addr = 0
-        self.fail_boxes_int = lltype.malloc(lltype.GcArray(lltype.Signed),
-                                            MAX_FAIL_BOXES, zero=True)
-        self.fail_boxes_ptr = lltype.malloc(lltype.GcArray(llmemory.GCREF),
-                                            MAX_FAIL_BOXES, zero=True)
-        self.fail_boxes_float = lltype.malloc(lltype.GcArray(lltype.Float),
-                                              MAX_FAIL_BOXES, zero=True)
+        self.fail_boxes_int = NonmovableGrowableArraySigned()
+        self.fail_boxes_ptr = NonmovableGrowableArrayGCREF()
+        self.fail_boxes_float = NonmovableGrowableArrayFloat()
 
     def leave_jitted_hook(self):
-        fail_boxes_ptr = self.fail_boxes_ptr
-        llop.gc_assume_young_pointers(lltype.Void,
-                                      llmemory.cast_ptr_to_adr(fail_boxes_ptr))
+        # XXX BIG FAT WARNING XXX
+        # At this point, we should not call anyone here, because
+        # RPython-level exception might be set. Here be dragons
+        i = 0
+        while i < self.fail_boxes_ptr.lgt:
+            chunk = self.fail_boxes_ptr.chunks[i]
+            llop.gc_assume_young_pointers(lltype.Void,
+                                      llmemory.cast_ptr_to_adr(chunk))
+            i += 1
 
     def make_sure_mc_exists(self):
         if self.mc is None:
-            rffi.cast(lltype.Signed, self.fail_boxes_int)   # workaround
-            rffi.cast(lltype.Signed, self.fail_boxes_ptr)   # workaround
-            rffi.cast(lltype.Signed, self.fail_boxes_float) # workaround
-            self.fail_box_int_addr = rffi.cast(lltype.Signed,
-                lltype.direct_arrayitems(self.fail_boxes_int))
-            self.fail_box_ptr_addr = rffi.cast(lltype.Signed,
-                lltype.direct_arrayitems(self.fail_boxes_ptr))
-            self.fail_box_float_addr = rffi.cast(lltype.Signed,
-                lltype.direct_arrayitems(self.fail_boxes_float))
-
             # the address of the function called by 'new'
             gc_ll_descr = self.cpu.gc_ll_descr
             gc_ll_descr.initialize()
@@ -213,23 +206,22 @@ class Assembler386(object):
                 # This uses XCHG to put zeroes in fail_boxes_ptr after
                 # reading them
                 self.mc.XOR(target, target)
-                self.mc.XCHG(target, addr_add(imm(self.fail_box_ptr_addr),
-                                              imm(i*WORD)))
+                adr = self.fail_boxes_ptr.get_addr_for_num(i)
+                self.mc.XCHG(target, heap(adr))
             else:
-                self.mc.MOV(target, addr_add(imm(self.fail_box_int_addr),
-                                             imm(i*WORD)))
+                adr = self.fail_boxes_int.get_addr_for_num(i)
+                self.mc.MOV(target, heap(adr))
             if target is not loc:
                 self.mc.MOV(loc, target)
         for i in range(len(floatlocs)):
             loc = floatlocs[i]
             if loc is None:
                 continue
+            adr = self.fail_boxes_float.get_addr_for_num(i)
             if isinstance(loc, REG):
-                self.mc.MOVSD(loc, addr64_add(imm(self.fail_box_float_addr),
-                                              imm(i*WORD*2)))
+                self.mc.MOVSD(loc, heap64(adr))
             else:
-                self.mc.MOVSD(xmmtmp, addr64_add(imm(self.fail_box_float_addr),
-                                               imm(i*WORD*2)))
+                self.mc.MOVSD(xmmtmp, heap64(adr))
                 self.mc.MOVSD(loc, xmmtmp)
         return adr_stackadjust
 
@@ -526,7 +518,8 @@ class Assembler386(object):
         self.set_vtable(eax, loc_vtable)
 
     def set_vtable(self, loc, loc_vtable):
-        self.mc.MOV(mem(loc, self.cpu.vtable_offset), loc_vtable)
+        if self.cpu.vtable_offset is not None:
+            self.mc.MOV(mem(loc, self.cpu.vtable_offset), loc_vtable)
 
     # XXX genop_new is abused for all varsized mallocs with Boehm, for now
     # (instead of genop_new_array, genop_newstr, genop_newunicode)
@@ -721,7 +714,24 @@ class Assembler386(object):
 
     def genop_guard_guard_class(self, ign_1, guard_op, addr, locs, ign_2):
         offset = self.cpu.vtable_offset
-        self.mc.CMP(mem(locs[0], offset), locs[1])
+        if offset is not None:
+            self.mc.CMP(mem(locs[0], offset), locs[1])
+        else:
+            # XXX hard-coded assumption: to go from an object to its class
+            # we use the following algorithm:
+            #   - read the typeid from mem(locs[0]), i.e. at offset 0
+            #   - keep the lower 16 bits read there
+            #   - multiply by 4 and use it as an offset in type_info_group.
+            loc = locs[1]
+            assert isinstance(loc, IMM32)
+            classptr = loc.value
+            # here, we have to go back from 'classptr' to the value expected
+            # from reading the 16 bits in the object header
+            type_info_group = llop.gc_get_type_info_group(llmemory.Address)
+            type_info_group = rffi.cast(lltype.Signed, type_info_group)
+            expected_typeid = (classptr - type_info_group) >> 2
+            self.mc.CMP16(mem(locs[0], 0), imm32(expected_typeid))
+            #
         return self.implement_guard(addr, self.mc.JNE)
 
     def _no_const_locs(self, args):
@@ -741,41 +751,38 @@ class Assembler386(object):
         return addr
 
     def generate_failure(self, mc, faildescr, failargs, locs, exc):
-        assert len(failargs) < MAX_FAIL_BOXES
         pos = mc.tell()
         for i in range(len(failargs)):
             arg = failargs[i]
             loc = locs[i]
             if isinstance(loc, REG):
                 if arg.type == FLOAT:
-                    mc.MOVSD(addr64_add(imm(self.fail_box_float_addr),
-                                        imm(i*WORD*2)), loc)
+                    adr = self.fail_boxes_float.get_addr_for_num(i)
+                    mc.MOVSD(heap64(adr), loc)
                 else:
                     if arg.type == REF:
-                        base = self.fail_box_ptr_addr
+                        adr = self.fail_boxes_ptr.get_addr_for_num(i)
                     else:
-                        base = self.fail_box_int_addr
-                    mc.MOV(addr_add(imm(base), imm(i*WORD)), loc)
+                        adr = self.fail_boxes_int.get_addr_for_num(i)
+                    mc.MOV(heap(adr), loc)
         for i in range(len(failargs)):
             arg = failargs[i]
             loc = locs[i]
             if not isinstance(loc, REG):
                 if arg.type == FLOAT:
                     mc.MOVSD(xmm0, loc)
-                    mc.MOVSD(addr64_add(imm(self.fail_box_float_addr),
-                                        imm(i*WORD*2)), xmm0)
+                    adr = self.fail_boxes_float.get_addr_for_num(i)
+                    mc.MOVSD(heap64(adr), xmm0)
                 else:
                     if arg.type == REF:
-                        base = self.fail_box_ptr_addr
+                        adr = self.fail_boxes_ptr.get_addr_for_num(i)
                     else:
-                        base = self.fail_box_int_addr
+                        adr = self.fail_boxes_int.get_addr_for_num(i)
                     mc.MOV(eax, loc)
-                    mc.MOV(addr_add(imm(base), imm(i*WORD)), eax)
+                    mc.MOV(heap(adr), eax)
         if self.debug_markers:
             mc.MOV(eax, imm(pos))
-            mc.MOV(addr_add(imm(self.fail_box_int_addr),
-                                 imm(len(locs) * WORD)),
-                                 eax)
+            mc.MOV(heap(self.fail_boxes_int.get_addr_for_num(len(locs))), eax)
 
         # we call a provided function that will
         # - call our on_leave_jitted_hook which will mark

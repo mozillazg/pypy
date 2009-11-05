@@ -16,7 +16,7 @@ class AppTestFunctionIntrospection:
         assert f.func_defaults == None
         assert f.func_dict == {}
         assert type(f.func_globals) == dict
-        #self.assertEquals(f.func_closure, None)  XXX
+        assert f.func_closure is None
         assert f.func_doc == None
         assert f.func_name == 'f'
         assert f.__module__ == 'mymodulename'
@@ -69,6 +69,27 @@ class AppTestFunctionIntrospection:
             return f
         f = g(42)
         raises(TypeError, FuncType, f.func_code, f.func_globals, 'f2', None, None)
+
+    def test_write_code(self):
+        def f():
+            return 42
+        def g():
+            return 41
+        assert f() == 42
+        assert g() == 41
+        raises(TypeError, "f.func_code = 1")
+        f.func_code = g.func_code
+        assert f() == 41
+        def h():
+            return f() # a closure
+        raises(ValueError, "f.func_code = h.func_code")
+
+    def test_write_code_builtin_forbidden(self):
+        def f(*args):
+            return 42
+            raises(TypeError, "dir.func_code = f.func_code")
+            raises(TypeError, "list.append.im_func.func_code = f.func_code") 
+
 
 class AppTestFunction: 
     def test_simple_call(self):
@@ -204,6 +225,21 @@ class AppTestFunction:
         obj = object()
         meth = func.__get__(obj, object)
         assert meth() == obj
+
+    def test_no_get_builtin(self):
+        assert not hasattr(dir, '__get__')
+        class A(object):
+            ord = ord
+        a = A()
+        assert a.ord('a') == 97
+
+    def test_builtin_as_special_method_is_not_bound(self):
+        class A(object):
+            __getattr__ = len
+        a = A()
+        assert a.a == 1
+        assert a.ab == 2
+        assert a.abcdefghij == 10
 
     def test_call_builtin(self):
         s = 'hello'
@@ -346,11 +382,13 @@ class AppTestMethod:
                 pass
         assert repr(A.f) == "<unbound method A.f>"
         assert repr(A().f).startswith("<bound method A.f of <") 
+        assert repr(A().f).endswith(">>") 
         class B:
             def f(self):
                 pass
         assert repr(B.f) == "<unbound method B.f>"
         assert repr(B().f).startswith("<bound method B.f of <")
+        assert repr(A().f).endswith(">>") 
 
 
     def test_method_call(self):
@@ -644,3 +682,15 @@ def f%s:
 
         assert space.eq_w(w_res, space.wrap(44))
 
+
+class TestFunction:
+
+    def test_func_defaults(self):
+        from pypy.interpreter import gateway
+        def g(w_a=gateway.NoneNotWrapped):
+            pass
+        app_g = gateway.interp2app_temp(g)
+        space = self.space
+        w_g = space.wrap(app_g)
+        w_defs = space.getattr(w_g, space.wrap("func_defaults"))
+        assert space.is_w(w_defs, space.w_None)

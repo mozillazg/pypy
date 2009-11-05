@@ -71,6 +71,67 @@ class AppTestAppSetTest:
         assert set('abc') > frozenset('ab')
         assert not (set('abc') < frozenset('abc'))
         assert not (set('abc') > frozenset('abc'))
+        assert not set() == 42
+        assert set() != 42
+        assert (set('abc') == frozenset('abc'))
+        assert (set('abc') == set('abc'))
+        assert (frozenset('abc') == frozenset('abc'))
+        assert (frozenset('abc') == set('abc'))
+        assert not (set('abc') != frozenset('abc'))
+        assert not (set('abc') != set('abc'))
+        assert not (frozenset('abc') != frozenset('abc'))
+        assert not (frozenset('abc') != set('abc'))
+        assert not (set('abc') == frozenset('abcd'))
+        assert not (set('abc') == set('abcd'))
+        assert not (frozenset('abc') == frozenset('abcd'))
+        assert not (frozenset('abc') == set('abcd'))
+        assert (set('abc') != frozenset('abcd'))
+        assert (set('abc') != set('abcd'))
+        assert (frozenset('abc') != frozenset('abcd'))
+        assert (frozenset('abc') != set('abcd'))
+
+    def test_libpython_equality(self):
+        for thetype in [frozenset, set]:
+            word = "aaaaaaaaawfpasrtarspawparst"
+            otherword = "ZZZZZZZXCVZXCVSRTD"
+            s = thetype(word)
+            assert s == set(word)
+            assert s, frozenset(word)
+            assert not s == word
+            assert s != set(otherword)
+            assert s != frozenset(otherword)
+            assert s != word
+
+    def test_copy(self):
+        s1 = set('abc')
+        s2 = s1.copy()
+        assert s1 is not s2
+        assert s1 == s2
+        assert type(s2) is set
+        s1 = frozenset('abc')
+        s2 = s1.copy()
+        assert s1 is s2
+        assert s1 == s2
+        class myfrozen(frozenset):
+            pass
+        s1 = myfrozen('abc')
+        s2 = s1.copy()
+        assert s1 is not s2
+        assert s1 == s2
+        assert type(s2) is myfrozen
+        class myfrozen(frozenset):
+            def __new__(cls):
+                return frozenset.__new__(cls, 'abc')
+        s1 = myfrozen()
+        raises(TypeError, s1.copy)
+
+    def test_update(self):
+        s1 = set('abc')
+        s1.update(set('abcd'))
+        assert s1 == set('abcd')
+        s1 = set('abc')
+        s1.update(frozenset('fro'))
+        assert s1 == set('abcfro')
 
     def test_recursive_repr(self):
         class A(object):

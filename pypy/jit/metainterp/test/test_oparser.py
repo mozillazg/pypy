@@ -160,3 +160,17 @@ def test_descr_with_obj_print():
     '''
     loop = parse(x)
     # assert did not explode
+
+example_loop_log = '''\
+# bridge out of Guard12, 6 ops
+[i0, i1, i2]
+i4 = int_add(i0, 2)
+i6 = int_sub(i1, 1)
+i8 = int_gt(i6, 3)
+guard_true(i8, descr=<Guard15>) [i4, i6]
+debug_merge_point('(no jitdriver.get_printable_location!)')
+jump(i6, i4, descr=<Loop0>)
+'''
+
+def test_parse_no_namespace():
+    loop = parse(example_loop_log, no_namespace=True)

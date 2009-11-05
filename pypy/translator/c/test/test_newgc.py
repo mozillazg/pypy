@@ -17,24 +17,45 @@ class TestUsingFramework(object):
     gcpolicy = "marksweep"
     should_be_moving = False
     removetypeptr = False
+    taggedpointers = False
     GC_CAN_MOVE = False
     GC_CANNOT_MALLOC_NONMOVABLE = False
 
     _isolated_func = None
 
     @classmethod
-    def _makefunc2(cls, f):
-        t = Translation(f, [int, int], gc=cls.gcpolicy,
-                        policy=annpolicy.StrictAnnotatorPolicy())
-        t.config.translation.gcconfig.debugprint = True
-        t.config.translation.gcconfig.removetypeptr = cls.removetypeptr
+    def _makefunc_str_int(cls, f):
+        def main(argv):
+            arg0 = argv[1]
+            arg1 = int(argv[2])
+            try:
+                res = f(arg0, arg1)
+            except MemoryError:
+                print "MEMORY-ERROR"
+            else:
+                print res
+            return 0
+        
+        t = Translation(main, standalone=True, gc=cls.gcpolicy,
+                        policy=annpolicy.StrictAnnotatorPolicy(),
+                        taggedpointers=cls.taggedpointers,
+                        gcremovetypeptr=cls.removetypeptr)
         t.disable(['backendopt'])
-        t.set_backend_extra_options(c_isolated=True, c_debug_defines=True)
+        t.set_backend_extra_options(c_debug_defines=True)
         t.rtype()
         if conftest.option.view:
             t.viewcg()
-        isolated_func = t.compile()
-        return isolated_func
+        exename = t.compile()
+
+        def run(s, i):
+            data = py.process.cmdexec("%s %s %d" % (exename, s, i))
+            data = data.strip()
+            if data == 'MEMORY-ERROR':
+                raise MemoryError
+            return data
+
+        return run
+
 
     def setup_class(cls):
         funcs0 = []
@@ -64,8 +85,8 @@ class TestUsingFramework(object):
                     funcs1.append(func)
             assert name not in name_to_func
             name_to_func[name] = len(name_to_func)
-        def allfuncs(num, arg):
-            rgc.collect()
+        def allfuncs(name, arg):
+            num = name_to_func[name]
             func0 = funcs0[num]
             if func0:
                 return str(func0())
@@ -77,7 +98,7 @@ class TestUsingFramework(object):
                 return funcstr(arg)
             assert 0, 'unreachable'
         cls.funcsstr = funcsstr
-        cls.c_allfuncs = staticmethod(cls._makefunc2(allfuncs))
+        cls.c_allfuncs = staticmethod(cls._makefunc_str_int(allfuncs))
         cls.allfuncs = staticmethod(allfuncs)
         cls.name_to_func = name_to_func
 
@@ -88,10 +109,9 @@ class TestUsingFramework(object):
     def run(self, name, *args):
         if not args:
             args = (-1, )
+        print 'Running %r)' % name
+        res = self.c_allfuncs(name, *args)
         num = self.name_to_func[name]
-        print
-        print 'Running %r (test number %d)' % (name, num)
-        res = self.c_allfuncs(num, *args)
         if self.funcsstr[num]:
             return res
         return int(res)
@@ -99,8 +119,8 @@ class TestUsingFramework(object):
     def run_orig(self, name, *args):
         if not args:
             args = (-1, )
-        num = self.name_to_func[name]
-        res = self.allfuncs(num, *args)
+        res = self.allfuncs(name, *args)
+        num = self.name_to_func[name]        
         if self.funcsstr[num]:
             return res
         return int(res)        
@@ -660,7 +680,6 @@ class TestUsingFramework(object):
         TP = lltype.GcArray(lltype.Char)
         def func():
             try:
-                from pypy.rlib import rgc
                 a = rgc.malloc_nonmovable(TP, 3)
                 rgc.collect()
                 if a:
@@ -925,8 +944,11 @@ class TestHybridGC(TestGenerationalGC):
     def test_gc_set_max_heap_size(self):
         py.test.skip("not implemented")
 
+
+
 class TestHybridGCRemoveTypePtr(TestHybridGC):
     removetypeptr = True
+
 
 class TestMarkCompactGC(TestSemiSpaceGC):
     gcpolicy = "markcompact"
@@ -940,3 +962,52 @@ class TestMarkCompactGC(TestSemiSpaceGC):
 
     def test_finalizer_order(self):
         py.test.skip("not implemented")
+
+# ____________________________________________________________________
+
+class TestHybridTaggedPointers(TestHybridGC):
+    taggedpointers = True
+
+
+    def define_tagged(cls):
+        class Unrelated(object):
+            pass
+
+        u = Unrelated()
+        u.x = UnboxedObject(47)
+        def fn(n):
+            rgc.collect() # check that a prebuilt tagged pointer doesn't explode
+            if n > 0:
+                x = BoxedObject(n)
+            else:
+                x = UnboxedObject(n)
+            u.x = x # invoke write barrier
+            rgc.collect()
+            return x.meth(100)
+        def func():
+            return fn(1000) + fn(-1000)
+        return func
+
+    def test_tagged(self):
+        expected = self.run_orig("tagged")
+        res = self.run("tagged")
+        assert res == expected
+
+from pypy.rlib.objectmodel import UnboxedValue
+
+class TaggedBase(object):
+    __slots__ = ()
+    def meth(self, x):
+        raise NotImplementedError
+
+class BoxedObject(TaggedBase):
+    attrvalue = 66
+    def __init__(self, normalint):
+        self.normalint = normalint
+    def meth(self, x):
+        return self.normalint + x + 2
+
+class UnboxedObject(TaggedBase, UnboxedValue):
+    __slots__ = 'smallint'
+    def meth(self, x):
+        return self.smallint + x + 3

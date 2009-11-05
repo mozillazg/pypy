@@ -522,20 +522,6 @@ class LLFrame(object):
         from pypy.translator.tool.lltracker import track
         track(*ll_objects)
 
-    def op_debug_print(self, *ll_args):
-        from pypy.rpython.lltypesystem.rstr import STR
-        line = []
-        for arg in ll_args:
-            T = lltype.typeOf(arg)
-            if T == lltype.Ptr(STR):
-                arg = ''.join(arg.chars)
-            line.append(str(arg))
-        line = ' '.join(line)
-        print line
-        tracer = self.llinterpreter.tracer
-        if tracer:
-            tracer.dump('\n[debug] %s\n' % (line,))
-
     def op_debug_pdb(self, *ll_args):
         if self.llinterpreter.tracer:
             self.llinterpreter.tracer.flush()
@@ -903,6 +889,9 @@ class LLFrame(object):
 
     def op_gc_stack_bottom(self):
         pass       # marker for trackgcroot.py
+
+    def op_gc_get_type_info_group(self):
+        raise NotImplementedError("gc_get_type_info_group")
 
     def op_do_malloc_fixedsize_clear(self):
         raise NotImplementedError("do_malloc_fixedsize_clear")

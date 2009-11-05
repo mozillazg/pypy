@@ -1,5 +1,5 @@
 import py
-from pypy.jit.metainterp.warmspot import ll_meta_interp, hash_whatever
+from pypy.jit.metainterp.warmspot import ll_meta_interp
 from pypy.jit.metainterp.warmspot import get_stats
 from pypy.rlib.jit import JitDriver, OPTIMIZER_FULL, OPTIMIZER_SIMPLE
 from pypy.rlib.jit import unroll_safe
@@ -7,15 +7,6 @@ from pypy.jit.backend.llgraph import runner
 
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
-
-def test_translate_hash_whatever():
-    from pypy.rpython.test.test_llinterp import interpret
-    from pypy.rpython.lltypesystem import lltype
-    def fn(x):
-        return hash_whatever(lltype.typeOf(x), x)
-    for type_system in ('lltype', 'ootype'):
-        res = interpret(fn, [42], type_system=type_system)
-        assert res == 42
 
 class Exit(Exception):
     def __init__(self, result):
@@ -72,20 +63,6 @@ class WarmspotTests(object):
 
         res = self.meta_interp(f, [60])
         assert res == f(30)
-
-    def test_hash_collision(self):
-        mydriver = JitDriver(reds = ['n'], greens = ['m'])
-        def f(n):
-            m = 0
-            while n > 0:
-                mydriver.can_enter_jit(n=n, m=m)
-                mydriver.jit_merge_point(n=n, m=m)
-                n -= 1
-                if not (n % 11):
-                    m = (m+n) & 3
-            return m
-        res = self.meta_interp(f, [110], hash_bits=1)
-        assert res == f(110)
 
     def test_location(self):
         def get_printable_location(n):
@@ -154,6 +131,7 @@ class WarmspotTests(object):
         assert warmrunnerdescr.state.optimize_bridge is optimize.optimize_bridge
 
     def test_static_debug_level(self):
+        py.test.skip("debug_level is being deprecated")
         from pypy.rlib.jit import DEBUG_PROFILE, DEBUG_OFF, DEBUG_STEPS
         from pypy.jit.metainterp.jitprof import EmptyProfiler, Profiler
         
@@ -200,6 +178,7 @@ class WarmspotTests(object):
         assert not "Running asm" in err
 
     def test_set_param_debug(self):
+        py.test.skip("debug_level is being deprecated")
         from pypy.rlib.jit import DEBUG_PROFILE, DEBUG_OFF, DEBUG_STEPS
         from pypy.jit.metainterp.jitprof import EmptyProfiler, Profiler
         

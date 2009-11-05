@@ -141,8 +141,8 @@ register_all(vars(), globals())
 # ____________________________________________________________
 
 def descr__new__(space, w_dicttype, __args__):
-    w_obj = space.allocate_instance(space.DictObjectCls, w_dicttype)
-    space.DictObjectCls.__init__(w_obj, space)
+    from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+    w_obj = W_DictMultiObject.allocate_and_init_instance(space, w_dicttype)
     return w_obj
 
 # ____________________________________________________________
@@ -187,13 +187,10 @@ def descr_dictiter__reduce__(w_self, space):
     w_typeobj = space.gettypeobject(dictiter_typedef)
     
     from pypy.interpreter.mixedmodule import MixedModule
-    if space.config.objspace.std.withmultidict:
-        raise OperationError(
-            space.w_RuntimeError,
-            space.wrap("cannot pickle dictiters with multidicts"))
-    else:
-        from pypy.objspace.std.dictobject import \
-            W_DictIter_Keys, W_DictIter_Values, W_DictIter_Items
+    raise OperationError(
+        space.w_RuntimeError,
+        space.wrap("cannot pickle dictiters with multidicts"))
+    # XXXXXX get that working again
     
     # we cannot call __init__ since we don't have the original dict
     if isinstance(w_self, W_DictIter_Keys):

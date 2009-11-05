@@ -1,6 +1,6 @@
 import py
 import sys
-from pypy.jit.metainterp.history import log
+from pypy.rlib.debug import debug_print
 from pypy.translator.translator import TranslationContext
 
 class BaseCompiledMixin(object):
@@ -25,6 +25,7 @@ class BaseCompiledMixin(object):
         for arg in args:
             assert isinstance(arg, int)
 
+        self.pre_translation_hook()
         t = self._get_TranslationContext()
         t.config.translation.type_system = self.type_system # force typesystem-specific options
         if listcomp:
@@ -63,7 +64,14 @@ class BaseCompiledMixin(object):
         entry_point_graph = mixlevelann.getgraph(entry_point, [s_list_of_strings],
                                                  annmodel.SomeInteger())
         warmrunnerdesc.finish()
+        self.post_translation_hook()
         return self._compile_and_run(t, entry_point, entry_point_graph, args)
+
+    def pre_translation_hook(self):
+        pass
+
+    def post_translation_hook(self):
+        pass
 
     def check_loops(self, *args, **kwds):
         pass
@@ -111,14 +119,22 @@ class CCompiledMixin(BaseCompiledMixin):
         cbuilder = CBuilder(t, entry_point, config=t.config)
         cbuilder.generate_source()
         exe_name = cbuilder.compile()
-        log('---------- Test starting ----------')
+        debug_print('---------- Test starting ----------')
         stdout = cbuilder.cmdexec(" ".join([str(arg) for arg in args]))
         res = int(stdout)
-        log('---------- Test done (%d) ----------' % (res,))
+        debug_print('---------- Test done (%d) ----------' % (res,))
         return res
 
 class CliCompiledMixin(BaseCompiledMixin):
     type_system = 'ootype'
+
+    def pre_translation_hook(self):
+        from pypy.translator.oosupport.support import patch_os
+        self.olddefs = patch_os()
+
+    def post_translation_hook(self):
+        from pypy.translator.oosupport.support import unpatch_os
+        unpatch_os(self.olddefs) # restore original values
 
     def _compile_and_run(self, t, entry_point, entry_point_graph, args):
         from pypy.translator.cli.test.runtest import compile_graph

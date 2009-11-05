@@ -7,6 +7,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
+from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.rpython.lltypesystem.lloperation import llop
 
 # The following flag is never set on young objects, i.e. the ones living
@@ -55,12 +56,8 @@ class GenerationGC(SemiSpaceGC):
         self.initial_nursery_size = nursery_size
         self.auto_nursery_size = auto_nursery_size
         self.min_nursery_size = min_nursery_size
-        self.old_objects_pointing_to_young = self.AddressStack()
-        # ^^^ a list of addresses inside the old objects space; it
-        # may contain static prebuilt objects as well.  More precisely,
-        # it lists exactly the old and static objects whose
-        # GCFLAG_NO_YOUNG_PTRS bit is not set.
-        self.young_objects_with_weakrefs = self.AddressStack()
+
+        # define nursery fields
         self.reset_nursery()
         self._setup_wb()
 
@@ -74,6 +71,13 @@ class GenerationGC(SemiSpaceGC):
         self.lb_young_var_basesize = sz
 
     def setup(self):
+        self.old_objects_pointing_to_young = self.AddressStack()
+        # ^^^ a list of addresses inside the old objects space; it
+        # may contain static prebuilt objects as well.  More precisely,
+        # it lists exactly the old and static objects whose
+        # GCFLAG_NO_YOUNG_PTRS bit is not set.
+        self.young_objects_with_weakrefs = self.AddressStack()
+
         self.last_generation_root_objects = self.AddressStack()
         self.young_objects_with_id = self.AddressDict()
         SemiSpaceGC.setup(self)
@@ -82,10 +86,15 @@ class GenerationGC(SemiSpaceGC):
         if self.auto_nursery_size:
             newsize = nursery_size_from_env()
             if newsize <= 0:
-                newsize = estimate_best_nursery_size(
-                    self.config.gcconfig.debugprint)
+                newsize = estimate_best_nursery_size()
             if newsize > 0:
                 self.set_nursery_size(newsize)
+
+        self.reset_nursery()
+
+    def _teardown(self):
+        self.collect() # should restore last gen objects flags
+        SemiSpaceGC._teardown(self)
 
     def reset_nursery(self):
         self.nursery      = NULL
@@ -93,6 +102,7 @@ class GenerationGC(SemiSpaceGC):
         self.nursery_free = NULL
 
     def set_nursery_size(self, newsize):
+        debug_start("gc-set-nursery-size")
         if newsize < self.min_nursery_size:
             newsize = self.min_nursery_size
         if newsize > self.space_size // 2:
@@ -107,13 +117,12 @@ class GenerationGC(SemiSpaceGC):
         while (self.min_nursery_size << (scale+1)) <= newsize:
             scale += 1
         self.nursery_scale = scale
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void, "SSS  nursery_size =", newsize)
-            llop.debug_print(lltype.Void, "SSS  largest_young_fixedsize =",
-                             self.largest_young_fixedsize)
-            llop.debug_print(lltype.Void, "SSS  largest_young_var_basesize =",
-                             self.largest_young_var_basesize)
-            llop.debug_print(lltype.Void, "SSS  nursery_scale =", scale)
+        debug_print("nursery_size =", newsize)
+        debug_print("largest_young_fixedsize =",
+                    self.largest_young_fixedsize)
+        debug_print("largest_young_var_basesize =",
+                    self.largest_young_var_basesize)
+        debug_print("nursery_scale =", scale)
         # we get the following invariant:
         assert self.nursery_size >= (self.min_nursery_size << scale)
 
@@ -122,6 +131,7 @@ class GenerationGC(SemiSpaceGC):
         # be done after changing the bounds, because it might re-create
         # a new nursery (e.g. if it invokes finalizers).
         self.semispace_collect()
+        debug_stop("gc-set-nursery-size")
 
     @staticmethod
     def get_young_fixedsize(nursery_size):
@@ -132,6 +142,8 @@ class GenerationGC(SemiSpaceGC):
         return nursery_size // 4 - 1
 
     def is_in_nursery(self, addr):
+        ll_assert(llmemory.cast_adr_to_int(addr) & 1 == 0,
+                  "odd-valued (i.e. tagged) pointer unexpected here")
         return self.nursery <= addr < self.nursery_top
 
     def malloc_fixedsize_clear(self, typeid, size, can_collect,
@@ -238,11 +250,7 @@ class GenerationGC(SemiSpaceGC):
         self.weakrefs_grow_older()
         self.ids_grow_older()
         self.reset_nursery()
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void, "major collect, size changing", size_changing)
         SemiSpaceGC.semispace_collect(self, size_changing)
-        if self.config.gcconfig.debugprint and not size_changing:
-            llop.debug_print(lltype.Void, "percent survived", float(self.free - self.tospace) / self.space_size)
 
     def make_a_copy(self, obj, objsize):
         tid = self.header(obj).tid
@@ -305,10 +313,9 @@ class GenerationGC(SemiSpaceGC):
 
     def _trace_external_obj(self, pointer, obj):
         addr = pointer.address[0]
-        if addr != NULL:
-            newaddr = self.copy(addr)
-            pointer.address[0] = newaddr
-            self.write_into_last_generation_obj(obj, newaddr)
+        newaddr = self.copy(addr)
+        pointer.address[0] = newaddr
+        self.write_into_last_generation_obj(obj, newaddr)
 
     # ____________________________________________________________
     # Implementation of nursery-only collections
@@ -320,10 +327,9 @@ class GenerationGC(SemiSpaceGC):
             ll_assert(self.nursery_size <= self.top_of_space - self.free,
                          "obtain_free_space failed to do its job")
         if self.nursery:
-            if self.config.gcconfig.debugprint:
-                llop.debug_print(lltype.Void, "--- minor collect ---")
-                llop.debug_print(lltype.Void, "nursery:",
-                                 self.nursery, "to", self.nursery_top)
+            debug_start("gc-minor")
+            debug_print("--- minor collect ---")
+            debug_print("nursery:", self.nursery, "to", self.nursery_top)
             # a nursery-only collection
             scan = beginning = self.free
             self.collect_oldrefs_to_nursery()
@@ -337,10 +343,9 @@ class GenerationGC(SemiSpaceGC):
                 self.update_young_objects_with_id()
             # mark the nursery as free and fill it with zeroes again
             llarena.arena_reset(self.nursery, self.nursery_size, 2)
-            if self.config.gcconfig.debugprint:
-                llop.debug_print(lltype.Void,
-                                 "survived (fraction of the size):",
-                                 float(scan - beginning) / self.nursery_size)
+            debug_print("survived (fraction of the size):",
+                        float(scan - beginning) / self.nursery_size)
+            debug_stop("gc-minor")
             #self.debug_check_consistency()   # -- quite expensive
         else:
             # no nursery - this occurs after a full collect, triggered either
@@ -366,8 +371,7 @@ class GenerationGC(SemiSpaceGC):
             hdr = self.header(obj)
             hdr.tid |= GCFLAG_NO_YOUNG_PTRS
             self.trace_and_drag_out_of_nursery(obj)
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void, "collect_oldrefs_to_nursery", count)
+        debug_print("collect_oldrefs_to_nursery", count)
 
     def collect_roots_in_nursery(self):
         # we don't need to trace prebuilt GcStructs during a minor collect:
@@ -446,10 +450,17 @@ class GenerationGC(SemiSpaceGC):
             #                 addr_struct, "<-", addr)
             ll_assert(not self.is_in_nursery(addr_struct),
                          "nursery object with GCFLAG_NO_YOUNG_PTRS")
+            # if we have tagged pointers around, we first need to check whether
+            # we have valid pointer here, otherwise we can do it after the
+            # is_in_nursery check
+            if (self.config.taggedpointers and
+                not self.is_valid_gc_object(addr)):
+                return
             if self.is_in_nursery(addr):
                 self.old_objects_pointing_to_young.append(addr_struct)
                 self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
-            elif addr == NULL:
+            elif (not self.config.taggedpointers and
+                  not self.is_valid_gc_object(addr)):
                 return
             self.write_into_last_generation_obj(addr_struct, addr)
         remember_young_pointer._dont_inline_ = True
@@ -571,19 +582,18 @@ def nursery_size_from_env():
             pass
     return -1
 
-def best_nursery_size_for_L2cache(L2cache, debugprint=False):
-    if debugprint:
-        llop.debug_print(lltype.Void, "CCC  L2cache =", L2cache)
+def best_nursery_size_for_L2cache(L2cache):
     # Heuristically, the best nursery size to choose is about half
     # of the L2 cache.  XXX benchmark some more.
     return L2cache // 2
 
 
 if sys.platform == 'linux2':
-    def estimate_best_nursery_size(debugprint=False):
+    def estimate_best_nursery_size():
         """Try to estimate the best nursery size at run-time, depending
         on the machine we are running on.
         """
+        debug_start("gc-L2cache")
         L2cache = sys.maxint
         try:
             fd = os.open('/proc/cpuinfo', os.O_RDONLY, 0644)
@@ -631,10 +641,13 @@ if sys.platform == 'linux2':
                 if number < L2cache:
                     L2cache = number
 
+        debug_print("L2cache =", L2cache)
+        debug_stop("gc-L2cache")
+
         if L2cache < sys.maxint:
-            return best_nursery_size_for_L2cache(L2cache, debugprint)
+            return best_nursery_size_for_L2cache(L2cache)
         else:
-            # Print a warning even in non-debug builds
+            # Print a top-level warning even in non-debug builds
             llop.debug_print(lltype.Void,
                 "Warning: cannot find your CPU L2 cache size in /proc/cpuinfo")
             return -1
@@ -659,10 +672,11 @@ elif sys.platform == 'darwin':
                                    rffi.INT,
                                    sandboxsafe=True)
 
-    def estimate_best_nursery_size(debugprint=False):
+    def estimate_best_nursery_size():
         """Try to estimate the best nursery size at run-time, depending
         on the machine we are running on.
         """
+        debug_start("gc-L2cache")
         L2cache = 0
         l2cache_p = lltype.malloc(rffi.LONGLONGP.TO, 1, flavor='raw')
         try:
@@ -686,14 +700,16 @@ elif sys.platform == 'darwin':
                 lltype.free(len_p, flavor='raw')
         finally:
             lltype.free(l2cache_p, flavor='raw')
+        debug_print("L2cache =", L2cache)
+        debug_stop("gc-L2cache")
         if L2cache > 0:
-            return best_nursery_size_for_L2cache(L2cache, debugprint)
+            return best_nursery_size_for_L2cache(L2cache)
         else:
-            # Print a warning even in non-debug builds
+            # Print a top-level warning even in non-debug builds
             llop.debug_print(lltype.Void,
                 "Warning: cannot find your CPU L2 cache size with sysctl()")
             return -1
 
 else:
-    def estimate_best_nursery_size(debugprint=False):
+    def estimate_best_nursery_size():
         return -1     # XXX implement me for other platforms

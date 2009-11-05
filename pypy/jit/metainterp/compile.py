@@ -2,16 +2,20 @@
 from pypy.rpython.ootypesystem import ootype
 from pypy.objspace.flow.model import Constant, Variable
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.debug import debug_start, debug_stop
 from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
-from pypy.jit.metainterp.history import TreeLoop, log, Box, History, LoopToken
+from pypy.jit.metainterp.history import TreeLoop, Box, History, LoopToken
 from pypy.jit.metainterp.history import AbstractFailDescr, BoxInt
 from pypy.jit.metainterp.history import BoxPtr, BoxObj, BoxFloat, Const
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.specnode import NotSpecNode, more_general_specnodes
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
+
+class GiveUp(Exception):
+    pass
 
 def show_loop(metainterp_sd, loop=None, error=None):
     # debugging
@@ -89,11 +93,16 @@ def send_loop_to_backend(metainterp_sd, loop, type):
     globaldata.loopnumbering += 1
 
     metainterp_sd.logger_ops.log_loop(loop.inputargs, loop.operations, n, type)
-    metainterp_sd.profiler.start_backend()
     if not we_are_translated():
         show_loop(metainterp_sd, loop)
         loop.check_consistency()
-    metainterp_sd.cpu.compile_loop(loop.inputargs, loop.operations, loop.token)
+    metainterp_sd.profiler.start_backend()
+    debug_start("jit-backend")
+    try:
+        metainterp_sd.cpu.compile_loop(loop.inputargs, loop.operations,
+                                       loop.token)
+    finally:
+        debug_stop("jit-backend")
     metainterp_sd.profiler.end_backend()
     metainterp_sd.stats.add_new_loop(loop)
     if not we_are_translated():
@@ -106,12 +115,16 @@ def send_loop_to_backend(metainterp_sd, loop, type):
 def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations):
     n = faildescr.get_index()
     metainterp_sd.logger_ops.log_bridge(inputargs, operations, n)
-    metainterp_sd.profiler.start_backend()
     if not we_are_translated():
         show_loop(metainterp_sd)
         TreeLoop.check_consistency_of(inputargs, operations)
         pass
-    metainterp_sd.cpu.compile_bridge(faildescr, inputargs, operations)        
+    metainterp_sd.profiler.start_backend()
+    debug_start("jit-backend")
+    try:
+        metainterp_sd.cpu.compile_bridge(faildescr, inputargs, operations)
+    finally:
+        debug_stop("jit-backend")
     metainterp_sd.profiler.end_backend()
     if not we_are_translated():
         metainterp_sd.stats.compiled()
@@ -259,8 +272,8 @@ class ResumeFromInterpDescr(ResumeDescr):
             new_loop_token)
         # store the new loop in compiled_merge_points too
         glob = metainterp_sd.globaldata
-        greenargs = glob.unpack_greenkey(self.original_greenkey)
-        old_loop_tokens = glob.compiled_merge_points.setdefault(greenargs, [])
+        old_loop_tokens = glob.get_compiled_merge_points(
+            self.original_greenkey)
         # it always goes at the end of the list, as it is the most
         # general loop token
         old_loop_tokens.append(new_loop_token)
@@ -284,7 +297,6 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
                                                                 old_loop_tokens,
                                                                 new_loop)
     except InvalidLoop:
-        assert 0, "InvalidLoop in optimize_bridge?"
         return None
     # Did it work?
     if target_loop_token is not None:

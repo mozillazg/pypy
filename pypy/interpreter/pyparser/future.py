@@ -207,9 +207,7 @@ class FutureAutomaton(object):
                     self.col_offset = col_offset
                     self.lineno = line
             self.consume_empty_line()
-        else:
-            return
-        
+
     def consume_mandatory_whitespace(self):
         if self.getc() not in whitespace + '\\':
             raise DoneException
@@ -242,13 +240,19 @@ class FutureAutomaton(object):
         if self.getc() not in letters:
             raise DoneException
         p = self.pos
-        while 1:
-            self.pos += 1
-            if self.getc() not in alphanumerics:
-                break
-        name = self.s[p:self.pos]
-        self.consume_whitespace()
-        return name
+        try:
+            while self.getc() in alphanumerics:
+                self.pos += 1
+        except DoneException:
+            # If there's any name at all, we want to call self.set_flag().
+            # Something else while get the DoneException again.
+            if self.pos == p:
+                raise
+            end = self.pos
+        else:
+            end = self.pos
+            self.consume_whitespace()
+        return self.s[p:end]
 
     def get_more(self, paren_list=False):
         if paren_list and self.getc() == ')':
