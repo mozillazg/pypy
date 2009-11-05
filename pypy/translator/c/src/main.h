@@ -17,8 +17,11 @@ int main(int argc, char *argv[]);
 
 void dump_group_info(const char *typename, long *counter)
 {
-  if (*counter)
-    fprintf(stderr, "|%12lu  %s\n", (unsigned long)*counter, typename);
+  if (counter[0])
+    fprintf(stderr, "|%12lu  %12lu  %s\n",
+            (unsigned long)counter[0],
+            (unsigned long)counter[1],
+            typename);
 }
 
 int main(int argc, char *argv[])

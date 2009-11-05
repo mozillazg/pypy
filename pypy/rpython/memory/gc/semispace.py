@@ -114,8 +114,8 @@ class SemiSpaceGC(MovingGCBase):
                 raise memoryError
             result = self.obtain_free_space(totalsize)
         llarena.arena_reserve(result, totalsize)
-        self.init_gc_object(result, typeid16)
         (result + size_gc_header + offset_to_length).signed[0] = length
+        self.init_gc_object(result, typeid16)
         self.free = result + llarena.round_up_for_allocation(totalsize)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
@@ -428,7 +428,10 @@ class SemiSpaceGC(MovingGCBase):
     def init_gc_object(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
         hdr.tid = self.combine(typeid16, flags)
-        self.count_allocation(typeid16)
+        #
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        size = self.get_size(addr + size_gc_header)
+        self.count_allocation(typeid16, size)
 
     def init_gc_object_immortal(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
