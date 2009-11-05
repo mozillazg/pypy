@@ -350,7 +350,7 @@ class FunctionGcRootTracker(object):
         # arithmetic operations should not produce GC pointers
         'inc', 'dec', 'not', 'neg', 'or', 'and', 'sbb', 'adc',
         'shl', 'shr', 'sal', 'sar', 'rol', 'ror', 'mul', 'imul', 'div', 'idiv',
-        'bswap', 'bt',
+        'bswap', 'bt', 'rdtsc',
         # zero-extending moves should not produce GC pointers
         'movz',
         ])
@@ -479,6 +479,10 @@ class FunctionGcRootTracker(object):
             return self._visit_prologue()
         elif source == self.EBP and target == self.ESP:
             return self._visit_epilogue()
+        if source == self.ESP and self.funcname.startswith('VALGRIND_'):
+            return []     # in VALGRIND_XXX functions, there is a dummy-looking
+                          # mov %esp, %eax.  Shows up only when compiling with
+                          # gcc -fno-unit-at-a-time.
         return self.insns_for_copy(source, target)
 
     def visit_pushl(self, line):
@@ -1556,6 +1560,7 @@ if __name__ == '__main__':
         f = open(fn, 'r')
         firstline = f.readline()
         f.seek(0)
+        assert firstline, "file %r is empty!" % (fn,)
         if firstline.startswith('seen_main = '):
             tracker.reload_raw_table(f)
             f.close()

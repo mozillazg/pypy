@@ -30,6 +30,8 @@ def _setup():
     ncounters = len(names)
 _setup()
 
+JITPROF_LINES = ncounters + 1 + 5 # one for TOTAL, 5 for calls, update if needed
+
 class BaseProfiler(object):
     pass
 
@@ -89,7 +91,7 @@ class Profiler(BaseProfiler):
     def start(self):
         self.starttime = self.timer()
         self.t1 = self.starttime
-        self.times = [0, 0, 0, 0]
+        self.times = [0, 0]
         self.counters = [0] * ncounters
         self.calls = [[0, 0], [0, 0], [0, 0]]
         self.current = []
@@ -128,11 +130,15 @@ class Profiler(BaseProfiler):
     def start_backend(self):   self._start(BACKEND)
     def end_backend(self):     self._end  (BACKEND)
 
-    def start_running(self):   self._start(RUNNING)
-    def end_running(self):     self._end  (RUNNING)
+    # Don't record times for 'running' and 'blackhole' because there are
+    # too many of them: calling time.time() is a major blocker.
+    # If you are interested in these numbers, use 'PYPYLOG=file' and
+    # look at the resulting file with pypy/tool/logparser.py.
+    def start_running(self): self.count(RUNNING)
+    def end_running(self):   pass
 
-    def start_blackhole(self): self._start(BLACKHOLE)
-    def end_blackhole(self):   self._end  (BLACKHOLE)
+    def start_blackhole(self): self.count(BLACKHOLE)
+    def end_blackhole(self):   pass
 
     def count(self, kind, inc=1):
         self.counters[kind] += inc        
@@ -151,8 +157,8 @@ class Profiler(BaseProfiler):
         calls = self.calls
         self._print_line_time("Tracing", cnt[TRACING],   tim[TRACING])
         self._print_line_time("Backend", cnt[BACKEND],   tim[BACKEND])
-        self._print_line_time("Running asm", cnt[RUNNING],   tim[RUNNING])
-        self._print_line_time("Blackhole", cnt[BLACKHOLE], tim[BLACKHOLE])
+        self._print_intline("Running asm", cnt[RUNNING])
+        self._print_intline("Blackhole", cnt[BLACKHOLE])
         line = "TOTAL:      \t\t%f\n" % (self.tk - self.starttime, )
         os.write(2, line)
         self._print_intline("ops", cnt[OPS])

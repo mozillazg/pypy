@@ -1,4 +1,4 @@
-from pypy.objspace.std.dictmultiobject import DictImplementation
+from pypy.interpreter.pycode import CO_CONTAINSGLOBALS
 from pypy.objspace.std.dictmultiobject import IteratorImplementation
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject, _is_sane_hash
 from pypy.rlib import jit
@@ -15,7 +15,7 @@ class ModuleCell(object):
     def __repr__(self):
         return "<ModuleCell: %s>" % (self.w_value, )
 
-class ModuleDictImplementation(DictImplementation):
+class ModuleDictImplementation(W_DictMultiObject):
     def __init__(self, space):
         self.space = space
         self.content = {}
@@ -44,24 +44,21 @@ class ModuleDictImplementation(DictImplementation):
             w_value = cell.invalidate()
             cell = impl.content[name] = ModuleCell(w_value)
 
-    def setitem(self, w_key, w_value):
+    def impl_setitem(self, w_key, w_value):
         space = self.space
         if space.is_w(space.type(w_key), space.w_str):
-            return self.setitem_str(w_key, w_value)
+            self.impl_setitem_str(self.space.str_w(w_key), w_value)
         else:
-            return self._as_rdict().setitem(w_key, w_value)
+            self._as_rdict().setitem(w_key, w_value)
 
-    def setitem_str(self, w_key, w_value, shadows_type=True):
-        name = self.space.str_w(w_key)
+    def impl_setitem_str(self, name, w_value, shadows_type=True):
         self.getcell(name).w_value = w_value
         
         if name in self.unshadowed_builtins:
             self.invalidate_unshadowed_builtin(name)
             del self.unshadowed_builtins[name]
 
-        return self
-
-    def delitem(self, w_key):
+    def impl_delitem(self, w_key):
         space = self.space
         w_key_type = space.type(w_key)
         if space.is_w(w_key_type, space.w_str):
@@ -71,84 +68,71 @@ class ModuleDictImplementation(DictImplementation):
                 raise KeyError
             cell.invalidate()
             del self.content[key]
-            return self
         elif _is_sane_hash(space, w_key_type):
             raise KeyError
         else:
-            return self._as_rdict().delitem(w_key)
+            self._as_rdict().delitem(w_key)
         
-    def length(self):
+    def impl_length(self):
         return len(self.content)
 
-    def get(self, w_lookup):
+    def impl_getitem(self, w_lookup):
         space = self.space
         w_lookup_type = space.type(w_lookup)
         if space.is_w(w_lookup_type, space.w_str):
-            res = self.getcell(space.str_w(w_lookup), False)
-            if res is None:
-                return None
-            return res.w_value
+            return self.impl_getitem_str(space.str_w(w_lookup))
+
         elif _is_sane_hash(space, w_lookup_type):
             return None
         else:
-            return self._as_rdict().get(w_lookup)
+            return self._as_rdict().getitem(w_lookup)
 
-    def iteritems(self):
-        return ModuleDictItemIteratorImplementation(self.space, self)
+    def impl_getitem_str(self, lookup):
+        res = self.getcell(lookup, False)
+        if res is None:
+            return None
+        return res.w_value
 
-    def iterkeys(self):
-        return ModuleDictKeyIteratorImplementation(self.space, self)
+    def impl_iter(self):
+        return ModuleDictIteratorImplementation(self.space, self)
 
-    def itervalues(self):
-        return ModuleDictValueIteratorImplementation(self.space, self)
-
-    def keys(self):
+    def impl_keys(self):
         space = self.space
         return [space.wrap(key) for key in self.content.iterkeys()]
 
-    def values(self):
+    def impl_values(self):
         return [cell.w_value for cell in self.content.itervalues()]
 
-    def items(self):
+    def impl_items(self):
         space = self.space
         return [space.newtuple([space.wrap(key), cell.w_value])
                     for (key, cell) in self.content.iteritems()]
 
-    def _as_rdict(self):
-        newimpl = self.space.DefaultDictImpl(self.space)
+    def impl_clear(self):
+        # inefficient, but who cares
         for k, cell in self.content.iteritems():
-            newimpl.setitem(self.space.wrap(k), cell.w_value)
             cell.invalidate()
         for k in self.unshadowed_builtins:
             self.invalidate_unshadowed_builtin(k)
-        return newimpl
+        self.content.clear()
+        self.unshadowed_builtins.clear()
 
-# grrrrr. just a copy-paste from StrKeyIteratorImplementation in dictmultiobject
-class ModuleDictKeyIteratorImplementation(IteratorImplementation):
-    def __init__(self, space, dictimplementation):
-        IteratorImplementation.__init__(self, space, dictimplementation)
-        self.iterator = dictimplementation.content.iterkeys()
 
-    def next_entry(self):
-        # note that this 'for' loop only runs once, at most
-        for key in self.iterator:
-            return self.space.wrap(key)
-        else:
-            return None
+    def _as_rdict(self):
+        r_dict_content = self.initialize_as_rdict()
+        for k, cell in self.content.iteritems():
+            r_dict_content[self.space.wrap(k)] = cell.w_value
+            cell.invalidate()
+        for k in self.unshadowed_builtins:
+            self.invalidate_unshadowed_builtin(k)
+        self._clear_fields()
+        return self
 
-class ModuleDictValueIteratorImplementation(IteratorImplementation):
-    def __init__(self, space, dictimplementation):
-        IteratorImplementation.__init__(self, space, dictimplementation)
-        self.iterator = dictimplementation.content.itervalues()
+    def _clear_fields(self):
+        self.content = None
+        self.unshadowed_builtins = None
 
-    def next_entry(self):
-        # note that this 'for' loop only runs once, at most
-        for cell in self.iterator:
-            return cell.w_value
-        else:
-            return None
-
-class ModuleDictItemIteratorImplementation(IteratorImplementation):
+class ModuleDictIteratorImplementation(IteratorImplementation):
     def __init__(self, space, dictimplementation):
         IteratorImplementation.__init__(self, space, dictimplementation)
         self.iterator = dictimplementation.content.iteritems()
@@ -156,14 +140,9 @@ class ModuleDictItemIteratorImplementation(IteratorImplementation):
     def next_entry(self):
         # note that this 'for' loop only runs once, at most
         for key, cell in self.iterator:
-            return self.space.newtuple([self.space.wrap(key), cell.w_value])
+            return (self.space.wrap(key), cell.w_value)
         else:
-            return None
-
-
-
-
-
+            return None, None
 
 
 class State(object):
@@ -171,24 +150,27 @@ class State(object):
         self.space = space
         self.invalidcell = ModuleCell()
         self.always_invalid_cache = []
-        self.neverused_dictimpl = ModuleDictImplementation(space)
+        self.neverused_dictcontent = {}
 
 class GlobalCacheHolder(object):
     def __init__(self, space):
         self.cache = None
         state = space.fromcache(State)
-        self.dictimpl = state.neverused_dictimpl
+        self.dictcontent = state.neverused_dictcontent
 
     def getcache(self, space, code, w_globals):
-        implementation = getimplementation(w_globals)
-        if self.dictimpl is implementation:
+        if type(w_globals) is ModuleDictImplementation:
+            content = w_globals.content
+        else:
+            content = None
+        if self.dictcontent is content:
             return self.cache
-        return self.getcache_slow(space, code, w_globals, implementation)
+        return self.getcache_slow(space, code, w_globals, content)
     getcache._always_inline_ = True
 
-    def getcache_slow(self, space, code, w_globals, implementation):
+    def getcache_slow(self, space, code, w_globals, content):
         state = space.fromcache(State)
-        if not isinstance(implementation, ModuleDictImplementation):
+        if content is None:
             cache = state.always_invalid_cache
             if len(code.co_names_w) > len(cache):
                 cache = [state.invalidcell] * len(code.co_names_w)
@@ -196,23 +178,28 @@ class GlobalCacheHolder(object):
         else:
             cache = [state.invalidcell] * len(code.co_names_w)
         self.cache = cache
-        self.dictimpl = implementation
+        self.dictcontent = content
         return cache
     getcache_slow._dont_inline_ = True
 
 def init_code(code):
-    code.globalcacheholder = GlobalCacheHolder(code.space)
+    if code.co_flags & CO_CONTAINSGLOBALS:
+        code.globalcacheholder = GlobalCacheHolder(code.space)
+    else:
+        code.globalcacheholder = None
 
 
 def get_global_cache(space, code, w_globals):
     from pypy.interpreter.pycode import PyCode
     assert isinstance(code, PyCode)
     holder = code.globalcacheholder
-    return holder.getcache(space, code, w_globals)
+    if holder is not None:
+        return holder.getcache(space, code, w_globals)
+    return None
 
 def getimplementation(w_dict):
-    if type(w_dict) is W_DictMultiObject:
-        return w_dict.implementation
+    if type(w_dict) is ModuleDictImplementation and w_dict.r_dict_content is None:
+        return w_dict
     else:
         return None
 
@@ -226,7 +213,7 @@ def LOAD_GLOBAL(f, nameindex, *ignored):
 LOAD_GLOBAL._always_inline_ = True
 
 def find_cell_from_dict(implementation, name):
-    if isinstance(implementation, ModuleDictImplementation):
+    if implementation is not None:
         return implementation.getcell(name, False)
     return None
 
@@ -234,8 +221,8 @@ def find_cell_from_dict(implementation, name):
 def load_global_fill_cache(f, nameindex):
     name = f.space.str_w(f.getname_w(nameindex))
     implementation = getimplementation(f.w_globals)
-    if isinstance(implementation, ModuleDictImplementation):
-        cell = find_cell_from_dict(implementation, name)
+    if implementation is not None:
+        cell = implementation.getcell(name, False)
         if cell is None:
             builtin_impl = getimplementation(f.get_builtin().getdict())
             cell = find_cell_from_dict(builtin_impl, name)
@@ -245,5 +232,5 @@ def load_global_fill_cache(f, nameindex):
         if cell is not None:
             f.cache_for_globals[nameindex] = cell
             return cell.w_value
-    return f._load_global(f.getname_w(nameindex))
+    return f._load_global(f.getname_u(nameindex))
 load_global_fill_cache._dont_inline_ = True

@@ -20,19 +20,16 @@ class AbstractTestAsmGCRoot:
         return config
 
     @classmethod
-    def _makefunc2(cls, func):
+    def _makefunc_str_int(cls, func):
         def main(argv):
-            arg0 = int(argv[1])
+            arg0 = argv[1]
             arg1 = int(argv[2])
             try:
                 res = func(arg0, arg1)
             except MemoryError:
                 print 'Result: MemoryError'
             else:
-                if isinstance(res, int):
-                    print 'Result:', res
-                else:
-                    print 'Result: "%s"' % (res,)
+                print 'Result: "%s"' % (res,)
             return 0
         config = cls.make_config()
         t = TranslationContext(config=config)
@@ -56,7 +53,7 @@ class AbstractTestAsmGCRoot:
                 redirect = ' 2> NUL'
             else:
                 redirect = ''
-            g = os.popen('"%s" %d %d%s' % (exe_name, arg0, arg1, redirect), 'r')
+            g = os.popen('"%s" %s %d%s' % (exe_name, arg0, arg1, redirect), 'r')
             for line in g:
                 print >> sys.stderr, 'RUN:', line.rstrip()
                 lines.append(line)
@@ -181,3 +178,7 @@ class TestAsmGCRootWithSemiSpaceGC_Mingw32(TestAsmGCRootWithSemiSpaceGC):
 
     def define_callback_with_collect(cls):
         return lambda: 0
+
+class TestAsmGCRootWithHybridTagged(AbstractTestAsmGCRoot,
+                                    test_newgc.TestHybridTaggedPointers):
+    pass

@@ -27,7 +27,6 @@ translation_optiondescription = OptionDescription(
                  requires={
                      "ootype": [
                                 ("translation.backendopt.constfold", False),
-                                ("translation.backendopt.heap2stack", False),
                                 ("translation.backendopt.clever_malloc_removal", False),
                                 ("translation.gc", "boehm"), # it's not really used, but some jit code expects a value here
                                 ]
@@ -40,6 +39,9 @@ translation_optiondescription = OptionDescription(
                      "jvm":    [("translation.type_system", "ootype")],
                      },
                  cmdline="-b --backend"),
+
+    BoolOption("log", "Include debug prints in the translation (PYPYLOG=...)",
+               default=True, cmdline="--log"),
 
     # gc
     ChoiceOption("gc", "Garbage Collection Strategy",
@@ -63,16 +65,15 @@ translation_optiondescription = OptionDescription(
                  ["boehm", "ref", "framework", "none"],
                  default="ref", cmdline=None,
                  requires={
-                     "boehm": [("translation.gcrootfinder", "n/a")],
-                     "ref": [("translation.gcrootfinder", "n/a")],
-                     "none": [("translation.gcrootfinder", "n/a")],
+                     "boehm": [("translation.gcrootfinder", "n/a"),
+                               ("translation.gcremovetypeptr", False)],
+                     "ref": [("translation.gcrootfinder", "n/a"),
+                             ("translation.gcremovetypeptr", False)],
+                     "none": [("translation.gcrootfinder", "n/a"),
+                              ("translation.gcremovetypeptr", False)],
                  }),
-    OptionDescription("gcconfig", "Configure garbage collectors", [
-        BoolOption("debugprint", "Turn on debug printing for the GC",
-                   default=False),
-        BoolOption("removetypeptr", "Remove the typeptr from every object",
-                   default=False, cmdline="--gcremovetypeptr"),
-        ]),
+    BoolOption("gcremovetypeptr", "Remove the typeptr from every object",
+               default=False, cmdline="--gcremovetypeptr"),
     ChoiceOption("gcrootfinder",
                  "Strategy for finding GC Roots (framework GCs only)",
                  ["n/a", "shadowstack", "asmgcc"],
@@ -97,13 +98,12 @@ translation_optiondescription = OptionDescription(
     # JIT generation: use -Ojit to enable it
     BoolOption("jit", "generate a JIT",
                default=False,
-               requires=[("translation.thread", False),
-                         ("translation.gcconfig.removetypeptr", False)],
+               requires=[("translation.thread", False)],
                suggests=[("translation.gc", "hybrid"),     # or "boehm"
                          ("translation.gcrootfinder", "asmgcc"),
                          ("translation.list_comprehension_operations", True)]),
     ChoiceOption("jit_backend", "choose the backend for the JIT",
-                 ["auto", "x86", "llvm"],
+                 ["auto", "x86", "x86-without-sse2", "llvm"],
                  default="auto", cmdline="--jit-backend"),
     ChoiceOption("jit_debug", "the amount of debugging dumps made by the JIT",
                  ["off", "profile", "steps", "detailed"],
@@ -169,6 +169,10 @@ translation_optiondescription = OptionDescription(
     IntOption("withsmallfuncsets",
               "Represent groups of less funtions than this as indices into an array",
                default=0),
+    BoolOption("taggedpointers",
+               "When true, enable the use of tagged pointers. "
+               "If false, use normal boxing",
+               default=False),
 
     # options for ootype
     OptionDescription("ootype", "Object Oriented Typesystem options", [
@@ -198,9 +202,6 @@ translation_optiondescription = OptionDescription(
         BoolOption("mallocs", "Remove mallocs", default=True),
         BoolOption("constfold", "Constant propagation",
                    default=True),
-        BoolOption("heap2stack", "Escape analysis and stack allocation",
-                   default=False,
-                   requires=[("translation.stackless", False)]),
         # control profile based inlining
         StrOption("profile_based_inline",
                   "Use call count profiling to drive inlining"
@@ -359,7 +360,7 @@ def set_opt_level(config, level):
         elif word == 'jit':
             config.translation.suggest(jit=True)
         elif word == 'removetypeptr':
-            config.translation.gcconfig.suggest(removetypeptr=True)
+            config.translation.suggest(gcremovetypeptr=True)
         else:
             raise ValueError(word)
 

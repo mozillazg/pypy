@@ -1,20 +1,16 @@
 #!/usr/bin/env python
+import autopath
 import sys, py
+from pypy.tool import logparser
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.jit.metainterp.resoperation import rop
 from pypy.rpython.lltypesystem import lltype, llmemory
 
-class AllDict(dict):
-    def __getitem__(self, item):
-        return lltype.nullptr(llmemory.GCREF.TO)
-
-alldict = AllDict()
-
 def main(argv):
-    lst = ("\n" + py.path.local(argv[0]).read()).split("\n[")
-    lst = ['[' + i for i in lst if i]
-    for oplist in lst:
-        loop = parse(oplist, namespace=alldict)
+    log = logparser.parse_log_file(argv[0])
+    parts = logparser.extract_category(log, "jit-log-opt-")
+    for oplist in parts:
+        loop = parse(oplist, no_namespace=True)
         num_ops = 0
         num_dmp = 0
         num_guards = 0

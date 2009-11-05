@@ -130,12 +130,7 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(translator, '_jit2gc'):
             self.layoutbuilder = translator._jit2gc['layoutbuilder']
         else:
-            if translator.config.translation.gcconfig.removetypeptr:
-                lltype2vtable = translator.rtyper.lltype2vtable
-            else:
-                lltype2vtable = {}
-            self.layoutbuilder = TransformerLayoutBuilder(GCClass,
-                                                          lltype2vtable)
+            self.layoutbuilder = TransformerLayoutBuilder(translator, GCClass)
         self.layoutbuilder.transformer = self
         self.get_type_id = self.layoutbuilder.get_type_id
 
@@ -168,6 +163,10 @@ class FrameworkGCTransformer(GCTransformer):
             root_walker.setup_root_walker()
             gcdata.gc.setup()
 
+        def frameworkgc__teardown():
+            # run-time teardown code for tests!
+            gcdata.gc._teardown()
+
         bk = self.translator.annotator.bookkeeper
         r_typeid16 = rffi.platform.numbertype_to_rclass[TYPE_ID]
         s_typeid16 = annmodel.SomeInteger(knowntype=r_typeid16)
@@ -198,6 +197,10 @@ class FrameworkGCTransformer(GCTransformer):
 
         self.frameworkgc_setup_ptr = getfn(frameworkgc_setup, [],
                                            annmodel.s_None)
+        # for tests
+        self.frameworkgc__teardown_ptr = getfn(frameworkgc__teardown, [],
+                                               annmodel.s_None)
+        
         if root_walker.need_root_stack:
             self.incr_stack_ptr = getfn(root_walker.incr_stack,
                                        [annmodel.SomeInteger()],
@@ -500,11 +503,16 @@ class FrameworkGCTransformer(GCTransformer):
         self.write_typeid_list()
         return newgcdependencies
 
-    def get_final_dependencies(self):
-        # returns an iterator enumerating the type_info_group's members,
-        # to make sure that they are all followed (only a part of them
-        # might have been followed by a previous enum_dependencies()).
-        return iter(self.layoutbuilder.type_info_group.members)
+    def get_finish_tables(self):
+        # We must first make sure that the type_info_group's members
+        # are all followed.  Do it repeatedly while new members show up.
+        # Once it is really done, do finish_tables().
+        seen = 0
+        while seen < len(self.layoutbuilder.type_info_group.members):
+            curtotal = len(self.layoutbuilder.type_info_group.members)
+            yield self.layoutbuilder.type_info_group.members[seen:curtotal]
+            seen = curtotal
+        yield self.finish_tables()
 
     def write_typeid_list(self):
         """write out the list of type ids together with some info"""
@@ -813,6 +821,9 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(self.root_walker, 'thread_die_ptr'):
             hop.genop("direct_call", [self.root_walker.thread_die_ptr])
 
+    def gct_gc_get_type_info_group(self, hop):
+        return hop.cast_result(self.c_type_info_group)
+
     def gct_malloc_nonmovable_varsize(self, hop):
         TYPE = hop.spaceop.result.concretetype
         if self.gcdata.gc.can_malloc_nonmovable():
@@ -880,7 +891,7 @@ class FrameworkGCTransformer(GCTransformer):
     def gct_getfield(self, hop):
         if (hop.spaceop.args[1].value == 'typeptr' and
             hop.spaceop.args[0].concretetype.TO._hints.get('typeptr') and
-            self.translator.config.translation.gcconfig.removetypeptr):
+            self.translator.config.translation.gcremovetypeptr):
             self.transform_getfield_typeptr(hop)
         else:
             GCTransformer.gct_getfield(self, hop)
@@ -888,7 +899,7 @@ class FrameworkGCTransformer(GCTransformer):
     def gct_setfield(self, hop):
         if (hop.spaceop.args[1].value == 'typeptr' and
             hop.spaceop.args[0].concretetype.TO._hints.get('typeptr') and
-            self.translator.config.translation.gcconfig.removetypeptr):
+            self.translator.config.translation.gcremovetypeptr):
             self.transform_setfield_typeptr(hop)
         else:
             GCTransformer.gct_setfield(self, hop)
@@ -956,6 +967,16 @@ class FrameworkGCTransformer(GCTransformer):
 
 class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
+    def __init__(self, translator, GCClass=None):
+        if GCClass is None:
+            from pypy.rpython.memory.gc.base import choose_gc_from_config
+            GCClass, _ = choose_gc_from_config(translator.config)
+        if translator.config.translation.gcremovetypeptr:
+            lltype2vtable = translator.rtyper.lltype2vtable
+        else:
+            lltype2vtable = None
+        super(TransformerLayoutBuilder, self).__init__(GCClass, lltype2vtable)
+
     def has_finalizer(self, TYPE):
         rtti = get_rtti(TYPE)
         return rtti is not None and hasattr(rtti._obj, 'destructor_funcptr')
@@ -980,18 +1001,6 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         else:
             fptr = lltype.nullptr(gctypelayout.GCData.FINALIZERTYPE.TO)
         return fptr
-
-
-class JITTransformerLayoutBuilder(TransformerLayoutBuilder):
-    # for the JIT: currently does not support removetypeptr
-    def __init__(self, config):
-        from pypy.rpython.memory.gc.base import choose_gc_from_config
-        try:
-            assert not config.translation.gcconfig.removetypeptr
-        except AttributeError:    # for some tests
-            pass
-        GCClass, _ = choose_gc_from_config(config)
-        TransformerLayoutBuilder.__init__(self, GCClass, {})
 
 
 def gen_zero_gc_pointers(TYPE, v, llops, previous_steps=None):
@@ -1040,7 +1049,7 @@ class BaseRootWalker:
             end = gcdata.static_root_nongcend
             while addr != end:
                 result = addr.address[0]
-                if result.address[0] != llmemory.NULL:
+                if gc.points_to_valid_gc_object(result):
                     collect_static_in_prebuilt_nongc(gc, result)
                 addr += sizeofaddr
         if collect_static_in_prebuilt_gc:
@@ -1048,7 +1057,7 @@ class BaseRootWalker:
             end = gcdata.static_root_end
             while addr != end:
                 result = addr.address[0]
-                if result.address[0] != llmemory.NULL:
+                if gc.points_to_valid_gc_object(result):
                     collect_static_in_prebuilt_gc(gc, result)
                 addr += sizeofaddr
         if collect_stack_root:
@@ -1110,7 +1119,7 @@ class ShadowStackRootWalker(BaseRootWalker):
         addr = gcdata.root_stack_base
         end = gcdata.root_stack_top
         while addr != end:
-            if addr.address[0] != llmemory.NULL:
+            if gc.points_to_valid_gc_object(addr):
                 collect_stack_root(gc, addr)
             addr += sizeofaddr
         if self.collect_stacks_from_other_threads is not None:
@@ -1219,7 +1228,7 @@ class ShadowStackRootWalker(BaseRootWalker):
                 end = stacktop - sizeofaddr
                 addr = end.address[0]
                 while addr != end:
-                    if addr.address[0] != llmemory.NULL:
+                    if gc.points_to_valid_gc_object(addr):
                         callback(gc, addr)
                     addr += sizeofaddr
 

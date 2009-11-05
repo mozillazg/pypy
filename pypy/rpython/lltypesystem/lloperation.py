@@ -84,12 +84,17 @@ class LLOp(object):
         return op_impl
     fold = roproperty(get_fold_impl)
 
-    def is_pure(self, *ARGTYPES):
+    def is_pure(self, args_v):
         return (self.canfold or                # canfold => pure operation
                 self is llop.debug_assert or   # debug_assert is pure enough
                                                # reading from immutable
                 (self in (llop.getfield, llop.getarrayitem) and
-                 ARGTYPES[0].TO._hints.get('immutable')))
+                 args_v[0].concretetype.TO._hints.get('immutable')) or
+                (self is llop.getfield and     # reading from immutable_field
+                 'immutable_fields' in args_v[0].concretetype.TO._hints and
+                 args_v[1].value in args_v[0].concretetype.TO
+                                           ._hints['immutable_fields'].fields))
+        # XXX: what about ootype immutable arrays?
 
     def __repr__(self):
         return '<LLOp %s>' % (getattr(self, 'opname', '?'),)
@@ -427,6 +432,7 @@ LL_OPERATIONS = {
     'do_malloc_fixedsize_clear': LLOp(canunwindgc=True),
     'do_malloc_varsize_clear': LLOp(canunwindgc=True),
     'get_write_barrier_failing_case': LLOp(sideeffects=False),
+    'gc_get_type_info_group': LLOp(sideeffects=False),
 
     # __________ GC operations __________
 
@@ -518,6 +524,9 @@ LL_OPERATIONS = {
     # __________ debugging __________
     'debug_view':           LLOp(),
     'debug_print':          LLOp(canrun=True),
+    'debug_start':          LLOp(canrun=True),
+    'debug_stop':           LLOp(canrun=True),
+    'have_debug_prints':    LLOp(canrun=True),
     'debug_pdb':            LLOp(),
     'debug_assert':         LLOp(tryfold=True),
     'debug_fatalerror':     LLOp(),

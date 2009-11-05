@@ -615,6 +615,8 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             for alias in imp.names:
                 assert isinstance(alias, ast.alias)
                 if alias.name not in future.futureFlags_2_5.compiler_features:
+                    if alias.name == "braces":
+                        self.error("not a chance", imp)
                     self.error("future feature %s is not defined" %
                                (alias.name,), imp)
         if imp.level == 0 and \
@@ -1264,9 +1266,11 @@ class FunctionCodeGenerator(AbstractFunctionCodeGenerator):
         assert isinstance(func, ast.FunctionDef)
         # If there's a docstring, store it as the first constant.
         if self.is_docstring(func.body[0]):
-            doc_string = func.body[0]
-            assert isinstance(doc_string, ast.Expr)
-            doc_string.value.walkabout(self)
+            doc_expr = func.body[0]
+            assert isinstance(doc_expr, ast.Expr)
+            doc_str = doc_expr.value
+            assert isinstance(doc_str, ast.Str)
+            self.add_const(doc_str.s)
             start = 1
         else:
             self.add_const(self.space.w_None)

@@ -6,12 +6,13 @@ from pypy.rpython.memory.support import get_address_stack, get_address_deque
 from pypy.rpython.memory.support import AddressDict
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi
 from pypy.rlib.objectmodel import free_non_gc_object
-from pypy.rlib.debug import ll_assert
+from pypy.rlib.debug import ll_assert, have_debug_prints
+from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.memory.gc.base import MovingGCBase
 
-import sys, os, time
+import sys, os
 
 first_gcflag = 1 << 16
 GCFLAG_FORWARDED = first_gcflag
@@ -31,8 +32,6 @@ class SemiSpaceGC(MovingGCBase):
     inline_simple_malloc_varsize = True
     malloc_zero_filled = True
     first_unused_gcflag = first_gcflag << 5
-    total_collection_time = 0.0
-    total_collection_count = 0
 
     HDR = lltype.Struct('header', ('tid', lltype.Signed))   # XXX or rffi.INT?
     typeid_is_in_field = 'tid'
@@ -51,14 +50,19 @@ class SemiSpaceGC(MovingGCBase):
 
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
                  max_space_size=sys.maxint//2+1):
+        self.param_space_size = space_size
+        self.param_max_space_size = max_space_size
         MovingGCBase.__init__(self, config, chunk_size)
-        self.space_size = space_size
-        self.max_space_size = max_space_size
-        self.red_zone = 0
 
     def setup(self):
-        if self.config.gcconfig.debugprint:
-            self.program_start_time = time.time()
+        #self.total_collection_time = 0.0
+        self.total_collection_count = 0
+
+        self.space_size = self.param_space_size
+        self.max_space_size = self.param_max_space_size
+        self.red_zone = 0
+
+        #self.program_start_time = time.time()
         self.tospace = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.tospace), "couldn't allocate tospace")
         self.top_of_space = self.tospace + self.space_size
@@ -68,6 +72,11 @@ class SemiSpaceGC(MovingGCBase):
         MovingGCBase.setup(self)
         self.objects_with_finalizers = self.AddressDeque()
         self.objects_with_weakrefs = self.AddressStack()
+
+    def _teardown(self):
+        debug_print("Teardown")
+        llarena.arena_free(self.fromspace)
+        llarena.arena_free(self.tospace)
 
     # This class only defines the malloc_{fixed,var}size_clear() methods
     # because the spaces are filled with zeroes in advance.
@@ -204,18 +213,13 @@ class SemiSpaceGC(MovingGCBase):
         # (this is also a hook for the HybridGC)
 
     def semispace_collect(self, size_changing=False):
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void)
-            llop.debug_print(lltype.Void,
-                             ".----------- Full collection ------------------")
-            start_usage = self.free - self.tospace
-            llop.debug_print(lltype.Void,
-                             "| used before collection:          ",
-                             start_usage, "bytes")
-            start_time = time.time()
-        else:
-            start_time = 0 # Help the flow space
-            start_usage = 0 # Help the flow space
+        debug_start("gc-collect")
+        debug_print()
+        debug_print(".----------- Full collection ------------------")
+        start_usage = self.free - self.tospace
+        debug_print("| used before collection:          ",
+                    start_usage, "bytes")
+        #start_time = time.time()
         #llop.debug_print(lltype.Void, 'semispace_collect', int(size_changing))
 
         # Switch the spaces.  We copy everything over to the empty space
@@ -245,41 +249,33 @@ class SemiSpaceGC(MovingGCBase):
             self.record_red_zone()
             self.execute_finalizers()
         #llop.debug_print(lltype.Void, 'collected', self.space_size, size_changing, self.top_of_space - self.free)
-        if self.config.gcconfig.debugprint:
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            self.total_collection_time += elapsed_time
+        if have_debug_prints():
+            #end_time = time.time()
+            #elapsed_time = end_time - start_time
+            #self.total_collection_time += elapsed_time
             self.total_collection_count += 1
-            total_program_time = end_time - self.program_start_time
+            #total_program_time = end_time - self.program_start_time
             end_usage = self.free - self.tospace
-            llop.debug_print(lltype.Void,
-                             "| used after collection:           ",
-                             end_usage, "bytes")
-            llop.debug_print(lltype.Void,
-                             "| freed:                           ",
-                             start_usage - end_usage, "bytes")
-            llop.debug_print(lltype.Void,
-                             "| size of each semispace:          ",
-                             self.space_size, "bytes")
-            llop.debug_print(lltype.Void,
-                             "| fraction of semispace now used:  ",
-                             end_usage * 100.0 / self.space_size, "%")
-            ct = self.total_collection_time
+            debug_print("| used after collection:           ",
+                        end_usage, "bytes")
+            debug_print("| freed:                           ",
+                        start_usage - end_usage, "bytes")
+            debug_print("| size of each semispace:          ",
+                        self.space_size, "bytes")
+            debug_print("| fraction of semispace now used:  ",
+                        end_usage * 100.0 / self.space_size, "%")
+            #ct = self.total_collection_time
             cc = self.total_collection_count
-            llop.debug_print(lltype.Void,
-                             "| number of semispace_collects:    ",
-                             cc)
-            llop.debug_print(lltype.Void,
-                             "|                         i.e.:    ",
-                             cc / total_program_time, "per second")
-            llop.debug_print(lltype.Void,
-                             "| total time in semispace_collect: ",
-                             ct, "seconds")
-            llop.debug_print(lltype.Void,
-                             "|                            i.e.: ",
-                             ct * 100.0 / total_program_time, "%")
-            llop.debug_print(lltype.Void,
-                             "`----------------------------------------------")
+            debug_print("| number of semispace_collects:    ",
+                        cc)
+            #debug_print("|                         i.e.:    ",
+            #            cc / total_program_time, "per second")
+            #debug_print("| total time in semispace_collect: ",
+            #            ct, "seconds")
+            #debug_print("|                            i.e.: ",
+            #            ct * 100.0 / total_program_time, "%")
+            debug_print("`----------------------------------------------")
+        debug_stop("gc-collect")
 
     def starting_full_collect(self):
         pass    # hook for the HybridGC
@@ -370,8 +366,7 @@ class SemiSpaceGC(MovingGCBase):
         self.trace(obj, self._trace_copy, None)
 
     def _trace_copy(self, pointer, ignored):
-        if pointer.address[0] != NULL:
-            pointer.address[0] = self.copy(pointer.address[0])
+        pointer.address[0] = self.copy(pointer.address[0])
 
     def surviving(self, obj):
         # To use during a collection.  Check if the object is currently
@@ -494,8 +489,7 @@ class SemiSpaceGC(MovingGCBase):
         return scan
 
     def _append_if_nonnull(pointer, stack):
-        if pointer.address[0] != NULL:
-            stack.append(pointer.address[0])
+        stack.append(pointer.address[0])
     _append_if_nonnull = staticmethod(_append_if_nonnull)
 
     def _finalization_state(self, obj):

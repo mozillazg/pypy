@@ -430,12 +430,14 @@ class CStandaloneBuilder(CBuilder):
         bk = self.translator.annotator.bookkeeper
         return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
-    def cmdexec(self, args='', env=None):
+    def cmdexec(self, args='', env=None, err=False):
         assert self._compiled
         res = self.translator.platform.execute(self.executable_name, args,
                                                env=env)
         if res.returncode != 0:
             raise Exception("Returned %d" % (res.returncode,))
+        if err:
+            return res.out, res.err
         return res.out
 
     def compile(self):
@@ -620,10 +622,12 @@ class SourceGenerator:
             yield self.uniquecname(basecname), subiter()
 
     def gen_readable_parts_of_source(self, f):
+        split_criteria_big = SPLIT_CRITERIA
         if py.std.sys.platform != "win32":
-            split_criteria_big = SPLIT_CRITERIA * 4 
-        else:
-            split_criteria_big = SPLIT_CRITERIA
+            if self.database.gcpolicy.need_no_typeptr():
+                pass    # XXX gcc uses toooooons of memory???
+            else:
+                split_criteria_big = SPLIT_CRITERIA * 4 
         if self.one_source_file:
             return gen_readable_parts_of_main_c_file(f, self.database,
                                                      self.preimpl)
@@ -733,7 +737,7 @@ def gen_structdef(f, database):
         if hasattr(node, 'forward_decl'):
             if node.forward_decl:
                 print >> f, node.forward_decl
-        else:
+        elif node.name is not None:
             print >> f, '%s %s;' % (node.typetag, node.name)
     print >> f
     for node in structdeflist:
