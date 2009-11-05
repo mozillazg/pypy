@@ -24,6 +24,7 @@ class GCData(object):
         ("finalizer",      FINALIZERTYPE),
         ("fixedsize",      lltype.Signed),
         ("ofstoptrs",      lltype.Ptr(OFFSETS_TO_GC_PTR)),
+        ("counter",        lltype.Signed),
         hints={'immutable': True},
         )
     VARSIZE_TYPE_INFO = lltype.Struct("varsize_type_info",
@@ -93,6 +94,9 @@ class GCData(object):
             return weakptr_offset
         return -1
 
+    def q_count_allocation(self, typeid):
+        self.get(typeid).counter += 1
+
     def set_query_functions(self, gc):
         gc.set_query_functions(
             self.q_is_varsize,
@@ -105,7 +109,8 @@ class GCData(object):
             self.q_varsize_offset_to_variable_part,
             self.q_varsize_offset_to_length,
             self.q_varsize_offsets_to_gcpointers_in_var_part,
-            self.q_weakpointer_offset)
+            self.q_weakpointer_offset,
+            self.q_count_allocation)
 
 
 T_IS_VARSIZE           = 0x01
@@ -160,6 +165,7 @@ def encode_type_shape(builder, info, TYPE):
     if TYPE == WEAKREF:
         infobits |= T_IS_WEAKREF
     info.infobits = infobits
+    info.counter = 0
 
 # ____________________________________________________________
 
