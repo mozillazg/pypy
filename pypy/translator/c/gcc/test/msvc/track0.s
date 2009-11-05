@@ -117,7 +117,8 @@ $block2$40046:
 
 ; 1487 : 	l_v406 = pypy_asm_gcroot(l_v405);
 
-	test	DWORD PTR _l_v405$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v405$[esp+24]
 
 ; 1488 : 	l_items_2 = l_v406; /* for moving GCs */
 ; 1489 : 	l_v408 = RPyField((&pypy_g_ExcData), ed_exc_type);

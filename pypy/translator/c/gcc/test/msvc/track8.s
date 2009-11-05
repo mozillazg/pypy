@@ -212,7 +212,8 @@ $block6$34416:
 
 ; 1096 : 	l_v354 = pypy_asm_gcroot(l_v353);
 
-	test	DWORD PTR _l_v353$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v353$[esp+24]
 
 ; 1097 : 	l_a2_1 = l_v354; /* for moving GCs */
 ; 1098 : 	l_v356 = (void*)l_a5_1;
@@ -222,7 +223,8 @@ $block6$34416:
 
 ; 1099 : 	l_v357 = pypy_asm_gcroot(l_v356);
 
-	test	DWORD PTR _l_v356$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v356$[esp+24]
 
 ; 1100 : 	l_a5_1 = l_v357; /* for moving GCs */
 ; 1101 : 	l_v359 = (void*)l_a6_1;
@@ -232,7 +234,8 @@ $block6$34416:
 
 ; 1102 : 	l_v360 = pypy_asm_gcroot(l_v359);
 
-	test	DWORD PTR _l_v359$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v359$[esp+24]
 
 ; 1103 : 	l_a6_1 = l_v360; /* for moving GCs */
 ; 1104 : 	l_v362 = (void*)l_a1_1;
@@ -241,7 +244,8 @@ $block6$34416:
 
 ; 1105 : 	l_v363 = pypy_asm_gcroot(l_v362);
 
-	test	DWORD PTR _l_v362$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v362$[esp+24]
 
 ; 1106 : 	l_a1_1 = l_v363; /* for moving GCs */
 ; 1107 : 	l_v365 = (void*)l_a3_1;
@@ -250,7 +254,8 @@ $block6$34416:
 
 ; 1108 : 	l_v366 = pypy_asm_gcroot(l_v365);
 
-	test	DWORD PTR _l_v365$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v365$[esp+24]
 
 ; 1109 : 	l_a3_1 = l_v366; /* for moving GCs */
 ; 1110 : 	l_v368 = (void*)l_a4_1;
@@ -260,7 +265,8 @@ $block6$34416:
 
 ; 1111 : 	l_v369 = pypy_asm_gcroot(l_v368);
 
-	test	DWORD PTR _l_v368$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v368$[esp+24]
 
 ; 1112 : 	l_a4_1 = l_v369; /* for moving GCs */
 ; 1113 : 	l_v335 = (struct pypy_src8_A0 *)l_v428;
@@ -302,7 +308,8 @@ $block7$34426:
 
 ; 1126 : 	l_v377 = pypy_asm_gcroot(l_v376);
 
-	test	DWORD PTR _l_v376$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v376$[esp+24]
 
 ; 1127 : 	l_a2_1 = l_v377; /* for moving GCs */
 ; 1128 : 	l_v379 = (void*)l_a6_1;
@@ -312,7 +319,8 @@ $block7$34426:
 
 ; 1129 : 	l_v380 = pypy_asm_gcroot(l_v379);
 
-	test	DWORD PTR _l_v379$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v379$[esp+24]
 
 ; 1130 : 	l_a6_1 = l_v380; /* for moving GCs */
 ; 1131 : 	l_v382 = (void*)l_a1_1;
@@ -321,7 +329,8 @@ $block7$34426:
 
 ; 1132 : 	l_v383 = pypy_asm_gcroot(l_v382);
 
-	test	DWORD PTR _l_v382$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v382$[esp+24]
 
 ; 1133 : 	l_a1_1 = l_v383; /* for moving GCs */
 ; 1134 : 	l_v385 = (void*)l_v335;
@@ -330,7 +339,8 @@ $block7$34426:
 
 ; 1135 : 	l_v386 = pypy_asm_gcroot(l_v385);
 
-	test	DWORD PTR _l_v385$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v385$[esp+24]
 
 ; 1136 : 	l_v335 = l_v386; /* for moving GCs */
 ; 1137 : 	l_v388 = (void*)l_a3_1;
@@ -339,7 +349,8 @@ $block7$34426:
 
 ; 1138 : 	l_v389 = pypy_asm_gcroot(l_v388);
 
-	test	DWORD PTR _l_v388$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v388$[esp+24]
 
 ; 1139 : 	l_a3_1 = l_v389; /* for moving GCs */
 ; 1140 : 	l_v391 = (void*)l_a5_1;
@@ -349,7 +360,8 @@ $block7$34426:
 
 ; 1141 : 	l_v392 = pypy_asm_gcroot(l_v391);
 
-	test	DWORD PTR _l_v391$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v391$[esp+24]
 
 ; 1142 : 	l_a5_1 = l_v392; /* for moving GCs */
 ; 1143 : 	l_v394 = (void*)l_a4_1;
@@ -359,7 +371,8 @@ $block7$34426:
 
 ; 1144 : 	l_v395 = pypy_asm_gcroot(l_v394);
 
-	test	DWORD PTR _l_v394$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v394$[esp+24]
 
 ; 1145 : 	l_a4_1 = l_v395; /* for moving GCs */
 ; 1146 : 	l_v397 = RPyField((&pypy_g_ExcData), ed_exc_type);
@@ -398,7 +411,8 @@ $block8$34437:
 
 ; 1157 : 	l_v402 = pypy_asm_gcroot(l_v401);
 
-	test	DWORD PTR _l_v401$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v401$[esp+24]
 
 ; 1158 : 	l_a2_1 = l_v402; /* for moving GCs */
 ; 1159 : 	l_v404 = (void*)l_a1_1;
@@ -407,7 +421,8 @@ $block8$34437:
 
 ; 1160 : 	l_v405 = pypy_asm_gcroot(l_v404);
 
-	test	DWORD PTR _l_v404$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v404$[esp+24]
 
 ; 1161 : 	l_a1_1 = l_v405; /* for moving GCs */
 ; 1162 : 	l_v407 = (void*)l_a3_1;
@@ -416,7 +431,8 @@ $block8$34437:
 
 ; 1163 : 	l_v408 = pypy_asm_gcroot(l_v407);
 
-	test	DWORD PTR _l_v407$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v407$[esp+24]
 
 ; 1164 : 	l_a3_1 = l_v408; /* for moving GCs */
 ; 1165 : 	l_v410 = (void*)l_a6_1;
@@ -426,7 +442,8 @@ $block8$34437:
 
 ; 1166 : 	l_v411 = pypy_asm_gcroot(l_v410);
 
-	test	DWORD PTR _l_v410$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v410$[esp+24]
 
 ; 1167 : 	l_a6_1 = l_v411; /* for moving GCs */
 ; 1168 : 	l_v413 = (void*)l_a5_1;
@@ -436,7 +453,8 @@ $block8$34437:
 
 ; 1169 : 	l_v414 = pypy_asm_gcroot(l_v413);
 
-	test	DWORD PTR _l_v413$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v413$[esp+24]
 
 ; 1170 : 	l_a5_1 = l_v414; /* for moving GCs */
 ; 1171 : 	l_v416 = (void*)l_a4_1;
@@ -446,7 +464,8 @@ $block8$34437:
 
 ; 1172 : 	l_v417 = pypy_asm_gcroot(l_v416);
 
-	test	DWORD PTR _l_v416$[esp+24], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v416$[esp+24]
 
 ; 1173 : 	l_a4_1 = l_v417; /* for moving GCs */
 ; 1174 : 	l_v419 = RPyField((&pypy_g_ExcData), ed_exc_type);

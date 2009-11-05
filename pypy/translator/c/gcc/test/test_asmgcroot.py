@@ -154,13 +154,6 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
         res = self.run('callback_simple')
         assert res == 4900
 
-    if sys.platform == 'win32':
-        def test_callback_with_collect(self):
-            py.test.skip("No libffi yet with mingw32")
-
-        def define_callback_with_collect(cls):
-            return lambda: 0
-
 
 class TestAsmGCRootWithSemiSpaceGC_Mingw32(TestAsmGCRootWithSemiSpaceGC):
     # for the individual tests see
@@ -181,3 +174,10 @@ class TestAsmGCRootWithSemiSpaceGC_Mingw32(TestAsmGCRootWithSemiSpaceGC):
         config = TestAsmGCRootWithSemiSpaceGC.make_config()
         config.translation.cc = 'mingw32'
         return config
+
+
+    def test_callback_with_collect(self):
+        py.test.skip("No libffi yet with mingw32")
+
+    def define_callback_with_collect(cls):
+        return lambda: 0
