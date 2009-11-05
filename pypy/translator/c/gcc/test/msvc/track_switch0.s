@@ -131,7 +131,8 @@ $block0$211591:
 
 ; 15663: 	l_v271559 = pypy_asm_gcroot(l_v271558);
 
-	test	DWORD PTR _l_v271558$[ebp], 0
+	mov	eax, DWORD PTR ?_constant_always_one_@?1??pypy_asm_gcroot@@9@9
+	imul	eax, DWORD PTR _l_v271558$[ebp]
 	mov	edx, DWORD PTR _l_v271558$[ebp]
 	mov	DWORD PTR _l_v271559$[ebp], edx
 

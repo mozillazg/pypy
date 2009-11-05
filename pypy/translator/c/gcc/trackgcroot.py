@@ -1,47 +1,36 @@
 #! /usr/bin/env python
 import autopath
-
 import re, sys, os, random
 
-from pypy.translator.c.gcc.instruction import *
-
-LABEL               = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
-
-# darwin
-r_textstart            = re.compile(r"\t.text\s*$")
-# see
-# http://developer.apple.com/documentation/developertools/Reference/Assembler/040-Assembler_Directives/asm_directives.html
-OTHERSECTIONS = ['section', 'zerofill',
-                 'const', 'static_const', 'cstring',
-                 'literal4', 'literal8', 'literal16',
-                 'constructor', 'desctructor',
-                 'symbol_stub',
-                 'data', 'static_data',
-                 'non_lazy_symbol_pointer', 'lazy_symbol_pointer',
-                 'dyld', 'mod_init_func', 'mod_term_func',
-                 'const_data'
-                 ]
-r_sectionstart         = re.compile(r"\t\.("+'|'.join(OTHERSECTIONS)+").*$")
+from pypy.translator.c.gcc.instruction import Insn, Label, InsnCall, InsnRet
+from pypy.translator.c.gcc.instruction import InsnFunctionStart, InsnStop
+from pypy.translator.c.gcc.instruction import InsnSetLocal, InsnCopyLocal
+from pypy.translator.c.gcc.instruction import InsnPrologue, InsnEpilogue
+from pypy.translator.c.gcc.instruction import InsnGCROOT
+from pypy.translator.c.gcc.instruction import InsnStackAdjust
+from pypy.translator.c.gcc.instruction import InsnCannotFollowEsp
+from pypy.translator.c.gcc.instruction import LocalVar, somenewvalue, frameloc
+from pypy.translator.c.gcc.instruction import LOC_REG, LOC_NOWHERE, LOC_MASK
+from pypy.translator.c.gcc.instruction import LOC_EBP_BASED, LOC_ESP_BASED
 
 OFFSET_LABELS   = 2**30
-
-# inside functions
-r_label         = re.compile(LABEL+"[:]\s*$")
-r_globl         = re.compile(r"\t[.]globl\t"+LABEL+"\s*$")
-r_globllabel    = re.compile(LABEL+r"=[.][+]%d\s*$"%OFFSET_LABELS)
-r_insn          = re.compile(r"\t([a-z]\w*)\s")
-r_jmp_switch    = re.compile(r"\tjmp\t[*]"+LABEL+"[(]")
-r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
 
 class FunctionGcRootTracker(object):
     skip = 0
 
     @classmethod
     def init_regexp(cls):
+        cls.r_label         = re.compile(cls.LABEL+"[:]\s*$")
+        cls.r_globl         = re.compile(r"\t[.]globl\t"+cls.LABEL+"\s*$")
+        cls.r_globllabel    = re.compile(cls.LABEL+r"=[.][+]%d\s*$"%OFFSET_LABELS)
+
+        cls.r_insn          = re.compile(r"\t([a-z]\w*)\s")
         cls.r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+cls.OPERAND+")\s*$")
         cls.r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<source>"+cls.OPERAND+"),\s*(?P<target>"+cls.OPERAND+")\s*$")
 
         cls.r_jump          = re.compile(r"\tj\w+\s+"+cls.LABEL+"\s*$")
+        cls.r_jmp_switch    = re.compile(r"\tjmp\t[*]"+cls.LABEL+"[(]")
+        cls.r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
 
     def __init__(self, funcname, lines, filetag=0):
         self.funcname = funcname
@@ -116,7 +105,7 @@ class FunctionGcRootTracker(object):
     def findlabels(self):
         self.labels = {}      # {name: Label()}
         for lineno, line in enumerate(self.lines):
-            match = r_label.match(line)
+            match = self.r_label.match(line)
             if match:
                 label = match.group(1)
                 assert label not in self.labels, "duplicate label"
@@ -142,7 +131,7 @@ class FunctionGcRootTracker(object):
                 continue
             self.currentlineno = lineno
             insn = []
-            match = r_insn.match(line)
+            match = self.r_insn.match(line)
 
             if self.r_bottom_marker.match(line):
                 self.is_stack_bottom = True
@@ -163,7 +152,7 @@ class FunctionGcRootTracker(object):
             elif line == '\t/* end_ignore_in_trackgcroot */\n':
                 ignore_insns = False
             else:
-                match = r_label.match(line)
+                match = self.r_label.match(line)
                 if match:
                     insn = self.labels[match.group(1)]
 
@@ -207,13 +196,15 @@ class FunctionGcRootTracker(object):
         for insn in self.insns:
             if isinstance(insn, (InsnRet, InsnEpilogue, InsnGCROOT)):
                 deltas = {}
+                if isinstance(insn, InsnRet):
+                    deltas[insn] = 0
                 self.walk_instructions_backwards(walker, insn, 0)
                 size_at_insn = []
                 for insn1, delta1 in deltas.items():
                     if hasattr(insn1, 'framesize'):
                         size_at_insn.append(insn1.framesize + delta1)
-                assert len(size_at_insn) > 0, (
-                    "cannot reach the start of the function??")
+                if not size_at_insn:
+                    continue
                 size_at_insn = size_at_insn[0]
                 for insn1, delta1 in deltas.items():
                     size_at_insn1 = size_at_insn - delta1
@@ -308,10 +299,10 @@ class FunctionGcRootTracker(object):
         # script); otherwise invent a name and add the label to tracker.lines.
         label = None
         # this checks for a ".globl NAME" followed by "NAME:"
-        match = r_globl.match(self.lines[call.lineno+1])
+        match = self.r_globl.match(self.lines[call.lineno+1])
         if match:
             label1 = match.group(1)
-            match = r_globllabel.match(self.lines[call.lineno+2])
+            match = self.r_globllabel.match(self.lines[call.lineno+2])
             if match:
                 label2 = match.group(1)
                 if label1 == label2:
@@ -525,7 +516,7 @@ class FunctionGcRootTracker(object):
 
     def visit_jmp(self, line):
         tablelabels = []
-        match = r_jmp_switch.match(line)
+        match = self.r_jmp_switch.match(line)
         if match:
             # this is a jmp *Label(%index), used for table-based switches.
             # Assume that the table is just a list of lines looking like
@@ -543,13 +534,13 @@ class FunctionGcRootTracker(object):
                     for s in insn.all_sources_of(loc):
                         # if the source looks like 8(%eax,%edx,4)
                         # %eax is the real source, %edx is an offset.
-                        match = r_jmp_source.match(s)
+                        match = self.r_jmp_source.match(s)
                         if match and not self.r_localvar_esp.match(s):
                             sources.append(match.group(1))
                         else:
                             sources.append(s)
                 for source in sources:
-                    label_match = re.compile(LABEL).match(source)
+                    label_match = re.compile(self.LABEL).match(source)
                     if label_match:
                         tablelabels.append(label_match.group(0))
                         return
@@ -589,7 +580,8 @@ class FunctionGcRootTracker(object):
         return InsnStop()
 
     def register_jump_to(self, label):
-        self.labels[label].previous_insns.append(self.insns[-1])
+        if not isinstance(self.insns[-1], InsnStop):
+            self.labels[label].previous_insns.append(self.insns[-1])
 
     def conditional_jump(self, line):
         match = self.r_jump.match(line)
@@ -652,14 +644,41 @@ class FunctionGcRootTracker(object):
         insns = [InsnCall(self.currentlineno),
                  InsnSetLocal(self.EAX)]      # the result is there
         if sys.platform == 'win32':
+            # On win32, the address of a foreign function must be
+            # computed, the optimizer may store it in a register.  We
+            # could ignore this, except when the function has a
+            # __stdcall calling convention...
+            def find_register(target):
+                reg = []
+                def walker(insn, locs):
+                    sources = []
+                    for loc in locs:
+                        for s in insn.all_sources_of(loc):
+                            sources.append(s)
+                    for source in sources:
+                        if re.match("DWORD PTR .+@", source):
+                            reg.append(source)
+                    if reg:
+                        return
+                    yield tuple(sources)
+                insn = InsnStop()
+                insn.previous_insns = [self.insns[-1]]
+                self.walk_instructions_backwards(walker, insn, (target,))
+                return reg
+
+            if match and self.r_localvarfp.match(target):
+                sources = find_register(target)
+                if sources:
+                    target, = sources
+
             # handle __stdcall calling convention:
             # Stack cleanup is performed by the called function,
             # Function name is decorated with "@N" where N is the stack size
-            if match and '@' in target:
+            if match and '@' in target and not target.startswith('@'):
                 insns.append(InsnStackAdjust(int(target.rsplit('@', 1)[1])))
-            # XXX some functions seem use the "fastcall" calling convention
-            # without their declaration, how can we guess the stack effect?
-            if match and target in ['__alldiv', '__allrem', '__allmul']:
+            # Some (intrinsic?) functions use the "fastcall" calling convention
+            # XXX without any declaration, how can we guess the stack effect?
+            if match and target in ['__alldiv', '__allrem', '__allmul', '__alldvrm']:
                 insns.append(InsnStackAdjust(16))
         return insns
 
@@ -734,12 +753,12 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     TOP_OF_STACK = 'DWORD PTR [esp]'
 
     OPERAND = r'(?:(:?WORD|DWORD|BYTE) PTR |OFFSET )?[_\w?:@$]*(?:[-+0-9]+)?(:?\[[-+*\w0-9]+\])?'
-    LABEL   = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
+    LABEL   = r'([a-zA-Z_$@.][a-zA-Z0-9_$@.]*)'
 
     r_functionstart = re.compile(r"; Function compile flags: ")
     r_codestart     = re.compile(LABEL+r"\s+PROC\s*(:?;.+)?\n$")
     r_functionend   = re.compile(LABEL+r"\s+ENDP\s*$")
-    r_symboldefine =  re.compile(r"([_a-z0-9]+\$) = ([-0-9]+)\s*;.+\n")
+    r_symboldefine =  re.compile(r"([_A-Za-z0-9$]+) = ([-0-9]+)\s*;.+\n")
 
     LOCALVAR        = r"eax|edx|ecx|ebx|esi|edi|ebp|DWORD PTR [-+]?\d*\[esp[-+]?\d*\]"
     LOCALVARFP      = LOCALVAR + r"|DWORD PTR -?\d*\[ebp\]"
@@ -748,7 +767,8 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     r_localvar_esp  = re.compile(r"DWORD PTR ([-+]?\d+)?\[esp([-+]?\d+)?\]")
     r_localvar_ebp  = re.compile(r"DWORD PTR ([-+]?\d+)?\[ebp([-+]?\d+)?\]")
 
-    r_gcroot_marker = re.compile(r";.+ = pypy_asm_gcroot\(")
+    r_gcroot_marker = re.compile(r"$1") # never matches
+    r_gcroot_marker_var = re.compile(r"DWORD PTR .+_constant_always_one_.+pypy_asm_gcroot")
     r_bottom_marker = re.compile(r"\tcall\t_pypy_asm_stack_bottom\s*")
 
     r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+DWORD PTR ("+OPERAND+")\s*$")
@@ -759,7 +779,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     def init_regexp(cls):
         super(MsvcFunctionGcRootTracker, cls).init_regexp()
         cls.r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<target>"+cls.OPERAND+r"),\s*(?P<source>"+cls.OPERAND+r")\s*(?:;.+)?$")
-        cls.r_jump = re.compile(r"\tj\w+\s+(?:SHORT |DWORD PTR )?"+LABEL+"\s*$")
+        cls.r_jump = re.compile(r"\tj\w+\s+(?:SHORT |DWORD PTR )?"+cls.LABEL+"\s*$")
 
     def __init__(self, lines, filetag=0):
         self.defines = {}
@@ -792,6 +812,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
         locals()['visit_' + name] = getattr(FunctionGcRootTracker,
                                             'visit_' + name + 'l')
 
+    visit_int = FunctionGcRootTracker.visit_nop
     visit_npad = FunctionGcRootTracker.visit_nop
     # probably not GC pointers
     visit_cdq  = FunctionGcRootTracker.visit_nop
@@ -802,12 +823,75 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
         except ValueError:
             return None
 
-    def _visit_gcroot_marker(self, line):
-        assert self.lines[self.currentlineno + 1] == "\n"
-        assert self.lines[self.currentlineno + 2].startswith("\ttest\tDWORD PTR")
-        match = self.r_binaryinsn.match(self.lines[self.currentlineno + 2])
-        loc = match.group("target")
-        return InsnGCROOT(self.replace_symbols(loc))
+    def _visit_gcroot_marker(self, line=None):
+        # two possible patterns:
+        # 1. mov reg, DWORD PTR _always_one_
+        #    imul target, reg
+        # 2. mov reg, DWORD PTR _always_one_
+        #    imul reg, target
+        assert self.lines[self.currentlineno].startswith("\tmov\t")
+        mov = self.r_binaryinsn.match(self.lines[self.currentlineno])
+        assert re.match("DWORD PTR .+_always_one_", mov.group("source"))
+        reg = mov.group("target")
+
+        self.lines[self.currentlineno] = ";" + self.lines[self.currentlineno]
+
+        # the 'imul' must appear in the same block; the 'reg' must not
+        # appear in the instructions between
+        imul = None
+        lineno = self.currentlineno + 1
+        stop = False
+        while not stop:
+            line = self.lines[lineno]
+            if line == '\n':
+                stop = True
+            elif line.startswith("\tjmp\t"):
+                stop = True
+            elif self.r_gcroot_marker_var.search(line):
+                stop = True
+            elif line.startswith("\tmov\t%s," % (reg,)):
+                # mov reg, <arg>
+                stop = True
+            elif line.startswith("\txor\t%s, %s" % (reg, reg)):
+                # xor reg, reg
+                stop = True
+            elif line.startswith("\timul\t"):
+                imul = self.r_binaryinsn.match(line)
+                imul_arg1 = imul.group("target")
+                imul_arg2 = imul.group("source")
+                break
+            # the register may not appear in other instructions
+            elif reg in line:
+                assert False, (line, lineno)
+
+            lineno += 1
+        else:
+            # No imul, the returned value is not used in this function
+            return []
+
+        if reg == imul_arg2:
+            self.lines[lineno] = ";" + self.lines[lineno]
+            return InsnGCROOT(self.replace_symbols(imul_arg1))
+        else:
+            assert reg == imul_arg1
+            self.lines[lineno] = "\tmov\t%s, %s\n" % (imul_arg1, imul_arg2)
+            if imul_arg2.startswith('OFFSET '):
+                # ignore static global variables
+                pass
+            else:
+                self.lines[lineno] += "\t; GCROOT\n"
+
+            return []
+
+    def insns_for_copy(self, source, target):
+        if self.r_gcroot_marker_var.match(source):
+            return self._visit_gcroot_marker()
+        if self.lines[self.currentlineno].endswith("\t; GCROOT\n"):
+            insns = [InsnGCROOT(self.replace_symbols(source))]
+        else:
+            insns = []
+        return insns + super(MsvcFunctionGcRootTracker, self).insns_for_copy(source, target)
+
 
 MsvcFunctionGcRootTracker.init_regexp()
 
@@ -881,16 +965,32 @@ class DarwinAssemblerParser(AssemblerParser):
     format = "darwin"
     FunctionGcRootTracker = DarwinFunctionGcRootTracker
 
+    r_textstart = re.compile(r"\t.text\s*$")
+
+    # see
+    # http://developer.apple.com/documentation/developertools/Reference/Assembler/040-Assembler_Directives/asm_directives.html
+    OTHERSECTIONS = ['section', 'zerofill',
+                     'const', 'static_const', 'cstring',
+                     'literal4', 'literal8', 'literal16',
+                     'constructor', 'desctructor',
+                     'symbol_stub',
+                     'data', 'static_data',
+                     'non_lazy_symbol_pointer', 'lazy_symbol_pointer',
+                     'dyld', 'mod_init_func', 'mod_term_func',
+                     'const_data'
+                     ]
+    r_sectionstart = re.compile(r"\t\.("+'|'.join(OTHERSECTIONS)+").*$")
+
     @classmethod
     def find_functions(cls, iterlines):
         functionlines = []
         in_text = False
         in_function = False
         for n, line in enumerate(iterlines):
-            if r_textstart.match(line):
+            if cls.r_textstart.match(line):
                 assert not in_text, "unexpected repeated .text start: %d" % n
                 in_text = True
-            elif r_sectionstart.match(line):
+            elif cls.r_sectionstart.match(line):
                 if in_function:
                     yield in_function, functionlines
                     functionlines = []
@@ -920,9 +1020,9 @@ class Mingw32AssemblerParser(DarwinAssemblerParser):
         in_text = False
         in_function = False
         for n, line in enumerate(iterlines):
-            if r_textstart.match(line):
+            if cls.r_textstart.match(line):
                 in_text = True
-            elif r_sectionstart.match(line):
+            elif cls.r_sectionstart.match(line):
                 in_text = False
             elif in_text and cls.FunctionGcRootTracker.r_functionstart.match(line):
                 yield in_function, functionlines
@@ -966,18 +1066,27 @@ class MsvcAssemblerParser(AssemblerParser):
     def write_newfile(self, newfile, lines, grist):
         newlines = []
         for line in lines:
+            # truncate long comments
+            if line.startswith(";"):
+                line = line[:-1][:500] + '\n'
+
             # Workaround a bug in the .s files generated by msvc
-            # compiler: every float constant is exported with a name
-            # correcponding to its value, and will conflict with other
-            # modules.
-            line = line.replace('__real@',
-                                '__%s__real@' % grist)
+            # compiler: every string or float constant is exported
+            # with a name built after its value, and will conflict
+            # with other modules.
+            if line.startswith("PUBLIC\t__real@"):
+                line = '; ' + line
+            elif line.startswith("PUBLIC\t??_C@"):
+                line = '; ' + line
+
             # Because we insert labels in the code, some "SHORT" jumps
             # are now longer than 127 bytes.  We turn them all into
             # "NEAR" jumps.  Note that the assembler allocates space
             # for a near jump, but still generates a short jump when
             # it can.
             line = line.replace('\tjmp\tSHORT ', '\tjmp\t')
+            line = line.replace('\tjne\tSHORT ', '\tjne\t')
+            line = line.replace('\tje\tSHORT ',  '\tje\t')
 
             newlines.append(line)
 

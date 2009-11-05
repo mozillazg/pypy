@@ -122,7 +122,8 @@ def test_computegcmaptable():
         yield check_computegcmaptable, format, path
 
 
-r_expected = re.compile(r"\s*;;\s*expected\s+([{].+[}])")
+r_expected        = re.compile(r"\s*;;\s*expected\s+([{].+[}])")
+r_gcroot_constant = re.compile(r";\tmov\t.+, .+_constant_always_one_")
 
 def check_computegcmaptable(format, path):
     if format == 'msvc':
@@ -159,6 +160,11 @@ def check_computegcmaptable(format, path):
             else:
                 expectedlines.insert(i-2, '\t.globl\t%s\n' % (label,))
                 expectedlines.insert(i-1, '%s=.+%d\n' % (label, OFFSET_LABELS))
+        if format == 'msvc' and r_gcroot_constant.match(line):
+            expectedlines[i] = ';' + expectedlines[i]
+            expectedlines[i+1] = (expectedlines[i+1]
+                                  .replace('\timul\t', '\tmov\t')
+                                  + '\t; GCROOT\n')
         prevline = line
     assert len(seen) == len(tabledict), (
         "computed table contains unexpected entries:\n%r" %

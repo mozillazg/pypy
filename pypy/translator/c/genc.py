@@ -486,9 +486,13 @@ class CStandaloneBuilder(CBuilder):
             mk.rule(*rule)
 
         if self.config.translation.gcrootfinder == 'asmgcc':
-            sfiles = ['%s.s' % (cfile[:-2],) for cfile in mk.cfiles]
-            lblsfiles = ['%s.lbl.s' % (cfile[:-2],) for cfile in mk.cfiles]
-            gcmapfiles = ['%s.gcmap' % (cfile[:-2],) for cfile in mk.cfiles]
+            trackgcfiles = [cfile[:-2] for cfile in mk.cfiles]
+            if self.translator.platform.name == 'msvc':
+                trackgcfiles = [f for f in trackgcfiles
+                                if f.startswith(('implement', 'testing'))]
+            sfiles = ['%s.s' % (c,) for c in trackgcfiles]
+            lblsfiles = ['%s.lbl.s' % (c,) for c in trackgcfiles]
+            gcmapfiles = ['%s.gcmap' % (c,) for c in trackgcfiles]
             mk.definition('ASMFILES', sfiles)
             mk.definition('ASMLBLFILES', lblsfiles)
             mk.definition('GCMAPFILES', gcmapfiles)
@@ -500,11 +504,20 @@ class CStandaloneBuilder(CBuilder):
                 python = ''
 
             if self.translator.platform.name == 'msvc':
-                lblofiles = ['%s.lbl.obj' % (cfile[:-2],) for cfile in mk.cfiles]
+                lblofiles = []
+                for cfile in mk.cfiles:
+                    f = cfile[:-2]
+                    if f in trackgcfiles:
+                        ofile = '%s.lbl.obj' % (f,)
+                    else:
+                        ofile = '%s.obj' % (f,)
+
+                    lblofiles.append(ofile)
                 mk.definition('ASMLBLOBJFILES', lblofiles)
                 mk.definition('OBJECTS', 'gcmaptable.obj $(ASMLBLOBJFILES)')
-                # almost all optimizations implied by /O2, except /Og
-                mk.definition('ASM_CFLAGS', '$(CFLAGS) /Od /Oi /Ot /Oy /Ob2 /GF /Gy')
+                # /Oi (enable intrinsics) and /Ob1 (some inlining) are mandatory
+                # even in debug builds
+                mk.definition('ASM_CFLAGS', '$(CFLAGS) /Od /Oi /Ob1')
                 mk.rule('.SUFFIXES', '.s', [])
                 mk.rule('.s.obj', '',
                         'cmd /c $(MASM) /nologo /Cx /Cp /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
