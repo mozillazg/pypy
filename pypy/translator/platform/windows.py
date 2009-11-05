@@ -142,6 +142,12 @@ class MsvcPlatform(Platform):
     def _args_for_shared(self, args):
         return ['/dll'] + args
 
+    def check___thread(self):
+        # __declspec(thread) does not seem to work when using assembler.
+        # Returning False will cause the program to use TlsAlloc functions.
+        # see src/thread_nt.h
+        return False
+
     def _link_args_from_eci(self, eci, standalone):
         # Windows needs to resolve all symbols even for DLLs
         args = super(MsvcPlatform, self)._link_args_from_eci(eci, standalone=True)
