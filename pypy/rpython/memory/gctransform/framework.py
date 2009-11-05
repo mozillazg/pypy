@@ -350,8 +350,7 @@ class FrameworkGCTransformer(GCTransformer):
                                              annmodel.SomeAddress())
         if getattr(GCClass, 'resize_nursery', False):
             self.resizenursery_ptr = getfn(GCClass.resize_nursery.im_func,
-                                           [s_gc, annmodel.SomeInteger(),
-                                            annmodel.s_Bool],
+                                           [s_gc, annmodel.SomeInteger()],
                                            annmodel.s_None)
 
         if GCClass.moving_gc:
@@ -809,10 +808,9 @@ class FrameworkGCTransformer(GCTransformer):
         if not hasattr(self, 'resizenursery_ptr'):
             return    # only for generational gcs
         livevars = self.push_roots(hop)
-        [v_number, v_forced] = hop.spaceop.args
+        [v_number] = hop.spaceop.args
         hop.genop("direct_call",
-                  [self.resizenursery_ptr, self.c_const_gc,
-                   v_number, v_forced])
+                  [self.resizenursery_ptr, self.c_const_gc, v_number])
         self.pop_roots(hop, livevars)
 
     def gct_gc_set_max_heap_size(self, hop):
