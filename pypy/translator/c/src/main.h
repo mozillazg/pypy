@@ -15,6 +15,12 @@ int main(int argc, char *argv[]);
 
 #ifndef PYPY_NOT_MAIN_FILE
 
+void dump_group_info(const char *typename, long *counter)
+{
+  if (*counter)
+    fprintf(stderr, "|%12lu  %s\n", (unsigned long)*counter, typename);
+}
+
 int main(int argc, char *argv[])
 {
     char *errmsg;
@@ -35,6 +41,7 @@ int main(int argc, char *argv[])
     }
 
     exitcode = STANDALONE_ENTRY_POINT(list);
+    DUMP_GROUP_INFO
     if (RPyExceptionOccurred()) {
         /* fish for the exception type, at least */
 #ifndef AVR
