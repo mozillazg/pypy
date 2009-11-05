@@ -1,81 +1,75 @@
-import py 
-import sys
+import autopath
+from pypy.tool import testit
 
-class TestInterpreter: 
-    from pypy.interpreter.pycompiler import CPythonCompiler as CompilerClass
+class TestInterpreter(testit.TestCase):
 
     def codetest(self, source, functionname, args):
         """Compile and run the given code string, and then call its function
         named by 'functionname' with arguments 'args'."""
-        from pypy.interpreter import baseobjspace
+        from pypy.interpreter import baseobjspace, executioncontext
         from pypy.interpreter import pyframe, gateway, module
         space = self.space
 
-        source = str(py.code.Source(source).strip()) + '\n'
-
+        compile = space.builtin.compile
         w = space.wrap
-        w_code = space.builtin.call('compile', 
-                w(source), w('<string>'), w('exec'), w(0), w(0))
+        w_code = compile(w(source), w('<string>'), w('exec'), w(0), w(0))
+
+        ec = executioncontext.ExecutionContext(space)
 
         tempmodule = module.Module(space, w("__temp__"))
         w_glob = tempmodule.w_dict
-        space.setitem(w_glob, w("__builtins__"), space.builtin)
+        space.setitem(w_glob, w("__builtins__"), space.w_builtins)
 
         code = space.unwrap(w_code)
         code.exec_code(space, w_glob, w_glob)
 
-        wrappedargs = [w(a) for a in args]
+        wrappedargs = w(args)
         wrappedfunc = space.getitem(w_glob, w(functionname))
+        wrappedkwds = space.newdict([])
         try:
-            w_output = space.call_function(wrappedfunc, *wrappedargs)
+            w_output = space.call(wrappedfunc, wrappedargs, wrappedkwds)
         except baseobjspace.OperationError, e:
             #e.print_detailed_traceback(space)
             return '<<<%s>>>' % e.errorstr(space)
         else:
             return space.unwrap(w_output)
 
-    def setup_method(self, arg):
-        ec = self.space.getexecutioncontext() 
-        self.saved_compiler = ec.compiler
-        ec.compiler = self.CompilerClass(self.space)
-
-    def teardown_method(self, arg):
-        ec = self.space.getexecutioncontext() 
-        ec.compiler = self.saved_compiler
+    def setUp(self):
+        self.space = testit.objspace()
 
     def test_exception_trivial(self):
-        x = self.codetest('''\
-                def f():
-                    try:
-                        raise Exception()
-                    except Exception, e:
-                        return 1
-                    return 2
-            ''', 'f', [])
-        assert x == 1
+        x = self.codetest('''
+def f():
+    try:
+        raise Exception()
+    except Exception, e:
+        return 1
+    return 2
+''', 'f', [])
+        self.assertEquals(x, 1)
 
     def test_exception(self):
         x = self.codetest('''
-            def f():
-                try:
-                    raise Exception, 1
-                except Exception, e:
-                    return e.args[0]
-            ''', 'f', [])
-        assert x == 1
+def f():
+    try:
+        raise Exception, 1
+    except Exception, e:
+        return e.args[0]
+''', 'f', [])
+        self.assertEquals(x, 1)
 
     def test_finally(self):
         code = '''
-            def f(a):
-                try:
-                    if a:
-                        raise Exception
-                    a = -12
-                finally:
-                    return a
-        '''
-        assert self.codetest(code, 'f', [0]) == -12
-        assert self.codetest(code, 'f', [1]) == 1
+def f(a):
+    try:
+        if a:
+            raise Exception
+        a = -12
+    finally:
+        return a
+'''
+        self.assertEquals(self.codetest(code, 'f', [0]), -12)
+        self.assertEquals(self.codetest(code, 'f', [1]), 1)
 
 ##     def test_raise(self):
 ##         x = self.codetest('''
@@ -86,206 +80,137 @@ class TestInterpreter:
 
     def test_except2(self):
         x = self.codetest('''
-            def f():
-                try:
-                    z = 0
-                    try:
-                        "x"+1
-                    except TypeError, e:
-                        z = 5
-                        raise e
-                except TypeError:
-                    return z
-            ''', 'f', [])
-        assert x == 5
+def f():
+    try:
+        z = 0
+        try:
+            "x"+1
+        except TypeError, e:
+            z = 5
+            raise e
+    except TypeError:
+        return z
+''', 'f', [])
+        self.assertEquals(x, 5)
 
     def test_except3(self):
         code = '''
-                def f(v):
-                    z = 0
-                    try:
-                        z = 1//v
-                    except ZeroDivisionError, e:
-                        z = "infinite result"
-                    return z
-                '''
-        assert self.codetest(code, 'f', [2]) == 0
-        assert self.codetest(code, 'f', [0]) == "infinite result"
+def f(v):
+    z = 0
+    try:
+        z = 1//v
+    except ZeroDivisionError, e:
+        z = "infinite result"
+    return z
+'''
+        self.assertEquals(self.codetest(code, 'f', [2]), 0)
+        self.assertEquals(self.codetest(code, 'f', [0]), "infinite result")
         ess = "TypeError: unsupported operand type"
         res = self.codetest(code, 'f', ['x'])
-        assert res.find(ess) >= 0
+        self.failUnless(res.find(ess) >= 0)
         # the following (original) test was a bit too strict...:
         # self.assertEquals(self.codetest(code, 'f', ['x']), "<<<TypeError: unsupported operand type(s) for //: 'int' and 'str'>>>")
 
     def test_break(self):
         code = '''
-                def f(n):
-                    total = 0
-                    for i in range(n):
-                        try:
-                            if i == 4:
-                                break
-                        finally:
-                            total += i
-                    return total
-                '''
-        assert self.codetest(code, 'f', [4]) == 1+2+3
-        assert self.codetest(code, 'f', [9]) == 1+2+3+4
+def f(n):
+    total = 0
+    for i in range(n):
+        try:
+            if i == 4:
+                break
+        finally:
+            total += i
+    return total
+'''
+        self.assertEquals(self.codetest(code, 'f', [4]), 1+2+3)
+        self.assertEquals(self.codetest(code, 'f', [9]), 1+2+3+4)
 
     def test_continue(self):
         code = '''
-                def f(n):
-                    total = 0
-                    for i in range(n):
-                        try:
-                            if i == 4:
-                                continue
-                        finally:
-                            total += 100
-                        total += i
-                    return total
-                '''
-        assert self.codetest(code, 'f', [4]) == 1+2+3+400
-        assert self.codetest(code, 'f', [9]) == (
+def f(n):
+    total = 0
+    for i in range(n):
+        try:
+            if i == 4:
+                continue
+        finally:
+            total += 100
+        total += i
+    return total
+'''
+        self.assertEquals(self.codetest(code, 'f', [4]), 1+2+3+400)
+        self.assertEquals(self.codetest(code, 'f', [9]),
                           1+2+3 + 5+6+7+8+900)
 
-    def test_import(self):
-        # Regression test for a bug in PyFrame.IMPORT_NAME: when an
-        # import statement was executed in a function without a locals dict, a
-        # plain unwrapped None could be passed into space.call_function causing
-        # assertion errors later on.
-        real_call_function = self.space.call_function
-        def safe_call_function(w_obj, *arg_w):
-            for arg in arg_w:
-                assert arg is not None
-            return real_call_function(w_obj, *arg_w)
-        self.space.call_function = safe_call_function
-        code = '''
-            def f():
-                import sys
-            '''
-        self.codetest(code, 'f', [])
+class AppTestInterpreter(testit.AppTestCase):
+    def test_exception(self):
+        try:
+            raise Exception, 1
+        except Exception, e:
+            self.assertEquals(e.args[0], 1)
 
-    def test_extended_arg(self):
-        longexpr = 'x = x or ' + '-x' * 2500
-        code = '''
-                def f(x):
-                    %s
-                    %s
-                    %s
-                    %s
-                    %s
-                    %s
-                    %s
-                    %s
-                    %s
-                    %s
-                    while x:
-                        x -= 1   # EXTENDED_ARG is for the JUMP_ABSOLUTE at the end of the loop
-                    return x
-                ''' % ((longexpr,)*10)
-        assert self.codetest(code, 'f', [3]) == 0
-
-    def test_call_star_starstar(self):
-        code = '''\
-            def f1(n):
-                return n*2
-            def f38(n):
-                f = f1
-                r = [
-                    f(n, *[]),
-                    f(n),
-                    apply(f, (n,)),
-                    apply(f, [n]),
-                    f(*(n,)),
-                    f(*[n]),
-                    f(n=n),
-                    f(**{'n': n}),
-                    apply(f, (n,), {}),
-                    apply(f, [n], {}),
-                    f(*(n,), **{}),
-                    f(*[n], **{}),
-                    f(n, **{}),
-                    f(n, *[], **{}),
-                    f(n=n, **{}),
-                    f(n=n, *[], **{}),
-                    f(*(n,), **{}),
-                    f(*[n], **{}),
-                    f(*[], **{'n':n}),
-                    ]
-                return r
-            '''
-        assert self.codetest(code, 'f38', [117]) == [234]*19
-
-    def test_star_arg(self):
-        code = ''' 
-            def f(x, *y):
-                return y
-            def g(u, v):
-                return f(u, *v)
-            '''
-        assert self.codetest(code, 'g', [12, ()]) ==    ()
-        assert self.codetest(code, 'g', [12, (3,4)]) == (3,4)
-        assert self.codetest(code, 'g', [12, []]) ==    ()
-        assert self.codetest(code, 'g', [12, [3,4]]) == (3,4)
-        assert self.codetest(code, 'g', [12, {}]) ==    ()
-        assert self.codetest(code, 'g', [12, {3:1}]) == (3,)
-
-    def test_closure(self):
-        code = '''
-            def f(x, y):
-                def g(u, v):
-                    return u - v + 7*x
-                return g
-            def callme(x, u, v):
-                return f(x, 123)(u, v)
-            '''
-        assert self.codetest(code, 'callme', [1, 2, 3]) == 6
-
-    def test_list_comprehension(self):
-        code = '''
-            def f():
-                return [dir() for i in [1]][0]
-        '''
-        assert self.codetest(code, 'f', [])[0] == '_[1]'
-
-    def test_import_statement(self):
-        for x in range(10):
-            import os
-        code = '''
-            def f():
-                for x in range(10):
-                    import os
-                return os.name
-            '''
-        assert self.codetest(code, 'f', []) == os.name
-
-
-class TestPyPyInterpreter(TestInterpreter):
-    """Runs the previous test with the pypy parser"""
-    from pypy.interpreter.pycompiler import PythonAstCompiler as CompilerClass
-
-    def test_extended_arg(self):
-        py.test.skip("expression too large for the recursive parser")
-
-
-class AppTestInterpreter: 
     def test_trivial(self):
         x = 42
-        assert x == 42
+        self.assertEquals(x, 42)
+
+    def test_raise(self):
+        def f():
+            raise Exception
+        self.assertRaises(Exception, f)
+
+    def test_exception(self):
+        try:
+            raise Exception
+            self.fail("exception failed to raise")
+        except:
+            pass
+        else:
+            self.fail("exception executing else clause!")
+
+    def test_raise2(self):
+        def f(r):
+            try:
+                raise r
+            except LookupError:
+                return 1
+        self.assertRaises(Exception, f, Exception)
+        self.assertEquals(f(IndexError), 1)
+
+    def test_raise3(self):
+        try:
+            raise 1
+        except TypeError:
+            pass
+        else:
+            self.fail("shouldn't be able to raise 1")
+
+    def test_raise_three_args(self):
+        import sys
+        try:
+            raise ValueError
+        except:
+            exc_type,exc_val,exc_tb = sys.exc_info()
+        try:
+            raise exc_type,exc_val,exc_tb
+        except:
+            exc_type2,exc_val2,exc_tb2 = sys.exc_info()
+        self.assertEquals(exc_type,exc_type2)
+        self.assertEquals(exc_val,exc_val2)
+        self.assertEquals(exc_tb,exc_tb2)
 
     def test_trivial_call(self):
         def f(): return 42
-        assert f() == 42
+        self.assertEquals(f(), 42)
 
     def test_trivial_call2(self):
         def f(): return 1 + 1
-        assert f() == 2
+        self.assertEquals(f(), 2)
 
     def test_print(self):
         import sys
         save = sys.stdout 
-        class Out(object):
+        class Out:
             def __init__(self):
                 self.args = []
             def write(self, *args):
@@ -294,10 +219,14 @@ class AppTestInterpreter:
         try:
             sys.stdout = out
             print 10
-            assert out.args == ['10','\n']
+            self.assertEquals(out.args, ['10','\n'])
         finally:
             sys.stdout = save
 
     def test_identity(self):
         def f(x): return x
-        assert f(666) == 666
+        self.assertEquals(f(666), 666)
+
+
+if __name__ == '__main__':
+    testit.main()

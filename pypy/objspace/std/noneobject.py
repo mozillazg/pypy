@@ -5,19 +5,17 @@
 """ 
 
 from pypy.objspace.std.objspace import *
+from nonetype import W_NoneType
 
 class W_NoneObject(W_Object):
-    from pypy.objspace.std.nonetype import none_typedef as typedef
-
-    def unwrap(w_self, space):
-        return None
-
+    statictype = W_NoneType
 registerimplementation(W_NoneObject)
 
-W_NoneObject.w_None = W_NoneObject()
+def unwrap__None(space, w_none):
+    return None
 
-def nonzero__None(space, w_none):
-    return space.w_False
+def is_true__None(space, w_none):
+    return False
 
 def repr__None(space, w_none):
     return space.wrap('None')

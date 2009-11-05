@@ -1,0 +1,45 @@
+* String Formatting: the % mod operator needs to be implemented 
+  for dicts and the current hack for tuples (which just unwraps 
+  to cpython and calls the % operator) needs to be properly 
+  written at interp- or app-level. 
+
+* Provide an importer that can import packages. (we have a 
+  limited __import__ builtin defined) 
+
+  Consider PEP 302, new import hooks.
+  Try to write as much as possible in app-level.
+  How would PyPy import CPython extensions?
+
+* Implements super. Guido's paper, descrintro, has a pure Python
+  implementation. Let it run on PyPy. (as of r3461, it doesn't run.)
+
+* Supports traceback. At least sys.exc_info. (Many modules expect it.)
+
+* (documentation) generate a nice dot-graph from the structure of PyPy
+
+* port pypy's testing framework to std.utest (probably a sprint topic, 
+  as some discussion how to do it is required) 
+
+* (documentation) remove/retire all web-pages referencing e.g.
+  AnnSpace or other deprecated stuff
+
+* make application-level types work for (1) StdObjSpace types and (2)
+  core interpreter objects. 
+
+* Review, enhance the new mixed-level module mechanism
+  (e.g. the module/builtin*.py files comprise the builtin module)
+  and try to apply the same technique for the application level 
+  type definitions (types.py) 
+
+* review whatever you like 
+
+* clear out and do a clean implementation of multimethod delegation.
+  The idea is to give 'kinds' to arguments according to their use,
+  e.g. 'numeric argument' or 'object whose identity is preserved'.
+  A 'kind' encapsulates a set of delegation functions. Armin has
+  already written documentation for the envisioned new multimethod 
+  implementation:
+
+  http://codespeak.net/pypy/index.cgi?doc/objspace/multimethod
+
+* enhance the translator components to accept more of PyPy ...

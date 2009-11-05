@@ -1,250 +1,149 @@
-from py.test import raises
+import autopath
 
-from pypy.objspace.std import multimethod
-from pypy.objspace.std.multimethod import FailedToImplement
+from pypy.objspace.std.multimethod import *
+from pypy.tool import testit
 
-
-class W_Root(object):
-    pass
-
-class W_IntObject(W_Root):
-    pass
-
-class W_BoolObject(W_Root):
-    pass
-
-class W_StringObject(W_Root):
-    pass
-
-def delegate_b2i(space, w_x):
-    assert isinstance(w_x, W_BoolObject)
-    return W_IntObject()
-
-def add__Int_Int(space, w_x, w_y):
-    assert space == 'space'
-    assert isinstance(w_x, W_IntObject)
-    assert isinstance(w_y, W_IntObject)
-    return 'fine'
+BoundMultiMethod.ASSERT_BASE_TYPE = object
 
 
-class TestMultiMethod1:
-    Installer = multimethod.InstallerVersion1
+class X:
+    def __init__(self, value):
+        self.value = value
+    def __repr__(self):
+        return '<X %r>' % self.value
 
-    def setup_class(cls):
-        cls.prev_installer = multimethod.Installer
-        multimethod.Installer = cls.Installer
-        add = multimethod.MultiMethodTable(2, root_class=W_Root,
-                                           argnames_before=['space'])
-        add.register(add__Int_Int, W_IntObject, W_IntObject)
-        typeorder = {
-            W_IntObject: [(W_IntObject, None), (W_Root, None)],
-            W_BoolObject: [(W_BoolObject, None), (W_IntObject, delegate_b2i),
-                           (W_Root, None)],
-            W_StringObject: [(W_StringObject, None), (W_Root, None)],
-            }
-        cls.typeorder = typeorder
-        cls.add = add
-        cls.add1 = staticmethod(add.install('__add', [typeorder, typeorder]))
+def from_y_to_x(space, yinstance):
+    return X(yinstance)
 
-    def teardown_class(cls):
-        multimethod.Installer = cls.prev_installer
+from_y_to_x.result_class = X
+from_y_to_x.priority = 2
 
-    def test_simple(self):
-        space = 'space'
-        w_x = W_IntObject()
-        w_y = W_IntObject()
-        assert self.add1(space, w_x, w_y) == 'fine'
+def from_x_to_str(space, xinstance):
+    #if xinstance.value:
+    return w('!' + repr(xinstance.value))
+    #else:
+    #    return []
 
-    def test_failtoimplement(self):
-        space = 'space'
-        w_x = W_IntObject()
-        w_s = W_StringObject()
-        raises(FailedToImplement, "self.add1(space, w_x, w_s)")
-        raises(FailedToImplement, "self.add1(space, w_s, w_x)")
-
-    def test_delegate(self):
-        space = 'space'
-        w_x = W_IntObject()
-        w_s = W_StringObject()
-        w_b = W_BoolObject()
-        assert self.add1(space, w_x, w_b) == 'fine'
-        assert self.add1(space, w_b, w_x) == 'fine'
-        assert self.add1(space, w_b, w_b) == 'fine'
-        raises(FailedToImplement, "self.add1(space, w_b, w_s)")
-        raises(FailedToImplement, "self.add1(space, w_s, w_b)")
-
-    def test_not_baked(self):
-        typeorder = self.typeorder
-        add2 = self.add.install('__add2', [typeorder, typeorder],
-                                baked_perform_call=False)
-        assert add2[0] == ['space', 'arg0', 'arg1']
-        if multimethod.Installer is multimethod.InstallerVersion1:
-            assert add2[1] == 'arg0.__add2(space, arg1)'
-        assert isinstance(add2[2], dict)
-        assert not add2[3]
-
-    def test_empty(self):
-        add3_installer = multimethod.Installer(self.add, '__add3', [{},{}])
-        assert add3_installer.is_empty()
-        if multimethod.Installer is multimethod.InstallerVersion1:
-            assert len(add3_installer.to_install) == 1
-            assert add3_installer.to_install[0][0] is None
-
-    def test_empty_direct(self):
-        assert not self.add.install_if_not_empty('__add4', [{},{}])
-
-    def test_empty_not_baked(self):
-        add5_installer = multimethod.Installer(self.add, '__add5', [{},{}],
-                                               baked_perform_call=False)
-        assert add5_installer.is_empty()
-        if multimethod.Installer is multimethod.InstallerVersion1:
-            assert len(add5_installer.to_install) == 0
-        add5 = add5_installer.install()
-        assert add5[0] == ['space', 'arg0', 'arg1']
-        assert add5[1] == 'raiseFailedToImplement()'
-        assert isinstance(add5[2], dict)
-        assert add5[3]
-
-    def test_mmdispatcher(self):
-        typeorder = self.typeorder
-        add2 = multimethod.MMDispatcher(self.add, [typeorder, typeorder])
-        space = 'space'
-        w_x = W_IntObject()
-        w_s = W_StringObject()
-        w_b1 = W_BoolObject()
-        w_b2 = W_BoolObject()
-        assert add2(space, w_x, w_b1) == 'fine'
-        assert add2(space, w_b2, w_x) == 'fine'
-        assert add2(space, w_b1, w_b2) == 'fine'
-        raises(FailedToImplement, "add2(space, w_b2, w_s)")
-        raises(FailedToImplement, "add2(space, w_s, w_b1)")
-
-    def test_forbidden_subclasses(self):
-        mul = multimethod.MultiMethodTable(2, root_class=W_Root,
-                                           argnames_before=['space'])
-        class UserW_StringObject(W_StringObject):
-            pass
-        def mul__Int_String(space, w_x, w_y):
-            assert space == 'space'
-            assert isinstance(w_x, W_IntObject)
-            assert isinstance(w_y, W_StringObject)
-            return 'fine'
-        mul.register(mul__Int_String, W_IntObject, W_StringObject)
-
-        mul1 = mul.install('__mul1', [self.typeorder, self.typeorder])
-        assert mul1('space', W_IntObject(), W_StringObject()) == 'fine'
-        assert mul1('space', W_IntObject(), UserW_StringObject()) == 'fine'
-
-        ext_typeorder = self.typeorder.copy()
-        ext_typeorder[UserW_StringObject] = []
-        mul2 = mul.install('__mul2', [ext_typeorder, ext_typeorder])
-        assert mul2('space', W_IntObject(), W_StringObject()) == 'fine'
-        raises(FailedToImplement,
-               mul2, 'baz', W_IntObject(), UserW_StringObject())
-
-    def test_more_forbidden_subclasses(self):
-        mul = multimethod.MultiMethodTable(2, root_class=W_Root,
-                                           argnames_before=['space'])
-        class UserW_StringObject(W_StringObject):
-            pass
-        def mul__String_String(space, w_x, w_y):
-            assert space == 'space'
-            assert isinstance(w_x, W_StringObject)
-            assert isinstance(w_y, W_StringObject)
-            return 'fine'
-        mul.register(mul__String_String, W_StringObject, W_StringObject)
-
-        ext_typeorder = {W_StringObject: [(W_StringObject, None)],
-                         UserW_StringObject: []}
-        mul2 = mul.install('__mul2', [ext_typeorder, ext_typeorder])
-        assert mul2('space', W_StringObject(), W_StringObject()) == 'fine'
-        raises(FailedToImplement,
-               mul2, 'baz', W_StringObject(), UserW_StringObject())
-        raises(FailedToImplement,
-               mul2, 'baz', UserW_StringObject(), W_StringObject())
-        raises(FailedToImplement,
-               mul2, 'baz', UserW_StringObject(), UserW_StringObject())
-
-    def test_ANY(self):
-        setattr = multimethod.MultiMethodTable(3, root_class=W_Root,
-                                           argnames_before=['space'])
-        def setattr__Int_ANY_ANY(space, w_x, w_y, w_z):
-            assert space == 'space'
-            assert isinstance(w_x, W_IntObject)
-            assert isinstance(w_y, W_Root)
-            assert isinstance(w_z, W_Root)
-            return w_y.__class__.__name__ + w_z.__class__.__name__
-        setattr.register(setattr__Int_ANY_ANY, W_IntObject, W_Root, W_Root)
-        setattr1 = setattr.install('__setattr1', [self.typeorder]*3)
-        for cls1 in self.typeorder:
-            for cls2 in self.typeorder:
-                assert setattr1('space', W_IntObject(), cls1(), cls2()) == (
-                    cls1.__name__ + cls2.__name__)
-
-    def test_all_cases(self):
-        import random
-        space = 'space'
-        w_x = W_IntObject()
-        w_x.expected = [W_IntObject, W_Root]
-        w_s = W_StringObject()
-        w_s.expected = [W_StringObject, W_Root]
-        w_b = W_BoolObject()
-        w_b.expected = [W_BoolObject, W_IntObject, W_Root]
-
-        def test(indices):
-            sub = multimethod.MultiMethodTable(2, root_class=W_Root,
-                                               argnames_before=['space'])
-            def addimpl(cls1, cls2):
-                token = random.random()
-                def sub__cls1_cls2(space, w_x, w_y):
-                    assert space == 'space'
-                    assert isinstance(w_x, cls1)
-                    assert isinstance(w_y, cls2)
-                    return token
-                sub.register(sub__cls1_cls2, cls1, cls2)
-                return token
-
-            def check(w1, w2):
-                try:
-                    res = sub1(space, w1, w2)
-                except FailedToImplement:
-                    res = FailedToImplement
-                for cls1 in w1.expected:
-                    for cls2 in w2.expected:
-                        if (cls1, cls2) in expected:
-                            assert res == expected[cls1, cls2]
-                            return
-                else:
-                    assert res is FailedToImplement
-
-            random.shuffle(indices)
-            expected = {}
-            for index in indices:
-                cls1, cls2 = choices[index]
-                token = addimpl(cls1, cls2)
-                expected[cls1, cls2] = token
-
-            typeorder = self.typeorder
-            sub1 = sub.install('__sub', [typeorder, typeorder])
-            for w1 in [w_x, w_s, w_b]:
-                for w2 in [w_x, w_s, w_b]:
-                    check(w1, w2)
-
-        classes = [W_Root, W_StringObject, W_IntObject, W_BoolObject]
-        choices = [(cls1, cls2) for cls1 in classes
-                                for cls2 in classes]
-        # each choice is a pair of classes which can be implemented or
-        # not by the multimethod 'sub'.  Test all combinations that
-        # involve at most three implemented choices.
-        for i in range(len(choices)):
-            test([i])
-            for j in range(i+1, len(choices)):
-                test([i, j])
-                for k in range(j+1, len(choices)):
-                    test([i, j, k])
-                    #for l in range(k+1, len(choices)):  -- for a 4th choice
-                    #    test([i, j, k, l])              -- (takes a while)
+from_x_to_str.result_class = str
+from_x_to_str.priority = 2
 
 
-class TestMultiMethod2(TestMultiMethod1):
-    Installer = multimethod.InstallerVersion2
+class Y:
+    def __init__(self, value):
+        self.value = value
+    def __repr__(self):
+        return '<Y %r>' % self.value
+    def __nonzero__(self):
+        return self.value != 666
+
+
+def add_x_x(space, x1, x2):
+    return "add_x_x", x1, x2
+
+def add_x_y(space, x1, y2):
+    if x1.value < 0:
+        raise FailedToImplement(ValueError, 'not good')
+    return "add_x_y", x1, y2
+
+def add_y_y(space, y1, y2):
+    return "add_y_y", y1, y2
+
+def add_string_string(space, x, y):
+    return "add_string_string", x, y
+
+def add_int_string(space, x, y):
+    return "add_int_string", x, y
+
+def add_int_any(space, y1, o2):
+    return "add_int_any", y1, o2
+
+class FakeObjSpace:
+    add = MultiMethod('+', 2, [])
+    add.register(add_x_x,           X,   X)
+    add.register(add_x_y,           X,   Y)
+    add.register(add_y_y,           Y,   Y)
+    add.register(add_string_string, str, str)
+    add.register(add_int_string,    int, str)
+    add.register(add_int_any,       int, object)
+
+    delegate = DelegateMultiMethod()
+    delegate.register(from_y_to_x,    Y)
+    delegate.register(from_x_to_str,  X)
+    
+    def wrap(self, x):
+        return '<wrapped %r>' % (x,)
+    w_TypeError = 'w_TypeError'
+
+##def w(x, cache={}):
+##    if type(x) in cache:
+##        Stub = cache[type(x)]
+##    else:
+##        Stub = type(type(x))('%s_stub' % type(x).__name__, (type(x),), {})
+##        Stub.dispatchclass = Stub
+##        cache[type(x)] = Stub
+##    return Stub(x)
+
+##X.dispatchclass = X
+##Y.dispatchclass = Y
+
+def w(x):
+    return x
+
+
+class TestMultiMethod(testit.TestCase):
+    def setUp(self):
+        # only run when testing stdobjectspace 
+        #XXX removed: testit.objspace('std')
+        self.space = FakeObjSpace()
+
+    def test_non_delegate(self):
+        space = self.space
+        
+        r = space.add(X(2), X(5))
+        self.assertEquals(repr(r), "('add_x_x', <X 2>, <X 5>)")
+        
+        r = space.add(X(3), Y(4))
+        self.assertEquals(repr(r), "('add_x_y', <X 3>, <Y 4>)")
+
+        r = space.add(Y(0), Y(20))
+        self.assertEquals(repr(r), "('add_y_y', <Y 0>, <Y 20>)")
+
+        r = space.add(w(-3), w([7,6,5]))
+        self.assertEquals(repr(r), "('add_int_any', -3, [7, 6, 5])")
+
+        r = space.add(w(5), w("test"))
+        self.assertEquals(repr(r), "('add_int_string', 5, 'test')")
+
+        r = space.add(w("x"), w("y"))
+        self.assertEquals(repr(r), "('add_string_string', 'x', 'y')")
+        
+    def test_delegate_y_to_x(self):
+        space = self.space
+        r = space.add(Y(-1), X(7))
+        self.assertEquals(repr(r), "('add_x_x', <X <Y -1>>, <X 7>)")
+        
+        r = space.add(Y(1), X(7))
+        self.assertEquals(repr(r), "('add_x_x', <X <Y 1>>, <X 7>)")
+        
+        r = space.add(X(-3), Y(20))
+        self.assertEquals(repr(r), "('add_x_x', <X -3>, <X <Y 20>>)")
+       
+    def test_no_operation_defined(self):
+        space = self.space
+        self.assertRaises(OperationError, space.add, w([3]), w(4))
+        self.assertRaises(OperationError, space.add, w(3.0), w('bla'))
+        #self.assertRaises(OperationError, space.add, X(0), w("spam"))
+        #self.assertRaises(OperationError, space.add, Y(666), w("egg"))
+
+    def test_delegate_x_to_str(self):
+        space = self.space
+        r = space.add(X(42), w("spam"))
+        self.assertEquals(repr(r), "('add_string_string', '!42', 'spam')")
+
+        r = space.add(Y(20), w("egg"))
+        self.assertEquals(repr(r), "('add_string_string', '!<Y 20>', 'egg')")
+
+
+
+if __name__ == '__main__':
+    testit.main()
