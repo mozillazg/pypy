@@ -992,6 +992,16 @@ class GroupNode(ContainerNode):
             structnode = self.db.getcontainernode(member)
             yield '#define %s %s.member%d' % (structnode.name,
                                               self.name, i)
+        # <hack>
+        from pypy.translator.c.support import c_string_constant
+        yield '#define DUMP_GROUP_INFO \\'
+        for i, extrainfo in enumerate(self.obj.extrainfos):
+            if extrainfo:
+                text = '\tdump_group_info(%s, (long*)(&%s.member%d)); \\' % (
+                    c_string_constant(extrainfo), self.name, i)
+                yield text.replace('\n', '\\\n')
+        yield '\t;'
+        # </hack>
         yield ''
 
     def initializationexpr(self):

@@ -20,11 +20,11 @@ class GCData(object):
 
     # structure describing the layout of a typeid
     TYPE_INFO = lltype.Struct("type_info",
+        ("counter",        lltype.Signed),
         ("infobits",       lltype.Signed),    # combination of the T_xxx consts
         ("finalizer",      FINALIZERTYPE),
         ("fixedsize",      lltype.Signed),
         ("ofstoptrs",      lltype.Ptr(OFFSETS_TO_GC_PTR)),
-        ("counter",        lltype.Signed),
         hints={'immutable': True},
         )
     VARSIZE_TYPE_INFO = lltype.Struct("varsize_type_info",
@@ -223,7 +223,7 @@ class TypeLayoutBuilder(object):
             else:
                 self._pending_type_shapes.append((info, TYPE))
             # store it
-            type_id = self.type_info_group.add_member(fullinfo)
+            type_id = self.type_info_group.add_member(fullinfo, str(TYPE))
             self.id_of_type[TYPE] = type_id
             self.add_vtable_after_typeinfo(TYPE)
             return type_id
