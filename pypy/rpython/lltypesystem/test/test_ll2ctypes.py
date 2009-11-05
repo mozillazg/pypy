@@ -15,7 +15,6 @@ from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
-from pypy.tool.udir import udir
 
 class TestLL2Ctypes(object):
 
@@ -43,6 +42,8 @@ class TestLL2Ctypes(object):
         assert lltype2ctypes(rffi.r_ulong(-1)) == sys.maxint * 2 + 1
         res = ctypes2lltype(lltype.Unsigned, sys.maxint * 2 + 1)
         assert (res, type(res)) == (rffi.r_ulong(-1), rffi.r_ulong)
+        assert ctypes2lltype(lltype.Bool, 0) is False
+        assert ctypes2lltype(lltype.Bool, 1) is True
 
         res = lltype2ctypes(llmemory.sizeof(lltype.Signed))
         assert res == struct.calcsize("l")
@@ -121,7 +122,10 @@ class TestLL2Ctypes(object):
         a.y[0] = 'x'
         a.y[1] = 'y'
         a.y[2] = 'z'
-        ac = lltype2ctypes(a)
+        # we need to pass normalize=False, otherwise 'ac' is returned of
+        # a normalized standard type, which complains about IndexError
+        # when doing 'ac.contents.y.items[2]'.
+        ac = lltype2ctypes(a, normalize=False)
         assert ac.contents.y.length == 3
         assert ac.contents.y.items[2] == ord('z')
         lltype.free(a, flavor='raw')
@@ -800,7 +804,7 @@ class TestLL2Ctypes(object):
 
         assert f() == 6
 
-    def test_qsort(self):
+    def test_qsort_callback(self):
         TP = rffi.CArrayPtr(rffi.INT)
         a = lltype.malloc(TP.TO, 5, flavor='raw')
         a[0] = 5
@@ -994,47 +998,99 @@ class TestLL2Ctypes(object):
         assert v
         v2 = ctypes2lltype(llmemory.GCREF, ctypes.c_void_p(1235))
         assert v2 != v
+
+    def test_gcref_type(self):
+        NODE = lltype.GcStruct('NODE')
+        node = lltype.malloc(NODE)
+        ref = lltype.cast_opaque_ptr(llmemory.GCREF, node)
+        v = lltype2ctypes(ref)
+        assert isinstance(v, ctypes.c_void_p)
+
+    def test_gcref_null(self):
+        ref = lltype.nullptr(llmemory.GCREF.TO)
+        v = lltype2ctypes(ref)
+        assert isinstance(v, ctypes.c_void_p)
+
+    def test_cast_null_gcref(self):
+        ref = lltype.nullptr(llmemory.GCREF.TO)
+        value = rffi.cast(lltype.Signed, ref)
+        assert value == 0
+
+    def test_cast_null_fakeaddr(self):
+        ref = llmemory.NULL
+        value = rffi.cast(lltype.Signed, ref)
+        assert value == 0
+
+    def test_gcref_truth(self):
+        p0 = ctypes.c_void_p(0)
+        ref0 = ctypes2lltype(llmemory.GCREF, p0)
+        assert not ref0
+
+        p1234 = ctypes.c_void_p(1234)
+        ref1234 = ctypes2lltype(llmemory.GCREF, p1234)        
+        assert p1234
+
+    def test_gcref_casts(self):
+        p0 = ctypes.c_void_p(0)
+        ref0 = ctypes2lltype(llmemory.GCREF, p0)
+
+        assert lltype.cast_ptr_to_int(ref0) == 0
+        assert llmemory.cast_ptr_to_adr(ref0) == llmemory.NULL
+
+        NODE = lltype.GcStruct('NODE')
+        assert lltype.cast_opaque_ptr(lltype.Ptr(NODE), ref0) == lltype.nullptr(NODE)
+
+        node = lltype.malloc(NODE)
+        ref1 = lltype.cast_opaque_ptr(llmemory.GCREF, node)
+
+        intval  = rffi.cast(lltype.Signed, node)
+        intval1 = rffi.cast(lltype.Signed, ref1)
+
+        assert intval == intval1
+
+        ref2 = ctypes2lltype(llmemory.GCREF, intval1)
+
+        assert lltype.cast_opaque_ptr(lltype.Ptr(NODE), ref2) == node
         
-class TestPlatform(object):
-    def test_lib_on_libpaths(self):
-        from pypy.translator.platform import platform
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        #addr = llmemory.cast_ptr_to_adr(ref1)
+        #assert llmemory.cast_adr_to_int(addr) == intval
 
-        tmpdir = udir.join('lib_on_libppaths')
-        tmpdir.ensure(dir=1)
-        c_file = tmpdir.join('c_file.c')
-        c_file.write('int f(int a, int b) { return (a + b); }')
-        eci = ExternalCompilationInfo(export_symbols=['f'])
-        so = platform.compile([c_file], eci, standalone=False)
-        eci = ExternalCompilationInfo(
-            libraries = ['c_file'],
-            library_dirs = [str(so.dirpath())]
-        )
-        f = rffi.llexternal('f', [rffi.INT, rffi.INT], rffi.INT,
-                            compilation_info=eci)
-        assert f(3, 4) == 7
+        #assert lltype.cast_ptr_to_int(ref1) == intval
 
-    def test_prefix(self):
+    def test_mixed_gcref_comparison(self):
+        NODE = lltype.GcStruct('NODE')
+        node = lltype.malloc(NODE)
+        ref1 = lltype.cast_opaque_ptr(llmemory.GCREF, node)
+        ref2 = rffi.cast(llmemory.GCREF, 123)
 
-        if sys.platform != 'linux2':
-            py.test.skip("Not supported")
+        assert ref1 != ref2
+        assert not (ref1 == ref2)
 
-        from pypy.translator.platform import platform
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        assert ref2 != ref1
+        assert not (ref2 == ref1)
 
-        tmpdir = udir.join('lib_on_libppaths_prefix')
-        tmpdir.ensure(dir=1)
-        c_file = tmpdir.join('c_file.c')
-        c_file.write('int f(int a, int b) { return (a + b); }')
-        eci = ExternalCompilationInfo()
-        so = platform.compile([c_file], eci, standalone=False)
-        sopath = py.path.local(so)
-        sopath.move(sopath.dirpath().join('libc_file.so'))
-        eci = ExternalCompilationInfo(
-            libraries = ['c_file'],
-            library_dirs = [str(so.dirpath())]
-        )
-        f = rffi.llexternal('f', [rffi.INT, rffi.INT], rffi.INT,
-                            compilation_info=eci)
-        assert f(3, 4) == 7
+        assert node._obj._storage is True
+
+        # forced!
+        rffi.cast(lltype.Signed, ref1)
+        assert node._obj._storage not in (True, None)
+
+        assert ref1 != ref2
+        assert not (ref1 == ref2)
+
+        assert ref2 != ref1
+        assert not (ref2 == ref1)
+
+    def test_gcref_comparisons_back_and_forth(self):
+        NODE = lltype.GcStruct('NODE')
+        node = lltype.malloc(NODE)
+        ref1 = lltype.cast_opaque_ptr(llmemory.GCREF, node)
+        numb = rffi.cast(lltype.Signed, ref1)
+        ref2 = rffi.cast(llmemory.GCREF, numb)
+        assert ref1 == ref2
+        assert ref2 == ref1
+        assert not (ref1 != ref2)
+        assert not (ref2 != ref1)        
+   
         
+    

@@ -5,6 +5,20 @@ from pypy.annotation import description
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, getgcflavor
 
+
+class FieldListAccessor(object):
+
+    def initialize(self, TYPE, fields):
+        self.TYPE = TYPE
+        self.fields = fields
+
+    def __repr__(self):
+        return '<FieldListAccessor for %s>' % getattr(self, 'TYPE', '?')
+
+    def _freeze_(self):
+        return True
+
+
 def getclassrepr(rtyper, classdef):
     try:
         result = rtyper.class_reprs[classdef]
@@ -22,12 +36,42 @@ def getinstancerepr(rtyper, classdef, default_flavor='gc'):
     try:
         result = rtyper.instance_reprs[classdef, flavor]
     except KeyError:
-        result = rtyper.type_system.rclass.buildinstancerepr(
-                        rtyper, classdef, gcflavor=flavor)
+        result = buildinstancerepr(rtyper, classdef, gcflavor=flavor)
 
         rtyper.instance_reprs[classdef, flavor] = result
         rtyper.add_pendingsetup(result)
     return result
+
+
+def buildinstancerepr(rtyper, classdef, gcflavor='gc'):
+    from pypy.rlib.objectmodel import UnboxedValue
+    from pypy.objspace.flow.model import Constant
+    
+    if classdef is None:
+        unboxed = []
+        virtualizable2 = False
+    else:
+        unboxed = [subdef for subdef in classdef.getallsubdefs()
+                          if subdef.classdesc.pyobj is not None and
+                             issubclass(subdef.classdesc.pyobj, UnboxedValue)]
+        virtualizable2 = classdef.classdesc.read_attribute('_virtualizable2_',
+                                                           Constant(False)).value
+    if virtualizable2:
+        assert len(unboxed) == 0
+        assert gcflavor == 'gc'
+        return rtyper.type_system.rvirtualizable2.Virtualizable2InstanceRepr(rtyper, classdef)
+    elif len(unboxed) > 0 and rtyper.type_system.name == 'lltypesystem':
+        # the UnboxedValue class and its parent classes need a
+        # special repr for their instances
+        if len(unboxed) != 1:
+            raise TyperError("%r has several UnboxedValue subclasses" % (
+                classdef,))
+        assert gcflavor == 'gc'
+        from pypy.rpython.lltypesystem import rtagged
+        return rtagged.TaggedInstanceRepr(rtyper, classdef, unboxed[0])
+    else:
+        return rtyper.type_system.rclass.InstanceRepr(rtyper, classdef, gcflavor)
+
 
 class MissingRTypeAttribute(TyperError):
     pass
@@ -121,6 +165,19 @@ class AbstractInstanceRepr(Repr):
 
     def _setup_repr_final(self):
         pass
+
+    def _parse_field_list(self, fields, accessor):
+        with_suffix = {}
+        for name in fields:
+            if name.endswith('[*]'):
+                name = name[:-3]
+                suffix = '[*]'
+            else:
+                suffix = ''
+            mangled_name, r = self._get_field(name)
+            with_suffix[mangled_name] = suffix
+        accessor.initialize(self.object_type, with_suffix)
+        return with_suffix
 
     def new_instance(self, llops, classcallhop=None):
         raise NotImplementedError

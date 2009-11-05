@@ -1,7 +1,19 @@
 from pypy.conftest import gettestobjspace, option
 from pypy.tool.udir import udir
+from pypy.jit.backend import loopparser
 import py
 import sys, os
+
+def run_source(sourcefile, pypy_executable, tmpdir):
+    logfilepath = tmpdir.join(sourcefile.basename[:-3] + '.log')
+    if sys.platform.startswith('win'):
+        py.test.skip("XXX this is not Windows-friendly")
+
+    result = py.process.cmdexec('PYPYJITLOG="%s" "%s" "%s"' % (
+        logfilepath, pypy_executable, sourcefile))
+    assert result
+    assert logfilepath.check()
+    return result, logfilepath + '.ops'
 
 class PyPyCJITTests(object):
     def run_source(self, source, testcases):
@@ -14,8 +26,7 @@ class PyPyCJITTests(object):
         # some support code...
         print >> f, py.code.Source("""
             import sys, pypyjit
-            pypyjit.enable()
-            pypyjit.setthreshold(3)
+            pypyjit.set_param(threshold=3)
 
             def check(args, expected):
                 for i in range(3):
@@ -134,5 +145,34 @@ class TestJIT(PyPyCJITTests):
         cls.counter = 0
         cls.pypy_c = option.pypy_c
 
+    def run_and_compare(self, sourcefile):
+        fname = py.magic.autopath().dirpath().join('loops', sourcefile)
+        pypy_out, log = run_source(fname, self.pypy_c, self.tmpdir)
+        cpy_out = py.process.cmdexec('"%s" "%s"' % (
+                sys.executable, fname))
+        assert pypy_out == cpy_out
+        parser = loopparser.Parser()
+        loops = parser.parse(log)
+        if option.view:
+            from pypy.jit.metainterp.graphpage import display_loops
+            display_loops(loops)
+        return loops
 
-    
+    def assert_no_op(self, loop, opname):
+        for operation in loop.iter_operations():
+            assert operation.opname != opname
+
+    def test_trivial_add(self):
+        loops = self.run_and_compare('simple_add.py')
+        for loop in loops:
+            # naive way if finding the relevant loop to inspect
+            if isinstance(loop.operations[0], loopparser.ByteCodeRef):
+                self.assert_no_op(loop, 'call')
+                break
+        else:
+            assert False
+
+    def test_dict_lookup(self):
+        py.test.skip('should remove dict lookups')
+        loops = self.run_and_compare('dict_lookup.py')
+        self.assert_no_op(loops[1], 'getfield_gc')

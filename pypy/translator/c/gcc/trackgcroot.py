@@ -434,6 +434,7 @@ class FunctionGcRootTracker(object):
         # arithmetic operations should not produce GC pointers
         'inc', 'dec', 'not', 'neg', 'or', 'and', 'sbb', 'adc',
         'shl', 'shr', 'sal', 'sar', 'rol', 'ror', 'mul', 'imul', 'div', 'idiv',
+        'bswap', 'bt',
         # zero-extending moves should not produce GC pointers
         'movz',
         ])
@@ -1019,7 +1020,6 @@ if __name__ == '__main__':
             break
     tracker = GcRootTracker(verbose=verbose, shuffle=shuffle)
     for fn in sys.argv[1:]:
-        tmpfn = fn + '.TMP'
         f = open(fn, 'r')
         firstline = f.readline()
         f.seek(0)
@@ -1027,12 +1027,12 @@ if __name__ == '__main__':
             tracker.reload_raw_table(f)
             f.close()
         else:
-            g = open(tmpfn, 'w')
+            assert fn.endswith('.s')
+            lblfn = fn[:-2] + '.lbl.s'
+            g = open(lblfn, 'w')
             tracker.process(f, g, filename=fn)
             f.close()
             g.close()
-            os.unlink(fn)
-            os.rename(tmpfn, fn)
             if output_raw_table:
                 tracker.dump_raw_table(sys.stdout)
                 tracker.clear()

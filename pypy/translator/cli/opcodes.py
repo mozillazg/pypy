@@ -1,8 +1,7 @@
 from pypy.translator.cli.metavm import  Call, CallMethod, \
      IndirectCall, GetField, SetField, DownCast, NewCustomDict,\
      MapException, Box, Unbox, NewArray, GetArrayElem, SetArrayElem,\
-     TypeOf, CastPrimitive, EventHandler, GetStaticField, SetStaticField,\
-     FieldInfoForConst
+     TypeOf, CastPrimitive, EventHandler, GetStaticField, SetStaticField, DebugPrint
 from pypy.translator.oosupport.metavm import PushArg, PushAllArgs, StoreResult, InstructionList,\
     New, RuntimeNew, CastTo, PushPrimitive, OOString, OOUnicode, OONewArray
 from pypy.translator.cli.cts import WEAKREF
@@ -19,12 +18,20 @@ def _not(op):
 def _abs(type_):
     return [PushAllArgs, 'call %s class [mscorlib]System.Math::Abs(%s)' % (type_, type_), StoreResult]
 
-def _check_ovf(op):
+def _check_ovf(op, catch_arithmexic_exception=False):
     mapping = [('[mscorlib]System.OverflowException', 'exceptions.OverflowError')]
+    if catch_arithmexic_exception:
+        mapping.append(('[mscorlib]System.ArithmeticException', 'exceptions.OverflowError'))
     return [MapException(op, mapping)]
 
 def _check_zer(op):
     mapping = [('[mscorlib]System.DivideByZeroException', 'exceptions.ZeroDivisionError')]
+    return [MapException(op, mapping)]
+
+def _check_ovf_zer(op):
+    mapping = [('[mscorlib]System.OverflowException', 'exceptions.OverflowError'),
+               ('[mscorlib]System.DivideByZeroException', 'exceptions.ZeroDivisionError'),
+               ('[mscorlib]System.ArithmeticException', 'exceptions.OverflowError')]
     return [MapException(op, mapping)]
 
 # __________ object oriented & misc operations __________
@@ -36,6 +43,8 @@ misc_ops = {
     'oosend':                   [CallMethod],
     'ooupcast':                 DoNothing,
     'oodowncast':               [DownCast],
+    'cast_to_object':           DoNothing,
+    'cast_from_object':         [DownCast],
     'clibox':                   [Box],
     'cliunbox':                 [Unbox],
     'cli_newarray':             [NewArray],
@@ -46,9 +55,6 @@ misc_ops = {
     'cli_eventhandler':         [EventHandler],
     'cli_getstaticfield':       [GetStaticField],
     'cli_setstaticfield':       [SetStaticField],
-    'cli_fieldinfo_for_const':  [FieldInfoForConst],
-    'oois':                     'ceq',
-    'oononnull':                [PushAllArgs, 'ldnull', 'ceq']+Not,
     'classof':                  [PushAllArgs, 'callvirt instance class [mscorlib]System.Type object::GetType()'],
     'instanceof':               [CastTo, 'ldnull', 'cgt.un'],
     'subclassof':               [PushAllArgs, 'call bool [pypylib]pypy.runtime.Utils::SubclassOf(class [mscorlib]System.Type, class[mscorlib]System.Type)'],
@@ -70,8 +76,11 @@ misc_ops = {
     'gc_set_max_heap_size':     Ignore,
     'resume_point':             Ignore,
     'debug_assert':             Ignore,
+    'debug_print':              [DebugPrint],
+    'debug_fatalerror':         [PushAllArgs, 'call void [pypylib]pypy.runtime.Utils::debug_fatalerror(string)'],
     'keepalive':                Ignore,
-    'is_early_constant':        [PushPrimitive(ootype.Bool, False)],
+    'jit_marker':               Ignore,
+    'promote_virtualizable':    Ignore,
     }
 
 # __________ numeric operations __________
@@ -104,6 +113,10 @@ unary_ops = {
 
     'ullong_is_true':            [PushAllArgs, 'ldc.i8 0', 'cgt.un'],
     'ullong_invert':             'not',
+
+    # XXX: why nop nop nop?
+    'ooisnull':                 [PushAllArgs, 'nop', 'nop', 'nop', 'ldnull', 'ceq'],
+    'oononnull':                [PushAllArgs, 'nop', 'nop', 'nop', 'nop', 'ldnull', 'ceq']+Not,
 
     # when casting from bool we want that every truth value is casted
     # to 1: we can't simply DoNothing, because the CLI stack could
@@ -161,8 +174,8 @@ binary_ops = {
     'int_add_nonneg_ovf':       _check_ovf('add.ovf'),
     'int_sub_ovf':              _check_ovf('sub.ovf'),
     'int_mul_ovf':              _check_ovf('mul.ovf'),
-    'int_floordiv_ovf':         'div', # these can't overflow!
-    'int_mod_ovf':              'rem',
+    'int_floordiv_ovf':         _check_ovf('div', catch_arithmexic_exception=True),
+    'int_mod_ovf':              _check_ovf('rem', catch_arithmexic_exception=True),
     'int_lt_ovf':               'clt',
     'int_le_ovf':               _not('cgt'),
     'int_eq_ovf':               'ceq',
@@ -174,13 +187,11 @@ binary_ops = {
 
     'int_lshift_ovf':           _check_ovf([PushArg(0),'conv.i8',PushArg(1), 'shl',
                                             'conv.ovf.i4', StoreResult]),
-    'int_lshift_ovf_val':       _check_ovf([PushArg(0),'conv.i8',PushArg(1), 'shl',
-                                            'conv.ovf.i4', StoreResult]),
 
     'int_rshift_ovf':           'shr', # these can't overflow!
     'int_xor_ovf':              'xor',
-    'int_floordiv_ovf_zer':     _check_zer('div'),
-    'int_mod_ovf_zer':          _check_zer('rem'),
+    'int_floordiv_ovf_zer':     _check_ovf_zer('div'),
+    'int_mod_ovf_zer':          _check_ovf_zer('rem'),
     'int_mod_zer':              _check_zer('rem'),
 
     'uint_add':                 'add',
@@ -246,6 +257,9 @@ binary_ops = {
     'ullong_ge':                _not('clt.un'),
     'ullong_lshift':            [PushAllArgs, 'conv.u4', 'shl'],
     'ullong_rshift':            [PushAllArgs, 'conv.i4', 'shr'],
+
+    'oois':                     'ceq',
+    'ooisnot':                  _not('ceq'),
 }
 
 opcodes = misc_ops.copy()

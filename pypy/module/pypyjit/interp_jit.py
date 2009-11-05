@@ -6,7 +6,7 @@ import py
 import sys
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import r_uint, intmask
-from pypy.rlib.jit import JitDriver, hint
+from pypy.rlib.jit import JitDriver, hint, we_are_jitted
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, Arguments
@@ -15,9 +15,41 @@ from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.function import Function
 from pypy.interpreter.pyopcode import ExitFrame
+from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+from pypy.tool.stdlib_opcode import opcodedesc, HAVE_ARGUMENT
+from opcode import opmap
+from pypy.rlib.objectmodel import we_are_translated
 
-PyFrame._virtualizable2_ = True
-PyFrame._always_virtual_ = ['valuestack_w', 'fastlocals_w']
+PyFrame._virtualizable2_ = ['last_instr', 'pycode',
+                            'valuestackdepth', 'valuestack_w[*]',
+                            'fastlocals_w[*]', 'f_forward',
+                            ]
+
+JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
+
+def can_inline(next_instr, bytecode):
+    if we_are_translated():
+        bytecode = cast_base_ptr_to_instance(PyCode, bytecode)
+    co_code = bytecode.co_code
+    next_instr = 0
+    while next_instr < len(co_code):
+        opcode = ord(co_code[next_instr])
+        next_instr += 1
+        if opcode >= HAVE_ARGUMENT:
+            next_instr += 2
+        while opcode == opcodedesc.EXTENDED_ARG.index:
+            opcode = ord(co_code[next_instr])
+            next_instr += 3
+        if opcode == JUMP_ABSOLUTE:
+            return False
+    return True
+
+def get_printable_location(next_instr, bytecode):
+    from pypy.tool.stdlib_opcode import opcode_method_names
+    if we_are_translated():
+        bytecode = cast_base_ptr_to_instance(PyCode, bytecode)
+    name = opcode_method_names[ord(bytecode.co_code[next_instr])]
+    return '%s #%d %s' % (bytecode.get_repr(), next_instr, name)
 
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
@@ -32,63 +64,36 @@ class PyPyJitDriver(JitDriver):
 ##        blockstack = frame.blockstack
 ##        return (valuestackdepth, blockstack)
 
-pypyjitdriver = PyPyJitDriver()
+pypyjitdriver = PyPyJitDriver(can_inline = can_inline,
+                              get_printable_location = get_printable_location)
 
 class __extend__(PyFrame):
 
     def dispatch(self, pycode, next_instr, ec):
+        self = hint(self, access_directly=True)
         next_instr = r_uint(next_instr)
         try:
             while True:
-                pypyjitdriver.jit_merge_point(
-                    frame=self, ec=ec, next_instr=next_instr, pycode=pycode)
+                pypyjitdriver.jit_merge_point(ec=ec,
+                    frame=self, next_instr=next_instr, pycode=pycode)
                 co_code = pycode.co_code
                 self.valuestackdepth = hint(self.valuestackdepth, promote=True)
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
         except ExitFrame:
             return self.popvalue()
 
-    def JUMP_ABSOLUTE(f, jumpto, next_instr, *ignored):
-        ec = f.space.getexecutioncontext()
+    def JUMP_ABSOLUTE(f, jumpto, _, ec=None):
+        if we_are_jitted():
+            f.last_instr = intmask(jumpto)
+            ec.bytecode_trace(f)
+            jumpto = r_uint(f.last_instr)
         pypyjitdriver.can_enter_jit(frame=f, ec=ec, next_instr=jumpto,
                                     pycode=f.getcode())
         return jumpto
 
-##class __extend__(Function):
-##    __metaclass__ = extendabletype
-
-##    def getcode(self):
-##        # if the self is a compile time constant and if its code
-##        # is a BuiltinCode => grab and return its code as a constant
-##        if _is_early_constant(self):
-##            from pypy.interpreter.gateway import BuiltinCode
-##            code = hint(self, deepfreeze=True).code
-##            if not isinstance(code, BuiltinCode): code = self.code
-##        else:
-##            code = self.code
-##        return code
-        
-
 # ____________________________________________________________
 #
-# Public interface
-
-def jit_startup(space, argv):
-    # save the app-level sys.executable in JITInfo, where the machine
-    # code backend can fish for it.  A bit hackish.
-    from pypy.jit.backend.hlinfo import highleveljitinfo
-    highleveljitinfo.sys_executable = argv[0]
-
-    # recognize the option  --jit PARAM=VALUE,PARAM=VALUE...
-    # if it is at the beginning.  A bit ad-hoc.
-    if len(argv) > 2 and argv[1] == '--jit':
-        argv.pop(1)
-        try:
-            pypyjitdriver.set_user_param(argv.pop(1))
-        except ValueError:
-            from pypy.rlib.debug import debug_print
-            debug_print("WARNING: invalid --jit parameters string")
-
+# Public interface    
 
 def set_param(space, args):
     '''Configure the tunable JIT parameters.

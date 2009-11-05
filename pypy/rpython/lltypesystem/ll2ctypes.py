@@ -13,19 +13,19 @@ from pypy.rpython.extfunc import ExtRegistryEntry
 from pypy.rlib.objectmodel import Symbolic, ComputedIntSymbolic
 from pypy.tool.uid import fixid
 from pypy.tool.tls import tlsobject
-from pypy.rlib.rarithmetic import r_uint, r_singlefloat
+from pypy.rlib.rarithmetic import r_uint, r_singlefloat, intmask
 from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.annlowlevel import base_ptr_lltype
 from pypy.rpython import raddress
-from pypy.translator.platform import platform
 
 def uaddressof(obj):
     return fixid(ctypes.addressof(obj))
 
 _ctypes_cache = {}
 _eci_cache = {}
+_parent_cache = {}
 
 def _setup_ctypes_cache():
     from pypy.rpython.lltypesystem import rffi
@@ -109,6 +109,8 @@ def build_ctypes_array(A, delayed_builders, max_n=0):
     assert max_n >= 0
     ITEM = A.OF
     ctypes_item = get_ctypes_type(ITEM, delayed_builders)
+    MAX_SIZE = sys.maxint/64
+    PtrType = ctypes.POINTER(MAX_SIZE * ctypes_item)
 
     class CArray(ctypes.Structure):
         if not A._hints.get('nolength'):
@@ -128,7 +130,7 @@ def build_ctypes_array(A, delayed_builders, max_n=0):
         _malloc = classmethod(_malloc)
 
         def _indexable(self, index):
-            PtrType = ctypes.POINTER((index+1) * ctypes_item)
+            assert index + 1 < MAX_SIZE
             p = ctypes.cast(ctypes.pointer(self.items), PtrType)
             return p.contents
 
@@ -245,6 +247,9 @@ def convert_struct(container, cstruct=None):
             if isinstance(FIELDTYPE, lltype.Struct):
                 csubstruct = getattr(cstruct, field_name)
                 convert_struct(field_value, csubstruct)
+                subcontainer = getattr(container, field_name)
+                substorage = subcontainer._storage
+                update_parent_cache(substorage, subcontainer)
             elif field_name == STRUCT._arrayfld:    # inlined var-sized part
                 csubarray = getattr(cstruct, field_name)
                 convert_array(field_value, csubarray)
@@ -299,8 +304,11 @@ def struct_use_ctypes_storage(container, ctypes_storage):
         FIELDTYPE = getattr(STRUCT, field_name)
         if isinstance(FIELDTYPE, lltype.ContainerType):
             if isinstance(FIELDTYPE, lltype.Struct):
-                struct_use_ctypes_storage(getattr(container, field_name),
-                                          getattr(ctypes_storage, field_name))
+                struct_container = getattr(container, field_name)
+                struct_storage = getattr(ctypes_storage, field_name)
+                struct_use_ctypes_storage(struct_container, struct_storage)
+                struct_container._setparentstructure(container, field_name)
+                update_parent_cache(ctypes_storage, struct_container)
             elif isinstance(FIELDTYPE, lltype.Array):
                 assert FIELDTYPE._hints.get('nolength', False) == False
                 arraycontainer = _array_of_known_length(FIELDTYPE)
@@ -478,6 +486,7 @@ def _find_parent(llobj):
 _all_callbacks = {}
 _all_callbacks_results = []
 _callback2obj = {}
+_callback_exc_info = None
 
 # this is just another hack that passes around references to applevel types
 # disguised as base_ptr_lltype
@@ -517,13 +526,15 @@ def lltype2ctypes(llobj, normalize=True):
 
     if isinstance(T, lltype.Ptr):
         if not llobj:   # NULL pointer
+            if T == llmemory.GCREF:
+                return ctypes.c_void_p(0)
             return get_ctypes_type(T)()
 
         if T is base_ptr_lltype():
             return new_opaque_object(llobj)
         if T == llmemory.GCREF:
-            if isinstance(llobj, _llgcref):
-                return ctypes.c_void_p(llobj.intval)
+            if isinstance(llobj._obj, _llgcopaque):
+                return ctypes.c_void_p(llobj._obj.intval)
             container = llobj._obj.container
             T = lltype.Ptr(lltype.typeOf(container))
             # otherwise it came from integer and we want a c_void_p with
@@ -542,7 +553,7 @@ def lltype2ctypes(llobj, normalize=True):
             v1voidlist = [(i, getattr(container, '_void' + str(i), None))
                              for i in range(len(T.TO.ARGS))
                                  if T.TO.ARGS[i] is lltype.Void]
-            def callback(*cargs):
+            def callback_internal(*cargs):
                 cargs = list(cargs)
                 for v1 in v1voidlist:
                     cargs.insert(v1[0], v1[1])
@@ -562,8 +573,16 @@ def lltype2ctypes(llobj, normalize=True):
                     except LLException, lle:
                         llinterp._store_exception(lle)
                         return 0
+                    #except:
+                    #    import pdb
+                    #    pdb.set_trace()
                 else:
-                    llres = container._callable(*llargs)
+                    try:
+                        llres = container._callable(*llargs)
+                    except LLException, lle:
+                        llinterp = LLInterpreter.current_interpreter
+                        llinterp._store_exception(lle)
+                        return 0
                 assert lltype.typeOf(llres) == T.TO.RESULT
                 if T.TO.RESULT is lltype.Void:
                     return None
@@ -575,14 +594,16 @@ def lltype2ctypes(llobj, normalize=True):
                         return 0
                 return res
 
-            if getattr(conftest.option, 'usepdb', False):
-                callback_original = callback
-                def callback(*cargs):
-                    try:
-                        return callback_original(*cargs)
-                    except:
-                        import pdb, sys; pdb.post_mortem(sys.exc_traceback)
-                        raise
+            def callback(*cargs):
+                try:
+                    return callback_internal(*cargs)
+                except:
+                    import sys
+                    #if conftest.option.usepdb:
+                    #    import pdb; pdb.post_mortem(sys.exc_traceback)
+                    global _callback_exc_info
+                    _callback_exc_info = sys.exc_info()
+                    raise
 
             if isinstance(T.TO.RESULT, lltype.Ptr):
                 TMod = lltype.Ptr(lltype.FuncType(T.TO.ARGS,
@@ -621,20 +642,18 @@ def lltype2ctypes(llobj, normalize=True):
                 raise NotImplementedError(T)
             container._ctypes_storage_was_allocated()
         storage = container._storage
+        if lltype.parentlink(container)[0] is not None:
+            update_parent_cache(storage, container)
         p = ctypes.pointer(storage)
         if index:
             p = ctypes.cast(p, ctypes.c_void_p)
             p = ctypes.c_void_p(p.value + index)
             c_tp = get_ctypes_type(T.TO)
             storage._normalized_ctype = c_tp
-        if normalize and getattr(T.TO, '_arrayfld', None):
-            # XXX doesn't cache
-            c_tp = build_ctypes_struct(T.TO, [],
-                         len(getattr(storage, T.TO._arrayfld).items))
-            # make sure you cache according to the len() above!
-            p = ctypes.cast(p, ctypes.POINTER(c_tp))
-        elif normalize and hasattr(storage, '_normalized_ctype'):
+        if normalize and hasattr(storage, '_normalized_ctype'):
             p = ctypes.cast(p, ctypes.POINTER(storage._normalized_ctype))
+        if lltype.typeOf(llobj) == llmemory.GCREF:
+            p = ctypes.cast(p, ctypes.c_void_p)
         return p
 
     if isinstance(llobj, Symbolic):
@@ -682,6 +701,9 @@ def ctypes2lltype(T, cobj):
                                           ctypes.cast(cobj, ctypes_instance)))
                 container = lltype._struct(T.TO)
             struct_use_ctypes_storage(container, cobj.contents)
+            addr = ctypes.addressof(cobj.contents)
+            if addr in _parent_cache:
+                setparentstructure(container, _parent_cache[addr])
         elif isinstance(T.TO, lltype.Array):
             if T.TO._hints.get('nolength', False):
                 container = _array_of_unknown_length(T.TO)
@@ -699,8 +721,7 @@ def ctypes2lltype(T, cobj):
                                           _callable=_callable)
         elif isinstance(T.TO, lltype.OpaqueType):
             if T == llmemory.GCREF:
-                # XXX obscure hack
-                return _llgcref(cobj)
+                container = _llgcopaque(cobj)
             else:
                 container = lltype._opaque(T.TO)
         else:
@@ -717,6 +738,9 @@ def ctypes2lltype(T, cobj):
         llobj = unichr(cobj)
     elif T is lltype.Signed:
         llobj = cobj
+    elif T is lltype.Bool:
+        assert cobj == True or cobj == False    # 0 and 1 work too
+        llobj = bool(cobj)
     elif T is lltype.SingleFloat:
         if isinstance(cobj, ctypes.c_float):
             cobj = cobj.value
@@ -783,6 +807,33 @@ if ctypes:
 
 # ____________________________________________
 
+# xxx from ctypes.util, this code is a useful fallback on darwin too
+if sys.platform == 'darwin':
+    # Andreas Degert's find function using gcc
+    import re, tempfile, errno
+
+    def _findLib_gcc_fallback(name):
+        expr = r'[^\(\)\s]*lib%s\.[^\(\)\s]*' % re.escape(name)
+        fdout, ccout = tempfile.mkstemp()
+        os.close(fdout)
+        cmd = 'if type gcc >/dev/null 2>&1; then CC=gcc; else CC=cc; fi;' \
+              '$CC -Wl,-t -o ' + ccout + ' 2>&1 -l' + name
+        try:
+            f = os.popen(cmd)
+            trace = f.read()
+            f.close()
+        finally:
+            try:
+                os.unlink(ccout)
+            except OSError, e:
+                if e.errno != errno.ENOENT:
+                    raise
+        res = re.search(expr, trace)
+        if not res:
+            return None
+        return res.group(0)
+else:
+    _findLib_gcc_fallback = lambda name: None
 
 def get_ctypes_callable(funcptr, calling_conv):
     if not ctypes:
@@ -798,11 +849,14 @@ def get_ctypes_callable(funcptr, calling_conv):
     
     old_eci = funcptr._obj.compilation_info
     funcname = funcptr._obj._name
-    try:
-        eci = _eci_cache[old_eci]
-    except KeyError:
-        eci = old_eci.compile_shared_lib()
-        _eci_cache[old_eci] = eci
+    if hasattr(old_eci, '_with_ctypes'):
+        eci = old_eci._with_ctypes
+    else:
+        try:
+            eci = _eci_cache[old_eci]
+        except KeyError:
+            eci = old_eci.compile_shared_lib()
+            _eci_cache[old_eci] = eci
 
     libraries = list(eci.libraries + eci.frameworks)
 
@@ -817,26 +871,27 @@ def get_ctypes_callable(funcptr, calling_conv):
         not_found = []
         for libname in libraries:
             libpath = None
-            ext = platform.so_ext
-            prefixes = platform.so_prefixes
             for dir in eci.library_dirs:
-                if libpath:
+                # xxx untested directly, what about 'lib' prefix
+                if sys.platform == "win32":
+                    tryfile = os.path.join(dir, libname + '.dll')
+                elif sys.platform == "darwin":
+                    tryfile = os.path.join(dir, libname + '.dylib')
+                else:
+                    tryfile = os.path.join(dir, libname + '.so')
+                if os.path.isfile(tryfile):
+                    libpath = tryfile
                     break
-                for prefix in prefixes:
-                    tryfile = os.path.join(dir, prefix + libname + '.' + ext)
-                    if os.path.isfile(tryfile):
-                        libpath = tryfile
-                        break
             if not libpath:
                 libpath = ctypes.util.find_library(libname)
+                if not libpath:
+                    libpath = _findLib_gcc_fallback(libname)
                 if not libpath and os.path.isabs(libname):
                     libpath = libname
             if libpath:
                 dllclass = getattr(ctypes, calling_conv + 'dll')
-                # on ie slackware there was need for RTLD_GLOBAL here.
-                # this breaks a lot of things, since passing RTLD_GLOBAL
-                # creates symbol conflicts on C level.
-                clib = dllclass.LoadLibrary(libpath)
+                # urgh, cannot pass the flag to dllclass.LoadLibrary
+                clib = dllclass._dlltype(libpath, ctypes.RTLD_GLOBAL)
                 cfunc = get_on_lib(clib, funcname)
                 if cfunc is not None:
                     break
@@ -858,6 +913,8 @@ def get_ctypes_callable(funcptr, calling_conv):
             place = 'library %r' % (libraries[0],)
         else:
             place = 'any of the libraries %r' % (libraries,)
+            if not_found:
+                place += ' (did not find %r)' % (not_found,)
         raise NotImplementedError("function %r not found in %s" % (
             funcname, place))
 
@@ -898,6 +955,7 @@ def get_ctypes_trampoline(FUNCTYPE, cfunc):
         if FUNCTYPE.ARGS[i] is lltype.Void:
             void_arguments.append(i)
     def invoke_via_ctypes(*argvalues):
+        global _callback_exc_info
         cargs = []
         for i in range(len(FUNCTYPE.ARGS)):
             if i not in void_arguments:
@@ -905,9 +963,14 @@ def get_ctypes_trampoline(FUNCTYPE, cfunc):
                 if i in container_arguments:
                     cvalue = cvalue.contents
                 cargs.append(cvalue)
+        _callback_exc_info = None
         _restore_c_errno()
         cres = cfunc(*cargs)
         _save_c_errno()
+        if _callback_exc_info:
+            etype, evalue, etb = _callback_exc_info
+            _callback_exc_info = None
+            raise etype, evalue, etb
         return ctypes2lltype(RESULT, cres)
     return invoke_via_ctypes
 
@@ -916,7 +979,7 @@ def force_cast(RESTYPE, value):
     if not isinstance(RESTYPE, lltype.LowLevelType):
         raise TypeError("rffi.cast() first arg should be a TYPE")
     if isinstance(value, llmemory.fakeaddress):
-        value = value.ptr
+        value = value.ptr or 0
     TYPE1 = lltype.typeOf(value)
     cvalue = lltype2ctypes(value)
     cresulttype = get_ctypes_type(RESTYPE)
@@ -1000,11 +1063,11 @@ class _lladdress(long):
     _TYPE = llmemory.Address
 
     def __new__(cls, void_p):
+        if isinstance(void_p, (int, long)):
+            void_p = ctypes.c_void_p(void_p)
         self = long.__new__(cls, void_p.value)
         self.void_p = void_p
-        self.intval = void_p.value
-        if self.intval > sys.maxint:
-            self.intval = int(self.intval - 2*(sys.maxint + 1))
+        self.intval = intmask(void_p.value)
         return self
 
     def _cast_to_ptr(self, TP):
@@ -1014,36 +1077,41 @@ class _lladdress(long):
         return '<_lladdress %s>' % (self.void_p,)
 
     def __eq__(self, other):
-        return cast_adr_to_int(other) == self.intval
+        if not isinstance(other, (int, long)):
+            other = cast_adr_to_int(other)
+        return intmask(other) == self.intval
 
     def __ne__(self, other):
         return not self == other
 
-class _llgcref(object):
-    _TYPE = llmemory.GCREF
+class _llgcopaque(lltype._container):
+    _TYPE = llmemory.GCREF.TO
+    _name = "_llgcopaque"
 
     def __init__(self, void_p):
-        self.intval = void_p.value
+        if isinstance(void_p, (int, long)):
+            self.intval = intmask(void_p)
+        else:
+            self.intval = intmask(void_p.value)
 
     def __eq__(self, other):
-        if isinstance(other, _llgcref):
+        if isinstance(other, _llgcopaque):
             return self.intval == other.intval
-        return force_cast(lltype.Signed, other) == self.intval
+        if other.container._storage in (None, True):
+            return False
+        return force_cast(lltype.Signed, other._as_ptr()) == self.intval
 
     def __ne__(self, other):
         return not self == other
 
-    def __nonzero__(self):
-        return bool(self.intval)
-
     def _cast_to_ptr(self, PTRTYPE):
-        return force_cast(PTRTYPE, self.intval)
+         return force_cast(PTRTYPE, self.intval)
 
-    def _cast_to_int(self):
-        return self.intval
+##     def _cast_to_int(self):
+##         return self.intval
 
-    def _cast_to_adr(self):
-        return _lladdress(ctypes.c_void_p(self.intval))
+##     def _cast_to_adr(self):
+##         return _lladdress(self.intval)
 
 def cast_adr_to_int(addr):
     if isinstance(addr, llmemory.fakeaddress):
@@ -1073,6 +1141,46 @@ class CastAdrToIntEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('cast_adr_to_int', [adr],
                          resulttype = lltype.Signed)
+
+# ------------------------------------------------------------
+
+def parentchain(container):
+    current = container
+    links = []
+    while True:
+        link = lltype.parentlink(current)
+        if link[0] is None:
+            try:
+                addr = ctypes.addressof(container._storage)
+                actual = _parent_cache[addr]
+                if len(links) < len(actual):
+                    return actual
+            except KeyError:
+                pass
+            return links
+        links.append(link)
+        current = link[0]
+
+def update_parent_cache(storage, container):
+    chain = parentchain(container)
+    addr = ctypes.addressof(storage)
+    try:
+        current = _parent_cache[addr]
+        if len(chain) > len(current):
+            _parent_cache[addr] = chain
+    except KeyError:
+        _parent_cache[addr] = chain
+
+def setparentstructure(container, chain):
+    TP = lltype.typeOf(container)
+    current = container
+    for i, elem in enumerate(chain):
+        if lltype.typeOf(elem[0]) == TP:
+            chain = chain[i + 1:]
+            break
+    for elem in chain:
+        current._setparentstructure(*elem)
+        current = elem[0]
 
 # ____________________________________________________________
 # errno

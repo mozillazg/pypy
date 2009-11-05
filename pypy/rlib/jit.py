@@ -15,6 +15,23 @@ class Entry(ExtRegistryEntry):
     def compute_result_annotation(self, s_x, **kwds_s):
         from pypy.annotation import model as annmodel
         s_x = annmodel.not_const(s_x)
+        access_directly = 's_access_directly' in kwds_s
+        fresh_virtualizable = 's_fresh_virtualizable' in kwds_s
+        if  access_directly or fresh_virtualizable:
+            assert access_directly, "lone fresh_virtualizable hint"
+            if isinstance(s_x, annmodel.SomeInstance):
+                from pypy.objspace.flow.model import Constant
+                classdesc = s_x.classdef.classdesc
+                virtualizable = classdesc.read_attribute('_virtualizable2_',
+                                                         Constant(None)).value
+                if virtualizable is not None:
+                    flags = s_x.flags.copy()
+                    flags['access_directly'] = True
+                    if fresh_virtualizable:
+                        flags['fresh_virtualizable'] = True
+                    s_x = annmodel.SomeInstance(s_x.classdef,
+                                                s_x.can_be_None,
+                                                flags)        
         return s_x
 
     def specialize_call(self, hop, **kwds_i):
@@ -49,28 +66,8 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         from pypy.rpython.lltypesystem import lltype
+        hop.exception_cannot_occur()
         return hop.inputconst(lltype.Signed, _we_are_jitted)
-
-def _is_early_constant(x):
-    return False
-
-class Entry(ExtRegistryEntry):
-    _about_ = _is_early_constant
-
-    def compute_result_annotation(self, s_value):
-        from pypy.annotation import model as annmodel
-        s = annmodel.SomeBool()
-        if s_value.is_constant():
-            s.const = True
-        return s
-
-    def specialize_call(self, hop):
-        from pypy.rpython.lltypesystem import lltype
-        if hop.s_result.is_constant():
-            assert hop.s_result.const
-            return hop.inputconst(lltype.Bool, True)
-        v, = hop.inputargs(hop.args_r[0])
-        return hop.genop('is_early_constant', [v], resulttype=lltype.Bool)
 
 # ____________________________________________________________
 # User interface for the hotpath JIT policy
