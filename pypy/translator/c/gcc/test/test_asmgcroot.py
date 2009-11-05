@@ -52,7 +52,11 @@ class AbstractTestAsmGCRoot:
         def run(arg0, arg1):
             lines = []
             print >> sys.stderr, 'RUN: starting', exe_name, arg0, arg1
-            g = os.popen('"%s" %d %d' % (exe_name, arg0, arg1), 'r')
+            if sys.platform == 'win32':
+                redirect = ' 2> NUL'
+            else:
+                redirect = ''
+            g = os.popen('"%s" %d %d%s' % (exe_name, arg0, arg1, redirect), 'r')
             for line in g:
                 print >> sys.stderr, 'RUN:', line.rstrip()
                 lines.append(line)
