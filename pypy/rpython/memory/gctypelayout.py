@@ -26,7 +26,6 @@ class GCData(object):
         ("finalizer",      FINALIZERTYPE),
         ("fixedsize",      lltype.Signed),
         ("ofstoptrs",      lltype.Ptr(OFFSETS_TO_GC_PTR)),
-        hints={'immutable': True},
         )
     VARSIZE_TYPE_INFO = lltype.Struct("varsize_type_info",
         ("header",         TYPE_INFO),
@@ -34,7 +33,6 @@ class GCData(object):
         ("ofstovar",       lltype.Signed),
         ("ofstolength",    lltype.Signed),
         ("varofstoptrs",   lltype.Ptr(OFFSETS_TO_GC_PTR)),
-        hints={'immutable': True},
         )
     TYPE_INFO_PTR = lltype.Ptr(TYPE_INFO)
     VARSIZE_TYPE_INFO_PTR = lltype.Ptr(VARSIZE_TYPE_INFO)
