@@ -1086,14 +1086,13 @@ class MetaInterpStaticData(object):
             from pypy.rpython.lltypesystem import lltype, lloperation
             from pypy.rlib import rgc
             if enlarge:
+                rgc.collect(0)
                 newsize = 10*1024*1024         # XXX a rather custom number
                 if sys.maxint > 2147483647:
                     newsize *= 2
             else:
                 newsize = 0
             lloperation.llop.gc_resize_nursery(lltype.Void, newsize)
-            if enlarge:
-                rgc.collect(0)
 
 # ____________________________________________________________
 
