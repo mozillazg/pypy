@@ -2,13 +2,32 @@
 
 import re, sys, os, random
 
-r_functionstart = re.compile(r"\t.type\s+(\w+),\s*[@]function\s*$")
-r_functionend   = re.compile(r"\t.size\s+(\w+),\s*[.]-(\w+)\s*$")
+r_functionstart_elf = re.compile(r"\t.type\s+(\w+),\s*[@]function\s*$")
+r_functionend_elf   = re.compile(r"\t.size\s+(\w+),\s*[.]-(\w+)\s*$")
+
+# darwin
+r_textstart            = re.compile(r"\t.text\s*$")
+# see
+# http://developer.apple.com/documentation/developertools/Reference/Assembler/040-Assembler_Directives/asm_directives.html
+OTHERSECTIONS = ['section', 'zerofill',
+                 'const', 'static_const', 'cstring',
+                 'literal4', 'literal8', 'literal16',
+                 'constructor', 'desctructor',
+                 'symbol_stub',
+                 'data', 'static_data',
+                 'non_lazy_symbol_pointer', 'lazy_symbol_pointer',
+                 'dyld', 'mod_init_func', 'mod_term_func',
+                 'const_data'
+                 ]
+r_sectionstart         = re.compile(r"\t\.("+'|'.join(OTHERSECTIONS)+").*$")
+r_functionstart_darwin = re.compile(r"_(\w+):\s*$")
+
+# inside functions
 r_label         = re.compile(r"([.]?\w+)[:]\s*$")
 r_globl         = re.compile(r"\t[.]globl\t(\w+)\s*$")
 r_insn          = re.compile(r"\t([a-z]\w*)\s")
-r_jump          = re.compile(r"\tj\w+\s+([.]?\w+)\s*$")
-OPERAND         =           r"(?:[-\w$%+.:@]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])"
+r_jump          = re.compile(r"\tj\w+\s+([.]?[\w$]+)\s*$")
+OPERAND         =           r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
 r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
 r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
 r_jmp_switch    = re.compile(r"\tjmp\t[*]([.]?\w+)[(]")
@@ -26,9 +45,10 @@ r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
 
 class GcRootTracker(object):
 
-    def __init__(self, verbose=0, shuffle=False):
+    def __init__(self, verbose=0, shuffle=False, format='elf'):
         self.verbose = verbose
         self.shuffle = shuffle     # to debug the sorting logic in asmgcroot.py
+        self.format = format
         self.clear()
 
     def clear(self):
@@ -54,10 +74,26 @@ class GcRootTracker(object):
         shapes = {}
         shapelines = []
         shapeofs = 0
-        print >> output, """\t.text
-        .globl pypy_asm_stackwalk
-            .type pypy_asm_stackwalk, @function
-        pypy_asm_stackwalk:
+        def _globalname(name):
+            if self.format == 'darwin':
+                return '_' + name
+            return name
+        def _globl(name):
+            print >> output, "\t.globl %s" % _globalname(name)
+        def _label(name):
+            print >> output, "%s:" % _globalname(name)
+        def _variant(elf, darwin):
+            if self.format == 'darwin':
+                txt = darwin
+            else:
+                txt = elf
+            print >> output, "\t%s" % txt
+        
+        print >> output, "\t.text"
+        _globl('pypy_asm_stackwalk')
+        _variant('.type pypy_asm_stackwalk, @function', '')
+        _label('pypy_asm_stackwalk')
+        print >> output, """\
             /* See description in asmgcroot.py */
             movl   4(%esp), %edx     /* my argument, which is the callback */
             movl   %esp, %eax        /* my frame top address */
@@ -67,21 +103,22 @@ class GcRootTracker(object):
             pushl  %esi              /* ASM_FRAMEDATA[1] */
             pushl  %ebx              /* ASM_FRAMEDATA[0] */
             movl   %esp, %eax        /* address of ASM_FRAMEDATA */
-            pushl  %eax
+            pushl  %eax              /* respect Mac OS X 16 bytes aligment */ 
+            pushl  %eax              /* the one argument to the callback */
             call   *%edx             /* invoke the callback */
-            popl   %eax
+            addl   $8, %esp
             popl   %ebx              /* restore from ASM_FRAMEDATA[0] */
             popl   %esi              /* restore from ASM_FRAMEDATA[1] */
             popl   %edi              /* restore from ASM_FRAMEDATA[2] */
             popl   %ebp              /* restore from ASM_FRAMEDATA[3] */
             popl   %eax
             ret
-        .size pypy_asm_stackwalk_init, .-pypy_asm_stackwalk_init
-        """
+"""
+        _variant('.size pypy_asm_stackwalk, .-pypy_asm_stackwalk', '')
         print >> output, '\t.data'
         print >> output, '\t.align\t4'
-        print >> output, '\t.globl\t__gcmapstart'
-        print >> output, '__gcmapstart:'
+        _globl('__gcmapstart')
+        _label('__gcmapstart')
         for label, state, is_range in self.gcmaptable:
             try:
                 n = shapes[state]
@@ -96,25 +133,29 @@ class GcRootTracker(object):
                 n = ~ n
             print >> output, '\t.long\t%s' % (label,)
             print >> output, '\t.long\t%d' % (n,)
-        print >> output, '\t.globl\t__gcmapend'
-        print >> output, '__gcmapend:'
-        print >> output, '\t.section\t.rodata'
-        print >> output, '\t.globl\t__gccallshapes'
-        print >> output, '__gccallshapes:'
+        _globl('__gcmapend')
+        _label('__gcmapend')
+        _variant('.section\t.rodata', '.const')
+        _globl('__gccallshapes')
+        _label('__gccallshapes')
         output.writelines(shapelines)
 
     def find_functions(self, iterlines):
+        _find_functions = getattr(self, '_find_functions_' + self.format)
+        return _find_functions(iterlines)
+            
+    def _find_functions_elf(self, iterlines):
         functionlines = []
         in_function = False
         for line in iterlines:
-            if r_functionstart.match(line):
+            if r_functionstart_elf.match(line):
                 assert not in_function, (
                     "missed the end of the previous function")
                 yield False, functionlines
                 in_function = True
                 functionlines = []
             functionlines.append(line)
-            if r_functionend.match(line):
+            if r_functionend_elf.match(line):
                 assert in_function, (
                     "missed the start of the current function")
                 yield True, functionlines
@@ -124,16 +165,46 @@ class GcRootTracker(object):
             "missed the end of the previous function")
         yield False, functionlines
 
+    def _find_functions_darwin(self, iterlines):
+        functionlines = []
+        in_text = False
+        in_function = False
+        for n, line in enumerate(iterlines):
+            if r_textstart.match(line):
+                assert not in_text, "unexpected repeated .text start: %d" % n
+                in_text = True
+            elif r_sectionstart.match(line):
+                if in_function:
+                    yield in_function, functionlines
+                    functionlines = []
+                in_text = False
+                in_function = False
+            elif in_text and r_functionstart_darwin.match(line):
+                yield in_function, functionlines
+                functionlines = []
+                in_function = True
+            functionlines.append(line)
+
+        if functionlines:
+            yield in_function, functionlines
+
     def process(self, iterlines, newfile, entrypoint='main', filename='?'):
+        if self.format == 'darwin':
+            entrypoint = '_' + entrypoint
         for in_function, lines in self.find_functions(iterlines):
             if in_function:
                 lines = self.process_function(lines, entrypoint, filename)
             newfile.writelines(lines)
+        if self.verbose == 1:
+            sys.stderr.write('\n')
 
     def process_function(self, lines, entrypoint, filename):
-        tracker = FunctionGcRootTracker(lines, filetag=getidentifier(filename))
+        tracker = FunctionGcRootTracker(lines, filetag=getidentifier(filename),
+                                        format=self.format)
         tracker.is_main = tracker.funcname == entrypoint
-        if self.verbose:
+        if self.verbose == 1:
+            sys.stderr.write('.')
+        elif self.verbose > 1:
             print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
                                                           tracker.funcname)
         table = tracker.computegcmaptable(self.verbose)
@@ -151,12 +222,20 @@ class GcRootTracker(object):
 
 class FunctionGcRootTracker(object):
 
-    def __init__(self, lines, filetag=0):
-        match = r_functionstart.match(lines[0])
-        self.funcname = match.group(1)
-        match = r_functionend.match(lines[-1])
-        assert self.funcname == match.group(1)
-        assert self.funcname == match.group(2)
+    def __init__(self, lines, filetag=0, format='elf'):
+        if format == 'elf':
+            match = r_functionstart_elf.match(lines[0])
+            funcname = match.group(1)
+            match = r_functionend_elf.match(lines[-1])
+            assert funcname == match.group(1)
+            assert funcname == match.group(2)
+        elif format == 'darwin':
+            match = r_functionstart_darwin.match(lines[0])
+            funcname = '_'+match.group(1)
+        else:
+            assert False, "unknown format: %s" % format
+ 
+        self.funcname = funcname
         self.lines = lines
         self.uses_frame_pointer = False
         self.r_localvar = r_localvarnofp
@@ -204,7 +283,8 @@ class FunctionGcRootTracker(object):
                     loc = localvar.getlocation(insn.framesize,
                                                self.uses_frame_pointer)
                 else:
-                    assert localvar in REG2LOC
+                    assert localvar in REG2LOC, "%s: %s" % (self.funcname,
+                                                            localvar)
                     loc = REG2LOC[localvar]
                 assert isinstance(loc, int)
                 if tag is None:
@@ -232,13 +312,13 @@ class FunctionGcRootTracker(object):
 
     def parse_instructions(self):
         self.insns = [InsnFunctionStart()]
-        in_APP = False
+        ignore_insns = False
         for lineno, line in enumerate(self.lines):
             self.currentlineno = lineno
             insn = []
             match = r_insn.match(line)
             if match:
-                if not in_APP:
+                if not ignore_insns:
                     opname = match.group(1)
                     try:
                         meth = getattr(self, 'visit_' + opname)
@@ -247,10 +327,10 @@ class FunctionGcRootTracker(object):
                     insn = meth(line)
             elif r_gcroot_marker.match(line):
                 insn = self._visit_gcroot_marker(line)
-            elif line == '#APP\n':
-                in_APP = True
-            elif line == '#NO_APP\n':
-                in_APP = False
+            elif line == '\t/* ignore_in_trackgcroot */\n':
+                ignore_insns = True
+            elif line == '\t/* end_ignore_in_trackgcroot */\n':
+                ignore_insns = False
             else:
                 match = r_label.match(line)
                 if match:
@@ -430,7 +510,8 @@ class FunctionGcRootTracker(object):
         'rep', 'movs', 'lods', 'stos', 'scas', 'cwtl', 'prefetch',
         # floating-point operations cannot produce GC pointers
         'f',
-        'cvt',  # sse2
+        'cvt', 'ucomi', 'subs', 'subp' , 'adds', 'addp', 'xorp', 'movap',
+        'mins', 'minp',  'maxs', 'maxp', # sse2
         # arithmetic operations should not produce GC pointers
         'inc', 'dec', 'not', 'neg', 'or', 'and', 'sbb', 'adc',
         'shl', 'shr', 'sal', 'sar', 'rol', 'ror', 'mul', 'imul', 'div', 'idiv',
@@ -652,6 +733,11 @@ class FunctionGcRootTracker(object):
             target = match.group(1)
             if target in FUNCTIONS_NOT_RETURNING:
                 return InsnStop()
+            if target in self.labels:
+                lineoffset = self.labels[target].lineno - self.currentlineno
+                if lineoffset >= 0:
+                    assert  lineoffset in (1,2)
+                    return [InsnStackAdjust(-4)]
         return [InsnCall(self.currentlineno),
                 InsnSetLocal('%eax')]      # the result is there
 
@@ -847,6 +933,8 @@ FUNCTIONS_NOT_RETURNING = {
     'abort': None,
     '_exit': None,
     '__assert_fail': None,
+    '___assert_rtn': None,
+    'L___assert_rtn$stub': None
     }
 
 CALLEE_SAVE_REGISTERS_NOEBP = ['%ebx', '%esi', '%edi']
@@ -1018,7 +1106,11 @@ if __name__ == '__main__':
             output_raw_table = True
         else:
             break
-    tracker = GcRootTracker(verbose=verbose, shuffle=shuffle)
+    if sys.platform == 'darwin':
+        format = 'darwin'
+    else:
+        format = 'elf'
+    tracker = GcRootTracker(verbose=verbose, shuffle=shuffle, format=format)
     for fn in sys.argv[1:]:
         f = open(fn, 'r')
         firstline = f.readline()
