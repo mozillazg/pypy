@@ -428,6 +428,7 @@ class SemiSpaceGC(MovingGCBase):
     def init_gc_object(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
         hdr.tid = self.combine(typeid16, flags)
+        self.count_allocation(typeid16)
 
     def init_gc_object_immortal(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
