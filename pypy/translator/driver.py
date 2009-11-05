@@ -120,7 +120,7 @@ class TranslationDriver(SimpleTaskEngine):
             else:
                 task, postfix = parts
                 if task in ('rtype', 'backendopt', 'llinterpret',
-                            'prejitbackendopt', 'pyjitpl'):
+                            'pyjitpl'):
                     if ts:
                         if ts == postfix:
                             expose_task(task, explicit_task)
@@ -355,31 +355,34 @@ class TranslationDriver(SimpleTaskEngine):
     task_rtype_ootype = taskdef(task_rtype_ootype, ['annotate'], "ootyping")
     OOTYPE = 'rtype_ootype'
 
-    def task_prejitbackendopt_lltype(self):
-        from pypy.translator.backendopt.all import backend_optimizations
-        backend_optimizations(self.translator,
-                              inline_threshold=0,
-                              merge_if_blocks=True,
-                              constfold=True,
-                              raisingop2direct_call=False,
-                              remove_asserts=False)
-    #
-    task_prejitbackendopt_lltype = taskdef(
-        task_prejitbackendopt_lltype,
-        [RTYPE],
-        "Backendopt before jitting")
-
     def task_pyjitpl_lltype(self):
         get_policy = self.extra['jitpolicy']
         self.jitpolicy = get_policy(self)
         #
         from pypy.jit.metainterp.warmspot import apply_jit
-        apply_jit(self.translator, policy=self.jitpolicy)
+        apply_jit(self.translator, policy=self.jitpolicy,
+                  debug_level=self.config.translation.jit_debug,
+                  backend_name=self.config.translation.jit_backend)
         #
         self.log.info("the JIT compiler was generated")
     #
     task_pyjitpl_lltype = taskdef(task_pyjitpl_lltype,
-                                  [RTYPE, '?prejitbackendopt_lltype'],
+                                  [RTYPE],
+                                  "JIT compiler generation")
+
+    def task_pyjitpl_ootype(self):
+        get_policy = self.extra['jitpolicy']
+        self.jitpolicy = get_policy(self)
+        #
+        from pypy.jit.metainterp.warmspot import apply_jit
+        apply_jit(self.translator, policy=self.jitpolicy,
+                  debug_level=self.config.translation.jit_debug,
+                  backend_name='cli') #XXX
+        #
+        self.log.info("the JIT compiler was generated")
+    #
+    task_pyjitpl_ootype = taskdef(task_pyjitpl_ootype,
+                                  [OOTYPE],
                                   "JIT compiler generation")
 
     def task_backendopt_lltype(self):

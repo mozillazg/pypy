@@ -1,5 +1,5 @@
 import py
-from pypy.rlib.jit import hint, _is_early_constant
+from pypy.rlib.jit import hint, we_are_jitted
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 
@@ -11,21 +11,14 @@ class TestJIT(BaseRtypingTest, LLRtypeMixin):
         res = self.interpret(f, [])
         assert res == 5
 
-    def test_is_early_constant(self):
+    def test_we_are_jitted(self):
         def f(x):
-            if _is_early_constant(x):
-                return 42
-            return 0
-
-        assert f(3) == 0
-        res = self.interpret(f, [5])
-        assert res == 0
-
-        def g():
-            return f(88)
-        
-        res = self.interpret(g, [])
-        assert res == 42
-
-
+            try:
+                if we_are_jitted():
+                    return x
+                return x + 1
+            except Exception:
+                return 5
+        res = self.interpret(f, [4])
+        assert res == 5
 

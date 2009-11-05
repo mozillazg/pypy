@@ -17,10 +17,6 @@ PLATFORMS = [
     'distutils',
 ]
 
-def check_have_jit(config):
-    import pypy.jit       # check out branch/pyjitpl5 instead of trunk!
-
-
 translation_optiondescription = OptionDescription(
         "translation", "Translation Options", [
     BoolOption("stackless", "enable stackless features during compilation",
@@ -34,6 +30,7 @@ translation_optiondescription = OptionDescription(
                                 ("translation.backendopt.heap2stack", False),
                                 ("translation.backendopt.clever_malloc_removal", False),
                                 ("translation.list_comprehension_operations", False),
+                                ("translation.gc", "boehm"), # it's not really used, but some jit code expects a value here
                                 ]
                      }),
     ChoiceOption("backend", "Backend to use for code generation",
@@ -85,11 +82,7 @@ translation_optiondescription = OptionDescription(
                      "asmgcc": [("translation.gctransformer", "framework"),
                                 ("translation.backend", "c"),
                                 ("translation.thread", False)],
-                    },
-                 suggests={
-                     "shadowstack": [("translation.gc", "generation")],
-                     "asmgcc": [("translation.gc", "generation")],
-                 }),
+                    }),
 
     # other noticeable options
     BoolOption("thread", "enable use of threading primitives",
@@ -101,12 +94,19 @@ translation_optiondescription = OptionDescription(
     BoolOption("rweakref", "The backend supports RPython-level weakrefs",
                default=True),
 
-    # JIT generation
+    # JIT generation: use -Ojit to enable it
     BoolOption("jit", "generate a JIT",
-               default=False, cmdline="--jit",
-               validator=check_have_jit,
-               requires=[("translation.gc", "boehm"),
+               default=False,
+               requires=[("translation.thread", False)],
+               suggests=[("translation.gc", "boehm"),         # for now
                          ("translation.list_comprehension_operations", True)]),
+    ChoiceOption("jit_backend", "choose the backend for the JIT",
+                 ["auto", "x86", "llvm"],
+                 default="auto", cmdline="--jit-backend"),
+    ChoiceOption("jit_debug", "the amount of debugging dumps made by the JIT",
+                 ["off", "profile", "steps", "detailed"],
+                 default="steps",      # XXX for now
+                 cmdline="--jit-debug"),
 
     # misc
     BoolOption("verbose", "Print extra information", default=False),
@@ -234,6 +234,10 @@ translation_optiondescription = OptionDescription(
                    "Remove operations that look like 'raise AssertionError', "
                    "which lets the C optimizer remove the asserts",
                    default=False),
+        BoolOption("really_remove_asserts",
+                   "Really remove operations that look like 'raise AssertionError', "
+                   "without relying on the C compiler",
+                   default=False),
 
         BoolOption("stack_optimization",
                    "Tranform graphs in SSI form into graphs tailored for "
@@ -294,7 +298,7 @@ def get_combined_translation_config(other_optdescr=None,
 
 # ____________________________________________________________
 
-OPT_LEVELS = ['0', '1', 'size', 'mem', '2', '3']
+OPT_LEVELS = ['0', '1', 'size', 'mem', '2', '3', 'jit']
 DEFAULT_OPT_LEVEL = '2'
 
 OPT_TABLE_DOC = {
@@ -304,6 +308,7 @@ OPT_TABLE_DOC = {
     'mem':  'Optimize for run-time memory usage and use a memory-saving GC.',
     '2':    'Enable most optimizations and use a high-performance GC.',
     '3':    'Enable all optimizations and use a high-performance GC.',
+    'jit':  'Enable the JIT.',
     }
 
 OPT_TABLE = {
@@ -314,6 +319,7 @@ OPT_TABLE = {
     'mem':  'markcompact lowinline     remove_asserts',
     '2':    'hybrid      extraopts',
     '3':    'hybrid      extraopts     remove_asserts',
+    'jit':  'boehm       extraopts     jit',       # XXX boehm for now, fix me
     }
 
 def set_opt_level(config, level):
@@ -333,9 +339,9 @@ def set_opt_level(config, level):
     gc = words.pop(0)
 
     # set the GC (only meaningful with lltype)
-    if config.translation.sandbox and gc == 'hybrid':
-        gc = 'generation'
-    config.translation.suggest(gc=gc)
+    # but only set it if it wasn't already suggested to be something else
+    if config.translation._cfgimpl_value_owners['gc'] != 'suggested':
+        config.translation.suggest(gc=gc)
 
     # set the backendopts
     for word in words:
@@ -348,6 +354,8 @@ def set_opt_level(config, level):
             config.translation.backendopt.suggest(remove_asserts=True)
         elif word == 'extraopts':
             config.translation.suggest(withsmallfuncsets=5)
+        elif word == 'jit':
+            config.translation.suggest(jit=True)
         else:
             raise ValueError(word)
 

@@ -50,6 +50,8 @@ class W_TypeObject(W_Object):
     lazyloaders = {} # can be overridden by specific instances
     version_tag = None
 
+    _immutable_fields_ = ["__flags__"]
+
     uses_object_getattribute = False
     # ^^^ for config.objspace.std.getattributeshortcut
     # (False is a conservative default, fixed during real usage)
@@ -186,9 +188,17 @@ class W_TypeObject(W_Object):
         space = w_self.space
         assert space.config.objspace.std.withmethodcache
         version_tag = w_self.version_tag
+        version_tag = hint(version_tag, promote=True)
         if version_tag is None:
             tup = w_self._lookup_where(name)
             return tup
+        w_self = hint(w_self, promote=True)
+        name = hint(name, promote=True)
+        return w_self._pure_lookup_where_with_method_cache(name, version_tag)
+
+    @purefunction
+    def _pure_lookup_where_with_method_cache(w_self, name, version_tag):
+        space = w_self.space
         SHIFT = r_uint.BITS - space.config.objspace.std.methodcachesizeexp
         version_tag_as_int = current_object_addr_as_int(version_tag)
         # ^^^Note: if the version_tag object is moved by a moving GC, the
@@ -257,7 +267,6 @@ class W_TypeObject(W_Object):
         raise UnwrapError(w_self)
 
     def is_heaptype(w_self):
-        w_self = hint(w_self, deepfreeze=True)
         return w_self.__flags__&_HEAPTYPE
 
     def get_module(w_self):
@@ -520,11 +529,8 @@ def ensure_module_attr(w_self):
     # initialize __module__ in the dict (user-defined types only)
     if '__module__' not in w_self.dict_w:
         space = w_self.space
-        try:
-            caller = space.getexecutioncontext().framestack.top()
-        except IndexError:
-            pass
-        else:
+        caller = space.getexecutioncontext().gettopframe_nohidden()
+        if caller is not None:
             w_globals = caller.w_globals
             w_name = space.finditem(w_globals, space.wrap('__name__'))
             if w_name is not None:

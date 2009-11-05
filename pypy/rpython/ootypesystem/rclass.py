@@ -182,12 +182,18 @@ class InstanceRepr(AbstractInstanceRepr):
                 hints = classdef.classdesc.pyobj._rpython_hints
             else:
                 hints = {}
+            if '_immutable_' in self.classdef.classdesc.classdict:
+                hints = hints.copy()
+                hints['immutable'] = True
             self.lowleveltype = ootype.Instance(classdef.name, b, {}, {}, _hints = hints)
         self.prebuiltinstances = {}   # { id(x): (x, _ptr) }
         self.object_type = self.lowleveltype
         self.gcflavor = gcflavor
 
-    def _setup_repr(self):
+    def _setup_repr(self, llfields=None, hints=None):
+        if hints:
+            self.lowleveltype._hints.update(hints)
+
         if self.classdef is None:
             self.allfields = {}
             self.allmethods = {}
@@ -206,6 +212,9 @@ class InstanceRepr(AbstractInstanceRepr):
 
         fields = {}
         fielddefaults = {}
+
+        if llfields:
+            fields.update(dict(llfields))
         
         selfattrs = self.classdef.attrs
 
@@ -258,7 +267,6 @@ class InstanceRepr(AbstractInstanceRepr):
         self.rbase = getinstancerepr(self.rtyper, self.classdef.basedef)
         self.rbase.setup()
 
-        methods = {}
         classattributes = {}
         baseInstance = self.lowleveltype._superclass
         classrepr = getclassrepr(self.rtyper, self.classdef)
@@ -269,32 +277,6 @@ class InstanceRepr(AbstractInstanceRepr):
             oovalue = classrepr.get_meta_instance()
             self.attach_class_attr_accessor('getmeta', oovalue)
 
-        for mangled, (name, s_value) in allmethods.iteritems():
-            methdescs = s_value.descriptions
-            origin = dict([(methdesc.originclassdef, methdesc) for
-                           methdesc in methdescs])
-            if self.classdef in origin:
-                methdesc = origin[self.classdef]
-            else:
-                if name in selfattrs:
-                    for superdef in self.classdef.getmro():
-                        if superdef in origin:
-                            # put in methods
-                            methdesc = origin[superdef]
-                            break
-                    else:
-                        # abstract method
-                        methdesc = None
-                else:
-                    continue
-
-            # get method implementation
-            from pypy.rpython.ootypesystem.rpbc import MethodImplementations
-            methimpls = MethodImplementations.get(self.rtyper, s_value)
-            m_impls = methimpls.get_impl(mangled, methdesc,
-                    is_finalizer=name == "__del__")
-            
-            methods.update(m_impls)
                                         
 
         for classdef in self.classdef.getmro():
@@ -320,8 +302,6 @@ class InstanceRepr(AbstractInstanceRepr):
                     if not attrdef.s_value.is_constant():
                         classattributes[mangled] = attrdef.s_value, value
 
-        ootype.addMethods(self.lowleveltype, methods)
-        
         self.allfields = allfields
         self.allmethods = allmethods
         self.allclassattributes = allclassattributes
@@ -336,6 +316,41 @@ class InstanceRepr(AbstractInstanceRepr):
             ootype.addFields(self.lowleveltype, {mangled: (oot, impl)})
 
     def _setup_repr_final(self):
+        if self.classdef is None:
+            return
+
+        # we attach methods here and not in _setup(), because we want
+        # to be sure that all the reprs of the input arguments of all
+        # our methods have been computed at this point
+        methods = {}
+        selfattrs = self.classdef.attrs
+        for mangled, (name, s_value) in self.allmethods.iteritems():
+            methdescs = s_value.descriptions
+            origin = dict([(methdesc.originclassdef, methdesc) for
+                           methdesc in methdescs])
+            if self.classdef in origin:
+                methdesc = origin[self.classdef]
+            else:
+                if name in selfattrs:
+                    for superdef in self.classdef.getmro():
+                        if superdef in origin:
+                            # put in methods
+                            methdesc = origin[superdef]
+                            break
+                    else:
+                        # abstract method
+                        methdesc = None
+                else:
+                    continue
+            # get method implementation
+            from pypy.rpython.ootypesystem.rpbc import MethodImplementations
+            methimpls = MethodImplementations.get(self.rtyper, s_value)
+            m_impls = methimpls.get_impl(mangled, methdesc,
+                    is_finalizer=name == "__del__")
+            methods.update(m_impls)
+        ootype.addMethods(self.lowleveltype, methods)
+        
+        
         # step 3: provide accessor methods for class attributes that
         # are really overridden in subclasses. Must be done here
         # instead of _setup_repr to avoid recursion problems if class
@@ -378,6 +393,10 @@ class InstanceRepr(AbstractInstanceRepr):
 
         ootype.overrideDefaultForFields(self.lowleveltype, overridden_defaults)
 
+    def _get_field(self, attr):
+        mangled = mangle(attr, self.rtyper.getconfig())
+        return mangled, self.allfields[mangled]
+
     def attach_abstract_class_attr_accessor(self, mangled, attrtype):
         M = ootype.Meth([], attrtype)
         m = ootype.meth(M, _name=mangled, abstract=True)
@@ -405,12 +424,10 @@ class InstanceRepr(AbstractInstanceRepr):
         s_inst = hop.args_s[0]
         attr = hop.args_s[1].const
         mangled = mangle(attr, self.rtyper.getconfig())
-        v_attr = hop.inputconst(ootype.Void, mangled)
         if mangled in self.allfields:
             # regular instance attributes
-            self.lowleveltype._check_field(mangled)
-            return hop.genop("oogetfield", [v_inst, v_attr],
-                             resulttype = hop.r_result.lowleveltype)
+            return self.getfield(v_inst, attr, hop.llops,
+                                 flags=hop.args_s[0].flags)
         elif mangled in self.allmethods:
             # special case for methods: represented as their 'self' only
             # (see MethodsPBCRepr)
@@ -449,16 +466,26 @@ class InstanceRepr(AbstractInstanceRepr):
         self.lowleveltype._check_field(mangled)
         r_value = self.allfields[mangled]
         v_inst, _, v_newval = hop.inputargs(self, ootype.Void, r_value)
-        v_attr = hop.inputconst(ootype.Void, mangled)
-        return hop.genop('oosetfield', [v_inst, v_attr, v_newval])
+        self.setfield(v_inst, attr, v_newval, hop.llops,
+                      flags=hop.args_s[0].flags)
 
-    def setfield(self, vinst, attr, vvalue, llops):
-        # this method emulates behaviour from the corresponding
-        # lltypesystem one. It is referenced in some obscure corners
-        # like rtyping of OSError.
+    def getfield(self, v_inst, attr, llops, flags={}):
+        mangled = mangle(attr, self.rtyper.getconfig())
+        v_attr = inputconst(ootype.Void, mangled)
+        r_value = self.allfields[mangled]
+        self.lowleveltype._check_field(mangled)
+        self.hook_access_field(v_inst, v_attr, llops, flags)
+        return llops.genop('oogetfield', [v_inst, v_attr],
+                           resulttype = r_value)
+
+    def setfield(self, vinst, attr, vvalue, llops, flags={}):
         mangled_name = mangle(attr, self.rtyper.getconfig())
         cname = inputconst(ootype.Void, mangled_name)
+        self.hook_access_field(vinst, cname, llops, flags)
         llops.genop('oosetfield', [vinst, cname, vvalue])
+
+    def hook_access_field(self, vinst, cname, llops, flags):
+        pass        # for virtualizables; see rvirtualizable2.py
 
     def rtype_is_true(self, hop):
         vinst, = hop.inputargs(self)
@@ -521,8 +548,6 @@ class InstanceRepr(AbstractInstanceRepr):
         if '_hash_cache_' in self.lowleveltype._allfields():
             result._hash_cache_ = hash(value)
 
-buildinstancerepr = InstanceRepr
-
 
 class __extend__(pairtype(InstanceRepr, InstanceRepr)):
     def convert_from_to((r_ins1, r_ins2), v, llops):
@@ -559,6 +584,8 @@ class __extend__(pairtype(InstanceRepr, InstanceRepr)):
 
 
 def ll_inst_hash(ins):
+    if not ins:
+        return 0
     cached = ins._hash_cache_
     if cached == 0:
         cached = ins._hash_cache_ = ootype.ooidentityhash(ins)

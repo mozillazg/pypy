@@ -661,6 +661,25 @@ class BaseTestRclass(BaseRtypingTest):
             return a.revealconst(1) + b.revealconst(2) + a.revealconst(3)
         assert self.interpret(fn, []) == 3 + 8 + 9
 
+    def test_hash_of_none(self):
+        class A:
+            pass
+        def fn(x):
+            if x:
+                obj = A()
+            else:
+                obj = None
+            return hash(obj)
+        res = self.interpret(fn, [0])
+        assert res == 0
+
+    def test_hash_of_only_none(self):
+        def fn():
+            obj = None
+            return hash(obj)
+        res = self.interpret(fn, [])
+        assert res == 0
+
 
 class TestLltype(BaseTestRclass, LLRtypeMixin):
 
@@ -742,6 +761,21 @@ class TestLltype(BaseTestRclass, LLRtypeMixin):
         t, typer, graph = self.gengraph(f, [], backendopt=True)
         assert summary(graph) == {}
 
+    def test_immutable_fields(self):
+        class A(object):
+            _immutable_fields_ = ["x", "y[*]"]
+
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+        def f():
+            return A(3, [])
+        t, typer, graph = self.gengraph(f, [])
+        A_TYPE = graph.getreturnvar().concretetype
+        accessor = A_TYPE.TO._hints["immutable_fields"]
+        assert accessor.fields == {"inst_x" : "", "inst_y" : "[*]"}
+
     def test_immutable_inheritance(self):
         class I(object):
             def __init__(self, v):
@@ -780,6 +814,41 @@ class TestLltype(BaseTestRclass, LLRtypeMixin):
         from pypy.rlib.rarithmetic import r_uint
         expected = hex(r_uint(xid)).lower().replace('l', '')
         assert expected in xstr
+
+    def test_hash_via_type(self):
+        from pypy.annotation import model as annmodel
+        from pypy.rpython import extregistry
+        from pypy.rpython.annlowlevel import cast_object_to_ptr
+        class X(object): pass
+        class Y(X): pass
+        class Z(Y): pass
+
+        def my_gethash(z):
+            not_implemented
+
+        def ll_my_gethash(ptr):
+            return ptr.gethash()
+
+        class MyGetHashEntry(extregistry.ExtRegistryEntry):
+            _about_ = my_gethash
+            def compute_result_annotation(self, s_instance):
+                return annmodel.SomeInteger()
+            def specialize_call(self, hop):
+                [v_instance] = hop.inputargs(*hop.args_r)
+                return hop.gendirectcall(ll_my_gethash, v_instance)
+
+        def f(n):
+            if n > 10:
+                z = Y()
+                got = -1    # path never used
+            else:
+                z = Z()
+                got = my_gethash(z)
+            expected = hash(z)     # put the _hash_cache_ in the class Y
+            return got - expected
+
+        res = self.interpret(f, [5])
+        assert res == 0
 
 
 class TestOOtype(BaseTestRclass, OORtypeMixin):
@@ -838,3 +907,65 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
         assert destra == destrc
         assert destrb is not None
         assert destra is not None
+
+    def test_cast_object_instance(self):
+        A = ootype.Instance("Foo", ootype.ROOT)
+
+        def fn_instance():
+            a = ootype.new(A)
+            obj = ootype.cast_to_object(a)
+            a2 = ootype.cast_from_object(A, obj)
+            a3 = ootype.cast_from_object(ootype.ROOT, obj)
+            assert a is a2
+            assert a is a3
+        self.interpret(fn_instance, [])
+
+    def test_cast_object_record(self):
+        B = ootype.Record({'x': ootype.Signed}) 
+
+        def fn_record():
+            b = ootype.new(B)
+            b.x = 42
+            obj = ootype.cast_to_object(b)
+            b2 = ootype.cast_from_object(B, obj)
+            assert b2.x == 42
+            assert b is b2
+        self.interpret(fn_record, [])
+
+    def test_cast_object_null(self):
+        A = ootype.Instance("Foo", ootype.ROOT)
+        B = ootype.Record({'x': ootype.Signed}) 
+
+        def fn_null():
+            a = ootype.null(A)
+            b = ootype.null(B)
+            obj1 = ootype.cast_to_object(a)
+            obj2 = ootype.cast_to_object(b)
+            assert obj1 == obj2
+            assert ootype.cast_from_object(A, obj1) == a
+            assert ootype.cast_from_object(B, obj2) == b
+        self.interpret(fn_null, [])
+
+    def test_cast_object_is_true(self):
+        A = ootype.Instance("Foo", ootype.ROOT)
+        def fn_is_true(flag):
+            if flag:
+                a = ootype.new(A)
+            else:
+                a = ootype.null(A)
+            obj = ootype.cast_to_object(a)
+            return bool(obj)
+        assert self.interpret(fn_is_true, [True]) is True
+        assert self.interpret(fn_is_true, [False]) is False
+
+    def test_cast_object_mix_null(self):
+        A = ootype.Instance("Foo", ootype.ROOT)
+        def fn_mix_null(flag):
+            a = ootype.new(A)
+            obj = ootype.cast_to_object(a)
+            if flag:
+                return obj
+            else:
+                return ootype.NULL
+        res = self.interpret(fn_mix_null, [False])
+        assert res is ootype.NULL

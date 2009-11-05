@@ -456,6 +456,7 @@ class _Call(MicroInstruction):
         is_primitive = self._get_primitive_name(callee)
 
         if is_primitive:
+            import pdb; pdb.set_trace()
             module, name = is_primitive
             generator.prepare_call_primitive(op, module, name)
 

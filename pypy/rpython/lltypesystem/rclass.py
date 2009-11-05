@@ -8,7 +8,8 @@ from pypy.rpython.rclass import AbstractClassRepr,\
                                 AbstractInstanceRepr,\
                                 MissingRTypeAttribute,\
                                 getclassrepr, getinstancerepr,\
-                                get_type_repr, rtype_new_instance
+                                get_type_repr, rtype_new_instance, \
+                                FieldListAccessor
 from pypy.rpython.lltypesystem.lltype import \
      Ptr, Struct, GcStruct, malloc, \
      cast_pointer, cast_ptr_to_int, castable, nullptr, \
@@ -19,7 +20,6 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
-from pypy.rlib.objectmodel import UnboxedValue
 from pypy.rlib.rarithmetic import intmask
 
 #
@@ -351,6 +351,15 @@ class InstanceRepr(AbstractInstanceRepr):
             if '_immutable_' in self.classdef.classdesc.classdict:
                 hints = hints.copy()
                 hints['immutable'] = True
+            if '_immutable_fields_' in self.classdef.classdesc.classdict:
+                hints = hints.copy()
+                self.immutable_field_list = self.classdef.classdesc.classdict['_immutable_fields_'].value
+                accessor = FieldListAccessor()
+                hints['immutable_fields'] = accessor
+            if ('_hash_cache_' in fields or
+                '_hash_cache_' in self.rbase.allinstancefields):
+                adtmeths = adtmeths.copy()
+                adtmeths['gethash'] = self.get_ll_hash_function()
             object_type = MkStruct(self.classdef.name,
                                    ('super', self.rbase.object_type),
                                    hints=hints,
@@ -365,6 +374,10 @@ class InstanceRepr(AbstractInstanceRepr):
             attachRuntimeTypeInfo(self.object_type)
 
     def _setup_repr_final(self):
+        hints = self.object_type._hints
+        if "immutable_fields" in hints:
+            accessor = hints["immutable_fields"]
+            self._parse_field_list(self.immutable_field_list, accessor)
         if self.gcflavor == 'gc':
             if (self.classdef is not None and
                 self.classdef.classdesc.lookup('__del__') is not None):
@@ -390,6 +403,9 @@ class InstanceRepr(AbstractInstanceRepr):
 
     def common_repr(self): # -> object or nongcobject reprs
         return getinstancerepr(self.rtyper, None, self.gcflavor)
+
+    def _get_field(self, attr):
+        return self.fields[attr]
 
     def null_instance(self):
         return nullptr(self.object_type)
@@ -469,6 +485,7 @@ class InstanceRepr(AbstractInstanceRepr):
             cname = inputconst(Void, mangled_name)
             if force_cast:
                 vinst = llops.genop('cast_pointer', [vinst], resulttype=self)
+            self.hook_access_field(vinst, cname, llops, flags)
             return llops.genop('getfield', [vinst, cname], resulttype=r)
         else:
             if self.classdef is None:
@@ -484,12 +501,16 @@ class InstanceRepr(AbstractInstanceRepr):
             cname = inputconst(Void, mangled_name)
             if force_cast:
                 vinst = llops.genop('cast_pointer', [vinst], resulttype=self)
+            self.hook_access_field(vinst, cname, llops, flags)
             llops.genop('setfield', [vinst, cname, vvalue])
         else:
             if self.classdef is None:
                 raise MissingRTypeAttribute(attr)
             self.rbase.setfield(vinst, attr, vvalue, llops, force_cast=True,
                                 flags=flags)
+
+    def hook_access_field(self, vinst, cname, llops, flags):
+        pass        # for virtualizables; see rvirtualizable2.py
 
     def new_instance(self, llops, classcallhop=None):
         """Build a new instance, without calling __init__."""
@@ -605,41 +626,6 @@ class InstanceRepr(AbstractInstanceRepr):
         else:
             return hop.gendirectcall(ll_isinstance, v_obj, v_cls)
 
-
-def buildinstancerepr(rtyper, classdef, gcflavor='gc'):
-    if classdef is None:
-        unboxed = []
-        virtualizable = False
-        virtualizable2 = False
-    else:
-        unboxed = [subdef for subdef in classdef.getallsubdefs()
-                          if subdef.classdesc.pyobj is not None and
-                             issubclass(subdef.classdesc.pyobj, UnboxedValue)]
-        virtualizable = classdef.classdesc.read_attribute('_virtualizable_',
-                                                          Constant(False)).value
-        virtualizable2 = classdef.classdesc.read_attribute('_virtualizable2_',
-                                                           Constant(False)).value
-    if virtualizable:
-        assert len(unboxed) == 0
-        assert gcflavor == 'gc'
-        from pypy.rpython.lltypesystem import rvirtualizable
-        return rvirtualizable.VirtualizableInstanceRepr(rtyper, classdef)
-    elif virtualizable2:
-        assert len(unboxed) == 0
-        assert gcflavor == 'gc'
-        from pypy.rpython.lltypesystem import rvirtualizable2
-        return rvirtualizable2.Virtualizable2InstanceRepr(rtyper, classdef)
-    elif len(unboxed) == 0:
-        return InstanceRepr(rtyper, classdef, gcflavor)
-    else:
-        # the UnboxedValue class and its parent classes need a
-        # special repr for their instances
-        if len(unboxed) != 1:
-            raise TyperError("%r has several UnboxedValue subclasses" % (
-                classdef,))
-        assert gcflavor == 'gc'
-        from pypy.rpython.lltypesystem import rtagged
-        return rtagged.TaggedInstanceRepr(rtyper, classdef, unboxed[0])
 
 
 class __extend__(pairtype(InstanceRepr, InstanceRepr)):

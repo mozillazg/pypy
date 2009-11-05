@@ -381,6 +381,8 @@ class BaseInliner(object):
         excdata = self.translator.rtyper.getexceptiondata()
         exc_match = excdata.fn_exception_match
         for link in self.entrymap[self.graph_to_inline.exceptblock]:
+            if link.prevblock.exits[0] is not link:
+                continue
             copiedblock = self.copy_block(link.prevblock)
             VALUE, copiedlink = _find_exception_type(copiedblock)
             #print copiedblock.operations
@@ -483,10 +485,14 @@ class BaseInliner(object):
             INPUT_SELF = inputv.concretetype
             if LINK_SELF != INPUT_SELF:
                 # need to insert an upcast
-                assert ootype.isSubclass(LINK_SELF, INPUT_SELF)
+                if ootype.isSubclass(LINK_SELF, INPUT_SELF):
+                    opname = 'ooupcast'
+                else:
+                    assert ootype.isSubclass(INPUT_SELF, LINK_SELF)
+                    opname = 'oodowncast'
                 v = Variable()
                 v.concretetype = INPUT_SELF
-                upcast = SpaceOperation('ooupcast', [linkv], v)
+                upcast = SpaceOperation(opname, [linkv], v)
                 block.operations.append(upcast)
                 passon_args[0] = v
 
@@ -623,7 +629,6 @@ def inlining_heuristic(graph):
         return count, True
     return (0.9999 * measure_median_execution_cost(graph) +
             count), True
-
 
 def inlinable_static_callers(graphs):
     ok_to_call = dict.fromkeys(graphs)

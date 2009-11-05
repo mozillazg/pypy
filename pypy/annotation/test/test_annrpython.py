@@ -2746,11 +2746,10 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeInteger)
 
     def test_instance_with_flags(self):
-        py.test.skip("not supported any more")
         from pypy.rlib.jit import hint
 
         class A:
-            _virtualizable_ = True
+            _virtualizable2_ = []
         class B(A):
             def meth(self):
                 return self
@@ -3105,6 +3104,15 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(f, [int])
         assert s.const == 0
+
+    def test_hash(self):
+        class A(object):
+            pass
+        def f():
+            return hash(A()) + hash(None)
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert s.knowntype == int
 
 
 def g(n):
