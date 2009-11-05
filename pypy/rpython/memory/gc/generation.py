@@ -215,8 +215,8 @@ class GenerationGC(SemiSpaceGC):
             result = self.collect_nursery()
         llarena.arena_reserve(result, totalsize)
         # GCFLAG_NO_YOUNG_PTRS is never set on young objs
-        self.init_gc_object(result, typeid, flags=0)
         (result + size_gc_header + offset_to_length).signed[0] = length
+        self.init_gc_object(result, typeid, flags=0)
         self.nursery_free = result + llarena.round_up_for_allocation(totalsize)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 

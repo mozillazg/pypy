@@ -21,6 +21,7 @@ class GCData(object):
     # structure describing the layout of a typeid
     TYPE_INFO = lltype.Struct("type_info",
         ("counter",        lltype.Signed),
+        ("counter_size",   lltype.Signed),
         ("infobits",       lltype.Signed),    # combination of the T_xxx consts
         ("finalizer",      FINALIZERTYPE),
         ("fixedsize",      lltype.Signed),
@@ -94,8 +95,10 @@ class GCData(object):
             return weakptr_offset
         return -1
 
-    def q_count_allocation(self, typeid):
-        self.get(typeid).counter += 1
+    def q_count_allocation(self, typeid, size):
+        p = self.get(typeid)
+        p.counter += 1
+        p.counter_size += llmemory.raw_malloc_usage(size)
 
     def set_query_functions(self, gc):
         gc.set_query_functions(

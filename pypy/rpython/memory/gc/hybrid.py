@@ -168,8 +168,8 @@ class HybridGC(GenerationGC):
             if raw_malloc_usage(totalsize) <= self.nursery_top - result:
                 llarena.arena_reserve(result, totalsize)
                 # GCFLAG_NO_YOUNG_PTRS is never set on young objs
-                self.init_gc_object(result, typeid, flags=0)
                 (result + size_gc_header + offset_to_length).signed[0] = length
+                self.init_gc_object(result, typeid, flags=0)
                 self.nursery_free = result + llarena.round_up_for_allocation(
                     totalsize)
                 return llmemory.cast_adr_to_ptr(result+size_gc_header,
@@ -201,8 +201,8 @@ class HybridGC(GenerationGC):
         else:
             result = self.malloc_varsize_collecting_nursery(totalsize)
             flags = self.GCFLAGS_FOR_NEW_YOUNG_OBJECTS
-        self.init_gc_object(result, typeid, flags)
         (result + size_gc_header + offset_to_length).signed[0] = length
+        self.init_gc_object(result, typeid, flags)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
     malloc_varsize_slowpath._dont_inline_ = True
