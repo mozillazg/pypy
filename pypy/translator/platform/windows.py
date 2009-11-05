@@ -247,7 +247,7 @@ class MsvcPlatform(Platform):
 
         rules = [
             ('all', '$(DEFAULT_TARGET)', []),
-            ('.c.o', '', '$(CC) $(CFLAGS) /Fo$@ /c $< $(INCLUDEDIRS)'),
+            ('.c.obj', '', '$(CC) $(CFLAGS) /Fo$@ /c $< $(INCLUDEDIRS)'),
             ]
 
         for rule in rules:
