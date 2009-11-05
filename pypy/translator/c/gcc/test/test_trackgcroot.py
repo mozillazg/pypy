@@ -46,7 +46,7 @@ def test_compress_callshape():
     assert len(bytes) == 1+1+2+3+4+4+5+5+1
     assert decompress_callshape(bytes) == list(shape)
 
-def test_find_functions():
+def test_find_functions_elf():
     source = """\
 \t.p2align 4,,15
 .globl pypy_g_make_tree
@@ -70,29 +70,64 @@ def test_find_functions():
     assert parts[3] == (True,  lines[8:11])
     assert parts[4] == (False, lines[11:])
 
-
+def test_find_functions_darwin():
+    source = """\
+\t.text
+\t.align 4,0x90
+.globl _pypy_g_ll_str__StringR_Ptr_GcStruct_rpy_strin_rpy_strin
+_pypy_g_ll_str__StringR_Ptr_GcStruct_rpy_strin_rpy_strin:
+L0:
+\tFOO
+\t.align 4,0x90
+_static:
+\tSTATIC
+\t.align 4,0x90
+.globl _pypy_g_ll_issubclass__object_vtablePtr_object_vtablePtr
+_pypy_g_ll_issubclass__object_vtablePtr_object_vtablePtr:
+\tBAR
+\t.cstring
+\t.ascii "foo"
+\t.text
+\t.align 4,0x90
+.globl _pypy_g_RPyRaiseException
+_pypy_g_RPyRaiseException:
+\tBAZ
+\t.section stuff
+"""
+    lines = source.splitlines(True)
+    parts = list(GcRootTracker(format='darwin').find_functions(iter(lines)))
+    assert len(parts) == 7
+    assert parts[0] == (False, lines[:3])
+    assert parts[1] == (True,  lines[3:7])
+    assert parts[2] == (True,  lines[7:11])
+    assert parts[3] == (True,  lines[11:13])
+    assert parts[4] == (False, lines[13:18])
+    assert parts[5] == (True,  lines[18:20])
+    assert parts[6] == (False, lines[20:])
+ 
 def test_computegcmaptable():
     tests = []
-    for path in this_dir.listdir("track*.s"):
-        n = path.purebasename[5:]
-        try:
-            n = int(n)
-        except ValueError:
-            pass
-        tests.append((n, path))
+    for format in ('elf', 'darwin'):
+        for path in this_dir.join(format).listdir("track*.s"):
+            n = path.purebasename[5:]
+            try:
+                n = int(n)
+            except ValueError:
+                pass
+            tests.append((format, n, path))
     tests.sort()
-    for _, path in tests:
-        yield check_computegcmaptable, path
+    for format, _, path in tests:
+        yield check_computegcmaptable, format, path
 
 r_globallabel = re.compile(r"([\w]+)[:]")
 r_expected = re.compile(r"\s*;;\s*expected\s+([{].+[}])")
 
-def check_computegcmaptable(path):
+def check_computegcmaptable(format, path):
     print
     print path.basename
     lines = path.readlines()
     expectedlines = lines[:]
-    tracker = FunctionGcRootTracker(lines)
+    tracker = FunctionGcRootTracker(lines, format=format)
     table = tracker.computegcmaptable(verbose=sys.maxint)
     tabledict = {}
     seen = {}
