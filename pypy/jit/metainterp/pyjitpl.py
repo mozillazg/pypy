@@ -1084,6 +1084,7 @@ class MetaInterpStaticData(object):
         warmrunnerdesc = self.warmrunnerdesc
         if warmrunnerdesc is not None and warmrunnerdesc.can_resize_nursery:
             from pypy.rpython.lltypesystem import lltype, lloperation
+            from pypy.rlib import rgc
             if enlarge:
                 newsize = 10*1024*1024         # XXX a rather custom number
                 if sys.maxint > 2147483647:
@@ -1091,6 +1092,8 @@ class MetaInterpStaticData(object):
             else:
                 newsize = 0
             lloperation.llop.gc_resize_nursery(lltype.Void, newsize)
+            if enlarge:
+                rgc.collect(0)
 
 # ____________________________________________________________
 
