@@ -564,6 +564,48 @@ class RecursiveTests:
         res = self.meta_interp(main, [100], optimizer=OPTIMIZER_SIMPLE, inline=True)
         assert res == main(100)
 
+    def test_trace_from_start(self):
+        def p(code, pc):
+            code = hlstr(code)
+            return "%s %d %s" % (code, pc, code[pc])
+        def c(code, pc):
+            return "l" not in hlstr(code)
+        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n'],
+                                get_printable_location=p, can_inline=c)
+        
+        def f(code, n):
+            pc = 0
+            while pc < len(code):
+
+                myjitdriver.jit_merge_point(n=n, code=code, pc=pc)
+                op = code[pc]
+                if op == "+":
+                    n += 7
+                if op == "-":
+                    n -= 1
+                if op == "c":
+                    n = f('---', n)
+                elif op == "l":
+                    if n > 0:
+                        myjitdriver.can_enter_jit(n=n, code=code, pc=1)
+                        pc = 1
+                        continue
+                else:
+                    assert 0
+                pc += 1
+            return n
+        def g(m):
+            if m > 1000000:
+                f('', 0)
+            result = 0
+            for i in range(m):
+                result += f('+-cl--', i)
+        self.meta_interp(g, [50], backendopt=True)
+        self.check_tree_loop_count(3)
+        self.check_history(int_add=1)
+
+        
+
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
 

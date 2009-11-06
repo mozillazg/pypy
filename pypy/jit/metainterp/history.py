@@ -828,6 +828,9 @@ class NoStats(object):
     def add_new_loop(self, loop):
         pass
 
+    def add_new_bridge(self, bridge):
+        pass
+
     def view(self, **kwds):
         pass
 
@@ -840,6 +843,7 @@ class Stats(object):
 
     def __init__(self):
         self.loops = []
+        self.bridges = []
         self.locations = []
 
     def set_history(self, history):
@@ -863,6 +867,9 @@ class Stats(object):
     def add_new_loop(self, loop):
         self.loops.append(loop)
         
+    def add_new_bridge(self, bridge):
+        self.bridges.append(bridge)
+
     # test read interface
 
     def get_all_loops(self):
