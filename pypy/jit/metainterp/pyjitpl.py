@@ -106,7 +106,7 @@ class MIFrame(object):
     parent_resumedata_snapshot = None
     parent_resumedata_frame_info_list = None
 
-    def __init__(self, metainterp, jitcode):
+    def __init__(self, metainterp, jitcode, greenkey=None):
         assert isinstance(jitcode, codewriter.JitCode)
         self.metainterp = metainterp
         self.jitcode = jitcode
@@ -114,6 +114,8 @@ class MIFrame(object):
         self.constants = jitcode.constants
         self.exception_target = -1
         self.name = jitcode.name # purely for having name attribute
+        # this is not None for frames that are recursive portal calls
+        self.greenkey = greenkey
 
     # ------------------------------
     # Decoding of the JitCode
@@ -589,7 +591,7 @@ class MIFrame(object):
         result = vinfo.get_array_length(virtualizable, arrayindex)
         self.make_result_box(ConstInt(result))
 
-    def perform_call(self, jitcode, varargs):
+    def perform_call(self, jitcode, varargs, greenkey=None):
         if (self.metainterp.is_blackholing() and
             jitcode.calldescr is not None):
             # when producing only a BlackHole, we can implement this by
@@ -613,7 +615,7 @@ class MIFrame(object):
             return res
         else:
             # when tracing, this bytecode causes the subfunction to be entered
-            f = self.metainterp.newframe(jitcode)
+            f = self.metainterp.newframe(jitcode, greenkey)
             f.setup_call(varargs)
             return True
 
@@ -1126,14 +1128,18 @@ class MetaInterp(object):
     def __init__(self, staticdata):
         self.staticdata = staticdata
         self.cpu = staticdata.cpu
+        self.portal_trace_positions = []
 
     def is_blackholing(self):
         return self.history is None
 
-    def newframe(self, jitcode):
+    def newframe(self, jitcode, greenkey=None):
         if jitcode is self.staticdata.portal_code:
             self.in_recursion += 1
-        f = MIFrame(self, jitcode)
+        if greenkey is not None and not self.is_blackholing():
+            self.portal_trace_positions.append(
+                    (greenkey, len(self.history.operations)))
+        f = MIFrame(self, jitcode, greenkey)
         self.framestack.append(f)
         return f
 
@@ -1141,6 +1147,9 @@ class MetaInterp(object):
         frame = self.framestack.pop()
         if frame.jitcode is self.staticdata.portal_code:
             self.in_recursion -= 1
+        if frame.greenkey is not None and not self.is_blackholing():
+            self.portal_trace_positions.append(
+                    (None, len(self.history.operations)))
         return frame
 
     def finishframe(self, resultbox):
