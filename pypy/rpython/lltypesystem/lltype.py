@@ -258,8 +258,8 @@ class Struct(ContainerType):
 
     def __str__(self):
         # -- long version --
-        #return "%s %s { %s }" % (self.__class__.__name__,
-        #                         self._name, self._str_fields())
+        return "%s %s { %s }" % (self.__class__.__name__,
+                                 self._name, self._str_fields())
         # -- short version --
         return "%s %s { %s }" % (self.__class__.__name__, self._name,
                                  ', '.join(self._names))
