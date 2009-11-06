@@ -161,13 +161,13 @@ class WarmRunnerDesc:
 
         self.build_meta_interp(CPUClass, **kwds)
         self.make_args_specification()
+        if self.jitdriver.virtualizables:
+            from pypy.jit.metainterp.virtualizable import VirtualizableInfo
+            self.metainterp_sd.virtualizable_info = VirtualizableInfo(self)
         self.make_exception_classes()
         self.make_driverhook_graphs()
         self.make_enter_function()
         self.rewrite_jit_merge_point(policy)
-        if self.jitdriver.virtualizables:
-            from pypy.jit.metainterp.virtualizable import VirtualizableInfo
-            self.metainterp_sd.virtualizable_info = VirtualizableInfo(self)
                 
         self.codewriter.generate_bytecode(self.metainterp_sd,
                                           self.portal_graph,
