@@ -196,8 +196,6 @@ class FunctionGcRootTracker(object):
         for insn in self.insns:
             if isinstance(insn, (InsnRet, InsnEpilogue, InsnGCROOT)):
                 deltas = {}
-                if isinstance(insn, InsnRet):
-                    deltas[insn] = 0
                 self.walk_instructions_backwards(walker, insn, 0)
                 size_at_insn = []
                 for insn1, delta1 in deltas.items():
