@@ -62,3 +62,31 @@ def test_faildescr_numbering():
     # doesn't provide interning on its own
     n1_1 = gd.get_fail_descr_number(fail_descr1)
     assert n1_1 != n1
+
+def test_portal_trace_positions():
+    jitcode = codewriter.JitCode("f")
+    jitcode.code = jitcode.constants = None
+    portal = codewriter.JitCode("portal")
+    portal.code = portal.constants = None
+    class FakeStaticData:
+        cpu = None
+        portal_code = portal
+
+    metainterp = pyjitpl.MetaInterp(FakeStaticData())
+    metainterp.framestack = []
+    class FakeHistory:
+        operations = []
+    history = metainterp.history = FakeHistory()
+    metainterp.newframe(portal, "green1")
+    history.operations.append(1)
+    metainterp.newframe(jitcode)
+    history.operations.append(2)
+    metainterp.newframe(portal, "green2")
+    history.operations.append(3)
+    metainterp.popframe()
+    history.operations.append(4)
+    metainterp.popframe()
+    history.operations.append(5)
+    metainterp.popframe()
+    assert metainterp.portal_trace_positions == [("green1", 0), ("green2", 2),
+                                                 (None, 3), (None, 5)]
