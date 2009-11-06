@@ -432,7 +432,8 @@ def getgcflavor(classdef):
 
 def externalvsinternal(rtyper, item_repr): # -> external_item_repr, (internal_)item_repr
     from pypy.rpython import rclass
-    if (isinstance(item_repr, rclass.AbstractInstanceRepr) and
+    if (0 and     # XXX XXX XXX ONLY TO GET BETTER MEMORY DUMPS
+        isinstance(item_repr, rclass.AbstractInstanceRepr) and
         getattr(item_repr, 'gcflavor', 'gc') == 'gc'):
         return item_repr, rclass.getinstancerepr(rtyper, None)
     else:
