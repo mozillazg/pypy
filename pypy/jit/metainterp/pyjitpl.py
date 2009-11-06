@@ -648,7 +648,7 @@ class MIFrame(object):
             portal_code = self.metainterp.staticdata.portal_code
             greenkey = varargs[1:num_green_args + 1]
             if warmrunnerstate.can_inline_callable(greenkey):
-                return self.perform_call(portal_code, varargs[1:])
+                return self.perform_call(portal_code, varargs[1:], greenkey)
         return self.execute_varargs(rop.CALL, varargs, descr=calldescr, exc=True)
 
     @arguments("descr", "varargs")
@@ -1129,6 +1129,7 @@ class MetaInterp(object):
         self.staticdata = staticdata
         self.cpu = staticdata.cpu
         self.portal_trace_positions = []
+        self.greenkey_of_huge_function = None
 
     def is_blackholing(self):
         return self.history is None
@@ -1343,6 +1344,8 @@ class MetaInterp(object):
             warmrunnerstate = self.staticdata.state
             if len(self.history.operations) > warmrunnerstate.trace_limit:
                 self.staticdata.profiler.count(ABORT_TOO_LONG)
+                self.greenkey_of_huge_function = self.find_biggest_function()
+                self.portal_trace_positions = None
                 self.switch_to_blackhole()
 
     def _interpret(self):
@@ -1436,7 +1439,7 @@ class MetaInterp(object):
         except ContinueRunningNormallyBase:
             if not started_as_blackhole:
                 warmrunnerstate = self.staticdata.state
-                warmrunnerstate.reset_counter_from_failure(key)
+                warmrunnerstate.reset_counter_from_failure(key, self)
             raise
 
     def forget_consts(self, boxes, startindex=0):
@@ -1825,6 +1828,30 @@ class MetaInterp(object):
             for i in range(len(boxes)):
                 if boxes[i] is oldbox:
                     boxes[i] = newbox
+
+    def find_biggest_function(self):
+        assert not self.is_blackholing()
+
+        start_stack = []
+        max_size = 0
+        max_key = None
+        for pair in self.portal_trace_positions:
+            key, pos = pair
+            if key is not None:
+                start_stack.append(pair)
+            else:
+                greenkey, startpos = start_stack.pop()
+                size = pos - startpos
+                if size > max_size:
+                    max_size = size
+                    max_key = greenkey
+        if start_stack:
+            key, pos = start_stack[0]
+            size = len(self.history.operations) - pos
+            if size > max_size:
+                max_size = size
+                max_key = key
+        return max_key
 
 
 class GenerateMergePoint(Exception):

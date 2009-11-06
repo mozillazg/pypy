@@ -88,5 +88,18 @@ def test_portal_trace_positions():
     metainterp.popframe()
     history.operations.append(5)
     metainterp.popframe()
+    history.operations.append(6)
     assert metainterp.portal_trace_positions == [("green1", 0), ("green2", 2),
                                                  (None, 3), (None, 5)]
+    assert metainterp.find_biggest_function() == "green1"
+
+    metainterp.newframe(portal, "green3")
+    history.operations.append(7)
+    metainterp.newframe(jitcode)
+    history.operations.append(8)
+    assert metainterp.portal_trace_positions == [("green1", 0), ("green2", 2),
+                                                 (None, 3), (None, 5), ("green3", 6)]
+    assert metainterp.find_biggest_function() == "green1"
+
+    history.operations.extend([9, 10, 11, 12])
+    assert metainterp.find_biggest_function() == "green3"
