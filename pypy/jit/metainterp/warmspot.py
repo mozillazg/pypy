@@ -358,7 +358,7 @@ class WarmRunnerDesc:
             maybe_enter_jit._always_inline_ = True
         self.maybe_enter_jit_fn = maybe_enter_jit
 
-        can_inline = self.jitdriver.can_inline
+        can_inline = self.state.can_inline_greenargs
         def maybe_enter_from_start(*args):
             if can_inline is not None and not can_inline(*args[:self.num_green_args]):
                 maybe_compile_and_run(*args)

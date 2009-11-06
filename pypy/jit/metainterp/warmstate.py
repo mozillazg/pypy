@@ -161,8 +161,16 @@ class WarmEnterState(object):
         key.counter += 1
         return key.counter >= self.trace_eagerness
 
-    def reset_counter_from_failure(self, key):
+    def reset_counter_from_failure(self, key, metainterp):
         key.counter = 0
+        self.disable_noninlinable_function(metainterp)
+
+    def disable_noninlinable_function(self, metainterp):
+        greenkey = metainterp.greenkey_of_huge_function
+        if greenkey is not None:
+            cell = self.jit_cell_at_key(greenkey)
+            cell.dont_trace_here = True
+
 
     def attach_unoptimized_bridge_from_interp(self, greenkey,
                                               entry_loop_token):
@@ -220,6 +228,7 @@ class WarmEnterState(object):
                 except ContinueRunningNormally:
                     # the trace got too long, reset the counter
                     cell.counter = 0
+                    self.disable_noninlinable_function(metainterp)
                     raise
             else:
                 # machine code was already compiled for these greenargs
@@ -274,6 +283,7 @@ class WarmEnterState(object):
         class JitCell(BaseJitCell):
             counter = 0
             compiled_merge_points = None
+            dont_trace_here = False
         #
         if self.warmrunnerdesc.get_jitcell_at_ptr is None:
             jit_getter = self._make_jitcell_getter_default(JitCell)
@@ -428,18 +438,27 @@ class WarmEnterState(object):
             return
         #
         can_inline_ptr = self.warmrunnerdesc.can_inline_ptr
+        unwrap_greenkey = self.make_unwrap_greenkey()
         if can_inline_ptr is None:
-            def can_inline_callable(greenkey):
+            def can_inline_callable(*greenargs):
                 return True
         else:
             rtyper = self.warmrunnerdesc.rtyper
-            unwrap_greenkey = self.make_unwrap_greenkey()
             #
-            def can_inline_callable(greenkey):
-                greenargs = unwrap_greenkey(greenkey)
+            def can_inline_callable(*greenargs):
                 fn = support.maybe_on_top_of_llinterp(rtyper, can_inline_ptr)
                 return fn(*greenargs)
-        self.can_inline_callable = can_inline_callable
+        def can_inline(*greenargs):
+            cell = self.jit_getter(*greenargs)
+            if cell.dont_trace_here:
+                return False
+            return can_inline_callable(*greenargs)
+        self.can_inline_greenargs = can_inline
+        def can_inline_greenkey(greenkey):
+            greenargs = unwrap_greenkey(greenkey)
+            return can_inline(*greenargs)
+        self.can_inline_callable = can_inline_greenkey
+
         #
         get_location_ptr = self.warmrunnerdesc.get_printable_location_ptr
         if get_location_ptr is None:
