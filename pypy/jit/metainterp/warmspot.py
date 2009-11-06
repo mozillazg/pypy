@@ -294,8 +294,14 @@ class WarmRunnerDesc:
             def maybe_enter_jit(*args):
                 maybe_compile_and_run(*args)
             maybe_enter_jit._always_inline_ = True
-
         self.maybe_enter_jit_fn = maybe_enter_jit
+
+        def maybe_enter_from_start(*args):
+            if not self.jitdriver.can_inline(*args[:self.num_green_args]):
+                maybe_compile_and_run(*args)
+        maybe_enter_from_start._always_inline_ = True
+        self.maybe_enter_from_start_fn = maybe_enter_from_start
+
 
     def make_leave_jit_graph(self):
         self.leave_graph = None
@@ -505,6 +511,7 @@ class WarmRunnerDesc:
         def ll_portal_runner(*args):
             while 1:
                 try:
+                    self.maybe_enter_from_start_fn(*args)
                     return support.maybe_on_top_of_llinterp(rtyper,
                                                       portal_ptr)(*args)
                 except ContinueRunningNormally, e:
