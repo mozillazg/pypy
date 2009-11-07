@@ -10,7 +10,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.jit import PARAMETERS, OPTIMIZER_SIMPLE, OPTIMIZER_FULL
 from pypy.rlib.jit import DEBUG_PROFILE
 from pypy.rlib.jit import BaseJitCell
-from pypy.rlib.debug import debug_start, debug_stop
+from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.jit.metainterp import support, history
 
 # ____________________________________________________________
@@ -170,7 +170,11 @@ class WarmEnterState(object):
         if greenkey is not None:
             cell = self.jit_cell_at_key(greenkey)
             cell.dont_trace_here = True
-
+            debug_start("jit-disableinlining")
+            sd = self.warmrunnerdesc.metainterp_sd
+            loc = sd.state.get_location_str(greenkey)
+            debug_print("disabled inlining", loc)
+            debug_stop("jit-disableinlining")
 
     def attach_unoptimized_bridge_from_interp(self, greenkey,
                                               entry_loop_token):
