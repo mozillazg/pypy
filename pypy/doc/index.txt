@@ -8,7 +8,8 @@ nonsense, isn't it?  `more...`_
 Getting into PyPy ... 
 =============================================
 
-* `Release 1.1`_: the latest official release
+* `Release 1.1`_: the latest official release (oldish now, does not
+  contain the JIT_)
 
 * `PyPy Blog`_: news and status info about PyPy 
 
@@ -57,3 +58,4 @@ on the `development mailing list`_.
 .. _`Getting Started`: getting-started.html
 .. _papers: extradoc.html
 .. _`Release 1.1`: release-1.1.0.html
+.. _JIT: http://codespeak.net/pypy/trunk/pypy/doc/jit/
