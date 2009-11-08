@@ -180,8 +180,12 @@ class BaseCallDescr(AbstractDescr):
     loop_token = None
     arg_classes = ''     # <-- annotation hack
 
-    def __init__(self, arg_classes):
+    def __init__(self, arg_classes, extrainfo=None):
         self.arg_classes = arg_classes    # string of "r" and "i" (ref/int)
+        self.extrainfo = extrainfo
+
+    def get_extra_info(self):
+        return self.extrainfo
 
     def instantiate_arg_classes(self):
         result = []
@@ -220,13 +224,17 @@ class BaseCallDescr(AbstractDescr):
                 result = BoxInt()
             result_list = [result]
         operations = [
-            ResOperation(rop.CALL, args, result, self),
+            ResOperation(rop.CALL, args[:], result, self),
             ResOperation(rop.GUARD_NO_EXCEPTION, [], None,
                          descr=BasicFailDescr()),
             ResOperation(rop.FINISH, result_list, None,
                          descr=BasicFailDescr())]
         operations[1].fail_args = []
         loop_token = LoopToken()
+        # note: the 'args' that we pass below is not the same object as the
+        # 'args[:]' that was passed above to ResOperation, because we want
+        # the argument to ResOperation to be non-resizable, but the argument
+        # to compile_loop to be resizable.
         cpu.compile_loop(args, operations, loop_token)
         self.loop_token = loop_token
         return loop_token
@@ -256,7 +264,7 @@ def getCallDescrClass(RESULT):
                          NonGcPtrCallDescr, 'Call', 'get_result_size',
                          '_returns_a_float')
 
-def get_call_descr(gccache, ARGS, RESULT):
+def get_call_descr(gccache, ARGS, RESULT, extrainfo=None):
     arg_classes = []
     for ARG in ARGS:
         kind = getkind(ARG)
@@ -267,12 +275,12 @@ def get_call_descr(gccache, ARGS, RESULT):
             raise NotImplementedError('ARG = %r' % (ARG,))
     arg_classes = ''.join(arg_classes)
     cls = getCallDescrClass(RESULT)
-    key = (cls, arg_classes)
+    key = (cls, arg_classes, extrainfo)
     cache = gccache._cache_call
     try:
         return cache[key]
     except KeyError:
-        calldescr = cls(arg_classes)
+        calldescr = cls(arg_classes, extrainfo)
         cache[key] = calldescr
         return calldescr
 
