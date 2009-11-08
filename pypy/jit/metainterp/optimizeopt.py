@@ -42,7 +42,9 @@ LEVEL_CONSTANT   = '\x03'
 
 
 class OptValue(object):
-    _attrs_ = ('box', 'known_class', 'level')
+    _attrs_ = ('box', 'known_class', 'guard_class_index', 'level')
+    guard_class_index = -1
+
     level = LEVEL_UNKNOWN
 
     def __init__(self, box):
@@ -85,10 +87,11 @@ class OptValue(object):
         else:
             return None
 
-    def make_constant_class(self, classbox):
+    def make_constant_class(self, classbox, opindex):
         if self.level < LEVEL_KNOWNCLASS:
             self.known_class = classbox
             self.level = LEVEL_KNOWNCLASS
+            self.guard_class_index = opindex
 
     def is_nonnull(self):
         level = self.level
@@ -367,6 +370,7 @@ class Optimizer(object):
         self.interned_refs = self.cpu.ts.new_ref_dict()
         self.resumedata_memo = resume.ResumeDataLoopMemo(self.cpu)
         self.heap_op_optimizer = HeapOpOptimizer(self)
+        self.bool_boxes = {}
 
     def forget_numberings(self, virtualbox):
         self.metainterp_sd.profiler.count(OPT_FORCINGS)
@@ -513,6 +517,8 @@ class Optimizer(object):
             self.store_final_boxes_in_guard(op)
         elif op.can_raise():
             self.exception_might_have_happened = True
+        elif op.returns_bool_result():
+            self.bool_boxes[op.result] = None
         self.newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
@@ -523,6 +529,21 @@ class Optimizer(object):
         if len(newboxes) > self.metainterp_sd.options.failargs_limit:
             raise compile.GiveUp
         descr.store_final_boxes(op, newboxes)
+        #
+        # Hack: turn guard_value(bool) into guard_true/guard_false.
+        # This is done after the operation is emitted, to let
+        # store_final_boxes_in_guard set the guard_opnum field
+        # of the descr to the original rop.GUARD_VALUE.
+        if op.opnum == rop.GUARD_VALUE and op.args[0] in self.bool_boxes:
+            constvalue = op.args[1].getint()
+            if constvalue == 0:
+                opnum = rop.GUARD_FALSE
+            elif constvalue == 1:
+                opnum = rop.GUARD_TRUE
+            else:
+                raise AssertionError("uh?")
+            op.opnum = opnum
+            op.args = [op.args[0]]
 
     def optimize_default(self, op):
         if op.is_always_pure():
@@ -549,10 +570,10 @@ class Optimizer(object):
             value = self.getvalue(op.args[i])
             specnodes[i].teardown_virtual_node(self, value, exitargs)
         op2 = op.clone()
-        op2.args = exitargs
+        op2.args = exitargs[:]
         self.emit_operation(op2, must_clone=False)
 
-    def optimize_guard(self, op, constbox):
+    def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getvalue(op.args[0])
         if value.is_constant():
             box = value.box
@@ -560,13 +581,23 @@ class Optimizer(object):
             if not box.same_constant(constbox):
                 raise InvalidLoop
             return
-        self.emit_operation(op)
+        if emit_operation:
+            self.emit_operation(op)
         value.make_constant(constbox)
 
     def optimize_GUARD_VALUE(self, op):
+        value = self.getvalue(op.args[0])
+        emit_operation = True
+        if value.guard_class_index != -1:
+            # there already has been a guard_class on this value, which is
+            # rather silly. replace the original guard_class with a guard_value
+            guard_class_op = self.newoperations[value.guard_class_index]
+            guard_class_op.opnum = op.opnum
+            guard_class_op.args[1] = op.args[1]
+            emit_operation = False
         constbox = op.args[1]
         assert isinstance(constbox, Const)
-        self.optimize_guard(op, constbox)
+        self.optimize_guard(op, constbox, emit_operation)
 
     def optimize_GUARD_TRUE(self, op):
         self.optimize_guard(op, CONST_1)
@@ -586,7 +617,7 @@ class Optimizer(object):
             assert realclassbox.same_constant(expectedclassbox)
             return
         self.emit_operation(op)
-        value.make_constant_class(expectedclassbox)
+        value.make_constant_class(expectedclassbox, len(self.newoperations) - 1)
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if not self.exception_might_have_happened:
@@ -833,6 +864,20 @@ class HeapOpOptimizer(object):
             opnum == rop.SETARRAYITEM_GC or
             opnum == rop.DEBUG_MERGE_POINT):
             return
+        if opnum == rop.CALL:
+            effectinfo = op.descr.get_extra_info()
+            if effectinfo is not None:
+                for fielddescr in effectinfo.write_descrs_fields:
+                    try:
+                        del self.cached_fields[fielddescr]
+                    except KeyError:
+                        pass
+                for arraydescr in effectinfo.write_descrs_arrays:
+                    try:
+                        del self.cached_arrayitems[arraydescr]
+                    except KeyError:
+                        pass
+                return
         self.clean_caches()
 
     def optimize_GETFIELD_GC(self, op, value):
