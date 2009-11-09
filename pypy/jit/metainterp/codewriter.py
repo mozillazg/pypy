@@ -820,16 +820,18 @@ class BytecodeMaker(object):
             self.default_serialize_op(op)
 
     def serialize_op_ptr_eq(self, op):
-        self._serialize_op_ptr_eq(op, 'ptr_iszero')
+        self._serialize_op_ptr_eq(op, 'ooisnull')
+    serialize_op_oois = serialize_op_ptr_eq
 
     def serialize_op_ptr_ne(self, op):
-        self._serialize_op_ptr_eq(op, 'ptr_nonzero')
-
-    def serialize_op_oois(self, op):
-        self._serialize_op_ptr_eq(op, 'ooisnull')
-
-    def serialize_op_ooisnot(self, op):
         self._serialize_op_ptr_eq(op, 'oononnull')
+    serialize_op_ooisnot = serialize_op_ptr_ne
+
+    def serialize_op_ptr_iszero(self, op):
+        self.default_serialize_op(op, 'ooisnull')
+
+    def serialize_op_ptr_nonzero(self, op):
+        self.default_serialize_op(op, 'oononnull')
 
     def serialize_op_malloc(self, op):
         assert op.args[1].value == {'flavor': 'gc'}
