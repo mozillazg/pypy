@@ -1,6 +1,15 @@
 from pypy.lang.io.parserhack import interpret
 from pypy.lang.io.model import W_Number
-from math import isnan, isinf
+import sys
+if sys.version_info < (2, 6):
+    def isnan(num):
+        return num != num
+    def isinf(num): 
+        # not sure if this works with long
+        from sys import maxint
+        return num > maxint
+else:
+    from math import isnan, isinf
 import py
 
 def test_even_simpler():
