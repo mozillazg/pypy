@@ -797,7 +797,7 @@ class GenericMovingGCTests(GenericGCTests):
         run = self.runner("do_malloc_operations_in_call")
         run([])
 
-    def define_gc_dump_heap(cls):
+    def define_gc_heap_stats(cls):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         l1 = []
         l2 = []
@@ -815,7 +815,7 @@ class GenericMovingGCTests(GenericGCTests):
             # We cheat here and only read the table which we later on
             # process ourselves, otherwise this test takes ages
             llop.gc__collect(lltype.Void)
-            tb = rgc._dump_heap()
+            tb = rgc._heap_stats()
             a = 0
             nr = 0
             b = 0
@@ -836,8 +836,8 @@ class GenericMovingGCTests(GenericGCTests):
             return d * 1000 + c * 100 + b * 10 + a
         return f
 
-    def test_gc_dump_heap(self):
-        run = self.runner("gc_dump_heap")
+    def test_gc_heap_stats(self):
+        run = self.runner("gc_heap_stats")
         res = run([])
         assert res % 10000 == 2611
         totsize = (res / 10000)

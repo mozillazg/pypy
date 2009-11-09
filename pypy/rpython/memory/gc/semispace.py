@@ -658,13 +658,13 @@ class SemiSpaceGC(MovingGCBase):
     def _track_heap_root(self, root):
         self.track_heap(root.address[0])
 
-    def dump_heap_walk_roots(self):
+    def heap_stats_walk_roots(self):
         self.root_walker.walk_roots(
             SemiSpaceGC._track_heap_root,
             SemiSpaceGC._track_heap_root,
             SemiSpaceGC._track_heap_root)
         
-    def dump_heap(self):
+    def heap_stats(self):
         self._tracked_dict = self.AddressDict()
         max_tid = self.root_walker.gcdata.max_type_id
         ll_typeid_map = lltype.malloc(ARRAY_TYPEID_MAP, max_tid, zero=True)
@@ -676,7 +676,7 @@ class SemiSpaceGC(MovingGCBase):
         while i < max_tid:
             self._tracked_dict.add(llmemory.cast_ptr_to_adr(ll_typeid_map[i]))
             i += 1
-        self.dump_heap_walk_roots()
+        self.heap_stats_walk_roots()
         self._ll_typeid_map = lltype.nullptr(ARRAY_TYPEID_MAP)
         self._tracked_dict.delete()
         return ll_typeid_map

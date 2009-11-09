@@ -551,28 +551,6 @@ class GCTest(object):
         res = self.interpret(fn, [-1000], taggedpointers=True)
         assert res == 111
 
-
-    def test_gc_dump_heap(self):
-        if getattr(self.GCClass, 'dump_heap', None) is None:
-            py.test.skip("unsupported gc")
-        S = lltype.GcStruct('S', ('x', lltype.Signed))
-        
-        def fun(fd):
-            l = []
-            for i in range(10):
-                l.append(lltype.malloc(S))
-            rgc.dump_heap(fd)
-            keepalive_until_here(l)
-            return 0
-
-        from pypy.tool.udir import udir
-        f = udir.join("gcdump_direct.log")
-        handle = open(str(f), "w")
-        run = self.interpret(fun, [handle.fileno()])
-        handle.close()
-        assert f.read() == 'xxx'
-
-
 from pypy.rlib.objectmodel import UnboxedValue
 
 class TaggedBase(object):

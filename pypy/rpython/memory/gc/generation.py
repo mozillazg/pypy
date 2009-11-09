@@ -517,7 +517,7 @@ class GenerationGC(SemiSpaceGC):
     def _id_grow_older(self, obj, id, ignored):
         self.objects_with_id.setitem(obj, id)
 
-    def dump_heap_walk_roots(self):
+    def heap_stats_walk_roots(self):
         self.last_generation_root_objects.foreach(
             self._track_heap_ext, None)
         self.root_walker.walk_roots(

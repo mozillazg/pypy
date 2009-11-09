@@ -900,7 +900,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
         res = self.run('gc_set_max_heap_size')
         assert res == 2
 
-    def define_gc_dump_heap(cls):
+    def define_gc_heap_stats(cls):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         l1 = []
         l2 = []
@@ -912,7 +912,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
                 l1.append(s)
                 l2.append(s)
                 l3.append(s)
-            tb = rgc._dump_heap()
+            tb = rgc._heap_stats()
             a = 0
             nr = 0
             b = 0
@@ -930,8 +930,8 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
             return c * 100 + b * 10 + a
         return f
 
-    def test_gc_dump_heap(self):
-        res = self.run("gc_dump_heap")
+    def test_gc_heap_stats(self):
+        res = self.run("gc_heap_stats")
         assert res == 3011
 
     def definestr_string_builder(cls):
