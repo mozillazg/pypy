@@ -281,9 +281,24 @@ class MIFrame(object):
         target = self.load_3byte()  # load the 'target' argument
         self.pc = target      # jump
 
-    def ignore_next_guard_nullness(self):
+    def ignore_next_guard_nullness(self, opnum):
+        _op_ooisnull = self.metainterp.staticdata._op_ooisnull
+        _op_oononnull = self.metainterp.staticdata._op_oononnull
+        bc = ord(self.bytecode[self.pc])
+        if bc == _op_ooisnull:
+            if opnum == rop.GUARD_ISNULL:
+                res = ConstInt(0)
+            else:
+                res = ConstInt(1)
+        else:
+            assert bc == _op_oononnull
+            if opnum == rop.GUARD_ISNULL:
+                res = ConstInt(1)
+            else:
+                res = ConstInt(0)
         self.pc += 1    # past the bytecode for ptr_iszero/ptr_nonzero
         self.load_int() # past the 'box' argument
+        self.make_result_box(res)
 
     def dont_follow_jump(self):
         _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
@@ -450,7 +465,7 @@ class MIFrame(object):
             self.execute(rop.INT_NEG, box)
 
     @arguments("orgpc", "box")
-    def opimpl_ptr_nonzero(self, pc, box):
+    def opimpl_oononnull(self, pc, box):
         value = box.nonnull()
         if value:
             opnum = rop.GUARD_NONNULL
@@ -462,7 +477,7 @@ class MIFrame(object):
         self.make_result_box(res)
 
     @arguments("orgpc", "box")
-    def opimpl_ptr_iszero(self, pc, box):
+    def opimpl_ooisnull(self, pc, box):
         value = box.nonnull()
         if value:
             opnum = rop.GUARD_NONNULL
@@ -472,9 +487,6 @@ class MIFrame(object):
             res = ConstInt(1)
         self.generate_guard(pc, opnum, box, [])
         self.make_result_box(res)
-
-    opimpl_oononnull = opimpl_ptr_nonzero
-    opimpl_ooisnull = opimpl_ptr_iszero
 
     @arguments("box", "box")
     def opimpl_ptr_eq(self, box1, box2):
@@ -1001,6 +1013,8 @@ class MetaInterpStaticData(object):
 
         self.warmrunnerdesc = warmrunnerdesc
         self._op_goto_if_not = self.find_opcode('goto_if_not')
+        self._op_ooisnull    = self.find_opcode('ooisnull')
+        self._op_oononnull   = self.find_opcode('oononnull')
 
         backendmodule = self.cpu.__module__
         backendmodule = backendmodule.split('.')[-2]
@@ -1548,7 +1562,7 @@ class MetaInterp(object):
         elif opnum == rop.GUARD_NO_OVERFLOW:   # an overflow now detected
             self.raise_overflow_error()
         elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
-            self.framestack[-1].ignore_next_guard_nullness()
+            self.framestack[-1].ignore_next_guard_nullness(opnum)
 
     def compile(self, original_boxes, live_arg_boxes, start):
         num_green_args = self.staticdata.num_green_args
