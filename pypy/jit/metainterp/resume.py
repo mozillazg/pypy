@@ -89,7 +89,7 @@ TAGINT      = 1
 TAGBOX      = 2
 TAGVIRTUAL  = 3
 
-UNASSIGNED = tag(-1, TAGBOX)
+UNASSIGNED = tag(-2 ** 12 - 1, TAGBOX)
 NULLREF = tag(-1, TAGCONST)
 
 
