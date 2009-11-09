@@ -6,6 +6,9 @@ from pypy.rlib.rarithmetic import r_ulonglong
 def ident(x):
     return x
 
+def ident_view(x):
+    return x
+
 class BaseTestRunTest:
 
     def test_patch_os(self):
