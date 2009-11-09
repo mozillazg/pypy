@@ -281,6 +281,10 @@ class MIFrame(object):
         target = self.load_3byte()  # load the 'target' argument
         self.pc = target      # jump
 
+    def ignore_next_guard_nullness(self):
+        self.pc += 1    # past the bytecode for ptr_iszero/ptr_nonzero
+        self.load_int() # past the 'box' argument
+
     def dont_follow_jump(self):
         _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
         assert ord(self.bytecode[self.pc]) == _op_goto_if_not
@@ -445,13 +449,29 @@ class MIFrame(object):
         else:
             self.execute(rop.INT_NEG, box)
 
-    @arguments("box")
-    def opimpl_ptr_nonzero(self, box):
-        self.execute(rop.OONONNULL, box)
+    @arguments("orgpc", "box")
+    def opimpl_ptr_nonzero(self, pc, box):
+        value = box.nonnull()
+        if value:
+            opnum = rop.GUARD_NONNULL
+            res = ConstInt(1)
+        else:
+            opnum = rop.GUARD_ISNULL
+            res = ConstInt(0)
+        self.generate_guard(pc, opnum, box, [])
+        self.make_result_box(res)
 
-    @arguments("box")
-    def opimpl_ptr_iszero(self, box):
-        self.execute(rop.OOISNULL, box)
+    @arguments("orgpc", "box")
+    def opimpl_ptr_iszero(self, pc, box):
+        value = box.nonnull()
+        if value:
+            opnum = rop.GUARD_NONNULL
+            res = ConstInt(0)
+        else:
+            opnum = rop.GUARD_ISNULL
+            res = ConstInt(1)
+        self.generate_guard(pc, opnum, box, [])
+        self.make_result_box(res)
 
     opimpl_oononnull = opimpl_ptr_nonzero
     opimpl_ooisnull = opimpl_ptr_iszero
@@ -1527,6 +1547,8 @@ class MetaInterp(object):
             self.handle_exception()
         elif opnum == rop.GUARD_NO_OVERFLOW:   # an overflow now detected
             self.raise_overflow_error()
+        elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
+            self.framestack[-1].ignore_next_guard_nullness()
 
     def compile(self, original_boxes, live_arg_boxes, start):
         num_green_args = self.staticdata.num_green_args
