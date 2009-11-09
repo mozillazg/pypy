@@ -62,7 +62,7 @@ class MessageParser(object):
 io_file = py.magic.autopath().dirpath().join("parserhack.io")
 
 def parse(input, space=None):
-    child_in, child_out_err = os.popen4("osxvm %s" % io_file)
+    child_in, child_out_err = os.popen4("io %s" % io_file)
     child_in.write(input)
     child_in.close()
     s = child_out_err.read().strip()
