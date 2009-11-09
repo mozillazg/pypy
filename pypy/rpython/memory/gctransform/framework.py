@@ -271,8 +271,8 @@ class FrameworkGCTransformer(GCTransformer):
                 [s_gc, annmodel.SomeAddress()],
                 annmodel.s_None)
 
-        if hasattr(GCClass, 'dump_heap'):
-            self.dump_heap_ptr = getfn(GCClass.dump_heap.im_func,
+        if hasattr(GCClass, 'heap_stats'):
+            self.heap_stats_ptr = getfn(GCClass.heap_stats.im_func,
                     [s_gc], annmodel.SomePtr(lltype.Ptr(ARRAY_TYPEID_MAP)),
                     minimal_transform=False)
             self.get_member_index_ptr = getfn(
@@ -648,10 +648,12 @@ class FrameworkGCTransformer(GCTransformer):
         hop.genop("direct_call", [self.assume_young_pointers_ptr,
                                   self.c_const_gc, v_addr])
 
-    def gct_gc_dump_heap(self, hop):
+    def gct_gc_heap_stats(self, hop):
+        if not hasattr(self, 'heap_stats_ptr'):
+            return GCTransformer.gct_gc_heap_stats(self, hop)
         op = hop.spaceop
         livevars = self.push_roots(hop)
-        hop.genop("direct_call", [self.dump_heap_ptr, self.c_const_gc],
+        hop.genop("direct_call", [self.heap_stats_ptr, self.c_const_gc],
                   resultvar=op.result)
         self.pop_roots(hop, livevars)
 
