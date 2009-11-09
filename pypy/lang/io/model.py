@@ -44,6 +44,9 @@ class W_Object(object):
     def clone(self):
         return W_Object(self.space, [self])
         
+    def __repr__(self):
+        return "<W_Object slots=%s>" % (self.slots.keys(),)
+        
 class W_Number(W_Object):
     """Number"""
     def __init__(self, space, value, protos = None):

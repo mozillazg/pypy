@@ -16,7 +16,7 @@ def test_map_asObject_clones_object_proto():
     assert isinstance(res, W_Object)
     assert res.protos == [space.w_object]
     
-def test_map_as_lit():
+def test_map_as_list():
     py.test.skip("Depends on ==")
     inp = 'Map clone atPut("1", 12345) atPut("2", 99) atPut("3", 3) atPut("4", 234) asList'
     res, space = interpret(inp)
@@ -44,3 +44,43 @@ def test_new_slot_complex():
     assert 'timers' in a.slots
     assert 'setTimers' in a.slots
     # assert isinstance(a.slots['setTimers'], W_Block)
+    
+    
+def test_new_slot_with_lookup():
+    inp = """
+    q := 99
+    a := Object clone do (
+        timer ::= 1
+    )
+    a setTimer(q)
+    a timer
+    """
+    res, space = interpret(inp)
+    assert res.value == 99
+    a = space.w_lobby.slots['a']
+    assert 'timer' in a.slots
+    assert 'setTimer' in a.slots
+
+def test_new_slot_with_var():
+    inp = """
+        p := 4
+        a := Coroutine currentCoroutine do (
+            foobar ::= p
+        )
+        a foobar
+    """
+    res,space = interpret(inp)
+    assert res.value == 4
+    
+def test_new_slot_with_var2():
+    inp = """
+        p := 4
+        q := 23
+        a := Coroutine currentCoroutine do (
+            foobar ::= p
+        )
+        a setFoobar(q)
+        a foobar
+    """
+    res,space = interpret(inp)
+    assert res.value == 23

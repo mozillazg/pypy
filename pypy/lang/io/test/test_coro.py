@@ -66,7 +66,6 @@ def test_coro_result_last_value():
     assert res.slots['result'].value == 99
     
 def test_coro_parent_resume_switch():
-    # py.test.skip()
     inp = """
     back := currentCoro
     p := Coroutine currentCoroutine clone do(
@@ -131,4 +130,74 @@ def test_coroutine_corofor():
     assert isinstance(res, W_Coroutine)
     assert res.slots['runTarget'] is space.w_lobby
     assert res.slots['runLocals'] is space.w_lobby
+
+def test_xxx0():
+    py.test.skip()
+    inp = """
+    Lobby p := Coroutine currentCoroutine clone do (
+        name := "Coro"
+    )
+    p setRunMessage(message(99))
+    Lobby a := Coroutine currentCoroutine clone do (
+        name := "Coro-a"
+    )
+    a setParentCoroutine(p)
+    a setRunMessage(message(23))
+    a run; 
+    """
+    res,space = interpret(inp)
+    assert space.w_lobby.slots['a'].slots['result'].value == 23
+    assert space.w_lobby.slots['p'].slots['result'].value == 99
     
+
+def test_lookup_problem1():
+    inp = """
+    p := 4
+    result ::= 99
+    Object do (
+        foobar ::= nil
+    )
+    a := Object clone
+    a setFoobar(p)
+    Lobby setResult(a foobar)
+    result
+    """
+    res,space = interpret(inp)
+    print res
+    assert res.value == 4
+    
+def test_lookup_problem2():
+    inp = """
+    p := 4
+    result ::= 99
+    try(
+        Object do (
+            foobar ::= nil
+        )
+        a := Object clone
+        a setFoobar(p)
+        Lobby setResult(a foobar)
+    )
+    result
+    """
+    res,space = interpret(inp)
+    assert res.value == 4
+    
+    
+def test_lookup_problem3():
+    inp = """
+    result ::= 99
+    try(
+        p := 4
+        Object do (
+            foobar ::= nil
+        )
+        a := Object clone
+        a setFoobar(p)
+        Lobby setResult(a foobar)
+    )
+    result
+    """
+    res,space = interpret(inp)
+    print res
+    assert res.value == 4
