@@ -181,9 +181,13 @@ def object_do_string(space, w_target, code):
 def object_new_slot(space, w_target, name, w_value):
     from pypy.lang.io.model import W_CFunction
     w_target.slots[name] = w_value
-    def setSlot(space, w_target, w_message, w_context):
-        w_target.slots[name] = w_message.arguments[0].eval(space, w_context, w_context)
-        return w_target
+
+    def setSlot(my_space, w_w_target, w_w_message, w_w_context):
+        w_w_target.slots[name] = w_w_message.arguments[0].eval(my_space, 
+                                                                w_w_context,
+                                                                w_w_target)
+        return w_w_target
+
     w_target.slots['set%s' % (name[0].capitalize() + name[1:])] = W_CFunction(space, setSlot)
     
 @register_method('Object', 'updateSlot', unwrap_spec=[object, str, object])
