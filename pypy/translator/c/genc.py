@@ -519,7 +519,7 @@ class CStandaloneBuilder(CBuilder):
                 mk.definition('OBJECTS', 'gcmaptable.obj $(ASMLBLOBJFILES)')
                 # /Oi (enable intrinsics) and /Ob1 (some inlining) are mandatory
                 # even in debug builds
-                mk.definition('ASM_CFLAGS', '$(CFLAGS) /Od /Oi /Ob1')
+                mk.definition('ASM_CFLAGS', '$(CFLAGS) /Oi /Ob1')
                 mk.rule('.SUFFIXES', '.s', [])
                 mk.rule('.s.obj', '',
                         'cmd /c $(MASM) /nologo /Cx /Cp /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')

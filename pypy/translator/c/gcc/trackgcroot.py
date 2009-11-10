@@ -13,8 +13,6 @@ from pypy.translator.c.gcc.instruction import LocalVar, somenewvalue, frameloc
 from pypy.translator.c.gcc.instruction import LOC_REG, LOC_NOWHERE, LOC_MASK
 from pypy.translator.c.gcc.instruction import LOC_EBP_BASED, LOC_ESP_BASED
 
-OFFSET_LABELS   = 2**30
-
 class FunctionGcRootTracker(object):
     skip = 0
 
@@ -22,7 +20,7 @@ class FunctionGcRootTracker(object):
     def init_regexp(cls):
         cls.r_label         = re.compile(cls.LABEL+"[:]\s*$")
         cls.r_globl         = re.compile(r"\t[.]globl\t"+cls.LABEL+"\s*$")
-        cls.r_globllabel    = re.compile(cls.LABEL+r"=[.][+]%d\s*$"%OFFSET_LABELS)
+        cls.r_globllabel    = re.compile(cls.LABEL+r"=[.][+]%d\s*$"%cls.OFFSET_LABELS)
 
         cls.r_insn          = re.compile(r"\t([a-z]\w*)\s")
         cls.r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+cls.OPERAND+")\s*$")
@@ -323,7 +321,7 @@ class FunctionGcRootTracker(object):
                 # value a big constant, which is subtracted again when we need
                 # the original value for gcmaptable.s.  That's a hack.
                 self.lines.insert(call.lineno+1, '%s=.+%d\n' % (label,
-                                                                OFFSET_LABELS))
+                                                                self.OFFSET_LABELS))
                 self.lines.insert(call.lineno+1, '\t.globl\t%s\n' % (label,))
         call.global_label = label
 
@@ -558,6 +556,11 @@ class FunctionGcRootTracker(object):
         if tablelabels:
             tablelin = self.labels[tablelabels[0]].lineno + 1
             while not self.r_jmptable_end.match(self.lines[tablelin]):
+                # skip empty lines
+                if (not self.lines[tablelin].strip()
+                    or self.lines[tablelin].startswith(';')):
+                    tablelin += 1
+                    continue
                 match = self.r_jmptable_item.match(self.lines[tablelin])
                 if not match:
                     raise NoPatternMatch(repr(self.lines[tablelin]))
@@ -624,32 +627,19 @@ class FunctionGcRootTracker(object):
 
     def visit_call(self, line):
         match = self.r_unaryinsn.match(line)
+
         if match is None:
             assert self.r_unaryinsn_star.match(line)   # indirect call
-        else:
-            target = match.group(1)
-            if target in self.FUNCTIONS_NOT_RETURNING:
-                return [InsnStop(), InsnCannotFollowEsp()]
-            if self.format == 'mingw32' and target == '__alloca':
-                # in functions with large stack requirements, windows
-                # needs a call to _alloca(), to turn reserved pages
-                # into committed memory.
-                # With mingw32 gcc at least, %esp is not used before
-                # this call.  So we don't bother to compute the exact
-                # stack effect.
-                return [InsnCannotFollowEsp()]
-            if target in self.labels:
-                lineoffset = self.labels[target].lineno - self.currentlineno
-                if lineoffset >= 0:
-                    assert  lineoffset in (1,2)
-                    return [InsnStackAdjust(-4)]
-        insns = [InsnCall(self.currentlineno),
-                 InsnSetLocal(self.EAX)]      # the result is there
-        if self.format in ('mingw32', 'msvc'):
+            return [InsnCall(self.currentlineno),
+                    InsnSetLocal(self.EAX)]      # the result is there
+
+        target = match.group(1)
+
+        if self.format in ('msvc'):
             # On win32, the address of a foreign function must be
             # computed, the optimizer may store it in a register.  We
-            # could ignore this, except when the function has a
-            # __stdcall calling convention...
+            # could ignore this, except when the function need special
+            # processing (not returning, __stdcall...)
             def find_register(target):
                 reg = []
                 def walker(insn, locs):
@@ -658,8 +648,9 @@ class FunctionGcRootTracker(object):
                         for s in insn.all_sources_of(loc):
                             sources.append(s)
                     for source in sources:
-                        if re.match("DWORD PTR .+@", source):
-                            reg.append(source)
+                        m = re.match("DWORD PTR (.+)", source)
+                        if m:
+                            reg.append(m.group(1))
                     if reg:
                         return
                     yield tuple(sources)
@@ -673,14 +664,33 @@ class FunctionGcRootTracker(object):
                 if sources:
                     target, = sources
 
+        if target in self.FUNCTIONS_NOT_RETURNING:
+            return [InsnStop(), InsnCannotFollowEsp()]
+        if self.format == 'mingw32' and target == '__alloca':
+            # in functions with large stack requirements, windows
+            # needs a call to _alloca(), to turn reserved pages
+            # into committed memory.
+            # With mingw32 gcc at least, %esp is not used before
+            # this call.  So we don't bother to compute the exact
+            # stack effect.
+            return [InsnCannotFollowEsp()]
+        if target in self.labels:
+            lineoffset = self.labels[target].lineno - self.currentlineno
+            if lineoffset >= 0:
+                assert  lineoffset in (1,2)
+                return [InsnStackAdjust(-4)]
+
+        insns = [InsnCall(self.currentlineno),
+                 InsnSetLocal(self.EAX)]      # the result is there
+        if self.format in ('mingw32', 'msvc'):
             # handle __stdcall calling convention:
             # Stack cleanup is performed by the called function,
             # Function name is decorated with "@N" where N is the stack size
-            if match and '@' in target and not target.startswith('@'):
+            if '@' in target and not target.startswith('@'):
                 insns.append(InsnStackAdjust(int(target.rsplit('@', 1)[1])))
             # Some (intrinsic?) functions use the "fastcall" calling convention
             # XXX without any declaration, how can we guess the stack effect?
-            if match and target in ['__alldiv', '__allrem', '__allmul', '__alldvrm']:
+            if target in ['__alldiv', '__allrem', '__allmul', '__alldvrm']:
                 insns.append(InsnStackAdjust(16))
         return insns
 
@@ -696,6 +706,7 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
                    for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS))
     OPERAND = r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
     LABEL   = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
+    OFFSET_LABELS   = 2**30
     TOP_OF_STACK = '0(%esp)'
 
     r_functionstart = re.compile(r"\t.type\s+"+LABEL+",\s*[@]function\s*$")
@@ -742,6 +753,7 @@ class DarwinFunctionGcRootTracker(ElfFunctionGcRootTracker):
     format = 'darwin'
 
     r_functionstart = re.compile(r"_(\w+):\s*$")
+    OFFSET_LABELS   = 0
 
     def __init__(self, lines, filetag=0):
         match = self.r_functionstart.match(lines[0])
@@ -753,7 +765,6 @@ class Mingw32FunctionGcRootTracker(DarwinFunctionGcRootTracker):
 
 class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     format = 'msvc'
-
     ESP = 'esp'
     EBP = 'ebp'
     EAX = 'eax'
@@ -764,6 +775,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
 
     OPERAND = r'(?:(:?WORD|DWORD|BYTE) PTR |OFFSET )?[_\w?:@$]*(?:[-+0-9]+)?(:?\[[-+*\w0-9]+\])?'
     LABEL   = r'([a-zA-Z_$@.][a-zA-Z0-9_$@.]*)'
+    OFFSET_LABELS = 0
 
     r_functionstart = re.compile(r"; Function compile flags: ")
     r_codestart     = re.compile(LABEL+r"\s+PROC\s*(:?;.+)?\n$")
@@ -783,7 +795,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
 
     r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+DWORD PTR ("+OPERAND+")\s*$")
     r_jmptable_item = re.compile(r"\tDD\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
-    r_jmptable_end  = re.compile(r"[^\t]")
+    r_jmptable_end  = re.compile(r"[^\t\n;]")
 
     FUNCTIONS_NOT_RETURNING = {
         '_abort': None,
@@ -1346,7 +1358,9 @@ class GcRootTracker(object):
                 print >> output, '\tDD\t%s' % (label,)
                 print >> output, '\tDD\t%d' % (n,)
             else:
-                print >> output, '\t.long\t%s-%d' % (label, OFFSET_LABELS)
+                print >> output, '\t.long\t%s-%d' % (
+                    label,
+                    PARSERS[self.format].FunctionGcRootTracker.OFFSET_LABELS)
                 print >> output, '\t.long\t%d' % (n,)
 
         _globl('__gcmapend')
