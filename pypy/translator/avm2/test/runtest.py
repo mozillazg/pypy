@@ -20,19 +20,18 @@ from pypy.translator.avm2.genavm import GenAVM2
 #         gen.call_method("fromCharCode")
 
 def compile_function(func, name, annotation=[], graph=None, backendopt=True,
-                     auto_raise_exc=False, exctrans=False,
-                     annotatorpolicy=None, nowrap=False):
+                     exctrans=False, annotatorpolicy=None):
     olddefs = patch_os()
-    gen = _build_gen(func, annotation, name, graph, backendopt,
-                     exctrans, annotatorpolicy, nowrap)
+    gen = _build_gen(func, annotation,graph, backendopt,
+                     exctrans, annotatorpolicy)
     harness = TestHarness(name, gen)
     gen.ilasm = harness.actions
     gen.generate_source()
     unpatch_os(olddefs) # restore original values
     return gen, harness
 
-def _build_gen(func, annotation, name, graph=None, backendopt=True, exctrans=False,
-               annotatorpolicy=None, nowrap=False):
+def _build_gen(func, annotation, graph=None, backendopt=True, exctrans=False,
+               annotatorpolicy=None):
     try: 
         func = func.im_func
     except AttributeError: 
@@ -69,14 +68,13 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
         self._genoo = None
         self._harness = None
 
-    def _compile(self, fn, args, ann=None, backendopt=True, auto_raise_exc=False, exctrans=False):
+    def _compile(self, fn, args, ann=None, backendopt=True, exctrans=False):
         if ann is None:
             ann = [lltype_to_annotation(typeOf(x)) for x in args]
         self._genoo, self._harness = compile_function(fn,
                                                       "%s.%s" % (self.__class__.__name__, fn.func_name),
                                                       ann,
                                                       backendopt=backendopt,
-                                                      auto_raise_exc=auto_raise_exc,
                                                       exctrans=exctrans)
         self._func = fn
         self._ann = ann
@@ -141,3 +139,14 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
 
     def read_attr(self, obj, name):
         py.test.skip('read_attr not supported on gencli tests')
+
+class InstanceWrapper:
+    def __init__(self, class_name):
+        self.class_name = class_name
+
+class ExceptionWrapper:
+    def __init__(self, class_name):
+        self.class_name = class_name
+
+    def __repr__(self):
+        return 'ExceptionWrapper(%s)' % repr(self.class_name)

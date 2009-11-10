@@ -2,7 +2,7 @@
 import py
 from pypy.translator.avm1 import swf as s, tags as t, records as r
 from pypy.translator.avm2.test import browsertest as b
-from pypy.translator.avm2 import avm2gen as g, constants as c, abc_ as a
+from pypy.translator.avm2 import avm2gen as g, constants as c, abc_ as a, traits
 
 fl_dis_ns = c.Namespace("flash.display", c.TYPE_NAMESPACE_PackageNamespace)
 
@@ -10,21 +10,14 @@ class TestHarness(object):
     def __init__(self, name, gen):
         self.testname  = name
         self.swf = s.SwfData()
+        self.swf.add_tag(t.FileAttributes())
         self.swf.add_tag(t.SetBackgroundColor(0x333333))
-        self.swf.add_tag(t.DefineEditText(r.Rect(0, 0, 0, 0), "",
+        self.swf.add_tag(t.DefineEditText(r.Rect(0, 600, 0, 400), "tt",
                                           "Testing %s." % (name,), color=r.RGBA(0xFFFFFF)))
         self.swf.add_tag(t.PlaceObject2(1, 2, name="edittext"))
         self.abc = t.DoABC()
         self.actions = g.Avm2ilasm(gen.db, self.abc)
         
-        self.maincls = self.actions.begin_class(c.QName("PyPyTest_EntryPoint"), c.packagedQName("flash.display", "Sprite"), [
-                  c.packagedQName("flash.display", "Sprite"),
-                  c.packagedQName("flash.display", "DisplayObjectContainer"),
-                  c.packagedQName("flash.display", "InteractiveObject"),
-                  c.packagedQName("flash.display", "DisplayObject"),
-                  c.packagedQName("flash.events", "EventDispatcher"),
-                  c.QName("Object"),
-                ])
         self.swf.add_tag(self.abc)
         self.swf.add_tag(t.SymbolClass({0:"PyPyTest_EntryPoint"}))
         self.swf.add_tag(t.ShowFrame())
@@ -35,8 +28,7 @@ class TestHarness(object):
             return self.actions.push_var('edittext')
         
         self.actions.push_this()
-        self.actions.push_const('edittext')
-        self.actions.emit('callproperty', c.Multiname("getChildByName", c.PROP_NAMESPACE_SET), 1)
+        self.actions.emit('getlex', c.QName("edittext"))
         self.actions.store_var('edittext')
 
     def update_text(self):
@@ -70,8 +62,17 @@ class TestHarness(object):
         self.actions.store_var('text')
     
     def start_test(self):
+        self.maincls = self.actions.begin_class(c.QName("PyPyTest_EntryPoint"), c.packagedQName("flash.display", "Sprite"), [
+                  c.packagedQName("flash.display", "Sprite"),
+                  c.packagedQName("flash.display", "DisplayObjectContainer"),
+                  c.packagedQName("flash.display", "InteractiveObject"),
+                  c.packagedQName("flash.display", "DisplayObject"),
+                  c.packagedQName("flash.events", "EventDispatcher"),
+                  c.QName("Object"),
+                ])
         self.maincls.make_iinit()
         self.get_edittext()
+        self.maincls.add_instance_trait(traits.AbcSlotTrait(c.QName('edittext'), c.packagedQName("flash.text", "TextField")))
         self.actions.push_var('edittext')
         self.actions.emit('getproperty', c.QName('text'))
         self.actions.store_var('text')
@@ -90,7 +91,7 @@ class TestHarness(object):
         self.actions.emit('setproperty', c.QName("method"))
         self.actions.push_var('request')
         self.actions.emit('findpropstrict', c.packagedQName("flash.net", "URLVariables"))
-        self.actions.emit('constructprop', c.packagedQName("flash.net", "URLVariables"), 1)
+        self.actions.emit('constructprop', c.packagedQName("flash.net", "URLVariables"), 0)
         self.actions.emit('setproperty', c.QName("data"))
         self.actions.push_var('request')
         self.actions.emit('getproperty', c.QName("data"))
@@ -110,5 +111,5 @@ class TestHarness(object):
             f = open("test.abc", "w")
             f.write(a.AbcFile.serialize(self.abc))
             f.close()
-        py.test.fail("debug")
-        #return b.browsertest(self.testname, self.swf)
+        #py.test.fail("debug")
+        return b.browsertest(self.testname, self.swf)
