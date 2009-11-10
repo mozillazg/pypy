@@ -8,7 +8,7 @@ from pypy.lang.js import interpreter
 
 interpreter.TEST = True
 
-rootdir = py.magic.autopath().dirpath()
+rootdir = py.path.local(__file__).dirpath()
 exclusionlist = ['shell.js', 'browser.js']
 
 def pytest_addoption(parser):
