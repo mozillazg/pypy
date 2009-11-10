@@ -1,5 +1,5 @@
 import py
-from py.__.doc.confrest import *
+from py.impl.doc.confrest import *
 
 class PyPyPage(Page): 
     def fill_menubar(self):
