@@ -9,7 +9,7 @@ from inspect import isclass, getmro
 from pypy.tool.udir import udir
 from pypy.tool.autopath import pypydir
 
-rootdir = py.magic.autopath().dirpath()
+rootdir = py.path.local(__file__).dirpath()
 
 # pytest settings
 pytest_plugins = "resultlog",
@@ -36,7 +36,7 @@ def _set_platform(opt, opt_str, value, parser):
 option = py.test.config.option
 
 def pytest_addoption(parser):
-    group = parser.addgroup("pypy options")
+    group = parser.getgroup("pypy options")
     group.addoption('--view', action="store_true", dest="view", default=False,
            help="view translation tests' flow graphs with Pygame")
     group.addoption('-A', '--runappdirect', action="store_true",

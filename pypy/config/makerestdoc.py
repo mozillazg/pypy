@@ -7,7 +7,7 @@ from pypy.config.config import FloatOption, OptionDescription, Option, Config
 from pypy.config.config import ArbitraryOption, DEFAULT_OPTION_NAME
 from pypy.config.config import _getnegation
 
-configdocdir = py.magic.autopath().dirpath().dirpath().join("doc", "config")
+configdocdir = py.path.local(__file__).dirpath().dirpath().join("doc", "config")
 
 def get_fullpath(opt, path):
     if path:
