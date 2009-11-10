@@ -2,23 +2,27 @@
 import struct, re
 from collections import namedtuple
 
+# 5 bytes with the 7 low bits contributing to the number
+U32_MAX = 2**(7*5) - 1
+S32_MAX = 2**((7*5) - 2)
+
 def serialize_u32(value):
     s = ""
     i = 0
     while True:
-        i += 1
         if i == 5:
-            raise ValueError, "value does not fit in a u32"
+            raise ValueError("value does not fit in a u32: %r" % s)
         bits = value & 0b01111111 # low 7 bits
         value >>= 7
         if not value:
             s += chr(bits)
             break
         s += chr(0b10000000 | bits)
+        i += 1
     return s
 
 def replace_substr(string, replace, start, stop):
-    return string[:start] + replace + string[stop+1:]
+    return string[:start] + replace + string[stop:]
 
 def serialize_s24(value):
     m = struct.pack("<l", value)
@@ -64,6 +68,7 @@ class Avm2Label(object):
         
     def write_relative_offset(self, base, location):
         if self.address == -1:
+            print "writing backpatch at:", base, location
             self.asm.add_backpatch(Avm2Backpatch(location, base, self))
             return "\0\0\0"
         else:

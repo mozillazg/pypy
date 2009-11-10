@@ -2,7 +2,7 @@ import string
 #from pypy.translator.avm.class_ import Class
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.support import Counter
-from pypy.translator.avm2 import runtime, types_ as types, class_ as c
+from pypy.translator.avm2 import runtime, types_ as types, class_ as c, record
 from pypy.translator.oosupport.database import Database as OODatabase
 
 try:
@@ -59,7 +59,7 @@ class LowLevelDatabase(OODatabase):
         name = self._default_record_name(RECORD)
         name = self.get_unique_class_name(None, name)
         self.recordnames[RECORD] = name
-        r = Record(self, RECORD, name)
+        r = record.Record(self, RECORD, name)
         self.pending_node(r)
         return name
 
@@ -102,9 +102,18 @@ class LowLevelDatabase(OODatabase):
 
     def class_name(self, INSTANCE):
         if INSTANCE is ootype.ROOT:
-            return types.types.object.classname()
+            return "Object"
         try:
             NATIVE_INSTANCE = INSTANCE._hints['NATIVE_INSTANCE']
             return NATIVE_INSTANCE._name
         except KeyError:
             return self.classes[INSTANCE]
+        
+    def record_delegate(self, TYPE):
+        try:
+            return self.delegates[TYPE]
+        except KeyError:
+            name = 'StaticMethod__%d' % len(self.delegates)
+            self.delegates[TYPE] = name
+            self.pending_node(Delegate(self, TYPE, name))
+            return name

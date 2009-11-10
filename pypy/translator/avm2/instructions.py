@@ -32,6 +32,8 @@ class _Avm2ShortInstruction(object):
         INSTRUCTIONS[name] = self
 
     def _repr(self):
+        if self.opcode is None:
+            return self.name
         return "%s (0x%#X)" % (self.name, self.opcode)
       
     def _set_assembler_props(self, asm):
@@ -255,7 +257,7 @@ class _Avm2NewObject(_Avm2U30Instruction):
 
 #{ Instructions that push one value to the stack and take no arguments.
 dup = _Avm2ShortInstruction(0x2A, "dup", 1)
-getglobalscope = _Avm2ShortInstruction(0x6A, "getglobalscope", 1)
+getglobalscope = _Avm2ShortInstruction(0x64, "getglobalscope", 1)
 getlocal_0 = _Avm2ShortInstruction(0xD0, "getlocal_0", 1)
 getlocal_1 = _Avm2ShortInstruction(0xD1, 'getlocal_1', 1)
 getlocal_2 = _Avm2ShortInstruction(0xD2, 'getlocal_2', 1)
@@ -427,7 +429,7 @@ jump = _Avm2OffsetInstruction(0x10, 'jump')
 #{ Special Instructions
 debug = _Avm2DebugInstruction(0xEF, 'debug')
 
-label_internal = _Avm2ShortInstruction(0x09, 'label')()
+label_internal = _Avm2ShortInstruction(0x09, 'label_interal')()
 label = _Avm2LabelInstruction(None, 'label')
 
 lookupswitch = _Avm2LookupSwitchInstruction(0x1B, 'lookupswitch')

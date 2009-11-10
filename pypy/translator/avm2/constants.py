@@ -123,8 +123,8 @@ def py_to_abc(value, pool):
         return value.kind, pool.namespace_pool.index_for(value)
     if isinstance(value, NamespaceSet):
         return TYPE_NAMESPACE_SET_NamespaceSet, pool.nsset_pool.index_for(value)
-    if hasattr(value, "KIND"):
-        return value.KIND, pool.multiname_pool.index_for(value)
+    if hasattr(value, "multiname"):
+        return value.multiname().KIND, pool.multiname_pool.index_for(value.multiname())
     raise ValueError, "This is not an ABC-compatible type."
 
 # ======================================
@@ -185,11 +185,13 @@ ANY_NAMESPACE = Namespace(TYPE_NAMESPACE_Namespace, "*")
 
 PACKAGE_NAMESPACE   = Namespace(TYPE_NAMESPACE_PackageNamespace, "")
 PACKAGE_I_NAMESPACE = Namespace(TYPE_NAMESPACE_PackageInternalNs, "")
-PRIVATE_NAMESPACE   = Namespace(TYPE_NAMESPACE_PrivateNamespace, "*")
+PRIVATE_NAMESPACE   = Namespace(TYPE_NAMESPACE_PrivateNamespace, "")
 AS3_NAMESPACE       = Namespace(TYPE_NAMESPACE_Namespace, "http://adobe.com/AS3/2006/builtin")
 
 NO_NAMESPACE_SET = NamespaceSet()
 PROP_NAMESPACE_SET = NamespaceSet(PRIVATE_NAMESPACE, PACKAGE_NAMESPACE, PACKAGE_I_NAMESPACE, AS3_NAMESPACE)
+
+ANY_NAME = object()
 
 def packagedQName(ns, name):
     return QName(name, Namespace(TYPE_NAMESPACE_PackageNamespace, ns))
@@ -220,6 +222,9 @@ class MultinameL(object):
     def serialize(self):
         assert self._ns_set_index is not None, "Please call write_to_pool before serializing"
         return chr(self.KIND) + u32(self._ns_set_index)
+
+    def multiname(self):
+        return self
 
 class MultinameLA(MultinameL):
     KIND = TYPE_MULTINAME_MultinameLA
@@ -290,6 +295,9 @@ class QName(object):
         assert self._ns_index is not None, "Please call write_to_pool before serializing"
         return chr(self.KIND) + u32(self._ns_index) + u32(self._name_index)
 
+    def multiname(self):
+        return self
+
 class QNameA(QName):
     KIND = TYPE_MULTINAME_QNameA
     
@@ -329,16 +337,19 @@ class RtqName(object):
     
     def write_to_pool(self, pool):
         assert self.name != ""
-        if self.name == "*":
-            self._name_index = 0
-        else:
-            self._name_index = pool.utf8_pool.index_for(self.name)
+        # if self.name == "*":
+        #     self._name_index = 0
+        # else:
+        self._name_index = pool.utf8_pool.index_for(self.name)
 
     def serialize(self):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
         return chr(self.KIND) + u32(self._name_index)
 
-class RtqNameA(object):
+    def multiname(self):
+        return self
+
+class RtqNameA(RtqName):
     KIND = TYPE_MULTINAME_RtqNameA
 
 class TypeName(object):
@@ -369,6 +380,9 @@ class TypeName(object):
         assert self._types_indices is not None, "Please call write_to_pool before serializing"
         return ''.join([chr(self.KIND), u32(self._name_index), u32(len(self._types_indices))] + [u32(a) for a in self._types_indices])
 
+    def multiname(self):
+        return self
+
 # ======================================
 # Constant Pool
 # ======================================
@@ -381,10 +395,10 @@ class AbcConstantPool(object):
         self.int_pool       = ValuePool(0, self)
         self.uint_pool      = ValuePool(0, self)
         self.double_pool    = ValuePool(float("nan"), self)
-        self.utf8_pool      = ValuePool("", self)
+        self.utf8_pool      = ValuePool(object(), self) # don't use "" because multinames expect "*"
         self.namespace_pool = ValuePool(ANY_NAMESPACE, self)
         self.nsset_pool     = ValuePool(NO_NAMESPACE_SET, self)
-        self.multiname_pool = ValuePool(object(), self, debug=True)
+        self.multiname_pool = ValuePool(ANY_NAME, self, debug=True)
 
     def write(self, value):
         if hasattr(value, "write_to_pool"):

@@ -32,6 +32,7 @@ class Avm2CodeAssembler(object):
 
     def add_instruction(self, instruction):
         instruction.set_assembler_props(self)
+        print instruction
         self.code += instruction.serialize()
         
     def add_instructions(self, instructions):
@@ -87,6 +88,7 @@ class Avm2CodeAssembler(object):
                 raise BackpatchNotSealed(b)
             v = b.lbl.address - b.base
             l = b.location
+            print "sealing backpatch:", v, l
             self.code = replace_substr(self.code, s24(v), l, l+3)
             
         self.backpatches = []

@@ -4,8 +4,19 @@ from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lltype import Void
 from pypy.translator.oosupport.function import Function as OOFunction
-from pypy.translator.cli.node import Node
-from pypy.translator.avm2 import constants, types_ as types
+from pypy.translator.avm1.node import Node
+from pypy.translator.avm1.avm1gen import ClassName
+
+def load_variable_hook(self, v):
+    if v.name in self.argset:
+        selftype, selfname = self.args[0]
+        if self.is_method and v.name == selfname:
+            self.generator.push_this() # special case for 'self'
+        else:
+            self.generator.push_arg(v)
+        return True
+    return False
+    
 
 class Function(OOFunction, Node):
     
@@ -30,6 +41,7 @@ class Function(OOFunction, Node):
 
     def _create_generator(self, ilasm):
         ilasm.db = self.db
+        ilasm.load_variable_hook = partial(load_variable_hook, self)
         return ilasm
     
     def record_ll_meta_exc(self, ll_meta_exc):
@@ -42,40 +54,36 @@ class Function(OOFunction, Node):
     def begin_render(self):
         self._set_args()
         self._set_locals()
-        print self.args
-        print self.locals
-        if not self.args:
-            self.args = ()
-
-        returntype, returnvar = self.cts.llvar_to_cts(self.graph.getreturnvar())
-
-        if self.classname:
-            self.generator.begin_method(self.name, self.args[1:], returntype)
+        if self.args:
+            args = zip(*self.args)[1]
         else:
-            self.generator.begin_method(self.name, self.args, returntype, static=True)
+            args = ()
+        if self.is_method:
+            self.generator.begin_method(self.name, ClassName(self.namespace, self.classname), args[1:])
+        elif self.classname:
+            self.generator.begin_static_method(self.name, ClassName(self.namespace, self.classname), args)
+        else:
+            self.generator.begin_function(self.name, args)
         
     def end_render(self):
-        # if self.generator.scope.islabel:
-        #     self.generator.exit_scope()
-        self.generator.exit_context()
+        if self.generator.scope.islabel:
+            self.generator.exit_scope()
+        self.generator.exit_scope()
         
     def render_return_block(self, block):
+        print "RETURN BLOCK RENDERING"
         return_var = block.inputargs[0]
-        if return_var.concretetype is Void:
-            self.generator.emit('returnvoid')
-        else:
+        if return_var.concretetype is not Void:
             self.generator.load(return_var)
-            self.generator.emit('returnvalue')
+        self.generator.return_stmt()
 
     def set_label(self, label):
         return self.generator.set_label(label)
 
-
-    def _render_op(self, op):
-        #instr_list = self.db.genoo.opcodes.get(op.opname, None)
-        #instr_list.render(self.generator, op)
-        print op
-        super(Function, self)._render_op(op)
+    # def _render_op(self, op):
+    #     #instr_list = self.db.genoo.opcodes.get(op.opname, None)
+    #     #instr_list.render(self.generator, op)
+    #    super(Function, self)._render_op(op)
 
     def _setup_link(self, link):
         target = link.target
@@ -100,8 +108,9 @@ class Function(OOFunction, Node):
             self._trace('', writeline=True)
         
         for to_load, to_store in linkvars:
+            self.generator.load(to_store)
             self.generator.load(to_load)
-            self.generator.store(to_store)
+            self.generator.set_variable()
 
     
     # def begin_try(self, cond):
@@ -125,10 +134,10 @@ class Function(OOFunction, Node):
     #     self.ilasm.leave(target_label)
     #     self.ilasm.end_catch()
 
-    def render_raise_block(self, block):
-        exc = block.inputargs[1]
-        self.generator.load(exc)
-        self.generator.emit('throw')
+    # def render_raise_block(self, block):
+    #     exc = block.inputargs[1]
+    #     self.load(exc)
+    #     self.ilasm.opcode('throw')
 
     # def store_exception_and_link(self, link):
     #     if self._is_raise_block(link.target):

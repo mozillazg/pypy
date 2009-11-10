@@ -1,10 +1,11 @@
 from pypy.translator.cli import oopspec
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.oosupport.metavm import InstructionList, MicroInstruction, \
+from pypy.translator.oosupport.metavm import MicroInstruction, \
      PushAllArgs, StoreResult, GetField, SetField, DownCast
 from pypy.translator.oosupport.metavm import _Call as _OOCall
 # from pypy.translator.cli.comparer import EqualityComparer
 from pypy.translator.avm2.runtime import _static_meth, NativeInstance
+from pypy.translator.avm2 import types_ as types, constants as c
 
 STRING_HELPER_CLASS = '[pypylib]pypy.runtime.String'
 
@@ -83,8 +84,17 @@ class _RuntimeNew(MicroInstruction):
         generator.call_signature('object [pypylib]pypy.runtime.Utils::RuntimeNew(class [mscorlib]System.Type)')
         generator.cast_to(op.result.concretetype)
 
-class CallConstantMethod(MicroInstruction):
-    pass
+class _OOString(MicroInstruction):
+    def render(self, generator, op):
+        if op.args[1] == -1:
+            generator.emit('findpropstrict', types._str_qname)
+            generator.load(op.args[0])
+            generator.emit('callproperty', 1)
+        else:
+            generator.emit('findpropstrict', c.QName("parseInt"))
+            generator.load(op.args[0])
+            generator.load(op.args[1])
+            generator.emit('callproperty', 2)
 
 # class _NewCustomDict(MicroInstruction):
 #     def render(self, generator, op):
@@ -240,22 +250,22 @@ class _FieldInfoForConst(MicroInstruction):
         generator.ilasm.call_method('class [mscorlib]System.Reflection.FieldInfo class [mscorlib]System.Type::GetField(string)', virtual=True)
 
 
-OOTYPE_TO_MNEMONIC = {
-    ootype.Bool: 'i1', 
-    ootype.Char: 'i2',
-    ootype.UniChar: 'i2',
-    ootype.Signed: 'i4',
-    ootype.SignedLongLong: 'i8',
-    ootype.Unsigned: 'u4',
-    ootype.UnsignedLongLong: 'u8',
-    ootype.Float: 'r8',
-    }
+# OOTYPE_TO_MNEMONIC = {
+#     ootype.Bool: 'i1', 
+#     ootype.Char: 'i2',
+#     ootype.UniChar: 'i2',
+#     ootype.Signed: 'i4',
+#     ootype.SignedLongLong: 'i8',
+#     ootype.Unsigned: 'u4',
+#     ootype.UnsignedLongLong: 'u8',
+#     ootype.Float: 'r8',
+#     }
 
-class _CastPrimitive(MicroInstruction):
-    def render(self, generator, op):
-        TO = op.result.concretetype
-        mnemonic = OOTYPE_TO_MNEMONIC[TO]
-        generator.ilasm.opcode('conv.%s' % mnemonic)
+# class _CastPrimitive(MicroInstruction):
+#     def render(self, generator, op):
+#         TO = op.result.concretetype
+#         mnemonic = OOTYPE_TO_MNEMONIC[TO]
+#         generator.ilasm.opcode('conv.%s' % mnemonic)
 
 Call = _Call()
 CallMethod = _CallMethod()
@@ -270,4 +280,5 @@ EventHandler = _EventHandler()
 GetStaticField = _GetStaticField()
 SetStaticField = _SetStaticField()
 FieldInfoForConst = _FieldInfoForConst()
-CastPrimitive = _CastPrimitive()
+OOString = _OOString()
+# CastPrimitive = _CastPrimitive()

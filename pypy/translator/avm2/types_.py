@@ -9,6 +9,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.avm2 import constants
 from pypy.translator.cli import oopspec
+from pypy.translator.cli.option import getoption
 
 from pypy.tool.ansi_print import ansi_log
 
@@ -72,7 +73,7 @@ class Avm2ArrayType(Avm2Type):
         self.itemtype = itemtype
 
     def multiname(self):
-        return constants.TypeName(_vec_qname, itemtype)
+        return constants.TypeName(_vec_qname, self.itemtype.multiname())
 
 T = Avm2PrimitiveType
 N = Avm2PackagedType
@@ -87,7 +88,8 @@ class types:
     # weakref = CliClassType('pypylib', 'pypy.runtime.WeakReference')
     type   =  T('Class')
     object =  T('Object')
-    list   =  N('List', 'pypy.lib')
+    # list   =  N('List', 'pypy.lib')
+    list   =  Avm2ArrayType
     dict   =  N('Dict', 'pypy.lib')
     sb     =  N('StringBuilder', 'pypy.lib')
 del T
@@ -149,7 +151,7 @@ class Avm2TypeSystem(object):
             return Avm2NamespacedType(delegate)
         elif isinstance(t, (ootype.Array, ootype.List)):
             item_type = self.lltype_to_cts(t.ITEM)
-            return types.list
+            return types.list(item_type)
         elif isinstance(t, ootype.Dict):
             key_type = self.lltype_to_cts(t._KEYTYPE)
             value_type = self.lltype_to_cts(t._VALUETYPE)

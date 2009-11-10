@@ -34,7 +34,7 @@ from pypy.translator.cli.comparer import EqualityComparer
 from pypy.translator.avm2 import constants, types_ as types, traits
 from pypy.rpython.lltypesystem import lltype
 
-CONST_CLASS = constants.QName("__constants__")
+CONST_CLASS = constants.packagedQName("pypy.runtime", "Constants")
 
 DEBUG_CONST_INIT = False
 DEBUG_CONST_INIT_VERBOSE = False
@@ -53,29 +53,38 @@ class Avm2ConstGenerator(BaseConstantGenerator):
         self.cts = db.genoo.TypeSystem(db)
 
     def _begin_gen_constants(self, gen, all_constants):
-        pass
+        self.ilasm = ilasm
+        self.begin_class()
+        return gen
 
     def _end_gen_constants(self, gen, numsteps):
         assert gen.ilasm is self.ilasm
         self.end_class()
 
     def begin_class(self):
-        self.ilasm.begin_class(CONST_CLASSNAME)
+        self.ctx = self.ilasm.begin_class(CONST_CLASS)
+        self.ctx.make_cinit()
 
     def end_class(self):
-        self.ilasm.end_class()
+        self.ilasm.exit_context()
 
     def _declare_const(self, gen, const):
         self.ilasm.context.add_static_trait(traits.AbcConstTrait(const.name, const.get_type()))
 
     def downcast_constant(self, gen, const, EXPECTED_TYPE):
         type = self.cts.lltype_to_cts(EXPECTED_TYPE)
-        gen.ilasm.emit('coerce', type)
+        gen.emit('coerce', type.multiname())
  
     def _get_key_for_const(self, value):
         if isinstance(value, ootype._view) and isinstance(value._inst, ootype._record):
             return value._inst
         return BaseConstantGenerator._get_key_for_const(self, value)
+    
+    def push_constant(self, gen, const):
+        type_ = const.get_type()
+        gen.emit('getlex', CONST_CLASS)
+        gen.emit('getproperty', constants.QName(const.name))
+
 
     # def _create_complex_const(self, value):
         # if isinstance(value, _fieldinfo):
@@ -96,7 +105,7 @@ class Avm2ConstGenerator(BaseConstantGenerator):
 # AbstractConst or DictConst), I created a mixin, and then mixed it in
 # to each sub-class of that base-class.  Kind of awkward.
 
-class CLIBaseConstMixin(object):
+class Avm2BaseConstMixin(object):
     """ A mix-in with a few extra methods the CLI backend uses """
     
     def get_type(self):
@@ -107,9 +116,9 @@ class CLIBaseConstMixin(object):
         """ Overload the oosupport version so that we use the CLI opcode
         for pushing NULL """
         assert self.is_null()
-        gen.ilasm.opcode('ldnull')
+        gen.ilasm.opcode('pushnull')
 
-class CLIDictMixin(CLIBaseConstMixin):
+class Avm2DictMixin(Avm2BaseConstMixin):
     def _check_for_void_dict(self, gen):
         KEYTYPE = self.value._TYPE._KEYTYPE
         keytype = self.cts.lltype_to_cts(KEYTYPE)
@@ -148,34 +157,33 @@ class CLIDictMixin(CLIBaseConstMixin):
 # routines.  In order to get rid of them, we would need to implement
 # the generator interface in the CLI.
 
-# class CLIRecordConst(CLIBaseConstMixin, RecordConst):
-#     def create_pointer(self, gen):
-#         self.db.const_count.inc('Record')
-#         super(CLIRecordConst, self).create_pointer(gen)
+class Avm2RecordConst(Avm2BaseConstMixin, RecordConst):
+    def create_pointer(self, gen):
+        self.db.const_count.inc('Record')
+        super(CLIRecordConst, self).create_pointer(gen)
 
-# class CLIInstanceConst(CLIBaseConstMixin, InstanceConst):
-#     def create_pointer(self, gen):
-#         self.db.const_count.inc('Instance')
-#         self.db.const_count.inc('Instance', self.OOTYPE())
-#         super(CLIInstanceConst, self).create_pointer(gen)
+class Avm2InstanceConst(Avm2BaseConstMixin, InstanceConst):
+    def create_pointer(self, gen):
+        self.db.const_count.inc('Instance')
+        self.db.const_count.inc('Instance', self.OOTYPE())
+        super(Avm2InstanceConst, self).create_pointer(gen)
 
 
-# class CLIClassConst(CLIBaseConstMixin, ClassConst):
-#     def is_inline(self):
-#         return True
+class Avm2ClassConst(Avm2BaseConstMixin, ClassConst):
+    def is_inline(self):
+        return True
 
-#     def push_inline(self, gen, EXPECTED_TYPE):
-#         if not self.is_null():
-#             if hasattr(self.value, '_FUNC'):
-#                 FUNC = self.value._FUNC
-#                 classname = self.db.record_delegate(FUNC)
-#             else:
-#                 INSTANCE = self.value._INSTANCE
-#                 classname = self.db.class_name(INSTANCE)
-#             gen.ilasm.opcode('ldtoken', classname)
-#             gen.ilasm.call('class [mscorlib]System.Type class [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)')
-#             return
-#         super(CLIClassConst, self).push_inline(gen, EXPECTED_TYPE)
+    def push_inline(self, gen, EXPECTED_TYPE):
+        if not self.is_null():
+            if hasattr(self.value, '_FUNC'):
+                FUNC = self.value._FUNC
+                classname = self.db.record_delegate(FUNC)
+            else:
+                INSTANCE = self.value._INSTANCE
+                classname = self.db.class_name(INSTANCE)
+            gen.emit('getlex', constants.QName(classname))
+            return
+        super(Avm2ClassConst, self).push_inline(gen, EXPECTED_TYPE)
 
 # class CLIListConst(CLIBaseConstMixin, ListConst):
 

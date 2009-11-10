@@ -29,7 +29,6 @@ class AbcFile(object):
 
     def serialize(self):
         def write_pool(pool, prefix_count=True):
-            print len(pool)
             code = ""
             if prefix_count:
                 code += u32(len(pool))
