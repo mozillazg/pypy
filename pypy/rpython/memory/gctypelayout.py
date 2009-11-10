@@ -93,10 +93,6 @@ class GCData(object):
             return weakptr_offset
         return -1
 
-    def q_member_index(self, typeid):
-        infobits = self.get(typeid).infobits
-        return infobits & T_MEMBER_INDEX
-
     def set_query_functions(self, gc):
         gc.set_query_functions(
             self.q_is_varsize,
@@ -109,26 +105,23 @@ class GCData(object):
             self.q_varsize_offset_to_variable_part,
             self.q_varsize_offset_to_length,
             self.q_varsize_offsets_to_gcpointers_in_var_part,
-            self.q_weakpointer_offset,
-            self.q_member_index)
+            self.q_weakpointer_offset)
 
 
-# the lowest 16bits are used to store group member index
-T_MEMBER_INDEX         = 0xffff
-T_IS_VARSIZE           = 0x10000
-T_HAS_GCPTR_IN_VARSIZE = 0x20000
-T_IS_GCARRAY_OF_GCPTR  = 0x40000
-T_IS_WEAKREF           = 0x80000
+T_IS_VARSIZE           = 0x01
+T_HAS_GCPTR_IN_VARSIZE = 0x02
+T_IS_GCARRAY_OF_GCPTR  = 0x04
+T_IS_WEAKREF           = 0x08
 
 def _check_typeid(typeid):
     ll_assert(llop.is_group_member_nonzero(lltype.Bool, typeid),
               "invalid type_id")
 
 
-def encode_type_shape(builder, info, TYPE, index):
+def encode_type_shape(builder, info, TYPE):
     """Encode the shape of the TYPE into the TYPE_INFO structure 'info'."""
     offsets = offsets_to_gc_pointers(TYPE)
-    infobits = index
+    infobits = 0
     info.ofstoptrs = builder.offsets2table(offsets, TYPE)
     info.finalizer = builder.make_finalizer_funcptr_for_type(TYPE)
     if not TYPE._is_varsize():
@@ -219,12 +212,12 @@ class TypeLayoutBuilder(object):
                 fullinfo = lltype.malloc(GCData.VARSIZE_TYPE_INFO,
                                          immortal=True, zero=True)
                 info = fullinfo.header
-            type_id = self.type_info_group.add_member(fullinfo)
             if self.can_encode_type_shape:
-                encode_type_shape(self, info, TYPE, type_id.index)
+                encode_type_shape(self, info, TYPE)
             else:
-                self._pending_type_shapes.append((info, TYPE, type_id.index))
+                self._pending_type_shapes.append((info, TYPE))
             # store it
+            type_id = self.type_info_group.add_member(fullinfo)
             self.id_of_type[TYPE] = type_id
             self.add_vtable_after_typeinfo(TYPE)
             return type_id
@@ -264,8 +257,8 @@ class TypeLayoutBuilder(object):
     def encode_type_shapes_now(self):
         if not self.can_encode_type_shape:
             self.can_encode_type_shape = True
-            for info, TYPE, index in self._pending_type_shapes:
-                encode_type_shape(self, info, TYPE, index)
+            for info, TYPE in self._pending_type_shapes:
+                encode_type_shape(self, info, TYPE)
             del self._pending_type_shapes
 
     def delay_encoding(self):
