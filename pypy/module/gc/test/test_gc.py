@@ -85,11 +85,11 @@ class AppTestGcDumpHeap(object):
                 self.size = size
                 self.links = links
         
-        def fake_dump_heap():
+        def fake_heap_stats():
             return [X(1, 12, [0, 0]), X(2, 10, [10, 0])]
         
-        cls._dump_heap = rgc._dump_heap
-        rgc._dump_heap = fake_dump_heap
+        cls._heap_stats = rgc._heap_stats
+        rgc._heap_stats = fake_heap_stats
         fname = udir.join('gcdump.log')
         cls.space = gettestobjspace()
         cls.w_fname = cls.space.wrap(str(fname))
@@ -99,10 +99,10 @@ class AppTestGcDumpHeap(object):
         import py
         from pypy.rlib import rgc
         
-        rgc._dump_heap = cls._dump_heap
+        rgc._heap_stats = cls._heap_stats
         assert py.path.local(cls._fname).read() == '1 12 0,0\n2 10 10,0\n'
     
-    def test_gc_dump_heap(self):
+    def test_gc_heap_stats(self):
         import gc
-        gc.dump_heap(self.fname)
+        gc.dump_heap_stats(self.fname)
 

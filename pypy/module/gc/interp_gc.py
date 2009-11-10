@@ -54,12 +54,14 @@ def estimate_heap_size(space):
                          space.wrap("can't estimate the heap size"))
 estimate_heap_size.unwrap_spec = [ObjSpace]
 
-def dump_heap(space, filename):
-    tb = rgc._dump_heap()
+def dump_heap_stats(space, filename):
+    tb = rgc._heap_stats()
+    if not tb:
+        raise OperationError(space.w_RuntimeError,
+                             space.wrap("Wrong GC"))
     f = open_file_as_stream(filename, mode="w")
     for i in range(len(tb)):
         f.write("%d %d " % (tb[i].count, tb[i].size))
         f.write(",".join([str(tb[i].links[j]) for j in range(len(tb))]) + "\n")
     f.close()
-
-dump_heap.unwrap_spec = [ObjSpace, str]
+dump_heap_stats.unwrap_spec = [ObjSpace, str]
