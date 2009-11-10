@@ -8,7 +8,6 @@ from pypy.translator.c.gcc.trackgcroot import ElfAssemblerParser
 from pypy.translator.c.gcc.trackgcroot import DarwinAssemblerParser
 from pypy.translator.c.gcc.trackgcroot import compress_callshape
 from pypy.translator.c.gcc.trackgcroot import decompress_callshape
-from pypy.translator.c.gcc.trackgcroot import OFFSET_LABELS
 from pypy.translator.c.gcc.trackgcroot import PARSERS
 from StringIO import StringIO
 
@@ -159,7 +158,8 @@ def check_computegcmaptable(format, path):
                 expectedlines.insert(i-1, '%s::\n' % (label,))
             else:
                 expectedlines.insert(i-2, '\t.globl\t%s\n' % (label,))
-                expectedlines.insert(i-1, '%s=.+%d\n' % (label, OFFSET_LABELS))
+                expectedlines.insert(i-1, '%s=.+%d\n' % (label,
+                                                         tracker.OFFSET_LABELS))
         if format == 'msvc' and r_gcroot_constant.match(line):
             expectedlines[i] = ';' + expectedlines[i]
             expectedlines[i+1] = (expectedlines[i+1]
