@@ -93,7 +93,9 @@ class AbcSlotTrait(AbcTrait):
     
     def write_to_pool(self, pool):
         super(AbcSlotTrait, self).write_to_pool(pool)
-        if self.value is not None:
+        if self.value is None:
+            self._value_index = 0
+        else:
             self._value_kind, self._value_index = py_to_abc(self.value)
             if self._value_index is None:
                 self._value_index = self._value_kind

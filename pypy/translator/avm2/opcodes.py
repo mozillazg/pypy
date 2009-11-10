@@ -1,10 +1,10 @@
 from pypy.translator.avm2.metavm import  Call, CallMethod, \
      IndirectCall, GetField, SetField, DownCast, \
      NewArray, GetArrayElem, SetArrayElem,\
-     TypeOf, CastPrimitive, EventHandler, GetStaticField, SetStaticField,\
-     FieldInfoForConst
+     TypeOf, EventHandler, GetStaticField, SetStaticField,\
+     FieldInfoForConst, OOString
 from pypy.translator.oosupport.metavm import PushArg, PushAllArgs, StoreResult, InstructionList,\
-    New, RuntimeNew, CastTo, PushPrimitive, OOString, OOUnicode, OONewArray
+    New, RuntimeNew, CastTo, PushPrimitive, OONewArray
 from pypy.translator.cli.cts import WEAKREF
 from pypy.rpython.ootypesystem import ootype
 
@@ -52,7 +52,7 @@ misc_ops = {
     'ooidentityhash':           [PushAllArgs, 'callvirt instance int32 object::GetHashCode()'],
     'oohash':                   [PushAllArgs, 'callvirt instance int32 object::GetHashCode()'],    
     'oostring':                 [OOString],
-    'oounicode':                [OOUnicode],
+    'oounicode':                [OOString],
     'ooparse_int':              [PushAllArgs, 'call int32 [pypylib]pypy.runtime.Utils::OOParseInt(string, int32)'],
     'ooparse_float':            [PushAllArgs, 'call float64 [pypylib]pypy.runtime.Utils::OOParseFloat(string)'],
 #    'oonewcustomdict':          [NewCustomDict],
@@ -122,7 +122,7 @@ unary_ops = {
     'cast_float_to_uint':       'conv.u4',
     'cast_longlong_to_float':   'conv.r8',
     'cast_float_to_longlong':   'conv.i8',
-    'cast_primitive':           [PushAllArgs, CastPrimitive],
+#    'cast_primitive':           [PushAllArgs, CastPrimitive],
     'truncate_longlong_to_int': 'conv.i4',
     }
 

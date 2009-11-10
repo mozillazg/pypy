@@ -1,6 +1,6 @@
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.node import Node
-from pypy.translator.avm2 import types_ as types, constants as c
+from pypy.translator.avm2 import types_ as types, constants as c, traits
 from pypy.translator.oosupport.constant import push_constant
 from pypy.translator.cli.ilgenerator import CLIBaseGenerator
 
@@ -82,7 +82,7 @@ class Class(Node):
             cts_type = self.cts.lltype_to_cts(f_type)
             f_name = self.cts.escape_name(f_name)
             if cts_type != types.types.void:
-                ilasm.field(f_name, cts_type)
+                ilasm.context.add_instance_trait(traits.AbcSlotTrait(c.QName(f_name), cts_type.multiname()))
 
         self._ctor()
         self._toString()
@@ -106,7 +106,7 @@ class Class(Node):
                            for i, ARG in enumerate(METH.ARGS)
                            if ARG is not ootype.Void]
                 returntype = self.cts.lltype_to_cts(METH.RESULT)
-                ilasm.begin_function(m_name, arglist, returntype)
+                ilasm.begin_method(m_name, arglist, returntype)
                 ilasm.emit('findpropstrict', c.QName("Error"))
                 ilasm.push_const("Abstract method %s::%s called" % (self.name, m_name))
                 ilasm.emit('constructprop', c.QName("Error"), 1)
@@ -116,31 +116,28 @@ class Class(Node):
         ilasm.exit_context()
     
     def _ctor(self):
-        # self.ilasm.begin_function('.ctor', [], 'void', False, 'specialname', 'rtspecialname', 'instance')
-        # self.ilasm.opcode('ldarg.0')
-        # self.ilasm.call('instance void %s::.ctor()' % self.get_base_class())
+        self.ilasm.context.make_iinit()
         # set default values for fields
         default_values = self.INSTANCE._fields.copy()
         default_values.update(self.INSTANCE._overridden_defaults)
         for f_name, (F_TYPE, f_default) in default_values.iteritems():
             if getattr(F_TYPE, '_is_value_type', False):
                 continue # we can't set it to null
-            INSTANCE_DEF, _ = self.INSTANCE._lookup_field(f_name)
+            # INSTANCE_DEF, _ = self.INSTANCE._lookup_field(f_name)
             cts_type = self.cts.lltype_to_cts(F_TYPE)
             f_name = self.cts.escape_name(f_name)
-            if cts_type != CTS.types.void:
-                self.ilasm.opcode('ldarg.0')
+            if cts_type != types.types.void:
+                self.ilasm.push_this()
                 push_constant(self.db, F_TYPE, f_default, self.gen)
-                class_name = self.db.class_name(INSTANCE_DEF)
-                self.ilasm.set_field((cts_type, class_name, f_name))
+                # class_name = self.db.class_name(INSTANCE_DEF)
+                self.ilasm.emit('setproperty', c.packagedQName(f_name))
 
-        self.ilasm.opcode('ret')
-        self.ilasm.end_function()
+        self.ilasm.exit_context()
 
     def _toString(self):
-        self.ilasm.begin_function('ToString', [], 'string', False, 'virtual', 'instance', 'default')
-        self.ilasm.opcode('ldarg.0')
-        self.ilasm.call('string class [pypylib]pypy.test.Result::InstanceToPython(object)')
-        self.ilasm.ret()
-        self.ilasm.end_function()
+        self.ilasm.begin_method('toString', [], types.types.string)
+        self.ilasm.push_this()
+        self.ilasm.load("InstanceWrapper('%s')" % (self.name))
+        self.ilasm.emit('returnvalue')
+        self.ilasm.exit_context()
 

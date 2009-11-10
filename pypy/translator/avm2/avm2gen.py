@@ -3,8 +3,9 @@
 """
 
 from pypy.objspace.flow import model as flowmodel
+from pypy.rlib.rarithmetic import r_int, r_uint, r_longlong, r_ulonglong
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.avm2 import assembler, constants, instructions, abc_ as abc, types_ as types, traits
+from pypy.translator.avm2 import assembler, constants, instructions, abc_ as abc, types_ as types, traits, util
 from pypy.translator.oosupport.treebuilder import SubOperation
 from pypy.translator.oosupport.metavm import Generator
 from pypy.translator.oosupport.constant import push_constant
@@ -26,7 +27,19 @@ class GlobalContext(object):
         self.gen.enter_context(ctx)
         return ctx
 
-class ScriptContext(object):
+class _MethodContextMixin(object):
+    def new_method(self, name, params, rettype, static=False):
+        meth = abc.AbcMethodInfo(name, [t.multiname() for t, n in params], rettype.multiname(), param_names=[n for t, n in params])
+        trait = traits.AbcMethodTrait(constants.QName(name), meth)
+        if static:
+            self.add_static_trait(trait)
+        else:
+            self.add_instance_trait(trait)
+        ctx = MethodContext(self.gen, meth, self, params)
+        self.gen.enter_context(ctx)
+        return ctx
+
+class ScriptContext(_MethodContextMixin):
     CONTEXT_TYPE = "script"
 
     def __init__(self, gen, parent):
@@ -35,7 +48,7 @@ class ScriptContext(object):
         self.pending_classes = {}
     
     def make_init(self):
-        self.init = abc.AbcMethodInfo("", [], constants.QName("void"))
+        self.init = abc.AbcMethodInfo("", [], constants.ANY_NAME)
         ctx = MethodContext(self.gen, self.init, self, [])
         self.gen.enter_context(ctx)
         return ctx
@@ -46,14 +59,20 @@ class ScriptContext(object):
         self.pending_classes[name] = (ctx, bases)
         self.gen.enter_context(ctx)
         return ctx
-        
+
+    def add_trait(self, trait):
+        self.traits.append(trait)
+
+    add_static_trait = add_trait
+    add_instance_trait = add_trait
+    
     def exit(self):
         assert self.parent.CONTEXT_TYPE == "global"
 
         self.make_init()
         
         for context, parents in self.pending_classes.itervalues():
-            parent = context.super_name
+            parent = self.pending_classes.get(context.super_name, None)
 
             if parents is None:
                 parents = []
@@ -63,10 +82,12 @@ class ScriptContext(object):
 
                 parents.append(constants.QName("Object"))
 
+            self.gen.I(instructions.getscopeobject(0))
             for parent in reversed(parents):
                 self.gen.I(instructions.getlex(parent), instructions.pushscope())
             
             self.traits.append(traits.AbcClassTrait(context.name, context.classobj))
+            self.gen.I(instructions.getlex(context.super_name))
             self.gen.I(instructions.newclass(context.index))
             self.gen.I(*[instructions.popscope()]*len(parents))
             self.gen.I(instructions.initproperty(context.name))
@@ -75,7 +96,7 @@ class ScriptContext(object):
         self.gen.exit_context()
         return self.parent
 
-class ClassContext(object):
+class ClassContext(_MethodContextMixin):
     CONTEXT_TYPE = "class"
 
     def __init__(self, gen, name, super_name, parent):
@@ -83,31 +104,22 @@ class ClassContext(object):
         self.instance_traits = []
         self.static_traits   = []
         self.cinit = None
+        self.iinit = None
 
     def make_cinit(self):
-        self.cinit = abc.AbcMethodInfo("", [], constants.QName("*"))
+        self.cinit = abc.AbcMethodInfo("", [], constants.ANY_NAME)
         ctx = MethodContext(self.gen, self.cinit, self, [])
         self.gen.enter_context(ctx)
         return ctx
 
     def make_iinit(self, params=None):
         params = params or ()
-        self.iinit = abc.AbcMethodInfo("", [t.multiname() for t, n in params], constants.QName("*"), param_names=[n for t, n in params])
+        self.iinit = abc.AbcMethodInfo("", [t.multiname() for t, n in params], constants.QName("void"), param_names=[n for t, n in params])
         ctx = MethodContext(self.gen, self.iinit, self, params)
         self.gen.enter_context(ctx)
         
         self.gen.emit('getlocal', 0)
         self.gen.emit('constructsuper', 0)
-        return ctx
-
-    def new_method(self, name, params, rettype, static=False):
-        meth = abc.AbcMethodInfo(name, [t.multiname() for t, n in params], rettype.multiname(), param_names=[n for t, n in params])
-        if static:
-            self.add_static_trait(traits.AbcMethodTrait(constants.QName(name), meth))
-        else:
-            self.add_instance_trait(traits.AbcMethodTrait(constants.QName(name), meth))
-        ctx = MethodContext(self.gen, meth, self, params)
-        self.gen.enter_context(ctx)
         return ctx
 
     def add_instance_trait(self, trait):
@@ -120,6 +132,9 @@ class ClassContext(object):
     
     def exit(self):
         assert self.parent.CONTEXT_TYPE == "script"
+        if self.iinit is None:
+            self.make_iinit()
+            self.gen.exit_context()
         if self.cinit is None:
             self.make_cinit()
             self.gen.exit_context()
@@ -204,7 +219,6 @@ class Avm2ilasm(Generator):
         return self.context.has_local(name)
     
     def begin_class(self, name, super_name=None, bases=None):
-        print name.name
         return self.context.new_class(name, super_name, bases)
 
     def begin_method(self, name, arglist, returntype, static=False):
@@ -252,18 +266,22 @@ class Avm2ilasm(Generator):
         self.I(instructions.INSTRUCTIONS[instr](*args, **kwargs))
 
     def set_label(self, label):
-        print "set label :", label
         self.emit('label', label)
 
     def branch_unconditionally(self, label):
-        print "jump label:", label
         self.emit('jump', label)
-        
+
+    def branch_conditionally(self, iftrue, label):
+        if iftrue:
+            self.emit('iftrue', label)
+        else:
+            self.emit('iffalse', label)
+    
     def call_function_constargs(self, name, *args):
-        for i in args:
-            self.load(i)
-        self.emit('getlocal', 0)
-        self.emit('callproperty', constants.QName(name), len(args))
+        if args:
+            self.load(*args)
+        self.emit('getglobalscope')
+        self.emit('callproplex', constants.QName(name), len(args))
     
     def load(self, v, *args):
         if isinstance(v, flowmodel.Variable):
@@ -273,7 +291,8 @@ class Avm2ilasm(Generator):
                 self.push_local(v)
         elif isinstance(v, flowmodel.Constant):
             push_constant(self.db, v.concretetype, v.value, self)
-            pass
+        elif hasattr(v, "multiname"):
+            self.I(instructions.getlex(v.multiname()))
         else:
             self.push_const(v)
 
@@ -284,33 +303,36 @@ class Avm2ilasm(Generator):
         self.SL(name)
 
     def store(self, v):
-        self.store_var(v.name)
+        if v.concretetype is not ootype.Void:
+            self.store_var(v.name)
     
-    def prepare_call_oostring(self, OOTYPE):
-        self.I(instructions.findpropstrict(types._str_qname))
+    # def prepare_call_oostring(self, OOTYPE):
+    #     self.I(instructions.findpropstrict(types._str_qname))
     
-    def call_oostring(self, OOTYPE):
-        self.pop()
-        self.I(instructions.callproperty(types._str_qname, 1))
+    # def call_oostring(self, OOTYPE):
+    #     self.I(instructions.callproperty(types._str_qname, 1))
         
-    call_oounicode = call_oostring
-    prepare_call_oounicode = prepare_call_oostring
+    # call_oounicode = call_oostring
+    # prepare_call_oounicode = prepare_call_oostring
 
     def newarray(self, TYPE, length=1):
-        self.I(instructions.getlex(types._arr_qname))
+        self.load(types._arr_qname)
         self.push_const(length)
         self.I(instructions.construct(1))
 
     def oonewarray(self, TYPE, length=1):
-        self.I(instructions.getlex(types._vec_qname))
-        self.load(TYPE)
+        self.load(types._vec_qname)
+        self.load(self.cts.lltype_to_cts(TYPE.ITEM))
         self.I(instructions.applytype(1))
-        self.push_const(length)
-        self.I(instructions.coerce(constants.TypeName(types._vec_qname, self.cts.lltype_to_cts(TYPE).multiname())))
+        self.load(length)
         self.I(instructions.construct(1))
+        self.I(instructions.coerce(self.cts.lltype_to_cts(TYPE).multiname()))
 
     def array_setitem(self, ARRAY):
         self.I(instructions.setproperty(constants.MultinameL(constants.PROP_NAMESPACE_SET)))
+
+    def array_getitem(self, ARRAY):
+        self.I(instructions.getproperty(constants.MultinameL(constants.PROP_NAMESPACE_SET)))
     
     def push_this(self):
         self.GL("this")
@@ -324,22 +346,23 @@ class Avm2ilasm(Generator):
         self.GL(v)
 
     def push_const(self, v):
-        if isinstance(v, int):
-            if 0 <= v < 256:
+        if isinstance(v, (long, int, r_int, r_uint, r_longlong, r_ulonglong, float)):
+            if isinstance(v, float) or v > util.U32_MAX or v < -util.S32_MAX:
+                self.I(instructions.pushdouble(self.constants.double_pool.index_for(v)))
+            elif 0 <= v < 256:
                 self.I(instructions.pushbyte(v))
             elif v >= 0:
                 self.I(instructions.pushuint(self.constants.uint_pool.index_for(v)))
             else:
                 self.I(instructions.pushint(self.constants.int_pool.index_for(v)))
-        elif isinstance(v, float):
-            self.I(instructions.pushdouble(self.constants.double_pool.index_for(v)))
         elif isinstance(v, basestring):
-            print "PUSHSTRING"
             self.I(instructions.pushstring(self.constants.utf8_pool.index_for(v)))
         elif v is True:
             self.I(instructions.pushtrue())
         elif v is False:
             self.I(instructions.pushfalse())
+        else:
+            assert False, "value for push_const not a literal value"
 
     def push_undefined(self):
         self.I(instructions.pushundefined())
@@ -372,3 +395,6 @@ class Avm2ilasm(Generator):
         if members:
             self.load(*members)
         self.oonewarray(TYPE, len(members))
+
+    def new(self, TYPE):
+        self.emit('constructprop', self.cts.lltype_to_cts(TYPE).multiname())
