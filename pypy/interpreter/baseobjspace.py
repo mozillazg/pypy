@@ -802,33 +802,43 @@ class ObjSpace(object):
         w_objtype = self.type(w_obj)
         return self.issubtype(w_objtype, w_type)
 
+    # The code below only works
+    # for the simple case (new-style instance).
+    # These methods are patched with the full logic by the __builtin__
+    # module when it is loaded
+
     def abstract_issubclass_w(self, w_cls1, w_cls2):
-        # Equivalent to 'issubclass(cls1, cls2)'.  The code below only works
-        # for the simple case (new-style class, new-style class).
-        # This method is patched with the full logic by the __builtin__
-        # module when it is loaded.
+        # Equivalent to 'issubclass(cls1, cls2)'.
         return self.is_true(self.issubtype(w_cls1, w_cls2))
 
     def abstract_isinstance_w(self, w_obj, w_cls):
-        # Equivalent to 'isinstance(obj, cls)'.  The code below only works
-        # for the simple case (new-style instance, new-style class).
-        # This method is patched with the full logic by the __builtin__
-        # module when it is loaded.
+        # Equivalent to 'isinstance(obj, cls)'.
         return self.is_true(self.isinstance(w_obj, w_cls))
 
     def abstract_isclass_w(self, w_obj):
-        # Equivalent to 'isinstance(obj, type)'.  The code below only works
-        # for the simple case (new-style instance without special stuff).
-        # This method is patched with the full logic by the __builtin__
-        # module when it is loaded.
+        # Equivalent to 'isinstance(obj, type)'.
         return self.is_true(self.isinstance(w_obj, self.w_type))
 
     def abstract_getclass(self, w_obj):
-        # Equivalent to 'obj.__class__'.  The code below only works
-        # for the simple case (new-style instance without special stuff).
-        # This method is patched with the full logic by the __builtin__
-        # module when it is loaded.
+        # Equivalent to 'obj.__class__'.
         return self.type(w_obj)
+
+    # CPython rules allows old style classes or subclasses
+    # of BaseExceptions to be exceptions.
+    # This is slightly less general than the case above, so we prefix
+    # it with exception_
+
+    def exception_is_valid_class_w(self, w_obj):
+        return (self.is_true(self.isinstance(w_obj, self.w_type)) and
+                self.is_true(self.issubtype(w_obj, self.w_BaseException)))
+
+    def exception_getclass(self, w_obj):
+        return self.type(w_obj)
+
+    def exception_issubclass_w(self, w_cls1, w_cls2):
+        return self.is_true(self.issubtype(w_cls1, w_cls2))
+
+    # end of special support code
 
     def eval(self, expression, w_globals, w_locals, hidden_applevel=False):
         "NOT_RPYTHON: For internal debugging."
