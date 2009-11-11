@@ -278,10 +278,10 @@ class Avm2ilasm(Generator):
             self.emit('iffalse', label)
     
     def call_function_constargs(self, name, *args):
+        self.emit('getglobalscope')
         if args:
             self.load(*args)
-        self.emit('getglobalscope')
-        self.emit('callproplex', constants.QName(name), len(args))
+        self.emit('callproperty', constants.QName(name), len(args))
     
     def load(self, v, *args):
         if isinstance(v, flowmodel.Variable):
@@ -396,5 +396,11 @@ class Avm2ilasm(Generator):
             self.load(*members)
         self.oonewarray(TYPE, len(members))
 
+    def set_field(self, TYPE, fieldname):
+        self.emit('setproperty', constants.QName(fieldname))
+
     def new(self, TYPE):
-        self.emit('constructprop', self.cts.lltype_to_cts(TYPE).multiname())
+        # XXX: assume no args for now
+        t = self.cts.lltype_to_cts(TYPE).multiname()
+        self.emit('findpropstrict', t)
+        self.emit('constructprop', t, 0)

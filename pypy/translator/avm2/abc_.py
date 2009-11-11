@@ -76,6 +76,8 @@ class AbcMethodInfo(object):
         code += u32(self._return_type_index)
         
         code += ''.join(u32(index) for index in self._param_types_indices)
+        print self._return_type_index
+        print self._param_types_indices
         code += u32(self._name_index)
 
         if self.options:
@@ -98,9 +100,10 @@ class AbcMethodInfo(object):
         return code
 
     def write_to_pool(self, pool):
+        print "Emitting function %s(%s):%s" % (self.name, self.param_types, self.return_type)
         self._name_index = pool.utf8_pool.index_for(self.name)
         self._return_type_index = pool.multiname_pool.index_for(self.return_type)
-
+        
         if self.param_types:
             self._param_types_indices = [pool.multiname_pool.index_for(i) for i in self.param_types]
         else:
@@ -281,7 +284,7 @@ class AbcMethodBodyInfo(object):
     def serialize(self):
         code = ""
         code += u32(self._method_info_index)
-        code += u32(self.code._stack_depth_max)
+        code += u32(self.code._stack_depth_max+1) # just to be safe.
         code += u32(len(self.code.temporaries))
         code += u32(0) # FIXME: For now, init_scope_depth is always 0.
         code += u32(self.code._scope_depth_max)

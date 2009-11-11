@@ -37,6 +37,11 @@ def parse_result(string):
         return int(string)
     elif "," in string:
         return [parse_result(s) for s in string.split(",")]
+    else:
+        try:
+            return float(string)
+        except ValueError:
+            pass
     return string
 
 class TestCase(object):

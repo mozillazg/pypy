@@ -154,6 +154,9 @@ class Namespace(object):
         assert self._name_index is not None, "Please call write_to_pool before serializing"
         return chr(self.kind) + u32(self._name_index)
 
+    def __repr__(self):
+        return self.name or 'global'
+
 class NamespaceSet(object):
 
     def __init__(self, *namespaces):
@@ -297,6 +300,9 @@ class QName(object):
 
     def multiname(self):
         return self
+
+    def __repr__(self):
+        return "QName: %s::%s" % (self.ns, self.name)
 
 class QNameA(QName):
     KIND = TYPE_MULTINAME_QNameA

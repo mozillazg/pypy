@@ -35,7 +35,7 @@ class GenAVM2(GenOO):
         self.fix_names()
         self.gen_entrypoint()
         self.gen_pendings()
-        # self.db.gen_constants(self.ilasm)
+        self.db.gen_constants(self.ilasm)
 
     # Don't do treebuilding stuff
     def stack_optimization(self):
