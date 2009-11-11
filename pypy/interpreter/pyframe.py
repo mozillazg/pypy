@@ -458,7 +458,7 @@ class PyFrame(eval.Frame):
             
         if self.w_f_trace is None:
             raise OperationError(space.w_ValueError,
-                  space.wrap("f_lineo can only be set by a trace function."))
+                  space.wrap("f_lineno can only be set by a trace function."))
 
         if new_lineno < self.pycode.co_firstlineno:
             raise OperationError(space.w_ValueError,
@@ -553,7 +553,11 @@ class PyFrame(eval.Frame):
             else:
                 addr += 1
 
-        f_iblock = self.blockcount
+        f_iblock = 0
+        block = self.lastblock
+        while block:
+            f_iblock += 1
+            block = block.previous
         min_iblock = f_iblock + min_delta_iblock
         if new_lasti > self.last_instr:
             new_iblock = f_iblock + delta_iblock
