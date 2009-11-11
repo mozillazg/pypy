@@ -76,7 +76,7 @@ def setup_directory_structure(space):
         code = py.code.Source(p.join("x.py").read()).compile()
         s3 = marshal.dumps(code)
         s2 = struct.pack("i", os.stat(str(p.join("x.py")))[stat.ST_MTIME])
-        p.join("x.pyc").write(imp.get_magic() + s2 + s3)
+        p.join("x.pyc").write(imp.get_magic() + s2 + s3, mode='wb')
     else:
         w = space.wrap
         w_modname = w("compiled.x")
