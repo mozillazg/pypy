@@ -244,3 +244,14 @@ class AppTestRaise:
             assert 0
         except KeyError:
             pass
+
+    def test_obscure_bases(self):
+        # this test checks bug-to-bug cpython compatibility
+        e = ValueError()
+        e.__bases__ = (5,)
+        try:
+            raise e
+        except ValueError:
+            pass
+
+            
