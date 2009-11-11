@@ -5,7 +5,7 @@ class AppTestExc(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('tempexceptions',))
 
-    def test_str(self):
+    def test_baseexc(self):
         from tempexceptions import BaseException
 
         assert str(BaseException()) == ''
@@ -20,3 +20,11 @@ class AppTestExc(object):
         assert repr(BaseException(3, "x")) == "BaseException(3, 'x')"
         assert str(BaseException(3, "x")) == "(3, 'x')"
         assert BaseException(3, "x").message == ''
+
+    def test_exc(self):
+        from tempexceptions import Exception, BaseException
+
+        assert issubclass(Exception, BaseException)
+        assert isinstance(Exception(), Exception)
+        assert isinstance(Exception(), BaseException)
+        assert repr(Exception(3, "x")) == "Exception(3, 'x')"

@@ -111,17 +111,31 @@ class W_BaseException(Wrappable):
     def descr_getargs(space, self):
         return space.newtuple(self.args_w)
 
-def descr_new_base_exception(space, w_subtype, args_w):
-    exc = space.allocate_instance(W_BaseException, w_subtype)
-    W_BaseException.__init__(exc, space, args_w)
-    return space.wrap(exc)
-descr_new_base_exception.unwrap_spec = [ObjSpace, W_Root, 'args_w']
+def _new(cls):
+    def descr_new_base_exception(space, w_subtype, args_w):
+        exc = space.allocate_instance(cls, w_subtype)
+        cls.__init__(exc, space, args_w)
+        return space.wrap(exc)
+    descr_new_base_exception.unwrap_spec = [ObjSpace, W_Root, 'args_w']
+    descr_new_base_exception.func_name = 'descr_new_' + cls.__name__
+    return interp2app(descr_new_base_exception)
 
 W_BaseException.typedef = TypeDef(
     'BaseException',
-    __new__ = interp2app(descr_new_base_exception),
+    __doc__ = W_BaseException.__doc__,
+    __new__ = _new(W_BaseException),
     __str__ = interp2app(W_BaseException.descr_str),
     __repr__ = interp2app(W_BaseException.descr_repr),
     message = interp_attrproperty_w('w_message', W_BaseException),
     args = GetSetProperty(W_BaseException.descr_getargs),
+)
+
+class W_Exception(W_BaseException):
+    """Common base class for all non-exit exceptions."""
+
+W_Exception.typedef = TypeDef(
+    'Exception',
+    W_BaseException.typedef,
+    __doc__ = W_Exception.__doc__,
+    __new__ = _new(W_Exception),
 )
