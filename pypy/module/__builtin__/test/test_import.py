@@ -92,7 +92,7 @@ def setup_directory_structure(space):
             stream.close()
         if space.config.objspace.usepycfiles:
             # also create a lone .pyc file
-            p.join('lone.pyc').write(p.join('x.pyc').read())
+            p.join('lone.pyc').write(p.join('x.pyc').read(), mode='wb')
 
     return str(root)
 
