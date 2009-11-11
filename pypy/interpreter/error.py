@@ -95,7 +95,7 @@ class OperationError(Exception):
             print >> file, "Traceback (application-level):"
             while tb is not None:
                 co = tb.frame.pycode
-                lineno = tb.lineno
+                lineno = tb.get_lineno()
                 fname = co.co_filename
                 if fname.startswith('<inline>\n'):
                     lines = fname.split('\n')
