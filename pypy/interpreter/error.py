@@ -73,13 +73,6 @@ class OperationError(Exception):
         else:
             return '%s: %s' % (exc_typename, exc_value)
 
-    def getframe(self):
-        "The frame this exception was raised in, or None."
-        if self.application_traceback:
-            return self.application_traceback.frame
-        else:
-            return None
-
     def record_interpreter_traceback(self):
         """Records the current traceback inside the interpreter.
         This traceback is only useful to debug the interpreter, not the
