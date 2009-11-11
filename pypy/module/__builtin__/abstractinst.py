@@ -156,11 +156,17 @@ def abstract_issubclass_w(space, w_derived, w_klass_or_tuple):
 # ------------------------------------------------------------
 # Exception helpers
 
-def exception_is_valid_class_w(space, w_obj):
+def exception_is_valid_obj_as_class_w(space, w_obj):
     obj = space.interpclass_w(w_obj)
     if isinstance(obj, W_ClassObject):
         return True
-    return BaseObjSpace.exception_is_valid_class_w(space, w_obj)
+    return BaseObjSpace.exception_is_valid_obj_as_class_w(space, w_obj)
+
+def exception_is_valid_class_w(space, w_cls):
+    cls = space.interpclass_w(w_cls)
+    if isinstance(cls, W_ClassObject):
+        return True
+    return BaseObjSpace.exception_is_valid_class_w(space, w_cls)
 
 def exception_getclass(space, w_obj):
     obj = space.interpclass_w(w_obj)
