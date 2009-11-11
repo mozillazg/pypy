@@ -8,4 +8,5 @@ class Module(MixedModule):
     
     interpleveldefs = {
         'BaseException' : 'interp_exceptions.W_BaseException',
+        'Exception' : 'interp_exceptions.W_Exception',
         }
