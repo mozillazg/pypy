@@ -56,7 +56,6 @@ class PyFrame(eval.Frame):
         self.valuestack_w = [None] * code.co_stacksize
         self.valuestackdepth = 0
         self.lastblock = None
-        self.blockcount = 0
         if space.config.objspace.honor__builtins__:
             self.builtin = space.builtin.pick_builtin(w_globals)
         # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
@@ -70,31 +69,29 @@ class PyFrame(eval.Frame):
     def append_block(self, block):
         block.previous = self.lastblock
         self.lastblock = block
-        self.blockcount += 1
 
     def pop_block(self):
         block = self.lastblock
         self.lastblock = block.previous
-        self.blockcount -= 1
         return block
+
+    def blockstack_non_empty(self):
+        return self.lastblock is not None
 
     def get_blocklist(self):
         """Returns a list containing all the blocks in the frame"""
-        lst = [None] * self.blockcount
+        lst = []
         block = self.lastblock
-        i = 0
         while block is not None:
-            lst[i] = block
-            i += 1
+            lst.append(block)
             block = block.previous
         return lst
 
     def set_blocklist(self, lst):
         self.lastblock = None
-        self.blockcount = 0
-        i = len(lst)
-        while i > 0:
-            block = lst[i-1]
+        i = len(lst) - 1
+        while i >= 0:
+            block = lst[i]
             i -= 1
             self.append_block(block)
 
