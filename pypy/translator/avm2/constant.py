@@ -53,12 +53,12 @@ class Avm2ConstGenerator(BaseConstantGenerator):
         self.cts = db.genoo.TypeSystem(db)
 
     def _begin_gen_constants(self, gen, all_constants):
-        self.ilasm = ilasm
+        self.ilasm = gen
         self.begin_class()
         return gen
 
     def _end_gen_constants(self, gen, numsteps):
-        assert gen.ilasm is self.ilasm
+        assert gen is self.ilasm
         self.end_class()
 
     def begin_class(self):
@@ -67,9 +67,10 @@ class Avm2ConstGenerator(BaseConstantGenerator):
 
     def end_class(self):
         self.ilasm.exit_context()
-
+        self.ilasm.exit_context()
+    
     def _declare_const(self, gen, const):
-        self.ilasm.context.add_static_trait(traits.AbcConstTrait(const.name, const.get_type()))
+        self.ctx.add_static_trait(traits.AbcConstTrait(constants.QName(const.name), const.get_type().multiname()))
 
     def downcast_constant(self, gen, const, EXPECTED_TYPE):
         type = self.cts.lltype_to_cts(EXPECTED_TYPE)
@@ -85,6 +86,20 @@ class Avm2ConstGenerator(BaseConstantGenerator):
         gen.emit('getlex', CONST_CLASS)
         gen.emit('getproperty', constants.QName(const.name))
 
+    #def _push_constant_during_init(self, gen, const):
+    #    self.push_constant(gen, const)
+    #    gen.store_var('current_constant')
+
+    def _store_constant(self, gen, const):
+        type_ = const.get_type()
+        gen.emit('getlex', CONST_CLASS)
+        gen.emit('setproperty', constants.QName(const.name))
+
+    def _declare_step(self, gen, stepnum):
+        pass
+
+    def _close_step(self, gen, stepnum):
+        pass
 
     # def _create_complex_const(self, value):
         # if isinstance(value, _fieldinfo):
@@ -118,30 +133,30 @@ class Avm2BaseConstMixin(object):
         assert self.is_null()
         gen.ilasm.opcode('pushnull')
 
-class Avm2DictMixin(Avm2BaseConstMixin):
-    def _check_for_void_dict(self, gen):
-        KEYTYPE = self.value._TYPE._KEYTYPE
-        keytype = self.cts.lltype_to_cts(KEYTYPE)
-        keytype_T = self.cts.lltype_to_cts(self.value._TYPE.KEYTYPE_T)
-        VALUETYPE = self.value._TYPE._VALUETYPE
-        valuetype = self.cts.lltype_to_cts(VALUETYPE)
-        valuetype_T = self.cts.lltype_to_cts(self.value._TYPE.VALUETYPE_T)
-        if VALUETYPE is ootype.Void:
-            gen.add_comment('  CLI Dictionary w/ void value')
-            class_name = PYPY_DICT_OF_VOID % keytype
-            for key in self.value._dict:
-                gen.ilasm.opcode('dup')
-                push_constant(self.db, KEYTYPE, key, gen)
-                meth = 'void class %s::ll_set(%s)' % (class_name, keytype_T)
-                gen.ilasm.call_method(meth, False)
-            return True
-        return False
+# class Avm2DictMixin(Avm2BaseConstMixin):
+#     def _check_for_void_dict(self, gen):
+#         KEYTYPE = self.value._TYPE._KEYTYPE
+#         keytype = self.cts.lltype_to_cts(KEYTYPE)
+#         keytype_T = self.cts.lltype_to_cts(self.value._TYPE.KEYTYPE_T)
+#         VALUETYPE = self.value._TYPE._VALUETYPE
+#         valuetype = self.cts.lltype_to_cts(VALUETYPE)
+#         valuetype_T = self.cts.lltype_to_cts(self.value._TYPE.VALUETYPE_T)
+#         if VALUETYPE is ootype.Void:
+#             gen.add_comment('  CLI Dictionary w/ void value')
+#             class_name = PYPY_DICT_OF_VOID % keytype
+#             for key in self.value._dict:
+#                 gen.ilasm.opcode('dup')
+#                 push_constant(self.db, KEYTYPE, key, gen)
+#                 meth = 'void class %s::ll_set(%s)' % (class_name, keytype_T)
+#                 gen.ilasm.call_method(meth, False)
+#             return True
+#         return False
     
-    def initialize_data(self, constgen, gen):
-        # special case: dict of void, ignore the values
-        if self._check_for_void_dict(gen):
-            return 
-        return super(CLIDictMixin, self).initialize_data(constgen, gen)
+#     def initialize_data(self, constgen, gen):
+#         # special case: dict of void, ignore the values
+#         if self._check_for_void_dict(gen):
+#             return 
+#         return super(Avm2DictMixin, self).initialize_data(constgen, gen)
 
 # ______________________________________________________________________
 # Constant Classes
@@ -160,7 +175,7 @@ class Avm2DictMixin(Avm2BaseConstMixin):
 class Avm2RecordConst(Avm2BaseConstMixin, RecordConst):
     def create_pointer(self, gen):
         self.db.const_count.inc('Record')
-        super(CLIRecordConst, self).create_pointer(gen)
+        super(Avm2RecordConst, self).create_pointer(gen)
 
 class Avm2InstanceConst(Avm2BaseConstMixin, InstanceConst):
     def create_pointer(self, gen):

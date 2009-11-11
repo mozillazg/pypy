@@ -28,7 +28,7 @@ class Avm2Type(object):
         return hash(self.typename())
     
     def __eq__(self, other):
-        return self.typename() == other.typename()
+        return isinstance(other, self.__class__) and self.typename() == other.typename()
     
     def __ne__(self, other):
         return self.typename() != other.typename()
@@ -46,7 +46,7 @@ class Avm2PrimitiveType(Avm2Type):
     
 
 class Avm2NamespacedType(Avm2Type):
-    nstype = constants.TYPE_NAMESPACE_Namespace
+    nstype = constants.TYPE_NAMESPACE_PackageNamespace
     
     def __init__(self, name, namespace=''):
         if '::' in name and namespace == '':
@@ -64,8 +64,6 @@ class Avm2NamespacedType(Avm2Type):
     def multiname(self):
         return constants.QName(self.name, constants.Namespace(self.nstype, self.ns))
 
-class Avm2PackagedType(Avm2NamespacedType):
-    nstype = constants.TYPE_NAMESPACE_PackageNamespace
 
 class Avm2ArrayType(Avm2Type):
 
@@ -76,7 +74,7 @@ class Avm2ArrayType(Avm2Type):
         return constants.TypeName(_vec_qname, self.itemtype.multiname())
 
 T = Avm2PrimitiveType
-N = Avm2PackagedType
+N = Avm2NamespacedType
 class types:
     void   =  T('void')
     int    =  T('int')
