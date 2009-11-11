@@ -245,6 +245,24 @@ class AppTestRaise:
         except KeyError:
             pass
 
+    def test_catch_tuple(self):
+        class A:
+            pass
+        
+        try:
+            raise ValueError
+        except (ValueError, A):
+            pass
+        else:
+            fail("Did not raise")
+
+        try:
+            raise A()
+        except (ValueError, A):
+            pass
+        else:
+            fail("Did not raise")
+
     def test_obscure_bases(self):
         # this test checks bug-to-bug cpython compatibility
         e = ValueError()
@@ -254,4 +272,22 @@ class AppTestRaise:
         except ValueError:
             pass
 
-            
+        # explodes on CPython and py.test, not sure why
+
+        flag = False
+        class A(BaseException):
+            class __metaclass__(type):
+                def __getattribute__(self, name):
+                    if flag and name == '__bases__':
+                        fail("someone read bases attr")
+                    else:
+                        return type.__getattribute__(self, name)
+
+        try:
+            a = A()
+            flag = True
+            raise a
+        except 42:
+            pass
+        except A:
+            pass

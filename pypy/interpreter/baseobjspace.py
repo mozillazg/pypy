@@ -9,7 +9,7 @@ from pypy.tool.uid import HUGEVAL_BYTES
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib.timer import DummyTimer, Timer
-from pypy.rlib.jit import we_are_jitted, dont_look_inside
+from pypy.rlib.jit import we_are_jitted, dont_look_inside, unroll_safe
 import os, sys
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
@@ -675,12 +675,19 @@ class ObjSpace(object):
         return make_sure_not_resized(self.unpackiterable(w_iterable,
                                                          expected_length)[:])
 
+    @unroll_safe
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""
         if self.is_w(w_exc_type, w_check_class):
             return True   # fast path (also here to handle string exceptions)
         try:
-            return self.abstract_issubclass_w(w_exc_type, w_check_class)
+            if self.is_true(self.isinstance(w_check_class, self.w_tuple)):
+                for w_t in self.viewiterable(w_check_class):
+                    if self.exception_match(w_exc_type, w_t):
+                        return True
+                else:
+                    return False
+            return self.exception_issubclass_w(w_exc_type, w_check_class)
         except OperationError, e:
             if e.match(self, self.w_TypeError):   # string exceptions maybe
                 return False
