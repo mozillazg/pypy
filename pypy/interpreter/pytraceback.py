@@ -18,9 +18,11 @@ class PyTraceback(baseobjspace.Wrappable):
         self.lasti = lasti
         self.next = next
 
+    def get_lineno(self):
+        return offset2lineno(self.frame.pycode, self.lasti)
+
     def descr_tb_lineno(space, self):
-        lineno = offset2lineno(self.frame.pycode, self.lasti)
-        return space.wrap(lineno)
+        return space.wrap(self.get_lineno())
 
     def descr__reduce__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
@@ -33,7 +35,6 @@ class PyTraceback(baseobjspace.Wrappable):
         tup_state = [
             w(self.frame),
             w(self.lasti),
-            w(self.lineno),
             w(self.next),
             ]
         nt = space.newtuple
@@ -42,10 +43,9 @@ class PyTraceback(baseobjspace.Wrappable):
     def descr__setstate__(self, space, w_args):
         from pypy.interpreter.pyframe import PyFrame
         args_w = space.unpackiterable(w_args)
-        w_frame, w_lasti, w_lineno, w_next = args_w
+        w_frame, w_lasti, w_next = args_w
         self.frame = space.interp_w(PyFrame, w_frame)
         self.lasti = space.int_w(w_lasti)
-        self.lineno = space.int_w(w_lineno)
         self.next = space.interp_w(PyTraceback, w_next, can_be_None=True)
 
 def record_application_traceback(space, operror, frame, last_instruction):
