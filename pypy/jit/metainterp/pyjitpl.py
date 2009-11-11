@@ -996,8 +996,8 @@ class MetaInterpStaticData(object):
         self.cpu = cpu
         self.stats = stats
         self.options = options
-        self.logger_noopt = Logger(cpu.ts)
-        self.logger_ops = Logger(cpu.ts, guard_number=True)
+        self.logger_noopt = Logger(self)
+        self.logger_ops = Logger(self, guard_number=True)
 
         RESULT = portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)
@@ -1023,7 +1023,8 @@ class MetaInterpStaticData(object):
         self.portal_code = None
         self.leave_code = None
         self._class_sizes = None
-        self._list_of_addr2name = None
+        self._addr2name_keys = None
+        self._addr2name_values = None
 
     def _freeze_(self):
         return True
@@ -1033,7 +1034,8 @@ class MetaInterpStaticData(object):
         self.portal_code = portal_code
         self.leave_code = leave_code
         self._class_sizes = class_sizes
-        self._list_of_addr2name = list_of_addr2name
+        self._addr2name_keys   = [key   for key, value in list_of_addr2name]
+        self._addr2name_values = [value for key, value in list_of_addr2name]
 
     def finish_setup(self, optimizer=None):
         warmrunnerdesc = self.warmrunnerdesc
@@ -1066,9 +1068,26 @@ class MetaInterpStaticData(object):
             class_sizes[vtable] = sizedescr
         self.cpu.set_class_sizes(class_sizes)
 
-    def get_addr2name_dict(self):
-        # for debugging
-        pass #...
+    def get_name_from_address(self, addr):
+        # for debugging only
+        if we_are_translated():
+            d = self.globaldata.addr2name
+            if d is None:
+                # Build the dictionary at run-time.  This is needed
+                # because the keys are function/class addresses, so they
+                # can change from run to run.
+                d = {}
+                keys = self._addr2name_keys
+                values = self._addr2name_values
+                for i in range(len(keys)):
+                    d[keys[i]] = values[i]
+                self.globaldata.addr2name = d
+            return d.get(addr, '')
+        else:
+            for i in range(len(self._addr2name_keys)):
+                if fnaddress == self._addr2name_keys[i]:
+                    return self._addr2name_values[i]
+            return ''
 
     def bytecode_for_address(self, fnaddress):
         if we_are_translated():
@@ -1122,6 +1141,7 @@ class MetaInterpGlobalData(object):
     def __init__(self, staticdata, prebuilt_fail_descr_list):
         self.initialized = False
         self.indirectcall_dict = None
+        self.addr2name = None
         self.fail_descr_list = prebuilt_fail_descr_list[:]
         self.loopnumbering = 0
         #
