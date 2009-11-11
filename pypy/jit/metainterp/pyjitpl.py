@@ -1023,8 +1023,8 @@ class MetaInterpStaticData(object):
         self.portal_code = None
         self.leave_code = None
         self._class_sizes = None
-        self._addr2name_keys = None
-        self._addr2name_values = None
+        self._addr2name_keys = []
+        self._addr2name_values = []
 
     def _freeze_(self):
         return True
