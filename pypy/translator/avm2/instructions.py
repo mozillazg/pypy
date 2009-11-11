@@ -1,7 +1,6 @@
 
 from pypy.translator.avm2.util import serialize_u32 as u32, Avm2Label
 from pypy.translator.avm2.constants import METHODFLAG_Activation, METHODFLAG_SetsDxns
-from decorator import decorator
 
 INSTRUCTIONS = {}
 
