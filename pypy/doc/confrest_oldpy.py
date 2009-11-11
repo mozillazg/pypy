@@ -186,7 +186,9 @@ class Project:
                      id = 'docinfoline'))
 
         page.contentspace.append(py.xml.raw(content))
-        outputpath.ensure().write(page.unicode().encode(encoding)) 
+        f = outputpath.open('w')
+        f.write(page.unicode().encode(encoding))
+        f.close()
 
 # XXX this function comes from apigen/linker.py, put it
 # somewhere in py lib 
