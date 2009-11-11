@@ -1085,7 +1085,7 @@ class MetaInterpStaticData(object):
             return d.get(addr, '')
         else:
             for i in range(len(self._addr2name_keys)):
-                if fnaddress == self._addr2name_keys[i]:
+                if addr == self._addr2name_keys[i]:
                     return self._addr2name_values[i]
             return ''
 
