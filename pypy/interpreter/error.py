@@ -177,7 +177,7 @@ class OperationError(Exception):
             while space.is_true(space.isinstance(w_type, space.w_tuple)):
                 w_type = space.getitem(w_type, space.wrap(0))
 
-        if space.exception_is_valid_class_w(w_type):
+        if space.exception_is_valid_obj_as_class_w(w_type):
             # this is for all cases of the form (Class, something)
             if space.is_w(w_value, space.w_None):
                 # raise Type: we assume we have to instantiate Type

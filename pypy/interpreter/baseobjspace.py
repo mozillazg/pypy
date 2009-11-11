@@ -835,9 +835,17 @@ class ObjSpace(object):
     # This is slightly less general than the case above, so we prefix
     # it with exception_
 
-    def exception_is_valid_class_w(self, w_obj):
-        return (self.is_true(self.isinstance(w_obj, self.w_type)) and
-                self.is_true(self.issubtype(w_obj, self.w_BaseException)))
+    def exception_is_valid_obj_as_class_w(self, w_obj):
+        if not self.is_true(self.isinstance(w_obj, self.w_type)):
+            return False
+        if not self.full_exceptions:
+            return True
+        return self.is_true(self.issubtype(w_obj, self.w_BaseException))
+
+    def exception_is_valid_class_w(self, w_cls):
+        if not self.full_exceptions:
+            return True
+        return self.is_true(self.issubtype(w_cls, self.w_BaseException))
 
     def exception_getclass(self, w_obj):
         return self.type(w_obj)
