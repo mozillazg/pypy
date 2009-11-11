@@ -212,7 +212,7 @@ def register_config_role(docdir):
     """ register a :config: ReST link role for use in documentation. """
     try:
         from docutils.parsers.rst import directives, states, roles
-        from py.impl.rest.directive import register_linkrole
+        from pypy.tool.rest.directive import register_linkrole
     except ImportError:
         return
     # enable :config: link role
