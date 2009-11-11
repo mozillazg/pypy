@@ -825,7 +825,7 @@ PyTraceback.typedef = TypeDef("traceback",
                               unwrap_spec=['self', ObjSpace, W_Root]),
     tb_frame  = interp_attrproperty('frame', cls=PyTraceback),
     tb_lasti  = interp_attrproperty('lasti', cls=PyTraceback),
-    tb_lineno = interp_attrproperty('lineno', cls=PyTraceback),
+    tb_lineno = GetSetProperty(PyTraceback.descr_tb_lineno),
     tb_next   = interp_attrproperty('next', cls=PyTraceback),
     )
 PyTraceback.typedef.acceptable_as_base_class = False
