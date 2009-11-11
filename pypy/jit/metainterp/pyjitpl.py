@@ -1030,12 +1030,13 @@ class MetaInterpStaticData(object):
         return True
 
     def info_from_codewriter(self, portal_code, leave_code, class_sizes,
-                             list_of_addr2name=[]):
+                             list_of_addr2name, portal_runner_ptr):
         self.portal_code = portal_code
         self.leave_code = leave_code
         self._class_sizes = class_sizes
         self._addr2name_keys   = [key   for key, value in list_of_addr2name]
         self._addr2name_values = [value for key, value in list_of_addr2name]
+        self._portal_runner_ptr = portal_runner_ptr
 
     def finish_setup(self, optimizer=None):
         warmrunnerdesc = self.warmrunnerdesc
@@ -1076,7 +1077,8 @@ class MetaInterpStaticData(object):
                 # Build the dictionary at run-time.  This is needed
                 # because the keys are function/class addresses, so they
                 # can change from run to run.
-                d = {}
+                k = llmemory.cast_ptr_to_adr(self._portal_runner_ptr)
+                d = {k: 'recursive call'}
                 keys = self._addr2name_keys
                 values = self._addr2name_values
                 for i in range(len(keys)):

@@ -175,7 +175,8 @@ class CodeWriter(object):
 
         self.metainterp_sd.info_from_codewriter(portal_code, leave_code,
                                                 self.class_sizes,
-                                                self.list_of_addr2name)
+                                                self.list_of_addr2name,
+                                                portal_runner_ptr)
 
     def _start(self, metainterp_sd, portal_runner_ptr):
         self.metainterp_sd = metainterp_sd
@@ -347,10 +348,14 @@ class CodeWriter(object):
 
     def register_known_function(self, func):
         if self.rtyper.type_system.name == 'lltypesystem':
-            if func._obj not in self._functions_addr_seen:
-                self._functions_addr_seen[func._obj] = True
+            try:
+                obj = func._obj
+            except lltype.DelayedPointer:   # probably ll_portal_runner
+                return
+            if obj not in self._functions_addr_seen:
+                self._functions_addr_seen[obj] = True
                 func_addr = llmemory.cast_ptr_to_adr(func)
-                self.list_of_addr2name.append((func_addr, func._obj._name))
+                self.list_of_addr2name.append((func_addr, obj._name))
 
 
 class BytecodeMaker(object):
