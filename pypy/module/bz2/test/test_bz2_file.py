@@ -20,7 +20,7 @@ def setup_module(mod):
     def create_broken_temp_file():
         f = py.test.ensuretemp("bz2").join("foo")
         data = DATA[:100]
-        f.write(data)
+        f.write(data, 'wb')
     
     def decompress(data):
         import popen2
