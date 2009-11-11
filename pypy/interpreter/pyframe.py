@@ -162,9 +162,6 @@ class PyFrame(eval.Frame):
                 raise
             if not we_are_jitted():
                 executioncontext.return_trace(self, w_exitvalue)
-            # on exit, we try to release self.last_exception -- breaks an
-            # obvious reference cycle, so it helps refcounting implementations
-            self.last_exception = None
         finally:
             executioncontext.leave(self)
         return w_exitvalue
