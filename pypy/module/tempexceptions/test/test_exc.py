@@ -62,3 +62,26 @@ class AppTestExc(object):
         from tempexceptions import KeyError
 
         assert str(KeyError('s')) == "'s'"
+
+    def test_environment_error(self):
+        from tempexceptions import EnvironmentError
+        ee = EnvironmentError(3, "x", "y")
+        assert str(ee) == "[Errno 3] x: y"
+        assert str(EnvironmentError(3, "x")) == "[Errno 3] x"
+
+    def test_syntax_error(self):
+        from tempexceptions import SyntaxError
+        s = SyntaxError(3)
+        assert str(s) == '3'
+        assert str(SyntaxError("a", "b", 123)) == "a"
+        assert str(SyntaxError("a", (1, 2, 3, 4))) == "a (line 2)"
+        s = SyntaxError("a", (1, 2, 3, 4))
+        assert s.msg == "a"
+        assert s.filename == 1
+        assert str(SyntaxError("msg", ("file.py", 2, 3, 4))) == "msg (file.py, line 2)"
+
+    def test_system_exit(self):
+        from tempexceptions import SystemExit
+        assert SystemExit().code is None
+        assert SystemExit("x").code == "x"
+        assert SystemExit(1, 2).code == (1, 2)

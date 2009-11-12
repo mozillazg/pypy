@@ -75,6 +75,20 @@ from pypy.interpreter.typedef import TypeDef, interp_attrproperty_w,\
      GetSetProperty, interp_attrproperty, descr_get_dict, descr_set_dict
 from pypy.interpreter.gateway import interp2app
 
+def readwrite_attrproperty(name, cls, unwrapname):
+    def fget(space, obj):
+        return space.wrap(getattr(obj, name))
+    def fset(space, obj, w_val):
+        setattr(obj, name, getattr(space, unwrapname)(w_val))
+    return GetSetProperty(fget, fset, cls=cls)
+
+def readwrite_attrproperty_w(name, cls):
+    def fget(space, obj):
+        return getattr(obj, name)
+    def fset(space, obj, w_val):
+        setattr(obj, name, w_val)
+    return GetSetProperty(fget, fset, cls=cls)
+
 class W_BaseException(Wrappable):
     """Superclass representing the base of the exception hierarchy.
 
@@ -213,13 +227,6 @@ def descr_new_unicode_translate_error(space, w_subtype, w_obj, w_start, w_end,
                                      w_end, w_reason)
     return space.wrap(exc)
 
-def readwrite_attrproperty(name, cls, unwrapname):
-    def fget(space, obj):
-        return space.wrap(getattr(obj, name))
-    def fset(space, obj, w_val):
-        setattr(obj, name, getattr(space, unwrapname)(w_val))
-    return GetSetProperty(fget, fset, cls=cls)
-
 W_UnicodeTranslateError.typedef = TypeDef(
     'UnicodeTranslateError',
     W_UnicodeError.typedef,
@@ -247,3 +254,151 @@ key_error_str.unwrap_spec = ['self', ObjSpace]
 W_KeyError = _new_exception('KeyError', W_LookupError,
                             """Mapping key not found.""",
                             __str__ = key_error_str)
+
+W_StopIteration = _new_exception('StopIteration', W_Exception,
+                                 """Signal the end from iterator.next().""")
+
+W_Warning = _new_exception('Warning', W_Exception,
+                           """Base class for warning categories.""")
+
+W_PendingDeprecationWarning = _new_exception('PendingDeprecationWarning',
+                                             W_Warning,
+       """Base class for warnings about features which will be deprecated in the future.""")
+
+class W_EnvironmentError(W_StandardError):
+    """Base class for I/O related errors."""
+
+    def __init__(self, space, args_w):
+        W_BaseException.__init__(self, space, args_w)
+        self.w_errno = space.w_None
+        self.w_strerror = space.w_None
+        self.w_filename = space.w_None
+        if 2 <= len(args_w) <= 3:
+            self.w_errno = args_w[0]
+            self.w_strerror = args_w[1]
+        if len(args_w) == 3:
+            self.w_filename = args_w[2]
+            self.args_w = [args_w[0], args_w[1]]
+
+    def descr_str(self, space):
+        if not space.is_w(self.w_filename, space.w_None):
+            return space.wrap("[Errno %d] %s: %s" % (space.int_w(self.w_errno),
+                                                     space.str_w(self.w_strerror),
+                                                     space.str_w(self.w_filename)))
+        if (not space.is_w(self.w_errno, space.w_None) and
+            not space.is_w(self.w_errno, space.w_None)):
+            return space.wrap("[Errno %d] %s" % (space.int_w(self.w_errno),
+                                                 space.str_w(self.w_strerror)))
+        return W_BaseException.__str__(self, space)
+    descr_str.unwrap_spec = ['self', ObjSpace]
+
+W_EnvironmentError.typedef = TypeDef(
+    'EnvironmentError',
+    W_StandardError.typedef,
+    __new__ = _new(W_EnvironmentError),
+    __str__ = interp2app(W_EnvironmentError.descr_str)
+    )
+
+W_OSError = _new_exception('OSError', W_EnvironmentError,
+                           """OS system call failed.""")
+
+W_DeprecationWarning = _new_exception('DeprecationWarning', W_Warning,
+                        """Base class for warnings about deprecated features.""")
+
+W_ArithmeticError = _new_exception('ArithmeticError', W_StandardError,
+                         """Base class for arithmetic errors.""")
+
+W_FloatingPointError = _new_exception('FloatingPointError', W_ArithmeticError,
+                                      """Floating point operation failed.""")
+
+W_ReferenceError = _new_exception('ReferenceError', W_StandardError,
+                           """Weak ref proxy used after referent went away.""")
+
+W_NameError = _new_exception('NameError', W_StandardError,
+                             """Name not found globally.""")
+
+W_IOError = _new_exception('IOError', W_EnvironmentError,
+                           """I/O operation failed.""")
+
+
+class W_SyntaxError(W_StandardError):
+    """Invalid syntax."""
+
+    def __init__(self, space, args_w):
+        W_BaseException.__init__(self, space, args_w)
+        # that's not a self.w_message!!!
+        if len(args_w) > 0:
+            self.w_msg = args_w[0]
+        else:
+            self.w_msg = space.wrap('')
+        if len(args_w) == 2:
+            values_w = space.viewiterable(args_w[1], 4)
+            self.w_filename = values_w[0]
+            self.w_lineno   = values_w[1]
+            self.w_offset   = values_w[2]
+            self.w_text     = values_w[3]
+        else:
+            self.w_filename = space.w_None
+            self.w_lineno   = space.w_None
+            self.w_offset   = space.w_None
+            self.w_text     = space.w_None
+
+    def descr_str(self, space):
+        return space.appexec([self], """(self):
+            if type(self.msg) is not str:
+                return str(self.msg)
+
+            buffer = self.msg
+            have_filename = type(self.filename) is str
+            have_lineno = type(self.lineno) is int
+            if have_filename:
+                import os
+                fname = os.path.basename(self.filename or "???")
+                if have_lineno:
+                    buffer = "%s (%s, line %ld)" % (self.msg, fname, self.lineno)
+                else:
+                    buffer ="%s (%s)" % (self.msg, fname)
+            elif have_lineno:
+                buffer = "%s (line %ld)" % (self.msg, self.lineno)
+            return buffer
+        """)
+
+    descr_str.unwrap_spec = ['self', ObjSpace]
+
+W_SyntaxError.typedef = TypeDef(
+    'SyntaxError',
+    W_StandardError.typedef,
+    __new__ = _new(W_SyntaxError),
+    __str__ = interp2app(W_SyntaxError.descr_str),
+    __doc__ = W_SyntaxError.__doc__,
+    msg      = readwrite_attrproperty_w('w_msg', W_SyntaxError),
+    filename = readwrite_attrproperty_w('w_filename', W_SyntaxError),
+    lineno   = readwrite_attrproperty_w('w_lineno', W_SyntaxError),
+    offset   = readwrite_attrproperty_w('w_offset', W_SyntaxError),
+    text     = readwrite_attrproperty_w('w_text', W_SyntaxError),
+)
+
+W_FutureWarning = _new_exception('FutureWarning', W_Warning,
+    """Base class for warnings about constructs that will change semantically in the future.""")
+
+class W_SystemExit(W_BaseException):
+    """Request to exit from the interpreter."""
+    
+    def __init__(self, space, args_w):
+        W_BaseException.__init__(self, space, args_w)
+        if len(args_w) == 0:
+            self.w_code = space.w_None
+        elif len(args_w) == 1:
+            self.w_code = args_w[0]
+        else:
+            self.w_code = space.newtuple(args_w)
+
+W_SystemExit.typedef = TypeDef(
+    'SystemExit',
+    W_BaseException.typedef,
+    __new__ = _new(W_SystemExit),
+    __doc__ = W_SystemExit.__doc__,
+    code    = readwrite_attrproperty_w('w_code', W_SystemExit)
+)
+
+
