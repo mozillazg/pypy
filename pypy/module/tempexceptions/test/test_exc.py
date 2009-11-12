@@ -57,6 +57,9 @@ class AppTestExc(object):
         ut.object = u'y'
         assert ut.object == u'y'
         assert str(ut) == "can't translate characters in position 1-4: bah"
+        ut.start = 4
+        ut.object = u'012345'
+        assert str(ut) == "can't translate character u'\\x34' in position 4: bah"
 
     def test_key_error(self):
         from tempexceptions import KeyError
@@ -85,3 +88,19 @@ class AppTestExc(object):
         assert SystemExit().code is None
         assert SystemExit("x").code == "x"
         assert SystemExit(1, 2).code == (1, 2)
+
+    def test_unicode_decode_error(self):
+        from tempexceptions import UnicodeDecodeError
+        ud = UnicodeDecodeError("x", "y", 1, 5, "bah")
+        assert ud.encoding == 'x'
+        assert ud.object == 'y'
+        assert ud.start == 1
+        assert ud.end == 5
+        assert ud.reason == 'bah'
+        assert ud.args == ('x', 'y', 1, 5, 'bah')
+        assert ud.message == ''
+        ud.object = 'z9'
+        assert ud.object == 'z9'
+        assert str(ud) == "'x' codec can't decode bytes in position 1-4: bah"
+        ud.end = 2
+        assert str(ud) == "'x' codec can't decode byte 0x39 in position 1: bah"

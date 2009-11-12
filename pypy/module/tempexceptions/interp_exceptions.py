@@ -200,12 +200,13 @@ W_UnicodeError = _new_exception('UnicodeError', W_ValueError,
 
 class W_UnicodeTranslateError(W_UnicodeError):
     """Unicode translation error."""
-    def __init__(self, space, w_obj, w_start, w_end, w_reason):
-        self.object = space.unicode_w(w_obj)
+    def __init__(self, space, w_object, w_start, w_end, w_reason):
+        self.object = space.unicode_w(w_object)
         self.start = space.int_w(w_start)
         self.end = space.int_w(w_end)
         self.reason = space.str_w(w_reason)
-        W_BaseException.__init__(self, space, [w_obj, w_start, w_end, w_reason])
+        W_BaseException.__init__(self, space, [w_object, w_start,
+                                               w_end, w_reason])
 
     def descr_str(self, space):
         return space.appexec([space.wrap(self)], """(self):
@@ -220,10 +221,10 @@ class W_UnicodeTranslateError(W_UnicodeError):
         """)
     descr_str.unwrap_spec = ['self', ObjSpace]
 
-def descr_new_unicode_translate_error(space, w_subtype, w_obj, w_start, w_end,
-                                      w_reason):
+def descr_new_unicode_translate_error(space, w_subtype, w_object,
+                                      w_start, w_end, w_reason):
     exc = space.allocate_instance(W_UnicodeTranslateError, w_subtype)
-    W_UnicodeTranslateError.__init__(exc, space, w_obj, w_start,
+    W_UnicodeTranslateError.__init__(exc, space, w_object, w_start,
                                      w_end, w_reason)
     return space.wrap(exc)
 
@@ -401,4 +402,111 @@ W_SystemExit.typedef = TypeDef(
     code    = readwrite_attrproperty_w('w_code', W_SystemExit)
 )
 
+W_EOFError = _new_exception('EOFError', W_StandardError,
+                            """Read beyond end of file.""")
 
+W_IndentationError = _new_exception('IndentationError', W_SyntaxError,
+                                    """Improper indentation.""")
+
+W_TabError = _new_exception('TabError', W_IndentationError,
+                            """Improper mixture of spaces and tabs.""")
+
+W_ZeroDivisionError = _new_exception('ZeroDivisionError', W_ArithmeticError,
+            """Second argument to a division or modulo operation was zero.""")
+
+W_SystemError = _new_exception('SystemError', W_StandardError,
+            """Internal error in the Python interpreter.
+
+Please report this to the Python maintainer, along with the traceback,
+the Python version, and the hardware/OS platform and version.""")
+
+W_AssertionError = _new_exception('AssertionError', W_StandardError,
+                                  """Assertion failed.""")
+
+class W_UnicodeDecodeError(W_UnicodeError):
+    """Unicode decoding error."""
+
+    def __init__(self, space, w_encoding, w_object, w_start, w_end, w_reason):
+        self.encoding = space.str_w(w_encoding)
+        self.object = space.str_w(w_object)
+        self.start = space.int_w(w_start)
+        self.end = space.int_w(w_end)
+        self.reason = space.str_w(w_reason)
+        W_BaseException.__init__(self, space, [w_encoding, w_object,
+                                               w_start, w_end, w_reason])
+
+    def descr_str(self, space):
+        return space.appexec([self], """(self):
+            if self.end == self.start + 1:
+                return "%r codec can't decode byte 0x%02x in position %d: %s"%(
+                    self.encoding,
+                    ord(self.object[self.start]), self.start, self.reason)
+            return "%r codec can't decode bytes in position %d-%d: %s" % (
+                self.encoding, self.start, self.end - 1, self.reason)
+        """)
+
+    descr_str.unwrap_spec = ['self', ObjSpace]
+
+def descr_new_unicode_decode_error(space, w_subtype, w_encoding, w_object,
+                                   w_start, w_end, w_reason):
+    exc = space.allocate_instance(W_UnicodeDecodeError, w_subtype)
+    W_UnicodeDecodeError.__init__(exc, space, w_encoding, w_object, w_start,
+                                  w_end, w_reason)
+    return space.wrap(exc)
+
+W_UnicodeDecodeError.typedef = TypeDef(
+    'UnicodeDecodeError',
+    W_UnicodeError.typedef,
+    __doc__ = W_UnicodeTranslateError.__doc__,
+    __new__ = interp2app(descr_new_unicode_decode_error),
+    __str__ = interp2app(W_UnicodeDecodeError.descr_str),
+    encoding = readwrite_attrproperty('encoding', W_UnicodeDecodeError, 'str_w'),
+    object = readwrite_attrproperty('object', W_UnicodeDecodeError, 'str_w'),
+    start  = readwrite_attrproperty('start', W_UnicodeDecodeError, 'int_w'),
+    end    = readwrite_attrproperty('end', W_UnicodeDecodeError, 'int_w'),
+    reason = readwrite_attrproperty('reason', W_UnicodeDecodeError, 'str_w'),
+)
+
+W_TypeError = _new_exception('TypeError', W_StandardError,
+                             """Inappropriate argument type.""")
+
+W_IndexError = _new_exception('IndexError', W_LookupError,
+                              """Sequence index out of range.""")
+
+W_RuntimeWarning = _new_exception('RuntimeWarning', W_Warning,
+                """Base class for warnings about dubious runtime behavior.""")
+
+W_KeyboardInterrupt = _new_exception('KeyboardInterrupt', W_BaseException,
+                                     """Program interrupted by user.""")
+
+W_UserWarning = _new_exception('UserWarning', W_Warning,
+                       """Base class for warnings generated by user code.""")
+
+W_SyntaxWarning = _new_exception('SyntaxWarning', W_Warning,
+                         """Base class for warnings about dubious syntax.""")
+
+W_UnicodeWarning = _new_exception('UnicodeWarning', W_Warning,
+            """Base class for warnings about Unicode related problems, mostly
+related to conversion problems.""")
+
+W_ImportWarning = _new_exception('ImportWarning', W_Warning,
+    """Base class for warnings about probable mistakes in module imports""")
+
+W_MemoryError = _new_exception('MemoryError', W_StandardError,
+                               """Out of memory.""")
+
+W_UnboundLocalError = _new_exception('UnboundLocalError', W_NameError,
+                        """Local name referenced but not bound to a value.""")
+
+W_NotImplementedError = _new_exception('NotImplementedError', W_RuntimeError,
+                        """Method or function hasn't been implemented yet.""")
+
+W_AttributeError = _new_exception('AttributeError', W_StandardError,
+                                  """Attribute not found.""")
+
+W_OverflowError = _new_exception('OverflowError', W_ArithmeticError,
+                                 """Result too large to be represented.""")
+
+
+##class UnicodeEncodeError(UnicodeError):
+##    """Unicode encoding error."""..........
