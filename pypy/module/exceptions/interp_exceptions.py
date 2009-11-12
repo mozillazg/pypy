@@ -140,10 +140,12 @@ class W_BaseException(Wrappable):
         self.w_dict = w_dict
 
 
-def _new(cls):
+def _new(cls, basecls=None):
+    if basecls is None:
+        basecls = cls
     def descr_new_base_exception(space, w_subtype, args_w):
         exc = space.allocate_instance(cls, w_subtype)
-        cls.__init__(exc, space, args_w)
+        basecls.__init__(exc, space, args_w)
         return space.wrap(exc)
     descr_new_base_exception.unwrap_spec = [ObjSpace, W_Root, 'args_w']
     descr_new_base_exception.func_name = 'descr_new_' + cls.__name__
@@ -162,21 +164,30 @@ W_BaseException.typedef = TypeDef(
 )
 
 def _new_exception(name, base, docstring, **kwargs):
-    class W_Exception(base):
+    # Create a subclass W_Exc of the class 'base'.  Note that there is
+    # hackery going on on the typedef of W_Exc: when we make further
+    # app-level subclasses, they inherit at interp-level from 'realbase'
+    # instead of W_Exc.  This allows multiple inheritance to work (see
+    # test_multiple_inheritance in test_exc.py).
+
+    class W_Exc(base):
         __doc__ = docstring
 
-    W_Exception.__name__ = 'W_' + name
+    W_Exc.__name__ = 'W_' + name
+
+    realbase = base.typedef.applevel_subclasses_base or base
 
     for k, v in kwargs.items():
-        kwargs[k] = interp2app(v.__get__(None, W_Exception))
-    W_Exception.typedef = TypeDef(
+        kwargs[k] = interp2app(v.__get__(None, realbase))
+    W_Exc.typedef = TypeDef(
         name,
         base.typedef,
-        __doc__ = W_Exception.__doc__,
-        __new__ = _new(W_Exception),
+        __doc__ = W_Exc.__doc__,
+        __new__ = _new(W_Exc, realbase),
         **kwargs
     )
-    return W_Exception
+    W_Exc.typedef.applevel_subclasses_base = realbase
+    return W_Exc
 
 W_Exception = _new_exception('Exception', W_BaseException,
                          """Common base class for all non-exit exceptions.""")

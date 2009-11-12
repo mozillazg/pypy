@@ -76,7 +76,6 @@ class W_TypeObject(W_Object):
         w_self.hasdict = False
         w_self.needsdel = False
         w_self.weakrefable = False
-        w_self.w_same_layout_as = None
         w_self.weak_subclasses = []
         w_self.__flags__ = 0           # or _HEAPTYPE
         w_self.instancetypedef = overridetypedef
@@ -87,6 +86,7 @@ class W_TypeObject(W_Object):
         else:
             setup_user_defined_type(w_self)
             custom_metaclass = not space.is_w(space.type(w_self), space.w_type)
+        w_self.w_same_layout_as = get_parent_layout(w_self)
 
         if space.config.objspace.std.withtypeversion:
             if w_self.instancetypedef.hasdict or custom_metaclass:
@@ -518,7 +518,6 @@ def setup_user_defined_type(w_self):
     hasoldstylebase = copy_flags_from_bases(w_self, w_bestbase)
     create_all_slots(w_self, hasoldstylebase)
 
-    w_self.w_same_layout_as = get_parent_layout(w_self)
     ensure_common_attributes(w_self)
 
 def setup_builtin_type(w_self):

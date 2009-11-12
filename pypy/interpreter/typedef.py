@@ -24,6 +24,7 @@ class TypeDef:
             self.weakrefable |= __base.weakrefable
         self.rawdict = {}
         self.acceptable_as_base_class = True
+        self.applevel_subclasses_base = None
         # xxx used by faking
         self.fakedcpytype = None
         self.add_entries(**rawdict)
