@@ -283,20 +283,17 @@ class W_EnvironmentError(W_StandardError):
             self.args_w = [args_w[0], args_w[1]]
 
     def descr_str(self, space):
-        return self.str(space, self.w_errno)
-    descr_str.unwrap_spec = ['self', ObjSpace]
-
-    def str(self, space, w_errno):    # for WindowsError
-        if (not space.is_w(w_errno, space.w_None) and
+        if (not space.is_w(self.w_errno, space.w_None) and
             not space.is_w(self.w_strerror, space.w_None)):
             if not space.is_w(self.w_filename, space.w_None):
                 return space.wrap("[Errno %d] %s: %s" % (
-                    space.int_w(w_errno),
+                    space.int_w(self.w_errno),
                     space.str_w(self.w_strerror),
                     space.str_w(self.w_filename)))
-            return space.wrap("[Errno %d] %s" % (space.int_w(w_errno),
+            return space.wrap("[Errno %d] %s" % (space.int_w(self.w_errno),
                                                  space.str_w(self.w_strerror)))
         return W_BaseException.descr_str(self, space)
+    descr_str.unwrap_spec = ['self', ObjSpace]
 
 W_EnvironmentError.typedef = TypeDef(
     'EnvironmentError',
@@ -329,7 +326,16 @@ class W_WindowsError(W_OSError):
         self.w_errno = space.wrap(errno)
 
     def descr_str(self, space):
-        return self.str(space, self.w_winerror)
+        if (not space.is_w(self.w_winerror, space.w_None) and
+            not space.is_w(self.w_strerror, space.w_None)):
+            if not space.is_w(self.w_filename, space.w_None):
+                return space.wrap("[Error %d] %s: %s" % (
+                    space.int_w(self.w_winerror),
+                    space.str_w(self.w_strerror),
+                    space.str_w(self.w_filename)))
+            return space.wrap("[Error %d] %s" % (space.int_w(self.w_winerror),
+                                                 space.str_w(self.w_strerror)))
+        return W_BaseException.descr_str(self, space)
     descr_str.unwrap_spec = ['self', ObjSpace]
 
     # copied from CPython: PC/errmap.h

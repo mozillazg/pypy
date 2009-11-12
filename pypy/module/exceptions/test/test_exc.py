@@ -76,6 +76,18 @@ class AppTestExc(object):
         assert ee.filename == "y"
         assert EnvironmentError(3, "x").filename is None
 
+    def test_windows_error(self):
+        try:
+            from exceptions import WindowsError
+        except ImportError:
+            skip('WindowsError not present')
+        ee = WindowsError(3, "x", "y")
+        assert str(ee) == "[Error 3] x: y"
+        # winerror=3 (ERROR_PATH_NOT_FOUND) maps to errno=2 (ENOENT)
+        assert ee.winerror == 3
+        assert ee.errno == 2
+        assert str(WindowsError(3, "x")) == "[Error 3] x"
+
     def test_syntax_error(self):
         from exceptions import SyntaxError
         s = SyntaxError(3)
