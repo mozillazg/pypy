@@ -491,7 +491,8 @@ class CStandaloneBuilder(CBuilder):
             trackgcfiles = [cfile[:-2] for cfile in mk.cfiles]
             if self.translator.platform.name == 'msvc':
                 trackgcfiles = [f for f in trackgcfiles
-                                if f.startswith(('implement', 'testing'))]
+                                if f.startswith(('implement', 'testing',
+                                                 '../module_cache/module'))]
             sfiles = ['%s.s' % (c,) for c in trackgcfiles]
             lblsfiles = ['%s.lbl.s' % (c,) for c in trackgcfiles]
             gcmapfiles = ['%s.gcmap' % (c,) for c in trackgcfiles]
