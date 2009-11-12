@@ -104,3 +104,19 @@ class AppTestExc(object):
         assert str(ud) == "'x' codec can't decode bytes in position 1-4: bah"
         ud.end = 2
         assert str(ud) == "'x' codec can't decode byte 0x39 in position 1: bah"
+
+    def test_unicode_encode_error(self):
+        from tempexceptions import UnicodeEncodeError
+        ue = UnicodeEncodeError("x", u"y", 1, 5, "bah")
+        assert ue.encoding == 'x'
+        assert ue.object == u'y'
+        assert ue.start == 1
+        assert ue.end == 5
+        assert ue.reason == 'bah'
+        assert ue.args == ('x', u'y', 1, 5, 'bah')
+        assert ue.message == ''
+        ue.object = u'z9'
+        assert ue.object == u'z9'
+        assert str(ue) == "'x' codec can't encode characters in position 1-4: bah"
+        ue.end = 2
+        assert str(ue) == "'x' codec can't encode character u'\\x39' in position 1: bah"
