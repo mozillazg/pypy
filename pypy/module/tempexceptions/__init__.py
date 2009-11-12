@@ -1,4 +1,4 @@
-
+import sys
 from pypy.interpreter.mixedmodule import MixedModule
 
 class Module(MixedModule):
@@ -53,5 +53,7 @@ class Module(MixedModule):
         'ValueError' : 'interp_exceptions.W_ValueError',
         'Warning' : 'interp_exceptions.W_Warning',
         'ZeroDivisionError' : 'interp_exceptions.W_ZeroDivisionError',
-
         }
+
+    if sys.platform.startswith("win"):
+        interpleveldefs['WindowsError'] = 'interp_exceptions.W_WindowsError'

@@ -74,6 +74,7 @@ from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, W_Root
 from pypy.interpreter.typedef import TypeDef, interp_attrproperty_w,\
      GetSetProperty, interp_attrproperty, descr_get_dict, descr_set_dict
 from pypy.interpreter.gateway import interp2app
+from pypy.interpreter.error import OperationError
 
 def readwrite_attrproperty(name, cls, unwrapname):
     def fget(space, obj):
@@ -282,26 +283,76 @@ class W_EnvironmentError(W_StandardError):
             self.args_w = [args_w[0], args_w[1]]
 
     def descr_str(self, space):
-        if not space.is_w(self.w_filename, space.w_None):
-            return space.wrap("[Errno %d] %s: %s" % (space.int_w(self.w_errno),
-                                                     space.str_w(self.w_strerror),
-                                                     space.str_w(self.w_filename)))
-        if (not space.is_w(self.w_errno, space.w_None) and
-            not space.is_w(self.w_errno, space.w_None)):
-            return space.wrap("[Errno %d] %s" % (space.int_w(self.w_errno),
-                                                 space.str_w(self.w_strerror)))
-        return W_BaseException.__str__(self, space)
+        return self.str(space, self.w_errno)
     descr_str.unwrap_spec = ['self', ObjSpace]
+
+    def str(self, space, w_errno):    # for WindowsError
+        if (not space.is_w(w_errno, space.w_None) and
+            not space.is_w(self.w_strerror, space.w_None)):
+            if not space.is_w(self.w_filename, space.w_None):
+                return space.wrap("[Errno %d] %s: %s" % (
+                    space.int_w(w_errno),
+                    space.str_w(self.w_strerror),
+                    space.str_w(self.w_filename)))
+            return space.wrap("[Errno %d] %s" % (space.int_w(w_errno),
+                                                 space.str_w(self.w_strerror)))
+        return W_BaseException.descr_str(self, space)
 
 W_EnvironmentError.typedef = TypeDef(
     'EnvironmentError',
     W_StandardError.typedef,
+    __doc__ = W_EnvironmentError.__doc__,
     __new__ = _new(W_EnvironmentError),
-    __str__ = interp2app(W_EnvironmentError.descr_str)
+    __str__ = interp2app(W_EnvironmentError.descr_str),
+    errno    = readwrite_attrproperty_w('w_errno',    W_EnvironmentError),
+    strerror = readwrite_attrproperty_w('w_strerror', W_EnvironmentError),
+    filename = readwrite_attrproperty_w('w_filename', W_EnvironmentError),
     )
 
 W_OSError = _new_exception('OSError', W_EnvironmentError,
                            """OS system call failed.""")
+
+class W_WindowsError(W_OSError):
+    """MS-Windows OS system call failed."""
+    
+    def __init__(self, space, args_w):
+        W_OSError.__init__(self, space, args_w)
+        # Set errno to the POSIX errno, and winerror to the Win32
+        # error code.
+        try:
+            errno = space.int_w(self.w_errno)
+        except OperationError:
+            errno = 22     # EINVAL
+        else:
+            errno = self._winerror_to_errno.get(errno, 22)  # EINVAL
+        self.w_winerror = self.w_errno
+        self.w_errno = space.wrap(errno)
+
+    def descr_str(self, space):
+        return self.str(space, self.w_winerror)
+    descr_str.unwrap_spec = ['self', ObjSpace]
+
+    # copied from CPython: PC/errmap.h
+    _winerror_to_errno = {
+        2: 2, 3: 2, 4: 24, 5: 13, 6: 9, 7: 12, 8: 12, 9: 12, 10: 7, 11: 8,
+        15: 2, 16: 13, 17: 18, 18: 2, 19: 13, 20: 13, 21: 13, 22: 13,
+        23: 13, 24: 13, 25: 13, 26: 13, 27: 13, 28: 13, 29: 13, 30: 13,
+        31: 13, 32: 13, 33: 13, 34: 13, 35: 13, 36: 13, 53: 2, 65: 13,
+        67: 2, 80: 17, 82: 13, 83: 13, 89: 11, 108: 13, 109: 32, 112: 28,
+        114: 9, 128: 10, 129: 10, 130: 9, 132: 13, 145: 41, 158: 13,
+        161: 2, 164: 11, 167: 13, 183: 17, 188: 8, 189: 8, 190: 8, 191: 8,
+        192: 8, 193: 8, 194: 8, 195: 8, 196: 8, 197: 8, 198: 8, 199: 8,
+        200: 8, 201: 8, 202: 8, 206: 2, 215: 11, 1816: 12,
+        }
+
+W_WindowsError.typedef = TypeDef(
+    "WindowsError",
+    W_OSError.typedef,
+    __doc__  = W_WindowsError.__doc__,
+    __new__  = _new(W_WindowsError),
+    __str__  = interp2app(W_WindowsError.descr_str),
+    winerror = readwrite_attrproperty_w('w_winerror', W_WindowsError),
+    )
 
 W_DeprecationWarning = _new_exception('DeprecationWarning', W_Warning,
                         """Base class for warnings about deprecated features.""")
