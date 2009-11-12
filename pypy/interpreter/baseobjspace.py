@@ -389,11 +389,18 @@ class ObjSpace(object):
     def make_builtins(self):
         "NOT_RPYTHON: only for initializing the space."
 
+        from pypy.module.exceptions import Module
+        w_name_exceptions = self.wrap('exceptions')
+        self.exceptions_module = Module(self, w_name_exceptions)
+
         from pypy.module.sys import Module
         w_name = self.wrap('sys')
         self.sys = Module(self, w_name)
         w_modules = self.sys.get('modules')
         self.setitem(w_modules, w_name, self.wrap(self.sys))
+
+        self.setitem(w_modules, w_name_exceptions,
+                     self.wrap(self.exceptions_module))
 
         from pypy.module.__builtin__ import Module
         w_name = self.wrap('__builtin__')
@@ -404,6 +411,8 @@ class ObjSpace(object):
 
         bootstrap_modules = ['sys', '__builtin__', 'exceptions']
         installed_builtin_modules = bootstrap_modules[:]
+
+        self.export_builtin_exceptions()
 
         # initialize with "bootstrap types" from objspace  (e.g. w_None)
         for name, value in self.__dict__.items():
@@ -429,6 +438,18 @@ class ObjSpace(object):
         # force this value into the dict without unlazyfying everything
         self.setitem(self.sys.w_dict, self.wrap('builtin_module_names'),
                      w_builtin_module_names)
+
+    def export_builtin_exceptions(self):
+        """NOT_RPYTHON"""
+        w_dic = self.exceptions_module.getdict()
+        names_w = self.unpackiterable(self.call_function(self.getattr(w_dic, self.wrap("keys"))))
+
+        for w_name in names_w:
+            name = self.str_w(w_name)
+            if not name.startswith('__'):
+                excname = name
+                w_exc = self.getitem(w_dic, w_name)
+                setattr(self, "w_"+excname, w_exc)
 
     def install_mixedmodule(self, mixedname, installed_builtin_modules):
         """NOT_RPYTHON"""

@@ -3,10 +3,10 @@ from pypy.conftest import gettestobjspace
 
 class AppTestExc(object):
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=('tempexceptions',))
+        cls.space = gettestobjspace(usemodules=('exceptions',))
 
     def test_baseexc(self):
-        from tempexceptions import BaseException
+        from exceptions import BaseException
 
         assert str(BaseException()) == ''
         assert repr(BaseException()) == 'BaseException()'
@@ -25,7 +25,7 @@ class AppTestExc(object):
         assert x.xyz == 3
 
     def test_exc(self):
-        from tempexceptions import Exception, BaseException
+        from exceptions import Exception, BaseException
 
         assert issubclass(Exception, BaseException)
         assert isinstance(Exception(), Exception)
@@ -33,7 +33,7 @@ class AppTestExc(object):
         assert repr(Exception(3, "x")) == "Exception(3, 'x')"
 
     def test_custom_class(self):
-        from tempexceptions import Exception
+        from exceptions import Exception
 
         class MyException(Exception):
             def __init__(self, x):
@@ -46,7 +46,7 @@ class AppTestExc(object):
         assert str(MyException("x")) == "x"
 
     def test_unicode_translate_error(self):
-        from tempexceptions import UnicodeTranslateError
+        from exceptions import UnicodeTranslateError
         ut = UnicodeTranslateError(u"x", 1, 5, "bah")
         assert ut.object == u'x'
         assert ut.start == 1
@@ -62,12 +62,12 @@ class AppTestExc(object):
         assert str(ut) == "can't translate character u'\\x34' in position 4: bah"
 
     def test_key_error(self):
-        from tempexceptions import KeyError
+        from exceptions import KeyError
 
         assert str(KeyError('s')) == "'s'"
 
     def test_environment_error(self):
-        from tempexceptions import EnvironmentError
+        from exceptions import EnvironmentError
         ee = EnvironmentError(3, "x", "y")
         assert str(ee) == "[Errno 3] x: y"
         assert str(EnvironmentError(3, "x")) == "[Errno 3] x"
@@ -77,7 +77,7 @@ class AppTestExc(object):
         assert EnvironmentError(3, "x").filename is None
 
     def test_syntax_error(self):
-        from tempexceptions import SyntaxError
+        from exceptions import SyntaxError
         s = SyntaxError(3)
         assert str(s) == '3'
         assert str(SyntaxError("a", "b", 123)) == "a"
@@ -88,13 +88,13 @@ class AppTestExc(object):
         assert str(SyntaxError("msg", ("file.py", 2, 3, 4))) == "msg (file.py, line 2)"
 
     def test_system_exit(self):
-        from tempexceptions import SystemExit
+        from exceptions import SystemExit
         assert SystemExit().code is None
         assert SystemExit("x").code == "x"
         assert SystemExit(1, 2).code == (1, 2)
 
     def test_unicode_decode_error(self):
-        from tempexceptions import UnicodeDecodeError
+        from exceptions import UnicodeDecodeError
         ud = UnicodeDecodeError("x", "y", 1, 5, "bah")
         assert ud.encoding == 'x'
         assert ud.object == 'y'
@@ -110,7 +110,7 @@ class AppTestExc(object):
         assert str(ud) == "'x' codec can't decode byte 0x39 in position 1: bah"
 
     def test_unicode_encode_error(self):
-        from tempexceptions import UnicodeEncodeError
+        from exceptions import UnicodeEncodeError
         ue = UnicodeEncodeError("x", u"y", 1, 5, "bah")
         assert ue.encoding == 'x'
         assert ue.object == u'y'
