@@ -648,7 +648,7 @@ class FunctionGcRootTracker(object):
                         for s in insn.all_sources_of(loc):
                             sources.append(s)
                     for source in sources:
-                        m = re.match("DWORD PTR (.+)", source)
+                        m = re.match("DWORD PTR " + self.LABEL, source)
                         if m:
                             reg.append(m.group(1))
                     if reg:
