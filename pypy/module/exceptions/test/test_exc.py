@@ -23,6 +23,8 @@ class AppTestExc(object):
         x = BaseException()
         x.xyz = 3
         assert x.xyz == 3
+        x.args = [42]
+        assert x.args == (42,)
 
     def test_exc(self):
         from exceptions import Exception, BaseException
@@ -140,6 +142,7 @@ class AppTestExc(object):
         assert str(ue) == "'x' codec can't encode character u'\\x39' in position 1: bah"
 
     def test_multiple_inheritance(self):
+        from exceptions import LookupError, ValueError, Exception
         class A(LookupError, ValueError):
             pass
         assert issubclass(A, A)
@@ -154,6 +157,7 @@ class AppTestExc(object):
         assert isinstance(a, ValueError)
         assert not isinstance(a, KeyError)
 
+        from exceptions import UnicodeDecodeError, UnicodeEncodeError
         try:
             class B(UnicodeTranslateError, UnicodeEncodeError):
                 pass
@@ -161,3 +165,10 @@ class AppTestExc(object):
             pass
         else:
             fail("bah")
+
+    def test_doc_and_module(self):
+        import exceptions
+        for name, e in exceptions.__dict__.items():
+            if isinstance(e, type) and issubclass(e, exceptions.BaseException):
+                assert e.__doc__, e
+                assert e.__module__ == 'exceptions', e

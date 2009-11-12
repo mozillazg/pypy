@@ -129,6 +129,9 @@ class W_BaseException(Wrappable):
     def descr_getargs(space, self):
         return space.newtuple(self.args_w)
 
+    def descr_setargs(space, self, w_newargs):
+        self.args_w = space.unpackiterable(w_newargs)
+
     def getdict(self):
         if self.w_dict is None:
             self.w_dict = self.space.newdict()
@@ -154,13 +157,15 @@ def _new(cls, basecls=None):
 W_BaseException.typedef = TypeDef(
     'BaseException',
     __doc__ = W_BaseException.__doc__,
+    __module__ = 'exceptions',
     __new__ = _new(W_BaseException),
     __str__ = interp2app(W_BaseException.descr_str),
     __repr__ = interp2app(W_BaseException.descr_repr),
     __dict__ = GetSetProperty(descr_get_dict, descr_set_dict,
                               cls=W_BaseException),
     message = interp_attrproperty_w('w_message', W_BaseException),
-    args = GetSetProperty(W_BaseException.descr_getargs),
+    args = GetSetProperty(W_BaseException.descr_getargs,
+                          W_BaseException.descr_setargs),
 )
 
 def _new_exception(name, base, docstring, **kwargs):
@@ -183,6 +188,7 @@ def _new_exception(name, base, docstring, **kwargs):
         name,
         base.typedef,
         __doc__ = W_Exc.__doc__,
+        __module__ = 'exceptions',
         __new__ = _new(W_Exc, realbase),
         **kwargs
     )
@@ -245,6 +251,7 @@ W_UnicodeTranslateError.typedef = TypeDef(
     'UnicodeTranslateError',
     W_UnicodeError.typedef,
     __doc__ = W_UnicodeTranslateError.__doc__,
+    __module__ = 'exceptions',
     __new__ = interp2app(descr_new_unicode_translate_error),
     __str__ = interp2app(W_UnicodeTranslateError.descr_str),
     object = readwrite_attrproperty('object', W_UnicodeTranslateError, 'unicode_w'),
@@ -311,6 +318,7 @@ W_EnvironmentError.typedef = TypeDef(
     'EnvironmentError',
     W_StandardError.typedef,
     __doc__ = W_EnvironmentError.__doc__,
+    __module__ = 'exceptions',
     __new__ = _new(W_EnvironmentError),
     __str__ = interp2app(W_EnvironmentError.descr_str),
     errno    = readwrite_attrproperty_w('w_errno',    W_EnvironmentError),
@@ -359,6 +367,7 @@ W_WindowsError.typedef = TypeDef(
     "WindowsError",
     W_OSError.typedef,
     __doc__  = W_WindowsError.__doc__,
+    __module__ = 'exceptions',
     __new__  = _new(W_WindowsError),
     __str__  = interp2app(W_WindowsError.descr_str),
     winerror = readwrite_attrproperty_w('w_winerror', W_WindowsError),
@@ -433,6 +442,7 @@ W_SyntaxError.typedef = TypeDef(
     __new__ = _new(W_SyntaxError),
     __str__ = interp2app(W_SyntaxError.descr_str),
     __doc__ = W_SyntaxError.__doc__,
+    __module__ = 'exceptions',
     msg      = readwrite_attrproperty_w('w_msg', W_SyntaxError),
     filename = readwrite_attrproperty_w('w_filename', W_SyntaxError),
     lineno   = readwrite_attrproperty_w('w_lineno', W_SyntaxError),
@@ -460,6 +470,7 @@ W_SystemExit.typedef = TypeDef(
     W_BaseException.typedef,
     __new__ = _new(W_SystemExit),
     __doc__ = W_SystemExit.__doc__,
+    __module__ = 'exceptions',
     code    = readwrite_attrproperty_w('w_code', W_SystemExit)
 )
 
@@ -518,6 +529,7 @@ W_UnicodeDecodeError.typedef = TypeDef(
     'UnicodeDecodeError',
     W_UnicodeError.typedef,
     __doc__ = W_UnicodeDecodeError.__doc__,
+    __module__ = 'exceptions',
     __new__ = interp2app(descr_new_unicode_decode_error),
     __str__ = interp2app(W_UnicodeDecodeError.descr_str),
     encoding = readwrite_attrproperty('encoding', W_UnicodeDecodeError, 'str_w'),
@@ -607,6 +619,7 @@ W_UnicodeEncodeError.typedef = TypeDef(
     'UnicodeEncodeError',
     W_UnicodeError.typedef,
     __doc__ = W_UnicodeEncodeError.__doc__,
+    __module__ = 'exceptions',
     __new__ = interp2app(descr_new_unicode_encode_error),
     __str__ = interp2app(W_UnicodeEncodeError.descr_str),
     encoding = readwrite_attrproperty('encoding', W_UnicodeEncodeError, 'str_w'),
