@@ -558,16 +558,18 @@ class StdObjSpace(ObjSpace, DescrOperation):
             # the purpose of the above check is to avoid the code below
             # to be annotated at all for 'cls' if it is not necessary
             w_subtype = w_type.check_user_subclass(w_subtype)
+            if cls.typedef.applevel_subclasses_base is not None:
+                cls = cls.typedef.applevel_subclasses_base
             subcls = get_unique_interplevel_subclass(
                     self.config, cls, w_subtype.hasdict, w_subtype.nslots != 0,
                     w_subtype.needsdel, w_subtype.weakrefable)
             instance = instantiate(subcls)
+            assert isinstance(instance, cls)
             instance.user_setup(self, w_subtype)
         else:
             raise OperationError(self.w_TypeError,
                 self.wrap("%s.__new__(%s): only for the type %s" % (
                     w_type.name, w_subtype.getname(self, '?'), w_type.name)))
-        assert isinstance(instance, cls)
         return instance
     allocate_instance._annspecialcase_ = "specialize:arg(1)"
 

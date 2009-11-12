@@ -33,7 +33,7 @@ class AppTestExc(object):
         assert repr(Exception(3, "x")) == "Exception(3, 'x')"
 
     def test_custom_class(self):
-        from exceptions import Exception
+        from exceptions import Exception, BaseException, LookupError
 
         class MyException(Exception):
             def __init__(self, x):
@@ -43,6 +43,8 @@ class AppTestExc(object):
                 return self.x
 
         assert issubclass(MyException, Exception)
+        assert issubclass(MyException, BaseException)
+        assert not issubclass(MyException, LookupError)
         assert str(MyException("x")) == "x"
 
     def test_unicode_translate_error(self):
@@ -136,3 +138,26 @@ class AppTestExc(object):
         assert str(ue) == "'x' codec can't encode characters in position 1-4: bah"
         ue.end = 2
         assert str(ue) == "'x' codec can't encode character u'\\x39' in position 1: bah"
+
+    def test_multiple_inheritance(self):
+        class A(LookupError, ValueError):
+            pass
+        assert issubclass(A, A)
+        assert issubclass(A, Exception)
+        assert issubclass(A, LookupError)
+        assert issubclass(A, ValueError)
+        assert not issubclass(A, KeyError)
+        a = A()
+        assert isinstance(a, A)
+        assert isinstance(a, Exception)
+        assert isinstance(a, LookupError)
+        assert isinstance(a, ValueError)
+        assert not isinstance(a, KeyError)
+
+        try:
+            class B(UnicodeTranslateError, UnicodeEncodeError):
+                pass
+        except TypeError:
+            pass
+        else:
+            fail("bah")
