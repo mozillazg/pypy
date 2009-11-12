@@ -1111,6 +1111,8 @@ class MsvcAssemblerParser(AssemblerParser):
                 line = '; ' + line
             elif line.startswith("PUBLIC\t??_C@"):
                 line = '; ' + line
+            elif line == "PUBLIC\t__$ArrayPad$\n":
+                line = '; ' + line
 
             # Because we insert labels in the code, some "SHORT" jumps
             # are now longer than 127 bytes.  We turn them all into
