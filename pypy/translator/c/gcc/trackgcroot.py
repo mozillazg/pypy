@@ -791,7 +791,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
 
     r_gcroot_marker = re.compile(r"$1") # never matches
     r_gcroot_marker_var = re.compile(r"DWORD PTR .+_constant_always_one_.+pypy_asm_gcroot")
-    r_bottom_marker = re.compile(r"\tcall\t_pypy_asm_stack_bottom\s*")
+    r_bottom_marker = re.compile(r"; .+\tpypy_asm_stack_bottom\(\);")
 
     r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+DWORD PTR ("+OPERAND+")\s*$")
     r_jmptable_item = re.compile(r"\tDD\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
@@ -1228,7 +1228,7 @@ class GcRootTracker(object):
 
         def _offset(name):
             if self.format == 'msvc':
-                return "DWORD PTR [%s]" % _globalname(name)
+                return "OFFSET %s" % _globalname(name)
             else:
                 return "$%s" % _globalname(name)
 
