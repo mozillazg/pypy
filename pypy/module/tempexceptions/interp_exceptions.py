@@ -209,14 +209,14 @@ class W_UnicodeTranslateError(W_UnicodeError):
                                                w_end, w_reason])
 
     def descr_str(self, space):
-        return space.appexec([space.wrap(self)], """(self):
+        return space.appexec([space.wrap(self)], r"""(self):
             if self.end == self.start + 1:
                 badchar = ord(self.object[self.start])
                 if badchar <= 0xff:
-                    return "can't translate character u'\\\\x%02x' in position %d: %s" % (badchar, self.start, self.reason)
+                    return "can't translate character u'\\x%02x' in position %d: %s" % (badchar, self.start, self.reason)
                 if badchar <= 0xffff:
-                    return "can't translate character u'\\\\u%04x' in position %d: %s"%(badchar, self.start, self.reason)
-                return "can't translate character u'\\\\U%08x' in position %d: %s"%(badchar, self.start, self.reason)
+                    return "can't translate character u'\\u%04x' in position %d: %s"%(badchar, self.start, self.reason)
+                return "can't translate character u'\\U%08x' in position %d: %s"%(badchar, self.start, self.reason)
             return "can't translate characters in position %d-%d: %s" % (self.start, self.end - 1, self.reason)
         """)
     descr_str.unwrap_spec = ['self', ObjSpace]
@@ -444,7 +444,6 @@ class W_UnicodeDecodeError(W_UnicodeError):
             return "%r codec can't decode bytes in position %d-%d: %s" % (
                 self.encoding, self.start, self.end - 1, self.reason)
         """)
-
     descr_str.unwrap_spec = ['self', ObjSpace]
 
 def descr_new_unicode_decode_error(space, w_subtype, w_encoding, w_object,
@@ -457,7 +456,7 @@ def descr_new_unicode_decode_error(space, w_subtype, w_encoding, w_object,
 W_UnicodeDecodeError.typedef = TypeDef(
     'UnicodeDecodeError',
     W_UnicodeError.typedef,
-    __doc__ = W_UnicodeTranslateError.__doc__,
+    __doc__ = W_UnicodeDecodeError.__doc__,
     __new__ = interp2app(descr_new_unicode_decode_error),
     __str__ = interp2app(W_UnicodeDecodeError.descr_str),
     encoding = readwrite_attrproperty('encoding', W_UnicodeDecodeError, 'str_w'),
@@ -507,6 +506,51 @@ W_AttributeError = _new_exception('AttributeError', W_StandardError,
 W_OverflowError = _new_exception('OverflowError', W_ArithmeticError,
                                  """Result too large to be represented.""")
 
+class W_UnicodeEncodeError(W_UnicodeError):
+    """Unicode encoding error."""
 
-##class UnicodeEncodeError(UnicodeError):
-##    """Unicode encoding error."""..........
+    def __init__(self, space, w_encoding, w_object, w_start, w_end, w_reason):
+        self.encoding = space.str_w(w_encoding)
+        self.object = space.unicode_w(w_object)
+        self.start = space.int_w(w_start)
+        self.end = space.int_w(w_end)
+        self.reason = space.str_w(w_reason)
+        W_BaseException.__init__(self, space, [w_encoding, w_object,
+                                               w_start, w_end, w_reason])
+
+    def descr_str(self, space):
+        return space.appexec([self], r"""(self):
+            if self.end == self.start + 1:
+                badchar = ord(self.object[self.start])
+                if badchar <= 0xff:
+                    return "%r codec can't encode character u'\\x%02x' in position %d: %s"%(
+                        self.encoding, badchar, self.start, self.reason)
+                if badchar <= 0xffff:
+                    return "%r codec can't encode character u'\\u%04x' in position %d: %s"%(
+                        self.encoding, badchar, self.start, self.reason)
+                return "%r codec can't encode character u'\\U%08x' in position %d: %s"%(
+                    self.encoding, badchar, self.start, self.reason)
+            return "%r codec can't encode characters in position %d-%d: %s" % (
+                self.encoding, self.start, self.end - 1, self.reason)
+        """)
+    descr_str.unwrap_spec = ['self', ObjSpace]
+
+def descr_new_unicode_encode_error(space, w_subtype, w_encoding, w_object,
+                                   w_start, w_end, w_reason):
+    exc = space.allocate_instance(W_UnicodeEncodeError, w_subtype)
+    W_UnicodeEncodeError.__init__(exc, space, w_encoding, w_object, w_start,
+                                  w_end, w_reason)
+    return space.wrap(exc)
+
+W_UnicodeEncodeError.typedef = TypeDef(
+    'UnicodeEncodeError',
+    W_UnicodeError.typedef,
+    __doc__ = W_UnicodeEncodeError.__doc__,
+    __new__ = interp2app(descr_new_unicode_encode_error),
+    __str__ = interp2app(W_UnicodeEncodeError.descr_str),
+    encoding = readwrite_attrproperty('encoding', W_UnicodeEncodeError, 'str_w'),
+    object = readwrite_attrproperty('object', W_UnicodeEncodeError, 'unicode_w'),
+    start  = readwrite_attrproperty('start', W_UnicodeEncodeError, 'int_w'),
+    end    = readwrite_attrproperty('end', W_UnicodeEncodeError, 'int_w'),
+    reason = readwrite_attrproperty('reason', W_UnicodeEncodeError, 'str_w'),
+)
