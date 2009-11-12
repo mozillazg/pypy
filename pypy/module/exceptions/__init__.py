@@ -37,8 +37,8 @@ class Module(MixedModule):
         'StopIteration' : 'interp_exceptions.W_StopIteration',
         'SyntaxError' : 'interp_exceptions.W_SyntaxError',
         'SyntaxWarning' : 'interp_exceptions.W_SyntaxWarning',
-        'SystemError' : 'interp_exceptions.W_SystemError',
         'SystemExit' : 'interp_exceptions.W_SystemExit',
+        'SystemError' : 'interp_exceptions.W_SystemError',
         'TabError' : 'interp_exceptions.W_TabError',
         'TypeError' : 'interp_exceptions.W_TypeError',
         'UnboundLocalError' : 'interp_exceptions.W_UnboundLocalError',
@@ -55,3 +55,11 @@ class Module(MixedModule):
 
     if sys.platform.startswith("win"):
         interpleveldefs['WindowsError'] = 'interp_exceptions.W_WindowsError'
+
+    def setup_after_space_initialization(self):
+        from pypy.objspace.std.transparent import register_proxyable
+        from pypy.module.exceptions import interp_exceptions
+
+        for name, exc in interp_exceptions.__dict__.items():
+            if isinstance(exc, type) and issubclass(exc, interp_exceptions.W_BaseException):
+                register_proxyable(self.space, exc)
