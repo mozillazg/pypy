@@ -322,9 +322,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             setattr(self, 'w_' + typedef.name, w_type)
 
         # exceptions & builtins
-        w_mod = self.setup_exceptions()
         self.make_builtins()
-        self.sys.setmodule(w_mod)
 
         # the type of old-style classes
         self.w_classobj = self.builtin.get('__metaclass__')
@@ -357,61 +355,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
                           self.wrap(app_proxy))
             self.setattr(w___pypy__, self.wrap('get_tproxy_controller'),
                           self.wrap(app_proxy_controller))
-
-    def create_builtin_module(self, pyname, publicname):
-        """NOT_RPYTHON
-        helper function which returns the wrapped module and its dict.
-        """
-        # generate on-the-fly
-        class Fake: pass
-        fake = Fake()
-        from pypy import lib
-        fname = os.path.join(os.path.split(lib.__file__)[0], pyname)
-        fake.filename = fname
-        fake.code = compile(file(fname).read(), fname, "exec")
-        fake.modname = publicname
-        w_dic = PyPyCacheDir.build_applevelinterp_dict(fake, self)
-        from pypy.interpreter.module import Module
-        mod = Module(self, self.wrap(publicname), w_dic)
-        w_mod = self.wrap(mod)
-        return w_mod, w_dic
-
-    def setup_exceptions(self):
-        """NOT_RPYTHON"""
-        ## hacking things in
-        def call(w_type, w_args):
-            space = self
-            # too early for unpackiterable as well :-(
-            name  = space.unwrap(space.getitem(w_args, space.wrap(0)))
-            bases = space.viewiterable(space.getitem(w_args, space.wrap(1)))
-            dic   = space.unwrap(space.getitem(w_args, space.wrap(2)))
-            dic = dict([(key,space.wrap(value)) for (key, value) in dic.items()])
-            bases = list(bases)
-            if not bases:
-                bases = [space.w_object]
-            res = W_TypeObject(space, name, bases, dic)
-            res.ready()
-            return res
-        try:
-            # note that we hide the real call method by an instance variable!
-            self.call = call
-            mod, w_dic = self.create_builtin_module('_exceptions.py', 'exceptions')
-
-            self.w_IndexError = self.getitem(w_dic, self.wrap("IndexError"))
-            self.w_StopIteration = self.getitem(w_dic, self.wrap("StopIteration"))
-        finally:
-            del self.call # revert
-
-        names_w = self.unpackiterable(self.call_function(self.getattr(w_dic, self.wrap("keys"))))
-
-        for w_name in names_w:
-            name = self.str_w(w_name)
-            if not name.startswith('__'):
-                excname = name
-                w_exc = self.getitem(w_dic, w_name)
-                setattr(self, "w_"+excname, w_exc)
-
-        return mod
 
     def createexecutioncontext(self):
         # add space specific fields to execution context
