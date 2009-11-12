@@ -71,6 +71,10 @@ class AppTestExc(object):
         ee = EnvironmentError(3, "x", "y")
         assert str(ee) == "[Errno 3] x: y"
         assert str(EnvironmentError(3, "x")) == "[Errno 3] x"
+        assert ee.errno == 3
+        assert ee.strerror == "x"
+        assert ee.filename == "y"
+        assert EnvironmentError(3, "x").filename is None
 
     def test_syntax_error(self):
         from tempexceptions import SyntaxError
