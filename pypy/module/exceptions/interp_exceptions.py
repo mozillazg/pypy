@@ -130,7 +130,7 @@ class W_BaseException(Wrappable):
         return space.newtuple(self.args_w)
 
     def descr_setargs(space, self, w_newargs):
-        self.args_w = space.unpackiterable(w_newargs)
+        self.args_w = space.viewiterable(w_newargs)
 
     def getdict(self):
         if self.w_dict is None:
