@@ -248,6 +248,7 @@ class TestFrameChaining(object):
     class Frame(object):
         _f_back_some = None
         _f_forward = None
+        last_exception = None
 
         def __init__(self, ec, virtual_with_base_frame=None):
             self.ec = ec
@@ -757,3 +758,12 @@ class TestFrameChaining(object):
         assert ec.gettopframe() is frame
         ec._unchain(frame)
         assert ec.gettopframe() is None
+
+    def test_unchain_with_exception(self):
+        ec, frame, frame2 = self.enter_two_jitted_levels()
+        frame3 = self.Frame(ec, frame2)
+        ec._chain(frame3)
+        frame3.last_exception = 3
+        ec._unchain(frame3)
+        assert frame3.f_back_some is frame2
+        assert frame3.f_back_forced
