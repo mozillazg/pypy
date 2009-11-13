@@ -176,3 +176,8 @@ def test_lex_curlyBrackets():
     assert tokens[0] == Token('Identifier', 'curlyBrackets', SourcePos(0, 0, 0))
     assert tokens[1] == Token('OpenParen', '{', SourcePos(0, 0, 0))
     assert tokens[2] == Token('CloseParen', '}', SourcePos(1, 0, 1))
+    
+def test_lex_comma_token():
+    inp = '(1, 2)'
+    tokens = iolexer.tokenize(inp)
+    assert tokens[3] == Token('Comma', ',', SourcePos(2, 0, 2))
