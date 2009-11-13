@@ -1275,10 +1275,10 @@ class GcRootTracker(object):
 
         if self.format == 'msvc':
             print >> output, """\
-            TITLE	gcmaptable.s
+            TITLE\tgcmaptable.s
             .686P
             .XMM
-            .model	flat
+            .model\tflat
             """
 
         _variant(elf='\t.text',
@@ -1410,7 +1410,7 @@ class GcRootTracker(object):
         output.writelines(shapelines)
 
         if self.format == 'msvc':
-            print >> output, "_DATA	ENDS"
+            print >> output, "_DATA\tENDS"
             print >> output, "END"
 
     def process(self, iterlines, newfile, entrypoint='main', filename='?'):
