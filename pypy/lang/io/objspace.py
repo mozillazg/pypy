@@ -12,6 +12,7 @@ import pypy.lang.io.message
 import pypy.lang.io.map
 import pypy.lang.io.coroutine
 import pypy.lang.io.sequence
+import pypy.lang.io.compiler
 
 class ObjSpace(object):
     """docstring for ObjSpace"""
@@ -29,6 +30,7 @@ class ObjSpace(object):
         self.w_call = W_Object(self, [self.w_object])
         self.w_map = W_Map(self, [self.w_object])
         self.w_coroutine = W_Coroutine.w_getmain(self)
+        self.w_compiler = W_Object(self, [self.w_object])
         # flow control objects
         self.w_normal = W_Object(self, [self.w_object])
         self.w_break = W_Object(self, [self.w_object])
@@ -42,6 +44,7 @@ class ObjSpace(object):
         # default stop state
         self.stop_status = self.w_normal
         self.w_return_value = self.w_nil
+        
         self.init_w_object()        
         
         self.init_w_protos()
@@ -57,7 +60,6 @@ class ObjSpace(object):
         
         self.init_w_number()
         
-        
         self.init_w_core()
         
         self.init_w_call()
@@ -72,6 +74,7 @@ class ObjSpace(object):
         
         self.init_stored_messages()
 
+        self.init_w_compiler()
         
     def init_w_map(self):
         for key, function in cfunction_definitions['Map'].items():
@@ -109,6 +112,7 @@ class ObjSpace(object):
         self.w_core.slots['Number'] = self.w_number
         self.w_core.slots['Sequence'] = self.w_sequence
         self.w_core.slots['ImmutableSequence'] = self.w_immutable_sequence
+        self.w_core.slots['Compiler'] = self.w_compiler
 
     def init_w_number(self):
         self.w_number = instantiate(W_Number)
@@ -157,7 +161,11 @@ class ObjSpace(object):
     	self.w_core.slots['Eol'] = self.w_eol
         self.w_core.slots['Eol'].slots['type'] = W_ImmutableSequence(self, 'Eol')
         
-        
+    def init_w_compiler(self):
+        self.w_compiler.slots['type'] = W_ImmutableSequence(self, 'Compiler')
+        for key, function in cfunction_definitions['Compiler'].items():
+            self.w_compiler.slots[key] = W_CFunction(self, function)
+
     def init_w_coroutine(self):
         for key, function in cfunction_definitions['Coroutine'].items():
             self.w_coroutine.slots[key] = W_CFunction(self, function)
