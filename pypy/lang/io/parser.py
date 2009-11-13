@@ -45,11 +45,13 @@ MonoQuote = r'"([^"]|(\\"))*"'
 # ;
 Terminator = r'(;'+maybe(Whitespace)+')+'
 
+# ,
+Comma = r'\,'
 
 
-rexs = [Identifiers, Whitespace, Number, Hexnumber, Terminator, OpenParen, CloseParen, MonoQuote, TriQuote, Comment]
+rexs = [Identifiers, Whitespace, Number, Hexnumber, Terminator, OpenParen, CloseParen, MonoQuote, TriQuote, Comment, Comma]
 names = ["Identifier", "Whitespace", "Number", "HexNumber", "Terminator",
-         "OpenParen", "CloseParen", "MonoQuote", "TriQuote", "Comment"]
+         "OpenParen", "CloseParen", "MonoQuote", "TriQuote", "Comment", "Comma"]
 ignores = ['Whitespace', 'Comment']
 
 
