@@ -5,7 +5,7 @@ from pypy.config.config import OptionDescription, BoolOption, IntOption, Arbitra
 from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
 from pypy.config.config import ConflictConfigError
 
-modulepath = py.magic.autopath().dirpath().dirpath().join("module")
+modulepath = py.path.local(__file__).dirpath().dirpath().join("module")
 all_modules = [p.basename for p in modulepath.listdir()
                if p.check(dir=True, dotfile=False)
                and p.join('__init__.py').check()]
@@ -77,6 +77,7 @@ module_import_dependencies = {
     "bz2"       : ["pypy.module.bz2.interp_bz2"],
     "pyexpat"   : ["pypy.module.pyexpat.interp_pyexpat"],
     "_ssl"      : ["pypy.module._ssl.interp_ssl"],
+    "_minimal_curses": ["pypy.module._minimal_curses.fficurses"],
     }
 
 def get_module_validator(modname):
