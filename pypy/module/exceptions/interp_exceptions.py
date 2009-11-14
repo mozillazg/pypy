@@ -436,15 +436,14 @@ class W_SyntaxError(W_StandardError):
         self.w_lineno   = space.w_None
         self.w_offset   = space.w_None
         self.w_text     = space.w_None
-        self.w_msg      = space.w_None
+        self.w_msg      = space.wrap('')
+        self.w_print_file_and_line = space.w_None # what's that?
         W_BaseException.__init__(self, space)
 
     def descr_init(self, space, args_w):
         # that's not a self.w_message!!!
         if len(args_w) > 0:
             self.w_msg = args_w[0]
-        else:
-            self.w_msg = space.wrap('')
         if len(args_w) == 2:
             values_w = space.viewiterable(args_w[1], 4)
             self.w_filename = values_w[0]
@@ -489,6 +488,8 @@ W_SyntaxError.typedef = TypeDef(
     lineno   = readwrite_attrproperty_w('w_lineno', W_SyntaxError),
     offset   = readwrite_attrproperty_w('w_offset', W_SyntaxError),
     text     = readwrite_attrproperty_w('w_text', W_SyntaxError),
+    print_file_and_line = readwrite_attrproperty_w('w_print_file_and_line',
+                                                   W_SyntaxError),
 )
 
 W_FutureWarning = _new_exception('FutureWarning', W_Warning,
