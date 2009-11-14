@@ -28,6 +28,8 @@ class AppTestExc(object):
         assert x[0] == 42
         x.args = (1, 2, 3)
         assert x[1:2] == (2,)
+        x.message = "xyz"
+        assert x.message == "xyz"
 
     def test_exc(self):
         from exceptions import Exception, BaseException

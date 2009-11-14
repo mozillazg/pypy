@@ -181,7 +181,7 @@ W_BaseException.typedef = TypeDef(
     __getitem__ = interp2app(W_BaseException.descr_getitem),
     __reduce__ = interp2app(W_BaseException.descr_reduce),
     __setstate__ = interp2app(W_BaseException.descr_setstate),
-    message = interp_attrproperty_w('w_message', W_BaseException),
+    message = readwrite_attrproperty_w('w_message', W_BaseException),
     args = GetSetProperty(W_BaseException.descr_getargs,
                           W_BaseException.descr_setargs),
 )
