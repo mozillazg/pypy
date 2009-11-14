@@ -31,6 +31,15 @@ class AppTestExc(object):
         x.message = "xyz"
         assert x.message == "xyz"
 
+    def test_kwargs(self):
+        from exceptions import Exception
+        class X(Exception):
+            def __init__(self, x=3):
+                self.x = x
+
+        x = X(x=8)
+        assert x.x == 8
+
     def test_exc(self):
         from exceptions import Exception, BaseException
 
