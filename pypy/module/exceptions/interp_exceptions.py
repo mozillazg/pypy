@@ -72,7 +72,8 @@ BaseException
 
 from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, W_Root
 from pypy.interpreter.typedef import TypeDef, interp_attrproperty_w,\
-     GetSetProperty, interp_attrproperty, descr_get_dict, descr_set_dict
+     GetSetProperty, interp_attrproperty, descr_get_dict, descr_set_dict,\
+     descr_del_dict
 from pypy.interpreter.gateway import interp2app, Arguments
 from pypy.interpreter.error import OperationError
 from pypy.rlib import rwin32
@@ -182,7 +183,7 @@ W_BaseException.typedef = TypeDef(
     __init__ = interp2app(W_BaseException.descr_init),
     __str__ = interp2app(W_BaseException.descr_str),
     __repr__ = interp2app(W_BaseException.descr_repr),
-    __dict__ = GetSetProperty(descr_get_dict, descr_set_dict,
+    __dict__ = GetSetProperty(descr_get_dict, descr_set_dict, descr_del_dict,
                               cls=W_BaseException),
     __getitem__ = interp2app(W_BaseException.descr_getitem),
     __reduce__ = interp2app(W_BaseException.descr_reduce),
