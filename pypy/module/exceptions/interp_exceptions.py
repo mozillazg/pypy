@@ -142,6 +142,17 @@ class W_BaseException(Wrappable):
             raise OperationError( space.w_TypeError, space.wrap("setting exceptions's dictionary to a non-dict") )
         self.w_dict = w_dict
 
+    def descr_reduce(self, space):
+        lst = [self.getclass(space), space.newtuple(self.args_w)]
+        if self.w_dict is not None and space.is_true(self.w_dict):
+            lst = lst + [self.w_dict]
+        return space.newtuple(lst)
+    descr_reduce.unwrap_spec = ['self', ObjSpace]
+
+    def descr_setstate(self, space, w_dict):
+        w_olddict = self.getdict()
+        space.call_method(w_olddict, 'update', w_dict)
+    descr_setstate.unwrap_spec = ['self', ObjSpace, W_Root]
 
 def _new(cls, basecls=None):
     if basecls is None:
@@ -163,6 +174,8 @@ W_BaseException.typedef = TypeDef(
     __repr__ = interp2app(W_BaseException.descr_repr),
     __dict__ = GetSetProperty(descr_get_dict, descr_set_dict,
                               cls=W_BaseException),
+    __reduce__ = interp2app(W_BaseException.descr_reduce),
+    __setstate__ = interp2app(W_BaseException.descr_setstate),
     message = interp_attrproperty_w('w_message', W_BaseException),
     args = GetSetProperty(W_BaseException.descr_getargs,
                           W_BaseException.descr_setargs),
@@ -308,7 +321,7 @@ class W_EnvironmentError(W_StandardError):
                 return space.wrap("[Errno %d] %s: %s" % (
                     space.int_w(self.w_errno),
                     space.str_w(self.w_strerror),
-                    space.str_w(self.w_filename)))
+                    space.str_w(space.repr(self.w_filename))))
             return space.wrap("[Errno %d] %s" % (space.int_w(self.w_errno),
                                                  space.str_w(self.w_strerror)))
         return W_BaseException.descr_str(self, space)
