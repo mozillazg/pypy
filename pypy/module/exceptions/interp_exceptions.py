@@ -132,6 +132,10 @@ class W_BaseException(Wrappable):
     def descr_setargs(space, self, w_newargs):
         self.args_w = space.viewiterable(w_newargs)
 
+    def descr_getitem(self, space, w_index):
+        return space.getitem(space.newtuple(self.args_w), w_index)
+    descr_getitem.unwrap_spec = ['self', ObjSpace, W_Root]
+
     def getdict(self):
         if self.w_dict is None:
             self.w_dict = self.space.newdict()
@@ -174,6 +178,7 @@ W_BaseException.typedef = TypeDef(
     __repr__ = interp2app(W_BaseException.descr_repr),
     __dict__ = GetSetProperty(descr_get_dict, descr_set_dict,
                               cls=W_BaseException),
+    __getitem__ = interp2app(W_BaseException.descr_getitem),
     __reduce__ = interp2app(W_BaseException.descr_reduce),
     __setstate__ = interp2app(W_BaseException.descr_setstate),
     message = interp_attrproperty_w('w_message', W_BaseException),

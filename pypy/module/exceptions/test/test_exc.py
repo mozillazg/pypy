@@ -25,6 +25,9 @@ class AppTestExc(object):
         assert x.xyz == 3
         x.args = [42]
         assert x.args == (42,)
+        assert x[0] == 42
+        x.args = (1, 2, 3)
+        assert x[1:2] == (2,)
 
     def test_exc(self):
         from exceptions import Exception, BaseException
