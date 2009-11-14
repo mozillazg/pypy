@@ -9,7 +9,7 @@ from pypy.translator.goal.timing import Timer
 from pypy.annotation import model as annmodel
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.annotation import policy as annpolicy
-from py.compat import optparse
+import optparse
 from pypy.tool.udir import udir
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_DETAILED, DEBUG_PROFILE, DEBUG_STEPS
 
@@ -599,14 +599,25 @@ class TranslationDriver(SimpleTaskEngine):
             shutil.copy(os.path.join(usession_path, 'main.il'), dirname)
         newexename = basename
         f = file(newexename, 'w')
-        f.write("""#!/bin/bash
+        f.write(r"""#!/bin/bash
 LEDIT=`type -p ledit`
 EXE=`readlink $0`
 if [ -z $EXE ]
 then
     EXE=$0
 fi
-if  uname -s | grep -iq Cygwin ; then MONO=; else MONO=mono; fi
+if  uname -s | grep -iq Cygwin
+then 
+    MONO=
+else 
+    MONO=mono
+    # workaround for known mono buggy versions
+    VER=`mono -V | head -1 | sed s/'Mono JIT compiler version \(.*\) (.*'/'\1/'`
+    if [[ 2.1 < "$VER" && "$VER" < 2.4.3 ]]
+    then
+        MONO="mono -O=-branch"
+    fi
+fi
 $LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
 """ % main_exe_name)
         f.close()
