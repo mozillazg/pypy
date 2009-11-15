@@ -56,6 +56,7 @@ class AppTestExc(object):
         assert isinstance(Exception(), Exception)
         assert isinstance(Exception(), BaseException)
         assert repr(Exception(3, "x")) == "Exception(3, 'x')"
+        assert str(IOError("foo", "bar")) == "[Errno foo] bar"
 
     def test_custom_class(self):
         from exceptions import Exception, BaseException, LookupError
