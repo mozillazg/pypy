@@ -447,6 +447,14 @@ class CodecCallbackTest(unittest.TestCase):
             (u"", 1)
         )
 
+    def check_double_raise(self, tp, func, arg):
+        try:
+            arg()
+        except tp:
+            pass
+        else:
+            self.assertRaises(tp, func, arg)
+
     def test_badandgoodreplaceexceptions(self):
         # "replace" complains about a non-exception passed in
         self.assertRaises(
@@ -460,15 +468,15 @@ class CodecCallbackTest(unittest.TestCase):
            codecs.replace_errors,
            UnicodeError("ouch")
         )
-        self.assertRaises(
+        self.check_double_raise(
             TypeError,
             codecs.replace_errors,
-            BadObjectUnicodeEncodeError()
+            BadObjectUnicodeEncodeError,
         )
-        self.assertRaises(
+        self.check_double_raise(
             TypeError,
             codecs.replace_errors,
-            BadObjectUnicodeDecodeError()
+            BadObjectUnicodeDecodeError,
         )
         # With the correct exception, "replace" returns an "?" or u"\ufffd" replacement
         self.assertEquals(
