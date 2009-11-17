@@ -244,7 +244,7 @@ class W_UnicodeTranslateError(W_UnicodeError):
     
     def descr_init(self, space, w_object, w_start, w_end, w_reason):
         # typechecking
-        space.unicode_w(w_object)
+        space.realunicode_w(w_object)
         space.int_w(w_start)
         space.int_w(w_end)
         space.str_w(w_reason)
@@ -658,7 +658,7 @@ class W_UnicodeEncodeError(W_UnicodeError):
     def descr_init(self, space, w_encoding, w_object, w_start, w_end, w_reason):
         # typechecking
         space.str_w(w_encoding)
-        space.unicode_w(w_object)
+        space.realunicode_w(w_object)
         space.int_w(w_start)
         space.int_w(w_end)
         space.str_w(w_reason)

@@ -1033,6 +1033,14 @@ class ObjSpace(object):
             buffer = self.buffer_w(w_obj)
             return buffer.as_str()
 
+    def realunicode_w(self, w_obj):
+        # Like unicode_w, but only works if w_obj is really of type
+        # 'unicode'.
+        if not self.is_true(self.isinstance(w_obj, self.w_unicode)):
+            raise OperationError(self.w_TypeError,
+                                 self.wrap('argument must be a unicode'))
+        return self.unicode_w(w_obj)
+
     def bool_w(self, w_obj):
         # Unwraps a bool, also accepting an int for compatibility.
         # This is here mostly just for gateway.int_unwrapping_space_method().
