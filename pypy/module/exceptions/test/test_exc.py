@@ -168,6 +168,7 @@ class AppTestExc(object):
         assert str(ue) == "'x' codec can't encode character u'\\x39' in position 1: bah"
         ue.object = []
         assert ue.object == []
+        raises(TypeError, UnicodeEncodeError, "x", "y", 1, 5, "bah")
 
     def test_multiple_inheritance(self):
         from exceptions import LookupError, ValueError, Exception
