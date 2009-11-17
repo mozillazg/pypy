@@ -558,18 +558,25 @@ W_AssertionError = _new_exception('AssertionError', W_StandardError,
 
 class W_UnicodeDecodeError(W_UnicodeError):
     """Unicode decoding error."""
-    encoding = ''
-    object = ''
-    start = 0
-    end = 0
-    reason = ''
+    w_encoding = None
+    w_object = None
+    w_start = None
+    w_end = None
+    w_reason = None
 
     def descr_init(self, space, w_encoding, w_object, w_start, w_end, w_reason):
-        self.encoding = space.str_w(w_encoding)
-        self.object = space.str_w(w_object)
-        self.start = space.int_w(w_start)
-        self.end = space.int_w(w_end)
-        self.reason = space.str_w(w_reason)
+        # typechecking
+        space.str_w(w_encoding)
+        space.str_w(w_object)
+        space.int_w(w_start)
+        space.int_w(w_end)
+        space.str_w(w_reason)
+        # assign attributes
+        self.w_encoding = w_encoding
+        self.w_object = w_object
+        self.w_start = w_start
+        self.w_end = w_end
+        self.w_reason = w_reason
         W_BaseException.descr_init(self, space, [w_encoding, w_object,
                                                  w_start, w_end, w_reason])
     descr_init.unwrap_spec = ['self', ObjSpace, W_Root, W_Root, W_Root, W_Root,
@@ -594,11 +601,11 @@ W_UnicodeDecodeError.typedef = TypeDef(
     __new__ = _new(W_UnicodeDecodeError),
     __init__ = interp2app(W_UnicodeDecodeError.descr_init),
     __str__ = interp2app(W_UnicodeDecodeError.descr_str),
-    encoding = readwrite_attrproperty('encoding', W_UnicodeDecodeError, 'str_w'),
-    object = readwrite_attrproperty('object', W_UnicodeDecodeError, 'str_w'),
-    start  = readwrite_attrproperty('start', W_UnicodeDecodeError, 'int_w'),
-    end    = readwrite_attrproperty('end', W_UnicodeDecodeError, 'int_w'),
-    reason = readwrite_attrproperty('reason', W_UnicodeDecodeError, 'str_w'),
+    encoding = readwrite_attrproperty_w('w_encoding', W_UnicodeDecodeError),
+    object = readwrite_attrproperty_w('w_object', W_UnicodeDecodeError),
+    start  = readwrite_attrproperty_w('w_start', W_UnicodeDecodeError),
+    end    = readwrite_attrproperty_w('w_end', W_UnicodeDecodeError),
+    reason = readwrite_attrproperty_w('w_reason', W_UnicodeDecodeError),
 )
 
 W_TypeError = _new_exception('TypeError', W_StandardError,
@@ -643,19 +650,25 @@ W_OverflowError = _new_exception('OverflowError', W_ArithmeticError,
 
 class W_UnicodeEncodeError(W_UnicodeError):
     """Unicode encoding error."""
-
-    encoding = ''
-    object = u''
-    start = 0
-    end = 0
-    reason = ''
+    w_encoding = None
+    w_object = None
+    w_start = None
+    w_end = None
+    w_reason = None
 
     def descr_init(self, space, w_encoding, w_object, w_start, w_end, w_reason):
-        self.encoding = space.str_w(w_encoding)
-        self.object = space.unicode_w(w_object)
-        self.start = space.int_w(w_start)
-        self.end = space.int_w(w_end)
-        self.reason = space.str_w(w_reason)
+        # typechecking
+        space.str_w(w_encoding)
+        space.unicode_w(w_object)
+        space.int_w(w_start)
+        space.int_w(w_end)
+        space.str_w(w_reason)
+        # assign attributes
+        self.w_encoding = w_encoding
+        self.w_object = w_object
+        self.w_start = w_start
+        self.w_end = w_end
+        self.w_reason = w_reason
         W_BaseException.descr_init(self, space, [w_encoding, w_object,
                                                  w_start, w_end, w_reason])
     descr_init.unwrap_spec = ['self', ObjSpace, W_Root, W_Root, W_Root, W_Root,
@@ -686,9 +699,9 @@ W_UnicodeEncodeError.typedef = TypeDef(
     __new__ = _new(W_UnicodeEncodeError),
     __init__ = interp2app(W_UnicodeEncodeError.descr_init),
     __str__ = interp2app(W_UnicodeEncodeError.descr_str),
-    encoding = readwrite_attrproperty('encoding', W_UnicodeEncodeError, 'str_w'),
-    object = readwrite_attrproperty('object', W_UnicodeEncodeError, 'unicode_w'),
-    start  = readwrite_attrproperty('start', W_UnicodeEncodeError, 'int_w'),
-    end    = readwrite_attrproperty('end', W_UnicodeEncodeError, 'int_w'),
-    reason = readwrite_attrproperty('reason', W_UnicodeEncodeError, 'str_w'),
+    encoding = readwrite_attrproperty_w('w_encoding', W_UnicodeEncodeError),
+    object = readwrite_attrproperty_w('w_object', W_UnicodeEncodeError),
+    start  = readwrite_attrproperty_w('w_start', W_UnicodeEncodeError),
+    end    = readwrite_attrproperty_w('w_end', W_UnicodeEncodeError),
+    reason = readwrite_attrproperty_w('w_reason', W_UnicodeEncodeError),
 )
