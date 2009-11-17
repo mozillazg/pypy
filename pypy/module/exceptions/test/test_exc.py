@@ -88,6 +88,8 @@ class AppTestExc(object):
         ut.start = 4
         ut.object = u'012345'
         assert str(ut) == "can't translate character u'\\x34' in position 4: bah"
+        ut.object = []
+        assert ut.object == []
 
     def test_key_error(self):
         from exceptions import KeyError

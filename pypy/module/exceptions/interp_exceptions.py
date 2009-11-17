@@ -78,13 +78,6 @@ from pypy.interpreter.gateway import interp2app, Arguments
 from pypy.interpreter.error import OperationError
 from pypy.rlib import rwin32
 
-def readwrite_attrproperty(name, cls, unwrapname):
-    def fget(space, obj):
-        return space.wrap(getattr(obj, name))
-    def fset(space, obj, w_val):
-        setattr(obj, name, getattr(space, unwrapname)(w_val))
-    return GetSetProperty(fget, fset, cls=cls)
-
 def readwrite_attrproperty_w(name, cls):
     def fget(space, obj):
         return getattr(obj, name)
@@ -244,16 +237,22 @@ W_UnicodeError = _new_exception('UnicodeError', W_ValueError,
 
 class W_UnicodeTranslateError(W_UnicodeError):
     """Unicode translation error."""
-    object = u''
-    start = 0
-    end = 0
-    reason = ''
+    object = None
+    start = None
+    end = None
+    reason = None
     
     def descr_init(self, space, w_object, w_start, w_end, w_reason):
-        self.object = space.unicode_w(w_object)
-        self.start = space.int_w(w_start)
-        self.end = space.int_w(w_end)
-        self.reason = space.str_w(w_reason)
+        # typechecking
+        space.unicode_w(w_object)
+        space.int_w(w_start)
+        space.int_w(w_end)
+        space.str_w(w_reason)
+        # assign attributes
+        self.w_object = w_object
+        self.w_start = w_start
+        self.w_end = w_end
+        self.w_reason = w_reason
         W_BaseException.descr_init(self, space, [w_object, w_start,
                                                  w_end, w_reason])
     descr_init.unwrap_spec = ['self', ObjSpace, W_Root, W_Root, W_Root,
@@ -280,10 +279,10 @@ W_UnicodeTranslateError.typedef = TypeDef(
     __new__ = _new(W_UnicodeTranslateError),
     __init__ = interp2app(W_UnicodeTranslateError.descr_init),
     __str__ = interp2app(W_UnicodeTranslateError.descr_str),
-    object = readwrite_attrproperty('object', W_UnicodeTranslateError, 'unicode_w'),
-    start  = readwrite_attrproperty('start', W_UnicodeTranslateError, 'int_w'),
-    end    = readwrite_attrproperty('end', W_UnicodeTranslateError, 'int_w'),
-    reason = readwrite_attrproperty('reason', W_UnicodeTranslateError, 'str_w'),
+    object = readwrite_attrproperty_w('w_object', W_UnicodeTranslateError),
+    start  = readwrite_attrproperty_w('w_start', W_UnicodeTranslateError),
+    end    = readwrite_attrproperty_w('w_end', W_UnicodeTranslateError),
+    reason = readwrite_attrproperty_w('w_reason', W_UnicodeTranslateError),
 )
 
 W_LookupError = _new_exception('LookupError', W_StandardError,
