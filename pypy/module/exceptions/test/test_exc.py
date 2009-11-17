@@ -198,12 +198,14 @@ class AppTestExc(object):
                 assert e.__module__ == 'exceptions', e
 
     def test_reduce(self):
-        from exceptions import LookupError
+        from exceptions import LookupError, EnvironmentError
 
         le = LookupError(1, 2, "a")
         assert le.__reduce__() == (LookupError, (1, 2, "a"))
         le.xyz = (1, 2)
         assert le.__reduce__() == (LookupError, (1, 2, "a"), {"xyz": (1, 2)})
+        ee = EnvironmentError(1, 2, "a")
+        assert ee.__reduce__() == (EnvironmentError, (1, 2, "a"))
 
     def test_setstate(self):
         from exceptions import FutureWarning
@@ -214,3 +216,4 @@ class AppTestExc(object):
         fw.__setstate__({'z': 1})
         assert fw.z == 1
         assert fw.xyz == (1, 2)
+

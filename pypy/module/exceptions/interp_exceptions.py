@@ -331,6 +331,18 @@ class W_EnvironmentError(W_StandardError):
             self.args_w = [args_w[0], args_w[1]]
     descr_init.unwrap_spec = ['self', ObjSpace, 'args_w']
 
+    # since we rebind args_w, we need special reduce, grump
+    def descr_reduce(self, space):
+        if not space.is_w(self.w_filename, space.w_None):
+            lst = [self.getclass(space), space.newtuple(
+                self.args_w + [self.w_filename])]
+        else:
+            lst = [self.getclass(space), space.newtuple(self.args_w)]
+        if self.w_dict is not None and space.is_true(self.w_dict):
+            lst = lst + [self.w_dict]
+        return space.newtuple(lst)
+    descr_reduce.unwrap_spec = ['self', ObjSpace]
+
     def descr_str(self, space):
         if (not space.is_w(self.w_errno, space.w_None) and
             not space.is_w(self.w_strerror, space.w_None)):
@@ -351,6 +363,7 @@ W_EnvironmentError.typedef = TypeDef(
     __doc__ = W_EnvironmentError.__doc__,
     __module__ = 'exceptions',
     __new__ = _new(W_EnvironmentError),
+    __reduce__ = interp2app(W_EnvironmentError.descr_reduce),
     __init__ = interp2app(W_EnvironmentError.descr_init),
     __str__ = interp2app(W_EnvironmentError.descr_str),
     errno    = readwrite_attrproperty_w('w_errno',    W_EnvironmentError),
