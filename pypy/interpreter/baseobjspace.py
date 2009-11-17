@@ -1033,6 +1033,13 @@ class ObjSpace(object):
             buffer = self.buffer_w(w_obj)
             return buffer.as_str()
 
+    def realstr_w(self, w_obj):
+        # Like str_w, but only works if w_obj is really of type 'str'.
+        if not self.is_true(self.isinstance(w_obj, self.w_str)):
+            raise OperationError(self.w_TypeError,
+                                 self.wrap('argument must be a string'))
+        return self.str_w(w_obj)
+
     def realunicode_w(self, w_obj):
         # Like unicode_w, but only works if w_obj is really of type
         # 'unicode'.

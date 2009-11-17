@@ -169,6 +169,7 @@ class AppTestExc(object):
         ue.object = []
         assert ue.object == []
         raises(TypeError, UnicodeEncodeError, "x", "y", 1, 5, "bah")
+        raises(TypeError, UnicodeEncodeError, u"x", u"y", 1, 5, "bah")
 
     def test_multiple_inheritance(self):
         from exceptions import LookupError, ValueError, Exception
