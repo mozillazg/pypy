@@ -299,7 +299,6 @@ class ResumeDataVirtualAdder(object):
                     index = memo.assign_number_to_virtual(box)
                     self.liveboxes[box] = tag(index, TAGVIRTUAL)
         new_liveboxes.reverse()
-    
         liveboxes.extend(new_liveboxes)
 
         storage = self.storage
