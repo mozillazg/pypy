@@ -261,7 +261,6 @@ class ResumeDataVirtualAdder(object):
         numb, liveboxes_from_env, v = self.memo.number(values, storage.rd_snapshot)
         self.liveboxes_from_env = liveboxes_from_env
         self.liveboxes = {}
-        self.vinfos_not_env = {}
         storage.rd_numb = numb
         storage.rd_snapshot = None
 
