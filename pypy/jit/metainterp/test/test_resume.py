@@ -588,18 +588,20 @@ def test__make_virtual():
     modifier.liveboxes_from_env = {}
     modifier.liveboxes = {}
     modifier.virtuals = []
+    modifier.vinfos_not_env = {}
     modifier.vfieldboxes = []
     modifier.make_virtual(vbox, None, ['a', 'b'], [b1, b2])
-    assert modifier.liveboxes == {vbox: tag(0, TAGVIRTUAL), b1: UNASSIGNED,
+    assert modifier.liveboxes == {vbox: UNASSIGNEDVIRTUAL, b1: UNASSIGNED,
                                   b2: UNASSIGNED}
-    assert len(modifier.virtuals) == 1
-    assert modifier.vfieldboxes == [[b1, b2]]
+    assert len(modifier.virtuals) == 0
+    assert modifier.vfieldboxes == []
 
     modifier = ResumeDataVirtualAdder(None, None)
     modifier.liveboxes_from_env = {vbox: tag(0, TAGVIRTUAL)}
     modifier.liveboxes = {}
     modifier.virtuals = [None]
     modifier.vfieldboxes = [None]
+    modifier.vinfos_not_env = {}
     modifier.make_virtual(vbox, None, ['a', 'b', 'c'], [b1, b2, vbox])
     assert modifier.liveboxes == {b1: UNASSIGNED, b2: UNASSIGNED,
                                   vbox: tag(0, TAGVIRTUAL)}
@@ -720,6 +722,7 @@ def test_virtual_adder_make_virtual():
     modifier.liveboxes_from_env = {}
     modifier.liveboxes = {}
     modifier.virtuals = []
+    modifier.vinfos_not_env = {}
     modifier.vfieldboxes = []
     modifier.make_virtual(b2s,
                           ConstAddr(LLtypeMixin.node_vtable_adr,
@@ -749,22 +752,25 @@ def test_virtual_adder_make_virtual():
     metainterp = MyMetaInterp()
     reader = ResumeDataReader(storage, newboxes, metainterp)
     assert len(reader.virtuals) == 2
-    b2t = reader._decode_box(tag(0, TAGVIRTUAL))
-    b4t = reader._decode_box(tag(1, TAGVIRTUAL))
+    b2t = reader._decode_box(modifier._gettagged(b2s))
+    b4t = reader._decode_box(modifier._gettagged(b4s))
     trace = metainterp.trace
-    expected =  [
-        (rop.NEW_WITH_VTABLE, [ConstAddr(LLtypeMixin.node_vtable_adr,
+    b2new = (rop.NEW_WITH_VTABLE, [ConstAddr(LLtypeMixin.node_vtable_adr,
                                          LLtypeMixin.cpu)],
-                              b2t, None),
-        (rop.NEW_WITH_VTABLE, [ConstAddr(LLtypeMixin.node_vtable_adr2,
+                              b2t, None)
+    b4new = (rop.NEW_WITH_VTABLE, [ConstAddr(LLtypeMixin.node_vtable_adr2,
                                          LLtypeMixin.cpu)],
-                              b4t, None),
-        (rop.SETFIELD_GC, [b2t, b4t],      None, LLtypeMixin.nextdescr),
-        (rop.SETFIELD_GC, [b2t, c1s],      None, LLtypeMixin.valuedescr),
-        (rop.SETFIELD_GC, [b4t, b2t],     None, LLtypeMixin.nextdescr),
-        (rop.SETFIELD_GC, [b4t, b3t],     None, LLtypeMixin.valuedescr),
-        (rop.SETFIELD_GC, [b4t, b5t],     None, LLtypeMixin.otherdescr),
-        ]
+                              b4t, None)
+    b2set = [(rop.SETFIELD_GC, [b2t, b4t],      None, LLtypeMixin.nextdescr),
+             (rop.SETFIELD_GC, [b2t, c1s],      None, LLtypeMixin.valuedescr)]
+    b4set = [(rop.SETFIELD_GC, [b4t, b2t],     None, LLtypeMixin.nextdescr),
+             (rop.SETFIELD_GC, [b4t, b3t],     None, LLtypeMixin.valuedescr),
+             (rop.SETFIELD_GC, [b4t, b5t],     None, LLtypeMixin.otherdescr)]
+    if untag(modifier._gettagged(b2s))[0] == 0:
+        expected = [b2new, b4new] + b2set + b4set
+    else:
+        expected = [b4new, b2new] + b4set + b2set
+        
     for x, y in zip(expected, trace):
         assert x == y
     ptr = b2t.value._obj.container._as_ptr()
@@ -785,6 +791,7 @@ def test_virtual_adder_make_varray():
     modifier.liveboxes_from_env = {}
     modifier.liveboxes = {}
     modifier.virtuals = []
+    modifier.vinfos_not_env = {}
     modifier.vfieldboxes = []
     modifier.make_varray(b2s,
                          LLtypeMixin.arraydescr,
@@ -831,6 +838,7 @@ def test_virtual_adder_make_vstruct():
     modifier.liveboxes_from_env = {}
     modifier.liveboxes = {}
     modifier.virtuals = []
+    modifier.vinfos_not_env = {}
     modifier.vfieldboxes = []
     modifier.make_vstruct(b2s,
                           LLtypeMixin.ssize,

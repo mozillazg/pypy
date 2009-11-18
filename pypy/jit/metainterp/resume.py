@@ -90,6 +90,7 @@ TAGBOX      = 2
 TAGVIRTUAL  = 3
 
 UNASSIGNED = tag(-2 ** 12 - 1, TAGBOX)
+UNASSIGNEDVIRTUAL = tag(-2 ** 12 - 1, TAGVIRTUAL)
 NULLREF = tag(-1, TAGCONST)
 
 
@@ -205,9 +206,8 @@ class ResumeDataVirtualAdder(object):
             self.virtuals[i] = vinfo
             self.vfieldboxes[i] = fieldboxes
         else:
-            tagged = tag(len(self.virtuals), TAGVIRTUAL)
-            self.virtuals.append(vinfo)
-            self.vfieldboxes.append(fieldboxes)
+            tagged = UNASSIGNEDVIRTUAL
+            self.vinfos_not_env[virtualbox] = (vinfo, fieldboxes)
         self.liveboxes[virtualbox] = tagged
         self._register_boxes(fieldboxes)
 
@@ -237,6 +237,7 @@ class ResumeDataVirtualAdder(object):
         numb, liveboxes_from_env, v = self.memo.number(values, storage.rd_snapshot)
         self.liveboxes_from_env = liveboxes_from_env
         self.liveboxes = {}
+        self.vinfos_not_env = {}
         storage.rd_numb = numb
         storage.rd_snapshot = None
 
@@ -261,6 +262,7 @@ class ResumeDataVirtualAdder(object):
         return liveboxes[:]
 
     def _number_virtuals(self, liveboxes):
+        virtuals = self.virtuals
         for box, tagged in self.liveboxes.iteritems():
             i, tagbits = untag(tagged)
             if tagbits == TAGBOX:
@@ -269,7 +271,11 @@ class ResumeDataVirtualAdder(object):
                 liveboxes.append(box)
             else:
                 assert tagbits == TAGVIRTUAL
-
+                if tagged_eq(tagged, UNASSIGNEDVIRTUAL):
+                    vinfo, fieldboxes = self.vinfos_not_env[box]
+                    self.liveboxes[box] = tag(len(virtuals), TAGVIRTUAL)
+                    virtuals.append(vinfo)
+                    self.vfieldboxes.append(fieldboxes)
         storage = self.storage
         storage.rd_virtuals = None
         if len(self.virtuals) > 0:
