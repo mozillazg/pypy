@@ -4,6 +4,7 @@ from pypy.jit.backend.test import test_random
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import ConstInt, ConstPtr
 from pypy.jit.metainterp.history import ConstAddr, BoxPtr, BoxInt
+from pypy.jit.metainterp.history import BasicFailDescr
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.llinterp import LLException

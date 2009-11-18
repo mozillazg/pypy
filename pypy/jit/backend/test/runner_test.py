@@ -187,6 +187,8 @@ class BaseBackendTest(Runner):
         i0 = BoxInt()
         class UntouchableFailDescr(AbstractFailDescr):
             def __setattr__(self, name, value):
+                if name == 'index':
+                    return AbstractFailDescr.__setattr__(self, name, value)
                 py.test.fail("finish descrs should not be touched")
         faildescr = UntouchableFailDescr() # to check that is not touched
         looptoken = LoopToken()
