@@ -260,7 +260,7 @@ class TestX86(LLtypeBackendTest):
                         self.cpu.set_future_value_int(0, b.value)
                     else:
                         self.cpu.set_future_value_ref(0, b.value)
-                    r = self.cpu.execute_token(looptoken)
+                    self.cpu.execute_token(looptoken)
                     result = self.cpu.get_latest_value_int(0)
                     if guard == rop.GUARD_FALSE:
                         assert result == execute(self.cpu, op, None, b).value
@@ -306,7 +306,7 @@ class TestX86(LLtypeBackendTest):
                     self.cpu.compile_loop(inputargs, ops, looptoken)
                     for i, box in enumerate(inputargs):
                         self.cpu.set_future_value_int(i, box.value)
-                    r = self.cpu.execute_token(looptoken)
+                    self.cpu.execute_token(looptoken)
                     result = self.cpu.get_latest_value_int(0)
                     expected = execute(self.cpu, op, None, a, b).value
                     if guard == rop.GUARD_FALSE:

@@ -20,6 +20,7 @@ class AbstractLLCPU(AbstractCPU):
     def __init__(self, rtyper, stats, translate_support_code=False,
                  gcdescr=None):
         from pypy.jit.backend.llsupport.gc import get_ll_description
+        AbstractCPU.__init__(self)
         self.rtyper = rtyper
         self.stats = stats
         self.translate_support_code = translate_support_code
