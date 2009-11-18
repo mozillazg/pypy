@@ -123,6 +123,27 @@ class BaseBackendTest(Runner):
         res = self.cpu.get_latest_value_int(0)
         assert res == 10
 
+    def test_compile_with_holes_in_fail_args(self):
+        i0 = BoxInt()
+        i1 = BoxInt()
+        i2 = BoxInt()
+        looptoken = LoopToken()
+        operations = [
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.GUARD_TRUE, [i2], None, descr=BasicFailDescr(2)),
+            ResOperation(rop.JUMP, [i1], None, descr=looptoken),
+            ]
+        inputargs = [i0]
+        operations[2].fail_args = [None, None, i1, None]
+        
+        self.cpu.compile_loop(inputargs, operations, looptoken)
+        self.cpu.set_future_value_int(0, 2)
+        fail = self.cpu.execute_token(looptoken)
+        assert fail == 2
+        res = self.cpu.get_latest_value_int(2)
+        assert res == 10
+
     def test_backends_dont_keep_loops_alive(self):
         import weakref, gc
         self.cpu.dont_keepalive_stuff = True
