@@ -761,9 +761,22 @@ class TestFrameChaining(object):
 
     def test_unchain_with_exception(self):
         ec, frame, frame2 = self.enter_two_jitted_levels()
+        ec.jitted = False
         frame3 = self.Frame(ec, frame2)
         ec._chain(frame3)
         frame3.last_exception = 3
+        assert ec.some_frame is frame3
         ec._unchain(frame3)
+        ec.jitted = True
         assert frame3.f_back_some is frame2
         assert frame3.f_back_forced
+        assert frame2._f_forward is None
+        assert not frame2.f_back_forced
+        assert frame2.f_back() is frame
+        assert frame._f_forward is frame2
+        #
+        # test for a bug: what happens if we _unchain frame2 without an exc.
+        assert frame2.last_exception is None
+        assert ec.some_frame is frame2
+        ec._unchain(frame2)
+        assert frame._f_forward is None

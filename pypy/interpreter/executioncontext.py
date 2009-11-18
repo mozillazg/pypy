@@ -143,11 +143,12 @@ class ExecutionContext(object):
             frame.f_back_some = f_back
             frame.f_back_forced = True
         if self.some_frame is frame:
-            self.some_frame = frame.f_back_some
+            f_back = frame.f_back_some
+            self.some_frame = f_back
         else:
             f_back = frame.f_back()
-            if f_back is not None:
-                f_back.f_forward = None
+        if f_back is not None:
+            f_back.f_forward = None
 
         self.framestackdepth -= 1
 
