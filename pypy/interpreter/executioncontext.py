@@ -138,17 +138,17 @@ class ExecutionContext(object):
 
     def _unchain(self, frame):
         #assert frame is self.gettopframe() --- slowish
+        if self.some_frame is frame:
+            self.some_frame = frame.f_back_some
+        else:
+            f_back = frame.f_back()
+            if f_back is not None:
+                f_back.f_forward = None
+
         if frame.last_exception is not None:
             f_back = frame.f_back()
             frame.f_back_some = f_back
             frame.f_back_forced = True
-        if self.some_frame is frame:
-            f_back = frame.f_back_some
-            self.some_frame = f_back
-        else:
-            f_back = frame.f_back()
-        if f_back is not None:
-            f_back.f_forward = None
 
         self.framestackdepth -= 1
 

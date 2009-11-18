@@ -777,6 +777,5 @@ class TestFrameChaining(object):
         #
         # test for a bug: what happens if we _unchain frame2 without an exc.
         assert frame2.last_exception is None
-        assert ec.some_frame is frame2
         ec._unchain(frame2)
         assert frame._f_forward is None
