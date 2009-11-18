@@ -464,7 +464,7 @@ class CallOperation(BaseCallOperation):
         descr = builder.cpu.calldescrof(TP, TP.ARGS, TP.RESULT)
         self.put(builder, args, descr)
         op = ResOperation(rop.GUARD_NO_EXCEPTION, [], None,
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op.fail_args = fail_subset
         builder.loop.operations.append(op)
 
@@ -486,7 +486,7 @@ class CallOperationException(BaseCallOperation):
         _, vtableptr = builder.get_random_structure_type_and_vtable(r)
         exc_box = ConstAddr(llmemory.cast_ptr_to_adr(vtableptr), builder.cpu)
         op = ResOperation(rop.GUARD_EXCEPTION, [exc_box], BoxPtr(),
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op.fail_args = builder.subset_of_intvars(r)
         op._exc_box = None
         builder.should_fail_by = op
@@ -509,7 +509,7 @@ class RaisingCallOperation(BaseCallOperation):
         assert builder.cpu.get_exception()
         builder.cpu.clear_exception()
         op = ResOperation(rop.GUARD_EXCEPTION, [exc_box], BoxPtr(),
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op.fail_args = fail_subset
         builder.loop.operations.append(op)
 
@@ -527,7 +527,7 @@ class RaisingCallOperationGuardNoException(BaseCallOperation):
         assert builder.cpu.get_exception()
         builder.cpu.clear_exception()
         op = ResOperation(rop.GUARD_NO_EXCEPTION, [], BoxPtr(),
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op._exc_box = ConstAddr(llmemory.cast_ptr_to_adr(exc), builder.cpu)
         op.fail_args = builder.subset_of_intvars(r)
         builder.should_fail_by = op
@@ -553,7 +553,7 @@ class RaisingCallOperationWrongGuardException(BaseCallOperation):
                 break
         other_box = ConstAddr(llmemory.cast_ptr_to_adr(vtableptr), builder.cpu)
         op = ResOperation(rop.GUARD_EXCEPTION, [other_box], BoxPtr(),
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op._exc_box = ConstAddr(llmemory.cast_ptr_to_adr(exc), builder.cpu)
         op.fail_args = builder.subset_of_intvars(r)
         builder.should_fail_by = op
