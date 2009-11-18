@@ -398,6 +398,33 @@ def test_rebuild_from_resumedata_two_guards_w_virtuals():
            FakeFrame("code2", 10, -1, c3, b2t, b4t)]
     assert metainterp.framestack == fs2    
 
+def test_rebuild_from_resumedata_two_guards_w_shared_virtuals():
+    b1, b2, b3, b4, b5, b6 = [BoxPtr(), BoxPtr(), BoxInt(), BoxPtr(), BoxInt(), BoxInt()]
+    c1, c2, c3, c4 = [ConstInt(1), ConstInt(2), ConstInt(3),
+                      LLtypeMixin.nodebox.constbox()]
+    storage = Storage()
+    fs = [FakeFrame("code0", 0, -1, c1, b2, b3)]
+    capture_resumedata(fs, None, storage)
+    
+    memo = ResumeDataLoopMemo(LLtypeMixin.cpu)
+    values = {b2: virtual_value(b2, b5, c4)}
+    modifier = ResumeDataVirtualAdder(storage, memo)
+    liveboxes = modifier.finish(values)
+    assert len(storage.rd_virtuals) == 1
+    assert storage.rd_virtuals[0].fieldnums == [tag(len(liveboxes)-1, TAGBOX),
+                                                tag(0, TAGCONST)]
+
+    storage2 = Storage()
+    fs = [FakeFrame("code0", 0, -1, b1, b4, b2)]
+    capture_resumedata(fs, None, storage2)
+    values[b4] = virtual_value(b4, b6, c4)
+    modifier = ResumeDataVirtualAdder(storage2, memo)
+    liveboxes = modifier.finish(values)
+    assert len(storage2.rd_virtuals) == 2
+    assert storage2.rd_virtuals[1].fieldnums == storage.rd_virtuals[0].fieldnums
+    assert storage2.rd_virtuals[1] is storage.rd_virtuals[0]
+    
+
 def test_resumedata_top_recursive_virtuals():
     b1, b2, b3 = [BoxPtr(), BoxPtr(), BoxInt()]
     storage = Storage()
