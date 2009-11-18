@@ -102,6 +102,8 @@ class ResumeDataLoopMemo(object):
         self.large_ints = {}
         self.refs = cpu.ts.new_ref_dict_2()
         self.numberings = {}
+        self.cached_boxes = {}
+        self.cached_virtuals = {}
 
     def getconst(self, const):
         if const.type == INT:
@@ -135,6 +137,8 @@ class ResumeDataLoopMemo(object):
         result = tag(len(self.consts), TAGCONST)
         self.consts.append(const)
         return result
+
+    # env numbering
 
     def number(self, values, snapshot):
         if snapshot is None:
@@ -174,6 +178,41 @@ class ResumeDataLoopMemo(object):
     def forget_numberings(self, virtualbox):
         # XXX ideally clear only the affected numberings
         self.numberings.clear()
+        # XXX clear cached_*
+
+    # caching for virtuals and boxes inside them
+
+    def num_cached_boxes(self):
+        return len(self.cached_boxes)
+
+    def assign_number_to_box(self, box, boxes):
+        if box in self.cached_boxes:
+            num = self.cached_boxes[box]
+            boxes[-num-1] = box
+        else:
+            boxes.append(box)
+            num = -len(boxes)
+            self.cached_boxes[box] = num
+        return num
+
+    def num_cached_virtuals(self):
+        return len(self.cached_virtuals)
+
+    def assign_number_to_virtual(self, box, vinfo, fieldboxes, virtuals, fieldboxes_list):
+        if box in self.cached_virtuals:
+            num = self.cached_virtuals[box]
+            virtuals[-num-1] = vinfo
+            fieldboxes_list[-num-1] = fieldboxes
+        else:
+            virtuals.append(vinfo)
+            fieldboxes_list.append(fieldboxes)
+            num = -len(virtuals)
+            self.cached_virtuals[box] = num
+        return num
+
+    def clear_box_virtual_numbers(self):
+        self.cached_boxes.clear()
+        self.cached_virtuals.clear()
 
 
 _frame_info_placeholder = (None, 0, 0)
@@ -264,23 +303,21 @@ class ResumeDataVirtualAdder(object):
     def _number_virtuals(self, liveboxes):
         prev_liveboxes_cache = 0
         prev_virtuals_cache = 0
-        new_liveboxes = []
-        new_virtuals = []
-        new_vfieldboxes = []
+        new_liveboxes = [None] * self.memo.num_cached_boxes()
+        new_virtuals = [None] * self.memo.num_cached_virtuals()
+        new_vfieldboxes = [None] * self.memo.num_cached_virtuals()
         for box, tagged in self.liveboxes.iteritems():
             i, tagbits = untag(tagged)
             if tagbits == TAGBOX:
                 assert tagged_eq(tagged, UNASSIGNED)
-                new_liveboxes.append(box)
-                index = -prev_liveboxes_cache - len(new_liveboxes)
+                index = self.memo.assign_number_to_box(box, new_liveboxes)
                 self.liveboxes[box] = tag(index, TAGBOX)
             else:
                 assert tagbits == TAGVIRTUAL
                 if tagged_eq(tagged, UNASSIGNEDVIRTUAL):
                     vinfo, fieldboxes = self.vinfos_not_env[box]
-                    new_virtuals.append(vinfo)
-                    new_vfieldboxes.append(fieldboxes)
-                    index = -prev_virtuals_cache - len(new_virtuals)
+                    index = self.memo.assign_number_to_virtual(
+                        box, vinfo, fieldboxes, new_virtuals, new_vfieldboxes)
                     self.liveboxes[box] = tag(index, TAGVIRTUAL)
         new_liveboxes.reverse()
         new_virtuals.reverse()
@@ -297,6 +334,8 @@ class ResumeDataVirtualAdder(object):
             storage.rd_virtuals = self.virtuals[:]
             for i in range(len(storage.rd_virtuals)):
                 vinfo = storage.rd_virtuals[i]
+                if vinfo is None:
+                    continue
                 fieldboxes = self.vfieldboxes[i]
                 vinfo.fieldnums = [self._gettagged(box)
                                    for box in fieldboxes]
@@ -471,8 +510,14 @@ def dump_storage(storage, liveboxes):
         for const in storage.rd_consts:
             debug_print('\tconst', const.repr_rpython())
         for box in liveboxes:
-            debug_print('\tbox', box.repr_rpython())
+            if box is None:
+                debug_print('\tbox', 'None')
+            else:
+                debug_print('\tbox', box.repr_rpython())
         if storage.rd_virtuals is not None:
             for virtual in storage.rd_virtuals:
-                virtual.debug_prints()
+                if virtual is None:
+                    debug_print('\t\t', 'None')
+                else:
+                    virtual.debug_prints()
     debug_stop("jit-resume")

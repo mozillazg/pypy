@@ -363,6 +363,7 @@ def test_rebuild_from_resumedata_two_guards_w_virtuals():
     v6 = virtual_value(b6, c2, None)
     v6.setfield(LLtypeMixin.nextdescr, v6)    
     values = {b2: virtual_value(b2, b4, v6), b6: v6}
+    memo.clear_box_virtual_numbers()
     modifier = ResumeDataVirtualAdder(storage2, memo)
     liveboxes2 = modifier.finish(values)
     assert len(storage2.rd_virtuals) == 2    
@@ -580,6 +581,75 @@ def test_ResumeDataLoopMemo_number():
                                           tag(1, TAGVIRTUAL)]
     assert numb5.prev is numb4
 
+def test_ResumeDataLoopMemo_number_boxes():
+    memo = ResumeDataLoopMemo(LLtypeMixin.cpu)
+    b1, b2 = [BoxInt(), BoxInt()]
+    assert memo.num_cached_boxes() == 0
+    boxes = []
+    num = memo.assign_number_to_box(b1, boxes)
+    assert num == -1
+    assert boxes == [b1]
+    assert memo.num_cached_boxes() == 1
+    boxes = [None]
+    num = memo.assign_number_to_box(b1, boxes)
+    assert num == -1
+    assert boxes == [b1]
+    num = memo.assign_number_to_box(b2, boxes)
+    assert num == -2
+    assert boxes == [b1, b2]
+
+    assert memo.num_cached_boxes() == 2
+    boxes = [None, None]
+    num = memo.assign_number_to_box(b2, boxes)
+    assert num == -2
+    assert boxes == [None, b2]
+    num = memo.assign_number_to_box(b1, boxes)
+    assert num == -1
+    assert boxes == [b1, b2]
+
+    memo.clear_box_virtual_numbers()
+    assert memo.num_cached_boxes() == 0
+
+def test_ResumeDataLoopMemo_number_virtuals():
+    memo = ResumeDataLoopMemo(LLtypeMixin.cpu)
+    b1, b2 = [BoxInt(), BoxInt()]
+    vinfo1 = object()
+    vinfo2 = object()
+    fb1 = object()
+    fb2 = object()
+    assert memo.num_cached_virtuals() == 0
+    virtuals = []
+    vfieldboxes = []
+    num = memo.assign_number_to_virtual(b1, vinfo1, fb1, virtuals, vfieldboxes)
+    assert num == -1
+    assert virtuals == [vinfo1]
+    assert vfieldboxes == [fb1]
+    assert memo.num_cached_virtuals() == 1
+    virtuals = [None]
+    vfieldboxes = [None]
+    num = memo.assign_number_to_virtual(b1, vinfo1, fb1, virtuals, vfieldboxes)
+    assert num == -1
+    assert virtuals == [vinfo1]
+    assert vfieldboxes == [fb1]
+    num = memo.assign_number_to_virtual(b2, vinfo2, fb2, virtuals, vfieldboxes)
+    assert num == -2
+    assert virtuals == [vinfo1, vinfo2]
+    assert vfieldboxes == [fb1, fb2]
+
+    assert memo.num_cached_virtuals() == 2
+    virtuals = [None, None]
+    vfieldboxes = [None, None]
+    num = memo.assign_number_to_virtual(b2, vinfo2, fb2, virtuals, vfieldboxes)
+    assert num == -2
+    assert virtuals == [None, vinfo2]
+    assert vfieldboxes == [None, fb2]
+    num = memo.assign_number_to_virtual(b1, vinfo1, fb1, virtuals, vfieldboxes)
+    assert num == -1
+    assert virtuals == [vinfo1, vinfo2]
+    assert vfieldboxes == [fb1, fb2]
+
+    memo.clear_box_virtual_numbers()
+    assert memo.num_cached_virtuals() == 0
 
 def test__make_virtual():
     b1, b2 = BoxInt(), BoxInt()

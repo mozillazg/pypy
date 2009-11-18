@@ -1645,6 +1645,8 @@ class MetaInterp(object):
                 box = cpu.ts.BoxRef(cpu.get_latest_value_ref(i))
             elif boxtype == history.FLOAT:
                 box = history.BoxFloat(cpu.get_latest_value_float(i))
+            elif boxtype == history.HOLE:
+                continue
             else:
                 assert False, "bad box type: num=%d" % ord(boxtype)
             inputargs.append(box)

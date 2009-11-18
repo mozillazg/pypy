@@ -363,7 +363,10 @@ def compile_add_fail_arg(loop, intvar):
     op = loop.operations[-1]
     if op.fail_args is None:
         op.fail_args = []
-    op.fail_args.append(_variables[intvar])
+    if intvar == -1:
+        op.fail_args.append(None)
+    else:
+        op.fail_args.append(_variables[intvar])
 
 def compile_redirect_fail(old_loop, old_index, new_loop):
     old_loop = _from_opaque(old_loop)
@@ -382,6 +385,8 @@ class Frame(object):
         self.memocast = memocast
 
     def getenv(self, v):
+        if v is None:
+            return None
         if isinstance(v, Constant):
             return v.value
         else:
