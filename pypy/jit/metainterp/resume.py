@@ -286,8 +286,6 @@ class ResumeDataVirtualAdder(object):
 
     def _number_virtuals(self, liveboxes, values, num_env_virtuals):
         memo = self.memo
-        prev_liveboxes_cache = 0
-        prev_virtuals_cache = 0
         new_liveboxes = [None] * memo.num_cached_boxes()
         for box, tagged in self.liveboxes.iteritems():
             i, tagbits = untag(tagged)
