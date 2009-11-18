@@ -258,7 +258,8 @@ class ResumeDataVirtualAdder(object):
     def finish(self, values):
         # compute the numbering
         storage = self.storage
-        numb, liveboxes_from_env, v = self.memo.number(values, storage.rd_snapshot)
+        numb, liveboxes_from_env, v = self.memo.number(values,
+                                                       storage.rd_snapshot)
         self.liveboxes_from_env = liveboxes_from_env
         self.liveboxes = {}
         storage.rd_numb = numb
@@ -284,19 +285,20 @@ class ResumeDataVirtualAdder(object):
         return liveboxes[:]
 
     def _number_virtuals(self, liveboxes, values, num_env_virtuals):
+        memo = self.memo
         prev_liveboxes_cache = 0
         prev_virtuals_cache = 0
-        new_liveboxes = [None] * self.memo.num_cached_boxes()
+        new_liveboxes = [None] * memo.num_cached_boxes()
         for box, tagged in self.liveboxes.iteritems():
             i, tagbits = untag(tagged)
             if tagbits == TAGBOX:
                 assert tagged_eq(tagged, UNASSIGNED)
-                index = self.memo.assign_number_to_box(box, new_liveboxes)
+                index = memo.assign_number_to_box(box, new_liveboxes)
                 self.liveboxes[box] = tag(index, TAGBOX)
             else:
                 assert tagbits == TAGVIRTUAL
                 if tagged_eq(tagged, UNASSIGNEDVIRTUAL):
-                    index = self.memo.assign_number_to_virtual(box)
+                    index = memo.assign_number_to_virtual(box)
                     self.liveboxes[box] = tag(index, TAGVIRTUAL)
         new_liveboxes.reverse()
     
@@ -306,7 +308,7 @@ class ResumeDataVirtualAdder(object):
         storage.rd_virtuals = None
         vfieldboxes = self.vfieldboxes
         if vfieldboxes:
-            length = num_env_virtuals + self.memo.num_cached_virtuals()
+            length = num_env_virtuals + memo.num_cached_virtuals()
             virtuals = storage.rd_virtuals = [None] * length
             for virtualbox, fieldboxes in vfieldboxes.iteritems():
                 num, _ = untag(self.liveboxes[virtualbox])
