@@ -356,7 +356,7 @@ def test_rebuild_from_resumedata_two_guards_w_virtuals():
     modifier = ResumeDataVirtualAdder(storage, memo)
     liveboxes = modifier.finish(values)
     assert len(storage.rd_virtuals) == 1
-    assert storage.rd_virtuals[0].fieldnums == [tag(len(liveboxes)-1, TAGBOX),
+    assert storage.rd_virtuals[0].fieldnums == [tag(-1, TAGBOX),
                                                 tag(0, TAGCONST)]
 
     b6 = BoxPtr()
@@ -367,9 +367,9 @@ def test_rebuild_from_resumedata_two_guards_w_virtuals():
     liveboxes2 = modifier.finish(values)
     assert len(storage2.rd_virtuals) == 2    
     assert storage2.rd_virtuals[0].fieldnums == [tag(len(liveboxes2)-1, TAGBOX),
-                                                 tag(1, TAGVIRTUAL)]
+                                                 tag(-1, TAGVIRTUAL)]
     assert storage2.rd_virtuals[1].fieldnums == [tag(2, TAGINT),
-                                                 tag(1, TAGVIRTUAL)]
+                                                 tag(-1, TAGVIRTUAL)]
 
     # now on to resuming
     metainterp = MyMetaInterp()
@@ -411,7 +411,7 @@ def test_rebuild_from_resumedata_two_guards_w_shared_virtuals():
     modifier = ResumeDataVirtualAdder(storage, memo)
     liveboxes = modifier.finish(values)
     assert len(storage.rd_virtuals) == 1
-    assert storage.rd_virtuals[0].fieldnums == [tag(len(liveboxes)-1, TAGBOX),
+    assert storage.rd_virtuals[0].fieldnums == [tag(-1, TAGBOX),
                                                 tag(0, TAGCONST)]
 
     storage2 = Storage()
@@ -440,9 +440,9 @@ def test_resumedata_top_recursive_virtuals():
     liveboxes = modifier.finish(values)
     assert liveboxes == [b3]
     assert len(storage.rd_virtuals) == 2
-    assert storage.rd_virtuals[0].fieldnums == [tag(0, TAGBOX),
+    assert storage.rd_virtuals[0].fieldnums == [tag(-1, TAGBOX),
                                                 tag(1, TAGVIRTUAL)]
-    assert storage.rd_virtuals[1].fieldnums == [tag(0, TAGBOX),
+    assert storage.rd_virtuals[1].fieldnums == [tag(-1, TAGBOX),
                                                 tag(0, TAGVIRTUAL)]    
 
 
@@ -766,7 +766,7 @@ def test_virtual_adder_make_virtual():
     b4set = [(rop.SETFIELD_GC, [b4t, b2t],     None, LLtypeMixin.nextdescr),
              (rop.SETFIELD_GC, [b4t, b3t],     None, LLtypeMixin.valuedescr),
              (rop.SETFIELD_GC, [b4t, b5t],     None, LLtypeMixin.otherdescr)]
-    if untag(modifier._gettagged(b2s))[0] == 0:
+    if untag(modifier._gettagged(b2s))[0] == -2:
         expected = [b2new, b4new] + b2set + b4set
     else:
         expected = [b4new, b2new] + b4set + b2set

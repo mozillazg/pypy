@@ -262,20 +262,35 @@ class ResumeDataVirtualAdder(object):
         return liveboxes[:]
 
     def _number_virtuals(self, liveboxes):
-        virtuals = self.virtuals
+        prev_liveboxes_cache = 0
+        prev_virtuals_cache = 0
+        new_liveboxes = []
+        new_virtuals = []
+        new_vfieldboxes = []
         for box, tagged in self.liveboxes.iteritems():
             i, tagbits = untag(tagged)
             if tagbits == TAGBOX:
                 assert tagged_eq(tagged, UNASSIGNED)
-                self.liveboxes[box] = tag(len(liveboxes), TAGBOX)
-                liveboxes.append(box)
+                new_liveboxes.append(box)
+                index = -prev_liveboxes_cache - len(new_liveboxes)
+                self.liveboxes[box] = tag(index, TAGBOX)
             else:
                 assert tagbits == TAGVIRTUAL
                 if tagged_eq(tagged, UNASSIGNEDVIRTUAL):
                     vinfo, fieldboxes = self.vinfos_not_env[box]
-                    self.liveboxes[box] = tag(len(virtuals), TAGVIRTUAL)
-                    virtuals.append(vinfo)
-                    self.vfieldboxes.append(fieldboxes)
+                    new_virtuals.append(vinfo)
+                    new_vfieldboxes.append(fieldboxes)
+                    index = -prev_virtuals_cache - len(new_virtuals)
+                    self.liveboxes[box] = tag(index, TAGVIRTUAL)
+        new_liveboxes.reverse()
+        new_virtuals.reverse()
+        new_vfieldboxes.reverse()
+    
+        liveboxes.extend(new_liveboxes)
+        self.virtuals.extend(new_virtuals)
+        self.vfieldboxes.extend(new_vfieldboxes)
+        # xxx + cached stuff
+
         storage = self.storage
         storage.rd_virtuals = None
         if len(self.virtuals) > 0:
