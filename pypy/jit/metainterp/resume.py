@@ -198,16 +198,11 @@ class ResumeDataLoopMemo(object):
     def num_cached_virtuals(self):
         return len(self.cached_virtuals)
 
-    def assign_number_to_virtual(self, box, vinfo, fieldboxes, virtuals, fieldboxes_list):
+    def assign_number_to_virtual(self, box):
         if box in self.cached_virtuals:
             num = self.cached_virtuals[box]
-            virtuals[-num-1] = vinfo
-            fieldboxes_list[-num-1] = fieldboxes
         else:
-            virtuals.append(vinfo)
-            fieldboxes_list.append(fieldboxes)
-            num = -len(virtuals)
-            self.cached_virtuals[box] = num
+            num = self.cached_virtuals[box] = -len(self.cached_virtuals) - 1
         return num
 
     def clear_box_virtual_numbers(self):
@@ -225,29 +220,19 @@ class ResumeDataVirtualAdder(object):
         #self.virtuals = []
         #self.vfieldboxes = []
 
-    def make_virtual(self, virtualbox, known_class, fielddescrs, fieldboxes):
-        vinfo = VirtualInfo(known_class, fielddescrs)
-        self._make_virtual(virtualbox, vinfo, fieldboxes)
+    def make_virtual(self, known_class, fielddescrs):
+        return VirtualInfo(known_class, fielddescrs)
 
-    def make_vstruct(self, virtualbox, typedescr, fielddescrs, fieldboxes):
-        vinfo = VStructInfo(typedescr, fielddescrs)
-        self._make_virtual(virtualbox, vinfo, fieldboxes)
+    def make_vstruct(self, typedescr, fielddescrs):
+        return VStructInfo(typedescr, fielddescrs)
 
-    def make_varray(self, virtualbox, arraydescr, itemboxes):
-        vinfo = VArrayInfo(arraydescr)
-        self._make_virtual(virtualbox, vinfo, itemboxes)
+    def make_varray(self, arraydescr):
+        return VArrayInfo(arraydescr)
 
-    def _make_virtual(self, virtualbox, vinfo, fieldboxes):
-        if virtualbox in self.liveboxes_from_env:
-            tagged = self.liveboxes_from_env[virtualbox]
-            i, _ = untag(tagged)
-            assert self.virtuals[i] is None
-            self.virtuals[i] = vinfo
-            self.vfieldboxes[i] = fieldboxes
-        else:
-            tagged = UNASSIGNEDVIRTUAL
-            self.vinfos_not_env[virtualbox] = (vinfo, fieldboxes)
+    def register_virtual_fields(self, virtualbox, fieldboxes):
+        tagged = self.liveboxes_from_env.get(virtualbox, UNASSIGNEDVIRTUAL)
         self.liveboxes[virtualbox] = tagged
+        self.vfieldboxes[virtualbox] = fieldboxes
         self._register_boxes(fieldboxes)
 
     def register_box(self, box):
@@ -283,8 +268,7 @@ class ResumeDataVirtualAdder(object):
         # collect liveboxes and virtuals
         n = len(liveboxes_from_env) - v
         liveboxes = [None]*n
-        self.virtuals = [None]*v
-        self.vfieldboxes = [None]*v
+        self.vfieldboxes = {}
         for box, tagged in liveboxes_from_env.iteritems():
             i, tagbits = untag(tagged)
             if tagbits == TAGBOX:
@@ -294,18 +278,16 @@ class ResumeDataVirtualAdder(object):
                 value = values[box]
                 value.get_args_for_fail(self)
 
-        self._number_virtuals(liveboxes)
+        self._number_virtuals(liveboxes, values, v)
 
         storage.rd_consts = self.memo.consts
         dump_storage(storage, liveboxes)
         return liveboxes[:]
 
-    def _number_virtuals(self, liveboxes):
+    def _number_virtuals(self, liveboxes, values, num_env_virtuals):
         prev_liveboxes_cache = 0
         prev_virtuals_cache = 0
         new_liveboxes = [None] * self.memo.num_cached_boxes()
-        new_virtuals = [None] * self.memo.num_cached_virtuals()
-        new_vfieldboxes = [None] * self.memo.num_cached_virtuals()
         for box, tagged in self.liveboxes.iteritems():
             i, tagbits = untag(tagged)
             if tagbits == TAGBOX:
@@ -315,30 +297,25 @@ class ResumeDataVirtualAdder(object):
             else:
                 assert tagbits == TAGVIRTUAL
                 if tagged_eq(tagged, UNASSIGNEDVIRTUAL):
-                    vinfo, fieldboxes = self.vinfos_not_env[box]
-                    index = self.memo.assign_number_to_virtual(
-                        box, vinfo, fieldboxes, new_virtuals, new_vfieldboxes)
+                    index = self.memo.assign_number_to_virtual(box)
                     self.liveboxes[box] = tag(index, TAGVIRTUAL)
         new_liveboxes.reverse()
-        new_virtuals.reverse()
-        new_vfieldboxes.reverse()
     
         liveboxes.extend(new_liveboxes)
-        self.virtuals.extend(new_virtuals)
-        self.vfieldboxes.extend(new_vfieldboxes)
-        # xxx + cached stuff
 
         storage = self.storage
         storage.rd_virtuals = None
-        if len(self.virtuals) > 0:
-            storage.rd_virtuals = self.virtuals[:]
-            for i in range(len(storage.rd_virtuals)):
-                vinfo = storage.rd_virtuals[i]
-                if vinfo is None:
-                    continue
-                fieldboxes = self.vfieldboxes[i]
-                vinfo.fieldnums = [self._gettagged(box)
-                                   for box in fieldboxes]
+        vfieldboxes = self.vfieldboxes
+        if vfieldboxes:
+            length = num_env_virtuals + self.memo.num_cached_virtuals()
+            virtuals = storage.rd_virtuals = [None] * length
+            for virtualbox, fieldboxes in vfieldboxes.iteritems():
+                num, _ = untag(self.liveboxes[virtualbox])
+                value = values[virtualbox]
+                fieldnums = [self._gettagged(box)
+                             for box in fieldboxes]
+                vinfo = value.make_virtual_info(self, fieldnums)
+                virtuals[num] = vinfo
 
     def _gettagged(self, box):
         if isinstance(box, Const):

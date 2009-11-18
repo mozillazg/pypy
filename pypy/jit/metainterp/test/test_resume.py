@@ -613,70 +613,44 @@ def test_ResumeDataLoopMemo_number_boxes():
 def test_ResumeDataLoopMemo_number_virtuals():
     memo = ResumeDataLoopMemo(LLtypeMixin.cpu)
     b1, b2 = [BoxInt(), BoxInt()]
-    vinfo1 = object()
-    vinfo2 = object()
-    fb1 = object()
-    fb2 = object()
     assert memo.num_cached_virtuals() == 0
-    virtuals = []
-    vfieldboxes = []
-    num = memo.assign_number_to_virtual(b1, vinfo1, fb1, virtuals, vfieldboxes)
+    num = memo.assign_number_to_virtual(b1)
     assert num == -1
-    assert virtuals == [vinfo1]
-    assert vfieldboxes == [fb1]
     assert memo.num_cached_virtuals() == 1
-    virtuals = [None]
-    vfieldboxes = [None]
-    num = memo.assign_number_to_virtual(b1, vinfo1, fb1, virtuals, vfieldboxes)
+    num = memo.assign_number_to_virtual(b1)
     assert num == -1
-    assert virtuals == [vinfo1]
-    assert vfieldboxes == [fb1]
-    num = memo.assign_number_to_virtual(b2, vinfo2, fb2, virtuals, vfieldboxes)
+    num = memo.assign_number_to_virtual(b2)
     assert num == -2
-    assert virtuals == [vinfo1, vinfo2]
-    assert vfieldboxes == [fb1, fb2]
 
     assert memo.num_cached_virtuals() == 2
-    virtuals = [None, None]
-    vfieldboxes = [None, None]
-    num = memo.assign_number_to_virtual(b2, vinfo2, fb2, virtuals, vfieldboxes)
+    num = memo.assign_number_to_virtual(b2)
     assert num == -2
-    assert virtuals == [None, vinfo2]
-    assert vfieldboxes == [None, fb2]
-    num = memo.assign_number_to_virtual(b1, vinfo1, fb1, virtuals, vfieldboxes)
+    num = memo.assign_number_to_virtual(b1)
     assert num == -1
-    assert virtuals == [vinfo1, vinfo2]
-    assert vfieldboxes == [fb1, fb2]
 
     memo.clear_box_virtual_numbers()
     assert memo.num_cached_virtuals() == 0
 
-def test__make_virtual():
+def test_register_virtual_fields():
     b1, b2 = BoxInt(), BoxInt()
     vbox = BoxPtr()
     modifier = ResumeDataVirtualAdder(None, None)
     modifier.liveboxes_from_env = {}
     modifier.liveboxes = {}
-    modifier.virtuals = []
-    modifier.vinfos_not_env = {}
-    modifier.vfieldboxes = []
-    modifier.make_virtual(vbox, None, ['a', 'b'], [b1, b2])
+    modifier.vfieldboxes = {}
+    modifier.register_virtual_fields(vbox, [b1, b2])
     assert modifier.liveboxes == {vbox: UNASSIGNEDVIRTUAL, b1: UNASSIGNED,
                                   b2: UNASSIGNED}
-    assert len(modifier.virtuals) == 0
-    assert modifier.vfieldboxes == []
+    assert modifier.vfieldboxes == {vbox: [b1, b2]}
 
     modifier = ResumeDataVirtualAdder(None, None)
     modifier.liveboxes_from_env = {vbox: tag(0, TAGVIRTUAL)}
     modifier.liveboxes = {}
-    modifier.virtuals = [None]
-    modifier.vfieldboxes = [None]
-    modifier.vinfos_not_env = {}
-    modifier.make_virtual(vbox, None, ['a', 'b', 'c'], [b1, b2, vbox])
+    modifier.vfieldboxes = {}
+    modifier.register_virtual_fields(vbox, [b1, b2, vbox])
     assert modifier.liveboxes == {b1: UNASSIGNED, b2: UNASSIGNED,
                                   vbox: tag(0, TAGVIRTUAL)}
-    assert len(modifier.virtuals) == 1
-    assert modifier.vfieldboxes == [[b1, b2, vbox]]    
+    assert modifier.vfieldboxes == {vbox: [b1, b2, vbox]}
 
 def _resume_remap(liveboxes, expected, *newvalues):
     newboxes = []

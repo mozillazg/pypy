@@ -62,6 +62,9 @@ class OptValue(object):
     def get_args_for_fail(self, modifier):
         pass
 
+    def make_virtual_info(self, modifier, fieldnums):
+        raise NotImplementedError # should not be called on this level
+
     def is_constant(self):
         return self.level == LEVEL_CONSTANT
 
@@ -169,6 +172,14 @@ class AbstractVirtualValue(OptValue):
             self._really_force()
         return self.box
 
+    def make_virtual_info(self, modifier, fieldnums):
+        vinfo = self._make_virtual(modifier)
+        vinfo.fieldnums = fieldnums
+        return vinfo
+
+    def _make_virtual(self, modifier):
+        raise NotImplementedError("abstract base")
+
 
 class AbstractVirtualStructValue(AbstractVirtualValue):
     _attrs_ = ('_fields', '_cached_sorted_fields')
@@ -221,13 +232,10 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
             # we have already seen the very same keybox
             lst = self._get_field_descr_list()
             fieldboxes = [self._fields[ofs].get_key_box() for ofs in lst]
-            self._make_virtual(modifier, lst, fieldboxes)
+            modifier.register_virtual_fields(self.keybox, fieldboxes)
             for ofs in lst:
                 fieldvalue = self._fields[ofs]
                 fieldvalue.get_args_for_fail(modifier)
-
-    def _make_virtual(self, modifier, fielddescrs, fieldboxes):
-        raise NotImplementedError
 
 
 class VirtualValue(AbstractVirtualStructValue):
@@ -238,10 +246,9 @@ class VirtualValue(AbstractVirtualStructValue):
         assert isinstance(known_class, Const)
         self.known_class = known_class
 
-    def _make_virtual(self, modifier, fielddescrs, fieldboxes):
-        modifier.make_virtual(self.keybox, self.known_class,
-                              fielddescrs, fieldboxes)
-
+    def _make_virtual(self, modifier):
+        fielddescrs = self._get_field_descr_list()
+        return modifier.make_virtual(self.known_class, fielddescrs)
 
 class VStructValue(AbstractVirtualStructValue):
 
@@ -249,10 +256,9 @@ class VStructValue(AbstractVirtualStructValue):
         AbstractVirtualStructValue.__init__(self, optimizer, keybox, source_op)
         self.structdescr = structdescr
 
-    def _make_virtual(self, modifier, fielddescrs, fieldboxes):
-        modifier.make_vstruct(self.keybox, self.structdescr,
-                              fielddescrs, fieldboxes)
-
+    def _make_virtual(self, modifier):
+        fielddescrs = self._get_field_descr_list()
+        return modifier.make_vstruct(self.structdescr, fielddescrs)
 
 class VArrayValue(AbstractVirtualValue):
 
@@ -296,10 +302,13 @@ class VArrayValue(AbstractVirtualValue):
             const = self.optimizer.new_const_item(self.arraydescr)
             for itemvalue in self._items:
                 itemboxes.append(itemvalue.get_key_box())
-            modifier.make_varray(self.keybox, self.arraydescr, itemboxes)
+            modifier.register_virtual_fields(self.keybox, itemboxes)
             for itemvalue in self._items:
                 if itemvalue is not self.constvalue:
                     itemvalue.get_args_for_fail(modifier)
+
+    def _make_virtual(self, modifier):
+        return modifier.make_varray(self.arraydescr)
 
 class __extend__(SpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
