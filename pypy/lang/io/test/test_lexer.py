@@ -85,14 +85,20 @@ def test_lex_terminator():
 def test_lex_terminator1():
     inp = ';;'
     tokens = iolexer.tokenize(inp)
-    assert tokens[0] == Token('Terminator', ';;', SourcePos(0, 0, 0))
+    assert tokens[0] == Token('Terminator', ';', SourcePos(0, 0, 0))
     assert len(tokens) == 1
     
 def test_lex_terminator2():
     inp = '; ;'
     tokens = iolexer.tokenize(inp)
-    assert tokens[0] == Token('Terminator', '; ;', SourcePos(0, 0, 0))
+    assert tokens[0] == Token('Terminator', ';', SourcePos(0, 0, 0))
     assert len(tokens) == 1
+
+def test_lex_newline_terminator():
+    inp = '\n'
+    tokens = iolexer.tokenize(inp)
+    assert len(tokens) == 1
+    assert tokens[0] == Token('Terminator', ';', SourcePos(0, 0, 0))
     
 def test_lex_open_paren():
     inp = '()'

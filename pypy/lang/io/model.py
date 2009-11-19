@@ -292,4 +292,4 @@ def parse_literal(space, literal):
         except ValueError:
             pass
     if literal.startswith('"') and literal.endswith('"'):
-        return space.w_immutable_sequence.clone_and_init(literal[1:-1])
+        return space.w_sequence.clone_and_init(literal[1:-1])
