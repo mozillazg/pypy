@@ -2,7 +2,7 @@ from pypy.jit.metainterp.history import Box, BoxInt, LoopToken, BoxFloat,\
      ConstFloat
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstObj, REF
 from pypy.jit.metainterp.resoperation import rop, ResOperation
-from pypy.jit.metainterp.jitprof import OPT_OPS, OPT_GUARDS, OPT_FORCINGS
+from pypy.jit.metainterp import jitprof
 from pypy.jit.metainterp.executor import execute_nonspec
 from pypy.jit.metainterp.specnode import SpecNode, NotSpecNode, ConstantSpecNode
 from pypy.jit.metainterp.specnode import AbstractVirtualStructSpecNode
@@ -388,7 +388,7 @@ class Optimizer(object):
         self.bool_boxes = {}
 
     def forget_numberings(self, virtualbox):
-        self.metainterp_sd.profiler.count(OPT_FORCINGS)
+        self.metainterp_sd.profiler.count(jitprof.OPT_FORCINGS)
         self.resumedata_memo.forget_numberings(virtualbox)
 
     def getinterned(self, box):
@@ -514,6 +514,8 @@ class Optimizer(object):
             else:
                 self.optimize_default(op)
         self.loop.operations = self.newoperations
+        # accumulate counters
+        self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
 
     def emit_operation(self, op, must_clone=True):
         self.heap_op_optimizer.emitting_operation(op)
@@ -526,9 +528,9 @@ class Optimizer(object):
                         op = op.clone()
                         must_clone = False
                     op.args[i] = box
-        self.metainterp_sd.profiler.count(OPT_OPS)
+        self.metainterp_sd.profiler.count(jitprof.OPT_OPS)
         if op.is_guard():
-            self.metainterp_sd.profiler.count(OPT_GUARDS)
+            self.metainterp_sd.profiler.count(jitprof.OPT_GUARDS)
             self.store_final_boxes_in_guard(op)
         elif op.can_raise():
             self.exception_might_have_happened = True

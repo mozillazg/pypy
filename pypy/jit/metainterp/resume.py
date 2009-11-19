@@ -1,6 +1,7 @@
 import sys, os
 from pypy.jit.metainterp.history import Box, Const, ConstInt, INT, REF
 from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp import jitprof
 from pypy.rpython.lltypesystem import rffi
 from pypy.rlib import rarithmetic
 from pypy.rlib.objectmodel import we_are_translated
@@ -112,6 +113,10 @@ class ResumeDataLoopMemo(object):
         self.numberings = {}
         self.cached_boxes = {}
         self.cached_virtuals = {}
+    
+        self.nvirtuals = 0
+        self.nvholes = 0
+        self.nvreused = 0
 
     def getconst(self, const):
         if const.type == INT:
@@ -217,6 +222,10 @@ class ResumeDataLoopMemo(object):
         self.cached_boxes.clear()
         self.cached_virtuals.clear()
 
+    def update_counters(self, profiler):
+        profiler.count(jitprof.NVIRTUALS, self.nvirtuals)
+        profiler.count(jitprof.NVHOLES, self.nvholes)
+        profiler.count(jitprof.NVREUSED, self.nvreused)
 
 _frame_info_placeholder = (None, 0, 0)
 
@@ -315,12 +324,18 @@ class ResumeDataVirtualAdder(object):
         if vfieldboxes:
             length = num_env_virtuals + memo.num_cached_virtuals()
             virtuals = storage.rd_virtuals = [None] * length
+            memo.nvirtuals += length
+            memo.nvholes += length - len(vfieldboxes)
             for virtualbox, fieldboxes in vfieldboxes.iteritems():
                 num, _ = untag(self.liveboxes[virtualbox])
                 value = values[virtualbox]
                 fieldnums = [self._gettagged(box)
                              for box in fieldboxes]
                 vinfo = value.make_virtual_info(self, fieldnums)
+                # if a new vinfo instance is made, we get the fieldnums list we
+                # pass in as an attribute. hackish.
+                if vinfo.fieldnums is not fieldnums:
+                    memo.nvreused += 1
                 virtuals[num] = vinfo
 
     def _gettagged(self, box):
