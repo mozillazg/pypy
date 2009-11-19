@@ -652,7 +652,7 @@ def init__DictMulti(space, w_dict, __args__):
     elif space.findattr(w_src, space.wrap("keys")) is None:
         list_of_w_pairs = space.unpackiterable(w_src)
         for w_pair in list_of_w_pairs:
-            pair = space.unpackiterable(w_pair)
+            pair = space.fixedview(w_pair)
             if len(pair)!=2:
                 raise OperationError(space.w_ValueError,
                              space.wrap("dict() takes a sequence of pairs"))
