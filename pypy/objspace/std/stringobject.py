@@ -349,7 +349,7 @@ str_rsplit__String_String_ANY = make_rsplit_with_delim('str_rsplit__String_Strin
                                                        sliced)
 
 def str_join__String_ANY(space, w_self, w_list):
-    list_w = space.unpackiterable(w_list)
+    list_w = space.listview(w_list)
     str_w = space.str_w
     if list_w:
         self = w_self._value

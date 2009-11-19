@@ -233,7 +233,7 @@ def contains__Rope_RopeUnicode(space, w_container, w_item):
     return space.contains(unicode_from_string(space, w_container), w_item )
 
 def unicode_join__RopeUnicode_ANY(space, w_self, w_list):
-    l_w = space.unpackiterable(w_list)
+    l_w = space.listview(w_list)
     delim = w_self._node
     totlen = 0
     if len(l_w) == 0:
