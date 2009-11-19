@@ -768,19 +768,23 @@ class Assembler386(object):
         really handle recovery from this particular failure.
         """
         fail_index = self.cpu.get_fail_descr_number(faildescr)
-        bytes_needed = 20 + len(failargs) // 8    # conservative estimate
+        bytes_needed = 20 + 5 * len(failargs)    # conservative estimate
         if self.mc2.bytes_free() < bytes_needed:
             self.mc2.make_new_mc()
         mc = self.mc2._mc
         addr = mc.tell()
-        mc.PUSH(imm32(fail_index))
         mc.CALL(rel32(self.failure_recovery_code[exc]))
         # write tight data that describes the failure recovery
         self.write_failure_recovery_description(mc, failargs, fail_locs)
+        # write the fail_index too
+        mc.write(packimm32(fail_index))
+        # for testing the decoding, write a final byte 0xCC
+        if not we_are_translated():
+            mc.writechr(0xCC)
         return addr
 
-    DESCR_INT       = 0x00
-    DESCR_REF       = 0x01
+    DESCR_REF       = 0x00
+    DESCR_INT       = 0x01
     DESCR_FLOAT     = 0x02
     DESCR_FROMSTACK = 8
     DESCR_STOP      = DESCR_INT + 4*esp.op
@@ -809,42 +813,147 @@ class Assembler386(object):
         mc.writechr(self.DESCR_STOP)
 
     def _build_failure_recovery(self, exc):
-        mc = self.mc2
-        esp_offset = 0
-        code = mc.tell()
-        # push the xmm registers on the stack
-        if self.cpu.supports_floats:
-            mc.SUB(esp, imm(8*8))
-            esp_offset += 8*8
-            for i in range(8):
-                mc.MOVSD(mem64(esp, 8*i), xmm_registers[i])
-        # push eax, edx and ecx on the stack
-        mc.PUSH(eax)
-        mc.PUSH(edx)
-        mc.PUSH(ecx)
-        esp_offset += 3*4
-        # really call the failure recovery builder code
-        mc.PUSH(mem(esp, esp_offset))    # the return address: ptr to bitfield
-        esp_offset += 4
-        mc.PUSH(mem(esp, esp_offset+4))  # fail_index
-        esp_offset += 4
-        mc.CALL(rel32(failure_recovery_builder))
-        mc.ADD(esp, imm(8))
-        esp_offset -= 8
-        # the return value in eax is the address of the code written by
-        # generate_failure.  We write it over this function's own return
-        # address, which was just a ptr to the bitfield, so far.
-        mc.MOV(mem(esp, esp_offset), eax)
-        # pop all registers
-        mc.POP(ecx)
-        mc.POP(edx)
-        mc.POP(eax)
-        if self.cpu.supports_floats:
-            for i in range(8):
-                mc.MOVSD(xmm_registers[i], mem64(esp, 8*i))
-            mc.ADD(esp, imm(8*8))
-        # epilogue
-        mc.RET(imm16(4))
+        """
+           PUSH edi
+           PUSH esi
+           PUSH ebp
+           PUSH 0      # for ESP, not used
+           PUSH ebx
+           PUSH edx
+           PUSH ecx
+           PUSH eax
+           MOV esi, [esp+32]
+           CLD
+           MOV edi, -1
+
+        loop:
+           INC edi
+           LODSB
+           CMP al, 4*8
+           MOVZX edx, al
+           JB decode_register
+           JL decode_multibyte
+
+        decode_edx:
+           TEST edx, 3
+           JZ decode_ptr
+           TEST edx, 2
+           JNZ decode_float
+
+        decode_int:
+           # (edx & 3) == 1
+           NEG edx
+           MOV eax, [ebp + edx + 1 - 16]
+
+        got_value_int:
+           MOV [fail_boxes_int + 4*edi], eax
+           JMP loop
+
+        decode_ptr:
+           # (edx & 3) == 0
+           NEG edx
+           MOV eax, [ebp + edx - 16]
+
+        got_value_ptr:
+           MOV [fail_boxes_ptr + 4*edi], eax
+           JMP loop
+
+        decode_float:
+           # (edx & 3) == 2
+           NEG edx
+           MOV eax, [ebp + edx - 2 - 16]
+           MOV [fail_boxes_float + 8*edi], eax
+           MOV eax, [ebp + edx + 2 - 16]
+           MOV [fail_boxes_float + 8*edi + 4], eax
+           JMP loop
+
+        decode_multibyte:
+           MOV cl, 7
+           AND edx, 0x7F
+           JMP innerloop
+
+           innerloop_morebytes:
+              AND eax, 0x7F
+              SHL eax, cl
+              OR edx, eax
+              ADD cl, 7
+           innerloop:
+              LODSB
+              CMP al, 0
+              MOVZX eax, al
+              JL innerloop_morebytes
+
+           SHL eax, cl
+           OR edx, eax
+           JMP decode_edx
+
+        decode_register:
+           TEST al, 2
+           JNZ decode_register_float
+           CMP al, DESCR_STOP
+           JE stop
+           AND edx, 0x3C
+           TEST al, 1
+           MOV eax, [esp+edx]
+           JNZ got_value_int
+           MOV [fail_boxes_ptr + 4*edi], eax
+           JMP loop
+
+        decode_register_float:
+           CMP al, 0x10
+           JB case_0123
+           CMP al, 0x18
+           JB case_45
+           CMP al, 0x1C
+           JB case_6
+        case_7:
+           MOVSD [fail_boxes_float + 8*edi], xmm7
+           JMP loop
+        case_6:
+           MOVSD [fail_boxes_float + 8*edi], xmm6
+           JMP loop
+        case_45:
+           CMP al, 0x14
+           JB case_4
+        case_5:
+           MOVSD [fail_boxes_float + 8*edi], xmm5
+           JMP loop
+        case_4:
+           MOVSD [fail_boxes_float + 8*edi], xmm4
+           JMP loop
+        case_0123:
+           CMP al, 0x08
+           JB case_01
+           CMP al, 0x0C
+           JB case_2
+        case_3:
+           MOVSD [fail_boxes_float + 8*edi], xmm3
+           JMP loop
+        case_2:
+           MOVSD [fail_boxes_float + 8*edi], xmm2
+           JMP loop
+        case_01:
+           CMP al, 0x04
+           JB case_0
+        case_1:
+           MOVSD [fail_boxes_float + 8*edi], xmm1
+           JMP loop
+        case_0:
+           MOVSD [fail_boxes_float + 8*edi], xmm0
+           JMP loop
+
+        stop:
+           CALL on_leave_jitted
+           MOV eax, [esp+36]    # fail_index
+           LEA esp, [ebp-12]
+           POP edi
+           POP esi
+           POP ebx
+           POP ebp
+           RET
+        """
+        ...
+        ...
         self.failure_recovery_code[exc] = code
 
     def generate_failure(self, mc, fail_index, locs, exc, locs_are_ref):
