@@ -34,6 +34,12 @@ def test_tagged_eq():
     assert tagged_eq(UNASSIGNED, UNASSIGNED)
     assert not tagged_eq(tag(1, TAGBOX), UNASSIGNED)
 
+def test_tagged_list_eq():
+    assert tagged_list_eq([UNASSIGNED, tag(1, TAGBOX), tag(-2, TAGVIRTUAL)],
+                          [UNASSIGNED, tag(1, TAGBOX), tag(-2, TAGVIRTUAL)])
+    assert not tagged_list_eq([tag(1, TAGBOX)], [tag(-2, TAGBOX)])
+    assert not tagged_list_eq([tag(1, TAGBOX), tag(-2, TAGBOX)], [tag(1, TAGBOX)])
+
 class MyMetaInterp:
     def __init__(self, cpu=None):
         if cpu is None:
