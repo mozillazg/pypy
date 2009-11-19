@@ -469,14 +469,14 @@ tuple_to_set = app.interphook('tuple_to_set')
 def marshal_w_set(space, w_set, m):
     # cannot access this list directly, because it's
     # type is not exactly known through applevel.
-    lis_w = space.unpackiterable(w_set)
+    lis_w = space.fixedview(w_set)
     m.put_tuple_w(TYPE_SET, lis_w)
 
 handled_by_any.append( ('set', marshal_w_set) )
 
 # not directly supported:
 def marshal_w_frozenset(space, w_frozenset, m):
-    lis_w = space.unpackiterable(w_frozenset)
+    lis_w = space.fixedview(w_frozenset)
     m.put_tuple_w(TYPE_FROZENSET, lis_w)
 
 handled_by_any.append( ('frozenset', marshal_w_frozenset) )
