@@ -1,6 +1,7 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.jit.metainterp.optimizeopt import VirtualValue, OptValue
+from pypy.jit.metainterp.optimizeopt import VirtualValue, OptValue, VArrayValue
+from pypy.jit.metainterp.optimizeopt import VStructValue
 from pypy.jit.metainterp.resume import *
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, ConstInt, ConstAddr
 from pypy.jit.metainterp.history import ConstPtr, ConstFloat
@@ -765,23 +766,26 @@ def test_virtual_adder_make_virtual():
     modifier = ResumeDataVirtualAdder(storage, memo)
     modifier.liveboxes_from_env = {}
     modifier.liveboxes = {}
-    modifier.virtuals = []
-    modifier.vinfos_not_env = {}
-    modifier.vfieldboxes = []
-    modifier.make_virtual(b2s,
-                          ConstAddr(LLtypeMixin.node_vtable_adr,
-                                    LLtypeMixin.cpu),
-                          [LLtypeMixin.nextdescr, LLtypeMixin.valuedescr],
-                          [b4s, c1s])   # new fields
-    modifier.make_virtual(b4s,
-                          ConstAddr(LLtypeMixin.node_vtable_adr2,
-                                    LLtypeMixin.cpu),
-                          [LLtypeMixin.nextdescr, LLtypeMixin.valuedescr,
-                                                  LLtypeMixin.otherdescr],
-                          [b2s, b3s, b5s])  # new fields
+    modifier.vfieldboxes = {}
+
+    v2 = VirtualValue(None, ConstAddr(LLtypeMixin.node_vtable_adr,
+                                                LLtypeMixin.cpu), b2s)
+    v2._fields = {LLtypeMixin.nextdescr: b4s,
+                  LLtypeMixin.valuedescr: c1s}
+    v2._cached_sorted_fields = [LLtypeMixin.nextdescr, LLtypeMixin.valuedescr]
+    v4 = VirtualValue(None, ConstAddr(LLtypeMixin.node_vtable_adr2,
+                                                LLtypeMixin.cpu), b4s)
+    v4._fields = {LLtypeMixin.nextdescr: b2s,
+                  LLtypeMixin.valuedescr: b3s,
+                  LLtypeMixin.otherdescr: b5s}
+    v4._cached_sorted_fields = [LLtypeMixin.nextdescr, LLtypeMixin.valuedescr,
+                                LLtypeMixin.otherdescr]
+    modifier.register_virtual_fields(b2s, [b4s, c1s])
+    modifier.register_virtual_fields(b4s, [b2s, b3s, b5s])
+    values = {b2s: v2, b4s: v4}
 
     liveboxes = []
-    modifier._number_virtuals(liveboxes)
+    modifier._number_virtuals(liveboxes, values, 0)
     storage.rd_consts = memo.consts[:]
     storage.rd_numb = None
     # resume
@@ -834,14 +838,17 @@ def test_virtual_adder_make_varray():
     modifier = ResumeDataVirtualAdder(storage, memo)
     modifier.liveboxes_from_env = {}
     modifier.liveboxes = {}
-    modifier.virtuals = []
-    modifier.vinfos_not_env = {}
-    modifier.vfieldboxes = []
-    modifier.make_varray(b2s,
-                         LLtypeMixin.arraydescr,
-                         [b4s, c1s])   # new fields
+    modifier.vfieldboxes = {}
+
+    class FakeOptimizer(object):
+        def new_const_item(self, descr):
+            return None
+    v2 = VArrayValue(FakeOptimizer(), LLtypeMixin.arraydescr, 2, b2s)
+    v2._items = [b4s, c1s]
+    modifier.register_virtual_fields(b2s, [b4s, c1s])
     liveboxes = []
-    modifier._number_virtuals(liveboxes)
+    values = {b2s: v2}
+    modifier._number_virtuals(liveboxes, values, 0)
     dump_storage(storage, liveboxes)
     storage.rd_consts = memo.consts[:]
     storage.rd_numb = None
@@ -881,15 +888,13 @@ def test_virtual_adder_make_vstruct():
     modifier = ResumeDataVirtualAdder(storage, memo)
     modifier.liveboxes_from_env = {}
     modifier.liveboxes = {}
-    modifier.virtuals = []
-    modifier.vinfos_not_env = {}
-    modifier.vfieldboxes = []
-    modifier.make_vstruct(b2s,
-                          LLtypeMixin.ssize,
-                          [LLtypeMixin.adescr, LLtypeMixin.bdescr],
-                          [c1s, b4s])   # new fields
+    modifier.vfieldboxes = {}
+    v2 = VStructValue(None, LLtypeMixin.ssize, b2s)
+    v2._fields = {LLtypeMixin.adescr: c1s, LLtypeMixin.bdescr: b4s}
+    v2._cached_sorted_fields = [LLtypeMixin.adescr, LLtypeMixin.bdescr]
+    modifier.register_virtual_fields(b2s, [c1s, b4s])
     liveboxes = []
-    modifier._number_virtuals(liveboxes)
+    modifier._number_virtuals(liveboxes, {b2s: v2}, 0)
     dump_storage(storage, liveboxes)
     storage.rd_consts = memo.consts[:]
     storage.rd_numb = None
