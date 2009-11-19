@@ -1,7 +1,7 @@
 import sys, os
 import ctypes
 from pypy.jit.backend.llsupport import symbolic
-from pypy.jit.metainterp.history import Const, Box, BoxPtr, REF, FLOAT
+from pypy.jit.metainterp.history import Const, Box, BoxPtr, INT, REF, FLOAT
 from pypy.jit.metainterp.history import AbstractFailDescr
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
@@ -86,7 +86,7 @@ class Assembler386(object):
         self.fail_boxes_int = NonmovableGrowableArraySigned()
         self.fail_boxes_ptr = NonmovableGrowableArrayGCREF()
         self.fail_boxes_float = NonmovableGrowableArrayFloat()
-        self.setup_failure_recovery()
+        self.failure_recovery_code = [0, 0]
 
     def leave_jitted_hook(self):
         # XXX BIG FAT WARNING XXX
@@ -123,7 +123,8 @@ class Assembler386(object):
             # 'mc2' is for guard recovery code
             self.mc = MachineCodeBlockWrapper()
             self.mc2 = MachineCodeBlockWrapper()
-            self._build_failure_recovery_builder_trampoline()
+            self._build_failure_recovery(False)
+            self._build_failure_recovery(True)
 
     def assemble_loop(self, inputargs, operations, looptoken):
         """adds the following attributes to looptoken:
@@ -757,10 +758,9 @@ class Assembler386(object):
         self._no_const_locs(failargs)
         exc = (guard_opnum == rop.GUARD_EXCEPTION or
                guard_opnum == rop.GUARD_NO_EXCEPTION)
-        faildescr._x86_faillocs = fail_locs
-        return self.generate_quick_failure(faildescr, failargs, exc)
+        return self.generate_quick_failure(faildescr, failargs, fail_locs, exc)
 
-    def generate_quick_failure(self, faildescr, failargs, exc):
+    def generate_quick_failure(self, faildescr, failargs, fail_locs, exc):
         """Generate the initial code for handling a failure.  We try to
         keep it as compact as possible.  The idea is that this code is
         executed at most once (and very often, zero times); when
@@ -774,93 +774,78 @@ class Assembler386(object):
         mc = self.mc2._mc
         addr = mc.tell()
         mc.PUSH(imm32(fail_index))
-        mc.CALL(rel32(self.failure_recovery_code))
-        # write a bitfield of 0's (int or float argument) or 1's (ref argument)
-        self.write_bitfield_for_failargs(mc, failargs, exc)
-        if not we_are_translated():
-            faildescr._x86_exc_locs_are_ref = (
-                exc, [v.type == REF for v in failargs])
+        mc.CALL(rel32(self.failure_recovery_code[exc]))
+        # write tight data that describes the failure recovery
+        self.write_failure_recovery_description(mc, failargs, fail_locs)
         return addr
 
-    def write_bitfield_for_failargs(self, mc, failargs, exc):
-        #print 'writing:', mc.tell()
-        #mc.writechr(0xDD)
-        bitfield = int(exc)    # the first bit: "save exceptions"
-        bit = 0x02
+    DESCR_INT       = 0x00
+    DESCR_REF       = 0x01
+    DESCR_FLOAT     = 0x02
+    DESCR_FROMSTACK = 8
+    DESCR_STOP      = DESCR_INT + 4*esp.op
+
+    def write_failure_recovery_description(self, mc, failargs, locs):
         for i in range(len(failargs)):
-            if bit == 0x100:
-                mc.writechr(bitfield)
-                bitfield = 0
-                bit = 0x01
-            if failargs[i].type == REF:
-                bitfield |= bit
-            bit <<= 1
-        mc.writechr(bitfield)
-        #mc.writechr(0xCC)
+            arg = failargs[i]
+            if arg.type == REF:
+                kind = self.DESCR_REF
+            elif arg.type == INT:
+                kind = self.DESCR_INT
+            elif arg.type == FLOAT:
+                kind = self.DESCR_FLOAT
+            else:
+                raise AssertionError("bogus kind")
+            loc = locs[i]
+            if isinstance(loc, REG):
+                n = loc.op
+            else:
+                n = self.DESCR_FROMSTACK + loc.position
+            n = kind + 4*n
+            while n > 0x7F:
+                mc.writechr((n & 0x7F) | 0x80)
+                n >>= 7
+            mc.writechr(n)
+        mc.writechr(self.DESCR_STOP)
 
-    def getbit_from_bitfield(self, bitfield_ptr, i):
-        byte = ord(bitfield_ptr[i >> 3])
-        return bool(byte & (1 << (i & 7)))
-
-    def setup_failure_recovery(self):
-
-        def failure_recovery_builder(fail_index, bitfield_ptr):
-            #assert bitfield_ptr[0] == chr(0xDD)
-            faildescr = self.cpu.get_fail_descr_from_number(fail_index)
-            locs = faildescr._x86_faillocs
-            #assert bitfield_ptr[1 + (1+len(locs)+7)//8] == chr(0xCC)
-            exc = self.getbit_from_bitfield(bitfield_ptr, 0)    # the first bit
-            locs_are_ref = [self.getbit_from_bitfield(bitfield_ptr, 1 + i)
-                            for i in range(len(locs))]
-            if not we_are_translated():
-                #print 'completing:', rffi.cast(lltype.Signed, bitfield_ptr)
-                assert (exc, locs_are_ref) == faildescr._x86_exc_locs_are_ref
-            addr = self.mc2.tell()
-            self.generate_failure(self.mc2, fail_index, locs, exc,
-                                  locs_are_ref)
-            self.patch_jump(faildescr, addr)
-            return addr
-
-        self.failure_recovery_builder = failure_recovery_builder
-        self.failure_recovery_code = 0
-
-    _FAILURE_RECOVERY_BUILDER = lltype.Ptr(lltype.FuncType(
-        [lltype.Signed, rffi.CCHARP], lltype.Signed))
-
-    def _build_failure_recovery_builder_trampoline(self):
-        failure_recovery_builder = llhelper(self._FAILURE_RECOVERY_BUILDER,
-                                            self.failure_recovery_builder)
-        failure_recovery_builder = rffi.cast(lltype.Signed,
-                                             failure_recovery_builder)
+    def _build_failure_recovery(self, exc):
         mc = self.mc2
+        esp_offset = 0
         code = mc.tell()
-        mc.PUSH(ebp)
-        mc.MOV(ebp, esp)
-        # push all registers on the stack
-        mc.PUSHA()
+        # push the xmm registers on the stack
         if self.cpu.supports_floats:
             mc.SUB(esp, imm(8*8))
+            esp_offset += 8*8
             for i in range(8):
                 mc.MOVSD(mem64(esp, 8*i), xmm_registers[i])
+        # push eax, edx and ecx on the stack
+        mc.PUSH(eax)
+        mc.PUSH(edx)
+        mc.PUSH(ecx)
+        esp_offset += 3*4
         # really call the failure recovery builder code
-        mc.PUSH(mem(ebp, 4))        # the return address: ptr to bitfield
-        mc.PUSH(mem(ebp, 8))        # fail_index
+        mc.PUSH(mem(esp, esp_offset))    # the return address: ptr to bitfield
+        esp_offset += 4
+        mc.PUSH(mem(esp, esp_offset+4))  # fail_index
+        esp_offset += 4
         mc.CALL(rel32(failure_recovery_builder))
         mc.ADD(esp, imm(8))
-        # save the return value into ebp+4.  This is the address of the code
-        # written by generate_failure.  Doing so overwrites this function's
-        # own return address, which was just a ptr to the bitfield, so far.
-        mc.MOV(mem(ebp, 4), eax)
+        esp_offset -= 8
+        # the return value in eax is the address of the code written by
+        # generate_failure.  We write it over this function's own return
+        # address, which was just a ptr to the bitfield, so far.
+        mc.MOV(mem(esp, esp_offset), eax)
         # pop all registers
+        mc.POP(ecx)
+        mc.POP(edx)
+        mc.POP(eax)
         if self.cpu.supports_floats:
             for i in range(8):
                 mc.MOVSD(xmm_registers[i], mem64(esp, 8*i))
             mc.ADD(esp, imm(8*8))
-        mc.POPA()
         # epilogue
-        mc.POP(ebp)
         mc.RET(imm16(4))
-        self.failure_recovery_code = code
+        self.failure_recovery_code[exc] = code
 
     def generate_failure(self, mc, fail_index, locs, exc, locs_are_ref):
         for i in range(len(locs)):
