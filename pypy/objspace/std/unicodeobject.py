@@ -489,7 +489,7 @@ def unicode_startswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
                                               w_start, w_end):
     unistr, _, start, end = _convert_idx_params(space, w_unistr, space.wrap(u''),
                                                 w_start, w_end, True)
-    for w_prefix in space.viewiterable(w_prefixes):
+    for w_prefix in space.fixedview(w_prefixes):
         prefix = space.unicode_w(w_prefix)
         if stringstartswith(unistr, prefix, start, end):
             return space.w_True
@@ -499,7 +499,7 @@ def unicode_endswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
                                             w_start, w_end):
     unistr, _, start, end = _convert_idx_params(space, w_unistr, space.wrap(u''),
                                              w_start, w_end, True)
-    for w_suffix in space.viewiterable(w_suffixes):
+    for w_suffix in space.fixedview(w_suffixes):
         suffix = space.unicode_w(w_suffix)
         if stringendswith(unistr, suffix, start, end):
             return space.w_True
