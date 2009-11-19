@@ -450,6 +450,7 @@ class ResumeDataReader(object):
 
     def _prepare_virtuals(self, metainterp, virtuals):
         if virtuals:
+            # xxx vinfo can be none, test and fix!
             self.virtuals = [vinfo.allocate(metainterp) for vinfo in virtuals]
             for i in range(len(virtuals)):
                 vinfo = virtuals[i]
