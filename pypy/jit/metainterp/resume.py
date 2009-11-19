@@ -84,6 +84,14 @@ def tagged_eq(x, y):
     # please rpython :(
     return rarithmetic.widen(x) == rarithmetic.widen(y)
 
+def tagged_list_eq(tl1, tl2):
+    if len(tl1) != len(tl2):
+        return False
+    for i in range(len(tl1)):
+        if not tagged_eq(tl1[i], tl2[i]):
+            return False
+    return True
+
 TAGCONST    = 0
 TAGINT      = 1
 TAGBOX      = 2

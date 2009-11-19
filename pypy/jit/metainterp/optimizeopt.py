@@ -151,9 +151,10 @@ oohelper.CVAL_NULLREF = ConstantValue(oohelper.CONST_NULL)
 
 
 class AbstractVirtualValue(OptValue):
-    _attrs_ = ('optimizer', 'keybox', 'source_op')
+    _attrs_ = ('optimizer', 'keybox', 'source_op', '_cached_vinfo')
     box = None
     level = LEVEL_NONNULL
+    _cached_vinfo = None
 
     def __init__(self, optimizer, keybox, source_op=None):
         self.optimizer = optimizer
@@ -173,8 +174,13 @@ class AbstractVirtualValue(OptValue):
         return self.box
 
     def make_virtual_info(self, modifier, fieldnums):
+        vinfo = self._cached_vinfo 
+        if vinfo is not None and resume.tagged_list_eq(
+                vinfo.fieldnums, fieldnums):
+            return vinfo
         vinfo = self._make_virtual(modifier)
         vinfo.fieldnums = fieldnums
+        self._cached_vinfo = vinfo
         return vinfo
 
     def _make_virtual(self, modifier):
