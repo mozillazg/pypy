@@ -112,6 +112,22 @@ def test_simple_read_tagged_ints():
     lst = reader.consume_boxes()
     assert lst == [b1s, b2s, b3s]
 
+
+def test_prepare_virtuals():
+    class FakeVinfo(object):
+        def allocate(self, metainterp):
+            return "allocated"
+        def setfields(self, metainterp, virtual, func):
+            assert virtual == "allocated"
+    class FakeStorage(object):
+        rd_virtuals = [FakeVinfo(), None]
+        rd_numb = []
+        rd_consts = []
+    class FakeMetainterp(object):
+        cpu = None
+    reader = ResumeDataReader(FakeStorage(), [], FakeMetainterp())
+    assert reader.virtuals == ["allocated", None]
+
 # ____________________________________________________________
 
 
