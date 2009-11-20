@@ -86,7 +86,7 @@ class Assembler386(object):
         self.fail_boxes_int = NonmovableGrowableArraySigned()
         self.fail_boxes_ptr = NonmovableGrowableArrayGCREF()
         self.fail_boxes_float = NonmovableGrowableArrayFloat()
-        self.failure_recovery_code = [0, 0]
+        self.setup_failure_recovery()
 
     def leave_jitted_hook(self):
         # XXX BIG FAT WARNING XXX
@@ -812,149 +812,58 @@ class Assembler386(object):
             mc.writechr(n)
         mc.writechr(self.DESCR_STOP)
 
+    def setup_failure_recovery(self):
+
+        def failure_recovery_func(registers):
+            pass  #...
+
+        self.failure_recovery_func = failure_recovery_func
+        self.failure_recovery_code = [0, 0]
+
+    _FAILURE_RECOVERY_FUNC = lltype.Ptr(lltype.FuncType([rffi.LONGP],
+                                                        lltype.Signed))
+
     def _build_failure_recovery(self, exc):
-        """
-           PUSH edi
-           PUSH esi
-           PUSH ebp
-           PUSH 0      # for ESP, not used
-           PUSH ebx
-           PUSH edx
-           PUSH ecx
-           PUSH eax
-           MOV esi, [esp+32]
-           CLD
-           MOV edi, -1
+        failure_recovery_func = llhelper(self._FAILURE_RECOVERY_FUNC,
+                                         self.failure_recovery_func)
+        failure_recovery_func = rffi.cast(lltype.Signed,
+                                          failure_recovery_func)
+        mc = self.mc2._mc
+        # Assume that we are called at the beginning, when there is no risk
+        # that 'mc' runs out of space.  Checked by asserts in mc.write().
+        addr = mc.tell()
+        mc.PUSH(edi)
+        mc.PUSH(esi)
+        mc.PUSH(ebp)
+        mc.PUSH(esp)    # not really used, but needed to take up the space
+        mc.PUSH(ebx)
+        mc.PUSH(edx)
+        mc.PUSH(ecx)
+        mc.PUSH(eax)
+        mc.MOV(eax, esp)
+        mc.PUSH(eax)
+        mc.CALL(rel32(failure_recovery_func))
 
-        loop:
-           INC edi
-           LODSB
-           CMP al, 4*8
-           MOVZX edx, al
-           JB decode_register
-           JL decode_multibyte
+        # we call a provided function that will
+        # - call our on_leave_jitted_hook which will mark
+        #   the fail_boxes_ptr array as pointing to young objects to
+        #   avoid unwarranted freeing
+        # - optionally save exception depending on the flag
+        addr = self.cpu.get_on_leave_jitted_int(save_exception=exc)
+        mc.PUSH(eax)
+        mc.CALL(rel32(addr))
+        mc.POP(eax)
 
-        decode_edx:
-           TEST edx, 3
-           JZ decode_ptr
-           TEST edx, 2
-           JNZ decode_float
-
-        decode_int:
-           # (edx & 3) == 1
-           NEG edx
-           MOV eax, [ebp + edx + 1 - 16]
-
-        got_value_int:
-           MOV [fail_boxes_int + 4*edi], eax
-           JMP loop
-
-        decode_ptr:
-           # (edx & 3) == 0
-           NEG edx
-           MOV eax, [ebp + edx - 16]
-
-        got_value_ptr:
-           MOV [fail_boxes_ptr + 4*edi], eax
-           JMP loop
-
-        decode_float:
-           # (edx & 3) == 2
-           NEG edx
-           MOV eax, [ebp + edx - 2 - 16]
-           MOV [fail_boxes_float + 8*edi], eax
-           MOV eax, [ebp + edx + 2 - 16]
-           MOV [fail_boxes_float + 8*edi + 4], eax
-           JMP loop
-
-        decode_multibyte:
-           MOV cl, 7
-           AND edx, 0x7F
-           JMP innerloop
-
-           innerloop_morebytes:
-              AND eax, 0x7F
-              SHL eax, cl
-              OR edx, eax
-              ADD cl, 7
-           innerloop:
-              LODSB
-              CMP al, 0
-              MOVZX eax, al
-              JL innerloop_morebytes
-
-           SHL eax, cl
-           OR edx, eax
-           JMP decode_edx
-
-        decode_register:
-           TEST al, 2
-           JNZ decode_register_float
-           CMP al, DESCR_STOP
-           JE stop
-           AND edx, 0x3C
-           TEST al, 1
-           MOV eax, [esp+edx]
-           JNZ got_value_int
-           MOV [fail_boxes_ptr + 4*edi], eax
-           JMP loop
-
-        decode_register_float:
-           CMP al, 0x10
-           JB case_0123
-           CMP al, 0x18
-           JB case_45
-           CMP al, 0x1C
-           JB case_6
-        case_7:
-           MOVSD [fail_boxes_float + 8*edi], xmm7
-           JMP loop
-        case_6:
-           MOVSD [fail_boxes_float + 8*edi], xmm6
-           JMP loop
-        case_45:
-           CMP al, 0x14
-           JB case_4
-        case_5:
-           MOVSD [fail_boxes_float + 8*edi], xmm5
-           JMP loop
-        case_4:
-           MOVSD [fail_boxes_float + 8*edi], xmm4
-           JMP loop
-        case_0123:
-           CMP al, 0x08
-           JB case_01
-           CMP al, 0x0C
-           JB case_2
-        case_3:
-           MOVSD [fail_boxes_float + 8*edi], xmm3
-           JMP loop
-        case_2:
-           MOVSD [fail_boxes_float + 8*edi], xmm2
-           JMP loop
-        case_01:
-           CMP al, 0x04
-           JB case_0
-        case_1:
-           MOVSD [fail_boxes_float + 8*edi], xmm1
-           JMP loop
-        case_0:
-           MOVSD [fail_boxes_float + 8*edi], xmm0
-           JMP loop
-
-        stop:
-           CALL on_leave_jitted
-           MOV eax, [esp+36]    # fail_index
-           LEA esp, [ebp-12]
-           POP edi
-           POP esi
-           POP ebx
-           POP ebp
-           RET
-        """
-        ...
-        ...
-        self.failure_recovery_code[exc] = code
+        # now we return from the complete frame, which starts from
+        # _assemble_bootstrap_code().  The LEA below throws away most
+        # of the frame, including all the PUSHes that we did just above.
+        mc.LEA(esp, addr_add(ebp, imm((-RET_BP + 2) * WORD)))
+        mc.POP(edi)
+        mc.POP(esi)
+        mc.POP(ebx)
+        mc.POP(ebp)
+        mc.RET()
+        self.failure_recovery_code[exc] = addr
 
     def generate_failure(self, mc, fail_index, locs, exc, locs_are_ref):
         for i in range(len(locs)):
@@ -994,7 +903,7 @@ class Assembler386(object):
 
         # don't break the following code sequence!
         mc = mc._mc
-        mc.LEA(esp, addr_add(imm(0), ebp, (-RET_BP + 2) * WORD))
+        mc.LEA(esp, addr_add(ebp, imm((-RET_BP + 2) * WORD)))
         mc.MOV(eax, imm(fail_index))
         mc.POP(edi)
         mc.POP(esi)
