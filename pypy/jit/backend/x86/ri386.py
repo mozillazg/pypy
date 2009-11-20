@@ -259,16 +259,9 @@ xmm5 = XMM5()
 xmm6 = XMM6()
 xmm7 = XMM7()
 
-class immutablelist(list):
-    def _dont_modify(self, *args):
-        raise Exception("don't modify this list!")
-    __delitem__ = __delslice__ = __iadd__ = __imul__ = _dont_modify
-    __setitem__ = __setslice__ = _dont_modify
-    append = extend = insert = pop = remove = reverse = sort = _dont_modify
-
-registers = immutablelist([eax, ecx, edx, ebx, esp, ebp, esi, edi])
-registers8 = immutablelist([al, cl, dl, bl, ah, ch, dh, bh])
-xmm_registers = immutablelist([xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7])
+registers = [eax, ecx, edx, ebx, esp, ebp, esi, edi]
+registers8 = [al, cl, dl, bl, ah, ch, dh, bh]
+xmm_registers = [xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7]
 
 for r in registers + registers8:
     r.bitmask = 1 << r.op
