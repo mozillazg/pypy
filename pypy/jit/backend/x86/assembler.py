@@ -47,7 +47,7 @@ class MachineCodeBlockWrapper(object):
 
     def make_new_mc(self):
         new_mc = codebuf.MachineCodeBlock(self.bigsize)
-        debug_print('[new machine code block at 0x%x]' % fixid(new_mc.tell()))
+        debug_print('[new machine code block at', new_mc.tell(), ']')
         self._mc.JMP(rel32(new_mc.tell()))
         self._mc.done()
         self.old_mcs.append(self._mc)
