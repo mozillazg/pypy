@@ -203,7 +203,8 @@ class RegAlloc(object):
 
     def possibly_free_vars(self, vars):
         for var in vars:
-            self.possibly_free_var(var)
+            if var is not None:
+                self.possibly_free_var(var)
 
     def make_sure_var_in_reg(self, var, forbidden_vars=[],
                              selected_reg=None, imm_fine=True,
@@ -361,6 +362,8 @@ class RegAlloc(object):
                     longevity[arg] = (start_live[arg], i)
             if op.is_guard():
                 for arg in op.fail_args:
+                    if arg is None: # hole
+                        continue
                     assert isinstance(arg, Box)
                     if arg not in start_live:
                         print "Bogus arg in guard %d at %d" % (op.opnum, i)
@@ -374,6 +377,8 @@ class RegAlloc(object):
         return longevity
 
     def loc(self, v):
+        if v is None:
+            return None
         if v.type == FLOAT:
             return self.xrm.loc(v)
         return self.rm.loc(v)
