@@ -151,6 +151,7 @@ class Assembler386(object):
     def assemble_bridge(self, faildescr, inputargs, operations):
         self.make_sure_mc_exists()
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
+        # XXXXXXXXXXXXXXXXXXXXXX remove usage of _x86_faillocs
         arglocs = faildescr._x86_faillocs
         fail_stack_depth = faildescr._x86_current_stack_depth
         regalloc.prepare_bridge(fail_stack_depth, inputargs, arglocs,
@@ -783,12 +784,14 @@ class Assembler386(object):
                 break
         mc.CALL(rel32(self.failure_recovery_code[exc + 2 * withfloats]))
         # write tight data that describes the failure recovery
+        faildescr._x86_failure_recovery_bytecode = mc.tell()
         self.write_failure_recovery_description(mc, failargs, fail_locs)
         # write the fail_index too
         mc.write(packimm32(fail_index))
         # for testing the decoding, write a final byte 0xCC
         if not we_are_translated():
             mc.writechr(0xCC)
+            faildescr._x86_faillocs = fail_locs
         return addr
 
     DESCR_REF       = 0x00
@@ -904,7 +907,7 @@ class Assembler386(object):
         mc = self.mc2._mc
         # Assume that we are called at the beginning, when there is no risk
         # that 'mc' runs out of space.  Checked by asserts in mc.write().
-        addr = mc.tell()
+        recovery_addr = mc.tell()
         mc.PUSH(edi)
         mc.PUSH(esi)
         mc.PUSH(ebp)
@@ -917,7 +920,7 @@ class Assembler386(object):
         if withfloats:
             mc.SUB(esp, imm(8*8))
             for i in range(8):
-                mc.MOVSD(mem(esp, 8*i), xmm_registers[i])
+                mc.MOVSD(mem64(esp, 8*i), xmm_registers[i])
         mc.PUSH(eax)
         mc.CALL(rel32(failure_recovery_func))
         # returns in eax the fail_index
@@ -941,7 +944,8 @@ class Assembler386(object):
         mc.POP(ebx)
         mc.POP(ebp)
         mc.RET()
-        self.failure_recovery_code[exc + 2 * withfloats] = addr
+        self.mc2.done()
+        self.failure_recovery_code[exc + 2 * withfloats] = recovery_addr
 
     def generate_failure(self, mc, fail_index, locs, exc, locs_are_ref):
         for i in range(len(locs)):
