@@ -349,13 +349,13 @@ str_rsplit__String_String_ANY = make_rsplit_with_delim('str_rsplit__String_Strin
                                                        sliced)
 
 def str_join__String_ANY(space, w_self, w_list):
-    list_w = space.unpackiterable(w_list)
+    list_w = space.listview(w_list)
     str_w = space.str_w
     if list_w:
         self = w_self._value
         listlen = 0
         reslen = 0
-        l = []
+        l = [None] * len(list_w)
         for i in range(len(list_w)):
             w_s = list_w[i]
             if not space.is_true(space.isinstance(w_s, space.w_str)):
@@ -367,7 +367,7 @@ def str_join__String_ANY(space, w_self, w_list):
                     space.wrap("sequence item %d: expected string, %s "
                                "found" % (i,
                                           space.type(w_s).getname(space, '?'))))
-            l.append(space.str_w(w_s))
+            l[i] = space.str_w(w_s)
         return space.wrap(self.join(l))
     else:
         return W_StringObject.EMPTY
@@ -628,7 +628,7 @@ def str_endswith__String_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, w_end
     (u_self, _, start, end) = _convert_idx_params(space, w_self,
                                                   space.wrap(''), w_start,
                                                   w_end, True)
-    for w_suffix in space.viewiterable(w_suffixes):
+    for w_suffix in space.fixedview(w_suffixes):
         if space.is_true(space.isinstance(w_suffix, space.w_unicode)):
             w_u = space.call_function(space.w_unicode, w_self)
             return space.call_method(w_u, "endswith", w_suffixes, w_start,
@@ -647,7 +647,7 @@ def str_startswith__String_String_ANY_ANY(space, w_self, w_prefix, w_start, w_en
 def str_startswith__String_Tuple_ANY_ANY(space, w_self, w_prefixes, w_start, w_end):
     (u_self, _, start, end) = _convert_idx_params(space, w_self, space.wrap(''),
                                                   w_start, w_end, True)
-    for w_prefix in space.viewiterable(w_prefixes):
+    for w_prefix in space.fixedview(w_prefixes):
         if space.is_true(space.isinstance(w_prefix, space.w_unicode)):
             w_u = space.call_function(space.w_unicode, w_self)
             return space.call_method(w_u, "startswith", w_prefixes, w_start,

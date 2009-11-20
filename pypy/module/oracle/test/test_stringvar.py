@@ -2,9 +2,18 @@ from pypy.module.oracle.test.test_connect import OracleTestBase
 
 class AppTestStringVar(OracleTestBase):
 
+    def test_bind_inout(self):
+        cur = self.cnx.cursor()
+        vars = cur.setinputsizes(value=oracle.STRING)
+        cur.execute("""
+            begin
+              :value := :value || ' output';
+            end;""",
+            value="input")
+        assert vars["value"].getvalue() == "input output"
+
     def test_rowid(self):
         cur = self.cnx.cursor()
-        var = cur.var(oracle.NUMBER)
         cur.execute("select rowid from dual")
         rowid, = cur.fetchone()
         cur.execute("select * from dual where rowid = :r",
@@ -92,3 +101,32 @@ class AppTestStringVar(OracleTestBase):
         assert tablelen.getvalue() == 20
         # dbms_utility.comma_to_table returns a 'NULL-terminated' table
         assert arrayvar.getvalue() == array + [None]
+
+    def test_binary(self):
+        cur = self.cnx.cursor()
+        try:
+            cur.execute("drop table pypy_temp_table")
+        except oracle.DatabaseError:
+            pass
+        cur.execute("create table pypy_temp_table (rawcol raw(30))")
+
+        cur.setinputsizes(p=oracle.BINARY)
+        cur.execute("insert into pypy_temp_table values (:p)",
+                    p="raw string")
+        cur.execute("select * from pypy_temp_table")
+        data = cur.fetchall()
+        assert data == [("raw string",)]
+
+    def test_longstring(self):
+        cur = self.cnx.cursor()
+        output = cur.var(oracle.LONG_STRING)
+        cur.execute("""
+            declare
+              t_Temp varchar2(10000);
+            begin
+              t_Temp := :bigString;
+              :output := t_Temp;
+            end;""",
+            bigString="X" * 10000, output=output)
+        assert output.getvalue() == "X" * 10000
+

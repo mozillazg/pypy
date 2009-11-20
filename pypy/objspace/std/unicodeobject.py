@@ -173,7 +173,7 @@ def contains__Unicode_Unicode(space, w_container, w_item):
     return space.newbool(container.find(item) != -1)
 
 def unicode_join__Unicode_ANY(space, w_self, w_list):
-    l = space.unpackiterable(w_list)
+    l = space.listview(w_list)
     delim = w_self._value
     totlen = 0
     if len(l) == 0:
@@ -182,7 +182,7 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
         space.is_w(space.type(l[0]), space.w_unicode)):
         return l[0]
     
-    values_list = []
+    values_list = [None] * len(l)
     for i in range(len(l)):
         item = l[i]
         if isinstance(item, W_UnicodeObject):
@@ -194,7 +194,7 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
             w_msg = space.mod(space.wrap('sequence item %d: expected string or Unicode'),
                               space.wrap(i))
             raise OperationError(space.w_TypeError, w_msg)
-        values_list.append(item)
+        values_list[i] = item
     return W_UnicodeObject(w_self._value.join(values_list))
 
 def hash__Unicode(space, w_uni):
@@ -489,7 +489,7 @@ def unicode_startswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
                                               w_start, w_end):
     unistr, _, start, end = _convert_idx_params(space, w_unistr, space.wrap(u''),
                                                 w_start, w_end, True)
-    for w_prefix in space.viewiterable(w_prefixes):
+    for w_prefix in space.fixedview(w_prefixes):
         prefix = space.unicode_w(w_prefix)
         if stringstartswith(unistr, prefix, start, end):
             return space.w_True
@@ -499,7 +499,7 @@ def unicode_endswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
                                             w_start, w_end):
     unistr, _, start, end = _convert_idx_params(space, w_unistr, space.wrap(u''),
                                              w_start, w_end, True)
-    for w_suffix in space.viewiterable(w_suffixes):
+    for w_suffix in space.fixedview(w_suffixes):
         suffix = space.unicode_w(w_suffix)
         if stringendswith(unistr, suffix, start, end):
             return space.w_True
