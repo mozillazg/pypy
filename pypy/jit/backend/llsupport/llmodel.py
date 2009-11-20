@@ -150,8 +150,8 @@ class AbstractLLCPU(AbstractCPU):
             on_leave_jitted_hook()
 
         def on_leave_jitted_save_exc():
-            on_leave_jitted_hook()
             save_exception()
+            on_leave_jitted_hook()
 
         self.on_leave_jitted_noexc = on_leave_jitted_noexc
         self.on_leave_jitted_save_exc = on_leave_jitted_save_exc
