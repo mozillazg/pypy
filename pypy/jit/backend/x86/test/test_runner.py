@@ -314,31 +314,27 @@ class TestX86(LLtypeBackendTest):
                     else:
                         assert result != expected
 
-    def test_overflow_mc(self):
-        from pypy.jit.backend.x86.assembler import MachineCodeBlockWrapper
 
-        orig_size = MachineCodeBlockWrapper.MC_SIZE
-        MachineCodeBlockWrapper.MC_SIZE = 1024
-        old_mc = self.cpu.assembler.mc
-        old_mc2 = self.cpu.assembler.mc2
-        self.cpu.assembler.mc = None
-        try:
-            ops = []
-            base_v = BoxInt()
-            v = base_v
-            for i in range(1024):
-                next_v = BoxInt()
-                ops.append(ResOperation(rop.INT_ADD, [v, ConstInt(1)], next_v))
-                v = next_v
-            ops.append(ResOperation(rop.FINISH, [v], None,
-                                    descr=BasicFailDescr()))
-            looptoken = LoopToken()
-            self.cpu.compile_loop([base_v], ops, looptoken)
-            assert self.cpu.assembler.mc != old_mc   # overflowed
-            self.cpu.set_future_value_int(0, base_v.value)
-            self.cpu.execute_token(looptoken)
-            assert self.cpu.get_latest_value_int(0) == 1024
-        finally:
-            MachineCodeBlockWrapper.MC_SIZE = orig_size
-            self.cpu.assembler.mc = old_mc
-            self.cpu.assembler.mc2 = old_mc2
+class TestX86OverflowMC(TestX86):
+
+    def setup_class(cls):
+        cls.cpu = CPU(rtyper=None, stats=FakeStats())
+        cls.cpu.assembler.mc_size = 1024
+
+    def test_overflow_mc(self):
+        ops = []
+        base_v = BoxInt()
+        v = base_v
+        for i in range(1024):
+            next_v = BoxInt()
+            ops.append(ResOperation(rop.INT_ADD, [v, ConstInt(1)], next_v))
+            v = next_v
+        ops.append(ResOperation(rop.FINISH, [v], None,
+                                descr=BasicFailDescr()))
+        looptoken = LoopToken()
+        old_mc_mc = self.cpu.assembler.mc._mc
+        self.cpu.compile_loop([base_v], ops, looptoken)
+        assert self.cpu.assembler.mc._mc != old_mc_mc   # overflowed
+        self.cpu.set_future_value_int(0, base_v.value)
+        self.cpu.execute_token(looptoken)
+        assert self.cpu.get_latest_value_int(0) == 1024
