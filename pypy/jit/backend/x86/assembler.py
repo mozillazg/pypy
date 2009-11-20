@@ -819,10 +819,11 @@ class Assembler386(object):
             else:
                 raise AssertionError("bogus kind")
             loc = locs[i]
-            if isinstance(loc, REG):
-                n = loc.op
-            else:
+            if isinstance(loc, MODRM):
                 n = self.DESCR_FROMSTACK + loc.position
+            else:
+                assert isinstance(loc, REG)
+                n = loc.op
             n = kind + 4*n
             while n > 0x7F:
                 mc.writechr((n & 0x7F) | 0x80)
