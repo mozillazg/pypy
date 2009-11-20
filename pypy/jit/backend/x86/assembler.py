@@ -93,9 +93,6 @@ class Assembler386(object):
         self.setup_failure_recovery()
 
     def leave_jitted_hook(self):
-        # XXX BIG FAT WARNING XXX
-        # At this point, we should not call anyone here, because
-        # RPython-level exception might be set. Here be dragons
         i = 0
         while i < self.fail_boxes_ptr.lgt:
             chunk = self.fail_boxes_ptr.chunks[i]
@@ -882,6 +879,10 @@ class Assembler386(object):
 
         def failure_recovery_func(registers):
             # no malloc allowed here!!
+            # 'registers' is a pointer to a structure containing the
+            # original value of the registers, optionally the original
+            # value of XMM registers, and finally a reference to the
+            # recovery bytecode.  See _build_failure_recovery() for details.
             stack_at_ebp = registers[ebp.op]
             bytecode = rffi.cast(rffi.UCHARP, registers[8])
             num = 0
@@ -908,8 +909,7 @@ class Assembler386(object):
                     value = rffi.cast(rffi.LONGP, stackloc)[0]
                     if kind == self.DESCR_FLOAT:
                         value_hi = value
-                        stackloc -= 4
-                        value = rffi.cast(rffi.LONGP, stackloc)[0]
+                        value = rffi.cast(rffi.LONGP, stackloc - 4)[0]
                 elif code == self.DESCR_STOP:
                     break
                 else:
@@ -959,19 +959,16 @@ class Assembler386(object):
         mc.PUSH(edi)
         mc.PUSH(esi)
         mc.PUSH(ebp)
-        mc.PUSH(esp)    # not really used, but needed to take up the space
+        mc.PUSH(esp)  # <-- not really used, but needed to take up the space
         mc.PUSH(ebx)
         mc.PUSH(edx)
         mc.PUSH(ecx)
         mc.PUSH(eax)
-        mc.MOV(eax, esp)
+        mc.MOV(esi, esp)
         if withfloats:
             mc.SUB(esp, imm(8*8))
             for i in range(8):
                 mc.MOVSD(mem64(esp, 8*i), xmm_registers[i])
-        mc.PUSH(eax)
-        mc.CALL(rel32(failure_recovery_func))
-        # returns in eax the fail_index
 
         # we call a provided function that will
         # - call our on_leave_jitted_hook which will mark
@@ -979,9 +976,18 @@ class Assembler386(object):
         #   avoid unwarranted freeing
         # - optionally save exception depending on the flag
         addr = self.cpu.get_on_leave_jitted_int(save_exception=exc)
-        mc.MOV(edi, eax)
         mc.CALL(rel32(addr))
-        mc.MOV(eax, edi)
+
+        # the following call saves all values from the stack and from
+        # registers to the right 'fail_boxes_<type>' location.
+        # Note that the registers are saved so far in esi[0] to esi[7],
+        # as pushed above, plus optionally in esi[-16] to esi[-1] for
+        # the XMM registers.  Moreover, esi[8] is a pointer to the recovery
+        # bytecode, pushed just before by the CALL instruction written by
+        # generate_quick_failure().
+        mc.PUSH(esi)
+        mc.CALL(rel32(failure_recovery_func))
+        # returns in eax the fail_index
 
         # now we return from the complete frame, which starts from
         # _assemble_bootstrap_code().  The LEA below throws away most
