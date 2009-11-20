@@ -47,6 +47,18 @@ def test_write_failure_recovery_description():
     assert mc.content == (nums[:3] + double_byte_nums + nums[6:] +
                           [assembler.DESCR_STOP])
 
+    # also test rebuild_faillocs_from_descr()
+    bytecode = lltype.malloc(rffi.UCHARP.TO, len(mc.content), flavor='raw')
+    for i in range(len(mc.content)):
+        assert 0 <= mc.content[i] <= 255
+        bytecode[i] = rffi.cast(rffi.UCHAR, mc.content[i])
+    bytecode_addr = rffi.cast(lltype.Signed, bytecode)
+    newlocs = assembler.rebuild_faillocs_from_descr(bytecode_addr)
+    assert ([loc.assembler() for loc in newlocs] ==
+            [loc.assembler() for loc in locs])
+
+# ____________________________________________________________
+
 def test_failure_recovery_func_no_floats():
     do_failure_recovery_func(withfloats=False)
 

@@ -150,9 +150,12 @@ class Assembler386(object):
 
     def assemble_bridge(self, faildescr, inputargs, operations):
         self.make_sure_mc_exists()
+        arglocs = self.rebuild_faillocs_from_descr(
+            faildescr._x86_failure_recovery_bytecode)
+        if not we_are_translated():
+            assert ([loc.assembler() for loc in arglocs] ==
+                    [loc.assembler() for loc in faildescr._x86_debug_faillocs])
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
-        # XXXXXXXXXXXXXXXXXXXXXX remove usage of _x86_faillocs
-        arglocs = faildescr._x86_faillocs
         fail_stack_depth = faildescr._x86_current_stack_depth
         regalloc.prepare_bridge(fail_stack_depth, inputargs, arglocs,
                                 operations)
@@ -791,7 +794,7 @@ class Assembler386(object):
         # for testing the decoding, write a final byte 0xCC
         if not we_are_translated():
             mc.writechr(0xCC)
-            faildescr._x86_faillocs = fail_locs
+            faildescr._x86_debug_faillocs = fail_locs
         return addr
 
     DESCR_REF       = 0x00
@@ -829,6 +832,46 @@ class Assembler386(object):
             self.fail_boxes_ptr.get_addr_for_num(i)
             if self.cpu.supports_floats:
                 self.fail_boxes_float.get_addr_for_num(i)
+
+    def rebuild_faillocs_from_descr(self, bytecode):
+        from pypy.jit.backend.x86.regalloc import X86StackManager
+        bytecode = rffi.cast(rffi.UCHARP, bytecode)
+        arglocs = []
+        while 1:
+            # decode the next instruction from the bytecode
+            code = rffi.cast(lltype.Signed, bytecode[0])
+            bytecode = rffi.ptradd(bytecode, 1)
+            if code >= 4*self.DESCR_FROMSTACK:
+                # 'code' identifies a stack location
+                if code > 0x7F:
+                    shift = 7
+                    code &= 0x7F
+                    while True:
+                        nextcode = rffi.cast(lltype.Signed, bytecode[0])
+                        bytecode = rffi.ptradd(bytecode, 1)
+                        code |= (nextcode & 0x7F) << shift
+                        shift += 7
+                        if nextcode <= 0x7F:
+                            break
+                kind = code & 3
+                code = (code >> 2) - self.DESCR_FROMSTACK
+                if kind == self.DESCR_FLOAT:
+                    size = 2
+                else:
+                    size = 1
+                loc = X86StackManager.stack_pos(code, size)
+            elif code == self.DESCR_STOP:
+                break
+            else:
+                # 'code' identifies a register
+                kind = code & 3
+                code >>= 2
+                if kind == self.DESCR_FLOAT:
+                    loc = xmm_registers[code]
+                else:
+                    loc = registers[code]
+            arglocs.append(loc)
+        return arglocs[:]
 
     def setup_failure_recovery(self):
 
