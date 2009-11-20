@@ -329,6 +329,32 @@ class VirtualTests:
             return 0
         self.meta_interp(f, [50])
 
+    def test_guards_around_forcing_of_virtual_in_virtual(self):
+        class A(object):
+            def __init__(self, x):
+                self.x = x
+        mydriver = JitDriver(reds = ['n'], greens = [])
+        global_a = A(0)
+
+        def g(b):
+            n = b.x
+            if n < 10:
+                n += 1
+            global_a.forced = b.next
+            if n < 20:
+                assert global_a.forced is b.next
+
+        def f(n):
+            while n > 0:
+                mydriver.can_enter_jit(n=n)
+                mydriver.jit_merge_point(n=n)
+                a = A(n)
+                b = A(n)
+                b.next = a
+                g(b)
+                n -= 1
+            return 0
+        self.meta_interp(f, [50])
 
 # ____________________________________________________________
 # Run 1: all the tests instantiate a real RPython class
