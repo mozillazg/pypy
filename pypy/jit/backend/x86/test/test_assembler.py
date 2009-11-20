@@ -1,6 +1,6 @@
 from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.backend.x86.assembler import Assembler386
-from pypy.jit.backend.x86.regalloc import X86StackManager
+from pypy.jit.backend.x86.regalloc import X86StackManager, get_ebp_ofs
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
@@ -8,6 +8,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 
 class FakeCPU:
     rtyper = None
+    supports_floats = True
 
 class FakeMC:
     def __init__(self):
@@ -46,7 +47,13 @@ def test_write_failure_recovery_description():
     assert mc.content == (nums[:3] + double_byte_nums + nums[6:] +
                           [assembler.DESCR_STOP])
 
-def test_failure_recovery_func():
+def test_failure_recovery_func_no_floats():
+    do_failure_recovery_func(withfloats=False)
+
+def test_failure_recovery_func_with_floats():
+    do_failure_recovery_func(withfloats=True)
+
+def do_failure_recovery_func(withfloats):
     import random
     S = lltype.GcStruct('S')
 
@@ -57,7 +64,12 @@ def test_failure_recovery_func():
         return lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
 
     def get_random_float():
-        return random.random() - 0.5
+        assert withfloats
+        value = random.random() - 0.5
+        # make sure it fits into 64 bits
+        tmp = lltype.malloc(rffi.LONGP.TO, 2, flavor='raw')
+        rffi.cast(rffi.DOUBLEP, tmp)[0] = value
+        return rffi.cast(rffi.DOUBLEP, tmp)[0], tmp[0], tmp[1]
 
     # memory locations: 30 integers, 30 pointers, 26 floats
     # main registers: half of them as signed and the other half as ptrs
@@ -73,37 +85,43 @@ def test_failure_recovery_func():
     random.shuffle(locations)
     content = ([('int', locations.pop()) for _ in range(30)] +
                [('ptr', locations.pop()) for _ in range(30)] +
-               [('float', locations.pop()) for _ in range(26)] +
                [(['int', 'ptr'][random.randrange(0, 2)], reg)
-                         for reg in [eax, ecx, edx, ebx, esi, edi]] +
-               [('float', reg) for reg in [xmm0, xmm1, xmm2, xmm3,
-                                           xmm4, xmm5, xmm6, xmm7]])
-    assert len(content) == 100
+                         for reg in [eax, ecx, edx, ebx, esi, edi]])
+    if withfloats:
+        content += ([('float', locations.pop()) for _ in range(26)] +
+                    [('float', reg) for reg in [xmm0, xmm1, xmm2, xmm3,
+                                                xmm4, xmm5, xmm6, xmm7]])
     random.shuffle(content)
 
     # prepare the expected target arrays, the descr_bytecode,
     # the 'registers' and the 'stack' arrays according to 'content'
-    registers = lltype.malloc(rffi.LONGP.TO, 9, flavor='raw')
-    xmmregisters = [0.0] * 8
-    stacklen = baseloc + 3
+    xmmregisters = lltype.malloc(rffi.LONGP.TO, 16+9, flavor='raw')
+    registers = rffi.ptradd(xmmregisters, 16)
+    stacklen = baseloc + 10
     stack = lltype.malloc(rffi.LONGP.TO, stacklen, flavor='raw')
-    expected_ints = [0] * 100
-    expected_ptrs = [lltype.nullptr(llmemory.GCREF.TO)] * 100
-    expected_floats = [0.0] * 100
+    expected_ints = [0] * len(content)
+    expected_ptrs = [lltype.nullptr(llmemory.GCREF.TO)] * len(content)
+    expected_floats = [0.0] * len(content)
+
+    def write_in_stack(loc, value):
+        assert loc >= 0
+        ofs = get_ebp_ofs(loc)
+        assert ofs < 0
+        assert (ofs % 4) == 0
+        stack[stacklen + ofs//4] = value
 
     descr_bytecode = []
     for i, (kind, loc) in enumerate(content):
         if kind == 'float':
-            value = get_random_float()
+            value, lo, hi = get_random_float()
             expected_floats[i] = value
             kind = Assembler386.DESCR_FLOAT
             if isinstance(loc, REG):
-                xmmregisters[loc.op] = value
+                xmmregisters[2*loc.op] = lo
+                xmmregisters[2*loc.op+1] = hi
             else:
-                tmp = lltype.malloc(rffi.LONGP.TO, 2, flavor='raw')
-                rffi.cast(rffi.DOUBLEP, tmp)[0] = value
-                stack[stacklen - loc] = tmp[1]
-                stack[stacklen - (loc+1)] = tmp[0]
+                write_in_stack(loc, hi)
+                write_in_stack(loc+1, lo)
         else:
             if kind == 'int':
                 value = get_random_int()
@@ -119,7 +137,7 @@ def test_failure_recovery_func():
             if isinstance(loc, REG):
                 registers[loc.op] = value
             else:
-                stack[stacklen - loc] = value
+                write_in_stack(loc, value)
 
         if isinstance(loc, REG):
             num = kind + 4*loc.op
@@ -142,14 +160,21 @@ def test_failure_recovery_func():
         assert 0 <= descr_bytecode[i] <= 255
         descr_bytes[i] = rffi.cast(rffi.UCHAR, descr_bytecode[i])
     registers[8] = rffi.cast(rffi.LONG, descr_bytes)
+    registers[ebp.op] = rffi.cast(rffi.LONG, stack) + 4*stacklen
 
     # run!
     assembler = Assembler386(FakeCPU())
+    assembler.fail_boxes_int.get_addr_for_num(len(content)-1)   # preallocate
+    assembler.fail_boxes_ptr.get_addr_for_num(len(content)-1)
+    assembler.fail_boxes_float.get_addr_for_num(len(content)-1)
     res = assembler.failure_recovery_func(registers)
     assert res == 0x1C3
 
     # check the fail_boxes
-    for i in range(100):
+    for i in range(len(content)):
         assert assembler.fail_boxes_int.getitem(i) == expected_ints[i]
         assert assembler.fail_boxes_ptr.getitem(i) == expected_ptrs[i]
+        # note: we expect *exact* results below.  If you have only
+        # an approximate result, it might mean that only the first 32
+        # bits of the float were correctly saved and restored.
         assert assembler.fail_boxes_float.getitem(i) == expected_floats[i]
