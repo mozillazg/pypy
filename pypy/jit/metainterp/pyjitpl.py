@@ -1622,6 +1622,7 @@ class MetaInterp(object):
     def initialize_state_from_guard_failure(self, resumedescr, must_compile):
         # guard failure: rebuild a complete MIFrame stack
         self.in_recursion = -1 # always one portal around
+        # xxx now that we have holes all this is delicate xxx
         inputargs = self.load_values_from_failure(resumedescr)
         warmrunnerstate = self.staticdata.state
         if must_compile:
