@@ -17,6 +17,7 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.x86.support import NonmovableGrowableArrayFloat,\
      NonmovableGrowableArraySigned, NonmovableGrowableArrayGCREF,\
      CHUNK_SIZE
+from pypy.rlib.debug import debug_print
 
 # our calling convention - we pass first 6 args in registers
 # and the rest stays on the stack
@@ -34,17 +35,19 @@ def align_stack_words(words):
     return (words + CALL_ALIGN - 1) & ~(CALL_ALIGN-1)
 
 class MachineCodeBlockWrapper(object):
-    MC_SIZE = 1024*1024
+    MC_DEFAULT_SIZE = 1024*1024
 
-    def __init__(self):
+    def __init__(self, bigsize):
         self.old_mcs = [] # keepalive
-        self._mc = codebuf.MachineCodeBlock(self.MC_SIZE)
+        self.bigsize = bigsize
+        self._mc = codebuf.MachineCodeBlock(bigsize)
 
     def bytes_free(self):
         return self._mc._size - self._mc._pos
 
     def make_new_mc(self):
-        new_mc = codebuf.MachineCodeBlock(self.MC_SIZE)
+        new_mc = codebuf.MachineCodeBlock(self.bigsize)
+        debug_print('[new machine code block at 0x%x]' % fixid(new_mc.tell()))
         self._mc.JMP(rel32(new_mc.tell()))
         self._mc.done()
         self.old_mcs.append(self._mc)
@@ -74,6 +77,7 @@ for name in dir(codebuf.MachineCodeBlock):
 class Assembler386(object):
     mc = None
     mc2 = None
+    mc_size = MachineCodeBlockWrapper.MC_DEFAULT_SIZE
 
     def __init__(self, cpu, translate_support_code=False):
         self.cpu = cpu
@@ -121,8 +125,8 @@ class Assembler386(object):
             # done
             # we generate the loop body in 'mc'
             # 'mc2' is for guard recovery code
-            self.mc = MachineCodeBlockWrapper()
-            self.mc2 = MachineCodeBlockWrapper()
+            self.mc = MachineCodeBlockWrapper(self.mc_size)
+            self.mc2 = MachineCodeBlockWrapper(self.mc_size)
             self._build_failure_recovery(False)
             self._build_failure_recovery(True)
             if self.cpu.supports_floats:
