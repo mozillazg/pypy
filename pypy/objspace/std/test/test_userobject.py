@@ -1,3 +1,4 @@
+import py
 from pypy.interpreter import gateway
 
 
@@ -283,6 +284,8 @@ class AppTestWithMultiMethodVersion2(AppTestUserObject):
 
         cls.prev_installer = multimethod.Installer
         multimethod.Installer = multimethod.InstallerVersion2
+        if conftest.option.runappdirect:
+            py.test.skip("Cannot run different installers when runappdirect")
         config = conftest.make_config(conftest.option, **cls.OPTIONS)
         cls.space = conftest.maketestobjspace(config)
 

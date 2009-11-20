@@ -144,12 +144,12 @@ class W_Variable(Wrappable):
                 self.size = size
 
         # allocate the data for the variable
-        self.allocateData()
+        self.allocateData(self.environment.space)
     
         # allocate the indicator for the variable
         self.indicator = lltype.malloc(rffi.CArrayPtr(roci.sb2).TO,
                                        self.allocatedElements,
-                                       flavor='raw', zero=True) # XXX
+                                       flavor='raw', zero=True)
 
         # ensure that all variable values start out NULL
         for i in range(self.allocatedElements):
@@ -159,7 +159,7 @@ class W_Variable(Wrappable):
         if self.isVariableLength:
             self.returnCode = lltype.malloc(rffi.CArrayPtr(roci.ub2).TO,
                                             self.allocatedElements,
-                                            flavor='raw', zero=True) # XXX
+                                            flavor='raw', zero=True)
 
         # perform extended initialization
         self.initialize(cursor)
@@ -170,28 +170,33 @@ class W_Variable(Wrappable):
             lltype.free(self.actualLength, flavor='raw')
         if self.data:
             lltype.free(self.data, flavor='raw')
+        if self.returnCode:
+            lltype.free(self.returnCode, flavor='raw')
 
     def getBufferSize(self):
         return self.size
 
-    def allocateData(self):
+    def allocateData(self, space):
         # set the buffer size for the variable
         self.bufferSize = self.getBufferSize()
 
         # allocate the data as long as it is small enough
-        dataLength = ovfcheck(self.allocatedElements * self.bufferSize)
-        if dataLength > sys.maxint:
-            raise ValueError("array size too large")
+        try:
+            dataLength = ovfcheck(self.allocatedElements * self.bufferSize)
+        except OverflowError:
+            raise OperationError(
+                space.w_ValueError,
+                space.wrap("array size too large"))
 
         self.data = lltype.malloc(rffi.CCHARP.TO, int(dataLength),
                                   flavor='raw', zero=True)
 
-    def resize(self, size):
+    def resize(self, space, size):
         # allocate the data for the new array
         orig_data = self.data
         orig_size = self.bufferSize
         self.size = size
-        self.allocateData()
+        self.allocateData(space)
 
         # copy the data from the original array to the new array
         for i in range(self.allocatedElements):
@@ -290,13 +295,13 @@ class W_Variable(Wrappable):
                 error = W_Error(space, self.environment,
                                 "Variable_VerifyFetch()", 0)
                 error.code = self.returnCode[pos]
-                error.message = self.space.wrap(
+                error.message = space.wrap(
                     "column at array pos %d fetched with error: %d" %
                     (pos, self.returnCode[pos]))
-                w_error = get(self.space).w_DatabaseError
+                w_error = get(space).w_DatabaseError
 
-                raise OperationError(get(self.space).w_DatabaseError,
-                                     self.space.wrap(error))
+                raise OperationError(get(space).w_DatabaseError,
+                                     space.wrap(error))
 
     def getSingleValue(self, space, pos):
         # ensure we do not exceed the number of allocated elements
@@ -356,7 +361,7 @@ class W_Variable(Wrappable):
                 space.w_TypeError,
                 space.wrap("expecting array data"))
 
-        elements_w = space.viewiterable(w_value)
+        elements_w = space.listview(w_value)
 
         # ensure we haven't exceeded the number of allocated elements
         if len(elements_w) > self.allocatedElements:
@@ -384,8 +389,9 @@ W_Variable.typedef = TypeDef(
     setvalue = interp2app(W_Variable.setValue,
                           unwrap_spec=W_Variable.setValue.unwrap_spec),
 
-    maxlength = interp_attrproperty('bufferSize', W_Variable),
-
+    maxlength  = interp_attrproperty('bufferSize', W_Variable),
+    bufferSize = interp_attrproperty('bufferSize', W_Variable),
+    size = interp_attrproperty('size', W_Variable),
     )
 
 class VT_String(W_Variable):
@@ -462,7 +468,7 @@ class VT_String(W_Variable):
 
             # ensure that the buffer is large enough
             if buf.size > self.bufferSize:
-                self.resize(size)
+                self.resize(space, size)
 
             # keep a copy of the string
             self.actualLength[pos] = rffi.cast(roci.ub2, buf.size)
@@ -480,7 +486,36 @@ class VT_NationalCharString(W_Variable):
     pass
 
 class VT_LongString(W_Variable):
-    pass
+    oracleType = roci.SQLT_LVC
+    isVariableLength = True
+    size = 128 * 1024
+
+    def getBufferSize(self):
+        return self.size + rffi.sizeof(roci.ub4)
+
+    def getValueProc(self, space, pos):
+        ptr = rffi.ptradd(self.data, pos * self.bufferSize)
+        length = rffi.cast(roci.Ptr(roci.ub4), ptr)[0]
+
+        ptr = rffi.ptradd(ptr, rffi.sizeof(roci.ub4))
+        return space.wrap(rffi.charpsize2str(ptr, length))
+
+    def setValueProc(self, space, pos, w_value):
+        buf = config.StringBuffer()
+        buf.fill(space, w_value)
+
+        try:
+            # ensure that the buffer is large enough
+            if buf.size + rffi.sizeof(roci.ub4) > self.bufferSize:
+                self.resize(space, buf.size + rffi.sizeof(roci.ub4))
+
+            # copy the string to the Oracle buffer
+            ptr = rffi.ptradd(self.data, pos * self.bufferSize)
+            rffi.cast(roci.Ptr(roci.ub4), ptr)[0] = rffi.cast(roci.ub4, buf.size)
+            for index in range(buf.size):
+                ptr[index + rffi.sizeof(roci.ub4)] = buf.ptr[index]
+        finally:
+            buf.clear()
 
 class VT_FixedNationalChar(W_Variable):
     pass
@@ -490,11 +525,12 @@ class VT_Rowid(VT_String):
     size = 18
     isVariableLength = False
 
-class VT_Binary(W_Variable):
-    pass
+class VT_Binary(VT_String):
+    oracleType = roci.SQLT_BIN
+    size = config.MAX_BINARY_BYTES
 
-class VT_LongBinary(W_Variable):
-    pass
+class VT_LongBinary(VT_LongString):
+    oracleType = roci.SQLT_LVB
 
 class VT_NativeFloat(W_Variable):
     pass
@@ -542,9 +578,10 @@ class VT_Float(W_Variable):
                 lltype.free(attrptr, flavor='raw')
 
             if scale == 0 or (scale == -127 and precision == 0):
-                return VT_LongInteger
-            elif precision > 0 and precision < 10:
-                return VT_Integer
+                if precision > 0 and precision < 10:
+                    return VT_Integer
+                else:
+                    return VT_LongInteger
 
         return cls
 
@@ -592,8 +629,13 @@ class VT_Float(W_Variable):
                                          rffi.cast(lltype.Signed, sizeptr[0])))
                 if isinstance(self, VT_NumberAsString):
                     return w_strvalue
-                else:
+
+                try:
                     return space.call_function(space.w_int, w_strvalue)
+                except OperationError, e:
+                    if e.match(space, space.w_ValueError):
+                        return space.call_function(space.w_float, w_strvalue)
+                    raise
             finally:
                 rffi.keep_buffer_alive_until_here(textbuf, text)
                 lltype.free(sizeptr, flavor='raw')
@@ -693,7 +735,6 @@ class VT_DateTime(W_Variable):
         dataptr = rffi.ptradd(
             rffi.cast(roci.Ptr(roci.OCIDate), self.data),
             pos)
-        dataptr = rffi.cast(roci.Ptr(roci.OCIDate), self.data)
         return transform.OracleDateToPythonDateTime(self.environment, dataptr)
 
     def setValueProc(self, space, pos, w_value):
@@ -708,14 +749,18 @@ class VT_DateTime(W_Variable):
             minute = space.int_w(space.getattr(w_value, space.wrap('minute')))
             second = space.int_w(space.getattr(w_value, space.wrap('second')))
         elif space.is_true(space.isinstance(w_value, get(space).w_DateType)):
-            XXX
+            year = space.int_w(space.getattr(w_value, space.wrap('year')))
+            month = space.int_w(space.getattr(w_value, space.wrap('month')))
+            day = space.int_w(space.getattr(w_value, space.wrap('day')))
+            hour = minute = second = 0
         else:
             raise OperationError(
                 space.w_TypeError,
                 space.wrap("expecting date data"))
 
         # store a copy of the value
-        timePart = dataptr[0].c_OCIDateTime
+        value = dataptr[0]
+        timePart = value.c_OCIDateTime
         rffi.setintfield(timePart, 'c_OCITimeHH', hour)
         rffi.setintfield(timePart, 'c_OCITimeMI', minute)
         rffi.setintfield(timePart, 'c_OCITimeSS', second)
@@ -723,7 +768,7 @@ class VT_DateTime(W_Variable):
         rffi.setintfield(dataptr[0], 'c_OCIDateMM', month)
         rffi.setintfield(dataptr[0], 'c_OCIDateDD', day)
 
-class VT_Date(W_Variable):
+class VT_Date(VT_DateTime):
     oracleType = roci.SQLT_ODT
     size = rffi.sizeof(roci.OCIDate)
 
@@ -869,7 +914,10 @@ def typeByValue(space, w_value, numElements):
 
     if space.is_true(space.isinstance(w_value, space.w_str)):
         size = space.int_w(space.len(w_value))
-        return VT_String, size, numElements
+        if size > config.MAX_STRING_CHARS:
+            return VT_LongString, size, numElements
+        else:
+            return VT_String, size, numElements
 
     # XXX Unicode
 
@@ -889,7 +937,8 @@ def typeByValue(space, w_value, numElements):
     if space.is_true(space.isinstance(w_value, get(space).w_DateTimeType)):
         return VT_DateTime, 0, numElements
 
-    # XXX date
+    if space.is_true(space.isinstance(w_value, get(space).w_DateType)):
+        return VT_Date, 0, numElements
 
     # XXX Delta
 
@@ -900,7 +949,7 @@ def typeByValue(space, w_value, numElements):
 
     # handle arrays
     if space.is_true(space.isinstance(w_value, space.w_list)):
-        elements_w = space.viewiterable(w_value)
+        elements_w = space.listview(w_value)
         for w_element in elements_w:
             if not space.is_w(w_element, space.w_None):
                 break
@@ -933,7 +982,7 @@ def newVariableByValue(space, cursor, w_value, numElements):
 def newArrayVariableByType(space, cursor, w_value):
     "Allocate a new PL/SQL array by looking at the Python data type."
 
-    w_type, w_numElements = space.viewiterable(w_value, 2)
+    w_type, w_numElements = space.fixedview(w_value, 2)
 
     numElements = space.int_w(w_numElements)
     varType = typeByPythonType(space, cursor, w_type)
@@ -963,4 +1012,4 @@ def newVariableByType(space, cursor, w_value, numElements):
 
     # everything else ought to be a Python type
     varType = typeByPythonType(space, cursor, w_value)
-    return varType(cursor, numElements)
+    return varType(cursor, numElements, varType.size)
