@@ -191,7 +191,7 @@ class ResumeDataLoopMemo(object):
     def forget_numberings(self, virtualbox):
         # XXX ideally clear only the affected numberings
         self.numberings.clear()
-        # XXX clear cached_*
+        self.clear_box_virtual_numbers()
 
     # caching for virtuals and boxes inside them
 
