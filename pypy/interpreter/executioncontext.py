@@ -5,6 +5,7 @@ from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.jit import we_are_jitted
 from pypy.rlib import jit
+from pypy.rlib.objectmodel import we_are_translated
 
 def app_profile_call(space, w_callable, frame, event, w_arg):
     space.call_function(w_callable,
@@ -62,16 +63,17 @@ class ExecutionContext(object):
 
     @jit.unroll_safe
     def gettopframe(self):
-        frame = self.some_frame
+        frame = self.top_real_frame
         if frame is not None:
             while frame.f_forward is not None:
                 frame = frame.f_forward
         return frame
 
     def _init_frame_chain(self):
-        # 'some_frame' points to any frame from this thread's frame stack
-        # (although in general it should point to the top one).
-        self.some_frame = None
+        # 'top_real_frame' points to the topmost "real" frame from this
+        # thread's frame stack.  See gettopframe() for how to go from
+        # there to the actual top of frame.
+        self.top_real_frame = None
         self.framestackdepth = 0
 
     @staticmethod
@@ -113,43 +115,44 @@ class ExecutionContext(object):
           ...
         
         This ensures that the virtual frames don't escape via the f_back of the
-        real frames. For the same reason, the executioncontext's some_frame
-        attribute should only point to real frames.
+        real frames. For the same reason, the executioncontext's top_real_frame
+        attribute should only point to real frames (as the name implies).
 
         All places where a frame can become accessed from applevel-code (like
-        sys._getframe and traceback catching) need to call force_f_back to ensure
-        that the intermediate virtual frames are forced to be real ones.
+        sys._getframe, sys.exc_info) need to call force_frame_chain to ensure
+        that the intermediate virtual frames are forced to be real ones.  For
+        sys.exc_info() and similar places that expose the traceback to app-
+        level, this is done by OperationError.wrap_application_traceback().
 
+        The 'f_no_forward_from_there' flag on PyFrame is an optimization:
+        it is set to True when we are sure that f_forward is None on frame and
+        on any of its f_backs.
         """ 
         frame.f_back_some = None
         frame.f_forward = None
-        frame.f_back_forced = False
+        frame.f_no_forward_from_there = False
 
     def _chain(self, frame):
         self.framestackdepth += 1
         #
-        frame.f_back_some = self.some_frame
+        frame.f_back_some = self.top_real_frame
         if self._we_are_jitted():
             curtopframe = self.gettopframe()
             assert curtopframe is not None
             curtopframe.f_forward = frame
         else:
-            self.some_frame = frame
+            self.top_real_frame = frame
 
     def _unchain(self, frame):
-        #assert frame is self.gettopframe() --- slowish
-        if self.some_frame is frame:
-            self.some_frame = frame.f_back_some
+        if not we_are_translated():
+            assert frame is self.gettopframe() # slowish
+        if self.top_real_frame is frame:
+            self.top_real_frame = frame.f_back_some
         else:
             f_back = frame.f_back()
-            if f_back is not None:
-                f_back.f_forward = None
-
-        if frame.last_exception is not None:
-            f_back = frame.f_back()
-            frame.f_back_some = f_back
-            frame.f_back_forced = True
-
+            assert f_back is not None
+            f_back.f_forward = None
+        #
         self.framestackdepth -= 1
 
     @staticmethod
@@ -160,13 +163,13 @@ class ExecutionContext(object):
         # executed outside of the jit. Note that this makes it important that
         # _unchain does not call we_are_jitted
         frame.f_back().f_forward = None
-        ec.some_frame = frame
+        ec.top_real_frame = frame
 
     @staticmethod
     @jit.unroll_safe
     def _extract_back_from_frame(frame):
         back_some = frame.f_back_some
-        if frame.f_back_forced:
+        if frame.f_no_forward_from_there:
             # don't check back_some.f_forward in this case
             return back_some
         if back_some is None:
@@ -177,17 +180,33 @@ class ExecutionContext(object):
                 return back_some
             back_some = f_forward
 
-    @staticmethod
-    def _force_back_of_frame(frame):
-        orig_frame = frame
-        while frame is not None and not frame.f_back_forced:
-            frame.f_back_some = f_back = ExecutionContext._extract_back_from_frame(frame)
-            frame.f_back_forced = True
+    def force_frame_chain(self):
+        frame = self.gettopframe()
+        self.top_real_frame = frame
+        while frame is not None and not frame.f_no_forward_from_there:
+            f_back = ExecutionContext._extract_back_from_frame(frame)
+            frame.f_back_some = f_back
             # now that we force the whole chain, we also have to set the
             # forward links to None
             frame.f_forward = None
+            frame.f_no_forward_from_there = True
             frame = f_back
-        return orig_frame.f_back_some
+
+    def escape_frame_via_traceback(self, topframe):
+        # The topframe escapes via a traceback.  There are two cases: either
+        # this topframe is a virtual frame, or not.
+        if not we_are_translated():
+            assert topframe is self.gettopframe()
+        if self.top_real_frame is not topframe:
+            # Case of a virtual frame: set the f_back_some pointer on the
+            # frame to the real back, and set f_no_forward_from_there as a
+            # way to ensure that the correct thing will happen in
+            # _extract_back_from_frame(), should it ever be called.
+            topframe.f_back_some = topframe.f_back()
+            topframe.f_no_forward_from_there = True
+        else:
+            # Normal case
+            self.force_frame_chain()
 
     _we_are_jitted = staticmethod(we_are_jitted) # indirection for testing
     
@@ -207,7 +226,7 @@ class ExecutionContext(object):
             self.is_tracing = 0
 
         def enter(self, ec):
-            ec.some_frame = self.topframe
+            ec.top_real_frame = self.topframe
             ec.framestackdepth = self.framestackdepth
             ec.w_tracefunc = self.w_tracefunc
             ec.profilefunc = self.profilefunc
@@ -216,6 +235,7 @@ class ExecutionContext(object):
             ec.space.frame_trace_action.fire()
 
         def leave(self, ec):
+            ec.force_frame_chain()     # for now
             self.topframe = ec.gettopframe()
             self.framestackdepth = ec.framestackdepth
             self.w_tracefunc = ec.w_tracefunc
@@ -392,7 +412,7 @@ class ExecutionContext(object):
         if w_callback is not None and event != "leaveframe":
             if operr is not None:
                 w_arg =  space.newtuple([operr.w_type, operr.w_value,
-                                     space.wrap(operr.application_traceback)])
+                                     operr.wrap_application_traceback(space)])
 
             frame.fast2locals()
             self.is_tracing += 1

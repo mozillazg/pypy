@@ -30,8 +30,8 @@ purposes only."""
         raise OperationError(space.w_ValueError,
                              space.wrap("frame index must not be negative"))
     ec = space.getexecutioncontext()
+    ec.force_frame_chain()
     f = ec.gettopframe_nohidden()
-    f.force_f_back()
     while True:
         if f is None:
             raise OperationError(space.w_ValueError,
@@ -92,7 +92,7 @@ frame."""
         return space.newtuple([space.w_None,space.w_None,space.w_None])
     else:
         return space.newtuple([operror.w_type, operror.w_value,
-                               space.wrap(operror.application_traceback)])
+                               operror.wrap_application_traceback(space)])
 
 def exc_clear(space):
     """Clear global information on the current exception.  Subsequent calls

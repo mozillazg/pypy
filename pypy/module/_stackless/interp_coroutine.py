@@ -275,7 +275,6 @@ def w_descr__framestack(space, self):
         return space.newtuple([])
     items = [None] * index
     f = self.subctx.topframe
-    f.force_f_back()
     while index > 0:
         index -= 1
         items[index] = space.wrap(f)

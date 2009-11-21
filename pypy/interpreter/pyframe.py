@@ -310,7 +310,7 @@ class PyFrame(eval.Frame):
             w_tb = space.w_None
         else:
             w_exc_value = self.last_exception.w_value
-            w_tb = w(self.last_exception.application_traceback)
+            w_tb = self.last_exception.wrap_application_traceback(space)
         
         tup_state = [
             w(self.f_back()),
@@ -366,7 +366,6 @@ class PyFrame(eval.Frame):
         # everything like cells from here
         PyFrame.__init__(self, space, pycode, w_globals, closure)
         new_frame.f_back_some = space.interp_w(PyFrame, w_f_back, can_be_None=True)
-        new_frame.f_back_forced = True
 
         new_frame.builtin = space.interp_w(Module, w_builtin)
         new_frame.set_blocklist([unpickle_block(space, w_blk)
@@ -438,9 +437,6 @@ class PyFrame(eval.Frame):
 
     def f_back(self):
         return ExecutionContext._extract_back_from_frame(self)
-
-    def force_f_back(self):
-        return ExecutionContext._force_back_of_frame(self)
 
     ### line numbers ###
 
@@ -632,7 +628,7 @@ class PyFrame(eval.Frame):
             while f is not None and f.last_exception is None:
                 f = f.f_back()
             if f is not None:
-                return space.wrap(f.last_exception.application_traceback)
+                return f.last_exception.wrap_application_traceback(space)
         return space.w_None
          
     def fget_f_restricted(space, self):
