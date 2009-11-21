@@ -159,6 +159,7 @@ class __extend__(pyframe.PyFrame):
         block = self.unrollstack(SApplicationException.kind)
         if block is None:
             # no handler found for the OperationError
+            ec.escape_frame_via_traceback(self)
             if we_are_translated():
                 raise operr
             else:
@@ -874,10 +875,11 @@ class __extend__(pyframe.PyFrame):
         unroller = f.space.interpclass_w(w_unroller)
         if isinstance(unroller, SApplicationException):
             operr = unroller.operr
+            w_traceback = operr.wrap_application_traceback(f.space)
             w_result = f.space.call_function(w_exitfunc,
                                              operr.w_type,
                                              operr.w_value,
-                                             operr.application_traceback)
+                                             w_traceback)
             if f.space.is_true(w_result):
                 # __exit__() returned True -> Swallow the exception.
                 f.settopvalue(f.space.w_None, 2)

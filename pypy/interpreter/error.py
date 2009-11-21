@@ -47,6 +47,11 @@ class OperationError(Exception):
         "NOT_RPYTHON: Convenience for tracebacks."
         return '[%s: %s]' % (self.w_type, self.w_value)
 
+    def wrap_application_traceback(self, space):
+        ec = space.getexecutioncontext()
+        ec.force_frame_chain()
+        return space.wrap(self.application_traceback)
+
     def errorstr(self, space):
         "The exception class and value, as a string."
         if space is None:

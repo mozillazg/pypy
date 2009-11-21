@@ -32,7 +32,7 @@ def _attach_helpers(space):
         w_last = None
         while w_frame.f_back():
             # should have been forced by traceback capturing
-            assert w_frame.f_back_forced
+            assert w_frame.f_no_forward_from_there
             w_last = w_frame
             w_frame = w_frame.f_back()
         assert w_last
@@ -42,7 +42,7 @@ def _attach_helpers(space):
 
     def restore_top_frame(space, w_frame, w_saved):
         while w_frame.f_back():
-            assert w_frame.f_back_forced
+            assert w_frame.f_no_forward_from_there
             w_frame = w_frame.f_back()
         w_frame.f_back_some = w_saved
 
