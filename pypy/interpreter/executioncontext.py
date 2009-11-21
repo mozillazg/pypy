@@ -124,13 +124,15 @@ class ExecutionContext(object):
         sys.exc_info() and similar places that expose the traceback to app-
         level, this is done by OperationError.wrap_application_traceback().
 
-        The 'f_no_forward_from_there' flag on PyFrame is an optimization:
-        it is set to True when we are sure that f_forward is None on frame and
-        on any of its f_backs.
+        The 'f_back_is_correct' flag on PyFrame means 'the f_back_some is
+        actually really my f_back'.  If not set, we must check
+        'f_back_some.f_forward' to access the real f_back.  Note that we
+        guarantee that if f_back_is_correct is set on a frame in the frame
+        chain, then it is also set on all older frames.
         """ 
         frame.f_back_some = None
         frame.f_forward = None
-        frame.f_no_forward_from_there = False
+        frame.f_back_is_correct = False
 
     def _chain(self, frame):
         self.framestackdepth += 1
@@ -144,8 +146,7 @@ class ExecutionContext(object):
             self.top_real_frame = frame
 
     def _unchain(self, frame):
-        if not we_are_translated():
-            assert frame is self.gettopframe() # slowish
+        assert frame is self.gettopframe() # slowish, XXX disable me again
         if self.top_real_frame is frame:
             self.top_real_frame = frame.f_back_some
         else:
@@ -169,7 +170,7 @@ class ExecutionContext(object):
     @jit.unroll_safe
     def _extract_back_from_frame(frame):
         back_some = frame.f_back_some
-        if frame.f_no_forward_from_there:
+        if frame.f_back_is_correct:
             # don't check back_some.f_forward in this case
             return back_some
         if back_some is None:
@@ -183,27 +184,30 @@ class ExecutionContext(object):
     def force_frame_chain(self):
         frame = self.gettopframe()
         self.top_real_frame = frame
-        while frame is not None and not frame.f_no_forward_from_there:
+        if frame is None:
+            return
+        while not frame.f_back_is_correct:
             f_back = ExecutionContext._extract_back_from_frame(frame)
             frame.f_back_some = f_back
+            frame.f_back_is_correct = True
             # now that we force the whole chain, we also have to set the
             # forward links to None
-            frame.f_forward = None
-            frame.f_no_forward_from_there = True
+            if f_back is None:
+                break
+            f_back.f_forward = None
             frame = f_back
 
     def escape_frame_via_traceback(self, topframe):
         # The topframe escapes via a traceback.  There are two cases: either
         # this topframe is a virtual frame, or not.
-        if not we_are_translated():
-            assert topframe is self.gettopframe()
+        assert topframe is self.gettopframe()
         if self.top_real_frame is not topframe:
             # Case of a virtual frame: set the f_back_some pointer on the
-            # frame to the real back, and set f_no_forward_from_there as a
+            # frame to the real back, and set f_back_is_correct as a
             # way to ensure that the correct thing will happen in
             # _extract_back_from_frame(), should it ever be called.
             topframe.f_back_some = topframe.f_back()
-            topframe.f_no_forward_from_there = True
+            topframe.f_back_is_correct = True
         else:
             # Normal case
             self.force_frame_chain()
