@@ -142,6 +142,7 @@ class ExecutionContext(object):
             curtopframe = self.gettopframe()
             assert curtopframe is not None
             curtopframe.f_forward = frame
+            frame.f_back_is_correct = False
         else:
             self.top_real_frame = frame
 
