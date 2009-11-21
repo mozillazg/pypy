@@ -845,3 +845,12 @@ class TestFrameChaining(object):
         ec.force_frame_chain()
         assert frame2._f_forward is None    # because we just forced
         assert frame._f_forward is None
+
+    def test_rechain_frame(self):
+        # test rechaining a frame, as is done with generators
+        ec, frame, frame2 = self.enter_two_jitted_levels()
+        ec.force_frame_chain()
+        ec._unchain(frame2)
+        ec._chain(frame2)
+        assert frame._f_forward is frame2
+        assert not frame2.f_back_is_correct
