@@ -438,7 +438,7 @@ class TestFrameChaining(object):
         assert frame.f_forward is None
         assert frame2.f_forward is None
         ec.force_frame_chain()
-        assert frame.f_no_forward_from_there
+        assert frame.f_back_is_correct
         assert ec.gettopframe() is frame2
         assert ec._extract_back_from_frame(frame2) is frame
         assert ec._extract_back_from_frame(frame) is None
@@ -827,12 +827,21 @@ class TestFrameChaining(object):
         ec.escape_frame_via_traceback(frame4)      # not forced
         ec._unchain(frame4)
         assert frame._f_forward is frame2
-        assert not frame.f_no_forward_from_there
-        assert not frame2.f_no_forward_from_there
+        assert not frame.f_back_is_correct
+        assert not frame2.f_back_is_correct
         #
         ec.escape_frame_via_traceback(frame3)      # calls force_frame_chain()
         ec._unchain(frame3)
-        assert frame2.f_no_forward_from_there
+        assert frame2.f_back_is_correct
         assert frame2._f_forward is None
-        assert frame.f_no_forward_from_there
+        assert frame.f_back_is_correct
+        assert frame._f_forward is None
+
+    def test_force_frame_chain_bug(self):
+        ec, frame, frame2 = self.enter_two_jitted_levels()
+        ec.force_frame_chain()
+        frame3 = self.Frame(ec, frame2)
+        ec._chain(frame3)
+        ec.force_frame_chain()
+        assert frame2._f_forward is None    # because we just forced
         assert frame._f_forward is None
