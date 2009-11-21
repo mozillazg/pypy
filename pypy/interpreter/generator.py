@@ -87,7 +87,12 @@ return next yielded value or raise StopIteration."""
         operr.normalize_exception(space)
         
         ec = space.getexecutioncontext()
-        next_instr = self.frame.handle_operation_error(ec, operr)
+        frame = self.frame
+        ec.enter(frame)
+        try:
+            next_instr = frame.handle_operation_error(ec, operr)
+        finally:
+            ec.leave(frame)
         self.frame.last_instr = intmask(next_instr - 1)
 
         return self.send_ex(space.w_None, True)
