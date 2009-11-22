@@ -351,7 +351,9 @@ class VirtualMiscTests:
                     tot -= (c.x + a.x) % 3
                 n -= 1
             return tot
-        self.meta_interp(f, [70])        
+        r = self.meta_interp(f, [70])
+        expected = f(70)
+        assert r == expected
 
 # ____________________________________________________________
 # Run 1: all the tests instantiate a real RPython class
