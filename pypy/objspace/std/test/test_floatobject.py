@@ -216,7 +216,7 @@ class AppTestAppFloatTest:
         nan = infinity/infinity
         for x in (123, 1 << 30,
                   (1 << 33) - 1, 1 << 33, (1 << 33) + 1,
-                  1 << 63, 1 << 70):
+                  1 << 62, 1 << 70):
             #
             assert     (x == float(x))
             assert     (x >= float(x))
