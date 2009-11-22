@@ -172,6 +172,32 @@ class Test_rbigint(object):
         x = 12345.6789e200
         x *= x
         assert raises(OverflowError, rbigint.fromfloat, x)
+        #
+        f1 = rbigint.fromfloat(12345.0, rounding_towards=-1)
+        assert f1.toint() == 12345
+        f1 = rbigint.fromfloat(12345.0, rounding_towards=0)
+        assert f1.toint() == 12345
+        f1 = rbigint.fromfloat(12345.0, rounding_towards=+1)
+        assert f1.toint() == 12345
+        f1 = rbigint.fromfloat(-12345.0, rounding_towards=-1)
+        assert f1.toint() == -12345
+        f1 = rbigint.fromfloat(-12345.0, rounding_towards=0)
+        assert f1.toint() == -12345
+        f1 = rbigint.fromfloat(-12345.0, rounding_towards=+1)
+        assert f1.toint() == -12345
+        #
+        f1 = rbigint.fromfloat(12345.6, rounding_towards=-1)
+        assert f1.toint() == 12345
+        f1 = rbigint.fromfloat(12345.6, rounding_towards=0)
+        assert f1.toint() == 12345
+        f1 = rbigint.fromfloat(12345.6, rounding_towards=+1)
+        assert f1.toint() == 12346   # here!
+        f1 = rbigint.fromfloat(-12345.6, rounding_towards=-1)
+        assert f1.toint() == -12346  # here!
+        f1 = rbigint.fromfloat(-12345.6, rounding_towards=0)
+        assert f1.toint() == -12345
+        f1 = rbigint.fromfloat(-12345.6, rounding_towards=+1)
+        assert f1.toint() == -12345
 
     def test_eq(self):
         x = 5858393919192332223L

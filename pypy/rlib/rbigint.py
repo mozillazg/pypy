@@ -75,7 +75,7 @@ class rbigint(object):
             sign = 1
             ival = r_uint(intval)
         else:
-            return rbigint()
+            return ZERO
         # Count the number of Python digits.
         # We used to pick 5 ("big enough for anything"), but that's a
         # waste of time and space given that 5*15 = 75 bits are rarely
@@ -97,35 +97,43 @@ class rbigint(object):
 
     def frombool(b):
         if b:
-            return rbigint([1], 1)
-        return rbigint()
+            return ONE
+        return ZERO
     frombool = staticmethod(frombool)
 
     def fromlong(l):
         return rbigint(*args_from_long(l))
     fromlong = staticmethod(fromlong)
 
-    def fromfloat(dval):
+    def fromfloat(dval, rounding_towards=0):
         """ Create a new bigint object from a float """
-        neg = 0
+        neg = False
         if isinf(dval):
             raise OverflowError
         if dval < 0.0:
-            neg = 1
+            neg = True
             dval = -dval
         frac, expo = math.frexp(dval) # dval = frac*2**expo; 0.0 <= frac < 1.0
         if expo <= 0:
-            return rbigint()
-        ndig = (expo-1) // SHIFT + 1 # Number of 'digits' in result
-        v = rbigint([0] * ndig, 1)
-        frac = math.ldexp(frac, (expo-1) % SHIFT + 1)
-        for i in range(ndig-1, -1, -1):
-            bits = mask_digit(int(frac))
-            v._setdigit(i, bits)
-            frac -= float(bits)
-            frac = math.ldexp(frac, SHIFT)
-        if neg:
-            v.sign = -1
+            v = ZERO
+        else:
+            ndig = (expo-1) // SHIFT + 1 # Number of 'digits' in result
+            v = rbigint([0] * ndig, 1)
+            frac = math.ldexp(frac, (expo-1) % SHIFT + 1)
+            for i in range(ndig-1, -1, -1):
+                bits = mask_digit(int(frac))
+                v._setdigit(i, bits)
+                frac -= float(bits)
+                frac = math.ldexp(frac, SHIFT)
+            if neg:
+                v.sign = -1
+        if rounding_towards != 0 and frac != 0.0:
+            if not neg:
+                if rounding_towards > 0:
+                    v = v.add(ONE)
+            else:
+                if rounding_towards < 0:
+                    v = v.sub(ONE)
         return v
     fromfloat = staticmethod(fromfloat)
 
@@ -352,7 +360,7 @@ class rbigint(object):
         div, mod = _divrem(v, w)
         if mod.sign * w.sign == -1:
             mod = mod.add(w)
-            div = div.sub(rbigint([1], 1))
+            div = div.sub(ONE)
         return div, mod
 
     def pow(a, b, c=None):
@@ -384,7 +392,7 @@ class rbigint(object):
             # if modulus == 1:
             #     return 0
             if c._numdigits() == 1 and c.digits[0] == 1:
-                return rbigint()
+                return ZERO
 
             # if base < 0:
             #     base = base % modulus
@@ -396,7 +404,7 @@ class rbigint(object):
         # At this point a, b, and c are guaranteed non-negative UNLESS
         # c is NULL, in which case a may be negative. */
 
-        z = rbigint([1], 1)
+        z = ONE
 
         # python adaptation: moved macros REDUCE(X) and MULT(X, Y, result)
         # into helper function result = _help_mult(x, y, c)
@@ -416,8 +424,8 @@ class rbigint(object):
         else:
             # Left-to-right 5-ary exponentiation (HAC Algorithm 14.82)
             # z still holds 1L
-            table = [z] * 32
-            table[0] = z;
+            table = [None] * 32
+            table[0] = z
             for i in range(1, 32):
                 table[i] = _help_mult(table[i-1], a, c)
             i = b._numdigits() - 1
@@ -444,7 +452,7 @@ class rbigint(object):
         return rbigint(self.digits, abs(self.sign))
 
     def invert(self): #Implement ~x as -(x + 1)
-        return self.add(rbigint([1], 1)).neg()
+        return self.add(ONE).neg()
 
     def lshift(self, int_other):
         if int_other < 0:
@@ -490,7 +498,7 @@ class rbigint(object):
         wordshift = int_other // SHIFT
         newsize = self._numdigits() - wordshift
         if newsize <= 0:
-            return rbigint()
+            return ZERO
 
         loshift = int_other % SHIFT
         hishift = SHIFT - loshift
@@ -564,6 +572,9 @@ class rbigint(object):
 #_________________________________________________________________
 
 # Helper Functions
+
+ZERO = rbigint()
+ONE = rbigint([1], 1)
 
 
 def _help_mult(x, y, c):
