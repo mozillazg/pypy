@@ -307,12 +307,14 @@ class ResumeDataVirtualAdder(object):
         for box, tagged in self.liveboxes.iteritems():
             i, tagbits = untag(tagged)
             if tagbits == TAGBOX:
+                assert box not in self.liveboxes_from_env
                 assert tagged_eq(tagged, UNASSIGNED)
                 index = memo.assign_number_to_box(box, new_liveboxes)
                 self.liveboxes[box] = tag(index, TAGBOX)
             else:
                 assert tagbits == TAGVIRTUAL
                 if tagged_eq(tagged, UNASSIGNEDVIRTUAL):
+                    assert box not in self.liveboxes_from_env
                     index = memo.assign_number_to_virtual(box)
                     self.liveboxes[box] = tag(index, TAGVIRTUAL)
         new_liveboxes.reverse()
