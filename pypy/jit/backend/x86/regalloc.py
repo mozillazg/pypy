@@ -240,9 +240,12 @@ class RegAlloc(object):
     def _update_bindings(self, locs, inputargs):
         # XXX this should probably go to llsupport/regalloc.py
         used = {}
-        for i in range(len(inputargs)):
+        i = 0
+        for loc in locs:
+            if loc is None: # xxx bit kludgy
+                continue
             arg = inputargs[i]
-            loc = locs[i]
+            i += 1
             if arg.type == FLOAT:
                 if isinstance(loc, REG):
                     self.xrm.reg_bindings[arg] = loc
