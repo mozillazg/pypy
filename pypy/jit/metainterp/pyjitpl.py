@@ -1622,22 +1622,20 @@ class MetaInterp(object):
     def initialize_state_from_guard_failure(self, resumedescr, must_compile):
         # guard failure: rebuild a complete MIFrame stack
         self.in_recursion = -1 # always one portal around
-        # xxx now that we have holes all this is delicate xxx
-        inputargs = self.load_values_from_failure(resumedescr)
-        warmrunnerstate = self.staticdata.state
+        inputargs_and_holes = self.load_values_from_failure(resumedescr)
         if must_compile:
             self.history = history.History(self.cpu)
-            self.history.inputargs = inputargs
+            self.history.inputargs = [box for box in inputargs_and_holes if box]
             self.staticdata.profiler.start_tracing()
         else:
             self.staticdata.profiler.start_blackhole()
             self.history = None   # this means that is_blackholing() is true
-        self.rebuild_state_after_failure(resumedescr, inputargs)
+        self.rebuild_state_after_failure(resumedescr, inputargs_and_holes)
 
     def load_values_from_failure(self, resumedescr):
         cpu = self.cpu
         fail_arg_types = resumedescr.fail_arg_types
-        inputargs = []
+        inputargs_and_holes = []
         for i in range(len(fail_arg_types)):
             boxtype = fail_arg_types[i]
             if boxtype == history.INT:
@@ -1647,11 +1645,11 @@ class MetaInterp(object):
             elif boxtype == history.FLOAT:
                 box = history.BoxFloat(cpu.get_latest_value_float(i))
             elif boxtype == history.HOLE:
-                continue
+                box = None
             else:
                 assert False, "bad box type: num=%d" % ord(boxtype)
-            inputargs.append(box)
-        return inputargs
+            inputargs_and_holes.append(box)
+        return inputargs_and_holes
 
     def initialize_virtualizable(self, original_boxes):
         vinfo = self.staticdata.virtualizable_info
