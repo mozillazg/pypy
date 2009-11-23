@@ -105,11 +105,12 @@ NULLREF = tag(-1, TAGCONST)
 
 class ResumeDataLoopMemo(object):
 
-    def __init__(self, cpu):
-        self.cpu = cpu
+    def __init__(self, metainterp_sd):
+        self.metainterp_sd = metainterp_sd
+        self.cpu = metainterp_sd.cpu
         self.consts = []
         self.large_ints = {}
-        self.refs = cpu.ts.new_ref_dict_2()
+        self.refs = self.cpu.ts.new_ref_dict_2()
         self.numberings = {}
         self.cached_boxes = {}
         self.cached_virtuals = {}
@@ -306,6 +307,7 @@ class ResumeDataVirtualAdder(object):
     def _number_virtuals(self, liveboxes, values, num_env_virtuals):
         memo = self.memo
         new_liveboxes = [None] * memo.num_cached_boxes()
+        count = 0
         for box, tagged in self.liveboxes.iteritems():
             i, tagbits = untag(tagged)
             if tagbits == TAGBOX:
@@ -313,6 +315,7 @@ class ResumeDataVirtualAdder(object):
                 assert tagged_eq(tagged, UNASSIGNED)
                 index = memo.assign_number_to_box(box, new_liveboxes)
                 self.liveboxes[box] = tag(index, TAGBOX)
+                count += 1
             else:
                 assert tagbits == TAGVIRTUAL
                 if tagged_eq(tagged, UNASSIGNEDVIRTUAL):
@@ -321,6 +324,7 @@ class ResumeDataVirtualAdder(object):
                     self.liveboxes[box] = tag(index, TAGVIRTUAL)
         new_liveboxes.reverse()
         liveboxes.extend(new_liveboxes)
+        nholes = len(new_liveboxes) - count
 
         storage = self.storage
         storage.rd_virtuals = None
@@ -348,6 +352,19 @@ class ResumeDataVirtualAdder(object):
                     break
                 r += 1
             memo.nvrightholes += r
+
+
+        if self._invalidation_needed(len(liveboxes), nholes):
+            memo.clear_box_virtual_numbers()           
+
+    def _invalidation_needed(self, nliveboxes, nholes):
+        memo = self.memo
+        # xxx heuristic a bit out of thin air
+        failargs_limit = memo.metainterp_sd.options.failargs_limit
+        if nliveboxes > (failargs_limit // 2):
+            if nholes > nliveboxes//3:
+                return True
+        return False
 
     def _gettagged(self, box):
         if isinstance(box, Const):

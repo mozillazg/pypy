@@ -369,7 +369,7 @@ class Optimizer(object):
         self.loop = loop
         self.values = {}
         self.interned_refs = self.cpu.ts.new_ref_dict()
-        self.resumedata_memo = resume.ResumeDataLoopMemo(self.cpu)
+        self.resumedata_memo = resume.ResumeDataLoopMemo(metainterp_sd)
         self.heap_op_optimizer = HeapOpOptimizer(self)
         self.bool_boxes = {}
 
