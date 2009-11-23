@@ -668,16 +668,15 @@ class ObjSpace(object):
                                    (i, plural))
         return items
 
-    def fixedview(self, w_iterable, expected_length=-1):
+    def fixedview(self, w_iterable):
         """ A fixed list view of w_iterable. Don't modify the result
         """
-        return make_sure_not_resized(self.unpackiterable(w_iterable,
-                                                         expected_length)[:])
+        return make_sure_not_resized(self.unpackiterable(w_iterable)[:])
 
-    def listview(self, w_iterable, expected_length=-1):
+    def listview(self, w_iterable):
         """ A non-fixed view of w_iterable. Don't modify the result
         """
-        return self.unpackiterable(w_iterable, expected_length)
+        return self.unpackiterable(w_iterable)
 
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""
