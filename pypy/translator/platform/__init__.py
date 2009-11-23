@@ -171,8 +171,15 @@ if sys.platform == 'linux2':
     else:
         host_factory = Linux64
 elif sys.platform == 'darwin':
-    from pypy.translator.platform.darwin import Darwin
-    host_factory = Darwin
+    from pypy.translator.platform.darwin import Darwin_i386, Darwin_x86_64
+    import platform
+    if platform.machine() == 'i386':
+        if sys.maxint <= 2147483647:
+            host_factory = Darwin_i386
+        else:
+            host_factory = Darwin_x86_64
+    else:
+        host_factory = Darwin
 elif sys.platform == 'freebsd7':
     from pypy.translator.platform.freebsd7 import Freebsd7, Freebsd7_64
     import platform
