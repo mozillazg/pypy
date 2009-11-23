@@ -111,7 +111,7 @@ class W_BaseException(Wrappable):
         if lgt == 0:
             return space.wrap('')
         elif lgt == 1:
-            return space.str(self.w_message)
+            return space.str(self.args_w[0])
         else:
             return space.str(space.newtuple(self.args_w))
     descr_str.unwrap_spec = ['self', ObjSpace]
