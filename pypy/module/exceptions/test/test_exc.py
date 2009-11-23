@@ -56,6 +56,7 @@ class AppTestExc(object):
         assert isinstance(Exception(), Exception)
         assert isinstance(Exception(), BaseException)
         assert repr(Exception(3, "x")) == "Exception(3, 'x')"
+        assert str(IOError("foo", "bar")) == "[Errno foo] bar"
 
     def test_custom_class(self):
         from exceptions import Exception, BaseException, LookupError
@@ -87,6 +88,8 @@ class AppTestExc(object):
         ut.start = 4
         ut.object = u'012345'
         assert str(ut) == "can't translate character u'\\x34' in position 4: bah"
+        ut.object = []
+        assert ut.object == []
 
     def test_key_error(self):
         from exceptions import KeyError
@@ -163,6 +166,10 @@ class AppTestExc(object):
         assert str(ue) == "'x' codec can't encode characters in position 1-4: bah"
         ue.end = 2
         assert str(ue) == "'x' codec can't encode character u'\\x39' in position 1: bah"
+        ue.object = []
+        assert ue.object == []
+        raises(TypeError, UnicodeEncodeError, "x", "y", 1, 5, "bah")
+        raises(TypeError, UnicodeEncodeError, u"x", u"y", 1, 5, "bah")
 
     def test_multiple_inheritance(self):
         from exceptions import LookupError, ValueError, Exception
@@ -197,12 +204,14 @@ class AppTestExc(object):
                 assert e.__module__ == 'exceptions', e
 
     def test_reduce(self):
-        from exceptions import LookupError
+        from exceptions import LookupError, EnvironmentError
 
         le = LookupError(1, 2, "a")
         assert le.__reduce__() == (LookupError, (1, 2, "a"))
         le.xyz = (1, 2)
         assert le.__reduce__() == (LookupError, (1, 2, "a"), {"xyz": (1, 2)})
+        ee = EnvironmentError(1, 2, "a")
+        assert ee.__reduce__() == (EnvironmentError, (1, 2, "a"))
 
     def test_setstate(self):
         from exceptions import FutureWarning
@@ -213,3 +222,4 @@ class AppTestExc(object):
         fw.__setstate__({'z': 1})
         assert fw.z == 1
         assert fw.xyz == (1, 2)
+
