@@ -198,7 +198,8 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
     # now we know it's a list of unicode or string
     lgt += len(delim) * (len(l_w) - 1)
     builder = UnicodeBuilder(lgt)
-    for i in range(len(l_w)):
+    i = 0
+    while i < space.int_w(space.len(w_list)):
         w_item = l_w[i]
         if isinstance(w_item, W_UnicodeObject):
             builder.append(w_item._value)
@@ -206,6 +207,7 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
             builder.append(space.unicode_w(w_item))
         if i != len(l_w) - 1:
             builder.append(delim)
+        i += 1
     return W_UnicodeObject(builder.build())
 
 def hash__Unicode(space, w_uni):
