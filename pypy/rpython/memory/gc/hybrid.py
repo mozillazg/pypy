@@ -239,6 +239,9 @@ class HybridGC(GenerationGC):
         if grow:
             result = llop.raw_realloc_grow(llmemory.Address, source_addr,
                                            old_tot_size, tot_size)
+            llmemory.raw_memclear(result + size_gc_header +
+                                  fixedsize + oldlength * itemsize,
+                                  (newlength - oldlength) * itemsize)
         else:
             if oldlength == newlength:
                 # no need to call realloc
