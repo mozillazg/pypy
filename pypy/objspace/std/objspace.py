@@ -643,7 +643,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
         return t
 
-    def fixedview(self, w_obj, expected_length=-1):
+    def fixedview(self, w_obj):
         """ Fast paths
         """
         if isinstance(w_obj, W_TupleObject):
@@ -651,20 +651,16 @@ class StdObjSpace(ObjSpace, DescrOperation):
         elif isinstance(w_obj, W_ListObject):
             t = w_obj.wrappeditems[:]
         else:
-            return ObjSpace.fixedview(self, w_obj, expected_length)
-        if expected_length != -1 and len(t) != expected_length:
-            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            return ObjSpace.fixedview(self, w_obj)
         return t
 
-    def listview(self, w_obj, expected_length=-1):
+    def listview(self, w_obj):
         if isinstance(w_obj, W_ListObject):
             t = w_obj.wrappeditems
         elif isinstance(w_obj, W_TupleObject):
             t = w_obj.wrappeditems[:]
         else:
-            return ObjSpace.listview(self, w_obj, expected_length)
-        if expected_length != -1 and len(t) != expected_length:
-            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            return ObjSpace.listview(self, w_obj)
         return t
 
     def sliceindices(self, w_slice, w_length):
