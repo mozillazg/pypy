@@ -175,7 +175,7 @@ def contains__Unicode_Unicode(space, w_container, w_item):
     return space.newbool(container.find(item) != -1)
 
 def unicode_join__Unicode_ANY(space, w_self, w_list):
-    l_w = space.listview(w_list)
+    l_w = space.unpackiterable(w_list)
     delim = w_self._value
     if len(l_w) == 0:
         return W_UnicodeObject.EMPTY
@@ -199,7 +199,7 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
     lgt += len(delim) * (len(l_w) - 1)
     builder = UnicodeBuilder(lgt)
     i = 0
-    while i < space.int_w(space.len(w_list)):
+    for i in range(len(l_w)):
         w_item = l_w[i]
         if isinstance(w_item, W_UnicodeObject):
             builder.append(w_item._value)

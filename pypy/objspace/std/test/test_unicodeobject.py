@@ -799,3 +799,7 @@ class AppTestUnicodeString:
         b = unicode(a)
         assert type(b) is unicode
         assert b == u'hello \u1234'
+
+    def test_join_genexp(self):
+        s = [u'a', u'b', u'c']
+        assert u".".join(i for i in s) == u"a.b.c"
