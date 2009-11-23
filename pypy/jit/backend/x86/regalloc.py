@@ -203,7 +203,7 @@ class RegAlloc(object):
 
     def possibly_free_vars(self, vars):
         for var in vars:
-            if var is not None:
+            if var is not None: # xxx kludgy
                 self.possibly_free_var(var)
 
     def make_sure_var_in_reg(self, var, forbidden_vars=[],
@@ -379,7 +379,7 @@ class RegAlloc(object):
         return longevity
 
     def loc(self, v):
-        if v is None:
+        if v is None: # xxx kludgy
             return None
         if v.type == FLOAT:
             return self.xrm.loc(v)
