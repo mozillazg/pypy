@@ -38,7 +38,7 @@ def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
     name = space.str_w(w_name)
     assert isinstance(name, str)
     dict_w = {}
-    dictkeys_w = space.listview(w_dict)
+    dictkeys_w = space.unpackiterable(w_dict)
     for w_key in dictkeys_w:
         key = space.str_w(w_key)
         dict_w[key] = space.getitem(w_dict, w_key)
