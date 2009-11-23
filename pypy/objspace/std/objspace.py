@@ -643,7 +643,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
         return t
 
-    def fixedview(self, w_obj):
+    def fixedview(self, w_obj, expected_length=-1):
         """ Fast paths
         """
         if isinstance(w_obj, W_TupleObject):
@@ -652,6 +652,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
             t = w_obj.wrappeditems[:]
         else:
             return ObjSpace.fixedview(self, w_obj)
+        if expected_length != -1 and len(t) != expected_length:
+            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
         return t
 
     def listview(self, w_obj):
