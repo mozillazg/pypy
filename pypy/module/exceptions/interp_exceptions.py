@@ -78,13 +78,6 @@ from pypy.interpreter.gateway import interp2app, Arguments
 from pypy.interpreter.error import OperationError
 from pypy.rlib import rwin32
 
-def readwrite_attrproperty(name, cls, unwrapname):
-    def fget(space, obj):
-        return space.wrap(getattr(obj, name))
-    def fset(space, obj, w_val):
-        setattr(obj, name, getattr(space, unwrapname)(w_val))
-    return GetSetProperty(fget, fset, cls=cls)
-
 def readwrite_attrproperty_w(name, cls):
     def fget(space, obj):
         return getattr(obj, name)
@@ -244,16 +237,22 @@ W_UnicodeError = _new_exception('UnicodeError', W_ValueError,
 
 class W_UnicodeTranslateError(W_UnicodeError):
     """Unicode translation error."""
-    object = u''
-    start = 0
-    end = 0
-    reason = ''
+    object = None
+    start = None
+    end = None
+    reason = None
     
     def descr_init(self, space, w_object, w_start, w_end, w_reason):
-        self.object = space.unicode_w(w_object)
-        self.start = space.int_w(w_start)
-        self.end = space.int_w(w_end)
-        self.reason = space.str_w(w_reason)
+        # typechecking
+        space.realunicode_w(w_object)
+        space.int_w(w_start)
+        space.int_w(w_end)
+        space.realstr_w(w_reason)
+        # assign attributes
+        self.w_object = w_object
+        self.w_start = w_start
+        self.w_end = w_end
+        self.w_reason = w_reason
         W_BaseException.descr_init(self, space, [w_object, w_start,
                                                  w_end, w_reason])
     descr_init.unwrap_spec = ['self', ObjSpace, W_Root, W_Root, W_Root,
@@ -280,10 +279,10 @@ W_UnicodeTranslateError.typedef = TypeDef(
     __new__ = _new(W_UnicodeTranslateError),
     __init__ = interp2app(W_UnicodeTranslateError.descr_init),
     __str__ = interp2app(W_UnicodeTranslateError.descr_str),
-    object = readwrite_attrproperty('object', W_UnicodeTranslateError, 'unicode_w'),
-    start  = readwrite_attrproperty('start', W_UnicodeTranslateError, 'int_w'),
-    end    = readwrite_attrproperty('end', W_UnicodeTranslateError, 'int_w'),
-    reason = readwrite_attrproperty('reason', W_UnicodeTranslateError, 'str_w'),
+    object = readwrite_attrproperty_w('w_object', W_UnicodeTranslateError),
+    start  = readwrite_attrproperty_w('w_start', W_UnicodeTranslateError),
+    end    = readwrite_attrproperty_w('w_end', W_UnicodeTranslateError),
+    reason = readwrite_attrproperty_w('w_reason', W_UnicodeTranslateError),
 )
 
 W_LookupError = _new_exception('LookupError', W_StandardError,
@@ -331,16 +330,29 @@ class W_EnvironmentError(W_StandardError):
             self.args_w = [args_w[0], args_w[1]]
     descr_init.unwrap_spec = ['self', ObjSpace, 'args_w']
 
+    # since we rebind args_w, we need special reduce, grump
+    def descr_reduce(self, space):
+        if not space.is_w(self.w_filename, space.w_None):
+            lst = [self.getclass(space), space.newtuple(
+                self.args_w + [self.w_filename])]
+        else:
+            lst = [self.getclass(space), space.newtuple(self.args_w)]
+        if self.w_dict is not None and space.is_true(self.w_dict):
+            lst = lst + [self.w_dict]
+        return space.newtuple(lst)
+    descr_reduce.unwrap_spec = ['self', ObjSpace]
+
     def descr_str(self, space):
         if (not space.is_w(self.w_errno, space.w_None) and
             not space.is_w(self.w_strerror, space.w_None)):
             if not space.is_w(self.w_filename, space.w_None):
-                return space.wrap("[Errno %d] %s: %s" % (
-                    space.int_w(self.w_errno),
+                return space.wrap("[Errno %s] %s: %s" % (
+                    space.str_w(space.str(self.w_errno)),
                     space.str_w(self.w_strerror),
                     space.str_w(space.repr(self.w_filename))))
-            return space.wrap("[Errno %d] %s" % (space.int_w(self.w_errno),
-                                                 space.str_w(self.w_strerror)))
+            return space.wrap("[Errno %s] %s" %
+                              (space.str_w(space.str(self.w_errno)),
+                               space.str_w(self.w_strerror)))
         return W_BaseException.descr_str(self, space)
     descr_str.unwrap_spec = ['self', ObjSpace]
 
@@ -350,6 +362,7 @@ W_EnvironmentError.typedef = TypeDef(
     __doc__ = W_EnvironmentError.__doc__,
     __module__ = 'exceptions',
     __new__ = _new(W_EnvironmentError),
+    __reduce__ = interp2app(W_EnvironmentError.descr_reduce),
     __init__ = interp2app(W_EnvironmentError.descr_init),
     __str__ = interp2app(W_EnvironmentError.descr_str),
     errno    = readwrite_attrproperty_w('w_errno',    W_EnvironmentError),
@@ -544,18 +557,25 @@ W_AssertionError = _new_exception('AssertionError', W_StandardError,
 
 class W_UnicodeDecodeError(W_UnicodeError):
     """Unicode decoding error."""
-    encoding = ''
-    object = ''
-    start = 0
-    end = 0
-    reason = ''
+    w_encoding = None
+    w_object = None
+    w_start = None
+    w_end = None
+    w_reason = None
 
     def descr_init(self, space, w_encoding, w_object, w_start, w_end, w_reason):
-        self.encoding = space.str_w(w_encoding)
-        self.object = space.str_w(w_object)
-        self.start = space.int_w(w_start)
-        self.end = space.int_w(w_end)
-        self.reason = space.str_w(w_reason)
+        # typechecking
+        space.realstr_w(w_encoding)
+        space.realstr_w(w_object)
+        space.int_w(w_start)
+        space.int_w(w_end)
+        space.realstr_w(w_reason)
+        # assign attributes
+        self.w_encoding = w_encoding
+        self.w_object = w_object
+        self.w_start = w_start
+        self.w_end = w_end
+        self.w_reason = w_reason
         W_BaseException.descr_init(self, space, [w_encoding, w_object,
                                                  w_start, w_end, w_reason])
     descr_init.unwrap_spec = ['self', ObjSpace, W_Root, W_Root, W_Root, W_Root,
@@ -580,11 +600,11 @@ W_UnicodeDecodeError.typedef = TypeDef(
     __new__ = _new(W_UnicodeDecodeError),
     __init__ = interp2app(W_UnicodeDecodeError.descr_init),
     __str__ = interp2app(W_UnicodeDecodeError.descr_str),
-    encoding = readwrite_attrproperty('encoding', W_UnicodeDecodeError, 'str_w'),
-    object = readwrite_attrproperty('object', W_UnicodeDecodeError, 'str_w'),
-    start  = readwrite_attrproperty('start', W_UnicodeDecodeError, 'int_w'),
-    end    = readwrite_attrproperty('end', W_UnicodeDecodeError, 'int_w'),
-    reason = readwrite_attrproperty('reason', W_UnicodeDecodeError, 'str_w'),
+    encoding = readwrite_attrproperty_w('w_encoding', W_UnicodeDecodeError),
+    object = readwrite_attrproperty_w('w_object', W_UnicodeDecodeError),
+    start  = readwrite_attrproperty_w('w_start', W_UnicodeDecodeError),
+    end    = readwrite_attrproperty_w('w_end', W_UnicodeDecodeError),
+    reason = readwrite_attrproperty_w('w_reason', W_UnicodeDecodeError),
 )
 
 W_TypeError = _new_exception('TypeError', W_StandardError,
@@ -629,19 +649,25 @@ W_OverflowError = _new_exception('OverflowError', W_ArithmeticError,
 
 class W_UnicodeEncodeError(W_UnicodeError):
     """Unicode encoding error."""
-
-    encoding = ''
-    object = u''
-    start = 0
-    end = 0
-    reason = ''
+    w_encoding = None
+    w_object = None
+    w_start = None
+    w_end = None
+    w_reason = None
 
     def descr_init(self, space, w_encoding, w_object, w_start, w_end, w_reason):
-        self.encoding = space.str_w(w_encoding)
-        self.object = space.unicode_w(w_object)
-        self.start = space.int_w(w_start)
-        self.end = space.int_w(w_end)
-        self.reason = space.str_w(w_reason)
+        # typechecking
+        space.realstr_w(w_encoding)
+        space.realunicode_w(w_object)
+        space.int_w(w_start)
+        space.int_w(w_end)
+        space.realstr_w(w_reason)
+        # assign attributes
+        self.w_encoding = w_encoding
+        self.w_object = w_object
+        self.w_start = w_start
+        self.w_end = w_end
+        self.w_reason = w_reason
         W_BaseException.descr_init(self, space, [w_encoding, w_object,
                                                  w_start, w_end, w_reason])
     descr_init.unwrap_spec = ['self', ObjSpace, W_Root, W_Root, W_Root, W_Root,
@@ -672,9 +698,9 @@ W_UnicodeEncodeError.typedef = TypeDef(
     __new__ = _new(W_UnicodeEncodeError),
     __init__ = interp2app(W_UnicodeEncodeError.descr_init),
     __str__ = interp2app(W_UnicodeEncodeError.descr_str),
-    encoding = readwrite_attrproperty('encoding', W_UnicodeEncodeError, 'str_w'),
-    object = readwrite_attrproperty('object', W_UnicodeEncodeError, 'unicode_w'),
-    start  = readwrite_attrproperty('start', W_UnicodeEncodeError, 'int_w'),
-    end    = readwrite_attrproperty('end', W_UnicodeEncodeError, 'int_w'),
-    reason = readwrite_attrproperty('reason', W_UnicodeEncodeError, 'str_w'),
+    encoding = readwrite_attrproperty_w('w_encoding', W_UnicodeEncodeError),
+    object = readwrite_attrproperty_w('w_object', W_UnicodeEncodeError),
+    start  = readwrite_attrproperty_w('w_start', W_UnicodeEncodeError),
+    end    = readwrite_attrproperty_w('w_end', W_UnicodeEncodeError),
+    reason = readwrite_attrproperty_w('w_reason', W_UnicodeEncodeError),
 )
