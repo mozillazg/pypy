@@ -103,7 +103,22 @@ static __declspec(noinline) void pypy_asm_stack_bottom() { }
 
 #define OP_RAW_REALLOC_SHRINK(p, old_size, size, r) r = PyObject_Realloc((void*)p, size)
 
+#if RAW_MALLOC_ZERO_FILLED
+
+#define OP_RAW_REALLOC_GROW(p, old_size, size, r) { \
+  r = PyObject_Realloc((void*)p, size);             \
+  if (r != NULL) {                                  \
+    memset((void*)r + old_size, 0, size - old_size);  \
+  }                                                   \
+}
+
+#else
+
 #define OP_RAW_REALLOC_GROW(p, old_size, size, r) r = PyObject_Realloc((void*)p, size)
+
+#endif
+
+
 
 #ifdef MS_WINDOWS
 #define alloca  _alloca
