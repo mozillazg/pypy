@@ -91,8 +91,12 @@ class TypeCache(SpaceCache):
         for descrname, descrvalue in rawdict.items():
             dict_w[descrname] = w(descrvalue)
 
+        if typedef.applevel_subclasses_base is not None:
+            overridetypedef = typedef.applevel_subclasses_base.typedef
+        else:
+            overridetypedef = typedef
         w_type = W_TypeObject(space, typedef.name, bases_w, dict_w,
-                              overridetypedef=typedef)
+                              overridetypedef=overridetypedef)
         w_type.lazyloaders = lazyloaders
         return w_type
 
