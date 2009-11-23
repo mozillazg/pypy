@@ -79,7 +79,7 @@ class TestDarwin(BasicTest):
         #include <limits.h>
 
         int main() {
-                printf("%d\n", LONG_MAX);
+                printf("%ld\n", LONG_MAX);
                 return 0;
         }
         ''')
