@@ -562,6 +562,9 @@ def descr_get_dict(space, w_obj):
 def descr_set_dict(space, w_obj, w_dict):
     w_obj.setdict(space, w_dict)
 
+def descr_del_dict(space, w_obj): # blame CPython for the existence of this one
+    w_obj.setdict(space, space.newdict())
+
 def descr_get_weakref(space, w_obj):
     lifeline = w_obj.getweakref()
     if lifeline is None:
