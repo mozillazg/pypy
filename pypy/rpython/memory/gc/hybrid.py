@@ -240,7 +240,8 @@ class HybridGC(GenerationGC):
             result = llop.raw_realloc_grow(llmemory.Address, source_addr,
                                            old_tot_size, tot_size)
         else:
-            if old_tot_size == tot_size:
+            if oldlength == newlength:
+                # no need to call realloc
                 result = source_addr
             else:
                 result = llop.raw_realloc_shrink(llmemory.Address, source_addr,
@@ -251,11 +252,15 @@ class HybridGC(GenerationGC):
         if grow:
             self.gen2_resizable_objects.append(result + size_gc_header)
         else:
+            # this means we can no longer access this as a resizable
+            # object. Instead it becomes a simple rawmalloc object
             self.gen2_rawmalloced_objects.append(result + size_gc_header)
+        (result + size_gc_header + lengthofs).signed[0] = newlength
+        # because thing below can call semispace collect, we need to
+        # set length correctly above
         self._check_rawsize_alloced(raw_malloc_usage(tot_size) -
                                     raw_malloc_usage(old_tot_size),
                                     can_collect = not grow)
-        (result + size_gc_header + lengthofs).signed[0] = newlength
         return llmemory.cast_adr_to_ptr(result + size_gc_header, llmemory.GCREF)
 
     def can_move(self, addr):
