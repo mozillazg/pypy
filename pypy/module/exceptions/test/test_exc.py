@@ -25,6 +25,29 @@ class AppTestExc(object):
         assert x.xyz == 3
         x.args = [42]
         assert x.args == (42,)
+        assert x[0] == 42
+        x.args = (1, 2, 3)
+        assert x[1:2] == (2,)
+        x.message = "xyz"
+        assert x.message == "xyz"
+
+    def test_kwargs(self):
+        from exceptions import Exception
+        class X(Exception):
+            def __init__(self, x=3):
+                self.x = x
+
+        x = X(x=8)
+        assert x.x == 8
+
+    def test_catch_with_unpack(self):
+        from exceptions import LookupError
+
+        try:
+            raise LookupError(1, 2)
+        except LookupError, (one, two):
+            assert one == 1
+            assert two == 2
 
     def test_exc(self):
         from exceptions import Exception, BaseException
@@ -73,7 +96,7 @@ class AppTestExc(object):
     def test_environment_error(self):
         from exceptions import EnvironmentError
         ee = EnvironmentError(3, "x", "y")
-        assert str(ee) == "[Errno 3] x: y"
+        assert str(ee) == "[Errno 3] x: 'y'"
         assert str(EnvironmentError(3, "x")) == "[Errno 3] x"
         assert ee.errno == 3
         assert ee.strerror == "x"
@@ -172,3 +195,21 @@ class AppTestExc(object):
             if isinstance(e, type) and issubclass(e, exceptions.BaseException):
                 assert e.__doc__, e
                 assert e.__module__ == 'exceptions', e
+
+    def test_reduce(self):
+        from exceptions import LookupError
+
+        le = LookupError(1, 2, "a")
+        assert le.__reduce__() == (LookupError, (1, 2, "a"))
+        le.xyz = (1, 2)
+        assert le.__reduce__() == (LookupError, (1, 2, "a"), {"xyz": (1, 2)})
+
+    def test_setstate(self):
+        from exceptions import FutureWarning
+
+        fw = FutureWarning()
+        fw.__setstate__({"xyz": (1, 2)})
+        assert fw.xyz == (1, 2)
+        fw.__setstate__({'z': 1})
+        assert fw.z == 1
+        assert fw.xyz == (1, 2)
