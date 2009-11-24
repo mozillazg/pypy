@@ -668,11 +668,11 @@ class ObjSpace(object):
                                    (i, plural))
         return items
 
-    def fixedview(self, w_iterable, expected_lenght=-1):
+    def fixedview(self, w_iterable, expected_length=-1):
         """ A fixed list view of w_iterable. Don't modify the result
         """
         return make_sure_not_resized(self.unpackiterable(w_iterable,
-                                                         expected_lenght)[:])
+                                                         expected_length)[:])
 
     def listview(self, w_iterable):
         """ A non-fixed view of w_iterable. Don't modify the result
