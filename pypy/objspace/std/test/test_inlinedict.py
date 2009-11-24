@@ -124,22 +124,3 @@ class TestInlineDict(object):
         assert w_a.w__dict__ is None
         assert self.space.int_w(w_a.content['x']) == 12
         assert self.space.int_w(w_a.content['y']) == 13
-
-class AppTestSharingDict(object):
-    def setup_class(cls):
-        cls.space = gettestobjspace(withsharingdict=True, withinlineddict=True)
-
-    def test_bug(self):
-        skip("Fails")
-        class X(object):
-            __slots__ = 'a', 'b', 'c'
-
-        class Y(X):
-            def __setattr__(self, name, value):                
-                d = object.__getattribute__(self, '__dict__')
-                object.__setattr__(self, '__dict__', d)
-                return object.__setattr__(self, name, value)
-
-        x = Y()
-        x.number = 42
-        assert x.number == 42
