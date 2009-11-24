@@ -117,7 +117,6 @@ class ResumeDataLoopMemo(object):
     
         self.nvirtuals = 0
         self.nvholes = 0
-        self.nvrightholes = 0
         self.nvreused = 0
 
     def getconst(self, const):
@@ -228,7 +227,6 @@ class ResumeDataLoopMemo(object):
         profiler.count(jitprof.NVIRTUALS, self.nvirtuals)
         profiler.count(jitprof.NVHOLES, self.nvholes)
         profiler.count(jitprof.NVREUSED, self.nvreused)
-        profiler.count(jitprof.NVRIGHTHOLES, self.nvrightholes)
 
 _frame_info_placeholder = (None, 0, 0)
 
@@ -345,14 +343,6 @@ class ResumeDataVirtualAdder(object):
                 if vinfo.fieldnums is not fieldnums:
                     memo.nvreused += 1
                 virtuals[num] = vinfo
-            # count right holes
-            r = 0
-            while r < length:
-                if virtuals[-1-r]:
-                    break
-                r += 1
-            memo.nvrightholes += r
-
 
         if self._invalidation_needed(len(liveboxes), nholes):
             memo.clear_box_virtual_numbers()           
