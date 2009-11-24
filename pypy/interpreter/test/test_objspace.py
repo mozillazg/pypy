@@ -62,19 +62,16 @@ class TestObjSpace:
         w = self.space.wrap
         l = [w(1), w(2), w(3), w(4)]
         w_l = self.space.newtuple(l)
-        assert self.space.fixedview(w_l) == l
-        assert self.space.fixedview(w_l, 4) == l
+        assert self.space.fixedview(w_l) is l
+        assert self.space.fixedview(w_l, 4) is l
         raises(ValueError, self.space.fixedview, w_l, 3)
         raises(ValueError, self.space.fixedview, w_l, 5)
 
     def test_listview(self):
         w = self.space.wrap
         l = [w(1), w(2), w(3), w(4)]
-        w_l = self.space.newtuple(l)
-        assert self.space.listview(w_l) == l
-        assert self.space.listview(w_l, 4) == l
-        raises(ValueError, self.space.listview, w_l, 3)
-        raises(ValueError, self.space.listview, w_l, 5)
+        w_l = self.space.newlist(l)
+        assert self.space.listview(w_l) is l
 
     def test_exception_match(self):
         assert self.space.exception_match(self.space.w_ValueError,
