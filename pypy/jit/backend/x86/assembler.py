@@ -755,15 +755,8 @@ class Assembler386(object):
         #
         return self.implement_guard(addr, self.mc.JNE)
 
-    def _no_const_locs(self, args):
-        """ assert that all args are actually Boxes
-        """
-        for arg in args:
-            assert arg is None or isinstance(arg, Box) # hole
-
     def implement_guard_recovery(self, guard_opnum, faildescr, failargs,
                                                                fail_locs):
-        self._no_const_locs(failargs)
         exc = (guard_opnum == rop.GUARD_EXCEPTION or
                guard_opnum == rop.GUARD_NO_EXCEPTION)
         return self.generate_quick_failure(faildescr, failargs, fail_locs, exc)
@@ -783,7 +776,7 @@ class Assembler386(object):
         addr = mc.tell()
         withfloats = False
         for box in failargs:
-            if box.type == FLOAT:
+            if box is not None and box.type == FLOAT:
                 withfloats = True
                 break
         mc.CALL(rel32(self.failure_recovery_code[exc + 2 * withfloats]))
@@ -801,30 +794,35 @@ class Assembler386(object):
     DESCR_REF       = 0x00
     DESCR_INT       = 0x01
     DESCR_FLOAT     = 0x02
+    DESCR_SPECIAL   = 0x03
     DESCR_FROMSTACK = 8
-    DESCR_STOP      = DESCR_INT + 4*esp.op
+    DESCR_STOP      = 0 | DESCR_SPECIAL
+    DESCR_HOLE      = 4 | DESCR_SPECIAL
 
     def write_failure_recovery_description(self, mc, failargs, locs):
         for i in range(len(failargs)):
             arg = failargs[i]
-            if arg.type == REF:
-                kind = self.DESCR_REF
-            elif arg.type == INT:
-                kind = self.DESCR_INT
-            elif arg.type == FLOAT:
-                kind = self.DESCR_FLOAT
+            if arg is not None:
+                if arg.type == REF:
+                    kind = self.DESCR_REF
+                elif arg.type == INT:
+                    kind = self.DESCR_INT
+                elif arg.type == FLOAT:
+                    kind = self.DESCR_FLOAT
+                else:
+                    raise AssertionError("bogus kind")
+                loc = locs[i]
+                if isinstance(loc, MODRM):
+                    n = self.DESCR_FROMSTACK + loc.position
+                else:
+                    assert isinstance(loc, REG)
+                    n = loc.op
+                n = kind + 4*n
+                while n > 0x7F:
+                    mc.writechr((n & 0x7F) | 0x80)
+                    n >>= 7
             else:
-                raise AssertionError("bogus kind")
-            loc = locs[i]
-            if isinstance(loc, MODRM):
-                n = self.DESCR_FROMSTACK + loc.position
-            else:
-                assert isinstance(loc, REG)
-                n = loc.op
-            n = kind + 4*n
-            while n > 0x7F:
-                mc.writechr((n & 0x7F) | 0x80)
-                n >>= 7
+                n = self.DESCR_HOLE
             mc.writechr(n)
         mc.writechr(self.DESCR_STOP)
         # preallocate the fail_boxes
@@ -864,6 +862,8 @@ class Assembler386(object):
                 loc = X86StackManager.stack_pos(code, size)
             elif code == self.DESCR_STOP:
                 break
+            elif code == self.DESCR_HOLE:
+                continue
             else:
                 # 'code' identifies a register
                 kind = code & 3
@@ -910,11 +910,15 @@ class Assembler386(object):
                     if kind == self.DESCR_FLOAT:
                         value_hi = value
                         value = rffi.cast(rffi.LONGP, stackloc - 4)[0]
-                elif code == self.DESCR_STOP:
-                    break
                 else:
                     # 'code' identifies a register: load its value
                     kind = code & 3
+                    if kind == self.DESCR_SPECIAL:
+                        if code == self.DESCR_HOLE:
+                            num += 1
+                            continue
+                        assert code == self.DESCR_STOP
+                        break
                     code >>= 2
                     if kind == self.DESCR_FLOAT:
                         xmmregisters = rffi.ptradd(registers, -16)

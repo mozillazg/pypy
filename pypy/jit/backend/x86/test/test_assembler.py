@@ -21,15 +21,20 @@ def test_write_failure_recovery_description():
     assembler = Assembler386(FakeCPU())
     mc = FakeMC()
     failargs = [BoxInt(), BoxPtr(), BoxFloat()] * 3
+    failargs.insert(6, None)
+    failargs.insert(7, None)
     locs = [X86StackManager.stack_pos(0, 1),
             X86StackManager.stack_pos(1, 1),
             X86StackManager.stack_pos(10, 2),
             X86StackManager.stack_pos(100, 1),
             X86StackManager.stack_pos(101, 1),
             X86StackManager.stack_pos(110, 2),
+            None,
+            None,
             ebx,
             esi,
             xmm2]
+    assert len(failargs) == len(locs)
     assembler.write_failure_recovery_description(mc, failargs, locs)
     nums = [Assembler386.DESCR_INT   + 4*(8+0),
             Assembler386.DESCR_REF   + 4*(8+1),
@@ -37,6 +42,8 @@ def test_write_failure_recovery_description():
             Assembler386.DESCR_INT   + 4*(8+100),
             Assembler386.DESCR_REF   + 4*(8+101),
             Assembler386.DESCR_FLOAT + 4*(8+110),
+            Assembler386.DESCR_HOLE,
+            Assembler386.DESCR_HOLE,
             Assembler386.DESCR_INT   + 4*ebx.op,
             Assembler386.DESCR_REF   + 4*esi.op,
             Assembler386.DESCR_FLOAT + 4*xmm2.op]
@@ -47,7 +54,8 @@ def test_write_failure_recovery_description():
     assert mc.content == (nums[:3] + double_byte_nums + nums[6:] +
                           [assembler.DESCR_STOP])
 
-    # also test rebuild_faillocs_from_descr()
+    # also test rebuild_faillocs_from_descr(), which should not
+    # reproduce the holes at all
     bytecode = lltype.malloc(rffi.UCHARP.TO, len(mc.content), flavor='raw')
     for i in range(len(mc.content)):
         assert 0 <= mc.content[i] <= 255
@@ -55,7 +63,7 @@ def test_write_failure_recovery_description():
     bytecode_addr = rffi.cast(lltype.Signed, bytecode)
     newlocs = assembler.rebuild_faillocs_from_descr(bytecode_addr)
     assert ([loc.assembler() for loc in newlocs] ==
-            [loc.assembler() for loc in locs])
+            [loc.assembler() for loc in locs if loc is not None])
 
 # ____________________________________________________________
 
@@ -83,26 +91,29 @@ def do_failure_recovery_func(withfloats):
         rffi.cast(rffi.DOUBLEP, tmp)[0] = value
         return rffi.cast(rffi.DOUBLEP, tmp)[0], tmp[0], tmp[1]
 
-    # memory locations: 30 integers, 30 pointers, 26 floats
+    # memory locations: 26 integers, 26 pointers, 26 floats
     # main registers: half of them as signed and the other half as ptrs
     # xmm registers: all floats, from xmm0 to xmm7
+    # holes: 8
     locations = []
     baseloc = 4
-    for i in range(30+30+26):
+    for i in range(26+26+26):
         if baseloc < 128:
             baseloc += random.randrange(2, 20)
         else:
             baseloc += random.randrange(2, 1000)
         locations.append(baseloc)
     random.shuffle(locations)
-    content = ([('int', locations.pop()) for _ in range(30)] +
-               [('ptr', locations.pop()) for _ in range(30)] +
+    content = ([('int', locations.pop()) for _ in range(26)] +
+               [('ptr', locations.pop()) for _ in range(26)] +
                [(['int', 'ptr'][random.randrange(0, 2)], reg)
                          for reg in [eax, ecx, edx, ebx, esi, edi]])
     if withfloats:
         content += ([('float', locations.pop()) for _ in range(26)] +
                     [('float', reg) for reg in [xmm0, xmm1, xmm2, xmm3,
                                                 xmm4, xmm5, xmm6, xmm7]])
+    for i in range(8):
+        content.append(('hole', None))
     random.shuffle(content)
 
     # prepare the expected target arrays, the descr_bytecode,
@@ -124,40 +135,43 @@ def do_failure_recovery_func(withfloats):
 
     descr_bytecode = []
     for i, (kind, loc) in enumerate(content):
-        if kind == 'float':
-            value, lo, hi = get_random_float()
-            expected_floats[i] = value
-            kind = Assembler386.DESCR_FLOAT
-            if isinstance(loc, REG):
-                xmmregisters[2*loc.op] = lo
-                xmmregisters[2*loc.op+1] = hi
-            else:
-                write_in_stack(loc, hi)
-                write_in_stack(loc+1, lo)
+        if kind == 'hole':
+            num = Assembler386.DESCR_HOLE
         else:
-            if kind == 'int':
-                value = get_random_int()
-                expected_ints[i] = value
-                kind = Assembler386.DESCR_INT
-            elif kind == 'ptr':
-                value = get_random_ptr()
-                expected_ptrs[i] = value
-                kind = Assembler386.DESCR_REF
-                value = rffi.cast(rffi.LONG, value)
+            if kind == 'float':
+                value, lo, hi = get_random_float()
+                expected_floats[i] = value
+                kind = Assembler386.DESCR_FLOAT
+                if isinstance(loc, REG):
+                    xmmregisters[2*loc.op] = lo
+                    xmmregisters[2*loc.op+1] = hi
+                else:
+                    write_in_stack(loc, hi)
+                    write_in_stack(loc+1, lo)
             else:
-                assert 0, kind
-            if isinstance(loc, REG):
-                registers[loc.op] = value
-            else:
-                write_in_stack(loc, value)
+                if kind == 'int':
+                    value = get_random_int()
+                    expected_ints[i] = value
+                    kind = Assembler386.DESCR_INT
+                elif kind == 'ptr':
+                    value = get_random_ptr()
+                    expected_ptrs[i] = value
+                    kind = Assembler386.DESCR_REF
+                    value = rffi.cast(rffi.LONG, value)
+                else:
+                    assert 0, kind
+                if isinstance(loc, REG):
+                    registers[loc.op] = value
+                else:
+                    write_in_stack(loc, value)
 
-        if isinstance(loc, REG):
-            num = kind + 4*loc.op
-        else:
-            num = kind + 4*(8+loc)
-        while num >= 0x80:
-            descr_bytecode.append((num & 0x7F) | 0x80)
-            num >>= 7
+            if isinstance(loc, REG):
+                num = kind + 4*loc.op
+            else:
+                num = kind + 4*(8+loc)
+            while num >= 0x80:
+                descr_bytecode.append((num & 0x7F) | 0x80)
+                num >>= 7
         descr_bytecode.append(num)
 
     descr_bytecode.append(Assembler386.DESCR_STOP)
