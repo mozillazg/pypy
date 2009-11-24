@@ -142,7 +142,7 @@ class BaseBackendTest(Runner):
         self.cpu.compile_loop(inputargs, operations, looptoken)
         self.cpu.set_future_value_int(0, 2)
         fail = self.cpu.execute_token(looptoken)
-        assert fail == 2
+        assert fail.identifier == 2
         res = self.cpu.get_latest_value_int(2)
         assert res == 10
 
@@ -234,7 +234,7 @@ class BaseBackendTest(Runner):
 
         self.cpu.set_future_value_int(0, 2)
         fail = self.cpu.execute_token(looptoken)
-        assert fail == 2
+        assert fail.identifier == 2
         res = self.cpu.get_latest_value_int(0)
         assert res == 20
 

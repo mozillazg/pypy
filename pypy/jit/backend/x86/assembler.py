@@ -788,7 +788,8 @@ class Assembler386(object):
         # for testing the decoding, write a final byte 0xCC
         if not we_are_translated():
             mc.writechr(0xCC)
-            faildescr._x86_debug_faillocs = fail_locs
+            faildescr._x86_debug_faillocs = [loc for loc in fail_locs
+                                                 if loc is not None]
         return addr
 
     DESCR_REF       = 0x00
