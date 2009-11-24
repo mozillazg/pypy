@@ -651,7 +651,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         elif isinstance(w_obj, W_ListObject):
             t = w_obj.wrappeditems[:]
         else:
-            return ObjSpace.fixedview(self, w_obj)
+            return ObjSpace.fixedview(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
             raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
         return t

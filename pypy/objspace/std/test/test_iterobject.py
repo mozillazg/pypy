@@ -57,6 +57,31 @@ class AppTestW_IterObjectApp:
         raises(TypeError,
                           iter,
                           C())
+    
+    def test_unpacking_iter(self):
+        class BasicIterClass:
+            def __init__(self, n):
+                self.n = n
+                self.i = 0
+            def next(self):
+                res = self.i
+                if res >= self.n:
+                    raise StopIteration
+                self.i = res + 1
+                return res
+
+        class IteratingSequenceClass:
+            def __init__(self, n):
+                self.n = n
+            def __iter__(self):
+                return BasicIterClass(self.n)
+
+        try:
+            a, b = IteratingSequenceClass(3)
+        except ValueError:
+            pass
+        else:
+            raise Exception("did not raise")
 
 class AppTest_IterObject(object):
     def test_no_len_on_list_iter(self):
