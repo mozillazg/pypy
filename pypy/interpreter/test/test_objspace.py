@@ -12,7 +12,7 @@ import sys
 INT32_MAX = 2147483648
 
 
-class TestObjSpace: 
+class TestObjSpace:    
     def test_newlist(self):
         w = self.space.wrap
         l = range(10)
@@ -66,6 +66,8 @@ class TestObjSpace:
         assert self.space.fixedview(w_l, 4) is l
         raises(ValueError, self.space.fixedview, w_l, 3)
         raises(ValueError, self.space.fixedview, w_l, 5)
+        w_d = self.space.newdict({})
+        assert self.space.fixedview(w_d) == []
 
     def test_listview(self):
         w = self.space.wrap
