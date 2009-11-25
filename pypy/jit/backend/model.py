@@ -206,10 +206,13 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def do_force_token(self):
-    	raise NotImplementedError
+        raise NotImplementedError
 
     def do_call_may_force(self, args, calldescr):
-    	raise NotImplementedError
+        raise NotImplementedError
+
+    def force(self, force_token):
+        raise NotImplementedError
 
     # ootype specific operations
     # --------------------------
