@@ -416,7 +416,8 @@ class AppTestSocket:
         import _socket, os
         if not hasattr(_socket, 'AF_UNIX'):
             skip('AF_UNIX not supported.')
-        sockpath = os.path.join(self.udir, 'app_test_unix_socket_connect')
+        # Mac OS X has a very small limit on socket names
+        sockpath = os.path.join(self.udir, 'app_unix')
 
         serversock = _socket.socket(_socket.AF_UNIX)
         serversock.bind(sockpath)
