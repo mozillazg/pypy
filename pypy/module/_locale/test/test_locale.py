@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import py
 from pypy.conftest import gettestobjspace
-
+# from pypy.rpython.tool import rffi_platform as platform
 import sys
 
 class AppTestLocaleTrivia:
@@ -65,11 +65,16 @@ class AppTestLocaleTrivia:
 
 
         # HAVE_LANGINFO
+
         if sys.platform != 'win32':
             _LANGINFO_NAMES = ('RADIXCHAR THOUSEP CRNCYSTR D_T_FMT D_FMT '
                         'T_FMT AM_STR PM_STR CODESET T_FMT_AMPM ERA ERA_D_FMT '
-                        'ERA_D_T_FMT ERA_T_FMT ALT_DIGITS YESEXPR NOEXPR '
-                        '_DATE_FMT').split()
+                        'ERA_D_T_FMT ERA_T_FMT ALT_DIGITS YESEXPR '
+                        'NOEXPR').split()
+            # XXX don't know how to conditionally test this.
+            #_DATE_FMT = platform.SimpleType('_DATE_FMT', ifdef='_DATE_FMT')
+            #if _DATE_FMT:
+            #langinfo_names.append('_DATE_FMT')
             for i in range(1, 8):
                 _LANGINFO_NAMES.append("DAY_%d" % i)
                 _LANGINFO_NAMES.append("ABDAY_%d" % i)
