@@ -30,7 +30,7 @@ try:
     from _locale import *
 
 except ImportError:
-    raise
+
     # Locale emulation
 
     CHAR_MAX = 127

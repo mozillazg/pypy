@@ -21,15 +21,8 @@ class CConfig:
         includes += ['libintl.h']
     if sys.platform == 'win32':
         includes += ['windows.h']
-
-    if sys.platform == 'darwin':
-        libraries = ['intl']
-    else:
-        libraries = []
-
     _compilation_info_ = ExternalCompilationInfo(
         includes=includes,
-        libraries=libraries
     )
     HAVE_BIND_TEXTDOMAIN_CODESET = platform.Has('bind_textdomain_codeset')
     lconv = platform.Struct("struct lconv", [
@@ -106,11 +99,8 @@ if HAVE_LANGINFO:
     # should we support them?
     langinfo_names.extend('RADIXCHAR THOUSEP CRNCYSTR D_T_FMT D_FMT T_FMT '
                         'AM_STR PM_STR CODESET T_FMT_AMPM ERA ERA_D_FMT '
-                        'ERA_D_T_FMT ERA_T_FMT ALT_DIGITS YESEXPR '
-                        'NOEXPR'.split())
-    _DATE_FMT = platform.SimpleType('_DATE_FMT', ifdef='_DATE_FMT')
-    if _DATE_FMT:
-        langinfo_names.append('_DATE_FMT')
+                        'ERA_D_T_FMT ERA_T_FMT ALT_DIGITS YESEXPR NOEXPR '
+                        '_DATE_FMT'.split())
     for i in range(1, 8):
         langinfo_names.append("DAY_%d" % i)
         langinfo_names.append("ABDAY_%d" % i)
@@ -465,3 +455,5 @@ if sys.platform == 'win32':
         finally:
             lltype.free(buf_lang, flavor='raw')
             lltype.free(buf_country, flavor='raw')
+elif sys.platform == 'darwin':
+    raise NotImplementedError()
