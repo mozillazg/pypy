@@ -66,9 +66,10 @@ class TestDarwin(BasicTest):
         executable = plat32.compile([cfile], eci)
         res = plat32.execute(executable)
         self.check_res(res, '0\n')
-        executable = plat64.compile([cfile], eci)
-        res = plat64.execute(executable)
-        self.check_res(res, '1\n')
+        if host_factory == Darwin_x86_64:
+            executable = plat64.compile([cfile], eci)
+            res = plat64.execute(executable)
+            self.check_res(res, '1\n')
 
     def test_longsize(self):
         if platform.machine() != 'i386':
@@ -113,14 +114,14 @@ class TestDarwin(BasicTest):
         plat32.execute_makefile(mk)
         res = plat32.execute(tmpdir.join('test_int_size'))
         self.check_res(res, '0\n')
-
-        tmpdir = udir.join('64_makefile' + self.__class__.__name__).ensure(dir=1)
-        cfile = tmpdir.join('test_int_size.c')
-        cfile.write(cfile_content)
-        mk = plat64.gen_makefile([cfile], ExternalCompilationInfo(),
-                               path=tmpdir)
-        mk.write()
-        plat64.execute_makefile(mk)
-        res = plat64.execute(tmpdir.join('test_int_size'))
-        self.check_res(res, '1\n')
+        if host_factory == Darwin_x86_64:
+            tmpdir = udir.join('64_makefile' + self.__class__.__name__).ensure(dir=1)
+            cfile = tmpdir.join('test_int_size.c')
+            cfile.write(cfile_content)
+            mk = plat64.gen_makefile([cfile], ExternalCompilationInfo(),
+                                   path=tmpdir)
+            mk.write()
+            plat64.execute_makefile(mk)
+            res = plat64.execute(tmpdir.join('test_int_size'))
+            self.check_res(res, '1\n')
 
