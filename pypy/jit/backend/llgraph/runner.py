@@ -498,7 +498,7 @@ class LLtypeCPU(BaseCPU):
         return history.BoxInt(llimpl.cast_to_int(ptrbox.getref_base(),
                                                         self.memo_cast))
     def force(self, force_token):
-        frame = llimpl.force(force_token)
+        frame = llimpl.force(self.cast_int_to_adr(force_token))
         self.latest_frame = frame
 
 class OOtypeCPU(BaseCPU):

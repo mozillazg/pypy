@@ -146,7 +146,7 @@ TYPES = {
     'cast_ptr_to_int' : (('ref',), 'int'),
     'debug_merge_point': (('ref',), None),
     'force_token'     : ((), 'int'),
-    'call_may_force'  : (('ref', 'varargs'), 'intorptr'),
+    'call_may_force'  : (('int', 'varargs'), 'intorptr'),
     'guard_not_forced': ((), None)
     #'getitem'         : (('void', 'ref', 'int'), 'int'),
     #'setitem'         : (('void', 'ref', 'int', 'int'), None),
