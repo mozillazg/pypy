@@ -1229,7 +1229,7 @@ class LLtypeBackendTest(BaseBackendTest):
                values.append(self.cpu.get_latest_value_int(0))
                values.append(self.cpu.get_latest_value_int(1))
 
-        FUNC = self.FuncType([llmemory.Address, lltype.Signed], lltype.Void)
+        FUNC = self.FuncType([lltype.Signed, lltype.Signed], lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
