@@ -87,6 +87,10 @@ class CPU386(AbstractLLCPU):
         adr = llmemory.cast_ptr_to_adr(x)
         return CPU386.cast_adr_to_int(adr)
 
+    def force(self, stack_base):
+        TP = rffi.CArrayPtr(lltype.Signed)
+        rffi.cast(TP, stack_base + self.virtualizable_ofs)[0] = 1
+        # force stuff actually...
 
 class CPU386_NO_SSE2(CPU386):
     supports_floats = False
