@@ -210,6 +210,8 @@ class Assembler386(object):
         self.mc.PUSH(ebx)
         self.mc.PUSH(esi)
         self.mc.PUSH(edi)
+        # could be really PUSH(0), but that way is safer
+        self.mc.MOV(mem(ebp, self.cpu.virtualizable_ofs), imm(0))
         # NB. exactly 4 pushes above; if this changes, fix stack_pos().
         # You must also keep get_basic_shape() in sync.
         adr_stackadjust = self._patchable_stackadjust()
@@ -1104,6 +1106,7 @@ class Assembler386(object):
             self.mc.AND(eax, imm(0xffff))
 
     genop_call_pure = genop_call
+    genop_call_may_force = genop_call
 
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
         # use 'mc._mc' directly instead of 'mc', to avoid
