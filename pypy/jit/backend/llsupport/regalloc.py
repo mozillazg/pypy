@@ -82,15 +82,15 @@ class RegisterManager(object):
             self.possibly_free_var(v)
 
     def _check_invariants(self):
-        if not we_are_translated():
-            # make sure no duplicates
-            assert len(dict.fromkeys(self.reg_bindings.values())) == len(self.reg_bindings)
-            rev_regs = dict.fromkeys(self.reg_bindings.values())
-            for reg in self.free_regs:
-                assert reg not in rev_regs
-            assert len(rev_regs) + len(self.free_regs) == len(self.all_regs)
-        else:
-            assert len(self.reg_bindings) + len(self.free_regs) == len(self.all_regs)
+        #if not we_are_translated():
+        #    # make sure no duplicates
+        #    assert len(dict.fromkeys(self.reg_bindings.values())) == len(self.reg_bindings)
+        #    rev_regs = dict.fromkeys(self.reg_bindings.values())
+        #    for reg in self.free_regs:
+        #        assert reg not in rev_regs
+        #    assert len(rev_regs) + len(self.free_regs) == len(self.all_regs)
+        #else:
+        #    assert len(self.reg_bindings) + len(self.free_regs) == len(self.all_regs)
         if self.longevity:
             for v in self.reg_bindings:
                 assert self.longevity[v][1] > self.position
