@@ -211,7 +211,7 @@ class Assembler386(object):
         self.mc.PUSH(esi)
         self.mc.PUSH(edi)
         # NB. exactly 4 pushes above; if this changes, fix stack_pos().
-        # You must also keep _get_callshape() in sync.
+        # You must also keep get_basic_shape() in sync.
         adr_stackadjust = self._patchable_stackadjust()
         tmp = X86RegisterManager.all_regs[0]
         xmmtmp = X86XMMRegisterManager.all_regs[0]
