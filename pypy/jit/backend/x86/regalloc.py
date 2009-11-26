@@ -632,7 +632,7 @@ class RegAlloc(object):
         assert isinstance(calldescr, BaseCallDescr)
         assert len(calldescr.arg_classes) == len(op.args) - 1
         size = calldescr.get_result_size(self.translate_support_code)
-        self._call(op, [imm(size), ebp] +
+        self._call(op, [imm(size)] +
                    [self.loc(arg) for arg in op.args],
                    save_all_regs=True)
 
@@ -943,7 +943,7 @@ class RegAlloc(object):
         return gcrootmap.compress_callshape(shape)
 
     def consider_force_token(self, op, ignored):
-        pass
+        self.rm.reg_bindings[op.result] = ebp
 
     def not_implemented_op(self, op, ignored):
         msg = "[regalloc] Not implemented operation: %s" % op.getopname()
