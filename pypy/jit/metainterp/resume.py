@@ -455,6 +455,10 @@ def rebuild_from_resumedata(metainterp, newboxes, storage, expects_virtualizable
     metainterp.framestack.reverse()
     return virtualizable_boxes
 
+def force_from_resumedata(metainterp, newboxes, storage):
+    resumereader = ResumeDataReader(storage, newboxes, metainterp)
+    return resumereader.consume_boxes()
+
 
 class ResumeDataReader(object):
     virtuals = None

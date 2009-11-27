@@ -106,6 +106,7 @@ class CPU386(AbstractLLCPU):
         self.assembler.leave_jitted_hook()
         # end of "no gc operation!" block
         assert fail_index == fail_index_2
+        return faildescr
 
 
 class CPU386_NO_SSE2(CPU386):

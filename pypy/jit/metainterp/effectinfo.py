@@ -8,7 +8,7 @@ class EffectInfo(object):
     _cache = {}
 
     def __new__(cls, write_descrs_fields, write_descrs_arrays,
-                promotes_virtualizables):
+                promotes_virtualizables=False):
         key = (frozenset(write_descrs_fields), frozenset(write_descrs_arrays),
                promotes_virtualizables)
         if key in cls._cache:
