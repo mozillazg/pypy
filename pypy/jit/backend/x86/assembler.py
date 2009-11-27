@@ -684,6 +684,11 @@ class Assembler386(object):
         self.mc.CMP(heap(self.cpu.pos_exception()), imm(0))
         return self.implement_guard(addr, self.mc.JNZ)
 
+    def genop_guard_guard_not_forced(self, ign_1, guard_op, addr,
+                                     locs, ign_2):
+        self.mc.CMP(mem(ebp, self.cpu.virtualizable_ofs), imm(0))
+        return self.implement_guard(addr, self.mc.JNZ)
+
     def genop_guard_guard_exception(self, ign_1, guard_op, addr,
                                     locs, resloc):
         loc = locs[0]

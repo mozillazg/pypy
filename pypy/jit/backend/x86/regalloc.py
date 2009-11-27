@@ -399,7 +399,7 @@ class RegAlloc(object):
     consider_guard_isnull = _consider_guard
 
     def consider_guard_not_forced(self, op, ignored):
-        pass
+        self.perform_guard(op, [], None)
 
     def consider_finish(self, op, ignored):
         locs = [self.loc(v) for v in op.args]
