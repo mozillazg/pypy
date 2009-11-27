@@ -210,8 +210,7 @@ class Assembler386(object):
         self.mc.PUSH(ebx)
         self.mc.PUSH(esi)
         self.mc.PUSH(edi)
-        # could be really PUSH(0), but that way is safer
-        self.mc.MOV(mem(ebp, self.cpu.virtualizable_ofs), imm(0))
+        self.mc.PUSH(imm(0)) # the virtualizable flag
         # NB. exactly 4 pushes above; if this changes, fix stack_pos().
         # You must also keep get_basic_shape() in sync.
         adr_stackadjust = self._patchable_stackadjust()
@@ -686,7 +685,7 @@ class Assembler386(object):
 
     def genop_guard_guard_not_forced(self, ign_1, guard_op, addr,
                                      locs, ign_2):
-        self.mc.CMP(mem(ebp, self.cpu.virtualizable_ofs), imm(0))
+        self.mc.CMP(locs[0], imm(0))
         return self.implement_guard(addr, self.mc.JNZ)
 
     def genop_guard_guard_exception(self, ign_1, guard_op, addr,
@@ -1141,6 +1140,9 @@ class Assembler386(object):
         offset = mc.get_relative_pos() - jz_location
         assert 0 < offset <= 127
         mc.overwrite(jz_location-1, [chr(offset)])
+
+    def genop_force_token(self, op, arglocs, resloc):
+        self.mc.LEA(resloc, arglocs[0])
 
     def not_implemented_op_discard(self, op, arglocs):
         msg = "not implemented operation: %s" % op.getopname()
