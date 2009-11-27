@@ -269,9 +269,6 @@ class Assembler386(object):
 
     regalloc_mov = mov # legacy interface
 
-    def regalloc_fstp(self, loc):
-        self.mc.FSTP(loc)
-
     def regalloc_push(self, loc):
         if isinstance(loc, XMMREG):
             self.mc.SUB(esp, imm(2*WORD))
@@ -1104,7 +1101,9 @@ class Assembler386(object):
         self.mc.CALL(x)
         self.mark_gc_roots()
         self.mc.ADD(esp, imm(extra_on_stack))
-        if size == 1:
+        if isinstance(resloc, MODRM64):
+            self.mc.FSTP(resloc)
+        elif size == 1:
             self.mc.AND(eax, imm(0xff))
         elif size == 2:
             self.mc.AND(eax, imm(0xffff))
