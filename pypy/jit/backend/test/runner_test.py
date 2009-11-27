@@ -1225,7 +1225,7 @@ class LLtypeBackendTest(BaseBackendTest):
         values = []
         def maybe_force(token, flag):
             if flag:
-               self.cpu.force(token)
+               self.cpu.force(token, faildescr, [i1, i0])
                values.append(self.cpu.get_latest_value_int(0))
                values.append(self.cpu.get_latest_value_int(1))
 
@@ -1237,11 +1237,12 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = BoxInt()
         i1 = BoxInt()
         tok = BoxInt()
+        faildescr = BasicFailDescr(1)
         ops = [
         ResOperation(rop.FORCE_TOKEN, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], None,
                      descr=calldescr),
-        ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=BasicFailDescr(1)),
+        ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
         ResOperation(rop.FINISH, [i0], None, descr=BasicFailDescr(0))
         ]
         ops[2].fail_args = [i1, i0]

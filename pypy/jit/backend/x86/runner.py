@@ -8,7 +8,6 @@ from pypy.jit.metainterp import history
 from pypy.jit.backend.x86.assembler import Assembler386
 from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
 
-
 class CPU386(AbstractLLCPU):
     debug = True
     supports_floats = True
@@ -87,10 +86,26 @@ class CPU386(AbstractLLCPU):
         adr = llmemory.cast_ptr_to_adr(x)
         return CPU386.cast_adr_to_int(adr)
 
-    def force(self, stack_base):
+    def force(self, stack_base, descr, args):
+        # args parameter is there only for types
         TP = rffi.CArrayPtr(lltype.Signed)
         rffi.cast(TP, stack_base + self.virtualizable_ofs)[0] = 1
-        # force stuff actually...
+        # move things to latest values
+        arglocs = self.assembler.rebuild_faillocs_from_descr(
+            descr._x86_failure_recovery_bytecode)
+        assert len(arglocs) == len(args)
+        for i in range(len(arglocs)):
+            arg = args[i]
+            argloc = arglocs[i]
+            if arg.type == history.FLOAT:
+                xxx
+            elif arg.type == history.REF:
+                xxx
+            elif arg.type == history.INT:
+                pos = stack_base + argloc.ofs_relative_to_ebp()
+                self.assembler.fail_boxes_int.setitem(i, rffi.cast(TP, pos)[0])
+            else:
+                raise NotImplementedError
 
 class CPU386_NO_SSE2(CPU386):
     supports_floats = False
