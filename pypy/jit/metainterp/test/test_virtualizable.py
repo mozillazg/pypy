@@ -7,7 +7,6 @@ from pypy.rlib.jit import JitDriver, hint, dont_look_inside
 from pypy.rlib.jit import OPTIMIZER_SIMPLE, OPTIMIZER_FULL
 from pypy.rlib.rarithmetic import intmask
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
-from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR
 from pypy.rpython.rclass import FieldListAccessor
 from pypy.jit.metainterp.warmspot import get_stats, get_translator
 from pypy.jit.metainterp import history, heaptracker
@@ -41,8 +40,7 @@ class ExplicitVirtualizableTests:
     XY = lltype.GcStruct(
         'XY',
         ('parent', rclass.OBJECT),
-        ('vable_base', llmemory.Address),
-        ('vable_rti', VABLERTIPTR),
+        ('vable_token', lltype.Signed),
         ('inst_x', lltype.Signed),
         ('inst_node', lltype.Ptr(LLtypeMixin.NODE)),
         hints = {'virtualizable2_accessor': FieldListAccessor()})
@@ -57,7 +55,7 @@ class ExplicitVirtualizableTests:
 
     def setup(self):
         xy = lltype.malloc(self.XY)
-        xy.vable_rti = lltype.nullptr(VABLERTIPTR.TO)
+        xy.vable_token = 0
         xy.parent.typeptr = self.xy_vtable
         return xy
 
@@ -205,8 +203,7 @@ class ExplicitVirtualizableTests:
     XY2 = lltype.GcStruct(
         'XY2',
         ('parent', rclass.OBJECT),
-        ('vable_base', llmemory.Address),
-        ('vable_rti', VABLERTIPTR),
+        ('vable_token', lltype.Signed),
         ('inst_x', lltype.Signed),
         ('inst_l1', lltype.Ptr(lltype.GcArray(lltype.Signed))),
         ('inst_l2', lltype.Ptr(lltype.GcArray(lltype.Signed))),
@@ -219,7 +216,7 @@ class ExplicitVirtualizableTests:
 
     def setup2(self):
         xy2 = lltype.malloc(self.XY2)
-        xy2.vable_rti = lltype.nullptr(VABLERTIPTR.TO)
+        xy2.vable_token = 0
         xy2.parent.typeptr = self.xy2_vtable
         return xy2
 
@@ -392,7 +389,7 @@ class ExplicitVirtualizableTests:
 
     def setup2sub(self):
         xy2 = lltype.malloc(self.XY2SUB)
-        xy2.parent.vable_rti = lltype.nullptr(VABLERTIPTR.TO)
+        xy2.parent.vable_token = 0
         xy2.parent.parent.typeptr = self.xy2_vtable
         return xy2
 
@@ -619,8 +616,8 @@ class ImplicitVirtualizableTests:
         self.check_tree_loop_count(0)
 
     def test_external_read_sometimes(self):
-        py.test.skip("known bug: access the frame in a residual call but"
-                     " only sometimes, so that it's not seen during tracing")
+        #py.test.skip("known bug: access the frame in a residual call but"
+        #             " only sometimes, so that it's not seen during tracing")
         jitdriver = JitDriver(greens = [], reds = ['frame'],
                               virtualizables = ['frame'])
         

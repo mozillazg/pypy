@@ -1214,6 +1214,7 @@ class BytecodeMaker(object):
             canraise = True  # if we need to look into the delayed ptr that is
                              # the portal, then it's certainly going to raise
         if pure:
+            assert not calldescr.effectinfo.promotes_virtualizables
             self.emit('residual_call_pure')
         elif canraise:
             self.emit('residual_call')

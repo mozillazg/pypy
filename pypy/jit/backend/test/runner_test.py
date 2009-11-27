@@ -1225,9 +1225,10 @@ class LLtypeBackendTest(BaseBackendTest):
         values = []
         def maybe_force(token, flag):
             if flag:
-               self.cpu.force(token)
-               values.append(self.cpu.get_latest_value_int(0))
-               values.append(self.cpu.get_latest_value_int(1))
+                descr = self.cpu.force(token)
+                values.append(descr)
+                values.append(self.cpu.get_latest_value_int(0))
+                values.append(self.cpu.get_latest_value_int(1))
 
         FUNC = self.FuncType([lltype.Signed, lltype.Signed], lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
@@ -1261,7 +1262,7 @@ class LLtypeBackendTest(BaseBackendTest):
         assert fail.identifier == 1
         assert self.cpu.get_latest_value_int(0) == 1
         assert self.cpu.get_latest_value_int(1) == 10
-        assert values == [1, 10]
+        assert values == [faildescr, 1, 10]
 
     def test_force_operations_returning_int(self):
         values = []

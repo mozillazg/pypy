@@ -401,8 +401,10 @@ class Frame(object):
         fail_args = []
         if op.fail_args:
             for fail_arg in op.fail_args:
-                if fail_arg is None or fail_arg is skip:
+                if fail_arg is None:
                     fail_args.append(None)
+                elif fail_arg is skip:
+                    fail_args.append(fail_arg.concretetype._defl())
                 else:
                     fail_args.append(self.getenv(fail_arg))
         self.fail_args = fail_args
