@@ -879,6 +879,69 @@ class Assembler386(object):
             arglocs.append(loc)
         return arglocs[:]
 
+    def grab_frame_values(self, bytecode, frame_addr,
+                          registers=lltype.nullptr(rffi.LONGP.TO)):
+        num = 0
+        value_hi = 0
+        while 1:
+            # decode the next instruction from the bytecode
+            code = rffi.cast(lltype.Signed, bytecode[0])
+            bytecode = rffi.ptradd(bytecode, 1)
+            if code >= 4*self.DESCR_FROMSTACK:
+                if code > 0x7F:
+                    shift = 7
+                    code &= 0x7F
+                    while True:
+                        nextcode = rffi.cast(lltype.Signed, bytecode[0])
+                        bytecode = rffi.ptradd(bytecode, 1)
+                        code |= (nextcode & 0x7F) << shift
+                        shift += 7
+                        if nextcode <= 0x7F:
+                            break
+                # load the value from the stack
+                kind = code & 3
+                code = (code >> 2) - self.DESCR_FROMSTACK
+                stackloc = frame_addr + get_ebp_ofs(code)
+                value = rffi.cast(rffi.LONGP, stackloc)[0]
+                if kind == self.DESCR_FLOAT:
+                    value_hi = value
+                    value = rffi.cast(rffi.LONGP, stackloc - 4)[0]
+            else:
+                # 'code' identifies a register: load its value
+                kind = code & 3
+                if kind == self.DESCR_SPECIAL:
+                    if code == self.DESCR_HOLE:
+                        num += 1
+                        continue
+                    assert code == self.DESCR_STOP
+                    break
+                assert registers    # it's NULL when called from cpu.force()
+                code >>= 2
+                if kind == self.DESCR_FLOAT:
+                    xmmregisters = rffi.ptradd(registers, -16)
+                    value = xmmregisters[2*code]
+                    value_hi = xmmregisters[2*code + 1]
+                else:
+                    value = registers[code]
+
+            # store the loaded value into fail_boxes_<type>
+            if kind == self.DESCR_INT:
+                tgt = self.fail_boxes_int.get_addr_for_num(num)
+            elif kind == self.DESCR_REF:
+                tgt = self.fail_boxes_ptr.get_addr_for_num(num)
+            elif kind == self.DESCR_FLOAT:
+                tgt = self.fail_boxes_float.get_addr_for_num(num)
+                rffi.cast(rffi.LONGP, tgt)[1] = value_hi
+            else:
+                assert 0, "bogus kind"
+            rffi.cast(rffi.LONGP, tgt)[0] = value
+            num += 1
+        #
+        if not we_are_translated():
+            assert bytecode[4] == 0xCC
+        fail_index = rffi.cast(rffi.LONGP, bytecode)[0]
+        return fail_index
+
     def setup_failure_recovery(self):
 
         def failure_recovery_func(registers):
@@ -889,65 +952,7 @@ class Assembler386(object):
             # recovery bytecode.  See _build_failure_recovery() for details.
             stack_at_ebp = registers[ebp.op]
             bytecode = rffi.cast(rffi.UCHARP, registers[8])
-            num = 0
-            value_hi = 0
-            while 1:
-                # decode the next instruction from the bytecode
-                code = rffi.cast(lltype.Signed, bytecode[0])
-                bytecode = rffi.ptradd(bytecode, 1)
-                if code >= 4*self.DESCR_FROMSTACK:
-                    if code > 0x7F:
-                        shift = 7
-                        code &= 0x7F
-                        while True:
-                            nextcode = rffi.cast(lltype.Signed, bytecode[0])
-                            bytecode = rffi.ptradd(bytecode, 1)
-                            code |= (nextcode & 0x7F) << shift
-                            shift += 7
-                            if nextcode <= 0x7F:
-                                break
-                    # load the value from the stack
-                    kind = code & 3
-                    code = (code >> 2) - self.DESCR_FROMSTACK
-                    stackloc = stack_at_ebp + get_ebp_ofs(code)
-                    value = rffi.cast(rffi.LONGP, stackloc)[0]
-                    if kind == self.DESCR_FLOAT:
-                        value_hi = value
-                        value = rffi.cast(rffi.LONGP, stackloc - 4)[0]
-                else:
-                    # 'code' identifies a register: load its value
-                    kind = code & 3
-                    if kind == self.DESCR_SPECIAL:
-                        if code == self.DESCR_HOLE:
-                            num += 1
-                            continue
-                        assert code == self.DESCR_STOP
-                        break
-                    code >>= 2
-                    if kind == self.DESCR_FLOAT:
-                        xmmregisters = rffi.ptradd(registers, -16)
-                        value = xmmregisters[2*code]
-                        value_hi = xmmregisters[2*code + 1]
-                    else:
-                        value = registers[code]
-
-                # store the loaded value into fail_boxes_<type>
-                if kind == self.DESCR_INT:
-                    tgt = self.fail_boxes_int.get_addr_for_num(num)
-                elif kind == self.DESCR_REF:
-                    tgt = self.fail_boxes_ptr.get_addr_for_num(num)
-                elif kind == self.DESCR_FLOAT:
-                    tgt = self.fail_boxes_float.get_addr_for_num(num)
-                    rffi.cast(rffi.LONGP, tgt)[1] = value_hi
-                else:
-                    assert 0, "bogus kind"
-                rffi.cast(rffi.LONGP, tgt)[0] = value
-                num += 1
-            #
-            if not we_are_translated():
-                assert bytecode[4] == 0xCC
-            fail_index = rffi.cast(rffi.LONGP, bytecode)[0]
-            return fail_index
+            return self.grab_frame_values(bytecode, stack_at_ebp, registers)
 
         self.failure_recovery_func = failure_recovery_func
         self.failure_recovery_code = [0, 0, 0, 0]
@@ -1110,7 +1115,12 @@ class Assembler386(object):
     
     def genop_guard_call_may_force(self, op, guard_op, addr,
                                    arglocs, result_loc):
-        xxx #...
+        faildescr = guard_op.descr
+        fail_index = self.cpu.get_fail_descr_number(faildescr)
+        self.mc.MOV(mem(ebp, FORCE_INDEX_OFS), imm(fail_index))
+        self.genop_call(op, arglocs, result_loc)
+        self.mc.CMP(mem(ebp, FORCE_INDEX_OFS), imm(0))
+        return self.implement_guard(addr, self.mc.JL)
 
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
         # use 'mc._mc' directly instead of 'mc', to avoid
@@ -1142,7 +1152,7 @@ class Assembler386(object):
         mc.overwrite(jz_location-1, [chr(offset)])
 
     def genop_force_token(self, op, arglocs, resloc):
-        xxx  #self.mc.LEA(resloc, ...)
+        self.mc.LEA(resloc, mem(ebp, FORCE_INDEX_OFS))
 
     def not_implemented_op_discard(self, op, arglocs):
         msg = "not implemented operation: %s" % op.getopname()

@@ -289,7 +289,8 @@ class RegAlloc(object):
         self.assembler.regalloc_perform_with_guard(op, guard_op, faillocs,
                                                    arglocs, result_loc,
                                                    self.sm.stack_depth)
-        self.rm.possibly_free_var(op.result)
+        if op.result is not None:
+            self.rm.possibly_free_var(op.result)
         self.possibly_free_vars(guard_op.fail_args)
 
     def perform_guard(self, guard_op, arglocs, result_loc):
