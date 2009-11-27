@@ -1225,7 +1225,7 @@ class LLtypeBackendTest(BaseBackendTest):
         values = []
         def maybe_force(token, flag):
             if flag:
-               self.cpu.force(token, faildescr, [i1, i0])
+               self.cpu.force(token)
                values.append(self.cpu.get_latest_value_int(0))
                values.append(self.cpu.get_latest_value_int(1))
 
