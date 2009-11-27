@@ -90,8 +90,7 @@ class CPU386(AbstractLLCPU):
     def force(self, addr_of_force_index):
         TP = rffi.CArrayPtr(lltype.Signed)
         fail_index = rffi.cast(TP, addr_of_force_index)[0]
-        if fail_index < 0:
-            return    # already forced
+        assert fail_index >= 0, "already forced!"
         faildescr = self.get_fail_descr_from_number(fail_index)
         rffi.cast(TP, addr_of_force_index)[0] = -1
         bytecode = rffi.cast(rffi.UCHARP,
