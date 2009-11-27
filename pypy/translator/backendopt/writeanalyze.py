@@ -1,6 +1,5 @@
 from pypy.translator.backendopt import graphanalyze
 from pypy.rpython.ootypesystem import ootype
-reload(graphanalyze)
 
 top_set = object()
 empty_set = frozenset()
