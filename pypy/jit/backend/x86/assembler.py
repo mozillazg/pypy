@@ -9,7 +9,8 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.tool.uid import fixid
 from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, lower_byte,\
-     X86RegisterManager, X86XMMRegisterManager, get_ebp_ofs
+     X86RegisterManager, X86XMMRegisterManager, get_ebp_ofs, FRAME_FIXED_SIZE,\
+     FORCE_INDEX_OFS
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.ri386 import *
@@ -21,8 +22,6 @@ from pypy.rlib.debug import debug_print
 
 # our calling convention - we pass first 6 args in registers
 # and the rest stays on the stack
-
-RET_BP = 5 # ret ip + bp + bx + esi + edi = 5 words
 
 if sys.platform == 'darwin':
     # darwin requires the stack to be 16 bytes aligned on calls
@@ -200,7 +199,11 @@ class Assembler386(object):
         # patch stack adjustment LEA
         # possibly align, e.g. for Mac OS X        
         mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 4)
-        mc.write(packimm32(-(stack_depth + RET_BP - 2) * WORD))
+        # Compute the correct offset for the instruction LEA ESP, [EBP-4*words].
+        # Given that [EBP] is where we saved EBP, i.e. in the last word
+        # of our fixed frame, then the 'words' value is:
+        words = (FRAME_FIXED_SIZE - 1) + stack_depth
+        mc.write(packimm32(-WORD * words))
         mc.done()
 
     def _assemble_bootstrap_code(self, inputargs, arglocs):
@@ -210,9 +213,8 @@ class Assembler386(object):
         self.mc.PUSH(ebx)
         self.mc.PUSH(esi)
         self.mc.PUSH(edi)
-        self.mc.PUSH(imm(0)) # the virtualizable flag
-        # NB. exactly 4 pushes above; if this changes, fix stack_pos().
-        # You must also keep get_basic_shape() in sync.
+        # NB. the shape of the frame is hard-coded in get_basic_shape() too.
+        # Also, make sure this is consistent with FRAME_FIXED_SIZE.
         adr_stackadjust = self._patchable_stackadjust()
         tmp = X86RegisterManager.all_regs[0]
         xmmtmp = X86XMMRegisterManager.all_regs[0]
@@ -683,11 +685,6 @@ class Assembler386(object):
         self.mc.CMP(heap(self.cpu.pos_exception()), imm(0))
         return self.implement_guard(addr, self.mc.JNZ)
 
-    def genop_guard_guard_not_forced(self, ign_1, guard_op, addr,
-                                     locs, ign_2):
-        self.mc.CMP(locs[0], imm(0))
-        return self.implement_guard(addr, self.mc.JNZ)
-
     def genop_guard_guard_exception(self, ign_1, guard_op, addr,
                                     locs, resloc):
         loc = locs[0]
@@ -1003,11 +1000,11 @@ class Assembler386(object):
         # now we return from the complete frame, which starts from
         # _assemble_bootstrap_code().  The LEA below throws away most
         # of the frame, including all the PUSHes that we did just above.
-        mc.LEA(esp, addr_add(ebp, imm((-RET_BP + 2) * WORD)))
-        mc.POP(edi)
-        mc.POP(esi)
-        mc.POP(ebx)
-        mc.POP(ebp)
+        mc.LEA(esp, addr_add(ebp, imm(-3 * WORD)))
+        mc.POP(edi)    # [ebp-12]
+        mc.POP(esi)    # [ebp-8]
+        mc.POP(ebx)    # [ebp-4]
+        mc.POP(ebp)    # [ebp]
         mc.RET()
         self.mc2.done()
         self.failure_recovery_code[exc + 2 * withfloats] = recovery_addr
@@ -1048,14 +1045,14 @@ class Assembler386(object):
         addr = self.cpu.get_on_leave_jitted_int(save_exception=exc)
         mc.CALL(rel32(addr))
 
-        # don't break the following code sequence!
+        # don't break the following code sequence!   xxx no reason any more?
         mc = mc._mc
-        mc.LEA(esp, addr_add(ebp, imm((-RET_BP + 2) * WORD)))
+        mc.LEA(esp, addr_add(ebp, imm(-3 * WORD)))
         mc.MOV(eax, imm(fail_index))
-        mc.POP(edi)
-        mc.POP(esi)
-        mc.POP(ebx)
-        mc.POP(ebp)
+        mc.POP(edi)    # [ebp-12]
+        mc.POP(esi)    # [ebp-8]
+        mc.POP(ebx)    # [ebp-4]
+        mc.POP(ebp)    # [ebp]
         mc.RET()
 
     @specialize.arg(2)
@@ -1110,7 +1107,10 @@ class Assembler386(object):
             self.mc.AND(eax, imm(0xffff))
 
     genop_call_pure = genop_call
-    genop_call_may_force = genop_call
+    
+    def genop_guard_call_may_force(self, op, guard_op, addr,
+                                   arglocs, result_loc):
+        xxx #...
 
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
         # use 'mc._mc' directly instead of 'mc', to avoid
@@ -1142,7 +1142,7 @@ class Assembler386(object):
         mc.overwrite(jz_location-1, [chr(offset)])
 
     def genop_force_token(self, op, arglocs, resloc):
-        self.mc.LEA(resloc, arglocs[0])
+        xxx  #self.mc.LEA(resloc, ...)
 
     def not_implemented_op_discard(self, op, arglocs):
         msg = "not implemented operation: %s" % op.getopname()

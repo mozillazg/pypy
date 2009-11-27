@@ -19,6 +19,8 @@ from pypy.jit.backend.llsupport.regalloc import StackManager, RegisterManager,\
      TempBox
 
 WORD = 4
+FRAME_FIXED_SIZE = 5     # ebp + ebx + esi + edi + force_index = 5 words
+FORCE_INDEX_OFS = -4*WORD
 
 width_of_type = {
     INT : 1,
@@ -130,8 +132,6 @@ class RegAlloc(object):
 
     def _prepare(self, inputargs, operations):
         self.sm = X86StackManager()
-        # a bit of a hack - always grab one position at the beginning
-        self.vable_loc = self.sm.loc(TempBox(), 1)
         cpu = self.assembler.cpu
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
         # compute longevity of variables
@@ -310,7 +310,10 @@ class RegAlloc(object):
             self.assembler.dump('%s(%s)' % (op, arglocs))
         self.assembler.regalloc_perform_discard(op, arglocs)
 
-    def can_optimize_cmp_op(self, op, i, operations):
+    def can_merge_with_next_guard(self, op, i, operations):
+        if op.opnum == rop.CALL_MAY_FORCE:
+            assert operations[i + 1].opnum == rop.GUARD_NOT_FORCED
+            return True
         if not op.is_comparison():
             return False
         if (operations[i + 1].opnum != rop.GUARD_TRUE and
@@ -334,7 +337,7 @@ class RegAlloc(object):
                 i += 1
                 self.possibly_free_vars(op.args)
                 continue
-            if self.can_optimize_cmp_op(op, i, operations):
+            if self.can_merge_with_next_guard(op, i, operations):
                 oplist[op.opnum](self, op, operations[i + 1])
                 i += 1
             else:
@@ -396,9 +399,6 @@ class RegAlloc(object):
     consider_guard_false = _consider_guard
     consider_guard_nonnull = _consider_guard
     consider_guard_isnull = _consider_guard
-
-    def consider_guard_not_forced(self, op, ignored):
-        self.perform_guard(op, [self.vable_loc], None)
 
     def consider_finish(self, op, ignored):
         locs = [self.loc(v) for v in op.args]
@@ -609,33 +609,35 @@ class RegAlloc(object):
         self.Perform(op, [loc0], loc1)
         self.rm.possibly_free_var(op.args[0])
 
-    def _call(self, op, arglocs, force_store=[], save_all_regs=False):
+    def _call(self, op, arglocs, force_store=[], guard_not_forced_op=None):
+        save_all_regs = guard_not_forced_op is not None
         self.rm.before_call(force_store, save_all_regs=save_all_regs)
         self.xrm.before_call(force_store, save_all_regs=save_all_regs)
-        self.Perform(op, arglocs, eax)
+        if guard_not_forced_op is not None:
+            self.perform_with_guard(op, guard_not_forced_op, arglocs, eax)
+        else:
+            self.Perform(op, arglocs, eax)
         if op.result is not None:
             if op.result.type == FLOAT:
                 self.xrm.after_call(op.result)
             else:
                 self.rm.after_call(op.result)
 
+    def _consider_call(self, op, guard_not_forced_op=None):
+        calldescr = op.descr
+        assert isinstance(calldescr, BaseCallDescr)
+        assert len(calldescr.arg_classes) == len(op.args) - 1
+        size = calldescr.get_result_size(self.translate_support_code)
+        self._call(op, [imm(size)] + [self.loc(arg) for arg in op.args],
+                   guard_not_forced_op=guard_not_forced_op)
+
     def consider_call(self, op, ignored):
-        calldescr = op.descr
-        assert isinstance(calldescr, BaseCallDescr)
-        assert len(calldescr.arg_classes) == len(op.args) - 1
-        size = calldescr.get_result_size(self.translate_support_code)
-        self._call(op, [imm(size)] + [self.loc(arg) for arg in op.args])
-
-    def consider_call_may_force(self, op, ignored):
-        calldescr = op.descr
-        assert isinstance(calldescr, BaseCallDescr)
-        assert len(calldescr.arg_classes) == len(op.args) - 1
-        size = calldescr.get_result_size(self.translate_support_code)
-        self._call(op, [imm(size)] +
-                   [self.loc(arg) for arg in op.args],
-                   save_all_regs=True)
-
+        self._consider_call(op)
     consider_call_pure = consider_call
+
+    def consider_call_may_force(self, op, guard_op):
+        assert guard_op is not None
+        self._consider_call(op, guard_op)
 
     def consider_cond_call_gc_wb(self, op, ignored):
         assert op.result is None
@@ -943,7 +945,7 @@ class RegAlloc(object):
 
     def consider_force_token(self, op, ignored):
         loc = self.rm.force_allocate_reg(op.result)
-        self.Perform(op, [self.vable_loc], loc)
+        self.Perform(op, [], loc)
 
     def not_implemented_op(self, op, ignored):
         msg = "[regalloc] Not implemented operation: %s" % op.getopname()
@@ -960,10 +962,9 @@ for name, value in RegAlloc.__dict__.iteritems():
 
 def get_ebp_ofs(position):
     # Argument is a stack position (0, 1, 2...).
-    # Returns (ebp-16), (ebp-20), (ebp-24)...
-    # This depends on the fact that our function prologue contains
-    # exactly 4 PUSHes.
-    return -WORD * (4 + position)
+    # Returns (ebp-20), (ebp-24), (ebp-28)...
+    # i.e. the n'th word beyond the fixed frame size.
+    return -WORD * (FRAME_FIXED_SIZE + position)
 
 def lower_byte(reg):
     # argh, kill, use lowest8bits instead
