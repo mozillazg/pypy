@@ -131,8 +131,7 @@ class RegAlloc(object):
     def _prepare(self, inputargs, operations):
         self.sm = X86StackManager()
         # a bit of a hack - always grab one position at the beginning
-        loc = self.sm.loc(TempBox(), 1)
-        self.assembler.cpu.virtualizable_ofs = loc.ofs_relative_to_ebp()
+        self.vable_loc = self.sm.loc(TempBox(), 1)
         cpu = self.assembler.cpu
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
         # compute longevity of variables
@@ -399,7 +398,7 @@ class RegAlloc(object):
     consider_guard_isnull = _consider_guard
 
     def consider_guard_not_forced(self, op, ignored):
-        self.perform_guard(op, [], None)
+        self.perform_guard(op, [self.vable_loc], None)
 
     def consider_finish(self, op, ignored):
         locs = [self.loc(v) for v in op.args]
@@ -943,7 +942,8 @@ class RegAlloc(object):
         return gcrootmap.compress_callshape(shape)
 
     def consider_force_token(self, op, ignored):
-        self.rm.reg_bindings[op.result] = ebp
+        loc = self.rm.force_allocate_reg(op.result)
+        self.Perform(op, [self.vable_loc], loc)
 
     def not_implemented_op(self, op, ignored):
         msg = "[regalloc] Not implemented operation: %s" % op.getopname()
