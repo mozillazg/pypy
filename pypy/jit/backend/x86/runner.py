@@ -87,6 +87,9 @@ class CPU386(AbstractLLCPU):
         adr = llmemory.cast_ptr_to_adr(x)
         return CPU386.cast_adr_to_int(adr)
 
+    all_null_registers = lltype.malloc(rffi.LONGP.TO, 24,
+                                       flavor='raw', zero=True)
+
     def force(self, addr_of_force_index):
         TP = rffi.CArrayPtr(lltype.Signed)
         fail_index = rffi.cast(TP, addr_of_force_index)[0]
@@ -98,7 +101,8 @@ class CPU386(AbstractLLCPU):
         # start of "no gc operation!" block
         fail_index_2 = self.assembler.grab_frame_values(
             bytecode,
-            addr_of_force_index - FORCE_INDEX_OFS)
+            addr_of_force_index - FORCE_INDEX_OFS,
+            rffi.ptradd(self.all_null_registers, 16))
         self.assembler.leave_jitted_hook()
         # end of "no gc operation!" block
         assert fail_index == fail_index_2

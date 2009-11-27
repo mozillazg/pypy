@@ -209,9 +209,9 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def do_call_may_force(self, args, calldescr):
-        raise NotImplementedError
+        return self.do_call(args, calldescr)
 
-    def force(self, force_token, descr, args):
+    def force(self, force_token):
         raise NotImplementedError
 
     # ootype specific operations

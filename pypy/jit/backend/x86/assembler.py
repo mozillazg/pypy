@@ -879,8 +879,7 @@ class Assembler386(object):
             arglocs.append(loc)
         return arglocs[:]
 
-    def grab_frame_values(self, bytecode, frame_addr,
-                          registers=lltype.nullptr(rffi.LONGP.TO)):
+    def grab_frame_values(self, bytecode, frame_addr, registers):
         num = 0
         value_hi = 0
         while 1:
@@ -915,7 +914,6 @@ class Assembler386(object):
                         continue
                     assert code == self.DESCR_STOP
                     break
-                assert registers    # it's NULL when called from cpu.force()
                 code >>= 2
                 if kind == self.DESCR_FLOAT:
                     xmmregisters = rffi.ptradd(registers, -16)

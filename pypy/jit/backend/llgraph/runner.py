@@ -497,9 +497,13 @@ class LLtypeCPU(BaseCPU):
     def do_cast_ptr_to_int(self, ptrbox):
         return history.BoxInt(llimpl.cast_to_int(ptrbox.getref_base(),
                                                         self.memo_cast))
+
     def force(self, force_token):
         frame = llimpl.force(self.cast_int_to_adr(force_token))
         self.latest_frame = frame
+        fail_index = llimpl.get_forced_fail_index(frame)
+        return self.get_fail_descr_from_number(fail_index)
+
 
 class OOtypeCPU(BaseCPU):
     is_oo = True
