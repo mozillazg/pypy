@@ -91,7 +91,6 @@ class CPU386(AbstractLLCPU):
         TP = rffi.CArrayPtr(lltype.Signed)
         fail_index = rffi.cast(TP, addr_of_force_index)[0]
         if fail_index < 0:
-            xxx   # write a test and kill this line
             return    # already forced
         faildescr = self.get_fail_descr_from_number(fail_index)
         rffi.cast(TP, addr_of_force_index)[0] = -1
