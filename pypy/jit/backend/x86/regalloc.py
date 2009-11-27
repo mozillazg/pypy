@@ -100,10 +100,9 @@ class X86XMMRegisterManager(RegisterManager):
         
     def after_call(self, v):
         # the result is stored in st0, but we don't have this around,
-        # so we move it to some stack location
-        if v is not None:
-            loc = self.stack_manager.loc(v, 2)
-            self.assembler.regalloc_fstp(loc)
+        # so genop_call will move it to some stack location immediately
+        # after the call
+        return self.stack_manager.loc(v, 2)
 
 class X86StackManager(StackManager):
 
@@ -290,7 +289,7 @@ class RegAlloc(object):
                                                    arglocs, result_loc,
                                                    self.sm.stack_depth)
         if op.result is not None:
-            self.rm.possibly_free_var(op.result)
+            self.possibly_free_var(op.result)
         self.possibly_free_vars(guard_op.fail_args)
 
     def perform_guard(self, guard_op, arglocs, result_loc):
@@ -614,17 +613,17 @@ class RegAlloc(object):
         save_all_regs = guard_not_forced_op is not None
         self.rm.before_call(force_store, save_all_regs=save_all_regs)
         self.xrm.before_call(force_store, save_all_regs=save_all_regs)
-        if guard_not_forced_op is not None:
-            if op.result is not None:
-                self.force_allocate_reg(op.result, selected_reg=eax)  # XXX!!!
-            self.perform_with_guard(op, guard_not_forced_op, arglocs, eax)
-        else:
-            self.Perform(op, arglocs, eax)
         if op.result is not None:
             if op.result.type == FLOAT:
-                self.xrm.after_call(op.result)
+                resloc = self.xrm.after_call(op.result)
             else:
-                self.rm.after_call(op.result)
+                resloc = self.rm.after_call(op.result)
+        else:
+            resloc = None
+        if guard_not_forced_op is not None:
+            self.perform_with_guard(op, guard_not_forced_op, arglocs, resloc)
+        else:
+            self.Perform(op, arglocs, resloc)
 
     def _consider_call(self, op, guard_not_forced_op=None):
         calldescr = op.descr

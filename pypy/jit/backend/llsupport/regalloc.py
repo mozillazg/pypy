@@ -327,12 +327,12 @@ class RegisterManager(object):
         """ Adjust registers according to the result of the call,
         which is in variable v.
         """
-        if v is not None:
-            self._check_type(v)
-            r = self.call_result_location(v)
-            self.reg_bindings[v] = r
-            self.free_regs = [fr for fr in self.free_regs if fr is not r]
-    
+        self._check_type(v)
+        r = self.call_result_location(v)
+        self.reg_bindings[v] = r
+        self.free_regs = [fr for fr in self.free_regs if fr is not r]
+        return r
+
     # abstract methods, override
 
     def convert_to_imm(self, c):
