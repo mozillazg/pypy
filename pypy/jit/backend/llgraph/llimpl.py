@@ -397,15 +397,16 @@ class Frame(object):
         else:
             return self.env[v]
 
-    def _populate_fail_args(self, op):
+    def _populate_fail_args(self, op, skip=None):
         fail_args = []
         if op.fail_args:
             for fail_arg in op.fail_args:
-                if fail_arg is None:
+                if fail_arg is None or fail_arg is skip:
                     fail_args.append(None)
                 else:
                     fail_args.append(self.getenv(fail_arg))
-        self.fail_args = fail_args        
+        self.fail_args = fail_args
+        self.fail_index = op.fail_index
 
     def execute(self):
         """Execute all operations in a loop,
@@ -793,7 +794,7 @@ class Frame(object):
     def op_call_may_force(self, calldescr, func, *args):
         assert not self._forced
         self._may_force = self.opindex
-        self.op_call(calldescr, func, *args)
+        return self.op_call(calldescr, func, *args)
 
     def op_guard_not_forced(self, descr):
         forced = self._forced
@@ -1071,11 +1072,18 @@ def force(force_token):
     opaque_frame = llmemory.cast_adr_to_ptr(force_token,
                                             lltype.Ptr(_TO_OPAQUE[Frame]))
     frame = _from_opaque(opaque_frame)
+    assert not frame._forced
     frame._forced = True
     assert frame._may_force >= 0
+    call_op = frame.loop.operations[frame._may_force]
     guard_op = frame.loop.operations[frame._may_force+1]
-    frame._populate_fail_args(guard_op)
+    frame._populate_fail_args(guard_op, skip=call_op.result)
     return opaque_frame
+
+def get_forced_fail_index(opaque_frame):
+    frame = _from_opaque(opaque_frame)
+    assert frame._forced
+    return frame.fail_index
 
 class MemoCast(object):
     def __init__(self):
@@ -1447,6 +1455,7 @@ setannotation(get_overflow_error_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(get_zero_division_error, annmodel.SomeAddress())
 setannotation(get_zero_division_error_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, s_Frame)
+setannotation(get_forced_fail_index, annmodel.SomeInteger())
 
 setannotation(new_memo_cast, s_MemoCast)
 setannotation(cast_adr_to_int, annmodel.SomeInteger())

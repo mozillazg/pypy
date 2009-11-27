@@ -615,6 +615,8 @@ class RegAlloc(object):
         self.rm.before_call(force_store, save_all_regs=save_all_regs)
         self.xrm.before_call(force_store, save_all_regs=save_all_regs)
         if guard_not_forced_op is not None:
+            if op.result is not None:
+                self.force_allocate_reg(op.result, selected_reg=eax)  # XXX!!!
             self.perform_with_guard(op, guard_not_forced_op, arglocs, eax)
         else:
             self.Perform(op, arglocs, eax)
