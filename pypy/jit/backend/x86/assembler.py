@@ -759,7 +759,8 @@ class Assembler386(object):
     def implement_guard_recovery(self, guard_opnum, faildescr, failargs,
                                                                fail_locs):
         exc = (guard_opnum == rop.GUARD_EXCEPTION or
-               guard_opnum == rop.GUARD_NO_EXCEPTION)
+               guard_opnum == rop.GUARD_NO_EXCEPTION or
+               guard_opnum == rop.GUARD_NOT_FORCED)
         return self.generate_quick_failure(faildescr, failargs, fail_locs, exc)
 
     def generate_quick_failure(self, faildescr, failargs, fail_locs, exc):
