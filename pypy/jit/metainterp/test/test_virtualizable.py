@@ -772,6 +772,57 @@ class ImplicitVirtualizableTests:
         res = self.meta_interp(f, [123], policy=StopAtXPolicy(g), repeat=7)
         assert res == f(123)
 
+    def test_external_read_sometimes_recursive(self):
+        jitdriver = JitDriver(greens = [], reds = ['frame', 'rec'],
+                              virtualizables = ['frame'])
+        
+        class Frame(object):
+            _virtualizable2_ = ['x', 'y']
+        class SomewhereElse:
+            pass
+        somewhere_else = SomewhereElse()
+
+        def g(rec):
+            somewhere_else.counter += 1
+            if somewhere_else.counter == 70:
+                frame = somewhere_else.top_frame
+                result1 = frame.y     # external read
+                result2 = frame.back.y     # external read
+                debug_print(lltype.Void, '-+-+-+-+- external read:',
+                            result1, result2)
+                assert result1 == 13
+                assert result2 == 1023
+                result = 2
+            elif rec:
+                res = f(4, False)
+                assert res == 0 or res == -1
+                result = 1
+            else:
+                result = 1
+            return result
+
+        def f(n, rec):
+            frame = Frame()
+            frame.x = n
+            frame.y = 10 + 1000 * rec
+            frame.back = somewhere_else.top_frame
+            somewhere_else.top_frame = frame
+            while frame.x > 0:
+                jitdriver.can_enter_jit(frame=frame, rec=rec)
+                jitdriver.jit_merge_point(frame=frame, rec=rec)
+                frame.x -= g(rec)
+                frame.y += 1
+            somewhere_else.top_frame = frame.back
+            return frame.x
+
+        def main(n):
+            somewhere_else.counter = 0
+            somewhere_else.top_frame = None
+            return f(n, True)
+
+        res = self.meta_interp(main, [123], policy=StopAtXPolicy(g))
+        assert res == main(123)
+
     def test_promote_index_in_virtualizable_list(self):
         jitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
                               virtualizables = ['frame'])

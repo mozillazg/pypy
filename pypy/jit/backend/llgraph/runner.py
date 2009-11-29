@@ -100,7 +100,6 @@ class BaseCPU(model.AbstractCPU):
         llimpl._stats = self.stats
         llimpl._llinterp = LLInterpreter(self.rtyper)
         self._future_values = []
-        self.latest_force_token = llmemory.NULL
 
     def _freeze_(self):
         assert self.translate_support_code
@@ -236,10 +235,7 @@ class BaseCPU(model.AbstractCPU):
         return llimpl.frame_float_getvalue(self.latest_frame, index)
 
     def get_latest_force_token(self):
-        token = self.latest_force_token
-        if not we_are_translated():
-            frame = llimpl.get_forced_token_frame(token)
-            assert frame._obj.externalobj is self.latest_frame._obj.externalobj
+        token = llimpl.get_frame_forced_token(self.latest_frame)
         return self.cast_adr_to_int(token)
 
     # ----------
@@ -511,7 +507,6 @@ class LLtypeCPU(BaseCPU):
         token = self.cast_int_to_adr(force_token)
         frame = llimpl.get_forced_token_frame(token)
         fail_index = llimpl.force(frame)
-        self.latest_force_token = token
         self.latest_frame = frame
         return self.get_fail_descr_from_number(fail_index)
 
