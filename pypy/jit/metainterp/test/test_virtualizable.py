@@ -882,26 +882,26 @@ class ImplicitVirtualizableTests:
         assert res == 55
         self.check_loops(new_with_vtable=0)
 
-    def test_check_for_nonstandardness_only_once(self):                                          
-         myjitdriver = JitDriver(greens = [], reds = ['frame'],                                   
-                                 virtualizables = ['frame'])                                      
-                                                                                                  
-         class Frame(object):                                                                     
-             _virtualizable2_ = ['x', 'y', 'z']                                                   
-                                                                                                  
-             def __init__(self, x, y, z=1):                                                       
-                 self = hint(self, access_directly=True)                                          
-                 self.x = x                                                                       
-                 self.y = y                                                                       
-                 self.z = z                                                                       
-                                                                                                  
-         class SomewhereElse:                                                                     
-             pass                                                                                 
-         somewhere_else = SomewhereElse()                                                         
-                                                                                                  
-         def f(n):                                                                                
-             frame = Frame(n, 0)                                                                  
-             somewhere_else.top_frame = frame        # escapes                                    
+    def test_check_for_nonstandardness_only_once(self):
+         myjitdriver = JitDriver(greens = [], reds = ['frame'],
+                                 virtualizables = ['frame'])
+
+         class Frame(object):
+             _virtualizable2_ = ['x', 'y', 'z']
+
+             def __init__(self, x, y, z=1):
+                 self = hint(self, access_directly=True)
+                 self.x = x
+                 self.y = y
+                 self.z = z
+
+         class SomewhereElse:
+             pass
+         somewhere_else = SomewhereElse()
+
+         def f(n):
+             frame = Frame(n, 0)
+             somewhere_else.top_frame = frame        # escapes
              frame = hint(frame, access_directly=True)
              while frame.x > 0:
                  myjitdriver.can_enter_jit(frame=frame)
