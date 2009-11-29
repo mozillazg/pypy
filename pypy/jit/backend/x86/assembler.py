@@ -89,6 +89,7 @@ class Assembler386(object):
         self.fail_boxes_int = NonmovableGrowableArraySigned()
         self.fail_boxes_ptr = NonmovableGrowableArrayGCREF()
         self.fail_boxes_float = NonmovableGrowableArrayFloat()
+        self.fail_ebp = 0
         self.setup_failure_recovery()
 
     def leave_jitted_hook(self):
@@ -877,6 +878,7 @@ class Assembler386(object):
         return arglocs[:]
 
     def grab_frame_values(self, bytecode, frame_addr, registers):
+        self.fail_ebp = registers[ebp.op]
         num = 0
         value_hi = 0
         while 1:
