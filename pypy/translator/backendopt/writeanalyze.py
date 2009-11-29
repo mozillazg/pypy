@@ -37,9 +37,6 @@ class WriteAnalyzer(graphanalyze.GraphAnalyzer):
     def _array_result(self, TYPE):
         return frozenset([("array", TYPE)])
 
-    def analyze_external_call(self, op):
-        return self.bottom_result() # an external call cannot change anything
-
     def analyze_external_method(self, op, TYPE, meth):
         if isinstance(TYPE, ootype.Array):
             methname = op.args[0].value
