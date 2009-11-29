@@ -925,7 +925,6 @@ class MIFrame(object):
         if isinstance(box, Const):    # no need for a guard
             return
         metainterp = self.metainterp
-        metainterp_sd = metainterp.staticdata
         if metainterp.is_blackholing():
             return
         saved_pc = self.pc
@@ -934,6 +933,7 @@ class MIFrame(object):
             moreargs = [box] + extraargs
         else:
             moreargs = list(extraargs)
+        metainterp_sd = metainterp.staticdata
         original_greenkey = metainterp.resumekey.original_greenkey
         if opnum == rop.GUARD_NOT_FORCED:
             resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,

@@ -466,7 +466,8 @@ class Frame(object):
             if op.opnum == rop.JUMP:
                 assert len(op.jump_target.inputargs) == len(args)
                 self.env = dict(zip(op.jump_target.inputargs, args))
-                operations = op.jump_target.operations
+                self.loop = op.jump_target
+                operations = self.loop.operations
                 opindex = 0
                 _stats.exec_jumps += 1
             elif op.opnum == rop.FINISH:
@@ -497,7 +498,7 @@ class Frame(object):
         try:
             res = ophandler(self, descr, *values)
         finally:
-            if verbose:
+            if 0:     # if verbose:
                 argtypes, restype = TYPES[opname]
                 if res is None:
                     resdata = ''
@@ -506,9 +507,9 @@ class Frame(object):
                 else:
                     resdata = '-> ' + repr1(res, restype, self.memocast)
                 # fish the types
-                #log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes,
-                #                                          self.memocast),
-                #                        resdata))
+                log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes,
+                                                          self.memocast),
+                                        resdata))
         return res
 
     def as_int(self, x):
@@ -796,7 +797,10 @@ class Frame(object):
     def op_call_may_force(self, calldescr, func, *args):
         assert not self._forced
         self._may_force = self.opindex
-        return self.op_call(calldescr, func, *args)
+        try:
+            return self.op_call(calldescr, func, *args)
+        finally:
+            self._may_force = -1
 
     def op_guard_not_forced(self, descr):
         forced = self._forced
@@ -1077,6 +1081,7 @@ def force(opaque_frame):
     assert frame._may_force >= 0
     call_op = frame.loop.operations[frame._may_force]
     guard_op = frame.loop.operations[frame._may_force+1]
+    assert call_op.opnum == rop.CALL_MAY_FORCE
     frame._populate_fail_args(guard_op, skip=call_op.result)
     return frame.fail_index
 
