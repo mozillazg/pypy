@@ -1070,9 +1070,7 @@ def get_zero_division_error_value():
     return lltype.cast_opaque_ptr(llmemory.GCREF,
                                   _get_error(ZeroDivisionError).args[1])
 
-def force(force_token):
-    opaque_frame = llmemory.cast_adr_to_ptr(force_token,
-                                            lltype.Ptr(_TO_OPAQUE[Frame]))
+def force(opaque_frame):
     frame = _from_opaque(opaque_frame)
     assert not frame._forced
     frame._forced = True
@@ -1080,12 +1078,12 @@ def force(force_token):
     call_op = frame.loop.operations[frame._may_force]
     guard_op = frame.loop.operations[frame._may_force+1]
     frame._populate_fail_args(guard_op, skip=call_op.result)
-    return opaque_frame
-
-def get_forced_fail_index(opaque_frame):
-    frame = _from_opaque(opaque_frame)
-    assert frame._forced
     return frame.fail_index
+
+def get_forced_token_frame(force_token):
+    opaque_frame = llmemory.cast_adr_to_ptr(force_token,
+                                            lltype.Ptr(_TO_OPAQUE[Frame]))
+    return opaque_frame
 
 class MemoCast(object):
     def __init__(self):
@@ -1456,8 +1454,8 @@ setannotation(get_overflow_error, annmodel.SomeAddress())
 setannotation(get_overflow_error_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(get_zero_division_error, annmodel.SomeAddress())
 setannotation(get_zero_division_error_value, annmodel.SomePtr(llmemory.GCREF))
-setannotation(force, s_Frame)
-setannotation(get_forced_fail_index, annmodel.SomeInteger())
+setannotation(force, annmodel.SomeInteger())
+setannotation(get_forced_token_frame, s_Frame)
 
 setannotation(new_memo_cast, s_MemoCast)
 setannotation(cast_adr_to_int, annmodel.SomeInteger())

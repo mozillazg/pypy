@@ -78,6 +78,11 @@ class AbstractCPU(object):
         or from 'args' if it was a FINISH).  Returns a ptr or an obj."""
         raise NotImplementedError
 
+    def get_latest_force_token(self):
+        """After a GUARD_NOT_FORCED fails, this function returns the
+        same FORCE_TOKEN result as the one in the just-failed loop."""
+        raise NotImplementedError
+
     def get_exception(self):
         raise NotImplementedError
 

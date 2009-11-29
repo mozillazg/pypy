@@ -208,8 +208,10 @@ class VirtualizableInfo:
             # virtualizable escapes.
             pass
         else:
+            from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
             faildescr = self.cpu.force(token)
-            faildescr.force_virtualizable(self, virtualizable)
+            assert isinstance(faildescr, ResumeGuardForcedDescr)
+            faildescr.force_virtualizable(self, virtualizable, token)
     force_now._dont_inline_ = True
 
 # ____________________________________________________________

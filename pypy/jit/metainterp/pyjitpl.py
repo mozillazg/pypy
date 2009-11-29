@@ -935,7 +935,12 @@ class MIFrame(object):
         else:
             moreargs = list(extraargs)
         original_greenkey = metainterp.resumekey.original_greenkey
-        resumedescr = compile.ResumeGuardDescr(metainterp_sd, original_greenkey)
+        if opnum == rop.GUARD_NOT_FORCED:
+            resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
+                                                         original_greenkey)
+        else:
+            resumedescr = compile.ResumeGuardDescr(metainterp_sd,
+                                                   original_greenkey)
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)       
         virtualizable_boxes = None
@@ -1161,6 +1166,7 @@ class MetaInterpGlobalData(object):
         self.indirectcall_dict = None
         self.addr2name = None
         self.loopnumbering = 0
+        self.resume_virtuals = {}
         #
         state = staticdata.state
         if state is not None:
@@ -1187,6 +1193,8 @@ class MetaInterpGlobalData(object):
 
 class MetaInterp(object):
     in_recursion = 0
+    _already_allocated_resume_virtuals = None
+
     def __init__(self, staticdata):
         self.staticdata = staticdata
         self.cpu = staticdata.cpu
