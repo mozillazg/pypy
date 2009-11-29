@@ -1589,7 +1589,8 @@ class MetaInterp(object):
             self.framestack[-1].follow_jump()
         elif opnum == rop.GUARD_FALSE:     # a goto_if_not that stops jumping
             self.framestack[-1].dont_follow_jump()
-        elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
+        elif (opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION
+              or opnum == rop.GUARD_NOT_FORCED):
             self.handle_exception()
         elif opnum == rop.GUARD_NO_OVERFLOW:   # an overflow now detected
             self.raise_overflow_error()
