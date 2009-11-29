@@ -1208,15 +1208,19 @@ class BytecodeMaker(object):
         if op.opname == "direct_call":
             func = getattr(get_funcobj(op.args[0].value), '_callable', None)
             pure = getattr(func, "_pure_function_", False)
+            all_promoted_args = getattr(func,
+                               "_pure_function_with_all_promoted_args_", False)
+            if pure and not all_promoted_args:
+                effectinfo = calldescr.get_extra_info()
+                assert (effectinfo is not None and
+                        not effectinfo.promotes_virtualizables)
         try:
             canraise = self.codewriter.raise_analyzer.can_raise(op)
         except lltype.DelayedPointer:
             canraise = True  # if we need to look into the delayed ptr that is
                              # the portal, then it's certainly going to raise
         if pure:
-            effectinfo = calldescr.get_extra_info()
-            assert (effectinfo is not None and
-                    not effectinfo.promotes_virtualizables)
+            # XXX check what to do about exceptions (also MemoryError?)
             self.emit('residual_call_pure')
         elif canraise:
             self.emit('residual_call')
