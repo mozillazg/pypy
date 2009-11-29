@@ -4,6 +4,7 @@ Minimal-API wrapper around the llinterpreter to run operations.
 
 import sys
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.llinterp import LLInterpreter
@@ -232,6 +233,13 @@ class BaseCPU(model.AbstractCPU):
 
     def get_latest_value_float(self, index):
         return llimpl.frame_float_getvalue(self.latest_frame, index)
+
+    def get_latest_force_token(self):
+        token = self.latest_force_token
+        if not we_are_translated():
+            frame = llimpl.get_forced_token_frame(token)
+            assert frame._obj.externalobj is self.latest_frame._obj.externalobj
+        return self.cast_adr_to_int(token)
 
     # ----------
 
@@ -499,9 +507,11 @@ class LLtypeCPU(BaseCPU):
                                                         self.memo_cast))
 
     def force(self, force_token):
-        frame = llimpl.force(self.cast_int_to_adr(force_token))
+        token = self.cast_int_to_adr(force_token)
+        frame = llimpl.get_forced_token_frame(token)
+        fail_index = llimpl.force(frame)
+        self.latest_force_token = token
         self.latest_frame = frame
-        fail_index = llimpl.get_forced_fail_index(frame)
         return self.get_fail_descr_from_number(fail_index)
 
 

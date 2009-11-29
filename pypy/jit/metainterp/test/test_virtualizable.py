@@ -616,8 +616,6 @@ class ImplicitVirtualizableTests:
         self.check_tree_loop_count(0)
 
     def test_external_read_sometimes(self):
-        #py.test.skip("known bug: access the frame in a residual call but"
-        #             " only sometimes, so that it's not seen during tracing")
         jitdriver = JitDriver(greens = [], reds = ['frame'],
                               virtualizables = ['frame'])
         
@@ -648,6 +646,49 @@ class ImplicitVirtualizableTests:
                 jitdriver.jit_merge_point(frame=frame)
                 frame.x -= g()
                 frame.y += 1
+            return frame.x
+
+        res = self.meta_interp(f, [123], policy=StopAtXPolicy(g))
+        assert res == f(123)
+
+    def test_external_read_sometimes_with_virtuals(self):
+        jitdriver = JitDriver(greens = [], reds = ['frame'],
+                              virtualizables = ['frame'])
+        
+        class Frame(object):
+            _virtualizable2_ = ['x', 'y']
+        class Y:
+            pass
+        class SomewhereElse:
+            pass
+        somewhere_else = SomewhereElse()
+
+        def g():
+            somewhere_else.counter += 1
+            if somewhere_else.counter == 70:
+                y = somewhere_else.top_frame.y     # external read
+                debug_print(lltype.Void, '-+-+-+-+- external read')
+            else:
+                y = None
+            return y
+
+        def f(n):
+            frame = Frame()
+            frame.x = n
+            somewhere_else.counter = 0
+            somewhere_else.top_frame = frame
+            while frame.x > 0:
+                jitdriver.can_enter_jit(frame=frame)
+                jitdriver.jit_merge_point(frame=frame)
+                frame.y = y = Y()
+                result = g()
+                if frame.y is not y:
+                    return -660
+                if result:
+                    if result is not y:
+                        return -661
+                frame.y = None
+                frame.x -= 1
             return frame.x
 
         res = self.meta_interp(f, [123], policy=StopAtXPolicy(g))
