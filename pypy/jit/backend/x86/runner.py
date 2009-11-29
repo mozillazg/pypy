@@ -59,6 +59,9 @@ class CPU386(AbstractLLCPU):
             llmemory.GCREF.TO))
         return ptrvalue
 
+    def get_latest_force_token(self):
+        return self.assembler.fail_ebp + FORCE_INDEX_OFS
+
     def execute_token(self, executable_token):
         addr = executable_token._x86_bootstrap_code
         func = rffi.cast(lltype.Ptr(self.BOOTSTRAP_TP), addr)
