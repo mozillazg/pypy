@@ -245,6 +245,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         metainterp = MetaInterp(metainterp_sd)
         token = metainterp_sd.cpu.get_latest_force_token()
         metainterp._already_allocated_resume_virtuals = self.fetch_data(token)
+        self.counter = -2     # never compile
         return metainterp.handle_guard_failure(self)
 
     def force_virtualizable(self, vinfo, virtualizable, force_token):
