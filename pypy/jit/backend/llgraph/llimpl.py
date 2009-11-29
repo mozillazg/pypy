@@ -35,8 +35,13 @@ def _from_opaque(opq):
 _TO_OPAQUE = {}
 
 def _to_opaque(value):
-    return lltype.opaqueptr(_TO_OPAQUE[value.__class__], 'opaque',
-                            externalobj=value)
+    try:
+        return value._the_opaque_pointer
+    except AttributeError:
+        op = lltype.opaqueptr(_TO_OPAQUE[value.__class__], 'opaque',
+                              externalobj=value)
+        value._the_opaque_pointer = op
+        return op
 
 def from_opaque_string(s):
     if isinstance(s, str):
@@ -1090,6 +1095,9 @@ def get_forced_token_frame(force_token):
                                             lltype.Ptr(_TO_OPAQUE[Frame]))
     return opaque_frame
 
+def get_frame_forced_token(opaque_frame):
+    return llmemory.cast_ptr_to_adr(opaque_frame)
+
 class MemoCast(object):
     def __init__(self):
         self.addresses = [llmemory.NULL]
@@ -1461,6 +1469,7 @@ setannotation(get_zero_division_error, annmodel.SomeAddress())
 setannotation(get_zero_division_error_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, annmodel.SomeInteger())
 setannotation(get_forced_token_frame, s_Frame)
+setannotation(get_frame_forced_token, annmodel.SomeAddress())
 
 setannotation(new_memo_cast, s_MemoCast)
 setannotation(cast_adr_to_int, annmodel.SomeInteger())
