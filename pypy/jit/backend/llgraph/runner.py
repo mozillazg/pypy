@@ -100,6 +100,7 @@ class BaseCPU(model.AbstractCPU):
         llimpl._stats = self.stats
         llimpl._llinterp = LLInterpreter(self.rtyper)
         self._future_values = []
+        self.latest_force_token = llmemory.NULL
 
     def _freeze_(self):
         assert self.translate_support_code

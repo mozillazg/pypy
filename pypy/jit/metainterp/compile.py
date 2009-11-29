@@ -266,7 +266,10 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def fetch_data(self, key):
         globaldata = self.metainterp_sd.globaldata
-        return globaldata.resume_virtuals.pop(key)
+        assert key in globaldata.resume_virtuals
+        data = globaldata.resume_virtuals[key]
+        del globaldata.resume_virtuals[key]
+        return data
 
 
 class ResumeFromInterpDescr(ResumeDescr):
