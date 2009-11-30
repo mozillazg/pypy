@@ -34,17 +34,19 @@ class Descr(history.AbstractDescr):
         return self.extrainfo
 
     def __hash__(self):
-        return hash((self.ofs, self.typeinfo))
+        return hash((self.ofs, self.typeinfo, self.extrainfo))
 
     def __eq__(self, other):
         if not isinstance(other, Descr):
             return NotImplemented
-        return self.ofs == other.ofs and self.typeinfo == other.typeinfo
+        return (self.ofs == other.ofs and self.typeinfo == other.typeinfo
+                and self.extrainfo == other.extrainfo)
 
     def __ne__(self, other):
         if not isinstance(other, Descr):
             return NotImplemented
-        return self.ofs != other.ofs or self.typeinfo != other.typeinfo
+        return (self.ofs != other.ofs or self.typeinfo != other.typeinfo
+                or self.extrainfo != other.extrainfo)
 
     def sort_key(self):
         return self.ofs

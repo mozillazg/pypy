@@ -78,9 +78,7 @@ class DelTests:
             return 1
         res = self.meta_interp(f, [20], optimizer=OPTIMIZER_SIMPLE)
         assert res == 1
-        self.check_loops(call_may_force=1)
-        # for the case B(), but not for the case A()
-        # XXX it should really be 'call', not 'call_may_force'.
+        self.check_loops(call=1)   # for the case B(), but not for the case A()
 
 
 class TestLLtype(DelTests, LLJitMixin):
