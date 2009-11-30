@@ -878,8 +878,9 @@ class Assembler386(object):
             arglocs.append(loc)
         return arglocs[:]
 
-    def grab_frame_values(self, bytecode, frame_addr, registers):
-        self.fail_ebp = registers[ebp.op]
+    def grab_frame_values(self, bytecode, frame_addr, allregisters):
+        # no malloc allowed here!!
+        self.fail_ebp = allregisters[16 + ebp.op]
         num = 0
         value_hi = 0
         while 1:
@@ -916,11 +917,10 @@ class Assembler386(object):
                     break
                 code >>= 2
                 if kind == self.DESCR_FLOAT:
-                    xmmregisters = rffi.ptradd(registers, -16)
-                    value = xmmregisters[2*code]
-                    value_hi = xmmregisters[2*code + 1]
+                    value = allregisters[2*code]
+                    value_hi = allregisters[2*code + 1]
                 else:
-                    value = registers[code]
+                    value = allregisters[16 + code]
 
             # store the loaded value into fail_boxes_<type>
             if kind == self.DESCR_INT:
@@ -943,14 +943,14 @@ class Assembler386(object):
     def setup_failure_recovery(self):
 
         def failure_recovery_func(registers):
-            # no malloc allowed here!!
             # 'registers' is a pointer to a structure containing the
             # original value of the registers, optionally the original
             # value of XMM registers, and finally a reference to the
             # recovery bytecode.  See _build_failure_recovery() for details.
             stack_at_ebp = registers[ebp.op]
             bytecode = rffi.cast(rffi.UCHARP, registers[8])
-            return self.grab_frame_values(bytecode, stack_at_ebp, registers)
+            allregisters = rffi.ptradd(registers, -16)
+            return self.grab_frame_values(bytecode, stack_at_ebp, allregisters)
 
         self.failure_recovery_func = failure_recovery_func
         self.failure_recovery_code = [0, 0, 0, 0]

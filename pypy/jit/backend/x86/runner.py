@@ -105,7 +105,7 @@ class CPU386(AbstractLLCPU):
         fail_index_2 = self.assembler.grab_frame_values(
             bytecode,
             addr_of_force_index - FORCE_INDEX_OFS,
-            rffi.ptradd(self.all_null_registers, 16))
+            self.all_null_registers)
         self.assembler.leave_jitted_hook()
         # end of "no gc operation!" block
         assert fail_index == fail_index_2
