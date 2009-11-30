@@ -29,6 +29,8 @@ class Descr(history.AbstractDescr):
         self.ofs = ofs
         self.typeinfo = typeinfo
         self.extrainfo = extrainfo
+        # Note: this class has a custom __eq__, so don't forget
+        # to fix it if you add more fields.
 
     def get_extra_info(self):
         return self.extrainfo
