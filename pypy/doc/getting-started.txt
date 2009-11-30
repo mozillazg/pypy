@@ -50,7 +50,7 @@ place it into a directory named ``pypy-dist``, and will get you the PyPy
 source in ``pypy-dist/pypy`` and documentation files in
 ``pypy-dist/pypy/doc``.  If you would prefer to check out the "cutting edge"
 version of PyPy - which may not always be stable! - then check out
-from ``http://codespeak.net/svn/pypy/trunk`` intead.
+from ``http://codespeak.net/svn/pypy/trunk`` instead.
 
 Where to go from here
 ----------------------
