@@ -148,6 +148,9 @@ class OOJitMixin(JitMixin):
     type_system = 'ootype'
     CPUClass = runner.OOtypeCPU
 
+    def setup_class(cls):
+        py.test.skip("ootype tests skipped for now")
+
     @staticmethod
     def Ptr(T):
         return T
