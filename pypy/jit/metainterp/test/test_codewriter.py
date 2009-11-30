@@ -273,9 +273,17 @@ class TestCodeWriter:
         cw._start(self.metainterp_sd, None)        
         jitcode = cw.make_one_bytecode((graphs[0], None), False)
         assert len(self.metainterp_sd.indirectcalls) == 1
-        names = [jitcode.name for (fnaddress, jitcode)
+        names = [jitcode1.name for (fnaddress, jitcode1)
                                in self.metainterp_sd.indirectcalls]
         assert dict.fromkeys(names) == {'g': None}
+        calldescrs = [calldescr for calldescr in jitcode.constants
+                                if isinstance(calldescr, tuple) and
+                                   calldescr[0] == 'calldescr']
+        assert len(calldescrs) == 1
+        assert calldescrs[0][4] is not None
+        assert not calldescrs[0][4].write_descrs_fields
+        assert not calldescrs[0][4].write_descrs_arrays
+        assert not calldescrs[0][4].promotes_virtualizables
 
     def test_oosend_look_inside_only_one(self):
         class A:

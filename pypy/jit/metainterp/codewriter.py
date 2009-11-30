@@ -1248,9 +1248,8 @@ class BytecodeMaker(object):
     def handle_regular_indirect_call(self, op):
         self.codewriter.register_indirect_call_targets(op)
         args = op.args[1:-1]
-        calldescr, non_void_args = self.codewriter.getcalldescr(op.args[0],
-                                                                args,
-                                                                op.result)
+        calldescr, non_void_args = self.codewriter.getcalldescr(
+            op.args[0], args, op.result, consider_effects_of=op)
         self.minimize_variables()
         self.emit('indirect_call')
         self.emit(self.get_position(calldescr))
