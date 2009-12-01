@@ -1,5 +1,4 @@
-from pypy.rlib.objectmodel import r_dict, compute_identity_hash
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.objectmodel import r_dict
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp import resoperation
 
@@ -10,6 +9,20 @@ class InvalidLoop(Exception):
 
 # ____________________________________________________________
 # Misc. utilities
+
+def av_eq(self, other):
+    return self.sort_key() == other.sort_key()
+
+def av_hash(self):
+    return self.sort_key()
+
+def av_newdict():
+    return r_dict(av_eq, av_hash)
+
+def av_newdict2():
+    # another implementation of av_newdict(), allowing different types for
+    # the values...
+    return r_dict(av_eq, av_hash)
 
 def _findall(Class, name_prefix):
     result = []
@@ -40,22 +53,4 @@ def quicksort(array, left, right):
 def sort_descrs(lst):
     quicksort(lst, 0, len(lst)-1)
 
-
-def descrlist_hash(l):
-    res = 0x345678
-    for descr in l:
-        y = compute_identity_hash(descr)
-        res = intmask((1000003 * res) ^ y)
-    return res
-
-def descrlist_eq(l1, l2):
-    if len(l1) != len(l2):
-        return False
-    for i in range(len(l1)):
-        if l1[i] is not l2[i]:
-            return False
-    return True
-
-def descrlist_dict():
-    return r_dict(descrlist_eq, descrlist_hash)
 
