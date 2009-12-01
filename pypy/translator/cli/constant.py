@@ -293,9 +293,6 @@ class CLIStaticMethodConst(CLIBaseConstMixin, StaticMethodConst):
         gen.ilasm.opcode('ldftn', signature)
         gen.ilasm.new('instance void class %s::.ctor(object, native int)' % self.delegate_type)
         self.db.const_count.inc('StaticMethod')
-        
-    def initialize_data(self, constgen, gen):
-        return
 
         
 class CLIWeakRefConst(CLIBaseConstMixin, WeakRefConst):
@@ -305,6 +302,9 @@ class CLIWeakRefConst(CLIBaseConstMixin, WeakRefConst):
 
     def get_type(self, include_class=True):
         return 'class ' + WEAKREF
+
+    def needs_initialization(self):
+        return bool(self.value)
     
     def initialize_data(self, constgen, gen):
         if self.value is not None:
