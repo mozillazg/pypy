@@ -473,19 +473,19 @@ class ResumeDataReader(object):
     def _prepare_virtuals(self, metainterp, virtuals):
         if virtuals:
             v = metainterp._already_allocated_resume_virtuals
-            if v is None:
-                self.virtuals = [None] * len(virtuals)
-                for i in range(len(virtuals)):
-                    vinfo = virtuals[i]
-                    if vinfo is not None:
-                        self.virtuals[i] = vinfo.allocate(metainterp)
-                for i in range(len(virtuals)):
-                    vinfo = virtuals[i]
-                    if vinfo is not None:
-                        vinfo.setfields(metainterp, self.virtuals[i],
-                                        self._decode_box)
-            else:
+            if v is not None:
                 self.virtuals = v
+                return
+            self.virtuals = [None] * len(virtuals)
+            for i in range(len(virtuals)):
+                vinfo = virtuals[i]
+                if vinfo is not None:
+                    self.virtuals[i] = vinfo.allocate(metainterp)
+            for i in range(len(virtuals)):
+                vinfo = virtuals[i]
+                if vinfo is not None:
+                    vinfo.setfields(metainterp, self.virtuals[i],
+                                    self._decode_box)
 
     def consume_boxes(self):
         numb = self.cur_numb
