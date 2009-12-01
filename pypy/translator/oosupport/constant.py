@@ -282,6 +282,8 @@ class BaseConstantGenerator(object):
         """ Iterates through each constant, initializing its data. """
         gen.add_section("Initialize Data Phase")
         for const in all_constants:
+            if not const.needs_initialization():
+                continue
             self._consider_step(gen)
             gen.add_comment("Constant: %s" % const.name)
             self._push_constant_during_init(gen, const)
@@ -426,6 +428,12 @@ class AbstractConst(object):
         assert not self.is_null()
         gen.new(self.value._TYPE)
 
+    def needs_initialization(self):
+        """
+        if True, calls initialize_data
+        """
+        return True
+
     def initialize_data(self, constgen, gen):
         """
         Initializes the internal data.  Begins with a pointer to
@@ -474,6 +482,9 @@ class RecordConst(AbstractConst):
         for f_name, (FIELD_TYPE, f_default) in self.value._TYPE._fields.iteritems():
             value = self.value._items[f_name]            
             self._record_const_if_complex(FIELD_TYPE, value)
+
+    def needs_initialization(self):
+        return bool(self.value._TYPE._fields)
 
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
@@ -543,13 +554,17 @@ class InstanceConst(AbstractConst):
 
         return const_list
 
+    def needs_initialization(self):
+        self.const_list = self._sorted_const_list()
+        return bool(self.const_list)
+
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
 
         # Get a list of all the constants we'll need to initialize.
         # I am not clear on why this needs to be sorted, actually,
         # but we sort it.
-        const_list = self._sorted_const_list()
+        const_list = self.const_list
         
         # Push ourself on the stack, and cast to our actual type if it
         # is not the same as our static type
@@ -585,8 +600,8 @@ class ClassConst(AbstractConst):
         INSTANCE = self.value._INSTANCE
         gen.getclassobject(INSTANCE)
 
-    def initialize_data(self, constgen, gen):
-        pass
+    def needs_initialization(self):
+        return False
 
 # ______________________________________________________________________
 # List constants
@@ -626,6 +641,9 @@ class ListConst(AbstractConst):
         The default is not to initialize if the list is a list of
         Void. """
         return self.value._TYPE.ITEM is ootype.Void
+
+    def needs_initialization(self):
+        return bool(self.value._list)
 
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
@@ -675,6 +693,9 @@ class ArrayConst(AbstractConst):
         Void. """
         return self.value._TYPE.ITEM is ootype.Void
 
+    def needs_initialization(self):
+        return bool(self.value._array)
+
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
         SELFTYPE = self.value._TYPE
@@ -712,6 +733,9 @@ class DictConst(AbstractConst):
         for key, value in self.value._dict.iteritems():
             self._record_const_if_complex(self.value._TYPE._KEYTYPE, key)
             self._record_const_if_complex(self.value._TYPE._VALUETYPE, value)
+
+    def needs_initialization(self):
+        return bool(self.value._dict)
 
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
@@ -752,8 +776,8 @@ class StaticMethodConst(AbstractConst):
             self.db.pending_function(self.value.graph)
         self.delegate_type = self.db.record_delegate(self.value._TYPE)
 
-    def initialize_data(self, constgen, gen):
-        raise NotImplementedError
+    def needs_initialization(self):
+        return False
 
 # ______________________________________________________________________
 # Weak Reference constants

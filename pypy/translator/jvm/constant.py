@@ -158,8 +158,6 @@ class JVMStaticMethodConst(StaticMethodConst):
         else:
             gen.push_null(jvm.jObject)
 
-    def initialize_data(self, constgen, gen):
-        return
     
 class JVMCustomDictConst(CustomDictConst):
 
@@ -199,9 +197,8 @@ class JVMWeakRefConst(WeakRefConst):
             push_constant(self.db, self.value._TYPE, self.value, gen)
         gen.create_weakref(TYPE)
 
-    def initialize_data(self, constgen, gen):
-        gen.pop(ootype.ROOT)
-        return True
+    def needs_initialization(self):
+        return False
     
     
     
