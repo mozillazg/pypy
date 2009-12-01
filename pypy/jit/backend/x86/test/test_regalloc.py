@@ -575,6 +575,9 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         finish(i3, descr=fdescr2)        
         '''
         bridge = self.attach_bridge(ops, loop, -2)
+
+        assert loop.operations[-2].descr._x86_bridge_param_depth == 2
+
         self.cpu.set_future_value_int(0, 4)
         self.cpu.set_future_value_int(1, 7)        
         self.run(loop)
@@ -595,7 +598,11 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         finish(i3, descr=fdescr2)        
         '''
         bridge = self.attach_bridge(ops, loop, -2)
+
+        assert loop.operations[-2].descr._x86_bridge_param_depth == 2        
+
         self.cpu.set_future_value_int(0, 4)
         self.cpu.set_future_value_int(1, 7)        
         self.run(loop)
         assert self.getint(0) == 29
+

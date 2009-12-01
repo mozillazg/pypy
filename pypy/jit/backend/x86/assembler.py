@@ -194,7 +194,10 @@ class Assembler386(object):
         jump_target_descr = regalloc.jump_target_descr
         if jump_target_descr is not None:
             target_frame_depth = jump_target_descr._x86_frame_depth
+            target_param_depth = jump_target_descr._x86_param_depth
             frame_depth = max(frame_depth, target_frame_depth)
+            # xxx tested?
+            param_depth = max(param_depth, target_param_depth)
         return frame_depth, param_depth
 
     def _patchable_stackadjust(self):
