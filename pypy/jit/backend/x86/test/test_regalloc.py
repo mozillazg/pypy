@@ -547,6 +547,7 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         '''
         loop = self.interpret(ops, [4, 7])
         assert self.getints(1) == [5]
+        assert loop.token._x86_param_depth == 1
 
     def test_two_calls(self):
         ops = '''
@@ -557,7 +558,8 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         '''
         loop = self.interpret(ops, [4, 7])
         assert self.getints(1) == [5*7]
-
+        assert loop.token._x86_param_depth == 2
+        
     def test_bridge_calls_1(self):
         ops = '''
         [i0, i1]

@@ -134,7 +134,8 @@ class Assembler386(object):
         """adds the following attributes to looptoken:
                _x86_loop_code       (an integer giving an address)
                _x86_bootstrap_code  (an integer giving an address)
-               _x86_stack_depth
+               _x86_frame_depth
+               _x86_param_depth
                _x86_arglocs
         """
         self.make_sure_mc_exists()
@@ -144,10 +145,12 @@ class Assembler386(object):
         looptoken._x86_bootstrap_code = self.mc.tell()
         adr_stackadjust = self._assemble_bootstrap_code(inputargs, arglocs)
         looptoken._x86_loop_code = self.mc.tell()
-        looptoken._x86_stack_depth = -1     # temporarily
-        stack_depth = self._assemble(regalloc, operations)
-        self._patch_stackadjust(adr_stackadjust, stack_depth)
-        looptoken._x86_stack_depth = stack_depth
+        looptoken._x86_frame_depth = -1     # temporarily
+        looptoken._x86_param_depth = -1     # temporarily        
+        frame_depth, param_depth = self._assemble(regalloc, operations)
+        self._patch_stackadjust(adr_stackadjust, frame_depth+param_depth)
+        looptoken._x86_frame_depth = frame_depth
+        looptoken._x86_param_depth = param_depth
 
     def assemble_bridge(self, faildescr, inputargs, operations):
         self.make_sure_mc_exists()
@@ -157,16 +160,18 @@ class Assembler386(object):
             assert ([loc.assembler() for loc in arglocs] ==
                     [loc.assembler() for loc in faildescr._x86_debug_faillocs])
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
-        fail_stack_depth = faildescr._x86_current_stack_depth
-        regalloc.prepare_bridge(fail_stack_depth, inputargs, arglocs,
-                                operations)
+        fail_frame_depth = faildescr._x86_current_frame_depth
+        fail_param_depth = faildescr._x86_current_param_depth
+        regalloc.prepare_bridge(fail_frame_depth, inputargs, arglocs,
+                                operations) # xxx param_depth
         adr_bridge = self.mc.tell()
         adr_stackadjust = self._patchable_stackadjust()
-        stack_depth = self._assemble(regalloc, operations)
-        self._patch_stackadjust(adr_stackadjust, stack_depth)
+        frame_depth, param_depth = self._assemble(regalloc, operations)
+        self._patch_stackadjust(adr_stackadjust, frame_depth+param_depth)
         if not we_are_translated():
             # for the benefit of tests
-            faildescr._x86_bridge_stack_depth = stack_depth
+            faildescr._x86_bridge_frame_depth = frame_depth
+            faildescr._x86_bridge_param_depth = param_depth
         # patch the jump from original guard
         self.patch_jump(faildescr, adr_bridge)
 
@@ -184,26 +189,27 @@ class Assembler386(object):
         self.mc2.done()
         if we_are_translated() or self.cpu.dont_keepalive_stuff:
             self._regalloc = None   # else keep it around for debugging
-        stack_depth = regalloc.fm.frame_depth
+        frame_depth = regalloc.fm.frame_depth
+        param_depth = regalloc.param_depth
         jump_target_descr = regalloc.jump_target_descr
         if jump_target_descr is not None:
-            target_stack_depth = jump_target_descr._x86_stack_depth
-            stack_depth = max(stack_depth, target_stack_depth)
-        return stack_depth
+            target_frame_depth = jump_target_descr._x86_frame_depth
+            frame_depth = max(frame_depth, target_frame_depth)
+        return frame_depth, param_depth
 
     def _patchable_stackadjust(self):
         # stack adjustment LEA
         self.mc.LEA(esp, fixedsize_ebp_ofs(0))
         return self.mc.tell() - 4
 
-    def _patch_stackadjust(self, adr_lea, stack_depth):
+    def _patch_stackadjust(self, adr_lea, reserved_depth):
         # patch stack adjustment LEA
         # possibly align, e.g. for Mac OS X        
         mc = codebuf.InMemoryCodeBuilder(adr_lea, adr_lea + 4)
         # Compute the correct offset for the instruction LEA ESP, [EBP-4*words].
         # Given that [EBP] is where we saved EBP, i.e. in the last word
         # of our fixed frame, then the 'words' value is:
-        words = (FRAME_FIXED_SIZE - 1) + stack_depth
+        words = (FRAME_FIXED_SIZE - 1) + reserved_depth
         mc.write(packimm32(-WORD * words))
         mc.done()
 
@@ -299,10 +305,11 @@ class Assembler386(object):
         genop_discard_list[op.opnum](self, op, arglocs)
 
     def regalloc_perform_with_guard(self, op, guard_op, faillocs,
-                                    arglocs, resloc, current_stack_depth):
+                                    arglocs, resloc, current_frame_depth):
         faildescr = guard_op.descr
         assert isinstance(faildescr, AbstractFailDescr)
-        faildescr._x86_current_stack_depth = current_stack_depth
+        faildescr._x86_current_frame_depth = current_frame_depth
+        faildescr._x86_current_param_depth = 0 # xxx
         failargs = guard_op.fail_args
         guard_opnum = guard_op.opnum
         failaddr = self.implement_guard_recovery(guard_opnum,
@@ -319,9 +326,9 @@ class Assembler386(object):
         faildescr._x86_adr_jump_offset = adr_jump_offset
 
     def regalloc_perform_guard(self, guard_op, faillocs, arglocs, resloc,
-                               current_stack_depth):
+                               current_frame_depth):
         self.regalloc_perform_with_guard(None, guard_op, faillocs, arglocs,
-                                         resloc, current_stack_depth)
+                                         resloc, current_frame_depth)
 
     def load_effective_addr(self, sizereg, baseofs, scale, result):
         self.mc.LEA(result, addr_add(imm(0), sizereg, baseofs, scale))
@@ -1071,6 +1078,9 @@ class Assembler386(object):
         extra_on_stack = 0
         for arg in range(2, nargs + 2):
             extra_on_stack += round_up_to_4(arglocs[arg].width)
+
+        self._regalloc.reserve_param(extra_on_stack//4)
+            
         #extra_on_stack = self.align_stack_for_call(extra_on_stack)
         self.mc.SUB(esp, imm(extra_on_stack))
         if isinstance(op.args[0], Const):

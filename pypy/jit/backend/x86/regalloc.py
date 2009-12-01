@@ -131,6 +131,7 @@ class RegAlloc(object):
 
     def _prepare(self, inputargs, operations):
         self.fm = X86FrameManager()
+        self.param_depth = 0
         cpu = self.assembler.cpu
         cpu.gc_ll_descr.rewrite_assembler(cpu, operations)
         # compute longevity of variables
@@ -149,11 +150,15 @@ class RegAlloc(object):
         self.loop_consts = loop_consts
         return self._process_inputargs(inputargs)
 
-    def prepare_bridge(self, prev_stack_depth, inputargs, arglocs, operations):
+    def prepare_bridge(self, prev_frame_depth, inputargs, arglocs, operations):
         self._prepare(inputargs, operations)
         self.loop_consts = {}
         self._update_bindings(arglocs, inputargs)
-        self.fm.frame_depth = prev_stack_depth
+        self.fm.frame_depth = prev_frame_depth
+        self.param_depth = 0 # xxx
+
+    def reserve_param(self, n):
+        self.param_depth = max(self.param_depth, n)
 
     def _process_inputargs(self, inputargs):
         # XXX we can sort out here by longevity if we need something
