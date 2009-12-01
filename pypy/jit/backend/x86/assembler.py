@@ -184,7 +184,7 @@ class Assembler386(object):
         self.mc2.done()
         if we_are_translated() or self.cpu.dont_keepalive_stuff:
             self._regalloc = None   # else keep it around for debugging
-        stack_depth = regalloc.sm.stack_depth
+        stack_depth = regalloc.fm.frame_depth
         jump_target_descr = regalloc.jump_target_descr
         if jump_target_descr is not None:
             target_stack_depth = jump_target_descr._x86_stack_depth
@@ -837,7 +837,7 @@ class Assembler386(object):
                 self.fail_boxes_float.get_addr_for_num(i)
 
     def rebuild_faillocs_from_descr(self, bytecode):
-        from pypy.jit.backend.x86.regalloc import X86StackManager
+        from pypy.jit.backend.x86.regalloc import X86FrameManager
         bytecode = rffi.cast(rffi.UCHARP, bytecode)
         arglocs = []
         while 1:
@@ -862,7 +862,7 @@ class Assembler386(object):
                     size = 2
                 else:
                     size = 1
-                loc = X86StackManager.stack_pos(code, size)
+                loc = X86FrameManager.frame_pos(code, size)
             elif code == self.DESCR_STOP:
                 break
             elif code == self.DESCR_HOLE:
