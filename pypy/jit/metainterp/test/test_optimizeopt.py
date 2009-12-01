@@ -63,27 +63,16 @@ def test_store_final_boxes_in_guard():
     assert fdescr.rd_consts == []
 
 def test_sharing_field_lists_of_virtual():
-    class FakeOptimizer(object):
-        class cpu(object):
-            pass
-    opt = FakeOptimizer()
-    virt1 = optimizeopt.AbstractVirtualStructValue(opt, None)
+    virt1 = optimizeopt.AbstractVirtualStructValue(None, None)
     lst1 = virt1._get_field_descr_list()
     assert lst1 == []
     lst2 = virt1._get_field_descr_list()
     assert lst1 is lst2
     virt1.setfield(LLtypeMixin.valuedescr, optimizeopt.OptValue(None))
-    lst3 = virt1._get_field_descr_list()
-    assert lst3 == [LLtypeMixin.valuedescr]
-    lst4 = virt1._get_field_descr_list()
-    assert lst3 is lst4
-    
-    virt2 = optimizeopt.AbstractVirtualStructValue(opt, None)
-    lst5 = virt2._get_field_descr_list()
-    assert lst5 is lst1
-    virt2.setfield(LLtypeMixin.valuedescr, optimizeopt.OptValue(None))
-    lst6 = virt1._get_field_descr_list()
-    assert lst6 is lst3
+    lst1 = virt1._get_field_descr_list()
+    assert lst1 == [LLtypeMixin.valuedescr]
+    lst2 = virt1._get_field_descr_list()
+    assert lst1 is lst2
 
 def test_reuse_vinfo():
     class FakeVInfo(object):
@@ -99,34 +88,7 @@ def test_reuse_vinfo():
     assert vinfo3 is not vinfo2
     vinfo4 = v1.make_virtual_info(None, [1, 2, 6])
     assert vinfo3 is vinfo4
-
-def test_descrlist_dict():
-    from pypy.jit.metainterp import optimizeutil
-    h1 = optimizeutil.descrlist_hash([])
-    h2 = optimizeutil.descrlist_hash([LLtypeMixin.valuedescr])
-    h3 = optimizeutil.descrlist_hash(
-            [LLtypeMixin.valuedescr, LLtypeMixin.nextdescr])
-    assert h1 != h2
-    assert h2 != h3
-    assert optimizeutil.descrlist_eq([], [])
-    assert not optimizeutil.descrlist_eq([], [LLtypeMixin.valuedescr])
-    assert optimizeutil.descrlist_eq([LLtypeMixin.valuedescr],
-                                     [LLtypeMixin.valuedescr])
-    assert not optimizeutil.descrlist_eq([LLtypeMixin.valuedescr],
-                                         [LLtypeMixin.nextdescr])
-    assert optimizeutil.descrlist_eq([LLtypeMixin.valuedescr, LLtypeMixin.nextdescr],
-                                     [LLtypeMixin.valuedescr, LLtypeMixin.nextdescr])
-    assert not optimizeutil.descrlist_eq([LLtypeMixin.nextdescr, LLtypeMixin.valuedescr],
-                                         [LLtypeMixin.valuedescr, LLtypeMixin.nextdescr])
-
-    # descrlist_eq should compare by identity of the descrs, not by the result
-    # of sort_key
-    class FakeDescr(object):
-        def sort_key(self):
-            return 1
-
-    assert not optimizeutil.descrlist_eq([FakeDescr()], [FakeDescr()])
-
+    
 
 # ____________________________________________________________
 

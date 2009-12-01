@@ -49,6 +49,10 @@ class LLTypeHelper(TypeSystemHelper):
     CONST_NULL = history.ConstPtr(history.ConstPtr.value)
     CVAL_NULLREF = None # patched by optimizeopt.py
 
+    def get_VABLERTI(self):
+        from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR
+        return VABLERTIPTR
+
     def new_ConstRef(self, x):
         ptrval = lltype.cast_opaque_ptr(llmemory.GCREF, x)
         return history.ConstPtr(ptrval)
@@ -155,6 +159,10 @@ class OOTypeHelper(TypeSystemHelper):
     loops_done_with_this_frame_ref = None # patched by compile.py
     CONST_NULL = history.ConstObj(history.ConstObj.value)
     CVAL_NULLREF = None # patched by optimizeopt.py
+
+    def get_VABLERTI(self):
+        from pypy.rpython.ootypesystem.rvirtualizable2 import VABLERTI
+        return VABLERTI
     
     def new_ConstRef(self, x):
         obj = ootype.cast_to_object(x)

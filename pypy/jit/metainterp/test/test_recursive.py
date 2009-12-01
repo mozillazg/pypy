@@ -144,11 +144,10 @@ class RecursiveTests:
         f = self.get_interpreter(codes)
 
         assert self.meta_interp(f, [0, 0, 0], optimizer=OPTIMIZER_SIMPLE) == 42
-        self.check_loops(int_add = 1, call_may_force = 1, call = 0)
+        self.check_loops(int_add = 1, call = 1)
         assert self.meta_interp(f, [0, 0, 0], optimizer=OPTIMIZER_SIMPLE,
                                 inline=True) == 42
-        self.check_loops(int_add = 2, call_may_force = 0, call = 0,
-                         guard_no_exception = 0)
+        self.check_loops(int_add = 2, call = 0, guard_no_exception = 0)
 
     def test_inline_jitdriver_check(self):
         code = "021"
@@ -159,7 +158,7 @@ class RecursiveTests:
 
         assert self.meta_interp(f, [0, 0, 0], optimizer=OPTIMIZER_SIMPLE,
                                 inline=True) == 42
-        self.check_loops(call_may_force = 1, call = 0)
+        self.check_loops(call = 1)
 
     def test_inline_faulty_can_inline(self):
         code = "021"
@@ -489,10 +488,10 @@ class RecursiveTests:
             return loop(100)
 
         res = self.meta_interp(main, [0], optimizer=OPTIMIZER_SIMPLE, trace_limit=TRACE_LIMIT)
-        self.check_loops(call_may_force=1, call=0)
+        self.check_loops(call=1)
 
         res = self.meta_interp(main, [1], optimizer=OPTIMIZER_SIMPLE, trace_limit=TRACE_LIMIT)
-        self.check_loops(call_may_force=0, call=0)
+        self.check_loops(call=0)
 
     def test_leave_jit_hook(self):
         from pypy.rpython.annlowlevel import hlstr
@@ -646,7 +645,7 @@ class RecursiveTests:
                 result += f('-c-----------l-', i+100)
         self.meta_interp(g, [10], backendopt=True)
         self.check_aborted_count(1)
-        self.check_history(call_may_force=1, call=0)
+        self.check_history(call=1)
         self.check_tree_loop_count(3)
         
 

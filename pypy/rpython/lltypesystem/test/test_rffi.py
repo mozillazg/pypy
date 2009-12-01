@@ -387,7 +387,6 @@ class BaseTestRffi:
 
         fn = self.compile(f, [])
         assert fn() == 6
-        assert eating_callback._ptr._obj._callbacks.callbacks == {g: True}
 
     def test_double_callback(self):
         eating_callback = self.eating_callback()
@@ -407,8 +406,6 @@ class BaseTestRffi:
         fn = self.compile(f, [int])
         assert fn(4) == 4
         assert fn(1) == 3
-        assert eating_callback._ptr._obj._callbacks.callbacks == {one: True,
-                                                                  two: True}
 
     def test_exception_callback(self):
         eating_callback = self.eating_callback()
