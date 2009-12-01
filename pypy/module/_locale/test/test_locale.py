@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import py
 from pypy.conftest import gettestobjspace
 
@@ -10,31 +11,21 @@ class AppTestLocaleTrivia:
             cls.w_language_en = cls.space.wrap("en_US")
             cls.w_language_utf8 = cls.space.wrap("en_US.UTF-8")
             cls.w_language_pl = cls.space.wrap("pl_PL.UTF-8")
-            cls.w_encoding_pl = cls.space.wrap("utf-8")
         else:
             cls.w_language_en = cls.space.wrap("English_US")
             cls.w_language_utf8 = cls.space.wrap("English_US.65001")
-            cls.w_language_pl = cls.space.wrap("Polish_Poland.1257")
-            cls.w_encoding_pl = cls.space.wrap("cp1257")
+            cls.w_language_pl = cls.space.wrap("Polish_Poland")
         import _locale
         # check whether used locales are installed, otherwise the tests will
         # fail
         current = _locale.setlocale(_locale.LC_ALL)
         try:
             try:
-                _locale.setlocale(_locale.LC_ALL,
-                                  space.str_w(cls.w_language_en))
-                _locale.setlocale(_locale.LC_ALL,
-                                  space.str_w(cls.w_language_pl))
+                _locale.setlocale(_locale.LC_ALL, space.str_w(cls.w_language_en))
+                _locale.setlocale(_locale.LC_ALL, space.str_w(cls.w_language_utf8))
+                _locale.setlocale(_locale.LC_ALL, space.str_w(cls.w_language_pl))
             except _locale.Error:
                 py.test.skip("necessary locales not installed")
-
-            # Windows forbids the UTF-8 character set since Windows XP.
-            try:
-                _locale.setlocale(_locale.LC_ALL,
-                                  space.str_w(cls.w_language_utf8))
-            except _locale.Error:
-                del cls.w_language_utf8
         finally:
             _locale.setlocale(_locale.LC_ALL, current)
 
@@ -85,9 +76,13 @@ class AppTestLocaleTrivia:
             for i in range(1, 13):
                 _LANGINFO_NAMES.append("MON_%d" % i)
                 _LANGINFO_NAMES.append("ABMON_%d" % i)
+        else:
+            _LANGINFO_NAMES = ('LOCALE_USER_DEFAULT LOCALE_SISO639LANGNAME '
+                            'LOCALE_SISO3166CTRYNAME LOCALE_IDEFAULTLANGUAGE '
+                            '').split()
 
-            for constant in _LANGINFO_NAMES:
-                assert hasattr(_locale, constant)
+        for constant in _LANGINFO_NAMES:
+            assert hasattr(_locale, constant)
 
     def test_setlocale(self):
         import _locale
@@ -100,8 +95,6 @@ class AppTestLocaleTrivia:
         assert _locale.setlocale(_locale.LC_ALL)
 
     def test_string_ulcase(self):
-        if not hasattr(self, 'language_utf8'):
-            skip("No utf8 locale on this platform")
         import _locale, string
 
         lcase = "abcdefghijklmnopqrstuvwxyz"
@@ -150,13 +143,9 @@ class AppTestLocaleTrivia:
 
         _locale.setlocale(_locale.LC_ALL, self.language_pl)
         assert _locale.strcoll("a", "b") < 0
-        assert _locale.strcoll(
-            u"\N{LATIN SMALL LETTER A WITH OGONEK}".encode(self.encoding_pl),
-            "b") < 0
+        assert _locale.strcoll("ą", "b") < 0
 
-        assert _locale.strcoll(
-            u"\N{LATIN SMALL LETTER C WITH ACUTE}".encode(self.encoding_pl),
-            "b") > 0
+        assert _locale.strcoll("ć", "b") > 0
         assert _locale.strcoll("c", "b") > 0
 
         assert _locale.strcoll("b", "b") == 0
@@ -309,14 +298,3 @@ class AppTestLocaleTrivia:
         assert _locale.bind_textdomain_codeset('/', None) == 'UTF-8'
 
         assert _locale.bind_textdomain_codeset('', '') is None
-
-    def test_getdefaultlocale(self):
-        import sys
-        if sys.platform != 'win32':
-            skip("No _getdefaultlocale() to test")
-
-        import _locale
-        lang, encoding = _locale._getdefaultlocale()
-        assert lang is None or isinstance(lang, str)
-        assert encoding.startswith('cp')
-
