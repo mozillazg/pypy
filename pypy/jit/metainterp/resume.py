@@ -472,10 +472,7 @@ class ResumeDataReader(object):
 
     def _prepare_virtuals(self, metainterp, virtuals):
         if virtuals:
-            try:
-                v = metainterp._already_allocated_resume_virtuals
-            except AttributeError:
-                v = None
+            v = metainterp._already_allocated_resume_virtuals
             if v is None:
                 self.virtuals = [None] * len(virtuals)
                 for i in range(len(virtuals)):
