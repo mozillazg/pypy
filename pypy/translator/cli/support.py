@@ -63,7 +63,7 @@ class Counter:
         keys.sort()
         for key in keys:
             label = ', '.join([str(item) for item in key])
-            f.write('%s: %d\n' % (label, self.counters[key]))
+            f.write('%6d: %s\n' % (self.counters[key], label))
         f.close()
 
 def getattr_ex(target, attr):
