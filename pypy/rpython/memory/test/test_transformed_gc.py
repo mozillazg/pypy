@@ -843,6 +843,25 @@ class GenericMovingGCTests(GenericGCTests):
         assert (totsize - 26 * size_of_int) % 4 == 0
         # ^^^ a crude assumption that totsize - varsize would be dividable by 4
         #     (and give fixedsize)
+
+    
+    def define_listcopy(cls):
+        TP = lltype.GcArray(lltype.Signed)
+        def fn():
+            l = lltype.malloc(TP, 100)
+            for i in range(100):
+                l[i] = 1
+            l2 = lltype.malloc(TP, 50)
+            llop.listcopy(lltype.Void, l, l2, 50, 0, 50)
+            for i in range(50):
+                assert l2[i] == 1
+            return 0
+
+        return fn
+
+    def test_listcopy(self):
+        run = self.runner("listcopy")
+        run([])
         
 # ________________________________________________________________
 
