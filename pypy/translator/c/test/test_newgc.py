@@ -1027,6 +1027,24 @@ class TestHybridTaggedPointers(TestHybridGC):
         res = self.run("tagged")
         assert res == expected
 
+
+    def define_listcopy(cls):
+        TP = lltype.GcArray(lltype.Signed)
+        def fn():
+            l = lltype.malloc(TP, 100)
+            for i in range(100):
+                l[i] = 1
+            l2 = lltype.malloc(TP, 50)
+            llop.listcopy(lltype.Void, l, l2, 50, 0, 50)
+            for i in range(50):
+                assert l2[i] == 1
+            return 0
+
+        return fn
+
+    def test_listcopy(self):
+        self.run("listcopy")
+
 from pypy.rlib.objectmodel import UnboxedValue
 
 class TaggedBase(object):

@@ -12,7 +12,7 @@ from pypy.translator.backendopt.canraise import RaiseAnalyzer
 from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.translator.backendopt.constfold import constant_fold_graph
 from pypy.annotation import model as annmodel
-from pypy.rpython import rmodel, annlowlevel
+from pypy.rpython import rmodel
 from pypy.rpython.memory import gc
 from pypy.rpython.memory.gctransform.support import var_ispyobj
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
@@ -379,6 +379,16 @@ class BaseGCTransformer(object):
 
     def gct_zero_gc_pointers_inside(self, hop):
         pass
+
+    def gct_listcopy(self, hop):
+        # by default, this becomes a raw memcopy
+        op = hop.spaceop
+        from pypy.rpython.lltypesystem import opimpl
+        llptr = self.annotate_helper(opimpl.op_listcopy,
+                                     [arg.concretetype for arg in op.args],
+                                     op.result.concretetype, inline=True)
+        c_func = rmodel.inputconst(lltype.Void, llptr)
+        hop.genop('direct_call', [c_func] + op.args)
 
     def gct_gc_identityhash(self, hop):
         # must be implemented in the various GCs
