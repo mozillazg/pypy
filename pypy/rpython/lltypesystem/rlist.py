@@ -214,18 +214,7 @@ def _ll_list_resize_really(l, newsize):
         p = before_len - 1
     else:
         p = new_allocated - 1
-    ITEM = typeOf(l).TO.ITEM
-    if isinstance(ITEM, Ptr):
-        while p >= 0:
-            newitems[p] = items[p]
-            items[p] = nullptr(ITEM.TO)
-            p -= 1
-    else:
-        source = cast_ptr_to_adr(items) + itemoffsetof(typeOf(l.items).TO, 0)
-        dest = cast_ptr_to_adr(newitems) + itemoffsetof(typeOf(l.items).TO, 0)
-        s = p + 1
-        raw_memcopy(source, dest, sizeof(ITEM) * s)
-        keepalive_until_here(items)
+    llop.listcopy(items, newitems, 0, 0, p)
     l.length = newsize
     l.items = newitems
 _ll_list_resize_really._annenforceargs_ = (None, int)
