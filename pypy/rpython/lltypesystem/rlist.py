@@ -18,6 +18,7 @@ from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.lltypesystem import rffi
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rlib import rgc
 
 # ____________________________________________________________
 #
@@ -213,7 +214,7 @@ def _ll_list_resize_really(l, newsize):
         p = before_len
     else:
         p = new_allocated
-    llop.listcopy(Void, items, newitems, 0, 0, p)
+    rgc.listcopy(items, newitems, 0, 0, p)
     l.length = newsize
     l.items = newitems
 _ll_list_resize_really._annenforceargs_ = (None, int)
