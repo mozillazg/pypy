@@ -475,8 +475,8 @@ class GenerationGC(SemiSpaceGC):
             objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
             self.last_generation_root_objects.append(addr_struct)
 
-    @specialize.arglltype(0)
-    def listcopy(source, dest, source_start, dest_start, length):
+    @specialize.arglltype(1)
+    def listcopy(self, source, dest, source_start, dest_start, length):
         TP = lltype.typeOf(source).TO
         if isinstance(TP.OF, lltype.Ptr):
             pass # do write barrier
