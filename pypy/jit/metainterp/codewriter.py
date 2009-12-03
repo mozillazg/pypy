@@ -1571,6 +1571,10 @@ class BytecodeMaker(object):
         assert vinfo.is_vtypeptr(op.args[0].concretetype)
         self.vable_flags[op.args[0]] = op.args[2].value
 
+    def serialize_op_jit_force_virtual(self, op):
+        raise ForcingVirtualRef("forcing a virtual_ref, i.e. calling it, "
+                                "should not be seen by the JIT")
+
     serialize_op_oostring  = handle_builtin_call
     serialize_op_oounicode = handle_builtin_call
     serialize_op_gc_identityhash = handle_builtin_call
@@ -1696,3 +1700,6 @@ class VirtualizableArrayField(Exception):
     def __str__(self):
         return "using virtualizable array in illegal way in %r" % (
             self.args[0],)
+
+class ForcingVirtualRef(Exception):
+    pass
