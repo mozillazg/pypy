@@ -2,6 +2,9 @@ from pypy.rlib.jit import virtual_ref
 from pypy.rlib._jit_vref import SomeVRef
 from pypy.annotation import model as annmodel
 from pypy.annotation.annrpython import RPythonAnnotator
+from pypy.rpython.test.test_llinterp import interpret
+from pypy.rpython.lltypesystem.rclass import OBJECTPTR
+from pypy.rpython.lltypesystem import lltype
 
 
 class X(object):
@@ -30,3 +33,16 @@ def test_annotate_2():
     s = a.build_types(f, [])
     assert isinstance(s, annmodel.SomeInstance)
     assert s.classdef == a.bookkeeper.getuniqueclassdef(X)
+
+def test_rtype_1():
+    def f():
+        return virtual_ref(X())
+    x = interpret(f, [])
+    assert lltype.typeOf(x) == OBJECTPTR
+
+def test_rtype_2():
+    def f():
+        vref = virtual_ref(X())
+        return vref()
+    x = interpret(f, [])
+    assert lltype.castable(OBJECTPTR, lltype.typeOf(x)) > 0

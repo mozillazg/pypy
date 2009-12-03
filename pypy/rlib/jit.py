@@ -121,7 +121,7 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         from pypy.rlib import _jit_vref
-        return _jit_vref.specialize_call(self, hop)
+        return _jit_vref.specialize_call(hop)
 
 # ____________________________________________________________
 # User interface for the hotpath JIT policy
