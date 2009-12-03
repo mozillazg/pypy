@@ -102,7 +102,11 @@ class Entry(ExtRegistryEntry):
 # VRefs
 
 def virtual_ref(x):
-    return DirectVRef(x)
+    if we_are_jitted():
+        from pypy.rlib import _jit_vref
+        return _jit_vref.jit_virtual_ref(x)
+    else:
+        return DirectVRef(x)
 
 class DirectVRef(object):
     def __init__(self, x):
@@ -110,18 +114,17 @@ class DirectVRef(object):
     def __call__(self):
         return self._x
     def _freeze_(self):
-        raise Exception("should not see a prebuilt pypy.rlib.jit.virtual_ref")
+        raise Exception("should not see a prebuilt virtual_ref")
 
 class Entry(ExtRegistryEntry):
-    _about_ = virtual_ref
+    _about_ = DirectVRef
 
     def compute_result_annotation(self, s_obj):
         from pypy.rlib import _jit_vref
         return _jit_vref.SomeVRef(s_obj)
 
     def specialize_call(self, hop):
-        from pypy.rlib import _jit_vref
-        return _jit_vref.specialize_call(hop)
+        return hop.r_result.specialize_call(hop)
 
 # ____________________________________________________________
 # User interface for the hotpath JIT policy

@@ -489,6 +489,9 @@ def op_get_member_index(memberoffset):
 def op_gc_assume_young_pointers(addr):
     pass
 
+def op_jit_virtual_force(x):
+    return x
+
 # ____________________________________________________________
 
 def get_op_impl(opname):
