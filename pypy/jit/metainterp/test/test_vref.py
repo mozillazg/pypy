@@ -5,6 +5,21 @@ from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
 class VRefTests:
 
+    def test_make_vref_simple(self):
+        class X:
+            pass
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        def f():
+            exctx.topframeref = virtual_ref(X())
+            exctx.topframeref = None
+            return 1
+        #
+        self.interp_operations(f, [])
+        self.check_operations_history(virtual_ref=1)
+
     def test_simple_no_access(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #

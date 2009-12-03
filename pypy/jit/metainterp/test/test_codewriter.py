@@ -2,7 +2,7 @@ import py
 from pypy.rlib import jit
 from pypy.jit.metainterp import support, typesystem
 from pypy.jit.metainterp.policy import JitPolicy
-from pypy.jit.metainterp.codewriter import CodeWriter
+from pypy.jit.metainterp.codewriter import CodeWriter, ForcingVirtualRef
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.translator.translator import graphof
 from pypy.rpython.lltypesystem.rbuiltin import ll_instantiate
@@ -447,6 +447,21 @@ class TestCodeWriter:
         cw._start(self.metainterp_sd, None)
         jitcode = cw.make_one_bytecode((graphs[0], None), False)
         assert 'virtual_ref' in jitcode._source
+
+    def test_vref_forced(self):
+        class X:
+            pass
+        def f():
+            vref = jit.virtual_ref(X())
+            return vref()
+        graphs = self.make_graphs(f, [])
+        assert graphs[0].func is f
+        assert graphs[1].func is jit.virtual_ref
+        cw = CodeWriter(self.rtyper)
+        cw.candidate_graphs = [graphs[0]]
+        cw._start(self.metainterp_sd, None)
+        py.test.raises(ForcingVirtualRef, cw.make_one_bytecode,
+                       (graphs[0], None), False)    # assert it does not work
 
 
 class ImmutableFieldsTests:
