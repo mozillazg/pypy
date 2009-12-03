@@ -15,10 +15,9 @@ from pypy.rpython.lltypesystem import rstr
 from pypy.rpython import robject
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rpython.lltypesystem.llmemory import cast_ptr_to_adr, raw_memclear,\
-     raw_memcopy, sizeof, itemoffsetof, offsetof
 from pypy.rpython.lltypesystem import rffi
 from pypy.rlib.objectmodel import keepalive_until_here
+from pypy.rpython.lltypesystem.lloperation import llop
 
 # ____________________________________________________________
 #
@@ -211,10 +210,10 @@ def _ll_list_resize_really(l, newsize):
     newitems = malloc(typeOf(l).TO.items.TO, new_allocated)
     before_len = l.length
     if before_len < new_allocated:
-        p = before_len - 1
+        p = before_len
     else:
-        p = new_allocated - 1
-    llop.listcopy(items, newitems, 0, 0, p)
+        p = new_allocated
+    llop.listcopy(Void, items, newitems, 0, 0, p)
     l.length = newsize
     l.items = newitems
 _ll_list_resize_really._annenforceargs_ = (None, int)

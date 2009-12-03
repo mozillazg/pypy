@@ -394,6 +394,12 @@ def op_adr_delta(addr1, addr2):
     checkadr(addr2)
     return addr1 - addr2
 
+def op_listcopy(source, dest, source_start, dest_start, length):
+    i = 0
+    while i < length:
+        dest[i + dest_start] = source[i + source_start]
+        i += 1
+
 def op_getfield(p, name):
     checkptr(p)
     TYPE = lltype.typeOf(p).TO
