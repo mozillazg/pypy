@@ -564,6 +564,26 @@ class GCTest(object):
 
         self.interpret(fn, [])
 
+    def test_listcopy_ptr(self):
+        S = lltype.GcStruct('S')
+        TP = lltype.GcArray(lltype.Ptr(S))
+        def fn():
+            l = lltype.malloc(TP, 100)
+            l2 = lltype.malloc(TP, 100)
+            for i in range(100):
+                l[i] = lltype.malloc(S)
+            llop.listcopy(lltype.Void, l, l2, 50, 0, 50)
+            x = []
+            # force minor collect
+            t = (1, lltype.malloc(S))
+            for i in range(20):
+                x.append(t)
+            for i in range(50):
+                assert l2[i]
+            return 0
+
+        self.interpret(fn, [])
+
 
 from pypy.rlib.objectmodel import UnboxedValue
 
