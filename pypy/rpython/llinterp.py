@@ -754,6 +754,9 @@ class LLFrame(object):
     def op_zero_gc_pointers_inside(self, obj):
         raise NotImplementedError("zero_gc_pointers_inside")
 
+    def op_listcopy(self, source, dest, source_start, dest_start, length):
+        self.heap.listcopy(source, dest, source_start, dest_start, length)
+
     def op_getfield(self, obj, field):
         checkptr(obj)
         # check the difference between op_getfield and op_getsubstruct:
