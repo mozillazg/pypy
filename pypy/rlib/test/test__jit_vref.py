@@ -86,4 +86,14 @@ def test_rtype_3():
     x = interpret(f, [-5])
     assert lltype.typeOf(x) == OBJECTPTR
 
+def test_rtype_4():
+    def f(n):
+        if n > 0:
+            return virtual_ref(X())
+        else:
+            return None
+    x = interpret(f, [-5])
+    assert lltype.typeOf(x) == OBJECTPTR
+    assert not x
+
 # the path "we_are_jitted()" is tested in jit/metainterp/test/test_codewriter.
