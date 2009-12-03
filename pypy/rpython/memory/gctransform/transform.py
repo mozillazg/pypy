@@ -5,7 +5,7 @@ from pypy.objspace.flow.model import SpaceOperation, Variable, Constant, \
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.translator.unsimplify import insert_empty_startblock
 from pypy.translator.unsimplify import starts_with_empty_block
-from pypy.translator.backendopt.support import var_needsgc, ll_listcopy
+from pypy.translator.backendopt.support import var_needsgc
 from pypy.translator.backendopt import inline
 from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
@@ -14,7 +14,7 @@ from pypy.translator.backendopt.constfold import constant_fold_graph
 from pypy.annotation import model as annmodel
 from pypy.rpython import rmodel
 from pypy.rpython.memory import gc
-from pypy.rpython.memory.gctransform.support import var_ispyobj
+from pypy.rpython.memory.gctransform.support import var_ispyobj, ll_listcopy
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.rtyper import LowLevelOpList
 from pypy.rpython.rbuiltin import gen_cast
