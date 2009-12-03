@@ -28,7 +28,7 @@ class Entry(ExtRegistryEntry):
                   hop.inputconst(lltype.Void, hop.args_v[1].value),
                   hop.inputconst(lltype.Void, {})]
         hop.exception_cannot_occur()
-        return hop.genop('promote_virtualizable',
+        return hop.genop('jit_force_virtualizable',
                          args_v, resulttype=lltype.Void)
 
 debug_print = lloperation.llop.debug_print

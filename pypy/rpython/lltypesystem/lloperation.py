@@ -427,15 +427,14 @@ LL_OPERATIONS = {
     # __________ used by the JIT ________
 
     'jit_marker':           LLOp(),
-    'promote_virtualizable':LLOp(canrun=True),
+    'jit_force_virtualizable':LLOp(canrun=True),
+    'jit_force_virtual':    LLOp(canrun=True),
     'get_exception_addr':   LLOp(),
     'get_exc_value_addr':   LLOp(),
     'do_malloc_fixedsize_clear': LLOp(canunwindgc=True),
     'do_malloc_varsize_clear': LLOp(canunwindgc=True),
     'get_write_barrier_failing_case': LLOp(sideeffects=False),
     'gc_get_type_info_group': LLOp(sideeffects=False),
-    'jit_virtual_ref':      LLOp(),
-    'jit_virtual_force':    LLOp(canfold=True),
 
     # __________ GC operations __________
 

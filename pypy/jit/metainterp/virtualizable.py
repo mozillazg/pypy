@@ -162,7 +162,7 @@ class VirtualizableInfo:
         ts = self.warmrunnerdesc.cpu.ts
         (_, FUNCPTR) = ts.get_FuncType([self.VTYPEPTR], lltype.Void)
         funcptr = self.warmrunnerdesc.helper_func(FUNCPTR, force_if_necessary)
-        rvirtualizable2.replace_promote_virtualizable_with_call(
+        rvirtualizable2.replace_force_virtualizable_with_call(
             all_graphs, self.VTYPEPTR, funcptr)
 
     def unwrap_virtualizable_box(self, virtualizable_box):

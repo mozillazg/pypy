@@ -102,11 +102,8 @@ class Entry(ExtRegistryEntry):
 # VRefs
 
 def virtual_ref(x):
-    if we_are_jitted():
-        from pypy.rlib import _jit_vref
-        return _jit_vref.jit_virtual_ref(x)
-    else:
-        return DirectVRef(x)
+    return DirectVRef(x)
+virtual_ref.oopspec = 'virtual_ref(x)'
 
 class DirectVRef(object):
     def __init__(self, x):
