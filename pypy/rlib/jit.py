@@ -98,6 +98,9 @@ class Entry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.inputconst(lltype.Signed, _we_are_jitted)
 
+def virtual_ref(x):
+    return None        # XXX!
+
 # ____________________________________________________________
 # User interface for the hotpath JIT policy
 
