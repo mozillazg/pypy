@@ -52,6 +52,18 @@ def test_annotate_3():
     assert isinstance(s.s_instance, annmodel.SomeInstance)
     assert s.s_instance.classdef == a.bookkeeper.getuniqueclassdef(X)
 
+def test_annotate_4():
+    def f(n):
+        if n > 0:
+            return virtual_ref(X())
+        else:
+            return None
+    a = RPythonAnnotator()
+    s = a.build_types(f, [int])
+    assert isinstance(s, SomeVRef)
+    assert isinstance(s.s_instance, annmodel.SomeInstance)
+    assert s.s_instance.classdef == a.bookkeeper.getuniqueclassdef(X)
+
 def test_rtype_1():
     def f():
         return virtual_ref(X())
