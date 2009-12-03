@@ -10,6 +10,12 @@ from pypy.rpython.lltypesystem import lltype
 class X(object):
     pass
 
+class Y(X):
+    pass
+
+class Z(X):
+    pass
+
 
 def test_direct():
     x1 = X()
@@ -34,6 +40,18 @@ def test_annotate_2():
     assert isinstance(s, annmodel.SomeInstance)
     assert s.classdef == a.bookkeeper.getuniqueclassdef(X)
 
+def test_annotate_3():
+    def f(n):
+        if n > 0:
+            return virtual_ref(Y())
+        else:
+            return virtual_ref(Z())
+    a = RPythonAnnotator()
+    s = a.build_types(f, [int])
+    assert isinstance(s, SomeVRef)
+    assert isinstance(s.s_instance, annmodel.SomeInstance)
+    assert s.s_instance.classdef == a.bookkeeper.getuniqueclassdef(X)
+
 def test_rtype_1():
     def f():
         return virtual_ref(X())
@@ -46,3 +64,14 @@ def test_rtype_2():
         return vref()
     x = interpret(f, [])
     assert lltype.castable(OBJECTPTR, lltype.typeOf(x)) > 0
+
+def test_rtype_3():
+    def f(n):
+        if n > 0:
+            return virtual_ref(Y())
+        else:
+            return virtual_ref(Z())
+    x = interpret(f, [-5])
+    assert lltype.typeOf(x) == OBJECTPTR
+
+# the path "we_are_jitted()" is tested in jit/metainterp/test/test_codewriter.
