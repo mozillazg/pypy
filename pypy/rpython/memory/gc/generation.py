@@ -478,15 +478,24 @@ class GenerationGC(SemiSpaceGC):
     @specialize.arglltype(1)
     def listcopy(self, source, dest, source_start, dest_start, length):
         TP = lltype.typeOf(source).TO
+        source_addr = llmemory.cast_ptr_to_adr(source)
+        dest_addr = llmemory.cast_ptr_to_adr(dest)
         if isinstance(TP.OF, lltype.Ptr):
-            pass # do write barrier
-        source_addr = (llmemory.cast_ptr_to_adr(source) +
-                       llmemory.itemoffsetof(TP, 0) +
-                       llmemory.sizeof(TP.OF) * source_start)
-        dest_addr = (llmemory.cast_ptr_to_adr(dest)
-                     + llmemory.itemoffsetof(TP, 0) +
-                     llmemory.sizeof(TP.OF) * dest_start)
-        llmemory.raw_memcopy(source_addr, dest_addr,
+            if self.header(source_addr).tid & GCFLAG_NO_YOUNG_PTRS:
+                # if GCFLAG_NO_YOUNG_PTRS is set, we don't need to update
+                pass
+            elif self.header(dest_addr).tid & GCFLAG_NO_YOUNG_PTRS == 0:
+                pass # dest either in nursery or has the flag already zeroed,
+                     # ignore
+            else:
+                # this means source contains young ptrs and dest is not in
+                # a nursery and dest is not yet in list
+                self.assume_young_pointers(dest_addr)
+        cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
+                          llmemory.sizeof(TP.OF) * source_start)
+        cp_dest_addr = (dest_addr + llmemory.itemoffsetof(TP, 0) +
+                        llmemory.sizeof(TP.OF) * dest_start)
+        llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
                              llmemory.sizeof(TP.OF) * length)
 
     def write_into_last_generation_obj(self, addr_struct, addr):
