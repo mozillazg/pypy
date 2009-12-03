@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
+from pypy.rlib.objectmodel import specialize
 import os
 
 def var_ispyobj(var):
@@ -106,3 +107,10 @@ def ll_call_destructor(destrptr, destr_v):
             os.write(2, "a destructor raised an exception, ignoring it\n")
         except:
             pass
+
+@specialize.arglltype(0)
+def ll_listcopy(source, dest, source_start, dest_start, length):
+    i = 0
+    while i < length:
+        dest[i + dest_start] = source[i + source_start]
+        i += 1

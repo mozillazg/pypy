@@ -5,7 +5,7 @@ from pypy.objspace.flow.model import SpaceOperation, Variable, Constant, \
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.translator.unsimplify import insert_empty_startblock
 from pypy.translator.unsimplify import starts_with_empty_block
-from pypy.translator.backendopt.support import var_needsgc
+from pypy.translator.backendopt.support import var_needsgc, ll_listcopy
 from pypy.translator.backendopt import inline
 from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
@@ -383,8 +383,7 @@ class BaseGCTransformer(object):
     def gct_listcopy(self, hop):
         # by default, this becomes a raw memcopy
         op = hop.spaceop
-        from pypy.rpython.lltypesystem import opimpl
-        llptr = self.annotate_helper(opimpl.op_listcopy,
+        llptr = self.annotate_helper(ll_listcopy,
                                      [arg.concretetype for arg in op.args],
                                      op.result.concretetype, inline=True)
         c_func = rmodel.inputconst(lltype.Void, llptr)
