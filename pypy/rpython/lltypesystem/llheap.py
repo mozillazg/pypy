@@ -35,6 +35,12 @@ def finish_building_buffer(buf, final_size):
         ll_str.chars[i] = buf.chars[i]
     return ll_str
 
+def listcopy(source, dest, source_start, dest_start, length):
+    i = 0
+    while i < length:
+        dest[i + dest_start] = source[i + source_start]
+        i += 1
+
 def thread_prepare():
     pass
 
