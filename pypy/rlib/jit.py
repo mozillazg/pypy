@@ -98,8 +98,30 @@ class Entry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.inputconst(lltype.Signed, _we_are_jitted)
 
+# ____________________________________________________________
+# VRefs
+
 def virtual_ref(x):
-    return None        # XXX!
+    return DirectVRef(x)
+
+class DirectVRef(object):
+    def __init__(self, x):
+        self._x = x
+    def __call__(self):
+        return self._x
+    def _freeze_(self):
+        raise Exception("should not see a prebuilt pypy.rlib.jit.virtual_ref")
+
+class Entry(ExtRegistryEntry):
+    _about_ = virtual_ref
+
+    def compute_result_annotation(self, s_obj):
+        from pypy.rlib import _jit_vref
+        return _jit_vref.SomeVRef(s_obj)
+
+    def specialize_call(self, hop):
+        from pypy.rlib import _jit_vref
+        return _jit_vref.specialize_call(self, hop)
 
 # ____________________________________________________________
 # User interface for the hotpath JIT policy
