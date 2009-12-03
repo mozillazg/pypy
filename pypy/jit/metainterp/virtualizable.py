@@ -153,15 +153,16 @@ class VirtualizableInfo:
 
     def finish(self):
         #
-        def force_if_necessary(virtualizable):
+        def force_virtualizable_if_necessary(virtualizable):
             if virtualizable.vable_token:
                 self.force_now(virtualizable)
-        force_if_necessary._always_inline_ = True
+        force_virtualizable_if_necessary._always_inline_ = True
         #
         all_graphs = self.warmrunnerdesc.translator.graphs
         ts = self.warmrunnerdesc.cpu.ts
         (_, FUNCPTR) = ts.get_FuncType([self.VTYPEPTR], lltype.Void)
-        funcptr = self.warmrunnerdesc.helper_func(FUNCPTR, force_if_necessary)
+        funcptr = self.warmrunnerdesc.helper_func(
+            FUNCPTR, force_virtualizable_if_necessary)
         rvirtualizable2.replace_force_virtualizable_with_call(
             all_graphs, self.VTYPEPTR, funcptr)
 

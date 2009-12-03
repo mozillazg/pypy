@@ -944,9 +944,11 @@ class ImplicitVirtualizableTests:
                     for block, op in graph.iterblockops()
                         if op.opname == 'direct_call']
 
-        assert direct_calls(f_graph) == ['__init__', 'force_if_necessary', 'll_portal_runner']
-        assert direct_calls(portal_graph) == ['force_if_necessary', 'maybe_enter_jit']
-
+        assert direct_calls(f_graph) == ['__init__',
+                                         'force_virtualizable_if_necessary',
+                                         'll_portal_runner']
+        assert direct_calls(portal_graph)==['force_virtualizable_if_necessary',
+                                            'maybe_enter_jit']
         assert direct_calls(init_graph) == []
 
     def test_virtual_child_frame(self):

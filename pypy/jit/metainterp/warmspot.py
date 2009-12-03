@@ -1,4 +1,4 @@
-import sys
+import sys, py
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import llhelper, MixLevelHelperAnnotator,\
@@ -17,7 +17,7 @@ from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.translator.unsimplify import call_final_function
 
 from pypy.jit.metainterp import codewriter
-from pypy.jit.metainterp import support, history, pyjitpl, gc
+from pypy.jit.metainterp import support, history, pyjitpl, gc, vref
 from pypy.jit.metainterp.pyjitpl import MetaInterpStaticData, MetaInterp
 from pypy.jit.metainterp.policy import JitPolicy
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
@@ -177,6 +177,7 @@ class WarmRunnerDesc:
                                           )
         self.rewrite_can_enter_jit()
         self.rewrite_set_param()
+        self.rewrite_force_virtual()
         self.add_profiler_finish()
         self.metainterp_sd.finish_setup(optimizer=optimizer)
 
@@ -598,6 +599,15 @@ class WarmRunnerDesc:
                 closures[funcname] = make_closure('set_param_' + funcname)
             op.opname = 'direct_call'
             op.args[:3] = [closures[funcname]]
+
+    def rewrite_force_virtual(self):
+        if self.cpu.ts.name != 'lltype':
+            py.test.skip("rewrite_force_virtual: port it to ootype")
+        FUNC = lltype.FuncType([rclass.OBJECTPTR], rclass.OBJECTPTR)
+        funcptr = self.helper_func(lltype.Ptr(FUNC),
+                                   vref.force_virtual_if_necessary)
+        all_graphs = self.translator.graphs
+        vref.replace_force_virtual_with_call(all_graphs, funcptr)
 
 
 def decode_hp_hint_args(op):

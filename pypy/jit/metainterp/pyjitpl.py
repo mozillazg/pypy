@@ -5,7 +5,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 
-from pypy.jit.metainterp import history, compile, resume
+from pypy.jit.metainterp import history, compile, resume, vref
 from pypy.jit.metainterp.history import Const, ConstInt, Box
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import codewriter, executor
@@ -238,7 +238,7 @@ class MIFrame(object):
     for _opimpl in ['int_is_true', 'int_neg', 'int_invert', 'bool_not',
                     'cast_ptr_to_int', 'cast_float_to_int',
                     'cast_int_to_float', 'float_neg', 'float_abs',
-                    'float_is_true', 'virtual_ref',
+                    'float_is_true',
                     ]:
         exec py.code.Source('''
             @arguments("box")
@@ -886,6 +886,14 @@ class MIFrame(object):
         return self.metainterp.finishframe_exception(self.exception_box,
                                                      self.exc_value_box)
 
+    @arguments("box")
+    def opimpl_virtual_ref(self, box):
+        obj = box.getref_base()
+        res = vref.virtual_ref_during_tracing(self.metainterp, obj)
+        resbox = history.BoxPtr(res)
+        self.metainterp.history.record(rop.VIRTUAL_REF, [box], resbox)
+        self.make_result_box(resbox)
+
     # ------------------------------
 
     def setup_call(self, argboxes):
@@ -994,6 +1002,7 @@ class MIFrame(object):
             # xxx do something about code duplication
             resbox = self.metainterp.execute_and_record_varargs(
                 rop.CALL_MAY_FORCE, argboxes, descr=descr)
+            self.metainterp.virtual_after_residual_call()
             self.metainterp.vable_after_residual_call()
             if resbox is not None:
                 self.make_result_box(resbox)
@@ -1194,6 +1203,7 @@ class MetaInterpGlobalData(object):
 class MetaInterp(object):
     in_recursion = 0
     _already_allocated_resume_virtuals = None
+    _force_token_mem = None
 
     def __init__(self, staticdata):
         self.staticdata = staticdata
@@ -1754,6 +1764,15 @@ class MetaInterp(object):
                     vable_escapes = True
         if vable_escapes:
             self.load_fields_from_virtualizable()
+
+    def virtual_after_residual_call(self):
+        if self.is_blackholing() or not vref.was_forced(self):
+            return
+        # during tracing, more precisely during the CALL_MAY_FORCE, at least
+        # one of the vrefs was read.  If we continue to trace and make
+        # assembler from there, we will get assembler that probably always
+        # forces a vref.  So we just cancel now.
+        self.switch_to_blackhole()
 
     def handle_exception(self):
         etype = self.cpu.get_exception()
