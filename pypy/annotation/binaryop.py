@@ -785,6 +785,8 @@ def _make_none_union(classname, constructor_args='', glob=None):
         glob = globals()
     loc = locals()
     source = py.code.Source("""
+        from pypy.tool.pairtype import pairtype
+        from pypy.annotation.model import SomePBC, SomeObject
         class __extend__(pairtype(%(classname)s, SomePBC)):
             def union((obj, pbc)):
                 if pbc.isNone():

@@ -1,4 +1,5 @@
 from pypy.annotation import model as annmodel
+from pypy.annotation.binaryop import _make_none_union
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.rmodel import Repr
@@ -11,6 +12,9 @@ class SomeVRef(annmodel.SomeObject):
     def __init__(self, s_instance):
         self.s_instance = s_instance
 
+    def can_be_none(self):
+        return True
+
     def simple_call(self):
         return self.s_instance
 
@@ -21,6 +25,8 @@ class SomeVRef(annmodel.SomeObject):
 
     def rtyper_makekey(self):
         return self.__class__,
+
+_make_none_union('SomeVRef', 'obj.s_instance', globals())
 
 
 class VRefRepr(Repr):
@@ -33,5 +39,5 @@ class VRefRepr(Repr):
 
     def rtype_simple_call(self, hop):
         [v] = hop.inputargs(self)
-        v = hop.genop('jit_virtual_force', [v], resulttype = OBJECTPTR)
+        v = hop.genop('jit_force_virtual', [v], resulttype = OBJECTPTR)
         return hop.genop('cast_pointer', [v], resulttype = hop.r_result)
