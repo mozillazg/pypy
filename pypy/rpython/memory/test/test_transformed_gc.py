@@ -852,9 +852,9 @@ class GenericMovingGCTests(GenericGCTests):
             for i in range(100):
                 l[i] = 1
             l2 = lltype.malloc(TP, 50)
-            llop.listcopy(lltype.Void, l, l2, 50, 0, 50)
-            for i in range(50):
-                assert l2[i] == 1
+            if llop.gc_listcopy(lltype.Void, l, l2, 50, 0, 50):
+                for i in range(50):
+                    assert l2[i] == 1
             return 0
 
         return fn
@@ -871,13 +871,13 @@ class GenericMovingGCTests(GenericGCTests):
             l2 = lltype.malloc(TP, 100)
             for i in range(100):
                 l[i] = lltype.malloc(S)
-            llop.listcopy(lltype.Void, l, l2, 50, 0, 50)
-            # force nursery collect
-            x = []
-            for i in range(20):
-                x.append((1, lltype.malloc(S)))
-            for i in range(50):
-                assert l2[i]
+            if llop.gc_listcopy(lltype.Void, l, l2, 50, 0, 50):
+                # force nursery collect
+                x = []
+                for i in range(20):
+                    x.append((1, lltype.malloc(S)))
+                for i in range(50):
+                    assert l2[i]
             return 0
 
         return fn

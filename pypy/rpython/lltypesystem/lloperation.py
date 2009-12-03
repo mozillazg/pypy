@@ -358,7 +358,7 @@ LL_OPERATIONS = {
     'resize_buffer':        LLOp(canraise=(MemoryError,), canunwindgc=True),
     'finish_building_buffer' : LLOp(canraise=(MemoryError,), canunwindgc=True),
     'zero_gc_pointers_inside': LLOp(),
-    'listcopy':             LLOp(canrun=True),
+    'gc_listcopy':             LLOp(canrun=True),
     'free':                 LLOp(),
     'getfield':             LLOp(sideeffects=False, canrun=True),
     'getarrayitem':         LLOp(sideeffects=False, canrun=True),

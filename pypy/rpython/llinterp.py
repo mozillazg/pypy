@@ -755,7 +755,10 @@ class LLFrame(object):
         raise NotImplementedError("zero_gc_pointers_inside")
 
     def op_listcopy(self, source, dest, source_start, dest_start, length):
-        self.heap.listcopy(source, dest, source_start, dest_start, length)
+        if hasattr(self.heap, 'listcopy'):
+            self.heap.listcopy(source, dest, source_start, dest_start, length)
+            return True
+        return False
 
     def op_getfield(self, obj, field):
         checkptr(obj)

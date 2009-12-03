@@ -380,14 +380,8 @@ class BaseGCTransformer(object):
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 
-    def gct_listcopy(self, hop):
-        # by default, this becomes a raw memcopy
-        op = hop.spaceop
-        llptr = self.annotate_helper(ll_listcopy,
-                                     [arg.concretetype for arg in op.args],
-                                     op.result.concretetype, inline=True)
-        c_func = rmodel.inputconst(lltype.Void, llptr)
-        hop.genop('direct_call', [c_func] + op.args)
+    def gct_gc_listcopy(self, hop):
+        return rmodel.inputconst(lltype.Bool, False)
 
     def gct_gc_identityhash(self, hop):
         # must be implemented in the various GCs

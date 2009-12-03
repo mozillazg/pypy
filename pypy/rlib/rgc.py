@@ -328,3 +328,16 @@ class FinishBuildingBufferEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('finish_building_buffer', vlist,
                          resulttype=hop.r_result.lowleveltype)
+
+def listcopy(source, dest, source_start, dest_start, length):
+    from pypy.rpython.lltypesystem.lloperation import llop
+    from pypy.rpython.lltypesystem import lltype
+    
+    if llop.gc_listcopy(lltype.Void, source, dest, source_start, dest_start,
+                        length):
+        return # gc supports nicely copying lists
+    i = 0
+    while i < length:
+        dest[i + dest_start] = source[i + source_start]
+        i += 1
+        
