@@ -35,19 +35,3 @@ class VRefRepr(Repr):
         [v] = hop.inputargs(self)
         v = hop.genop('jit_virtual_force', [v], resulttype = OBJECTPTR)
         return hop.genop('cast_pointer', [v], resulttype = hop.r_result)
-
-# ____________________________________________________________
-
-
-def jit_virtual_ref(x):
-    raise Exception("should not be reached")
-
-class Entry(ExtRegistryEntry):
-    _about_ = jit_virtual_ref
-
-    def compute_result_annotation(self, s_obj):
-        return SomeVRef(s_obj)
-
-    def specialize_call(self, hop):
-        [v] = hop.inputargs(getinstancerepr(hop.rtyper, None))
-        return hop.genop('jit_virtual_ref', [v], resulttype = hop.r_result)
