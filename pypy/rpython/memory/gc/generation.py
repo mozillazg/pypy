@@ -481,15 +481,12 @@ class GenerationGC(SemiSpaceGC):
         source_addr = llmemory.cast_ptr_to_adr(source)
         dest_addr = llmemory.cast_ptr_to_adr(dest)
         if isinstance(TP.OF, lltype.Ptr):
-            if self.header(source_addr).tid & GCFLAG_NO_YOUNG_PTRS:
-                # if GCFLAG_NO_YOUNG_PTRS is set, we don't need to update
-                pass
-            elif self.header(dest_addr).tid & GCFLAG_NO_YOUNG_PTRS == 0:
-                pass # dest either in nursery or has the flag already zeroed,
-                     # ignore
-            else:
-                # this means source contains young ptrs and dest is not in
-                # a nursery and dest is not yet in list
+            need_set = False
+            if self.header(source_addr).tid & GCFLAG_NO_YOUNG_PTRS == 0:
+                need_set = True
+            if self.header(source_addr).tid & GCFLAG_NO_HEAP_PTRS == 0:
+                need_set = True
+            if need_set:
                 self.assume_young_pointers(dest_addr)
         cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
                           llmemory.sizeof(TP.OF) * source_start)
