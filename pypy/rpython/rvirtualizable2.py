@@ -61,7 +61,10 @@ def replace_force_virtualizable_with_call(graphs, VTYPEPTR, funcptr):
     count = 0
     for graph in graphs:
         for block in graph.iterblocks():
-            for op in block.operations:
+            if not block.operations:
+                continue
+            newoplist = []
+            for i, op in enumerate(block.operations):
                 if (op.opname == 'jit_force_virtualizable' and
                     match_virtualizable_type(op.args[0].concretetype,
                                              VTYPEPTR)):
@@ -70,6 +73,8 @@ def replace_force_virtualizable_with_call(graphs, VTYPEPTR, funcptr):
                     op.opname = 'direct_call'
                     op.args = [c_funcptr, op.args[0]]
                     count += 1
+                newoplist.append(op)
+            block.operations = newoplist
     log("replaced %d 'jit_force_virtualizable' with %r" % (count, funcptr))
 
 def match_virtualizable_type(TYPE, VTYPEPTR):
