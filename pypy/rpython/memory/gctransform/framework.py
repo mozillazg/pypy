@@ -776,6 +776,16 @@ class FrameworkGCTransformer(GCTransformer):
             TYPE = v_ob.concretetype.TO
             gen_zero_gc_pointers(TYPE, v_ob, hop.llops)
 
+    def gct_listcopy(self, hop):
+        if not hasattr(self.GCClass, 'listcopy'):
+            return GCTransformer.gct_listcopy(self, hop)
+        op = hop.spaceop
+        ARGS = [arg.concretetype for arg in op.args]
+        llptr = self.annotate_helper(self.GCClass.listcopy.im_func, ARGS,
+                                     op.result.concretetype, inline=True)
+        c_func = rmodel.inputconst(lltype.Void, llptr)
+        hop.genop('direct_call', [c_func] + op.args)
+
     def gct_weakref_create(self, hop):
         op = hop.spaceop
 

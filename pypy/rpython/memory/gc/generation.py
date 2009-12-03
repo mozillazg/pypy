@@ -5,7 +5,7 @@ from pypy.rpython.memory.gc.semispace import GCFLAG_HASHTAKEN
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
-from pypy.rlib.objectmodel import free_non_gc_object
+from pypy.rlib.objectmodel import free_non_gc_object, specialize
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -474,6 +474,20 @@ class GenerationGC(SemiSpaceGC):
         if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
             objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
             self.last_generation_root_objects.append(addr_struct)
+
+    @specialize.arglltype(0)
+    def listcopy(source, dest, source_start, dest_start, length):
+        TP = lltype.typeOf(source).TO
+        if isinstance(TP.OF, lltype.Ptr):
+            pass # do write barrier
+        source_addr = (llmemory.cast_ptr_to_adr(source) +
+                       llmemory.itemoffsetof(TP, 0) +
+                       llmemory.sizeof(TP.OF) * source_start)
+        dest_addr = (llmemory.cast_ptr_to_adr(dest)
+                     + llmemory.itemoffsetof(TP, 0) +
+                     llmemory.sizeof(TP.OF) * dest_start)
+        llmemory.raw_memcopy(source_addr, dest_addr,
+                             llmemory.sizeof(TP.OF) * length)
 
     def write_into_last_generation_obj(self, addr_struct, addr):
         objhdr = self.header(addr_struct)
