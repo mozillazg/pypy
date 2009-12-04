@@ -329,15 +329,26 @@ class FinishBuildingBufferEntry(ExtRegistryEntry):
         return hop.genop('finish_building_buffer', vlist,
                          resulttype=hop.r_result.lowleveltype)
 
-def listcopy(source, dest, source_start, dest_start, length):
+def ll_arraycopy(source, dest, source_start, dest_start, length):
     from pypy.rpython.lltypesystem.lloperation import llop
-    from pypy.rpython.lltypesystem import lltype
-    
-    if llop.gc_listcopy(lltype.Void, source, dest, source_start, dest_start,
-                        length):
-        return # gc supports nicely copying lists
-    i = 0
-    while i < length:
-        dest[i + dest_start] = source[i + source_start]
-        i += 1
-        
+    from pypy.rpython.lltypesystem import lltype, llmemory
+
+    TP = lltype.typeOf(source).TO
+    if isinstance(TP.OF, lltype.Ptr):
+        if llop.gc_arraycopy(lltype.Void, source, dest, source_start, dest_start,
+                            length):
+            return # gc supports nicely copying lists
+        i = 0
+        while i < length:
+            dest[i + dest_start] = source[i + source_start]
+            i += 1
+    # it's safe to do memcpy
+    source_addr = llmemory.cast_ptr_to_adr(source)
+    dest_addr   = llmemory.cast_ptr_to_adr(dest)
+    cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
+                      llmemory.sizeof(TP.OF) * source_start)
+    cp_dest_addr = (dest_addr + llmemory.itemoffsetof(TP, 0) +
+                    llmemory.sizeof(TP.OF) * dest_start)
+    llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
+                         llmemory.sizeof(TP.OF) * length)
+
