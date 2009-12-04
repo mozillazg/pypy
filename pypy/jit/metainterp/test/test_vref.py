@@ -1,5 +1,6 @@
 import py
 from pypy.rlib.jit import JitDriver, dont_look_inside, virtual_ref
+from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
 
@@ -59,7 +60,9 @@ class VRefTests:
         exctx = ExCtx()
         #
         @dont_look_inside
-        def externalfn():
+        def externalfn(n):
+            if n > 1000:
+                return compute_unique_id(exctx.topframeref())
             return 1
         #
         def f(n):
@@ -67,12 +70,14 @@ class VRefTests:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
                 xy = XY()
+                xy.next1 = XY()
+                xy.next2 = XY()
                 exctx.topframeref = virtual_ref(xy)
-                n -= externalfn()
+                n -= externalfn(n)
                 exctx.topframeref = None
         #
         self.meta_interp(f, [15])
-        self.check_loops(new_with_vtable=0)
+        self.check_loops(new_with_vtable=1)     # the vref, not the XYs
 
     def test_simple_force_always(self):
         py.test.skip("in-progress")

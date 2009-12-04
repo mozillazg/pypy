@@ -889,9 +889,16 @@ class MIFrame(object):
     @arguments("box")
     def opimpl_virtual_ref(self, box):
         obj = box.getref_base()
-        res = vref.virtual_ref_during_tracing(self.metainterp, obj)
+        res = vref.virtual_ref_during_tracing(obj)
+        self.metainterp.all_virtual_refs.append(res)
         resbox = history.BoxPtr(res)
         self.metainterp.history.record(rop.VIRTUAL_REF, [box], resbox)
+        # Note: we create a JIT_VIRTUAL_REF here, in order to detect when
+        # the virtual escapes during tracing already.  We record it as a
+        # VIRTUAL_REF operation, although the backend sees this operation
+        # as a no-op.  The point is that the backend should not really see
+        # it in practice, as optimizeopt.py should either kill it or
+        # replace it with a NEW_WITH_VTABLE followed by SETFIELD_GCs.
         self.make_result_box(resbox)
 
     # ------------------------------
@@ -1203,13 +1210,13 @@ class MetaInterpGlobalData(object):
 class MetaInterp(object):
     in_recursion = 0
     _already_allocated_resume_virtuals = None
-    _force_token_mem = None
 
     def __init__(self, staticdata):
         self.staticdata = staticdata
         self.cpu = staticdata.cpu
         self.portal_trace_positions = []
         self.greenkey_of_huge_function = None
+        self.all_virtual_refs = []
 
     def is_blackholing(self):
         return self.history is None
@@ -1766,7 +1773,12 @@ class MetaInterp(object):
             self.load_fields_from_virtualizable()
 
     def virtual_after_residual_call(self):
-        if self.is_blackholing() or not vref.was_forced(self):
+        if self.is_blackholing():
+            return
+        for gcref in self.all_virtual_refs:
+            if vref.was_forced(gcref):
+                break
+        else:
             return
         # during tracing, more precisely during the CALL_MAY_FORCE, at least
         # one of the vrefs was read.  If we continue to trace and make

@@ -11,8 +11,8 @@ from pypy.jit.metainterp.warmstate import wrap, unwrap
 
 
 class VirtualizableInfo:
-    token_none    = 0
-    token_tracing = -1
+    TOKEN_NONE    = 0
+    TOKEN_TRACING = -1
 
     def __init__(self, warmrunnerdesc):
         self.warmrunnerdesc = warmrunnerdesc
@@ -177,7 +177,7 @@ class VirtualizableInfo:
         return rvirtualizable2.match_virtualizable_type(TYPE, self.VTYPEPTR)
 
     def reset_vable_token(self, virtualizable):
-        virtualizable.vable_token = self.token_none
+        virtualizable.vable_token = self.TOKEN_NONE
 
     def clear_vable_token(self, virtualizable):
         if virtualizable.vable_token:
@@ -186,14 +186,14 @@ class VirtualizableInfo:
 
     def tracing_before_residual_call(self, virtualizable):
         assert not virtualizable.vable_token
-        virtualizable.vable_token = self.token_tracing
+        virtualizable.vable_token = self.TOKEN_TRACING
 
     def tracing_after_residual_call(self, virtualizable):
         if virtualizable.vable_token:
             # not modified by the residual call; assert that it is still
             # set to 'tracing_vable_rti' and clear it.
-            assert virtualizable.vable_token == self.token_tracing
-            virtualizable.vable_token = self.token_none
+            assert virtualizable.vable_token == self.TOKEN_TRACING
+            virtualizable.vable_token = self.TOKEN_NONE
             return False
         else:
             # marker "modified during residual call" set.
@@ -201,10 +201,10 @@ class VirtualizableInfo:
 
     def force_now(self, virtualizable):
         token = virtualizable.vable_token
-        virtualizable.vable_token = self.token_none
-        if token == self.token_tracing:
+        virtualizable.vable_token = self.TOKEN_NONE
+        if token == self.TOKEN_TRACING:
             # The values in the virtualizable are always correct during
-            # tracing.  We only need to reset vable_token to token_none
+            # tracing.  We only need to reset vable_token to TOKEN_NONE
             # as a marker for the tracing, to tell it that this
             # virtualizable escapes.
             pass
@@ -220,11 +220,11 @@ class VirtualizableInfo:
 # The 'vable_token' field of a virtualizable is either 0, -1, or points
 # into the CPU stack to a particular field in the current frame.  It is:
 #
-#   1. 0 (token_none) if not in the JIT at all, except as described below.
+#   1. 0 (TOKEN_NONE) if not in the JIT at all, except as described below.
 #
 #   2. equal to 0 when tracing is in progress; except:
 #
-#   3. equal to -1 (token_tracing) during tracing when we do a residual call,
+#   3. equal to -1 (TOKEN_TRACING) during tracing when we do a residual call,
 #      calling random unknown other parts of the interpreter; it is
 #      reset to 0 as soon as something occurs to the virtualizable.
 #
