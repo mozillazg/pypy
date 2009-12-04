@@ -36,6 +36,7 @@ JIT_VIRTUAL_REF = lltype.GcStruct('JitVirtualRef',
                                   ('forced', rclass.OBJECTPTR))
 jit_virtual_ref_vtable = lltype.malloc(rclass.OBJECT_VTABLE, zero=True,
                                        flavor='raw')
+jit_virtual_ref_vtable.name = rclass.alloc_array_name('jit_virtual_ref')
 
 # The 'virtual_token' field has the same meaning as the 'vable_token' field
 # of a virtualizable.  It is equal to:
