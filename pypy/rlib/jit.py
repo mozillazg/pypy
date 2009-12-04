@@ -1,7 +1,7 @@
 import py
 import sys
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.rlib.objectmodel import CDefinedIntSymbolic
+from pypy.rlib.objectmodel import CDefinedIntSymbolic, we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 
 def purefunction(func):
@@ -105,10 +105,17 @@ def virtual_ref(x):
     return DirectVRef(x)
 virtual_ref.oopspec = 'virtual_ref(x)'
 
+def virtual_ref_finish(x):
+    if not we_are_translated():
+        x._forced = x._forced or -1
+
 class DirectVRef(object):
+    _forced = 0
     def __init__(self, x):
         self._x = x
     def __call__(self):
+        assert self._forced >= 0, "too late to force the virtual_ref!"
+        self._forced = 1
         return self._x
     def _freeze_(self):
         raise Exception("should not see a prebuilt virtual_ref")
