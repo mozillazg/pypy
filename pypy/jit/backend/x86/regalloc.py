@@ -150,12 +150,12 @@ class RegAlloc(object):
         self.loop_consts = loop_consts
         return self._process_inputargs(inputargs)
 
-    def prepare_bridge(self, prev_frame_depth, inputargs, arglocs, operations):
+    def prepare_bridge(self, prev_depths, inputargs, arglocs, operations):
         self._prepare(inputargs, operations)
         self.loop_consts = {}
         self._update_bindings(arglocs, inputargs)
-        self.fm.frame_depth = prev_frame_depth
-        self.param_depth = 0 # xxx
+        self.fm.frame_depth = prev_depths[0]
+        self.param_depth = prev_depths[1]
 
     def reserve_param(self, n):
         self.param_depth = max(self.param_depth, n)
@@ -290,9 +290,10 @@ class RegAlloc(object):
         faillocs = self.locs_for_fail(guard_op)
         self.rm.position += 1
         self.xrm.position += 1
+        current_depths = (self.fm.frame_depth, self.param_depth)
         self.assembler.regalloc_perform_with_guard(op, guard_op, faillocs,
                                                    arglocs, result_loc,
-                                                   self.fm.frame_depth)
+                                                   current_depths)
         if op.result is not None:
             self.possibly_free_var(op.result)
         self.possibly_free_vars(guard_op.fail_args)
@@ -305,9 +306,10 @@ class RegAlloc(object):
                                                       arglocs))
             else:
                 self.assembler.dump('%s(%s)' % (guard_op, arglocs))
+        current_depths = (self.fm.frame_depth, self.param_depth)                
         self.assembler.regalloc_perform_guard(guard_op, faillocs, arglocs,
                                               result_loc,
-                                              self.fm.frame_depth)
+                                              current_depths)
         self.possibly_free_vars(guard_op.fail_args)        
 
     def PerformDiscard(self, op, arglocs):

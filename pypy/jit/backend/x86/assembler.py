@@ -160,10 +160,9 @@ class Assembler386(object):
             assert ([loc.assembler() for loc in arglocs] ==
                     [loc.assembler() for loc in faildescr._x86_debug_faillocs])
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
-        fail_frame_depth = faildescr._x86_current_frame_depth
-        fail_param_depth = faildescr._x86_current_param_depth
-        regalloc.prepare_bridge(fail_frame_depth, inputargs, arglocs,
-                                operations) # xxx param_depth
+        fail_depths = faildescr._x86_current_depths
+        regalloc.prepare_bridge(fail_depths, inputargs, arglocs,
+                                operations)
         adr_bridge = self.mc.tell()
         adr_stackadjust = self._patchable_stackadjust()
         frame_depth, param_depth = self._assemble(regalloc, operations)
@@ -196,7 +195,6 @@ class Assembler386(object):
             target_frame_depth = jump_target_descr._x86_frame_depth
             target_param_depth = jump_target_descr._x86_param_depth
             frame_depth = max(frame_depth, target_frame_depth)
-            # xxx tested?
             param_depth = max(param_depth, target_param_depth)
         return frame_depth, param_depth
 
@@ -308,11 +306,10 @@ class Assembler386(object):
         genop_discard_list[op.opnum](self, op, arglocs)
 
     def regalloc_perform_with_guard(self, op, guard_op, faillocs,
-                                    arglocs, resloc, current_frame_depth):
+                                    arglocs, resloc, current_depths):
         faildescr = guard_op.descr
         assert isinstance(faildescr, AbstractFailDescr)
-        faildescr._x86_current_frame_depth = current_frame_depth
-        faildescr._x86_current_param_depth = 0 # xxx
+        faildescr._x86_current_depths = current_depths
         failargs = guard_op.fail_args
         guard_opnum = guard_op.opnum
         failaddr = self.implement_guard_recovery(guard_opnum,
@@ -329,9 +326,9 @@ class Assembler386(object):
         faildescr._x86_adr_jump_offset = adr_jump_offset
 
     def regalloc_perform_guard(self, guard_op, faillocs, arglocs, resloc,
-                               current_frame_depth):
+                               current_depths):
         self.regalloc_perform_with_guard(None, guard_op, faillocs, arglocs,
-                                         resloc, current_frame_depth)
+                                         resloc, current_depths)
 
     def load_effective_addr(self, sizereg, baseofs, scale, result):
         self.mc.LEA(result, addr_add(imm(0), sizereg, baseofs, scale))
@@ -1083,9 +1080,8 @@ class Assembler386(object):
             extra_on_stack += round_up_to_4(arglocs[arg].width)
 
         self._regalloc.reserve_param(extra_on_stack//4)
-            
+        
         #extra_on_stack = self.align_stack_for_call(extra_on_stack)
-        self.mc.SUB(esp, imm(extra_on_stack))
         if isinstance(op.args[0], Const):
             x = rel32(op.args[0].getint())
         else:
@@ -1116,7 +1112,6 @@ class Assembler386(object):
             p += round_up_to_4(loc.width)
         self.mc.CALL(x)
         self.mark_gc_roots()
-        self.mc.ADD(esp, imm(extra_on_stack))
         if isinstance(resloc, MODRM64):
             self.mc.FSTP(resloc)
         elif size == 1:
