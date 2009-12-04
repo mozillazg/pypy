@@ -1,5 +1,7 @@
 from pypy.rpython.rmodel import inputconst, log
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass
+from pypy.rlib.objectmodel import specialize
+from pypy.jit.metainterp import history
 
 
 def replace_force_virtual_with_call(make_helper_func, graphs):
@@ -45,6 +47,19 @@ jit_virtual_ref_vtable.name = rclass.alloc_array_name('jit_virtual_ref')
 #   * 0 (TOKEN_NONE) after the virtual is forced, if it is forced at all.
 TOKEN_NONE    = 0
 TOKEN_TRACING = -1
+
+@specialize.memo()
+def get_jit_virtual_ref_const_class(cpu):
+    adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)
+    return history.ConstAddr(adr, cpu)
+
+@specialize.memo()
+def get_descr_virtual_token(cpu):
+    return cpu.fielddescrof(JIT_VIRTUAL_REF, 'virtual_token')
+
+@specialize.memo()
+def get_descr_forced(cpu):
+    return cpu.fielddescrof(JIT_VIRTUAL_REF, 'forced')
 
 def virtual_ref_during_tracing(real_object):
     assert real_object

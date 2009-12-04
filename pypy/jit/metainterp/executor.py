@@ -103,9 +103,6 @@ def do_bool_not(cpu, box1):
 def do_same_as(cpu, box1):
     return box1
 
-def do_virtual_ref(cpu, box1):
-    return box1.clonebox()
-
 def do_oois(cpu, box1, box2):
     tp = box1.type
     assert tp == box2.type
@@ -222,6 +219,12 @@ def do_cast_int_to_float(cpu, box1):
     return ConstFloat(float(box1.getint()))
 
 # ____________________________________________________________
+
+def do_force_token(cpu):
+    raise NotImplementedError
+
+def do_virtual_ref(cpu, box1):
+    raise NotImplementedError
 
 def do_debug_merge_point(cpu, box1):
     from pypy.jit.metainterp.warmspot import get_stats

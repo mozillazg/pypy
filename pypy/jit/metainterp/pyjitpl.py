@@ -1775,8 +1775,8 @@ class MetaInterp(object):
     def virtual_after_residual_call(self):
         if self.is_blackholing():
             return
-        for gcref in self.all_virtual_refs:
-            if vref.was_forced(gcref):
+        for vr in self.all_virtual_refs:
+            if vref.was_forced(vr):
                 break
         else:
             return
