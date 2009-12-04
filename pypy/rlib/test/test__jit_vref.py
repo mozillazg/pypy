@@ -1,4 +1,5 @@
-from pypy.rlib.jit import virtual_ref
+import py
+from pypy.rlib.jit import virtual_ref, virtual_ref_finish
 from pypy.rlib._jit_vref import SomeVRef
 from pypy.annotation import model as annmodel
 from pypy.annotation.annrpython import RPythonAnnotator
@@ -20,6 +21,17 @@ class Z(X):
 def test_direct():
     x1 = X()
     vref = virtual_ref(x1)
+    assert vref() is x1
+
+def test_finish():
+    vref = virtual_ref(X())
+    virtual_ref_finish(vref)
+    py.test.raises(AssertionError, "vref()")
+    #
+    x1 = X()
+    vref = virtual_ref(x1)
+    assert vref() is x1
+    virtual_ref_finish(vref)
     assert vref() is x1
 
 def test_annotate_1():
