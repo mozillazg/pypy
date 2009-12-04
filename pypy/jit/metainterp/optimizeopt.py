@@ -736,6 +736,26 @@ class Optimizer(object):
     def optimize_OOIS(self, op):
         self._optimize_oois_ooisnot(op, False)
 
+    def optimize_VIRTUAL_REF(self, op):
+        value = self.getvalue(op.args[0])
+        if not value.is_virtual():   # virtual_ref(non-virtual) gives bad
+            raise compile.GiveUp     # results, so don't bother compiling it
+        #
+        # get some constants (these calls are all 'memo')
+        from pypy.jit.metainterp import vref
+        c_cls = vref.get_jit_virtual_ref_const_class(self.cpu)
+        descr_virtual_token = vref.get_descr_virtual_token(self.cpu)
+        descr_forced = vref.get_descr_forced(self.cpu)
+        #
+        # Replace the VIRTUAL_REF operation with a virtual structure of type
+        # 'vref.JIT_VIRTUAL_REF'.  The virtual structure may be forced soon,
+        # but the point is that doing so does not force the original structure.
+        op = ResOperation(rop.NEW_WITH_VTABLE, [c_cls], op.result)
+        vrefvalue = self.make_virtual(c_cls, op.result, op)
+        tokenbox = BoxInt()
+        self.emit_operation(ResOperation(rop.FORCE_TOKEN, [], tokenbox))
+        vrefvalue.setfield(descr_virtual_token, self.getvalue(tokenbox))
+
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])
         if value.is_virtual():

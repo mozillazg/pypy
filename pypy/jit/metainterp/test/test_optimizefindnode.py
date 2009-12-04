@@ -99,6 +99,12 @@ class LLtypeMixin(object):
     nonwritedescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, EffectInfo([], []))
     writeadescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, EffectInfo([adescr], []))
     writearraydescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, EffectInfo([adescr], [arraydescr]))
+    mayforcevirtdescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], forces_virtual_or_virtualizable=True))
+
+    from pypy.jit.metainterp.vref import jit_virtual_ref_vtable
+    from pypy.jit.metainterp.vref import JIT_VIRTUAL_REF
+    virtualtokendescr = cpu.fielddescrof(JIT_VIRTUAL_REF, 'virtual_token')
 
     cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
                       cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),
