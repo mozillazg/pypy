@@ -14,7 +14,7 @@ from pypy.translator.backendopt.constfold import constant_fold_graph
 from pypy.annotation import model as annmodel
 from pypy.rpython import rmodel
 from pypy.rpython.memory import gc
-from pypy.rpython.memory.gctransform.support import var_ispyobj, ll_listcopy
+from pypy.rpython.memory.gctransform.support import var_ispyobj
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.rtyper import LowLevelOpList
 from pypy.rpython.rbuiltin import gen_cast
@@ -380,7 +380,7 @@ class BaseGCTransformer(object):
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 
-    def gct_gc_listcopy(self, hop):
+    def gct_gc_arraycopy(self, hop):
         return rmodel.inputconst(lltype.Bool, False)
 
     def gct_gc_identityhash(self, hop):

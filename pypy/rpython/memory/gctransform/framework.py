@@ -292,6 +292,11 @@ class FrameworkGCTransformer(GCTransformer):
                 [s_gc, annmodel.SomeInteger(knowntype=rffi.r_ushort)],
                 annmodel.SomeInteger())
 
+        if hasattr(GCClass, 'arraycopy'):
+            self.arraycopy_ptr = getfn(GCClass.arraycopy.im_func,
+                    [s_gc] + [annmodel.SomeAddress()] * 2 +
+                     [annmodel.SomeInteger()] * 3, annmodel.SomeBool())
+
         # in some GCs we can inline the common case of
         # malloc_fixedsize(typeid, size, True, False, False)
         if getattr(GCClass, 'inline_simple_malloc', False):
@@ -776,16 +781,17 @@ class FrameworkGCTransformer(GCTransformer):
             TYPE = v_ob.concretetype.TO
             gen_zero_gc_pointers(TYPE, v_ob, hop.llops)
 
-    # def gct_listcopy(self, hop):
-    #     if not hasattr(self.GCClass, 'listcopy'):
-    #         return GCTransformer.gct_listcopy(self, hop)
-    #     op = hop.spaceop
-    #     ARGS = ([self.c_const_gc.concretetype] +
-    #             [arg.concretetype for arg in op.args])
-    #     llptr = self.annotate_helper(self.GCClass.listcopy, ARGS,
-    #                                  op.result.concretetype, inline=True)
-    #     c_func = rmodel.inputconst(lltype.Void, llptr)
-    #     hop.genop('direct_call', [c_func, self.c_const_gc] + op.args)
+    def gct_gc_arraycopy(self, hop):
+        if not hasattr(self, 'arraycopy_ptr'):
+            return GCTransformer.gct_gc_arraycopy(self, hop)
+        op = hop.spaceop
+        source_addr = hop.genop('cast_ptr_to_adr', [op.args[0]],
+                                resulttype=llmemory.Address)
+        dest_addr = hop.genop('cast_ptr_to_adr', [op.args[1]],
+                                resulttype=llmemory.Address)
+        hop.genop('direct_call', [self.arraycopy_ptr, self.c_const_gc,
+                                  source_addr, dest_addr] + op.args[2:],
+                  resultvar=op.result)
 
     def gct_weakref_create(self, hop):
         op = hop.spaceop

@@ -475,25 +475,25 @@ class GenerationGC(SemiSpaceGC):
             objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
             self.last_generation_root_objects.append(addr_struct)
 
-    @specialize.arglltype(1)
-    def listcopy(self, source, dest, source_start, dest_start, length):
-        TP = lltype.typeOf(source).TO
-        source_addr = llmemory.cast_ptr_to_adr(source)
-        dest_addr = llmemory.cast_ptr_to_adr(dest)
-        if isinstance(TP.OF, lltype.Ptr):
-            need_set = False
-            if self.header(source_addr).tid & GCFLAG_NO_YOUNG_PTRS == 0:
-                need_set = True
-            if self.header(source_addr).tid & GCFLAG_NO_HEAP_PTRS == 0:
-                need_set = True
-            if need_set:
-                self.assume_young_pointers(dest_addr)
-        cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
-                          llmemory.sizeof(TP.OF) * source_start)
-        cp_dest_addr = (dest_addr + llmemory.itemoffsetof(TP, 0) +
-                        llmemory.sizeof(TP.OF) * dest_start)
+    def arraycopy(self, source_addr, dest_addr, source_start,
+                  dest_start, length):
+        typeid = self.get_type_id(source_addr)
+        assert self.is_gcarrayofgcptr(typeid)
+        need_set = False
+        if self.header(source_addr).tid & GCFLAG_NO_YOUNG_PTRS == 0:
+            need_set = True
+        if self.header(source_addr).tid & GCFLAG_NO_HEAP_PTRS == 0:
+            need_set = True
+        if need_set:
+            self.assume_young_pointers(dest_addr)
+        itemsize = llmemory.gcarrayofptr_singleitemoffset
+        cp_source_addr = (source_addr + llmemory.gcarrayofptr_itemsoffset +
+                          itemsize * source_start)
+        cp_dest_addr = (dest_addr + llmemory.gcarrayofptr_itemsoffset + 
+                        itemsize * dest_start)
         llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
-                             llmemory.sizeof(TP.OF) * length)
+                             itemsize * length)
+        return True
 
     def write_into_last_generation_obj(self, addr_struct, addr):
         objhdr = self.header(addr_struct)

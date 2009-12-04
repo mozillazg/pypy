@@ -394,7 +394,7 @@ def op_adr_delta(addr1, addr2):
     checkadr(addr2)
     return addr1 - addr2
 
-def op_gc_listcopy(source, dest, source_start, dest_start, length):
+def op_gc_arraycopy(source, dest, source_start, dest_start, length):
     return False # no special support
 
 def op_getfield(p, name):
