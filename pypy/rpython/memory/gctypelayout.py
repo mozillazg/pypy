@@ -62,6 +62,10 @@ class GCData(object):
         infobits = self.get(typeid).infobits
         return (infobits & T_HAS_GCPTR_IN_VARSIZE) != 0
 
+    def q_has_gcptrs(self, typeid):
+        infobits = self.get(typeid).infobits
+        return (infobits & T_HAS_GCPTR) != 0        
+
     def q_is_gcarrayofgcptr(self, typeid):
         infobits = self.get(typeid).infobits
         return (infobits & T_IS_GCARRAY_OF_GCPTR) != 0
@@ -101,6 +105,7 @@ class GCData(object):
         gc.set_query_functions(
             self.q_is_varsize,
             self.q_has_gcptr_in_varsize,
+            self.q_has_gcptrs,
             self.q_is_gcarrayofgcptr,
             self.q_finalizer,
             self.q_offsets_to_gc_pointers,
@@ -117,8 +122,9 @@ class GCData(object):
 T_MEMBER_INDEX         = 0xffff
 T_IS_VARSIZE           = 0x10000
 T_HAS_GCPTR_IN_VARSIZE = 0x20000
-T_IS_GCARRAY_OF_GCPTR  = 0x40000
-T_IS_WEAKREF           = 0x80000
+T_HAS_GCPTR            = 0x40000
+T_IS_GCARRAY_OF_GCPTR  = 0x80000
+T_IS_WEAKREF           = 0x100000
 
 def _check_typeid(typeid):
     ll_assert(llop.is_group_member_nonzero(lltype.Bool, typeid),
@@ -131,6 +137,7 @@ def encode_type_shape(builder, info, TYPE, index):
     infobits = index
     info.ofstoptrs = builder.offsets2table(offsets, TYPE)
     info.finalizer = builder.make_finalizer_funcptr_for_type(TYPE)
+    arroffsets = None
     if not TYPE._is_varsize():
         info.fixedsize = llarena.round_up_for_allocation(
             llmemory.sizeof(TYPE), builder.GCClass.object_minimal_size)
@@ -157,15 +164,18 @@ def encode_type_shape(builder, info, TYPE, index):
             varinfo.ofstovar = llmemory.itemoffsetof(TYPE, 0)
         assert isinstance(ARRAY, lltype.Array)
         if ARRAY.OF != lltype.Void:
-            offsets = offsets_to_gc_pointers(ARRAY.OF)
+            arroffsets = offsets_to_gc_pointers(ARRAY.OF)
         else:
-            offsets = ()
-        if len(offsets) > 0:
+            arroffsets = ()
+        if len(arroffsets) > 0:
             infobits |= T_HAS_GCPTR_IN_VARSIZE
-        varinfo.varofstoptrs = builder.offsets2table(offsets, ARRAY.OF)
+        varinfo.varofstoptrs = builder.offsets2table(arroffsets, ARRAY.OF)
         varinfo.varitemsize = llmemory.sizeof(ARRAY.OF)
     if TYPE == WEAKREF:
         infobits |= T_IS_WEAKREF
+    if offsets or arroffsets:
+        infobits |= T_HAS_GCPTR
+
     info.infobits = infobits
 
 # ____________________________________________________________

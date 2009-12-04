@@ -46,6 +46,7 @@ class GCBase(object):
     DEBUG = False
 
     def set_query_functions(self, is_varsize, has_gcptr_in_varsize,
+                            has_gcptr,
                             is_gcarrayofgcptr,
                             getfinalizer,
                             offsets_to_gc_pointers,
@@ -58,6 +59,7 @@ class GCBase(object):
         self.getfinalizer = getfinalizer
         self.is_varsize = is_varsize
         self.has_gcptr_in_varsize = has_gcptr_in_varsize
+        self.has_gcptr = has_gcptr
         self.is_gcarrayofgcptr = is_gcarrayofgcptr
         self.offsets_to_gc_pointers = offsets_to_gc_pointers
         self.fixed_size = fixed_size
@@ -160,6 +162,8 @@ class GCBase(object):
         Typically, 'callback' is a bound method and 'arg' can be None.
         """
         typeid = self.get_type_id(obj)
+        if not self.has_gcptr(typeid):
+            return
         if self.is_gcarrayofgcptr(typeid):
             # a performance shortcut for GcArray(gcptr)
             length = (obj + llmemory.gcarrayofptr_lengthoffset).signed[0]
