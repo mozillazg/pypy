@@ -541,23 +541,23 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
 
     def test_one_call(self):
         ops = '''
-        [i0, i1]
-        i2 = call(ConstClass(f1ptr), i0, descr=f1_calldescr)
-        finish(i2)
+        [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
+        i10 = call(ConstClass(f1ptr), i0, descr=f1_calldescr)
+        finish(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9)
         '''
-        loop = self.interpret(ops, [4, 7])
-        assert self.getints(1) == [5]
+        loop = self.interpret(ops, [4, 7, 9, 9 ,9, 9, 9, 9, 9, 9, 9])
+        assert self.getints(11) == [5, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9]
         assert loop.token._x86_param_depth == 1
 
     def test_two_calls(self):
         ops = '''
-        [i0, i1]
-        i2 = call(ConstClass(f1ptr), i0, descr=f1_calldescr)
-        i3 = call(ConstClass(f2ptr), i2, i1, descr=f2_calldescr)        
-        finish(i3)
+        [i0, i1,  i2, i3, i4, i5, i6, i7, i8, i9]
+        i10 = call(ConstClass(f1ptr), i0, descr=f1_calldescr)
+        i11 = call(ConstClass(f2ptr), i10, i1, descr=f2_calldescr)        
+        finish(i11, i1,  i2, i3, i4, i5, i6, i7, i8, i9)
         '''
-        loop = self.interpret(ops, [4, 7])
-        assert self.getints(1) == [5*7]
+        loop = self.interpret(ops, [4, 7, 9, 9 ,9, 9, 9, 9, 9, 9, 9])
+        assert self.getints(11) == [5*7, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9]
         assert loop.token._x86_param_depth == 2
         
     def test_bridge_calls_1(self):
