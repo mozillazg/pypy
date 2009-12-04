@@ -155,6 +155,18 @@ class GCBase(object):
     def x_clone(self, clonedata):
         raise RuntimeError("no support for x_clone in the GC")
 
+    def trace_gcarray(self, obj, callback, arg):
+        # a performance shortcut for GcArray(gcptr)
+        length = (obj + llmemory.gcarrayofptr_lengthoffset).signed[0]
+        item = obj + llmemory.gcarrayofptr_itemsoffset
+        while length > 0:
+            if self.points_to_valid_gc_object(item):
+                callback(item, arg)
+            item += llmemory.gcarrayofptr_singleitemoffset
+            length -= 1
+    trace_gcarray._dont_inline_ = True
+    trace_gcarray._annspecialcase_ = 'specialize:arg(2)'
+
     def trace(self, obj, callback, arg):
         """Enumerate the locations inside the given obj that can contain
         GC pointers.  For each such location, callback(pointer, arg) is
@@ -165,14 +177,7 @@ class GCBase(object):
         if not self.has_gcptr(typeid):
             return
         if self.is_gcarrayofgcptr(typeid):
-            # a performance shortcut for GcArray(gcptr)
-            length = (obj + llmemory.gcarrayofptr_lengthoffset).signed[0]
-            item = obj + llmemory.gcarrayofptr_itemsoffset
-            while length > 0:
-                if self.points_to_valid_gc_object(item):
-                    callback(item, arg)
-                item += llmemory.gcarrayofptr_singleitemoffset
-                length -= 1
+            self.trace_gcarray(obj, callback, arg)
             return
         offsets = self.offsets_to_gc_pointers(typeid)
         i = 0
