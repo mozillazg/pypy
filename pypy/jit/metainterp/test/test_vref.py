@@ -1,5 +1,6 @@
 import py
-from pypy.rlib.jit import JitDriver, dont_look_inside, virtual_ref
+from pypy.rlib.jit import JitDriver, dont_look_inside
+from pypy.rlib.jit import virtual_ref, virtual_ref_finish
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
@@ -14,8 +15,9 @@ class VRefTests:
         exctx = ExCtx()
         #
         def f():
-            exctx.topframeref = virtual_ref(X())
+            exctx.topframeref = vref = virtual_ref(X())
             exctx.topframeref = None
+            virtual_ref_finish(vref)
             return 1
         #
         self.interp_operations(f, [])
@@ -43,6 +45,8 @@ class VRefTests:
                 x.n = n + 123
                 exctx.topframeref = virtual_ref(x)
                 total += force_me() - 100
+                exctx.topframeref = None
+                virtual_ref_finish(x)
             return total
         #
         res = self.meta_interp(f, [-4])

@@ -742,10 +742,10 @@ class Optimizer(object):
             raise compile.GiveUp     # results, so don't bother compiling it
         #
         # get some constants (these calls are all 'memo')
-        from pypy.jit.metainterp import vref
-        c_cls = vref.get_jit_virtual_ref_const_class(self.cpu)
-        descr_virtual_token = vref.get_descr_virtual_token(self.cpu)
-        descr_forced = vref.get_descr_forced(self.cpu)
+        from pypy.jit.metainterp import virtualref
+        c_cls = virtualref.get_jit_virtual_ref_const_class(self.cpu)
+        descr_virtual_token = virtualref.get_descr_virtual_token(self.cpu)
+        descr_forced = virtualref.get_descr_forced(self.cpu)
         #
         # Replace the VIRTUAL_REF operation with a virtual structure of type
         # 'vref.JIT_VIRTUAL_REF'.  The virtual structure may be forced soon,
