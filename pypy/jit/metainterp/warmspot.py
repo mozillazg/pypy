@@ -17,7 +17,7 @@ from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.translator.unsimplify import call_final_function
 
 from pypy.jit.metainterp import codewriter
-from pypy.jit.metainterp import support, history, pyjitpl, gc, vref
+from pypy.jit.metainterp import support, history, pyjitpl, gc, virtualref
 from pypy.jit.metainterp.pyjitpl import MetaInterpStaticData, MetaInterp
 from pypy.jit.metainterp.policy import JitPolicy
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
@@ -604,7 +604,8 @@ class WarmRunnerDesc:
         if self.cpu.ts.name != 'lltype':
             py.test.skip("rewrite_force_virtual: port it to ootype")
         all_graphs = self.translator.graphs
-        vref.replace_force_virtual_with_call(self.helper_func, all_graphs)
+        virtualref.replace_force_virtual_with_call(self.helper_func,
+                                                   all_graphs)
 
 
 def decode_hp_hint_args(op):

@@ -5,7 +5,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 
-from pypy.jit.metainterp import history, compile, resume, vref
+from pypy.jit.metainterp import history, compile, resume, virtualref
 from pypy.jit.metainterp.history import Const, ConstInt, Box
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import codewriter, executor
@@ -889,17 +889,30 @@ class MIFrame(object):
     @arguments("box")
     def opimpl_virtual_ref(self, box):
         obj = box.getref_base()
-        res = vref.virtual_ref_during_tracing(obj)
-        self.metainterp.all_virtual_refs.append(res)
-        resbox = history.BoxPtr(res)
+        vref = virtualref.virtual_ref_during_tracing(obj)
+        #
+        if self.metainterp.all_virtual_refs is None:
+            self.metainterp.all_virtual_refs = []
+        self.metainterp.all_virtual_refs.append(vref)
+        #
+        resbox = history.BoxPtr(vref)
         self.metainterp.history.record(rop.VIRTUAL_REF, [box], resbox)
-        # Note: we create a JIT_VIRTUAL_REF here, in order to detect when
+        # Note: we allocate a JIT_VIRTUAL_REF here
+        # (in virtual_ref_during_tracing()), in order to detect when
         # the virtual escapes during tracing already.  We record it as a
         # VIRTUAL_REF operation, although the backend sees this operation
         # as a no-op.  The point is that the backend should not really see
         # it in practice, as optimizeopt.py should either kill it or
         # replace it with a NEW_WITH_VTABLE followed by SETFIELD_GCs.
         self.make_result_box(resbox)
+
+    @arguments("box")
+    def opimpl_virtual_ref_finish(self, box):
+        # virtual_ref_finish() assumes that we have a stack-like, last-in
+        # first-out order.
+        if not self.metainterp.is_blackholing():
+            lastitem = self.metainterp.all_virtual_refs.pop()
+            assert box.getref_base() == lastitem
 
     # ------------------------------
 
@@ -1209,6 +1222,7 @@ class MetaInterpGlobalData(object):
 
 class MetaInterp(object):
     in_recursion = 0
+    all_virtual_refs = None
     _already_allocated_resume_virtuals = None
 
     def __init__(self, staticdata):
@@ -1216,7 +1230,6 @@ class MetaInterp(object):
         self.cpu = staticdata.cpu
         self.portal_trace_positions = []
         self.greenkey_of_huge_function = None
-        self.all_virtual_refs = []
 
     def is_blackholing(self):
         return self.history is None
@@ -1773,10 +1786,10 @@ class MetaInterp(object):
             self.load_fields_from_virtualizable()
 
     def virtual_after_residual_call(self):
-        if self.is_blackholing():
+        if self.is_blackholing() or self.all_virtual_refs is None:
             return
         for vr in self.all_virtual_refs:
-            if vref.was_forced(vr):
+            if virtualref.was_forced(vr):
                 break
         else:
             return

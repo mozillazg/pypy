@@ -1279,8 +1279,8 @@ class BytecodeMaker(object):
         return self._do_builtin_call(op, oopspec_name, args)
 
     def _do_builtin_call(self, op, oopspec_name, args):
-        if oopspec_name == 'virtual_ref':
-            self.handle_virtual_ref_call(op, args)
+        if oopspec_name.startswith('virtual_ref'):
+            self.handle_virtual_ref_call(op, oopspec_name, args)
             return
         argtypes = [v.concretetype for v in args]
         resulttype = op.result.concretetype
@@ -1302,8 +1302,8 @@ class BytecodeMaker(object):
         self.emit_varargs([c_func] + non_void_args)
         self.register_var(op.result)
 
-    def handle_virtual_ref_call(self, op, args):
-        self.emit('virtual_ref')
+    def handle_virtual_ref_call(self, op, oopspec_name, args):
+        self.emit(oopspec_name)     # 'virtual_ref' or 'virtual_ref_finish'
         self.emit(self.var_position(args[0]))
         self.register_var(op.result)
 
