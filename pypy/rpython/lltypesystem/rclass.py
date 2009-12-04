@@ -86,6 +86,13 @@ def cast_vtable_to_typeptr(vtable):
         vtable = vtable.super
     return vtable
 
+def alloc_array_name(name):
+    p = malloc(Array(Char), len(name)+1, immortal=True)
+    for i in range(len(name)):
+        p[i] = name[i]
+    p[len(name)] = '\x00'
+    return p
+
 
 class ClassRepr(AbstractClassRepr):
     def __init__(self, rtyper, classdef):
@@ -192,10 +199,7 @@ class ClassRepr(AbstractClassRepr):
                 name = 'object'
             else:
                 name = rsubcls.classdef.shortname
-            vtable.name = malloc(Array(Char), len(name)+1, immortal=True)
-            for i in range(len(name)):
-                vtable.name[i] = name[i]
-            vtable.name[len(name)] = '\x00'
+            vtable.name = alloc_array_name(name)
             if hasattr(rsubcls.classdef, 'my_instantiate_graph'):
                 graph = rsubcls.classdef.my_instantiate_graph
                 vtable.instantiate = self.rtyper.getcallable(graph)

@@ -1,6 +1,6 @@
 import py, random
 
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
@@ -38,12 +38,13 @@ class LLtypeMixin(object):
     type_system = 'lltype'
 
     def get_class_of_box(self, box):
-        from pypy.rpython.lltypesystem import rclass
         return box.getref(rclass.OBJECTPTR).typeptr
 
     node_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
+    node_vtable.name = rclass.alloc_array_name('node')
     node_vtable_adr = llmemory.cast_ptr_to_adr(node_vtable)
     node_vtable2 = lltype.malloc(OBJECT_VTABLE, immortal=True)
+    node_vtable2.name = rclass.alloc_array_name('node2')
     node_vtable_adr2 = llmemory.cast_ptr_to_adr(node_vtable2)
     cpu = runner.LLtypeCPU(None)
 
