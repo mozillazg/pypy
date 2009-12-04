@@ -214,7 +214,7 @@ def _ll_list_resize_really(l, newsize):
         p = before_len
     else:
         p = new_allocated
-    rgc.listcopy(items, newitems, 0, 0, p)
+    rgc.ll_arraycopy(items, newitems, 0, 0, p)
     l.length = newsize
     l.items = newitems
 _ll_list_resize_really._annenforceargs_ = (None, int)

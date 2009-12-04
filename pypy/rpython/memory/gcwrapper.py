@@ -128,10 +128,12 @@ class GCManagedHeap(object):
         ptr = lltype.cast_opaque_ptr(llmemory.GCREF, ptr)
         return self.gc.id(ptr)
 
-    def listcopy(self, source, dest, source_start, dest_start, length):
-        if hasattr(self.gc, 'listcopy'):
-            return self.gc.listcopy(source, dest, source_start,
-                                    dest_start, length)
+    def arraycopy(self, source, dest, source_start, dest_start, length):
+        if hasattr(self.gc, 'arraycopy'):
+            source_addr = llmemory.cast_ptr_to_adr(source)
+            dest_addr   = llmemory.cast_ptr_to_adr(dest)
+            return self.gc.arraycopy(source_addr, dest_addr, source_start,
+                                     dest_start, length)
         i = 0
         while i < length:
             dest[dest_start + i] = source[source_start + i]

@@ -551,20 +551,7 @@ class GCTest(object):
         res = self.interpret(fn, [-1000], taggedpointers=True)
         assert res == 111
 
-    def test_listcopy(self):
-        TP = lltype.GcArray(lltype.Signed)
-        def fn():
-            l = lltype.malloc(TP, 100)
-            for i in range(100):
-                l[i] = 1
-            l2 = lltype.malloc(TP, 50)
-            llop.listcopy(lltype.Void, l, l2, 50, 0, 50)
-            for i in range(50):
-                assert l2[i] == 1
-
-        self.interpret(fn, [])
-
-    def test_listcopy_ptr(self):
+    def test_arraycopy(self):
         S = lltype.GcStruct('S')
         TP = lltype.GcArray(lltype.Ptr(S))
         def fn():
@@ -572,14 +559,14 @@ class GCTest(object):
             l2 = lltype.malloc(TP, 100)
             for i in range(100):
                 l[i] = lltype.malloc(S)
-            llop.listcopy(lltype.Void, l, l2, 50, 0, 50)
-            x = []
-            # force minor collect
-            t = (1, lltype.malloc(S))
-            for i in range(20):
-                x.append(t)
-            for i in range(50):
-                assert l2[i]
+            if llop.gc_arraycopy(lltype.Void, l, l2, 50, 0, 50):
+                x = []
+                # force minor collect
+                t = (1, lltype.malloc(S))
+                for i in range(20):
+                    x.append(t)
+                for i in range(50):
+                    assert l2[i]
             return 0
 
         self.interpret(fn, [])

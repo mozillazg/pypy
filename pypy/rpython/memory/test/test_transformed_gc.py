@@ -844,26 +844,7 @@ class GenericMovingGCTests(GenericGCTests):
         # ^^^ a crude assumption that totsize - varsize would be dividable by 4
         #     (and give fixedsize)
 
-    
-    def define_listcopy(cls):
-        TP = lltype.GcArray(lltype.Signed)
-        def fn():
-            l = lltype.malloc(TP, 100)
-            for i in range(100):
-                l[i] = 1
-            l2 = lltype.malloc(TP, 50)
-            if llop.gc_listcopy(lltype.Void, l, l2, 50, 0, 50):
-                for i in range(50):
-                    assert l2[i] == 1
-            return 0
-
-        return fn
-
-    def test_listcopy(self):
-        run = self.runner("listcopy")
-        run([])
-
-    def define_listcopy_ptr(cls):
+    def define_arraycopy(cls):
         S = lltype.GcStruct('S')
         TP = lltype.GcArray(lltype.Ptr(S))
         def fn():
@@ -871,7 +852,7 @@ class GenericMovingGCTests(GenericGCTests):
             l2 = lltype.malloc(TP, 100)
             for i in range(100):
                 l[i] = lltype.malloc(S)
-            if llop.gc_listcopy(lltype.Void, l, l2, 50, 0, 50):
+            if llop.gc_arraycopy(lltype.Void, l, l2, 50, 0, 50):
                 # force nursery collect
                 x = []
                 for i in range(20):
@@ -882,8 +863,8 @@ class GenericMovingGCTests(GenericGCTests):
 
         return fn
 
-    def test_listcopy_ptr(self):
-        run = self.runner("listcopy_ptr")
+    def test_arraycopy(self):
+        run = self.runner("arraycopy")
         run([])
 
 # ________________________________________________________________
