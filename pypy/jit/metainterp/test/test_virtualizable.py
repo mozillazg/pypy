@@ -905,7 +905,6 @@ class ImplicitVirtualizableTests:
             return frame.y
 
         res = self.meta_interp(f, [123], policy=StopAtXPolicy(g))
-        py.test.skip("in-progress")
         assert res == f(123)
 
     def test_promote_index_in_virtualizable_list(self):
