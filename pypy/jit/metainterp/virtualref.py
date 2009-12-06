@@ -23,6 +23,10 @@ def replace_force_virtual_with_call(warmrunnerdesc, graphs):
     if c_funcptr is not None:
         log("replaced %d 'jit_force_virtual' with %r" % (count,
                                                          c_funcptr.value))
+    #
+    # record the type JIT_VIRTUAL_REF explicitly in the rtyper, too
+    warmrunnerdesc.rtyper.set_type_for_typeptr(jit_virtual_ref_vtable,
+                                               JIT_VIRTUAL_REF)
 
 # ____________________________________________________________
 
