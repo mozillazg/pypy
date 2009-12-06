@@ -928,34 +928,6 @@ class TestLL2Ctypes(object):
         assert op.args[1].value == pypy.rpython.lltypesystem.rstr.LLHelpers
         assert op.args[3].value == -2
 
-    def test_pass_around_t_object(self):
-        from pypy.rpython.annlowlevel import base_ptr_lltype
-        T = base_ptr_lltype()
-        
-        class X(object):
-            _TYPE = T
-            x = 10
-
-        def callback(x):
-            return x.x
-
-        c_source = py.code.Source("""
-        long eating_callback(void *arg, long(*call)(void*))
-        {
-            return call(arg);
-        }
-        """)
-
-        eci = ExternalCompilationInfo(separate_module_sources=[c_source],
-                                      export_symbols=['eating_callback'])
-
-        args = [T, rffi.CCallback([T], rffi.LONG)]
-        eating_callback = rffi.llexternal('eating_callback', args, rffi.LONG,
-                                          compilation_info=eci)
-
-        res = eating_callback(X(), callback)
-        assert res == 10
-
     def test_recursive_struct_more(self):
         NODE = lltype.ForwardReference()
         NODE.become(lltype.Struct('NODE', ('value', lltype.Signed),
