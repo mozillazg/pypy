@@ -1558,6 +1558,7 @@ class MetaInterp(object):
                                               len(self.virtualizable_boxes)-1,
                                               duplicates)
             live_arg_boxes += self.virtualizable_boxes[:-1]
+        assert len(self.virtualref_boxes) == 0, "missing virtual_ref_finish()?"
         # Called whenever we reach the 'can_enter_jit' hint.
         # First, attempt to make a bridge:
         # - if self.resumekey is a ResumeGuardDescr, it starts from a guard
@@ -1900,6 +1901,10 @@ class MetaInterp(object):
             for i in range(len(boxes)):
                 if boxes[i] is oldbox:
                     boxes[i] = newbox
+        boxes = self.virtualref_boxes
+        for i in range(len(boxes)):
+            if boxes[i] is oldbox:
+                boxes[i] = newbox
         if self.staticdata.virtualizable_info is not None:
             boxes = self.virtualizable_boxes
             for i in range(len(boxes)):
