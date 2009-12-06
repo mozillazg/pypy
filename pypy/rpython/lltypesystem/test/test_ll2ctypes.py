@@ -1145,6 +1145,46 @@ class TestLL2Ctypes(object):
         res = interpret(f, [123])
         assert res == 123
 
+    def test_object_subclass_3(self):
+        from pypy.rpython.lltypesystem import rclass
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+        class S:
+            pass
+        def f(n):
+            s = S()
+            s.x = n
+            ls = cast_instance_to_base_ptr(s)
+            as_num = rffi.cast(lltype.Signed, ls)
+            # --- around this point, only 'as_num' is passed
+            r = rffi.cast(llmemory.GCREF, as_num)
+            t = lltype.cast_opaque_ptr(rclass.OBJECTPTR, r)
+            u = cast_base_ptr_to_instance(S, t)
+            return u.x
+        res = interpret(f, [123])
+        assert res == 123
+
+    def test_object_subclass_4(self):
+        from pypy.rpython.lltypesystem import rclass
+        SCLASS = lltype.GcStruct('SCLASS',
+                                 ('parent', rclass.OBJECT),
+                                 ('n', lltype.Signed))
+        sclass_vtable = lltype.malloc(rclass.OBJECT_VTABLE, zero=True,
+                                      immortal=True)
+        sclass_vtable.name = rclass.alloc_array_name('SClass')
+        def f(n):
+            rclass.declare_type_for_typeptr(sclass_vtable, SCLASS)
+            s = lltype.malloc(SCLASS)
+            s.parent.typeptr = sclass_vtable
+            s.n = n
+            as_num = rffi.cast(lltype.Signed, s)
+            # --- around this point, only 'as_num' is passed
+            r = rffi.cast(llmemory.GCREF, as_num)
+            t = lltype.cast_opaque_ptr(lltype.Ptr(SCLASS), r)
+            return t.n
+        res = interpret(f, [123])
+        assert res == 123
+
 class TestPlatform(object):
     def test_lib_on_libpaths(self):
         from pypy.translator.platform import platform
