@@ -1109,17 +1109,18 @@ class TestLL2Ctypes(object):
 
     def test_object_subclass(self):
         from pypy.rpython.lltypesystem import rclass
-        SCLASS = lltype.GcStruct('SCLASS',
-                                 ('parent', rclass.OBJECT),
-                                 ('x', lltype.Signed))
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+        class S:
+            pass
         def f(n):
-            s = lltype.malloc(SCLASS)
+            s = S()
             s.x = n
-            gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
-            as_num = rffi.cast(lltype.Signed, gcref)
-            gcref2 = rffi.cast(llmemory.GCREF, as_num)
-            t = lltype.cast_opaque_ptr(rclass.OBJECTPTR, gcref2)
-            u = lltype.cast_pointer(lltype.Ptr(SCLASS), t)
+            ls = cast_instance_to_base_ptr(s)
+            as_num = rffi.cast(lltype.Signed, ls)
+            # --- around this point, only 'as_num' is passed
+            t = rffi.cast(rclass.OBJECTPTR, as_num)
+            u = cast_base_ptr_to_instance(S, t)
             return u.x
         res = interpret(f, [123])
         assert res == 123
