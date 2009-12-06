@@ -1160,8 +1160,7 @@ class ImplicitVirtualizableTests:
         self.check_loops(getfield_gc=0, setfield_gc=0)
 
     def test_blackhole_should_not_reenter(self):
-        from pypy.jit.backend.test.support import BaseCompiledMixin
-        if isinstance(self, BaseCompiledMixin):
+        if not self.basic:
             py.test.skip("purely frontend test")
 
         myjitdriver = JitDriver(greens = [], reds = ['frame', 'fail'],

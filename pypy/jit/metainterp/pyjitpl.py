@@ -890,11 +890,6 @@ class MIFrame(object):
     def opimpl_virtual_ref(self, box):
         obj = box.getref_base()
         vref = virtualref.virtual_ref_during_tracing(obj)
-        #
-        if self.metainterp.all_virtual_refs is None:
-            self.metainterp.all_virtual_refs = []
-        self.metainterp.all_virtual_refs.append(vref)
-        #
         resbox = history.BoxPtr(vref)
         self.metainterp.history.record(rop.VIRTUAL_REF, [box], resbox)
         # Note: we allocate a JIT_VIRTUAL_REF here
@@ -904,15 +899,17 @@ class MIFrame(object):
         # as a no-op.  The point is that the backend should not really see
         # it in practice, as optimizeopt.py should either kill it or
         # replace it with a NEW_WITH_VTABLE followed by SETFIELD_GCs.
+        self.metainterp.virtualref_boxes.append(box)
+        self.metainterp.virtualref_boxes.append(resbox)
         self.make_result_box(resbox)
 
     @arguments("box")
-    def opimpl_virtual_ref_finish(self, box):
+    def opimpl_virtual_ref_finish(self, vrefbox):
         # virtual_ref_finish() assumes that we have a stack-like, last-in
         # first-out order.
-        if not self.metainterp.is_blackholing():
-            lastitem = self.metainterp.all_virtual_refs.pop()
-            assert box.getref_base() == lastitem
+        lastvrefbox = self.metainterp.virtualref_boxes.pop()
+        assert vrefbox.getref_base() == lastvrefbox.getref_base()
+        self.metainterp.virtualref_boxes.pop()
 
     # ------------------------------
 
@@ -975,7 +972,7 @@ class MIFrame(object):
         if metainterp.staticdata.virtualizable_info is not None:
             virtualizable_boxes = metainterp.virtualizable_boxes
         resume.capture_resumedata(metainterp.framestack, virtualizable_boxes,
-                                  resumedescr)
+                                  metainterp.virtualref_boxes, resumedescr)
         self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS)
         # count
         metainterp.attach_debug_info(guard_op)
@@ -1222,7 +1219,6 @@ class MetaInterpGlobalData(object):
 
 class MetaInterp(object):
     in_recursion = 0
-    all_virtual_refs = None
     _already_allocated_resume_virtuals = None
 
     def __init__(self, staticdata):
@@ -1230,6 +1226,7 @@ class MetaInterp(object):
         self.cpu = staticdata.cpu
         self.portal_trace_positions = []
         self.greenkey_of_huge_function = None
+        self.virtualref_boxes = []
 
     def is_blackholing(self):
         return self.history is None
@@ -1786,10 +1783,11 @@ class MetaInterp(object):
             self.load_fields_from_virtualizable()
 
     def virtual_after_residual_call(self):
-        if self.is_blackholing() or self.all_virtual_refs is None:
+        if self.is_blackholing():
             return
-        for vr in self.all_virtual_refs:
-            if virtualref.was_forced(vr):
+        for i in range(1, len(self.virtualref_boxes), 2):
+            vrefbox = self.virtualref_boxes[i]
+            if virtualref.was_forced(vrefbox.getref_base()):
                 break
         else:
             return
@@ -1831,7 +1829,9 @@ class MetaInterp(object):
         vinfo = self.staticdata.virtualizable_info
         self.framestack = []
         expect_virtualizable = vinfo is not None
-        virtualizable_boxes = resume.rebuild_from_resumedata(self, newboxes, resumedescr, expect_virtualizable)
+        virtualizable_boxes, virtualref_boxes = resume.rebuild_from_resumedata(
+            self, newboxes, resumedescr, expect_virtualizable)
+        self.virtualref_boxes = virtualref_boxes
         if expect_virtualizable:
             self.virtualizable_boxes = virtualizable_boxes
             if self._already_allocated_resume_virtuals is not None:
@@ -1840,8 +1840,8 @@ class MetaInterp(object):
                 self.load_fields_from_virtualizable()
                 return
             # just jumped away from assembler (case 4 in the comment in
-            # virtualizable.py) into tracing (case 2); check that vable_rti
-            # is and stays NULL.
+            # virtualizable.py) into tracing (case 2); check that vable_token
+            # is and stays 0.
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
             assert not virtualizable.vable_token
