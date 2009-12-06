@@ -604,8 +604,7 @@ class WarmRunnerDesc:
         if self.cpu.ts.name != 'lltype':
             py.test.skip("rewrite_force_virtual: port it to ootype")
         all_graphs = self.translator.graphs
-        virtualref.replace_force_virtual_with_call(self.helper_func,
-                                                   all_graphs)
+        virtualref.replace_force_virtual_with_call(self, all_graphs)
 
 
 def decode_hp_hint_args(op):

@@ -206,7 +206,7 @@ _oplist = [
     'NEW_WITH_VTABLE/1',
     'NEW_ARRAY/1d',
     'FORCE_TOKEN/0',
-    'VIRTUAL_REF/1',
+    'VIRTUAL_REF/2',
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
     'SETARRAYITEM_GC/3d',

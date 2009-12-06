@@ -441,7 +441,8 @@ class VArrayInfo(AbstractVirtualInfo):
             debug_print("\t\t", str(untag(i)))
 
 
-def rebuild_from_resumedata(metainterp, newboxes, storage, expects_virtualizables):
+def rebuild_from_resumedata(metainterp, newboxes, storage,
+                            expects_virtualizables):
     resumereader = ResumeDataReader(storage, newboxes, metainterp)
     virtualizable_boxes = None
     if expects_virtualizables:
@@ -458,9 +459,14 @@ def rebuild_from_resumedata(metainterp, newboxes, storage, expects_virtualizable
     metainterp.framestack.reverse()
     return virtualizable_boxes, virtualref_boxes
 
-def force_from_resumedata(metainterp, newboxes, storage):
+def force_from_resumedata(metainterp, newboxes, storage,
+                          expects_virtualizables):
     resumereader = ResumeDataReader(storage, newboxes, metainterp)
-    return resumereader.consume_boxes(), resumereader.virtuals
+    virtualizable_boxes = None
+    if expects_virtualizables:
+        virtualizable_boxes = resumereader.consume_boxes()
+    virtualref_boxes = resumereader.consume_boxes()
+    return virtualizable_boxes, virtualref_boxes, resumereader.virtuals
 
 
 class ResumeDataReader(object):

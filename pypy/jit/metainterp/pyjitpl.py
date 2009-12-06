@@ -891,7 +891,8 @@ class MIFrame(object):
         obj = box.getref_base()
         vref = virtualref.virtual_ref_during_tracing(obj)
         resbox = history.BoxPtr(vref)
-        self.metainterp.history.record(rop.VIRTUAL_REF, [box], resbox)
+        cindex = history.ConstInt(len(self.metainterp.virtualref_boxes) // 2)
+        self.metainterp.history.record(rop.VIRTUAL_REF, [box, cindex], resbox)
         # Note: we allocate a JIT_VIRTUAL_REF here
         # (in virtual_ref_during_tracing()), in order to detect when
         # the virtual escapes during tracing already.  We record it as a
