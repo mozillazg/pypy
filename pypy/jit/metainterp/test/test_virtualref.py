@@ -108,7 +108,6 @@ class VRefTests:
         self.check_loops({})      # because we aborted tracing
 
     def test_simple_no_access(self):
-        #py.test.skip("in-progress")
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
         class XY:
@@ -132,13 +131,13 @@ class VRefTests:
                 xy.next2 = XY()
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
+                virtual_ref_finish(exctx.topframeref)
                 exctx.topframeref = None
         #
         self.meta_interp(f, [15])
         self.check_loops(new_with_vtable=1)     # the vref, not the XYs
 
     def test_simple_force_always(self):
-        py.test.skip("in-progress")
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
         class XY:
@@ -161,6 +160,7 @@ class VRefTests:
                 xy.n = n
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
+                virtual_ref_finish(exctx.topframeref)
                 exctx.topframeref = None
         #
         self.meta_interp(f, [15])
