@@ -5,7 +5,6 @@ from pypy.rlib.jit import virtual_ref, virtual_ref_finish
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp import history
 from pypy.jit.metainterp.virtualref import JIT_VIRTUAL_REF
 
 
@@ -28,7 +27,7 @@ class VRefTests:
         self.check_operations_history(virtual_ref=1)
 
     def test_make_vref_guard(self):
-        if not self.basic:
+        if not isinstance(self, TestLLtype):
             py.test.skip("purely frontend test")
         #
         class X:
@@ -62,12 +61,10 @@ class VRefTests:
         [guard_op] = [op for op in self.metainterp.history.operations
                          if op.opnum == rop.GUARD_NOT_FORCED]
         bxs1 = [box for box in guard_op.fail_args
-                 if isinstance(box, history.BoxPtr) and
-                  lltype.typeOf(box.value._obj.container)._name.endswith('.X')]
+                  if str(box._getrepr_()).endswith('.X')]
         assert len(bxs1) == 1
         bxs2 = [box for box in guard_op.fail_args
-                 if isinstance(box, history.BoxPtr) and
-                  lltype.typeOf(box.value._obj.container) == JIT_VIRTUAL_REF]
+                  if str(box._getrepr_()).endswith('JitVirtualRef')]
         assert len(bxs2) == 1
         #
         self.metainterp.rebuild_state_after_failure(guard_op.descr,
