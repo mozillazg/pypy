@@ -105,6 +105,7 @@ class LLtypeMixin(object):
     from pypy.jit.metainterp.virtualref import jit_virtual_ref_vtable
     from pypy.jit.metainterp.virtualref import JIT_VIRTUAL_REF
     virtualtokendescr = cpu.fielddescrof(JIT_VIRTUAL_REF, 'virtual_token')
+    virtualrefindexdescr = cpu.fielddescrof(JIT_VIRTUAL_REF,'virtualref_index')
 
     cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
                       cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),

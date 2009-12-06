@@ -2034,7 +2034,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
     def test_vref_nonvirtual(self):
         ops = """
         [p1]
-        p2 = virtual_ref(p1)
+        p2 = virtual_ref(p1, 5)
         jump(p1)
         """
         py.test.raises(compile.GiveUp, self.optimize_loop, ops, 'Not', ops)
@@ -2048,7 +2048,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         setfield_gc(p1b, 252, descr=valuedescr)
         setfield_gc(p1, p1b, descr=nextdescr)
         #
-        p2 = virtual_ref(p1)
+        p2 = virtual_ref(p1, 3)
         setfield_gc(p0, p2, descr=nextdescr)
         call_may_force(i1, descr=mayforcevirtdescr)
         guard_not_forced() [i1]
@@ -2060,6 +2060,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         i3 = force_token()
         p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
         setfield_gc(p2, i3, descr=virtualtokendescr)
+        setfield_gc(p2, 3, descr=virtualrefindexdescr)
         setfield_gc(p0, p2, descr=nextdescr)
         call_may_force(i1, descr=mayforcevirtdescr)
         guard_not_forced() [i1]
@@ -2078,7 +2079,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         setfield_gc(p1b, i1, descr=valuedescr)
         setfield_gc(p1, p1b, descr=nextdescr)
         #
-        p2 = virtual_ref(p1)
+        p2 = virtual_ref(p1, 2)
         setfield_gc(p0, p2, descr=nextdescr)
         call_may_force(i1, descr=mayforcevirtdescr)
         guard_not_forced(descr=fdescr) [p1]
@@ -2090,6 +2091,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         i3 = force_token()
         p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
         setfield_gc(p2, i3, descr=virtualtokendescr)
+        setfield_gc(p2, 2, descr=virtualrefindexdescr)
         setfield_gc(p0, p2, descr=nextdescr)
         call_may_force(i1, descr=mayforcevirtdescr)
         guard_not_forced(descr=fdescr) [i1]
