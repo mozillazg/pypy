@@ -391,14 +391,34 @@ class Assembler386(object):
 ##            self.mc.PUSH(imm(0))   --- or just use a single SUB(esp, imm)
 ##        return extra_on_stack
 
-    def call(self, addr, args, res):
-        nargs = len(args)
-        extra_on_stack = nargs #self.align_stack_for_call(nargs)
-        for i in range(nargs-1, -1, -1):
-            self.mc.PUSH(args[i])
-        self.mc.CALL(rel32(addr))
+    def _emit_call(self, x, arglocs, start=0, tmp=eax):
+        p = 0
+        n = len(arglocs)
+        for i in range(start, n):
+            loc = arglocs[i]
+            if isinstance(loc, REG):
+                if isinstance(loc, XMMREG):
+                    self.mc.MOVSD(mem64(esp, p), loc)
+                else:
+                    self.mc.MOV(mem(esp, p), loc)
+            p += round_up_to_4(loc.width)
+        p = 0
+        for i in range(start, n):
+            loc = arglocs[i]
+            if not isinstance(loc, REG):
+                if isinstance(loc, MODRM64):
+                    self.mc.MOVSD(xmm0, loc)
+                    self.mc.MOVSD(mem64(esp, p), xmm0)
+                else:
+                    self.mc.MOV(tmp, loc)
+                    self.mc.MOV(mem(esp, p), tmp)
+            p += round_up_to_4(loc.width)
+        self._regalloc.reserve_param(p//WORD)
+        self.mc.CALL(x)
         self.mark_gc_roots()
-        self.mc.ADD(esp, imm(extra_on_stack * WORD))
+        
+    def call(self, addr, args, res):
+        self._emit_call(rel32(addr), args)
         assert res is eax
 
     genop_int_neg = _unaryop("NEG")
@@ -1074,14 +1094,7 @@ class Assembler386(object):
         sizeloc = arglocs[0]
         assert isinstance(sizeloc, IMM32)
         size = sizeloc.value
-        nargs = len(op.args)-1
-        extra_on_stack = 0
-        for arg in range(2, nargs + 2):
-            extra_on_stack += round_up_to_4(arglocs[arg].width)
 
-        self._regalloc.reserve_param(extra_on_stack//4)
-        
-        #extra_on_stack = self.align_stack_for_call(extra_on_stack)
         if isinstance(op.args[0], Const):
             x = rel32(op.args[0].getint())
         else:
@@ -1090,28 +1103,9 @@ class Assembler386(object):
             tmp = ecx
         else:
             tmp = eax
-        p = 0
-        for i in range(2, nargs + 2):
-            loc = arglocs[i]
-            if isinstance(loc, REG):
-                if isinstance(loc, XMMREG):
-                    self.mc.MOVSD(mem64(esp, p), loc)
-                else:
-                    self.mc.MOV(mem(esp, p), loc)
-            p += round_up_to_4(loc.width)
-        p = 0
-        for i in range(2, nargs + 2):
-            loc = arglocs[i]
-            if not isinstance(loc, REG):
-                if isinstance(loc, MODRM64):
-                    self.mc.MOVSD(xmm0, loc)
-                    self.mc.MOVSD(mem64(esp, p), xmm0)
-                else:
-                    self.mc.MOV(tmp, loc)
-                    self.mc.MOV(mem(esp, p), tmp)
-            p += round_up_to_4(loc.width)
-        self.mc.CALL(x)
-        self.mark_gc_roots()
+            
+        self._emit_call(x, arglocs, 2, tmp=tmp)
+
         if isinstance(resloc, MODRM64):
             self.mc.FSTP(resloc)
         elif size == 1:
@@ -1199,14 +1193,13 @@ class Assembler386(object):
         mc.CMP(edx, heap(nursery_top_adr))
         mc.write(constlistofchars('\x76\x00')) # JNA after the block
         jmp_adr = mc.get_relative_pos()
-        mc.PUSH(imm(size))
-        mc.CALL(rel32(slowpath_addr))
-        self.mark_gc_roots()
+        self._emit_call(rel32(slowpath_addr), [imm(size)])
+
         # note that slowpath_addr returns a "long long", or more precisely
         # two results, which end up in eax and edx.
         # eax should contain the result of allocation, edx new value
         # of nursery_free_adr
-        mc.ADD(esp, imm(4))
+
         offset = mc.get_relative_pos() - jmp_adr
         assert 0 < offset <= 127
         mc.overwrite(jmp_adr-1, [chr(offset)])
