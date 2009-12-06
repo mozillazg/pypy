@@ -4,7 +4,7 @@ from pypy.rlib.objectmodel import specialize
 from pypy.jit.metainterp import history
 
 
-def replace_force_virtual_with_call(make_helper_func, graphs):
+def replace_force_virtual_with_call(warmrunnerdesc, graphs):
     # similar to rvirtualizable2.replace_force_virtualizable_with_call().
     c_funcptr = None
     count = 0
@@ -15,18 +15,14 @@ def replace_force_virtual_with_call(make_helper_func, graphs):
                     # first compute c_funcptr, but only if there is any
                     # 'jit_force_virtual' around
                     if c_funcptr is None:
-                        FUNC = lltype.FuncType([rclass.OBJECTPTR],
-                                               rclass.OBJECTPTR)
-                        funcptr = make_helper_func(
-                            lltype.Ptr(FUNC),
-                            force_virtual_if_necessary)
-                        c_funcptr = inputconst(lltype.typeOf(funcptr), funcptr)
+                        c_funcptr = get_force_virtual_fnptr(warmrunnerdesc)
                     #
                     op.opname = 'direct_call'
                     op.args = [c_funcptr, op.args[0]]
                     count += 1
     if c_funcptr is not None:
-        log("replaced %d 'jit_force_virtual' with %r" % (count, funcptr))
+        log("replaced %d 'jit_force_virtual' with %r" % (count,
+                                                         c_funcptr.value))
 
 # ____________________________________________________________
 
@@ -35,6 +31,7 @@ def replace_force_virtual_with_call(make_helper_func, graphs):
 JIT_VIRTUAL_REF = lltype.GcStruct('JitVirtualRef',
                                   ('super', rclass.OBJECT),
                                   ('virtual_token', lltype.Signed),
+                                  ('virtualref_index', lltype.Signed),
                                   ('forced', rclass.OBJECTPTR))
 jit_virtual_ref_vtable = lltype.malloc(rclass.OBJECT_VTABLE, zero=True,
                                        flavor='raw')
@@ -58,6 +55,10 @@ def get_descr_virtual_token(cpu):
     return cpu.fielddescrof(JIT_VIRTUAL_REF, 'virtual_token')
 
 @specialize.memo()
+def get_descr_virtualref_index(cpu):
+    return cpu.fielddescrof(JIT_VIRTUAL_REF, 'virtualref_index')
+
+@specialize.memo()
 def get_descr_forced(cpu):
     return cpu.fielddescrof(JIT_VIRTUAL_REF, 'forced')
 
@@ -74,17 +75,45 @@ def was_forced(gcref):
     vref = lltype.cast_opaque_ptr(lltype.Ptr(JIT_VIRTUAL_REF), gcref)
     return vref.virtual_token != TOKEN_TRACING
 
+def forced_single_vref(gcref, real_object):
+    assert real_object
+    vref = lltype.cast_opaque_ptr(lltype.Ptr(JIT_VIRTUAL_REF), gcref)
+    assert (vref.virtual_token != TOKEN_NONE and
+            vref.virtual_token != TOKEN_TRACING)
+    vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
+    vref.virtual_token = TOKEN_NONE
+
 # ____________________________________________________________
 
-def force_virtual_if_necessary(inst):
-    if not inst or inst.typeptr != jit_virtual_ref_vtable:
-        return inst    # common, fast case
-    return force_virtual(inst)
+def get_force_virtual_fnptr(warmrunnerdesc):
+    cpu = warmrunnerdesc.cpu
+    #
+    def force_virtual_if_necessary(inst):
+        if not inst or inst.typeptr != jit_virtual_ref_vtable:
+            return inst    # common, fast case
+        return force_virtual(cpu, inst)
+    #
+    FUNC = lltype.FuncType([rclass.OBJECTPTR], rclass.OBJECTPTR)
+    funcptr = warmrunnerdesc.helper_func(
+        lltype.Ptr(FUNC),
+        force_virtual_if_necessary)
+    return inputconst(lltype.typeOf(funcptr), funcptr)
 
-def force_virtual(inst):
+def force_virtual(cpu, inst):
     vref = lltype.cast_pointer(lltype.Ptr(JIT_VIRTUAL_REF), inst)
-    if not vref.forced:
-        xxxx
-    vref.virtual_token = TOKEN_NONE
+    token = vref.virtual_token
+    if token != TOKEN_NONE:
+        if token == TOKEN_TRACING:
+            # The "virtual" is not a virtual at all during tracing.
+            # We only need to reset virtual_token to TOKEN_NONE
+            # as a marker for the tracing, to tell it that this
+            # "virtual" escapes.
+            vref.virtual_token = TOKEN_NONE
+        else:
+            assert not vref.forced
+            from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
+            ResumeGuardForcedDescr.force_now(cpu, token)
+            assert vref.virtual_token == TOKEN_NONE
+    assert vref.forced
     return vref.forced
 force_virtual._dont_inline_ = True

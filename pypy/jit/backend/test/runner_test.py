@@ -782,7 +782,8 @@ class BaseBackendTest(Runner):
     def test_virtual_ref(self):
         # if VIRTUAL_REF reaches the backend, it should just be a SAME_AS
         u_box = self.alloc_unicode(u"hello\u1234")
-        r = self.execute_operation(rop.VIRTUAL_REF, [u_box], 'ref')
+        r = self.execute_operation(rop.VIRTUAL_REF, [u_box, ConstInt(2)],
+                                   'ref')
         assert r.value == u_box.value
 
     def test_jump(self):

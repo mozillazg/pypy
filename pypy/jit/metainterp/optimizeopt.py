@@ -740,12 +740,14 @@ class Optimizer(object):
         value = self.getvalue(op.args[0])
         if not value.is_virtual():   # virtual_ref(non-virtual) gives bad
             raise compile.GiveUp     # results, so don't bother compiling it
+        indexbox = op.args[1]
         #
         # get some constants (these calls are all 'memo')
         from pypy.jit.metainterp import virtualref
-        c_cls = virtualref.get_jit_virtual_ref_const_class(self.cpu)
-        descr_virtual_token = virtualref.get_descr_virtual_token(self.cpu)
-        descr_forced = virtualref.get_descr_forced(self.cpu)
+        cpu = self.cpu
+        c_cls = virtualref.get_jit_virtual_ref_const_class(cpu)
+        descr_virtual_token = virtualref.get_descr_virtual_token(cpu)
+        descr_virtualref_index = virtualref.get_descr_virtualref_index(cpu)
         #
         # Replace the VIRTUAL_REF operation with a virtual structure of type
         # 'vref.JIT_VIRTUAL_REF'.  The virtual structure may be forced soon,
@@ -755,6 +757,7 @@ class Optimizer(object):
         tokenbox = BoxInt()
         self.emit_operation(ResOperation(rop.FORCE_TOKEN, [], tokenbox))
         vrefvalue.setfield(descr_virtual_token, self.getvalue(tokenbox))
+        vrefvalue.setfield(descr_virtualref_index, self.getvalue(indexbox))
 
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])

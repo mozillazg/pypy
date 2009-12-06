@@ -200,19 +200,16 @@ class VirtualizableInfo:
             return True
 
     def force_now(self, virtualizable):
-        token = virtualizable.vable_token
-        virtualizable.vable_token = self.TOKEN_NONE
-        if token == self.TOKEN_TRACING:
+        if virtualizable.vable_token == self.TOKEN_TRACING:
             # The values in the virtualizable are always correct during
             # tracing.  We only need to reset vable_token to TOKEN_NONE
             # as a marker for the tracing, to tell it that this
             # virtualizable escapes.
-            pass
+            virtualizable.vable_token = self.TOKEN_NONE
         else:
             from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
-            faildescr = self.cpu.force(token)
-            assert isinstance(faildescr, ResumeGuardForcedDescr)
-            faildescr.force_virtualizable(self, virtualizable, token)
+            ResumeGuardForcedDescr.force_now(self.cpu, token)
+            assert virtualizable.vable_token == self.TOKEN_NONE
     force_now._dont_inline_ = True
 
 # ____________________________________________________________

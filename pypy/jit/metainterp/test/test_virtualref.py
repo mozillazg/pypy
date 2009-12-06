@@ -164,7 +164,37 @@ class VRefTests:
                 exctx.topframeref = None
         #
         self.meta_interp(f, [15])
-        self.check_loops(new_with_vtable=0)
+        self.check_loops({})     # because we aborted tracing
+
+    def test_simple_force_sometimes(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n'])
+        #
+        class XY:
+            pass
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        @dont_look_inside
+        def externalfn(n):
+            if n == 13:
+                exctx.m = exctx.topframeref().n
+            return 1
+        #
+        def f(n):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n)
+                myjitdriver.jit_merge_point(n=n)
+                xy = XY()
+                xy.n = n
+                exctx.topframeref = virtual_ref(xy)
+                n -= externalfn(n)
+                virtual_ref_finish(exctx.topframeref)
+                exctx.topframeref = None
+            return exctx.m
+        #
+        res = self.meta_interp(f, [30])
+        assert res == 13
 
 
 class TestLLtype(VRefTests, LLJitMixin):
