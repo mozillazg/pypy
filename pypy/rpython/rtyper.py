@@ -153,6 +153,14 @@ class RPythonTyper(object):
     def set_type_for_typeptr(self, typeptr, TYPE):
         self.type_for_typeptr[typeptr._obj] = TYPE
 
+    def get_real_typeptr_for_typeptr(self, typeptr):
+        # perform a linear scan for the case of ll2ctypes typeptr
+        search = typeptr._obj
+        for key, value in self.type_for_typeptr.items():
+            if key == search:
+                return key._as_ptr()
+        raise KeyError(search)
+
     def makekey(self, s_obj):
         return pair(self.type_system, s_obj).rtyper_makekey(self)
 
