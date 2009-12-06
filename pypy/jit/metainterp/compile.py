@@ -276,8 +276,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
             forced_single_vref(vrefbox.getref_base(), virtualbox.getref_base())
         # Handle virtualizable_boxes: store them on the real virtualizable now
         if expect_virtualizable:
-            metainterp.virtualizable_boxes = virtualizable_boxes
-            metainterp.synchronize_virtualizable()
+            metainterp_sd.virtualizable_info.forced_vable(virtualizable_boxes)
         # Handle all_virtuals: keep them for later blackholing from the
         # future failure of the GUARD_NOT_FORCED
         self.save_data(force_token, all_virtuals)
