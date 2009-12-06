@@ -1106,7 +1106,24 @@ class TestLL2Ctypes(object):
         #import pdb; pdb.set_trace()
         assert adr1_2 == adr1
         assert adr1 == adr1_2
-        
+
+    def test_object_subclass(self):
+        from pypy.rpython.lltypesystem import rclass
+        SCLASS = lltype.GcStruct('SCLASS',
+                                 ('parent', rclass.OBJECT),
+                                 ('x', lltype.Signed))
+        def f(n):
+            s = lltype.malloc(SCLASS)
+            s.x = n
+            gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+            as_num = rffi.cast(lltype.Signed, gcref)
+            gcref2 = rffi.cast(llmemory.GCREF, as_num)
+            t = lltype.cast_opaque_ptr(rclass.OBJECTPTR, gcref2)
+            u = lltype.cast_pointer(lltype.Ptr(SCLASS), t)
+            return u.x
+        res = interpret(f, [123])
+        assert res == 123
+
 class TestPlatform(object):
     def test_lib_on_libpaths(self):
         from pypy.translator.platform import platform
