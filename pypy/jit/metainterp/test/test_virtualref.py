@@ -108,7 +108,7 @@ class VRefTests:
         self.check_loops({})      # because we aborted tracing
 
     def test_simple_no_access(self):
-        py.test.skip("in-progress")
+        #py.test.skip("in-progress")
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
         class XY:
