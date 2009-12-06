@@ -383,7 +383,7 @@ class InstanceRepr(AbstractInstanceRepr):
                                                   ll_runtime_type_info,
                                                   OBJECT, destrptr)
             vtable = self.rclass.getvtable()
-            self.rtyper.type_for_typeptr[vtable._obj] = self.lowleveltype.TO
+            self.rtyper.set_type_for_typeptr(vtable, self.lowleveltype.TO)
             self.rtyper.lltype2vtable[self.lowleveltype.TO] = vtable
 
     def common_repr(self): # -> object or nongcobject reprs
@@ -693,3 +693,23 @@ def feedllattr(inst, name, llvalue):
             break
     raise AttributeError("%s has no field %s" % (lltype.typeOf(widest),
                                                  name))
+
+def declare_type_for_typeptr(vtable, TYPE):
+    """Hack for custom low-level-only 'subclasses' of OBJECT:
+    call this somewhere annotated, in order to declare that it is
+    of the given TYPE and has got the corresponding vtable."""
+
+class Entry(ExtRegistryEntry):
+    _about_ = declare_type_for_typeptr
+    def compute_result_annotation(self, s_vtable, s_TYPE):
+        assert s_vtable.is_constant()
+        assert s_TYPE.is_constant()
+        return annmodel.s_None
+    def specialize_call(self, hop):
+        vtable = hop.args_v[0].value
+        TYPE   = hop.args_v[1].value
+        assert lltype.typeOf(vtable) == CLASSTYPE
+        assert isinstance(TYPE, GcStruct)
+        assert lltype._castdepth(TYPE, OBJECT) > 0
+        hop.rtyper.set_type_for_typeptr(vtable, TYPE)
+        return hop.inputconst(lltype.Void, None)
