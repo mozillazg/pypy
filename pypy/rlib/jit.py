@@ -2,6 +2,7 @@ import py
 import sys
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.objectmodel import CDefinedIntSymbolic, we_are_translated
+from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib.unroll import unrolling_iterable
 
 def purefunction(func):
@@ -108,6 +109,8 @@ virtual_ref.oopspec = 'virtual_ref(x)'
 def virtual_ref_finish(x):
     if not we_are_translated():
         x._forced = x._forced or -1
+    keepalive_until_here(x)   # otherwise the whole function call is removed
+virtual_ref_finish.oopspec = 'virtual_ref_finish(x)'
 
 class DirectVRef(object):
     _forced = 0
