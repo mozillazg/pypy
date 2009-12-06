@@ -1125,6 +1125,26 @@ class TestLL2Ctypes(object):
         res = interpret(f, [123])
         assert res == 123
 
+    def test_object_subclass_2(self):
+        from pypy.rpython.lltypesystem import rclass
+        SCLASS = lltype.GcStruct('SCLASS',
+                                 ('parent', rclass.OBJECT),
+                                 ('n', lltype.Signed))
+        sclass_vtable = lltype.malloc(rclass.OBJECT_VTABLE, zero=True,
+                                      immortal=True)
+        sclass_vtable.name = rclass.alloc_array_name('SClass')
+        def f(n):
+            rclass.declare_type_for_typeptr(sclass_vtable, SCLASS)
+            s = lltype.malloc(SCLASS)
+            s.parent.typeptr = sclass_vtable
+            s.n = n
+            as_num = rffi.cast(lltype.Signed, s)
+            # --- around this point, only 'as_num' is passed
+            t = rffi.cast(lltype.Ptr(SCLASS), as_num)
+            return t.n
+        res = interpret(f, [123])
+        assert res == 123
+
 class TestPlatform(object):
     def test_lib_on_libpaths(self):
         from pypy.translator.platform import platform

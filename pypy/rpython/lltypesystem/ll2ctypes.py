@@ -677,7 +677,10 @@ def ctypes2lltype(T, cobj):
                 if get_rtyper() and lltype._castdepth(REAL_TYPE, OBJECT) >= 0:
                     # figure out the real type of the object
                     containerheader = lltype._struct(OBJECT)
-                    struct_use_ctypes_storage(containerheader, cobj.contents)
+                    cobjheader = ctypes.cast(cobj,
+                                       get_ctypes_type(lltype.Ptr(OBJECT)))
+                    struct_use_ctypes_storage(containerheader,
+                                              cobjheader.contents)
                     REAL_TYPE = get_rtyper().get_type_for_typeptr(
                         containerheader.typeptr)
                     REAL_T = lltype.Ptr(REAL_TYPE)

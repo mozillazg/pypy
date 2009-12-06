@@ -137,7 +137,7 @@ class RPythonTyper(object):
         try:
             return self.type_for_typeptr[search]
         except KeyError:
-            # rehash the dictionary, and perform a non-dictionary scan
+            # rehash the dictionary, and perform a linear scan
             # for the case of ll2ctypes typeptr
             found = None
             type_for_typeptr = {}
@@ -149,6 +149,9 @@ class RPythonTyper(object):
             if found is None:
                 raise KeyError(search)
             return found
+
+    def set_type_for_typeptr(self, typeptr, TYPE):
+        self.type_for_typeptr[typeptr._obj] = TYPE
 
     def makekey(self, s_obj):
         return pair(self.type_system, s_obj).rtyper_makekey(self)
