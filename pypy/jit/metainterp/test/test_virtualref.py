@@ -193,6 +193,38 @@ class VRefTests:
         res = self.meta_interp(f, [30])
         assert res == 13
 
+    def test_bridge_forces(self):
+        py.test.skip("in-progress")
+        myjitdriver = JitDriver(greens = [], reds = ['n'])
+        #
+        class XY:
+            pass
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        @dont_look_inside
+        def externalfn(n):
+            exctx.m = exctx.topframeref().n
+            return 1
+        #
+        def f(n):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n)
+                myjitdriver.jit_merge_point(n=n)
+                xy = XY()
+                xy.n = n
+                exctx.topframeref = virtual_ref(xy)
+                if n == 13:
+                    externalfn(n)
+                n -= 1
+                virtual_ref_finish(exctx.topframeref)
+                exctx.topframeref = None
+            return exctx.m
+        #
+        res = self.meta_interp(f, [30])
+        assert res == 13
+
 
 class TestLLtype(VRefTests, LLJitMixin):
     pass
