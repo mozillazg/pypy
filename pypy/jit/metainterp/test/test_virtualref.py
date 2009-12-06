@@ -66,6 +66,7 @@ class VRefTests:
         bxs2 = [box for box in guard_op.fail_args
                   if str(box._getrepr_()).endswith('JitVirtualRef')]
         assert len(bxs2) == 1
+        bxs2[0].getref(lltype.Ptr(JIT_VIRTUAL_REF)).virtual_token = 1234567
         #
         self.metainterp.rebuild_state_after_failure(guard_op.descr,
                                                     guard_op.fail_args[:])
@@ -194,7 +195,6 @@ class VRefTests:
         assert res == 13
 
     def test_bridge_forces(self):
-        py.test.skip("in-progress")
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
         class XY:
