@@ -1227,7 +1227,6 @@ class MetaInterp(object):
         self.cpu = staticdata.cpu
         self.portal_trace_positions = []
         self.greenkey_of_huge_function = None
-        self.virtualref_boxes = []
 
     def is_blackholing(self):
         return self.history is None
@@ -1715,6 +1714,7 @@ class MetaInterp(object):
         f = self.newframe(self.staticdata.portal_code)
         f.pc = 0
         f.env = original_boxes[:]
+        self.virtualref_boxes = []
         self.initialize_virtualizable(original_boxes)
         return original_boxes
 
@@ -1833,7 +1833,17 @@ class MetaInterp(object):
         expect_virtualizable = vinfo is not None
         virtualizable_boxes, virtualref_boxes = resume.rebuild_from_resumedata(
             self, newboxes, resumedescr, expect_virtualizable)
+        #
+        # virtual refs: make the vrefs point to the freshly allocated virtuals
         self.virtualref_boxes = virtualref_boxes
+        for i in range(0, len(virtualref_boxes), 2):
+            virtualbox = virtualref_boxes[i]
+            vrefbox = virtualref_boxes[i+1]
+            virtualref.continue_tracing(vrefbox.getref_base(),
+                                        virtualbox.getref_base())
+        #
+        # virtualizable: synchronize the real virtualizable and the local
+        # boxes, in whichever direction is appropriate
         if expect_virtualizable:
             self.virtualizable_boxes = virtualizable_boxes
             # just jumped away from assembler (case 4 in the comment in

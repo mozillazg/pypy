@@ -87,6 +87,12 @@ def forced_single_vref(gcref, real_object):
     vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
     vref.virtual_token = TOKEN_NONE
 
+def continue_tracing(gcref, real_object):
+    vref = lltype.cast_opaque_ptr(lltype.Ptr(JIT_VIRTUAL_REF), gcref)
+    assert vref.virtual_token != TOKEN_TRACING
+    vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
+    vref.virtual_token = TOKEN_TRACING
+
 # ____________________________________________________________
 
 def get_force_virtual_fnptr(warmrunnerdesc):
