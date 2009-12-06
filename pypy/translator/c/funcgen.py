@@ -798,7 +798,7 @@ class FunctionCodeGenerator(object):
 
     def OP_JIT_FORCE_VIRTUAL(self, op):
         return '%s = %s; /* JIT_FORCE_VIRTUAL */' % (self.expr(op.result),
-                                                     self.expr(op.args[0])))
+                                                     self.expr(op.args[0]))
 
     def OP_GET_GROUP_MEMBER(self, op):
         typename = self.db.gettype(op.result.concretetype)
