@@ -21,7 +21,7 @@ from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_singlefloat, intmask
 from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter, LLException
-from pypy.rpython.lltypesystem.rclass import OBJECT
+from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 from pypy.rpython import raddress
 from pypy.translator.platform import platform
 
@@ -689,6 +689,14 @@ def ctypes2lltype(T, cobj):
             struct_use_ctypes_storage(container, cobj.contents)
             if REAL_TYPE != T.TO:
                 p = container._as_ptr()
+                container = lltype.cast_pointer(T, p)._as_obj()
+            # special treatment of 'OBJECT_VTABLE' subclasses
+            if get_rtyper() and lltype._castdepth(REAL_TYPE,
+                                                  OBJECT_VTABLE) >= 0:
+                # figure out the real object that this vtable points to,
+                # and just return that
+                p = get_rtyper().get_real_typeptr_for_typeptr(
+                    container._as_ptr())
                 container = lltype.cast_pointer(T, p)._as_obj()
         elif isinstance(T.TO, lltype.Array):
             if T.TO._hints.get('nolength', False):

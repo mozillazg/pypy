@@ -1185,6 +1185,25 @@ class TestLL2Ctypes(object):
         res = interpret(f, [123])
         assert res == 123
 
+    def test_object_subclass_5(self):
+        from pypy.rpython.lltypesystem import rclass
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+        class S:
+            x = 5      # entry in the vtable
+        class T(S):
+            x = 6
+        def f():
+            s = T()
+            ls = cast_instance_to_base_ptr(s)
+            as_num = rffi.cast(lltype.Signed, ls)
+            # --- around this point, only 'as_num' is passed
+            t = rffi.cast(rclass.OBJECTPTR, as_num)
+            u = cast_base_ptr_to_instance(S, t)
+            return u.x
+        res = interpret(f, [])
+        assert res == 6
+
 class TestPlatform(object):
     def test_lib_on_libpaths(self):
         from pypy.translator.platform import platform
