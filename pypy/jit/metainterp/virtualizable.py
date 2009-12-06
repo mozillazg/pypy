@@ -200,7 +200,8 @@ class VirtualizableInfo:
             return True
 
     def force_now(self, virtualizable):
-        if virtualizable.vable_token == self.TOKEN_TRACING:
+        token = virtualizable.vable_token
+        if token == self.TOKEN_TRACING:
             # The values in the virtualizable are always correct during
             # tracing.  We only need to reset vable_token to TOKEN_NONE
             # as a marker for the tracing, to tell it that this
@@ -211,6 +212,12 @@ class VirtualizableInfo:
             ResumeGuardForcedDescr.force_now(self.cpu, token)
             assert virtualizable.vable_token == self.TOKEN_NONE
     force_now._dont_inline_ = True
+
+    def forced_vable(self, virtualizable_boxes):
+        virtualizable_box = virtualizable_boxes[-1]
+        virtualizable = self.unwrap_virtualizable_box(virtualizable_box)
+        self.write_boxes(virtualizable, virtualizable_boxes)
+        virtualizable.vable_token = self.TOKEN_NONE
 
 # ____________________________________________________________
 #
