@@ -22,7 +22,6 @@ from pypy.rlib.rarithmetic import r_uint, r_singlefloat, intmask
 from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem.rclass import OBJECT
-from pypy.rpython.annlowlevel import base_ptr_lltype
 from pypy.rpython import raddress
 from pypy.translator.platform import platform
 
@@ -500,25 +499,6 @@ _all_callbacks_results = []
 _callback2obj = {}
 _callback_exc_info = None
 
-# this is just another hack that passes around references to applevel types
-# disguised as base_ptr_lltype
-class Dummy(object):
-    pass
-
-_opaque_cache = {Dummy():0}
-_opaque_list = [Dummy()]
-
-def new_opaque_object(llobj):
-    try:
-        return _opaque_cache[llobj]
-    except KeyError:
-        assert len(_opaque_cache) == len(_opaque_list)
-        ctypes_type = get_ctypes_type(base_ptr_lltype())
-        val = ctypes.cast(len(_opaque_cache), ctypes_type)
-        _opaque_list.append(llobj)
-        _opaque_cache[llobj] = val
-        return val
-
 def get_rtyper():
     llinterp = LLInterpreter.current_interpreter
     if llinterp is not None:
@@ -542,8 +522,6 @@ def lltype2ctypes(llobj, normalize=True):
                 return ctypes.c_void_p(0)
             return get_ctypes_type(T)()
 
-        if T is base_ptr_lltype():
-            return new_opaque_object(llobj)
         if T == llmemory.GCREF:
             if isinstance(llobj._obj, _llgcopaque):
                 return ctypes.c_void_p(llobj._obj.intval)
@@ -694,8 +672,6 @@ def ctypes2lltype(T, cobj):
     if isinstance(T, lltype.Ptr):
         if not cobj:   # NULL pointer
             return lltype.nullptr(T.TO)
-        if T is base_ptr_lltype():
-            return _opaque_list[ctypes.cast(cobj, ctypes.c_void_p).value]
         if isinstance(T.TO, lltype.Struct):
             if T.TO._arrayfld is not None:
                 carray = getattr(cobj.contents, T.TO._arrayfld)
