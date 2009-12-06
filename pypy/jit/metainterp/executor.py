@@ -223,7 +223,7 @@ def do_cast_int_to_float(cpu, box1):
 def do_force_token(cpu):
     raise NotImplementedError
 
-def do_virtual_ref(cpu, box1):
+def do_virtual_ref(cpu, box1, box2):
     raise NotImplementedError
 
 def do_debug_merge_point(cpu, box1):
