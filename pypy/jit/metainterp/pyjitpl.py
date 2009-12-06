@@ -1836,18 +1836,20 @@ class MetaInterp(object):
         self.virtualref_boxes = virtualref_boxes
         if expect_virtualizable:
             self.virtualizable_boxes = virtualizable_boxes
+            # just jumped away from assembler (case 4 in the comment in
+            # virtualizable.py) into tracing (case 2); check that vable_token
+            # is and stays 0.  Note the call to reset_vable_token() in
+            # warmstate.py.
+            virtualizable_box = self.virtualizable_boxes[-1]
+            virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
+            assert not virtualizable.vable_token
             if self._already_allocated_resume_virtuals is not None:
                 # resuming from a ResumeGuardForcedDescr: load the new values
                 # currently stored on the virtualizable fields
                 self.load_fields_from_virtualizable()
-                return
-            # just jumped away from assembler (case 4 in the comment in
-            # virtualizable.py) into tracing (case 2); check that vable_token
-            # is and stays 0.
-            virtualizable_box = self.virtualizable_boxes[-1]
-            virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
-            assert not virtualizable.vable_token
-            self.synchronize_virtualizable()
+            else:
+                # normal case: fill the virtualizable with the local boxes
+                self.synchronize_virtualizable()
 
     def check_synchronized_virtualizable(self):
         if not we_are_translated():
