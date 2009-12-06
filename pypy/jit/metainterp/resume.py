@@ -47,7 +47,8 @@ def _ensure_parent_resumedata(framestack, n):
                                          back.parent_resumedata_snapshot,
                                          back.env[:])
 
-def capture_resumedata(framestack, virtualizable_boxes, storage):
+def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
+                       storage):
     n = len(framestack)-1
     top = framestack[n]
     _ensure_parent_resumedata(framestack, n)
@@ -55,6 +56,7 @@ def capture_resumedata(framestack, virtualizable_boxes, storage):
                                 top)
     storage.rd_frame_info_list = frame_info_list
     snapshot = Snapshot(top.parent_resumedata_snapshot, top.env[:])
+    snapshot = Snapshot(snapshot, virtualref_boxes[:]) # xxx for now
     if virtualizable_boxes is not None:
         snapshot = Snapshot(snapshot, virtualizable_boxes[:]) # xxx for now
     storage.rd_snapshot = snapshot
@@ -444,6 +446,7 @@ def rebuild_from_resumedata(metainterp, newboxes, storage, expects_virtualizable
     virtualizable_boxes = None
     if expects_virtualizables:
         virtualizable_boxes = resumereader.consume_boxes()
+    virtualref_boxes = resumereader.consume_boxes()
     frameinfo = storage.rd_frame_info_list
     while True:
         env = resumereader.consume_boxes()
@@ -453,7 +456,7 @@ def rebuild_from_resumedata(metainterp, newboxes, storage, expects_virtualizable
         if frameinfo is None:
             break
     metainterp.framestack.reverse()
-    return virtualizable_boxes
+    return virtualizable_boxes, virtualref_boxes
 
 def force_from_resumedata(metainterp, newboxes, storage):
     resumereader = ResumeDataReader(storage, newboxes, metainterp)

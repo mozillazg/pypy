@@ -1,8 +1,12 @@
 import py
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib.jit import JitDriver, dont_look_inside
 from pypy.rlib.jit import virtual_ref, virtual_ref_finish
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp import history
+from pypy.jit.metainterp.virtualref import JIT_VIRTUAL_REF
 
 
 class VRefTests:
@@ -22,6 +26,56 @@ class VRefTests:
         #
         self.interp_operations(f, [])
         self.check_operations_history(virtual_ref=1)
+
+    def test_make_vref_guard(self):
+        if not self.basic:
+            py.test.skip("purely frontend test")
+        #
+        class X:
+            def __init__(self, n):
+                self.n = n
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        @dont_look_inside
+        def external(n):
+            if n > 100:
+                return exctx.topframeref().n
+            return n
+        def enter(n):
+            exctx.topframeref = virtual_ref(X(n + 10))
+        def leave():
+            virtual_ref_finish(exctx.topframeref)
+            exctx.topframeref = None
+        def f(n):
+            enter(n)
+            n = external(n)
+            # ^^^ the point is that X() should be kept alive here
+            leave()
+            return n
+        #
+        res = self.interp_operations(f, [5])
+        assert res == 5
+        self.check_operations_history(virtual_ref=1, guard_not_forced=1)
+        #
+        [guard_op] = [op for op in self.metainterp.history.operations
+                         if op.opnum == rop.GUARD_NOT_FORCED]
+        bxs1 = [box for box in guard_op.fail_args
+                 if isinstance(box, history.BoxPtr) and
+                  lltype.typeOf(box.value._obj.container)._name.endswith('.X')]
+        assert len(bxs1) == 1
+        bxs2 = [box for box in guard_op.fail_args
+                 if isinstance(box, history.BoxPtr) and
+                  lltype.typeOf(box.value._obj.container) == JIT_VIRTUAL_REF]
+        assert len(bxs2) == 1
+        #
+        self.metainterp.rebuild_state_after_failure(guard_op.descr,
+                                                    guard_op.fail_args[:])
+        assert len(self.metainterp.framestack) == 1
+        assert len(self.metainterp.virtualref_boxes) == 2
+        assert self.metainterp.virtualref_boxes[0].value == bxs1[0].value
+        assert self.metainterp.virtualref_boxes[1].value == bxs2[0].value
 
     def test_make_vref_and_force(self):
         jitdriver = JitDriver(greens = [], reds = ['total', 'n'])
@@ -45,8 +99,8 @@ class VRefTests:
                 x.n = n + 123
                 exctx.topframeref = virtual_ref(x)
                 total += force_me() - 100
+                virtual_ref_finish(exctx.topframeref)
                 exctx.topframeref = None
-                virtual_ref_finish(x)
             return total
         #
         res = self.meta_interp(f, [-4])
