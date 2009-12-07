@@ -11,8 +11,8 @@ from pypy.jit.metainterp.warmstate import wrap, unwrap
 
 
 class VirtualizableInfo:
-    TOKEN_NONE    = 0
-    TOKEN_TRACING = -1
+    TOKEN_NONE            = 0
+    TOKEN_TRACING_RESCALL = -1
 
     def __init__(self, warmrunnerdesc):
         self.warmrunnerdesc = warmrunnerdesc
@@ -186,13 +186,13 @@ class VirtualizableInfo:
 
     def tracing_before_residual_call(self, virtualizable):
         assert not virtualizable.vable_token
-        virtualizable.vable_token = self.TOKEN_TRACING
+        virtualizable.vable_token = self.TOKEN_TRACING_RESCALL
 
     def tracing_after_residual_call(self, virtualizable):
         if virtualizable.vable_token:
             # not modified by the residual call; assert that it is still
-            # set to 'tracing_vable_rti' and clear it.
-            assert virtualizable.vable_token == self.TOKEN_TRACING
+            # set to TOKEN_TRACING_RESCALL and clear it.
+            assert virtualizable.vable_token == self.TOKEN_TRACING_RESCALL
             virtualizable.vable_token = self.TOKEN_NONE
             return False
         else:
@@ -201,7 +201,7 @@ class VirtualizableInfo:
 
     def force_now(self, virtualizable):
         token = virtualizable.vable_token
-        if token == self.TOKEN_TRACING:
+        if token == self.TOKEN_TRACING_RESCALL:
             # The values in the virtualizable are always correct during
             # tracing.  We only need to reset vable_token to TOKEN_NONE
             # as a marker for the tracing, to tell it that this
@@ -228,9 +228,9 @@ class VirtualizableInfo:
 #
 #   2. equal to 0 when tracing is in progress; except:
 #
-#   3. equal to -1 (TOKEN_TRACING) during tracing when we do a residual call,
-#      calling random unknown other parts of the interpreter; it is
-#      reset to 0 as soon as something occurs to the virtualizable.
+#   3. equal to -1 (TOKEN_TRACING_RESCALL) during tracing when we do a
+#      residual call, calling random unknown other parts of the interpreter;
+#      it is reset to 0 as soon as something occurs to the virtualizable.
 #
 #   4. when running the machine code with a virtualizable, it is set
 #      to the address in the CPU stack by the FORCE_TOKEN operation.

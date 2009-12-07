@@ -888,29 +888,37 @@ class MIFrame(object):
 
     @arguments("box")
     def opimpl_virtual_ref(self, box):
-        obj = box.getref_base()
-        vref = virtualref.virtual_ref_during_tracing(obj)
-        resbox = history.BoxPtr(vref)
-        cindex = history.ConstInt(len(self.metainterp.virtualref_boxes) // 2)
-        self.metainterp.history.record(rop.VIRTUAL_REF, [box, cindex], resbox)
-        # Note: we allocate a JIT_VIRTUAL_REF here
-        # (in virtual_ref_during_tracing()), in order to detect when
-        # the virtual escapes during tracing already.  We record it as a
-        # VIRTUAL_REF operation, although the backend sees this operation
-        # as a no-op.  The point is that the backend should not really see
-        # it in practice, as optimizeopt.py should either kill it or
-        # replace it with a NEW_WITH_VTABLE followed by SETFIELD_GCs.
-        self.metainterp.virtualref_boxes.append(box)
-        self.metainterp.virtualref_boxes.append(resbox)
+        metainterp = self.metainterp
+        if metainterp.is_blackholing():
+            resbox = box      # good enough when blackholing
+        else:
+            obj = box.getref_base()
+            vref = virtualref.virtual_ref_during_tracing(obj)
+            resbox = history.BoxPtr(vref)
+            cindex = history.ConstInt(len(metainterp.virtualref_boxes) // 2)
+            metainterp.history.record(rop.VIRTUAL_REF, [box, cindex], resbox)
+            # Note: we allocate a JIT_VIRTUAL_REF here
+            # (in virtual_ref_during_tracing()), in order to detect when
+            # the virtual escapes during tracing already.  We record it as a
+            # VIRTUAL_REF operation, although the backend sees this operation
+            # as a no-op.  The point is that the backend should not really see
+            # it in practice, as optimizeopt.py should either kill it or
+            # replace it with a NEW_WITH_VTABLE followed by SETFIELD_GCs.
+        metainterp.virtualref_boxes.append(box)
+        metainterp.virtualref_boxes.append(resbox)
         self.make_result_box(resbox)
 
     @arguments("box")
-    def opimpl_virtual_ref_finish(self, vrefbox):
+    def opimpl_virtual_ref_finish(self, box):
         # virtual_ref_finish() assumes that we have a stack-like, last-in
         # first-out order.
-        lastvrefbox = self.metainterp.virtualref_boxes.pop()
-        assert vrefbox.getref_base() == lastvrefbox.getref_base()
-        self.metainterp.virtualref_boxes.pop()
+        metainterp = self.metainterp
+        vrefbox = metainterp.virtualref_boxes.pop()
+        lastbox = metainterp.virtualref_boxes.pop()
+        assert box.getref_base() == lastbox.getref_base()
+        if not metainterp.is_blackholing():
+            metainterp.history.record(rop.VIRTUAL_REF_FINISH,
+                                      [vrefbox, lastbox], None)
 
     # ------------------------------
 
@@ -1016,12 +1024,11 @@ class MIFrame(object):
         effectinfo = descr.get_extra_info()
         if effectinfo is None or effectinfo.forces_virtual_or_virtualizable:
             # residual calls require attention to keep virtualizables in-sync
-            self.metainterp.vable_before_residual_call()
+            self.metainterp.vable_and_vrefs_before_residual_call()
             # xxx do something about code duplication
             resbox = self.metainterp.execute_and_record_varargs(
                 rop.CALL_MAY_FORCE, argboxes, descr=descr)
-            self.metainterp.virtual_after_residual_call()
-            self.metainterp.vable_after_residual_call()
+            self.metainterp.vable_and_vrefs_after_residual_call()
             if resbox is not None:
                 self.make_result_box(resbox)
             self.generate_guard(self.pc, rop.GUARD_NOT_FORCED, None, [])
@@ -1752,9 +1759,17 @@ class MetaInterp(object):
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
         vinfo.clear_vable_token(virtualizable)
 
-    def vable_before_residual_call(self):
+    def vable_and_vrefs_before_residual_call(self):
         if self.is_blackholing():
             return
+        #
+        for i in range(1, len(self.virtualref_boxes), 2):
+            vrefbox = self.virtualref_boxes[i]
+            vref = vrefbox.getref_base()
+            virtualref.tracing_before_residual_call(vref)
+            # the FORCE_TOKEN is already set at runtime in each vrefs when
+            # they are created, by optimizeopt.py.
+        #
         vinfo = self.staticdata.virtualizable_info
         if vinfo is not None:
             virtualizable_box = self.virtualizable_boxes[-1]
@@ -1767,37 +1782,32 @@ class MetaInterp(object):
                                                   force_token_box],
                                 None, descr=vinfo.vable_token_descr)
 
-    def vable_after_residual_call(self):
+    def vable_and_vrefs_after_residual_call(self):
         if self.is_blackholing():
-            vable_escapes = True
+            escapes = True
         else:
-            vable_escapes = False
+            escapes = False
+            #
+            for i in range(1, len(self.virtualref_boxes), 2):
+                vrefbox = self.virtualref_boxes[i]
+                vref = vrefbox.getref_base()
+                if virtualref.tracing_after_residual_call(vref):
+                    # this vref escaped during CALL_MAY_FORCE.
+                    escapes = True
+            #
             vinfo = self.staticdata.virtualizable_info
             if vinfo is not None:
                 virtualizable_box = self.virtualizable_boxes[-1]
                 virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
                 if vinfo.tracing_after_residual_call(virtualizable):
-                    # We just did the residual call, and it shows that the
-                    # virtualizable escapes.
-                    self.switch_to_blackhole()
-                    vable_escapes = True
-        if vable_escapes:
+                    # the virtualizable escaped during CALL_MAY_FORCE.
+                    escapes = True
+            #
+            if escapes:
+                self.switch_to_blackhole()
+        #
+        if escapes:
             self.load_fields_from_virtualizable()
-
-    def virtual_after_residual_call(self):
-        if self.is_blackholing():
-            return
-        for i in range(1, len(self.virtualref_boxes), 2):
-            vrefbox = self.virtualref_boxes[i]
-            if virtualref.was_forced(vrefbox.getref_base()):
-                break
-        else:
-            return
-        # during tracing, more precisely during the CALL_MAY_FORCE, at least
-        # one of the vrefs was read.  If we continue to trace and make
-        # assembler from there, we will get assembler that probably always
-        # forces a vref.  So we just cancel now.
-        self.switch_to_blackhole()
 
     def handle_exception(self):
         etype = self.cpu.get_exception()
