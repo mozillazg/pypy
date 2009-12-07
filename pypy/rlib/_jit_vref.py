@@ -1,5 +1,5 @@
 from pypy.annotation import model as annmodel
-from pypy.annotation.binaryop import _make_none_union
+from pypy.tool.pairtype import pairtype
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.rmodel import Repr
@@ -11,11 +11,14 @@ from pypy.rpython.error import TyperError
 
 class SomeVRef(annmodel.SomeObject):
 
-    def __init__(self, s_instance):
+    def __init__(self, s_instance=annmodel.s_None):
+        assert (isinstance(s_instance, annmodel.SomeInstance) or
+                annmodel.s_None.contains(s_instance))
         self.s_instance = s_instance
 
     def can_be_none(self):
-        return True
+        return False    # but it can contain s_None, which is only accessible
+                        # via simple_call() anyway
 
     def simple_call(self):
         return self.s_instance
@@ -26,14 +29,18 @@ class SomeVRef(annmodel.SomeObject):
     def rtyper_makekey(self):
         return self.__class__,
 
-_make_none_union('SomeVRef', 'obj.s_instance', globals())
+class __extend__(pairtype(SomeVRef, SomeVRef)):
+
+    def union((vref1, vref2)):
+        return SomeVRef(annmodel.unionof(vref1.s_instance, vref2.s_instance))
 
 
 class VRefRepr(Repr):
     lowleveltype = OBJECTPTR
 
     def specialize_call(self, hop):
-        [v] = hop.inputargs(getinstancerepr(hop.rtyper, None))
+        r_generic_object = getinstancerepr(hop.rtyper, None)
+        [v] = hop.inputargs(r_generic_object)   # might generate a cast_pointer
         return v
 
     def rtype_simple_call(self, hop):
@@ -42,8 +49,9 @@ class VRefRepr(Repr):
         return hop.genop('cast_pointer', [v], resulttype = hop.r_result)
 
     def convert_const(self, value):
-        if value:
-            raise TyperError("only supports None as a prebuilt virtual_ref")
+        if value() is not None:
+            raise TyperError("only supports virtual_ref_None as a"
+                             " prebuilt virtual_ref")
         return lltype.nullptr(OBJECTPTR.TO)
 
 vrefrepr = VRefRepr()

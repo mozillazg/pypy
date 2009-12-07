@@ -109,12 +109,12 @@ def virtual_ref(x):
     JIT will abort if it is not), at least between the calls to
     virtual_ref and virtual_ref_finish.  The point is that the 'vref'
     returned by virtual_ref may escape early.  If at runtime it is
-    dereferenced (by calling it, as in 'vref()') before the
+    dereferenced (by the syntax 'vref()' or by virtual_ref_deref()) before the
     virtual_ref_finish, then we get out of the assembler.  If it is not
     dereferenced at all, or only after the virtual_ref_finish, then
     nothing special occurs.
     """
-    return DirectVRef(x)
+    return DirectJitVRef(x)
 virtual_ref.oopspec = 'virtual_ref(x)'
 
 def virtual_ref_finish(x):
@@ -123,16 +123,26 @@ def virtual_ref_finish(x):
     keepalive_until_here(x)   # otherwise the whole function call is removed
 virtual_ref_finish.oopspec = 'virtual_ref_finish(x)'
 
+def non_virtual_ref(x):
+    """Creates a 'vref' that just returns x when called; nothing more special.
+    Used for None or for frames outside JIT scope."""
+    return DirectVRef(x)
+
+# ---------- implementation-specific ----------
+
 class DirectVRef(object):
     def __init__(self, x):
         self._x = x
     def __call__(self):
         return self._x
-    def _freeze_(self):
-        raise Exception("should not see a prebuilt virtual_ref")
+
+class DirectJitVRef(DirectVRef):
+    def __init__(self, x):
+        assert x is not None, "virtual_ref(None) is not allowed"
+        DirectVRef.__init__(self, x)
 
 class Entry(ExtRegistryEntry):
-    _about_ = DirectVRef
+    _about_ = (non_virtual_ref, DirectJitVRef)
 
     def compute_result_annotation(self, s_obj):
         from pypy.rlib import _jit_vref
@@ -140,6 +150,17 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         return hop.r_result.specialize_call(hop)
+
+class Entry(ExtRegistryEntry):
+    _type_ = DirectVRef
+
+    def compute_annotation(self):
+        from pypy.rlib import _jit_vref
+        assert isinstance(self.instance, DirectVRef)
+        s_obj = self.bookkeeper.immutablevalue(self.instance())
+        return _jit_vref.SomeVRef(s_obj)
+
+vref_None = non_virtual_ref(None)
 
 # ____________________________________________________________
 # User interface for the hotpath JIT policy

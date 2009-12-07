@@ -1,5 +1,6 @@
 import py
 from pypy.rlib.jit import virtual_ref, virtual_ref_finish
+from pypy.rlib.jit import vref_None, non_virtual_ref
 from pypy.rlib._jit_vref import SomeVRef
 from pypy.annotation import model as annmodel
 from pypy.annotation.annrpython import RPythonAnnotator
@@ -57,11 +58,12 @@ def test_annotate_3():
         if n > 0:
             return virtual_ref(Y())
         else:
-            return virtual_ref(Z())
+            return non_virtual_ref(Z())
     a = RPythonAnnotator()
     s = a.build_types(f, [int])
     assert isinstance(s, SomeVRef)
     assert isinstance(s.s_instance, annmodel.SomeInstance)
+    assert not s.s_instance.can_be_None
     assert s.s_instance.classdef == a.bookkeeper.getuniqueclassdef(X)
 
 def test_annotate_4():
@@ -69,11 +71,12 @@ def test_annotate_4():
         if n > 0:
             return virtual_ref(X())
         else:
-            return None
+            return vref_None
     a = RPythonAnnotator()
     s = a.build_types(f, [int])
     assert isinstance(s, SomeVRef)
     assert isinstance(s.s_instance, annmodel.SomeInstance)
+    assert s.s_instance.can_be_None
     assert s.s_instance.classdef == a.bookkeeper.getuniqueclassdef(X)
 
 def test_rtype_1():
@@ -97,7 +100,7 @@ def test_rtype_3():
         if n > 0:
             return virtual_ref(Y())
         else:
-            return virtual_ref(Z())
+            return non_virtual_ref(Z())
     x = interpret(f, [-5])
     assert lltype.typeOf(x) == OBJECTPTR
 
@@ -106,7 +109,7 @@ def test_rtype_4():
         if n > 0:
             return virtual_ref(X())
         else:
-            return None
+            return vref_None
     x = interpret(f, [-5])
     assert lltype.typeOf(x) == OBJECTPTR
     assert not x
