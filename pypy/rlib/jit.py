@@ -1,7 +1,7 @@
 import py
 import sys
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.rlib.objectmodel import CDefinedIntSymbolic, we_are_translated
+from pypy.rlib.objectmodel import CDefinedIntSymbolic
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib.unroll import unrolling_iterable
 
@@ -103,22 +103,30 @@ class Entry(ExtRegistryEntry):
 # VRefs
 
 def virtual_ref(x):
+    """Creates a 'vref' object that contains a reference to 'x'.  Calls
+    to virtual_ref/virtual_ref_finish must be properly nested.  The idea
+    is that the object 'x' is supposed to be JITted as a virtual (the
+    JIT will abort if it is not), at least between the calls to
+    virtual_ref and virtual_ref_finish.  The point is that the 'vref'
+    returned by virtual_ref may escape early.  If at runtime it is
+    dereferenced (by calling it, as in 'vref()') before the
+    virtual_ref_finish, then we get out of the assembler.  If it is not
+    dereferenced at all, or only after the virtual_ref_finish, then
+    nothing special occurs.
+    """
     return DirectVRef(x)
 virtual_ref.oopspec = 'virtual_ref(x)'
 
 def virtual_ref_finish(x):
-    if not we_are_translated():
-        x._forced = x._forced or -1
+    """See docstring in virtual_ref(x).  Note that virtual_ref_finish
+    takes as argument the real object, not the vref."""
     keepalive_until_here(x)   # otherwise the whole function call is removed
 virtual_ref_finish.oopspec = 'virtual_ref_finish(x)'
 
 class DirectVRef(object):
-    _forced = 0
     def __init__(self, x):
         self._x = x
     def __call__(self):
-        assert self._forced >= 0, "too late to force the virtual_ref!"
-        self._forced = 1
         return self._x
     def _freeze_(self):
         raise Exception("should not see a prebuilt virtual_ref")

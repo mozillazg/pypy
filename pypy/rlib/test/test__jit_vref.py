@@ -18,20 +18,17 @@ class Z(X):
     pass
 
 
-def test_direct():
+def test_direct_1():
     x1 = X()
     vref = virtual_ref(x1)
+    assert vref() is x1
+    virtual_ref_finish(x1)
     assert vref() is x1
 
-def test_finish():
-    vref = virtual_ref(X())
-    virtual_ref_finish(vref)
-    py.test.raises(AssertionError, "vref()")
-    #
+def test_direct_2():
     x1 = X()
     vref = virtual_ref(x1)
-    assert vref() is x1
-    virtual_ref_finish(vref)
+    virtual_ref_finish(x1)
     assert vref() is x1
 
 def test_annotate_1():
@@ -45,8 +42,11 @@ def test_annotate_1():
 
 def test_annotate_2():
     def f():
-        vref = virtual_ref(X())
-        return vref()
+        x1 = X()
+        vref = virtual_ref(x1)
+        x2 = vref()
+        virtual_ref_finish(x1)
+        return x2
     a = RPythonAnnotator()
     s = a.build_types(f, [])
     assert isinstance(s, annmodel.SomeInstance)
@@ -84,8 +84,11 @@ def test_rtype_1():
 
 def test_rtype_2():
     def f():
-        vref = virtual_ref(X())
-        return vref()
+        x1 = X()
+        vref = virtual_ref(x1)
+        x2 = vref()
+        virtual_ref_finish(x2)
+        return x2
     x = interpret(f, [])
     assert lltype.castable(OBJECTPTR, lltype.typeOf(x)) > 0
 
@@ -107,5 +110,3 @@ def test_rtype_4():
     x = interpret(f, [-5])
     assert lltype.typeOf(x) == OBJECTPTR
     assert not x
-
-# the path "we_are_jitted()" is tested in jit/metainterp/test/test_codewriter.
