@@ -333,6 +333,7 @@ def ll_arraycopy(source, dest, source_start, dest_start, length):
     from pypy.rpython.lltypesystem.lloperation import llop
     from pypy.rpython.lltypesystem import lltype, llmemory
 
+    assert source != dest
     TP = lltype.typeOf(source).TO
     assert TP == lltype.typeOf(dest).TO
     if isinstance(TP.OF, lltype.Ptr) and TP.OF.TO._gckind == 'gc':
