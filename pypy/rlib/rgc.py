@@ -338,7 +338,7 @@ def ll_arraycopy(source, dest, source_start, dest_start, length):
     if isinstance(TP.OF, lltype.Ptr) and TP.OF.TO._gckind == 'gc':
         # perform a write barrier that copies necessary flags from
         # source to dest
-        llop.gc_arraycopy_writebarrier(lltype.Void, source, dest)
+        llop.gc_writebarrier_before_copy(lltype.Void, source, dest)
     source_addr = llmemory.cast_ptr_to_adr(source)
     dest_addr   = llmemory.cast_ptr_to_adr(dest)
     cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +

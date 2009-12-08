@@ -380,7 +380,7 @@ class BaseGCTransformer(object):
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 
-    def gct_gc_arraycopy_writebarrier(self, hop):
+    def gct_gc_writebarrier_before_copy(self, hop):
         pass
 
     def gct_gc_identityhash(self, hop):

@@ -482,7 +482,7 @@ class GenerationGC(SemiSpaceGC):
             objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
             self.last_generation_root_objects.append(addr_struct)
 
-    def arraycopy_writebarrier(self, source_addr, dest_addr):
+    def writebarrier_before_copy(self, source_addr, dest_addr):
         """ This has the same effect as calling writebarrier over
         each element in dest copied from source, except it might reset
         one of the following flags a bit too eagerly, which means we'll have
