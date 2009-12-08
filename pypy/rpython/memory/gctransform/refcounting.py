@@ -142,6 +142,9 @@ class RefcountingGCTransformer(GCTransformer):
     def var_needs_set_transform(self, var):
         return var_needsgc(var)
 
+    def gct_gc_push_alive(self, hop):
+        self.push_alive_nopyobj(hop.spaceop.args[0], hop.llops)
+
     def push_alive_nopyobj(self, var, llops):
         v_adr = gen_cast(llops, llmemory.Address, var)
         llops.genop("direct_call", [self.increfptr, v_adr])
