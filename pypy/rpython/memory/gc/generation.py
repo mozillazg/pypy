@@ -466,6 +466,13 @@ class GenerationGC(SemiSpaceGC):
         remember_young_pointer._dont_inline_ = True
         self.remember_young_pointer = remember_young_pointer
 
+    def write_into_last_generation_obj(self, addr_struct, addr):
+        objhdr = self.header(addr_struct)
+        if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
+            if not self.is_last_generation(addr):
+                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+                self.last_generation_root_objects.append(addr_struct)
+
     def assume_young_pointers(self, addr_struct):
         objhdr = self.header(addr_struct)
         if objhdr.tid & GCFLAG_NO_YOUNG_PTRS:
@@ -481,8 +488,8 @@ class GenerationGC(SemiSpaceGC):
         one of the following flags a bit too eagerly, which means we'll have
         a bit more objects to track, but being on the safe side.
         """
-        typeid = self.get_type_id(source_addr)
-        assert self.is_gcarrayofgcptr(typeid)
+        #typeid = self.get_type_id(source_addr)
+        #assert self.is_gcarrayofgcptr(typeid)  ...?
         source_hdr = self.header(source_addr)
         dest_hdr = self.header(dest_addr)
         if dest_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
@@ -498,13 +505,6 @@ class GenerationGC(SemiSpaceGC):
                 #     gen
                 dest_hdr.tid &= ~GCFLAG_NO_HEAP_PTRS
                 self.last_generation_root_objects.append(dest_addr)
-                
-    def write_into_last_generation_obj(self, addr_struct, addr):
-        objhdr = self.header(addr_struct)
-        if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
-            if not self.is_last_generation(addr):
-                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
-                self.last_generation_root_objects.append(addr_struct)
 
     def is_last_generation(self, obj):
         # overridden by HybridGC
