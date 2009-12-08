@@ -12,19 +12,12 @@ from pypy.tool.udir import udir
 
 debug = 0
 
-CFLAGS = os.getenv("CFLAGS")
-if CFLAGS:
-    CFLAGS = CFLAGS.split()
-else:
-    CFLAGS = ['-O3']
-
 class ExternalCompilationInfo(object):
 
     _ATTRIBUTES = ['pre_include_bits', 'includes', 'include_dirs',
                    'post_include_bits', 'libraries', 'library_dirs',
                    'separate_module_sources', 'separate_module_files',
-                   'export_symbols', 'compile_extra', 'link_extra',
-                   'frameworks']
+                   'export_symbols', 'compile_extra', 'link_extra', 'frameworks']
     _DUPLICATES_OK = ['compile_extra', 'link_extra']
 
     def __init__(self,
@@ -39,8 +32,7 @@ class ExternalCompilationInfo(object):
                  export_symbols          = [],
                  compile_extra           = [],
                  link_extra              = [],
-                 frameworks              = [],
-                 platform                = None):
+                 frameworks              = []):
         """
         pre_include_bits: list of pieces of text that should be put at the top
         of the generated .c files, before any #include.  They shouldn't
@@ -81,17 +73,11 @@ class ExternalCompilationInfo(object):
         linker. Use this instead of the 'libraries' parameter if you want to
         link to a framework bundle. Not suitable for unix-like .dylib
         installations.
-
-        platform: an object that can identify the platform
         """
         for name in self._ATTRIBUTES:
             value = locals()[name]
             assert isinstance(value, (list, tuple))
             setattr(self, name, tuple(value))
-        if platform is None:
-            from pypy.rlib import pyplatform
-            platform = pyplatform.platform
-        self.platform = platform
 
     def from_compiler_flags(cls, flags):
         """Returns a new ExternalCompilationInfo instance by parsing
@@ -158,8 +144,7 @@ class ExternalCompilationInfo(object):
     from_config_tool = classmethod(from_config_tool)
 
     def _value(self):
-        return tuple([getattr(self, x) for x in self._ATTRIBUTES]
-                     + [self.platform])
+        return tuple([getattr(self, x) for x in self._ATTRIBUTES])
 
     def __hash__(self):
         return hash(self._value())
@@ -176,7 +161,6 @@ class ExternalCompilationInfo(object):
         for attr in self._ATTRIBUTES:
             val = getattr(self, attr)
             info.append("%s=%s" % (attr, repr(val)))
-        info.append("platform=%s" % repr(self.platform))
         return "<ExternalCompilationInfo (%s)>" % ", ".join(info)
 
     def merge(self, *others):
@@ -206,11 +190,6 @@ class ExternalCompilationInfo(object):
                             s.add(elem)
                             attr.append(elem)
                 attrs[name] = attr
-        for other in others:
-            if other.platform != self.platform:
-                raise Exception("Mixing ECI for different platforms %s and %s"%
-                                (other.platform, self.platform))
-        attrs['platform'] = self.platform
         return ExternalCompilationInfo(**attrs)
 
     def write_c_header(self, fileobj):
@@ -471,7 +450,7 @@ def log_spawned_cmd(spawn):
 class ProfOpt(object):
     #XXX assuming gcc style flags for now
     name = "profopt"
-
+    
     def __init__(self, compiler):
         self.compiler = compiler
 
@@ -511,25 +490,17 @@ class CCompiler:
         self.include_dirs = list(eci.include_dirs)
         self.library_dirs = list(eci.library_dirs)
         self.compile_extra = list(eci.compile_extra)
-        self.link_extra = list(eci.link_extra)
+        self.link_extra = list(eci.link_extra) 
         self.frameworks = list(eci.frameworks)
-        if compiler_exe is not None:
-            self.compiler_exe = compiler_exe
-        else:
-            self.compiler_exe = eci.platform.get_compiler()
+        self.compiler_exe = compiler_exe
         self.profbased = profbased
         if not sys.platform in ('win32', 'darwin'): # xxx
             if 'm' not in self.libraries:
                 self.libraries.append('m')
-            self.compile_extra += CFLAGS + ['-fomit-frame-pointer']
             if 'pthread' not in self.libraries:
                 self.libraries.append('pthread')
-            if sys.platform != 'sunos5': 
-                self.compile_extra += ['-pthread']
-                self.link_extra += ['-pthread']
-            else:
-                self.compile_extra += ['-pthreads']
-                self.link_extra += ['-lpthread']
+            self.compile_extra += ['-O3', '-fomit-frame-pointer', '-pthread']
+            self.link_extra += ['-pthread']
         if sys.platform == 'win32':
             self.link_extra += ['/DEBUG'] # generate .pdb file
         if sys.platform == 'darwin':
@@ -541,13 +512,13 @@ class CCompiler:
                 if s + 'lib' not in self.library_dirs and \
                    os.path.exists(s + 'lib'):
                     self.library_dirs.append(s + 'lib')
-            self.compile_extra += CFLAGS + ['-fomit-frame-pointer']
+            self.compile_extra += ['-O3', '-fomit-frame-pointer']
             for framework in self.frameworks:
                 self.link_extra += ['-framework', framework]
 
         if outputfilename is None:
             self.outputfilename = py.path.local(cfilenames[0]).new(ext=ext)
-        else:
+        else: 
             self.outputfilename = py.path.local(outputfilename)
         self.eci = eci
 
@@ -594,9 +565,9 @@ class CCompiler:
             if not noerr:
                 print >>sys.stderr, data
             raise
-
+ 
     def _build(self):
-        from distutils.ccompiler import new_compiler
+        from distutils.ccompiler import new_compiler 
         compiler = new_compiler(force=1)
         if self.compiler_exe is not None:
             for c in '''compiler compiler_so compiler_cxx
@@ -604,7 +575,7 @@ class CCompiler:
                 compiler.executables[c][0] = self.compiler_exe
         compiler.spawn = log_spawned_cmd(compiler.spawn)
         objects = []
-        for cfile in self.cfilenames:
+        for cfile in self.cfilenames: 
             cfile = py.path.local(cfile)
             compile_extra = self.compile_extra[:]
             # -frandom-seed is only to try to be as reproducable as possible
@@ -616,17 +587,17 @@ class CCompiler:
                     compile_extra = [arg for arg in compile_extra
                                      if not arg.startswith('-fprofile-')]
 
-            old = cfile.dirpath().chdir()
-            try:
-                res = compiler.compile([cfile.basename],
+            old = cfile.dirpath().chdir() 
+            try: 
+                res = compiler.compile([cfile.basename], 
                                        include_dirs=self.eci.include_dirs,
                                        extra_preargs=compile_extra)
                 assert len(res) == 1
-                cobjfile = py.path.local(res[0])
+                cobjfile = py.path.local(res[0]) 
                 assert cobjfile.check()
                 objects.append(str(cobjfile))
-            finally:
-                old.chdir()
+            finally: 
+                old.chdir() 
 
         compiler.link_executable(objects, str(self.outputfilename),
                                  libraries=self.eci.libraries,

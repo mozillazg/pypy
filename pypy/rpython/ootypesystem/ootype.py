@@ -47,10 +47,7 @@ class Class(OOType):
 
     def _defl(self):
         return nullruntimeclass
-
-    def _example(self):
-        return _class(ROOT)
-
+    
 Class = Class()
 
 class Instance(OOType):
@@ -783,7 +780,6 @@ class _class(object):
         self._INSTANCE = INSTANCE
 
 nullruntimeclass = _class(None)
-Class._null = nullruntimeclass
 
 class _instance(object):
     

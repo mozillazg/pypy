@@ -150,7 +150,7 @@ class CFuncPtr(_CData):
         for arg in args:
             if hasattr(arg, '_as_parameter_'):
                 arg = arg._as_parameter_
-            if isinstance(arg, basestring):
+            if isinstance(arg, str):
                 res.append(c_char_p)
             elif isinstance(arg, _CData):
                 res.append(type(arg))

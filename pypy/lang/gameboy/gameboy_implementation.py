@@ -6,11 +6,12 @@ from pypy.lang.gameboy.video import VideoDriver
 from pypy.lang.gameboy.sound import SoundDriver
 from pypy.lang.gameboy.timer import Clock
 from pypy.lang.gameboy import constants
+from pypy.lang.gameboy import debug
 
 from pypy.rlib.rsdl import RSDL, RSDL_helper
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.objectmodel import specialize
-import time
+import py
 
 # GAMEBOY ----------------------------------------------------------------------
 
@@ -18,7 +19,6 @@ class GameBoyImplementation(GameBoy):
     
     def __init__(self):
         GameBoy.__init__(self)
-        self.is_running = False
         self.init_sdl()
         
     def init_sdl(self):
@@ -30,32 +30,27 @@ class GameBoyImplementation(GameBoy):
         self.joypad_driver = JoypadDriverImplementation()
         self.video_driver  = VideoDriverImplementation()
         self.sound_driver  = SoundDriverImplementation()
+   
     
     def mainLoop(self):
-        self.reset()
-        self.is_running = True
         try:
-            while self.is_running:
-            	self.emulate_cycle()
-        except Exception, error:
-            self.is_running = False
-            self.handle_execution_error(error)
+            isRunning = True
+            while isRunning and self.handle_events():
+                self.emulate(constants.GAMEBOY_CLOCK >> 2)
+                #RSDL.Delay(1)
+        finally:
+            lltype.free(self.event, flavor='raw')
+            RSDL.Quit()
+            debug.print_results()
         return 0
     
-    def emulate_cycle(self):
-    	self.handle_events()
-    	self.emulate(constants.GAMEBOY_CLOCK >> 2)
-    	RSDL.Delay(1)
-    
-    def handle_execution_error(self, error): 
-    	lltype.free(self.event, flavor='raw')
-    	RSDL.Quit()
-    
     def handle_events(self):
-        self.poll_event()
-        if self.check_for_escape():
-            self.is_running = False 
-        self.joypad_driver.update(self.event)
+        isRunning = True
+        while self.poll_event():
+            if self.check_for_escape():
+                isRunning = False 
+            self.joypad_driver.update(self.event) 
+        return isRunning
     
     
     def poll_event(self):
@@ -75,8 +70,6 @@ class GameBoyImplementation(GameBoy):
 
 class VideoDriverImplementation(VideoDriver):
     
-    COLOR_MAP = [0xFFFFFF, 0xCCCCCC, 0x666666, 0x000000]
-    
     def __init__(self):
         VideoDriver.__init__(self)
         self.create_screen()
@@ -86,30 +79,30 @@ class VideoDriverImplementation(VideoDriver):
         self.screen = RSDL.SetVideoMode(self.width, self.height, 32, 0)
         
     def update_display(self):
+        #print "    update_display"
         RSDL.LockSurface(self.screen)
         self.draw_pixels()
         RSDL.UnlockSurface(self.screen)
         RSDL.Flip(self.screen)
             
     def draw_pixels(self):
-        #pass
-        str = ""
+        #str = ""
         for y in range(self.height):
-           # str += "\n"
+            #str += "\n"
             for x in range(self.width):
                 #if y%2 == 0 or True:
                 #    px = self.get_pixel_color(x, y)
                 #    str += ["#", "%", "+", " ", " "][px]
-                #RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
+                #RSDL_helper.set_pixel(self.screen, x, y, self.pixel_map(x, y))
                 pass
         #print str;
              
-    @specialize.arg(3)   
-    def get_pixel_color(self, x, y, string=False):
-        if string:
-            return self.pixels[x+self.width*y]
-        else:
-            return self.pixels[x+self.width*y]
+    def pixel_map(self, x, y):
+        return [0xFFFFFF, 0xCCCCCC, 0x666666, 0x000000][self.get_pixel_color(x, y)]
+        
+    def get_pixel_color(self, x, y):
+        return self.pixels[x+self.width*y]
+        #return self.map[self.pixels[x+self.width*y]]
     
     def pixel_to_byte(self, int_number):
         return struct.pack("B", (int_number) & 0xFF, 
@@ -173,9 +166,7 @@ class JoypadDriverImplementation(JoypadDriver):
 # SOUND DRIVER -----------------------------------------------------------------
 
 class SoundDriverImplementation(SoundDriver):
-    """
-    The current implementation doesnt handle sound yet
-    """
+    
     def __init__(self):
         SoundDriver.__init__(self)
         self.create_sound_driver()

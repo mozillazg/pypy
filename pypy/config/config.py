@@ -13,9 +13,6 @@ class NoMatchingOptionFound(AttributeError):
 class ConfigError(Exception):
     pass
 
-class ConflictConfigError(ConfigError):
-    pass
-
 class Config(object):
     _cfgimpl_frozen = False
     
@@ -102,22 +99,10 @@ class Config(object):
         if oldvalue != value and oldowner not in ("default", "suggested"):
             if who in ("default", "suggested"):
                 return
-            raise ConflictConfigError('cannot override value to %s for '
-                                      'option %s' % (value, name))
+            raise ConfigError('cannot override value to %s for option %s' %
+                                (value, name))
         child.setoption(self, value, who)
         self._cfgimpl_value_owners[name] = who
-
-    def suggest(self, **kwargs):
-        for name, value in kwargs.items():
-            self.suggestoption(name, value)
-
-    def suggestoption(self, name, value):
-        try:
-            self.setoption(name, value, "suggested")
-        except ConflictConfigError:
-            # setting didn't work, but that is fine, since it is
-            # suggested only
-            pass
 
     def set(self, **kwargs):
         all_paths = [p.split(".") for p in self.getpaths()]
@@ -263,7 +248,12 @@ class ChoiceOption(Option):
         for path, reqvalue in self._suggests.get(value, []):
             toplevel = config._cfgimpl_get_toplevel()
             homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
-            homeconfig.suggestoption(name, reqvalue)
+            try:
+                homeconfig.setoption(name, reqvalue, "suggested")
+            except ConfigError:
+                # setting didn't work, but that is fine, since it is
+                # suggested only
+                pass
         super(ChoiceOption, self).setoption(config, value, who)
 
     def validate(self, value):
@@ -308,7 +298,12 @@ class BoolOption(Option):
             for path, reqvalue in self._suggests:
                 toplevel = config._cfgimpl_get_toplevel()
                 homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
-                homeconfig.suggestoption(name, reqvalue)
+                try:
+                    homeconfig.setoption(name, reqvalue, "suggested")
+                except ConfigError:
+                    # setting didn't work, but that is fine, since it is
+                    # suggested
+                    pass
 
         super(BoolOption, self).setoption(config, value, who)
 

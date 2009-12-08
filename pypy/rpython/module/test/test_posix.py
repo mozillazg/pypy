@@ -139,17 +139,6 @@ class BaseTestPosix(BaseRtypingTest):
                 return os.sysconf(i)
             assert self.interpret(f, [13]) == f(13)
 
-    if hasattr(os, 'chroot'):
-        def test_os_chroot(self):
-            def f():
-                try:
-                    os.chroot('!@$#!#%$#^#@!#!$$#^')
-                except OSError:
-                    return 1
-                return 0
-
-            assert self.interpret(f, []) == 1
-
     def test_os_wstar(self):
         from pypy.rpython.module.ll_os import RegisterOs
         for name in RegisterOs.w_star:
@@ -168,6 +157,3 @@ class TestLLtype(BaseTestPosix, LLRtypeMixin):
 class TestOOtype(BaseTestPosix, OORtypeMixin):
     def test_fstat(self):
         py.test.skip("ootypesystem does not support os.fstat")
-
-    def test_os_chroot(self):
-        py.test.skip("ootypesystem does not support os.chroot")

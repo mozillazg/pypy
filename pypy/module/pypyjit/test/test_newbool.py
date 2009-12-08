@@ -1,5 +1,3 @@
-import py
-py.test.skip("JIT disabled for now")
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.annotator import HintAnnotatorPolicy
 from pypy.jit.timeshifter import rvalue

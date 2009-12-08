@@ -114,29 +114,29 @@ def test_rom5_step():
     emulate_step_op_codes_test(gameboy, [0xDD, 0xAF, 0xC6])
     pc = cpu.pc.get()
     assert cpu.a.get() == 1
-    assert cpu.flag.c_flag == False
+    assert cpu.f.c_flag == False
     # check jr in .loop2
     emulate_step_op_codes_test(gameboy, [0x30])
     assert cpu.pc.get()  == pc-2
     # looping in .loop2
     emulate_step_op_codes_test(gameboy, [0xC6, 0x30]*0xFF)
     assert cpu.a.get() == 0
-    assert cpu.flag.c_flag == True
+    assert cpu.f.c_flag == True
     # debugg call reseting 
     emulate_step_op_codes_test(gameboy, [0xDD, 0xAF])
     assert cpu.a.get() == 0
-    assert cpu.flag.c_flag == False
+    assert cpu.f.c_flag == False
     pc = cpu.pc.get()
     # enter .loop3
-    c_flag = cpu.flag.c_flag
+    c_flag = cpu.f.c_flag
     emulate_step_op_codes_test(gameboy, [0x3C, 0xD2])
-    assert cpu.flag.c_flag == c_flag
+    assert cpu.f.c_flag == c_flag
     assert cpu.a.get() == 1
     assert cpu.pc.get() == pc
     # looping in .loop3
     emulate_step_op_codes_test(gameboy, [0x3C, 0xD2]*255)
     assert cpu.a.get() == 0
-    assert cpu.flag.c_flag == False
+    assert cpu.f.c_flag == False
     
     emulate_step_op_codes_test(gameboy, [0xDD, 0x76, 0x76])
     
@@ -192,7 +192,7 @@ def test_rom6_step():
         emulate_step_op_codes_test(gameboy, [0x0D, 0x20])
         assert cpu.c.get() == c-1
         
-        while not cpu.flag.is_zero:
+        while not cpu.f.z_flag:
             hl = cpu.hl.get()
             emulate_step_op_codes_test(gameboy, [0x22])
             assert cpu.hl.get() == hl+1

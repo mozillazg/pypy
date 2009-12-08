@@ -4,12 +4,11 @@
 import StringIO, sys
 import unittest, py
 
-from pypy.lib import pyexpat
+import pyexpat
 #from xml.parsers import expat
 expat = pyexpat
 
 from test.test_support import sortdict, run_unittest
-
 
 class TestSetAttribute:
     def setup_method(self, meth):
@@ -43,7 +42,6 @@ data = '''\
 <!-- comment data -->
 <!DOCTYPE quotations SYSTEM "quotations.dtd" [
 <!ELEMENT root ANY>
-<!ATTLIST root attr1 CDATA #REQUIRED attr2 CDATA #IMPLIED>
 <!NOTATION notation SYSTEM "notation.jpeg">
 <!ENTITY acirc "&#226;">
 <!ENTITY external_entity SYSTEM "entity.file">
@@ -57,10 +55,8 @@ data = '''\
 </myns:subelement>
 <sub2><![CDATA[contents of CDATA section]]></sub2>
 &external_entity;
-&skipped_entity;
 </root>
 '''
-
 
 # Produce UTF-8 output
 class TestParse:
@@ -106,41 +102,13 @@ class TestParse:
             entityName, base, systemId, publicId, notationName = args
             self.out.append('Unparsed entity decl: %s' %(args,))
 
-        def NotStandaloneHandler(self):
+        def NotStandaloneHandler(self, userData):
             self.out.append('Not standalone')
             return 1
 
         def ExternalEntityRefHandler(self, *args):
             context, base, sysId, pubId = args
             self.out.append('External entity ref: %s' %(args[1:],))
-            return 1
-
-        def StartDoctypeDeclHandler(self, *args):
-            self.out.append(('Start doctype', args))
-            return 1
-
-        def EndDoctypeDeclHandler(self):
-            self.out.append("End doctype")
-            return 1
-
-        def EntityDeclHandler(self, *args):
-            self.out.append(('Entity declaration', args))
-            return 1
-
-        def XmlDeclHandler(self, *args):
-            self.out.append(('XML declaration', args))
-            return 1
-
-        def ElementDeclHandler(self, *args):
-            self.out.append(('Element declaration', args))
-            return 1
-
-        def AttlistDeclHandler(self, *args):
-            self.out.append(('Attribute list declaration', args))
-            return 1
-
-        def SkippedEntityHandler(self, *args):
-            self.out.append(("Skipped entity", args))
             return 1
 
         def DefaultHandler(self, userData):
@@ -150,15 +118,15 @@ class TestParse:
             pass
 
     handler_names = [
-        'StartElementHandler', 'EndElementHandler', 'CharacterDataHandler',
-        'ProcessingInstructionHandler', 'UnparsedEntityDeclHandler',
-        'NotationDeclHandler', 'StartNamespaceDeclHandler',
-        'EndNamespaceDeclHandler', 'CommentHandler',
-        'StartCdataSectionHandler', 'EndCdataSectionHandler', 'DefaultHandler',
-        'DefaultHandlerExpand', 'NotStandaloneHandler',
-        'ExternalEntityRefHandler', 'StartDoctypeDeclHandler',
-        'EndDoctypeDeclHandler', 'EntityDeclHandler', 'XmlDeclHandler',
-        'ElementDeclHandler', 'AttlistDeclHandler', 'SkippedEntityHandler',
+        'StartElementHandler', 'EndElementHandler',
+        'CharacterDataHandler', 'ProcessingInstructionHandler',
+        'UnparsedEntityDeclHandler', 'NotationDeclHandler',
+        'StartNamespaceDeclHandler', 'EndNamespaceDeclHandler',
+        'CommentHandler', 'StartCdataSectionHandler',
+        'EndCdataSectionHandler',
+        'DefaultHandler', 'DefaultHandlerExpand',
+        #'NotStandaloneHandler',
+        'ExternalEntityRefHandler'
         ]
 
     def test_utf8(self):
@@ -171,42 +139,24 @@ class TestParse:
         parser.Parse(data, 1)
 
         # Verify output
-        operations = out.out
-        expected_operations = [
-            ('XML declaration', (u'1.0', u'iso-8859-1', 0)),
-            'PI: \'xml-stylesheet\' \'href="stylesheet.css"\'',
-            "Comment: ' comment data '",
-            "Not standalone",
-            ("Start doctype", ('quotations', 'quotations.dtd', None, 1)),
-            ('Element declaration', (u'root', (2, 0, None, ()))),
-            ('Attribute list declaration', ('root', 'attr1', 'CDATA', None,
-                1)),
-            ('Attribute list declaration', ('root', 'attr2', 'CDATA', None,
-                0)),
-            "Notation declared: ('notation', None, 'notation.jpeg', None)",
-            ('Entity declaration', ('acirc', 0, '\xc3\xa2', None, None, None, None)),
-            ('Entity declaration', ('external_entity', 0, None, None,
-                'entity.file', None, None)),
-            "Unparsed entity decl: ('unparsed_entity', None, 'entity.file', None, 'notation')",
-            "Not standalone",
-            "End doctype",
-            "Start element: 'root' {'attr1': 'value1', 'attr2': 'value2\\xe1\\xbd\\x80'}",
-            "NS decl: 'myns' 'http://www.python.org/namespace'",
-            "Start element: 'http://www.python.org/namespace!subelement' {}",
-            "Character data: 'Contents of subelements'",
-            "End element: 'http://www.python.org/namespace!subelement'",
-            "End of NS decl: 'myns'",
-            "Start element: 'sub2' {}",
-            'Start of CDATA section',
-            "Character data: 'contents of CDATA section'",
-            'End of CDATA section',
-            "End element: 'sub2'",
-            "External entity ref: (None, 'entity.file', None)",
-            ('Skipped entity', ('skipped_entity', 0)),
-            "End element: 'root'",
-        ]
-        for operation, expected_operation in zip(operations, expected_operations):
-            assert operation == expected_operation
+        op = out.out
+        assert op[0] == 'PI: \'xml-stylesheet\' \'href="stylesheet.css"\''
+        assert op[1] == "Comment: ' comment data '"
+        assert op[2] == "Notation declared: ('notation', None, 'notation.jpeg', None)"
+        assert op[3] == "Unparsed entity decl: ('unparsed_entity', None, 'entity.file', None, 'notation')"
+        assert op[4] == "Start element: 'root' {'attr1': 'value1', 'attr2': 'value2\\xe1\\xbd\\x80'}"
+        assert op[5] == "NS decl: 'myns' 'http://www.python.org/namespace'"
+        assert op[6] == "Start element: 'http://www.python.org/namespace!subelement' {}"
+        assert op[7] == "Character data: 'Contents of subelements'"
+        assert op[8] == "End element: 'http://www.python.org/namespace!subelement'"
+        assert op[9] == "End of NS decl: 'myns'"
+        assert op[10] == "Start element: 'sub2' {}"
+        assert op[11] == 'Start of CDATA section'
+        assert op[12] == "Character data: 'contents of CDATA section'"
+        assert op[13] == 'End of CDATA section'
+        assert op[14] == "End element: 'sub2'"
+        assert op[15] == "External entity ref: (None, 'entity.file', None)"
+        assert op[16] == "End element: 'root'"
 
     def test_unicode(self):
         # Try the parse again, this time producing Unicode output
@@ -218,43 +168,24 @@ class TestParse:
 
         parser.Parse(data, 1)
 
-        operations = out.out
-        expected_operations = [
-            ('XML declaration', (u'1.0', u'iso-8859-1', 0)),
-            'PI: u\'xml-stylesheet\' u\'href="stylesheet.css"\'',
-            "Comment: u' comment data '",
-            "Not standalone",
-            ("Start doctype", ('quotations', 'quotations.dtd', None, 1)),
-            ('Element declaration', (u'root', (2, 0, None, ()))),
-            ('Attribute list declaration', ('root', 'attr1', 'CDATA', None,
-                1)),
-            ('Attribute list declaration', ('root', 'attr2', 'CDATA', None,
-                0)),
-            "Notation declared: (u'notation', None, u'notation.jpeg', None)",
-            ('Entity declaration', (u'acirc', 0, u'\xe2', None, None, None,
-                None)),
-            ('Entity declaration', (u'external_entity', 0, None, None,
-                 u'entity.file', None, None)),
-            "Unparsed entity decl: (u'unparsed_entity', None, u'entity.file', None, u'notation')",
-            "Not standalone",
-            "End doctype",
-            "Start element: u'root' {u'attr1': u'value1', u'attr2': u'value2\\u1f40'}",
-            "NS decl: u'myns' u'http://www.python.org/namespace'",
-            "Start element: u'http://www.python.org/namespace!subelement' {}",
-            "Character data: u'Contents of subelements'",
-            "End element: u'http://www.python.org/namespace!subelement'",
-            "End of NS decl: u'myns'",
-            "Start element: u'sub2' {}",
-            'Start of CDATA section',
-            "Character data: u'contents of CDATA section'",
-            'End of CDATA section',
-            "End element: u'sub2'",
-            "External entity ref: (None, u'entity.file', None)",
-            ('Skipped entity', ('skipped_entity', 0)),
-            "End element: u'root'",
-        ]
-        for operation, expected_operation in zip(operations, expected_operations):
-            assert operation == expected_operation
+        op = out.out
+        assert op[0] == 'PI: u\'xml-stylesheet\' u\'href="stylesheet.css"\''
+        assert op[1] == "Comment: u' comment data '"
+        assert op[2] == "Notation declared: (u'notation', None, u'notation.jpeg', None)"
+        assert op[3] == "Unparsed entity decl: (u'unparsed_entity', None, u'entity.file', None, u'notation')"
+        assert op[4] == "Start element: u'root' {u'attr1': u'value1', u'attr2': u'value2\\u1f40'}"
+        assert op[5] == "NS decl: u'myns' u'http://www.python.org/namespace'"
+        assert op[6] == "Start element: u'http://www.python.org/namespace!subelement' {}"
+        assert op[7] == "Character data: u'Contents of subelements'"
+        assert op[8] == "End element: u'http://www.python.org/namespace!subelement'"
+        assert op[9] == "End of NS decl: u'myns'"
+        assert op[10] == "Start element: u'sub2' {}"
+        assert op[11] == 'Start of CDATA section'
+        assert op[12] == "Character data: u'contents of CDATA section'"
+        assert op[13] == 'End of CDATA section'
+        assert op[14] == "End element: u'sub2'"
+        assert op[15] == "External entity ref: (None, u'entity.file', None)"
+        assert op[16] == "End element: u'root'"
 
     def test_parse_file(self):
         # Try parsing a file
@@ -267,41 +198,24 @@ class TestParse:
 
         parser.ParseFile(file)
 
-        operations = out.out
-        expected_operations = [
-            ('XML declaration', (u'1.0', u'iso-8859-1', 0)),
-            'PI: u\'xml-stylesheet\' u\'href="stylesheet.css"\'',
-            "Comment: u' comment data '",
-            "Not standalone",
-            ("Start doctype", ('quotations', 'quotations.dtd', None, 1)),
-            ('Element declaration', (u'root', (2, 0, None, ()))),
-            ('Attribute list declaration', ('root', 'attr1', 'CDATA', None,
-                1)),
-            ('Attribute list declaration', ('root', 'attr2', 'CDATA', None,
-                0)),
-            "Notation declared: (u'notation', None, u'notation.jpeg', None)",
-            ('Entity declaration', ('acirc', 0, u'\xe2', None, None, None, None)),
-            ('Entity declaration', (u'external_entity', 0, None, None, u'entity.file', None, None)),
-            "Unparsed entity decl: (u'unparsed_entity', None, u'entity.file', None, u'notation')",
-            "Not standalone",
-            "End doctype",
-            "Start element: u'root' {u'attr1': u'value1', u'attr2': u'value2\\u1f40'}",
-            "NS decl: u'myns' u'http://www.python.org/namespace'",
-            "Start element: u'http://www.python.org/namespace!subelement' {}",
-            "Character data: u'Contents of subelements'",
-            "End element: u'http://www.python.org/namespace!subelement'",
-            "End of NS decl: u'myns'",
-            "Start element: u'sub2' {}",
-            'Start of CDATA section',
-            "Character data: u'contents of CDATA section'",
-            'End of CDATA section',
-            "End element: u'sub2'",
-            "External entity ref: (None, u'entity.file', None)",
-            ('Skipped entity', ('skipped_entity', 0)),
-            "End element: u'root'",
-        ]
-        for operation, expected_operation in zip(operations, expected_operations):
-            assert operation == expected_operation
+        op = out.out
+        assert op[0] == 'PI: u\'xml-stylesheet\' u\'href="stylesheet.css"\''
+        assert op[1] == "Comment: u' comment data '"
+        assert op[2] == "Notation declared: (u'notation', None, u'notation.jpeg', None)"
+        assert op[3] == "Unparsed entity decl: (u'unparsed_entity', None, u'entity.file', None, u'notation')"
+        assert op[4] == "Start element: u'root' {u'attr1': u'value1', u'attr2': u'value2\\u1f40'}"
+        assert op[5] == "NS decl: u'myns' u'http://www.python.org/namespace'"
+        assert op[6] == "Start element: u'http://www.python.org/namespace!subelement' {}"
+        assert op[7] == "Character data: u'Contents of subelements'"
+        assert op[8] == "End element: u'http://www.python.org/namespace!subelement'"
+        assert op[9] == "End of NS decl: u'myns'"
+        assert op[10] == "Start element: u'sub2' {}"
+        assert op[11] == 'Start of CDATA section'
+        assert op[12] == "Character data: u'contents of CDATA section'"
+        assert op[13] == 'End of CDATA section'
+        assert op[14] == "End element: u'sub2'"
+        assert op[15] == "External entity ref: (None, u'entity.file', None)"
+        assert op[16] == "End element: u'root'"
 
 
 class TestNamespaceSeparator:
@@ -398,8 +312,7 @@ class TestBufferText:
         # Make sure buffering is turned on
         assert self.parser.buffer_text
         self.parser.Parse("<a>1<b/>2<c/>3</a>", 1)
-        assert self.stuff == ['123'], (
-                          "buffered text not properly collapsed")
+        assert self.stuff == ['123']
 
     def test1(self):
         # XXX This test exposes more detail of Expat's text chunking than we
@@ -488,7 +401,7 @@ class TestPosition:
                 'Expected position %s, got position %s' %(pos, expected))
         self.upto += 1
 
-    def test(self):
+    def test_x(self):
         self.parser = expat.ParserCreate()
         self.parser.StartElementHandler = self.StartElementHandler
         self.parser.EndElementHandler = self.EndElementHandler
@@ -502,6 +415,11 @@ class TestPosition:
 
 class Testsf1296433:
     def test_parse_only_xml_data(self):
+        try:
+            import __pypy__
+        except ImportError:
+            import py
+            py.test.skip("segfaults cpython")
         # http://python.org/sf/1296433
         #
         xml = "<?xml version='1.0' encoding='iso8859'?><s>%s</s>" % ('a' * 1025)
@@ -523,6 +441,13 @@ class TestChardataBuffer:
     """
     test setting of chardata buffer size
     """
+    def setup_class(cls):
+        import py
+        try:
+            import __pypy__
+        except ImportError:
+            pass
+            #py.test.skip("Doesn't work on cpy 2.5")
 
     def test_1025_bytes(self):
         assert self.small_buffer_test(1025) == 2
@@ -643,19 +568,3 @@ class TestChardataBuffer:
         assert parser.buffer_size == 1024
         parser.Parse(xml2, 1)
         assert self.n == 4
-
-    def test_segfault(self):
-        py.test.raises(TypeError, expat.ParserCreate, 1234123123)
-
-def test_invalid_data():
-    parser = expat.ParserCreate()
-    parser.Parse('invalid.xml', 0)
-    try:
-        parser.Parse("", 1)
-    except expat.ExpatError, e:
-        assert e.code == 2 # XXX is this reliable?
-        assert e.lineno == 1
-        assert e.message.startswith('syntax error')
-    else:
-        py.test.fail("Did not raise")
-

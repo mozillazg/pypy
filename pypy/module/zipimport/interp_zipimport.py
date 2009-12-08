@@ -4,6 +4,8 @@ from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, \
 from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
+from pypy.interpreter.gateway import app2interp
+from pypy.interpreter.eval import Code
 from pypy.interpreter.module import Module
 from pypy.module.__builtin__ import importing
 from pypy.rlib.unroll import unrolling_iterable

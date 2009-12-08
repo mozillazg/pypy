@@ -9,16 +9,10 @@ from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.tool.autopath import pypydir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.rlib.rmmap import alloc
 import py
 import os
-import sys
-import ctypes.util
-
-DEBUG = False # writes dlerror() messages to stderr
 
 _MS_WINDOWS = os.name == "nt"
-_MAC_OS = sys.platform == "darwin"
 
 if _MS_WINDOWS:
     from pypy.rlib import rwin32
@@ -26,10 +20,7 @@ if _MS_WINDOWS:
 if not _MS_WINDOWS:
     includes = ['dlfcn.h', 'ffi.h']
     include_dirs = []
-    if _MAC_OS:
-        pot_incl = py.path.local('/usr/include/ffi') 
-    else:
-        pot_incl = py.path.local('/usr/include/libffi') 
+    pot_incl = py.path.local('/usr/include/libffi')
     if pot_incl.check():
         include_dirs.append(str(pot_incl))
     lib_dirs = []
@@ -37,12 +28,7 @@ if not _MS_WINDOWS:
     if pot_lib.check():
         lib_dirs.append(str(pot_lib))
 
-    if _MAC_OS:
-        pre_include_bits = ['#define MACOSX']
-    else: 
-        pre_include_bits = []
     eci = ExternalCompilationInfo(
-        pre_include_bits = pre_include_bits,
         includes = includes,
         libraries = ['ffi', 'dl'],
         include_dirs = include_dirs,
@@ -181,7 +167,8 @@ def winexternal(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=eci, calling_conv='win')
 
 if not _MS_WINDOWS:
-    c_dlopen = external('dlopen', [rffi.CCHARP, rffi.INT], rffi.VOIDP)
+    c_dlopen = external('dlopen', [rffi.CCHARP, rffi.INT], rffi.VOIDP,
+                        _nowrapper=True)
     c_dlclose = external('dlclose', [rffi.VOIDP], rffi.INT)
     c_dlerror = external('dlerror', [], rffi.CCHARP)
     c_dlsym = external('dlsym', [rffi.VOIDP, rffi.CCHARP], rffi.VOIDP)
@@ -199,23 +186,16 @@ if not _MS_WINDOWS:
             return ""
         return rffi.charp2str(res)
 
-    def dlopen(name, mode=-1):
+    def dlopen(name):
         """ Wrapper around C-level dlopen
         """
-        if mode == -1:
-            if RTLD_LOCAL is not None:
-                mode = RTLD_LOCAL | RTLD_NOW
-            else:
-                mode = RTLD_NOW
+        if RTLD_LOCAL is not None:
+            mode = RTLD_LOCAL | RTLD_NOW
+        else:
+            mode = RTLD_NOW
         res = c_dlopen(name, rffi.cast(rffi.INT, mode))
         if not res:
-            err = dlerror()
-            # because the message would be lost in a translated program (OSError only has an errno),
-            # we offer a way to write it to stderr
-            if DEBUG:
-                import os
-                os.write(2, err)
-            raise OSError(-1, err)
+            raise OSError(-1, dlerror())
         return res
 
     dlclose = c_dlclose
@@ -229,7 +209,8 @@ if not _MS_WINDOWS:
         # XXX rffi.cast here...
         return res
 
-    libc_name = ctypes.util.find_library('c')
+    def get_libc_name():
+        return 'libc.so.6'
 
 if _MS_WINDOWS:
     def dlopen(name):
@@ -258,7 +239,8 @@ if _MS_WINDOWS:
 
     get_libc_handle = external('get_libc_handle', [], rwin32.HANDLE)
 
-    libc_name = rwin32.GetModuleFileName(get_libc_handle())
+    def get_libc_name():
+        return rwin32.GetModuleFileName(get_libc_handle())
         
 
 FFI_OK = cConfig.FFI_OK
@@ -328,6 +310,9 @@ def ll_callback(ffi_cif, ll_res, ll_args, ll_userdata):
     userdata = rffi.cast(USERDATA_P, ll_userdata)
     userdata.callback(ll_args, ll_res, userdata)
 
+# heap for closures
+from pypy.jit.codegen.i386.codebuf import memhandler
+
 CHUNK = 4096
 CLOSURES = rffi.CArrayPtr(FFI_CLOSUREP.TO)
 
@@ -337,7 +322,7 @@ class ClosureHeap(object):
         self.free_list = lltype.nullptr(rffi.VOIDP.TO)
 
     def _more(self):
-        chunk = rffi.cast(CLOSURES, alloc(CHUNK))
+        chunk = rffi.cast(CLOSURES, memhandler.alloc(CHUNK))
         count = CHUNK//rffi.sizeof(FFI_CLOSUREP.TO)
         for i in range(count):
             rffi.cast(rffi.VOIDPP, chunk)[0] = self.free_list
@@ -529,18 +514,20 @@ class FuncPtr(AbstractFuncPtr):
 
 class CDLL:
     flags = FUNCFLAG_CDECL
-
-    def __init__(self, libname, unload_on_finalization=True):
-        self.unload_on_finalization = unload_on_finalization
+    
+    def __init__(self, libname):
+        self.ll_libname = lltype.nullptr(rffi.CCHARP.TO)
         self.lib = lltype.nullptr(rffi.CCHARP.TO)
-        ll_libname = rffi.str2charp(libname)
-        self.lib = dlopen(ll_libname)
-        lltype.free(ll_libname, flavor='raw')
+        self.ll_libname = rffi.str2charp(libname)
+        self.lib = dlopen(self.ll_libname)
 
     def __del__(self):
-        if self.lib and self.unload_on_finalization:
+        if self.lib:
             dlclose(self.lib)
             self.lib = lltype.nullptr(rffi.CCHARP.TO)
+        if self.ll_libname:
+            lltype.free(self.ll_libname, flavor='raw')
+            self.ll_libname = lltype.nullptr(rffi.CCHARP.TO)
 
     def getpointer(self, name, argtypes, restype):
         # these arguments are already casted to proper ffi

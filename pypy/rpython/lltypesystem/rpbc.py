@@ -396,8 +396,6 @@ class ClassesPBCRepr(AbstractClassesPBCRepr):
         v_inst1 = hop.gendirectcall(ll_instantiate, vtypeptr)
         return hop.genop('cast_pointer', [v_inst1], resulttype = r_instance)
 
-    def getlowleveltype(self):
-        return rclass.CLASSTYPE
 
 
 # ____________________________________________________________

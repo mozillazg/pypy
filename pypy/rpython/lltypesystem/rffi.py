@@ -101,44 +101,6 @@ def llexternal(name, args, result, _callable=None,
         # sandboxsafe is a hint for "too-small-ness" (e.g. math functions).
         invoke_around_handlers = not sandboxsafe
 
-    if invoke_around_handlers:
-        # The around-handlers are releasing the GIL in a threaded pypy.
-        # We need tons of care to ensure that no GC operation and no
-        # exception checking occurs while the GIL is released.
-
-        # The actual call is done by this small piece of non-inlinable
-        # generated code in order to avoid seeing any GC pointer:
-        # neither '*args' nor the GC objects originally passed in as
-        # argument to wrapper(), if any (e.g. RPython strings).
-
-        argnames = ', '.join(['a%d' % i for i in range(len(args))])
-        source = py.code.Source("""
-            def call_external_function(%(argnames)s):
-                before = aroundstate.before
-                after = aroundstate.after
-                if before: before()
-                # NB. it is essential that no exception checking occurs here!
-                res = funcptr(%(argnames)s)
-                if after: after()
-                return res
-        """ % locals())
-        miniglobals = {'aroundstate': aroundstate,
-                       'funcptr':     funcptr,
-                       '__name__':    __name__, # for module name propagation
-                       }
-        exec source.compile() in miniglobals
-        call_external_function = miniglobals['call_external_function']
-        call_external_function._dont_inline_ = True
-        call_external_function._annspecialcase_ = 'specialize:ll'
-        call_external_function = func_with_new_name(call_external_function,
-                                                    'ccall_' + name)
-        # don't inline, as a hack to guarantee that no GC pointer is alive
-        # anywhere in call_external_function
-    else:
-        # if we don't have to invoke the aroundstate, we can just call
-        # the low-level function pointer carelessly
-        call_external_function = funcptr
-
     unrolling_arg_tps = unrolling_iterable(enumerate(args))
     def wrapper(*args):
         # XXX the next line is a workaround for the annotation bug
@@ -178,7 +140,19 @@ def llexternal(name, args, result, _callable=None,
                         arg = cast(TARGET, arg)
             real_args = real_args + (arg,)
             to_free = to_free + (freeme,)
-        res = call_external_function(*real_args)
+        if invoke_around_handlers:
+            before = aroundstate.before
+            after = aroundstate.after
+            if before: before()
+            # NB. it is essential that no exception checking occurs after
+            # the call to before(), because we don't have the GIL any more!
+            # It is also essential that no GC pointer is alive between now
+            # and the end of the function, so that the external function
+            # calls below don't need to be guarded by GC shadow stack logic
+            # that would crash if not protected by the GIL!
+        res = funcptr(*real_args)
+        if invoke_around_handlers:
+            if after: after()
         for i, TARGET in unrolling_arg_tps:
             if to_free[i]:
                 lltype.free(to_free[i], flavor='raw')
@@ -189,7 +163,12 @@ def llexternal(name, args, result, _callable=None,
                 return cast(lltype.Unsigned, res)
         return res
     wrapper._annspecialcase_ = 'specialize:ll'
-    wrapper._always_inline_ = True
+    if invoke_around_handlers:
+        # don't inline, as a hack to guarantee that no GC pointer is alive
+        # in the final part of the wrapper
+        wrapper._dont_inline_ = True
+    else:
+        wrapper._always_inline_ = True
     # for debugging, stick ll func ptr to that
     wrapper._ptr = funcptr
 
@@ -307,8 +286,7 @@ for _name in 'short int long'.split():
     for name in (_name, 'unsigned ' + _name):
         TYPES.append(name)
 TYPES += ['signed char', 'unsigned char',
-          'long long', 'unsigned long long',
-          'size_t', 'time_t']
+          'long long', 'unsigned long long', 'size_t']
 if os.name != 'nt':
     TYPES.append('mode_t')
     TYPES.append('pid_t')
@@ -353,7 +331,6 @@ platform.numbertype_to_rclass[lltype.Signed] = int     # avoid "r_long" for comm
 #        LONGLONG       r_longlong
 #        ULONGLONG      r_ulonglong
 #        SIZE_T         r_size_t
-#        TIME_T         r_time_t
 # --------------------------------------------------------------------
 # Note that rffi.r_int is not necessarily the same as
 # rarithmetic.r_int, etc!  rffi.INT/r_int correspond to the C-level
@@ -402,14 +379,10 @@ def COpaque(name, hints=None, compilation_info=None):
         hints = hints.copy()
     hints['external'] = 'C'
     hints['c_name'] = name
-    def lazy_getsize(cache={}):
+    def lazy_getsize():
         from pypy.rpython.tool import rffi_platform
-        try:
-            return cache[name]
-        except KeyError:
-            val = rffi_platform.sizeof(name, compilation_info)
-            cache[name] = val
-            return val
+        k = {}
+        return rffi_platform.sizeof(name, compilation_info)
     
     hints['getsize'] = lazy_getsize
     return lltype.OpaqueType(name, hints)

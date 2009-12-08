@@ -8,9 +8,7 @@ from pypy.objspace.flow.model import Constant
 class GCManagedHeap(object):
 
     def __init__(self, llinterp, flowgraphs, gc_class, GC_PARAMS={}):
-        translator = llinterp.typer.annotator.translator
-        config = translator.config.translation
-        self.gc = gc_class(config, chunk_size = 10, **GC_PARAMS)
+        self.gc = gc_class(chunk_size = 10, **GC_PARAMS)
         self.gc.set_root_walker(LLInterpRootWalker(self))
         self.gc.DEBUG = True
         self.llinterp = llinterp
@@ -103,6 +101,12 @@ class GCManagedHeap(object):
 
     def collect(self):
         self.gc.collect()
+
+    def disable_finalizers(self):
+        self.gc.disable_finalizers()
+
+    def enable_finalizers(self):
+        self.gc.enable_finalizers()
 
     def can_move(self, addr):
         return self.gc.can_move(addr)

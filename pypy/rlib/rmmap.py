@@ -64,8 +64,7 @@ if _POSIX:
 elif _MS_WINDOWS:
     constant_names = ['PAGE_READONLY', 'PAGE_READWRITE', 'PAGE_WRITECOPY',
                       'FILE_MAP_READ', 'FILE_MAP_WRITE', 'FILE_MAP_COPY',
-                      'DUPLICATE_SAME_ACCESS', 'MEM_COMMIT', 'MEM_RESERVE',
-                      'MEM_RELEASE', 'PAGE_EXECUTE_READWRITE']
+                      'DUPLICATE_SAME_ACCESS']
     for name in constant_names:
         setattr(CConfig, name, rffi_platform.ConstantInteger(name))
 
@@ -177,15 +176,7 @@ elif _MS_WINDOWS:
     # but it should not be so!
     _get_osfhandle = winexternal('_get_osfhandle', [INT], HANDLE)
     GetLastError = winexternal('GetLastError', [], DWORD)
-    VirtualAlloc = winexternal('VirtualAlloc',
-                               [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORD],
-                               rffi.VOIDP)
-    VirtualProtect = winexternal('VirtualProtect',
-                                 [rffi.VOIDP, rffi.SIZE_T, DWORD, LPDWORD],
-                                 BOOL)
-    VirtualFree = winexternal('VirtualFree',
-                              [rffi.VOIDP, rffi.SIZE_T, DWORD], BOOL)
-
+    
     
     def _get_page_size():
         try:
@@ -619,24 +610,6 @@ if _POSIX:
         
         m.setdata(res, map_size)
         return m
-
-    # XXX is this really necessary?
-    class Hint:
-        pos = -0x4fff0000   # for reproducible results
-    hint = Hint()
-
-    def alloc(map_size):
-        flags = MAP_PRIVATE | MAP_ANONYMOUS
-        prot = PROT_EXEC | PROT_READ | PROT_WRITE
-        hintp = rffi.cast(PTR, hint.pos)
-        res = c_mmap(hintp, map_size, prot, flags, -1, 0)
-        if res == rffi.cast(PTR, -1):
-            raise MemoryError
-        hint.pos += map_size
-        return res
-
-    free = c_munmap
-    
 elif _MS_WINDOWS:
     def mmap(fileno, length, tagname="", access=_ACCESS_DEFAULT):
         # check size boundaries
@@ -735,20 +708,5 @@ elif _MS_WINDOWS:
         err = rffi.cast(lltype.Signed, dwErr)
         raise OSError(err, os.strerror(err))
 
-    
-    def alloc(map_size):
-        null = lltype.nullptr(rffi.VOIDP.TO)
-        res = VirtualAlloc(null, map_size, MEM_COMMIT|MEM_RESERVE,
-                           PAGE_EXECUTE_READWRITE)
-        if not res:
-            raise MemoryError
-        arg = lltype.malloc(LPDWORD.TO, 1, zero=True, flavor='raw')
-        VirtualProtect(res, map_size, PAGE_EXECUTE_READWRITE, arg)
-        lltype.free(arg, flavor='raw')
-        # ignore errors, just try
-        return res
-
-    def free(ptr, map_size):
-        VirtualFree(ptr, 0, MEM_RELEASE)
         
 # register_external here?

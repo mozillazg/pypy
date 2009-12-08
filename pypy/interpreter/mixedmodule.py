@@ -19,7 +19,6 @@ class MixedModule(Module):
         Module.__init__(self, space, w_name) 
         self.lazy = True 
         self.__class__.buildloaders()
-        self.loaders = self.loaders.copy()    # copy from the class to the inst
 
     def get_applevel_name(cls):
         """ NOT_RPYTHON """

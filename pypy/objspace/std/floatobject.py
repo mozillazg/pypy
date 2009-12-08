@@ -124,11 +124,10 @@ def declare_new_float_int_comparison(opname):
 for op in ['lt', 'le', 'eq', 'ne', 'gt', 'ge']:
     func, name = declare_new_float_comparison(op)
     globals()[name] = func
-    # XXX shortcuts disabled: see r54171 and issue #384.
-    #func, name = declare_new_int_float_comparison(op)
-    #globals()[name] = func
-    #func, name = declare_new_float_int_comparison(op)
-    #globals()[name] = func
+    func, name = declare_new_int_float_comparison(op)
+    globals()[name] = func
+    func, name = declare_new_float_int_comparison(op)
+    globals()[name] = func
 
 # for overflowing comparisons between longs and floats
 # XXX we might have to worry (later) about eq__Float_Int, for the case

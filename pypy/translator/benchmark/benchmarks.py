@@ -123,7 +123,7 @@ def run_templess(executable='/usr/local/bin/python'):
         'svn co -r100 http://johnnydebris.net/templess/trunk templess'
     """
     here = py.magic.autopath().dirpath()
-    pypath = os.path.dirname(os.path.dirname(py.__file__))
+    pypath = py.__package__.getpath().dirpath()
     templessdir = here.join('templess')
     testscript = templessdir.join('test/oneshot.py')
     command = 'PYTHONPATH="%s:%s" "%s" "%s" 100' % (here, pypath,

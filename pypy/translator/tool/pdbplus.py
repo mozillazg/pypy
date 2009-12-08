@@ -1,4 +1,4 @@
-import pdb, bdb
+import pdb
 import types
 import code
 import sys
@@ -11,10 +11,7 @@ class PdbPlusShow(pdb.Pdb):
 
     def __init__(self, translator):
         pdb.Pdb.__init__(self)
-        if self.prompt == "(Pdb) ":
-            self.prompt = "(Pdb+) "
-        else:
-            self.prompt = self.prompt.replace("(", "(Pdb+ on ", 1)
+        self.prompt = "(Pdb+) "
         self.translator = translator
         self.exposed = {}
 
@@ -416,7 +413,7 @@ show the program's call graph"""
             locals().update(self.exposed)
             fn(*args)
             pass # for debugger to land
-        except bdb.BdbQuit:
+        except pdb.bdb.BdbQuit:
             pass    
 
 

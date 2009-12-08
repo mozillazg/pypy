@@ -1,8 +1,8 @@
-from pypy.conftest import gettestobjspace
-from pypy.interpreter import gateway
-
 
 class AppTestOldstyle(object):
+    def setup_class(cls):
+        from pypy.conftest import gettestobjspace
+        cls.space = gettestobjspace(**{"objspace.std.oldstyle": True})
 
     def test_simple(self):
         class A:
@@ -17,35 +17,6 @@ class AppTestOldstyle(object):
         assert a.a == 1
         assert a.__class__ is A
         assert a.__dict__ == {'b': 2}
-
-    def test_isinstance(self):
-        class A:
-            pass
-        class B(A):
-            pass
-        class C(A):
-            pass
-        assert isinstance(B(), A)
-        assert isinstance(B(), B)
-        assert not isinstance(B(), C)
-        assert not isinstance(A(), B)
-        assert isinstance(B(), (A, C))
-        assert isinstance(B(), (C, (), (C, B)))
-        assert not isinstance(B(), ())
-
-    def test_issubclass(self):
-        class A:
-            pass
-        class B(A):
-            pass
-        class C(A):
-            pass
-        assert issubclass(A, A)
-        assert not issubclass(A, B)
-        assert not issubclass(A, C)
-        assert issubclass(B, A)
-        assert issubclass(B, B)
-        assert not issubclass(B, C)
 
     def test_mutate_class_special(self):
         class A:
@@ -447,21 +418,6 @@ class AppTestOldstyle(object):
         raises(TypeError, "a + 1.1")
         assert l == [1, 1.1]
 
-    def test_binaryop_raises(self):
-        class A:
-            def __add__(self, other):
-                raise this_exception
-            def __iadd__(self, other):
-                raise this_exception
-
-        a = A()
-        this_exception = ValueError
-        raises(ValueError, "a + 1")
-        raises(ValueError, "a += 1")
-        this_exception = AttributeError
-        raises(AttributeError, "a + 1")
-        raises(AttributeError, "a += 1")
-
     def test_iadd(self):
         class A:
             def __init__(self):
@@ -665,23 +621,19 @@ class AppTestOldstyle(object):
 
     def test_catch_attributeerror_of_descriptor(self):
         def booh(self):
-            raise this_exception, "booh"
+            raise AttributeError, "booh"
 
         class E:
             __eq__ = property(booh)
             __iadd__ = property(booh)
 
         e = E()
-        this_exception = AttributeError
         raises(TypeError, "e += 1")
         # does not crash
         E() == E()
         class I:
             __init__ = property(booh)
         raises(AttributeError, I)
-
-        this_exception = ValueError
-        raises(ValueError, "e += 1")
 
     def test_multiple_inheritance_more(self):
         l = []
@@ -737,10 +689,6 @@ class AppTestOldstyle(object):
         assert Y() != X()
 
     def test_assignment_to_del(self):
-        import sys
-        if not hasattr(sys, 'pypy_objspaceclass'):
-            skip("assignment to __del__ doesn't give a warning in CPython")
-
         import warnings
         
         warnings.simplefilter('error', RuntimeWarning)
@@ -758,22 +706,3 @@ class AppTestOldstyle(object):
             Z().__del__ = lambda self: None
         finally:
             warnings.simplefilter('default', RuntimeWarning)
-
-class AppTestOldStyleSharing(AppTestOldstyle):
-    def setup_class(cls):
-        cls.space = gettestobjspace(**{"objspace.std.withsharingdict": True})
-        def is_sharing(space, w_inst):
-            from pypy.objspace.std.dictmultiobject import SharedDictImplementation, W_DictMultiObject
-            w_d = w_inst.getdict()
-            return space.wrap(isinstance(w_d, W_DictMultiObject) and
-                              isinstance(w_d.implementation, SharedDictImplementation))
-        cls.w_is_sharing = cls.space.wrap(gateway.interp2app(is_sharing))
-
-
-    def test_real_sharing(self):
-        class A:
-            def __init__(self):
-                self.x = 42
-        A1, A2, A3 = A(), A(), A()
-        assert self.is_sharing(A3)
-        assert self.is_sharing(A2)

@@ -27,13 +27,6 @@ class CConfigure:
                                     ('convert', c_void_p),
                                     ('release', c_void_p),
                                     ('map', c_int * 256)])
-    XML_Content = configure.Struct('XML_Content',[
-        ('numchildren', c_int),
-        ('children', c_void_p),
-        ('name', c_char_p),
-        ('type', c_int),
-        ('quant', c_int),
-    ])
     # this is insanely stupid
     XML_FALSE = configure.ConstantInteger('XML_FALSE')
     XML_TRUE = configure.ConstantInteger('XML_TRUE')
@@ -41,8 +34,6 @@ class CConfigure:
 info = configure.configure(CConfigure)
 for k, v in info.items():
     globals()[k] = v
-
-XML_Content.children = POINTER(XML_Content)
 XML_Parser = ctypes.c_void_p # an opaque pointer
 assert XML_Char is ctypes.c_char # this assumption is everywhere in
 # cpython's expat, let's explode
@@ -50,7 +41,7 @@ assert XML_Char is ctypes.c_char # this assumption is everywhere in
 def declare_external(name, args, res):
     func = getattr(lib, name)
     func.args = args
-    func.restype = res
+    func.result = res
     globals()[name] = func
 
 declare_external('XML_ParserCreate', [c_char_p], XML_Parser)
@@ -61,20 +52,24 @@ currents = ['CurrentLineNumber', 'CurrentColumnNumber',
 for name in currents:
     func = getattr(lib, 'XML_Get' + name)
     func.args = [XML_Parser]
-    func.restype = c_int
+    func.result = c_int
 
 declare_external('XML_SetReturnNSTriplet', [XML_Parser, c_int], None)
 declare_external('XML_GetSpecifiedAttributeCount', [XML_Parser], c_int)
 declare_external('XML_SetParamEntityParsing', [XML_Parser, c_int], None)
 declare_external('XML_GetErrorCode', [XML_Parser], c_int)
 declare_external('XML_StopParser', [XML_Parser, c_int], None)
-declare_external('XML_ErrorString', [c_int], c_char_p)
-declare_external('XML_SetBase', [XML_Parser, c_char_p], None)
+lib.XML_ErrorString.args = [c_int]
+lib.XML_ErrorString.result = c_int
 
 declare_external('XML_SetUnknownEncodingHandler', [XML_Parser, c_void_p,
                                                    c_void_p], None)
-declare_external('XML_FreeContentModel', [XML_Parser, POINTER(XML_Content)],
-                 None)
+
+def XML_ErrorString(code):
+    res = lib.XML_ErrorString(code)
+    p = c_char_p()
+    p.value = res
+    return p.value
 
 handler_names = [
     'StartElement',
@@ -141,7 +136,6 @@ class XMLParserType(object):
         self.buffer_size = 8192
         self.character_data_handler = None
         self.intern = {}
-        self.__exc_info = None
 
     def _flush_character_buffer(self):
         if not self.buffer:
@@ -183,19 +177,13 @@ class XMLParserType(object):
         e.lineno = lineno
         err = XML_ErrorString(code)[:200]
         e.s = "%s: line: %d, column: %d" % (err, lineno, colno)
-        e.message = e.s
         self._error = e
 
     def Parse(self, data, is_final=0):
         res = XML_Parse(self.itself, data, len(data), is_final)
         if res == 0:
             self._set_error(XML_GetErrorCode(self.itself))
-            if self.__exc_info:
-                exc_info = self.__exc_info
-                self.__exc_info = None
-                raise exc_info[0], exc_info[1], exc_info[2]
-            else:
-                raise self._error
+            raise self.__exc_info[0], self.__exc_info[1], self.__exc_info[2]
         self._flush_character_buffer()
         return res
 
@@ -273,21 +261,11 @@ class XMLParserType(object):
         CB = ctypes.CFUNCTYPE(None, c_void_p, POINTER(c_char), c_int)
         return CB(CharacterData)
 
-    def get_cb_for_NotStandaloneHandler(self, real_cb):
-        def NotStandaloneHandler(unused):
-            return real_cb()
-        NotStandaloneHandler = self._wrap_cb(NotStandaloneHandler)
-        CB = ctypes.CFUNCTYPE(c_int, c_void_p)
-        return CB(NotStandaloneHandler)
-
     def get_cb_for_EntityDeclHandler(self, real_cb):
-        def EntityDecl(unused, ename, is_param, value, value_len, base,
-                       system_id, pub_id, not_name):
+        def EntityDecl(unused, ename, is_param, value, _, base, system_id,
+                       pub_id, not_name):
+            
             self._flush_character_buffer()
-            if not value:
-                value = None
-            else:
-                value = value[:value_len]
             args = [ename, is_param, value, base, system_id,
                     pub_id, not_name]
             args = [self.conv(arg) for arg in args]
@@ -297,21 +275,12 @@ class XMLParserType(object):
                                c_int, c_char_p, c_char_p, c_char_p, c_char_p)
         return CB(EntityDecl)
 
-    def _conv_content_model(self, model):
-        children = tuple([self._conv_content_model(model.children[i])
-                          for i in range(model.numchildren)])
-        return (model.type, model.quant, self.conv(model.name),
-                children)
-
     def get_cb_for_ElementDeclHandler(self, real_cb):
-        def ElementDecl(unused, name, model):
-            self._flush_character_buffer()
-            modelobj = self._conv_content_model(model[0])
-            real_cb(name, modelobj)
-            XML_FreeContentModel(self.itself, model)
-
+        # XXX this is broken, needs tests
+        def ElementDecl(unused, *args):
+            print "WARNING! ElementDeclHandler Not supported"
         ElementDecl = self._wrap_cb(ElementDecl)
-        CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, POINTER(XML_Content))
+        CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, c_void_p)
         return CB(ElementDecl)
 
     def _new_callback_for_string_len(name, sign):
@@ -372,7 +341,7 @@ class XMLParserType(object):
     def conv_unicode(self, s):
         if s is None or isinstance(s, int):
             return s
-        return s.decode(self.encoding, "strict")
+        return s.decode(self.encoding)
 
     def __setattr__(self, name, value):
         # forest of ifs...
@@ -420,25 +389,15 @@ class XMLParserType(object):
             return self.buffer is not None
         elif name in currents:
             return getattr(lib, 'XML_Get' + name)(self.itself)
-        elif name == 'ErrorColumnNumber':
-            return lib.XML_GetCurrentColumnNumber(self.itself)
-        elif name == 'ErrorLineNumber':
-            return lib.XML_GetCurrentLineNumber(self.itself)
         return self.__dict__[name]
 
     def ParseFile(self, file):
         return self.Parse(file.read(), False)
 
-    def SetBase(self, base):
-        XML_SetBase(self.itself, base)
-
 def ErrorString(errno):
     xxx
 
 def ParserCreate(encoding=None, namespace_separator=None, intern=None):
-    if (not isinstance(encoding, str) and
-        not encoding is None):
-        raise TypeError("ParserCreate() argument 1 must be string or None, not %s" % encoding.__class__.__name__)
     if (not isinstance(namespace_separator, str) and
         not namespace_separator is None):
         raise TypeError("ParserCreate() argument 2 must be string or None, not %s" % namespace_separator.__class__.__name__)

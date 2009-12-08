@@ -65,8 +65,7 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
                             return space.new_interned_str(x)
                         else:
                             return space.wrap(x)
-                    builder = specialize.make_constgraphbuilder(2, factory=fold,
-                                                                srcmodule='<ann_override.wrap>')
+                    builder = specialize.make_constgraphbuilder(2, factory=fold)
                     return funcdesc.cachedgraph((typ, x), builder=builder)
         return funcdesc.cachedgraph(typ)
     
@@ -121,7 +120,7 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
             def builder(translator, func):
                 #print "LOOKUP", attr
                 pol.consider_lookup(funcdesc.bookkeeper, attr)
-                d = {'__name__': '<ann_override_lookup>'}
+                d = {}
                 exec CACHED_LOOKUP % {'attr': attr} in d
                 return translator.buildflowgraph(d['lookup_'+attr])
             return funcdesc.cachedgraph(attr, builder=builder)
@@ -136,7 +135,7 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
             def builder(translator, func):
                 #print "LOOKUP_IN_TYPE_WHERE", attr
                 pol.consider_lookup_in_type_where(funcdesc.bookkeeper, attr)
-                d = {'__name__': '<ann_override_lookup>'}
+                d = {}
                 exec CACHED_LOOKUP_IN_TYPE_WHERE % {'attr': attr} in d
                 return translator.buildflowgraph(d['lookup_in_type_where_'+attr])
             return funcdesc.cachedgraph(attr, builder=builder)

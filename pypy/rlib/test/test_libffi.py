@@ -13,6 +13,9 @@ import py
 import time
 
 def setup_module(mod):
+    if not (sys.platform.startswith('linux') or
+            sys.platform == 'win32'):
+        py.test.skip("Fragile tests, linux & win32 only by now")
     for name in type_names:
         # XXX force this to be seen by ll2ctypes
         # so that ALLOCATED.clear() clears it
@@ -25,16 +28,20 @@ class TestDLOperations:
 
     def test_dlopen(self):
         py.test.raises(OSError, "dlopen(rffi.str2charp('xxxxxxxxxxxx'))")
-        assert dlopen(rffi.str2charp(libc_name))
+        if sys.platform == 'win32':
+            assert dlopen(rffi.str2charp('kernel32.dll'))
+        else:
+            assert dlopen(rffi.str2charp('/lib/libc.so.6'))
         
     def get_libc(self):
-        return CDLL(libc_name)
+        if sys.platform == 'win32':
+            return CDLL('msvcrt.dll')
+        else:
+            return CDLL('/lib/libc.so.6')
     
     def get_libm(self):
         if sys.platform == 'win32':
             return CDLL('msvcrt.dll')
-        elif sys.platform == "darwin":
-            return CDLL('libm.dylib')
         else:
             return CDLL('libm.so')
     
@@ -162,26 +169,25 @@ class TestDLOperations:
             a2 = rffi.cast(rffi.INTP, p_a2)[0]
             res = rffi.cast(rffi.INTP, ll_res)
             if a1 > a2:
-                res[0] = rffi.cast(rffi.INT, 1)
+                res[0] = 1
             else:
-                res[0] = rffi.cast(rffi.INT, -1)
+                res[0] = -1
 
         ptr = CallbackFuncPtr([ffi_type_pointer, ffi_type_pointer],
                               ffi_type_sint, callback)
         
         TP = rffi.CArray(rffi.INT)
         to_sort = lltype.malloc(TP, 4, flavor='raw')
-        to_sort[0] = rffi.cast(rffi.INT, 4)
-        to_sort[1] = rffi.cast(rffi.INT, 3)
-        to_sort[2] = rffi.cast(rffi.INT, 1)
-        to_sort[3] = rffi.cast(rffi.INT, 2)
+        to_sort[0] = 4
+        to_sort[1] = 3
+        to_sort[2] = 1
+        to_sort[3] = 2
         qsort.push_arg(rffi.cast(rffi.VOIDP, to_sort))
         qsort.push_arg(rffi.sizeof(rffi.INT))
         qsort.push_arg(4)
         qsort.push_arg(ptr.ll_closure)
         qsort.call(lltype.Void)
-        assert ([rffi.cast(lltype.Signed, to_sort[i]) for i in range(4)] ==
-                [1,2,3,4])
+        assert [to_sort[i] for i in range(4)] == [1,2,3,4]
         lltype.free(to_sort, flavor='raw')
         keepalive_until_here(ptr)  # <= this test is not translated, but don't
                                    #    forget this in code that is meant to be
@@ -358,11 +364,11 @@ class TestDLOperations:
 class TestWin32Handles:
     def setup_class(cls):
         if sys.platform != 'win32':
-            py.test.skip("Handle to libc library, Win-only test")
+            py.test.skip("Win-only test")
     
     def test_get_libc_handle(self):
         handle = get_libc_handle()
-        print libc_name
+        print get_libc_name()
         print hex(handle)
         assert handle != 0
         assert handle % 0x1000 == 0

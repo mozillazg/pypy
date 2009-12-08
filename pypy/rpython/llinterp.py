@@ -37,7 +37,7 @@ def type_name(etype):
         return ''.join(etype.name).rstrip('\x00')
     else:
         # ootype!
-        return etype._INSTANCE._name.split(".")[-1] 
+        return etype.class_._INSTANCE._name.split(".")[-1] 
 
 class LLInterpreter(object):
     """ low level interpreter working with concrete values. """
@@ -764,6 +764,12 @@ class LLFrame(object):
     def op_gc__collect(self):
         self.heap.collect()
 
+    def op_gc__disable_finalizers(self):
+        self.heap.disable_finalizers()
+
+    def op_gc__enable_finalizers(self):
+        self.heap.enable_finalizers()
+
     def op_gc_can_move(self, ptr):
         addr = llmemory.cast_ptr_to_adr(ptr)
         return self.heap.can_move(addr)
@@ -894,8 +900,6 @@ class LLFrame(object):
         checkadr(fromaddr)
         checkadr(toaddr)
         llmemory.raw_memcopy(fromaddr, toaddr, size)
-
-    op_raw_memmove = op_raw_memcopy # this is essentially the same here
 
     def op_raw_load(self, addr, typ, offset):
         checkadr(addr)

@@ -95,9 +95,6 @@ class __extend__(pyframe.PyFrame):
             operr = self.last_exception
             next_instr = self.handle_operation_error(ec, operr,
                                                      attach_tb=False)
-        except RaiseWithExplicitTraceback, e:
-            next_instr = self.handle_operation_error(ec, e.operr,
-                                                     attach_tb=False)
         except KeyboardInterrupt:
             next_instr = self.handle_asynchronous_error(ec,
                 self.space.w_KeyboardInterrupt)
@@ -125,6 +122,7 @@ class __extend__(pyframe.PyFrame):
         return self.handle_operation_error(ec, operr)
 
     def handle_operation_error(self, ec, operr, attach_tb=True):
+        self.last_exception = operr
         if attach_tb:
             pytraceback.record_application_traceback(
                 self.space, operr, self, self.last_instr)
@@ -535,8 +533,9 @@ class __extend__(pyframe.PyFrame):
                 raise OperationError(space.w_TypeError,
                       space.wrap("raise: arg 3 must be a traceback or None"))
             operror.application_traceback = tb
-            # special 3-arguments raise, no new traceback obj will be attached
-            raise RaiseWithExplicitTraceback(operror)
+            # re-raise, no new traceback obj will be attached
+            f.last_exception = operror
+            raise Reraise
 
     def LOAD_LOCALS(f, *ignored):
         f.pushvalue(f.w_locals)
@@ -552,7 +551,7 @@ class __extend__(pyframe.PyFrame):
                                      w_compile_flags,
                                      f.space.wrap(f.get_builtin()),
                                      f.space.gettypeobject(PyCode.typedef))
-        w_prog, w_globals, w_locals = f.space.viewiterable(w_resulttuple, 3)
+        w_prog, w_globals, w_locals = f.space.unpacktuple(w_resulttuple, 3)
 
         plain = f.w_locals is not None and f.space.is_w(w_locals, f.w_locals)
         if plain:
@@ -679,7 +678,7 @@ class __extend__(pyframe.PyFrame):
         f.pushvalue(w_tuple)
 
     def BUILD_LIST(f, itemcount, *ignored):
-        items = f.popvalues_mutable(itemcount)
+        items = f.popvalues(itemcount)
         w_list = f.space.newlist(items)
         f.pushvalue(w_list)
 
@@ -905,7 +904,7 @@ class __extend__(pyframe.PyFrame):
     def MAKE_FUNCTION(f, numdefaults, *ignored):
         w_codeobj = f.popvalue()
         codeobj = f.space.interp_w(PyCode, w_codeobj)
-        defaultarguments = f.popvalues_mutable(numdefaults)
+        defaultarguments = f.popvalues(numdefaults)
         fn = function.Function(f.space, codeobj, f.w_globals, defaultarguments)
         f.pushvalue(f.space.wrap(fn))
 
@@ -980,20 +979,17 @@ class __extend__(pyframe.PyFrame):
 
 ### ____________________________________________________________ ###
 
+class Reraise(Exception):
+    """Signal an application-level OperationError that should not grow
+    a new traceback entry nor trigger the trace hook."""
+
 class ExitFrame(Exception):
     pass
 
 class Return(ExitFrame):
-    """Raised when exiting a frame via a 'return' statement."""
+    """Obscure."""
 class Yield(ExitFrame):
-    """Raised when exiting a frame via a 'yield' statement."""
-
-class Reraise(Exception):
-    """Raised at interp-level by a bare 'raise' statement."""
-class RaiseWithExplicitTraceback(Exception):
-    """Raised at interp-level by a 3-arguments 'raise' statement."""
-    def __init__(self, operr):
-        self.operr = operr
+    """Obscure."""
 
 class BytecodeCorruption(Exception):
     """Detected bytecode corruption.  Never caught; it's an error."""
@@ -1161,7 +1157,6 @@ class ExceptBlock(FrameBlock):
         frame.pushvalue(frame.space.wrap(unroller))
         frame.pushvalue(operationerr.w_value)
         frame.pushvalue(operationerr.w_type)
-        frame.last_exception = operationerr
         return self.handlerposition   # jump to the handler
 
 

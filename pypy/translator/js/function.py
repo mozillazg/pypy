@@ -1,3 +1,7 @@
+try:
+    set
+except NameError:
+    from sets import Set as set
 
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem.lltype import Signed, Unsigned, Void, Bool, Float
@@ -217,7 +221,7 @@ class Function(function.Function, BaseGenerator):
         pass
 
     def begin_catch(self, llexitcase):
-        real_name = self.cts.lltype_to_cts(llexitcase._INSTANCE)
+        real_name = self.cts.lltype_to_cts(llexitcase._inst.class_._INSTANCE)
         s = "isinstanceof(exc, %s)"%real_name
         self.ilasm.branch_if_string(s)
     

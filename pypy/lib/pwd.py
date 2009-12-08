@@ -98,8 +98,6 @@ def getpwnam(name):
     Return the password database entry for the given user name.
     See pwd.__doc__ for more on password database entries.
     """
-    if not isinstance(name, str):
-        raise TypeError("expected string")
     pw = _getpwnam(name)
     if not pw:
         raise KeyError("getpwname(): name not found: %s" % name)
