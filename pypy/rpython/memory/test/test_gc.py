@@ -551,7 +551,7 @@ class GCTest(object):
         res = self.interpret(fn, [-1000], taggedpointers=True)
         assert res == 111
 
-    def test_arraycopy_writebarrier(self):
+    def test_writebarrier_before_copy(self):
         import new
         ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
         
