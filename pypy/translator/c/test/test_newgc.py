@@ -835,6 +835,32 @@ class TestUsingFramework(object):
         res = self.run('hash_varsized')
         assert res != 0
 
+
+    def define_arraycopy_writebarrier(cls):
+        import new
+        ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
+        
+        TP = lltype.GcArray(lltype.Signed)
+        S = lltype.GcStruct('S')
+        def fn():
+            l = lltype.malloc(TP, 100)
+            for i in range(100):
+                l[i] = 1
+            l2 = lltype.malloc(TP, 50)
+            ll_arraycopy(l, l2, 50, 0, 50)
+            # force a nursery collect
+            x = []
+            for i in range(20):
+                x.append((1, lltype.malloc(S)))
+            for i in range(50):
+                assert l2[i] == 1
+            return 0
+
+        return fn
+
+    def test_arraycopy_writebarrier(self):
+        self.run("arraycopy_writebarrier")
+
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
     should_be_moving = True
@@ -1026,32 +1052,6 @@ class TestHybridTaggedPointers(TestHybridGC):
         expected = self.run_orig("tagged")
         res = self.run("tagged")
         assert res == expected
-
-
-    def define_arraycopy_writebarrier(cls):
-        import new
-        ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
-        
-        TP = lltype.GcArray(lltype.Signed)
-        S = lltype.GcStruct('S')
-        def fn():
-            l = lltype.malloc(TP, 100)
-            for i in range(100):
-                l[i] = 1
-            l2 = lltype.malloc(TP, 50)
-            ll_arraycopy(l, l2, 50, 0, 50)
-            # force a nursery collect
-            x = []
-            for i in range(20):
-                x.append((1, lltype.malloc(S)))
-            for i in range(50):
-                assert l2[i] == 1
-            return 0
-
-        return fn
-
-    def test_arraycopy_writebarrier(self):
-        self.run("arraycopy_writebarrier")
 
 from pypy.rlib.objectmodel import UnboxedValue
 
