@@ -394,13 +394,12 @@ def op_adr_delta(addr1, addr2):
     checkadr(addr2)
     return addr1 - addr2
 
-def op_gc_arraycopy(source, dest, source_start, dest_start, length):
+def op_gc_arraycopy_writebarrier(source, dest):
     A = lltype.typeOf(source)
     assert A == lltype.typeOf(dest)
     assert isinstance(A.TO, lltype.GcArray)
     assert isinstance(A.TO.OF, lltype.Ptr)
     assert A.TO.OF.TO._gckind == 'gc'
-    return False # no special support
 
 def op_getfield(p, name):
     checkptr(p)

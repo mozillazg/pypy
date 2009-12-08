@@ -551,7 +551,10 @@ class GCTest(object):
         res = self.interpret(fn, [-1000], taggedpointers=True)
         assert res == 111
 
-    def test_arraycopy(self):
+    def test_arraycopy_writebarrier(self):
+        import new
+        ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
+        
         S = lltype.GcStruct('S')
         TP = lltype.GcArray(lltype.Ptr(S))
         def fn():
@@ -559,14 +562,14 @@ class GCTest(object):
             l2 = lltype.malloc(TP, 100)
             for i in range(100):
                 l[i] = lltype.malloc(S)
-            if llop.gc_arraycopy(lltype.Void, l, l2, 50, 0, 50):
-                x = []
-                # force minor collect
-                t = (1, lltype.malloc(S))
-                for i in range(20):
-                    x.append(t)
-                for i in range(50):
-                    assert l2[i]
+            ll_arraycopy(l, l2, 50, 0, 50)
+            x = []
+            # force minor collect
+            t = (1, lltype.malloc(S))
+            for i in range(20):
+                x.append(t)
+            for i in range(50):
+                assert l2[i]
             return 0
 
         self.interpret(fn, [])

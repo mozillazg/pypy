@@ -292,8 +292,8 @@ class FrameworkGCTransformer(GCTransformer):
                 [s_gc, annmodel.SomeInteger(knowntype=rffi.r_ushort)],
                 annmodel.SomeInteger())
 
-        if hasattr(GCClass, 'arraycopy'):
-            self.arraycopy_ptr = getfn(GCClass.arraycopy.im_func,
+        if hasattr(GCClass, 'arraycopy_writebarrier'):
+            self.arraycopy_wb_p = getfn(GCClass.arraycopy_writebarrier.im_func,
                     [s_gc] + [annmodel.SomeAddress()] * 2 +
                      [annmodel.SomeInteger()] * 3, annmodel.SomeBool())
 
@@ -781,17 +781,17 @@ class FrameworkGCTransformer(GCTransformer):
             TYPE = v_ob.concretetype.TO
             gen_zero_gc_pointers(TYPE, v_ob, hop.llops)
 
-    def gct_gc_arraycopy(self, hop):
-        if not hasattr(self, 'arraycopy_ptr'):
-            return GCTransformer.gct_gc_arraycopy(self, hop)
+    def gct_gc_arraycopy_writebarrier(self, hop):
+        if not hasattr(self, 'arraycopy_wb_p'):
+            # should do nothing
+            return GCTransformer.gct_gc_arraycopy_writebarrier(self, hop)
         op = hop.spaceop
         source_addr = hop.genop('cast_ptr_to_adr', [op.args[0]],
                                 resulttype=llmemory.Address)
         dest_addr = hop.genop('cast_ptr_to_adr', [op.args[1]],
                                 resulttype=llmemory.Address)
         hop.genop('direct_call', [self.arraycopy_ptr, self.c_const_gc,
-                                  source_addr, dest_addr] + op.args[2:],
-                  resultvar=op.result)
+                                  source_addr, dest_addr])
 
     def gct_weakref_create(self, hop):
         op = hop.spaceop

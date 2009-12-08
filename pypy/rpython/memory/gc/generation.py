@@ -475,8 +475,7 @@ class GenerationGC(SemiSpaceGC):
             objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
             self.last_generation_root_objects.append(addr_struct)
 
-    def arraycopy(self, source_addr, dest_addr, source_start,
-                  dest_start, length):
+    def arraycopy_writebarrier(self, source_addr, dest_addr):
         typeid = self.get_type_id(source_addr)
         assert self.is_gcarrayofgcptr(typeid)
         need_set = False
@@ -486,14 +485,6 @@ class GenerationGC(SemiSpaceGC):
             need_set = True
         if need_set:
             self.assume_young_pointers(dest_addr)
-        itemsize = llmemory.gcarrayofptr_singleitemoffset
-        cp_source_addr = (source_addr + llmemory.gcarrayofptr_itemsoffset +
-                          itemsize * source_start)
-        cp_dest_addr = (dest_addr + llmemory.gcarrayofptr_itemsoffset + 
-                        itemsize * dest_start)
-        llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
-                             itemsize * length)
-        return True
 
     def write_into_last_generation_obj(self, addr_struct, addr):
         objhdr = self.header(addr_struct)

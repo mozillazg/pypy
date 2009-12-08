@@ -834,7 +834,9 @@ class GenericMovingGCTests(GenericGCTests):
             return d * 1000 + c * 100 + b * 10 + a
         return f
 
-    def xxxtest_gc_heap_stats(self):
+    @py.test.mark.xfail("Fails if followed by any test")
+    def test_gc_heap_stats(self):
+        XXX # this test makes next test to crash
         run = self.runner("gc_heap_stats")
         res = run([])
         assert res % 10000 == 2611
@@ -845,6 +847,9 @@ class GenericMovingGCTests(GenericGCTests):
         #     (and give fixedsize)
 
     def define_arraycopy(cls):
+        import new
+        ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
+        
         S = lltype.GcStruct('S')
         TP = lltype.GcArray(lltype.Ptr(S))
         def fn():
@@ -852,13 +857,13 @@ class GenericMovingGCTests(GenericGCTests):
             l2 = lltype.malloc(TP, 100)
             for i in range(100):
                 l[i] = lltype.malloc(S)
-            if llop.gc_arraycopy(lltype.Void, l, l2, 50, 0, 50):
-                # force nursery collect
-                x = []
-                for i in range(20):
-                    x.append((1, lltype.malloc(S)))
-                for i in range(50):
-                    assert l2[i]
+            ll_arraycopy(l, l2, 50, 0, 50)
+            # force nursery collect
+            x = []
+            for i in range(20):
+                x.append((1, lltype.malloc(S)))
+            for i in range(50):
+                assert l2[i]
             return 0
 
         return fn

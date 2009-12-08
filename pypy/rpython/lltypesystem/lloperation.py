@@ -358,7 +358,6 @@ LL_OPERATIONS = {
     'resize_buffer':        LLOp(canraise=(MemoryError,), canunwindgc=True),
     'finish_building_buffer' : LLOp(canraise=(MemoryError,), canunwindgc=True),
     'zero_gc_pointers_inside': LLOp(),
-    'gc_arraycopy':             LLOp(canrun=True),
     'free':                 LLOp(),
     'getfield':             LLOp(sideeffects=False, canrun=True),
     'getarrayitem':         LLOp(sideeffects=False, canrun=True),
@@ -462,6 +461,7 @@ LL_OPERATIONS = {
     'gc_thread_run'       : LLOp(),
     'gc_thread_die'       : LLOp(),
     'gc_assume_young_pointers': LLOp(canrun=True),
+    'gc_arraycopy_writebarrier': LLOp(canrun=True),
     'gc_heap_stats'       : LLOp(canunwindgc=True),
 
     # ------- JIT & GC interaction, only for some GCs ----------
