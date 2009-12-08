@@ -296,6 +296,8 @@ class FrameworkGCTransformer(GCTransformer):
             self.wb_before_copy_ptr = \
                     getfn(GCClass.writebarrier_before_copy.im_func,
                     [s_gc] + [annmodel.SomeAddress()] * 2, annmodel.s_None)
+        elif GCClass.needs_write_barrier:
+            raise NotImplementedError("GC needs write barrier, but does not provide writebarrier_before_copy functionality")
 
         # in some GCs we can inline the common case of
         # malloc_fixedsize(typeid, size, True, False, False)
