@@ -493,13 +493,15 @@ class GenerationGC(SemiSpaceGC):
         """
         typeid = self.get_type_id(source_addr)
         assert self.is_gcarrayofgcptr(typeid)
-        need_clear = False
+        objhdr = self.header(dest_addr)
         if self.header(source_addr).tid & GCFLAG_NO_YOUNG_PTRS == 0:
-            need_clear = True
+            if objhdr.tid & GCFLAG_NO_YOUNG_PTRS:
+                self.old_objects_pointing_to_young.append(dest_addr)
+                objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
         if self.header(source_addr).tid & GCFLAG_NO_HEAP_PTRS == 0:
-            need_clear = True
-        if need_clear:
-            self.assume_young_pointers(dest_addr)
+            if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
+                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+                self.last_generation_root_objects.append(dest_addr)
 
     def write_into_last_generation_obj(self, addr_struct, addr):
         objhdr = self.header(addr_struct)
