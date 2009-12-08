@@ -1577,8 +1577,7 @@ class BytecodeMaker(object):
         self.vable_flags[op.args[0]] = op.args[2].value
 
     def serialize_op_jit_force_virtual(self, op):
-        raise ForcingVirtualRef("forcing a virtual_ref, i.e. calling it, "
-                                "should not be seen by the JIT")
+        self._do_builtin_call(op, 'jit_force_virtual', op.args)
 
     serialize_op_oostring  = handle_builtin_call
     serialize_op_oounicode = handle_builtin_call
