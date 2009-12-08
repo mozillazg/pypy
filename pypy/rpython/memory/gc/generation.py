@@ -480,29 +480,25 @@ class GenerationGC(SemiSpaceGC):
         each element in dest copied from source, except it might reset
         one of the following flags a bit too eagerly, which means we'll have
         a bit more objects to track, but being on the safe side.
-
-        For both GCFLAG_NO_YOUNG_PTRS and GCFLAG_NO_HEAP_PTRS following
-        yields true:
-
-        if the flag on source is set to 0 (means source either contains
-        young pointers or is in nursery), we need to clear the same flag on
-        dest, provided it's set already
-
-        assume_young_pointers contains already the interface for setting,
-        we just need to decide when we need to set it.
         """
         typeid = self.get_type_id(source_addr)
         assert self.is_gcarrayofgcptr(typeid)
-        objhdr = self.header(dest_addr)
-        if self.header(source_addr).tid & GCFLAG_NO_YOUNG_PTRS == 0:
-            if objhdr.tid & GCFLAG_NO_YOUNG_PTRS:
-                self.old_objects_pointing_to_young.append(dest_addr)
-                objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
-        if self.header(source_addr).tid & GCFLAG_NO_HEAP_PTRS == 0:
-            if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
-                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+        source_hdr = self.header(source_addr)
+        dest_hdr = self.header(dest_addr)
+        if dest_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
+            return
+        # ^^^ a fast path of write-barrier
+        if source_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
+            # there might be an object in source that is in nursery
+            self.old_objects_pointing_to_young.append(dest_addr)
+            dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+        if dest_hdr.tid & GCFLAG_NO_HEAP_PTRS:
+            if source_hdr.tid & GCFLAG_NO_HEAP_PTRS == 0:
+                # ^^^ equivalend of addr from source not being in last
+                #     gen
+                dest_hdr.tid &= ~GCFLAG_NO_HEAP_PTRS
                 self.last_generation_root_objects.append(dest_addr)
-
+                
     def write_into_last_generation_obj(self, addr_struct, addr):
         objhdr = self.header(addr_struct)
         if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
