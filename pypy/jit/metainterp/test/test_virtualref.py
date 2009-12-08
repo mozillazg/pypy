@@ -334,6 +334,32 @@ class VRefTests:
         res = self.meta_interp(f, [15])
         assert res == 1
 
+    def test_jit_force_virtual_seen(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n'])
+        #
+        class XY:
+            pass
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        def f(n):
+            later = None
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n)
+                myjitdriver.jit_merge_point(n=n)
+                xy = XY()
+                xy.n = n
+                exctx.topframeref = virtual_ref(xy)
+                n = exctx.topframeref().n - 1
+                exctx.topframeref = vref_None
+                virtual_ref_finish(xy)
+            return 1
+        #
+        res = self.meta_interp(f, [15])
+        assert res == 1
+        self.check_loops({})      # because we aborted tracing
+
 
 class TestLLtype(VRefTests, LLJitMixin):
     pass
