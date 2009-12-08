@@ -380,8 +380,8 @@ class BaseGCTransformer(object):
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 
-    def gct_gc_arraycopy(self, hop):
-        return rmodel.inputconst(lltype.Bool, False)
+    def gct_gc_arraycopy_writebarrier(self, hop):
+        pass
 
     def gct_gc_identityhash(self, hop):
         # must be implemented in the various GCs

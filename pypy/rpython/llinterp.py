@@ -754,11 +754,9 @@ class LLFrame(object):
     def op_zero_gc_pointers_inside(self, obj):
         raise NotImplementedError("zero_gc_pointers_inside")
 
-    def op_gc_arraycopy(self, source, dest, source_start, dest_start, length):
-        if hasattr(self.heap, 'arraycopy'):
-            self.heap.arraycopy(source, dest, source_start, dest_start, length)
-            return True
-        return False
+    def op_gc_arraycopy_writebarrier(self, source, dest):
+        if hasattr(self.heap, 'arraycopy_writebarrier'):
+            self.heap.arraycopy_writebarrier(source, dest)
 
     def op_getfield(self, obj, field):
         checkptr(obj)

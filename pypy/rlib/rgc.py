@@ -336,15 +336,9 @@ def ll_arraycopy(source, dest, source_start, dest_start, length):
     assert source != dest
     TP = lltype.typeOf(source).TO
     if isinstance(TP.OF, lltype.Ptr) and TP.OF.TO._gckind == 'gc':
-        if llop.gc_arraycopy(lltype.Void, source, dest, source_start, dest_start,
-                            length):
-            return # gc supports nicely copying lists
-        i = 0
-        while i < length:
-            dest[i + dest_start] = source[i + source_start]
-            i += 1
-        return
-    # it's safe to do memcpy
+        # perform a write barrier that copies necessary flags from
+        # source to dest
+        llop.gc_arraycopy_writebarrier(lltype.Void, source, dest)
     source_addr = llmemory.cast_ptr_to_adr(source)
     dest_addr   = llmemory.cast_ptr_to_adr(dest)
     cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
