@@ -129,7 +129,7 @@ class GCManagedHeap(object):
         return self.gc.id(ptr)
 
     def writebarrier_before_copy(self, source, dest):
-        if hasattr(self.gc, 'writebarrier_before_copy'):
+        if self.gc.needs_write_barrier:
             source_addr = llmemory.cast_ptr_to_adr(source)
             dest_addr   = llmemory.cast_ptr_to_adr(dest)
             return self.gc.writebarrier_before_copy(source_addr, dest_addr)
