@@ -294,8 +294,7 @@ class FrameworkGCTransformer(GCTransformer):
 
         if hasattr(GCClass, 'arraycopy_writebarrier'):
             self.arraycopy_wb_p = getfn(GCClass.arraycopy_writebarrier.im_func,
-                    [s_gc] + [annmodel.SomeAddress()] * 2 +
-                     [annmodel.SomeInteger()] * 3, annmodel.SomeBool())
+                    [s_gc] + [annmodel.SomeAddress()] * 2, annmodel.s_None)
 
         # in some GCs we can inline the common case of
         # malloc_fixedsize(typeid, size, True, False, False)
@@ -790,7 +789,7 @@ class FrameworkGCTransformer(GCTransformer):
                                 resulttype=llmemory.Address)
         dest_addr = hop.genop('cast_ptr_to_adr', [op.args[1]],
                                 resulttype=llmemory.Address)
-        hop.genop('direct_call', [self.arraycopy_ptr, self.c_const_gc,
+        hop.genop('direct_call', [self.arraycopy_wb_p, self.c_const_gc,
                                   source_addr, dest_addr])
 
     def gct_weakref_create(self, hop):
