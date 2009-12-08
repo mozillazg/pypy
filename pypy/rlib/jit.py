@@ -109,7 +109,7 @@ def virtual_ref(x):
     JIT will abort if it is not), at least between the calls to
     virtual_ref and virtual_ref_finish.  The point is that the 'vref'
     returned by virtual_ref may escape early.  If at runtime it is
-    dereferenced (by the syntax 'vref()' or by virtual_ref_deref()) before the
+    dereferenced (by the call syntax 'vref()') before the
     virtual_ref_finish, then we get out of the assembler.  If it is not
     dereferenced at all, or only after the virtual_ref_finish, then
     nothing special occurs.

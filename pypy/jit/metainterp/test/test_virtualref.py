@@ -1,7 +1,7 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.rlib.jit import JitDriver, dont_look_inside
-from pypy.rlib.jit import virtual_ref, virtual_ref_finish
+from pypy.rlib.jit import virtual_ref, virtual_ref_finish, vref_None
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.resoperation import rop
@@ -22,7 +22,7 @@ class VRefTests:
         def f():
             x = X()
             exctx.topframeref = virtual_ref(x)
-            exctx.topframeref = None
+            exctx.topframeref = vref_None
             virtual_ref_finish(x)
             return 1
         #
@@ -52,7 +52,7 @@ class VRefTests:
             exctx._frame = x
             exctx.topframeref = virtual_ref(x)
         def leave():
-            exctx.topframeref = None
+            exctx.topframeref = vref_None
             virtual_ref_finish(exctx._frame)
         def f(n):
             enter(n)
@@ -104,7 +104,7 @@ class VRefTests:
                 exctx.topframeref = vref = virtual_ref(x)
                 # here, 'x' should be virtual. (This is ensured because
                 # we call virtual_ref(x).)
-                exctx.topframeref = None
+                exctx.topframeref = vref_None
                 virtual_ref_finish(x)
                 # 'vref' is allowed to escape, and even be forced, even after
                 # the call to finish().
@@ -138,7 +138,7 @@ class VRefTests:
                 exctx.topframeref = virtual_ref(x)
                 total += force_me() - 100
                 virtual_ref_finish(x)
-                exctx.topframeref = None
+                exctx.topframeref = vref_None
             return total
         #
         res = self.meta_interp(f, [-4])
@@ -170,7 +170,7 @@ class VRefTests:
                 xy.next3 = XY()
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
-                exctx.topframeref = None
+                exctx.topframeref = vref_None
                 xy.next1 = None
                 xy.next2 = None
                 xy.next3 = None
@@ -204,7 +204,7 @@ class VRefTests:
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
                 virtual_ref_finish(xy)
-                exctx.topframeref = None
+                exctx.topframeref = vref_None
         #
         self.meta_interp(f, [15])
         self.check_loops({})     # because we aborted tracing
@@ -233,7 +233,7 @@ class VRefTests:
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
                 virtual_ref_finish(xy)
-                exctx.topframeref = None
+                exctx.topframeref = vref_None
             return exctx.m
         #
         res = self.meta_interp(f, [30])
@@ -264,7 +264,7 @@ class VRefTests:
                 if n == 13:
                     externalfn(n)
                 n -= 1
-                exctx.topframeref = None
+                exctx.topframeref = vref_None
                 virtual_ref_finish(xy)
             return exctx.m
         #
@@ -296,7 +296,7 @@ class VRefTests:
                 if n % 6 == 0:
                     externalfn(n)
                 n -= 1
-                exctx.topframeref = None
+                exctx.topframeref = vref_None
                 virtual_ref_finish(xy)
             return exctx.m
         #
@@ -327,7 +327,7 @@ class VRefTests:
                 exctx.topframeref = virtual_ref(xy)
                 exctx.later = exctx.topframeref
                 n -= 1
-                exctx.topframeref = None
+                exctx.topframeref = vref_None
                 virtual_ref_finish(xy)
             return g()
         #
