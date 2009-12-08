@@ -1028,22 +1028,29 @@ class TestHybridTaggedPointers(TestHybridGC):
         assert res == expected
 
 
-    def define_listcopy(cls):
+    def define_arraycopy_writebarrier(cls):
+        import new
+        ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
+        
         TP = lltype.GcArray(lltype.Signed)
         def fn():
             l = lltype.malloc(TP, 100)
             for i in range(100):
                 l[i] = 1
             l2 = lltype.malloc(TP, 50)
-            llop.listcopy(lltype.Void, l, l2, 50, 0, 50)
+            ll_arraycopy(l, l2, 50, 0, 50)
+            # force a nursery collect
+            x = []
+            for i in range(20):
+                x.append((1, lltype.malloc(S)))
             for i in range(50):
                 assert l2[i] == 1
             return 0
 
         return fn
 
-    def test_listcopy(self):
-        self.run("listcopy")
+    def test_arraycopy_writebarrier(self):
+        self.run("arraycopy_writebarrier")
 
 from pypy.rlib.objectmodel import UnboxedValue
 
