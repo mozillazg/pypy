@@ -332,6 +332,7 @@ class FinishBuildingBufferEntry(ExtRegistryEntry):
 def ll_arraycopy(source, dest, source_start, dest_start, length):
     from pypy.rpython.lltypesystem.lloperation import llop
     from pypy.rpython.lltypesystem import lltype, llmemory
+    from pypy.rlib.objectmodel import keepalive_until_here
 
     assert source != dest
     TP = lltype.typeOf(source).TO
@@ -340,12 +341,17 @@ def ll_arraycopy(source, dest, source_start, dest_start, length):
         # perform a write barrier that copies necessary flags from
         # source to dest
         llop.gc_writebarrier_before_copy(lltype.Void, source, dest)
+        # the hack below is a write barrier version for refcounting :-/
+        for i in range(length):
+            llop.gc_push_alive(lltype.Void, source[source_start + i])
     source_addr = llmemory.cast_ptr_to_adr(source)
     dest_addr   = llmemory.cast_ptr_to_adr(dest)
     cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
                       llmemory.sizeof(TP.OF) * source_start)
     cp_dest_addr = (dest_addr + llmemory.itemoffsetof(TP, 0) +
                     llmemory.sizeof(TP.OF) * dest_start)
+    
     llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
                          llmemory.sizeof(TP.OF) * length)
+    keepalive_until_here(source)
 ll_arraycopy._annspecialcase_ = 'specialize:ll'
