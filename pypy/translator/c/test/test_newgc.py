@@ -1033,6 +1033,7 @@ class TestHybridTaggedPointers(TestHybridGC):
         ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
         
         TP = lltype.GcArray(lltype.Signed)
+        S = lltype.GcStruct('S')
         def fn():
             l = lltype.malloc(TP, 100)
             for i in range(100):
