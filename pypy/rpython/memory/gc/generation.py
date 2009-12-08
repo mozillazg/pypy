@@ -476,13 +476,23 @@ class GenerationGC(SemiSpaceGC):
             self.last_generation_root_objects.append(addr_struct)
 
     def arraycopy_writebarrier(self, source_addr, dest_addr):
+        """ For both GCFLAG_NO_YOUNG_PTRS and GCFLAG_NO_HEAP_PTRS following
+        yields true:
+
+        if the flag on source is set to 0 (means source either contains
+        young pointers or is in nursery), we need to clear the same flag on dest,
+        provided it's set already
+
+        assume_young_pointers contains already the interface for setting,
+        we just need to decide when we need to set it.
+        """
         typeid = self.get_type_id(source_addr)
         assert self.is_gcarrayofgcptr(typeid)
-        need_set = False
+        need_clear = False
         if self.header(source_addr).tid & GCFLAG_NO_YOUNG_PTRS == 0:
-            need_set = True
+            need_clear = True
         if self.header(source_addr).tid & GCFLAG_NO_HEAP_PTRS == 0:
-            need_set = True
+            need_clear = True
         if need_set:
             self.assume_young_pointers(dest_addr)
 
