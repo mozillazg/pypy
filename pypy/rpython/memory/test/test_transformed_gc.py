@@ -834,8 +834,8 @@ class GenericMovingGCTests(GenericGCTests):
             return d * 1000 + c * 100 + b * 10 + a
         return f
 
-    @py.test.mark.xfail("Fails if followed by any test")
     def test_gc_heap_stats(self):
+        py.test.skip("XFail fails, so skip")
         XXX # this test makes next test to crash
         run = self.runner("gc_heap_stats")
         res = run([])
