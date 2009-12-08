@@ -394,7 +394,7 @@ def op_adr_delta(addr1, addr2):
     checkadr(addr2)
     return addr1 - addr2
 
-def op_gc_arraycopy_writebarrier(source, dest):
+def op_gc_writebarrier_before_copy(source, dest):
     A = lltype.typeOf(source)
     assert A == lltype.typeOf(dest)
     assert isinstance(A.TO, lltype.GcArray)
