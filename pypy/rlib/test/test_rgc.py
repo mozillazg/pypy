@@ -80,9 +80,9 @@ def test_ll_arraycopy_1():
         assert a1[i] == 100 + i
     for i in range(6):
         if 2 <= i < 5:
-	    assert a2[i] == a1[i+2]
-	else:
-	    assert a2[i] == 200 + i
+            assert a2[i] == a1[i+2]
+        else:
+            assert a2[i] == 200 + i
 
 def test_ll_arraycopy_2():
     TYPE = lltype.GcArray(lltype.Void)
@@ -105,9 +105,9 @@ def test_ll_arraycopy_3():
         assert a1[i] == org1[i]
     for i in range(6):
         if 2 <= i < 5:
-	    assert a2[i] == a1[i+2]
-	else:
-	    assert a2[i] == org2[i]
+            assert a2[i] == a1[i+2]
+        else:
+            assert a2[i] == org2[i]
 
 def test_ll_arraycopy_4():
     S = lltype.GcStruct('S')
@@ -123,6 +123,6 @@ def test_ll_arraycopy_4():
         assert a1[i] == org1[i]
     for i in range(6):
         if 2 <= i < 5:
-	    assert a2[i] == a1[i+2]
-	else:
-	    assert a2[i] == org2[i]
+            assert a2[i] == a1[i+2]
+        else:
+            assert a2[i] == org2[i]
