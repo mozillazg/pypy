@@ -348,3 +348,4 @@ def ll_arraycopy(source, dest, source_start, dest_start, length):
                     llmemory.sizeof(TP.OF) * dest_start)
     llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
                          llmemory.sizeof(TP.OF) * length)
+ll_arraycopy._annspecialcase_ = 'specialize:ll'

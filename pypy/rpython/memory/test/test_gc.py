@@ -552,9 +552,6 @@ class GCTest(object):
         assert res == 111
 
     def test_writebarrier_before_copy(self):
-        import new
-        ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
-        
         S = lltype.GcStruct('S')
         TP = lltype.GcArray(lltype.Ptr(S))
         def fn():
@@ -562,7 +559,7 @@ class GCTest(object):
             l2 = lltype.malloc(TP, 100)
             for i in range(100):
                 l[i] = lltype.malloc(S)
-            ll_arraycopy(l, l2, 50, 0, 50)
+            rgc.ll_arraycopy(l, l2, 50, 0, 50)
             x = []
             # force minor collect
             t = (1, lltype.malloc(S))
