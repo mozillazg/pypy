@@ -8,17 +8,9 @@ from pypy.rlib.objectmodel import we_are_translated
 class FakeEC(object):
     pass
 
-class FakeActionFlag(object):
-    def register_action(self, action):
-        pass
-    def get(self):
-        return 0
-    def set(self, x):
-        pass
-
 class FakeSpace(object):
     def __init__(self):
-        self.actionflag = FakeActionFlag()
+        self.pending_actions = []
     def _freeze_(self):
         return True
     def getexecutioncontext(self):

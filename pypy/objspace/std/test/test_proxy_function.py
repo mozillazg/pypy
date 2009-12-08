@@ -50,7 +50,7 @@ class AppTestProxyFunction(object):
         def f(self):
             return 3
         
-        class A(object):
+        class A:
             pass
             
         fun = self.get_proxy(f)
@@ -81,18 +81,18 @@ class AppTestProxyFunction(object):
         assert f.__doc__ is None
 
     def test_proxy_bind_method(self):
-        class A(object):
+        class A:
             pass
         
         def f(self):
             return 3
         
-        class AA(object):
+        class AA:
             pass
         
         from __pypy__ import tproxy as proxy
         a = A()
-        class X(object):
+        class X:
             def __init__(self, x):
                 self.x = x
             def f(self, name, *args, **kwargs):

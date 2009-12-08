@@ -22,8 +22,7 @@ from pypy.rpython.ootypesystem import \
 from pypy.translator.jvm.typesystem import \
      JvmGeneratedClassType, jString, jStringArray, jVoid, jThrowable, jInt, \
      jObject, JvmType, jStringBuilder, jPyPyInterlink, jCallbackInterfaces, \
-     JvmGeneratedInterfaceType, jPyPy, jPyPyAbstractMethodException, \
-     jPyPyThrowable, OBJECTGETCLASS
+     JvmGeneratedInterfaceType, jPyPy, jPyPyAbstractMethodException
 from pypy.translator.jvm.opcodes import \
      opcodes
 from pypy.translator.jvm.option import \
@@ -174,7 +173,8 @@ class EntryPoint(Node):
             gen.goto(done_printing)
             gen.end_try()
 
-            gen.begin_catch(jPyPyThrowable)
+            jexc = self.db.exception_root_object()
+            gen.begin_catch(jexc)
             gen.emit(jvm.PYPYDUMPEXCWRAPPER) # dumps to stdout
             gen.end_catch()
 
@@ -366,7 +366,7 @@ class GraphFunction(OOFunction, Function):
 
     def begin_catch(self, llexitcase):
         ll_meta_exc = llexitcase
-        ll_exc = ll_meta_exc._INSTANCE
+        ll_exc = ll_meta_exc._inst.class_._INSTANCE
         jtype = self.cts.lltype_to_cts(ll_exc)
         assert jtype.throwable # SHOULD only try to catch subtypes of Exception
         self.ilasm.begin_catch(jtype)
@@ -384,11 +384,10 @@ class GraphFunction(OOFunction, Function):
         else:
             # the exception value is on the stack, store it in the proper place
             if isinstance(link.last_exception, flowmodel.Variable):
-                # if the code that follows is interested in the class
-                # of the exception, extract it
-                self.ilasm.dup_jtype(jPyPyThrowable)
+                self.ilasm.emit(jvm.DUP)
                 self.ilasm.store(link.last_exc_value)
-                self.ilasm.emit(OBJECTGETCLASS)
+                fld = self.db.lltype_to_cts(rclass.OBJECT).lookup_field('meta')
+                self.ilasm.emit(fld)
                 self.ilasm.store(link.last_exception)
             else:
                 self.ilasm.store(link.last_exc_value)
@@ -451,15 +450,8 @@ class GraphFunction(OOFunction, Function):
                 can_branch_directly(last_op.opname) and
                 not_in_link_args(block.exitswitch)):
 
-                self.generator.add_comment(
-                    "short-circuit final comparison on %s, block has %d ops" % (
-                    block.exitswitch, len(block.operations)))
-
                 for op in block.operations[:-1]:
                     self._render_op(op)
-                    
-                self.generator.add_comment(
-                    "inlining comparison: %r" % (last_op),)
                 for arg in last_op.args:
                     self.ilasm.load(arg)
                 truelink, falselink = true_false_exits()
@@ -511,12 +503,12 @@ class GraphFunction(OOFunction, Function):
         self.ilasm.load(exc)
 
         # Check whether the static type is known to be throwable.
-        # If not, emit a CHECKCAST to throwable.
+        # If not, emit a CHECKCAST to the base exception type.
         # According to Samuele, no non-Exceptions should be thrown,
         # but this is not enforced by the RTyper or annotator.
         jtype = self.db.lltype_to_cts(exc.concretetype)
         if not jtype.throwable:
-            self.ilasm.downcast_jtype(jThrowable)
+            self.ilasm.downcast_jtype(self.db.exception_root_object())
             
         self.ilasm.throw()
 

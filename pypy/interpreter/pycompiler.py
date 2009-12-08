@@ -227,7 +227,7 @@ class PythonAstCompiler(PyCodeCompiler):
         self.compiler_flags = self.futureFlags.allowed_flags
 
     def compile(self, source, filename, mode, flags):
-        from pypy.interpreter.pyparser.error import SyntaxError
+        from pyparser.error import SyntaxError
         from pypy.interpreter import astcompiler
         from pypy.interpreter.astcompiler.pycodegen import ModuleCodeGenerator
         from pypy.interpreter.astcompiler.pycodegen import InteractiveCodeGenerator
@@ -242,7 +242,6 @@ class PythonAstCompiler(PyCodeCompiler):
 
 ##         flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
-        space.timer.start("PythonAST compile")
         try:
             builder = AstBuilder(self.parser, self.grammar_version, space=space)
             for rulename, buildfunc in self.additional_rules.iteritems():
@@ -284,7 +283,6 @@ class PythonAstCompiler(PyCodeCompiler):
         except (ValueError, TypeError), e:
             raise OperationError(space.w_SystemError, space.wrap(str(e)))
         assert isinstance(c, PyCode)
-        space.timer.stop("PythonAST compile")
         return c
 
     # interface for pypy.module.recparser

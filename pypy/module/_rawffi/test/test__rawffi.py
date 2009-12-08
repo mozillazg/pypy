@@ -8,6 +8,10 @@ from pypy.module._rawffi.tracker import Tracker
 
 import os, sys, py
 
+def setup_module(mod):
+    if sys.platform not in ('linux2', 'win32'):
+        py.test.skip("Linux & win32 only tests by now")
+
 class AppTestFfi:
     def prepare_c_example():
         from pypy.tool.udir import udir
@@ -158,20 +162,17 @@ class AppTestFfi:
     prepare_c_example = staticmethod(prepare_c_example)
     
     def setup_class(cls):
-        from pypy.rlib.libffi import libc_name
         space = gettestobjspace(usemodules=('_rawffi','struct'))
         cls.space = space
         cls.w_lib_name = space.wrap(cls.prepare_c_example())
-        cls.w_libc_name = space.wrap(libc_name)
         if sys.platform == 'win32':
             cls.w_iswin32 = space.wrap(True)
+            cls.w_libc_name = space.wrap('msvcrt')
             cls.w_libm_name = space.wrap('msvcrt')
         else:
             cls.w_iswin32 = space.wrap(False)
+            cls.w_libc_name = space.wrap('libc.so.6')
             cls.w_libm_name = space.wrap('libm.so')
-            if sys.platform == "darwin":
-                cls.w_libm_name = space.wrap('libm.dylib')
-                
         cls.w_sizes_and_alignments = space.wrap(dict(
             [(k, (v.c_size, v.c_alignment)) for k,v in TYPEMAP.iteritems()]))
 
@@ -458,11 +459,12 @@ class AppTestFfi:
         ll_to_sort = _rawffi.Array('i')(4)
         for i in range(4):
             ll_to_sort[i] = 4-i
-        qsort = libc.ptr('qsort', ['P', 'l', 'l', 'P'], None)
+        qsort = libc.ptr('qsort', ['P', 'i', 'i', 'P'], None)
+        resarray = _rawffi.Array('i')(1)
         bogus_args = []
         def compare(a, b):
-            a1 = _rawffi.Array('i').fromaddress(_rawffi.Array('P').fromaddress(a, 1)[0], 1)
-            a2 = _rawffi.Array('i').fromaddress(_rawffi.Array('P').fromaddress(b, 1)[0], 1)
+            a1 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(a, 1)[0], 1)
+            a2 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(b, 1)[0], 1)
             print "comparing", a1[0], "with", a2[0]
             if a1[0] not in [1,2,3,4] or a2[0] not in [1,2,3,4]:
                 bogus_args.append((a1[0], a2[0]))
@@ -470,9 +472,9 @@ class AppTestFfi:
                 return 1
             return -1
         a1 = ll_to_sort.byptr()
-        a2 = _rawffi.Array('l')(1)
+        a2 = _rawffi.Array('i')(1)
         a2[0] = len(ll_to_sort)
-        a3 = _rawffi.Array('l')(1)
+        a3 = _rawffi.Array('i')(1)
         a3[0] = struct.calcsize('i')
         cb = _rawffi.CallbackPtr(compare, ['P', 'P'], 'i')
         a4 = cb.byptr()
@@ -592,18 +594,16 @@ class AppTestFfi:
 
     def test_repr(self):
         import _rawffi, struct
-        isize = struct.calcsize("i")
-        lsize = struct.calcsize("l")
+        s = struct.calcsize("i")
         assert (repr(_rawffi.Array('i')) ==
-                "<_rawffi.Array 'i' (%d, %d)>" % (isize, isize))
+                "<_rawffi.Array 'i' (%d, %d)>" % (s, s))
 
         # fragile
         S = _rawffi.Structure([('x', 'c'), ('y', 'l')])
-        assert (repr(_rawffi.Array((S, 2))) ==
-                "<_rawffi.Array 'V' (%d, %d)>" % (4*lsize, lsize))
+        assert repr(_rawffi.Array((S, 2))) == "<_rawffi.Array 'V' (16, 4)>"
 
         assert (repr(_rawffi.Structure([('x', 'i'), ('yz', 'i')])) ==
-                "<_rawffi.Structure 'x' 'yz' (%d, %d)>" % (2*isize, isize))
+                "<_rawffi.Structure 'x' 'yz' (%d, %d)>" % (2*s, s))
 
         s = _rawffi.Structure([('x', 'i'), ('yz', 'i')])()
         assert repr(s) == "<_rawffi struct %x>" % (s.buffer,)

@@ -5,30 +5,16 @@ from pypy.lang.gameboy.ram import iMemory
 
 class Joypad(iMemory):
     """
-    PyGirl Emulator
+    PyGirl GameBoy (TM) Emulator
+     
     Joypad Input
-    
-    The eight gameboy buttons/direction keys are arranged in form of a 2x4 
-    matrix. Select either button or direction keys by writing to this register,
-    then read-out bit 0-3.
-          Bit 7 - Not used
-          Bit 6 - Not used
-          Bit 5 - P15 Select Button Keys      (0=Select)
-          Bit 4 - P14 Select Direction Keys   (0=Select)
-          Bit 3 - P13 Input Down  or Start    (0=Pressed) (Read Only)
-          Bit 2 - P12 Input Up    or Select   (0=Pressed) (Read Only)
-          Bit 1 - P11 Input Left  or Button B (0=Pressed) (Read Only)
-          Bit 0 - P10 Input Right or Button A (0=Pressed) (Read Only)
-    Note: Most programs are repeatedly reading from this port several times (the
-    first reads used as short delay, allowing the inputs to stabilize, and only
-    the value from the last read actually used).
     """
 
     def __init__(self, joypad_driver, interrupt):
         assert isinstance(joypad_driver, JoypadDriver)
         assert isinstance(interrupt, Interrupt)
         self.driver    = joypad_driver
-        self.joypad_interrupt_flag = interrupt.joypad
+        self.interrupt = interrupt
         self.reset()
 
     def reset(self):
@@ -45,6 +31,7 @@ class Joypad(iMemory):
             if self.driver.is_raised():
                 self.update()
             self.cycles = constants.JOYPAD_CLOCK
+            #self.cycles = 150
 
     def write(self, address, data):
         if address == constants.JOYP:
@@ -65,7 +52,7 @@ class Joypad(iMemory):
         elif self.read_control & 0x3 == 3:
             self.button_code  = 0xF
         if old_buttons != self.button_code:
-            self.joypad_interrupt_flag.set_pending()
+            self.interrupt.raise_interrupt(constants.JOYPAD)
 
 
 # ------------------------------------------------------------------------------
@@ -74,10 +61,6 @@ class Joypad(iMemory):
 class JoypadDriver(object):
     """
     Maps the Input to the Button and Direction Codes
-    get_button_code and get_direction_code are called by the system
-    to check for pressed buttons
-    On Button change an interrupt flag self.raised is set to send later
-    and interrupt to inform the system for a pressed button
     """
     def __init__(self):
         self.raised = False

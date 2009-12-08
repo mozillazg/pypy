@@ -1,5 +1,5 @@
 """
-PyGirl Emulator
+PyGirl GameBoy (TM) Emulator
  
 GameBoy Scheduler and Memory Mapper
 
@@ -16,8 +16,7 @@ from pypy.lang.gameboy.timer import *
 from pypy.lang.gameboy.video import *
 from pypy.lang.gameboy.cartridge import *
 
-import pdb
-
+    
 class GameBoy(object):
 
     def __init__(self):
@@ -79,7 +78,7 @@ class GameBoy(object):
         self.video.reset()
         self.sound.reset()
         self.cpu.set_rom(self.cartridge_manager.get_rom())
-        self.draw_logo()
+        #self.draw_logo()
 
     def get_cycles(self):
         return min(min(min(min( self.video.get_cycles(),
@@ -91,6 +90,7 @@ class GameBoy(object):
     def emulate(self, ticks):
         while ticks > 0:
             count = self.get_cycles()
+            #print "emulating", ticks, "cycles, available", count
             self.cpu.emulate(count)
             self.serial.emulate(count)
             self.timer.emulate(count)
@@ -125,8 +125,8 @@ class GameBoy(object):
     def write(self, address, data):
         receiver = self.get_receiver(address)
         if receiver is None:
+            return
             raise Exception("invalid read address given")
-        	#return
         receiver.write(address, data)
         if address == constants.STAT or address == 0xFFFF:
             self.cpu.handle_pending_interrupts()
@@ -134,8 +134,8 @@ class GameBoy(object):
     def read(self, address):
         receiver = self.get_receiver(address)
         if receiver is None:
-           # raise Exception("invalid read address given")
-        	return 0xFF
+            return 0xFF
+            #raise Exception("invalid read address given")
         return receiver.read(address)
 
     def print_receiver_msg(self, address, name):
@@ -143,21 +143,6 @@ class GameBoy(object):
             pass
             
     def get_receiver(self, address):
-        """
-        General Memory Map
-        0000-3FFF   16KB ROM Bank 00     (in cartridge, fixed at bank 00)
-        4000-7FFF   16KB ROM Bank 01..NN (in cartridge, switchable bank number)
-        8000-9FFF   8KB Video RAM (VRAM)
-        A000-BFFF   8KB External RAM     (in cartridge, switchable bank, if any)
-        C000-CFFF   4KB Work RAM Bank 0 (WRAM)
-        D000-DFFF   4KB Work RAM Bank 1 (WRAM)
-        E000-FDFF   Same as C000-DDFF (ECHO)    (typically not used)
-        FE00-FE9F   Sprite Attribute Table (OAM)
-        FEA0-FEFF   Not Usable
-        FF00-FF7F   I/O Ports
-        FF80-FFFE   High RAM (HRAM)
-        FFFF        Interrupt Enable Register
-        """
         if 0x0000 <= address <= 0x7FFF:
             self.print_receiver_msg(address, "memoryBank")
             return self.cartridge_manager.get_memory_bank()
@@ -217,5 +202,5 @@ class GameBoy(object):
         for tile in range(0, 12):
             self.video.write(0x9904 + tile, tile + 1)
             self.video.write(0x9924 + tile, tile + 13)
-        self.video.write(0x9904 + 12, 25)
+        self.video.write(0x9905 + 12, 25)
 

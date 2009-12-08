@@ -847,7 +847,7 @@ class TestUsingFramework(AbstractGCTestClass):
         import gc
         slong = cast_type_to_ffitype(rffi.LONG)
 
-        from pypy.rpython.lltypesystem.ll2ctypes import libc_name
+        libc_name = ll2ctypes.get_libc_name()
 
         def callback(ll_args, ll_res, stuff):
             gc.collect()
@@ -1027,14 +1027,4 @@ class TestHybridGC(TestGenerationalGC):
     GC_CANNOT_MALLOC_NONMOVABLE = False
 
     def test_gc_set_max_heap_size(self):
-        py.test.skip("not implemented")
-
-class TestMarkCompactGC(TestSemiSpaceGC):
-    gcpolicy = "markcompact"
-    should_be_moving = True
-
-    def test_gc_set_max_heap_size(self):
-        py.test.skip("not implemented")
-
-    def test_finalizer_order(self):
         py.test.skip("not implemented")

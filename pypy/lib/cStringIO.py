@@ -2,9 +2,6 @@
 # StringIO-based cStringIO implementation.
 #
 
-# Note that PyPy contains also a built-in module 'cStringIO' which will hide
-# this one if compiled in.
-
 from StringIO import *
 from StringIO import __doc__
 

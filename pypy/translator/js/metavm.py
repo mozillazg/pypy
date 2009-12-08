@@ -146,14 +146,11 @@ class _GetBuiltinField(MicroInstruction):
         generator.get_field(None, field)
 
 class _GetPredefinedField(MicroInstruction):
-    def __init__(self, field, num=1):
+    def __init__(self, field):
         self.field = field
-        self.num = num
 
     def render(self, generator, op):
-        if op.result.concretetype is ootype.Void:
-            return
-        this = op.args[self.num]
+        this = op.args[1]
         generator.load(this)
         generator.get_field(None, self.field)
 

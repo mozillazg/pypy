@@ -11,6 +11,15 @@ def set_max_heap_size(nbytes):
     """
     pass
 
+def disable_finalizers():
+    """Prevent __del__ methods from running.
+    Calls to disable_finalizers/enable_finalizers can be nested.
+    """
+    gc.disable()     # rough approximation on top of CPython
+
+def enable_finalizers():
+    gc.enable()     # rough approximation on top of CPython
+
 # ____________________________________________________________
 # Framework GC features
 
@@ -164,6 +173,18 @@ class SetMaxHeapSizeEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('gc_set_max_heap_size', [v_nbytes],
                          resulttype=lltype.Void)
+
+class CollectEntry(ExtRegistryEntry):
+    _about_ = (disable_finalizers, enable_finalizers)
+
+    def compute_result_annotation(self):
+        from pypy.annotation import model as annmodel
+        return annmodel.s_None
+
+    def specialize_call(self, hop):
+        opname = 'gc__' + self.instance.__name__
+        hop.exception_cannot_occur()
+        return hop.genop(opname, [], resulttype=hop.r_result)
 
 def can_move(p):
     return True

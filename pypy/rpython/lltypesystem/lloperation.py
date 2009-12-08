@@ -368,7 +368,6 @@ LL_OPERATIONS = {
     'raw_free':             LLOp(),
     'raw_memclear':         LLOp(),
     'raw_memcopy':          LLOp(),
-    'raw_memmove':          LLOp(),
     'raw_load':             LLOp(sideeffects=False),
     'raw_store':            LLOp(),
     'stack_malloc':         LLOp(), # mmh
@@ -394,6 +393,8 @@ LL_OPERATIONS = {
     # __________ GC operations __________
 
     'gc__collect':          LLOp(canunwindgc=True),
+    'gc__disable_finalizers': LLOp(),
+    'gc__enable_finalizers':  LLOp(canunwindgc=True),
     'gc_free':              LLOp(),
     'gc_fetch_exception':   LLOp(),
     'gc_restore_exception': LLOp(),

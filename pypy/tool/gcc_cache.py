@@ -3,7 +3,7 @@ from pypy.tool.autopath import pypydir
 from pypy.translator.tool.cbuild import build_executable
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.tool.cbuild import CompilationError
-from pypy.tool.compat import md5
+import md5
 import py
 
 cache_dir_root = py.path.local(pypydir).join('_cache').ensure(dir=1)
@@ -20,7 +20,7 @@ def build_executable_cache(c_files, eci):
     try:
         return path.read()
     except py.error.Error:
-        result = eci.platform.execute(build_executable(c_files, eci))
+        result = py.process.cmdexec(build_executable(c_files, eci))
         path.write(result)
         return result
 

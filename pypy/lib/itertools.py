@@ -1,6 +1,3 @@
-# Note that PyPy contains also a built-in module 'itertools' which will
-# hide this one if compiled in.
-
 """Functional tools for creating and using iterators.
 
 Infinite iterators:
@@ -371,14 +368,14 @@ class islice:
                 self.donext = self.it.next
             except AttributeError:
                 raise TypeError
-        nextindex = self.start
-        if self.stop is not None and nextindex >= self.stop:
-            raise StopIteration
-        while self.cnt <= nextindex:
-            nextitem = self.donext()
+        while self.cnt < self.start:
+            self.donext()
             self.cnt += 1
-        self.start += self.step 
-        return nextitem
+        if self.stop is None or self.cnt < self.stop:
+            self.start += self.step 
+            self.cnt += 1
+            return self.donext()
+        raise StopIteration 
 
 class izip:
     """Make an iterator that aggregates elements from each of the

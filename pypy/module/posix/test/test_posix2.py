@@ -306,20 +306,10 @@ class AppTestPosix:
             assert os.getuid() == self.getuid
             assert os.geteuid() == self.geteuid
 
-    if hasattr(os, 'setuid'):
-        def test_os_setuid_error(self):
-            os = self.posix
-            raises(OSError, os.setuid, -100000)
-
     if hasattr(os, 'getgid'):
         def test_os_getgid(self):
             os = self.posix
             assert os.getgid() == self.getgid
-
-    if hasattr(os, 'setgid'):
-        def test_os_setgid_error(self):
-            os = self.posix
-            raises(OSError, os.setgid, -100000)
 
     if hasattr(os, 'sysconf'):
         def test_os_sysconf(self):
@@ -327,10 +317,6 @@ class AppTestPosix:
             assert os.sysconf(self.sysconf_value) == self.sysconf_result
             assert os.sysconf(self.sysconf_name) == self.sysconf_result
             assert os.sysconf_names[self.sysconf_name] == self.sysconf_value
-
-        def test_os_sysconf_error(self):
-            os = self.posix
-            raises(ValueError, os.sysconf, "!@#$%!#$!@#")
 
     def test_largefile(self):
         os = self.posix

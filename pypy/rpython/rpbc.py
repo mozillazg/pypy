@@ -646,7 +646,7 @@ class AbstractClassesPBCRepr(Repr):
         if s_pbc.is_constant():
             self.lowleveltype = Void
         else:
-            self.lowleveltype = self.getlowleveltype()
+            self.lowleveltype = rtyper.type_system.rclass.CLASSTYPE
 
     def get_access_set(self, attrname):
         """Return the ClassAttrFamily corresponding to accesses to 'attrname'
@@ -669,9 +669,7 @@ class AbstractClassesPBCRepr(Repr):
             raise TyperError("%r not in %r" % (cls, self))
         if self.lowleveltype is Void:
             return None
-        subclassdef = desc.getuniqueclassdef()
-        r_subclass = rclass.getclassrepr(self.rtyper, subclassdef)
-        return r_subclass.getruntime(self.lowleveltype)
+        return rclass.get_type_repr(self.rtyper).convert_desc(desc)
 
     def convert_const(self, cls):
         if cls is None:
@@ -780,6 +778,8 @@ class __extend__(pairtype(AbstractClassesPBCRepr, rclass.AbstractClassRepr)):
         if r_clspbc.lowleveltype is Void:
             return inputconst(r_cls, r_clspbc.s_pbc.const)
         # convert from ptr-to-object-vtable to ptr-to-more-precise-vtable
+        assert (r_clspbc.lowleveltype ==
+            r_clspbc.rtyper.type_system.rclass.CLASSTYPE)
         return r_cls.fromclasstype(v, llops)
 
 class __extend__(pairtype(AbstractClassesPBCRepr, AbstractClassesPBCRepr)):

@@ -247,18 +247,12 @@ def _builduserclswithfeature(supercls, *features):
         add(Proto)
 
     if "del" in features:
+        parent_destructor = getattr(supercls, '__del__', None)
         class Proto(object):
             def __del__(self):
-                self._enqueue_for_destruction(self.space)
-        # if the base class needs its own interp-level __del__,
-        # we override the _call_builtin_destructor() method to invoke it
-        # after the app-level destructor.
-        parent_destructor = getattr(supercls, '__del__', None)
-        if parent_destructor is not None:
-            def _call_builtin_destructor(self):
-                parent_destructor(self)
-            Proto._call_builtin_destructor = _call_builtin_destructor
-
+                call_user_destructor(self.space, self)
+                if parent_destructor is not None:
+                    parent_destructor(self)
         add(Proto)
 
     if "slots" in features:
@@ -328,6 +322,15 @@ def check_new_dictionary(space, w_dict):
         assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
     return w_dict
 check_new_dictionary._dont_inline_ = True
+
+def call_user_destructor(space, w_self):
+    w_self.clear_all_weakrefs()
+    try:
+        space.userdel(w_self)
+    except OperationError, e:
+        e.write_unraisable(space, 'method __del__ of ', w_self)
+        e.clear(space)   # break up reference cycles
+call_user_destructor._dont_inline_ = True
 
 # ____________________________________________________________
 
