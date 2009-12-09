@@ -19,6 +19,9 @@ def new_wrapper(func, translator, newname=None):
     graph = bk.getdesc(func).getuniquegraph()
 
     f = getfunctionptr(graph)
+    if translator.config.translation.generatemodule:
+        return f
+
     FUNCTYPE = typeOf(f).TO
 
     newops = LowLevelOpList(translator.rtyper)
@@ -74,5 +77,6 @@ def new_wrapper(func, translator, newname=None):
                                 PyObjPtr),
                        wgraph.name,
                        graph = wgraph,
-                       exception_policy = "CPython")
+                       exception_policy = "CPython",
+                       _exported=True)
 

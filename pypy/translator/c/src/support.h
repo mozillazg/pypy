@@ -99,7 +99,7 @@ int RPyAbort(void) {
 #  define RPyBareItem(array, index)          ((array)[index])
 #endif
 
-#ifndef PYPY_STANDALONE
+#if !defined(PYPY_STANDALONE) && !defined(PYPY_EXTMODULE)
 
 /* prototypes */
 
