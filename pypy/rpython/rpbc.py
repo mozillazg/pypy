@@ -177,12 +177,14 @@ def get_concrete_calltable(rtyper, callfamily):
 
 class AbstractFunctionsPBCRepr(CanBeNull, Repr):
     """Representation selected for a PBC of function(s)."""
-
+    force_virtual = False
     def __init__(self, rtyper, s_pbc):
         self.rtyper = rtyper
         self.s_pbc = s_pbc
         self.callfamily = s_pbc.descriptions.iterkeys().next().getcallfamily()
-        if len(s_pbc.descriptions) == 1 and not s_pbc.can_be_None:
+
+        if len(s_pbc.descriptions) == 1 and not s_pbc.can_be_None and not (
+                s_pbc.force_virtual_access):
             # a single function
             self.lowleveltype = Void
         else:
