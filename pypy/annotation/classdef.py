@@ -5,7 +5,7 @@ Type inference for user-defined classes.
 from __future__ import generators
 from pypy.annotation.model import SomePBC, s_ImpossibleValue, unionof
 from pypy.annotation.model import SomeInteger, isdegenerated, SomeTuple,\
-     SomeString
+     SomeString, SomeInstance, UnionError
 from pypy.annotation import description
 
 
@@ -75,6 +75,7 @@ class Attribute:
         self.readonly = True
         self.attr_allowed = True
         self.read_locations = {}
+        self.exported = False
 
     def add_constant_source(self, classdef, source):
         s_value = source.s_get_value(classdef, self.name)
@@ -166,12 +167,79 @@ class ClassDef(object):
 
         self.parentdefs = dict.fromkeys(self.getmro())
 
+    def is_exported(self, recursive=True):
+        ecdef = self.get_exported_cdef(False)
+        if recursive:
+            return ecdef is not None
+        else:
+            return ecdef is self
+
+    def get_exported_cdef(self, imported_as_well=True): # returns the most precise exported classdef
+        if '_exported_' in self.classdesc.classdict:
+            component = self.classdesc.classdict['_component_'].value
+            if self.bookkeeper.annotator.translator.config.translation.exportpackage == component.name:
+                return self
+        elif imported_as_well and '_importinfo_' in self.classdesc.classdict:
+            return self
+        if self.basedef is None or self.basedef.classdesc.pyobj is object:
+            return None
+        return self.basedef.get_exported_cdef()
+
+    def get_import_data(self):
+        const = self.classdesc.classdict.get('_importinfo_', None)
+        if const is not None:
+            return const.value
+
     def setup(self, sources):
         # collect the (supposed constant) class attributes
         for name, source in sources.items():
             self.add_source_for_attribute(name, source)
         if self.bookkeeper:
             self.bookkeeper.event('classdef_setup', self)
+            self.call_imported_methods()
+
+    def call_imported_methods(self):
+        from pypy.annotation.binaryop import unioncheck
+        for cdef in list(self.getmro())[:0:-1]:
+            impdata = cdef.get_import_data()
+            if impdata:
+                # add methods that override methods from imported base classes
+                for mangled_name, name, value in impdata.cls:
+                    if not name:
+                        continue
+                    self.generalize_attr(name) # XXX ugly and probably non-sense
+                    cdef.generalize_attr(name)
+                    s_value = cdef.about_attribute(name)
+                    if not s_value:
+                        continue
+                    s_func_subcls = self.lookup_filter(s_value, name)
+                    s_func_impcls = cdef.lookup_filter(s_value, name)
+                    #if s_func_subcls.descriptions.keys()[0].funcdesc is s_func_impcls.descriptions.keys()[0].funcdesc:
+                    #    continue # hm
+                    bm_subcls_desc = s_func_subcls.descriptions.iterkeys().next()
+                    bm_impcls_desc = s_func_impcls.descriptions.iterkeys().next()
+                    smfc = bm_impcls_desc.funcdesc.pyobj.is_wrapping
+                    smfc.compute_rebuilt_args_result(self.bookkeeper)
+                    src_args_s, src_s_result = smfc.args_s_rebuilt, smfc.s_result_rebuilt
+                    desc = bm_subcls_desc.bind_self(self)
+                    args = self.bookkeeper.build_args("simple_call", src_args_s[1:])
+                    s_meth = SomePBC([desc.funcdesc])
+                    new_args_s = [SomeInstance(s_func_subcls.descriptions.keys()[0].originclassdef)] + src_args_s[1:]
+                    self.bookkeeper.emulate_pbc_call(desc, s_meth, new_args_s)
+                    self.bookkeeper.pending_specializations.append(lambda desc=desc.funcdesc, s_res=src_s_result: self.check_return_values(desc, s_res))
+                    # XXX remove
+                    #desc.consider_call_site(self.bookkeeper, desc.getcallfamily(), [desc], args, s_ImpossibleValue)
+
+    def check_return_values(self, desc, s_result):
+        bk = self.bookkeeper
+        graph = desc.getuniquegraph()
+        s_graph_result = bk.annotator.binding(graph.getreturnvar(), None)
+        if s_graph_result is None:
+            print "Annotation failed ..."
+            return
+        if not s_result.contains(s_graph_result):
+            raise UnionError("Invalid return value in overridden imported function!")
+        bk.annotator.setbinding(graph.getreturnvar(), s_result)
 
     def add_source_for_attribute(self, attr, source):
         """Adds information about a constant source for an attribute.
