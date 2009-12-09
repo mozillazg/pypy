@@ -76,12 +76,6 @@ class LowLevelType(object):
 
     _is_compatible = __eq__
 
-    def __getstate__(self):
-        return self.__dict__
-
-    def __setstate__(self, val):
-        self.__dict__.update(val)
-
     def _enforce(self, value):
         if typeOf(value) != self:
             raise TypeError
@@ -111,6 +105,11 @@ class LowLevelType(object):
         if hash_level == 0:
             self.__cached_hash = result
         return result
+
+    # due to this dynamic hash value, we should forbid
+    # pickling, until we have an algorithm for that.
+    # but we just provide a tag for external help.
+    __hash_is_not_constant__ = True
 
     def __repr__(self):
         return '<%s>' % (self,)
@@ -1261,7 +1260,6 @@ assert not '__dict__' in dir(_interior_ptr)
 
 class _container(object):
     __slots__ = ()
-    _exported = False
     def _parentstructure(self, check=True):
         return None
     def _check(self):
@@ -1282,7 +1280,7 @@ class _parentable(_container):
 
     __slots__ = ('_TYPE',
                  '_parent_type', '_parent_index', '_keepparent',
-                 '_wrparent',"_exported",
+                 '_wrparent',
                  '__weakref__',
                  '_storage')
 
@@ -1653,9 +1651,7 @@ class _func(_container):
             return id(self)
 
     def __setattr__(self, attr, value):
-        if attr != "_exported":
-            raise AttributeError("cannot change the attributes of %r" % (self,))
-        _container.__setattr__(self, attr, value)
+        raise AttributeError("cannot change the attributes of %r" % (self,))
 
 class _opaque(_parentable):
     def __init__(self, TYPE, parent=None, parentindex=None, **attrs):
@@ -1700,18 +1696,8 @@ class _opaque(_parentable):
             return _parentable._normalizedcontainer(self)
 
 
-class _external_reference(_container):
-    def __init__(self, TYPE, name, component=None):
-        self._TYPE = TYPE
-        self.name = name
-        self.component = component
-        self.iddata = str(component) + name
-
-    def _getid(self):
-        return id(self.iddata)
-
-
 class _pyobject(Hashable, _container):
+    __slots__ = []   # or we get in trouble with pickling
 
     _TYPE = PyObject
 
@@ -1777,10 +1763,6 @@ def opaqueptr(TYPE, name, **attrs):
 def pyobjectptr(obj):
     o = _pyobject(obj)
     return _ptr(Ptr(PyObject), o) 
-
-def externalptr(TYPE, name, component=None):
-    o = _external_reference(TYPE, name, component)
-    return _ptr(Ptr(TYPE), o, solid=True)
 
 def cast_ptr_to_int(ptr):
     return ptr._cast_to_int()

@@ -14,8 +14,7 @@ from pypy.rpython.lltypesystem.lltype import \
      cast_pointer, cast_ptr_to_int, castable, nullptr, \
      RuntimeTypeInfo, getRuntimeTypeInfo, typeOf, \
      Array, Char, Void, attachRuntimeTypeInfo, \
-     FuncType, Bool, Signed, functionptr, FuncType, PyObject, \
-     normalizeptr
+     FuncType, Bool, Signed, functionptr, FuncType, PyObject
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.extregistry import ExtRegistryEntry
@@ -63,8 +62,8 @@ OBJECT = GcStruct('object', ('typeptr', CLASSTYPE),
 OBJECTPTR = Ptr(OBJECT)
 OBJECT_VTABLE.become(Struct('object_vtable',
                             #('parenttypeptr', CLASSTYPE),
-                            ('level', Signed),
-                            ('classrow', Ptr(Array(CLASSTYPE))),
+                            ('subclassrange_min', Signed),
+                            ('subclassrange_max', Signed),
                             ('rtti', Ptr(RuntimeTypeInfo)),
                             ('name', Ptr(Array(Char))),
                             ('instantiate', Ptr(FuncType([], OBJECTPTR))),
@@ -87,50 +86,6 @@ def cast_vtable_to_typeptr(vtable):
     return vtable
 
 
-
-def weave_llfields(llfields, classinfo, types_only=False):
-    llfields_iter = iter(llfields)
-    result = []
-    for mangled_name, name, value in classinfo:
-        if name is not None:
-            curfield = llfields_iter.next()
-            while curfield is not None and curfield[0] != mangled_name: # XXX does this make sense?
-                result.append((mangled_name, value.get_func()))
-                try:
-                    curfield = llfields_iter.next()
-                except StopIteration:
-                    curfield = None
-            if curfield is not None:
-                result.append(curfield)
-        else:
-            if not types_only:
-                value = typeOf(value)
-            result.append((mangled_name, value))
-    try:
-        llfields_iter.next()
-    except StopIteration:
-        pass
-    else:
-        raise TyperError("Incorrect set of llfields")
-    return result
-
-def extend_exportinfo(exportinfo, mangled_name, name, r, classdesc=None):
-    T = r.lowleveltype
-    if classdesc is None:
-        llvalue = T
-        var = None
-    else:
-        var = classdesc.read_attribute(name, None)
-        llvalue = r.convert_desc_or_const(var)
-    #import pdb; pdb.set_trace()
-    if var is None or not getattr(var.value, '_export_', None):
-        name = None # hide
-        val = llvalue
-    else:
-        val = var.value
-    exportinfo.append((mangled_name, name, val))
-
-
 class ClassRepr(AbstractClassRepr):
     def __init__(self, rtyper, classdef):
         AbstractClassRepr.__init__(self, rtyper, classdef)
@@ -142,7 +97,6 @@ class ClassRepr(AbstractClassRepr):
         self.lowleveltype = Ptr(self.vtable_type)
 
     def _setup_repr(self):
-        exportinfo = None
         # NOTE: don't store mutable objects like the dicts below on 'self'
         #       before they are fully built, to avoid strange bugs in case
         #       of recursion where other code would uses these
@@ -151,9 +105,6 @@ class ClassRepr(AbstractClassRepr):
         pbcfields = {}
         allmethods = {}
         if self.classdef is not None:
-            if self.classdef.is_exported():
-                exportinfo = []
-            importinfo = self.classdef.get_import_data()
             # class attributes
             llfields = []
             attrs = self.classdef.attrs.items()
@@ -166,13 +117,9 @@ class ClassRepr(AbstractClassRepr):
                         allmethods[name] = True
                         s_value = s_unboundmethod
                     r = self.rtyper.getrepr(s_value)
-                    #if "Multi" in repr(r) or ("Void" in repr(r.lowleveltype) and name in ("foo", "bar") and "foovoid" not in repr(self)):
-                    #    import pdb; pdb.set_trace()
                     mangled_name = 'cls_' + name
                     clsfields[name] = mangled_name, r
                     llfields.append((mangled_name, r.lowleveltype))
-                    if exportinfo is not None and r.lowleveltype is not Void:
-                        extend_exportinfo(exportinfo, mangled_name, name, r, self.classdef.classdesc)
             # attributes showing up in getattrs done on the class as a PBC
             extra_access_sets = self.rtyper.class_pbc_attributes.get(
                 self.classdef, {})
@@ -181,12 +128,7 @@ class ClassRepr(AbstractClassRepr):
                 mangled_name = mangle('pbc%d' % counter, attr)
                 pbcfields[access_set, attr] = mangled_name, r
                 llfields.append((mangled_name, r.lowleveltype))
-                if exportinfo is not None:
-                    assert 0, "not yet supported"
             #
-            if importinfo:
-                #import pdb; pdb.set_trace()
-                llfields = weave_llfields(llfields, importinfo.cls)
             self.rbase = getclassrepr(self.rtyper, self.classdef.basedef)
             self.rbase.setup()
             kwds = {'hints': {'immutable': True}}
@@ -194,8 +136,6 @@ class ClassRepr(AbstractClassRepr):
                                  ('super', self.rbase.vtable_type),
                                  *llfields, **kwds)
             self.vtable_type.become(vtable_type)
-            if exportinfo is not None:
-                self.classdef.exportinfo_cls = exportinfo
             allmethods.update(self.rbase.allmethods)
         self.clsfields = clsfields
         self.pbcfields = pbcfields
@@ -219,20 +159,8 @@ class ClassRepr(AbstractClassRepr):
     def getvtable(self, cast_to_typeptr=True):
         """Return a ptr to the vtable of this type."""
         if self.vtable is None:
-            if self.classdef and self.classdef.get_import_data():
-                #from pypy.rpython.lltypesystem.rffi import CConstant
-                handle = self.classdef.get_import_data().vtablename
-                component = None
-                if isinstance(handle, tuple):
-                    component, handle = handle
-                #T = lltype.Ptr(lltype.OpaqueType(handle, hints=dict(external_void=True)))
-                #val = CConstant("&" + handle, T)
-                self.vtable = lltype.externalptr(OBJECT_VTABLE, handle + "_vtable", component)
-                #self.vtable = val
-                cast_to_typeptr = False
-            else:
-                self.vtable = malloc(self.vtable_type, immortal=True)
-                self.setup_vtable(self.vtable, self)
+            self.vtable = malloc(self.vtable_type, immortal=True)
+            self.setup_vtable(self.vtable, self)
         #
         vtable = self.vtable
         if cast_to_typeptr:
@@ -247,18 +175,11 @@ class ClassRepr(AbstractClassRepr):
             # initialize the 'subclassrange_*' and 'name' fields
             if rsubcls.classdef is not None:
                 #vtable.parenttypeptr = rsubcls.rbase.getvtable()
-                vtable.level = rsubcls.classdef.level
-                vtable.classrow = malloc(Array(CLASSTYPE), rsubcls.classdef.level + 1, immortal=True)
-                cur_repr = rsubcls
-                for i in xrange(rsubcls.classdef.level, -1, -1):
-                    vtable.classrow[i] = cur_repr.getvtable()
-                    cur_repr = cur_repr.rbase
-
-                if rsubcls.classdef.is_exported():
-                    rsubcls.classdef.exportinfo_vtableval = normalizeptr(vtable)
+                vtable.subclassrange_min = rsubcls.classdef.minid
+                vtable.subclassrange_max = rsubcls.classdef.maxid
             else: #for the root class
-                vtable.level = -1
-                vtable.classrow = nullptr(Array(CLASSTYPE))
+                vtable.subclassrange_min = 0
+                vtable.subclassrange_max = sys.maxint
             rinstance = getinstancerepr(self.rtyper, rsubcls.classdef)
             rinstance.setup()
             if rinstance.gcflavor == 'gc':
@@ -277,7 +198,6 @@ class ClassRepr(AbstractClassRepr):
             #else: the classdef was created recently, so no instantiate()
             #      could reach it
         else:
-            importinfo = self.classdef.get_import_data()
             # setup class attributes: for each attribute name at the level
             # of 'self', look up its value in the subclass rsubcls
             def assign(mangled_name, value):
@@ -286,7 +206,7 @@ class ClassRepr(AbstractClassRepr):
                 llvalue = r.convert_desc_or_const(value)
                 setattr(vtable, mangled_name, llvalue)
 
-            mro = list(rsubcls.classdef.getmro()) # XXX not needed?
+            mro = list(rsubcls.classdef.getmro())
             for fldname in self.clsfields:
                 mangled_name, r = self.clsfields[fldname]
                 if r.lowleveltype is Void:
@@ -303,10 +223,6 @@ class ClassRepr(AbstractClassRepr):
                 attrvalue = rsubcls.classdef.classdesc.read_attribute(attr, None)
                 if attrvalue is not None:
                     assign(mangled_name, attrvalue)
-            if importinfo:
-                for mangled_name, name, val in importinfo.cls:
-                    if not name:
-                        setattr(vtable, mangled_name, val)
 
             # then initialize the 'super' portion of the vtable
             self.rbase.setup_vtable(vtable.super, rsubcls)
@@ -366,8 +282,10 @@ class ClassRepr(AbstractClassRepr):
 ##                # a class with no subclass
 ##                return hop.genop('ptr_eq', [v_cls1, v_cls2], resulttype=Bool)
 ##            else:
-            level = hop.inputconst(Signed, cls2.level)
-            return hop.gendirectcall(ll_issubclass_const, v_cls1, v_cls2, level)
+            minid = hop.inputconst(Signed, cls2.subclassrange_min)
+            maxid = hop.inputconst(Signed, cls2.subclassrange_max)
+            return hop.gendirectcall(ll_issubclass_const, v_cls1, minid,
+                                     maxid)
         else:
             v_cls1, v_cls2 = hop.inputargs(class_repr, class_repr)
             return hop.gendirectcall(ll_issubclass, v_cls1, v_cls2)
@@ -389,7 +307,6 @@ class InstanceRepr(AbstractInstanceRepr):
         self.gcflavor = gcflavor
 
     def _setup_repr(self, llfields=None, hints=None, adtmeths=None):
-        exportinfo = None
         # NOTE: don't store mutable objects like the dicts below on 'self'
         #       before they are fully built, to avoid strange bugs in case
         #       of recursion where other code would uses these
@@ -400,8 +317,6 @@ class InstanceRepr(AbstractInstanceRepr):
         if self.classdef is None:
             fields['__class__'] = 'typeptr', get_type_repr(self.rtyper)
         else:
-            if self.classdef.is_exported():
-                exportinfo = []
             # instance attributes
             if llfields is None:
                 llfields = []
@@ -413,18 +328,12 @@ class InstanceRepr(AbstractInstanceRepr):
                     mangled_name = 'inst_' + name
                     fields[name] = mangled_name, r
                     llfields.append((mangled_name, r.lowleveltype))
-                    if exportinfo is not None:
-                        extend_exportinfo(exportinfo, mangled_name, name, r, None)
-
             #
             # hash() support
             if self.rtyper.needs_hash_support(self.classdef):
                 from pypy.rpython import rint
                 fields['_hash_cache_'] = 'hash_cache', rint.signed_repr
                 llfields.append(('hash_cache', Signed))
-            importinfo = self.classdef.get_import_data()
-            if importinfo:
-                llfields = weave_llfields(llfields, importinfo.inst, True)
 
             self.rbase = getinstancerepr(self.rtyper, self.classdef.basedef,
                                          self.gcflavor)
@@ -438,11 +347,6 @@ class InstanceRepr(AbstractInstanceRepr):
             if '_immutable_' in self.classdef.classdesc.classdict:
                 hints = hints.copy()
                 hints['immutable'] = True
-            if self.classdef.is_exported():
-                hints = hints.copy()
-                hints['_exported'] = True
-            if exportinfo is not None:
-                self.classdef.exportinfo_inst = exportinfo
             object_type = MkStruct(self.classdef.name,
                                    ('super', self.rbase.object_type),
                                    hints=hints,
@@ -680,15 +584,16 @@ class InstanceRepr(AbstractInstanceRepr):
         instance_repr = self.common_repr()
 
         v_obj, v_cls = hop.inputargs(instance_repr, class_repr)
-        if False and isinstance(v_cls, Constant): # XXX
+        if isinstance(v_cls, Constant):
             cls = v_cls.value
             # XXX re-implement the following optimization
             #if cls.subclassrange_max == cls.subclassrange_min:
             #    # a class with no subclass
             #    return hop.gendirectcall(rclass.ll_isinstance_exact, v_obj, v_cls)
             #else:
-            level = hop.inputconst(Signed, cls.level)
-            return hop.gendirectcall(ll_isinstance_const, v_obj, v_cls, level)
+            minid = hop.inputconst(Signed, cls.subclassrange_min)
+            maxid = hop.inputconst(Signed, cls.subclassrange_max)
+            return hop.gendirectcall(ll_isinstance_const, v_obj, minid, maxid)
         else:
             return hop.gendirectcall(ll_isinstance, v_obj, v_cls)
 
@@ -774,10 +679,11 @@ def ll_type(obj):
     return cast_pointer(OBJECTPTR, obj).typeptr
 
 def ll_issubclass(subcls, cls):
-    return subcls.level >= cls.level and subcls.classrow[cls.level] == cls
+    return cls.subclassrange_min <= subcls.subclassrange_min <= cls.subclassrange_max
 
-def ll_issubclass_const(subcls, cls, level):
-    return subcls.level >= level and subcls.classrow[level] == cls
+def ll_issubclass_const(subcls, minid, maxid):
+    return minid <= subcls.subclassrange_min <= maxid
+
 
 def ll_isinstance(obj, cls): # obj should be cast to OBJECT or NONGCOBJECT
     if not obj:
@@ -785,12 +691,12 @@ def ll_isinstance(obj, cls): # obj should be cast to OBJECT or NONGCOBJECT
     obj_cls = obj.typeptr
     return ll_issubclass(obj_cls, cls)
 
-def ll_isinstance_const(obj, cls, level):
+def ll_isinstance_const(obj, minid, maxid):
     if not obj:
         return False
-    return ll_issubclass_const(obj.typeptr, cls, level)
+    return ll_issubclass_const(obj.typeptr, minid, maxid)
 
-def ll_isinstance_exact(obj, cls): #unused
+def ll_isinstance_exact(obj, cls):
     if not obj:
         return False
     obj_cls = obj.typeptr

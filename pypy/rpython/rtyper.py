@@ -689,9 +689,6 @@ class HighLevelOp(object):
         self.r_result = rtyper.getrepr(self.s_result)
         rtyper.call_all_setups()  # compute ForwardReferences now
 
-    def __repr__(self):
-        return '<HOp %r #llops=%i>' % (self.spaceop, len(self.llops))
-
     def copy(self):
         result = HighLevelOp(self.rtyper, self.spaceop,
                              self.exceptionlinks, self.llops)

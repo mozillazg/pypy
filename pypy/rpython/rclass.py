@@ -77,7 +77,7 @@ class AbstractClassRepr(Repr):
             if not s_value.isNone() and s_value.getKind() == description.MethodDesc:
                 s_value = self.classdef.lookup_filter(s_value)
                 funcdescs = [mdesc.funcdesc for mdesc in s_value.descriptions]
-                return annmodel.SomePBC(funcdescs, force_virtual_access=any(mdesc.force_virtual_access for mdesc in s_value.descriptions))
+                return annmodel.SomePBC(funcdescs)
         return None   # not a method
 
     def get_ll_eq_function(self):
