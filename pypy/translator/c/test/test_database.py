@@ -1,5 +1,6 @@
 import autopath, sys
 from pypy.rpython.lltypesystem.lltype import *
+from pypy.rpython.lltypesystem import rffi
 from pypy.translator.translator import TranslationContext
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.objspace.flow.model import Constant, Variable, SpaceOperation
@@ -12,6 +13,13 @@ def dump_on_stdout(database):
         database.prepare_inline_helpers()
     print '/*********************************/'
     structdeflist = database.getstructdeflist()
+    for node in structdeflist:
+        if hasattr(node, 'forward_decl'):
+            if node.forward_decl:
+                print node.forward_decl
+        else:
+            print '%s %s;' % (node.typetag, node.name)
+
     for node in structdeflist:
         for line in node.definition():
             print line
@@ -175,6 +183,20 @@ def test_function_call():
     db.complete()
     dump_on_stdout(db)
 
+def test_extdef():
+    db = LowLevelDatabase()
+    handle = "handle"
+    S2 = GcStruct("testing2")
+    val = externalptr(S2, "foo")
+    #typ = Ptr(OpaqueType(handle, hints=dict(external_void=True)))
+    #val = rffi.CConstant(handle, typ)
+    S = GcStruct('testing', ('x', Ptr(S2)), ('y', Signed))
+    s = malloc(S)
+    s.x = val
+    s.y = 1
+    db.get(s)
+    db.complete()
+    dump_on_stdout(db)
 
 def test_malloc():
     S = GcStruct('testing', ('x', Signed), ('y', Signed))
