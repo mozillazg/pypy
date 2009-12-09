@@ -4,11 +4,14 @@ from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator.tool.taskengine import SimpleTaskEngine
 from pypy.translator.goal import query
 from pypy.translator.goal.timing import Timer
+from pypy.translator.sepcomp import ImportExportComponent, get_function_name
 from pypy.annotation import model as annmodel
 from pypy.annotation.listdef import s_list_of_strings
+from pypy.annotation.signature import annotationoftype
 from pypy.annotation import policy as annpolicy
 from py.compat import optparse
 from pypy.tool.udir import udir
+
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -215,12 +218,14 @@ class TranslationDriver(SimpleTaskEngine):
         self.entry_point = entry_point
         self.translator = translator
         self.libdef = None
-
+        self.secondary_entrypoints = ()
         self.translator.driver_instrument_result = self.instrument_result
 
     def setup_library(self, libdef, policy=None, extra={}, empty_translator=None):
+        """ Used by carbonpython only. """
         self.setup(None, None, policy, extra, empty_translator)
         self.libdef = libdef
+        self.secondary_entrypoints = libdef.functions
 
     def instrument_result(self, args):
         backend, ts = self.get_backend_and_type_system()
@@ -302,22 +307,35 @@ class TranslationDriver(SimpleTaskEngine):
         annmodel.DEBUG = self.config.translation.debug
         annotator = translator.buildannotator(policy=policy)
 
+        if self.config.translation.exportpackage:
+            iep = ImportExportComponent.packages[self.config.translation.exportpackage]
+            self.secondary_entrypoints = iep.entry_points
+
         if self.entry_point:
             s = annotator.build_types(self.entry_point, self.inputtypes)
-
-            self.sanity_check_annotation()
-            if self.standalone and s.knowntype != int:
-                raise Exception("stand-alone program entry point must return an "
-                                "int (and not, e.g., None or always raise an "
-                                "exception).")
-            annotator.simplify()
-            return s
         else:
-            assert self.libdef is not None
-            for func, inputtypes in self.libdef.functions:
-                annotator.build_types(func, inputtypes)
-            self.sanity_check_annotation()
-            annotator.simplify()
+            s = None
+
+        if self.secondary_entrypoints is not None:
+            for func, inputtypes in self.secondary_entrypoints:
+                if inputtypes == Ellipsis:
+                    continue
+                rettype = annotator.build_types(func, inputtypes)
+
+        self.sanity_check_annotation()
+        if self.entry_point and self.standalone and s.knowntype != int:
+            raise Exception("stand-alone program entry point must return an "
+                            "int (and not, e.g., None or always raise an "
+                            "exception).")
+        annotator.simplify()
+
+        # XXX only supports a single set of exports per compilation run
+        generating_package = self.config.translation.exportpackage
+        if generating_package:
+            export_table = ImportExportComponent.packages[generating_package].new_table()
+            export_table.load_entrypoint_annotations(self.translator, self.secondary_entrypoints)
+
+        return s
     #
     task_annotate = taskdef(task_annotate, [], "Annotating&simplifying")
 
@@ -484,11 +502,24 @@ class TranslationDriver(SimpleTaskEngine):
         else:
             from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
         cbuilder = CBuilder(self.translator, self.entry_point,
-                            config=self.config)
+                            config=self.config, secondary_entrypoints=self.secondary_entrypoints)
+
+        # XXX make more general (for all backends)
+        # XXX only supports a single set of exports per compilation run
+        generating_package = self.config.translation.exportpackage
+        if generating_package:
+            export_table = ImportExportComponent.packages[generating_package].table
+            export_table.load_entrypoints(self.translator, self.secondary_entrypoints)
+
+        # XXX messy
         cbuilder.stackless = self.config.translation.stackless
-        if not standalone:     # xxx more messy
+        if not standalone:
             cbuilder.modulename = self.extmod_name
+
         database = cbuilder.build_database()
+        if generating_package:
+            export_table.convert_llvalues(database)
+            ImportExportComponent.save_all()
         self.log.info("database for generating C source was created")
         self.cbuilder = cbuilder
         self.database = database
@@ -507,15 +538,20 @@ class TranslationDriver(SimpleTaskEngine):
     #
     task_source_c = taskdef(task_source_c, ['database_c'], "Generating c source")
 
-    def create_exe(self):
+    def create_exe(self, is_so=False):
         if self.exe_name is not None:
             import shutil
-            exename = mkexename(self.c_entryp)
-            info = {'backend': self.config.translation.backend}
+            if is_so:
+                exename = self.c_entryp
+            else:
+                exename = mkexename(self.c_entryp)
             newexename = self.exe_name % self.get_info()
+            if is_so:
+                newexename += ".so"
             if '/' not in newexename and '\\' not in newexename:
                 newexename = './' + newexename
-            newexename = mkexename(newexename)
+            if not is_so:
+                newexename = mkexename(newexename)
             shutil.copy(exename, newexename)
             self.c_entryp = newexename
         self.log.info("created: %s" % (self.c_entryp,))
@@ -528,7 +564,12 @@ class TranslationDriver(SimpleTaskEngine):
             self.c_entryp = cbuilder.executable_name
             self.create_exe()
         else:
-            self.c_entryp = cbuilder.get_entry_point()
+            if self.config.translation.generatemodule:
+                cbuilder._make_wrapper_module()
+                self.c_entryp = str(cbuilder.so_name)
+                self.create_exe(True)
+            else:
+                self.c_entryp = cbuilder.get_entry_point()
     #
     task_compile_c = taskdef(task_compile_c, ['source_c'], "Compiling c source")
 
