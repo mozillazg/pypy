@@ -150,6 +150,10 @@ class SomeObject:
     def nonnoneify(self):
         return self
 
+    def make_acceptable_in_interface(self):
+        return None # we refuse
+
+
 class SomeFloat(SomeObject):
     "Stands for a float or an integer."
     knowntype = float   # if we don't know if it's a float or an int,
@@ -159,6 +163,9 @@ class SomeFloat(SomeObject):
     def can_be_none(self):
         return False
 
+    def make_acceptable_in_interface(self):
+        return SomeFloat()
+
 class SomeSingleFloat(SomeObject):
     "Stands for an r_singlefloat."
     # No operation supported, not even union with a regular float
@@ -167,6 +174,9 @@ class SomeSingleFloat(SomeObject):
 
     def can_be_none(self):
         return False
+
+    def make_acceptable_in_interface(self):
+        return SomeSingleFloat()
 
 class SomeInteger(SomeFloat):
     "Stands for an object which is known to be an integer."
@@ -187,6 +197,9 @@ class SomeInteger(SomeFloat):
         self.nonneg = unsigned or nonneg
         self.unsigned = unsigned  # pypy.rlib.rarithmetic.r_uint
 
+    def make_acceptable_in_interface(self):
+        return SomeInteger(nonneg=False, knowntype=self.knowntype)
+
 class SomeBool(SomeInteger):
     "Stands for true or false."
     knowntype = bool
@@ -194,6 +207,7 @@ class SomeBool(SomeInteger):
     unsigned = False
     def __init__(self):
         pass
+
 
 class SomeString(SomeObject):
     "Stands for an object which is known to be a string."
@@ -208,6 +222,9 @@ class SomeString(SomeObject):
     def nonnoneify(self):
         return SomeString(can_be_None=False)
 
+    def make_acceptable_in_interface(self):
+        return SomeString(True)
+
 class SomeUnicodeString(SomeObject):
     "Stands for an object which is known to be an unicode string"
     knowntype = unicode
@@ -220,6 +237,9 @@ class SomeUnicodeString(SomeObject):
 
     def nonnoneify(self):
         return SomeUnicodeString(can_be_None=False)
+
+    def make_acceptable_in_interface(self):
+        return SomeUnicodeString(True)
 
 class SomeChar(SomeString):
     "Stands for an object known to be a string of length 1."
@@ -351,18 +371,25 @@ class SomeInstance(SomeObject):
     def nonnoneify(self):
         return SomeInstance(self.classdef, can_be_None=False)
 
+    def make_acceptable_in_interface(self):
+        cdef = self.classdef.get_exported_cdef()
+        assert cdef is not None
+        return SomeInstance(cdef, True)
 
 class SomePBC(SomeObject):
     """Stands for a global user instance, built prior to the analysis,
     or a set of such instances."""
     immutable = True
 
-    def __init__(self, descriptions, can_be_None=False, subset_of=None):
+    def __init__(self, descriptions, can_be_None=False, subset_of=None, force_virtual_access=False):
         # descriptions is a set of Desc instances.
         descriptions = dict.fromkeys(descriptions)
         self.descriptions = descriptions
         self.can_be_None = can_be_None
         self.subset_of = subset_of
+        self.force_virtual_access = force_virtual_access
+        if subset_of is not None:
+            self.force_virtual_access = subset_of.force_virtual_access or force_virtual_access
         self.simplify()
         if self.isNone():
             self.knowntype = type(None)
@@ -378,8 +405,12 @@ class SomePBC(SomeObject):
                 # hack for the convenience of direct callers to SomePBC():
                 # only if there is a single object in descriptions
                 desc, = descriptions
-                if desc.pyobj is not None:
+                if desc.pyobj is not None and not desc.avoid_constantness and not self.force_virtual_access:
                     self.const = desc.pyobj
+
+    def make_acceptable_in_interface(self):
+        if self.isNone():
+            return self
 
     def getKind(self):
         "Return the common Desc class of all descriptions in this PBC."
@@ -420,7 +451,7 @@ class SomePBC(SomeObject):
         if hasattr(self, 'const'):
             return None
         else:
-            return '{...%s...}'%(len(pbis),)
+            return '{%s}' % (str(pbis.keys())[1:-1], )
 
     def fmt_knowntype(self, kt):
         if self.is_constant():
@@ -685,7 +716,7 @@ def unionof(*somevalues):
     return s1
 
 def isdegenerated(s_value):
-    return s_value.__class__ is SomeObject and s_value.knowntype is not type
+    return (s_value.__class__ is SomeObject and s_value.knowntype is not type) or (s_value.__class__ is SomeInstance and s_value.classdef is object)
 
 # make knowntypedata dictionary
 
