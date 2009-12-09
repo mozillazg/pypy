@@ -12,7 +12,7 @@ class Module(MixedModule):
             'strxfrm':                  'interp_locale.strxfrm',
             }
 
-    if sys.platform == 'win32':
+    if sys.platform in ('win32', 'darwin'):
         interpleveldefs.update({
             '_getdefaultlocale':        'interp_locale.getdefaultlocale',
             })

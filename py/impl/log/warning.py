@@ -13,18 +13,14 @@ class Warning(DeprecationWarning):
 def _apiwarn(startversion, msg, stacklevel=2, function=None):
     # below is mostly COPIED from python2.4/warnings.py's def warn()
     # Get context information
-    if isinstance(stacklevel, str):
-        frame = sys._getframe(1)
-        level = 1
-        found = frame.f_code.co_filename.find(stacklevel) != -1
+    if stacklevel == "initpkg":
+        frame = sys._getframe(stacklevel == "initpkg" and 1 or stacklevel)
+        level = 2
         while frame:
             co = frame.f_code
-            if co.co_filename.find(stacklevel) == -1:
-                if found:
-                    stacklevel = level 
-                    break
-            else:
-                found = True
+            if co.co_name == "__getattr__" and co.co_filename.find("initpkg") !=-1:
+                stacklevel = level 
+                break
             level += 1
             frame = frame.f_back
         else:

@@ -33,8 +33,7 @@ class TestRecompilation(BaseTestRegalloc):
         jump(i1)
         '''
         loop = self.interpret(ops, [0])
-        previous = loop.token._x86_frame_depth
-        assert loop.token._x86_param_depth == 0
+        previous = loop.token._x86_stack_depth
         assert self.getint(0) == 20
         ops = '''
         [i1]
@@ -49,8 +48,7 @@ class TestRecompilation(BaseTestRegalloc):
         '''
         bridge = self.attach_bridge(ops, loop, -2)
         descr = loop.operations[2].descr
-        new = descr._x86_bridge_frame_depth
-        assert descr._x86_bridge_param_depth == 0        
+        new = descr._x86_bridge_stack_depth
         assert new > previous
         self.cpu.set_future_value_int(0, 0)
         fail = self.run(loop)
@@ -109,10 +107,8 @@ class TestRecompilation(BaseTestRegalloc):
         '''
         bridge = self.attach_bridge(ops, loop, 5, looptoken=loop.token)
         guard_op = loop.operations[5]
-        loop_frame_depth = loop.token._x86_frame_depth
-        assert loop.token._x86_param_depth == 0
-        assert guard_op.descr._x86_bridge_frame_depth > loop_frame_depth
-        assert guard_op.descr._x86_bridge_param_depth == 0
+        loop_stack_depth = loop.token._x86_stack_depth
+        assert guard_op.descr._x86_bridge_stack_depth > loop_stack_depth
         self.cpu.set_future_value_int(0, 0)
         self.cpu.set_future_value_int(1, 0)
         self.cpu.set_future_value_int(2, 0)

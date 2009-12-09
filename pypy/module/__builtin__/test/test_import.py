@@ -66,10 +66,8 @@ def setup_directory_structure(space):
     setuppkg("pkg_substituted", mod='')
     p = setuppkg("readonly", x='')
     p = setuppkg("pkg_univnewlines")
-    p.join('__init__.py').write(
-        'a=5\nb=6\rc="""hello\r\nworld"""\r', mode='wb')
-    p.join('mod.py').write(
-        'a=15\nb=16\rc="""foo\r\nbar"""\r', mode='wb')
+    p.join('__init__.py').write('a=5\nb=6\rc="""hello\r\nworld"""\r')
+    p.join('mod.py').write('a=15\nb=16\rc="""foo\r\nbar"""\r')
 
     # create compiled/x.py and a corresponding pyc file
     p = setuppkg("compiled", x = "x = 84")
@@ -94,8 +92,7 @@ def setup_directory_structure(space):
             stream.close()
         if space.config.objspace.usepycfiles:
             # also create a lone .pyc file
-            p.join('lone.pyc').write(p.join('x.pyc').read(mode='rb'),
-                                     mode='wb')
+            p.join('lone.pyc').write(p.join('x.pyc').read(), mode='wb')
 
     return str(root)
 
