@@ -331,6 +331,14 @@ def assign_inheritance_ids(annotator):
             classdef.minid = TotalOrderSymbolic(witness, lst)
             classdef.maxid = TotalOrderSymbolic(witness + [MAX], lst)
 
+
+def assign_inheritance_levels(annotator):
+    bk = annotator.bookkeeper
+    for classdef in bk.classdefs:
+        if not hasattr(classdef, 'level'):
+            classdef.level = len(tuple(classdef.getmro())) - 1
+
+
 MAX = 1E100
 _cdef_id_counter = 0
 def get_unique_cdef_id(cdef):
@@ -350,7 +358,7 @@ def perform_normalizations(rtyper):
     try:
         normalize_call_familes(rtyper.annotator)
         merge_classpbc_getattr_into_classdef(rtyper)
-        assign_inheritance_ids(rtyper.annotator)
+        assign_inheritance_levels(rtyper.annotator)
     finally:
         rtyper.annotator.frozen -= 1
     create_instantiate_functions(rtyper.annotator)
