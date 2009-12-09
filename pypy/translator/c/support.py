@@ -38,7 +38,7 @@ def forward_cdecl(ctype, cname, standalone, is_thread_local=False):
         __thread = "__thread "
 
     cdecl_str = __thread + cdecl(ctype, cname)
-    if standalone:
+    if standalone and False: # XXX why extern!?
         return 'extern ' + cdecl_str
     else:
         return cdecl_str

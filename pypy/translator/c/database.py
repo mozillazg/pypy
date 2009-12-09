@@ -52,7 +52,11 @@ class LowLevelDatabase(object):
         # assign to a constant object is something C doesn't think is
         # constant
         self.late_initializations = []
-        self.namespace = CNameManager()
+        pkgname = "pypy"
+        if translator and translator.config.translation.exportpackage:
+            pkgname = translator.config.translation.exportpackage
+        self.namespace = CNameManager(pkgname + "_")
+        self.from_other_namespace = lambda ns, name, **kwargs: CNameManager(ns + "_").uniquename(name, **kwargs)
 
         if translator is None or translator.rtyper is None:
             self.exctransformer = None
@@ -83,7 +87,7 @@ class LowLevelDatabase(object):
                     node = BareBoneArrayDefNode(self, T, varlength)
                 else:
                     node = ArrayDefNode(self, T, varlength)
-            elif isinstance(T, OpaqueType) and T.hints.get("render_structure", False):
+            elif isinstance(T, OpaqueType) and (T.hints.get("render_structure", False) or T.hints.get("external_void", False)):
                 node = ExtTypeOpaqueDefNode(self, T)
             elif T == WeakRef:
                 REALT = self.gcpolicy.get_real_weakref_type()
@@ -130,6 +134,8 @@ class LowLevelDatabase(object):
         elif isinstance(T, OpaqueType):
             if T == RuntimeTypeInfo:
                 return  self.gcpolicy.rtti_type()
+            elif T.hints.get("external_void", False):
+                return 'void @'
             elif T.hints.get("render_structure", False):
                 node = self.gettypedefnode(T, varlength=varlength)
                 if who_asks is not None:
@@ -148,6 +154,8 @@ class LowLevelDatabase(object):
         try:
             node = self.containernodes[container]
         except KeyError:
+            if isinstance(container, lltype._external_reference):
+                buildkwds.update(dict(external_name=container.name, external_component=container.component))
             T = typeOf(container)
             if isinstance(T, (lltype.Array, lltype.Struct)):
                 if hasattr(self.gctransformer, 'consider_constant'):

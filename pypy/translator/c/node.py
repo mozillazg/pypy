@@ -440,6 +440,9 @@ class ExtTypeOpaqueDefNode:
         self.T = T
         self.dependencies = {}
         self.name = 'RPyOpaque_%s' % (T.tag,)
+        if T.hints.get("external_void", False):
+            self.typetag = "extern void*"
+            self.name = T.tag
 
     def setup(self):
         pass
@@ -447,23 +450,34 @@ class ExtTypeOpaqueDefNode:
     def definition(self):
         return []
 
+
 # ____________________________________________________________
 
 
 class ContainerNode(object):
     if USESLOTS:
-        __slots__ = """db T obj 
+        __slots__ = """db T obj inhibit_dependencies
                        typename implementationtypename
                         name ptrname
-                        globalcontainer""".split()
+                        globalcontainer external_name""".split()
 
-    def __init__(self, db, T, obj):
+    def __init__(self, db, T, obj, external_name=None, external_component=None):
         self.db = db
         self.T = T
         self.obj = obj
-        #self.dependencies = {}
+        self.external_name = external_name
         self.typename = db.gettype(T)  #, who_asks=self)
         self.implementationtypename = db.gettype(T, varlength=self.getlength())
+        self.inhibit_dependencies = False
+        if external_name:
+            self.inhibit_dependencies = True
+            self.globalcontainer = True
+            if not external_component:
+                self.name = external_name
+            else:
+                self.name = db.from_other_namespace(external_component, "g_" + external_name)
+            self.ptrname = '(&%s)' % (self.name, )
+            return
         parent, parentindex = parentlink(obj)
         if parent is None:
             self.name = db.namespace.uniquename('g_' + self.basename())
@@ -483,13 +497,25 @@ class ContainerNode(object):
         return hasattr(self.T, "_hints") and self.T._hints.get('thread_local')
 
     def forward_declaration(self):
-        yield '%s;' % (
+        yield '%s%s;' % (self.linkage(),
             forward_cdecl(self.implementationtypename,
                 self.name, self.db.standalone, self.is_thread_local()))
 
+    def linkage(self):
+        linkage = "static "
+        if getattr(self.obj, "_exported", False):
+            linkage = ""
+        if getattr(self, "external_name", None):
+            linkage = "extern "
+        return linkage
+
+
     def implementation(self):
+        if self.external_name:
+            return []
+
         lines = list(self.initializationexpr())
-        lines[0] = '%s = %s' % (
+        lines[0] = '%s%s = %s' % (self.linkage(),
             cdecl(self.implementationtypename, self.name, self.is_thread_local()),
             lines[0])
         lines[-1] += ';'
@@ -512,6 +538,8 @@ class StructNode(ContainerNode):
         return self.T._name
 
     def enum_dependencies(self):
+        if self.inhibit_dependencies:
+            return
         for name in self.T._names:
             yield getattr(self.obj, name)
 
@@ -558,13 +586,14 @@ class StructNode(ContainerNode):
 
 assert not USESLOTS or '__dict__' not in dir(StructNode)
 
+
 class ArrayNode(ContainerNode):
     nodekind = 'array'
     if USESLOTS:
         __slots__ = ()
 
-    def __init__(self, db, T, obj):
-        ContainerNode.__init__(self, db, T, obj)
+    def __init__(self, db, T, obj, **kwargs):
+        ContainerNode.__init__(self, db, T, obj, **kwargs)
         if barebonearray(T):
             self.ptrname = self.name
 
@@ -572,6 +601,8 @@ class ArrayNode(ContainerNode):
         return 'array'
 
     def enum_dependencies(self):
+        if self.inhibit_dependencies:
+            return
         return self.obj.items
 
     def getlength(self):
@@ -630,6 +661,8 @@ class FixedSizeArrayNode(ContainerNode):
         return self.T._name
 
     def enum_dependencies(self):
+        if self.inhibit_dependencies:
+            return
         for i in range(self.obj.getlength()):
             yield self.obj.getitem(i)
 
@@ -690,10 +723,17 @@ class FuncNode(ContainerNode):
         self.T = T
         self.obj = obj
         if getattr(obj, 'external', None) == 'C' and not db.need_sandboxing(obj):
-            self.name = forcename or self.basename()
+            comp = getattr(obj, 'component', None)
+            if comp:
+                self.name = db.from_other_namespace(comp, self.basename())
+            else:
+                self.name = forcename or self.basename()
         else:
-            self.name = (forcename or
-                         db.namespace.uniquename('g_' + self.basename()))
+            if getattr(obj, '_extname', None):
+                self.name = db.namespace.uniquename(obj._extname)
+            else:
+                self.name = (forcename or
+                             db.namespace.uniquename('g_' + self.basename()))
         self.compilation_info = getattr(obj, 'compilation_info',
                                         ExternalCompilationInfo())
         self.make_funcgens()
@@ -717,7 +757,7 @@ class FuncNode(ContainerNode):
 
     def forward_declaration(self):
         for funcgen in self.funcgens:
-            yield '%s;' % (
+            yield '%s%s;' % (self.linkage(),
                 forward_cdecl(self.implementationtypename,
                     funcgen.name(self.name), self.db.standalone))
 
@@ -736,7 +776,7 @@ class FuncNode(ContainerNode):
         # recompute implementationtypename as the argnames may have changed
         argnames = funcgen.argnames()
         implementationtypename = self.db.gettype(self.T, argnames=argnames)
-        yield '%s {' % cdecl(implementationtypename, funcgen.name(self.name))
+        yield '%s%s {' % (self.linkage(), cdecl(implementationtypename, funcgen.name(self.name)))
         #
         # declare the local variables
         #

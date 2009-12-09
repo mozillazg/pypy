@@ -253,7 +253,7 @@ class BoehmGcRuntimeTypeInfo_OpaqueNode(ContainerNode):
         return []
 
     def implementation(self):
-        yield 'char %s  /* uninitialized */;' % self.name
+        yield '%schar %s  /* uninitialized */;' % (self.linkage(), self.name)
 
 class FrameworkGcRuntimeTypeInfo_OpaqueNode(BoehmGcRuntimeTypeInfo_OpaqueNode):
     nodekind = 'framework rtti'
