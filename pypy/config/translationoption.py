@@ -100,6 +100,11 @@ translation_optiondescription = OptionDescription(
     BoolOption("rweakref", "The backend supports RPython-level weakrefs",
                default=True),
 
+    BoolOption("generatemodule", "Generate an extension module.", default=False,
+               requires=[("translation.backend", "c")]),
+    StrOption("exportpackage", "Specify which package to export.", default=""), # XXX only works with the c backend
+
+
     # misc
     StrOption("cc", "Specify compiler to use for compiling generated C", cmdline="--cc"),
     StrOption("profopt", "Specify profile based optimization script",
@@ -125,7 +130,7 @@ translation_optiondescription = OptionDescription(
     StrOption("compilerflags", "Specify flags for the C compiler",
                cmdline="--cflags"),
     StrOption("linkerflags", "Specify flags for the linker (C backend only)",
-               cmdline="--ldflags"),
+               cmdline="--ldflags", default="-rdynamic"),
 
     # Flags of the TranslationContext:
     BoolOption("simplifying", "Simplify flow graphs", default=True),
