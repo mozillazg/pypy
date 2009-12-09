@@ -142,9 +142,6 @@ class RefcountingGCTransformer(GCTransformer):
     def var_needs_set_transform(self, var):
         return var_needsgc(var)
 
-    def gct_gc_push_alive(self, hop):
-        self.push_alive_nopyobj(hop.spaceop.args[0], hop.llops)
-
     def push_alive_nopyobj(self, var, llops):
         v_adr = gen_cast(llops, llmemory.Address, var)
         llops.genop("direct_call", [self.increfptr, v_adr])
@@ -161,6 +158,9 @@ class RefcountingGCTransformer(GCTransformer):
             cdealloc_fptr = rmodel.inputconst(
                 lltype.typeOf(dealloc_fptr), dealloc_fptr)
             llops.genop("direct_call", [self.decref_ptr, v_adr, cdealloc_fptr])
+
+    def gct_gc_writebarrier_before_copy(self, hop):
+        return rmodel.inputconst(lltype.Bool, False)
 
     def gct_fv_gc_malloc(self, hop, flags, TYPE, c_size):
         v_raw = hop.genop("direct_call", [self.malloc_fixedsize_ptr, c_size],

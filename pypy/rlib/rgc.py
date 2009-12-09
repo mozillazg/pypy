@@ -340,10 +340,11 @@ def ll_arraycopy(source, dest, source_start, dest_start, length):
     if isinstance(TP.OF, lltype.Ptr) and TP.OF.TO._gckind == 'gc':
         # perform a write barrier that copies necessary flags from
         # source to dest
-        llop.gc_writebarrier_before_copy(lltype.Void, source, dest)
-        # the hack below is a write barrier version for refcounting :-/
-        for i in range(length):
-            llop.gc_push_alive(lltype.Void, source[source_start + i])
+        if not llop.gc_writebarrier_before_copy(lltype.Void, source, dest):
+            # if the write barrier is not supported, copy by hand
+            for i in range(length):
+                dest[i + dest_start] = source[i + source_start]
+            return
     source_addr = llmemory.cast_ptr_to_adr(source)
     dest_addr   = llmemory.cast_ptr_to_adr(dest)
     cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
@@ -354,4 +355,5 @@ def ll_arraycopy(source, dest, source_start, dest_start, length):
     llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
                          llmemory.sizeof(TP.OF) * length)
     keepalive_until_here(source)
+    keepalive_until_here(dest)
 ll_arraycopy._annspecialcase_ = 'specialize:ll'

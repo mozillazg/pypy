@@ -859,9 +859,6 @@ class LLFrame(object):
     def op_gc_push_alive_pyobj(self, pyobj):
         raise NotImplementedError("gc_push_alive_pyobj")
 
-    def op_gc_push_alive(self, pyobj):
-        pass
-
     def op_gc_pop_alive_pyobj(self, pyobj):
         raise NotImplementedError("gc_pop_alive_pyobj")
 
