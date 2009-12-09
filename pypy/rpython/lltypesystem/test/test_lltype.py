@@ -326,19 +326,6 @@ def test_hash():
     assert S == S1
     assert hash(S1) == hash(S)
 
-
-def test_pickle():
-    S = ForwardReference()
-    S.become(Struct('S', ('p', Ptr(S))))
-    assert S == S
-    hash(S)
-    from pickle import dumps, loads
-    S_pickle = dumps(S)
-    S_loaded = loads(S_pickle)
-    assert S_loaded == S
-    assert hash(S_loaded) == hash(S)
-
-
 def test_array_with_non_container_elements():
     As = GcArray(Signed)
     a = malloc(As, 3)
