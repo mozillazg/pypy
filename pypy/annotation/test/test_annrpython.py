@@ -2482,7 +2482,7 @@ class TestAnnotateTestCase:
         def fun(x, y):
             return y
         s_nonneg = annmodel.SomeInteger(nonneg=True)
-        fun._annenforceargs_ = policy.Sig(lambda s1,s2: s1, lambda s1,s2: s1)
+        fun._annenforceargs_ = policy.Sig(lambda s1, s2: s1, lambda s1, s2: s1)
         # means: the 2nd argument's annotation becomes the 1st argument's
         #        input annotation
 
@@ -2591,6 +2591,31 @@ class TestAnnotateTestCase:
             else:
                 from pypy.annotation.classdef import NoSuchAttrError
                 py.test.raises(NoSuchAttrError, a.build_types, fun, [int])
+
+    def test_enforced_attrs_this(self):
+        class Base(object):
+            _attrs_this_ = 'x'
+            def m(self):
+                return 65
+        class A(Base): pass
+        for attrname, works1, works2 in [('x', True, True),
+                                         ('y', False, True)]:
+            def fun1(n):
+                o = Base()
+                setattr(o, attrname, 12)
+                return o.m()
+            def fun2(n):
+                o = A()
+                setattr(o, attrname, 12)
+                return o.m()
+            for works, fun in ((works1, fun1), (works2, fun2)):
+                a = self.RPythonAnnotator()
+                if works:
+                    a.build_types(fun, [int])
+                else:
+                    from pypy.annotation.classdef import NoSuchAttrError
+                    py.test.raises(NoSuchAttrError, a.build_types, fun, [int])
+
 
     def test_attrs_enforce_attrs(self):
         class Superbase(object):

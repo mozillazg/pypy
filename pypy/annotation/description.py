@@ -114,6 +114,7 @@ class ClassAttrFamily:
 
 class Desc(object):
     __metaclass__ = extendabletype
+    avoid_constantness = False
 
     def __init__(self, bookkeeper, pyobj=None):
         self.bookkeeper = bookkeeper
@@ -360,10 +361,15 @@ class ClassDesc(Desc):
                  name=None, basedesc=None, classdict=None,
                  specialize=None):
         super(ClassDesc, self).__init__(bookkeeper, pyobj)
+        self.enable_virtual_access = (getattr(pyobj, '_exported_', False) or getattr(pyobj, '_force_virtual_', False)
+                ) # XXX should only look in dict
 
         if name is None:
             name = pyobj.__module__ + '.' + pyobj.__name__
+        if hasattr(pyobj, '_force_name_'):
+            name = pyobj._force_name_
         self.name = name
+        self.abstract = False
         self.basedesc = basedesc
         if classdict is None:
             classdict = {}    # populated below
@@ -400,6 +406,9 @@ class ClassDesc(Desc):
                                             "with _mixin_: %r" % (cls,))
                     base = b1
 
+            if '_abstract_' in cls.__dict__:
+                self.abstract = bool(cls.__dict__['_abstract_'])
+                assert '_exported_' in cls.__dict__
             self.add_sources_for_class(cls)
             if base is not object:
                 self.basedesc = bookkeeper.getdesc(base)
@@ -407,21 +416,27 @@ class ClassDesc(Desc):
             if '_settled_' in cls.__dict__:
                 self.settled = bool(cls.__dict__['_settled_'])
 
-            if '__slots__' in cls.__dict__ or '_attrs_' in cls.__dict__:
+            if '__slots__' in cls.__dict__ or '_attrs_' in cls.__dict__ or '_attrs_this_' in cls.__dict__:
                 attrs = {}
-                for decl in ('__slots__', '_attrs_'):
+                def fish_attrs(decl):
                     decl = cls.__dict__.get(decl, [])
                     if isinstance(decl, str):
                         decl = (decl,)
                     decl = dict.fromkeys(decl)
-                    attrs.update(decl)
+                    return decl
+                for decl in ('__slots__', '_attrs_'):
+                    attrs.update(fish_attrs(decl))
+                self.inheriting_enforced_attrs = attrs
                 if self.basedesc is not None:
                     if self.basedesc.all_enforced_attrs is None:
                         raise Exception("%r has slots or _attrs_, "
                                         "but not its base class"
                                         % (pyobj,))
-                    attrs.update(self.basedesc.all_enforced_attrs)
-                self.all_enforced_attrs = attrs
+                    attrs.update(self.basedesc.inheriting_enforced_attrs)
+                self.all_enforced_attrs = fish_attrs("_attrs_this_")
+                self.all_enforced_attrs.update(self.inheriting_enforced_attrs)
+            if self.abstract and not getattr(self, 'all_enforced_attrs', None):
+                self.all_enforced_attrs = ()
 
     def add_source_attribute(self, name, value, mixin=False):
         if isinstance(value, types.FunctionType):
@@ -464,6 +479,8 @@ class ClassDesc(Desc):
 
     def add_sources_for_class(self, cls, mixin=False):
         for name, value in cls.__dict__.items():
+            if self.abstract:
+                assert name.startswith("_") or hasattr(value, '_inputtypes_')
             self.add_source_attribute(name, value, mixin)
 
     def getclassdef(self, key):
@@ -682,6 +699,7 @@ class MethodDesc(Desc):
     def __init__(self, bookkeeper, funcdesc, originclassdef, 
                  selfclassdef, name, flags={}):
         super(MethodDesc, self).__init__(bookkeeper)
+        self.force_virtual_access = getattr(funcdesc.pyobj, '_force_virtual_', False) and originclassdef.classdesc.enable_virtual_access
         self.funcdesc = funcdesc
         self.originclassdef = originclassdef
         self.selfclassdef = selfclassdef
