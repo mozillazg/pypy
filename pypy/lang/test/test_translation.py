@@ -26,3 +26,6 @@ class TestTranslation:
 
     def test_scheme(self):
         self.translate('targetscheme')
+
+    def test_js(self):
+        self.translate('targetjsstandalone')

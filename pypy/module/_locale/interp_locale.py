@@ -462,3 +462,5 @@ if sys.platform == 'win32':
         finally:
             lltype.free(buf_lang, flavor='raw')
             lltype.free(buf_country, flavor='raw')
+elif sys.platform == 'darwin':
+    raise NotImplementedError()

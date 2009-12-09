@@ -10,9 +10,9 @@ from execnet.gateway_base import RemoteError
 class GatewayManager:
     RemoteError = RemoteError
     def __init__(self, specs, hook, defaultchdir="pyexecnetcache"):
+        self.gateways = []
         self.specs = []
         self.hook = hook
-        self.group = execnet.Group()
         for spec in specs:
             if not isinstance(spec, execnet.XSpec):
                 spec = execnet.XSpec(spec)
@@ -21,11 +21,40 @@ class GatewayManager:
             self.specs.append(spec)
 
     def makegateways(self):
-        assert not list(self.group)
+        assert not self.gateways
         for spec in self.specs:
-            gw = self.group.makegateway(spec)
+            gw = execnet.makegateway(spec)
+            self.gateways.append(gw)
+            gw.id = "[%s]" % len(self.gateways)
             self.hook.pytest_gwmanage_newgateway(
                 gateway=gw, platinfo=gw._rinfo())
+
+    def getgateways(self, remote=True, inplacelocal=True):
+        if not self.gateways and self.specs:
+            self.makegateways()
+        l = []
+        for gw in self.gateways:
+            if gw.spec._samefilesystem():
+                if inplacelocal:
+                    l.append(gw)
+            else:
+                if remote:
+                    l.append(gw)
+        return execnet.MultiGateway(gateways=l)
+
+    def multi_exec(self, source, inplacelocal=True):
+        """ remote execute code on all gateways. 
+            @param inplacelocal=False: don't send code to inplacelocal hosts. 
+        """
+        multigw = self.getgateways(inplacelocal=inplacelocal)
+        return multigw.remote_exec(source)
+
+    def multi_chdir(self, basename, inplacelocal=True):
+        """ perform a remote chdir to the given path, may be relative. 
+            @param inplacelocal=False: don't send code to inplacelocal hosts. 
+        """ 
+        self.multi_exec("import os ; os.chdir(%r)" % basename, 
+                        inplacelocal=inplacelocal).waitclose()
 
     def rsync(self, source, notify=None, verbose=False, ignores=None):
         """ perform rsync to all remote hosts. 
@@ -33,7 +62,7 @@ class GatewayManager:
         rsync = HostRSync(source, verbose=verbose, ignores=ignores)
         seen = py.builtin.set()
         gateways = []
-        for gateway in self.group:
+        for gateway in self.gateways:
             spec = gateway.spec
             if not spec._samefilesystem():
                 if spec not in seen:
@@ -55,7 +84,9 @@ class GatewayManager:
             )
 
     def exit(self):
-        self.group.terminate()
+        while self.gateways:
+            gw = self.gateways.pop()
+            gw.exit()
 
 class HostRSync(execnet.RSync):
     """ RSyncer that filters out common files 

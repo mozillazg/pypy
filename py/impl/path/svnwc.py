@@ -77,7 +77,7 @@ repositories = RepoCache()
 
 # svn support code 
 
-ALLOWED_CHARS = "_ -/\\=$.~+%" #add characters as necessary when tested
+ALLOWED_CHARS = "_ -/\\=$.~+" #add characters as necessary when tested
 if sys.platform == "win32":
     ALLOWED_CHARS += ":"
 ALLOWED_CHARS_HOST = ALLOWED_CHARS + '@:'
@@ -521,12 +521,9 @@ class SvnWCCommandPath(common.PathBase):
         args.append(url)
         self._authsvn('co', args)
 
-    def update(self, rev='HEAD', interactive=True):
+    def update(self, rev='HEAD'):
         """ update working copy item to given revision. (None -> HEAD). """
-        opts = ['-r', rev]
-        if not interactive:
-            opts.append("--non-interactive")
-        self._authsvn('up', opts)
+        self._authsvn('up', ['-r', rev, "--non-interactive"],)
 
     def write(self, content, mode='w'):
         """ write content into local filesystem wc. """
