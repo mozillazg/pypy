@@ -493,7 +493,7 @@ class GenerationGC(SemiSpaceGC):
         source_hdr = self.header(source_addr)
         dest_hdr = self.header(dest_addr)
         if dest_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
-            return
+            return True
         # ^^^ a fast path of write-barrier
         if source_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
             # there might be an object in source that is in nursery
@@ -505,6 +505,7 @@ class GenerationGC(SemiSpaceGC):
                 #     gen
                 dest_hdr.tid &= ~GCFLAG_NO_HEAP_PTRS
                 self.last_generation_root_objects.append(dest_addr)
+        return True
 
     def is_last_generation(self, obj):
         # overridden by HybridGC

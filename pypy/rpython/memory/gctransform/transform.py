@@ -377,14 +377,13 @@ class BaseGCTransformer(object):
 
     gct_getfield = default
 
-    def gct_gc_push_alive(self, hop):
-        pass
-
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 
     def gct_gc_writebarrier_before_copy(self, hop):
-        pass
+        # by default we don't need to do anything special with this,
+        # for exception see refcounting
+        return rmodel.inputconst(lltype.Bool, True)
 
     def gct_gc_identityhash(self, hop):
         # must be implemented in the various GCs

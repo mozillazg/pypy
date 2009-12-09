@@ -295,7 +295,7 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(GCClass, 'writebarrier_before_copy'):
             self.wb_before_copy_ptr = \
                     getfn(GCClass.writebarrier_before_copy.im_func,
-                    [s_gc] + [annmodel.SomeAddress()] * 2, annmodel.s_None)
+                    [s_gc] + [annmodel.SomeAddress()] * 2, annmodel.SomeBool)
         elif GCClass.needs_write_barrier:
             raise NotImplementedError("GC needs write barrier, but does not provide writebarrier_before_copy functionality")
 
@@ -793,7 +793,8 @@ class FrameworkGCTransformer(GCTransformer):
         dest_addr = hop.genop('cast_ptr_to_adr', [op.args[1]],
                                 resulttype=llmemory.Address)
         hop.genop('direct_call', [self.wb_before_copy_ptr, self.c_const_gc,
-                                  source_addr, dest_addr])
+                                  source_addr, dest_addr],
+                  resultvar=op.result)
 
     def gct_weakref_create(self, hop):
         op = hop.spaceop

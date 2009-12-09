@@ -443,7 +443,6 @@ LL_OPERATIONS = {
     'gc_restore_exception': LLOp(),
     'gc_call_rtti_destructor': LLOp(),
     'gc_deallocate':        LLOp(),
-    'gc_push_alive':        LLOp(),
     'gc_push_alive_pyobj':  LLOp(),
     'gc_pop_alive_pyobj':   LLOp(),
     'gc_reload_possibly_moved': LLOp(),
