@@ -23,7 +23,7 @@ class CBuilder(object):
     _compiled = False
     modulename = None
     
-    def __init__(self, translator, entrypoint, config, gcpolicy=None):
+    def __init__(self, translator, entrypoint, config, gcpolicy=None, secondary_entrypoints=()):
         self.translator = translator
         self.entrypoint = entrypoint
         self.entrypoint_name = self.entrypoint.func_name
@@ -33,6 +33,7 @@ class CBuilder(object):
         if gcpolicy is not None and gcpolicy.requires_stackless:
             config.translation.stackless = True
         self.eci = ExternalCompilationInfo()
+        self.secondary_entrypoints = secondary_entrypoints
 
     def build_database(self):
         translator = self.translator
@@ -69,6 +70,11 @@ class CBuilder(object):
         # build entrypoint and eventually other things to expose
         pf = self.getentrypointptr()
         pfname = db.get(pf)
+
+        for func, _ in self.secondary_entrypoints:
+            bk = translator.annotator.bookkeeper
+            db.get(getfunctionptr(bk.getdesc(func).getuniquegraph()))
+
         self.c_entrypoint_name = pfname
         db.complete()
 
@@ -83,10 +89,14 @@ class CBuilder(object):
             libraries=db.gcpolicy.gc_libraries()))
 
         all = []
+        exported_names = []
         for node in self.db.globalcontainers():
             eci = getattr(node, 'compilation_info', None)
             if eci:
                 all.append(eci)
+            if getattr(getattr(node, "obj", None), "export", None): # XXX this should be handled in the db
+                exported_names.append(node.name)
+        all.append(ExternalCompilationInfo(export_symbols=tuple(exported_names)))
         self.eci = self.eci.merge(*all)
 
     def get_gcpolicyclass(self):
@@ -225,6 +235,7 @@ class CExtModuleBuilder(CBuilder):
 
         entrypoint_ptr = self.getentrypointptr()
         wrapped_entrypoint_c_name = self.db.get(entrypoint_ptr)
+        self.so_name = self.c_source_filename.new(ext=so_ext)
         
         CODE = """
 import ctypes
@@ -251,7 +262,7 @@ else:
 
 _rpython_startup = _lib.RPython_StartupCode
 _rpython_startup()
-""" % {'so_name': self.c_source_filename.new(ext=so_ext),
+""" % {'so_name': self.so_name,
        'c_entrypoint_name': wrapped_entrypoint_c_name,
        'nargs': len(lltype.typeOf(entrypoint_ptr).TO.ARGS)}
         modfile.write(CODE)
@@ -492,7 +503,7 @@ class SourceGenerator:
                 othernodes.append(node)
         # for now, only split for stand-alone programs.
         if self.database.standalone:
-            self.one_source_file = False
+            self.one_source_file = True # XXX False
         self.funcnodes = funcnodes
         self.othernodes = othernodes
         self.path = path
@@ -797,6 +808,8 @@ def gen_source(database, modulename, targetdir, eci, defines={}):
     incfilename = targetdir.join('common_header.h')
     fi = incfilename.open('w')
 
+    if database.translator.config.translation.generatemodule: # XXX refactor the 2 src gen funcs
+        defines["PYPY_EXTMODULE"] = "1"
     #
     # Header
     #
