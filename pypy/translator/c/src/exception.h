@@ -2,7 +2,7 @@
 /************************************************************/
  /***  C header subsection: exceptions                     ***/
 
-#if !defined(PYPY_STANDALONE) && !defined(PYPY_NOT_MAIN_FILE)
+#if !defined(PYPY_STANDALONE) && !defined(PYPY_NOT_MAIN_FILE) && !defined(PYPY_EXTMODULE)
    PyObject *RPythonError;
 #endif 
 
@@ -59,7 +59,7 @@ void RPyDebugReturnShowException(const char *msg, const char *filename,
 #define RPyRaiseSimpleException(exc, msg)   _RPyRaiseSimpleException(R##exc)
 void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc);
 
-#ifndef PYPY_STANDALONE
+#if !defined(PYPY_STANDALONE) && !defined(PYPY_EXTMODULE)
 void RPyConvertExceptionFromCPython(void);
 void RPyConvertExceptionToCPython(void);
 #endif
@@ -74,7 +74,7 @@ void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc)
 	RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(rexc), rexc);
 }
 
-#ifndef PYPY_STANDALONE
+#if !defined(PYPY_STANDALONE) && !defined(PYPY_EXTMODULE)
 void RPyConvertExceptionFromCPython(void)
 {
 	/* convert the CPython exception to an RPython one */
@@ -115,7 +115,7 @@ void RPyConvertExceptionToCPython(void)
 	PyErr_NormalizeException(&pycls, &v, &tb);
 	PyErr_Restore(pycls, v, tb);
 }
-#endif   /* !PYPY_STANDALONE */
+#endif   /* !PYPY_STANDALONE && !PYPY_EXTMODULE */
 
 #endif /* PYPY_NOT_MAIN_FILE */
 

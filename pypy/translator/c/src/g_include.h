@@ -2,7 +2,7 @@
 /************************************************************/
 /***  C header file for code produced by genc.py          ***/
 
-#ifndef PYPY_STANDALONE
+#if !defined(PYPY_STANDALONE) && !defined(PYPY_EXTMODULE)
 #  include "Python.h"
 #  include "compile.h"
 #  include "frameobject.h"
@@ -23,7 +23,7 @@
     #define PY_LONG_LONG long long
 #endif
 
-#ifndef PYPY_STANDALONE
+#if !defined(PYPY_STANDALONE) && !defined(PYPY_EXTMODULE)
 #  include "src/pyobj.h"
 #endif
 
