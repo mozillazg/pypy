@@ -17,6 +17,9 @@ class InstanceMethod(object):
         self.im_self = im_self
         self.im_class = im_class
 
+    def __repr__(self):
+        return "<InstanceMethod class=%r self=%r func=%r>" % (self.im_class, self.im_self, self.im_func)
+
     def __call__(self, *args, **kwds):
         firstarg = self.im_self
         if firstarg is None:
