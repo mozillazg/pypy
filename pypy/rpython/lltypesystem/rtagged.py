@@ -129,10 +129,9 @@ class TaggedInstanceRepr(InstanceRepr):
         cls = v_cls.value
         answer = self.unboxedclassdef.issubclass(classdef)
         c_answer_if_unboxed = hop.inputconst(lltype.Bool, answer)
-        minid = hop.inputconst(lltype.Signed, cls.subclassrange_min)
-        maxid = hop.inputconst(lltype.Signed, cls.subclassrange_max)
-        return hop.gendirectcall(ll_unboxed_isinstance_const, v_obj,
-                                 minid, maxid, c_answer_if_unboxed)
+        level = hop.inputconst(lltype.Signed, cls.level)
+        return hop.gendirectcall(ll_unboxed_isinstance_const, v_obj, v_cls,
+                                 level, c_answer_if_unboxed)
 
 
 def ll_int_to_unboxed(PTRTYPE, value):
@@ -147,10 +146,10 @@ def ll_unboxed_getclass(instance, class_if_unboxed):
     else:
         return instance.typeptr
 
-def ll_unboxed_isinstance_const(obj, minid, maxid, answer_if_unboxed):
+def ll_unboxed_isinstance_const(obj, cls, level, answer_if_unboxed):
     if not obj:
         return False
     if lltype.cast_ptr_to_int(obj) & 1:
         return answer_if_unboxed
     else:
-        return ll_issubclass_const(obj.typeptr, minid, maxid)
+        return ll_issubclass_const(obj.typeptr, cls, level)

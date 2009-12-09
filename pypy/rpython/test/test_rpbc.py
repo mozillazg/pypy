@@ -1595,7 +1595,33 @@ class BaseTestRPBC(BaseRtypingTest):
         self.interpret(f, [int])
 
 class TestLLtype(BaseTestRPBC, LLRtypeMixin):
-    pass
+    def test_devoid_exported_func(self):
+        from pypy.translator.translator import graphof
+        from pypy.objspace.flow.model import summary
+        class c:
+            _force_virtual_ = True
+            def foo(self):
+                return 42
+            foo._force_virtual_ = True
+        def f():
+            inst = c()
+            inst.foo()
+            return inst
+        def testfunc(x):
+            return x.foo()
+        def h():
+            return testfunc(c())
+
+        t, r, g = self.gengraph(f)
+        bk = t.annotator.bookkeeper
+        getcdef = bk.getuniqueclassdef
+        classdef = getcdef(c)
+        vt = t.rtyper.class_reprs[classdef].getvtable()
+        assert isinstance(typeOf(t.rtyper.class_reprs[classdef].getvtable(False).cls_foo).TO, FuncType)
+        t, r, g2 = self.gengraph(h)
+        assert not summary(g).get('direct_call', 0)
+        assert not summary(graphof(t, testfunc)).get('direct_call', 0)
+
 
 class TestOOtype(BaseTestRPBC, OORtypeMixin):
     pass
