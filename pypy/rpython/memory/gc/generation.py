@@ -5,7 +5,7 @@ from pypy.rpython.memory.gc.semispace import GCFLAG_HASHTAKEN
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
-from pypy.rlib.objectmodel import free_non_gc_object, specialize
+from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -488,8 +488,6 @@ class GenerationGC(SemiSpaceGC):
         one of the following flags a bit too eagerly, which means we'll have
         a bit more objects to track, but being on the safe side.
         """
-        #typeid = self.get_type_id(source_addr)
-        #assert self.is_gcarrayofgcptr(typeid)  ...?
         source_hdr = self.header(source_addr)
         dest_hdr = self.header(dest_addr)
         if dest_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
