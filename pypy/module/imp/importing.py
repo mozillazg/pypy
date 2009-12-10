@@ -49,7 +49,7 @@ def find_modtype(space, filepart):
 
     # no .pyc file, use the .py file if it exists
     if pyfile_exists:
-        return PY_SOURCE, ".py", "rU"
+        return PY_SOURCE, ".py", "U"
     else:
         return SEARCH_ERROR, None, None
 
@@ -269,39 +269,37 @@ def find_module(space, modulename, w_modulename, partname, w_path, use_loader=Tr
     # XXX check frozen modules?
     #     when w_path is null
 
-    if w_path is None:
-        w_path = space.sys.get("path")
+    if w_path is not None:
+        for w_pathitem in space.unpackiterable(w_path):
+            # sys.path_hooks import hook
+            if use_loader:
+                w_loader = find_in_path_hooks(space, w_modulename, w_pathitem)
+                if w_loader:
+                    return None, w_loader
 
-    for w_pathitem in space.unpackiterable(w_path):
-        # sys.path_hooks import hook
-        if use_loader:
-            w_loader = find_in_path_hooks(space, w_modulename, w_pathitem)
-            if w_loader:
-                return None, w_loader
-
-        path = space.str_w(w_pathitem)
-        filepart = os.path.join(path, partname)
-        if os.path.isdir(filepart) and case_ok(filepart):
-            initfile = os.path.join(filepart, '__init__')
-            modtype, _, _ = find_modtype(space, initfile)
-            if modtype in (PY_SOURCE, PY_COMPILED):
-                return ImportInfo(PKG_DIRECTORY, filepart, None), None
-            else:
-                msg = "Not importing directory " +\
-                        "'%s' missing __init__.py" % (filepart,)
-                space.warn(msg, space.w_ImportWarning)
-        modtype, suffix, filemode = find_modtype(space, filepart)
-        try:
-            if modtype in (PY_SOURCE, PY_COMPILED):
-                filename = filepart + suffix
-                stream = streamio.open_file_as_stream(filename, filemode)
-                try:
-                    return ImportInfo(modtype, filename, stream, suffix, filemode), None
-                except:
-                    stream.close()
-                    raise
-        except StreamErrors:
-            pass
+            path = space.str_w(w_pathitem)
+            filepart = os.path.join(path, partname)
+            if os.path.isdir(filepart) and case_ok(filepart):
+                initfile = os.path.join(filepart, '__init__')
+                modtype, _, _ = find_modtype(space, initfile)
+                if modtype in (PY_SOURCE, PY_COMPILED):
+                    return ImportInfo(PKG_DIRECTORY, filepart, None), None
+                else:
+                    msg = "Not importing directory " +\
+                            "'%s' missing __init__.py" % (filepart,)
+                    space.warn(msg, space.w_ImportWarning)
+            modtype, suffix, filemode = find_modtype(space, filepart)
+            try:
+                if modtype in (PY_SOURCE, PY_COMPILED):
+                    filename = filepart + suffix
+                    stream = streamio.open_file_as_stream(filename, filemode)
+                    try:
+                        return ImportInfo(modtype, filename, stream, suffix, filemode), None
+                    except:
+                        stream.close()
+                        raise
+            except StreamErrors:
+                pass
     return None, None
 
 def load_module(space, w_modulename, import_info, w_loader, ispkg=False):
@@ -524,6 +522,13 @@ from pypy.interpreter.pycode import default_magic
 MARSHAL_VERSION_FOR_PYC = 2
 
 def get_pyc_magic(space):
+    # XXX CPython testing hack: delegate to the real imp.get_magic
+    if not we_are_translated():
+        if '__pypy__' not in space.builtin_modules:
+            import struct
+            magic = __import__('imp').get_magic()
+            return struct.unpack('<i', magic)[0]
+
     result = default_magic
     if space.config.objspace.opcodes.CALL_LIKELY_BUILTIN:
         result += 1

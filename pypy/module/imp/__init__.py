@@ -18,13 +18,19 @@ class Module(MixedModule):
         'PY_COMPILED':     'space.wrap(importing.PY_COMPILED)',
         'PKG_DIRECTORY':   'space.wrap(importing.PKG_DIRECTORY)',
         'C_BUILTIN':       'space.wrap(importing.C_BUILTIN)',
+        'get_suffixes':    'interp_imp.get_suffixes',
 
         'get_magic':       'interp_imp.get_magic',
         'find_module':     'interp_imp.find_module',
         'load_module':     'interp_imp.load_module',
+        'load_source':     'interp_imp.load_source',
+        'load_compiled':   'interp_imp.load_compiled',
+        #'run_module':      'interp_imp.run_module',
         'new_module':      'interp_imp.new_module',
-        # XXX CPython testing hack: delegate to the real imp.get_magic
-        # get_magic = __import__('imp').get_magic
+        'init_builtin':    'interp_imp.init_builtin',
+        'init_frozen':     'interp_imp.init_frozen',
+        'is_builtin':      'interp_imp.is_builtin',
+        'is_frozen':       'interp_imp.is_frozen',
         }
 
     appleveldefs = {
