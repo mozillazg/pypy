@@ -859,7 +859,7 @@ class GenericMovingGCTests(GenericGCTests):
             for i in range(20):
                 x.append((1, lltype.malloc(S)))
             for i in range(50):
-                assert l2[i]
+                assert l2[i] == l[50 + i]
             return 0
 
         return fn
