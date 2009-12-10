@@ -845,7 +845,7 @@ class GenericMovingGCTests(GenericGCTests):
         # ^^^ a crude assumption that totsize - varsize would be dividable by 4
         #     (and give fixedsize)
 
-    def define_arraycopy(cls):
+    def define_writebarrier_before_copy(cls):
         S = lltype.GcStruct('S')
         TP = lltype.GcArray(lltype.Ptr(S))
         def fn():
@@ -864,8 +864,8 @@ class GenericMovingGCTests(GenericGCTests):
 
         return fn
 
-    def test_arraycopy(self):
-        run = self.runner("arraycopy")
+    def test_writebarrier_before_copy(self):
+        run = self.runner("writebarrier_before_copy")
         run([])
 
 # ________________________________________________________________
