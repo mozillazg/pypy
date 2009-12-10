@@ -2,7 +2,7 @@
 # XXX maybe this should go together with 'imp.py' and the interp-level
 # import logic into a MixedModule.
 
-from pypy.module.__builtin__ import importing
+from pypy.module.imp import importing
 
 def held(space):
     return space.wrap(importing.getimportlock(space).lock_held())

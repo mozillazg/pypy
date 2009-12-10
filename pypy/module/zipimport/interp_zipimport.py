@@ -5,7 +5,7 @@ from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.module import Module
-from pypy.module.__builtin__ import importing
+from pypy.module.imp import importing
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rzipfile import RZipFile, BadZipfile
 import os
