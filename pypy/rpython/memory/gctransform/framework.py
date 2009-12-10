@@ -295,7 +295,7 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(GCClass, 'writebarrier_before_copy'):
             self.wb_before_copy_ptr = \
                     getfn(GCClass.writebarrier_before_copy.im_func,
-                    [s_gc] + [annmodel.SomeAddress()] * 2, annmodel.SomeBool)
+                    [s_gc] + [annmodel.SomeAddress()] * 2, annmodel.SomeBool())
         elif GCClass.needs_write_barrier:
             raise NotImplementedError("GC needs write barrier, but does not provide writebarrier_before_copy functionality")
 
