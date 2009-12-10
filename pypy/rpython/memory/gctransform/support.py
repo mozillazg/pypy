@@ -1,7 +1,6 @@
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
-from pypy.rlib.objectmodel import specialize
 import os
 
 def var_ispyobj(var):
