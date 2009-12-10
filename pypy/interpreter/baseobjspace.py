@@ -421,16 +421,18 @@ class ObjSpace(object):
         "NOT_RPYTHON: only for initializing the space."
 
         from pypy.module.exceptions import Module
-        w_name_exceptions = self.wrap('exceptions')
-        self.exceptions_module = Module(self, w_name_exceptions)
+        w_name = self.wrap('exceptions')
+        self.exceptions_module = Module(self, w_name)
+        self.builtin_modules['exceptions'] = self.wrap(self.exceptions_module)
 
         from pypy.module.sys import Module
         w_name = self.wrap('sys')
         self.sys = Module(self, w_name)
-        w_modules = self.sys.get('modules')
         self.builtin_modules['sys'] = self.wrap(self.sys)
 
-        self.builtin_modules['exceptions'] = self.wrap(self.exceptions_module)
+        from pypy.module.imp import Module
+        w_name = self.wrap('imp')
+        self.builtin_modules['imp'] = self.wrap(Module(self, w_name))
 
         from pypy.module.__builtin__ import Module
         w_name = self.wrap('__builtin__')
@@ -439,7 +441,7 @@ class ObjSpace(object):
         self.builtin_modules['__builtin__'] = self.wrap(w_builtin)
         self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), w_builtin)
 
-        bootstrap_modules = ['sys', '__builtin__', 'exceptions']
+        bootstrap_modules = ['sys', 'imp', '__builtin__', 'exceptions']
         installed_builtin_modules = bootstrap_modules[:]
 
         self.export_builtin_exceptions()
@@ -511,6 +513,7 @@ class ObjSpace(object):
     def setup_builtin_modules(self):
         "NOT_RPYTHON: only for initializing the space."
         self.getbuiltinmodule('sys')
+        self.getbuiltinmodule('imp')
         self.getbuiltinmodule('__builtin__')
         for mod in self.builtin_modules.values():
             mod.setup_after_space_initialization()

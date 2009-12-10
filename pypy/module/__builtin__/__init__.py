@@ -1,6 +1,7 @@
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import module
 from pypy.interpreter.mixedmodule import MixedModule
+import pypy.module.imp.importing
 
 # put builtins here that should be optimized somehow
 
@@ -34,9 +35,6 @@ class Module(MixedModule):
         'sorted'        : 'app_functional.sorted',
         'vars'          : 'app_inspect.vars',
         'dir'           : 'app_inspect.dir',
-
-        '_find_module'  : 'app_misc.find_module',
-        'reload'        : 'app_misc.reload',
 
         '__filestub'    : 'app_file_stub.file',
     }
@@ -88,7 +86,8 @@ class Module(MixedModule):
         'compile'       : 'compiling.compile',
         'eval'          : 'compiling.eval',
 
-        '__import__'    : 'importing.importhook',
+        '__import__'    : 'pypy.module.imp.importing.importhook',
+        'reload'        : 'pypy.module.imp.importing.reload',
 
         'range'         : 'functional.range_int',
         'xrange'        : 'functional.W_XRange',
