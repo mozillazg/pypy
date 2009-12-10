@@ -9,7 +9,7 @@ from pypy.conftest import gettestobjspace
 import sys, os
 import tempfile, marshal
 
-from pypy.module.__builtin__ import importing
+from pypy.module.imp import importing
 
 from pypy import conftest
 
@@ -64,6 +64,7 @@ def setup_directory_structure(space):
              )
     setuppkg("pkg_substituting",
              __init__ = "import sys, pkg_substituted\n"
+                        "print 'TOTO', __name__\n"
                         "sys.modules[__name__] = pkg_substituted")
     setuppkg("pkg_substituted", mod='')
     p = setuppkg("readonly", x='')
@@ -726,12 +727,13 @@ class AppTestImportHooks(object):
             def __init__(self, *namestoblock):
                 self.namestoblock = dict.fromkeys(namestoblock)
             def find_module(self, fullname, path=None):
+                print "AFA FIND_MODULE", fullname
                 if fullname in self.namestoblock:
                     return self
             def load_module(self, fullname):
                 raise ImportError, "blocked"
 
-        import sys
+        import sys, imp
         modname = "errno" # an arbitrary harmless builtin module
         mod = None
         if modname in sys.modules:
@@ -740,6 +742,10 @@ class AppTestImportHooks(object):
         sys.meta_path.append(ImportBlocker(modname))
         try:
             raises(ImportError, __import__, modname)
+            # the imp module doesn't use meta_path, and is not blocked
+            # (until imp.get_loader is implemented, see PEP302)
+            file, filename, stuff = imp.find_module(modname)
+            imp.load_module(modname, file, filename, stuff)
         finally:
             sys.meta_path.pop()
             if mod:
@@ -773,6 +779,64 @@ class AppTestImportHooks(object):
             sys.path.pop(0)
             sys.path.pop(0)
             sys.path_hooks.pop()
+
+    def test_imp_wrapper(self):
+        import sys, os, imp
+        class ImpWrapper:
+
+            def __init__(self, path=None):
+                if path is not None and not os.path.isdir(path):
+                    raise ImportError
+                self.path = path
+
+            def find_module(self, fullname, path=None):
+                subname = fullname.split(".")[-1]
+                if subname != fullname and self.path is None:
+                    return None
+                if self.path is None:
+                    path = None
+                else:
+                    path = [self.path]
+                try:
+                    file, filename, stuff = imp.find_module(subname, path)
+                except ImportError, e:
+                    return None
+                return ImpLoader(file, filename, stuff)
+
+        class ImpLoader:
+
+            def __init__(self, file, filename, stuff):
+                self.file = file
+                self.filename = filename
+                self.stuff = stuff
+
+            def load_module(self, fullname):
+                mod = imp.load_module(fullname, self.file, self.filename, self.stuff)
+                if self.file:
+                    self.file.close()
+                mod.__loader__ = self  # for introspection
+                return mod
+
+        i = ImpWrapper()
+        sys.meta_path.append(i)
+        sys.path_hooks.append(ImpWrapper)
+        sys.path_importer_cache.clear()
+        mnames = ("colorsys", "urlparse", "distutils.core", "compiler.misc")
+        for mname in mnames:
+            parent = mname.split(".")[0]
+            for n in sys.modules.keys():
+                if n.startswith(parent):
+                    del sys.modules[n]
+        for mname in mnames:
+            m = __import__(mname, globals(), locals(), ["__dummy__"])
+            m.__loader__  # to make sure we actually handled the import
+        # Delete urllib from modules because urlparse was imported above.
+        # Without this hack, test_socket_ssl fails if run in this order:
+        # regrtest.py test_codecmaps_tw test_importhooks test_socket_ssl
+        try:
+            del sys.modules['urllib']
+        except KeyError:
+            pass
 
 class AppTestNoPycFile(object):
     usepycfiles = False
