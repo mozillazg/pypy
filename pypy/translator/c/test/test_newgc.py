@@ -860,7 +860,6 @@ class TestUsingFramework(object):
 
     def define_arraycopy_writebarrier_ptr(cls):
         TP = lltype.GcArray(lltype.Ptr(lltype.GcArray(lltype.Signed)))
-        S = lltype.GcStruct('S')
         def fn():
             l = lltype.malloc(TP, 100)
             for i in range(100):
