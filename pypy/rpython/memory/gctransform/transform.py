@@ -381,9 +381,11 @@ class BaseGCTransformer(object):
         pass
 
     def gct_gc_writebarrier_before_copy(self, hop):
-        # by default we don't need to do anything special with this,
-        # for exception see refcounting
-        return rmodel.inputconst(lltype.Bool, True)
+        # We take the conservative default and return False here, meaning
+        # that rgc.ll_arraycopy() will do the copy by hand (i.e. with a
+        # 'for' loop).  Subclasses that have their own logic, or that don't
+        # need any kind of write barrier, may return True.
+        return rmodel.inputconst(lltype.Bool, False)
 
     def gct_gc_identityhash(self, hop):
         # must be implemented in the various GCs

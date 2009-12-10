@@ -785,8 +785,8 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_gc_writebarrier_before_copy(self, hop):
         if not hasattr(self, 'wb_before_copy_ptr'):
-            # should do nothing
-            return GCTransformer.gct_gc_writebarrier_before_copy(self, hop)
+            # no write barrier needed in that case
+            return rmodel.inputconst(lltype.Bool, True)
         op = hop.spaceop
         source_addr = hop.genop('cast_ptr_to_adr', [op.args[0]],
                                 resulttype=llmemory.Address)
