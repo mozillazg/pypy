@@ -1,50 +1,140 @@
-
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import interp2app, NoneNotWrapped
 from pypy.rlib.debug import make_sure_not_resized
 
+from pypy.rlib.objectmodel import specialize
+
+result_types = {
+                (int, int): int,
+                (int, float): float,
+                (float, int): float,
+                (float, float): float
+               }
+
 class BaseNumArray(Wrappable):
     pass
 
-class NumArray(BaseNumArray):
-    def __init__(self, space, dim, dtype):
-        self.dim = dim
-        self.space = space
-        # ignore dtype for now
-        self.storage = [0] * dim
-        make_sure_not_resized(self.storage)
+def iterable_type(space, w_xs):
+    xs = space.fixedview(w_xs)
+    type = int
+    for i in range(len(xs)):
+        type = result_types[type, xs[i]]
+    return type
 
-    def descr_getitem(self, index):
-        space = self.space
-        try:
-            return space.wrap(self.storage[index])
-        except IndexError:
-            raise OperationError(space.w_IndexError,
-                                 space.wrap("list index out of range"))
-    descr_getitem.unwrap_spec = ['self', int]
+def int_unwrapper(space, w_x):
+    return space.int_w(space.int(w_x))
 
-    def descr_setitem(self, index, value):
-        space = self.space
-        try:
-            self.storage[index] = value
-        except IndexError:
-            raise OperationError(space.w_IndexError,
-                                 space.wrap("list index out of range"))
-        return space.w_None
-    descr_setitem.unwrap_spec = ['self', int, int]
+def float_unwrapper(space, w_x):
+    return space.float_w(space.float(w_x))
 
-    def descr_len(self):
-        return self.space.wrap(len(self.storage))
-    descr_len.unwrap_spec = ['self']
+def create_numarray(type, unwrapper, name):
+    class NumArray(BaseNumArray):
+        def __init__(self, space, length, dtype):
+            #ignore dtype, irrelevant to optimized numarray implementations too
+            self.length = length
+            self.space = space
+            self.storage = [type(0.0)] * length
+            make_sure_not_resized(self.storage)
 
-NumArray.typedef = TypeDef(
-    'NumArray',
-    __getitem__ = interp2app(NumArray.descr_getitem),
-    __setitem__ = interp2app(NumArray.descr_setitem),
-    __len__     = interp2app(NumArray.descr_len),
-)
+
+        def _dup_size(self, type):
+            return self.__class__(space, result_types[self.type, type], self.length)
+
+        def create_scalar_op(unwrap, f):
+            def scalar_operation(self, w_x):
+                space = self.space
+                x = unwrap(w_x)
+                result = self._dup_size(type(x))
+                for i in range(self.length):
+                    result[i] = f(self.storage[i], x)
+                return space.wrap(result)
+            return scalar_operation
+
+        def create_fixedview_op(unwrap, f):
+            def fixedview_operation(self, w_xs):
+                space = self.space
+
+                try:
+                    xs = space.fixedview(w_xs, len(self.storage))
+                except UnpackValueError, e:
+                    # w_xs is of the wrong size
+                    raise OperationError(space.w_ValueError,
+                                         space.wrap("shape mismatch: objects cannot be broadcast to the same shape"))
+
+                result = self._dup_size(iterable_type(space, xs))
+
+                i = 0
+                for w_x in xs:
+                    result[i] = f(self.storage[i], unwrap(w_x))
+                    i += 1
+                return result
+            return fixedview_operation
+
+        #def mul_iterable(self, w_xs):
+            #return self.fixedview_operation(w_xs, mul)
+        
+#        def descr_mul(self, w_x):
+#            space = self.space
+#            if space.type(w_x) in [W_Int, W_Float]: #complex, long
+#                try:
+#                    return self.mul_scalar(space.int_w(w_x))
+#                except TypeError:
+#                    return self.mul_scalar(space.float_w(w_x))
+#            else:
+#                return self.mul_iterable(w_x)
+#        descr_mul.unwrap_spec = ['self', W_Root]
+
+        def descr_getitem(self, index):
+            space = self.space
+            try:
+                return space.wrap(self.storage[index])
+            except IndexError:
+                raise OperationError(space.w_IndexError,
+                                     space.wrap("list index out of range"))
+        descr_getitem.unwrap_spec = ['self', int]
+
+        def descr_setitem(self, index, w_value):
+            space = self.space
+            try:
+                self.storage[index] = unwrapper(space, w_value)
+            except IndexError:
+                raise OperationError(space.w_IndexError,
+                                     space.wrap("list index out of range"))
+            return space.w_None
+        descr_setitem.unwrap_spec = ['self', int, W_Root]
+
+        def descr_len(self):
+            return self.space.wrap(len(self.storage))
+        descr_len.unwrap_spec = ['self']
+
+    def descr_init(xs): pass
+
+    NumArray.typedef = TypeDef(
+        name,
+        #__init__ = interp2app(descr_init), #FIXME
+        __getitem__ = interp2app(NumArray.descr_getitem),
+        __setitem__ = interp2app(NumArray.descr_setitem),
+        __len__     = interp2app(NumArray.descr_len),
+    )
+    return NumArray
+
+IntArray = create_numarray(int, int_unwrapper, 'IntArray')
+NumArray = IntArray # FIXME: compatibility for now
+FloatArray = create_numarray(float, float_unwrapper, 'FloatArray')
+
+arrays = {
+          int: IntArray,
+          float: FloatArray
+         }
+
+#def array(space, w_xs): 
+#    w_length = space.len(w_xs)
+#    length = space.int_w(w_length)
+#    #TODO: discover type
+#    result = NumArray(space, type, length)
+#array.unwrap_spec = [ObjSpace, W_Root]
 
 def compute_pos(space, indexes, dim):
     current = 1
