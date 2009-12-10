@@ -4,7 +4,34 @@ from pypy.conftest import gettestobjspace
 class AppTestNumpy(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('micronumpy',))
-    
+        cls.w_compare = cls.space.appexec([],
+        """():
+           def compare(a, b):
+               for x, y in zip(a, b):
+                   if x != y: return False
+               return True
+           return compare""")
+
+    def create_type_test(type):
+        def test_type_array(self):
+            compare = self.compare
+            from numpy import array
+            data = [type(x) for x in xrange(4)] 
+            ar = array(data)
+
+            assert compare(ar, data)
+        return test_type_array
+
+    test_int_array = create_type_test(int)
+    test_float_array = create_type_test(float)
+
+    def test_iterable_construction(self):
+        compare = self.compare
+        from numpy import array
+        ar = array(xrange(4))
+
+        assert compare(ar, xrange(4))
+
     def test_zeroes(self):
         from numpy import zeros
         ar = zeros(3, dtype=int)
