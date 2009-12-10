@@ -842,21 +842,22 @@ class TestUsingFramework(object):
         def fn():
             l = lltype.malloc(TP, 100)
             for i in range(100):
-                l[i] = 1
+                l[i] = i * 3
             l2 = lltype.malloc(TP, 50)
-            rgc.ll_arraycopy(l, l2, 50, 0, 50)
+            rgc.ll_arraycopy(l, l2, 40, 0, 50)
             # force a nursery collect
             x = []
             for i in range(20):
                 x.append((1, lltype.malloc(S)))
             for i in range(50):
-                assert l2[i] == 1
+                assert l2[i] == (40 + i) * 3
             return 0
 
         return fn
 
     def test_arraycopy_writebarrier(self):
         self.run("arraycopy_writebarrier")
+
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
