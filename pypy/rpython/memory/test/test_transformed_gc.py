@@ -835,8 +835,7 @@ class GenericMovingGCTests(GenericGCTests):
         return f
 
     def test_gc_heap_stats(self):
-        py.test.skip("XFail fails, so skip")
-        XXX # this test makes next test to crash
+        py.test.skip("this test makes the following test crash.  Investigate.")
         run = self.runner("gc_heap_stats")
         res = run([])
         assert res % 10000 == 2611
@@ -877,7 +876,7 @@ class TestMarkSweepGC(GenericGCTests):
         class transformerclass(framework.FrameworkGCTransformer):
             GC_PARAMS = {'start_heap_size': 4096 }
             root_stack_depth = 200
-            from pypy.rpython.memory.gc.marksweep import MarkSweepGC as GCClass
+
 
     def define_cloning(cls):
         B = lltype.GcStruct('B', ('x', lltype.Signed))

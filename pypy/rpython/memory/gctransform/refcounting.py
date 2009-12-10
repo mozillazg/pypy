@@ -160,6 +160,8 @@ class RefcountingGCTransformer(GCTransformer):
             llops.genop("direct_call", [self.decref_ptr, v_adr, cdealloc_fptr])
 
     def gct_gc_writebarrier_before_copy(self, hop):
+        # Not supported, so return False.  Means that rgc.ll_arraycopy()
+        # will do the copy manually (with a 'for' loop).
         return rmodel.inputconst(lltype.Bool, False)
 
     def gct_fv_gc_malloc(self, hop, flags, TYPE, c_size):

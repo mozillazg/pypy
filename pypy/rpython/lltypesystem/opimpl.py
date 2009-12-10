@@ -400,6 +400,7 @@ def op_gc_writebarrier_before_copy(source, dest):
     assert isinstance(A.TO, lltype.GcArray)
     assert isinstance(A.TO.OF, lltype.Ptr)
     assert A.TO.OF.TO._gckind == 'gc'
+    return True
 
 def op_getfield(p, name):
     checkptr(p)
