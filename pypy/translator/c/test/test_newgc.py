@@ -837,9 +837,6 @@ class TestUsingFramework(object):
 
 
     def define_arraycopy_writebarrier(cls):
-        import new
-        ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
-        
         TP = lltype.GcArray(lltype.Signed)
         S = lltype.GcStruct('S')
         def fn():
@@ -847,7 +844,7 @@ class TestUsingFramework(object):
             for i in range(100):
                 l[i] = 1
             l2 = lltype.malloc(TP, 50)
-            ll_arraycopy(l, l2, 50, 0, 50)
+            rgc.ll_arraycopy(l, l2, 50, 0, 50)
             # force a nursery collect
             x = []
             for i in range(20):

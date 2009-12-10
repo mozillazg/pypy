@@ -847,9 +847,6 @@ class GenericMovingGCTests(GenericGCTests):
         #     (and give fixedsize)
 
     def define_arraycopy(cls):
-        import new
-        ll_arraycopy = new.function(rgc.ll_arraycopy.func_code, {})
-        
         S = lltype.GcStruct('S')
         TP = lltype.GcArray(lltype.Ptr(S))
         def fn():
@@ -857,7 +854,7 @@ class GenericMovingGCTests(GenericGCTests):
             l2 = lltype.malloc(TP, 100)
             for i in range(100):
                 l[i] = lltype.malloc(S)
-            ll_arraycopy(l, l2, 50, 0, 50)
+            rgc.ll_arraycopy(l, l2, 50, 0, 50)
             # force nursery collect
             x = []
             for i in range(20):
