@@ -419,7 +419,6 @@ def reload(space, w_module):
     subname = namepath[-1]
     parent_name = '.'.join(namepath[:-1])
     parent = None
-    w_path = None
     if parent_name:
         w_parent = check_sys_modules(space, space.wrap(parent_name))
         if w_parent is None:
@@ -428,6 +427,8 @@ def reload(space, w_module):
                 space.wrap("reload(): parent %s not in sys.modules" % (
                     parent_name,)))
         w_path = space.getitem(w_parent, space.wrap("__path"))
+    else:
+        w_path = space.sys.get('path')
 
     find_info = find_module(
         space, modulename, w_modulename, subname, w_path)
