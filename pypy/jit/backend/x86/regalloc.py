@@ -928,6 +928,9 @@ class RegAlloc(object):
     def consider_debug_merge_point(self, op, ignored):
         pass
 
+    def consider_virtual_ref_check(self, op, ignored):
+        self.possibly_free_vars(op.args)
+
     def get_mark_gc_roots(self, gcrootmap):
         shape = gcrootmap.get_basic_shape()
         for v, val in self.sm.stack_bindings.items():

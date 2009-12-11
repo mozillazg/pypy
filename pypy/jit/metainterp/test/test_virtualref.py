@@ -1,7 +1,7 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
-from pypy.rlib.jit import JitDriver, dont_look_inside
-from pypy.rlib.jit import virtual_ref, virtual_ref_finish, vref_None
+from pypy.rlib.jit import JitDriver, dont_look_inside, vref_None
+from pypy.rlib.jit import virtual_ref, virtual_ref_check, virtual_ref_finish
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.resoperation import rop
@@ -22,6 +22,7 @@ class VRefTests:
         def f():
             x = X()
             exctx.topframeref = virtual_ref(x)
+            virtual_ref_check()
             exctx.topframeref = vref_None
             virtual_ref_finish(x)
             return 1
@@ -29,7 +30,7 @@ class VRefTests:
         self.interp_operations(f, [])
         self.check_operations_history(new_with_vtable=1,     # X()
                                       virtual_ref=1,
-                                      virtual_ref_finish=1)
+                                      virtual_ref_check=1)
 
     def test_make_vref_guard(self):
         if not isinstance(self, TestLLtype):
@@ -53,6 +54,7 @@ class VRefTests:
             exctx.topframeref = virtual_ref(x)
         def leave():
             exctx.topframeref = vref_None
+            virtual_ref_check()
             virtual_ref_finish(exctx._frame)
         def f(n):
             enter(n)
@@ -105,6 +107,7 @@ class VRefTests:
                 # here, 'x' should be virtual. (This is ensured because
                 # we call virtual_ref(x).)
                 exctx.topframeref = vref_None
+                virtual_ref_check()
                 virtual_ref_finish(x)
                 # 'x' is allowed to escape, and even be forced, even after
                 # the call to finish().
@@ -114,8 +117,72 @@ class VRefTests:
         #
         self.meta_interp(f, [10])
         self.check_loops(new_with_vtable=2)   # the vref, and later the X
+        self.check_aborted_count(0)
 
-    def test_make_vref_and_force(self):
+    def test_make_vref_and_force_nocheck_1(self):
+        jitdriver = JitDriver(greens = [], reds = ['total', 'n'])
+        #
+        class X:
+            pass
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        @dont_look_inside
+        def force_me():
+            return exctx.topframeref().n
+        #
+        def f(n):
+            total = 0
+            while total < 300:
+                jitdriver.can_enter_jit(total=total, n=n)
+                jitdriver.jit_merge_point(total=total, n=n)
+                x = X()
+                x.n = n + 123
+                exctx.topframeref = virtual_ref(x)
+                # --- no virtual_ref_check() here ---
+                total += force_me() - 100
+                virtual_ref_finish(x)
+                exctx.topframeref = vref_None
+            return total
+        #
+        res = self.meta_interp(f, [-4])
+        assert res == 16 * 19
+        self.check_aborted_count(0)
+
+    def test_make_vref_and_force_nocheck_2(self):
+        jitdriver = JitDriver(greens = [], reds = ['total', 'n'])
+        #
+        class X:
+            pass
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        @dont_look_inside
+        def force_me():
+            return exctx.topframeref().n
+        #
+        def f(n):
+            total = 0
+            while total < 300:
+                jitdriver.can_enter_jit(total=total, n=n)
+                jitdriver.jit_merge_point(total=total, n=n)
+                x = X()
+                x.n = n + 123
+                exctx.topframeref = virtual_ref(x)
+                virtual_ref_check()
+                total += force_me() - 100
+                # --- but no virtual_ref_check() there ---
+                virtual_ref_finish(x)
+                exctx.topframeref = vref_None
+            return total
+        #
+        res = self.meta_interp(f, [-4])
+        assert res == 16 * 19
+        self.check_aborted_count(0)
+
+    def test_make_vref_and_force_check(self):
         jitdriver = JitDriver(greens = [], reds = ['total', 'n'])
         #
         class X:
@@ -137,6 +204,7 @@ class VRefTests:
                 x.n = n + 123
                 exctx.topframeref = virtual_ref(x)
                 total += force_me() - 100
+                virtual_ref_check()
                 virtual_ref_finish(x)
                 exctx.topframeref = vref_None
             return total
@@ -175,11 +243,13 @@ class VRefTests:
                 xy.next1 = None
                 xy.next2 = None
                 xy.next3 = None
+                virtual_ref_check()
                 virtual_ref_finish(xy)
         #
         self.meta_interp(f, [15])
         self.check_loops(new_with_vtable=2)     # the vref, and xy so far,
                                                 # but not xy.next1/2/3
+        self.check_aborted_count(0)
 
     def test_simple_force_always(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -204,6 +274,7 @@ class VRefTests:
                 xy.n = n
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
+                virtual_ref_check()
                 virtual_ref_finish(xy)
                 exctx.topframeref = vref_None
         #
@@ -234,6 +305,7 @@ class VRefTests:
                 xy.n = n
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
+                virtual_ref_check()
                 virtual_ref_finish(xy)
                 exctx.topframeref = vref_None
             return exctx.m
@@ -241,6 +313,7 @@ class VRefTests:
         res = self.meta_interp(f, [30])
         assert res == 13
         self.check_loop_count(1)
+        self.check_aborted_count(0)
 
     def test_blackhole_forces(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -267,12 +340,14 @@ class VRefTests:
                     externalfn(n)
                 n -= 1
                 exctx.topframeref = vref_None
+                virtual_ref_check()
                 virtual_ref_finish(xy)
             return exctx.m
         #
         res = self.meta_interp(f, [30])
         assert res == 13
         self.check_loop_count(1)
+        self.check_aborted_count(0)
 
     def test_bridge_forces(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -299,12 +374,14 @@ class VRefTests:
                     externalfn(n)
                 n -= 1
                 exctx.topframeref = vref_None
+                virtual_ref_check()
                 virtual_ref_finish(xy)
             return exctx.m
         #
         res = self.meta_interp(f, [72])
         assert res == 6
         self.check_loop_count(1)     # the bridge should not be compiled
+        self.check_aborted_count_at_least(1)
 
     def test_access_vref_later(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -320,7 +397,6 @@ class VRefTests:
             return exctx.later().n
         #
         def f(n):
-            later = None
             while n > 0:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
@@ -330,11 +406,13 @@ class VRefTests:
                 exctx.later = exctx.topframeref
                 n -= 1
                 exctx.topframeref = vref_None
+                virtual_ref_check()
                 virtual_ref_finish(xy)
             return g()
         #
         res = self.meta_interp(f, [15])
         assert res == 1
+        self.check_aborted_count(0)
 
     def test_jit_force_virtual_seen(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -354,6 +432,7 @@ class VRefTests:
                 exctx.topframeref = virtual_ref(xy)
                 n = exctx.topframeref().n - 1
                 exctx.topframeref = vref_None
+                virtual_ref_check()
                 virtual_ref_finish(xy)
             return 1
         #

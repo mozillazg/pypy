@@ -786,6 +786,12 @@ class BaseBackendTest(Runner):
                                    'ref')
         assert r.value == u_box.value
 
+    def test_virtual_ref_check(self):
+        # if VIRTUAL_REF_CHECK reaches the backend, it is a no-op
+        self.execute_operation(rop.VIRTUAL_REF_CHECK,
+                               [BoxInt(123), BoxInt(234)],
+                               'void')
+
     def test_jump(self):
         # this test generates small loops where the JUMP passes many
         # arguments of various types, shuffling them around.
