@@ -314,6 +314,14 @@ def find_module(space, modulename, w_modulename, partname, w_path, use_loader=Tr
     # not found
     return None
 
+def _prepare_module(space, w_mod, filename, pkgdir):
+    w = space.wrap
+    space.sys.setmodule(w_mod)
+    space.setattr(w_mod, w('__file__'), space.wrap(filename))
+    space.setattr(w_mod, w('__doc__'), space.w_None)
+    if pkgdir is not None:
+        space.setattr(w_mod, w('__path__'), space.newlist([w(pkgdir)]))
+
 def load_module(space, w_modulename, find_info, ispkg=False):
     if find_info is None:
         return
@@ -328,9 +336,11 @@ def load_module(space, w_modulename, find_info, ispkg=False):
             w_mod = space.getitem(space.sys.get('modules'), w_modulename)
         else:
             w_mod = space.wrap(Module(space, w_modulename))
-        space.sys.setmodule(w_mod)
-        space.setattr(w_mod, space.wrap('__file__'), space.wrap(find_info.filename))
-        space.setattr(w_mod, space.wrap('__doc__'), space.w_None)
+        if find_info.modtype == PKG_DIRECTORY:
+            pkgdir = find_info.filename
+        else:
+            pkgdir = None
+        _prepare_module(space, w_mod, find_info.filename, pkgdir)
 
         try:
             if find_info.modtype == PY_SOURCE:
