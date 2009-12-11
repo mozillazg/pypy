@@ -1808,20 +1808,19 @@ class MetaInterp(object):
                                 None, descr=vinfo.vable_token_descr)
 
     def vable_and_vrefs_after_residual_call(self):
-        for i in range(1, len(self.virtualref_boxes), 2):
-            if self.is_blackholing():
-                break
-            vrefbox = self.virtualref_boxes[i]
-            vref = vrefbox.getref_base()
-            if virtualref.tracing_after_residual_call(vref):
-                # this vref escaped during CALL_MAY_FORCE.
-                self.stop_tracking_virtualref(i-1)
-        #
         if self.is_blackholing():
             escapes = True
         else:
             escapes = False
             #
+            for i in range(1, len(self.virtualref_boxes), 2):
+                if self.is_blackholing():
+                    break
+                vrefbox = self.virtualref_boxes[i]
+                vref = vrefbox.getref_base()
+                if virtualref.tracing_after_residual_call(vref):
+                    # this vref escaped during CALL_MAY_FORCE.
+                    self.stop_tracking_virtualref(i-1)
             #
             vinfo = self.staticdata.virtualizable_info
             if vinfo is not None:
@@ -1873,8 +1872,7 @@ class MetaInterp(object):
                     op.args = [op.args[0]]
                 break
         else:
-            # not found at all!
-            self.switch_to_blackhole()
+            assert 0, "not found the VIRTUAL_REF nor VIRTUAL_REF_CHECK at all!"
 
     def handle_exception(self):
         etype = self.cpu.get_exception()
@@ -1912,6 +1910,8 @@ class MetaInterp(object):
             self, newboxes, resumedescr, expect_virtualizable)
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
+        if not self.is_blackholing():
+            self.history.record(rop.VIRTUAL_REF_CHECK, [], None)
         self.virtualref_boxes = virtualref_boxes
         for i in range(0, len(virtualref_boxes), 2):
             virtualbox = virtualref_boxes[i]
