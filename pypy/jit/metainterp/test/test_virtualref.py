@@ -106,7 +106,7 @@ class VRefTests:
                 # we call virtual_ref(x).)
                 exctx.topframeref = vref_None
                 virtual_ref_finish(x)
-                # 'vref' is allowed to escape, and even be forced, even after
+                # 'x' is allowed to escape, and even be forced, even after
                 # the call to finish().
                 g(vref)
                 n -= 1
@@ -144,6 +144,7 @@ class VRefTests:
         res = self.meta_interp(f, [-4])
         assert res == 16 * 19
         self.check_loops({})      # because we aborted tracing
+        self.check_aborted_count_at_least(1)
 
     def test_simple_no_access(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -208,6 +209,7 @@ class VRefTests:
         #
         self.meta_interp(f, [15])
         self.check_loops({})     # because we aborted tracing
+        self.check_aborted_count_at_least(1)
 
     def test_simple_force_sometimes(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -344,7 +346,6 @@ class VRefTests:
         exctx = ExCtx()
         #
         def f(n):
-            later = None
             while n > 0:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
@@ -359,6 +360,70 @@ class VRefTests:
         res = self.meta_interp(f, [15])
         assert res == 1
         self.check_loops({})      # because we aborted tracing
+        self.check_aborted_count_at_least(1)
+
+    def test_recursive_call_1(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'frame', 'rec'])
+        #
+        class XY:
+            pass
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        def f(frame, n, reclevel):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, frame=frame, rec=reclevel)
+                myjitdriver.jit_merge_point(n=n, frame=frame, rec=reclevel)
+                if reclevel == 0:
+                    return n
+                xy = XY()
+                exctx.topframeref = virtual_ref(xy)
+                m = f(xy, n, reclevel-1)
+                assert m == n
+                n -= 1
+                exctx.topframeref = vref_None
+                virtual_ref_finish(xy)
+            return 2
+        def main(n, reclevel):
+            return f(XY(), n, reclevel)
+        #
+        res = self.meta_interp(main, [15, 1])
+        assert res == main(15, 1)
+        self.check_aborted_count(0)
+
+    def test_recursive_call_2(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'frame', 'rec'])
+        #
+        class XY:
+            n = 0
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        def f(frame, n, reclevel):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, frame=frame, rec=reclevel)
+                myjitdriver.jit_merge_point(n=n, frame=frame, rec=reclevel)
+                frame.n += 1
+                xy = XY()
+                xy.n = n
+                exctx.topframeref = virtual_ref(xy)
+                if reclevel > 0:
+                    m = f(xy, frame.n, reclevel-1)
+                    assert xy.n == m
+                    n -= 1
+                else:
+                    n -= 2
+                exctx.topframeref = vref_None
+                virtual_ref_finish(xy)
+            return frame.n
+        def main(n, reclevel):
+            return f(XY(), n, reclevel)
+        #
+        res = self.meta_interp(main, [10, 2])
+        assert res == main(10, 2)
+        self.check_aborted_count(0)
 
 
 class TestLLtype(VRefTests, LLJitMixin):
