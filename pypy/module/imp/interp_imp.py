@@ -84,9 +84,7 @@ def load_source(space, w_modulename, w_filename, w_file=None):
     stream = get_file(space, w_file, filename, 'U')
 
     w_mod = space.wrap(Module(space, w_modulename))
-    space.sys.setmodule(w_mod)
-    space.setattr(w_mod, space.wrap('__file__'), w_filename)
-    space.setattr(w_mod, space.wrap('__doc__'), space.w_None)
+    importing._prepare_module(space, w_mod, filename, None)
 
     importing.load_source_module(
         space, w_modulename, w_mod, filename, stream.readall())
@@ -100,9 +98,7 @@ def load_compiled(space, w_modulename, w_filename, w_file=None):
     stream = get_file(space, w_file, filename, 'rb')
 
     w_mod = space.wrap(Module(space, w_modulename))
-    space.sys.setmodule(w_mod)
-    space.setattr(w_mod, space.wrap('__file__'), w_filename)
-    space.setattr(w_mod, space.wrap('__doc__'), space.w_None)
+    importing._prepare_module(space, w_mod, filename, None)
 
     magic = importing._r_long(stream)
     timestamp = importing._r_long(stream)
@@ -140,3 +136,19 @@ def is_builtin(space, w_name):
 
 def is_frozen(space, w_name):
     return space.w_False
+
+#__________________________________________________________________
+
+def lock_held(space):
+    if space.config.objspace.usemodules.thread:
+        return space.wrap(importing.getimportlock(space).lock_held())
+    else:
+        return False
+
+def acquire_lock(space):
+    if space.config.objspace.usemodules.thread:
+        importing.getimportlock(space).acquire_lock()
+
+def release_lock(space):
+    if space.config.objspace.usemodules.thread:
+        importing.getimportlock(space).release_lock()
