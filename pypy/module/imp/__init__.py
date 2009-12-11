@@ -10,6 +10,7 @@ class Module(MixedModule):
         'PY_COMPILED':     'space.wrap(importing.PY_COMPILED)',
         'PKG_DIRECTORY':   'space.wrap(importing.PKG_DIRECTORY)',
         'C_BUILTIN':       'space.wrap(importing.C_BUILTIN)',
+        'C_EXTENSION':     'space.wrap(importing.C_EXTENSION)',
         'get_suffixes':    'interp_imp.get_suffixes',
 
         'get_magic':       'interp_imp.get_magic',
