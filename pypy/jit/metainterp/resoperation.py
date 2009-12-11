@@ -223,7 +223,7 @@ _oplist = [
     'COND_CALL_GC_MALLOC',  # [a, b, if_(a<=b)_result, if_(a>b)_call, args...]
                             #        => result          (for mallocs)
     'DEBUG_MERGE_POINT/1',      # debugging only
-    'VIRTUAL_REF_FINISH/2',
+    'VIRTUAL_REF_CHECK',
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     'CALL',

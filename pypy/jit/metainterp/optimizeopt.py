@@ -759,26 +759,29 @@ class Optimizer(object):
         vrefvalue.setfield(descr_virtual_token, self.getvalue(tokenbox))
         vrefvalue.setfield(descr_virtualref_index, self.getvalue(indexbox))
 
-    def optimize_VIRTUAL_REF_FINISH(self, op):
-        value = self.getvalue(op.args[1])
-        if not value.is_virtual():   # virtual_ref(non-virtual) gives bad
-            raise compile.GiveUp     # results, so don't bother compiling it
-        #
-        # Set the 'forced' field of the virtual_ref.
-        # In good cases, this is all virtual, so has no effect.
-        # Otherwise, this forces the real object -- but only now, as
-        # opposed to much earlier.  This is important because the object is
-        # typically a PyPy PyFrame, and now is the end of its execution, so
-        # forcing it now does not have catastrophic effects.
-        from pypy.jit.metainterp import virtualref
-        # - set 'forced' to point to the real object
-        op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
-                          descr = virtualref.get_descr_forced(self.cpu))
-        self.optimize_SETFIELD_GC(op1)
-        # - set 'virtual_token' to TOKEN_NONE
-        op1 = ResOperation(rop.SETFIELD_GC, [op.args[0], ConstInt(0)], None,
+    def optimize_VIRTUAL_REF_CHECK(self, op):
+        for i in range(0, len(op.args), 2):
+            value = self.getvalue(op.args[i])
+            if not value.is_virtual():   # virtual_ref(non-virtual) means it
+                raise compile.GiveUp     # escaped already, which is bad
+            #
+            # Set the 'forced' field of the virtual_ref.
+            # In good cases, this is all virtual, so has no effect.
+            # Otherwise, this forces the real object -- but only now, as
+            # opposed to much earlier.  This is important because the object is
+            # typically a PyPy PyFrame, and now is the end of its execution, so
+            # forcing it now does not have catastrophic effects.
+            from pypy.jit.metainterp import virtualref
+            # - set 'forced' to point to the real object
+            args = [op.args[i+1], op.args[i]]
+            op1 = ResOperation(rop.SETFIELD_GC, args, None,
+                              descr = virtualref.get_descr_forced(self.cpu))
+            self.optimize_SETFIELD_GC(op1)
+            # - set 'virtual_token' to TOKEN_NONE
+            args = [op.args[i+1], ConstInt(0)]
+            op1 = ResOperation(rop.SETFIELD_GC, args, None,
                           descr = virtualref.get_descr_virtual_token(self.cpu))
-        self.optimize_SETFIELD_GC(op1)
+            self.optimize_SETFIELD_GC(op1)
 
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])

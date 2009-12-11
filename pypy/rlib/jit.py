@@ -112,10 +112,17 @@ def virtual_ref(x):
     dereferenced (by the call syntax 'vref()') before the
     virtual_ref_finish, then we get out of the assembler.  If it is not
     dereferenced at all, or only after the virtual_ref_finish, then
-    nothing special occurs.
+    nothing special occurs.  Note that the checks for 'being virtual'
+    only occurs when virtual_ref_check() is called (mostly for testing),
+    or when jit_merge_point is called by JITted code in a recursive call.
     """
     return DirectJitVRef(x)
 virtual_ref.oopspec = 'virtual_ref(x)'
+
+def virtual_ref_check():
+    from pypy.rpython.lltypesystem import lltype, lloperation
+    lloperation.llop.jit_marker(lltype.Void,
+                                lloperation.void('virtual_ref_check'))
 
 def virtual_ref_finish(x):
     """See docstring in virtual_ref(x).  Note that virtual_ref_finish

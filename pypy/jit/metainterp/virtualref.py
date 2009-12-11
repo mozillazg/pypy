@@ -76,12 +76,22 @@ def virtual_ref_during_tracing(real_object):
     vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
     return lltype.cast_opaque_ptr(llmemory.GCREF, vref)
 
+def is_virtual_ref(gcref):
+    if not gcref:
+        return False
+    inst = lltype.cast_opaque_ptr(rclass.OBJECTPTR, gcref)
+    return inst.typeptr == jit_virtual_ref_vtable
+
 def tracing_before_residual_call(gcref):
+    if not is_virtual_ref(gcref):
+        return
     vref = lltype.cast_opaque_ptr(lltype.Ptr(JIT_VIRTUAL_REF), gcref)
     assert not vref.virtual_token
     vref.virtual_token = TOKEN_TRACING_RESCALL
 
 def tracing_after_residual_call(gcref):
+    if not is_virtual_ref(gcref):
+        return False
     vref = lltype.cast_opaque_ptr(lltype.Ptr(JIT_VIRTUAL_REF), gcref)
     if vref.virtual_token:
         # not modified by the residual call; assert that it is still
@@ -94,6 +104,8 @@ def tracing_after_residual_call(gcref):
         return True
 
 def forced_single_vref(gcref, real_object):
+    if not is_virtual_ref(gcref):
+        return
     assert real_object
     vref = lltype.cast_opaque_ptr(lltype.Ptr(JIT_VIRTUAL_REF), gcref)
     assert (vref.virtual_token != TOKEN_NONE and
@@ -102,6 +114,8 @@ def forced_single_vref(gcref, real_object):
     vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
 
 def continue_tracing(gcref, real_object):
+    if not is_virtual_ref(gcref):
+        return
     vref = lltype.cast_opaque_ptr(lltype.Ptr(JIT_VIRTUAL_REF), gcref)
     assert vref.virtual_token != TOKEN_TRACING_RESCALL
     vref.virtual_token = TOKEN_NONE

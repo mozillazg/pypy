@@ -1158,16 +1158,20 @@ class BytecodeMaker(object):
                   self.var_position(op.args[3]))
 
     def serialize_op_jit_marker(self, op):
-        if op.args[0].value == 'jit_merge_point':
-            assert self.portal, "jit_merge_point in non-main graph!"
-            self.emit('jit_merge_point')
-            assert ([self.var_position(i) for i in op.args[2:]] ==
-                    range(0, 2*(len(op.args) - 2), 2))
-            #for i in range(2, len(op.args)):
-            #    arg = op.args[i]
-            #    self._eventualy_builtin(arg)
-        elif op.args[0].value == 'can_enter_jit':
-            self.emit('can_enter_jit')
+        key = op.args[0].value
+        getattr(self, 'handle_jit_marker__%s' % key)(op)
+
+    def handle_jit_marker__jit_merge_point(self, op):
+        assert self.portal, "jit_merge_point in non-main graph!"
+        self.emit('jit_merge_point')
+        assert ([self.var_position(i) for i in op.args[2:]] ==
+                range(0, 2*(len(op.args) - 2), 2))
+
+    def handle_jit_marker__can_enter_jit(self, op):
+        self.emit('can_enter_jit')
+
+    def handle_jit_marker__virtual_ref_check(self, op):
+        self.emit('virtual_ref_check')
 
     def serialize_op_direct_call(self, op):
         kind = self.codewriter.guess_call_kind(op)
