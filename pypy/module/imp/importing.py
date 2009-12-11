@@ -17,9 +17,13 @@ from pypy.rlib.objectmodel import we_are_translated
 SEARCH_ERROR = 0
 PY_SOURCE = 1
 PY_COMPILED = 2
-PKG_DIRECTORY = 3
-C_BUILTIN = 4
-IMP_HOOK = 5
+C_EXTENSION = 3
+# PY_RESOURCE = 4
+PKG_DIRECTORY = 5
+C_BUILTIN = 6
+# PY_FROZEN = 7
+# PY_CODERESOURCE = 8
+IMP_HOOK = 9
 
 def find_modtype(space, filepart):
     """Check which kind of module to import for the given filepart,

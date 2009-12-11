@@ -4,7 +4,7 @@ import marshal
 import py
 import time
 import struct
-from pypy.module.__builtin__.importing import get_pyc_magic, _w_long
+from pypy.module.imp.importing import get_pyc_magic, _w_long
 from StringIO import StringIO
 
 from pypy.tool.udir import udir
