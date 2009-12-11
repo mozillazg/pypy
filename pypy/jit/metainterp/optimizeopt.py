@@ -750,7 +750,7 @@ class Optimizer(object):
         descr_virtualref_index = virtualref.get_descr_virtualref_index(cpu)
         #
         # Replace the VIRTUAL_REF operation with a virtual structure of type
-        # 'vref.JIT_VIRTUAL_REF'.  The virtual structure may be forced soon,
+        # 'jit_virtual_ref'.  The jit_virtual_ref structure may be forced soon,
         # but the point is that doing so does not force the original structure.
         op = ResOperation(rop.NEW_WITH_VTABLE, [c_cls], op.result)
         vrefvalue = self.make_virtual(c_cls, op.result, op)

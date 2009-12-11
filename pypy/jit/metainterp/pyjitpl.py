@@ -917,8 +917,30 @@ class MIFrame(object):
         lastbox = metainterp.virtualref_boxes.pop()
         assert box.getref_base() == lastbox.getref_base()
         if not metainterp.is_blackholing():
+            if vrefbox.getref_base():
+                metainterp.history.record(rop.VIRTUAL_REF_FINISH,
+                                          [vrefbox, lastbox], None)
+
+    def cancel_tracking_virtual_ref(self, argboxes):
+        # if the most recent vref points to an object that escapes in a
+        # residual call (i.e. is in argboxes), then cancel its special
+        # treatment and allow it to escape.  XXX check and document more, or
+        # find another approach -- see test_recursive_call in test_virtualref
+        metainterp = self.metainterp
+        if metainterp.is_blackholing():
+            return
+        if len(metainterp.virtualref_boxes) == 0:
+            return
+        lastbox = metainterp.virtualref_boxes[-2]
+        if lastbox not in argboxes:
+            return
+        vrefbox = metainterp.virtualref_boxes[-1]
+        if vrefbox.getref_base():
             metainterp.history.record(rop.VIRTUAL_REF_FINISH,
                                       [vrefbox, lastbox], None)
+            ConstRef = metainterp.cpu.ts.ConstRef
+            nullbox = ConstRef(ConstRef.value)
+            metainterp.virtualref_boxes[-1] = nullbox
 
     # ------------------------------
 
@@ -1023,6 +1045,7 @@ class MIFrame(object):
     def do_residual_call(self, argboxes, descr, exc):
         effectinfo = descr.get_extra_info()
         if effectinfo is None or effectinfo.forces_virtual_or_virtualizable:
+            self.cancel_tracking_virtual_ref(argboxes)
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.vable_and_vrefs_before_residual_call()
             # xxx do something about code duplication
@@ -1433,6 +1456,7 @@ class MetaInterp(object):
         self.staticdata.stats.aborted()
         self.staticdata.profiler.end_tracing()
         self.staticdata.profiler.start_blackhole()
+    switch_to_blackhole._dont_inline_ = True
 
     def switch_to_blackhole_if_trace_too_long(self):
         if not self.is_blackholing():
@@ -1766,9 +1790,11 @@ class MetaInterp(object):
         for i in range(1, len(self.virtualref_boxes), 2):
             vrefbox = self.virtualref_boxes[i]
             vref = vrefbox.getref_base()
+            if not vref:
+                continue
             virtualref.tracing_before_residual_call(vref)
-            # the FORCE_TOKEN is already set at runtime in each vrefs when
-            # they are created, by optimizeopt.py.
+            # the FORCE_TOKEN is already set at runtime in each vref when
+            # it is created, by optimizeopt.py.
         #
         vinfo = self.staticdata.virtualizable_info
         if vinfo is not None:
@@ -1791,6 +1817,8 @@ class MetaInterp(object):
             for i in range(1, len(self.virtualref_boxes), 2):
                 vrefbox = self.virtualref_boxes[i]
                 vref = vrefbox.getref_base()
+                if not vref:
+                    continue
                 if virtualref.tracing_after_residual_call(vref):
                     # this vref escaped during CALL_MAY_FORCE.
                     escapes = True
@@ -1849,6 +1877,8 @@ class MetaInterp(object):
         for i in range(0, len(virtualref_boxes), 2):
             virtualbox = virtualref_boxes[i]
             vrefbox = virtualref_boxes[i+1]
+            if not vrefbox.getref_base():
+                continue
             virtualref.continue_tracing(vrefbox.getref_base(),
                                         virtualbox.getref_base())
         #
