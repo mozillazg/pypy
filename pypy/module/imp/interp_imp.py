@@ -14,7 +14,15 @@ def get_suffixes(space):
         ])
 
 def get_magic(space):
-    return space.wrap(struct.pack('<i', importing.get_pyc_magic(space)))
+    x = importing.get_pyc_magic(space)
+    a = x & 0xff
+    x >>= 8
+    b = x & 0xff
+    x >>= 8
+    c = x & 0xff
+    x >>= 8
+    d = x & 0xff
+    return space.wrap(chr(a) + chr(b) + chr(c) + chr(d))
 
 def get_file(space, w_file, filename, filemode):
     if w_file is None or space.is_w(w_file, space.w_None):
@@ -27,26 +35,28 @@ def find_module(space, w_name, w_path=None):
     if space.is_w(w_path, space.w_None):
         w_path = space.sys.get('path')
 
-    import_info, _ = importing.find_module(
+    find_info = importing.find_module(
         space, name, w_name, name, w_path, use_loader=False)
-    if import_info is None:
+    if not find_info:
         raise OperationError(
             space.w_ImportError,
             space.wrap("No module named %s" % (name,)))
-    modtype, filename, stream, suffix, filemode = import_info
 
-    w_filename = space.wrap(filename)
+    w_filename = space.wrap(find_info.filename)
+    stream = find_info.stream
 
     if stream is not None:
         fileobj = W_File(space)
         fileobj.fdopenstream(
             stream, stream.try_to_find_file_descriptor(),
-            filemode, w_filename)
+            find_info.filemode, w_filename)
         w_fileobj = space.wrap(fileobj)
     else:
         w_fileobj = space.w_None
     w_import_info = space.newtuple(
-        [space.wrap(suffix), space.wrap(filemode), space.wrap(modtype)])
+        [space.wrap(find_info.suffix),
+         space.wrap(find_info.filemode),
+         space.wrap(find_info.modtype)])
     return space.newtuple([w_fileobj, w_filename, w_import_info])
 
 def load_module(space, w_name, w_file, w_filename, w_info):
@@ -59,13 +69,14 @@ def load_module(space, w_name, w_file, w_filename, w_info):
     else:
         stream = get_file(space, w_file, filename, filemode)
 
-    import_info = (space.int_w(w_modtype),
-                   filename,
-                   stream,
-                   space.str_w(w_suffix),
-                   filemode)
+    find_info = importing.FindInfo(
+        space.int_w(w_modtype),
+        filename,
+        stream,
+        space.str_w(w_suffix),
+        filemode)
     return importing.load_module(
-        space, w_name, import_info, None)
+        space, w_name, find_info)
 
 def load_source(space, w_modulename, w_filename, w_file=None):
     filename = space.str_w(w_filename)
