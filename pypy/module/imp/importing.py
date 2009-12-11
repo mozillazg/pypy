@@ -19,6 +19,7 @@ PY_SOURCE = 1
 PY_COMPILED = 2
 PKG_DIRECTORY = 3
 C_BUILTIN = 4
+IMP_HOOK = 5
 
 def find_modtype(space, filepart):
     """Check which kind of module to import for the given filepart,
@@ -247,24 +248,33 @@ def find_in_path_hooks(space, w_modulename, w_pathitem):
         if space.is_true(w_loader):
             return w_loader
 
-def ImportInfo(type, name, stream, suffix="", filemode=""):
-    return type, name, stream, suffix, filemode
+class FindInfo:
+    def __init__(self, modtype, filename, stream,
+                 suffix="", filemode="", w_loader=None):
+        self.modtype = modtype
+        self.filename = filename
+        self.stream = stream
+        self.suffix = suffix
+        self.filemode = filemode
+        self.w_loader = w_loader
+
+    @staticmethod
+    def fromLoader(w_loader):
+        return FindInfo(IMP_HOOK, '', None, w_loader=w_loader)
 
 def find_module(space, modulename, w_modulename, partname, w_path, use_loader=True):
-    """If use_loader is False, returns (import_info, None)
-    if use_loader is True, may return (None, w_loader)"""
     # Examin importhooks (PEP302) before doing the import
     if use_loader:
         w_loader  = find_in_meta_path(space, w_modulename, w_path)
         if w_loader:
-            return None, w_loader
+            return FindInfo.fromLoader(w_loader)
 
     # XXX Check for frozen modules?
     #     when w_path is a string
 
     # check the builtin modules
     if modulename in space.builtin_modules:
-        return ImportInfo(C_BUILTIN, modulename, None), None
+        return FindInfo(C_BUILTIN, modulename, None)
 
     # XXX check frozen modules?
     #     when w_path is null
@@ -275,7 +285,7 @@ def find_module(space, modulename, w_modulename, partname, w_path, use_loader=Tr
             if use_loader:
                 w_loader = find_in_path_hooks(space, w_modulename, w_pathitem)
                 if w_loader:
-                    return None, w_loader
+                    return FindInfo.fromLoader(w_loader)
 
             path = space.str_w(w_pathitem)
             filepart = os.path.join(path, partname)
@@ -283,7 +293,7 @@ def find_module(space, modulename, w_modulename, partname, w_path, use_loader=Tr
                 initfile = os.path.join(filepart, '__init__')
                 modtype, _, _ = find_modtype(space, initfile)
                 if modtype in (PY_SOURCE, PY_COMPILED):
-                    return ImportInfo(PKG_DIRECTORY, filepart, None), None
+                    return FindInfo(PKG_DIRECTORY, filepart, None)
                 else:
                     msg = "Not importing directory " +\
                             "'%s' missing __init__.py" % (filepart,)
@@ -294,57 +304,60 @@ def find_module(space, modulename, w_modulename, partname, w_path, use_loader=Tr
                     filename = filepart + suffix
                     stream = streamio.open_file_as_stream(filename, filemode)
                     try:
-                        return ImportInfo(modtype, filename, stream, suffix, filemode), None
+                        return FindInfo(modtype, filename, stream, suffix, filemode)
                     except:
                         stream.close()
                         raise
             except StreamErrors:
                 pass
-    return None, None
 
-def load_module(space, w_modulename, import_info, w_loader, ispkg=False):
-    if w_loader:
-        return space.call_method(w_loader, "load_module", w_modulename)
-    if import_info is None:
+    # not found
+    return None
+
+def load_module(space, w_modulename, find_info, ispkg=False):
+    if find_info is None:
         return
-    modtype, filename, stream, _, _ = import_info
-    if modtype == C_BUILTIN:
-        return space.getbuiltinmodule(filename)
+    if find_info.w_loader:
+        return space.call_method(find_info.w_loader, "load_module", w_modulename)
 
-    if modtype in (PY_SOURCE, PY_COMPILED, PKG_DIRECTORY):
+    if find_info.modtype == C_BUILTIN:
+        return space.getbuiltinmodule(find_info.filename)
+
+    if find_info.modtype in (PY_SOURCE, PY_COMPILED, PKG_DIRECTORY):
         if ispkg:
             w_mod = space.getitem(space.sys.get('modules'), w_modulename)
         else:
             w_mod = space.wrap(Module(space, w_modulename))
         space.sys.setmodule(w_mod)
-        space.setattr(w_mod, space.wrap('__file__'), space.wrap(filename))
+        space.setattr(w_mod, space.wrap('__file__'), space.wrap(find_info.filename))
         space.setattr(w_mod, space.wrap('__doc__'), space.w_None)
 
-    try:
-        if modtype == PY_SOURCE:
-            load_source_module(space, w_modulename, w_mod, filename,
-                               stream.readall())
-            return w_mod
-        elif modtype == PY_COMPILED:
-            magic = _r_long(stream)
-            timestamp = _r_long(stream)
-            load_compiled_module(space, w_modulename, w_mod, filename,
-                                 magic, timestamp, stream.readall())
-            return w_mod
-        elif modtype == PKG_DIRECTORY:
-            w_path = space.newlist([space.wrap(filename)])
-            space.setattr(w_mod, space.wrap('__path__'), w_path)
-            import_info, _ = find_module(space, "__init__", None, "__init__",
-                                         w_path, use_loader=False)
-            if import_info is None:
+        try:
+            if find_info.modtype == PY_SOURCE:
+                load_source_module(space, w_modulename, w_mod, find_info.filename,
+                                   find_info.stream.readall())
                 return w_mod
-            load_module(space, w_modulename, import_info, None, ispkg=True)
-            w_mod = check_sys_modules(space, w_modulename) # in case of "substitution"
-            return w_mod
-    except OperationError:
-        w_mods = space.sys.get('modules')
-        space.call_method(w_mods, 'pop', w_modulename, space.w_None)
-        raise
+            elif find_info.modtype == PY_COMPILED:
+                magic = _r_long(find_info.stream)
+                timestamp = _r_long(find_info.stream)
+                load_compiled_module(space, w_modulename, w_mod, find_info.filename,
+                                     magic, timestamp, find_info.stream.readall())
+                return w_mod
+            elif find_info.modtype == PKG_DIRECTORY:
+                w_path = space.newlist([space.wrap(find_info.filename)])
+                space.setattr(w_mod, space.wrap('__path__'), w_path)
+                find_info = find_module(space, "__init__", None, "__init__",
+                                        w_path, use_loader=False)
+                if find_info is None:
+                    return w_mod
+                load_module(space, w_modulename, find_info, ispkg=True)
+                # fetch the module again, in case of "substitution"
+                w_mod = check_sys_modules(space, w_modulename)
+                return w_mod
+        except OperationError:
+            w_mods = space.sys.get('modules')
+            space.call_method(w_mods, 'pop', w_modulename, space.w_None)
+            raise
 
 def load_part(space, w_path, prefix, partname, w_parent, tentative):
     w = space.wrap
@@ -355,18 +368,18 @@ def load_part(space, w_path, prefix, partname, w_parent, tentative):
         if not space.is_w(w_mod, space.w_None):
             return w_mod
     else:
-        import_info, w_loader = find_module(
+        find_info = find_module(
             space, modulename, w_modulename, partname, w_path)
 
         try:
-            if (import_info, w_loader) != (None, None):
-                w_mod = load_module(space, w_modulename, import_info, w_loader)
+            if find_info:
+                w_mod = load_module(space, w_modulename, find_info)
                 if w_parent is not None:
                     space.setattr(w_parent, space.wrap(partname), w_mod)
                 return w_mod
         finally:
-            if import_info:
-                _, _, stream, _, _ = import_info
+            if find_info:
+                stream = find_info.stream
                 if stream:
                     stream.close()
 
@@ -406,15 +419,15 @@ def reload(space, w_module):
                     parent_name,)))
         w_path = space.getitem(w_parent, space.wrap("__path"))
 
-    import_info, w_loader = find_module(
+    find_info = find_module(
         space, modulename, w_modulename, subname, w_path)
 
-    if (import_info, w_loader) == (None, None):
+    if not find_info:
         # ImportError
         msg = "No module named %s" % modulename
         raise OperationError(space.w_ImportError, space.wrap(msg))
 
-    return load_module(space, w_modulename, import_info, w_loader)
+    return load_module(space, w_modulename, find_info)
 
 # __________________________________________________________________
 #
