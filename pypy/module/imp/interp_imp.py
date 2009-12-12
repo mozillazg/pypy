@@ -143,7 +143,7 @@ def lock_held(space):
     if space.config.objspace.usemodules.thread:
         return space.wrap(importing.getimportlock(space).lock_held())
     else:
-        return False
+        return space.w_False
 
 def acquire_lock(space):
     if space.config.objspace.usemodules.thread:
