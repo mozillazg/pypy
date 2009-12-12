@@ -508,6 +508,13 @@ class MIFrame(object):
     @arguments("box", "descr", "box")
     def opimpl_setfield_gc(self, box, fielddesc, valuebox):
         self.execute_with_descr(rop.SETFIELD_GC, fielddesc, box, valuebox)
+        # <hack> XXX
+        metainterp = self.metainterp
+        if (len(metainterp.virtualref_boxes) >= 2 and
+            metainterp.virtualref_boxes[-2] == valuebox and
+            virtualref.is_virtual_ref(metainterp.virtualref_boxes[-1].getref_base())):
+            metainterp.stop_tracking_virtualref(-2)
+        # </hack>
 
     @arguments("box", "descr")
     def opimpl_getfield_raw(self, box, fielddesc):
@@ -1841,12 +1848,11 @@ class MetaInterp(object):
     def stop_tracking_virtualref(self, i):
         virtualbox = self.virtualref_boxes[i]
         vrefbox = self.virtualref_boxes[i+1]
-        # record VIRTUAL_REF_FINISH just before the current CALL_MAY_FORCE
-        call_may_force_op = self.history.operations.pop()
-        assert call_may_force_op.opnum == rop.CALL_MAY_FORCE
+        # record VIRTUAL_REF_FINISH just before the current op
+        current_op = self.history.operations.pop()
         self.history.record(rop.VIRTUAL_REF_FINISH,
                             [vrefbox, virtualbox], None)
-        self.history.operations.append(call_may_force_op)
+        self.history.operations.append(current_op)
         # mark by replacing it with ConstPtr(NULL)
         self.virtualref_boxes[i+1] = self.cpu.ts.CONST_NULL
 
