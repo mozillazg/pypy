@@ -30,7 +30,7 @@ class VRefTests:
         self.interp_operations(f, [])
         self.check_operations_history(new_with_vtable=1,     # X()
                                       virtual_ref=1,
-                                      virtual_ref_check=1)
+                                      virtual_ref_finish=1)
 
     def test_make_vref_guard(self):
         if not isinstance(self, TestLLtype):

@@ -226,7 +226,7 @@ def do_force_token(cpu):
 def do_virtual_ref(cpu, box1, box2):
     raise NotImplementedError
 
-def do_virtual_ref_check(cpu, *boxes):
+def do_virtual_ref_finish(cpu, box1, box2):
     raise NotImplementedError
 
 def do_debug_merge_point(cpu, box1):

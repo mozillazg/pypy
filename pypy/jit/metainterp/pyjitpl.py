@@ -836,7 +836,7 @@ class MIFrame(object):
                 except GiveUp:
                     self.metainterp.staticdata.profiler.count(ABORT_BRIDGE)
                     self.metainterp.switch_to_blackhole()
-            self.metainterp.generate_virtual_ref_check()
+            self.metainterp.virtual_ref_check()
         if self.metainterp.is_blackholing():
             self.blackhole_reached_merge_point(self.env)
         return True
@@ -900,9 +900,9 @@ class MIFrame(object):
         #    in the vref), then we replace the vref in the list with
         #    ConstPtr(NULL).
         #
-        #  * at the next virtual_ref_check() or jit_merge_point, any such
+        #  * at the next virtual_ref_check() or jit_merge_point(), any such
         #    NULL causes tracing to abort.  So escaping is fine if there
-        #    is no virtual_ref_check() or jit_merge_point before the final
+        #    is no virtual_ref_check()/jit_merge_point() before the final
         #    call to virtual_ref_finish().
         #
         metainterp = self.metainterp
@@ -930,19 +930,18 @@ class MIFrame(object):
         # virtual_ref_finish() assumes that we have a stack-like, last-in
         # first-out order.
         metainterp = self.metainterp
-        if not metainterp.is_blackholing():
-            vrefbox = metainterp.virtualref_boxes[-1]
-            vref = vrefbox.getref_base()
-            if virtualref.is_virtual_ref(vref):
-                metainterp.stop_tracking_virtualref(-2)
-        #
         vrefbox = metainterp.virtualref_boxes.pop()
         lastbox = metainterp.virtualref_boxes.pop()
         assert box.getref_base() == lastbox.getref_base()
+        if not metainterp.is_blackholing():
+            vref = vrefbox.getref_base()
+            if virtualref.is_virtual_ref(vref):
+                metainterp.history.record(rop.VIRTUAL_REF_FINISH,
+                                          [vrefbox, lastbox], None)
 
     @arguments()
     def opimpl_virtual_ref_check(self):
-        self.metainterp.generate_virtual_ref_check()
+        self.metainterp.virtual_ref_check()
 
     # ------------------------------
 
@@ -1052,7 +1051,7 @@ class MIFrame(object):
             # xxx do something about code duplication
             resbox = self.metainterp.execute_and_record_varargs(
                 rop.CALL_MAY_FORCE, argboxes, descr=descr)
-            self.metainterp.vable_and_vrefs_after_residual_call()
+            self.metainterp.vable_and_vrefs_after_residual_call(argboxes)
             if resbox is not None:
                 self.make_result_box(resbox)
             self.generate_guard(self.pc, rop.GUARD_NOT_FORCED, None, [])
@@ -1807,20 +1806,23 @@ class MetaInterp(object):
                                                   force_token_box],
                                 None, descr=vinfo.vable_token_descr)
 
-    def vable_and_vrefs_after_residual_call(self):
+    def vable_and_vrefs_after_residual_call(self, argboxes):
         if self.is_blackholing():
             escapes = True
         else:
             escapes = False
             #
-            for i in range(1, len(self.virtualref_boxes), 2):
-                if self.is_blackholing():
-                    break
-                vrefbox = self.virtualref_boxes[i]
+            for i in range(0, len(self.virtualref_boxes), 2):
+                virtualbox = self.virtualref_boxes[i]
+                vrefbox = self.virtualref_boxes[i+1]
                 vref = vrefbox.getref_base()
-                if virtualref.tracing_after_residual_call(vref):
-                    # this vref escaped during CALL_MAY_FORCE.
-                    self.stop_tracking_virtualref(i-1)
+                if (virtualref.tracing_after_residual_call(vref) or
+                    virtualbox in argboxes):    # <-- XXX hack
+                    # this vref was really a virtual_ref, but it escaped
+                    # during this CALL_MAY_FORCE.  Mark this fact by
+                    # generating a VIRTUAL_REF_FINISH on it and replacing
+                    # it by ConstPtr(NULL).
+                    self.stop_tracking_virtualref(i)
             #
             vinfo = self.staticdata.virtualizable_info
             if vinfo is not None:
@@ -1836,43 +1838,28 @@ class MetaInterp(object):
         if escapes:
             self.load_fields_from_virtualizable()
 
-    def generate_virtual_ref_check(self):
+    def stop_tracking_virtualref(self, i):
+        virtualbox = self.virtualref_boxes[i]
+        vrefbox = self.virtualref_boxes[i+1]
+        # record VIRTUAL_REF_FINISH just before the current CALL_MAY_FORCE
+        call_may_force_op = self.history.operations.pop()
+        assert call_may_force_op.opnum == rop.CALL_MAY_FORCE
+        self.history.record(rop.VIRTUAL_REF_FINISH,
+                            [vrefbox, virtualbox], None)
+        self.history.operations.append(call_may_force_op)
+        # mark by replacing it with ConstPtr(NULL)
+        self.virtualref_boxes[i+1] = self.cpu.ts.CONST_NULL
+
+    def virtual_ref_check(self):
         if self.is_blackholing():
             return
-        # first, abort tracing if we reach this point with an escaped virtual
+        # abort tracing if we reach this point with an escaped virtual
         for i in range(1, len(self.virtualref_boxes), 2):
             vrefbox = self.virtualref_boxes[i]
             vref = vrefbox.getref_base()
             if not virtualref.is_virtual_ref(vref):
                 self.switch_to_blackhole()
-                return
-        # then record VIRTUAL_REF_CHECK, with no argument so far.
-        # Arguments may be added by stop_tracking_virtualref().
-        self.history.record(rop.VIRTUAL_REF_CHECK, [], None)
-
-    def stop_tracking_virtualref(self, j):
-        # we look for the most recent VIRTUAL_REF_CHECK marker, and add
-        # there the pair virtualbox/vrefbox as arguments.
-        virtualbox = self.virtualref_boxes[j]
-        vrefbox = self.virtualref_boxes[j+1]
-        assert virtualref.is_virtual_ref(vrefbox.getref_base())
-        self.virtualref_boxes[j+1] = self.cpu.ts.CONST_NULL
-        operations = self.history.operations
-        for i in range(len(operations)-1, -1, -1):
-            op = operations[i]
-            if op.opnum == rop.VIRTUAL_REF_CHECK:
-                # found
-                op.args = op.args + [virtualbox, vrefbox]
                 break
-            if op.result is vrefbox:
-                # no VIRTUAL_REF_CHECK exists before the VIRTUAL_REF
-                # that created this vref.  Replace it with a mere SAME_AS.
-                if op.opnum == rop.VIRTUAL_REF:
-                    op.opnum = rop.SAME_AS
-                    op.args = [op.args[0]]
-                break
-        else:
-            assert 0, "not found the VIRTUAL_REF nor VIRTUAL_REF_CHECK at all!"
 
     def handle_exception(self):
         etype = self.cpu.get_exception()
@@ -1910,8 +1897,6 @@ class MetaInterp(object):
             self, newboxes, resumedescr, expect_virtualizable)
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
-        if not self.is_blackholing():
-            self.history.record(rop.VIRTUAL_REF_CHECK, [], None)
         self.virtualref_boxes = virtualref_boxes
         for i in range(0, len(virtualref_boxes), 2):
             virtualbox = virtualref_boxes[i]
