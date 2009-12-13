@@ -737,9 +737,6 @@ class Optimizer(object):
         self._optimize_oois_ooisnot(op, False)
 
     def optimize_VIRTUAL_REF(self, op):
-        value = self.getvalue(op.args[0])
-        if not value.is_virtual():   # virtual_ref(non-virtual) gives bad
-            raise compile.GiveUp     # results, so don't bother compiling it
         indexbox = op.args[1]
         #
         # get some constants (these calls are all 'memo')
@@ -760,10 +757,6 @@ class Optimizer(object):
         vrefvalue.setfield(descr_virtualref_index, self.getvalue(indexbox))
 
     def optimize_VIRTUAL_REF_FINISH(self, op):
-        value = self.getvalue(op.args[1])
-        if not value.is_virtual():   # virtual_ref(non-virtual) means it
-            raise compile.GiveUp     # escaped already, which is bad
-        #
         # Set the 'forced' field of the virtual_ref.
         # In good cases, this is all virtual, so has no effect.
         # Otherwise, this forces the real object -- but only now, as
@@ -780,6 +773,12 @@ class Optimizer(object):
         op1 = ResOperation(rop.SETFIELD_GC, args, None,
                       descr = virtualref.get_descr_virtual_token(self.cpu))
         self.optimize_SETFIELD_GC(op1)
+        # Note that in some cases the virtual in op.args[1] has been forced
+        # already.  This is fine.  In that case, and *if* a residual
+        # CALL_MAY_FORCE suddenly turns out to access it, then it will
+        # trigger a ResumeGuardForcedDescr.handle_async_forcing() which
+        # will work too (but just be a little pointless, as the structure
+        # was already forced).
 
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])

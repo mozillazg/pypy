@@ -1,7 +1,7 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.rlib.jit import JitDriver, dont_look_inside, vref_None
-from pypy.rlib.jit import virtual_ref, virtual_ref_check, virtual_ref_finish
+from pypy.rlib.jit import virtual_ref, virtual_ref_finish
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.resoperation import rop
@@ -22,7 +22,6 @@ class VRefTests:
         def f():
             x = X()
             exctx.topframeref = virtual_ref(x)
-            virtual_ref_check()
             exctx.topframeref = vref_None
             virtual_ref_finish(x)
             return 1
@@ -54,7 +53,6 @@ class VRefTests:
             exctx.topframeref = virtual_ref(x)
         def leave():
             exctx.topframeref = vref_None
-            virtual_ref_check()
             virtual_ref_finish(exctx._frame)
         def f(n):
             enter(n)
@@ -107,10 +105,9 @@ class VRefTests:
                 # here, 'x' should be virtual. (This is ensured because
                 # we call virtual_ref(x).)
                 exctx.topframeref = vref_None
-                virtual_ref_check()
                 virtual_ref_finish(x)
-                # 'x' is allowed to escape, and even be forced, even after
-                # the call to finish().
+                # 'x' and 'vref' can randomly escape after the call to
+                # finish().
                 g(vref)
                 n -= 1
             return 1
@@ -119,104 +116,10 @@ class VRefTests:
         self.check_loops(new_with_vtable=2)   # the vref, and later the X
         self.check_aborted_count(0)
 
-    def test_make_vref_and_force_nocheck_1(self):
-        jitdriver = JitDriver(greens = [], reds = ['total', 'n'])
-        #
-        class X:
-            pass
-        class ExCtx:
-            pass
-        exctx = ExCtx()
-        #
-        @dont_look_inside
-        def force_me():
-            return exctx.topframeref().n
-        #
-        def f(n):
-            total = 0
-            while total < 300:
-                jitdriver.can_enter_jit(total=total, n=n)
-                jitdriver.jit_merge_point(total=total, n=n)
-                x = X()
-                x.n = n + 123
-                exctx.topframeref = virtual_ref(x)
-                # --- no virtual_ref_check() here ---
-                total += force_me() - 100
-                virtual_ref_finish(x)
-                exctx.topframeref = vref_None
-            return total
-        #
-        res = self.meta_interp(f, [-4])
-        assert res == 16 * 19
-        self.check_aborted_count(0)
-
-    def test_make_vref_and_force_nocheck_2(self):
-        jitdriver = JitDriver(greens = [], reds = ['total', 'n'])
-        #
-        class X:
-            pass
-        class ExCtx:
-            pass
-        exctx = ExCtx()
-        #
-        @dont_look_inside
-        def force_me():
-            return exctx.topframeref().n
-        #
-        def f(n):
-            total = 0
-            while total < 300:
-                jitdriver.can_enter_jit(total=total, n=n)
-                jitdriver.jit_merge_point(total=total, n=n)
-                x = X()
-                x.n = n + 123
-                exctx.topframeref = virtual_ref(x)
-                virtual_ref_check()
-                total += force_me() - 100
-                # --- but no virtual_ref_check() there ---
-                virtual_ref_finish(x)
-                exctx.topframeref = vref_None
-            return total
-        #
-        res = self.meta_interp(f, [-4])
-        assert res == 16 * 19
-        self.check_aborted_count(0)
-
-    def test_make_vref_and_force_check(self):
-        jitdriver = JitDriver(greens = [], reds = ['total', 'n'])
-        #
-        class X:
-            pass
-        class ExCtx:
-            pass
-        exctx = ExCtx()
-        #
-        @dont_look_inside
-        def force_me():
-            return exctx.topframeref().n
-        #
-        def f(n):
-            total = 0
-            while total < 300:
-                jitdriver.can_enter_jit(total=total, n=n)
-                jitdriver.jit_merge_point(total=total, n=n)
-                x = X()
-                x.n = n + 123
-                exctx.topframeref = virtual_ref(x)
-                total += force_me() - 100
-                virtual_ref_check()
-                virtual_ref_finish(x)
-                exctx.topframeref = vref_None
-            return total
-        #
-        res = self.meta_interp(f, [-4])
-        assert res == 16 * 19
-        self.check_loops({})      # because we aborted tracing
-        self.check_aborted_count_at_least(1)
-
     def test_simple_no_access(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
+        A = lltype.GcArray(lltype.Signed)
         class XY:
             pass
         class ExCtx:
@@ -234,26 +137,26 @@ class VRefTests:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
                 xy = XY()
-                xy.next1 = XY()
-                xy.next2 = XY()
-                xy.next3 = XY()
+                xy.next1 = lltype.malloc(A, 0)
+                xy.next2 = lltype.malloc(A, 0)
+                xy.next3 = lltype.malloc(A, 0)
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
                 exctx.topframeref = vref_None
-                xy.next1 = None
-                xy.next2 = None
-                xy.next3 = None
-                virtual_ref_check()
+                xy.next1 = lltype.nullptr(A)
+                xy.next2 = lltype.nullptr(A)
+                xy.next3 = lltype.nullptr(A)
                 virtual_ref_finish(xy)
         #
         self.meta_interp(f, [15])
-        self.check_loops(new_with_vtable=2)     # the vref, and xy so far,
-                                                # but not xy.next1/2/3
+        self.check_loops(new_with_vtable=2,     # the vref, and xy so far,
+                         new_array=0)           # but not xy.next1/2/3
         self.check_aborted_count(0)
 
     def test_simple_force_always(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
+        A = lltype.GcArray(lltype.Signed)
         class XY:
             pass
         class ExCtx:
@@ -271,20 +174,27 @@ class VRefTests:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
                 xy = XY()
+                xy.next1 = lltype.malloc(A, 0)
+                xy.next2 = lltype.malloc(A, 0)
+                xy.next3 = lltype.malloc(A, 0)
                 xy.n = n
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
-                virtual_ref_check()
+                xy.next1 = lltype.nullptr(A)
+                xy.next2 = lltype.nullptr(A)
+                xy.next3 = lltype.nullptr(A)
                 virtual_ref_finish(xy)
                 exctx.topframeref = vref_None
         #
         self.meta_interp(f, [15])
-        self.check_loops({})     # because we aborted tracing
-        self.check_aborted_count_at_least(1)
+        self.check_loops(new_with_vtable=2,   # XY(), the vref
+                         new_array=3)         # next1/2/3
+        self.check_aborted_count(0)
 
     def test_simple_force_sometimes(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
+        A = lltype.GcArray(lltype.Signed)
         class XY:
             pass
         class ExCtx:
@@ -302,22 +212,30 @@ class VRefTests:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
                 xy = XY()
+                xy.next1 = lltype.malloc(A, 0)
+                xy.next2 = lltype.malloc(A, 0)
+                xy.next3 = lltype.malloc(A, 0)
                 xy.n = n
                 exctx.topframeref = virtual_ref(xy)
                 n -= externalfn(n)
-                virtual_ref_check()
+                xy.next1 = lltype.nullptr(A)
+                xy.next2 = lltype.nullptr(A)
+                xy.next3 = lltype.nullptr(A)
                 virtual_ref_finish(xy)
                 exctx.topframeref = vref_None
             return exctx.m
         #
         res = self.meta_interp(f, [30])
         assert res == 13
+        self.check_loops(new_with_vtable=2,   # the vref, XY() at the end
+                         new_array=0)         # but not next1/2/3
         self.check_loop_count(1)
         self.check_aborted_count(0)
 
     def test_blackhole_forces(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
+        A = lltype.GcArray(lltype.Signed)
         class XY:
             pass
         class ExCtx:
@@ -334,24 +252,32 @@ class VRefTests:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
                 xy = XY()
+                xy.next1 = lltype.malloc(A, 0)
+                xy.next2 = lltype.malloc(A, 0)
+                xy.next3 = lltype.malloc(A, 0)
                 xy.n = n
                 exctx.topframeref = virtual_ref(xy)
                 if n == 13:
                     externalfn(n)
                 n -= 1
                 exctx.topframeref = vref_None
-                virtual_ref_check()
+                xy.next1 = lltype.nullptr(A)
+                xy.next2 = lltype.nullptr(A)
+                xy.next3 = lltype.nullptr(A)
                 virtual_ref_finish(xy)
             return exctx.m
         #
         res = self.meta_interp(f, [30])
         assert res == 13
+        self.check_loops(new_with_vtable=2,   # the vref, XY() at the end
+                         new_array=0)         # but not next1/2/3
         self.check_loop_count(1)
         self.check_aborted_count(0)
 
     def test_bridge_forces(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
+        A = lltype.GcArray(lltype.Signed)
         class XY:
             pass
         class ExCtx:
@@ -368,20 +294,34 @@ class VRefTests:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
                 xy = XY()
+                xy.next1 = lltype.malloc(A, 0)
+                xy.next2 = lltype.malloc(A, 0)
+                xy.next3 = lltype.malloc(A, 0)
+                xy.next4 = lltype.malloc(A, 0)
+                xy.next5 = lltype.malloc(A, 0)
                 xy.n = n
                 exctx.topframeref = virtual_ref(xy)
                 if n % 6 == 0:
+                    xy.next1 = lltype.nullptr(A)
+                    xy.next2 = lltype.nullptr(A)
+                    xy.next3 = lltype.nullptr(A)
                     externalfn(n)
                 n -= 1
                 exctx.topframeref = vref_None
-                virtual_ref_check()
+                xy.next1 = lltype.nullptr(A)
+                xy.next2 = lltype.nullptr(A)
+                xy.next3 = lltype.nullptr(A)
+                xy.next4 = lltype.nullptr(A)
+                xy.next5 = lltype.nullptr(A)
                 virtual_ref_finish(xy)
             return exctx.m
         #
         res = self.meta_interp(f, [72])
         assert res == 6
-        self.check_loop_count(1)     # the bridge should not be compiled
-        self.check_aborted_count_at_least(1)
+        self.check_loop_count(2)     # the loop and the bridge
+        self.check_loops(new_with_vtable=3,  # loop: vref, xy; bridge: xy
+                         new_array=2)        # bridge: next4, next5
+        self.check_aborted_count(0)
 
     def test_access_vref_later(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -406,7 +346,6 @@ class VRefTests:
                 exctx.later = exctx.topframeref
                 n -= 1
                 exctx.topframeref = vref_None
-                virtual_ref_check()
                 virtual_ref_finish(xy)
             return g()
         #
@@ -417,6 +356,7 @@ class VRefTests:
     def test_jit_force_virtual_seen(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         #
+        A = lltype.GcArray(lltype.Signed)
         class XY:
             pass
         class ExCtx:
@@ -430,16 +370,18 @@ class VRefTests:
                 xy = XY()
                 xy.n = n
                 exctx.topframeref = virtual_ref(xy)
+                xy.next1 = lltype.malloc(A, 0)
                 n = exctx.topframeref().n - 1
+                xy.next1 = lltype.nullptr(A)
                 exctx.topframeref = vref_None
-                virtual_ref_check()
                 virtual_ref_finish(xy)
             return 1
         #
         res = self.meta_interp(f, [15])
         assert res == 1
-        self.check_loops({})      # because we aborted tracing
-        self.check_aborted_count_at_least(1)
+        self.check_loops(new_with_vtable=2,     # vref, xy
+                         new_array=1)           # next1
+        self.check_aborted_count(0)
 
     def test_recursive_call_1(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'frame', 'rec'])
