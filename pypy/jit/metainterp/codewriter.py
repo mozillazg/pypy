@@ -1170,9 +1170,6 @@ class BytecodeMaker(object):
     def handle_jit_marker__can_enter_jit(self, op):
         self.emit('can_enter_jit')
 
-    def handle_jit_marker__virtual_ref_check(self, op):
-        self.emit('virtual_ref_check')
-
     def serialize_op_direct_call(self, op):
         kind = self.codewriter.guess_call_kind(op)
         return getattr(self, 'handle_%s_call' % kind)(op)

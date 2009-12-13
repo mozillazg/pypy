@@ -103,26 +103,16 @@ class Entry(ExtRegistryEntry):
 # VRefs
 
 def virtual_ref(x):
+    
     """Creates a 'vref' object that contains a reference to 'x'.  Calls
     to virtual_ref/virtual_ref_finish must be properly nested.  The idea
-    is that the object 'x' is supposed to be JITted as a virtual (the
-    JIT will abort if it is not), at least between the calls to
-    virtual_ref and virtual_ref_finish.  The point is that the 'vref'
-    returned by virtual_ref may escape early.  If at runtime it is
-    dereferenced (by the call syntax 'vref()') before the
-    virtual_ref_finish, then we get out of the assembler.  If it is not
-    dereferenced at all, or only after the virtual_ref_finish, then
-    nothing special occurs.  Note that the checks for 'being virtual'
-    only occurs when virtual_ref_check() is called (mostly for testing),
-    or when jit_merge_point is called by JITted code in a recursive call.
-    """
+    is that the object 'x' is supposed to be JITted as a virtual between
+    the calls to virtual_ref and virtual_ref_finish, but the 'vref'
+    object can escape at any point in time.  If at runtime it is
+    dereferenced (by the call syntax 'vref()'), it returns 'x', which is
+    then forced."""
     return DirectJitVRef(x)
 virtual_ref.oopspec = 'virtual_ref(x)'
-
-def virtual_ref_check():
-    from pypy.rpython.lltypesystem import lltype, lloperation
-    lloperation.llop.jit_marker(lltype.Void,
-                                lloperation.void('virtual_ref_check'))
 
 def virtual_ref_finish(x):
     """See docstring in virtual_ref(x).  Note that virtual_ref_finish
