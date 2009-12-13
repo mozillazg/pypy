@@ -11,7 +11,7 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import codewriter, executor
 from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import BLACKHOLED_OPS, EmptyProfiler
-from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS
+from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS, ABORT_ESCAPE
 from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
