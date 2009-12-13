@@ -834,8 +834,7 @@ class MIFrame(object):
                 try:
                     self.metainterp.reached_can_enter_jit(self.env)
                 except GiveUp:
-                    self.metainterp.staticdata.profiler.count(ABORT_BRIDGE)
-                    self.metainterp.switch_to_blackhole()
+                    self.metainterp.switch_to_blackhole(ABORT_BRIDGE)
         if self.metainterp.is_blackholing():
             self.blackhole_reached_merge_point(self.env)
         return True
@@ -1281,8 +1280,7 @@ class MetaInterp(object):
                 try:
                     self.compile_done_with_this_frame(resultbox)
                 except GiveUp:
-                    self.staticdata.profiler.count(ABORT_BRIDGE)
-                    self.switch_to_blackhole()
+                    self.switch_to_blackhole(ABORT_BRIDGE)
             sd = self.staticdata
             if sd.result_type == 'void':
                 assert resultbox is None
@@ -1319,8 +1317,7 @@ class MetaInterp(object):
             try:
                 self.compile_exit_frame_with_exception(excvaluebox)
             except GiveUp:
-                self.staticdata.profiler.count(ABORT_BRIDGE)
-                self.switch_to_blackhole()
+                self.switch_to_blackhole(ABORT_BRIDGE)
         raise self.staticdata.ExitFrameWithExceptionRef(self.cpu, excvaluebox.getref_base())
 
     def check_recursion_invariant(self):
@@ -1438,7 +1435,8 @@ class MetaInterp(object):
             op.pc = self.framestack[-1].pc
             op.name = self.framestack[-1].jitcode.name
 
-    def switch_to_blackhole(self):
+    def switch_to_blackhole(self, reason):
+        self.staticdata.profiler.count(reason)
         debug_print('~~~ ABORTING TRACING')
         debug_stop('jit-tracing')
         debug_start('jit-blackhole')
@@ -1452,10 +1450,9 @@ class MetaInterp(object):
         if not self.is_blackholing():
             warmrunnerstate = self.staticdata.state
             if len(self.history.operations) > warmrunnerstate.trace_limit:
-                self.staticdata.profiler.count(ABORT_TOO_LONG)
                 self.greenkey_of_huge_function = self.find_biggest_function()
                 self.portal_trace_positions = None
-                self.switch_to_blackhole()
+                self.switch_to_blackhole(ABORT_TOO_LONG)
 
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
@@ -1822,7 +1819,7 @@ class MetaInterp(object):
                     escapes = True
             #
             if escapes:
-                self.switch_to_blackhole()
+                self.switch_to_blackhole(ABORT_ESCAPE)
         #
         if escapes:
             self.load_fields_from_virtualizable()
