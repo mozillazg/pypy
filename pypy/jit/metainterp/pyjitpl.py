@@ -845,6 +845,7 @@ class MIFrame(object):
         greenkey = self.env[:num_green_args]
         sd = self.metainterp.staticdata
         loc = sd.state.get_location_str(greenkey)
+        debug_print(loc)
         constloc = self.metainterp.cpu.ts.conststr(loc)
         self.metainterp.history.record(rop.DEBUG_MERGE_POINT,
                                        [constloc], None)
