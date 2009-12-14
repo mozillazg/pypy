@@ -185,9 +185,7 @@ def _absolute_import(space, modulename, baselevel, w_fromlist, tentative):
     w_mod = None
     parts = modulename.split('.')
     prefix = []
-    # it would be nice if we could do here: w_path = space.sys.w_path
-    # instead:
-    w_path = space.sys.get('path') 
+    w_path = None
 
     first = None
     level = 0
@@ -222,6 +220,8 @@ def _absolute_import(space, modulename, baselevel, w_fromlist, tentative):
 
 def find_in_meta_path(space, w_modulename, w_path):
     assert w_modulename is not None
+    if w_path is None:
+        w_path = space.w_None
     for w_hook in space.unpackiterable(space.sys.get("meta_path")):
         w_loader = space.call_method(w_hook, "find_module",
                                      w_modulename, w_path)
@@ -276,9 +276,11 @@ def find_module(space, modulename, w_modulename, partname, w_path, use_loader=Tr
     # XXX Check for frozen modules?
     #     when w_path is a string
 
-    # check the builtin modules
-    if modulename in space.builtin_modules:
-        return FindInfo(C_BUILTIN, modulename, None)
+    if w_path is None:
+        # check the builtin modules
+        if modulename in space.builtin_modules:
+            return FindInfo(C_BUILTIN, modulename, None)
+        w_path = space.sys.get('path')
 
     # XXX check frozen modules?
     #     when w_path is null
@@ -381,10 +383,11 @@ def load_part(space, w_path, prefix, partname, w_parent, tentative):
     modulename = '.'.join(prefix + [partname])
     w_modulename = w(modulename)
     w_mod = check_sys_modules(space, w_modulename)
+
     if w_mod is not None:
         if not space.is_w(w_mod, space.w_None):
             return w_mod
-    else:
+    elif not prefix or w_path is not None:
         find_info = find_module(
             space, modulename, w_modulename, partname, w_path)
 
@@ -433,9 +436,9 @@ def reload(space, w_module):
                 space.w_ImportError,
                 space.wrap("reload(): parent %s not in sys.modules" % (
                     parent_name,)))
-        w_path = space.getitem(w_parent, space.wrap("__path"))
+        w_path = space.getitem(w_parent, space.wrap("__path__"))
     else:
-        w_path = space.sys.get('path')
+        w_path = None
 
     find_info = find_module(
         space, modulename, w_modulename, subname, w_path)
@@ -448,7 +451,8 @@ def reload(space, w_module):
     try:
         return load_module(space, w_modulename, find_info, reuse=True)
     finally:
-        find_info.stream.close()
+        if find_info.stream:
+            find_info.stream.close()
 
 
 # __________________________________________________________________
