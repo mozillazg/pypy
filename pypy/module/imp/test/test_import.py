@@ -34,6 +34,7 @@ def setup_directory_structure(space):
                     a = "imamodule = 1\ninpackage = 0",
                     b = "imamodule = 1\ninpackage = 0",
                     ambig = "imamodule = 1",
+                    test_reload = "def test():\n    raise ValueError\n",
                     )
     root.ensure("notapackage", dir=1)    # empty, no __init__.py
     setuppkg("pkg",
@@ -382,6 +383,34 @@ class AppTestImport:
         assert mod.a == 15
         assert mod.b == 16
         assert mod.c == "foo\nbar"
+
+    def test_reload(self):
+        import test_reload
+        try:
+            test_reload.test()
+        except ValueError:
+            pass
+
+        # If this test runs too quickly, test_reload.py's mtime
+        # attribute will remain unchanged even if the file is rewritten.
+        # Consequently, the file would not reload.  So, added a sleep()
+        # delay to assure that a new, distinct timestamp is written.
+        import time
+        time.sleep(1)
+
+        f = open(test_reload.__file__, "w")
+        f.write("def test():\n    raise NotImplementedError\n")
+        f.close()
+        reload(test_reload)
+        try:
+            test_reload.test()
+        except NotImplementedError:
+            pass
+
+        # Ensure that the file is closed
+        # (on windows at least)
+        import os
+        os.unlink(test_reload.__file__)
 
 def _getlong(data):
     x = marshal.dumps(data)

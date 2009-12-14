@@ -326,7 +326,7 @@ def _prepare_module(space, w_mod, filename, pkgdir):
     if pkgdir is not None:
         space.setattr(w_mod, w('__path__'), space.newlist([w(pkgdir)]))
 
-def load_module(space, w_modulename, find_info, ispkg=False):
+def load_module(space, w_modulename, find_info, reuse=False):
     if find_info is None:
         return
     if find_info.w_loader:
@@ -336,7 +336,7 @@ def load_module(space, w_modulename, find_info, ispkg=False):
         return space.getbuiltinmodule(find_info.filename)
 
     if find_info.modtype in (PY_SOURCE, PY_COMPILED, PKG_DIRECTORY):
-        if ispkg:
+        if reuse:
             w_mod = space.getitem(space.sys.get('modules'), w_modulename)
         else:
             w_mod = space.wrap(Module(space, w_modulename))
@@ -364,7 +364,10 @@ def load_module(space, w_modulename, find_info, ispkg=False):
                                         w_path, use_loader=False)
                 if find_info is None:
                     return w_mod
-                load_module(space, w_modulename, find_info, ispkg=True)
+                try:
+                    load_module(space, w_modulename, find_info, reuse=True)
+                finally:
+                    find_info.stream.close()
                 # fetch the module again, in case of "substitution"
                 w_mod = check_sys_modules(space, w_modulename)
                 return w_mod
@@ -442,7 +445,11 @@ def reload(space, w_module):
         msg = "No module named %s" % modulename
         raise OperationError(space.w_ImportError, space.wrap(msg))
 
-    return load_module(space, w_modulename, find_info)
+    try:
+        return load_module(space, w_modulename, find_info, reuse=True)
+    finally:
+        find_info.stream.close()
+
 
 # __________________________________________________________________
 #
