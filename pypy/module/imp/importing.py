@@ -33,30 +33,22 @@ def find_modtype(space, filepart):
     # check the .py file
     pyfile = filepart + ".py"
     if os.path.exists(pyfile) and case_ok(pyfile):
-        pyfile_ts = os.stat(pyfile)[stat.ST_MTIME]
-        pyfile_exists = True
-    else:
-        # The .py file does not exist.  By default on PyPy, lonepycfiles
-        # is False: if a .py file does not exist, we don't even try to
-        # look for a lone .pyc file.
-        if not space.config.objspace.lonepycfiles:
-            return SEARCH_ERROR, None, None
-        pyfile_ts = 0
-        pyfile_exists = False
+        return PY_SOURCE, ".py", "U"
+
+    # The .py file does not exist.  By default on PyPy, lonepycfiles
+    # is False: if a .py file does not exist, we don't even try to
+    # look for a lone .pyc file.
+    if not space.config.objspace.lonepycfiles:
+        return SEARCH_ERROR, None, None
 
     # check the .pyc file
     if space.config.objspace.usepycfiles:
         pycfile = filepart + ".pyc"
-        if case_ok(pycfile):
-            if check_compiled_module(space, pycfile, pyfile_ts):
-                # existing and up-to-date .pyc file
-                return PY_COMPILED, ".pyc", "rb"
+        if os.path.exists(pycfile) and case_ok(pycfile):
+            # existing .pyc file
+            return PY_COMPILED, ".pyc", "rb"
 
-    # no .pyc file, use the .py file if it exists
-    if pyfile_exists:
-        return PY_SOURCE, ".py", "U"
-    else:
-        return SEARCH_ERROR, None, None
+    return SEARCH_ERROR, None, None
 
 if sys.platform in ['linux2', 'freebsd']:
     def case_ok(filename):
@@ -588,19 +580,35 @@ def load_source_module(space, w_modulename, w_mod, pathname, source,
     Load a source module from a given file and return its module
     object.
     """
-    pycode = parse_source_module(space, pathname, source)
-
-    if space.config.objspace.usepycfiles and write_pyc:
-        mtime = int(os.stat(pathname)[stat.ST_MTIME])
+    print "AFA LOAD SOURCE MODULE", pathname
+    if space.config.objspace.usepycfiles:
         cpathname = pathname + 'c'
-        write_compiled_module(space, pycode, cpathname, mtime)
+        mtime = int(os.stat(pathname)[stat.ST_MTIME])
+        stream = check_compiled_module(space, cpathname, mtime)
+        print "CHECKED", stream
+    else:
+        stream = None
 
     w = space.wrap
+
+    if stream:
+        # existing and up-to-date .pyc file
+        try:
+            code_w = read_compiled_module(space, cpathname, stream.readall())
+        finally:
+            stream.close()
+        space.setattr(w_mod, w('__file__'), w(cpathname))
+    else:
+        code_w = parse_source_module(space, pathname, source)
+
+        if space.config.objspace.usepycfiles and write_pyc:
+            write_compiled_module(space, code_w, cpathname, mtime)
+
     w_dict = space.getattr(w_mod, w('__dict__'))
     space.call_method(w_dict, 'setdefault',
                       w('__builtins__'),
                       w(space.builtin))
-    pycode.exec_code(space, w_dict, w_dict)
+    code_w.exec_code(space, w_dict, w_dict)
 
     return w_mod
 
@@ -640,21 +648,23 @@ def check_compiled_module(space, pycfilename, expected_mtime=0):
     """
     Check if a pyc file's magic number and (optionally) mtime match.
     """
+    stream = None
     try:
         stream = streamio.open_file_as_stream(pycfilename, "rb")
-        try:
-            magic = _r_long(stream)
-            if magic != get_pyc_magic(space):
-                return False
-            if expected_mtime != 0:
-                pyc_mtime = _r_long(stream)
-                if pyc_mtime != expected_mtime:
-                    return False
-        finally:
+        magic = _r_long(stream)
+        if magic != get_pyc_magic(space):
             stream.close()
+            return None
+        if expected_mtime != 0:
+            pyc_mtime = _r_long(stream)
+            if pyc_mtime != expected_mtime:
+                stream.close()
+                return None
+        return stream
     except StreamErrors:
-        return False
-    return True
+        if stream:
+            stream.close()
+        return None
 
 def read_compiled_module(space, cpathname, strbuf):
     """ Read a code object from a file and check it for validity """
@@ -679,14 +689,12 @@ def load_compiled_module(space, w_modulename, w_mod, cpathname, magic,
             "Bad magic number in %s" % cpathname))
     #print "loading pyc file:", cpathname
     code_w = read_compiled_module(space, cpathname, source)
-    #if (Py_VerboseFlag)
-    #    PySys_WriteStderr("import %s # precompiled from %s\n",
-    #        name, cpathname);
-    w_dic = space.getattr(w_mod, w('__dict__'))
-    space.call_method(w_dic, 'setdefault', 
-                      w('__builtins__'), 
+
+    w_dict = space.getattr(w_mod, w('__dict__'))
+    space.call_method(w_dict, 'setdefault',
+                      w('__builtins__'),
                       w(space.builtin))
-    code_w.exec_code(space, w_dic, w_dic)
+    code_w.exec_code(space, w_dict, w_dict)
     return w_mod
 
 

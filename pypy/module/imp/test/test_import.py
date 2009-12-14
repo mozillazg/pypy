@@ -443,13 +443,14 @@ class TestPycStuff:
         ret = importing.check_compiled_module(space,
                                               cpathname,
                                               mtime)
-        assert ret is True
+        assert ret is not None
+        ret.close()
 
         # check for wrong mtime
         ret = importing.check_compiled_module(space,
                                               cpathname,
                                               mtime+1)
-        assert ret is False
+        assert ret is None
         os.remove(cpathname)
 
         # check for wrong version
@@ -457,7 +458,7 @@ class TestPycStuff:
         ret = importing.check_compiled_module(space,
                                               cpathname,
                                               mtime)
-        assert ret is False
+        assert ret is None
 
         # check for empty .pyc file
         f = open(cpathname, 'wb')
@@ -465,7 +466,7 @@ class TestPycStuff:
         ret = importing.check_compiled_module(space,
                                               cpathname,
                                               mtime)
-        assert ret is False
+        assert ret is None
         os.remove(cpathname)
 
     def test_read_compiled_module(self):
@@ -659,7 +660,8 @@ class TestPycStuff:
         ret = importing.check_compiled_module(space,
                                               cpathname,
                                               mtime)
-        assert ret is True
+        assert ret is not None
+        ret.close()
 
         # read compiled module
         stream = streamio.open_file_as_stream(cpathname, "rb")
