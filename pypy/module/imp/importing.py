@@ -580,15 +580,16 @@ def load_source_module(space, w_modulename, w_mod, pathname, source,
     Load a source module from a given file and return its module
     object.
     """
+    w = space.wrap
+
     if space.config.objspace.usepycfiles:
         cpathname = pathname + 'c'
         mtime = int(os.stat(pathname)[stat.ST_MTIME])
         stream = check_compiled_module(space, cpathname, mtime)
     else:
-        stream = None
         cpathname = None
-
-    w = space.wrap
+        mtime = 0
+        stream = None
 
     if stream:
         # existing and up-to-date .pyc file
