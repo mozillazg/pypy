@@ -580,14 +580,13 @@ def load_source_module(space, w_modulename, w_mod, pathname, source,
     Load a source module from a given file and return its module
     object.
     """
-    print "AFA LOAD SOURCE MODULE", pathname
     if space.config.objspace.usepycfiles:
         cpathname = pathname + 'c'
         mtime = int(os.stat(pathname)[stat.ST_MTIME])
         stream = check_compiled_module(space, cpathname, mtime)
-        print "CHECKED", stream
     else:
         stream = None
+        cpathname = None
 
     w = space.wrap
 
