@@ -35,8 +35,7 @@ class AppTestImpModule:
         file.close()
         assert os.path.exists(pathname)
         pathname = pathname.lower()
-        assert (pathname.endswith('.py') or pathname.endswith('.pyc')
-                                         or pathname.endswith('.pyo'))
+        assert pathname.endswith('.py') # even if .pyc is up-to-date
         assert description in self.imp.get_suffixes()
 
 
