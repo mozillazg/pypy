@@ -33,7 +33,7 @@ def get_file(space, w_file, filename, filemode):
 def find_module(space, w_name, w_path=None):
     name = space.str_w(w_name)
     if space.is_w(w_path, space.w_None):
-        w_path = space.sys.get('path')
+        w_path = None
 
     find_info = importing.find_module(
         space, name, w_name, name, w_path, use_loader=False)
