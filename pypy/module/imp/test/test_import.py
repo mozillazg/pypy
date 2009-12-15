@@ -743,7 +743,9 @@ class AppTestImportHooks(object):
             def find_module(self, fullname, path=None):
                 tried_imports.append((fullname, path))
 
-        import sys, math
+        import sys, datetime
+        del sys.modules["datetime"]
+
         sys.meta_path.append(Importer())
         try:
             import datetime
@@ -762,7 +764,6 @@ class AppTestImportHooks(object):
             def __init__(self, *namestoblock):
                 self.namestoblock = dict.fromkeys(namestoblock)
             def find_module(self, fullname, path=None):
-                print "AFA FIND_MODULE", fullname
                 if fullname in self.namestoblock:
                     return self
             def load_module(self, fullname):
