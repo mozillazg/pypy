@@ -149,9 +149,9 @@ class W_ZipImporter(Wrappable):
         real_name = self.name + os.path.sep + self.corr_zname(filename)
         space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
-        result = importing.load_source_module(space, w(modname), w_mod,
-                                            filename, buf, write_pyc=False)
-        return result
+        code_w = importing.parse_source_module(space, filename, buf)
+        importing.exec_code_module(space, w_mod, code_w)
+        return w_mod
 
     def _parse_mtime(self, space, filename):
         w = space.wrap

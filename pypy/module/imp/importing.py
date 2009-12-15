@@ -574,6 +574,14 @@ def parse_source_module(space, pathname, source):
     pycode = ec.compiler.compile(source, pathname, 'exec', 0)
     return pycode
 
+def exec_code_module(space, w_mod, code_w):
+    w_dict = space.getattr(w_mod, space.wrap('__dict__'))
+    space.call_method(w_dict, 'setdefault',
+                      space.wrap('__builtins__'),
+                      space.wrap(space.builtin))
+    code_w.exec_code(space, w_dict, w_dict)
+
+
 def load_source_module(space, w_modulename, w_mod, pathname, source,
                        write_pyc=True):
     """
@@ -604,11 +612,7 @@ def load_source_module(space, w_modulename, w_mod, pathname, source,
         if space.config.objspace.usepycfiles and write_pyc:
             write_compiled_module(space, code_w, cpathname, mtime)
 
-    w_dict = space.getattr(w_mod, w('__dict__'))
-    space.call_method(w_dict, 'setdefault',
-                      w('__builtins__'),
-                      w(space.builtin))
-    code_w.exec_code(space, w_dict, w_dict)
+    exec_code_module(space, w_mod, code_w)
 
     return w_mod
 
@@ -689,12 +693,8 @@ def load_compiled_module(space, w_modulename, w_mod, cpathname, magic,
             "Bad magic number in %s" % cpathname))
     #print "loading pyc file:", cpathname
     code_w = read_compiled_module(space, cpathname, source)
+    exec_code_module(space, w_mod, code_w)
 
-    w_dict = space.getattr(w_mod, w('__dict__'))
-    space.call_method(w_dict, 'setdefault',
-                      w('__builtins__'),
-                      w(space.builtin))
-    code_w.exec_code(space, w_dict, w_dict)
     return w_mod
 
 
