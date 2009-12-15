@@ -368,9 +368,9 @@ class AppTestImport:
     def test_relative_import_pkg(self):
         import sys
         import imp
-        pkg = imp.new_module('pkg')
-        sys.modules['pkg'] = pkg
-        mydict = {'__name__': 'pkg.foo', '__path__': '/some/path'}
+        pkg = imp.new_module('newpkg')
+        sys.modules['newpkg'] = pkg
+        mydict = {'__name__': 'newpkg.foo', '__path__': '/some/path'}
         res = __import__('', mydict, None, ['bar'], 2)
         assert res is pkg
 
