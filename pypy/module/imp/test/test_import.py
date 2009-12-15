@@ -412,6 +412,21 @@ class AppTestImport:
         import os
         os.unlink(test_reload.__file__)
 
+    def test_reload_failing(self):
+        import test_reload
+        import time
+        time.sleep(1)
+        f = open(test_reload.__file__, "w")
+        f.write("a = 10 // 0\n")
+        f.close()
+
+        # A failing reload should leave the previous module in sys.modules
+        raises(ZeroDivisionError, reload, test_reload)
+        import os, sys
+        assert 'test_reload' in sys.modules
+        assert test_reload.test
+        os.unlink(test_reload.__file__)
+
     def test_reload_submodule(self):
         import pkg.a
         reload(pkg.a)
@@ -857,22 +872,19 @@ class AppTestImportHooks(object):
         sys.meta_path.append(i)
         sys.path_hooks.append(ImpWrapper)
         sys.path_importer_cache.clear()
-        mnames = ("colorsys", "urlparse", "distutils.core", "compiler.misc")
-        for mname in mnames:
-            parent = mname.split(".")[0]
-            for n in sys.modules.keys():
-                if n.startswith(parent):
-                    del sys.modules[n]
-        for mname in mnames:
-            m = __import__(mname, globals(), locals(), ["__dummy__"])
-            m.__loader__  # to make sure we actually handled the import
-        # Delete urllib from modules because urlparse was imported above.
-        # Without this hack, test_socket_ssl fails if run in this order:
-        # regrtest.py test_codecmaps_tw test_importhooks test_socket_ssl
         try:
-            del sys.modules['urllib']
-        except KeyError:
-            pass
+            mnames = ("colorsys", "urlparse", "distutils.core", "compiler.misc")
+            for mname in mnames:
+                parent = mname.split(".")[0]
+                for n in sys.modules.keys():
+                    if n.startswith(parent):
+                        del sys.modules[n]
+            for mname in mnames:
+                m = __import__(mname, globals(), locals(), ["__dummy__"])
+                m.__loader__  # to make sure we actually handled the import
+        finally:
+            sys.meta_path.pop(0)
+            sys.path_hooks.pop(0)
 
 class AppTestNoPycFile(object):
     usepycfiles = False
@@ -891,6 +903,9 @@ class AppTestNoPycFile(object):
         _teardown(cls.space, cls.saved_modules)
 
     def test_import_possibly_from_pyc(self):
+        import sys
+        assert sys.meta_path == []
+        assert sys.path_hooks == []
         from compiled import x
         if self.usepycfiles:
             assert x.__file__.endswith('x.pyc')

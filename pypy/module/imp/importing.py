@@ -25,7 +25,7 @@ PY_FROZEN = 7
 # PY_CODERESOURCE = 8
 IMP_HOOK = 9
 
-def find_modtype(space, filepart):
+def find_modtype(space, filepart, force_lonepycfiles=False):
     """Check which kind of module to import for the given filepart,
     which is a path without extension.  Returns PY_SOURCE, PY_COMPILED or
     SEARCH_ERROR.
@@ -38,7 +38,9 @@ def find_modtype(space, filepart):
     # The .py file does not exist.  By default on PyPy, lonepycfiles
     # is False: if a .py file does not exist, we don't even try to
     # look for a lone .pyc file.
-    if not space.config.objspace.lonepycfiles:
+    # The "imp" module does not respect this, and is allowed to find
+    # lone .pyc files.
+    if not space.config.objspace.lonepycfiles and not force_lonepycfiles:
         return SEARCH_ERROR, None, None
 
     # check the .pyc file
@@ -258,7 +260,8 @@ class FindInfo:
     def fromLoader(w_loader):
         return FindInfo(IMP_HOOK, '', None, w_loader=w_loader)
 
-def find_module(space, modulename, w_modulename, partname, w_path, use_loader=True):
+def find_module(space, modulename, w_modulename, partname, w_path,
+                use_loader=True, force_lonepycfiles=False):
     # Examin importhooks (PEP302) before doing the import
     if use_loader:
         w_loader  = find_in_meta_path(space, w_modulename, w_path)
@@ -289,14 +292,16 @@ def find_module(space, modulename, w_modulename, partname, w_path, use_loader=Tr
             filepart = os.path.join(path, partname)
             if os.path.isdir(filepart) and case_ok(filepart):
                 initfile = os.path.join(filepart, '__init__')
-                modtype, _, _ = find_modtype(space, initfile)
+                modtype, _, _ = find_modtype(space, initfile,
+                                             force_lonepycfiles)
                 if modtype in (PY_SOURCE, PY_COMPILED):
                     return FindInfo(PKG_DIRECTORY, filepart, None)
                 else:
                     msg = "Not importing directory " +\
                             "'%s' missing __init__.py" % (filepart,)
                     space.warn(msg, space.w_ImportWarning)
-            modtype, suffix, filemode = find_modtype(space, filepart)
+            modtype, suffix, filemode = find_modtype(space, filepart,
+                                                     force_lonepycfiles)
             try:
                 if modtype in (PY_SOURCE, PY_COMPILED):
                     filename = filepart + suffix
@@ -442,6 +447,11 @@ def reload(space, w_module):
 
     try:
         return load_module(space, w_modulename, find_info, reuse=True)
+    except:
+        # load_module probably removed name from modules because of
+		# the error.  Put back the original module object.
+        space.sys.setmodule(w_module)
+        raise
     finally:
         if find_info.stream:
             find_info.stream.close()
