@@ -428,7 +428,7 @@ def reload(space, w_module):
                 space.w_ImportError,
                 space.wrap("reload(): parent %s not in sys.modules" % (
                     parent_name,)))
-        w_path = space.getitem(w_parent, space.wrap("__path__"))
+        w_path = space.getattr(w_parent, space.wrap("__path__"))
     else:
         w_path = None
 

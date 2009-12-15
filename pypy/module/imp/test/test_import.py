@@ -412,6 +412,10 @@ class AppTestImport:
         import os
         os.unlink(test_reload.__file__)
 
+    def test_reload_submodule(self):
+        import pkg.a
+        reload(pkg.a)
+
 def _getlong(data):
     x = marshal.dumps(data)
     return x[-4:]
