@@ -9,21 +9,22 @@ class AppTestNumpy(object):
            def compare(a, b):
                for x, y in zip(a, b):
                    if x != y: return False
+                   assert type(x) == type(y)
                return True
            return compare""")
-
-    def create_type_test(type):
-        def test_type_array(self):
-            compare = self.compare
+        cls.w_array_type_test = cls.space.appexec([cls.w_compare],
+        """(compare):
+        def array_type_test(data_type):
             from numpy import array
-            data = [type(x) for x in xrange(4)] 
+            data = [data_type(x) for x in xrange(4)] 
             ar = array(data)
 
             assert compare(ar, data)
-        return test_type_array
+        return array_type_test
+        """)
 
-    test_int_array = create_type_test(int)
-    test_float_array = create_type_test(float)
+    def test_int_array(self): self.array_type_test(int)
+    def test_float_array(self): self.array_type_test(float)
 
     def test_iterable_construction(self):
         compare = self.compare

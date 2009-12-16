@@ -1,3 +1,4 @@
+# NOT_RPYTHON
 types_list = [object, complex, float, int]
 
 def lowest_type(x):
@@ -24,4 +25,8 @@ def array(xs, dtype=None):
              }
     #type = lowest_common_type(xs)
     #return arrays[type](xs)
-    return numpy.zeros(len(xs), dtype=int) #FIXME
+    result = numpy.zeros(len(xs), dtype=int) #FIXME: dtype=dtype !
+    for i, x in enumerate(xs):
+        result[i] = x
+    return result
+
