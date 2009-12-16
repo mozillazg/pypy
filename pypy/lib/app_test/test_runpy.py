@@ -137,6 +137,12 @@ class TestRunModule:
             d1 = run_module(mod_name) # Read from source
             __import__(mod_name)
             os.remove(mod_fname)
+
+            #--- the block below is to check that "imp.find_module"
+            #--- manages to import the .pyc file alone.  We don't
+            #--- support it in PyPy in the default configuration.
+            return
+
             if verbose: print "Running from compiled:", mod_name
             d2 = run_module(mod_name) # Read from bytecode
         finally:
