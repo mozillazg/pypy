@@ -36,9 +36,7 @@ def find_module(space, w_name, w_path=None):
         w_path = None
 
     find_info = importing.find_module(
-        space, name, w_name, name, w_path,
-        use_loader=False,
-        force_lonepycfiles=True)
+        space, name, w_name, name, w_path, use_loader=False)
     if not find_info:
         raise OperationError(
             space.w_ImportError,

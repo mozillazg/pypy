@@ -883,8 +883,8 @@ class AppTestImportHooks(object):
                 m = __import__(mname, globals(), locals(), ["__dummy__"])
                 m.__loader__  # to make sure we actually handled the import
         finally:
-            sys.meta_path.pop(0)
-            sys.path_hooks.pop(0)
+            sys.meta_path.pop()
+            sys.path_hooks.pop()
 
 class AppTestNoPycFile(object):
     usepycfiles = False
@@ -903,9 +903,6 @@ class AppTestNoPycFile(object):
         _teardown(cls.space, cls.saved_modules)
 
     def test_import_possibly_from_pyc(self):
-        import sys
-        assert sys.meta_path == []
-        assert sys.path_hooks == []
         from compiled import x
         if self.usepycfiles:
             assert x.__file__.endswith('x.pyc')
