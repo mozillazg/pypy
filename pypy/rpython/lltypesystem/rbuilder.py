@@ -14,14 +14,14 @@ GROW_FAST_UNTIL = 100*1024*1024      # 100 MB
 def new_grow_func(name):
     def stringbuilder_grow(ll_builder, needed):
         allocated = ll_builder.allocated
-        if allocated < GROW_FAST_UNTIL:
-            new_allocated = allocated << 1
-        else:
-            extra_size = allocated >> 2
-            try:
-                new_allocated = ovfcheck(allocated + extra_size)
-            except OverflowError:
-                raise MemoryError
+        #if allocated < GROW_FAST_UNTIL:
+        #    new_allocated = allocated << 1
+        #else:
+        extra_size = allocated >> 2
+        try:
+            new_allocated = ovfcheck(allocated + extra_size)
+        except OverflowError:
+            raise MemoryError
         try:
             new_allocated = ovfcheck(new_allocated + needed)
         except OverflowError:
