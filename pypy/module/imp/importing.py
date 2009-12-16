@@ -444,15 +444,16 @@ def reload(space, w_module):
         raise OperationError(space.w_ImportError, space.wrap(msg))
 
     try:
-        return load_module(space, w_modulename, find_info, reuse=True)
+        try:
+            return load_module(space, w_modulename, find_info, reuse=True)
+        finally:
+            if find_info.stream:
+                find_info.stream.close()
     except:
         # load_module probably removed name from modules because of
         # the error.  Put back the original module object.
         space.sys.setmodule(w_module)
         raise
-    finally:
-        if find_info.stream:
-            find_info.stream.close()
 
 
 # __________________________________________________________________
