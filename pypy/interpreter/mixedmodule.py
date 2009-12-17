@@ -90,11 +90,12 @@ class MixedModule(Module):
             for name in self.loaders: 
                 w_value = self.get(name)  
                 space.setitem(self.w_dict, space.new_interned_str(name), w_value) 
-            self.lazy = False 
+            self.lazy = False
+            self.w_initialdict = space.call_method(self.w_dict, 'items')
         return self.w_dict 
 
     def _freeze_(self):
-        self.w_initialdict = self.space.call_method(self.getdict(), 'copy')
+        self.getdict()
         self.startup_called = False
         # hint for the annotator: Modules can hold state, so they are
         # not constant

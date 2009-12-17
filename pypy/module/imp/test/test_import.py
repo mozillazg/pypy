@@ -431,6 +431,15 @@ class AppTestImport:
         import pkg.a
         reload(pkg.a)
 
+    def test_reload_builtin(self):
+        import sys
+        try:
+            del sys.setdefaultencoding
+        except AttributeError:
+            pass
+        reload(sys)
+        assert 'setdefaultencoding' in dir(sys)
+
 def _getlong(data):
     x = marshal.dumps(data)
     return x[-4:]

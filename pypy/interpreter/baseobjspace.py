@@ -349,14 +349,17 @@ class ObjSpace(object):
         self.builtin_modules[name] = w_mod
         return name
 
-    def getbuiltinmodule(self, name):
+    def getbuiltinmodule(self, name, force_init=False):
         w_name = self.wrap(name)
         w_modules = self.sys.get('modules')
         try:
-            return self.getitem(w_modules, w_name)
+            w_mod = self.getitem(w_modules, w_name)
         except OperationError, e:
             if not e.match(self, self.w_KeyError):
                 raise
+        else:
+            if not force_init:
+                return w_mod
 
         # If the module is a builtin but not yet imported,
         # retrieve it and initialize it
