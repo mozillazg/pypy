@@ -124,11 +124,6 @@ IntArray = create_numarray(int, int_unwrapper, 'IntArray')
 NumArray = IntArray # FIXME: compatibility for now
 FloatArray = create_numarray(float, float_unwrapper, 'FloatArray')
 
-arrays = {
-          int: IntArray,
-          float: FloatArray
-         }
-
 #def array(space, w_xs): 
 #    w_length = space.len(w_xs)
 #    length = space.int_w(w_length)
