@@ -711,7 +711,7 @@ class FrameworkGCTransformer(GCTransformer):
         hop.genop('adr_add', [v_gc_adr, c_ofs], resultvar=op.result)
 
     def _can_realloc(self):
-        return self.gcdata.gc.can_realloc
+        return True
 
     def perform_realloc(self, hop, v_ptr, v_newsize, c_const_size,
                         c_itemsize, c_lengthofs, c_grow):
