@@ -367,9 +367,9 @@ class ObjSpace(object):
             w_mod = self.builtin_modules[name]
         except KeyError:
             raise OperationError(
-                space.w_SystemError,
-                space.wrap("getbuiltinmodule() called "
-                           "with non-builtin module %s" % name))
+                self.w_SystemError,
+                self.wrap("getbuiltinmodule() called "
+                          "with non-builtin module %s" % name))
         else:
             # Add the module to sys.modules
             self.setitem(w_modules, w_name, w_mod)
