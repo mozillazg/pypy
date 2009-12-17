@@ -151,16 +151,3 @@ class Module(MixedModule):
         space.exception_is_valid_obj_as_class_w = ab.exception_is_valid_obj_as_class_w.__get__(space)
         space.exception_getclass = ab.exception_getclass.__get__(space)
         space.exception_issubclass_w = ab.exception_issubclass_w.__get__(space)
-
-    def startup(self, space):
-        # install zipimport hook if --withmod-zipimport is used
-        if space.config.objspace.usemodules.zipimport:
-            w_import = space.builtin.get('__import__')
-            w_zipimport = space.call(w_import, space.newlist(
-                [space.wrap('zipimport')]))
-            w_sys = space.getbuiltinmodule('sys')
-            w_path_hooks = space.getattr(w_sys, space.wrap('path_hooks'))
-            w_append = space.getattr(w_path_hooks, space.wrap('append'))
-            w_zipimporter = space.getattr(w_zipimport,
-                                          space.wrap('zipimporter'))
-            space.call(w_append, space.newlist([w_zipimporter]))
