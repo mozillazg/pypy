@@ -255,6 +255,11 @@ class AppTestZipimport:
         l = [i for i in zipimport._zip_directory_cache]
         assert len(l)
 
+    def test_path_hooks(self):
+        import sys
+        import zipimport
+        assert sys.path_hooks.count(zipimport.zipimporter) == 1
+
 class AppTestZipimportDeflated(AppTestZipimport):
     compression = ZIP_DEFLATED
 
