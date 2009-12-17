@@ -281,10 +281,9 @@ class ObjSpace(object):
                 raise
             modname = self.str_w(w_modname)
             mod = self.interpclass_w(w_mod)
-            if isinstance(mod, Module) and not mod.startup_called:
+            if isinstance(mod, Module):
                 self.timer.start("startup " + modname)
-                mod.startup(self)
-                mod.startup_called = True
+                mod.init(self)
                 self.timer.stop("startup " + modname)
 
 
@@ -372,10 +371,9 @@ class ObjSpace(object):
             # And initialize it
             from pypy.interpreter.module import Module
             mod = self.interpclass_w(w_mod)
-            if isinstance(mod, Module) and not mod.startup_called:
+            if isinstance(mod, Module):
                 self.timer.start("startup " + name)
-                mod.startup(self)
-                mod.startup_called = True
+                mod.init(self)
                 self.timer.stop("startup " + name)
             return w_mod
 

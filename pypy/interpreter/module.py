@@ -22,6 +22,13 @@ class Module(Wrappable):
         """NOT_RPYTHON: to allow built-in modules to do some more setup
         after the space is fully initialized."""
 
+    def init(self, space):
+        """This is called each time the module is imported or reloaded
+        """
+        if not self.startup_called:
+            self.startup_called = True
+            self.startup(space)
+
     def startup(self, space):
         """This is called at runtime on import to allow the module to
         do initialization when it is imported for the first time.
