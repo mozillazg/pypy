@@ -1,4 +1,4 @@
-from test.test_support import TESTFN, TestFailed, check_impl_detail
+from test.test_support import TESTFN, TestFailed
 
 import os
 import random
@@ -243,5 +243,4 @@ def test_infinite_reload():
     finally:
         sys.path.pop(0)
 
-if check_impl_detail():
-    test_infinite_reload()
+test_infinite_reload()
