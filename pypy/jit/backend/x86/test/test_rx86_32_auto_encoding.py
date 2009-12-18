@@ -44,7 +44,8 @@ class TestRx86_32(object):
     X86_CodeBuilder = rx86.X86_32_CodeBuilder
     REGNAMES = ['%eax', '%ecx', '%edx', '%ebx', '%esp', '%ebp', '%esi', '%edi']
     REGS = range(8)
-    NONSPECREGS = [rx86.eax, rx86.ecx, rx86.edx, rx86.ebx, rx86.esi, rx86.edi]
+    NONSPECREGS = [rx86.R.eax, rx86.R.ecx, rx86.R.edx, rx86.R.ebx,
+                   rx86.R.esi, rx86.R.edi]
 
     def reg_tests(self):
         return self.REGS
@@ -207,11 +208,11 @@ class TestRx86_32(object):
             # special cases
             if methname in ('ADD_ri', 'AND_ri', 'CMP_ri', 'OR_ri',
                             'SUB_ri', 'XOR_ri'):
-                if args[0] == rx86.eax:
+                if args[0] == rx86.R.eax:
                     return []     # ADD EAX, constant: there is a special encoding
-            if methname == 'MOV_rj' and args[0] == rx86.eax:
+            if methname == 'MOV_rj' and args[0] == rx86.R.eax:
                 return []   # MOV EAX, [immediate]: there is a special encoding
-            if methname == 'MOV_jr' and args[1] == rx86.eax:
+            if methname == 'MOV_jr' and args[1] == rx86.R.eax:
                 return []   # MOV [immediate], EAX: there is a special encoding
             return [args]
 

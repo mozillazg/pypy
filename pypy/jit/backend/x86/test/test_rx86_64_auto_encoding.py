@@ -10,9 +10,10 @@ class TestRx86_64(test_rx86_32_auto_encoding.TestRx86_32):
     REGNAMES = ['%rax', '%rcx', '%rdx', '%rbx', '%rsp', '%rbp', '%rsi', '%rdi',
                 '%r8', '%r9', '%r10', '%r11', '%r12', '%r13', '%r14', '%r15']
     REGS = range(16)
-    NONSPECREGS = [rx86.eax, rx86.ecx, rx86.edx, rx86.ebx, rx86.esi, rx86.edi,
-                   rx86.r8,  rx86.r9,  rx86.r10, rx86.r11,
-                   rx86.r12, rx86.r13, rx86.r14, rx86.r15]
+    NONSPECREGS = [rx86.R.eax, rx86.R.ecx, rx86.R.edx, rx86.R.ebx,
+                   rx86.R.esi, rx86.R.edi,
+                   rx86.R.r8,  rx86.R.r9,  rx86.R.r10, rx86.R.r11,
+                   rx86.R.r12, rx86.R.r13, rx86.R.r14, rx86.R.r15]
 
     def array_tests(self):
         # reduce a little bit -- we spend too long in these tests

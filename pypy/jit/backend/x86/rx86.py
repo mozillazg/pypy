@@ -5,22 +5,21 @@ from pypy.rlib.objectmodel import specialize
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.lltypesystem import rffi
 
-# the following are synonyms for rax, rcx, etc. on 64 bits
-eax = 0
-ecx = 1
-edx = 2
-ebx = 3
-esp = 4
-ebp = 5
-esi = 6
-edi = 7
+class R(object):
+    # the following are synonyms for rax, rcx, etc. on 64 bits
+    eax, ecx, edx, ebx, esp, ebp, esi, edi = range(8)
 
-# xmm registers
-xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = range(8)
+    # xmm registers
+    xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = range(8)
 
-# the following are extra registers available only on 64 bits
-r8, r9, r10, r11, r12, r13, r14, r15  = range(8, 16)
-xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15 = range(8, 16)
+    # the following are extra registers available only on 64 bits
+    r8, r9, r10, r11, r12, r13, r14, r15 = range(8, 16)
+    xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15 = range(8, 16)
+
+    names = ['eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi',
+             'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15']
+    xmmnames = ['xmm%d' % i for i in range(16)]
+
 
 def single_byte(value):
     return -128 <= value < 128
@@ -109,11 +108,11 @@ def immediate(argnum, width='i'):
 @specialize.arg(2)
 def encode_stack(mc, offset, force_32bits, orbyte):
     if not force_32bits and single_byte(offset):
-        mc.writechar(chr(0x40 | orbyte | ebp))
+        mc.writechar(chr(0x40 | orbyte | R.ebp))
         mc.writeimm8(offset)
     else:
         assert fits_in_32bits(offset)
-        mc.writechar(chr(0x80 | orbyte | ebp))
+        mc.writechar(chr(0x80 | orbyte | R.ebp))
         mc.writeimm32(offset)
     return 0
 
@@ -127,7 +126,7 @@ def reg_offset(reg, offset):
     # returns a 64-bits integer encoding "reg1+offset".
     # * 'offset' is stored as bytes 1-4 of the result;
     # * 'reg1' is stored as byte 5 of the result.
-    assert reg != esp and reg != ebp
+    assert reg != R.esp and reg != R.ebp
     assert fits_in_32bits(offset)
     return (r_ulonglong(reg) << 32) | cast32to64(offset)
 
@@ -139,9 +138,9 @@ def encode_mem_reg_plus_const(mc, reg1_offset, _, orbyte):
     # 64-bits special cases for reg1 == r12 or r13
     # (which look like esp or ebp after being truncated to 3 bits)
     if mc.WORD == 8:
-        if reg1 == esp:             # forces an SIB byte:
-            SIB = (esp<<3) | esp    #   use [r12+(no index)+offset]
-        elif reg1 == ebp:
+        if reg1 == R.esp:               # forces an SIB byte:
+            SIB = (R.esp<<3) | R.esp    #   use [r12+(no index)+offset]
+        elif reg1 == R.ebp:
             no_offset = False
     # end of 64-bits special cases
     if no_offset:
@@ -174,8 +173,8 @@ def reg_reg_scaleshift_offset(reg1, reg2, scaleshift, offset):
     # * 'offset' is stored as bytes 1-4 of the result;
     # * the SIB byte is computed and stored as byte 5 of the result;
     # * for 64-bits mode, the optional REX.B and REX.X flags go to byte 6.
-    assert 0 <= reg1 < 16 and reg1 != ebp
-    assert 0 <= reg2 < 16 and reg2 != esp
+    assert 0 <= reg1 < 16 and reg1 != R.ebp
+    assert 0 <= reg2 < 16 and reg2 != R.esp
     assert 0 <= scaleshift < 4
     assert fits_in_32bits(offset)
     encoding = 0
@@ -201,7 +200,7 @@ def encode_mem_reg_plus_scaled_reg_plus_const(mc, reg1_reg2_scaleshift_offset,
     # 64-bits special case for reg1 == r13
     # (which look like ebp after being truncated to 3 bits)
     if mc.WORD == 8:
-        if (encoding & 7) == ebp:
+        if (encoding & 7) == R.ebp:
             no_offset = False
     # end of 64-bits special case
     if no_offset:
