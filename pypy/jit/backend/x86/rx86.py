@@ -28,6 +28,9 @@ def single_byte(value):
 def fits_in_32bits(value):
     return -2147483648 <= value <= 2147483647
 
+def intmask32(value):
+    return intmask(rffi.cast(rffi.INT, value))
+
 # ____________________________________________________________
 # Emit a single char
 
@@ -123,9 +126,7 @@ def reg_offset(reg, offset):
 
 def encode_mem_reg_plus_const(mc, reg1_offset, _, orbyte):
     reg1 = reg_number_3bits(mc, intmask(reg1_offset >> 32))
-    offset = intmask(reg1_offset)
-    if mc.WORD == 8:
-        offset = offset & 0xFFFFFFFF
+    offset = intmask32(reg1_offset)
     no_offset = offset == 0
     SIB = -1
     # 64-bits special cases for reg1 == r12 or r13
@@ -188,7 +189,7 @@ def encode_mem_reg_plus_scaled_reg_plus_const(mc, reg1_reg2_scaleshift_offset,
         SIB = chr(encoding)
     else:
         SIB = chr(encoding & 0xFF)
-    offset = intmask(reg1_reg2_scaleshift_offset)
+    offset = intmask32(reg1_reg2_scaleshift_offset)
     no_offset = offset == 0
     # 64-bits special case for reg1 == r13
     # (which look like ebp after being truncated to 3 bits)
@@ -352,7 +353,7 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 8
 
     def writeimm64(self, imm):
-        self.writeimm32(intmask(rffi.cast(rffi.INT, imm)))
+        self.writeimm32(intmask32(imm))
         self.writeimm32(imm >> 32)
 
     # MOV_ri from the parent class is not wrong, but here is a better encoding
