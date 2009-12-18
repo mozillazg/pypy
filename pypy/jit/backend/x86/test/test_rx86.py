@@ -100,3 +100,8 @@ def test_mov_rm_64():
     s.MOV_rm(edx, reg_offset(r12, 0))
     s.MOV_rm(edx, reg_offset(r13, 0))
     assert s.getvalue() == '\x48\x8B\x17\x49\x8b\x14\x24\x49\x8b\x55\x00'
+
+def test_mov_rm_negative_64():
+    s = CodeBuilder64()
+    s.MOV_rm(edx, reg_offset(edi, -1))
+    assert s.getvalue() == '\x48\x8B\x57\xFF'

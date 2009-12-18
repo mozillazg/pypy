@@ -29,7 +29,14 @@ def fits_in_32bits(value):
     return -2147483648 <= value <= 2147483647
 
 def intmask32(value):
+    # extract the 32 lower bits of 'value', returning a regular signed int
+    # (it is negative if 'value' is negative according to the 32-bits repr)
     return intmask(rffi.cast(rffi.INT, value))
+
+def cast32to64(value):
+    # returns 'value' in the 32 lower bits of a 64-bit integer,
+    # with the remaining bits set to 0 (even if value is negative).
+    return r_ulonglong(rffi.cast(rffi.UINT, value))
 
 # ____________________________________________________________
 # Emit a single char
@@ -122,7 +129,7 @@ def reg_offset(reg, offset):
     # * 'reg1' is stored as byte 5 of the result.
     assert reg != esp and reg != ebp
     assert fits_in_32bits(offset)
-    return (r_ulonglong(reg) << 32) | r_ulonglong(rffi.r_uint(offset))
+    return (r_ulonglong(reg) << 32) | cast32to64(offset)
 
 def encode_mem_reg_plus_const(mc, reg1_offset, _, orbyte):
     reg1 = reg_number_3bits(mc, intmask(reg1_offset >> 32))
@@ -179,7 +186,7 @@ def reg_reg_scaleshift_offset(reg1, reg2, scaleshift, offset):
         encoding |= REX_X << 8
         reg2 &= 7
     encoding |= (scaleshift<<6) | (reg2<<3) | reg1
-    return (r_ulonglong(encoding) << 32) | r_ulonglong(rffi.r_uint(offset))
+    return (r_ulonglong(encoding) << 32) | cast32to64(offset)
 
 def encode_mem_reg_plus_scaled_reg_plus_const(mc, reg1_reg2_scaleshift_offset,
                                               _, orbyte):
