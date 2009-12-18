@@ -7,11 +7,12 @@ from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.tool.uid import fixid
-from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, lower_byte,\
-     X86RegisterManager, X86XMMRegisterManager, get_ebp_ofs
+from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, \
+     X86RegisterManager, X86XMMRegisterManager, is_stack, is_reg
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86 import rx86
+from pypy.jit.backend.x86.rx86 import eax, ecx, edx, ebx, esp, ebp, esi, edi
 from pypy.jit.metainterp.resoperation import rop
 
 
@@ -59,9 +60,8 @@ def _new_method(name):
     method.func_name = name
     return method
 
-for name in dir(codebuf.MachineCodeBlock):
-    if name.upper() == name:
-        setattr(MachineCodeBlockWrapper, name, _new_method(name))
+for name in rx86.all_instructions:
+    setattr(MachineCodeBlockWrapper, name, _new_method(name))
 
 class Assembler386(object):
     mc = None
@@ -179,7 +179,7 @@ class Assembler386(object):
 
     def _patchable_stackadjust(self):
         # stack adjustment LEA
-        self.mc.LEA(esp, fixedsize_ebp_ofs(0))
+        self.mc.LEA32_rs(esp, 0)
         return self.mc.tell() - 4
 
     def _patch_stackadjust(self, adr_lea, stack_depth):
@@ -191,45 +191,49 @@ class Assembler386(object):
 
     def _assemble_bootstrap_code(self, inputargs, arglocs):
         nonfloatlocs, floatlocs = arglocs
-        self.mc.PUSH(ebp)
-        self.mc.MOV(ebp, esp)
-        self.mc.PUSH(ebx)
-        self.mc.PUSH(esi)
-        self.mc.PUSH(edi)
+        self.mc.PUSH_r(ebp)
+        self.mc.MOV_rr(ebp, esp)
+        self.mc.PUSH_r(ebx)
+        self.mc.PUSH_r(esi)
+        self.mc.PUSH_r(edi)
         # NB. exactly 4 pushes above; if this changes, fix stack_pos().
         # You must also keep _get_callshape() in sync.
         adr_stackadjust = self._patchable_stackadjust()
         tmp = X86RegisterManager.all_regs[0]
         xmmtmp = X86XMMRegisterManager.all_regs[0]
+        #
+        # 1. read from fail_boxes_ptr/int
         for i in range(len(nonfloatlocs)):
             loc = nonfloatlocs[i]
-            if loc is None:
+            if loc == -1:
                 continue
-            if isinstance(loc, REG):
-                target = loc
-            else:
-                target = tmp
             if inputargs[i].type == REF:
-                # This uses XCHG to put zeroes in fail_boxes_ptr after
-                # reading them
-                self.mc.XOR(target, target)
-                self.mc.XCHG(target, addr_add(imm(self.fail_box_ptr_addr),
-                                              imm(i*WORD)))
+                base = self.fail_box_ptr_addr
             else:
-                self.mc.MOV(target, addr_add(imm(self.fail_box_int_addr),
-                                             imm(i*WORD)))
-            self.mc.MOV(loc, target)
+                base = self.fail_box_int_addr
+            addr = base + i*WORD
+            if is_stack(loc):
+                self.mc.MOV_rj(tmp, addr)
+                self.mc.MOV_sr(loc, tmp)
+            else:
+                self.mc.MOV_rj(loc, addr)
+        #
+        # 2. put zeroes in fail_boxes_ptr to clear them for the GC
+        self.mc.XOR_rr(tmp, tmp)
+        for i in range(len(nonfloatlocs)):
+            loc = nonfloatlocs[i]
+            if loc == -1:
+                continue
+            if inputargs[i].type == REF:
+                self.mc.MOV_jr(self.fail_box_ptr_addr + i*WORD, tmp)
+        #
+        # 3. read from fail_boxes_float
         for i in range(len(floatlocs)):
             loc = floatlocs[i]
-            if loc is None:
+            if loc == -1:
                 continue
-            if isinstance(loc, REG):
-                self.mc.MOVSD(loc, addr64_add(imm(self.fail_box_float_addr),
-                                              imm(i*WORD*2)))
-            else:
-                self.mc.MOVSD(xmmtmp, addr64_add(imm(self.fail_box_float_addr),
-                                               imm(i*WORD*2)))
-                self.mc.MOVSD(loc, xmmtmp)
+            xxx
+        #
         return adr_stackadjust
 
     def dump(self, text):
@@ -920,30 +924,30 @@ for name, value in Assembler386.__dict__.iteritems():
         num = getattr(rop, opname.upper())
         genop_list[num] = value
 
-def new_addr_add(heap, mem, memsib):
-    def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
-        if isinstance(reg_or_imm1, IMM32):
-            if isinstance(reg_or_imm2, IMM32):
-                return heap(reg_or_imm1.value + offset +
-                            (reg_or_imm2.value << scale))
-            else:
-                return memsib(None, reg_or_imm2, scale, reg_or_imm1.value + offset)
-        else:
-            if isinstance(reg_or_imm2, IMM32):
-                return mem(reg_or_imm1, offset + (reg_or_imm2.value << scale))
-            else:
-                return memsib(reg_or_imm1, reg_or_imm2, scale, offset)
-    return addr_add
+##def new_addr_add(heap, mem, memsib):
+##    def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
+##        if isinstance(reg_or_imm1, IMM32):
+##            if isinstance(reg_or_imm2, IMM32):
+##                return heap(reg_or_imm1.value + offset +
+##                            (reg_or_imm2.value << scale))
+##            else:
+##                return memsib(None, reg_or_imm2, scale, reg_or_imm1.value + offset)
+##        else:
+##            if isinstance(reg_or_imm2, IMM32):
+##                return mem(reg_or_imm1, offset + (reg_or_imm2.value << scale))
+##            else:
+##                return memsib(reg_or_imm1, reg_or_imm2, scale, offset)
+##    return addr_add
 
-addr8_add = new_addr_add(heap8, mem8, memSIB8)
-addr_add = new_addr_add(heap, mem, memSIB)
-addr64_add = new_addr_add(heap64, mem64, memSIB64)
+##addr8_add = new_addr_add(heap8, mem8, memSIB8)
+##addr_add = new_addr_add(heap, mem, memSIB)
+##addr64_add = new_addr_add(heap64, mem64, memSIB64)
 
-def addr_add_const(reg_or_imm1, offset):
-    if isinstance(reg_or_imm1, IMM32):
-        return heap(reg_or_imm1.value + offset)
-    else:
-        return mem(reg_or_imm1, offset)
+##def addr_add_const(reg_or_imm1, offset):
+##    if isinstance(reg_or_imm1, IMM32):
+##        return heap(reg_or_imm1.value + offset)
+##    else:
+##        return mem(reg_or_imm1, offset)
 
 def round_up_to_4(size):
     if size < 4:

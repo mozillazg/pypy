@@ -1,11 +1,11 @@
 
 import os
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.jit.backend.x86.ri386 import I386CodeBuilder
+from pypy.jit.backend.x86.rx86 import X86_32_CodeBuilder
 from pypy.rlib.rmmap import PTR, alloc, free
 
 
-class InMemoryCodeBuilder(I386CodeBuilder):
+class InMemoryCodeBuilder(X86_32_CodeBuilder):
     _last_dump_start = 0
 
     def __init__(self, start, end):
@@ -18,21 +18,10 @@ class InMemoryCodeBuilder(I386CodeBuilder):
         self._size = map_size
         self._pos = 0
 
-    def overwrite(self, pos, data):
-        assert pos + len(data) <= self._size
-        for c in data:
-            self._data[pos] = c
-            pos += 1
-        return pos
-
-    def write(self, data):
-        self._pos = self.overwrite(self._pos, data)
-
-    def writechr(self, n):
-        # purely for performance: don't convert chr(n) to a str
+    def writechar(self, char):
         pos = self._pos
         assert pos + 1 <= self._size
-        self._data[pos] = chr(n)
+        self._data[pos] = char
         self._pos = pos + 1
 
     def get_relative_pos(self):

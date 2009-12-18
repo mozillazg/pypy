@@ -5,7 +5,9 @@
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
                                          ResOperation, ConstAddr, BoxPtr,
                                          LoopToken, INT, REF, FLOAT)
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86.rx86 import eax, ecx, edx, ebx, esi, edi
+from pypy.jit.backend.x86.rx86 import xmm0, xmm1, xmm2, xmm3
+from pypy.jit.backend.x86.rx86 import xmm4, xmm5, xmm6, xmm7
 from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
@@ -35,20 +37,6 @@ class X86RegisterManager(RegisterManager):
 
     def call_result_location(self, v):
         return eax
-
-    def convert_to_imm(self, c):
-        if isinstance(c, ConstInt):
-            return imm(c.value)
-        elif isinstance(c, ConstPtr):
-            if we_are_translated() and c.value and rgc.can_move(c.value):
-                print "convert_to_imm: ConstPtr needs special care"
-                raise AssertionError
-            return imm(rffi.cast(lltype.Signed, c.value))
-        elif isinstance(c, ConstAddr):
-            return imm(ll2ctypes.cast_adr_to_int(c.value))
-        else:
-            print "convert_to_imm: got a %s" % c
-            raise AssertionError
 
 BASE_CONSTANT_SIZE = 1000
 
@@ -82,15 +70,15 @@ class X86XMMRegisterManager(RegisterManager):
         self.constant_arrays[-1][1] = NAN
         self.constant_array_counter = 2
 
-    def convert_to_imm(self, c):
-        if self.constant_array_counter >= BASE_CONSTANT_SIZE:
-            self.constant_arrays.append(self.new_const_array())
-            self.constant_array_counter = 0
-        res = self.constant_array_counter
-        self.constant_array_counter += 1
-        arr = self.constant_arrays[-1]
-        arr[res] = c.getfloat()
-        return self.get_addr_of_const_float(-1, res)
+##    def convert_to_imm(self, c):
+##        if self.constant_array_counter >= BASE_CONSTANT_SIZE:
+##            self.constant_arrays.append(self.new_const_array())
+##            self.constant_array_counter = 0
+##        res = self.constant_array_counter
+##        self.constant_array_counter += 1
+##        arr = self.constant_arrays[-1]
+##        arr[res] = c.getfloat()
+##        return self.get_addr_of_const_float(-1, res)
 
     def get_addr_of_const_float(self, num_arr, num_pos):
         arr = self.constant_arrays[num_arr]
@@ -157,8 +145,8 @@ class RegAlloc(object):
     def _process_inputargs(self, inputargs):
         # XXX we can sort out here by longevity if we need something
         # more optimal
-        floatlocs = [None] * len(inputargs)
-        nonfloatlocs = [None] * len(inputargs)
+        floatlocs = [-1] * len(inputargs)
+        nonfloatlocs = [-1] * len(inputargs)
         # Don't use all_regs[0] for passing arguments around a loop.
         # Must be kept in sync with consider_jump().
         # XXX this should probably go to llsupport/regalloc.py
@@ -913,3 +901,9 @@ def lower_byte(reg):
         return dl
     else:
         raise NotImplementedError()
+
+def is_stack(loc):
+    return loc < 0
+
+def is_reg(loc):
+    return loc >= 0

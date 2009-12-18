@@ -93,3 +93,10 @@ def test_mov_ri_64():
     s.MOV_ri(r12, 0x80000042)
     assert s.getvalue() == ('\x48\xC7\xC1\xFE\xFF\xFF\xFF' +
                             '\x49\xBC\x42\x00\x00\x80\x00\x00\x00\x00')
+
+def test_mov_rm_64():
+    s = CodeBuilder64()
+    s.MOV_rm(edx, reg_offset(edi, 0))
+    s.MOV_rm(edx, reg_offset(r12, 0))
+    s.MOV_rm(edx, reg_offset(r13, 0))
+    assert s.getvalue() == '\x48\x8B\x17\x49\x8b\x14\x24\x49\x8b\x55\x00'

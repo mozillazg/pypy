@@ -1,3 +1,4 @@
+import py
 from pypy.rlib.rarithmetic import intmask, r_ulonglong
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
 from pypy.rlib.objectmodel import specialize
@@ -14,15 +15,12 @@ ebp = 5
 esi = 6
 edi = 7
 
+# xmm registers
+xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = range(8)
+
 # the following are extra registers available only on 64 bits
-r8  = 8
-r9  = 9
-r10 = 10
-r11 = 11
-r12 = 12
-r13 = 13
-r14 = 14
-r15 = 15
+r8, r9, r10, r11, r12, r13, r14, r15  = range(8, 16)
+xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15 = range(8, 16)
 
 def single_byte(value):
     return -128 <= value < 128
@@ -64,6 +62,7 @@ def rex_register(mc, reg, factor):
     return 0
 
 def register(argnum, factor=1):
+    assert factor in (1, 8)
     return encode_register, argnum, factor, rex_register
 
 # ____________________________________________________________
@@ -125,6 +124,8 @@ def reg_offset(reg, offset):
 def encode_mem_reg_plus_const(mc, reg1_offset, _, orbyte):
     reg1 = reg_number_3bits(mc, intmask(reg1_offset >> 32))
     offset = intmask(reg1_offset)
+    if mc.WORD == 8:
+        offset = offset & 0xFFFFFFFF
     no_offset = offset == 0
     SIB = -1
     # 64-bits special cases for reg1 == r12 or r13
@@ -189,12 +190,12 @@ def encode_mem_reg_plus_scaled_reg_plus_const(mc, reg1_reg2_scaleshift_offset,
         SIB = chr(encoding & 0xFF)
     offset = intmask(reg1_reg2_scaleshift_offset)
     no_offset = offset == 0
-    # 64-bits special cases for reg1 == r13
+    # 64-bits special case for reg1 == r13
     # (which look like ebp after being truncated to 3 bits)
     if mc.WORD == 8:
         if (encoding & 7) == ebp:
             no_offset = False
-    # end of 64-bits special cases
+    # end of 64-bits special case
     if no_offset:
         mc.writechar(chr(0x04 | orbyte))
         mc.writechar(SIB)
@@ -315,12 +316,17 @@ class AbstractX86CodeBuilder(object):
     # "MOV reg1, [reg2+offset]" and the opposite direction
     MOV_rm = insn(rex_w, '\x8B', register(1,8), mem_reg_plus_const(2))
     MOV_mr = insn(rex_w, '\x89', register(2,8), mem_reg_plus_const(1))
+    #MOV_mi = insn(rex_w, '\xC7', mem_reg_plus_const(1), immediate(2))
 
     # "MOV reg1, [reg2+reg3*scale+offset]" and the opposite direction
     MOV_ra = insn(rex_w, '\x8B', register(1,8),
                                  mem_reg_plus_scaled_reg_plus_const(2))
     MOV_ar = insn(rex_w, '\x89', register(2,8),
                                  mem_reg_plus_scaled_reg_plus_const(1))
+
+    # "MOV reg1, [immediate2]" and the opposite direction
+    MOV_rj = insn(rex_w, '\x8B', register(1,8), '\x05', immediate(2))
+    MOV_jr = insn(rex_w, '\x89', register(2,8), '\x05', immediate(1))
 
     ADD_ri, ADD_rr, ADD_rs = common_modes(0)
     OR_ri,  OR_rr,  OR_rs  = common_modes(1)
@@ -358,6 +364,12 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
             self._MOV_ri32(reg, immed)
         else:
             AbstractX86CodeBuilder.MOV_ri(self, reg, immed)
+
+    # unsupported yet
+    def MOV_rj(self, reg, mem_immed):
+        py.test.skip("MOV_rj unsupported yet")
+    def MOV_jr(self, mem_immed, reg):
+        py.test.skip("MOV_jr unsupported yet")
 
 # ____________________________________________________________
 
