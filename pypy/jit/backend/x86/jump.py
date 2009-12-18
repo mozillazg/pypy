@@ -1,22 +1,6 @@
 import sys
 from pypy.tool.pairtype import extendabletype
-from pypy.jit.backend.x86.ri386 import *
-
-class __extend__(OPERAND):
-    __metaclass__ = extendabletype
-    def _getregkey(self):
-        raise AssertionError("should only happen to registers and frame "
-                             "positions")
-
-class __extend__(REG):
-    __metaclass__ = extendabletype
-    def _getregkey(self):
-        return ~self.op
-
-class __extend__(MODRM):
-    __metaclass__ = extendabletype
-    def _getregkey(self):
-        return self.position
+from pypy.jit.backend.x86.regalloc import AssemblerLocation, StackLoc, RegLoc
 
 
 def remap_frame_layout(assembler, src_locations, dst_locations, tmpreg):
@@ -27,7 +11,7 @@ def remap_frame_layout(assembler, src_locations, dst_locations, tmpreg):
         srccount[dst._getregkey()] = 0
     for i in range(len(dst_locations)):
         src = src_locations[i]
-        if isinstance(src, IMM32):
+        if not isinstance(src, AssemblerLocation):    # if it's a constant
             continue
         key = src._getregkey()
         if key in srccount:
@@ -46,7 +30,7 @@ def remap_frame_layout(assembler, src_locations, dst_locations, tmpreg):
                 srccount[key] = -1       # means "it's done"
                 pending_dests -= 1
                 src = src_locations[i]
-                if not isinstance(src, IMM32):
+                if isinstance(src, AssemblerLocation):
                     key = src._getregkey()
                     if key in srccount:
                         srccount[key] -= 1
@@ -80,7 +64,11 @@ def remap_frame_layout(assembler, src_locations, dst_locations, tmpreg):
             assert pending_dests == 0
 
 def _move(assembler, src, dst, tmpreg):
-    if isinstance(dst, MODRM) and isinstance(src, MODRM):
-        assembler.regalloc_mov(src, tmpreg)
-        src = tmpreg
-    assembler.regalloc_mov(src, dst)
+    if isinstance(dst, StackLoc):
+        if isinstance(src, StackLoc):
+            assembler.regalloc_load(src, tmpreg)
+            src = tmpreg
+        assembler.regalloc_store(src, dst)
+    else:
+        assert isinstance(dst, RegLoc)
+        assembler.regalloc_load(src, dst)
