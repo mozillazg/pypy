@@ -1,22 +1,6 @@
 import sys
 from pypy.tool.pairtype import extendabletype
-from pypy.jit.backend.x86.ri386 import *
-
-class __extend__(OPERAND):
-    __metaclass__ = extendabletype
-    def _getregkey(self):
-        raise AssertionError("should only happen to registers and stack "
-                             "positions")
-
-class __extend__(REG):
-    __metaclass__ = extendabletype
-    def _getregkey(self):
-        return ~self.op
-
-class __extend__(MODRM):
-    __metaclass__ = extendabletype
-    def _getregkey(self):
-        return self.position
+#from pypy.jit.backend.x86.rx86 import ...
 
 
 def remap_stack_layout(assembler, src_locations, dst_locations, tmpreg):

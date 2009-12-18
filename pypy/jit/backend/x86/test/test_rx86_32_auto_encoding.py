@@ -22,7 +22,7 @@ class CodeCheckerMixin(object):
         if char != self.expected[self.index:self.index+1]:
             print self.op
             print "\x09from rx86.py:", hexdump(self.expected[self.instrindex:self.index] + char)+"..."
-            print "\x09from 'as':   ", hexdump(self.expected[self.instrindex:self.index+1])+"..."
+            print "\x09from 'as':   ", hexdump(self.expected[self.instrindex:self.index+15])+"..."
             raise Exception("Differs")
         self.index += 1
 
@@ -87,6 +87,7 @@ class TestRx86_32(object):
             'm': self.memory_tests,
             'a': self.array_tests,
             'i': self.imm32_tests,
+            'j': self.imm32_tests,
             }
 
     def assembler_operand_reg(self, regnum):
@@ -120,6 +121,9 @@ class TestRx86_32(object):
     def assembler_operand_imm(self, value):
         return '$%d' % value
 
+    def assembler_operand_imm_addr(self, value):
+        return '%d' % value
+
     def get_all_assembler_operands(self):
         return {
             'r': self.assembler_operand_reg,
@@ -127,6 +131,7 @@ class TestRx86_32(object):
             'm': self.assembler_operand_memory,
             'a': self.assembler_operand_array,
             'i': self.assembler_operand_imm,
+            'j': self.assembler_operand_imm_addr,
             }
 
     def run_test(self, methname, instrname, argmodes, args_lists):
@@ -204,37 +209,10 @@ class TestRx86_32(object):
                             'SUB_ri', 'XOR_ri'):
                 if args[0] == rx86.eax:
                     return []     # ADD EAX, constant: there is a special encoding
-    ##        if methname == "MOV_":
-    ####            if args[0] == args[1]:
-    ####                return []   # MOV reg, same reg
-    ##            if ((args[0][1] in (i386.eax, i386.al))
-    ##                and args[1][1].assembler().lstrip('-').isdigit()):
-    ##                return []   # MOV accum, [constant-address]
-    ##            if ((args[1][1] in (i386.eax, i386.al))
-    ##                and args[0][1].assembler().lstrip('-').isdigit()):
-    ##                return []   # MOV [constant-address], accum
-    ##        if instrname == "MOV16":
-    ##            return []   # skipped
-    ##        if instrname == "LEA":
-    ##            if (args[1][1].__class__ != i386.MODRM or
-    ##                args[1][1].is_register()):
-    ##                return []
-    ##        if instrname == "INT":
-    ##            if args[0][1].value == 3:
-    ##                return []
-    ##        if instrname in ('SHL', 'SHR', 'SAR'):
-    ##            if args[1][1].assembler() == '$1':
-    ##                return []
-    ##        if instrname in ('MOVZX', 'MOVSX'):
-    ##            if args[1][1].width == 4:
-    ##                return []
-    ##        if instrname == "TEST":
-    ##            if (args[0] != args[1] and
-    ##                isinstance(args[0][1], i386.REG) and
-    ##                isinstance(args[1][1], i386.REG)):
-    ##                return []   # TEST reg1, reg2  <=>  TEST reg2, reg1
-    ##        if instrname.endswith('cond'):
-    ##            return []
+            if methname == 'MOV_rj' and args[0] == rx86.eax:
+                return []   # MOV EAX, [immediate]: there is a special encoding
+            if methname == 'MOV_jr' and args[1] == rx86.eax:
+                return []   # MOV [immediate], EAX: there is a special encoding
             return [args]
 
     def get_code_checker_class(self):

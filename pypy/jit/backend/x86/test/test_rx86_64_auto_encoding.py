@@ -14,6 +14,12 @@ class TestRx86_64(test_rx86_32_auto_encoding.TestRx86_32):
                    rx86.r8,  rx86.r9,  rx86.r10, rx86.r11,
                    rx86.r12, rx86.r13, rx86.r14, rx86.r15]
 
+    def array_tests(self):
+        # reduce a little bit -- we spend too long in these tests
+        lst = super(TestRx86_64, self).array_tests()
+        random.shuffle(lst)
+        return lst[:int(len(lst) * 0.2)]
+
     def imm64_tests(self):
         v = [-0x80000001, 0x80000000,
              -0x8000000000000000, 0x7FFFFFFFFFFFFFFF]
