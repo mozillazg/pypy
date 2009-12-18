@@ -1,5 +1,6 @@
 import py
 from pypy.jit.backend.x86.rx86 import *
+globals().update(R.__dict__)
 
 class CodeBuilderMixin(object):
     def __init__(self):
