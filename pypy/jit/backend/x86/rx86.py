@@ -366,11 +366,11 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         else:
             AbstractX86CodeBuilder.MOV_ri(self, reg, immed)
 
-    # unsupported yet
+    # unsupported -- must use e.g. MOV tmpreg, immed64; MOV reg, [tmpreg]
     def MOV_rj(self, reg, mem_immed):
-        py.test.skip("MOV_rj unsupported yet")
+        py.test.skip("MOV_rj unsupported")
     def MOV_jr(self, mem_immed, reg):
-        py.test.skip("MOV_jr unsupported yet")
+        py.test.skip("MOV_jr unsupported")
 
 # ____________________________________________________________
 

@@ -29,9 +29,8 @@ class TestRx86_64(test_rx86_32_auto_encoding.TestRx86_32):
                  (random.randrange(0,65536)<<16) |
                  (random.randrange(0,65536)<<0))
             v.append(x)
-        return v + self._old_imm32_tests()
+        return v + super(TestRx86_64, self).imm32_tests()
 
     def test_extra_MOV_ri64(self):
-        self._old_imm32_tests = self.imm32_tests
         self.imm32_tests = self.imm64_tests      # patch on 'self'
         self.complete_test('MOV_ri')
