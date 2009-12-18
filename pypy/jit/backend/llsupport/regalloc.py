@@ -1,5 +1,5 @@
 
-from pypy.jit.metainterp.history import Const, Box
+from pypy.jit.metainterp.history import Box
 from pypy.rlib.objectmodel import we_are_translated
 
 class TempBox(Box):
@@ -60,6 +60,7 @@ class RegisterManager(object):
         self.position += incr
 
     def _check_type(self, v):
+        assert isinstance(v, Box)
         if not we_are_translated() and self.box_types is not None:
             assert isinstance(v, TempBox) or v.type in self.box_types
 
@@ -69,7 +70,7 @@ class RegisterManager(object):
             point for all variables that might be in registers.
         """
         self._check_type(v)
-        if isinstance(v, Const) or v not in self.reg_bindings:
+        if v not in self.reg_bindings:
             return
         if v not in self.longevity or self.longevity[v][1] <= self.position:
             self.free_regs.append(self.reg_bindings[v])
@@ -104,7 +105,6 @@ class RegisterManager(object):
         returns allocated register or None, if not possible.
         """
         self._check_type(v)
-        assert not isinstance(v, Const)
         if selected_reg is not None:
             res = self.reg_bindings.get(v, None)
             if res is not None:
@@ -199,8 +199,6 @@ class RegisterManager(object):
         """ Return the location of 'box'.
         """
         self._check_type(box)
-        if isinstance(box, Const):
-            return self.convert_to_imm(box)
         try:
             return self.reg_bindings[box]
         except KeyError:
@@ -237,10 +235,6 @@ class RegisterManager(object):
         'force_allocate_reg' for the meaning of the optional arguments.
         """
         self._check_type(v)
-        if isinstance(v, Const):
-            return self.return_constant(v, forbidden_vars, selected_reg,
-                                        imm_fine)
-        
         prev_loc = self.loc(v)
         loc = self.force_allocate_reg(v, forbidden_vars, selected_reg,
                                       need_lower_byte=need_lower_byte)
@@ -270,15 +264,6 @@ class RegisterManager(object):
         """
         self._check_type(result_v)
         self._check_type(v)
-        if isinstance(v, Const):
-            loc = self.make_sure_var_in_reg(v, forbidden_vars,
-                                            imm_fine=False)
-            # note that calling make_sure_var_in_reg with imm_fine=False
-            # will not allocate place in reg_bindings, we need to do it
-            # on our own
-            self.reg_bindings[result_v] = loc
-            self.free_regs = [reg for reg in self.free_regs if reg is not loc]
-            return loc
         if v not in self.reg_bindings:
             prev_loc = self.stack_manager.loc(v, self.reg_width)
             loc = self.force_allocate_reg(v, forbidden_vars)
@@ -334,11 +319,6 @@ class RegisterManager(object):
             self.free_regs = [fr for fr in self.free_regs if fr is not r]
     
     # abstract methods, override
-
-    def convert_to_imm(self, c):
-        """ Platform specific - convert a constant to imm
-        """
-        raise NotImplementedError("Abstract")
 
     def call_result_location(self, v):
         """ Platform specific - tell where the result of a call will
