@@ -1,4 +1,4 @@
-from pypy.rpython.lltypesystem import lltype, rffi, llmemory
+from pypy.rpython.lltypesystem import lltype, rffi
 
 def values_array(TP, size):
     ATP = lltype.GcArray(TP)
@@ -10,6 +10,9 @@ def values_array(TP, size):
         def get_addr_for_num(self, i):
             return rffi.cast(lltype.Signed, lltype.direct_ptradd(
                 lltype.direct_arrayitems(self.ar), i))
+
+        def get_base_addr(self):
+            return rffi.cast(lltype.Signed, lltype.direct_arrayitems(self.ar))
 
         def setitem(self, i, v):
             self.ar[i] = v

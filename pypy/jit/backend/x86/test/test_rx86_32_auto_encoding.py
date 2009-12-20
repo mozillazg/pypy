@@ -43,30 +43,37 @@ class TestRx86_32(object):
     TESTDIR = 'rx86_32'
     X86_CodeBuilder = rx86.X86_32_CodeBuilder
     REGNAMES = ['%eax', '%ecx', '%edx', '%ebx', '%esp', '%ebp', '%esi', '%edi']
+    XMMREGNAMES = ['%%xmm%d' % i for i in range(16)]
     REGS = range(8)
     NONSPECREGS = [rx86.R.eax, rx86.R.ecx, rx86.R.edx, rx86.R.ebx,
                    rx86.R.esi, rx86.R.edi]
+    methname = '?'
 
     def reg_tests(self):
         return self.REGS
 
-    def stack_tests(self, count=COUNT1):
+    def stack_bp_tests(self, count=COUNT1):
         return ([0, 4, -4, 124, 128, -128, -132] +
                 [random.randrange(-0x20000000, 0x20000000) * 4
                  for i in range(count)])
 
+    def stack_sp_tests(self, count=COUNT1):
+        return ([0, 4, 124, 128] +
+                [random.randrange(0, 0x20000000) * 4
+                 for i in range(count)])
+
     def memory_tests(self):
-        return [rx86.reg_offset(reg, ofs)
+        return [(reg, ofs)
                     for reg in self.NONSPECREGS
-                    for ofs in self.stack_tests(5)
+                    for ofs in self.stack_bp_tests(5)
                 ]
 
     def array_tests(self):
-        return [rx86.reg_reg_scaleshift_offset(reg1, reg2, scaleshift, ofs)
+        return [(reg1, reg2, scaleshift, ofs)
                     for reg1 in self.NONSPECREGS
                     for reg2 in self.NONSPECREGS
                     for scaleshift in [0, 1, 2, 3]
-                    for ofs in self.stack_tests(1)
+                    for ofs in self.stack_bp_tests(1)
                 ]
 
     def imm8_tests(self):
@@ -81,41 +88,39 @@ class TestRx86_32(object):
              [random.randrange(128, 256) for i in range(COUNT1)])
         return self.imm8_tests() + v
 
+    def relative_tests(self):
+        py.test.skip("explicit test required for %r" % (self.methname,))
+
     def get_all_tests(self):
         return {
             'r': self.reg_tests,
-            's': self.stack_tests,
+            'b': self.stack_bp_tests,
+            's': self.stack_sp_tests,
             'm': self.memory_tests,
             'a': self.array_tests,
             'i': self.imm32_tests,
             'j': self.imm32_tests,
+            'l': self.relative_tests,
             }
 
     def assembler_operand_reg(self, regnum):
-        return self.REGNAMES[regnum]
+        if self.is_xmm_insn:
+            return self.XMMREGNAMES[regnum]
+        else:
+            return self.REGNAMES[regnum]
 
-    def assembler_operand_stack(self, position):
+    def assembler_operand_stack_bp(self, position):
         return '%d(%s)' % (position, self.REGNAMES[5])
 
-    def assembler_operand_memory(self, reg1_offset):
-        reg1 = intmask(reg1_offset >> 32)
-        offset = intmask(reg1_offset)
+    def assembler_operand_stack_sp(self, position):
+        return '%d(%s)' % (position, self.REGNAMES[4])
+
+    def assembler_operand_memory(self, (reg1, offset)):
         if not offset: offset = ''
         return '%s(%s)' % (offset, self.REGNAMES[reg1])
 
-    def assembler_operand_array(self, reg1_reg2_scaleshift_offset):
-        SIB = intmask(reg1_reg2_scaleshift_offset >> 32)
-        rex = SIB >> 8
-        SIB = SIB & 0xFF
-        offset = intmask(reg1_reg2_scaleshift_offset)
+    def assembler_operand_array(self, (reg1, reg2, scaleshift, offset)):
         if not offset: offset = ''
-        reg1 = SIB & 7
-        reg2 = (SIB >> 3) & 7
-        scaleshift = SIB >> 6
-        if rex & rx86.REX_B:
-            reg1 |= 8
-        if rex & rx86.REX_X:
-            reg2 |= 8
         return '%s(%s,%s,%d)' % (offset, self.REGNAMES[reg1],
                                  self.REGNAMES[reg2], 1<<scaleshift)
 
@@ -128,7 +133,8 @@ class TestRx86_32(object):
     def get_all_assembler_operands(self):
         return {
             'r': self.assembler_operand_reg,
-            's': self.assembler_operand_stack,
+            'b': self.assembler_operand_stack_bp,
+            's': self.assembler_operand_stack_sp,
             'm': self.assembler_operand_memory,
             'a': self.assembler_operand_array,
             'i': self.assembler_operand_imm,
@@ -150,7 +156,7 @@ class TestRx86_32(object):
     ##        for m, extra in args:
     ##            if m in (i386.MODRM, i386.MODRM8) or all:
     ##                suffix = suffixes[sizes[m]] + suffix
-            if argmodes:
+            if argmodes and not self.is_xmm_insn:
                 suffix = suffixes[self.WORD]
 
             following = ""
@@ -230,6 +236,9 @@ class TestRx86_32(object):
         else:
             instrname, argmodes = methname, ''
         print "Testing %s with argmodes=%r" % (instrname, argmodes)
+        self.methname = methname
+        self.is_xmm_insn = getattr(getattr(rx86.AbstractX86CodeBuilder,
+                                           methname), 'is_xmm_insn', False)
         ilist = self.make_all_tests(methname, argmodes)
         oplist, as_code = self.run_test(methname, instrname, argmodes, ilist)
         cc = self.get_code_checker_class()(as_code)

@@ -1,7 +1,7 @@
 from pypy.jit.metainterp.history import ConstInt
 from pypy.jit.backend.x86.regalloc import X86FrameManager
-from pypy.jit.backend.x86.regalloc import StackLoc, RegLoc
-from pypy.jit.backend.x86.regalloc import eax, ebx, ecx, edx, esi, edi
+from pypy.jit.backend.x86.regloc import StackLoc, RegLoc
+from pypy.jit.backend.x86.regloc import eax, ebx, ecx, edx, esi, edi
 from pypy.jit.backend.x86.jump import remap_frame_layout
 
 frame_pos = X86FrameManager.frame_pos
