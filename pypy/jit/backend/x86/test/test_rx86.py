@@ -94,6 +94,23 @@ def test_call_l(s=None):
     ofs = 0x01234567 - (0x76543210+5)
     assert s.getvalue() == '\xE8' + struct.pack("<i", ofs)
 
+def test_jmp_l():
+    s = CodeBuilder32()
+    s.JMP_l(0x01234567)
+    ofs = 0x01234567 - (0x76543210+5)
+    assert s.getvalue() == '\xE9' + struct.pack("<i", ofs)
+
+def test_j_il():
+    s = CodeBuilder32()
+    s.J_il(5, 0x01234567)
+    ofs = 0x01234567 - (0x76543210+6)
+    assert s.getvalue() == '\x0F\x85' + struct.pack("<i", ofs)
+
+def test_set_ir():
+    s = CodeBuilder32()
+    s.SET_ir(5, 2)
+    assert s.getvalue() == '\x0F\x95\xC2'
+
 
 class CodeBuilder64(CodeBuilderMixin, X86_64_CodeBuilder):
     pass

@@ -1,5 +1,4 @@
 import py
-from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.unroll import unrolling_iterable
@@ -83,6 +82,8 @@ def encode_immediate(mc, immediate, width, orbyte):
         mc.writeimm8(immediate)
     elif width == 'h':
         mc.writeimm16(immediate)
+    elif width == 'o':
+        return immediate    # in the 'orbyte' for the next command
     elif width == 'q' and mc.WORD == 8:
         mc.writeimm64(immediate)
     else:
@@ -113,7 +114,6 @@ def encode_stack_bp(mc, offset, force_32bits, orbyte):
         mc.writechar(chr(0x40 | orbyte | R.ebp))
         mc.writeimm8(offset)
     else:
-        assert fits_in_32bits(offset)
         mc.writechar(chr(0x80 | orbyte | R.ebp))
         mc.writeimm32(offset)
     return 0
@@ -134,7 +134,6 @@ def encode_stack_sp(mc, offset, _, orbyte):
         mc.writechar(SIB)
         mc.writeimm8(offset)
     else:
-        assert fits_in_32bits(offset)
         mc.writechar(chr(0x84 | orbyte))
         mc.writechar(SIB)
         mc.writeimm32(offset)
@@ -148,7 +147,6 @@ def stack_sp(argnum):
 
 def encode_mem_reg_plus_const(mc, (reg, offset), _, orbyte):
     assert reg != R.esp and reg != R.ebp
-    assert fits_in_32bits(offset)
     #
     reg1 = reg_number_3bits(mc, reg)
     no_offset = offset == 0
@@ -191,7 +189,6 @@ def encode_mem_reg_plus_scaled_reg_plus_const(mc,
     # emit "reg1 + (reg2 << scaleshift) + offset"
     assert reg1 != R.ebp and reg2 != R.esp
     assert 0 <= scaleshift < 4
-    assert fits_in_32bits(offset)
     reg1 = reg_number_3bits(mc, reg1)
     reg2 = reg_number_3bits(mc, reg2)
     SIB = chr((scaleshift<<6) | (reg2<<3) | reg1)
@@ -290,9 +287,12 @@ def common_modes(group):
     base = group * 8
     char = chr(0xC0 | base)
     INSN_ri8 = insn(rex_w, '\x83', register(1), char, immediate(2,'b'))
-    INSN_ri32 = insn(rex_w, '\x81', register(1), char, immediate(2))
+    INSN_ri32= insn(rex_w, '\x81', register(1), char, immediate(2))
     INSN_rr = insn(rex_w, chr(base+1), register(2,8), register(1,1), '\xC0')
+    INSN_br = insn(rex_w, chr(base+1), register(2,8), stack_bp(1))
     INSN_rb = insn(rex_w, chr(base+3), register(1,8), stack_bp(2))
+    INSN_bi8 = insn(rex_w, '\x83', orbyte(base), stack_bp(1), immediate(2,'b'))
+    INSN_bi32= insn(rex_w, '\x81', orbyte(base), stack_bp(1), immediate(2))
 
     def INSN_ri(mc, reg, immed):
         if single_byte(immed):
@@ -301,7 +301,14 @@ def common_modes(group):
             INSN_ri32(mc, reg, immed)
     INSN_ri._always_inline_ = True      # try to constant-fold single_byte()
 
-    return INSN_ri, INSN_rr, INSN_rb
+    def INSN_bi(mc, offset, immed):
+        if single_byte(immed):
+            INSN_bi8(mc, offset, immed)
+        else:
+            INSN_bi32(mc, offset, immed)
+    INSN_bi._always_inline_ = True      # try to constant-fold single_byte()
+
+    return INSN_ri, INSN_rr, INSN_rb, INSN_bi, INSN_br
 
 # ____________________________________________________________
 
@@ -351,12 +358,12 @@ class AbstractX86CodeBuilder(object):
 
     # ------------------------------ Arithmetic ------------------------------
 
-    ADD_ri, ADD_rr, ADD_rb = common_modes(0)
-    OR_ri,  OR_rr,  OR_rb  = common_modes(1)
-    AND_ri, AND_rr, AND_rb = common_modes(4)
-    SUB_ri, SUB_rr, SUB_rb = common_modes(5)
-    XOR_ri, XOR_rr, XOR_rb = common_modes(6)
-    CMP_ri, CMP_rr, CMP_rb = common_modes(7)
+    ADD_ri, ADD_rr, ADD_rb, _, _ = common_modes(0)
+    OR_ri,  OR_rr,  OR_rb,  _, _ = common_modes(1)
+    AND_ri, AND_rr, AND_rb, _, _ = common_modes(4)
+    SUB_ri, SUB_rr, SUB_rb, _, _ = common_modes(5)
+    XOR_ri, XOR_rr, XOR_rb, _, _ = common_modes(6)
+    CMP_ri, CMP_rr, CMP_rb, CMP_bi, CMP_br = common_modes(7)
 
     # ------------------------------ Misc stuff ------------------------------
 
@@ -375,6 +382,10 @@ class AbstractX86CodeBuilder(object):
 
     XCHG_rm = insn(rex_w, '\x87', register(1,8), mem_reg_plus_const(2))
 
+    JMP_l = insn('\xE9', relative(1))
+    J_il = insn('\x0F', immediate(1,'o'), '\x80', relative(2))
+    SET_ir = insn('\x0F', immediate(1,'o'),'\x90', register(2), '\xC0')
+
     # ------------------------------ SSE2 ------------------------------
 
     MOVSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), register(2),
@@ -390,6 +401,25 @@ class AbstractX86CodeBuilder(object):
 
     # ------------------------------------------------------------
 
+Conditions = {
+     'O':  0,
+    'NO':  1,
+     'C':  2,     'B':  2,   'NAE':  2,
+    'NC':  3,    'NB':  3,    'AE':  3,
+     'Z':  4,     'E':  4,
+    'NZ':  5,    'NE':  5,
+                 'BE':  6,    'NA':  6,
+                'NBE':  7,     'A':  7,
+     'S':  8,
+    'NS':  9,
+     'P': 10,    'PE': 10,
+    'NP': 11,    'PO': 11,
+                  'L': 12,   'NGE': 12,
+                 'NL': 13,    'GE': 13,
+                 'LE': 14,    'NG': 14,
+                'NLE': 15,     'G': 15,
+}
+
 
 class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 4
@@ -399,9 +429,14 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 8
 
     def writeimm64(self, imm):
-        imm32 = intmask(rffi.cast(rffi.INT, imm))
-        self.writeimm32(imm32)
-        self.writeimm32(imm >> 32)
+        self.writechar(chr(imm & 0xFF))
+        self.writechar(chr((imm >> 8) & 0xFF))
+        self.writechar(chr((imm >> 16) & 0xFF))
+        self.writechar(chr((imm >> 24) & 0xFF))
+        self.writechar(chr((imm >> 32) & 0xFF))
+        self.writechar(chr((imm >> 40) & 0xFF))
+        self.writechar(chr((imm >> 48) & 0xFF))
+        self.writechar(chr((imm >> 56) & 0xFF))
 
     # MOV_ri from the parent class is not wrong, but here is a better encoding
     # for the common case where the immediate fits in 32 bits

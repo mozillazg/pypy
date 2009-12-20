@@ -3,11 +3,12 @@ import os, sys
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.jit.backend.x86.rx86 import X86_32_CodeBuilder
+from pypy.jit.backend.x86.regloc import LocationCodeBuilder
 from pypy.rlib.rmmap import PTR, alloc, free
 from pypy.rlib.debug import make_sure_not_resized
 
 
-class InMemoryCodeBuilder(X86_32_CodeBuilder):
+class InMemoryCodeBuilder(X86_32_CodeBuilder, LocationCodeBuilder):
     _last_dump_start = 0
 
     def __init__(self, start, end):

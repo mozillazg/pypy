@@ -220,6 +220,8 @@ class TestRx86_32(object):
                 return []   # MOV EAX, [immediate]: there is a special encoding
             if methname == 'MOV_jr' and args[1] == rx86.R.eax:
                 return []   # MOV [immediate], EAX: there is a special encoding
+            if methname == 'SET_ir':
+                py.test.skip("SET_ir: must be tested manually")
             return [args]
 
     def get_code_checker_class(self):
