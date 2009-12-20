@@ -11,9 +11,14 @@ from pypy.tool.uid import fixid
 from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, lower_byte,\
      X86RegisterManager, X86XMMRegisterManager, get_ebp_ofs, FRAME_FIXED_SIZE,\
      FORCE_INDEX_OFS
+from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
+                                         esp, ebp, esi, edi,
+                                         xmm0, xmm1, xmm2, xmm3,
+                                         xmm4, xmm5, xmm6, xmm7,
+                                         RegLoc, StackLoc)
 from pypy.rlib.objectmodel import we_are_translated, specialize
+from pypy.jit.backend.x86 import rx86
 from pypy.jit.backend.x86 import codebuf
-from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.x86.support import values_array
 from pypy.rlib.debug import debug_print
@@ -67,9 +72,8 @@ def _new_method(name):
     method.func_name = name
     return method
 
-for name in dir(codebuf.MachineCodeBlock):
-    if name.upper() == name:
-        setattr(MachineCodeBlockWrapper, name, _new_method(name))
+for _name in rx86.all_instructions:
+    setattr(MachineCodeBlockWrapper, _name, _new_method(_name))
 
 class Assembler386(object):
     mc = None
@@ -146,8 +150,8 @@ class Assembler386(object):
         addr[5] = 2147483647       # / for abs
         addr[6] = 0                #
         addr[7] = 0                #
-        self.loc_float_const_neg = heap64(float_constants)
-        self.loc_float_const_abs = heap64(float_constants + 16)
+        self.loc_float_const_neg = float_constants
+        self.loc_float_const_abs = float_constants + 16
 
     def assemble_loop(self, inputargs, operations, looptoken):
         """adds the following attributes to looptoken:
@@ -219,7 +223,7 @@ class Assembler386(object):
 
     def _patchable_stackadjust(self):
         # stack adjustment LEA
-        self.mc.LEA(esp, fixedsize_ebp_ofs(0))
+        self.mc.LEA32_rb(esp.value, 0)
         return self.mc.tell() - 4
 
     def _patch_stackadjust(self, adr_lea, reserved_depth):
@@ -230,51 +234,92 @@ class Assembler386(object):
         # Given that [EBP] is where we saved EBP, i.e. in the last word
         # of our fixed frame, then the 'words' value is:
         words = (FRAME_FIXED_SIZE - 1) + reserved_depth
-        mc.write(packimm32(-WORD * words))
+        mc.writeimm32(-WORD * words)
         mc.done()
 
     def _assemble_bootstrap_code(self, inputargs, arglocs):
         nonfloatlocs, floatlocs = arglocs
-        self.mc.PUSH(ebp)
-        self.mc.MOV(ebp, esp)
-        self.mc.PUSH(ebx)
-        self.mc.PUSH(esi)
-        self.mc.PUSH(edi)
+        self.mc.PUSH_r(ebp.value)
+        self.mc.MOV_rr(ebp.value, esp.value)
+        self.mc.PUSH_r(ebx.value)
+        self.mc.PUSH_r(esi.value)
+        self.mc.PUSH_r(edi.value)
         # NB. the shape of the frame is hard-coded in get_basic_shape() too.
         # Also, make sure this is consistent with FRAME_FIXED_SIZE.
         adr_stackadjust = self._patchable_stackadjust()
-        tmp = X86RegisterManager.all_regs[0]
-        xmmtmp = X86XMMRegisterManager.all_regs[0]
+        #
+        self._bootstrap_load_floats(floatlocs)
+        #
+        # A bit of messy code to ensure that we load the value of 'esi'
+        # last, to let it be available as a temporary register in the
+        # preceeding parts.
         for i in range(len(nonfloatlocs)):
+            loc = nonfloatlocs[i]
+            if loc is esi:
+                esi_type = inputargs[i].type
+                break
+        else:
+            i = 0
+            esi_type = INT
+        if esi_type == REF:
+            self._bootstrap_load(inputargs, nonfloatlocs,
+                                 INT, self.fail_boxes_int, 0)
+            self._bootstrap_load(inputargs, nonfloatlocs,
+                                 REF, self.fail_boxes_ptr, i)
+        else:
+            self._bootstrap_load(inputargs, nonfloatlocs,
+                                 REF, self.fail_boxes_ptr, 0)
+            self._bootstrap_load(inputargs, nonfloatlocs,
+                                 INT, self.fail_boxes_int, i)
+        #
+        return adr_stackadjust
+
+    def _bootstrap_load(self, inputargs, nonfloatlocs, type, fail_boxes, i):
+        # load all input arguments from 'nonfloatlocs' that are of the
+        # given type (INT or REF), loading the i'th argument last.
+        tmp = X86RegisterManager.all_regs[0]
+        adr = fail_boxes.get_base_addr()
+        self.mc.MOV_ri(tmp.value, adr)
+        for j in range(len(nonfloatlocs)):
+            i -= 1
+            if i < 0:
+                i = len(nonfloatlocs) - 1
             loc = nonfloatlocs[i]
             if loc is None:
                 continue
-            if isinstance(loc, REG):
+            if inputargs[i].type != type:
+                continue
+            if isinstance(loc, RegLoc):
                 target = loc
             else:
-                target = tmp
-            if inputargs[i].type == REF:
+                target = esi
+            if type == REF:
                 # This uses XCHG to put zeroes in fail_boxes_ptr after
                 # reading them
-                self.mc.XOR(target, target)
-                adr = self.fail_boxes_ptr.get_addr_for_num(i)
-                self.mc.XCHG(target, heap(adr))
+                self.mc.XOR_rr(target.value, target.value)
+                self.mc.XCHG_rm(target.value, (tmp.value, WORD*i))
             else:
-                adr = self.fail_boxes_int.get_addr_for_num(i)
-                self.mc.MOV(target, heap(adr))
-            if target is not loc:
-                self.mc.MOV(loc, target)
+                self.mc.MOV_rm(target.value, (tmp.value, WORD*i))
+            if isinstance(loc, StackLoc):
+                self.mc.MOV_br(loc.value, target.value)
+
+    def _bootstrap_load_floats(self, floatlocs):
+        tmp = X86RegisterManager.all_regs[0]
+        loaded = False
         for i in range(len(floatlocs)):
             loc = floatlocs[i]
             if loc is None:
                 continue
-            adr = self.fail_boxes_float.get_addr_for_num(i)
-            if isinstance(loc, REG):
-                self.mc.MOVSD(loc, heap64(adr))
+            if not loaded:
+                adr = self.fail_boxes_float.get_base_addr()
+                self.mc.MOV_ri(tmp.value, adr)
+                loaded = True
+            if isinstance(loc, RegLoc):
+                self.mc.MOVSD_rm(loc.value, (tmp.value, 8*i))
             else:
-                self.mc.MOVSD(xmmtmp, heap64(adr))
-                self.mc.MOVSD(loc, xmmtmp)
-        return adr_stackadjust
+                xmmtmp = X86XMMRegisterManager.all_regs[0]
+                self.mc.MOVSD_rm(xmmtmp.value, (tmp.value, 8*i))
+                self.mc.MOVSD_sr(loc.value, xmmtmp.value)
 
     def dump(self, text):
         if not self.verbose:
@@ -359,7 +404,13 @@ class Assembler386(object):
 
     def _binaryop(asmop, can_swap=False):
         def genop_binary(self, op, arglocs, result_loc):
-            getattr(self.mc, asmop)(arglocs[0], arglocs[1])
+            loc0, loc1 = arglocs
+            if isinstance(loc1, RegLoc):
+                getattr(self.mc, asmop + '_rr')(loc0.value, loc1.value)
+            elif isinstance(loc1, StackLoc):
+                getattr(self.mc, asmop + '_rb')(loc0.value, loc1.value)
+            else:
+                getattr(self.mc, asmop + '_ri')(loc0.value, loc1.getint())
         return genop_binary
 
     def _cmpop(cond, rev_cond):
@@ -825,15 +876,15 @@ class Assembler386(object):
             if box is not None and box.type == FLOAT:
                 withfloats = True
                 break
-        mc.CALL(rel32(self.failure_recovery_code[exc + 2 * withfloats]))
+        mc.CALL_l(self.failure_recovery_code[exc + 2 * withfloats])
         # write tight data that describes the failure recovery
         faildescr._x86_failure_recovery_bytecode = mc.tell()
         self.write_failure_recovery_description(mc, failargs, fail_locs)
         # write the fail_index too
-        mc.write(packimm32(fail_index))
+        mc.writeimm32(fail_index)
         # for testing the decoding, write a final byte 0xCC
         if not we_are_translated():
-            mc.writechr(0xCC)
+            mc.writechar('\xCC')
             faildescr._x86_debug_faillocs = [loc for loc in fail_locs
                                                  if loc is not None]
         return addr
@@ -859,26 +910,19 @@ class Assembler386(object):
                 else:
                     raise AssertionError("bogus kind")
                 loc = locs[i]
-                if isinstance(loc, MODRM):
+                if isinstance(loc, StackLoc):
                     n = self.CODE_FROMSTACK//4 + loc.position
                 else:
-                    assert isinstance(loc, REG)
-                    n = loc.op
+                    assert isinstance(loc, RegLoc)
+                    n = loc.value
                 n = kind + 4*n
                 while n > 0x7F:
-                    mc.writechr((n & 0x7F) | 0x80)
+                    mc.writechar(chr((n & 0x7F) | 0x80))
                     n >>= 7
             else:
                 n = self.CODE_HOLE
-            mc.writechr(n)
-        mc.writechr(self.CODE_STOP)
-        # preallocate the fail_boxes
-        i = len(failargs) - 1
-        if i >= 0:
-            self.fail_boxes_int.get_addr_for_num(i)
-            self.fail_boxes_ptr.get_addr_for_num(i)
-            if self.cpu.supports_floats:
-                self.fail_boxes_float.get_addr_for_num(i)
+            mc.writechar(chr(n))
+        mc.writechar(chr(self.CODE_STOP))
 
     def rebuild_faillocs_from_descr(self, bytecode):
         from pypy.jit.backend.x86.regalloc import X86FrameManager
@@ -1044,19 +1088,19 @@ class Assembler386(object):
         # Assume that we are called at the beginning, when there is no risk
         # that 'mc' runs out of space.  Checked by asserts in mc.write().
         recovery_addr = mc.tell()
-        mc.PUSH(edi)
-        mc.PUSH(esi)
-        mc.PUSH(ebp)
-        mc.PUSH(esp)  # <-- not really used, but needed to take up the space
-        mc.PUSH(ebx)
-        mc.PUSH(edx)
-        mc.PUSH(ecx)
-        mc.PUSH(eax)
-        mc.MOV(esi, esp)
+        mc.PUSH_r(edi.value)
+        mc.PUSH_r(esi.value)
+        mc.PUSH_r(ebp.value)
+        mc.PUSH_r(esp.value)  # <-- not really used, but needed to take
+        mc.PUSH_r(ebx.value)                             # up the space
+        mc.PUSH_r(edx.value)
+        mc.PUSH_r(ecx.value)
+        mc.PUSH_r(eax.value)
+        mc.MOV_rr(esi.value, esp.value)
         if withfloats:
-            mc.SUB(esp, imm(8*8))
+            mc.SUB_ri(esp.value, 8*8)
             for i in range(8):
-                mc.MOVSD(mem64(esp, 8*i), xmm_registers[i])
+                mc.MOVSD_sr(8*i, i)
 
         # we call a provided function that will
         # - call our on_leave_jitted_hook which will mark
@@ -1064,7 +1108,7 @@ class Assembler386(object):
         #   avoid unwarranted freeing
         # - optionally save exception depending on the flag
         addr = self.cpu.get_on_leave_jitted_int(save_exception=exc)
-        mc.CALL(rel32(addr))
+        mc.CALL_l(addr)
 
         # the following call saves all values from the stack and from
         # registers to the right 'fail_boxes_<type>' location.
@@ -1073,66 +1117,63 @@ class Assembler386(object):
         # the XMM registers.  Moreover, esi[8] is a pointer to the recovery
         # bytecode, pushed just before by the CALL instruction written by
         # generate_quick_failure().
-        mc.PUSH(esi)
-        mc.CALL(rel32(failure_recovery_func))
+        mc.PUSH_r(esi.value)
+        mc.CALL_l(failure_recovery_func)
         # returns in eax the fail_index
 
         # now we return from the complete frame, which starts from
         # _assemble_bootstrap_code().  The LEA below throws away most
         # of the frame, including all the PUSHes that we did just above.
-        mc.LEA(esp, addr_add(ebp, imm(-3 * WORD)))
-        mc.POP(edi)    # [ebp-12]
-        mc.POP(esi)    # [ebp-8]
-        mc.POP(ebx)    # [ebp-4]
-        mc.POP(ebp)    # [ebp]
+        mc.LEA_rb(esp.value, -3 * WORD)
+        mc.POP_r(edi.value)    # [ebp-12]
+        mc.POP_r(esi.value)    # [ebp-8]
+        mc.POP_r(ebx.value)    # [ebp-4]
+        mc.POP_r(ebp.value)    # [ebp]
         mc.RET()
         self.mc2.done()
         self.failure_recovery_code[exc + 2 * withfloats] = recovery_addr
 
-    def generate_failure(self, mc, fail_index, locs, exc, locs_are_ref):
-        for i in range(len(locs)):
-            loc = locs[i]
-            if isinstance(loc, REG):
-                if loc.width == 8:
-                    adr = self.fail_boxes_float.get_addr_for_num(i)
-                    mc.MOVSD(heap64(adr), loc)
-                else:
-                    if locs_are_ref[i]:
-                        adr = self.fail_boxes_ptr.get_addr_for_num(i)
-                    else:
-                        adr = self.fail_boxes_int.get_addr_for_num(i)
-                    mc.MOV(heap(adr), loc)
-        for i in range(len(locs)):
-            loc = locs[i]
-            if not isinstance(loc, REG):
-                if loc.width == 8:
-                    mc.MOVSD(xmm0, loc)
-                    adr = self.fail_boxes_float.get_addr_for_num(i)
-                    mc.MOVSD(heap64(adr), xmm0)
-                else:
-                    if locs_are_ref[i]:
-                        adr = self.fail_boxes_ptr.get_addr_for_num(i)
-                    else:
-                        adr = self.fail_boxes_int.get_addr_for_num(i)
-                    mc.MOV(eax, loc)
-                    mc.MOV(heap(adr), eax)
+    def generate_failure_save(self, v, loc, i, tmpreg):
+        if v.type == FLOAT:
+            destadr = self.fail_boxes_float.get_addr_for_num(i)
+            self.mc.MOV_ri(tmpreg.value, destadr)
+            if isinstance(loc, RegLoc):
+                self.mc.MOVSD_mr((tmpreg.value, 0), loc.value)
+            else:
+                assert isinstance(loc, ConstInt)
+                value = rffi.cast(rffi.INTP, loc.value)[0]
+                self.mc.MOV_mi((tmpreg.value, 0), value)
+                value = rffi.cast(rffi.INTP, loc.value)[1]
+                self.mc.MOV_mi((tmpreg.value, 4), value)
+        else:
+            if v.type == REF:
+                destadr = self.fail_boxes_ref.get_addr_for_num(i)
+            else:
+                destadr = self.fail_boxes_int.get_addr_for_num(i)
+            self.mc.MOV_ri(tmpreg.value, destadr)
+            if isinstance(loc, RegLoc):
+                self.mc.MOV_mr((tmpreg.value, 0), loc.value)
+            else:
+                assert isinstance(loc, ConstInt)
+                self.mc.MOV_mi((tmpreg.value, 0), loc.value)
 
+    def generate_failure(self, fail_index, exc):
+        # avoid breaking the following code sequence, as we are almost done
+        mc = self.mc._mc
         # we call a provided function that will
         # - call our on_leave_jitted_hook which will mark
         #   the fail_boxes_ptr array as pointing to young objects to
         #   avoid unwarranted freeing
         # - optionally save exception depending on the flag
         addr = self.cpu.get_on_leave_jitted_int(save_exception=exc)
-        mc.CALL(rel32(addr))
-
-        # don't break the following code sequence!   xxx no reason any more?
-        mc = mc._mc
-        mc.LEA(esp, addr_add(ebp, imm(-3 * WORD)))
-        mc.MOV(eax, imm(fail_index))
-        mc.POP(edi)    # [ebp-12]
-        mc.POP(esi)    # [ebp-8]
-        mc.POP(ebx)    # [ebp-4]
-        mc.POP(ebp)    # [ebp]
+        mc.CALL_l(addr)
+        #
+        mc.LEA_rb(esp.value, -3 * WORD)
+        mc.MOV_ri(eax.value, fail_index)
+        mc.POP_r(edi.value)    # [ebp-12]
+        mc.POP_r(esi.value)    # [ebp-8]
+        mc.POP_r(ebx.value)    # [ebp-4]
+        mc.POP_r(ebp.value)    # [ebp]
         mc.RET()
 
     @specialize.arg(2)
@@ -1289,15 +1330,15 @@ def new_addr_add(heap, mem, memsib):
                 return memsib(reg_or_imm1, reg_or_imm2, scale, offset)
     return addr_add
 
-addr8_add = new_addr_add(heap8, mem8, memSIB8)
-addr_add = new_addr_add(heap, mem, memSIB)
-addr64_add = new_addr_add(heap64, mem64, memSIB64)
-
-def addr_add_const(reg_or_imm1, offset):
-    if isinstance(reg_or_imm1, IMM32):
-        return heap(reg_or_imm1.value + offset)
-    else:
-        return mem(reg_or_imm1, offset)
+#addr8_add = new_addr_add(heap8, mem8, memSIB8)
+#addr_add = new_addr_add(heap, mem, memSIB)
+#addr64_add = new_addr_add(heap64, mem64, memSIB64)
+#
+#def addr_add_const(reg_or_imm1, offset):
+#    if isinstance(reg_or_imm1, IMM32):
+#        return heap(reg_or_imm1.value + offset)
+#    else:
+#        return mem(reg_or_imm1, offset)
 
 def round_up_to_4(size):
     if size < 4:

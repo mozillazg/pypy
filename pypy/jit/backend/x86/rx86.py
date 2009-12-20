@@ -1,5 +1,5 @@
 import py
-from pypy.rlib.rarithmetic import intmask, r_ulonglong
+from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.unroll import unrolling_iterable
@@ -26,16 +26,6 @@ def single_byte(value):
 
 def fits_in_32bits(value):
     return -2147483648 <= value <= 2147483647
-
-def intmask32(value):
-    # extract the 32 lower bits of 'value', returning a regular signed int
-    # (it is negative if 'value' is negative according to the 32-bits repr)
-    return intmask(rffi.cast(rffi.INT, value))
-
-def cast32to64(value):
-    # returns 'value' in the 32 lower bits of a 64-bit integer,
-    # with the remaining bits set to 0 (even if value is negative).
-    return r_ulonglong(rffi.cast(rffi.UINT, value))
 
 # ____________________________________________________________
 # Emit a single char
@@ -103,10 +93,22 @@ def immediate(argnum, width='i'):
     return encode_immediate, argnum, width, None
 
 # ____________________________________________________________
+# Emit an immediate displacement (relative to the cur insn)
+
+def encode_relative(mc, target, _, orbyte):
+    assert orbyte == 0
+    offset = target - (mc.tell() + 4)
+    mc.writeimm32(offset)
+    return 0
+
+def relative(argnum):
+    return encode_relative, argnum, None, None
+
+# ____________________________________________________________
 # Emit a mod/rm referencing a stack location [EBP+offset]
 
 @specialize.arg(2)
-def encode_stack(mc, offset, force_32bits, orbyte):
+def encode_stack_bp(mc, offset, force_32bits, orbyte):
     if not force_32bits and single_byte(offset):
         mc.writechar(chr(0x40 | orbyte | R.ebp))
         mc.writeimm8(offset)
@@ -116,23 +118,39 @@ def encode_stack(mc, offset, force_32bits, orbyte):
         mc.writeimm32(offset)
     return 0
 
-def stack(argnum, force_32bits=False):
-    return encode_stack, argnum, force_32bits, None
+def stack_bp(argnum, force_32bits=False):
+    return encode_stack_bp, argnum, force_32bits, None
+
+# ____________________________________________________________
+# Emit a mod/rm referencing a stack location [ESP+offset]
+
+def encode_stack_sp(mc, offset, _, orbyte):
+    SIB = chr((R.esp<<3) | R.esp)    #   use [esp+(no index)+offset]
+    if offset == 0:
+        mc.writechar(chr(0x04 | orbyte))
+        mc.writechar(SIB)
+    elif single_byte(offset):
+        mc.writechar(chr(0x44 | orbyte))
+        mc.writechar(SIB)
+        mc.writeimm8(offset)
+    else:
+        assert fits_in_32bits(offset)
+        mc.writechar(chr(0x84 | orbyte))
+        mc.writechar(SIB)
+        mc.writeimm32(offset)
+    return 0
+
+def stack_sp(argnum):
+    return encode_stack_sp, argnum, None, None
 
 # ____________________________________________________________
 # Emit a mod/rm referencing a memory location [reg1+offset]
 
-def reg_offset(reg, offset):
-    # returns a 64-bits integer encoding "reg1+offset".
-    # * 'offset' is stored as bytes 1-4 of the result;
-    # * 'reg1' is stored as byte 5 of the result.
+def encode_mem_reg_plus_const(mc, (reg, offset), _, orbyte):
     assert reg != R.esp and reg != R.ebp
     assert fits_in_32bits(offset)
-    return (r_ulonglong(reg) << 32) | cast32to64(offset)
-
-def encode_mem_reg_plus_const(mc, reg1_offset, _, orbyte):
-    reg1 = reg_number_3bits(mc, intmask(reg1_offset >> 32))
-    offset = intmask32(reg1_offset)
+    #
+    reg1 = reg_number_3bits(mc, reg)
     no_offset = offset == 0
     SIB = -1
     # 64-bits special cases for reg1 == r12 or r13
@@ -156,9 +174,8 @@ def encode_mem_reg_plus_const(mc, reg1_offset, _, orbyte):
         mc.writeimm32(offset)
     return 0
 
-def rex_mem_reg_plus_const(mc, reg1_offset, _):
-    reg1 = intmask(reg1_offset >> 32)
-    if reg1 >= 8:
+def rex_mem_reg_plus_const(mc, (reg, offset), _):
+    if reg >= 8:
         return REX_B
     return 0
 
@@ -168,39 +185,22 @@ def mem_reg_plus_const(argnum):
 # ____________________________________________________________
 # Emit a mod/rm referencing an array memory location [reg1+reg2*scale+offset]
 
-def reg_reg_scaleshift_offset(reg1, reg2, scaleshift, offset):
-    # returns a 64-bits integer encoding "reg1+reg2<<scaleshift+offset".
-    # * 'offset' is stored as bytes 1-4 of the result;
-    # * the SIB byte is computed and stored as byte 5 of the result;
-    # * for 64-bits mode, the optional REX.B and REX.X flags go to byte 6.
-    assert 0 <= reg1 < 16 and reg1 != R.ebp
-    assert 0 <= reg2 < 16 and reg2 != R.esp
+def encode_mem_reg_plus_scaled_reg_plus_const(mc,
+                                              (reg1, reg2, scaleshift, offset),
+                                              _, orbyte):
+    # emit "reg1 + (reg2 << scaleshift) + offset"
+    assert reg1 != R.ebp and reg2 != R.esp
     assert 0 <= scaleshift < 4
     assert fits_in_32bits(offset)
-    encoding = 0
-    if reg1 >= 8:
-        encoding |= REX_B << 8
-        reg1 &= 7
-    if reg2 >= 8:
-        encoding |= REX_X << 8
-        reg2 &= 7
-    encoding |= (scaleshift<<6) | (reg2<<3) | reg1
-    return (r_ulonglong(encoding) << 32) | cast32to64(offset)
-
-def encode_mem_reg_plus_scaled_reg_plus_const(mc, reg1_reg2_scaleshift_offset,
-                                              _, orbyte):
-    encoding = intmask(reg1_reg2_scaleshift_offset >> 32)
-    if mc.WORD == 4:
-        assert encoding <= 0xFF    # else registers r8..r15 have been used
-        SIB = chr(encoding)
-    else:
-        SIB = chr(encoding & 0xFF)
-    offset = intmask32(reg1_reg2_scaleshift_offset)
+    reg1 = reg_number_3bits(mc, reg1)
+    reg2 = reg_number_3bits(mc, reg2)
+    SIB = chr((scaleshift<<6) | (reg2<<3) | reg1)
+    #
     no_offset = offset == 0
     # 64-bits special case for reg1 == r13
     # (which look like ebp after being truncated to 3 bits)
     if mc.WORD == 8:
-        if (encoding & 7) == R.ebp:
+        if reg1 == R.ebp:
             no_offset = False
     # end of 64-bits special case
     if no_offset:
@@ -216,8 +216,13 @@ def encode_mem_reg_plus_scaled_reg_plus_const(mc, reg1_reg2_scaleshift_offset,
         mc.writeimm32(offset)
     return 0
 
-def rex_mem_reg_plus_scaled_reg_plus_const(mc, reg1_reg2_scaleshift_offset, _):
-    return intmask(reg1_reg2_scaleshift_offset >> (32+8))
+def rex_mem_reg_plus_scaled_reg_plus_const(mc,
+                                           (reg1, reg2, scaleshift, offset),
+                                           _):
+    rex = 0
+    if reg1 >= 8: rex |= REX_B
+    if reg2 >= 8: rex |= REX_X
+    return rex
 
 def mem_reg_plus_scaled_reg_plus_const(argnum):
     return (encode_mem_reg_plus_scaled_reg_plus_const, argnum, None,
@@ -232,34 +237,36 @@ REX_X = 2
 REX_B = 1
 
 @specialize.arg(2)
-def encode_rex(mc, _, basevalue, orbyte):
+def encode_rex(mc, rexbyte, basevalue, orbyte):
     if mc.WORD == 8:
-        assert 0 <= orbyte < 8
-        if basevalue != 0x40 or orbyte != 0:
-            mc.writechar(chr(basevalue | orbyte))
+        assert 0 <= rexbyte < 8
+        if basevalue != 0x40 or rexbyte != 0:
+            mc.writechar(chr(basevalue | rexbyte))
     else:
-        assert orbyte == 0
+        assert rexbyte == 0
     return 0
 
-rex_w  = encode_rex, None, (0x40 | REX_W), None
-rex_nw = encode_rex, None, 0x40, None
+rex_w  = encode_rex, 0, (0x40 | REX_W), None
+rex_nw = encode_rex, 0, 0x40, None
 
 # ____________________________________________________________
 
 def insn(*encoding):
     def encode(mc, *args):
-        orbyte = 0
+        rexbyte = 0
         if mc.WORD == 8:
             # compute the REX byte, if any
             for encode_step, arg, extra, rex_step in encoding_steps:
                 if rex_step:
                     if arg is not None:
                         arg = args[arg-1]
-                    orbyte |= rex_step(mc, arg, extra)
+                    rexbyte |= rex_step(mc, arg, extra)
+        args = (rexbyte,) + args
         # emit the bytes of the instruction
+        orbyte = 0
         for encode_step, arg, extra, rex_step in encoding_steps:
             if arg is not None:
-                arg = args[arg-1]
+                arg = args[arg]
             orbyte = encode_step(mc, arg, extra, orbyte)
         assert orbyte == 0
     #
@@ -274,22 +281,27 @@ def insn(*encoding):
     encoding_steps = unrolling_iterable(encoding_steps)
     return encode
 
+def xmminsn(*encoding):
+    encode = insn(*encoding)
+    encode.is_xmm_insn = True
+    return encode
+
 def common_modes(group):
     base = group * 8
-    INSN_ri8 = insn(rex_w, '\x83', orbyte(group<<3), register(1), '\xC0',
-                    immediate(2,'b'))
-    INSN_ri32 = insn(rex_w, '\x81', orbyte(group<<3), register(1), '\xC0',
-                     immediate(2))
+    char = chr(0xC0 | base)
+    INSN_ri8 = insn(rex_w, '\x83', register(1), char, immediate(2,'b'))
+    INSN_ri32 = insn(rex_w, '\x81', register(1), char, immediate(2))
     INSN_rr = insn(rex_w, chr(base+1), register(2,8), register(1,1), '\xC0')
-    INSN_rs = insn(rex_w, chr(base+3), register(1,8), stack(2))
+    INSN_rb = insn(rex_w, chr(base+3), register(1,8), stack_bp(2))
 
     def INSN_ri(mc, reg, immed):
         if single_byte(immed):
             INSN_ri8(mc, reg, immed)
         else:
             INSN_ri32(mc, reg, immed)
+    INSN_ri._always_inline_ = True      # try to constant-fold single_byte()
 
-    return INSN_ri, INSN_rr, INSN_rs
+    return INSN_ri, INSN_rr, INSN_rb
 
 # ____________________________________________________________
 
@@ -314,16 +326,18 @@ class AbstractX86CodeBuilder(object):
         self.writechar(chr((imm >> 16) & 0xFF))
         self.writechar(chr((imm >> 24) & 0xFF))
 
+    # ------------------------------ MOV ------------------------------
+
     MOV_ri = insn(rex_w, register(1), '\xB8', immediate(2, 'q'))
-    #MOV_si = insn(rex_w, '\xC7', orbyte(0<<3), stack(1), immediate(2))
     MOV_rr = insn(rex_w, '\x89', register(2,8), register(1), '\xC0')
-    MOV_sr = insn(rex_w, '\x89', register(2,8), stack(1))
-    MOV_rs = insn(rex_w, '\x8B', register(1,8), stack(2))
+    MOV_br = insn(rex_w, '\x89', register(2,8), stack_bp(1))
+    MOV_rb = insn(rex_w, '\x8B', register(1,8), stack_bp(2))
 
     # "MOV reg1, [reg2+offset]" and the opposite direction
     MOV_rm = insn(rex_w, '\x8B', register(1,8), mem_reg_plus_const(2))
     MOV_mr = insn(rex_w, '\x89', register(2,8), mem_reg_plus_const(1))
-    #MOV_mi = insn(rex_w, '\xC7', mem_reg_plus_const(1), immediate(2))
+    MOV_mi = insn(rex_w, '\xC7', orbyte(0<<3), mem_reg_plus_const(1),
+                                               immediate(2, 'i'))
 
     # "MOV reg1, [reg2+reg3*scale+offset]" and the opposite direction
     MOV_ra = insn(rex_w, '\x8B', register(1,8),
@@ -335,20 +349,46 @@ class AbstractX86CodeBuilder(object):
     MOV_rj = insn(rex_w, '\x8B', register(1,8), '\x05', immediate(2))
     MOV_jr = insn(rex_w, '\x89', register(2,8), '\x05', immediate(1))
 
-    ADD_ri, ADD_rr, ADD_rs = common_modes(0)
-    OR_ri,  OR_rr,  OR_rs  = common_modes(1)
-    AND_ri, AND_rr, AND_rs = common_modes(4)
-    SUB_ri, SUB_rr, SUB_rs = common_modes(5)
-    XOR_ri, XOR_rr, XOR_rs = common_modes(6)
-    CMP_ri, CMP_rr, CMP_rs = common_modes(7)
+    # ------------------------------ Arithmetic ------------------------------
+
+    ADD_ri, ADD_rr, ADD_rb = common_modes(0)
+    OR_ri,  OR_rr,  OR_rb  = common_modes(1)
+    AND_ri, AND_rr, AND_rb = common_modes(4)
+    SUB_ri, SUB_rr, SUB_rb = common_modes(5)
+    XOR_ri, XOR_rr, XOR_rb = common_modes(6)
+    CMP_ri, CMP_rr, CMP_rb = common_modes(7)
+
+    # ------------------------------ Misc stuff ------------------------------
 
     NOP = insn('\x90')
     RET = insn('\xC3')
 
     PUSH_r = insn(rex_nw, register(1), '\x50')
+    POP_r = insn(rex_nw, register(1), '\x58')
 
-    LEA_rs = insn(rex_w, '\x8D', register(1,8), stack(2))
-    LEA32_rs = insn(rex_w, '\x8D', register(1,8), stack(2, force_32bits=True))
+    LEA_rb = insn(rex_w, '\x8D', register(1,8), stack_bp(2))
+    LEA32_rb = insn(rex_w, '\x8D', register(1,8),stack_bp(2,force_32bits=True))
+
+    CALL_l = insn('\xE8', relative(1))
+    CALL_r = insn(rex_nw, '\xFF', register(1), chr(0xC0 | (2<<3)))
+    CALL_b = insn('\xFF', orbyte(2<<3), stack_bp(1))
+
+    XCHG_rm = insn(rex_w, '\x87', register(1,8), mem_reg_plus_const(2))
+
+    # ------------------------------ SSE2 ------------------------------
+
+    MOVSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), register(2),
+                                                              '\xC0')
+    MOVSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), stack_bp(2))
+    MOVSD_br = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_bp(1))
+    MOVSD_rs = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), stack_sp(2))
+    MOVSD_sr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_sp(1))
+    MOVSD_rm = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8),
+                                                     mem_reg_plus_const(2))
+    MOVSD_mr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8),
+                                                     mem_reg_plus_const(1))
+
+    # ------------------------------------------------------------
 
 
 class X86_32_CodeBuilder(AbstractX86CodeBuilder):
@@ -359,7 +399,8 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 8
 
     def writeimm64(self, imm):
-        self.writeimm32(intmask32(imm))
+        imm32 = intmask(rffi.cast(rffi.INT, imm))
+        self.writeimm32(imm32)
         self.writeimm32(imm >> 32)
 
     # MOV_ri from the parent class is not wrong, but here is a better encoding
@@ -371,6 +412,16 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
             self._MOV_ri32(reg, immed)
         else:
             AbstractX86CodeBuilder.MOV_ri(self, reg, immed)
+
+    # case of a 64-bit immediate: encode via RAX (assuming it's ok to
+    # randomly change this register at that point in time)
+    def CALL_l(self, target):
+        offset = target - (self.tell() + 5)
+        if fits_in_32bits(offset):
+            AbstractX86CodeBuilder.CALL_l(self, target)
+        else:
+            AbstractX86CodeBuilder.MOV_ri(self, R.eax, target)
+            AbstractX86CodeBuilder.CALL_r(self, R.eax)
 
     # unsupported -- must use e.g. MOV tmpreg, immed64; MOV reg, [tmpreg]
     def MOV_rj(self, reg, mem_immed):

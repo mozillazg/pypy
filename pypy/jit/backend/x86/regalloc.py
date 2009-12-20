@@ -5,14 +5,16 @@
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
                                          ResOperation, ConstAddr, BoxPtr,
                                          LoopToken, INT, REF, FLOAT)
-from pypy.jit.backend.x86 import rx86
+from pypy.jit.backend.x86.regloc import (StackLoc, eax, ecx, edx, ebx,
+                                         esp, ebp, esi, edi,
+                                         xmm0, xmm1, xmm2, xmm3,
+                                         xmm4, xmm5, xmm6, xmm7)
 from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib import rgc
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.history import AbstractValue
 from pypy.jit.backend.llsupport.descr import BaseFieldDescr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import BaseCallDescr, BaseSizeDescr
 from pypy.jit.backend.llsupport.regalloc import FrameManager, RegisterManager,\
@@ -21,37 +23,6 @@ from pypy.jit.backend.llsupport.regalloc import FrameManager, RegisterManager,\
 WORD = 4
 FRAME_FIXED_SIZE = 5     # ebp + ebx + esi + edi + force_index = 5 words
 FORCE_INDEX_OFS = -4*WORD
-
-
-class AssemblerLocation(AbstractValue):
-    __slots__ = 'value'
-    def _getregkey(self):
-        return self.value
-
-class StackLoc(AssemblerLocation):
-    def __init__(self, position, ebp_offset):
-        assert ebp_offset < 0   # so no confusion with RegLoc._loc
-        self.position = position
-        self.value = ebp_offset
-    def __repr__(self):
-        return '%d(%%ebp)' % (self.value,)
-
-class RegLoc(AssemblerLocation):
-    def __init__(self, regnum):
-        assert regnum >= 0
-        self.value = regnum
-    def __repr__(self):
-        return rx86.R.names[self.value]
-
-class XmmRegLoc(RegLoc):
-    def __repr__(self):
-        return rx86.R.xmmnames[self.value]
-
-REGLOCS = [RegLoc(i) for i in range(8)]
-XMMREGLOCS = [XmmRegLoc(i) for i in range(8)]
-eax, ecx, edx, ebx, esp, ebp, esi, edi = REGLOCS
-xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = XMMREGLOCS
-
 
 width_of_type = {
     INT : 1,
@@ -65,6 +36,9 @@ class X86RegisterManager(RegisterManager):
     all_regs = [eax, ecx, edx, ebx, esi, edi]
     no_lower_byte_regs = [esi, edi]
     save_around_call_regs = [eax, edx, ecx]
+
+    def convert_to_imm(self, c):
+        return c
 
     def call_result_location(self, v):
         return eax
@@ -87,23 +61,22 @@ class X86XMMRegisterManager(RegisterManager):
     def __init__(self, longevity, frame_manager=None, assembler=None):
         RegisterManager.__init__(self, longevity, frame_manager=frame_manager,
                                  assembler=assembler)
-        self.constant_arrays = [self.new_const_array()]
-        self.constant_array_counter = 0
+        self.past_constant_arrays = []
+        self.cur_constant_array = None
+        self.constant_array_counter = BASE_CONSTANT_SIZE
 
-##    def convert_to_imm(self, c):
-##        if self.constant_array_counter >= BASE_CONSTANT_SIZE:
-##            self.constant_arrays.append(self.new_const_array())
-##            self.constant_array_counter = 0
-##        res = self.constant_array_counter
-##        self.constant_array_counter += 1
-##        arr = self.constant_arrays[-1]
-##        arr[res] = c.getfloat()
-##        return self.get_addr_of_const_float(-1, res)
+    def convert_to_imm(self, c):
+        if self.constant_array_counter >= BASE_CONSTANT_SIZE:
+            self.cur_constant_array = self.new_const_array()
+            self.past_constant_arrays.append(self.cur_constant_array)
+            self.constant_array_counter = 0
+        res = self.constant_array_counter
+        self.constant_array_counter += 1
+        arr = self.cur_constant_array
+        arr[res] = c.getfloat()
+        addr = rffi.cast(lltype.Signed, arr) + res * 8
+        return ConstInt(addr)
 
-    def get_addr_of_const_float(self, num_arr, num_pos):
-        arr = self.constant_arrays[num_arr]
-        return heap64(rffi.cast(lltype.Signed, arr) + num_pos * WORD * 2)
-        
     def after_call(self, v):
         # the result is stored in st0, but we don't have this around,
         # so genop_call will move it to some frame location immediately
@@ -167,8 +140,8 @@ class RegAlloc(object):
     def _process_inputargs(self, inputargs):
         # XXX we can sort out here by longevity if we need something
         # more optimal
-        floatlocs = [-1] * len(inputargs)
-        nonfloatlocs = [-1] * len(inputargs)
+        floatlocs = [None] * len(inputargs)
+        nonfloatlocs = [None] * len(inputargs)
         # Don't use all_regs[0] for passing arguments around a loop.
         # Must be kept in sync with consider_jump().
         # XXX this should probably go to llsupport/regalloc.py
@@ -412,12 +385,17 @@ class RegAlloc(object):
     consider_guard_isnull = _consider_guard
 
     def consider_finish(self, op, ignored):
-        locs = [self.loc(v) for v in op.args]
-        locs_are_ref = [v.type == REF for v in op.args]
+        # xxx assumes no duplicate Boxes in op.args
+        tmpvar = TempBox()
+        tmpreg = self.rm.force_allocate_reg(tmpvar)
+        for i in range(len(op.args)):
+            v = op.args[i]
+            loc = self.make_sure_var_in_reg(v)
+            self.assembler.generate_failure_save(v, loc, i, tmpreg)
+            self.possibly_free_var(v)
         fail_index = self.assembler.cpu.get_fail_descr_number(op.descr)
-        self.assembler.generate_failure(self.assembler.mc, fail_index, locs,
-                                        self.exc, locs_are_ref)
-        self.possibly_free_vars(op.args)
+        self.assembler.generate_failure(fail_index, self.exc)
+        self.rm.possibly_free_var(tmpvar)
 
     def consider_guard_no_exception(self, op, ignored):
         self.perform_guard(op, [], None)
