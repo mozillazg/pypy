@@ -1,6 +1,6 @@
 import py, random
 
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
@@ -38,12 +38,13 @@ class LLtypeMixin(object):
     type_system = 'lltype'
 
     def get_class_of_box(self, box):
-        from pypy.rpython.lltypesystem import rclass
         return box.getref(rclass.OBJECTPTR).typeptr
 
     node_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
+    node_vtable.name = rclass.alloc_array_name('node')
     node_vtable_adr = llmemory.cast_ptr_to_adr(node_vtable)
     node_vtable2 = lltype.malloc(OBJECT_VTABLE, immortal=True)
+    node_vtable2.name = rclass.alloc_array_name('node2')
     node_vtable_adr2 = llmemory.cast_ptr_to_adr(node_vtable2)
     cpu = runner.LLtypeCPU(None)
 
@@ -98,6 +99,13 @@ class LLtypeMixin(object):
     nonwritedescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, EffectInfo([], []))
     writeadescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, EffectInfo([adescr], []))
     writearraydescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, EffectInfo([adescr], [arraydescr]))
+    mayforcevirtdescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], forces_virtual_or_virtualizable=True))
+
+    from pypy.jit.metainterp.virtualref import jit_virtual_ref_vtable
+    from pypy.jit.metainterp.virtualref import JIT_VIRTUAL_REF
+    virtualtokendescr = cpu.fielddescrof(JIT_VIRTUAL_REF, 'virtual_token')
+    virtualrefindexdescr = cpu.fielddescrof(JIT_VIRTUAL_REF,'virtualref_index')
 
     cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
                       cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),

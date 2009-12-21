@@ -2031,6 +2031,81 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
+    def test_vref_nonvirtual(self):
+        ops = """
+        [p1]
+        p2 = virtual_ref(p1, 5)
+        jump(p1)
+        """
+        py.test.raises(compile.GiveUp, self.optimize_loop, ops, 'Not', ops)
+
+    def test_vref_virtual_1(self):
+        ops = """
+        [p0, i1]
+        #
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p1b = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1b, 252, descr=valuedescr)
+        setfield_gc(p1, p1b, descr=nextdescr)
+        #
+        p2 = virtual_ref(p1, 3)
+        setfield_gc(p0, p2, descr=nextdescr)
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced() [i1]
+        setfield_gc(p0, NULL, descr=nextdescr)
+        jump(p0, i1)
+        """
+        expected = """
+        [p0, i1]
+        i3 = force_token()
+        p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
+        setfield_gc(p2, i3, descr=virtualtokendescr)
+        setfield_gc(p2, 3, descr=virtualrefindexdescr)
+        setfield_gc(p0, p2, descr=nextdescr)
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced() [i1]
+        setfield_gc(p0, NULL, descr=nextdescr)
+        jump(p0, i1)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_vref_virtual_2(self):
+        self.make_fail_descr()
+        ops = """
+        [p0, i1]
+        #
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p1b = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1b, i1, descr=valuedescr)
+        setfield_gc(p1, p1b, descr=nextdescr)
+        #
+        p2 = virtual_ref(p1, 2)
+        setfield_gc(p0, p2, descr=nextdescr)
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced(descr=fdescr) [p1]
+        setfield_gc(p0, NULL, descr=nextdescr)
+        jump(p0, i1)
+        """
+        expected = """
+        [p0, i1]
+        i3 = force_token()
+        p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
+        setfield_gc(p2, i3, descr=virtualtokendescr)
+        setfield_gc(p2, 2, descr=virtualrefindexdescr)
+        setfield_gc(p0, p2, descr=nextdescr)
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced(descr=fdescr) [i1]
+        setfield_gc(p0, NULL, descr=nextdescr)
+        jump(p0, i1)
+        """
+        # the point of this test is that 'i1' should show up in the fail_args
+        # of 'guard_not_forced', because it was stored in the virtual 'p1b'.
+        self.optimize_loop(ops, 'Not, Not', expected)
+        self.check_expanded_fail_descr('''p1
+            where p1 is a node_vtable, nextdescr=p1b
+            where p1b is a node_vtable, valuedescr=i1
+            ''')
+
 
 class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
 
