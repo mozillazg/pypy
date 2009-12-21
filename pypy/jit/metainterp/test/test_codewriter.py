@@ -2,7 +2,7 @@ import py
 from pypy.rlib import jit
 from pypy.jit.metainterp import support, typesystem
 from pypy.jit.metainterp.policy import JitPolicy
-from pypy.jit.metainterp.codewriter import CodeWriter
+from pypy.jit.metainterp.codewriter import CodeWriter, ForcingVirtualRef
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.translator.translator import graphof
 from pypy.rpython.lltypesystem.rbuiltin import ll_instantiate
@@ -283,7 +283,7 @@ class TestCodeWriter:
         assert calldescrs[0][4] is not None
         assert not calldescrs[0][4].write_descrs_fields
         assert not calldescrs[0][4].write_descrs_arrays
-        assert not calldescrs[0][4].promotes_virtualizables
+        assert not calldescrs[0][4].forces_virtual_or_virtualizable
 
     def test_oosend_look_inside_only_one(self):
         class A:
@@ -394,7 +394,7 @@ class TestCodeWriter:
         assert cw.list_of_addr2name[0][1].endswith('.A1')
         assert cw.list_of_addr2name[1][1] == 'A1.g'
 
-    def test_promote_virtualizable_effectinfo(self):
+    def test_jit_force_virtualizable_effectinfo(self):
         class Frame(object):
             _virtualizable2_ = ['x']
             
@@ -430,9 +430,38 @@ class TestCodeWriter:
         effectinfo_g1 = calldescrs[1][4]
         effectinfo_g2 = calldescrs[2][4]
         effectinfo_h  = calldescrs[3][4]
-        assert effectinfo_g1.promotes_virtualizables
-        assert effectinfo_g2.promotes_virtualizables
-        assert not effectinfo_h.promotes_virtualizables
+        assert effectinfo_g1.forces_virtual_or_virtualizable
+        assert effectinfo_g2.forces_virtual_or_virtualizable
+        assert not effectinfo_h.forces_virtual_or_virtualizable
+
+    def test_vref_simple(self):
+        class X:
+            pass
+        def f():
+            return jit.virtual_ref(X())
+        graphs = self.make_graphs(f, [])
+        assert graphs[0].func is f
+        assert graphs[1].func is jit.virtual_ref
+        cw = CodeWriter(self.rtyper)
+        cw.candidate_graphs = [graphs[0]]
+        cw._start(self.metainterp_sd, None)
+        jitcode = cw.make_one_bytecode((graphs[0], None), False)
+        assert 'virtual_ref' in jitcode._source
+
+    def test_vref_forced(self):
+        class X:
+            pass
+        def f():
+            vref = jit.virtual_ref(X())
+            return vref()
+        graphs = self.make_graphs(f, [])
+        assert graphs[0].func is f
+        assert graphs[1].func is jit.virtual_ref
+        cw = CodeWriter(self.rtyper)
+        cw.candidate_graphs = [graphs[0]]
+        cw._start(self.metainterp_sd, None)
+        py.test.raises(ForcingVirtualRef, cw.make_one_bytecode,
+                       (graphs[0], None), False)    # assert it does not work
 
 
 class ImmutableFieldsTests:
