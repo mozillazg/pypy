@@ -8,7 +8,7 @@ from pypy.translator.backendopt.all import backend_optimizations
 from pypy.conftest import option
 
 
-class BaseTestCanRaise(object):
+class BaseTestWriteAnalyze(object):
 
     type_system = None
 
@@ -146,7 +146,7 @@ class BaseTestCanRaise(object):
         assert not result
 
 
-class TestLLtype(BaseTestCanRaise):
+class TestLLtype(BaseTestWriteAnalyze):
     type_system = 'lltype'
 
     def test_list(self):
@@ -205,7 +205,7 @@ class TestLLtype(BaseTestCanRaise):
         assert name.endswith("foobar")
 
 
-class TestOOtype(BaseTestCanRaise):
+class TestOOtype(BaseTestWriteAnalyze):
     type_system = 'ootype'
     
     def test_array(self):
