@@ -2031,6 +2031,27 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
+    def test_setfield_might_alias(self):
+        # the point is that p1 and p2 might be equal or not
+        ops = """
+        [p1, p2, i1, i1a]
+        setfield_gc(p1, i1, descr=adescr)
+        setfield_gc(p2, i1a, descr=adescr)
+        i2 = call(i1, descr=readadescr)
+        i3a = getfield_gc(p2, descr=adescr)     # can go away
+        i3 = getfield_gc(p1, descr=adescr)      # cannot go away
+        jump(p1, p2, i3, i1a)
+        """
+        expected = """
+        [p1, p2, i1, i1a]
+        setfield_gc(p1, i1, descr=adescr)
+        setfield_gc(p2, i1a, descr=adescr)
+        i2 = call(i1, descr=readadescr)
+        i3 = getfield_gc(p1, descr=adescr)
+        jump(p1, p2, i3, i1a)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
     def test_residual_call_invalidates_some_read_caches(self):
         ops = """
         [p1, i1, p2, i2]
