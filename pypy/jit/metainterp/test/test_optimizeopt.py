@@ -1293,6 +1293,57 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not', ops)
 
+    def test_duplicate_setfield_1(self):
+        ops = """
+        [p1, i1, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2)
+        """
+        expected = """
+        [p1, i1, i2]
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_duplicate_setfield_sideeffects_1(self):
+        ops = """
+        [p1, i1, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        escape()
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', ops)
+
+    def test_duplicate_setfield_aliasing(self):
+        # a case where aliasing issues (and not enough cleverness) mean
+        # that we fail to remove any setfield_gc
+        ops = """
+        [p1, p2, i1, i2, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        jump(p1, p2, i1, i2, i3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not, Not', ops)
+
+    def test_duplicate_setfield_guard_value_const(self):
+        ops = """
+        [p1, i1, i2]
+        guard_value(p1, ConstPtr(myptr)) []
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(ConstPtr(myptr), i2, descr=valuedescr)
+        jump(p1, i1, i2)
+        """
+        expected = """
+        [i1, i2]
+        setfield_gc(ConstPtr(myptr), i2, descr=valuedescr)
+        jump(i1, i2)
+        """
+        self.optimize_loop(ops, 'Constant(myptr)', expected)
+
     def test_duplicate_getarrayitem_1(self):
         ops = """
         [p1]
