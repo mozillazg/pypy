@@ -2031,6 +2031,26 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
+    def test_residual_call_invalidates_some_read_caches(self):
+        ops = """
+        [p1, i1, p2, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=readadescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        expected = """
+        [p1, i1, p2, i2]
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=readadescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
 
 class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
 
