@@ -848,6 +848,9 @@ class HeapOpOptimizer(object):
 
     def cache_field_value(self, descr, value, fieldvalue, write=False):
         if write:
+            # when seeing a setfield, we have to clear the cache for the same
+            # field on any other structure, just in case they are aliasing
+            # each other
             d = self.cached_fields[descr] = {}
         else:
             d = self.cached_fields.setdefault(descr, {})
@@ -921,6 +924,8 @@ class HeapOpOptimizer(object):
         if opnum == rop.CALL:
             effectinfo = op.descr.get_extra_info()
             if effectinfo is not None:
+                # XXX we can get the wrong complexity here, if the lists
+                # XXX stored on effectinfo are large
                 for fielddescr in effectinfo.write_descrs_fields:
                     try:
                         del self.cached_fields[fielddescr]
