@@ -918,7 +918,7 @@ class HeapOpOptimizer(object):
         if op.is_ovf():
             return
         if op.is_guard():
-            self.force_all_lazy_setfields()
+            self.force_all_lazy_setfields_of_nonvirtuals()
             return
         opnum = op.opnum
         if (opnum == rop.SETFIELD_GC or
@@ -964,6 +964,16 @@ class HeapOpOptimizer(object):
             for descr in self.lazy_setfields_descrs:
                 self.force_lazy_setfield(descr)
             del self.lazy_setfields_descrs[:]
+
+    def force_all_lazy_setfields_of_nonvirtuals(self):
+        for descr in self.lazy_setfields_descrs:
+            try:
+                op = self.lazy_setfields[descr]
+            except KeyError:
+                continue
+            fieldvalue = self.optimizer.getvalue(op.args[1])
+            if not fieldvalue.is_virtual():
+                self.force_lazy_setfield(descr)
 
     def force_lazy_setfield_if_necessary(self, op, value, write=False):
         try:
