@@ -1376,7 +1376,7 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not, Not', ops)
 
-    def test_duplicate_setfield_residual_guard(self):
+    def test_duplicate_setfield_residual_guard_1(self):
         ops = """
         [p1, i1, i2, i3]
         setfield_gc(p1, i1, descr=valuedescr)
@@ -1386,6 +1386,27 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(p1, i1, i2, i4)
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
+
+    def test_duplicate_setfield_residual_guard_2(self):
+        # the difference with the previous test is that the field value is
+        # a virtual, which we try hard to keep virtual
+        ops = """
+        [p1, i2, i3]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, p2, descr=nextdescr)
+        guard_true(i3) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        expected = """
+        [p1, i2, i3]
+        guard_true(i3) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
 
     def test_duplicate_setfield_aliasing(self):
         # a case where aliasing issues (and not enough cleverness) mean
