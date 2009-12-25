@@ -918,6 +918,7 @@ class HeapOpOptimizer(object):
         if op.is_ovf():
             return
         if op.is_guard():
+            self.force_all_lazy_setfields()
             return
         opnum = op.opnum
         if (opnum == rop.SETFIELD_GC or
