@@ -1376,6 +1376,17 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not, Not', ops)
 
+    def test_duplicate_setfield_residual_guard(self):
+        ops = """
+        [p1, i1, i2, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        guard_true(i3) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
+
     def test_duplicate_setfield_aliasing(self):
         # a case where aliasing issues (and not enough cleverness) mean
         # that we fail to remove any setfield_gc
