@@ -606,10 +606,10 @@ class BaseTestOptimizeOpt(BaseTest):
         p3sub = getfield_gc(p3, descr=nextdescr)
         i3 = getfield_gc(p3sub, descr=valuedescr)
         escape(i3)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         p2sub = new_with_vtable(ConstClass(node_vtable2))
         setfield_gc(p2sub, i1, descr=valuedescr)
         setfield_gc(p2, p2sub, descr=nextdescr)
-        p1 = new_with_vtable(ConstClass(node_vtable))
         jump(i1, p1, p2)
         """
         # The same as test_p123_simple, but in the end the "old" p2 contains
@@ -1307,6 +1307,65 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
+    def test_duplicate_setfield_2(self):
+        ops = """
+        [p1, i1, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        i2 = getfield_gc(p1, descr=valuedescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        escape(i2)
+        jump(p1, i1, i3)
+        """
+        expected = """
+        [p1, i1, i3]
+        setfield_gc(p1, i3, descr=valuedescr)
+        escape(i1)
+        jump(p1, i1, i3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_duplicate_setfield_3(self):
+        ops = """
+        [p1, p2, i1, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        i2 = getfield_gc(p2, descr=valuedescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        escape(i2)
+        jump(p1, p2, i1, i3)
+        """
+        # potential aliasing of p1 and p2 means that we cannot kill the
+        # the setfield_gc
+        self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
+
+    def test_duplicate_setfield_4(self):
+        ops = """
+        [p1, i1, i2, p3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        #
+        # some operations on which the above setfield_gc cannot have effect
+        i3 = getarrayitem_gc_pure(p3, 1, descr=arraydescr)
+        i4 = getarrayitem_gc(p3, i3, descr=arraydescr)
+        i5 = int_add(i3, i4)
+        setarrayitem_gc(p3, 0, i5, descr=arraydescr)
+        setfield_gc(p1, i4, descr=nextdescr)
+        #
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2, p3)
+        """
+        expected = """
+        [p1, i1, i2, p3]
+        #
+        i3 = getarrayitem_gc_pure(p3, 1, descr=arraydescr)
+        i4 = getarrayitem_gc(p3, i3, descr=arraydescr)
+        i5 = int_add(i3, i4)
+        setarrayitem_gc(p3, 0, i5, descr=arraydescr)
+        #
+        setfield_gc(p1, i2, descr=valuedescr)
+        setfield_gc(p1, i4, descr=nextdescr)
+        jump(p1, i1, i2, p3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
     def test_duplicate_setfield_sideeffects_1(self):
         ops = """
         [p1, i1, i2]
@@ -1342,7 +1401,7 @@ class BaseTestOptimizeOpt(BaseTest):
         setfield_gc(ConstPtr(myptr), i2, descr=valuedescr)
         jump(i1, i2)
         """
-        self.optimize_loop(ops, 'Constant(myptr)', expected)
+        self.optimize_loop(ops, 'Constant(myptr), Not, Not', expected)
 
     def test_duplicate_getarrayitem_1(self):
         ops = """
@@ -2082,7 +2141,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
-    def test_residual_call_invalidates_some_read_caches(self):
+    def test_residual_call_invalidates_some_read_caches_1(self):
         ops = """
         [p1, i1, p2, i2]
         setfield_gc(p1, i1, descr=valuedescr)
@@ -2101,6 +2160,38 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         jump(p1, i1, p2, i2)
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
+    def test_residual_call_invalidates_some_read_caches_2(self):
+        ops = """
+        [p1, i1, p2, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=writeadescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        expected = """
+        [p1, i1, p2, i2]
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=writeadescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
+    def test_residual_call_invalidates_some_read_caches_3(self):
+        ops = """
+        [p1, i1, p2, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=plaincalldescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
 
 
 class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):

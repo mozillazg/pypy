@@ -7,16 +7,16 @@ from pypy.translator.backendopt.graphanalyze import BoolGraphAnalyzer
 class EffectInfo(object):
     _cache = {}
 
-    def __new__(cls, read_descrs_fields, write_descrs_fields,
+    def __new__(cls, readonly_descrs_fields, write_descrs_fields,
                 write_descrs_arrays, promotes_virtualizables=False):
-        key = (frozenset(read_descrs_fields),
+        key = (frozenset(readonly_descrs_fields),
                frozenset(write_descrs_fields),
                frozenset(write_descrs_arrays),
                promotes_virtualizables)
         if key in cls._cache:
             return cls._cache[key]
         result = object.__new__(cls)
-        result.read_descrs_fields = read_descrs_fields
+        result.readonly_descrs_fields = readonly_descrs_fields
         result.write_descrs_fields = write_descrs_fields
         result.write_descrs_arrays = write_descrs_arrays
         result.promotes_virtualizables = promotes_virtualizables
@@ -27,8 +27,8 @@ def effectinfo_from_writeanalyze(effects, cpu, promotes_virtualizables=False):
     from pypy.translator.backendopt.writeanalyze import top_set
     if effects is top_set:
         return None
-    read_descrs_fields = []
-    # read_descrs_arrays = [] --- not enabled for now
+    readonly_descrs_fields = []
+    # readonly_descrs_arrays = [] --- not enabled for now
     write_descrs_fields = []
     write_descrs_arrays = []
 
@@ -48,14 +48,16 @@ def effectinfo_from_writeanalyze(effects, cpu, promotes_virtualizables=False):
         if tup[0] == "struct":
             add_struct(write_descrs_fields, tup)
         elif tup[0] == "readstruct":
-            add_struct(read_descrs_fields, tup)
+            tupw = ("struct",) + tup[1:]
+            if tupw not in effects:
+                add_struct(readonly_descrs_fields, tup)
         elif tup[0] == "array":
             add_array(write_descrs_arrays, tup)
         elif tup[0] == "readarray":
             pass
         else:
             assert 0
-    return EffectInfo(read_descrs_fields,
+    return EffectInfo(readonly_descrs_fields,
                       write_descrs_fields,
                       write_descrs_arrays,
                       promotes_virtualizables)
