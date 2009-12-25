@@ -95,6 +95,7 @@ class LLtypeMixin(object):
     onedescr = cpu.fielddescrof(U, 'one')
 
     FUNC = lltype.FuncType([lltype.Signed], lltype.Signed)
+    plaincalldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
     nonwritedescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                     EffectInfo([], [], []))
     writeadescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,

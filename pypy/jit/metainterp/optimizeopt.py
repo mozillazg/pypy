@@ -512,6 +512,9 @@ class Optimizer(object):
 
     def emit_operation(self, op, must_clone=True):
         self.heap_op_optimizer.emitting_operation(op)
+        self._emit_operation(op, must_clone)
+
+    def _emit_operation(self, op, must_clone=True):
         for i in range(len(op.args)):
             arg = op.args[i]
             if arg in self.values:
@@ -836,11 +839,13 @@ class CachedArrayItems(object):
 class HeapOpOptimizer(object):
     def __init__(self, optimizer):
         self.optimizer = optimizer
-        # cached OptValues for each field descr
+        # cached fields:  {descr: {OptValue_instance: OptValue_fieldvalue}}
         self.cached_fields = {}
-
-        # cached OptValues for each field descr
+        # cached array items:  {descr: CachedArrayItems}
         self.cached_arrayitems = {}
+        # lazily written setfields (at most one per descr):  {descr: op}
+        self.lazy_setfields = {}
+        self.lazy_setfields_descrs = []     # keys (at least) of previous dict
 
     def clean_caches(self):
         self.cached_fields.clear()
@@ -908,8 +913,6 @@ class HeapOpOptimizer(object):
         return None
 
     def emitting_operation(self, op):
-        if op.is_always_pure():
-            return
         if op.has_no_side_effect():
             return
         if op.is_ovf():
@@ -921,12 +924,16 @@ class HeapOpOptimizer(object):
             opnum == rop.SETARRAYITEM_GC or
             opnum == rop.DEBUG_MERGE_POINT):
             return
-        if opnum == rop.CALL:
+        if (opnum == rop.CALL or
+            opnum == rop.CALL_MAY_FORCE):
             effectinfo = op.descr.get_extra_info()
             if effectinfo is not None:
                 # XXX we can get the wrong complexity here, if the lists
                 # XXX stored on effectinfo are large
+                for fielddescr in effectinfo.readonly_descrs_fields:
+                    self.force_lazy_setfield(fielddescr)
                 for fielddescr in effectinfo.write_descrs_fields:
+                    self.force_lazy_setfield(fielddescr)
                     try:
                         del self.cached_fields[fielddescr]
                     except KeyError:
@@ -937,9 +944,38 @@ class HeapOpOptimizer(object):
                     except KeyError:
                         pass
                 return
+            self.force_all_lazy_setfields()
+        elif op.is_final() or (not we_are_translated() and
+                               op.opnum < 0):   # escape() operations
+            self.force_all_lazy_setfields()
         self.clean_caches()
 
+    def force_lazy_setfield(self, descr):
+        try:
+            op = self.lazy_setfields[descr]
+        except KeyError:
+            return
+        del self.lazy_setfields[descr]
+        self.optimizer._emit_operation(op)
+
+    def force_all_lazy_setfields(self):
+        if len(self.lazy_setfields_descrs) > 0:
+            for descr in self.lazy_setfields_descrs:
+                self.force_lazy_setfield(descr)
+            del self.lazy_setfields_descrs[:]
+
+    def force_lazy_setfield_if_necessary(self, op, value, write=False):
+        try:
+            op1 = self.lazy_setfields[op.descr]
+        except KeyError:
+            if write:
+                self.lazy_setfields_descrs.append(op.descr)
+        else:
+            if self.optimizer.getvalue(op1.args[0]) is not value:
+                self.force_lazy_setfield(op.descr)
+
     def optimize_GETFIELD_GC(self, op, value):
+        self.force_lazy_setfield_if_necessary(op, value)
         # check if the field was read from another getfield_gc just before
         # or has been written to recently
         fieldvalue = self.read_cached_field(op.descr, value)
@@ -954,7 +990,8 @@ class HeapOpOptimizer(object):
         self.cache_field_value(op.descr, value, fieldvalue)
 
     def optimize_SETFIELD_GC(self, op, value, fieldvalue):
-        self.optimizer.emit_operation(op)
+        self.force_lazy_setfield_if_necessary(op, value, write=True)
+        self.lazy_setfields[op.descr] = op
         # remember the result of future reads of the field
         self.cache_field_value(op.descr, value, fieldvalue, write=True)
 
