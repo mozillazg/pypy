@@ -252,8 +252,6 @@ class ResumeDataVirtualAdder(object):
         if (isinstance(box, Box) and box not in self.liveboxes_from_env
                                  and box not in self.liveboxes):
             self.liveboxes[box] = UNASSIGNED
-            return True
-        return False
 
     def _register_boxes(self, boxes):
         for box in boxes:
@@ -298,6 +296,7 @@ class ResumeDataVirtualAdder(object):
         return liveboxes[:]
 
     def _number_virtuals(self, liveboxes, values, num_env_virtuals):
+        # !! 'liveboxes' is a list that is extend()ed in-place !!
         memo = self.memo
         new_liveboxes = [None] * memo.num_cached_boxes()
         count = 0
@@ -339,7 +338,13 @@ class ResumeDataVirtualAdder(object):
                 value = values[virtualbox]
                 fieldnums = [self._gettagged(box)
                              for box in fieldboxes]
-                vinfo = value.make_virtual_info(self, fieldnums)
+                backstore_box, backstore_descr = value.get_backstore()
+                if backstore_descr is not None:
+                    backstore_num = self._gettagged(backstore_box)
+                else:
+                    backstore_num = NULLREF
+                vinfo = value.make_virtual_info(self, fieldnums,
+                                                backstore_num, backstore_descr)
                 # if a new vinfo instance is made, we get the fieldnums list we
                 # pass in as an attribute. hackish.
                 if vinfo.fieldnums is not fieldnums:
@@ -366,11 +371,47 @@ class ResumeDataVirtualAdder(object):
                 return self.liveboxes_from_env[box]
             return self.liveboxes[box]
 
+
+class BackstoreRef(object):
+    # Used to say that a virtual object must, after being created because
+    # of a guard failure, be stored back on the given field of the given
+    # non-virtual object.  For lazy setfields.  Limited to one place per
+    # virtual for now.
+    def __init__(self, parentdescr, parentnum):
+        self.parentdescr = parentdescr
+        self.parentnum = parentnum
+
+    def setfields(self, metainterp, box, fn_decode_box):
+        parentbox = fn_decode_box(self.parentnum)
+        metainterp.execute_and_record(rop.SETFIELD_GC, self.parentdescr,
+                                      parentbox, box)
+
 class AbstractVirtualInfo(object):
+    backstore_ref = None
+
     def allocate(self, metainterp):
         raise NotImplementedError
+
     def setfields(self, metainterp, box, fn_decode_box):
-        raise NotImplementedError
+        if self.backstore_ref is not None:
+            self.backstore_ref.setfields(metainterp, box, fn_decode_box)
+
+    def equals(self, fieldnums, backstore_num, backstore_descr):
+        return (tagged_list_eq(self.fieldnums, fieldnums) and
+                self.backstore_equals(backstore_num, backstore_descr))
+
+    def backstore_equals(self, backstore_num, backstore_descr):
+        if backstore_descr is None:
+            return self.backstore_ref is None
+        else:
+            return (self.backstore_ref is not None and
+                    self.backstore_ref.parentdescr == backstore_descr and
+                    self.backstore_ref.parentnum == backstore_num)
+
+    def set_content(self, fieldnums, backstore_num, backstore_descr):
+        self.fieldnums = fieldnums
+        if backstore_descr is not None:
+            self.backstore_ref = BackstoreRef(backstore_descr, backstore_num)
 
 
 class AbstractVirtualStructInfo(AbstractVirtualInfo):
@@ -384,6 +425,7 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
             metainterp.execute_and_record(rop.SETFIELD_GC,
                                           self.fielddescrs[i],
                                           box, fieldbox)
+        AbstractVirtualInfo.setfields(self, metainterp, box, fn_decode_box)
 
     def debug_prints(self):
         assert len(self.fielddescrs) == len(self.fieldnums)
@@ -434,6 +476,7 @@ class VArrayInfo(AbstractVirtualInfo):
             metainterp.execute_and_record(rop.SETARRAYITEM_GC,
                                           self.arraydescr,
                                           box, ConstInt(i), itembox)
+        AbstractVirtualInfo.setfields(self, metainterp, box, fn_decode_box)
 
     def debug_prints(self):
         debug_print("\tvarrayinfo", self.arraydescr)

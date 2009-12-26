@@ -40,6 +40,24 @@ def test_tagged_list_eq():
     assert not tagged_list_eq([tag(1, TAGBOX)], [tag(-2, TAGBOX)])
     assert not tagged_list_eq([tag(1, TAGBOX), tag(-2, TAGBOX)], [tag(1, TAGBOX)])
 
+def test_vinfo():
+    v1 = AbstractVirtualInfo()
+    v1.set_content([1, 2, 4], -1, None)
+    assert v1.backstore_ref is None
+    assert v1.equals([1, 2, 4], -1, None)
+    assert not v1.equals([1, 2, 6], -1, None)
+    assert not v1.equals([1, 2, 4], 3, object())
+    #
+    v2 = AbstractVirtualInfo()
+    descr = object()
+    v2.set_content([1, 2, 4], 3, descr)
+    assert v2.backstore_ref is not None
+    assert v2.backstore_ref.parentdescr is descr
+    assert v2.backstore_ref.parentnum == 3
+    assert v2.equals([1, 2, 4], 3, descr)
+    assert not v2.equals([1, 2, 4], 2, descr)
+    assert not v2.equals([1, 2, 4], 3, object())
+
 class MyMetaInterp:
     _already_allocated_resume_virtuals = None
 
@@ -959,6 +977,73 @@ def test_virtual_adder_make_vstruct():
     assert lltype.typeOf(ptr) == lltype.Ptr(LLtypeMixin.S)
     assert ptr.a == 111
     assert ptr.b == lltype.nullptr(LLtypeMixin.NODE)
+
+
+def test_virtual_adder_make_virtual_backstore():
+    b2s, b4s, b5s = [BoxPtr(), BoxPtr(), BoxPtr()]
+    c1s = ConstInt(111)
+    storage = Storage()
+    memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
+    modifier = ResumeDataVirtualAdder(storage, memo)
+    modifier.liveboxes_from_env = {}
+    modifier.liveboxes = {}
+    modifier.vfieldboxes = {}
+
+    class FakeOptimizer(object):
+        class cpu:
+            pass
+        def getvalue(self, box):
+            return {b2s: v2, b4s: v4}[box]
+    fakeoptimizer = FakeOptimizer()
+    class HeapOpOptimizer(object):
+        pass
+    fakeoptimizer.heap_op_optimizer = HeapOpOptimizer()
+    class FakeSetFieldOperation(object):
+        args = [b2s, b4s]
+    fakeoptimizer.heap_op_optimizer.lazy_setfields = {
+        LLtypeMixin.nextdescr: FakeSetFieldOperation()}
+
+    v4 = VirtualValue(fakeoptimizer, ConstAddr(LLtypeMixin.node_vtable_adr2,
+                                                LLtypeMixin.cpu), b4s)
+    v4.backstore_field = LLtypeMixin.nextdescr
+    v4.setfield(LLtypeMixin.valuedescr, OptValue(c1s))
+    v4.setfield(LLtypeMixin.otherdescr, OptValue(b5s))
+    v4._cached_sorted_fields = [LLtypeMixin.valuedescr, LLtypeMixin.otherdescr]
+
+    v2 = OptValue(b2s)
+
+    v4.register_virtual_fields(modifier, [c1s, b5s])
+    liveboxes = []
+    modifier._number_virtuals(liveboxes, {b4s: v4}, 0)
+    assert liveboxes == [b2s, b5s]
+    storage.rd_consts = memo.consts[:]
+    storage.rd_numb = None
+    # resume
+    demo55.next = lltype.nullptr(LLtypeMixin.NODE)
+    b2t = BoxPtr(demo55o)
+    b5t = BoxPtr(demo66o)
+    newboxes = _resume_remap(liveboxes, [b2s, b5s], b2t, b5t)
+
+    metainterp = MyMetaInterp()
+    reader = ResumeDataReader(storage, newboxes, metainterp)
+    assert len(reader.virtuals) == 1
+    b4t = reader._decode_box(modifier._gettagged(b4s))
+    trace = metainterp.trace
+    b4new = (rop.NEW_WITH_VTABLE, [ConstAddr(LLtypeMixin.node_vtable_adr2,
+                                         LLtypeMixin.cpu)],
+                              b4t, None)
+    b4set1 = (rop.SETFIELD_GC, [b4t, c1s], None, LLtypeMixin.valuedescr)
+    b4set2 = (rop.SETFIELD_GC, [b4t, b5t], None, LLtypeMixin.otherdescr)
+    b2set = (rop.SETFIELD_GC, [b2t, b4t], None, LLtypeMixin.nextdescr)
+    expected = [b4new, b4set1, b4set2, b2set]
+
+    for x, y in zip(expected, trace):
+        assert x == y
+    ptr = demo55.next
+    assert ptr.value == 111
+    ptr = lltype.cast_pointer(lltype.Ptr(LLtypeMixin.NODE2), ptr)
+    assert ptr.other == demo66
+
 
 def test_invalidation_needed():
     class options:
