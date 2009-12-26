@@ -87,18 +87,39 @@ def test_sharing_field_lists_of_virtual():
 
 def test_reuse_vinfo():
     class FakeVInfo(object):
-        pass
+        def set_content(self, fieldnums, backstore_num, backstore_descr):
+            self.fieldnums = fieldnums
+            self.backstore_num = backstore_num
+            self.backstore_descr = backstore_descr
+        def equals(self, fieldnums, backstore_num, backstore_descr):
+            return (self.fieldnums == fieldnums and
+                    self.backstore_num == backstore_num and
+                    self.backstore_descr == backstore_descr)
     class FakeVirtualValue(optimizeopt.AbstractVirtualValue):
         def _make_virtual(self, *args):
             return FakeVInfo()
     v1 = FakeVirtualValue(None, None, None)
-    vinfo1 = v1.make_virtual_info(None, [1, 2, 4])
-    vinfo2 = v1.make_virtual_info(None, [1, 2, 4])
+    vinfo1 = v1.make_virtual_info(None, [1, 2, 4], None, None)
+    vinfo2 = v1.make_virtual_info(None, [1, 2, 4], None, None)
     assert vinfo1 is vinfo2
-    vinfo3 = v1.make_virtual_info(None, [1, 2, 6])
+    vinfo3 = v1.make_virtual_info(None, [1, 2, 6], None, None)
     assert vinfo3 is not vinfo2
-    vinfo4 = v1.make_virtual_info(None, [1, 2, 6])
+    vinfo4 = v1.make_virtual_info(None, [1, 2, 6], None, None)
     assert vinfo3 is vinfo4
+    #
+    descr = object()
+    descr2 = object()
+    vinfo1 = v1.make_virtual_info(None, [1, 2, 4], None, None)
+    vinfo2 = v1.make_virtual_info(None, [1, 2, 4], 6, descr)
+    assert vinfo1 is not vinfo2
+    vinfo3 = v1.make_virtual_info(None, [1, 2, 4], 6, descr)
+    assert vinfo3 is vinfo2
+    vinfo4 = v1.make_virtual_info(None, [1, 2, 4], 5, descr)
+    assert vinfo4 is not vinfo3
+    vinfo5 = v1.make_virtual_info(None, [1, 2, 4], 5, descr2)
+    assert vinfo5 is not vinfo4
+    vinfo6 = v1.make_virtual_info(None, [1, 2, 4], 5, descr2)
+    assert vinfo6 is vinfo5
 
 def test_descrlist_dict():
     from pypy.jit.metainterp import optimizeutil
@@ -2058,6 +2079,54 @@ class BaseTestOptimizeOpt(BaseTest):
             where p6s is a vstruct ssize, adescr=ia, bdescr=p7v
             where p5s is a vstruct ssize, adescr=i2, bdescr=p7v
             where p7v is a node_vtable, valuedescr=iv
+            ''')
+
+    def test_expand_fail_lazy_setfield_1(self):
+        self.make_fail_descr()
+        ops = """
+        [p1, i2, i3]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p1, p2, descr=nextdescr)
+        guard_true(i3, descr=fdescr) [p1]
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        expected = """
+        [p1, i2, i3]
+        guard_true(i3, descr=fdescr) [p1, i2]
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+        self.check_expanded_fail_descr('''p1
+            where p2 is a node_vtable, valuedescr=i2 --> p1.nextdescr
+            ''')
+
+    def test_expand_fail_lazy_setfield_2(self):
+        self.make_fail_descr()
+        ops = """
+        [i2, i3]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(ConstPtr(myptr), p2, descr=nextdescr)
+        guard_true(i3, descr=fdescr) []
+        i4 = int_neg(i2)
+        setfield_gc(ConstPtr(myptr), NULL, descr=nextdescr)
+        jump(i2, i4)
+        """
+        expected = """
+        [i2, i3]
+        guard_true(i3, descr=fdescr) [i2]
+        i4 = int_neg(i2)
+        setfield_gc(ConstPtr(myptr), NULL, descr=nextdescr)
+        jump(i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+        self.check_expanded_fail_descr('''
+            where p2 is a node_vtable, valuedescr=i2 --> myptr.nextdescr
             ''')
 
 
