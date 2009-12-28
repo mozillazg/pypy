@@ -306,3 +306,26 @@ class TestLLtypeReadWriteAnalyze(BaseTest):
         ARRAYPTR = list(result)[0][1]
         assert list(result) == [("readarray", ARRAYPTR)]
         assert isinstance(ARRAYPTR.TO, lltype.GcArray)
+
+    def test_adt_method(self):
+        def ll_callme(n):
+            return n
+        ll_callme = lltype.staticAdtMethod(ll_callme)
+        S = lltype.GcStruct('S', ('x', lltype.Signed),
+                            adtmeths = {'yep': True,
+                                        'callme': ll_callme})
+        def g(x, y, z):
+            p = lltype.malloc(S)
+            p.x = x
+            if p.yep:
+                z *= p.callme(y)
+            return z
+        def f(x, y, z):
+            return g(x, y, z)
+
+        t, wa = self.translate(f, [int, int, int])
+        fgraph = graphof(t, f)
+        assert fgraph.startblock.operations[-1].opname == 'direct_call'
+
+        result = wa.analyze(fgraph.startblock.operations[-1])
+        assert list(result) == [("struct", lltype.Ptr(S), "x")]
