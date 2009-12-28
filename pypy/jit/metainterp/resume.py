@@ -266,7 +266,7 @@ class ResumeDataVirtualAdder(object):
         _, tagbits = untag(tagged)
         return tagbits == TAGVIRTUAL
 
-    def finish(self, values):
+    def finish(self, values, pending_setfields=[]):
         # compute the numbering
         storage = self.storage
         numb, liveboxes_from_env, v = self.memo.number(values,
@@ -289,7 +289,14 @@ class ResumeDataVirtualAdder(object):
                 value = values[box]
                 value.get_args_for_fail(self)
 
+        for _, box, fieldbox in pending_setfields:
+            self.register_box(box)
+            self.register_box(fieldbox)
+            value = values[fieldbox]
+            value.get_args_for_fail(self)
+
         self._number_virtuals(liveboxes, values, v)
+        self._add_pending_fields(pending_setfields)
 
         storage.rd_consts = self.memo.consts
         dump_storage(storage, liveboxes)
@@ -338,13 +345,7 @@ class ResumeDataVirtualAdder(object):
                 value = values[virtualbox]
                 fieldnums = [self._gettagged(box)
                              for box in fieldboxes]
-                backstore_box, backstore_descr = value.get_backstore()
-                if backstore_descr is not None:
-                    backstore_num = self._gettagged(backstore_box)
-                else:
-                    backstore_num = NULLREF
-                vinfo = value.make_virtual_info(self, fieldnums,
-                                                backstore_num, backstore_descr)
+                vinfo = value.make_virtual_info(self, fieldnums)
                 # if a new vinfo instance is made, we get the fieldnums list we
                 # pass in as an attribute. hackish.
                 if vinfo.fieldnums is not fieldnums:
@@ -363,6 +364,16 @@ class ResumeDataVirtualAdder(object):
                 return True
         return False
 
+    def _add_pending_fields(self, pending_setfields):
+        rd_pendingfields = None
+        if pending_setfields:
+            rd_pendingfields = []
+            for descr, box, fieldbox in pending_setfields:
+                num = self._gettagged(box)
+                fieldnum = self._gettagged(fieldbox)
+                rd_pendingfields.append((descr, num, fieldnum))
+        self.storage.rd_pendingfields = rd_pendingfields
+
     def _gettagged(self, box):
         if isinstance(box, Const):
             return self.memo.getconst(box)
@@ -372,46 +383,15 @@ class ResumeDataVirtualAdder(object):
             return self.liveboxes[box]
 
 
-class BackstoreRef(object):
-    # Used to say that a virtual object must, after being created because
-    # of a guard failure, be stored back on the given field of the given
-    # non-virtual object.  For lazy setfields.  Limited to one place per
-    # virtual for now.
-    def __init__(self, parentdescr, parentnum):
-        self.parentdescr = parentdescr
-        self.parentnum = parentnum
-
-    def setfields(self, metainterp, box, fn_decode_box):
-        parentbox = fn_decode_box(self.parentnum)
-        metainterp.execute_and_record(rop.SETFIELD_GC, self.parentdescr,
-                                      parentbox, box)
-
 class AbstractVirtualInfo(object):
-    backstore_ref = None
-
     def allocate(self, metainterp):
         raise NotImplementedError
-
     def setfields(self, metainterp, box, fn_decode_box):
-        if self.backstore_ref is not None:
-            self.backstore_ref.setfields(metainterp, box, fn_decode_box)
-
-    def equals(self, fieldnums, backstore_num, backstore_descr):
-        return (tagged_list_eq(self.fieldnums, fieldnums) and
-                self.backstore_equals(backstore_num, backstore_descr))
-
-    def backstore_equals(self, backstore_num, backstore_descr):
-        if backstore_descr is None:
-            return self.backstore_ref is None
-        else:
-            return (self.backstore_ref is not None and
-                    self.backstore_ref.parentdescr == backstore_descr and
-                    self.backstore_ref.parentnum == backstore_num)
-
-    def set_content(self, fieldnums, backstore_num, backstore_descr):
+        raise NotImplementedError
+    def equals(self, fieldnums):
+        return tagged_list_eq(self.fieldnums, fieldnums)
+    def set_content(self, fieldnums):
         self.fieldnums = fieldnums
-        if backstore_descr is not None:
-            self.backstore_ref = BackstoreRef(backstore_descr, backstore_num)
 
 
 class AbstractVirtualStructInfo(AbstractVirtualInfo):
@@ -425,7 +405,6 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
             metainterp.execute_and_record(rop.SETFIELD_GC,
                                           self.fielddescrs[i],
                                           box, fieldbox)
-        AbstractVirtualInfo.setfields(self, metainterp, box, fn_decode_box)
 
     def debug_prints(self):
         assert len(self.fielddescrs) == len(self.fieldnums)
@@ -476,7 +455,6 @@ class VArrayInfo(AbstractVirtualInfo):
             metainterp.execute_and_record(rop.SETARRAYITEM_GC,
                                           self.arraydescr,
                                           box, ConstInt(i), itembox)
-        AbstractVirtualInfo.setfields(self, metainterp, box, fn_decode_box)
 
     def debug_prints(self):
         debug_print("\tvarrayinfo", self.arraydescr)
@@ -514,6 +492,7 @@ class ResumeDataReader(object):
         self.liveboxes = liveboxes
         self.cpu = metainterp.cpu
         self._prepare_virtuals(metainterp, storage.rd_virtuals)
+        self._prepare_pendingfields(metainterp, storage.rd_pendingfields)
 
     def _prepare_virtuals(self, metainterp, virtuals):
         if virtuals:
@@ -531,6 +510,16 @@ class ResumeDataReader(object):
                 if vinfo is not None:
                     vinfo.setfields(metainterp, self.virtuals[i],
                                     self._decode_box)
+
+    def _prepare_pendingfields(self, metainterp, pendingfields):
+        if pendingfields:
+            if metainterp._already_allocated_resume_virtuals is not None:
+                return
+            for descr, num, fieldnum in pendingfields:
+                box = self._decode_box(num)
+                fieldbox = self._decode_box(fieldnum)
+                metainterp.execute_and_record(rop.SETFIELD_GC,
+                                              descr, box, fieldbox)
 
     def consume_boxes(self):
         numb = self.cur_numb

@@ -66,8 +66,7 @@ class OptValue(object):
     def get_backstore(self):
         return (None, None)
 
-    def make_virtual_info(self, modifier, fieldnums,
-                          backstore_num, backstore_descr):
+    def make_virtual_info(self, modifier, fieldnums):
         raise NotImplementedError # should not be called on this level
 
     def is_constant(self):
@@ -142,12 +141,10 @@ oohelper.CVAL_NULLREF = ConstantValue(oohelper.CONST_NULL)
 
 
 class AbstractVirtualValue(OptValue):
-    _attrs_ = ('optimizer', 'keybox', 'source_op', '_cached_vinfo',
-               'backstore_field')
+    _attrs_ = ('optimizer', 'keybox', 'source_op', '_cached_vinfo')
     box = None
     level = LEVEL_NONNULL
     _cached_vinfo = None
-    backstore_field = None     # the fielddescr from lazy_setfields
 
     def __init__(self, optimizer, keybox, source_op=None):
         self.optimizer = optimizer
@@ -166,28 +163,12 @@ class AbstractVirtualValue(OptValue):
             self._really_force()
         return self.box
 
-    def get_backstore(self):
-        if self.backstore_field is None:
-            return (None, None)
-        heapopt = self.optimizer.heap_op_optimizer
-        try:
-            op = heapopt.lazy_setfields[self.backstore_field]
-        except KeyError:
-            self.backstore_field = None
-            return (None, None)
-        if self.optimizer.getvalue(op.args[1]) is not self:
-            self.backstore_field = None
-            return (None, None)
-        return (op.args[0], self.backstore_field)
-
-    def make_virtual_info(self, modifier, fieldnums,
-                          backstore_num, backstore_descr):
+    def make_virtual_info(self, modifier, fieldnums):
         vinfo = self._cached_vinfo
-        if vinfo is not None and vinfo.equals(fieldnums, backstore_num,
-                                              backstore_descr):
+        if vinfo is not None and vinfo.equals(fieldnums):
             return vinfo
         vinfo = self._make_virtual(modifier)
-        vinfo.set_content(fieldnums, backstore_num, backstore_descr)
+        vinfo.set_content(fieldnums)
         self._cached_vinfo = vinfo
         return vinfo
 
@@ -562,11 +543,11 @@ class Optimizer(object):
         self.newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
-        self.heap_op_optimizer.force_lazy_setfields_for_guard()
+        pendingfields = self.heap_op_optimizer.force_lazy_setfields_for_guard()
         descr = op.descr
         assert isinstance(descr, compile.ResumeGuardDescr)
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
-        newboxes = modifier.finish(self.values)
+        newboxes = modifier.finish(self.values, pendingfields)
         if len(newboxes) > self.metainterp_sd.options.failargs_limit: # XXX be careful here
             raise compile.GiveUp
         descr.store_final_boxes(op, newboxes)
@@ -984,22 +965,18 @@ class HeapOpOptimizer(object):
         except KeyError:
             return
         del self.lazy_setfields[descr]
-        fieldvalue = self.optimizer.getvalue(op.args[1])
-        if isinstance(fieldvalue, AbstractVirtualValue):
-            fieldvalue.backstore_field = None
         self.optimizer._emit_operation(op)
         #
         # hackish: reverse the order of the last two operations if it makes
-        # sense to avoid the situation "int_eq/setfield_gc/guard_true"
+        # sense to avoid a situation like "int_eq/setfield_gc/guard_true",
+        # which the backend (at least the x86 backend) does not handle well.
         newoperations = self.optimizer.newoperations
         if before_guard and len(newoperations) >= 2:
             lastop = newoperations[-1]
             prevop = newoperations[-2]
             if prevop.is_always_pure() and prevop.result not in lastop.args:
-                del newoperations[-1]
-                del newoperations[-1]
-                newoperations.append(lastop)
-                newoperations.append(prevop)
+                newoperations[-2] = lastop
+                newoperations[-1] = prevop
 
     def force_all_lazy_setfields(self):
         if len(self.lazy_setfields_descrs) > 0:
@@ -1008,6 +985,7 @@ class HeapOpOptimizer(object):
             del self.lazy_setfields_descrs[:]
 
     def force_lazy_setfields_for_guard(self):
+        pendingfields = []
         for descr in self.lazy_setfields_descrs:
             try:
                 op = self.lazy_setfields[descr]
@@ -1015,18 +993,17 @@ class HeapOpOptimizer(object):
                 continue
             # the only really interesting case that we need to handle in the
             # guards' resume data is that of a virtual object that is stored
-            # into a field of a non-virtual object.  The later object cannot
-            # actually be virtual here (verified by an assert), but the
-            # former object 'fieldvalue' can be.
+            # into a field of a non-virtual object.
             value = self.optimizer.getvalue(op.args[0])
-            assert not value.is_virtual()
+            assert not value.is_virtual()      # it must be a non-virtual
             fieldvalue = self.optimizer.getvalue(op.args[1])
             if fieldvalue.is_virtual():
-                assert isinstance(fieldvalue, AbstractVirtualValue)
-                if fieldvalue.backstore_field is descr:
-                    # this is the case that can be handled by resume data
-                    continue
-            self.force_lazy_setfield(descr, before_guard=True)
+                # this is the case that we leave to resume.py
+                pendingfields.append((descr, value.box,
+                                      fieldvalue.get_key_box()))
+            else:
+                self.force_lazy_setfield(descr, before_guard=True)
+        return pendingfields
 
     def force_lazy_setfield_if_necessary(self, op, value, write=False):
         try:
@@ -1056,8 +1033,6 @@ class HeapOpOptimizer(object):
     def optimize_SETFIELD_GC(self, op, value, fieldvalue):
         self.force_lazy_setfield_if_necessary(op, value, write=True)
         self.lazy_setfields[op.descr] = op
-        if isinstance(fieldvalue, AbstractVirtualValue):
-            fieldvalue.backstore_field = op.descr
         # remember the result of future reads of the field
         self.cache_field_value(op.descr, value, fieldvalue, write=True)
 
