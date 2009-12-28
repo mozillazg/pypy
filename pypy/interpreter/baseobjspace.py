@@ -240,6 +240,7 @@ class ObjSpace(object):
         self.config = config
 
         self.builtin_modules = {}
+        self.reloading_modules = {}
 
         # import extra modules for side-effects
         import pypy.interpreter.nestedscope     # register *_DEREF bytecodes
