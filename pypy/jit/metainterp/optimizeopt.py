@@ -978,7 +978,7 @@ class HeapOpOptimizer(object):
             self.force_all_lazy_setfields()
         self.clean_caches()
 
-    def force_lazy_setfield(self, descr):
+    def force_lazy_setfield(self, descr, before_guard=False):
         try:
             op = self.lazy_setfields[descr]
         except KeyError:
@@ -988,6 +988,18 @@ class HeapOpOptimizer(object):
         if isinstance(fieldvalue, AbstractVirtualValue):
             fieldvalue.backstore_field = None
         self.optimizer._emit_operation(op)
+        #
+        # hackish: reverse the order of the last two operations if it makes
+        # sense to avoid the situation "int_eq/setfield_gc/guard_true"
+        newoperations = self.optimizer.newoperations
+        if before_guard and len(newoperations) >= 2:
+            lastop = newoperations[-1]
+            prevop = newoperations[-2]
+            if prevop.is_always_pure() and prevop.result not in lastop.args:
+                del newoperations[-1]
+                del newoperations[-1]
+                newoperations.append(lastop)
+                newoperations.append(prevop)
 
     def force_all_lazy_setfields(self):
         if len(self.lazy_setfields_descrs) > 0:
@@ -1014,7 +1026,7 @@ class HeapOpOptimizer(object):
                 if fieldvalue.backstore_field is descr:
                     # this is the case that can be handled by resume data
                     continue
-            self.force_lazy_setfield(descr)
+            self.force_lazy_setfield(descr, before_guard=True)
 
     def force_lazy_setfield_if_necessary(self, op, value, write=False):
         try:

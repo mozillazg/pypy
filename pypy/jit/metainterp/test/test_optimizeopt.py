@@ -1429,6 +1429,20 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
+    def test_duplicate_setfield_residual_guard_3(self):
+        # test that the setfield_gc does not end up between int_eq and
+        # the following guard_true
+        ops = """
+        [p1, i1, i2, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        i5 = int_eq(i3, 5)
+        guard_true(i5) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
+
     def test_duplicate_setfield_aliasing(self):
         # a case where aliasing issues (and not enough cleverness) mean
         # that we fail to remove any setfield_gc
@@ -2088,20 +2102,20 @@ class BaseTestOptimizeOpt(BaseTest):
         p2 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p2, i2, descr=valuedescr)
         setfield_gc(p1, p2, descr=nextdescr)
-        guard_true(i3, descr=fdescr) [p1]
+        guard_true(i3, descr=fdescr) []
         i4 = int_neg(i2)
         setfield_gc(p1, NULL, descr=nextdescr)
         jump(p1, i2, i4)
         """
         expected = """
         [p1, i2, i3]
-        guard_true(i3, descr=fdescr) [p1, i2]
+        guard_true(i3, descr=fdescr) [i2]
         i4 = int_neg(i2)
         setfield_gc(p1, NULL, descr=nextdescr)
         jump(p1, i2, i4)
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
-        self.check_expanded_fail_descr('''p1
+        self.check_expanded_fail_descr('''
             where p2 is a node_vtable, valuedescr=i2 --> p1.nextdescr
             ''')
 
