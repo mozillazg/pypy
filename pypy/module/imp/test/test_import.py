@@ -35,6 +35,7 @@ def setup_directory_structure(space):
                     b = "imamodule = 1\ninpackage = 0",
                     ambig = "imamodule = 1",
                     test_reload = "def test():\n    raise ValueError\n",
+                    infinite_reload = "import infinite_reload; reload(infinite_reload)",
                     )
     root.ensure("notapackage", dir=1)    # empty, no __init__.py
     setuppkg("pkg",
@@ -439,6 +440,9 @@ class AppTestImport:
             pass
         reload(sys)
         assert 'setdefaultencoding' in dir(sys)
+
+    def test_reload_infinite(self):
+        import infinite_reload
 
 def _getlong(data):
     x = marshal.dumps(data)
