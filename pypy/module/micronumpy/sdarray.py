@@ -12,7 +12,7 @@ from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
 from pypy.module.micronumpy.dtype import unwrap_float32, coerce_float32, float32
 
-def create_numarray(data_type, unwrap, coerce):
+def create_sdarray(data_type, unwrap, coerce):
     class NumArray(BaseNumArray):
         def __init__(self, space, length):
             self.shape = (1,)
@@ -90,23 +90,19 @@ def create_numarray(data_type, unwrap, coerce):
 
     return NumArray
 
-IntArray = create_numarray(int, unwrap_int, coerce_int)
+IntArray = create_sdarray(int, unwrap_int, coerce_int)
 NumArray = IntArray # FIXME: compatibility for now
-DoubleArray = create_numarray(float, unwrap_float, coerce_float)
-FloatArray = create_numarray(float32, unwrap_float32, coerce_float32)
+FloatArray = create_sdarray(float, unwrap_float, coerce_float)
+Float32Array = create_sdarray(float32, unwrap_float32, coerce_float32)
 GenericArray = None
 
 class ResultFactory(object):
     def __init__(self, space):
         self.space = space
-        from pypy.objspace.std.inttype import int_typedef
-        int_type = space.gettypeobject(int_typedef)
-        from pypy.objspace.std.floattype import float_typedef
-        float_type = space.gettypeobject(float_typedef)
 
         self.types = {
-            int_type:   IntArray,
-            float_type: FloatArray,
+            space.w_int:   IntArray,
+            space.w_float: FloatArray,
                      }
 
 result_factory = None
