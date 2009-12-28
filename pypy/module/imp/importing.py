@@ -420,40 +420,51 @@ def reload(space, w_module):
             space.w_ImportError,
             space.wrap("reload(): module %s not in sys.modules" % (modulename,)))
 
-    namepath = modulename.split('.')
-    subname = namepath[-1]
-    parent_name = '.'.join(namepath[:-1])
-    parent = None
-    if parent_name:
-        w_parent = check_sys_modules(space, space.wrap(parent_name))
-        if w_parent is None:
-            raise OperationError(
-                space.w_ImportError,
-                space.wrap("reload(): parent %s not in sys.modules" % (
-                    parent_name,)))
-        w_path = space.getattr(w_parent, space.wrap("__path__"))
-    else:
-        w_path = None
-
-    find_info = find_module(
-        space, modulename, w_modulename, subname, w_path)
-
-    if not find_info:
-        # ImportError
-        msg = "No module named %s" % modulename
-        raise OperationError(space.w_ImportError, space.wrap(msg))
-
     try:
+        w_mod = space.reloading_modules[modulename]
+        # Due to a recursive reload, this module is already being reloaded.
+        return w_mod
+    except KeyError:
+        pass
+
+    space.reloading_modules[modulename] = w_module
+    try:
+        namepath = modulename.split('.')
+        subname = namepath[-1]
+        parent_name = '.'.join(namepath[:-1])
+        parent = None
+        if parent_name:
+            w_parent = check_sys_modules(space, space.wrap(parent_name))
+            if w_parent is None:
+                raise OperationError(
+                    space.w_ImportError,
+                    space.wrap("reload(): parent %s not in sys.modules" % (
+                        parent_name,)))
+            w_path = space.getattr(w_parent, space.wrap("__path__"))
+        else:
+            w_path = None
+
+        find_info = find_module(
+            space, modulename, w_modulename, subname, w_path)
+
+        if not find_info:
+            # ImportError
+            msg = "No module named %s" % modulename
+            raise OperationError(space.w_ImportError, space.wrap(msg))
+
         try:
-            return load_module(space, w_modulename, find_info, reuse=True)
-        finally:
-            if find_info.stream:
-                find_info.stream.close()
-    except:
-        # load_module probably removed name from modules because of
-        # the error.  Put back the original module object.
-        space.sys.setmodule(w_module)
-        raise
+            try:
+                return load_module(space, w_modulename, find_info, reuse=True)
+            finally:
+                if find_info.stream:
+                    find_info.stream.close()
+        except:
+            # load_module probably removed name from modules because of
+            # the error.  Put back the original module object.
+            space.sys.setmodule(w_module)
+            raise
+    finally:
+        space.reloading_modules.clear()
 
 
 # __________________________________________________________________
