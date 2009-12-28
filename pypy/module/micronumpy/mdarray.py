@@ -6,6 +6,10 @@ from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.module.micronumpy.array import BaseNumArray
 
+from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
+from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
+from pypy.module.micronumpy.dtype import unwrap_float32, coerce_float32, float32
+
 def compute_pos(space, indexes, dim):
     current = 1
     pos = 0
@@ -21,43 +25,58 @@ def compute_pos(space, indexes, dim):
         current *= d
     return pos
 
-class MultiDimArray(BaseNumArray):
-    def __init__(self, space, shape, dtype):
-        self.shape = shape
+def create_mdarray(data_type, unwrap, coerce):
+    class MultiDimArray(BaseNumArray):
+        def __init__(self, space, shape):
+            self.shape = shape
+            self.space = space
+            size = 1
+            for dimension in shape:
+                size *= dimension
+            self.storage = [data_type(0.0)] * size
+            make_sure_not_resized(self.storage)
+
+        def _unpack_indexes(self, space, w_index):
+            indexes = [space.int_w(w_i) for w_i in space.fixedview(w_index)]
+            if len(indexes) != len(self.shape):
+                raise OperationError(space.w_IndexError, space.wrap(
+                    'Wrong index'))
+            return indexes
+
+        def getitem(self, w_index):
+            space = self.space
+            indexes = self._unpack_indexes(space, w_index)
+            pos = compute_pos(space, indexes, self.shape)
+            return space.wrap(self.storage[pos])
+
+        def setitem(self, w_index, w_value):
+            space = self.space
+            indexes = self._unpack_indexes(space, w_index)
+            pos = compute_pos(space, indexes, self.shape)
+            self.storage[pos] = coerce(space, w_value)
+            return space.w_None #XXX: necessary?
+
+        def len(self):
+            space = self.space
+            return space.wrap(self.shape[0])
+    return MultiDimArray
+
+MultiDimIntArray = create_mdarray(int, unwrap_int, coerce_int)
+MultiDimArray = MultiDimIntArray #XXX: compatibility
+MultiDimFloatArray = create_mdarray(float, unwrap_float, coerce_float)
+
+class ResultFactory(object):
+    def __init__(self, space):
         self.space = space
-        # ignore dtype for now
-        size = 1
-        for dimension in shape:
-            size *= dimension
-        self.storage = [0] * size
-        make_sure_not_resized(self.storage)
 
-    def _unpack_indexes(self, space, w_index):
-        indexes = [space.int_w(w_i) for w_i in space.fixedview(w_index)]
-        if len(indexes) != len(self.shape):
-            raise OperationError(space.w_IndexError, space.wrap(
-                'Wrong index'))
-        return indexes
+        self.types = {
+            space.w_int:   MultiDimIntArray,
+            space.w_float: MultiDimFloatArray,
+                     }
 
-    def getitem(self, w_index):
-        space = self.space
-        indexes = self._unpack_indexes(space, w_index)
-        pos = compute_pos(space, indexes, self.shape)
-        return space.wrap(self.storage[pos])
-
-    def setitem(self, w_index, w_value):
-        space = self.space
-        indexes = self._unpack_indexes(space, w_index)
-        pos = compute_pos(space, indexes, self.shape)
-        self.storage[pos] = space.int_w(w_value) #FIXME: lets get this thing generalized!
-        return space.w_None #XXX: necessary?
-
-    def len(self):
-        space = self.space
-        return space.wrap(self.shape[0])
-
-def unpack_dtype(space, w_dtype):
-    if space.is_w(w_dtype, space.w_int):
-        return 'i'
-    else:
-        raise NotImplementedError
+result_factory = None
+def mdresult(space, t):
+    global result_factory
+    if result_factory is None:
+        result_factory = ResultFactory(space)
+    return result_factory.types[t]

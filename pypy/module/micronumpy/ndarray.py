@@ -8,7 +8,7 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.module.micronumpy.sdarray import sdresult
 from pypy.module.micronumpy.sdarray import GenericArray
 
-from pypy.module.micronumpy.mdarray import MultiDimArray
+from pypy.module.micronumpy.mdarray import mdresult
 
 def unpack_shape(space, w_shape):
     if space.is_true(space.isinstance(w_shape, space.w_int)):
@@ -58,20 +58,27 @@ class ndarray(Wrappable):
             shape_w = unpack_shape(space, values_shape)
         else:
             shape_w = unpack_shape(space, w_shape)
-        if len(shape_w) == 1:
-            length = shape_w[0]
-            try:
-                self.array = sdresult(space, w_dtype)(space, length)
-            except KeyError, e:
-                raise OperationError(space.w_NotImplementedError,
-                        space.wrap("Haven't implemented generic array yet!"))
 
-            if not w_values == space.w_None: #space.is_true() ?
-                self.array.load_iterable(space, w_values)
-        else:
-            self.array = MultiDimArray(space, unpack_shape(space, w_shape), int) #FIXME: multi-dimensional arrays not *really* implemented
+        try:
+            if len(shape_w) == 1:
+                length = shape_w[0]
+                self.array = sdresult(space, w_dtype)(space, length)
+            else:
+                self.array = mdresult(space, w_dtype)(space, unpack_shape(space, w_shape))
+        except KeyError, e:
+            raise OperationError(space.w_NotImplementedError,
+                    space.wrap("Haven't implemented generic array yet!"))
+
+        if not w_values == space.w_None:
+            self.array.load_iterable(space, w_values) #TODO: implement loading for multi-dimensional arrays
 
     def validate_index(self, space, w_i):
+        if space.type(w_i) == space.w_int: return
+
+        if space.type(w_i) == space.w_str:
+            raise OperationError(space.w_NotImplementedError,
+                                 space.wrap("Haven't implemented field access yet!"))
+
         try:
             index_dimensionality = space.int_w(space.len(w_i))
             array_dimensionality = len(self.array.shape)
