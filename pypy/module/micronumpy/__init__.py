@@ -5,13 +5,12 @@ class Module(MixedModule):
 
     applevel_name = 'numpy'
     appleveldefs = {
-        'array' : 'app_numarray.array',
+        #'array' : 'app_numarray.array',
         }
     
     interpleveldefs = {
-        'zeros'    : 'numarray.zeros',
+        'array'    : 'ndarray.array',
+        'zeros'    : 'ndarray.zeros',
         'minimum'  : 'ufunc.minimum',
-        'IntArray' : 'numarray.IntArray',
-        'FloatArray' : 'numarray.FloatArray',
         }
 
