@@ -87,39 +87,21 @@ def test_sharing_field_lists_of_virtual():
 
 def test_reuse_vinfo():
     class FakeVInfo(object):
-        def set_content(self, fieldnums, backstore_num, backstore_descr):
+        def set_content(self, fieldnums):
             self.fieldnums = fieldnums
-            self.backstore_num = backstore_num
-            self.backstore_descr = backstore_descr
-        def equals(self, fieldnums, backstore_num, backstore_descr):
-            return (self.fieldnums == fieldnums and
-                    self.backstore_num == backstore_num and
-                    self.backstore_descr == backstore_descr)
+        def equals(self, fieldnums):
+            return self.fieldnums == fieldnums
     class FakeVirtualValue(optimizeopt.AbstractVirtualValue):
         def _make_virtual(self, *args):
             return FakeVInfo()
     v1 = FakeVirtualValue(None, None, None)
-    vinfo1 = v1.make_virtual_info(None, [1, 2, 4], None, None)
-    vinfo2 = v1.make_virtual_info(None, [1, 2, 4], None, None)
+    vinfo1 = v1.make_virtual_info(None, [1, 2, 4])
+    vinfo2 = v1.make_virtual_info(None, [1, 2, 4])
     assert vinfo1 is vinfo2
-    vinfo3 = v1.make_virtual_info(None, [1, 2, 6], None, None)
+    vinfo3 = v1.make_virtual_info(None, [1, 2, 6])
     assert vinfo3 is not vinfo2
-    vinfo4 = v1.make_virtual_info(None, [1, 2, 6], None, None)
+    vinfo4 = v1.make_virtual_info(None, [1, 2, 6])
     assert vinfo3 is vinfo4
-    #
-    descr = object()
-    descr2 = object()
-    vinfo1 = v1.make_virtual_info(None, [1, 2, 4], None, None)
-    vinfo2 = v1.make_virtual_info(None, [1, 2, 4], 6, descr)
-    assert vinfo1 is not vinfo2
-    vinfo3 = v1.make_virtual_info(None, [1, 2, 4], 6, descr)
-    assert vinfo3 is vinfo2
-    vinfo4 = v1.make_virtual_info(None, [1, 2, 4], 5, descr)
-    assert vinfo4 is not vinfo3
-    vinfo5 = v1.make_virtual_info(None, [1, 2, 4], 5, descr2)
-    assert vinfo5 is not vinfo4
-    vinfo6 = v1.make_virtual_info(None, [1, 2, 4], 5, descr2)
-    assert vinfo6 is vinfo5
 
 def test_descrlist_dict():
     from pypy.jit.metainterp import optimizeutil
@@ -1422,7 +1404,7 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         expected = """
         [p1, i2, i3]
-        guard_true(i3) []
+        guard_true(i3) [p1]
         i4 = int_neg(i2)
         setfield_gc(p1, NULL, descr=nextdescr)
         jump(p1, i2, i4)
@@ -1430,6 +1412,26 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
     def test_duplicate_setfield_residual_guard_3(self):
+        ops = """
+        [p1, i2, i3]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p1, p2, descr=nextdescr)
+        guard_true(i3) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        expected = """
+        [p1, i2, i3]
+        guard_true(i3) [p1, i2]
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_duplicate_setfield_residual_guard_4(self):
         # test that the setfield_gc does not end up between int_eq and
         # the following guard_true
         ops = """
@@ -1811,6 +1813,14 @@ class BaseTestOptimizeOpt(BaseTest):
                 tag = ('virtual', self.namespace[match.group(2)])
             virtuals[pvar] = (tag, None, fieldstext)
         #
+        r2 = re.compile(r"([\w\d()]+)[.](\w+)\s*=\s*([\w\d()]+)")
+        pendingfields = []
+        for match in r2.finditer(text):
+            pvar = match.group(1)
+            pfieldname = match.group(2)
+            pfieldvar = match.group(3)
+            pendingfields.append((pvar, pfieldname, pfieldvar))
+        #
         def _variables_equal(box, varname, strict):
             if varname not in virtuals:
                 if strict:
@@ -1832,11 +1842,21 @@ class BaseTestOptimizeOpt(BaseTest):
                 else:
                     virtuals[varname] = tag, box, fieldstext
         #
-        basetext = text[:ends[0]]
+        basetext = text.splitlines()[0]
         varnames = [s.strip() for s in basetext.split(',')]
+        if varnames == ['']:
+            varnames = []
         assert len(boxes) == len(varnames)
         for box, varname in zip(boxes, varnames):
             _variables_equal(box, varname, strict=True)
+        for pvar, pfieldname, pfieldvar in pendingfields:
+            box = oparse.getvar(pvar)
+            fielddescr = self.namespace[pfieldname.strip()]
+            fieldbox = executor.execute(self.cpu,
+                                        rop.GETFIELD_GC,
+                                        fielddescr,
+                                        box)
+            _variables_equal(fieldbox, pfieldvar, strict=True)
         #
         for match in parts:
             pvar = match.group(1)
@@ -2109,14 +2129,16 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         expected = """
         [p1, i2, i3]
-        guard_true(i3, descr=fdescr) [i2]
+        guard_true(i3, descr=fdescr) [p1, i2]
         i4 = int_neg(i2)
         setfield_gc(p1, NULL, descr=nextdescr)
         jump(p1, i2, i4)
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
+        self.loop.inputargs[0].value = self.nodebox.value
         self.check_expanded_fail_descr('''
-            where p2 is a node_vtable, valuedescr=i2 --> p1.nextdescr
+            p1.nextdescr = p2
+            where p2 is a node_vtable, valuedescr=i2
             ''')
 
     def test_expand_fail_lazy_setfield_2(self):
@@ -2140,7 +2162,8 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
         self.check_expanded_fail_descr('''
-            where p2 is a node_vtable, valuedescr=i2 --> myptr.nextdescr
+            ConstPtr(myptr).nextdescr = p2
+            where p2 is a node_vtable, valuedescr=i2
             ''')
 
 
