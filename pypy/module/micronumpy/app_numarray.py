@@ -16,16 +16,10 @@ def lowest_common_type(xs):
             result = t
     return result
 
+#FIXME: move me to interplevel
 def array(xs, dtype=None):
     import numpy
-    arrays = {
-              int: numpy.IntArray,
-              float: numpy.FloatArray,
-              #complex: ComplexNumArray,
-             }
-    #type = lowest_common_type(xs)
-    #return arrays[type](xs)
-    result = numpy.zeros(len(xs), dtype=int) #FIXME: dtype=dtype !
+    result = numpy.zeros(len(xs), dtype=dtype if dtype else lowest_common_type(xs))
     for i, x in enumerate(xs):
         result[i] = x
     return result
