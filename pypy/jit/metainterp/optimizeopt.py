@@ -974,9 +974,9 @@ class HeapOpOptimizer(object):
         if before_guard and len(newoperations) >= 2:
             lastop = newoperations[-1]
             prevop = newoperations[-2]
-            # - is_always_pure() for cases like "int_eq/setfield_gc/guard_true"
+            # - is_comparison() for cases like "int_eq/setfield_gc/guard_true"
             # - CALL_MAY_FORCE: "call_may_force/setfield_gc/guard_not_forced"
-            if ((prevop.is_always_pure() or prevop.opnum == rop.CALL_MAY_FORCE)
+            if ((prevop.is_comparison() or prevop.opnum == rop.CALL_MAY_FORCE)
                 and prevop.result not in lastop.args):
                 newoperations[-2] = lastop
                 newoperations[-1] = prevop
