@@ -15,22 +15,30 @@ class Module(Wrappable):
         self.w_dict = w_dict 
         self.w_name = w_name 
         if w_name is not None:
-            space.setitem(w_dict, space.new_interned_str('__name__'), w_name) 
+            space.setitem(w_dict, space.new_interned_str('__name__'), w_name)
+        self.startup_called = False
 
     def setup_after_space_initialization(self):
         """NOT_RPYTHON: to allow built-in modules to do some more setup
         after the space is fully initialized."""
 
+    def init(self, space):
+        """This is called each time the module is imported or reloaded
+        """
+        if not self.startup_called:
+            self.startup_called = True
+            self.startup(space)
+
     def startup(self, space):
-        """This is called at runtime before the space gets uses to allow
-        the module to do initialization at runtime.
+        """This is called at runtime on import to allow the module to
+        do initialization when it is imported for the first time.
         """
 
     def shutdown(self, space):
         """This is called when the space is shut down, just after
-        sys.exitfunc().
+        sys.exitfunc(), if the module has been imported.
         """
-        
+
     def getdict(self):
         return self.w_dict
 
