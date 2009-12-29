@@ -106,7 +106,8 @@ class LLtypeMixin(object):
     readadescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                  EffectInfo([adescr], [], []))
     mayforcevirtdescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
-                 EffectInfo([], [], [], forces_virtual_or_virtualizable=True))
+                 EffectInfo([nextdescr], [], [],
+                            forces_virtual_or_virtualizable=True))
 
     from pypy.jit.metainterp.virtualref import jit_virtual_ref_vtable
     from pypy.jit.metainterp.virtualref import JIT_VIRTUAL_REF
