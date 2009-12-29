@@ -50,7 +50,7 @@ class ndarray(Wrappable):
         self.space = space
         if w_dtype == space.w_None:
             #TODO: infer type from w_values (better than this)
-            w_dtype = space.type(space.fixedview(w_values)[0]) #FIXME: Allocates an entire array and throws it away!
+            w_dtype = space.type(space.getitem(w_values, space.wrap(0))) #FIXED
 
         self.dtype = w_dtype
         if w_shape == space.w_None:
@@ -64,7 +64,7 @@ class ndarray(Wrappable):
                 length = shape_w[0]
                 self.array = sdresult(space, w_dtype)(space, length)
             else:
-                self.array = mdresult(space, w_dtype)(space, unpack_shape(space, w_shape))
+                self.array = mdresult(space, w_dtype)(space, shape_w) #w_shape still may be w_None 
         except KeyError, e:
             raise OperationError(space.w_NotImplementedError,
                     space.wrap("Haven't implemented generic array yet!"))
