@@ -64,12 +64,12 @@ blackholed ops:         5
 opt ops:                6
 opt guards:             1
 forcings:               1
-abort: trace too long:	10
-abort: compiling:	11
-abort: vable escape:	12
-nvirtuals:       	13
-nvholes:         	14
-nvreused:        	15
+abort: trace too long:  10
+abort: compiling:       11
+abort: vable escape:    12
+nvirtuals:              13
+nvholes:                14
+nvreused:               15
 '''
 
 def test_parse():
