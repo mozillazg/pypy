@@ -102,8 +102,7 @@ class VRefTests:
                 x = X()
                 x.n = n
                 exctx.topframeref = vref = virtual_ref(x)
-                # here, 'x' should be virtual. (This is ensured because
-                # we call virtual_ref(x).)
+                # here, 'x' should be virtual
                 exctx.topframeref = vref_None
                 virtual_ref_finish(x)
                 # 'x' and 'vref' can randomly escape after the call to
@@ -113,7 +112,42 @@ class VRefTests:
             return 1
         #
         self.meta_interp(f, [10])
-        self.check_loops(new_with_vtable=2)   # the vref, and later the X
+        self.check_loops(new_with_vtable=2)   # the vref and the X
+        self.check_aborted_count(0)
+
+    def test_simple_all_removed(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n'])
+        #
+        A = lltype.GcArray(lltype.Signed)
+        class XY:
+            pass
+        class ExCtx:
+            pass
+        exctx = ExCtx()
+        #
+        @dont_look_inside
+        def externalfn(n):
+            return 1
+        #
+        def f(n):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n)
+                myjitdriver.jit_merge_point(n=n)
+                xy = XY()
+                xy.next1 = lltype.malloc(A, 0)
+                xy.next2 = lltype.malloc(A, 0)
+                xy.next3 = lltype.malloc(A, 0)
+                exctx.topframeref = virtual_ref(xy)
+                n -= externalfn(n)
+                exctx.topframeref = vref_None
+                xy.next1 = lltype.nullptr(A)
+                xy.next2 = lltype.nullptr(A)
+                xy.next3 = lltype.nullptr(A)
+                virtual_ref_finish(xy)
+        #
+        self.meta_interp(f, [15])
+        self.check_loops(new_with_vtable=0,     # all virtualized
+                         new_array=0)
         self.check_aborted_count(0)
 
     def test_simple_no_access(self):
@@ -269,8 +303,8 @@ class VRefTests:
         #
         res = self.meta_interp(f, [30])
         assert res == 13
-        self.check_loops(new_with_vtable=2,   # the vref, XY() at the end
-                         new_array=0)         # but not next1/2/3
+        self.check_loops(new_with_vtable=0, # all virtualized in the n!=13 loop
+                         new_array=0)
         self.check_loop_count(1)
         self.check_aborted_count(0)
 
@@ -319,7 +353,7 @@ class VRefTests:
         res = self.meta_interp(f, [72])
         assert res == 6
         self.check_loop_count(2)     # the loop and the bridge
-        self.check_loops(new_with_vtable=3,  # loop: vref, xy; bridge: xy
+        self.check_loops(new_with_vtable=2,  # loop: nothing; bridge: vref, xy
                          new_array=2)        # bridge: next4, next5
         self.check_aborted_count(0)
 
