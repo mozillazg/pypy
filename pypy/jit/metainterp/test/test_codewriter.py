@@ -2,7 +2,7 @@ import py
 from pypy.rlib import jit
 from pypy.jit.metainterp import support, typesystem
 from pypy.jit.metainterp.policy import JitPolicy
-from pypy.jit.metainterp.codewriter import CodeWriter, ForcingVirtualRef
+from pypy.jit.metainterp.codewriter import CodeWriter
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.translator.translator import graphof
 from pypy.rpython.lltypesystem.rbuiltin import ll_instantiate
@@ -101,6 +101,8 @@ class TestCodeWriter:
     def make_graphs(self, func, values, type_system='lltype'):
         class FakeMetaInterpSd:
             virtualizable_info = None
+            class options:
+                listops = True
             def find_opcode(self, name):
                 default = len(self.opname_to_index)
                 return self.opname_to_index.setdefault(name, default)
@@ -460,8 +462,11 @@ class TestCodeWriter:
         cw = CodeWriter(self.rtyper)
         cw.candidate_graphs = [graphs[0]]
         cw._start(self.metainterp_sd, None)
-        py.test.raises(ForcingVirtualRef, cw.make_one_bytecode,
-                       (graphs[0], None), False)    # assert it does not work
+        jitcode = cw.make_one_bytecode((graphs[0], None), False)
+        assert 'virtual_ref' in jitcode._source
+        # the call vref() becomes a residual call to a helper that contains
+        # itself a copy of the call.
+        assert 'residual_call' in jitcode._source
 
 
 class ImmutableFieldsTests:
