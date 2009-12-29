@@ -63,9 +63,6 @@ class OptValue(object):
     def get_args_for_fail(self, modifier):
         pass
 
-    def get_backstore(self):
-        return (None, None)
-
     def make_virtual_info(self, modifier, fieldnums):
         raise NotImplementedError # should not be called on this level
 
@@ -175,11 +172,6 @@ class AbstractVirtualValue(OptValue):
     def _make_virtual(self, modifier):
         raise NotImplementedError("abstract base")
 
-    def register_virtual_fields(self, modifier, fieldboxes):
-        modifier.register_virtual_fields(self.keybox, fieldboxes)
-        parentbox, parentdescr = self.get_backstore()
-        if parentdescr is not None:
-            modifier.register_box(parentbox)
 
 def get_fielddescrlist_cache(cpu):
     if not hasattr(cpu, '_optimizeopt_fielddescrlist_cache'):
@@ -246,7 +238,7 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
             # we have already seen the very same keybox
             lst = self._get_field_descr_list()
             fieldboxes = [self._fields[ofs].get_key_box() for ofs in lst]
-            self.register_virtual_fields(modifier, fieldboxes)
+            modifier.register_virtual_fields(self.keybox, fieldboxes)
             for ofs in lst:
                 fieldvalue = self._fields[ofs]
                 fieldvalue.get_args_for_fail(modifier)
@@ -314,7 +306,7 @@ class VArrayValue(AbstractVirtualValue):
             itemboxes = []
             for itemvalue in self._items:
                 itemboxes.append(itemvalue.get_key_box())
-            self.register_virtual_fields(modifier, itemboxes)
+            modifier.register_virtual_fields(self.keybox, itemboxes)
             for itemvalue in self._items:
                 if itemvalue is not self.constvalue:
                     itemvalue.get_args_for_fail(modifier)
