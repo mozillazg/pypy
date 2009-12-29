@@ -2331,13 +2331,42 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
 
-    def test_vref_nonvirtual(self):
+    def test_vref_nonvirtual_nonescape(self):
         ops = """
         [p1]
         p2 = virtual_ref(p1, 5)
+        virtual_ref_finish(p2, p1)
         jump(p1)
         """
-        py.test.raises(compile.GiveUp, self.optimize_loop, ops, 'Not', ops)
+        expected = """
+        [p1]
+        i0 = force_token()
+        jump(p1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_vref_nonvirtual_escape(self):
+        ops = """
+        [p1]
+        p2 = virtual_ref(p1, 5)
+        escape(p2)
+        virtual_ref_finish(p2, p1)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        i0 = force_token()
+        p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
+        setfield_gc(p2, i0, descr=virtualtokendescr)
+        setfield_gc(p2, 5, descr=virtualrefindexdescr)
+        escape(p2)
+        setfield_gc(p2, p1, descr=virtualforceddescr)
+        setfield_gc(p2, 0, descr=virtualtokendescr)
+        jump(p1)
+        """
+        # XXX we should optimize a bit more the case of a nonvirtual.
+        # in theory it is enough to just do 'p2 = p1'.
+        self.optimize_loop(ops, 'Not', expected)
 
     def test_vref_virtual_1(self):
         ops = """
