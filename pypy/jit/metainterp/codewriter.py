@@ -1705,6 +1705,3 @@ class VirtualizableArrayField(Exception):
     def __str__(self):
         return "using virtualizable array in illegal way in %r" % (
             self.args[0],)
-
-class ForcingVirtualRef(Exception):
-    pass
