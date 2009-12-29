@@ -68,6 +68,12 @@ class LLtypeMixin(object):
     nextdescr = cpu.fielddescrof(NODE, 'next')
     otherdescr = cpu.fielddescrof(NODE2, 'other')
 
+    NODEOBJ = lltype.GcStruct('NODEOBJ', ('parent', OBJECT),
+                                         ('ref', lltype.Ptr(OBJECT)))
+    nodeobj = lltype.malloc(NODEOBJ)
+    nodeobjvalue = lltype.cast_opaque_ptr(llmemory.GCREF, nodeobj)
+    refdescr = cpu.fielddescrof(NODEOBJ, 'ref')
+
     arraydescr = cpu.arraydescrof(lltype.GcArray(lltype.Signed))
     floatarraydescr = cpu.arraydescrof(lltype.GcArray(lltype.Float))
 
@@ -114,10 +120,14 @@ class LLtypeMixin(object):
     virtualtokendescr = cpu.fielddescrof(JIT_VIRTUAL_REF, 'virtual_token')
     virtualrefindexdescr = cpu.fielddescrof(JIT_VIRTUAL_REF,'virtualref_index')
     virtualforceddescr = cpu.fielddescrof(JIT_VIRTUAL_REF, 'forced')
+    jvr_vtable_adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)
 
-    cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
-                      cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),
-                       cpu.cast_adr_to_int(u_vtable_adr): cpu.sizeof(U)}
+    cpu.class_sizes = {
+        cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
+        cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),
+        cpu.cast_adr_to_int(u_vtable_adr): cpu.sizeof(U),
+        cpu.cast_adr_to_int(jvr_vtable_adr): cpu.sizeof(JIT_VIRTUAL_REF),
+        }
     namespace = locals()
 
 class OOtypeMixin(object):
