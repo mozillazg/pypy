@@ -445,7 +445,27 @@ class TestJIT(PyPyCJITTests):
     def setup_class(cls):
         if option.pypy_c is None:
             py.test.skip("pass --pypy!")
+        if not has_info(option.pypy_c, 'translation.jit'):
+            py.test.skip("must give a pypy-c with the jit enabled")
+        if has_info(option.pypy_c, 'translation.thread'):
+            py.test.skip("for now, must give a pypy-c-jit without threads")
         cls.tmpdir = udir.join('pypy-jit')
         cls.tmpdir.ensure(dir=1)
         cls.counter = 0
         cls.pypy_c = option.pypy_c
+
+def has_info(pypy_c, option):
+    g = os.popen('"%s" --info' % pypy_c, 'r')
+    lines = g.readlines()
+    g.close()
+    for line in lines:
+        line = line.strip()
+        if line.startswith(option + ':'):
+            line = line[len(option)+1:].strip()
+            if line == 'True':
+                return True
+            elif line == 'False':
+                return False
+            else:
+                return line
+    raise ValueError(option + ' not found in ' + pypy_c)
