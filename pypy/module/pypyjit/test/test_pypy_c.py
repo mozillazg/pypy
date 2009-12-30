@@ -205,7 +205,7 @@ class PyPyCJITTests(object):
 
             def main():
                 return richards.main(iterations = 1)
-        ''' % (sys.path,), 7000,
+        ''' % (sys.path,), 7200,
                    ([], 42))
 
     def test_simple_call(self):
