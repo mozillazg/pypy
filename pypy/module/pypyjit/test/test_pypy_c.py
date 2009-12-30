@@ -113,8 +113,8 @@ class PyPyCJITTests(object):
         assert result
         assert result.splitlines()[-1].strip() == 'OK :-)'
         self.parse_loops(logfilepath)
+        self.print_loops()
         if self.total_ops > expected_max_ops:
-            self.print_loops()
             assert 0, "too many operations: got %d, expected maximum %d" % (
                 self.total_ops, expected_max_ops)
 
@@ -267,7 +267,9 @@ class PyPyCJITTests(object):
         ops = self.get_by_bytecode("LOAD_ATTR")
         assert len(ops) == 2
         assert ops[0].get_opnames() == ["getfield_gc", "getarrayitem_gc",
+                                        "setfield_gc",  #  (*)
                                         "guard_nonnull_class"]
+        # (*) delayed write of the frames depth
         assert not ops[1] # second LOAD_ATTR folded away
 
     def test_default_and_kw(self):
