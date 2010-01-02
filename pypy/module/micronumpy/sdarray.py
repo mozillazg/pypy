@@ -36,14 +36,15 @@ def create_sdarray(data_type, unwrap, coerce):
                 space = self.space
                 x = coerce(space, w_x)
                 for i in range(source.length):
-                    self.storage[i] = f(source.storage[i], x)
+                    self.storage[i] = f(data_type(source.storage[i]), x)
             return scalar_operation
 
         mul_scalar = create_scalar_op(mul)
-#        div_scalar = create_scalar_op(div)
-#        add_scalar = create_scalar_op(add)
-#        sub_scalar = create_scalar_op(sub)
+        div_scalar = create_scalar_op(div)
+        add_scalar = create_scalar_op(add)
+        sub_scalar = create_scalar_op(sub)
 
+        #TODO: wrap up fixedview and scalar together
         def create_fixedview_op(f):
             def fixedview_operation(self, w_xs):
                 space = self.space

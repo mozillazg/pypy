@@ -22,16 +22,26 @@ class AppTestNumpy(object):
             assert compare(ar, data)
         return array_type_test
         """)
+        cls.w_array_scalar_op_test = cls.space.appexec([cls.w_compare],
+        """(compare):
+        def array_scalar_op_test(self, data_type, f, value, length):
+            compare = self.compare
+            from numpy import array
+            data = [data_type(x) for x in range(length)]
+            ar = array(data)
+            assert compare(f(ar, value), [f(x, value) for x in data])
+        return array_scalar_op_test
+        """)
 
     def test_int_array(self): self.array_type_test(int)
     def test_float_array(self): self.array_type_test(float)
 
-    def test_array_mul(self):
-        compare = self.compare
-        from numpy import array
-        data = range(4)
-        ar = array(data)
-        assert compare(ar * 4, [x * 4 for x in data])
+    def test_sdarray_operators(self):
+        from operator import mul, div, add, sub
+        self.array_scalar_op_test(self, float, mul, 2.0, 16)
+        self.array_scalar_op_test(self, float, div, 2.0, 16)
+        self.array_scalar_op_test(self, float, add, 2.0, 16)
+        self.array_scalar_op_test(self, float, sub, 2.0, 16)
 
     def test_iterable_construction(self):
         compare = self.compare
