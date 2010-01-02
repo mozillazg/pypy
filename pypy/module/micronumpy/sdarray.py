@@ -12,8 +12,12 @@ from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
 from pypy.module.micronumpy.dtype import unwrap_float32, coerce_float32, float32
 
+# from pypy.interpreter.gateway import unwrap_spec #TODO: merge unwrap_spec decorator
+
+class BaseSingleDimArray(BaseNumArray): pass
+
 def create_sdarray(data_type, unwrap, coerce):
-    class NumArray(BaseNumArray):
+    class NumArray(BaseSingleDimArray):
         def __init__(self, space, length):
             self.shape = (1,)
             self.length = length
@@ -28,9 +32,9 @@ def create_sdarray(data_type, unwrap, coerce):
         copy = copy_operation()
 
         def create_scalar_op(f):
-            def scalar_operation(self, space, source, w_x):
+            def scalar_operation(self, source, w_x):
                 space = self.space
-                x = self.coerce(space, w_x)
+                x = coerce(space, w_x)
                 for i in range(source.length):
                     self.storage[i] = f(source.storage[i], x)
             return scalar_operation
@@ -59,7 +63,8 @@ def create_sdarray(data_type, unwrap, coerce):
 
         copy_iterable = create_fixedview_op(copy)
 
-        def load_iterable(self, space, w_values): #FIXME: less than ideal
+        def load_iterable(self, w_values): #FIXME: less than ideal
+            space = self.space
             i = 0
             for x in space.fixedview(w_values, self.length):
                 self.storage[i] = unwrap(space, x)
@@ -98,8 +103,6 @@ GenericArray = None
 
 class ResultFactory(object):
     def __init__(self, space):
-        self.space = space
-
         self.types = {
             space.w_int:   IntArray,
             space.w_float: FloatArray,
