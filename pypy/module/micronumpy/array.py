@@ -17,7 +17,7 @@ def div_operation():
     return div
 
 def add_operation():
-    def add(x, y): return x * y
+    def add(x, y): return x + y
     return add
 
 def sub_operation():
