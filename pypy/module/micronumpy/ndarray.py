@@ -153,6 +153,15 @@ class ndarray(Wrappable):
         return self.array.len()
     descr_len.unwrap_spec = ['self', ObjSpace]
 
+    def descr_str(self, space):
+        return space.wrap("[%s]" % self.array.str())
+    descr_str.unwrap_spec = ['self', ObjSpace]
+
+    def descr_repr(self, space):
+        return space.wrap("array([%s])" % self.array.str())
+    descr_repr.unwrap_spec = ['self', ObjSpace]
+
+
 def descr_new(space, w_cls, w_shape,
               w_buffer=NoneNotWrapped, w_offset=NoneNotWrapped,
               w_strides=NoneNotWrapped, order=NoneNotWrapped):
@@ -171,6 +180,8 @@ ndarray.typedef = TypeDef(
     __div__ = interp2app(ndarray.descr_div),
     __add__ = interp2app(ndarray.descr_add),
     __sub__ = interp2app(ndarray.descr_sub),
+    __str__ = interp2app(ndarray.descr_str),
+    __repr__ = interp2app(ndarray.descr_repr),
     __getitem__ = interp2app(ndarray.descr_getitem),
     __setitem__ = interp2app(ndarray.descr_setitem),
     __len__     = interp2app(ndarray.descr_len),

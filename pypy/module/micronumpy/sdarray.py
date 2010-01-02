@@ -94,6 +94,9 @@ def create_sdarray(data_type, unwrap, coerce):
             space = self.space
             return space.wrap(len(self.storage))
 
+        def str(self):
+            return ', '.join([str(x) for x in self.storage])
+
     return NumArray
 
 IntArray = create_sdarray(int, unwrap_int, coerce_int)
