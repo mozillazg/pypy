@@ -26,6 +26,13 @@ class AppTestNumpy(object):
     def test_int_array(self): self.array_type_test(int)
     def test_float_array(self): self.array_type_test(float)
 
+    def test_array_mul(self):
+        compare = self.compare
+        from numpy import array
+        data = range(4)
+        ar = array(data)
+        assert compare(ar * 4, [x * 4 for x in data])
+
     def test_iterable_construction(self):
         compare = self.compare
         from numpy import array

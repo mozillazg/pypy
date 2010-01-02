@@ -8,7 +8,6 @@ from pypy.module.micronumpy.array import BaseNumArray
 
 from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
-from pypy.module.micronumpy.dtype import unwrap_float32, coerce_float32, float32
 
 def compute_pos(space, indexes, dim):
     current = 1
@@ -25,8 +24,10 @@ def compute_pos(space, indexes, dim):
         current *= d
     return pos
 
+class BaseMultiDimArray(BaseNumArray): pass
+
 def create_mdarray(data_type, unwrap, coerce):
-    class MultiDimArray(BaseNumArray):
+    class MultiDimArray(BaseMultiDimArray):
         def __init__(self, space, shape):
             self.shape = shape
             self.space = space
@@ -54,11 +55,16 @@ def create_mdarray(data_type, unwrap, coerce):
             indexes = self._unpack_indexes(space, w_index)
             pos = compute_pos(space, indexes, self.shape)
             self.storage[pos] = coerce(space, w_value)
-            return space.w_None #XXX: necessary?
+
+        def load_iterable(self, w_xs):
+            space = self.space
+            raise OperationError(space.w_NotImplementedError,
+                                       space.wrap("Haven't implemented iterable loading yet!"))
 
         def len(self):
             space = self.space
             return space.wrap(self.shape[0])
+
     return MultiDimArray
 
 MultiDimIntArray = create_mdarray(int, unwrap_int, coerce_int)
