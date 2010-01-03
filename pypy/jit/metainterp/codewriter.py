@@ -1308,10 +1308,9 @@ class BytecodeMaker(object):
         self.emit(self.var_position(args[0]))
         self.register_var(op.result)
         #
-        from pypy.jit.metainterp.virtualref import jit_virtual_ref_vtable
-        from pypy.jit.metainterp.virtualref import JIT_VIRTUAL_REF
-        self.codewriter.register_known_gctype(jit_virtual_ref_vtable,
-                                              JIT_VIRTUAL_REF)
+        vrefinfo = self.codewriter.metainterp_sd.virtualref_info
+        self.codewriter.register_known_gctype(vrefinfo.jit_virtual_ref_vtable,
+                                              vrefinfo.JIT_VIRTUAL_REF)
 
     def _array_of_voids(self, ARRAY):
         if isinstance(ARRAY, ootype.Array):

@@ -5,7 +5,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 
-from pypy.jit.metainterp import history, compile, resume, virtualref
+from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, Box
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import codewriter, executor
@@ -903,8 +903,9 @@ class MIFrame(object):
         if metainterp.is_blackholing():
             resbox = box      # good enough when blackholing
         else:
+            vrefinfo = metainterp.staticdata.virtualref_info
             obj = box.getref_base()
-            vref = virtualref.virtual_ref_during_tracing(obj)
+            vref = vrefinfo.virtual_ref_during_tracing(obj)
             resbox = history.BoxPtr(vref)
             cindex = history.ConstInt(len(metainterp.virtualref_boxes) // 2)
             metainterp.history.record(rop.VIRTUAL_REF, [box, cindex], resbox)
@@ -928,8 +929,9 @@ class MIFrame(object):
         lastbox = metainterp.virtualref_boxes.pop()
         assert box.getref_base() == lastbox.getref_base()
         if not metainterp.is_blackholing():
+            vrefinfo = metainterp.staticdata.virtualref_info
             vref = vrefbox.getref_base()
-            if virtualref.is_virtual_ref(vref):
+            if vrefinfo.is_virtual_ref(vref):
                 metainterp.history.record(rop.VIRTUAL_REF_FINISH,
                                           [vrefbox, lastbox], None)
 
@@ -1775,10 +1777,11 @@ class MetaInterp(object):
         if self.is_blackholing():
             return
         #
+        vrefinfo = self.staticdata.virtualref_info
         for i in range(1, len(self.virtualref_boxes), 2):
             vrefbox = self.virtualref_boxes[i]
             vref = vrefbox.getref_base()
-            virtualref.tracing_before_residual_call(vref)
+            vrefinfo.tracing_before_residual_call(vref)
             # the FORCE_TOKEN is already set at runtime in each vref when
             # it is created, by optimizeopt.py.
         #
@@ -1800,11 +1803,12 @@ class MetaInterp(object):
         else:
             escapes = False
             #
+            vrefinfo = self.staticdata.virtualref_info
             for i in range(0, len(self.virtualref_boxes), 2):
                 virtualbox = self.virtualref_boxes[i]
                 vrefbox = self.virtualref_boxes[i+1]
                 vref = vrefbox.getref_base()
-                if virtualref.tracing_after_residual_call(vref):
+                if vrefinfo.tracing_after_residual_call(vref):
                     # this vref was really a virtual_ref, but it escaped
                     # during this CALL_MAY_FORCE.  Mark this fact by
                     # generating a VIRTUAL_REF_FINISH on it and replacing
@@ -1874,11 +1878,12 @@ class MetaInterp(object):
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
         self.virtualref_boxes = virtualref_boxes
+        vrefinfo = self.staticdata.virtualref_info
         for i in range(0, len(virtualref_boxes), 2):
             virtualbox = virtualref_boxes[i]
             vrefbox = virtualref_boxes[i+1]
-            virtualref.continue_tracing(vrefbox.getref_base(),
-                                        virtualbox.getref_base())
+            vrefinfo.continue_tracing(vrefbox.getref_base(),
+                                      virtualbox.getref_base())
         #
         # virtualizable: synchronize the real virtualizable and the local
         # boxes, in whichever direction is appropriate

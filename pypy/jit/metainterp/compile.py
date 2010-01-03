@@ -256,7 +256,6 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
     def handle_async_forcing(self, force_token):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
         from pypy.jit.metainterp.resume import force_from_resumedata
-        from pypy.jit.metainterp.virtualref import forced_single_vref
         # To handle the forcing itself, we create a temporary MetaInterp
         # as a convenience to move the various data to its proper place.
         metainterp_sd = self.metainterp_sd
@@ -270,10 +269,12 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         virtualizable_boxes, virtualref_boxes, all_virtuals = forced_data
         #
         # Handle virtualref_boxes: mark each JIT_VIRTUAL_REF as forced
+        vrefinfo = metainterp_sd.virtualref_info
         for i in range(0, len(virtualref_boxes), 2):
             virtualbox = virtualref_boxes[i]
             vrefbox = virtualref_boxes[i+1]
-            forced_single_vref(vrefbox.getref_base(), virtualbox.getref_base())
+            vrefinfo.forced_single_vref(vrefbox.getref_base(),
+                                        virtualbox.getref_base())
         # Handle virtualizable_boxes: store them on the real virtualizable now
         if expect_virtualizable:
             metainterp_sd.virtualizable_info.forced_vable(virtualizable_boxes)
