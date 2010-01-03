@@ -115,18 +115,22 @@ class LLtypeMixin(object):
                  EffectInfo([nextdescr], [], [],
                             forces_virtual_or_virtualizable=True))
 
-    from pypy.jit.metainterp.virtualref import jit_virtual_ref_vtable
-    from pypy.jit.metainterp.virtualref import JIT_VIRTUAL_REF
-    virtualtokendescr = cpu.fielddescrof(JIT_VIRTUAL_REF, 'virtual_token')
-    virtualrefindexdescr = cpu.fielddescrof(JIT_VIRTUAL_REF,'virtualref_index')
-    virtualforceddescr = cpu.fielddescrof(JIT_VIRTUAL_REF, 'forced')
-    jvr_vtable_adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)
+    from pypy.jit.metainterp.virtualref import VirtualRefInfo
+    class FakeWarmRunnerDesc:
+        pass
+    FakeWarmRunnerDesc.cpu = cpu
+    vrefinfo = VirtualRefInfo(FakeWarmRunnerDesc)
+    virtualtokendescr = vrefinfo.descr_virtual_token
+    virtualrefindexdescr = vrefinfo.descr_virtualref_index
+    virtualforceddescr = vrefinfo.descr_forced
+    jvr_vtable_adr = llmemory.cast_ptr_to_adr(vrefinfo.jit_virtual_ref_vtable)
 
     cpu.class_sizes = {
         cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
         cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),
         cpu.cast_adr_to_int(u_vtable_adr): cpu.sizeof(U),
-        cpu.cast_adr_to_int(jvr_vtable_adr): cpu.sizeof(JIT_VIRTUAL_REF),
+        cpu.cast_adr_to_int(jvr_vtable_adr): cpu.sizeof(
+                                                   vrefinfo.JIT_VIRTUAL_REF),
         }
     namespace = locals()
 
