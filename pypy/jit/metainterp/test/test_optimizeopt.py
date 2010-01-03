@@ -249,7 +249,10 @@ class BaseTestOptimizeOpt(BaseTest):
             loop.token.specnodes = self.unpack_specnodes(spectext)
         #
         self.loop = loop
-        optimize_loop_1(FakeMetaInterpStaticData(self.cpu), loop)
+        metainterp_sd = FakeMetaInterpStaticData(self.cpu)
+        if hasattr(self, 'vrefinfo'):
+            metainterp_sd.virtualref_info = self.vrefinfo
+        optimize_loop_1(metainterp_sd, loop)
         #
         expected = self.parse(optops)
         self.assert_equal(loop, expected)

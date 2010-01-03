@@ -123,7 +123,8 @@ class LLtypeMixin(object):
     virtualtokendescr = vrefinfo.descr_virtual_token
     virtualrefindexdescr = vrefinfo.descr_virtualref_index
     virtualforceddescr = vrefinfo.descr_forced
-    jvr_vtable_adr = llmemory.cast_ptr_to_adr(vrefinfo.jit_virtual_ref_vtable)
+    jit_virtual_ref_vtable = vrefinfo.jit_virtual_ref_vtable
+    jvr_vtable_adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)
 
     cpu.class_sizes = {
         cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
