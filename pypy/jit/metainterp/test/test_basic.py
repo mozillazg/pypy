@@ -88,7 +88,8 @@ class JitMixin:
                                                   **kwds)
         metainterp.staticdata.state = FakeWarmRunnerState()
         metainterp.staticdata.state.cpu = metainterp.staticdata.cpu
-        self.finish_metainterp_for_interp_operations(metainterp)
+        if hasattr(self, 'finish_metainterp_for_interp_operations'):
+            self.finish_metainterp_for_interp_operations(metainterp)
         portal_graph = rtyper.annotator.translator.graphs[0]
         cw = codewriter.CodeWriter(rtyper)
         
@@ -112,9 +113,6 @@ class JitMixin:
             return e.args[0]
         else:
             raise Exception("FAILED")
-
-    def finish_metainterp_for_interp_operations(self, metainterp):
-        pass
 
     def check_history(self, expected=None, **isns):
         # this can be used after calling meta_interp
