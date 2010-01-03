@@ -5,12 +5,16 @@ from pypy.rlib.jit import virtual_ref, virtual_ref_finish
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.virtualref import JIT_VIRTUAL_REF
+from pypy.jit.metainterp.virtualref import VirtualRefInfo
 
 debug_print = lloperation.llop.debug_print
 
 
 class VRefTests:
+
+    def finish_metainterp_for_interp_operations(self, metainterp):
+        self.vrefinfo = VirtualRefInfo(metainterp.staticdata.state)
+        metainterp.staticdata.virtualref_info = self.vrefinfo
 
     def test_make_vref_simple(self):
         class X:
@@ -73,6 +77,7 @@ class VRefTests:
         bxs2 = [box for box in guard_op.fail_args
                   if str(box._getrepr_()).endswith('JitVirtualRef')]
         assert len(bxs2) == 1
+        JIT_VIRTUAL_REF = self.vrefinfo.JIT_VIRTUAL_REF
         bxs2[0].getref(lltype.Ptr(JIT_VIRTUAL_REF)).virtual_token = 1234567
         #
         self.metainterp.rebuild_state_after_failure(guard_op.descr,
