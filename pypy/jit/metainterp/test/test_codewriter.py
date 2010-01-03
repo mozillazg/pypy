@@ -436,6 +436,12 @@ class TestCodeWriter:
         assert effectinfo_g2.forces_virtual_or_virtualizable
         assert not effectinfo_h.forces_virtual_or_virtualizable
 
+    def make_vrefinfo(self):
+        from pypy.jit.metainterp.virtualref import VirtualRefInfo
+        class FakeWarmRunnerDesc:
+            cpu = self.metainterp_sd.cpu
+        self.metainterp_sd.virtualref_info = VirtualRefInfo(FakeWarmRunnerDesc)
+
     def test_vref_simple(self):
         class X:
             pass
@@ -444,6 +450,7 @@ class TestCodeWriter:
         graphs = self.make_graphs(f, [])
         assert graphs[0].func is f
         assert graphs[1].func is jit.virtual_ref
+        self.make_vrefinfo()
         cw = CodeWriter(self.rtyper)
         cw.candidate_graphs = [graphs[0]]
         cw._start(self.metainterp_sd, None)
@@ -459,6 +466,7 @@ class TestCodeWriter:
         graphs = self.make_graphs(f, [])
         assert graphs[0].func is f
         assert graphs[1].func is jit.virtual_ref
+        self.make_vrefinfo()
         cw = CodeWriter(self.rtyper)
         cw.candidate_graphs = [graphs[0]]
         cw._start(self.metainterp_sd, None)
