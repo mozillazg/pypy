@@ -402,6 +402,8 @@ class WarmRunnerDesc:
             annhelper, self.jitdriver.can_inline, annmodel.s_Bool)
         self.get_printable_location_ptr = self._make_hook_graph(
             annhelper, self.jitdriver.get_printable_location, s_Str)
+        self.confirm_enter_jit_ptr = self._make_hook_graph(
+            annhelper, self.jitdriver.confirm_enter_jit, annmodel.s_Bool)
         annhelper.finish()
 
     def _make_hook_graph(self, annhelper, func, s_result, s_first_arg=None):
