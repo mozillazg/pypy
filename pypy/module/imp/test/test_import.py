@@ -348,7 +348,7 @@ class AppTestImport:
     def test_future_relative_import_error_when_in_non_package(self):
         exec """def imp():
                     from .string import inpackage
-        """
+        """.rstrip()
         raises(ValueError, imp)
 
     def test_relative_import_with___name__(self):
@@ -434,11 +434,15 @@ class AppTestImport:
 
     def test_reload_builtin(self):
         import sys
+        oldpath = sys.path
         try:
             del sys.setdefaultencoding
         except AttributeError:
             pass
+
         reload(sys)
+
+        assert sys.path is oldpath
         assert 'setdefaultencoding' in dir(sys)
 
     def test_reload_infinite(self):
