@@ -228,7 +228,7 @@ class WarmEnterState(object):
                     cell.counter = n
                     return
                 # bound reached; start tracing
-                if not confirm_enter_jit(*greenargs):
+                if not confirm_enter_jit(*args):
                     cell.counter = 0
                     return
                 from pypy.jit.metainterp.pyjitpl import MetaInterp
@@ -241,7 +241,7 @@ class WarmEnterState(object):
                     self.disable_noninlinable_function(metainterp)
                     raise
             else:
-                if not confirm_enter_jit(*greenargs):
+                if not confirm_enter_jit(*args):
                     return
                 # machine code was already compiled for these greenargs
                 # get the assembler and fill in the boxes
@@ -491,13 +491,13 @@ class WarmEnterState(object):
         #
         confirm_enter_jit_ptr = self.warmrunnerdesc.confirm_enter_jit_ptr
         if confirm_enter_jit_ptr is None:
-            def confirm_enter_jit(*greenargs):
+            def confirm_enter_jit(*args):
                 return True
         else:
             rtyper = self.warmrunnerdesc.rtyper
             #
-            def confirm_enter_jit(*greenargs):
+            def confirm_enter_jit(*args):
                 fn = support.maybe_on_top_of_llinterp(rtyper,
                                                       confirm_enter_jit_ptr)
-                return fn(*greenargs)
+                return fn(*args)
         self.confirm_enter_jit = confirm_enter_jit

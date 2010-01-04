@@ -386,7 +386,7 @@ class BasicTests:
         assert res == -1
 
     def test_confirm_enter_jit(self):
-        def confirm_enter_jit(x):
+        def confirm_enter_jit(x, y):
             return x <= 5
         myjitdriver = JitDriver(greens = ['x'], reds = ['y'],
                                 confirm_enter_jit = confirm_enter_jit)
