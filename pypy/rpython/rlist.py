@@ -17,6 +17,9 @@ ADTIFixedList = ADTInterface(None, {
     'll_length':       (['self'                ], Signed),
     'll_getitem_fast': (['self', Signed        ], 'item'),
     'll_setitem_fast': (['self', Signed, 'item'], Void),
+    'll_copyitems':    (['self', Signed, None, Signed, Signed], Void),
+                       # uses a catch-everything None because it can be
+                       # either a fixed or a non-fixed list
 })
 ADTIList = ADTInterface(ADTIFixedList, {
     '_ll_resize_ge':   (['self', Signed        ], Void),
@@ -528,10 +531,7 @@ def listItemType(lst):
 def ll_copy(RESLIST, l):
     length = l.ll_length()
     new_lst = RESLIST.ll_newlist(length)
-    i = 0
-    while i < length:
-        new_lst.ll_setitem_fast(i, l.ll_getitem_fast(i))
-        i += 1
+    new_lst.ll_copyitems(0, l, 0, length)
     return new_lst
 
 def ll_len(l):
