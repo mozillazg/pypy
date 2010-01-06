@@ -72,6 +72,7 @@ class BaseListRepr(AbstractBaseListRepr):
                                  "ll_newemptylist": ll_fixed_newemptylist,
                                  "ll_length": ll_fixed_length,
                                  "ll_items": ll_fixed_items,
+                                 "ll_copyitems": ll_fixed_copyitems,
                                  "ITEM": ITEM,
                                  "ll_getitem_fast": ll_fixed_getitem_fast,
                                  "ll_setitem_fast": ll_fixed_setitem_fast,
@@ -105,6 +106,7 @@ class ListRepr(AbstractListRepr, BaseListRepr):
                                           "ll_newemptylist": ll_newemptylist,
                                           "ll_length": ll_length,
                                           "ll_items": ll_items,
+                                          "ll_copyitems": ll_copyitems,
                                           "ITEM": ITEM,
                                           "ll_getitem_fast": ll_getitem_fast,
                                           "ll_setitem_fast": ll_setitem_fast,
@@ -302,6 +304,9 @@ ll_length.oopspec = 'list.len(l)'
 def ll_items(l):
     return l.items
 
+def ll_copyitems(dst, dstindex, src, srcindex, length):
+    rgc.ll_arraycopy(src.ll_items(), dst.items, srcindex, dstindex, length)
+
 def ll_getitem_fast(l, index):
     ll_assert(index < l.length, "getitem out of bounds")
     return l.ll_items()[index]
@@ -331,6 +336,9 @@ ll_fixed_length.oopspec = 'list.len(l)'
 
 def ll_fixed_items(l):
     return l
+
+def ll_fixed_copyitems(dst, dstindex, src, srcindex, length):
+    rgc.ll_arraycopy(src.ll_items(), dst, srcindex, dstindex, length)
 
 def ll_fixed_getitem_fast(l, index):
     ll_assert(index < len(l), "fixed getitem out of bounds")
