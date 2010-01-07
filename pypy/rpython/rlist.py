@@ -11,15 +11,13 @@ from pypy.rlib.objectmodel import malloc_zero_filled
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck, widen
 from pypy.rpython.annlowlevel import ADTInterface
+from pypy.rlib import rgc
 
 ADTIFixedList = ADTInterface(None, {
     'll_newlist':      (['SELF', Signed        ], 'self'),
     'll_length':       (['self'                ], Signed),
     'll_getitem_fast': (['self', Signed        ], 'item'),
     'll_setitem_fast': (['self', Signed, 'item'], Void),
-    'll_copyitems':    (['self', Signed, None, Signed, Signed], Void),
-                       # uses a catch-everything None because it can be
-                       # either a fixed or a non-fixed list
 })
 ADTIList = ADTInterface(ADTIFixedList, {
     '_ll_resize_ge':   (['self', Signed        ], Void),
@@ -528,10 +526,24 @@ def listItemType(lst):
     return LIST.ITEM
 
 
+def ll_arraycopy(source, dest, source_start, dest_start, length):
+    SRCTYPE = typeOf(source)
+    if isinstance(SRCTYPE, Ptr):
+        # lltype
+        rgc.ll_arraycopy(source.ll_items(), dest.ll_items(),
+                         source_start, dest_start, length)
+    else:
+        # ootype -- XXX improve the case of array->array copy?
+        i = 0
+        while i < length:
+            item = source.ll_getitem_fast(source_start + i)
+            dest.ll_setitem_fast(dest_start + i, item)
+            i += 1
+
 def ll_copy(RESLIST, l):
     length = l.ll_length()
     new_lst = RESLIST.ll_newlist(length)
-    new_lst.ll_copyitems(0, l, 0, length)
+    ll_arraycopy(l, new_lst, 0, 0, length)
     return new_lst
 
 def ll_len(l):
@@ -574,8 +586,8 @@ def ll_concat(RESLIST, l1, l2):
     except OverflowError:
         raise MemoryError
     l = RESLIST.ll_newlist(newlength)
-    l.ll_copyitems(0, l1, 0, len1)
-    l.ll_copyitems(len1, l2, 0, len2)
+    ll_arraycopy(l1, l, 0, 0, len1)
+    ll_arraycopy(l2, l, 0, len1, len2)
     return l
 
 def ll_insert_nonneg(l, index, newitem):
@@ -762,7 +774,7 @@ def ll_extend(l1, l2):
     except OverflowError:
         raise MemoryError
     l1._ll_resize_ge(newlength)
-    l1.ll_copyitems(len1, l2, 0, len2)
+    ll_arraycopy(l2, l1, 0, len1, len2)
 ll_extend.oopspec = 'list.extend(l1, l2)'
 
 def ll_extend_with_str(lst, s, getstrlen, getstritem):
@@ -855,7 +867,7 @@ def ll_listslice_startonly(RESLIST, l1, start):
     ll_assert(start <= len1, "list slice start larger than list length")
     newlength = len1 - start
     l = RESLIST.ll_newlist(newlength)
-    l.ll_copyitems(0, l1, start, newlength)
+    ll_arraycopy(l1, l, start, 0, newlength)
     return l
 ll_listslice_startonly._annenforceargs_ = (None, None, int)
 
@@ -868,14 +880,14 @@ def ll_listslice_startstop(RESLIST, l1, start, stop):
         stop = length
     newlength = stop - start
     l = RESLIST.ll_newlist(newlength)
-    l.ll_copyitems(0, l1, start, newlength)
+    ll_arraycopy(l1, l, start, 0, newlength)
     return l
 
 def ll_listslice_minusone(RESLIST, l1):
     newlength = l1.ll_length() - 1
     ll_assert(newlength >= 0, "empty list is sliced with [:-1]")
     l = RESLIST.ll_newlist(newlength)
-    l.ll_copyitems(0, l1, 0, newlength)
+    ll_arraycopy(l1, l, 0, 0, newlength)
     return l
 
 def ll_listdelslice_startonly(l, start):
@@ -921,7 +933,7 @@ def ll_listsetslice(l1, start, stop, l2):
     ll_assert(count == stop - start,
                  "setslice cannot resize lists in RPython")
     # XXX ...but it would be easy enough to support if really needed
-    l1.ll_copyitems(start, l2, 0, count)
+    ll_arraycopy(l2, l1, 0, start, count)
 ll_listsetslice.oopspec = 'list.setslice(l1, start, stop, l2)'
 
 # ____________________________________________________________
