@@ -574,15 +574,8 @@ def ll_concat(RESLIST, l1, l2):
     except OverflowError:
         raise MemoryError
     l = RESLIST.ll_newlist(newlength)
-    j = 0
-    while j < len1:
-        l.ll_setitem_fast(j, l1.ll_getitem_fast(j))
-        j += 1
-    i = 0
-    while i < len2:
-        l.ll_setitem_fast(j, l2.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    l.ll_copyitems(0, l1, 0, len1)
+    l.ll_copyitems(len1, l2, 0, len2)
     return l
 
 def ll_insert_nonneg(l, index, newitem):
@@ -769,12 +762,7 @@ def ll_extend(l1, l2):
     except OverflowError:
         raise MemoryError
     l1._ll_resize_ge(newlength)
-    i = 0
-    j = len1
-    while i < len2:
-        l1.ll_setitem_fast(j, l2.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    l1.ll_copyitems(len1, l2, 0, len2)
 ll_extend.oopspec = 'list.extend(l1, l2)'
 
 def ll_extend_with_str(lst, s, getstrlen, getstritem):
@@ -867,12 +855,7 @@ def ll_listslice_startonly(RESLIST, l1, start):
     ll_assert(start <= len1, "list slice start larger than list length")
     newlength = len1 - start
     l = RESLIST.ll_newlist(newlength)
-    j = 0
-    i = start
-    while i < len1:
-        l.ll_setitem_fast(j, l1.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    l.ll_copyitems(0, l1, start, newlength)
     return l
 ll_listslice_startonly._annenforceargs_ = (None, None, int)
 
@@ -885,22 +868,14 @@ def ll_listslice_startstop(RESLIST, l1, start, stop):
         stop = length
     newlength = stop - start
     l = RESLIST.ll_newlist(newlength)
-    j = 0
-    i = start
-    while i < stop:
-        l.ll_setitem_fast(j, l1.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    l.ll_copyitems(0, l1, start, newlength)
     return l
 
 def ll_listslice_minusone(RESLIST, l1):
     newlength = l1.ll_length() - 1
     ll_assert(newlength >= 0, "empty list is sliced with [:-1]")
     l = RESLIST.ll_newlist(newlength)
-    j = 0
-    while j < newlength:
-        l.ll_setitem_fast(j, l1.ll_getitem_fast(j))
-        j += 1
+    l.ll_copyitems(0, l1, 0, newlength)
     return l
 
 def ll_listdelslice_startonly(l, start):
@@ -945,13 +920,8 @@ def ll_listsetslice(l1, start, stop, l2):
     ll_assert(start <= l1.ll_length(), "l[start:x] = l with start > len(l)")
     ll_assert(count == stop - start,
                  "setslice cannot resize lists in RPython")
-    # XXX but it should be easy enough to support, soon
-    j = start
-    i = 0
-    while i < count:
-        l1.ll_setitem_fast(j, l2.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    # XXX ...but it would be easy enough to support if really needed
+    l1.ll_copyitems(start, l2, 0, count)
 ll_listsetslice.oopspec = 'list.setslice(l1, start, stop, l2)'
 
 # ____________________________________________________________
