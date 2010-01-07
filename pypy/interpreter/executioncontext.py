@@ -53,17 +53,15 @@ class ExecutionContext(object):
 
     def leave(self, frame):
         try:
-            if not jit.we_are_jitted():
-                if self.profilefunc:
-                    self._trace(frame, 'leaveframe', self.space.w_None)
+            if self.profilefunc:
+                self._trace(frame, 'leaveframe', self.space.w_None)
         finally:
             self.topframeref = frame.f_backref
             self.framestackdepth -= 1
             jit.virtual_ref_finish(frame)
 
-        if not jit.we_are_jitted():
-            if self.w_tracefunc is not None and not frame.hide():
-                self.space.frame_trace_action.fire()
+        if self.w_tracefunc is not None and not frame.hide():
+            self.space.frame_trace_action.fire()
 
     # ________________________________________________________________
 
