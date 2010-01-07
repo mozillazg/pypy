@@ -28,4 +28,4 @@ class TestCellDict(object):
         d.clear()
         assert d.getitem("a") is None
         assert d.getcell("a", False) is acell
-        assert d.length() == 1
+        assert d.length() == 0
