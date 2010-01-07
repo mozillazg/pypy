@@ -721,7 +721,7 @@ class Optimizer(object):
         elif value.is_null():
             self.make_constant_int(op.result, not expect_nonnull)
         else:
-            self.emit_operation(op)
+            self.optimize_default(op)
 
     def optimize_INT_IS_TRUE(self, op):
         self._optimize_nullness(op, op.args[0], True)
