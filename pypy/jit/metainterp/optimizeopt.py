@@ -11,7 +11,7 @@ from pypy.jit.metainterp.specnode import VirtualArraySpecNode
 from pypy.jit.metainterp.specnode import VirtualStructSpecNode
 from pypy.jit.metainterp.optimizeutil import _findall, sort_descrs
 from pypy.jit.metainterp.optimizeutil import descrlist_dict
-from pypy.jit.metainterp.optimizeutil import InvalidLoop
+from pypy.jit.metainterp.optimizeutil import InvalidLoop, args_dict
 from pypy.jit.metainterp import resume, compile
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rlib.objectmodel import we_are_translated
@@ -388,6 +388,7 @@ class Optimizer(object):
         self.resumedata_memo = resume.ResumeDataLoopMemo(metainterp_sd)
         self.heap_op_optimizer = HeapOpOptimizer(self)
         self.bool_boxes = {}
+        self.pure_operations = args_dict()
 
     def forget_numberings(self, virtualbox):
         self.metainterp_sd.profiler.count(jitprof.OPT_FORCINGS)
@@ -574,6 +575,22 @@ class Optimizer(object):
                 resbox = execute_nonspec(self.cpu, op.opnum, argboxes, op.descr)
                 self.make_constant(op.result, resbox.constbox())
                 return
+
+            # did we do the exact same operation already?
+            args = op.args[:]
+            for i in range(len(args)):
+                arg = args[i]
+                if arg in self.values:
+                    args[i] = self.values[arg].get_key_box()
+            args.append(ConstInt(op.opnum))
+            oldop = self.pure_operations.get(args, None)
+            if oldop is not None:
+                assert oldop.opnum == op.opnum
+                self.make_equal_to(op.result, self.getvalue(oldop.result))
+                return
+            else:
+                self.pure_operations[args] = op
+
         # otherwise, the operation remains
         self.emit_operation(op)
 
