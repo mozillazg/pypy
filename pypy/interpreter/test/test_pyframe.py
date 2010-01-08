@@ -1,3 +1,4 @@
+import py
 
 class AppTestPyFrame:
 
@@ -384,8 +385,6 @@ class AppTestJitTraceInteraction(object):
             l.append((frame.f_code.co_name, event))
             return trace
         def g(i, x):
-            if i > x - 10:
-                print i
             if i == x - 5:
                 sys.settrace(trace)
 
@@ -397,7 +396,7 @@ class AppTestJitTraceInteraction(object):
 
         f(10)
         sys.settrace(None)
-        assert l == [('g', 'call'), ('g', 'line'), ('g', 'line'), ('g', 'line'), ('g', 'return')] * 4
+        assert l == [('g', 'call'), ('g', 'line'), ('g', 'return')] * 4
         l1 = l
         l = []
         f(10000)
