@@ -430,12 +430,16 @@ class CStandaloneBuilder(CBuilder):
         bk = self.translator.annotator.bookkeeper
         return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
-    def cmdexec(self, args='', env=None, err=False):
+    def cmdexec(self, args='', env=None, err=False, expect_crash=False):
         assert self._compiled
         res = self.translator.platform.execute(self.executable_name, args,
                                                env=env)
         if res.returncode != 0:
+            if expect_crash:
+                return res.out, res.err
             raise Exception("Returned %d" % (res.returncode,))
+        if expect_crash:
+            raise Exception("Program did not crash!")
         if err:
             return res.out, res.err
         return res.out
