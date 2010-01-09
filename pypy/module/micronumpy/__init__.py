@@ -7,9 +7,9 @@ class Module(MixedModule):
     appleveldefs = {}
     
     interpleveldefs = {
-        'array'    : 'ndarray.array',
-        'ndarray'  : 'ndarray.ndarray',
-        'zeros'    : 'ndarray.zeros',
+        'array'    : 'array.array',
+        'ndarray'  : 'array.ndarray',
+        'zeros'    : 'array.zeros',
         'minimum'  : 'ufunc.minimum',
         }
 

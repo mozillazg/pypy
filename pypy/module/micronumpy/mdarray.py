@@ -5,6 +5,7 @@ from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.module.micronumpy.array import BaseNumArray
+from pypy.module.micronumpy.array import base_typedef
 
 from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
@@ -37,6 +38,18 @@ def create_mdarray(data_type, unwrap, coerce):
             self.storage = [data_type(0.0)] * size
             make_sure_not_resized(self.storage)
 
+        def load_iterable(self, w_xs):
+            self._internal_load(w_xs, self.shape)
+
+        def _internal_load(self, w_xs, shape):
+            space = self.space
+            length = shape[0]
+            xs = space.fixedview(w_xs, length)
+
+            #FIXME: brain no work, do later
+            #for x in xs:
+                #self
+
         def _unpack_indexes(self, space, w_index):
             indexes = [space.int_w(w_i) for w_i in space.fixedview(w_index)]
             if len(indexes) != len(self.shape):
@@ -44,17 +57,19 @@ def create_mdarray(data_type, unwrap, coerce):
                     'Wrong index'))
             return indexes
 
-        def getitem(self, w_index):
+        def descr_getitem(self, w_index):
             space = self.space
             indexes = self._unpack_indexes(space, w_index)
             pos = compute_pos(space, indexes, self.shape)
             return space.wrap(self.storage[pos])
+        descr_getitem.unwrap_spec = ['self', W_Root]
 
-        def setitem(self, w_index, w_value):
+        def descr_setitem(self, w_index, w_value):
             space = self.space
             indexes = self._unpack_indexes(space, w_index)
             pos = compute_pos(space, indexes, self.shape)
             self.storage[pos] = coerce(space, w_value)
+        descr_setitem.unwrap_spec = ['self', W_Root, W_Root]
 
         def load_iterable(self, w_xs):
             space = self.space
@@ -62,13 +77,21 @@ def create_mdarray(data_type, unwrap, coerce):
                                        space.wrap("Haven't implemented iterable loading yet!"))
 
         def len(self):
-            space = self.space
-            return space.wrap(self.shape[0])
+            return self.shape[0]
 
+        def descr_len(self):
+            space = self.space
+            return space.wrap(self.len())
+        descr_len.unwrap_spec = ['self']
+
+    MultiDimArray.typedef = TypeDef('ndarray', base_typedef,
+                                    __len__ = interp2app(MultiDimArray.descr_len),
+                                    __getitem__ = interp2app(MultiDimArray.descr_getitem),
+                                    __setitem__ = interp2app(MultiDimArray.descr_setitem),
+                                   )
     return MultiDimArray
 
 MultiDimIntArray = create_mdarray(int, unwrap_int, coerce_int)
-MultiDimArray = MultiDimIntArray #XXX: compatibility
 MultiDimFloatArray = create_mdarray(float, unwrap_float, coerce_float)
 
 class ResultFactory(object):
