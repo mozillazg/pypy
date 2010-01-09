@@ -80,8 +80,6 @@ class BaseExceptionTransformer(object):
 
         def rpyexc_raise(etype, evalue):
             # assert(!RPyExceptionOccurred());
-            ll_assert(etype != assertion_error_ll_exc_type, "AssertionError!")
-            ll_assert(etype != n_i_error_ll_exc_type, "NotImplementedError!")
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
 
