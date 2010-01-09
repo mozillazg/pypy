@@ -21,7 +21,7 @@ class StandaloneTests(object):
         t.buildrtyper().specialize()
 
         cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-        cbuilder.generate_source()
+        cbuilder.generate_source(defines=cbuilder.DEBUG_DEFINES)
         cbuilder.compile()
         return t, cbuilder
 
@@ -434,6 +434,30 @@ class TestStandalone(StandaloneTests):
         # The traceback stops at f() because it's the first function that
         # captures the AssertionError, which makes the program abort.
 
+    def test_ll_assert_error(self):
+        def g(x):
+            ll_assert(x != 1, "foobar")
+        def f(argv):
+            try:
+                g(len(argv))
+            finally:
+                print 'done'
+        def entry_point(argv):
+            f(argv)
+            return 0
+        t, cbuilder = self.compile(entry_point)
+        out, err = cbuilder.cmdexec("", expect_crash=True)
+        assert out.strip() == ''
+        lines = err.strip().splitlines()
+        assert lines[-1] == 'PyPy assertion failed: foobar'
+        assert len(lines) >= 4
+        l0, l1, l2 = lines[-4:-1]
+        assert l0 == 'RPython traceback:'
+        assert re.match(r'  File "\w+.c", line \d+, in g', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in f', l2)
+        # The traceback stops at f() because it's the first function that
+        # captures the AssertionError, which makes the program abort.
+
 
 class TestMaemo(TestStandalone):
     def setup_class(cls):
@@ -464,7 +488,7 @@ class TestThread(object):
         t.buildrtyper().specialize()
         #
         cbuilder = CStandaloneBuilder(t, entry_point, t.config)
-        cbuilder.generate_source()
+        cbuilder.generate_source(defines=cbuilder.DEBUG_DEFINES)
         cbuilder.compile()
         #
         return t, cbuilder
