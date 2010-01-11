@@ -5,10 +5,27 @@ from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib import jit
 
+TRACE_EXCEPTION = 0
+TRACE_RETURN = 1
+_PROFILING_FIRST = 2
+TRACE_CALL = 2
+TRACE_LEAVEFRAME = 3
+TRACE_C_CALL = 4
+TRACE_C_RETURN = 5
+TRACE_C_EXCEPTION = 6
+_PROFILING_LAST = 6
+TRACE_LINE = 7
+
+TRACE_TO_NAME = []
+for i, k in enumerate(['exception', 'return', 'call', 'leaveframe', 'c_call',
+                       'c_return', 'c_exception', 'line']):
+    TRACE_TO_NAME.append(k)
+    assert globals()['TRACE_' + k.upper()] == i
+
 def app_profile_call(space, w_callable, frame, event, w_arg):
     space.call_function(w_callable,
                         space.wrap(frame),
-                        space.wrap(event), w_arg)
+                        space.wrap(TRACE_TO_NAME[event]), w_arg)
 
 class ExecutionContext(object):
     """An ExecutionContext holds the state of an execution thread
@@ -59,7 +76,7 @@ class ExecutionContext(object):
     def leave(self, frame):
         try:
             if self.profilefunc:
-                self._trace(frame, 'leaveframe', self.space.w_None)
+                self._trace(frame, TRACE_LEAVEFRAME, self.space.w_None)
         finally:
             self.topframeref = frame.f_backref
             self.framestackdepth -= 1
@@ -144,33 +161,33 @@ class ExecutionContext(object):
         if self.profilefunc is None:
             frame.is_being_profiled = False
         else:
-            self._trace(frame, 'c_call', w_func)
+            self._trace(frame, TRACE_C_CALL, w_func)
 
     def c_return_trace(self, frame, w_retval):
         "Profile the return from a builtin function"
         if self.profilefunc is None:
             frame.is_being_profiled = False
         else:
-            self._trace(frame, 'c_return', w_retval)
+            self._trace(frame, TRACE_C_RETURN, w_retval)
 
     def c_exception_trace(self, frame, w_exc):
         "Profile function called upon OperationError."
         if self.profilefunc is None:
             frame.is_being_profiled = False
         else:
-            self._trace(frame, 'c_exception', w_exc)
+            self._trace(frame, TRACE_C_EXCEPTION, w_exc)
 
     def call_trace(self, frame):
         "Trace the call of a function"
         if self.w_tracefunc is not None or self.profilefunc is not None:
-            self._trace(frame, 'call', self.space.w_None)
+            self._trace(frame, TRACE_CALL, self.space.w_None)
             if self.profilefunc:
                 frame.is_being_profiled = True
 
     def return_trace(self, frame, w_retval):
         "Trace the return from a function"
         if self.w_tracefunc is not None:
-            self._trace(frame, 'return', w_retval)
+            self._trace(frame, TRACE_RETURN, w_retval)
 
     def bytecode_trace(self, frame):
         "Trace function called before each bytecode."
@@ -197,7 +214,7 @@ class ExecutionContext(object):
         "Trace function called upon OperationError."
         operationerr.record_interpreter_traceback()
         if self.w_tracefunc is not None:
-            self._trace(frame, 'exception', None, operationerr)
+            self._trace(frame, TRACE_EXCEPTION, None, operationerr)
         #operationerr.print_detailed_traceback(self.space)
 
     def sys_exc_info(self): # attn: the result is not the wrapped sys.exc_info() !!!
@@ -260,18 +277,19 @@ class ExecutionContext(object):
             self.is_tracing = is_tracing
 
     def _trace(self, frame, event, w_arg, operr=None):
+        assert isinstance(event, int)
         if self.is_tracing or frame.hide():
             return
 
         space = self.space
         
         # Tracing cases
-        if event == 'call':
+        if event == TRACE_CALL:
             w_callback = self.w_tracefunc
         else:
             w_callback = frame.w_f_trace
 
-        if w_callback is not None and event != "leaveframe":
+        if w_callback is not None and event != TRACE_LEAVEFRAME:
             if operr is not None:
                 w_arg =  space.newtuple([operr.w_type, operr.w_value,
                                      space.wrap(operr.application_traceback)])
@@ -280,7 +298,7 @@ class ExecutionContext(object):
             self.is_tracing += 1
             try:
                 try:
-                    w_result = space.call_function(w_callback, space.wrap(frame), space.wrap(event), w_arg)
+                    w_result = space.call_function(w_callback, space.wrap(frame), space.wrap(TRACE_TO_NAME[event]), w_arg)
                     if space.is_w(w_result, space.w_None):
                         frame.w_f_trace = None
                     else:
@@ -296,14 +314,13 @@ class ExecutionContext(object):
 
         # Profile cases
         if self.profilefunc is not None:
-            if event not in ['leaveframe', 'call', 'c_call',
-                             'c_return', 'c_exception']:
+            if event < _PROFILING_FIRST or event > _PROFILING_LAST:
                 return
 
             last_exception = None
-            if event == 'leaveframe':
+            if event == TRACE_LEAVEFRAME:
                 last_exception = frame.last_exception
-                event = 'return'
+                event = TRACE_RETURN
 
             assert self.is_tracing == 0 
             self.is_tracing += 1
@@ -523,7 +540,7 @@ class FrameTraceAction(AsyncAction):
         if frame.instr_lb <= frame.last_instr < frame.instr_ub:
             if frame.last_instr <= frame.instr_prev:
                 # We jumped backwards in the same line.
-                executioncontext._trace(frame, 'line', self.space.w_None)
+                executioncontext._trace(frame, TRACE_LINE, self.space.w_None)
         else:
             size = len(code.co_lnotab) / 2
             addr = 0
@@ -557,7 +574,7 @@ class FrameTraceAction(AsyncAction):
 
             if frame.instr_lb == frame.last_instr: # At start of line!
                 frame.f_lineno = line
-                executioncontext._trace(frame, 'line', self.space.w_None)
+                executioncontext._trace(frame, TRACE_LINE, self.space.w_None)
 
         frame.instr_prev = frame.last_instr
         self.space.frame_trace_action.fire()     # continue tracing

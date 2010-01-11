@@ -1,6 +1,9 @@
 import py
 from pypy.interpreter import executioncontext
 from pypy.conftest import gettestobjspace
+from pypy.interpreter.executioncontext import (TRACE_CALL, TRACE_RETURN,
+     TRACE_C_CALL, TRACE_C_RETURN, TRACE_C_EXCEPTION, TRACE_EXCEPTION,
+     TRACE_LEAVEFRAME, TRACE_LINE)
 
 class Finished(Exception):
     pass
@@ -74,7 +77,7 @@ class TestExecutionContext:
         pass
         """)
         space.getexecutioncontext().setllprofile(None, None)
-        assert l == ['call', 'return', 'call', 'return']
+        assert l == [TRACE_CALL, TRACE_RETURN] * 2
 
     def test_llprofile_c_call(self):
         l = []
@@ -92,7 +95,8 @@ class TestExecutionContext:
             return
             """ % snippet)
             space.getexecutioncontext().setllprofile(None, None)
-            assert l == ['call', 'return', 'call', 'c_call', 'c_return', 'return']
+            assert l == [TRACE_CALL, TRACE_RETURN, TRACE_CALL, TRACE_C_CALL,
+                         TRACE_C_RETURN, TRACE_RETURN]
 
         check_snippet('l = []; l.append(42)')
         check_snippet('max(1, 2)')
@@ -120,7 +124,8 @@ class TestExecutionContext:
             return
             """ % snippet)
             space.getexecutioncontext().setllprofile(None, None)
-            assert l == ['call', 'return', 'call', 'c_call', 'c_exception', 'return']
+            assert l == [TRACE_CALL, TRACE_RETURN, TRACE_CALL,
+                         TRACE_C_CALL, TRACE_C_EXCEPTION, TRACE_RETURN]
 
         check_snippet('d = {}; d.__getitem__(42)')
 
@@ -144,7 +149,8 @@ class TestExecutionContext:
         return l
         """)
         events = space.unwrap(w_events)
-        assert events == ['return', 'c_call', 'c_return', 'return', 'c_call']
+        assert events == [TRACE_RETURN, TRACE_C_CALL, TRACE_C_RETURN,
+                          TRACE_RETURN, TRACE_C_CALL]
 
     def test_c_call_setprofile_strange_method(self):
         space = self.space
@@ -173,7 +179,8 @@ class TestExecutionContext:
         return l
         """)
         events = space.unwrap(w_events)
-        assert events == ['return', 'call', 'return', 'return', 'c_call']
+        assert events == [TRACE_RETURN, TRACE_CALL, TRACE_RETURN,
+                          TRACE_RETURN, TRACE_C_CALL]
 
     def test_c_call_profiles_immediately(self):
         space = self.space
@@ -192,7 +199,8 @@ class TestExecutionContext:
         return l
         """)
         events = space.unwrap(w_events)
-        assert [i[0] for i in events] == ['c_call', 'c_return', 'return', 'c_call']
+        assert [i[0] for i in events] == [TRACE_C_CALL, TRACE_C_RETURN,
+                                          TRACE_RETURN, TRACE_C_CALL]
         assert events[0][1] == events[1][1]
 
     def test_tracing_range_builtinshortcut(self):
@@ -218,4 +226,5 @@ class TestExecutionContext:
         return l
         """)
         events = space.unwrap(w_events)
-        assert [i[0] for i in events] == ['c_call', 'c_return', 'c_call']
+        assert [i[0] for i in events] == [TRACE_C_CALL, TRACE_C_RETURN,
+                                          TRACE_C_CALL]
