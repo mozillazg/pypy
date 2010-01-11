@@ -531,6 +531,7 @@ class ObjSpace(object):
     def leave_cache_building_mode(self, val):
         "hook for the flow object space"
 
+    @jit.loop_invariant
     def getexecutioncontext(self):
         "Return what we consider to be the active execution context."
         # Important: the annotator must not see a prebuilt ExecutionContext:
