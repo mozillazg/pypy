@@ -880,7 +880,7 @@ class Optimizer(object):
         if not funcvalue.is_constant():
             self.optimize_default(op)
             return
-        resvalue = self.loop_invariant_results.get(op.args[0], None)
+        resvalue = self.loop_invariant_results.get(op.args[0].getint(), None)
         if resvalue is not None:
             self.make_equal_to(op.result, resvalue)
             return
@@ -889,7 +889,7 @@ class Optimizer(object):
         op.opnum = rop.CALL
         self.optimize_default(op)
         resvalue = self.getvalue(op.result)
-        self.loop_invariant_results[op.args[0]] = resvalue
+        self.loop_invariant_results[op.args[0].getint()] = resvalue
             
 
 optimize_ops = _findall(Optimizer, 'optimize_')
