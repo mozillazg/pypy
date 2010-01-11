@@ -5,6 +5,8 @@ from pypy.interpreter.typedef import (TypeDef, GetSetProperty,
                                       interp_attrproperty)
 from pypy.interpreter.gateway import interp2app, NoneNotWrapped
 from pypy.interpreter.function import Method, Function
+from pypy.interpreter.executioncontext import (TRACE_CALL, TRACE_RETURN,
+                                               TRACE_C_CALL, TRACE_C_RETURN)
 import time, sys
 
 class W_StatsEntry(Wrappable):
@@ -180,17 +182,17 @@ def create_spec(space, w_arg):
     
 def lsprof_call(space, w_self, frame, event, w_arg):
     assert isinstance(w_self, W_Profiler)
-    if event == 'call':
+    if event == TRACE_CALL:
         code = frame.getcode()
         w_self._enter_call(code)
-    elif event == 'return':
+    elif event == TRACE_RETURN:
         code = frame.getcode()
         w_self._enter_return(code)
-    elif event == 'c_call':
+    elif event == TRACE_C_CALL:
         if w_self.builtins:
             key = create_spec(space, w_arg)
             w_self._enter_builtin_call(key)
-    elif event == 'c_return':
+    elif event == TRACE_C_RETURN:
         if w_self.builtins:
             key = create_spec(space, w_arg)
             w_self._enter_builtin_return(key)
