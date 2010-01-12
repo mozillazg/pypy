@@ -165,6 +165,7 @@ class Entry(ExtRegistryEntry):
         return _jit_vref.SomeVRef(s_obj)
 
     def specialize_call(self, hop):
+        hop.exception_cannot_occur()
         return hop.r_result.specialize_call(hop)
 
 class Entry(ExtRegistryEntry):
