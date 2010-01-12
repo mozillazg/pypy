@@ -36,6 +36,9 @@ class ExecutionContext(object):
     # XXX   self.w_tracefunc, self.profilefunc
     # XXX   frame.is_being_profiled
 
+    # bind it here, so tests can overwrite it
+    _we_are_jitted = staticmethod(jit.we_are_jitted)
+
     def __init__(self, space):
         self.space = space
         self.topframeref = jit.vref_None
@@ -75,7 +78,10 @@ class ExecutionContext(object):
 
     def leave(self, frame):
         try:
-            if self.profilefunc:
+            # below we need to check if is_being_profiled is set, instead
+            # of profilefunc, since when jitted we have profilefunc, but not
+            # is_being_profiled
+            if frame.is_being_profiled:
                 self._trace(frame, TRACE_LEAVEFRAME, self.space.w_None)
         finally:
             self.topframeref = frame.f_backref
@@ -179,7 +185,8 @@ class ExecutionContext(object):
 
     def call_trace(self, frame):
         "Trace the call of a function"
-        if self.w_tracefunc is not None or self.profilefunc is not None:
+        if (self.w_tracefunc is not None or
+           (not self._we_are_jitted() and self.profilefunc is not None)):
             self._trace(frame, TRACE_CALL, self.space.w_None)
             if self.profilefunc:
                 frame.is_being_profiled = True
