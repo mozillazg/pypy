@@ -31,10 +31,9 @@ class ExecutionContext(object):
     """An ExecutionContext holds the state of an execution thread
     in the Python interpreter."""
 
-    # XXX JIT: when tracing (but not when blackholing!), the following
-    # XXX fields should be known to a constant None or False:
-    # XXX   self.w_tracefunc, self.profilefunc
-    # XXX   frame.is_being_profiled
+    # JIT: when tracing (but not when blackholing!), the following
+    # self.w_tracefunc should be a constant None
+    # frame.is_being_profiled should be False for virtual frames
 
     # bind it here, so tests can overwrite it
     _we_are_jitted = staticmethod(jit.we_are_jitted)
