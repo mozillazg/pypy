@@ -101,6 +101,9 @@ opcodes = _proc_dict({
     'jit_force_virtual':        DoNothing,
 
     'debug_assert':              [], # TODO: implement?
+    'debug_start_traceback':    Ignore,
+    'debug_record_traceback':   Ignore,
+    'debug_catch_exception':    Ignore,
 
     # __________ numeric operations __________
 
