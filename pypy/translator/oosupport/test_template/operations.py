@@ -118,6 +118,11 @@ class BaseTestOperations(object):
             return x >> y
         assert self.interpret(fn, [r_longlong(32), 1]) == 16
 
+    def test_lshift(self):
+        def fn(x, y):
+            return x << y
+        assert self.interpret(fn, [r_longlong(32), 1]) == 64
+
     def test_uint_neg(self):
         def fn(x):
             return -x
