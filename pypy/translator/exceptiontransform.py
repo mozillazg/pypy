@@ -16,6 +16,7 @@ from pypy.rlib.rarithmetic import r_singlefloat
 from pypy.rlib.debug import ll_assert
 from pypy.annotation import model as annmodel
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+from pypy.tool.sourcetools import func_with_new_name
 
 PrimitiveErrorValue = {lltype.Signed: -1,
                        lltype.Unsigned: r_uint(-1),
@@ -45,6 +46,9 @@ def error_value(T):
 def error_constant(T):
     return Constant(error_value(T), T)
 
+def constant_value(llvalue):
+    return Constant(llvalue, lltype.typeOf(llvalue))
+
 class BaseExceptionTransformer(object):
 
     def __init__(self, translator):
@@ -64,6 +68,10 @@ class BaseExceptionTransformer(object):
         (n_i_error_ll_exc_type,
          n_i_error_ll_exc) = self.get_builtin_exception(NotImplementedError)
 
+        self.c_assertion_error_ll_exc_type = constant_value(
+            assertion_error_ll_exc_type)
+        self.c_n_i_error_ll_exc_type = constant_value(n_i_error_ll_exc_type)
+
         def rpyexc_occured():
             exc_type = exc_data.exc_type
             return bool(exc_type)
@@ -82,6 +90,7 @@ class BaseExceptionTransformer(object):
             # assert(!RPyExceptionOccurred());
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
+            lloperation.llop.debug_start_traceback(lltype.Void)
 
         def rpyexc_fetch_exception():
             evalue = rpyexc_fetch_value()
@@ -90,7 +99,8 @@ class BaseExceptionTransformer(object):
         
         def rpyexc_restore_exception(evalue):
             if evalue:
-                rpyexc_raise(rclass.ll_inst_type(evalue), evalue)
+                exc_data.exc_type = rclass.ll_inst_type(evalue)
+                exc_data.exc_value = evalue
 
         def rpyexc_raise_runtime_error():
             rpyexc_raise(runtime_error_ll_exc_type, runtime_error_ll_exc)
@@ -117,14 +127,14 @@ class BaseExceptionTransformer(object):
 
         self.rpyexc_raise_ptr = self.build_func(
             "RPyRaiseException",
-            rpyexc_raise,
+            self.noinline(rpyexc_raise),
             [self.lltype_of_exception_type, self.lltype_of_exception_value],
             lltype.Void,
             jitcallkind='rpyexc_raise') # for the JIT
 
         self.rpyexc_raise_runtime_error_ptr = self.build_func(
             "RPyRaiseRuntimeError",
-            rpyexc_raise_runtime_error,
+            self.noinline(rpyexc_raise_runtime_error),
             [], lltype.Void)
 
         self.rpyexc_fetch_exception_ptr = self.build_func(
@@ -134,13 +144,18 @@ class BaseExceptionTransformer(object):
 
         self.rpyexc_restore_exception_ptr = self.build_func(
             "RPyRestoreException",
-            rpyexc_restore_exception,
+            self.noinline(rpyexc_restore_exception),
             [self.lltype_of_exception_value], lltype.Void)
 
         self.build_extra_funcs()
 
         self.mixlevelannotator.finish()
         self.lltype_to_classdef = translator.rtyper.lltype_to_classdef_mapping()
+
+    def noinline(self, fn):
+        fn = func_with_new_name(fn, fn.__name__ + '_noinline')
+        fn._dont_inline_ = True
+        return fn
 
     def build_func(self, name, fn, inputtypes, rettype, **kwds):
         l2a = annmodel.lltype_to_annotation
@@ -185,10 +200,10 @@ class BaseExceptionTransformer(object):
         for block in list(graph.iterblocks()):
             self.replace_stack_unwind(block)
             self.replace_fetch_restore_operations(block)
+            self.transform_jump_to_except_block(graph, block.exits)
             need_exc_matching, gen_exc_checks = self.transform_block(graph, block)
             n_need_exc_matching_blocks += need_exc_matching
             n_gen_exc_checks           += gen_exc_checks
-        self.transform_except_block(graph, graph.exceptblock)
         cleanup_graph(graph)
         removenoops.remove_superfluous_keep_alive(graph)
         return n_need_exc_matching_blocks, n_gen_exc_checks
@@ -266,19 +281,23 @@ class BaseExceptionTransformer(object):
                 self.insert_matching(lastblock, graph)
         return need_exc_matching, n_gen_exc_checks
 
-    def transform_except_block(self, graph, block):
-        # attach an except block -- let's hope that nobody uses it
-        graph.exceptblock = Block([Variable('etype'),   # exception class
-                                   Variable('evalue')])  # exception value
-        graph.exceptblock.operations = ()
-        graph.exceptblock.closeblock()
-        
-        result = Variable()
-        result.concretetype = lltype.Void
-        block.operations = [SpaceOperation(
-           "direct_call", [self.rpyexc_raise_ptr] + block.inputargs, result)]
-        l = Link([error_constant(graph.returnblock.inputargs[0].concretetype)], graph.returnblock)
-        block.recloseblock(l)
+    def transform_jump_to_except_block(self, graph, exits):
+        for link in exits:
+            if link.target is graph.exceptblock:
+                result = Variable()
+                result.concretetype = lltype.Void
+                block = Block([copyvar(None, v)
+                               for v in graph.exceptblock.inputargs])
+                block.operations = [
+                    SpaceOperation("direct_call",
+                                   [self.rpyexc_raise_ptr] + block.inputargs,
+                                   result),
+                    SpaceOperation('debug_record_traceback', [],
+                                   varoftype(lltype.Void))]
+                link.target = block
+                RETTYPE = graph.returnblock.inputargs[0].concretetype
+                l = Link([error_constant(RETTYPE)], graph.returnblock)
+                block.recloseblock(l)
 
     def insert_matching(self, block, graph):
         proxygraph, op = self.create_proxy_graph(block.operations[-1])
@@ -326,6 +345,11 @@ class BaseExceptionTransformer(object):
         llops = rtyper.LowLevelOpList(None)
         var_value = self.gen_getfield('exc_value', llops)
         var_type  = self.gen_getfield('exc_type' , llops)
+        #
+        c_check1 = self.c_assertion_error_ll_exc_type
+        c_check2 = self.c_n_i_error_ll_exc_type
+        llops.genop('debug_catch_exception', [var_type, c_check1, c_check2])
+        #
         self.gen_setfield('exc_value', self.c_null_evalue, llops)
         self.gen_setfield('exc_type',  self.c_null_etype,  llops)
         excblock.operations[:] = llops
@@ -359,7 +383,12 @@ class BaseExceptionTransformer(object):
         
         block.exitswitch = var_no_exc
         #exception occurred case
+        b = Block([])
+        b.operations = [SpaceOperation('debug_record_traceback', [],
+                                       varoftype(lltype.Void))]
         l = Link([error_constant(returnblock.inputargs[0].concretetype)], returnblock)
+        b.closeblock(l)
+        l = Link([], b)
         l.exitcase = l.llexitcase = False
 
         #non-exception case
