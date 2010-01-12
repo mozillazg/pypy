@@ -87,7 +87,6 @@ class LLOp(object):
     def is_pure(self, args_v):
         return (self.canfold or                # canfold => pure operation
                 self is llop.debug_assert or   # debug_assert is pure enough
-                self is llop.debug_assert_with_tb or
                                                # reading from immutable
                 (self in (llop.getfield, llop.getarrayitem) and
                  args_v[0].concretetype.TO._hints.get('immutable')) or
