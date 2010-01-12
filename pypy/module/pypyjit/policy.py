@@ -8,7 +8,8 @@ class PyPyJitPolicy(JitPolicy):
 
         if '.' in modname:
             modname, _ = modname.split('.', 1)
-        if modname in ['pypyjit', 'signal', 'micronumpy', 'math', 'exceptions']:
+        if modname in ['pypyjit', 'signal', 'micronumpy', 'math', 'exceptions',
+                       '_lsprof']:
             return True
         return False
 
