@@ -333,9 +333,8 @@ class ExecutionContext(object):
             if event < _PROFILING_FIRST or event > _PROFILING_LAST:
                 return
 
-            last_exception = None
+            last_exception = frame.last_exception
             if event == TRACE_LEAVEFRAME:
-                last_exception = frame.last_exception
                 event = TRACE_RETURN
 
             assert self.is_tracing == 0 
