@@ -242,7 +242,7 @@ binary_ops = {
     'llong_ge':                 _not('clt'),
     'llong_and':                'and',
     'llong_or':                 'or',
-    'llong_lshift':             'shl',
+    'llong_lshift':             [PushAllArgs, 'conv.i4', 'shl'],
     'llong_rshift':             [PushAllArgs, 'conv.i4', 'shr'],
     'llong_xor':                'xor',
 
