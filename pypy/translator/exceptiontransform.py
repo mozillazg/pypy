@@ -153,7 +153,7 @@ class BaseExceptionTransformer(object):
         self.lltype_to_classdef = translator.rtyper.lltype_to_classdef_mapping()
 
     def noinline(self, fn):
-        fn = func_with_new_name(fn, fn.__name__ + '_noinline')
+        fn = func_with_new_name(fn, fn.__name__)
         fn._dont_inline_ = True
         return fn
 
