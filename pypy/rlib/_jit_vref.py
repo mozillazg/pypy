@@ -46,6 +46,7 @@ class VRefRepr(Repr):
     def rtype_simple_call(self, hop):
         [v] = hop.inputargs(self)
         v = hop.genop('jit_force_virtual', [v], resulttype = OBJECTPTR)
+        hop.exception_cannot_occur()
         return hop.genop('cast_pointer', [v], resulttype = hop.r_result)
 
     def convert_const(self, value):
