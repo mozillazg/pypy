@@ -113,3 +113,18 @@ def test_rtype_4():
     x = interpret(f, [-5])
     assert lltype.typeOf(x) == OBJECTPTR
     assert not x
+
+def test_rtype_5():
+    l = []
+    def f():
+        x = virtual_ref(Y())
+        try:
+            y = x()
+        finally:
+            l.append(0)
+        if y is not None:
+            return 0
+        return 1
+
+    x = interpret(f, [])
+    
