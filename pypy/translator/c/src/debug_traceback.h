@@ -43,10 +43,10 @@ void pypy_debug_traceback_print(void)
   const char *funcname;
 
   fprintf(stderr, "RPython traceback:\n");
-  for (i=PYPY_DEBUG_TRACEBACK_DEPTH-1; i>=0; i--)
+  for (i = 0; i < PYPY_DEBUG_TRACEBACK_DEPTH; i++)
     {
       if (i < pypy_debug_traceback_count)
-        break;
+        continue;
       filename = pypy_debug_tracebacks[i]->filename;
       funcname = pypy_debug_tracebacks[i]->funcname;
       lineno   = pypy_debug_tracebacks[i]->lineno;
