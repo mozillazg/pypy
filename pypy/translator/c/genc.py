@@ -715,6 +715,7 @@ class SourceGenerator:
             print >> fc, '/***  Implementations                                    ***/'
             print >> fc
             print >> fc, '#define PYPY_NOT_MAIN_FILE'
+            print >> fc, '#define PYPY_FILE_NAME "%s"' % name
             print >> fc, '#include "common_header.h"'
             print >> fc, '#include "structdef.h"'
             print >> fc, '#include "forwarddecl.h"'
@@ -787,6 +788,7 @@ def gen_readable_parts_of_main_c_file(f, database, preimplementationlines=[]):
     print >> f, '/***********************************************************/'
     print >> f, '/***  Implementations                                    ***/'
     print >> f
+    print >> f, '#define PYPY_FILE_NAME "%s"' % os.path.basename(f.name)
     for line in preimplementationlines:
         print >> f, line
     print >> f, '#include "src/g_include.h"'

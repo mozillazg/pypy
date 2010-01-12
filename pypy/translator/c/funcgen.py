@@ -817,5 +817,19 @@ class FunctionCodeGenerator(object):
             self.expr(op.args[1]),
             self.expr(op.args[2]))
 
+    def OP_DEBUG_RECORD_TRACEBACK(self, op):
+        if self.functionname is None:
+            return '/* debug_record_traceback skipped: no functionname */'
+        return 'PYPY_DEBUG_RECORD_TRACEBACK("%s");' % self.functionname
+
+    def OP_DEBUG_CATCH_EXCEPTION(self, op):
+        gottype = self.expr(op.args[0])
+        exprs = []
+        for c_limited_type in op.args[1:]:
+            exprs.append('%s == %s' % (gottype, self.expr(c_limited_type)))
+        return (self.OP_DEBUG_RECORD_TRACEBACK(None) +
+                ' if (%s) { pypy_debug_catch_exception(); }' % (
+                    ' || '.join(exprs),))
+
 
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)

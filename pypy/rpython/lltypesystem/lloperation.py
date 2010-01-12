@@ -87,6 +87,7 @@ class LLOp(object):
     def is_pure(self, args_v):
         return (self.canfold or                # canfold => pure operation
                 self is llop.debug_assert or   # debug_assert is pure enough
+                self is llop.debug_assert_with_tb or
                                                # reading from immutable
                 (self in (llop.getfield, llop.getarrayitem) and
                  args_v[0].concretetype.TO._hints.get('immutable')) or
@@ -536,6 +537,8 @@ LL_OPERATIONS = {
     'debug_fatalerror':     LLOp(),
     'debug_llinterpcall':   LLOp(), # Python func call 'res=arg[0](*arg[1:])'
                                     # in backends, abort() or whatever is fine
+    'debug_start_traceback':LLOp(),
+    'debug_catch_exception':LLOp(),
 
     # __________ instrumentation _________
     'instrument_count':     LLOp(),

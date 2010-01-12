@@ -52,6 +52,7 @@
 #ifdef HAVE_RTYPER      /* only if we have an RTyper */
 #  include "src/rtyper.h"
 #  include "src/debug_print.h"
+#  include "src/debug_traceback.h"
 #ifndef AVR
 #  include "src/ll_os.h"
 #  include "src/ll_strtod.h"
