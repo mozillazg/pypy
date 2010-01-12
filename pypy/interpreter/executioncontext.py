@@ -83,6 +83,9 @@ class ExecutionContext(object):
             # is_being_profiled
             if frame.is_being_profiled:
                 self._trace(frame, TRACE_LEAVEFRAME, self.space.w_None)
+                nextframe = frame.f_backref()
+                if nextframe is not None:
+                    nextframe.is_being_profiled = True
         finally:
             self.topframeref = frame.f_backref
             self.framestackdepth -= 1
@@ -255,11 +258,13 @@ class ExecutionContext(object):
         if func is not None:
             if w_arg is None:
                 raise ValueError("Cannot call setllprofile with real None")
-            self.force_all_frames(is_being_profiled=True)
+            topframe = self.gettopframe_nohidden()
+            if topframe is not None:
+                topframe.is_being_profiled = True
         self.profilefunc = func
         self.w_profilefuncarg = w_arg
 
-    def force_all_frames(self, is_being_profiled=False):
+    def force_all_frames(self):
         # "Force" all frames in the sense of the jit, and optionally
         # set the flag 'is_being_profiled' on them.  A forced frame is
         # one out of which the jit will exit: if it is running so far,
@@ -270,8 +275,6 @@ class ExecutionContext(object):
         # field of all frames, during the loop below.)
         frame = self.gettopframe_nohidden()
         while frame:
-            if is_being_profiled:
-                frame.is_being_profiled = True
             frame = self.getnextframe_nohidden(frame)
 
     def call_tracing(self, w_func, w_args):
