@@ -167,6 +167,8 @@ class ExecutionContext(object):
 
     def c_call_trace(self, frame, w_func):
         "Profile the call of a builtin function"
+        if self._we_are_jitted():
+            return
         if self.profilefunc is None:
             frame.is_being_profiled = False
         else:
@@ -174,6 +176,8 @@ class ExecutionContext(object):
 
     def c_return_trace(self, frame, w_retval):
         "Profile the return from a builtin function"
+        if self._we_are_jitted():
+            return
         if self.profilefunc is None:
             frame.is_being_profiled = False
         else:
@@ -181,6 +185,8 @@ class ExecutionContext(object):
 
     def c_exception_trace(self, frame, w_exc):
         "Profile function called upon OperationError."
+        if self._we_are_jitted():
+            return
         if self.profilefunc is None:
             frame.is_being_profiled = False
         else:
