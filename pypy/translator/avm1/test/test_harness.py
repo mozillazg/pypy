@@ -1,7 +1,7 @@
 import autopath
 
-from pypy.translator.avm.test import browsertest, harness as h
-from pypy.translator.avm import avm1 as a
+from pypy.translator.avm1.test import browsertest, harness as h
+from mech.fusion import avm1 as a
 
 def test_harness():
     harness = h.TestHarness("harness")

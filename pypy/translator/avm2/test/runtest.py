@@ -51,8 +51,7 @@ def _build_gen(func, annotation, graph=None, backendopt=True, exctrans=False,
     if backendopt:
         check_virtual_methods(ootype.ROOT)
         backend_optimizations(t)
-
-    print func.func_name
+    
     if func.func_name in ("fn_view", "ident_view"):
         t.view()
     

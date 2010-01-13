@@ -1,6 +1,8 @@
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.node import Node
-from pypy.translator.avm2 import constants as c, types_ as types, traits
+
+from mech.fusion.avm2 import constants as c, traits
+from pypy.translator.avm2 import types_ as types
 
 class Record(Node):
     def __init__(self, db, record, name):
@@ -44,7 +46,7 @@ class Record(Node):
             if not f_name.startswith('item'):
                 return # it's not a tuple
 
-        self.ilasm.begin_method('toString', [], types._str_qname)
+        self.ilasm.begin_method('toString', [], c.QName("String"))
         self.ilasm.push_const("(")
         for i in xrange(len(self.record._fields)):
             f_name = 'item%d' % i

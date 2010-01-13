@@ -1,6 +1,7 @@
 
 from pypy.translator.avm1.test import browsertest as b
-from pypy.translator.avm1 import avm1 as a, avm1gen as g, swf as s, tags as t, records as r
+from mech.fusion.swf import swfdata as s, tags as t, records as r
+from mech.fusion import avm1 as a
 
 class TestHarness(object):
     def __init__(self, name):

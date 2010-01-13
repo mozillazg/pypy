@@ -21,6 +21,15 @@ which gives you many good starting and entry points into playing with
 PyPy.  It will also point you to our documentation section which is
 generated from information in the pypy/doc directory.
 
+The AVM1/AVM2 translator backends require mecheye-fusion, which is
+easily installable from PyPI:
+
+easy_install mecheye-fusion
+
+or
+
+pip install mecheye-fusion
+
 Enjoy and send us feedback!
 
     the pypy-dev team <pypy-dev@codespeak.net>

@@ -27,6 +27,8 @@ class config(object):
 </cross-domain-policy>"""
 
 def parse_result(string):
+    if string.strip() == "":
+        return None
     if string == "true":
         return True
     elif string == "false":
@@ -36,6 +38,8 @@ def parse_result(string):
     elif all(c in "123456789-" for c in string):
         return int(string)
     elif "," in string:
+        if string.startswith("(") and string.endswith(")"):
+            return tuple(parse_result(s) for s in string[1:-1].split(",") if parse_result(s) is not None)
         return [parse_result(s) for s in string.split(",")]
     else:
         try:

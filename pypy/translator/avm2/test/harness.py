@@ -1,10 +1,14 @@
 
 import py
-from pypy.translator.avm1 import swf as s, tags as t, records as r
 from pypy.translator.avm2.test import browsertest as b
-from pypy.translator.avm2 import avm2gen as g, constants as c, abc_ as a, traits
+from pypy.translator.avm2 import avm2gen as g
+
+from mech.fusion.swf import swfdata as s, tags as t, records as r
+from mech.fusion.avm2 import constants as c, abc_ as a, traits
 
 fl_dis_ns = c.Namespace("flash.display", c.TYPE_NAMESPACE_PackageNamespace)
+
+_test_count = 0
 
 class TestHarness(object):
     def __init__(self, name, gen):
@@ -15,8 +19,8 @@ class TestHarness(object):
         self.swf.add_tag(t.DefineEditText(r.Rect(0, 600, 0, 400), "tt",
                                           "Testing %s." % (name,), color=r.RGBA(0xFFFFFF)))
         self.swf.add_tag(t.PlaceObject2(1, 2, name="edittext"))
-        self.abc = t.DoABC()
-        self.actions = g.Avm2ilasm(gen.db, self.abc)
+        self.abc = t.DoABC("PyPy Main")
+        self.actions = g.PyPyAvm2ilasm(gen.db, self.abc)
         
         self.swf.add_tag(self.abc)
         self.swf.add_tag(t.SymbolClass({0:"PyPyTest_EntryPoint"}))
@@ -62,14 +66,7 @@ class TestHarness(object):
         self.actions.store_var('text')
     
     def start_test(self):
-        self.maincls = self.actions.begin_class(c.QName("PyPyTest_EntryPoint"), c.packagedQName("flash.display", "Sprite"), [
-                  c.packagedQName("flash.display", "Sprite"),
-                  c.packagedQName("flash.display", "DisplayObjectContainer"),
-                  c.packagedQName("flash.display", "InteractiveObject"),
-                  c.packagedQName("flash.display", "DisplayObject"),
-                  c.packagedQName("flash.events", "EventDispatcher"),
-                  c.QName("Object"),
-                ])
+        self.maincls = self.actions.begin_class(c.QName("PyPyTest_EntryPoint"), c.packagedQName("flash.display", "Sprite"))
         self.maincls.make_iinit()
         self.get_edittext()
         self.maincls.add_instance_trait(traits.AbcSlotTrait(c.QName('edittext'), c.packagedQName("flash.text", "TextField")))
@@ -105,11 +102,24 @@ class TestHarness(object):
     def do_test(self, debug=False):
         self.finish_test()
         if debug:
-            f = open("test.swf", "w")
+            import sys
+            frame = sys._getframe()
+            while frame:
+                name = frame.f_code.co_name
+                if name.startswith("test_"):
+                    break
+                frame = frame.f_back
+            if frame is None:
+                global _test_count
+                _test_count += 1
+                name = "unnamed_test_%s" % (_test_count,)
+            f = open("%s.swf" % (name,), "w")
             f.write(self.swf.serialize())
             f.close()
-            f = open("test.abc", "w")
+            f = open("%s.abc" % (name,), "w")
             f.write(a.AbcFile.serialize(self.abc))
             f.close()
-        #py.test.fail("debug")
-        return b.browsertest(self.testname, self.swf)
+
+            asdf
+        
+        return b.browsertest(name, self.swf)

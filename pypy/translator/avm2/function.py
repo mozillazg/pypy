@@ -5,7 +5,8 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lltype import Void
 from pypy.translator.oosupport.function import Function as OOFunction
 from pypy.translator.cli.node import Node
-from pypy.translator.avm2 import constants, types_ as types
+from pypy.translator.avm2 import types_ as types
+from mech.fusion.avm2 import constants
 
 class Function(OOFunction, Node):
     
@@ -27,7 +28,9 @@ class Function(OOFunction, Node):
         else:
             self.namespace = None
             self.classname = None
-
+        
+        self.override = False
+        
     def _create_generator(self, ilasm):
         ilasm.db = self.db
         return ilasm
@@ -50,9 +53,9 @@ class Function(OOFunction, Node):
         returntype, returnvar = self.cts.llvar_to_cts(self.graph.getreturnvar())
 
         if self.classname:
-            self.generator.begin_method(self.name, self.args[1:], returntype)
+            self.generator.begin_method(self.name, self.args[1:], returntype, override=self.override)
         else:
-            self.generator.begin_method(self.name, self.args, returntype, static=True)
+            self.generator.begin_method(self.name, self.args, returntype, static=True, override=self.override)
         
     def end_render(self):
         # if self.generator.scope.islabel:
@@ -70,13 +73,19 @@ class Function(OOFunction, Node):
     def set_label(self, label):
         return self.generator.set_label(label)
 
+    def _trace_enabled(self):
+        return True
+
+    def _trace(self, s, writeline=False):
+        print "TRACE:", s
+
+    def _trace_value(self, prompt, v):
+        print "TRACE: P:", prompt, "V:", v
 
     def _render_op(self, op):
-        #instr_list = self.db.genoo.opcodes.get(op.opname, None)
-        #instr_list.render(self.generator, op)
-        print op
+        print "Rendering op:", op
         super(Function, self)._render_op(op)
-
+    
     def _setup_link(self, link):
         target = link.target
         linkvars = []
@@ -86,7 +95,7 @@ class Function(OOFunction, Node):
             if to_load.concretetype is ootype.Void:
                 continue
             linkvars.append((to_load, to_store))
-
+        
         # after SSI_to_SSA it can happen to have to_load = [a, b] and
         # to_store = [b, c].  If we store each variable sequentially,
         # 'b' would be overwritten before being read.  To solve, we
@@ -104,50 +113,48 @@ class Function(OOFunction, Node):
             self.generator.store(to_store)
 
     
-    # def begin_try(self, cond):
-    #     if cond:
-    #         self.ilasm.begin_try()
+    def begin_try(self, cond):
+        if cond:
+            self.ilasm.begin_try()
     
-    # def end_try(self, target_label, cond):
-    #     if cond:
-    #         self.ilasm.leave(target_label)
-    #         self.ilasm.end_try()
-    #     else:
-    #         self.ilasm.branch(target_label)
+    def end_try(self, target_label, cond):
+        if cond:
+            self.ilasm.end_try()
+        self.ilasm.branch_unconditionally(target_label)
 
-    # def begin_catch(self, llexitcase):
-    #     ll_meta_exc = llexitcase
-    #     ll_exc = ll_meta_exc._INSTANCE
-    #     cts_exc = self.cts.lltype_to_cts(ll_exc)
-    #     self.ilasm.begin_catch(cts_exc.classname())
+    def begin_catch(self, llexitcase):
+        ll_meta_exc = llexitcase
+        ll_exc = ll_meta_exc._INSTANCE
+        self.ilasm.begin_catch(ll_exc)
 
-    # def end_catch(self, target_label):
-    #     self.ilasm.leave(target_label)
-    #     self.ilasm.end_catch()
+    def end_catch(self, target_label):
+        self.ilasm.end_catch()
+        self.ilasm.branch_unconditionally(target_label)
 
     def render_raise_block(self, block):
         exc = block.inputargs[1]
+        print exc
         self.generator.load(exc)
         self.generator.emit('throw')
 
-    # def store_exception_and_link(self, link):
-    #     if self._is_raise_block(link.target):
-    #         # the exception value is on the stack, use it as the 2nd target arg
-    #         assert len(link.args) == 2
-    #         assert len(link.target.inputargs) == 2
-    #         self.store(link.target.inputargs[1])
-    #     else:
-    #         # the exception value is on the stack, store it in the proper place
-    #         if isinstance(link.last_exception, flowmodel.Variable):
-    #             self.ilasm.opcode('dup')
-    #             self.store(link.last_exc_value)
-    #             self.ilasm.call_method(
-    #                 'class [mscorlib]System.Type object::GetType()',
-    #                 virtual=True)
-    #             self.store(link.last_exception)
-    #         else:
-    #             self.store(link.last_exc_value)
-    #         self._setup_link(link)
+    def store_exception_and_link(self, link):
+        if self._is_raise_block(link.target):
+            # the exception value is on the stack, use it as the 2nd target arg
+            assert len(link.args) == 2
+            assert len(link.target.inputargs) == 2
+            self.store(link.target.inputargs[1])
+        else:
+            # the exception value is on the stack, store it in the proper place
+            if isinstance(link.last_exception, flowmodel.Variable):
+                self.ilasm.opcode('dup')
+                self.store(link.last_exc_value)
+                self.ilasm.call_method(
+                    'class [mscorlib]System.Type object::GetType()',
+                    virtual=True)
+                self.store(link.last_exception)
+            else:
+                self.store(link.last_exc_value)
+            self._setup_link(link)
 
     # def render_numeric_switch(self, block):
     #     if block.exitswitch.concretetype in (ootype.SignedLongLong, ootype.UnsignedLongLong):

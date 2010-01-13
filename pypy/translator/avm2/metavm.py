@@ -5,7 +5,8 @@ from pypy.translator.oosupport.metavm import MicroInstruction, \
 from pypy.translator.oosupport.metavm import _Call as _OOCall
 # from pypy.translator.cli.comparer import EqualityComparer
 from pypy.translator.avm2.runtime import _static_meth, NativeInstance
-from pypy.translator.avm2 import types_ as types, constants as c
+from pypy.translator.avm2 import types_ as types
+from mech.fusion.avm2 import constants
 
 STRING_HELPER_CLASS = '[pypylib]pypy.runtime.String'
 
@@ -30,7 +31,6 @@ class _Call(_OOCall):
         for func_arg in args[1:]: # push parameters
             self._load_arg_or_null(generator, func_arg)
         cts = generator.cts
-        #signature = '%s %s::%s(%s)' % (ret_type, funcdesc._cls._name, funcdesc._name, arg_list)
         generator.emit()
 
     def _load_arg_or_null(self, generator, arg):
@@ -55,7 +55,6 @@ class _CallMethod(_Call):
             if native:
                 self._load_arg_or_null(generator, arg)
             else:
-                print arg
                 generator.load(arg)
 
         if isinstance(this.concretetype, ootype.Array) and this.concretetype.ITEM is not ootype.Void:
@@ -87,11 +86,11 @@ class _RuntimeNew(MicroInstruction):
 class _OOString(MicroInstruction):
     def render(self, generator, op):
         if op.args[1] == -1:
-            generator.emit('findpropstrict', types._str_qname)
+            generator.emit('findpropstrict', types.str_qname)
             generator.load(op.args[0])
             generator.emit('callproperty', 1)
         else:
-            generator.emit('findpropstrict', c.QName("parseInt"))
+            generator.emit('findpropstrict', constants.QName("parseInt"))
             generator.load(op.args[0])
             generator.load(op.args[1])
             generator.emit('callproperty', 2)
@@ -175,7 +174,7 @@ class _GetArrayElem(MicroInstruction):
         generator.load(op.args[0])
         generator.load(op.args[1])
         rettype = generator.cts.lltype_to_cts(op.result.concretetype)
-        generator.ilasm.opcode('ldelem', rettype)
+        generator.ilasm.opcode('getproperty', rettype)
 
 class _SetArrayElem(MicroInstruction):
     def render(self, generator, op):
@@ -199,8 +198,6 @@ class _TypeOf(MicroInstruction):
         else:
             cliClass = c_type.value
             fullname = cliClass._INSTANCE._name
-        generator.ilasm.opcode('ldtoken', fullname)
-        generator.ilasm.call('class [mscorlib]System.Type class [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)')
 
 class _EventHandler(MicroInstruction):
     def render(self, generator, op):

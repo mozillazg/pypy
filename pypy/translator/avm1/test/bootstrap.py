@@ -1,6 +1,7 @@
 import autopath
 
-from pypy.translator.avm import swf as s, avm1 as a, tags as t, records as r
+from mech.fusion.swf import swfdata as s, tags as t, records as r
+from mech.fusion import avm1 as a
 
 if __name__ == "__main__":
     with open("test.swf", "w") as f:
