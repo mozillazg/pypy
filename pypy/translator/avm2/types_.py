@@ -7,15 +7,16 @@ import exceptions
 from py.builtin import set
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.avm2 import constants
 from pypy.translator.cli import oopspec
 from pypy.translator.cli.option import getoption
 
+from mech.fusion.avm2 import constants
+
 from pypy.tool.ansi_print import ansi_log
 
-_vec_qname = constants.packagedQName("__AS3__.vec", "Vector")
-_str_qname = constants.QName("String")
-_arr_qname = constants.QName("Array")
+vec_qname = constants.packagedQName("__AS3__.vec", "Vector")
+str_qname = constants.QName("String")
+arr_qname = constants.QName("Array")
 
 class Avm2Type(object):
     def typename(self):
@@ -49,6 +50,7 @@ class Avm2NamespacedType(Avm2Type):
     nstype = constants.TYPE_NAMESPACE_PackageNamespace
     
     def __init__(self, name, namespace=''):
+        print "Namedspaced Type", name
         if '::' in name and namespace == '':
             self.ns, self.name = name.rsplit('::', 1)
         else:
@@ -71,7 +73,7 @@ class Avm2ArrayType(Avm2Type):
         self.itemtype = itemtype
 
     def multiname(self):
-        return constants.TypeName(_vec_qname, self.itemtype.multiname())
+        return constants.TypeName(vec_qname, self.itemtype.multiname())
 
 T = Avm2PrimitiveType
 N = Avm2NamespacedType

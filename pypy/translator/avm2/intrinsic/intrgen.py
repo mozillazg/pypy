@@ -63,8 +63,8 @@ def parse_file(file):
             else:
                 FullName = ShortName
             
-            if line == "extends":
-                BaseType = get_ootype(line[2], Resolved)
+            if "extends" in line:
+                BaseType = line[2]
                 
         elif line.startswith(("public function ", "public static function ")):
             
@@ -116,7 +116,7 @@ def parse_file(file):
                 StaticFields.append((line[3], line[5]))
             else:
                 StaticFields.append(tuple(line[3].split(":")))
-
+    
     desc = ClassDesc()
     desc.FullName = FullName
     desc.BaseType = BaseType

@@ -1,8 +1,10 @@
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.node import Node
-from pypy.translator.avm2 import types_ as types, constants as c, traits
 from pypy.translator.oosupport.constant import push_constant
 from pypy.translator.cli.ilgenerator import CLIBaseGenerator
+
+from mech.fusion.avm2 import constants as c, traits
+from pypy.translator.avm2 import types_ as types
 
 try:
     set
@@ -45,7 +47,8 @@ class Class(Node):
         if self.is_root(base_class):
             return c.QName("Object")
         else:
-            return c.QName(self.db.class_name(base_class))
+            ns, name = self.db.class_name(base_class).rsplit('::', 1)
+            return c.packagedQName(ns, name)
 
     def is_abstract(self):
         return False # XXX
@@ -77,7 +80,7 @@ class Class(Node):
         self.ilasm = ilasm
         self.gen = CLIBaseGenerator(self.db, ilasm)
 
-        ilasm.begin_class(c.QName(self.name), self.get_base_class())
+        ilasm.begin_class(c.packagedQName(self.namespace, self.name), self.get_base_class())
         for f_name, (f_type, f_default) in self.INSTANCE._fields.iteritems():
             cts_type = self.cts.lltype_to_cts(f_type)
             f_name = self.cts.escape_name(f_name)
@@ -98,6 +101,15 @@ class Class(Node):
                 if not ootype.isSubclass(self.INSTANCE, SELF):
                     continue
                 f = self.db.genoo.Function(self.db, m_meth.graph, m_name)
+                
+                context = self.INSTANCE._superclass
+                while context:
+                    if m_name in context._methods:
+                        f.override = True
+                        print "Overriding", m_name
+                        break
+                    context = context._superclass
+
                 f.render(ilasm)
             else:
                 # abstract method
@@ -130,13 +142,17 @@ class Class(Node):
                 self.ilasm.push_this()
                 push_constant(self.db, F_TYPE, f_default, self.gen)
                 # class_name = self.db.class_name(INSTANCE_DEF)
-                self.ilasm.emit('setproperty', c.packagedQName(f_name))
+                self.ilasm.emit('setproperty', c.QName(f_name))
 
         self.ilasm.exit_context()
 
     def _toString(self):
-        self.ilasm.begin_method('toString', [], types.types.string)
-        self.ilasm.push_this()
+        if self.is_root(self.INSTANCE._superclass):
+            override = False
+        else:
+            override = True
+            print "Overriding toString"
+        self.ilasm.begin_method('toString', [], types.types.string, override=override)
         self.ilasm.load("InstanceWrapper('%s')" % (self.name))
         self.ilasm.emit('returnvalue')
         self.ilasm.exit_context()

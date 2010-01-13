@@ -234,6 +234,21 @@ class _static_meth(object):
         #assert ARGS == self._TYPE.ARGS
         return self
 
+class _overloaded_static_meth(object):
+    def __init__(self, *overloadings, **attrs):
+        resolver = attrs.pop('resolver', OverloadingResolver)
+        assert not attrs
+        self._resolver = resolver(overloadings)
+
+    def _set_attrs(self, cls, name):
+        for meth in self._resolver.overloadings:
+            meth._set_attrs(cls, name)
+
+    def _get_desc(self, ARGS):
+        meth = self._resolver.resolve(ARGS)
+        assert isinstance(meth, _static_meth)
+        return meth._get_desc(ARGS)
+    
 class NativeInstance(ootype.Instance):
     def __init__(self, namespace, name, superclass,
                  fields={}, methods={}, _is_root=False, _hints = {}):
@@ -242,6 +257,8 @@ class NativeInstance(ootype.Instance):
         self._classname = name
         self._is_value_type = False
         ootype.Instance.__init__(self, fullname, superclass, fields, methods, _is_root, _hints)
+
+
 
 
 ## RPython interface definition
@@ -539,14 +556,15 @@ class Entry(ExtRegistryEntry):
         return v_array
 
 # def typeof(Class_or_type):
-#     if isinstance(Class_or_type, ootype.StaticMethod):
-    #     FUNCTYPE = Class_or_type
-    #     Class = known_delegates[FUNCTYPE]
-    # else:
-    #     assert isinstance(Class_or_type, CliClass)
-    #     Class = Class_or_type
-    # TYPE = Class._INSTANCE
-    # return PythonNet.System.Type.GetType(TYPE._assembly_qualified_name)
+#     # if isinstance(Class_or_type, ootype.StaticMethod):
+#     #     FUNCTYPE = Class_or_type
+#     #     Class = known_delegates[FUNCTYPE]
+#     # else:
+#     #     assert isinstance(Class_or_type, CliClass)
+#     #     Class = Class_or_type
+#     # TYPE = Class._INSTANCE
+#     # return PythonNet.System.Type.GetType(TYPE._assembly_qualified_name)
+#     return None
 
 # def classof(cliClass_or_type):
 #     if isinstance(cliClass_or_type, ootype.StaticMethod):
@@ -569,7 +587,7 @@ class Entry(ExtRegistryEntry):
 #     def compute_result_annotation(self, Class_s):
 #         from pypy.translator.avm2.query import get_native_class
 #         assert Class_s.is_constant()
-#         Type = get_native_class('Class')
+#         Type = playerglobal.Class
 #         return SomeOOInstance(Type._INSTANCE)
 
 #     def specialize_call(self, hop):
@@ -618,7 +636,7 @@ class Entry(ExtRegistryEntry):
 def cast_record_to_object(record):
     T = ootype.typeOf(record)
     assert isinstance(T, ootype.Record)
-    return ootype._view(CLR.System.Object._INSTANCE, record)
+    return ootype._view(playerglobal.Object._INSTANCE, record)
 
 def cast_object_to_record(T, obj):
     assert isinstance(T, ootype.Record)
@@ -635,7 +653,7 @@ class Entry(ExtRegistryEntry):
         T = s_value.ootype
         assert isinstance(T, ootype.Record)
         can_be_None = getattr(s_value, 'can_be_None', False)
-        return SomeOOInstance(CLR.System.Object._INSTANCE, can_be_None=can_be_None)
+        return SomeOOInstance(playerglobal.Object._INSTANCE, can_be_None=can_be_None)
 
     def specialize_call(self, hop):
         assert isinstance(hop.args_s[0], annmodel.SomeOOInstance)
@@ -659,36 +677,36 @@ class Entry(ExtRegistryEntry):
         v_obj = hop.inputarg(hop.args_r[1], arg=1)
         return hop.genop('oodowncast', [v_obj], hop.r_result.lowleveltype)
 
-class _fieldinfo(object):
-    def __init__(self, llvalue):
-        self._TYPE = CLR.System.Reflection.FieldInfo._INSTANCE
-        self.llvalue = llvalue
+#class _fieldinfo(object):
+#     def __init__(self, llvalue):
+#         self._TYPE = CLR.System.Reflection.FieldInfo._INSTANCE
+#         self.llvalue = llvalue
 
-def fieldinfo_for_const(const):
-    return _fieldinfo(const)
+# def fieldinfo_for_const(const):
+#     return _fieldinfo(const)
 
-class Entry(ExtRegistryEntry):
-    _about_ = fieldinfo_for_const
+# class Entry(ExtRegistryEntry):
+#     _about_ = fieldinfo_for_const
 
-    def compute_result_annotation(self, s_const):
-        assert s_const.is_constant()
-        return SomeOOInstance(CLR.System.Reflection.FieldInfo._INSTANCE)
+#     def compute_result_annotation(self, s_const):
+#         assert s_const.is_constant()
+#         return SomeOOInstance(CLR.System.Reflection.FieldInfo._INSTANCE)
 
-    def specialize_call(self, hop):
-        llvalue = hop.args_v[0].value
-        c_llvalue = hop.inputconst(ootype.Void, llvalue)
-        return hop.genop('cli_fieldinfo_for_const', [c_llvalue], resulttype = hop.r_result.lowleveltype)
+#     def specialize_call(self, hop):
+#         llvalue = hop.args_v[0].value
+#         c_llvalue = hop.inputconst(ootype.Void, llvalue)
+#         return hop.genop('cli_fieldinfo_for_const', [c_llvalue], resulttype = hop.r_result.lowleveltype)
 
 
-class Entry(ExtRegistryEntry):
-    _type_ = _fieldinfo
+# class Entry(ExtRegistryEntry):
+#     _type_ = _fieldinfo
 
-    def compute_annotation(self):
-        return SomeOOInstance(CLR.System.Reflection.FieldInfo._INSTANCE)
+#     def compute_annotation(self):
+#         return SomeOOInstance(CLR.System.Reflection.FieldInfo._INSTANCE)
 
-# from pypy.translator.cli.query import CliNamespace
-# CLR = CliNamespace(None)
-# CLR._buildtree()
+from pypy.translator.avm2.query import NativeNamespace
+playerglobal = NativeNamespace(None)
+playerglobal._buildtree()
 
 # known_delegates = {
 #     ootype.StaticMethod([ootype.Signed], ootype.Signed):       CLR.pypy.test.DelegateType_int__int_1,

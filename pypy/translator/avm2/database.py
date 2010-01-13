@@ -13,6 +13,7 @@ except NameError:
 class LowLevelDatabase(OODatabase):
     def __init__(self, genoo):
         OODatabase.__init__(self, genoo)
+        self._pending_nodes = []
         self.classes = {} # INSTANCE --> class_name
         self.classnames = set() # (namespace, name)
         self.functions = {} # graph --> function_name
@@ -117,3 +118,13 @@ class LowLevelDatabase(OODatabase):
             self.delegates[TYPE] = name
             self.pending_node(Delegate(self, TYPE, name))
             return name
+    
+    def pending_node(self, node):
+        """ Adds a node to the worklist, so long as it is not already there
+        and has not already been rendered. """
+        assert not self.locked # sanity check
+        if node in self._pending_nodes or node in self._rendered_nodes:
+            return
+        self._pending_nodes.append(node)
+        node.dependencies()
+            

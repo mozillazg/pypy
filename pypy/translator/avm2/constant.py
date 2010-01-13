@@ -31,8 +31,10 @@ from pypy.translator.oosupport.constant import \
      BaseConstantGenerator, AbstractConst, ArrayConst
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.comparer import EqualityComparer
-from pypy.translator.avm2 import constants, types_ as types, traits
+from pypy.translator.avm2 import types_ as types
 from pypy.rpython.lltypesystem import lltype
+
+from mech.fusion.avm2 import constants, traits
 
 CONST_CLASS = constants.packagedQName("pypy.runtime", "Constants")
 
@@ -82,18 +84,18 @@ class Avm2ConstGenerator(BaseConstantGenerator):
         return BaseConstantGenerator._get_key_for_const(self, value)
     
     def push_constant(self, gen, const):
-        type_ = const.get_type()
         gen.emit('getlex', CONST_CLASS)
         gen.emit('getproperty', constants.QName(const.name))
 
-    #def _push_constant_during_init(self, gen, const):
-    #    self.push_constant(gen, const)
-    #    gen.store_var('current_constant')
+    def _push_constant_during_init(self, gen, const):
+        gen.push_this()
+        gen.emit('getproperty', constants.QName(const.name))
 
+    def _pre_store_constant(self, gen, const):
+        gen.push_this()
+    
     def _store_constant(self, gen, const):
-        type_ = const.get_type()
-        gen.emit('getlex', CONST_CLASS)
-        gen.emit('setproperty', constants.QName(const.name))
+        gen.emit('initproperty', constants.QName(const.name))
 
     def _declare_step(self, gen, stepnum):
         pass
@@ -121,17 +123,17 @@ class Avm2ConstGenerator(BaseConstantGenerator):
 # to each sub-class of that base-class.  Kind of awkward.
 
 class Avm2BaseConstMixin(object):
-    """ A mix-in with a few extra methods the CLI backend uses """
+    """ A mix-in with a few extra methods the Tamarin backend uses """
     
     def get_type(self):
-        """ Returns the CLI type for this constant's representation """
+        """ Returns the Tamrin type for this constant's representation """
         return self.cts.lltype_to_cts(self.value._TYPE)
     
     def push_inline(self, gen, TYPE):
-        """ Overload the oosupport version so that we use the CLI opcode
-        for pushing NULL """
+        """ Overload the oosupport version so that we use the Tamarin
+        opcode for pushing NULL """
         assert self.is_null()
-        gen.ilasm.opcode('pushnull')
+        gen.ilasm.push_null()
 
 # class Avm2DictMixin(Avm2BaseConstMixin):
 #     def _check_for_void_dict(self, gen):
@@ -196,42 +198,42 @@ class Avm2ClassConst(Avm2BaseConstMixin, ClassConst):
             else:
                 INSTANCE = self.value._INSTANCE
                 classname = self.db.class_name(INSTANCE)
-            gen.emit('getlex', constants.QName(classname))
+            ns, name = classname.rsplit('::', 1)
+            gen.emit('getlex', constants.packagedQName(ns, name))
             return
         super(Avm2ClassConst, self).push_inline(gen, EXPECTED_TYPE)
 
-# class CLIListConst(CLIBaseConstMixin, ListConst):
 
-#     def _do_not_initialize(self):
-#         # Check if it is a list of all zeroes:
-#         try:
-#             if self.value._list == [0] * len(self.value._list):
-#                 return True
-#         except:
-#             pass
-#         return super(CLIListConst, self)._do_not_initialize()
+class Avm2ArrayListConst(Avm2BaseConstMixin, ListConst):
+
+    def _do_not_initialize(self):
+        # Check if it is a list of all zeroes:
+        try:
+            if self.value._list == [0] * len(self.value._list):
+                return True
+        except:
+            pass
+        return super(Avm2ListConst, self)._do_not_initialize()
     
-#     def create_pointer(self, gen):
-#         self.db.const_count.inc('List')
-#         self.db.const_count.inc('List', self.value._TYPE.ITEM)
-#         self.db.const_count.inc('List', len(self.value._list))
-#         super(CLIListConst, self).create_pointer(gen)
+    def create_pointer(self, gen):
+        llen = len(self.value._list)
+        self.db.const_count.inc('List')
+        self.db.const_count.inc('List', self.value._TYPE.ITEM)
+        self.db.const_count.inc('List', llen)
+        gen.oonewarray(self.value._TYPE, llen)
+        
+    def initialize_data(self, constgen, gen):
+        assert not self.is_null()
+        
+        # check for special cases and avoid initialization
+        if self._do_not_initialize():
+            return
 
-
-# class CLIArrayConst(CLIBaseConstMixin, ArrayConst):
-
-#     def _do_not_initialize(self):
-#         # Check if it is an array of all zeroes:
-#         try:
-#             if self.value._list == [0] * len(self.value._list):
-#                 return True
-#         except:
-#             pass
-#         return super(CLIArrayConst, self)._do_not_initialize()
-
-#     def _setitem(self, SELFTYPE, gen):
-#         gen.array_setitem(SELFTYPE)
-
+        # set each item in the list using the OOTYPE methods
+        for idx, item in enumerate(self.value._array):
+            gen.dup()
+            gen.emit('setproperty', constants.Multiname(
+                    str(idx), constants.PROP_NAMESPACE_SET))
 
 # class CLIDictConst(CLIDictMixin, DictConst):
 #     def create_pointer(self, gen):

@@ -2,18 +2,14 @@ import sys
 import cPickle as pickle
 import os.path
 import py
-from py.compat import subprocess
+import subprocess
 from pypy.tool.udir import udir
 from pypy.rpython.ootypesystem import ootype
+from pypy.translator import avm2
 from pypy.translator.cli.support import log
 
-Assemblies = set()
 Types = {} # TypeName -> ClassDesc
 Namespaces = set()
-# mscorlib = 'mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
-# pypylib = 'pypylib, Version=0.0.0.0, Culture=neutral'
-# pypylib2 = 'pypylib, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null' # this is for mono 1.9
-
 
 #_______________________________________________________________________________
 # This is the public interface of query.py
@@ -38,17 +34,15 @@ def get_native_class(name):
 #         clr.AddReference(pypylib)
 #     load_assembly(pypylib)
 
-def load_assembly(name):
-    if name in Assemblies:
-        return
+def load_playerglobal():
     _cache = get_cachedir()
-    outfile = _cache.join(name + '.pickle')
+    outfile = _cache.join('avm2_playerglobal.pickle')
     if outfile.check():
         f = outfile.open('rb')
         types = pickle.load(f)
         f.close()
     else:
-        types = load_and_cache_assembly(name, outfile)
+        types = load_and_cache_playerglobal(outfile)
 
     for ttype in types:
         parts = ttype.split('.')
@@ -57,7 +51,6 @@ def load_assembly(name):
         for part in parts[1:-1]:
             ns = '%s.%s' % (ns, part)
             Namespaces.add(ns)
-    Assemblies.add(name)
     Types.update(types)
 
 
@@ -66,10 +59,10 @@ def get_cachedir():
     _cache = py.path.local(pypy.__file__).new(basename='_cache').ensure(dir=1)
     return _cache
 
-def load_and_cache_assembly(name, outfile):
-    tmpfile = udir.join(name)
+def load_and_cache_playerglobal(outfile):
     mydict = {}
-    execfile(str(tmpfile), mydict)
+    pipe = subprocess.Popen([sys.executable, str(py.path.local(avm2.__file__).dirpath("intrinsic/intrgen.py"))], stdout=subprocess.PIPE)
+    exec pipe.stdout in mydict
     types = mydict['types']
     f = outfile.open('wb')
     pickle.dump(types, f, pickle.HIGHEST_PROTOCOL)
@@ -202,6 +195,7 @@ class NativeNamespace(object):
     def _buildtree(self):
         assert self._name is None, '_buildtree can be called only on top-level Runtime, not on namespaces'
         from pypy.translator.cli.support import getattr_ex
+        load_playerglobal()
         for fullname in sorted(list(Namespaces)):
             if '.' in fullname:
                 parent, name = fullname.rsplit('.', 1)
@@ -210,9 +204,12 @@ class NativeNamespace(object):
             else:
                 setattr(self, fullname, NativeNamespace(fullname))
 
-        for fullname in Types.keys():
-            parent, name = fullname.rsplit('.', 1)
-            parent = getattr_ex(self, parent)
+        for fullname in Types.iterkeys():
+            if '.' in fullname:
+                parent, name = fullname.rsplit('.', 1)
+                parent = getattr_ex(self, parent)
+            else:
+                parent = self
             setattr(parent, name, placeholder)
         self.Object # XXX hack
 
