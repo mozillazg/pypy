@@ -539,6 +539,7 @@ LL_OPERATIONS = {
     'debug_start_traceback':LLOp(),
     'debug_record_traceback':LLOp(),
     'debug_catch_exception':LLOp(),
+    'debug_print_traceback':LLOp(),
 
     # __________ instrumentation _________
     'instrument_count':     LLOp(),

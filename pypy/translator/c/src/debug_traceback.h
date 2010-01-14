@@ -7,6 +7,9 @@
 #define OP_DEBUG_START_TRACEBACK()                              \
   pypy_debug_traceback_count = PYPY_DEBUG_TRACEBACK_DEPTH
 
+#define OP_DEBUG_PRINT_TRACEBACK()                              \
+  pypy_debug_traceback_print()
+
 #define PYPY_DEBUG_RECORD_TRACEBACK(funcname)                           \
   if ((--pypy_debug_traceback_count) >= 0) {                            \
     static struct pydtentry_s entry = { PYPY_FILE_NAME, funcname, __LINE__ }; \
@@ -25,6 +28,7 @@ struct pydtentry_s {
 extern int pypy_debug_traceback_count;
 extern struct pydtentry_s *pypy_debug_tracebacks[PYPY_DEBUG_TRACEBACK_DEPTH];
 
+void pypy_debug_traceback_print(void);
 void pypy_debug_catch_exception(void);
 
 

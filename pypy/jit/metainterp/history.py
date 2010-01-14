@@ -926,10 +926,6 @@ class Stats(object):
             loops.append(loop)
         display_loops(loops, errmsg, extraloops)
 
-
-class CrashInJIT(Exception):
-    pass
-
 # ----------------------------------------------------------------
 
 class Options:

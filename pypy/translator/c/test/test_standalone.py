@@ -10,6 +10,7 @@ from pypy.translator.c.genc import CStandaloneBuilder, ExternalCompilationInfo
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.tool.udir import udir
 from pypy.tool.autopath import pypydir
+from pypy.conftest import option
 
 
 class StandaloneTests(object):
@@ -23,6 +24,8 @@ class StandaloneTests(object):
         cbuilder = CStandaloneBuilder(t, entry_point, t.config)
         cbuilder.generate_source(defines=cbuilder.DEBUG_DEFINES)
         cbuilder.compile()
+        if option.view:
+            t.view()
         return t, cbuilder
 
 
@@ -409,6 +412,34 @@ class TestStandalone(StandaloneTests):
         assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l2)
         assert lines2[-2] != lines[-2]    # different line number
         assert lines2[-3] == lines[-3]    # same line number
+
+    def test_fatal_error_finally(self):
+        def g(x):
+            if x == 1:
+                raise KeyError
+        def h(x):
+            try:
+                g(x)
+            finally:
+                print 'done.'
+        def entry_point(argv):
+            if len(argv) < 3:
+                h(len(argv))
+            return 0
+        t, cbuilder = self.compile(entry_point)
+        #
+        out, err = cbuilder.cmdexec("", expect_crash=True)
+        assert out.strip() == 'done.'
+        lines = err.strip().splitlines()
+        assert lines[-1] == 'Fatal RPython error: KeyError'
+        assert len(lines) >= 6
+        l0, l1, l2, l3, l4 = lines[-6:-1]
+        assert l0 == 'RPython traceback:'
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l3)
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l4)
+        assert l2 != l3    # different line number
 
     def test_assertion_error(self):
         def g(x):
