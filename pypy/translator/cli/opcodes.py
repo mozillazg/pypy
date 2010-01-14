@@ -79,6 +79,7 @@ misc_ops = {
     'debug_assert':             Ignore,
     'debug_start_traceback':    Ignore,
     'debug_record_traceback':   Ignore,
+    'debug_print_traceback':    Ignore,
     'debug_catch_exception':    Ignore,
     'debug_print':              [DebugPrint],
     'debug_start':              [PushAllArgs, 'call void [pypylib]pypy.runtime.DebugPrint::DEBUG_START(string)'],
