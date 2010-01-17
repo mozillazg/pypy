@@ -421,7 +421,7 @@ class TestStandalone(StandaloneTests):
             try:
                 g(x)
             finally:
-                print 'done.'
+                os.write(1, 'done.\n')
         def entry_point(argv):
             if len(argv) < 3:
                 h(len(argv))
@@ -432,14 +432,12 @@ class TestStandalone(StandaloneTests):
         assert out.strip() == 'done.'
         lines = err.strip().splitlines()
         assert lines[-1] == 'Fatal RPython error: KeyError'
-        assert len(lines) >= 6
-        l0, l1, l2, l3, l4 = lines[-6:-1]
+        assert len(lines) >= 5
+        l0, l1, l2, l3 = lines[-5:-1]
         assert l0 == 'RPython traceback:'
         assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
         assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l2)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l3)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l4)
-        assert l2 != l3    # different line number
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l3)
 
     def test_assertion_error(self):
         def g(x):

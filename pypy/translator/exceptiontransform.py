@@ -3,11 +3,10 @@ from pypy.translator.unsimplify import copyvar, varoftype
 from pypy.translator.unsimplify import insert_empty_block, split_block
 from pypy.translator.backendopt import canraise, inline, support, removenoops
 from pypy.objspace.flow.model import Block, Constant, Variable, Link, \
-    c_last_exception, SpaceOperation, checkgraph, FunctionGraph
+    c_last_exception, SpaceOperation, checkgraph, FunctionGraph, mkentrymap
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem import lloperation
-from pypy.rpython.lltypesystem.llmemory import NULL
 from pypy.rpython import rtyper
 from pypy.rpython import rclass
 from pypy.rpython.rmodel import inputconst
@@ -27,7 +26,7 @@ PrimitiveErrorValue = {lltype.Signed: -1,
                        lltype.Char: chr(255),
                        lltype.UniChar: unichr(0xFFFF), # XXX is this always right?
                        lltype.Bool: True,
-                       llmemory.Address: NULL,
+                       llmemory.Address: llmemory.NULL,
                        lltype.Void: None}
 
 for TYPE in rffi.NUMBER_TYPES:
@@ -92,6 +91,10 @@ class BaseExceptionTransformer(object):
             exc_data.exc_value = evalue
             lloperation.llop.debug_start_traceback(lltype.Void)
 
+        def rpyexc_reraise(etype, evalue):
+            exc_data.exc_type = etype
+            exc_data.exc_value = evalue
+
         def rpyexc_fetch_exception():
             evalue = rpyexc_fetch_value()
             rpyexc_clear()
@@ -128,6 +131,13 @@ class BaseExceptionTransformer(object):
         self.rpyexc_raise_ptr = self.build_func(
             "RPyRaiseException",
             self.noinline(rpyexc_raise),
+            [self.lltype_of_exception_type, self.lltype_of_exception_value],
+            lltype.Void,
+            jitcallkind='rpyexc_raise') # for the JIT
+
+        self.rpyexc_reraise_ptr = self.build_func(
+            "RPyReRaiseException",
+            rpyexc_reraise,
             [self.lltype_of_exception_type, self.lltype_of_exception_value],
             lltype.Void,
             jitcallkind='rpyexc_raise') # for the JIT
@@ -197,10 +207,15 @@ class BaseExceptionTransformer(object):
         # collect the blocks before changing them
         n_need_exc_matching_blocks = 0
         n_gen_exc_checks           = 0
+        #
+        entrymap = mkentrymap(graph)
+        if graph.exceptblock in entrymap:
+            for link in entrymap[graph.exceptblock]:
+                self.transform_jump_to_except_block(graph, entrymap, link)
+        #
         for block in list(graph.iterblocks()):
             self.replace_stack_unwind(block)
             self.replace_fetch_restore_operations(block)
-            self.transform_jump_to_except_block(graph, block.exits)
             need_exc_matching, gen_exc_checks = self.transform_block(graph, block)
             n_need_exc_matching_blocks += need_exc_matching
             n_gen_exc_checks           += gen_exc_checks
@@ -281,23 +296,55 @@ class BaseExceptionTransformer(object):
                 self.insert_matching(lastblock, graph)
         return need_exc_matching, n_gen_exc_checks
 
-    def transform_jump_to_except_block(self, graph, exits):
-        for link in exits:
-            if link.target is graph.exceptblock:
-                result = Variable()
-                result.concretetype = lltype.Void
-                block = Block([copyvar(None, v)
-                               for v in graph.exceptblock.inputargs])
-                block.operations = [
-                    SpaceOperation("direct_call",
-                                   [self.rpyexc_raise_ptr] + block.inputargs,
-                                   result),
-                    SpaceOperation('debug_record_traceback', [],
-                                   varoftype(lltype.Void))]
-                link.target = block
-                RETTYPE = graph.returnblock.inputargs[0].concretetype
-                l = Link([error_constant(RETTYPE)], graph.returnblock)
-                block.recloseblock(l)
+    def comes_from_last_exception(self, entrymap, link):
+        block = link.prevblock
+        v = link.args[1]
+        seen = {}
+        pending = [(block, v)]
+        while pending:
+            block, v = pending.pop()
+            if (block, v) in seen:
+                continue
+            seen[block, v] = True
+            for op in block.operations[::-1]:
+                if v is op.result:
+                    if op.opname == 'cast_pointer':
+                        v = op.args[0]
+                    else:
+                        break
+            else:
+                for link in entrymap.get(block, ()):
+                    if link.prevblock is not None:
+                        for inputarg, outputarg in zip(link.args,
+                                                       block.inputargs):
+                            if outputarg is v:
+                                if inputarg is link.last_exc_value:
+                                    return True
+                                pending.append((link.prevblock, inputarg))
+        return False
+
+    def transform_jump_to_except_block(self, graph, entrymap, link):
+        reraise = self.comes_from_last_exception(entrymap, link)
+        if reraise:
+            fnptr = self.rpyexc_reraise_ptr
+        else:
+            fnptr = self.rpyexc_raise_ptr
+        result = Variable()
+        result.concretetype = lltype.Void
+        block = Block([copyvar(None, v)
+                       for v in graph.exceptblock.inputargs])
+        block.operations = [
+            SpaceOperation("direct_call",
+                           [fnptr] + block.inputargs,
+                           result)]
+        if not reraise:
+            block.operations.append(
+                SpaceOperation('debug_record_traceback', [],
+                               varoftype(lltype.Void)))
+        link.target = block
+        RETTYPE = graph.returnblock.inputargs[0].concretetype
+        l = Link([error_constant(RETTYPE)], graph.returnblock)
+        block.recloseblock(l)
 
     def insert_matching(self, block, graph):
         proxygraph, op = self.create_proxy_graph(block.operations[-1])
