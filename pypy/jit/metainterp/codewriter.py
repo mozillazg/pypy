@@ -297,8 +297,8 @@ class CodeWriter(object):
         assert isinstance(INSTANCE, ootype.Instance)
         TYPES = INSTANCE._all_subclasses()
         for T in TYPES:
-            _, meth = T._lookup(methname)
-            if not getattr(meth, 'abstract', False):
+            TDEF, meth = T._lookup(methname)
+            if TDEF is T and not getattr(meth, 'abstract', False):
                 assert meth.graph
                 if self.is_candidate(meth.graph):
                     jitcode = self.get_jitcode(meth.graph,

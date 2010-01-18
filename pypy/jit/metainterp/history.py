@@ -141,7 +141,13 @@ class AbstractMethDescr(AbstractDescr):
         # jitcodes maps { runtimeClass -> jitcode for runtimeClass.methname }
         self.jitcodes = jitcodes
     def get_jitcode_for_class(self, oocls):
-        return self.jitcodes[oocls]
+        rootcls = ootype.runtimeClass(ootype.ROOT)
+        while oocls is not rootcls:
+            try:
+                return self.jitcodes[oocls]
+            except KeyError:
+                oocls = ootype.getsuperclassof(oocls)
+        assert False, 'we should never get here'
 
 
 class Const(AbstractValue):

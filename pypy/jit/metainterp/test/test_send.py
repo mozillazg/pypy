@@ -607,6 +607,39 @@ class SendTests:
         res = self.meta_interp(fn, [20], policy=StopAtXPolicy(extern))
         assert res == 21
 
+    def test_call_method_of_base_class(self): 
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'w', 'res'])
+        class Base:
+            def foo(self):
+                return 42
+        class W1(Base):
+            pass
+        class W2(Base):
+            def foo(self):
+                return 43
+        
+        def f(x, y):
+            if x == 0:
+                w = Base()
+            elif x == 1:
+                w = W1()
+            else:
+                w = W2()
+            res = 0
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, w=w, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, w=w, res=res)
+                res = w.foo()
+                y -= 1
+            return res
+        res = self.meta_interp(f, [0, 10])
+        assert res == 42
+        res = self.meta_interp(f, [1, 10])
+        assert res == 42
+        res = self.meta_interp(f, [2, 10])
+        assert res == 43
+       
+
 
 class TestOOtype(SendTests, OOJitMixin):
     pass
