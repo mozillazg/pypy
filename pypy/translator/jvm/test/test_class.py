@@ -27,5 +27,8 @@ class TestJvmClass(JvmTest, BaseTestClass):
     def test_specialize_methods(self):
         py.test.skip('ABSTRACT METHOD FIX: RE-TEST AFTER MERGE')
 
+    def test_getsuperclassof(self):
+        py.test.skip('fixme')
+
 class TestJvmSpecialCase(JvmTest, BaseTestSpecialcase):
     pass

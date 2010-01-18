@@ -562,6 +562,10 @@ def subclassof(class1, class2):
     assert isinstance(class2, SomeOOClass) 
     return s_Bool
 
+def getsuperclassof(class_):
+    assert isinstance(class_, SomeOOClass)
+    return SomeOOClass(class_.ootype._superclass)
+
 def runtimenew(c):
     assert isinstance(c, SomeOOClass)
     if c.ootype is None:
@@ -609,6 +613,7 @@ BUILTIN_ANALYZERS[ootype.null] = null
 BUILTIN_ANALYZERS[ootype.runtimenew] = runtimenew
 BUILTIN_ANALYZERS[ootype.classof] = classof
 BUILTIN_ANALYZERS[ootype.subclassof] = subclassof
+BUILTIN_ANALYZERS[ootype.getsuperclassof] = getsuperclassof
 BUILTIN_ANALYZERS[ootype.ooupcast] = ooupcast
 BUILTIN_ANALYZERS[ootype.oodowncast] = oodowncast
 BUILTIN_ANALYZERS[ootype.cast_to_object] = cast_to_object
