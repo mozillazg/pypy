@@ -36,6 +36,12 @@ def rtype_subclassof(hop):
     return hop.genop('subclassof', vlist,
                      resulttype = ootype.Bool)
 
+def rtype_getsuperclassof(hop):
+    assert isinstance(hop.args_s[0], annmodel.SomeOOClass)
+    vlist = hop.inputargs(hop.args_r[0])
+    return hop.genop('getsuperclassof', vlist,
+                     resulttype = ootype.Class)
+
 def rtype_instanceof(hop):
     INSTANCE = hop.args_v[1].value
     v_inst = hop.inputarg(hop.args_r[0], arg=0)
@@ -124,6 +130,7 @@ BUILTIN_TYPER[ootype.oonewarray] = rtype_oonewarray
 BUILTIN_TYPER[ootype.null] = rtype_null
 BUILTIN_TYPER[ootype.classof] = rtype_classof
 BUILTIN_TYPER[ootype.subclassof] = rtype_subclassof
+BUILTIN_TYPER[ootype.getsuperclassof] = rtype_getsuperclassof
 BUILTIN_TYPER[ootype.instanceof] = rtype_instanceof
 BUILTIN_TYPER[ootype.runtimenew] = rtype_runtimenew
 BUILTIN_TYPER[ootype.ooupcast] = rtype_ooupcast

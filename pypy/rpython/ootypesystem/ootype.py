@@ -919,6 +919,10 @@ class _class(object):
     def _cast_to_object(self):
         return make_object(self)
 
+    def _get_superclass(self):
+        SUPER = self._INSTANCE._superclass
+        return runtimeClass(SUPER)
+
     def __repr__(self):
         return '%s(%s)' % (self.__class__.__name__, self._INSTANCE)
 
@@ -1866,6 +1870,9 @@ def subclassof(class1, class2):
     assert class1 is not nullruntimeclass
     assert class2 is not nullruntimeclass
     return isSubclass(class1._INSTANCE, class2._INSTANCE)
+
+def getsuperclassof(class_):
+    return class_._get_superclass()
 
 def addFields(INSTANCE, fields, with_default=False):
     INSTANCE._add_fields(fields, with_default)

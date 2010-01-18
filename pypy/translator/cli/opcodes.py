@@ -59,6 +59,7 @@ misc_ops = {
     'classof':                  [PushAllArgs, 'callvirt instance class [mscorlib]System.Type object::GetType()'],
     'instanceof':               [CastTo, 'ldnull', 'cgt.un'],
     'subclassof':               [PushAllArgs, 'call bool [pypylib]pypy.runtime.Utils::SubclassOf(class [mscorlib]System.Type, class[mscorlib]System.Type)'],
+    'getsuperclassof':          [PushAllArgs, 'callvirt instance class [mscorlib]System.Type class [mscorlib]System.Type::get_BaseType()'],
     'gc_id':                    [PushAllArgs, 'call int32 [mscorlib]System.Runtime.CompilerServices.RuntimeHelpers::GetHashCode(object)'],   # XXX not implemented
     'gc_identityhash':          [PushAllArgs, 'call int32 [mscorlib]System.Runtime.CompilerServices.RuntimeHelpers::GetHashCode(object)'],
     'oostring':                 [OOString],

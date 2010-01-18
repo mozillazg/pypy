@@ -997,3 +997,16 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
                 return ootype.NULL
         res = self.interpret(fn_mix_null, [False])
         assert res is ootype.NULL
+
+    def test_getsuperclassof(self):
+        A = ootype.Instance("A", ootype.ROOT)
+        B = ootype.Instance("B", A)
+        clsA = ootype.runtimeClass(A)
+        clsB = ootype.runtimeClass(B)
+
+        def fn(flag):
+            cls = flag and clsA or clsB
+            return ootype.getsuperclassof(cls) is clsA
+
+        res = self.interpret(fn, [False], backendopt=False)
+        assert res

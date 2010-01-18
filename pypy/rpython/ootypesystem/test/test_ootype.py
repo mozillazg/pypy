@@ -377,6 +377,17 @@ def test_subclassof():
         1, 1, 1,
         ]
 
+def test_getsuperclassof():
+    A = Instance("A", ROOT)
+    B = Instance("B", A)
+    C = Instance("C", B)
+    clsA = runtimeClass(A)
+    clsB = runtimeClass(B)
+    clsC = runtimeClass(C)
+    assert getsuperclassof(clsC) is clsB
+    assert getsuperclassof(clsB) is clsA
+    assert getsuperclassof(clsA) is runtimeClass(ROOT)
+
 def test_static_method_equality():
     SM = StaticMethod([], Signed)
     SM1 = StaticMethod([], Signed)
