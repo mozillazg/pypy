@@ -33,7 +33,7 @@ class ExecutionContext(object):
 
     # JIT: when tracing (but not when blackholing!), the following
     # self.w_tracefunc should be a constant None
-    # frame.is_being_profiled should be False for virtual frames
+    # we should not profile virtual frames
 
     # bind it here, so tests can overwrite it
     _we_are_jitted = staticmethod(jit.we_are_jitted)
@@ -77,14 +77,9 @@ class ExecutionContext(object):
 
     def leave(self, frame):
         try:
-            # below we need to check if is_being_profiled is set, instead
-            # of profilefunc, since when jitted we have profilefunc, but not
-            # is_being_profiled
-            if frame.is_being_profiled:
-                self._trace(frame, TRACE_LEAVEFRAME, self.space.w_None)
-                nextframe = frame.f_backref()
-                if nextframe is not None:
-                    nextframe.is_being_profiled = True
+            if not self._we_are_jitted():
+                if self.profilefunc is not None:
+                    self._trace(frame, TRACE_LEAVEFRAME, self.space.w_None)
         finally:
             self.topframeref = frame.f_backref
             self.framestackdepth -= 1
@@ -156,20 +151,10 @@ class ExecutionContext(object):
             return lst
         # coroutine: I think this is all, folks!
 
-
-    def get_builtin(self):
-        frame = self.gettopframe_nohidden()
-        if frame is not None:
-            return frame.builtin
-        else:
-            return self.space.builtin
-
     def c_call_trace(self, frame, w_func):
         "Profile the call of a builtin function"
         if self._we_are_jitted():
             return
-        if self.profilefunc is None:
-            frame.is_being_profiled = False
         else:
             self._trace(frame, TRACE_C_CALL, w_func)
 
@@ -177,8 +162,6 @@ class ExecutionContext(object):
         "Profile the return from a builtin function"
         if self._we_are_jitted():
             return
-        if self.profilefunc is None:
-            frame.is_being_profiled = False
         else:
             self._trace(frame, TRACE_C_RETURN, w_retval)
 
@@ -186,18 +169,14 @@ class ExecutionContext(object):
         "Profile function called upon OperationError."
         if self._we_are_jitted():
             return
-        if self.profilefunc is None:
-            frame.is_being_profiled = False
         else:
             self._trace(frame, TRACE_C_EXCEPTION, w_exc)
 
     def call_trace(self, frame):
         "Trace the call of a function"
-        if (self.w_tracefunc is not None or
-           (not self._we_are_jitted() and self.profilefunc is not None)):
-            self._trace(frame, TRACE_CALL, self.space.w_None)
-            if self.profilefunc:
-                frame.is_being_profiled = True
+        if not self._we_are_jitted():
+            if (self.w_tracefunc is not None or self.profilefunc is not None):
+                self._trace(frame, TRACE_CALL, self.space.w_None)
 
     def return_trace(self, frame, w_retval):
         "Trace the return from a function"
@@ -263,9 +242,6 @@ class ExecutionContext(object):
         if func is not None:
             if w_arg is None:
                 raise ValueError("Cannot call setllprofile with real None")
-            topframe = self.gettopframe_nohidden()
-            if topframe is not None:
-                topframe.is_being_profiled = True
         self.profilefunc = func
         self.w_profilefuncarg = w_arg
 

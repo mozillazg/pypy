@@ -21,7 +21,6 @@ class MockExecutionContext(ExecutionContext):
 class MockFrame(object):
     w_f_trace         = None
     last_exception    = None
-    is_being_profiled = False
     
     def hide(self):
         return False
@@ -57,3 +56,11 @@ class TestProfiling(object):
         ec.leave_jit()
         ec.leave(frame)
         assert events == [(TRACE_CALL, frame), (TRACE_RETURN, frame)]
+
+    def test_recursive_call(self):
+        events = []
+        def profilefunc(space, ignored, frame, event, w_arg):
+            events.append((event, frame))
+        
+        ec = MockExecutionContext(self.space)
+                
