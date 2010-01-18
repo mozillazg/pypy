@@ -8,7 +8,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter import pytraceback
 import opcode
-from pypy.rlib.objectmodel import we_are_translated, instantiate
+from pypy.rlib.objectmodel import instantiate
 from pypy.rlib.jit import hint
 from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib import jit
@@ -46,7 +46,6 @@ class PyFrame(eval.Frame):
     instr_lb                 = 0
     instr_ub                 = -1
     instr_prev               = -1
-    is_being_profiled        = False
 
     def __init__(self, space, code, w_globals, closure):
         self = hint(self, access_directly=True, fresh_virtualizable=True)

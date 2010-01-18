@@ -912,7 +912,8 @@ class __extend__(pyframe.PyFrame):
         arguments = f.popvalues(n_arguments)
         args = f.argument_factory(arguments, keywords, keywords_w, w_star, w_starstar)
         w_function  = f.popvalue()
-        if f.is_being_profiled and is_builtin_code(w_function):
+        if (f.space.getexecutioncontext().profilefunc is not None and
+            is_builtin_code(w_function)):
             w_result = f.space.call_args_and_c_profile(f, w_function, args)
         else:
             w_result = f.space.call_args(w_function, args)
