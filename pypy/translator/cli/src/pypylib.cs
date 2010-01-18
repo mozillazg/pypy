@@ -113,9 +113,9 @@ namespace pypy.runtime
     public delegate void LoopDelegate(InputArgs args);
 
     public class InputArgs {
-      public int[] ints = new int[256];
-      public double[] floats = new double[256];
-      public object[] objs = new object[256];
+      public int[] ints = new int[10000];
+      public double[] floats = new double[10000];
+      public object[] objs = new object[10000];
       public object exc_value = null;
       public int failed_op = -1;
 
