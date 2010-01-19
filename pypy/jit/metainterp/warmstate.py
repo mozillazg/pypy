@@ -258,7 +258,7 @@ class WarmEnterState(object):
                 if vinfo is not None:
                     vinfo.reset_vable_token(virtualizable)
                 loop_token = fail_descr.handle_fail(metainterp_sd)
-
+       
         maybe_compile_and_run._dont_inline_ = True
         self.maybe_compile_and_run = maybe_compile_and_run
         return maybe_compile_and_run
