@@ -42,16 +42,10 @@ class arguments(object):
         argtypes = unrolling_iterable(self.argtypes)
         def wrapped(self, orgpc):
             args = (self, )
-            #if DEBUG >= DEBUG_DETAILED:
-            #    s = '%s:%d\t%s' % (self.jitcode.name, orgpc, name)
-            #else:
-            s = ''
             for argspec in argtypes:
                 if argspec == "box":
                     box = self.load_arg()
                     args += (box, )
-                    #if DEBUG >= DEBUG_DETAILED:
-                    #    s += '\t' + box.repr_rpython()
                 elif argspec == "constbox":
                     args += (self.load_const_arg(), )
                 elif argspec == "int":
@@ -82,12 +76,7 @@ class arguments(object):
                     args += (methdescr, )
                 else:
                     assert 0, "unknown argtype declaration: %r" % (argspec,)
-            #if DEBUG >= DEBUG_DETAILED:
-            #    debug_print(s)
             val = func(*args)
-            #if DEBUG >= DEBUG_DETAILED:
-            #    reprboxes = ' '.join([box.repr_rpython() for box in self.env])
-            #    debug_print('  \x1b[34menv=[%s]\x1b[0m' % (reprboxes,))
             if val is None:
                 val = False
             return val
@@ -680,6 +669,9 @@ class MIFrame(object):
             greenkey = varargs[1:num_green_args + 1]
             if warmrunnerstate.can_inline_callable(greenkey):
                 return self.perform_call(portal_code, varargs[1:], greenkey)
+            token = warmrunnerstate.get_assembler_token(greenkey)
+            if token is not None:
+                return self.metainterp.direct_assembler_call(varargs, token)
         return self.do_residual_call(varargs, descr=calldescr, exc=True)
 
     @arguments("descr", "varargs")
@@ -2000,6 +1992,15 @@ class MetaInterp(object):
                 max_key = key
         return max_key
 
+    def direct_assembler_call(self, varargs, token):
+        """ Generate a direct call to assembler for portal entry point.
+        """
+        num_green_args = self.staticdata.num_green_args
+        assert self.staticdata.virtualizable_info is None # XXX
+        args = varargs[num_green_args + 1:]
+        xxx
+        self.framestack[-1].execute_varargs(rop.CALL_ASSEMBLER, args,
+                                            descr=token, exc=False)
 
 class GenerateMergePoint(Exception):
     def __init__(self, args, target_loop_token):
