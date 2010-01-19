@@ -572,6 +572,7 @@ class WarmRunnerDesc:
                     for _, name, _ in portalfunc_ARGS:
                         v = getattr(e, name)
                         args = args + (v,)
+                    # XXX we need to get back to the general portal no? we got new green args as well
                     self.state.set_future_values(*args)
                 except self.DoneWithThisFrameVoid:
                     assert result_kind == 'void'
