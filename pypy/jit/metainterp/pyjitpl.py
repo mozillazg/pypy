@@ -663,6 +663,7 @@ class MIFrame(object):
     @arguments("descr", "varargs")
     def opimpl_recursive_call(self, calldescr, varargs):
         warmrunnerstate = self.metainterp.staticdata.state
+        token = None
         if warmrunnerstate.inlining:
             num_green_args = self.metainterp.staticdata.num_green_args
             portal_code = self.metainterp.staticdata.portal_code
@@ -670,9 +671,12 @@ class MIFrame(object):
             if warmrunnerstate.can_inline_callable(greenkey):
                 return self.perform_call(portal_code, varargs[1:], greenkey)
             token = warmrunnerstate.get_assembler_token(greenkey)
-            if token is not None:
-                return self.metainterp.direct_assembler_call(varargs, token)
-        return self.do_residual_call(varargs, descr=calldescr, exc=True)
+        call_position = len(self.metainterp.history.operations)
+        res = self.do_residual_call(varargs, descr=calldescr, exc=True)
+        if token is not None:
+            # this will substitute the residual call with assembler call
+            self.metainterp.direct_assembler_call(varargs, token, call_position)
+        return res
 
     @arguments("descr", "varargs")
     def opimpl_residual_call_noexception(self, calldescr, varargs):
@@ -1992,15 +1996,15 @@ class MetaInterp(object):
                 max_key = key
         return max_key
 
-    def direct_assembler_call(self, varargs, token):
+    def direct_assembler_call(self, varargs, token, call_position):
         """ Generate a direct call to assembler for portal entry point.
         """
+        assert not self.is_blackholing() # XXX
         num_green_args = self.staticdata.num_green_args
         assert self.staticdata.virtualizable_info is None # XXX
         args = varargs[num_green_args + 1:]
-        xxx
-        self.framestack[-1].execute_varargs(rop.CALL_ASSEMBLER, args,
-                                            descr=token, exc=False)
+        self.history.substitute_operation(call_position, rop.CALL_ASSEMBLER,
+                                          args, descr=token)
 
 class GenerateMergePoint(Exception):
     def __init__(self, args, target_loop_token):

@@ -810,6 +810,10 @@ class History(object):
         op = ResOperation(opnum, argboxes, resbox, descr)
         self.operations.append(op)
         return op
+    def substitute_operation(self, position, opnum, argboxes, descr=None):
+        resbox = self.operations[position].result
+        op = ResOperation(opnum, argboxes, resbox, descr)
+        self.operations[position] = op
 
 # ____________________________________________________________
 
