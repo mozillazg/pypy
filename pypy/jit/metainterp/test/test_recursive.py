@@ -713,7 +713,27 @@ class RecursiveTests:
         self.check_history(call_assembler=1)        
 
     def test_directly_call_assembler_fail_guard(self):
-        pass
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
+                           get_printable_location = lambda codeno : str(codeno),
+                           can_inline = lambda codeno : False)
+
+        def portal(codeno, k):
+            i = 0
+            while i < 10:
+                driver.can_enter_jit(codeno=codeno, i=i, k=k)
+                driver.jit_merge_point(codeno=codeno, i=i, k=k)
+                if codeno == 2:
+                    k += portal(1, k)
+                elif k > 40:
+                    if i % 2:
+                        k += 1
+                    else:
+                        k += 2
+                k += 1
+                i += 1
+            return k
+
+        self.meta_interp(portal, [2, 0], inline=True)
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass

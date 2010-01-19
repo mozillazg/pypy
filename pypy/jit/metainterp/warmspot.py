@@ -563,31 +563,35 @@ class WarmRunnerDesc:
 
         def assembler_call_helper(failindex):
             fail_descr = self.cpu.get_fail_descr_from_number(failindex)
-            try:
-                while True:
+            while True:
+                try:
                     loop_token = fail_descr.handle_fail(self.metainterp_sd)
-                    xxx
-            except self.ContinueRunningNormally, e:
-                xxx
-            except self.DoneWithThisFrameVoid:
-                assert result_kind == 'void'
-                return
-            except self.DoneWithThisFrameInt, e:
-                assert result_kind == 'int'
-                return lltype.cast_primitive(RESULT, e.result)
-            except self.DoneWithThisFrameRef, e:
-                assert result_kind == 'ref'
-                return ts.cast_from_ref(RESULT, e.result)
-            except self.DoneWithThisFrameFloat, e:
-                assert result_kind == 'float'
-                return e.result
-            except self.ExitFrameWithExceptionRef, e:
-                value = ts.cast_to_baseclass(e.value)
-                if not we_are_translated():
-                    raise LLException(ts.get_typeptr(value), value)
-                else:
-                    value = cast_base_ptr_to_instance(Exception, value)
-                    raise Exception, value
+                    fail_descr = self.cpu.execute_token(loop_token)
+                except self.ContinueRunningNormally, e:
+                    args = ()
+                    for _, name, _ in portalfunc_ARGS:
+                        v = getattr(e, name)
+                        args = args + (v,)
+                    self.state.set_future_values(*args)
+                except self.DoneWithThisFrameVoid:
+                    assert result_kind == 'void'
+                    return
+                except self.DoneWithThisFrameInt, e:
+                    assert result_kind == 'int'
+                    return lltype.cast_primitive(RESULT, e.result)
+                except self.DoneWithThisFrameRef, e:
+                    assert result_kind == 'ref'
+                    return ts.cast_from_ref(RESULT, e.result)
+                except self.DoneWithThisFrameFloat, e:
+                    assert result_kind == 'float'
+                    return e.result
+                except self.ExitFrameWithExceptionRef, e:
+                    value = ts.cast_to_baseclass(e.value)
+                    if not we_are_translated():
+                        raise LLException(ts.get_typeptr(value), value)
+                    else:
+                        value = cast_base_ptr_to_instance(Exception, value)
+                        raise Exception, value
 
         self.cpu.assembler_helper_ptr = self.helper_func(
             self.PTR_ASSEMBLER_HELPER_FUNCTYPE,
