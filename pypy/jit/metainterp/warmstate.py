@@ -194,7 +194,7 @@ class WarmEnterState(object):
         ContinueRunningNormally = self.warmrunnerdesc.ContinueRunningNormally
         num_green_args = self.warmrunnerdesc.num_green_args
         get_jitcell = self.make_jitcell_getter()
-        set_future_values = self.make_set_future_values()
+        self.set_future_values = self.make_set_future_values()
         self.make_jitdriver_callbacks()
         confirm_enter_jit = self.confirm_enter_jit
 
@@ -245,7 +245,7 @@ class WarmEnterState(object):
                     return
                 # machine code was already compiled for these greenargs
                 # get the assembler and fill in the boxes
-                set_future_values(*args[num_green_args:])
+                self.set_future_values(*args[num_green_args:])
                 loop_token = cell.entry_loop_token
 
             # ---------- execute assembler ----------
