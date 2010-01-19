@@ -686,7 +686,31 @@ class RecursiveTests:
         self.check_history(call_assembler=1)
 
     def test_directly_call_assembler_raise(self):
-        pass
+
+        class MyException(Exception):
+            def __init__(self, x):
+                self.x = x
+        
+        driver = JitDriver(greens = ['codeno'], reds = ['i'],
+                           get_printable_location = lambda codeno : str(codeno),
+                           can_inline = lambda codeno : False)
+
+        def portal(codeno):
+            i = 0
+            while i < 10:
+                driver.can_enter_jit(codeno = codeno, i = i)
+                driver.jit_merge_point(codeno = codeno, i = i)
+                if codeno == 2:
+                    try:
+                        portal(1)
+                    except MyException, me:
+                        i += me.x
+                i += 1
+            if codeno == 1:
+                raise MyException(1)
+
+        self.meta_interp(portal, [2], inline=True)
+        self.check_history(call_assembler=1)        
 
     def test_directly_call_assembler_fail_guard(self):
         pass

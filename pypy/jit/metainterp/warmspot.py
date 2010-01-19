@@ -567,6 +567,8 @@ class WarmRunnerDesc:
                 while True:
                     loop_token = fail_descr.handle_fail(self.metainterp_sd)
                     xxx
+            except self.ContinueRunningNormally, e:
+                xxx
             except self.DoneWithThisFrameVoid:
                 assert result_kind == 'void'
                 return
@@ -580,7 +582,6 @@ class WarmRunnerDesc:
                 assert result_kind == 'float'
                 return e.result
             except self.ExitFrameWithExceptionRef, e:
-                xxx
                 value = ts.cast_to_baseclass(e.value)
                 if not we_are_translated():
                     raise LLException(ts.get_typeptr(value), value)

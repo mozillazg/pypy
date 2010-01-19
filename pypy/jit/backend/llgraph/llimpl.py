@@ -817,8 +817,9 @@ class Frame(object):
             self._may_force = -1
 
     def op_call_assembler(self, loop_token, *args):
-        assert not self._forced
-        self._may_force = self.opindex
+        global _last_exception
+        #assert not self._forced
+        #self._may_force = self.opindex
         inpargs = _from_opaque(loop_token._llgraph_compiled_version).inputargs
         for i, inparg in enumerate(inpargs):
             TYPE = inparg.concretetype
@@ -832,7 +833,11 @@ class Frame(object):
                 raise Exception("Nonsense type %s" % TYPE)
         
         failindex = self.cpu._execute_token(loop_token)
-        return self.cpu.assembler_helper_ptr(failindex)
+        try:
+            return self.cpu.assembler_helper_ptr(failindex)
+        except LLException, lle:
+            assert _last_exception is None, "exception left behind"
+            _last_exception = lle
 
     def op_guard_not_forced(self, descr):
         forced = self._forced
