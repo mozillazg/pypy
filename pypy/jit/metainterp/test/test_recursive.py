@@ -733,7 +733,8 @@ class RecursiveTests:
                 i += 1
             return k
 
-        self.meta_interp(portal, [2, 0], inline=True)
+        res = self.meta_interp(portal, [2, 0], inline=True)
+        assert res == portal(2, 0)
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
