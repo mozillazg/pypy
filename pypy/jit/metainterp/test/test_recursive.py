@@ -646,7 +646,7 @@ class RecursiveTests:
                 result += f('-c-----------l-', i+100)
         self.meta_interp(g, [10], backendopt=True)
         self.check_aborted_count(1)
-        self.check_history(call_may_force=1, call=0)
+        self.check_history(call_assembler=1, call=0)
         self.check_tree_loop_count(3)
 
     def test_directly_call_assembler(self):
@@ -664,6 +664,32 @@ class RecursiveTests:
                 i += 1
 
         self.meta_interp(portal, [2], inline=True)
+        self.check_history(call_assembler=1)
+
+    def test_directly_call_assembler_return(self):
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
+                           get_printable_location = lambda codeno : str(codeno),
+                           can_inline = lambda codeno : False)
+
+        def portal(codeno):
+            i = 0
+            k = codeno
+            while i < 10:
+                driver.can_enter_jit(codeno = codeno, i = i, k = k)
+                driver.jit_merge_point(codeno = codeno, i = i, k = k)
+                if codeno == 2:
+                    k = portal(1)
+                i += 1
+            return k
+
+        self.meta_interp(portal, [2], inline=True)
+        self.check_history(call_assembler=1)
+
+    def test_directly_call_assembler_raise(self):
+        pass
+
+    def test_directly_call_assembler_fail_guard(self):
+        pass
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
