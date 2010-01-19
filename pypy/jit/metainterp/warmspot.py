@@ -443,7 +443,8 @@ class WarmRunnerDesc:
          self.PTR_JIT_ENTER_FUNCTYPE) = self.cpu.ts.get_FuncType(ALLARGS, lltype.Void)
         (self.PORTAL_FUNCTYPE,
          self.PTR_PORTAL_FUNCTYPE) = self.cpu.ts.get_FuncType(ALLARGS, RESTYPE)
-        
+        (_, self.PTR_ASSEMBLER_HELPER_FUNCTYPE) = self.cpu.ts.get_FuncType(
+            [lltype.Signed], RESTYPE)
 
     def rewrite_can_enter_jit(self):
         FUNC = self.JIT_ENTER_FUNCTYPE
@@ -559,6 +560,37 @@ class WarmRunnerDesc:
         
         self.portal_runner_ptr = self.helper_func(self.PTR_PORTAL_FUNCTYPE,
                                                   ll_portal_runner)
+
+        def assembler_call_helper(failindex):
+            fail_descr = self.cpu.get_fail_descr_from_number(failindex)
+            try:
+                while True:
+                    loop_token = fail_descr.handle_fail(self.metainterp_sd)
+                    xxx
+            except self.DoneWithThisFrameVoid:
+                assert result_kind == 'void'
+                return
+            except self.DoneWithThisFrameInt, e:
+                assert result_kind == 'int'
+                return lltype.cast_primitive(RESULT, e.result)
+            except self.DoneWithThisFrameRef, e:
+                assert result_kind == 'ref'
+                return ts.cast_from_ref(RESULT, e.result)
+            except self.DoneWithThisFrameFloat, e:
+                assert result_kind == 'float'
+                return e.result
+            except self.ExitFrameWithExceptionRef, e:
+                xxx
+                value = ts.cast_to_baseclass(e.value)
+                if not we_are_translated():
+                    raise LLException(ts.get_typeptr(value), value)
+                else:
+                    value = cast_base_ptr_to_instance(Exception, value)
+                    raise Exception, value
+
+        self.cpu.assembler_helper_ptr = self.helper_func(
+            self.PTR_ASSEMBLER_HELPER_FUNCTYPE,
+            assembler_call_helper)
 
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr

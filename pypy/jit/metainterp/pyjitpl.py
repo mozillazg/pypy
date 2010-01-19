@@ -671,7 +671,9 @@ class MIFrame(object):
             if warmrunnerstate.can_inline_callable(greenkey):
                 return self.perform_call(portal_code, varargs[1:], greenkey)
             token = warmrunnerstate.get_assembler_token(greenkey)
-        call_position = len(self.metainterp.history.operations)
+        call_position = 0
+        if token is not None:
+            call_position = len(self.metainterp.history.operations)
         res = self.do_residual_call(varargs, descr=calldescr, exc=True)
         if token is not None:
             # this will substitute the residual call with assembler call
