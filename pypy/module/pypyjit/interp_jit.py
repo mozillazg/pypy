@@ -47,6 +47,11 @@ def get_jitcell_at(next_instr, bytecode):
 def set_jitcell_at(newcell, next_instr, bytecode):
     bytecode.jit_cells[next_instr] = newcell
 
+def confirm_enter_jit(next_instr, bytecode, frame, ec):
+    return (frame.w_f_trace is None and
+            ec.profilefunc is None and
+            ec.w_tracefunc is None)
+
 
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
@@ -65,7 +70,8 @@ pypyjitdriver = PyPyJitDriver(can_inline = can_inline,
                               get_printable_location = get_printable_location,
                               leave = leave,
                               get_jitcell_at = get_jitcell_at,
-                              set_jitcell_at = set_jitcell_at)
+                              set_jitcell_at = set_jitcell_at,
+                              confirm_enter_jit = confirm_enter_jit)
 
 class __extend__(PyFrame):
 
