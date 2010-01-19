@@ -187,7 +187,10 @@ class OOTypeHelper(TypeSystemHelper):
 
     def cls_of_box(self, cpu, box):
         obj = box.getref(ootype.ROOT)
-        oocls = ootype.classof(obj)
+        if not obj:
+            oocls = ootype.runtimeClass(ootype.ROOT)
+        else:
+            oocls = ootype.classof(obj)
         return history.ConstObj(ootype.cast_to_object(oocls))
 
     def subclassOf(self, cpu, clsbox1, clsbox2):
