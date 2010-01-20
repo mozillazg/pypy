@@ -86,6 +86,7 @@ class Assembler386(object):
         self.malloc_array_func_addr = 0
         self.malloc_str_func_addr = 0
         self.malloc_unicode_func_addr = 0
+        self.assembler_helper_adr = 0
         self.fail_boxes_int = values_array(lltype.Signed, failargs_limit)
         self.fail_boxes_ptr = values_array(llmemory.GCREF, failargs_limit)
         self.fail_boxes_float = values_array(lltype.Float, failargs_limit)
@@ -118,6 +119,10 @@ class Assembler386(object):
                 ll_new_unicode = gc_ll_descr.get_funcptr_for_newunicode()
                 self.malloc_unicode_func_addr = rffi.cast(lltype.Signed,
                                                           ll_new_unicode)
+            self.assembler_helper_adr = self.cpu.cast_ptr_to_int(
+                self.cpu.assembler_helper_ptr)
+                
+        
             # done
             # we generate the loop body in 'mc'
             # 'mc2' is for guard recovery code
@@ -1193,7 +1198,7 @@ class Assembler386(object):
             tmp = ecx
         else:
             tmp = eax
-            
+        
         self._emit_call(x, arglocs, 2, tmp=tmp)
 
         if isinstance(resloc, MODRM64):
@@ -1213,6 +1218,17 @@ class Assembler386(object):
         self.genop_call(op, arglocs, result_loc)
         self.mc.CMP(mem(ebp, FORCE_INDEX_OFS), imm(0))
         return self.implement_guard(addr, self.mc.JL)
+
+    def genop_guard_call_assembler(self, op, guard_op, addr,
+                                   arglocs, result_loc):
+        self._emit_call(rel32(op.descr._x86_bootstrap_code), arglocs, 2,
+                        tmp=eax)
+        self._emit_call(rel32(self.assembler_helper_adr), [eax, imm(0)], 0,
+                        tmp=eax)
+        if isinstance(result_loc, MODRM64):
+            self.mc.FSTP(result_loc)
+        else:
+            assert result_loc is eax or result_loc is None
 
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
         # use 'mc._mc' directly instead of 'mc', to avoid
@@ -1258,7 +1274,7 @@ class Assembler386(object):
 
     def not_implemented_op_guard(self, op, guard_op,
                                  failaddr, arglocs, resloc):
-        msg = "not implemented operation (guard): %s" % guard_op.getopname()
+        msg = "not implemented operation (guard): %s" % op.getopname()
         print msg
         raise NotImplementedError(msg)
 

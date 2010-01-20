@@ -318,7 +318,7 @@ class RegAlloc(object):
         self.assembler.regalloc_perform_discard(op, arglocs)
 
     def can_merge_with_next_guard(self, op, i, operations):
-        if op.opnum == rop.CALL_MAY_FORCE:
+        if op.opnum == rop.CALL_MAY_FORCE or op.opnum == rop.CALL_ASSEMBLER:
             assert operations[i + 1].opnum == rop.GUARD_NOT_FORCED
             return True
         if not op.is_comparison():
@@ -639,6 +639,14 @@ class RegAlloc(object):
         assert guard_op is not None
         self._consider_call(op, guard_op)
 
+    def consider_call_assembler(self, op, guard_op):
+        descr = op.descr
+        assert isinstance(descr, LoopToken)
+        size = descr._calldescr.get_result_size(self.translate_support_code)
+        self._call(op, [imm(size)] +
+                   [self.loc(arg) for arg in op.args],
+                   guard_not_forced_op=guard_op)
+        
     def consider_cond_call_gc_wb(self, op):
         assert op.result is None
         arglocs = [self.loc(arg) for arg in op.args]
@@ -977,7 +985,7 @@ for name, value in RegAlloc.__dict__.iteritems():
         name = name[len('consider_'):]
         num = getattr(rop, name.upper())
         if (ResOperation(num, [], None).is_comparison()
-            or num == rop.CALL_MAY_FORCE):
+            or num == rop.CALL_MAY_FORCE or num == rop.CALL_ASSEMBLER):
             oplist_with_guard[num] = value
             oplist[num] = add_none_argument(value)
         else:
