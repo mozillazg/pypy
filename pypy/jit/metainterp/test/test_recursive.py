@@ -744,24 +744,77 @@ class RecursiveTests:
         class Frame(object):
             _virtualizable2_ = ['thing']
         
-        driver = JitDriver(greens = ['codeno'], reds = ['frame'],
+        driver = JitDriver(greens = ['codeno'], reds = ['frame', 'i'],
                            virtualizables = ['frame'],
                            get_printable_location = lambda codeno : str(codeno),
                            can_inline = lambda codeno : False)
 
-        def portal(codeno):
+        def main(codeno):
             frame = Frame()
             frame.thing = Thing(0)
-            while frame.thing.val < 10:
-                driver.can_enter_jit(frame=frame, codeno=codeno)
-                driver.jit_merge_point(frame=frame, codeno=codeno)
+            portal(codeno, frame)
+            return frame.thing.val
+
+        def portal(codeno, frame):
+            i = 0
+            while i < 10:
+                driver.can_enter_jit(frame=frame, codeno=codeno, i=i)
+                driver.jit_merge_point(frame=frame, codeno=codeno, i=i)
+                nextval = frame.thing.val
                 if codeno == 0:
                     subframe = Frame()
-                    subframe.thing = Thing(frame.thing.val)
-                    portal(1)
-                frame.thing = Thing(frame.thing.val + 1)
+                    subframe.thing = Thing(nextval)
+                    nextval = portal(1, subframe)
+                frame.thing = Thing(nextval + 1)
+                i += 1
+            return frame.thing.val
 
-        self.meta_interp(portal, [0], inline=True)
+        res = self.meta_interp(main, [0], inline=True)
+        assert res == main(0)
+
+    def test_directly_call_assembler_virtualizable_force(self):
+        class Thing(object):
+            def __init__(self, val):
+                self.val = val
+        
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+        
+        driver = JitDriver(greens = ['codeno'], reds = ['frame', 'i'],
+                           virtualizables = ['frame'],
+                           get_printable_location = lambda codeno : str(codeno),
+                           can_inline = lambda codeno : False)
+        class SomewhereElse(object):
+            pass
+
+        somewhere_else = SomewhereElse()
+
+        def main(codeno):
+            frame = Frame()
+            somewhere_else.frame = frame
+            frame.thing = Thing(0)
+            portal(codeno, frame)
+            return frame.thing.val
+
+        def portal(codeno, frame):
+            i = 0
+            while i < 10:
+                driver.can_enter_jit(frame=frame, codeno=codeno, i=i)
+                driver.jit_merge_point(frame=frame, codeno=codeno, i=i)
+                nextval = frame.thing.val
+                if codeno == 0:
+                    subframe = Frame()
+                    subframe.thing = Thing(nextval)
+                    nextval = portal(1, subframe)
+                elif frame.thing.val > 40:
+                    somewhere_else.frame.thing = Thing(13)
+                    nextval = 13
+                frame.thing = Thing(nextval + 1)
+                i += 1
+            return frame.thing.val
+
+        res = self.meta_interp(main, [0], inline=True)
+        assert res == main(0)
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
