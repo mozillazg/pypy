@@ -140,7 +140,7 @@ class CannotInlineCanEnterJit(JitException):
 
 # ____________________________________________________________
 
-class WarmRunnerDesc:
+class WarmRunnerDesc(object):
 
     def __init__(self, translator, policy=None, backendopt=True, CPUClass=None,
                  optimizer=None, **kwds):
@@ -557,7 +557,8 @@ class WarmRunnerDesc:
                     else:
                         value = cast_base_ptr_to_instance(Exception, value)
                         raise Exception, value
-        
+
+        self.ll_portal_runner = ll_portal_runner # for debugging
         self.portal_runner_ptr = self.helper_func(self.PTR_PORTAL_FUNCTYPE,
                                                   ll_portal_runner)
 
@@ -593,6 +594,7 @@ class WarmRunnerDesc:
                         value = cast_base_ptr_to_instance(Exception, value)
                         raise Exception, value
 
+        self.assembler_call_helper = assembler_call_helper # for debugging
         self.cpu.assembler_helper_ptr = self.helper_func(
             self.PTR_ASSEMBLER_HELPER_FUNCTYPE,
             assembler_call_helper)
