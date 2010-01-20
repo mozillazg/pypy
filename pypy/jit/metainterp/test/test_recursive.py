@@ -736,8 +736,36 @@ class RecursiveTests:
         res = self.meta_interp(portal, [2, 0], inline=True)
         assert res == portal(2, 0)
 
+    def test_directly_call_assembler_virtualizable(self):
+        class Thing(object):
+            def __init__(self, val):
+                self.val = val
+        
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+        
+        driver = JitDriver(greens = ['codeno'], reds = ['frame'],
+                           virtualizables = ['frame'],
+                           get_printable_location = lambda codeno : str(codeno),
+                           can_inline = lambda codeno : False)
+
+        def portal(codeno):
+            frame = Frame()
+            frame.thing = Thing(0)
+            while frame.thing.val < 10:
+                driver.can_enter_jit(frame=frame, codeno=codeno)
+                driver.jit_merge_point(frame=frame, codeno=codeno)
+                if codeno == 0:
+                    subframe = Frame()
+                    subframe.thing = Thing(frame.thing.val)
+                    portal(1)
+                frame.thing = Thing(frame.thing.val + 1)
+
+        self.meta_interp(portal, [0], inline=True)
+
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
 
 class TestOOtype(RecursiveTests, OOJitMixin):
     pass
+    
