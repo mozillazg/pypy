@@ -444,7 +444,7 @@ class WarmRunnerDesc(object):
         (self.PORTAL_FUNCTYPE,
          self.PTR_PORTAL_FUNCTYPE) = self.cpu.ts.get_FuncType(ALLARGS, RESTYPE)
         (_, self.PTR_ASSEMBLER_HELPER_FUNCTYPE) = self.cpu.ts.get_FuncType(
-            [lltype.Signed], RESTYPE)
+            [lltype.Signed, llmemory.GCREF], RESTYPE)
 
     def rewrite_can_enter_jit(self):
         FUNC = self.JIT_ENTER_FUNCTYPE
@@ -562,10 +562,16 @@ class WarmRunnerDesc(object):
         self.portal_runner_ptr = self.helper_func(self.PTR_PORTAL_FUNCTYPE,
                                                   ll_portal_runner)
 
-        def assembler_call_helper(failindex):
+        vinfo = self.metainterp_sd.virtualizable_info
+
+        def assembler_call_helper(failindex, virtualizable):
             fail_descr = self.cpu.get_fail_descr_from_number(failindex)
             while True:
                 try:
+                    if vinfo is not None:
+                        virtualizable = lltype.cast_opaque_ptr(
+                            vinfo.VTYPEPTR, virtualizable)
+                        vinfo.reset_vable_token(virtualizable)
                     loop_token = fail_descr.handle_fail(self.metainterp_sd)
                     fail_descr = self.cpu.execute_token(loop_token)
                 except self.ContinueRunningNormally, e:
@@ -598,6 +604,12 @@ class WarmRunnerDesc(object):
         self.cpu.assembler_helper_ptr = self.helper_func(
             self.PTR_ASSEMBLER_HELPER_FUNCTYPE,
             assembler_call_helper)
+        # XXX a bit ugly sticking
+        if vinfo is not None:
+            self.cpu.index_of_virtualizable = (vinfo.index_of_virtualizable -
+                                               self.num_green_args)
+        else:
+            self.cpu.index_of_virtualizable = -1
 
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr
