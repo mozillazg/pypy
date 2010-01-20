@@ -675,6 +675,13 @@ class MIFrame(object):
         if token is not None:
             call_position = len(self.metainterp.history.operations)
         res = self.do_residual_call(varargs, descr=calldescr, exc=True)
+        # XXX fix the call position, <UGLY!>
+        while True:
+            op = self.metainterp.history.operations[call_position]
+            if op.opnum == rop.CALL or op.opnum == rop.CALL_MAY_FORCE:
+                break
+            call_position += 1
+        # </UGLY!>
         if token is not None:
             # this will substitute the residual call with assembler call
             self.metainterp.direct_assembler_call(varargs, token, call_position)
@@ -1357,7 +1364,7 @@ class MetaInterp(object):
 
     def create_empty_history(self):
         warmrunnerstate = self.staticdata.state
-        self.history = history.History(self.cpu)
+        self.history = history.History()
         self.staticdata.stats.set_history(self.history)
 
     def _all_constants(self, *boxes):
@@ -1746,7 +1753,7 @@ class MetaInterp(object):
         self.in_recursion = -1 # always one portal around
         inputargs_and_holes = self.cpu.make_boxes_from_latest_values(resumedescr)
         if must_compile:
-            self.history = history.History(self.cpu)
+            self.history = history.History()
             self.history.inputargs = [box for box in inputargs_and_holes if box]
             self.staticdata.profiler.start_tracing()
         else:
@@ -1958,6 +1965,23 @@ class MetaInterp(object):
                                             abox, ConstInt(j), itembox)
             assert i + 1 == len(self.virtualizable_boxes)
 
+    def gen_load_from_other_virtualizable(self, vbox):
+        vinfo = self.staticdata.virtualizable_info
+        boxes = []
+        assert vinfo is not None
+        for i in range(vinfo.num_static_extra_boxes):
+            descr = vinfo.static_field_descrs[i]
+            boxes.append(self.execute_and_record(rop.GETFIELD_GC, descr, vbox))
+        virtualizable = vinfo.unwrap_virtualizable_box(vbox)
+        for k in range(vinfo.num_arrays):
+            descr = vinfo.array_field_descrs[k]
+            abox = self.execute_and_record(rop.GETFIELD_GC, descr, vbox)
+            descr = vinfo.array_descrs[k]
+            for j in range(vinfo.get_array_length(virtualizable, k)):
+                boxes.append(self.execute_and_record(rop.GETARRAYITEM_GC, descr,
+                                                     abox, ConstInt(j)))
+        return boxes
+
     def replace_box(self, oldbox, newbox):
         for frame in self.framestack:
             boxes = frame.env
@@ -2003,10 +2027,15 @@ class MetaInterp(object):
         """
         assert not self.is_blackholing() # XXX
         num_green_args = self.staticdata.num_green_args
-        assert self.staticdata.virtualizable_info is None # XXX
         args = varargs[num_green_args + 1:]
-        self.history.substitute_operation(call_position, rop.CALL_ASSEMBLER,
-                                          args, descr=token)
+        resbox = self.history.operations[call_position].result
+        rest = self.history.slice_history_at(call_position)
+        if self.staticdata.virtualizable_info is not None:
+            vindex = self.staticdata.virtualizable_info.index_of_virtualizable
+            vbox = args[vindex - num_green_args]
+            args += self.gen_load_from_other_virtualizable(vbox)
+        self.history.record(rop.CALL_ASSEMBLER, args, resbox, descr=token)
+        self.history.operations += rest
 
 class GenerateMergePoint(Exception):
     def __init__(self, args, target_loop_token):
