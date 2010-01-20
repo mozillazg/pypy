@@ -1,7 +1,26 @@
 from pypy.objspace.std.dictmultiobject import IteratorImplementation
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject, _is_sane_hash
 from pypy.rlib.jit import purefunction_promote, hint, we_are_jitted, unroll_safe
-from pypy.rlib.rweakref import RWeakValueDictionary
+#from pypy.rlib.rweakref import RWeakValueDictionary
+
+import weakref
+class WeakValueDictionary:
+    def __init__(self):
+        self._dict = {}
+
+    def get(self, key):
+        wref = self._dict.get(key, None)
+        if wref is None:
+            return None
+        return wref()
+
+    def set(self, key, value):
+        if value is None:
+            self._dict.pop(key, None)
+        else:
+            #assert isinstance(value, self._valueclass)
+            self._dict[key] = weakref.ref(value)
+
 
 NUM_DIGITS = 4
 
@@ -17,7 +36,8 @@ class SharedStructure(object):
         self.keys = keys
         self.length = length
         self.back_struct = back_struct
-        other_structs = RWeakValueDictionary(SharedStructure)
+        #other_structs = RWeakValueDictionary(SharedStructure)
+        other_structs = WeakValueDictionary()
         self.other_structs = other_structs
         self.last_key = last_key
         self._size_estimate = length << NUM_DIGITS

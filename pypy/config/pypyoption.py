@@ -360,8 +360,7 @@ def set_pypy_opt_level(config, level):
 
     # extra optimizations with the JIT
     if level == 'jit':
-        if type_system != 'ootype':
-            config.objspace.std.suggest(withsharingdict=True)
+        config.objspace.std.suggest(withsharingdict=True)
         config.objspace.std.suggest(withcelldict=True)
         config.objspace.std.suggest(withinlineddict=True)
 
