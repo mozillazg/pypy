@@ -789,6 +789,9 @@ class RecursiveTests:
 
         somewhere_else = SomewhereElse()
 
+        def change(newthing):
+            somewhere_else.frame.thing = newthing
+
         def main(codeno):
             frame = Frame()
             somewhere_else.frame = frame
@@ -807,13 +810,14 @@ class RecursiveTests:
                     subframe.thing = Thing(nextval)
                     nextval = portal(1, subframe)
                 elif frame.thing.val > 40:
-                    somewhere_else.frame.thing = Thing(13)
+                    change(Thing(13))
                     nextval = 13
                 frame.thing = Thing(nextval + 1)
                 i += 1
             return frame.thing.val
 
-        res = self.meta_interp(main, [0], inline=True)
+        res = self.meta_interp(main, [0], inline=True,
+                               policy=StopAtXPolicy(change))
         assert res == main(0)
 
 class TestLLtype(RecursiveTests, LLJitMixin):
