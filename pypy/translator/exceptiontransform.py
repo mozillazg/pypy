@@ -298,30 +298,28 @@ class BaseExceptionTransformer(object):
         return need_exc_matching, n_gen_exc_checks
 
     def comes_from_last_exception(self, entrymap, link):
-        block = link.prevblock
-        v = link.args[1]
         seen = {}
-        pending = [(block, v)]
+        pending = [(link, link.args[1])]
         while pending:
-            block, v = pending.pop()
-            if (block, v) in seen:
+            link, v = pending.pop()
+            if (link, v) in seen:
                 continue
-            seen[block, v] = True
+            seen[link, v] = True
+            if link.last_exc_value is not None and v is link.last_exc_value:
+                return True
+            block = link.prevblock
+            if block is None:
+                continue
             for op in block.operations[::-1]:
                 if v is op.result:
                     if op.opname == 'cast_pointer':
                         v = op.args[0]
                     else:
                         break
-            else:
-                for link in entrymap.get(block, ()):
-                    if link.prevblock is not None:
-                        for inputarg, outputarg in zip(link.args,
-                                                       block.inputargs):
-                            if outputarg is v:
-                                if inputarg is link.last_exc_value:
-                                    return True
-                                pending.append((link.prevblock, inputarg))
+            for link in entrymap.get(block, ()):
+                for v1, v2 in zip(link.args, block.inputargs):
+                    if v2 is v:
+                        pending.append((link, v1))
         return False
 
     def transform_jump_to_except_block(self, graph, entrymap, link):
