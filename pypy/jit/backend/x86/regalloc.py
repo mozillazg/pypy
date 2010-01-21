@@ -643,7 +643,12 @@ class RegAlloc(object):
         descr = op.descr
         assert isinstance(descr, LoopToken)
         size = descr._calldescr.get_result_size(self.translate_support_code)
-        self._call(op, [imm(size)] +
+        vable_index = self.assembler.cpu.index_of_virtualizable
+        if vable_index != -1:
+            vable = self.fm.loc(op.args[vable_index], 1)
+        else:
+            vable = imm(0)
+        self._call(op, [imm(size), vable] +
                    [self.loc(arg) for arg in op.args],
                    guard_not_forced_op=guard_op)
         
