@@ -1,5 +1,5 @@
 import py
-from pypy.rlib.jit import JitDriver, we_are_jitted, OPTIMIZER_SIMPLE
+from pypy.rlib.jit import JitDriver, we_are_jitted, OPTIMIZER_SIMPLE, hint
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
@@ -819,6 +819,45 @@ class RecursiveTests:
         res = self.meta_interp(main, [0], inline=True,
                                policy=StopAtXPolicy(change))
         assert res == main(0)
+
+    def test_directly_call_assembler_virtualizable_with_array(self):
+        myjitdriver = JitDriver(greens = ['codeno'], reds = ['n', 'frame', 'x'],
+                                virtualizables = ['frame'],
+                                can_inline = lambda codeno : False)
+
+        class Frame(object):
+            _virtualizable2_ = ['l[*]', 's']
+
+            def __init__(self, l, s):
+                self = hint(self, access_directly=True,
+                            fresh_virtualizable=True)
+                self.l = l
+                self.s = s
+
+        def main(codeno, n, a):
+            frame = Frame([a, a+1, a+2, a+3], 0)
+            return f(codeno, n, a, frame)
+        
+        def f(codeno, n, a, frame):
+            x = 0
+            while n > 0:
+                myjitdriver.can_enter_jit(codeno=codeno, frame=frame, n=n, x=x)
+                myjitdriver.jit_merge_point(codeno=codeno, frame=frame, n=n,
+                                            x=x)
+                frame.s = hint(frame.s, promote=True)
+                n -= 1
+                x += frame.l[frame.s]
+                frame.s += 1
+                if codeno == 0:
+                    subframe = Frame([n, n+1, n+2, n+3], 0)
+                    x += f(1, 10, 1, subframe)
+                x += frame.l[frame.s]
+                x += len(frame.l)
+                frame.s -= 1
+            return x
+
+        res = self.meta_interp(main, [0, 10, 1], listops=True, inline=True)
+        assert res == main(0, 10, 1)
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
