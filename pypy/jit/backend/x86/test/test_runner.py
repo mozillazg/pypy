@@ -25,8 +25,9 @@ class TestX86(LLtypeBackendTest):
     # for the individual tests see
     # ====> ../../test/runner_test.py
     
-    def setup_class(cls):
-        cls.cpu = CPU(rtyper=None, stats=FakeStats())
+    def setup_method(self, meth):
+        self.cpu = CPU(rtyper=None, stats=FakeStats())
+        self.cpu.assembler_helper_ptr = None
 
     def test_execute_ptr_operation(self):
         cpu = self.cpu
