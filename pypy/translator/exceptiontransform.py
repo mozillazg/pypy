@@ -89,11 +89,12 @@ class BaseExceptionTransformer(object):
             # assert(!RPyExceptionOccurred());
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
-            lloperation.llop.debug_start_traceback(lltype.Void)
+            lloperation.llop.debug_start_traceback(lltype.Void, etype)
 
         def rpyexc_reraise(etype, evalue):
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
+            lloperation.llop.debug_reraise_traceback(lltype.Void, etype)
 
         def rpyexc_fetch_exception():
             evalue = rpyexc_fetch_value()
@@ -325,22 +326,24 @@ class BaseExceptionTransformer(object):
 
     def transform_jump_to_except_block(self, graph, entrymap, link):
         reraise = self.comes_from_last_exception(entrymap, link)
-        if reraise:
-            fnptr = self.rpyexc_reraise_ptr
-        else:
-            fnptr = self.rpyexc_raise_ptr
         result = Variable()
         result.concretetype = lltype.Void
         block = Block([copyvar(None, v)
                        for v in graph.exceptblock.inputargs])
-        block.operations = [
-            SpaceOperation("direct_call",
-                           [fnptr] + block.inputargs,
-                           result)]
-        if not reraise:
-            block.operations.append(
+        if reraise:
+            block.operations = [
+                SpaceOperation("direct_call",
+                               [self.rpyexc_reraise_ptr] + block.inputargs,
+                               result),
+                ]
+        else:
+            block.operations = [
+                SpaceOperation("direct_call",
+                               [self.rpyexc_raise_ptr] + block.inputargs,
+                               result),
                 SpaceOperation('debug_record_traceback', [],
-                               varoftype(lltype.Void)))
+                               varoftype(lltype.Void)),
+                ]
         link.target = block
         RETTYPE = graph.returnblock.inputargs[0].concretetype
         l = Link([error_constant(RETTYPE)], graph.returnblock)

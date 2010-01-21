@@ -413,7 +413,8 @@ class TestStandalone(StandaloneTests):
         assert lines2[-2] != lines[-2]    # different line number
         assert lines2[-3] == lines[-3]    # same line number
 
-    def test_fatal_error_finally(self):
+    def test_fatal_error_finally_1(self):
+        # a simple case of try:finally:
         def g(x):
             if x == 1:
                 raise KeyError
@@ -438,6 +439,77 @@ class TestStandalone(StandaloneTests):
         assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
         assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l2)
         assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l3)
+
+    def test_fatal_error_finally_2(self):
+        # a try:finally: in which we raise and catch another exception
+        def raiseme(x):
+            if x == 1:
+                raise ValueError
+        def raise_and_catch(x):
+            try:
+                raiseme(x)
+            except ValueError:
+                pass
+        def g(x):
+            if x == 1:
+                raise KeyError
+        def h(x):
+            try:
+                g(x)
+            finally:
+                raise_and_catch(x)
+                os.write(1, 'done.\n')
+        def entry_point(argv):
+            if len(argv) < 3:
+                h(len(argv))
+            return 0
+        t, cbuilder = self.compile(entry_point)
+        #
+        out, err = cbuilder.cmdexec("", expect_crash=True)
+        assert out.strip() == 'done.'
+        lines = err.strip().splitlines()
+        assert lines[-1] == 'Fatal RPython error: KeyError'
+        assert len(lines) >= 5
+        l0, l1, l2, l3 = lines[-5:-1]
+        assert l0 == 'RPython traceback:'
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l3)
+
+    def test_fatal_error_finally_3(self):
+        py.test.skip("not implemented: "
+                     "a try:finally: in which we raise the *same* exception")
+
+    def test_fatal_error_finally_4(self):
+        # a try:finally: in which we raise (and don't catch) an exception
+        def raiseme(x):
+            if x == 1:
+                raise ValueError
+        def g(x):
+            if x == 1:
+                raise KeyError
+        def h(x):
+            try:
+                g(x)
+            finally:
+                raiseme(x)
+                os.write(1, 'done.\n')
+        def entry_point(argv):
+            if len(argv) < 3:
+                h(len(argv))
+            return 0
+        t, cbuilder = self.compile(entry_point)
+        #
+        out, err = cbuilder.cmdexec("", expect_crash=True)
+        assert out.strip() == ''
+        lines = err.strip().splitlines()
+        assert lines[-1] == 'Fatal RPython error: ValueError'
+        assert len(lines) >= 5
+        l0, l1, l2, l3 = lines[-5:-1]
+        assert l0 == 'RPython traceback:'
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_raiseme', l3)
 
     def test_assertion_error(self):
         def g(x):
