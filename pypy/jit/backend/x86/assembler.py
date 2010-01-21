@@ -1252,8 +1252,9 @@ class Assembler386(object):
 
     def genop_guard_call_assembler(self, op, guard_op, addr,
                                    arglocs, result_loc):
-        # XXX temporary code. We generally want a separate entry point,
-        #     needs more tests
+        faildescr = guard_op.descr
+        fail_index = self.cpu.get_fail_descr_number(faildescr)
+        self.mc.MOV(mem(ebp, FORCE_INDEX_OFS), imm(fail_index))
         self._emit_call(rel32(op.descr._x86_direct_bootstrap_code), arglocs, 2,
                         tmp=eax)
         self._emit_call(rel32(self.assembler_helper_adr), [eax, arglocs[1]], 0,
@@ -1262,6 +1263,8 @@ class Assembler386(object):
             self.mc.FSTP(result_loc)
         else:
             assert result_loc is eax or result_loc is None
+        self.mc.CMP(mem(ebp, FORCE_INDEX_OFS), imm(0))
+        return self.implement_guard(addr, self.mc.JL)        
 
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
         # use 'mc._mc' directly instead of 'mc', to avoid
