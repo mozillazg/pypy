@@ -546,6 +546,9 @@ class LLFrame(object):
     def op_debug_start_traceback(self, *args):
         pass    # xxx write debugging code here?
 
+    def op_debug_reraise_traceback(self, *args):
+        pass    # xxx write debugging code here?
+
     def op_debug_record_traceback(self, *args):
         pass    # xxx write debugging code here?
 
