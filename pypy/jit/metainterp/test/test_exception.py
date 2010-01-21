@@ -516,11 +516,10 @@ class ExceptionTests:
         assert res == -1
         self.check_tree_loop_count(2)      # the loop and the entry path
         # we get:
-        #    ENTER             - compile the new loop
+        #    ENTER             - compile the new loop and the entry bridge
         #    ENTER (BlackHole) - leave
-        #    ENTER             - compile the entry bridge
         #    ENTER             - compile the leaving path (raising MyError)
-        self.check_enter_count(4)
+        self.check_enter_count(3)
 
 
     def test_bridge_from_interpreter_exc_2(self):
