@@ -2034,7 +2034,7 @@ class MetaInterp(object):
             vindex = self.staticdata.virtualizable_info.index_of_virtualizable
             vbox = args[vindex - num_green_args]
             args += self.gen_load_from_other_virtualizable(vbox)
-        self.history.record(rop.CALL_ASSEMBLER, args, resbox, descr=token)
+        self.history.record(rop.CALL_ASSEMBLER, args[:], resbox, descr=token)
         self.history.operations += rest
 
 class GenerateMergePoint(Exception):
