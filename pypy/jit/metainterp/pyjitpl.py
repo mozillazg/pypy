@@ -683,8 +683,6 @@ class MIFrame(object):
             call_position += 1
         # </UGLY!>
         if token is not None:
-            # attach a calldescr to token, so we can use it later
-            token._calldescr = calldescr
             # this will substitute the residual call with assembler call
             self.metainterp.direct_assembler_call(varargs, token, call_position)
         return res

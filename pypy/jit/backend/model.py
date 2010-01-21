@@ -5,6 +5,7 @@ class AbstractCPU(object):
     supports_floats = False
     # assembler_helper_ptr - a pointer to helper to call after a direct
     #                        assembler call
+    portal_calldescr = None
 
     def __init__(self):
         self.fail_descr_list = []
