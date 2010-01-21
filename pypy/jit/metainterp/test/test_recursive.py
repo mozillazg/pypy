@@ -367,7 +367,7 @@ class RecursiveTests:
         res = self.meta_interp(loop, [100], optimizer=OPTIMIZER_SIMPLE, inline=True, trace_limit=TRACE_LIMIT)
         assert res == 0
         self.check_max_trace_length(TRACE_LIMIT)
-        self.check_enter_count(15) # maybe
+        self.check_enter_count(14) # maybe
         self.check_aborted_count(7)
 
     def test_trace_limit_bridge(self):

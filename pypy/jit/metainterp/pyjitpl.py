@@ -1644,6 +1644,7 @@ class MetaInterp(object):
 
     def compile(self, original_boxes, live_arg_boxes, start):
         num_green_args = self.staticdata.num_green_args
+        orig_inputargs = self.history.inputargs
         self.history.inputargs = original_boxes[num_green_args:]
         greenkey = original_boxes[:num_green_args]
         glob = self.staticdata.globaldata
@@ -1651,7 +1652,17 @@ class MetaInterp(object):
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
         loop_token = compile.compile_new_loop(self, old_loop_tokens,
                                               greenkey, start)
-        if loop_token is not None: # raise if it *worked* correctly
+        if loop_token is not None:
+            # try to immediately attach a bridge to the newly created
+            # loop_token
+            if orig_inputargs is not None:
+                self.history.inputargs = orig_inputargs
+            target_loop_token = compile.compile_new_bridge(self, [loop_token],
+                                                           self.resumekey)
+            # target_loop_token can be None or not, we want to use the new loop
+            # anyway
+
+            # raise if it *worked* correctly
             raise GenerateMergePoint(live_arg_boxes, loop_token)
         self.history.operations.pop()     # remove the JUMP
 

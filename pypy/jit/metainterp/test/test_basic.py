@@ -571,11 +571,10 @@ class BasicTests:
         self.meta_interp(f, [20], repeat=7)
         self.check_tree_loop_count(2)      # the loop and the entry path
         # we get:
-        #    ENTER             - compile the new loop
+        #    ENTER             - compile the new loop and the entry bridge
         #    ENTER (BlackHole) - leave
-        #    ENTER             - compile the entry bridge
         #    ENTER             - compile the leaving path
-        self.check_enter_count(4)
+        self.check_enter_count(3)
 
     def test_bridge_from_interpreter_2(self):
         # one case for backend - computing of framesize on guard failure
@@ -945,7 +944,7 @@ class BasicTests:
 
         res = self.meta_interp(f, [10, 3])
         assert res == 9 + 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 + 0
-        self.check_tree_loop_count(1)
+        self.check_tree_loop_count(2)
 
         res = self.meta_interp(f, [10, 13])
         assert res == 9 + 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 + 0
