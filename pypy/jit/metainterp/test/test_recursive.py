@@ -734,7 +734,7 @@ class RecursiveTests:
             return k
 
         res = self.meta_interp(portal, [2, 0], inline=True)
-        assert res == portal(2, 0)
+        assert res == 13542
 
     def test_directly_call_assembler_virtualizable(self):
         class Thing(object):

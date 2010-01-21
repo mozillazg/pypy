@@ -159,6 +159,7 @@ class Assembler386(object):
         """adds the following attributes to looptoken:
                _x86_loop_code       (an integer giving an address)
                _x86_bootstrap_code  (an integer giving an address)
+               _x86_direct_bootstrap_code
                _x86_frame_depth
                _x86_param_depth
                _x86_arglocs
@@ -169,13 +170,17 @@ class Assembler386(object):
         looptoken._x86_arglocs = arglocs
         looptoken._x86_bootstrap_code = self.mc.tell()
         adr_stackadjust = self._assemble_bootstrap_code(inputargs, arglocs)
-        looptoken._x86_loop_code = self.mc.tell()
+        curadr = self.mc.tell()
+        looptoken._x86_loop_code = curadr
         looptoken._x86_frame_depth = -1     # temporarily
         looptoken._x86_param_depth = -1     # temporarily        
         frame_depth, param_depth = self._assemble(regalloc, operations)
         self._patch_stackadjust(adr_stackadjust, frame_depth+param_depth)
         looptoken._x86_frame_depth = frame_depth
         looptoken._x86_param_depth = param_depth
+        looptoken._x86_direct_bootstrap_code = self.mc.tell()
+        self._assemble_bootstrap_direct_call(arglocs, curadr,
+                                             frame_depth+param_depth)
         debug_print("Loop #", looptoken.number, "has address",
                     looptoken._x86_loop_code, "to", self.mc.tell())
 
@@ -245,8 +250,7 @@ class Assembler386(object):
         mc.write(packimm32(-WORD * aligned_words))
         mc.done()
 
-    def _assemble_bootstrap_code(self, inputargs, arglocs):
-        nonfloatlocs, floatlocs = arglocs
+    def _call_header(self):
         self.mc.PUSH(ebp)
         self.mc.MOV(ebp, esp)
         self.mc.PUSH(ebx)
@@ -254,7 +258,34 @@ class Assembler386(object):
         self.mc.PUSH(edi)
         # NB. the shape of the frame is hard-coded in get_basic_shape() too.
         # Also, make sure this is consistent with FRAME_FIXED_SIZE.
-        adr_stackadjust = self._patchable_stackadjust()
+        return self._patchable_stackadjust()
+
+    def _assemble_bootstrap_direct_call(self, arglocs, jmpadr, stackdepth):
+        # XXX this can be improved greatly. Right now it'll behave like
+        #     a normal call
+        nonfloatlocs, floatlocs = arglocs
+        # XXX not to repeat the logic, a bit around
+        adr_stackadjust = self._call_header()
+        self._patch_stackadjust(adr_stackadjust, stackdepth)
+        for loc in floatlocs:
+            assert loc is None
+        # XXX no test, so no support for now
+        for i in range(len(nonfloatlocs)):
+            loc = nonfloatlocs[i]
+            if isinstance(loc, REG):
+                self.mc.MOV(loc, mem(ebp, (2 + i) * WORD))
+        tmp = eax
+        for i in range(len(nonfloatlocs)):
+            loc = nonfloatlocs[i]
+            if not isinstance(loc, REG):
+                self.mc.MOV(tmp, mem(ebp, (2 + i) * WORD))
+                self.mc.MOV(loc, tmp)
+        self.mc.JMP(rel32(jmpadr))
+        return adr_stackadjust
+
+    def _assemble_bootstrap_code(self, inputargs, arglocs):
+        nonfloatlocs, floatlocs = arglocs
+        adr_stackadjust = self._call_header()
         tmp = X86RegisterManager.all_regs[0]
         xmmtmp = X86XMMRegisterManager.all_regs[0]
         for i in range(len(nonfloatlocs)):
@@ -1221,10 +1252,12 @@ class Assembler386(object):
 
     def genop_guard_call_assembler(self, op, guard_op, addr,
                                    arglocs, result_loc):
-        self._emit_call(rel32(op.descr._x86_bootstrap_code), arglocs, 2,
+        # XXX temporary code. We generally want a separate entry point,
+        #     needs more tests
+        self._emit_call(rel32(op.descr._x86_direct_bootstrap_code), arglocs, 1,
                         tmp=eax)
         self._emit_call(rel32(self.assembler_helper_adr), [eax, imm(0)], 0,
-                        tmp=eax)
+                        tmp=ecx)
         if isinstance(result_loc, MODRM64):
             self.mc.FSTP(result_loc)
         else:
