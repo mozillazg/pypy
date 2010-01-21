@@ -2,7 +2,8 @@ import sys, os
 import ctypes
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import Const, Box, BoxInt, BoxPtr, BoxFloat
-from pypy.jit.metainterp.history import AbstractFailDescr, INT, REF, FLOAT
+from pypy.jit.metainterp.history import AbstractFailDescr, INT, REF, FLOAT,\
+     LoopToken
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -1255,7 +1256,9 @@ class Assembler386(object):
         faildescr = guard_op.descr
         fail_index = self.cpu.get_fail_descr_number(faildescr)
         self.mc.MOV(mem(ebp, FORCE_INDEX_OFS), imm(fail_index))
-        self._emit_call(rel32(op.descr._x86_direct_bootstrap_code), arglocs, 2,
+        descr = op.descr
+        assert isinstance(descr, LoopToken)
+        self._emit_call(rel32(descr._x86_direct_bootstrap_code), arglocs, 2,
                         tmp=eax)
         self._emit_call(rel32(self.assembler_helper_adr), [eax, arglocs[1]], 0,
                         tmp=ecx)

@@ -561,16 +561,20 @@ class WarmRunnerDesc(object):
         self.ll_portal_runner = ll_portal_runner # for debugging
         self.portal_runner_ptr = self.helper_func(self.PTR_PORTAL_FUNCTYPE,
                                                   ll_portal_runner)
+        self.cpu.portal_calldescr = self.cpu.calldescrof(
+            self.PTR_PORTAL_FUNCTYPE.TO,
+            self.PTR_PORTAL_FUNCTYPE.TO.ARGS,
+            self.PTR_PORTAL_FUNCTYPE.TO.RESULT)
 
         vinfo = self.metainterp_sd.virtualizable_info
 
-        def assembler_call_helper(failindex, virtualizable):
+        def assembler_call_helper(failindex, virtualizableref):
             fail_descr = self.cpu.get_fail_descr_from_number(failindex)
             while True:
                 try:
                     if vinfo is not None:
                         virtualizable = lltype.cast_opaque_ptr(
-                            vinfo.VTYPEPTR, virtualizable)
+                            vinfo.VTYPEPTR, virtualizableref)
                         vinfo.reset_vable_token(virtualizable)
                     loop_token = fail_descr.handle_fail(self.metainterp_sd)
                     fail_descr = self.cpu.execute_token(loop_token)
