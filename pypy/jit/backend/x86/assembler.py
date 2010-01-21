@@ -120,8 +120,9 @@ class Assembler386(object):
                 ll_new_unicode = gc_ll_descr.get_funcptr_for_newunicode()
                 self.malloc_unicode_func_addr = rffi.cast(lltype.Signed,
                                                           ll_new_unicode)
-            self.assembler_helper_adr = self.cpu.cast_ptr_to_int(
-                self.cpu.assembler_helper_ptr)
+            if self.cpu.assembler_helper_ptr:
+                self.assembler_helper_adr = self.cpu.cast_ptr_to_int(
+                    self.cpu.assembler_helper_ptr)
                 
         
             # done
@@ -268,19 +269,24 @@ class Assembler386(object):
         # XXX not to repeat the logic, a bit around
         adr_stackadjust = self._call_header()
         self._patch_stackadjust(adr_stackadjust, stackdepth)
-        for loc in floatlocs:
-            assert loc is None
-        # XXX no test, so no support for now
         for i in range(len(nonfloatlocs)):
             loc = nonfloatlocs[i]
             if isinstance(loc, REG):
                 self.mc.MOV(loc, mem(ebp, (2 + i) * WORD))
+            loc = floatlocs[i]
+            if isinstance(loc, XMMREG):
+                self.mc.MOVSD(loc, mem64(ebp, (1 + i) * 2 * WORD))
         tmp = eax
+        xmmtmp = xmm0
         for i in range(len(nonfloatlocs)):
             loc = nonfloatlocs[i]
-            if not isinstance(loc, REG):
+            if loc is not None and not isinstance(loc, REG):
                 self.mc.MOV(tmp, mem(ebp, (2 + i) * WORD))
                 self.mc.MOV(loc, tmp)
+            loc = floatlocs[i]
+            if loc is not None and not isinstance(loc, XMMREG):
+                self.mc.MOVSD(xmmtmp, mem64(ebp, (1 + i) * 2 * WORD))
+                self.mc.MOVSD(loc, xmmtmp)
         self.mc.JMP(rel32(jmpadr))
         return adr_stackadjust
 
