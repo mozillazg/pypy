@@ -95,7 +95,7 @@ class BaseTestExceptionTransform:
                 return 3 + x
             return 4 + x
         t, g = self.transform_func(foo, [int])
-        assert len(list(g.iterblocks())) == 9
+        assert len(list(g.iterblocks())) == 10
         f = self.compile(foo, [int])
         result = interpret(foo, [6])
         assert result == 2
@@ -126,7 +126,7 @@ class BaseTestExceptionTransform:
                 return 1 + x
             return 4 + x
         t, g = self.transform_func(foo, [int])
-        assert len(list(g.iterblocks())) == 5
+        assert len(list(g.iterblocks())) == 6
         f = self.compile(foo, [int])
         result = interpret(foo, [6])
         assert result == 2
