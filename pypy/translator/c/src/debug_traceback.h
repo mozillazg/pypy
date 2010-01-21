@@ -84,9 +84,16 @@ void pypy_debug_traceback_print(void)
      at the start of the file. */
   fprintf(stderr, "RPython traceback:\n");
   skipping = 0;
-  i = (pypydtcount - 1) & (PYPY_DEBUG_TRACEBACK_DEPTH-1);
-  while (i != pypydtcount)
+  i = pypydtcount;
+  while (1)
     {
+      i = (i - 1) & (PYPY_DEBUG_TRACEBACK_DEPTH-1);
+      if (i == pypydtcount)
+        {
+          fprintf(stderr, "  ...\n");
+          break;
+        }
+
       location = pypy_debug_tracebacks[i].location;
       etype    = pypy_debug_tracebacks[i].exctype;
       has_loc  = location != NULL && location != PYPYDTPOS_RERAISE;
@@ -113,7 +120,6 @@ void pypy_debug_traceback_print(void)
               skipping = 1;     /* RERAISE: skip until "f:17, &KeyError" */
             }
         }
-      i = (i - 1) & (PYPY_DEBUG_TRACEBACK_DEPTH-1);
     }
 }
 
