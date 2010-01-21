@@ -399,8 +399,8 @@ class TestStandalone(StandaloneTests):
         assert len(lines) >= 4
         l0, l1, l2 = lines[-4:-1]
         assert l0 == 'RPython traceback:'
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in entry_point', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in g', l2)
         #
         out2, err2 = cbuilder.cmdexec("x", expect_crash=True)
         assert out2.strip() == ''
@@ -408,8 +408,8 @@ class TestStandalone(StandaloneTests):
         assert lines2[-1] == 'Fatal RPython error: KeyError'
         l0, l1, l2 = lines2[-4:-1]
         assert l0 == 'RPython traceback:'
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in entry_point', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in g', l2)
         assert lines2[-2] != lines[-2]    # different line number
         assert lines2[-3] == lines[-3]    # same line number
 
@@ -436,9 +436,9 @@ class TestStandalone(StandaloneTests):
         assert len(lines) >= 5
         l0, l1, l2, l3 = lines[-5:-1]
         assert l0 == 'RPython traceback:'
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l2)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l3)
+        assert re.match(r'  File "\w+.c", line \d+, in entry_point', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in h', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in g', l3)
 
     def test_fatal_error_finally_2(self):
         # a try:finally: in which we raise and catch another exception
@@ -472,9 +472,9 @@ class TestStandalone(StandaloneTests):
         assert len(lines) >= 5
         l0, l1, l2, l3 = lines[-5:-1]
         assert l0 == 'RPython traceback:'
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l2)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l3)
+        assert re.match(r'  File "\w+.c", line \d+, in entry_point', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in h', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in g', l3)
 
     def test_fatal_error_finally_3(self):
         py.test.skip("not implemented: "
@@ -507,9 +507,9 @@ class TestStandalone(StandaloneTests):
         assert len(lines) >= 5
         l0, l1, l2, l3 = lines[-5:-1]
         assert l0 == 'RPython traceback:'
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_entry_point', l1)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_h', l2)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_raiseme', l3)
+        assert re.match(r'  File "\w+.c", line \d+, in entry_point', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in h', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in raiseme', l3)
 
     def test_assertion_error(self):
         def g(x):
@@ -530,8 +530,8 @@ class TestStandalone(StandaloneTests):
         assert len(lines) >= 4
         l0, l1, l2 = lines[-4:-1]
         assert l0 == 'RPython traceback:'
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_f', l1)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in f', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in g', l2)
         # The traceback stops at f() because it's the first function that
         # captures the AssertionError, which makes the program abort.
 
@@ -555,8 +555,8 @@ class TestStandalone(StandaloneTests):
         assert len(lines) >= 4
         l0, l1, l2 = lines[-4:-1]
         assert l0 == 'RPython traceback:'
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_f', l1)
-        assert re.match(r'  File "\w+.c", line \d+, in pypy_g_g', l2)
+        assert re.match(r'  File "\w+.c", line \d+, in f', l1)
+        assert re.match(r'  File "\w+.c", line \d+, in g', l2)
         # The traceback stops at f() because it's the first function that
         # captures the AssertionError, which makes the program abort.
 
