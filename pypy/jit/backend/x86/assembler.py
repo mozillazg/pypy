@@ -1254,9 +1254,9 @@ class Assembler386(object):
                                    arglocs, result_loc):
         # XXX temporary code. We generally want a separate entry point,
         #     needs more tests
-        self._emit_call(rel32(op.descr._x86_direct_bootstrap_code), arglocs, 1,
+        self._emit_call(rel32(op.descr._x86_direct_bootstrap_code), arglocs, 2,
                         tmp=eax)
-        self._emit_call(rel32(self.assembler_helper_adr), [eax, imm(0)], 0,
+        self._emit_call(rel32(self.assembler_helper_adr), [eax, arglocs[1]], 0,
                         tmp=ecx)
         if isinstance(result_loc, MODRM64):
             self.mc.FSTP(result_loc)
