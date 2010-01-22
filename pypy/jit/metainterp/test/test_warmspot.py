@@ -352,11 +352,11 @@ class TestWarmspotDirect(object):
     def test_call_helper(self):
         from pypy.rpython.llinterp import LLException
         
-        assert self.desc.assembler_call_helper(0) == 3
-        assert self.desc.assembler_call_helper(1) == 10
-        assert self.desc.assembler_call_helper(2) == 10
+        assert self.desc.assembler_call_helper(0, 0) == 3
+        assert self.desc.assembler_call_helper(1, 0) == 10
+        assert self.desc.assembler_call_helper(2, 0) == 10
         try:
-            self.desc.assembler_call_helper(3)
+            self.desc.assembler_call_helper(3, 0)
         except LLException, lle:
             assert lle[0] == self.exc_vtable
         else:
