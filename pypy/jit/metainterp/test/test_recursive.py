@@ -859,6 +859,36 @@ class RecursiveTests:
         res = self.meta_interp(main, [0, 10, 1], listops=True, inline=True)
         assert res == main(0, 10, 1)
 
+    # def test_recursive_call_while_blackholing(self):
+    #     driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
+    #                        get_printable_location = lambda codeno : str(codeno),
+    #                        can_inline = lambda codeno : False)
+
+    #     def f(codeno, k):
+    #         i = 0
+    #         while i < 10:
+    #             driver.can_enter_jit(codeno=codeno, i=i, k=k)
+    #             driver.jit_merge_point(codeno=codeno, i=i, k=k)
+    #             if codeno == 0:
+    #                 k += indirection(1, k)
+    #             if codeno == 1 and k > 70 or codeno == 0:
+    #                 indirection(2, k)
+    #             i += 1
+    #             if codeno != 2:
+    #                 k += 1
+    #         return k
+
+    #     def indirection(a, b):
+    #         return f(a, b)
+
+    #     res = self.meta_interp(f, [0, 0], inline=True)
+    #     assert res == f(0, 0)
+
+    # There are two tests which I fail to write.
+    #   1. what happens if we call recursive_call while blackholing
+    #   2. what happens if in opimpl_recursive_call we switch to blackhole
+    #      while doing do_residual_call
+
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
 
