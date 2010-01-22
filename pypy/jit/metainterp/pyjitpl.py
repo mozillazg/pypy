@@ -664,7 +664,7 @@ class MIFrame(object):
     def opimpl_recursive_call(self, calldescr, varargs):
         warmrunnerstate = self.metainterp.staticdata.state
         token = None
-        if warmrunnerstate.inlining:
+        if not self.metainterp.is_blackholing() and warmrunnerstate.inlining:
             num_green_args = self.metainterp.staticdata.num_green_args
             portal_code = self.metainterp.staticdata.portal_code
             greenkey = varargs[1:num_green_args + 1]
@@ -675,7 +675,7 @@ class MIFrame(object):
         if token is not None:
             call_position = len(self.metainterp.history.operations)
         res = self.do_residual_call(varargs, descr=calldescr, exc=True)
-        if token is not None:
+        if not self.metainterp.is_blackholing() and token is not None:
             # XXX fix the call position, <UGLY!>
             found = False
             while True:
