@@ -859,35 +859,62 @@ class RecursiveTests:
         res = self.meta_interp(main, [0, 10, 1], listops=True, inline=True)
         assert res == main(0, 10, 1)
 
-    # def test_recursive_call_while_blackholing(self):
-    #     driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
-    #                        get_printable_location = lambda codeno : str(codeno),
-    #                        can_inline = lambda codeno : False)
+    def test_directly_call_assembler_virtualizable_force_blackhole(self):
+        class Thing(object):
+            def __init__(self, val):
+                self.val = val
+        
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+        
+        driver = JitDriver(greens = ['codeno'], reds = ['frame', 'i'],
+                           virtualizables = ['frame'],
+                           get_printable_location = lambda codeno : str(codeno),
+                           can_inline = lambda codeno : False)
+        class SomewhereElse(object):
+            pass
 
-    #     def f(codeno, k):
-    #         i = 0
-    #         while i < 10:
-    #             driver.can_enter_jit(codeno=codeno, i=i, k=k)
-    #             driver.jit_merge_point(codeno=codeno, i=i, k=k)
-    #             if codeno == 0:
-    #                 k += indirection(1, k)
-    #             if codeno == 1 and k > 70 or codeno == 0:
-    #                 indirection(2, k)
-    #             i += 1
-    #             if codeno != 2:
-    #                 k += 1
-    #         return k
+        somewhere_else = SomewhereElse()
 
-    #     def indirection(a, b):
-    #         return f(a, b)
+        def change(newthing, arg):
+            print arg
+            if arg > 30:
+                somewhere_else.frame.thing = newthing
+                arg = 13
+            return arg
 
-    #     res = self.meta_interp(f, [0, 0], inline=True)
-    #     assert res == f(0, 0)
+        def main(codeno):
+            frame = Frame()
+            somewhere_else.frame = frame
+            frame.thing = Thing(0)
+            portal(codeno, frame)
+            return frame.thing.val
 
-    # There are two tests which I fail to write.
-    #   1. what happens if we call recursive_call while blackholing
-    #   2. what happens if in opimpl_recursive_call we switch to blackhole
-    #      while doing do_residual_call
+        def portal(codeno, frame):
+            i = 0
+            while i < 10:
+                driver.can_enter_jit(frame=frame, codeno=codeno, i=i)
+                driver.jit_merge_point(frame=frame, codeno=codeno, i=i)
+                nextval = frame.thing.val
+                if codeno == 0:
+                    subframe = Frame()
+                    subframe.thing = Thing(nextval)
+                    nextval = portal(1, subframe)
+                else:
+                    nextval = change(Thing(13), frame.thing.val)
+                frame.thing = Thing(nextval + 1)
+                i += 1
+            return frame.thing.val
+
+        res = self.meta_interp(main, [0], inline=True,
+                               policy=StopAtXPolicy(change))
+        assert res == main(0)
+
+
+    # There is a test which I fail to write.
+    #   * what happens if we call recursive_call while blackholing
+    #     this seems to be completely corner case and not really happening
+    #     in the wild
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
