@@ -1264,6 +1264,7 @@ class Assembler386(object):
         self.mc.MOV(mem(ebp, FORCE_INDEX_OFS), imm(fail_index))
         descr = op.descr
         assert isinstance(descr, LoopToken)
+        assert len(arglocs) - 2 == len(descr._x86_arglocs[0])
         self._emit_call(rel32(descr._x86_direct_bootstrap_code), arglocs, 2,
                         tmp=eax)
         self._emit_call(rel32(self.assembler_helper_adr), [eax, arglocs[1]], 0,
