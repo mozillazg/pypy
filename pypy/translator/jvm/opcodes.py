@@ -103,8 +103,9 @@ opcodes = _proc_dict({
     'debug_assert':              [], # TODO: implement?
     'debug_start_traceback':    Ignore,
     'debug_record_traceback':   Ignore,
-    'debug_print_traceback':    Ignore,
     'debug_catch_exception':    Ignore,
+    'debug_reraise_traceback':  Ignore,
+    'debug_print_traceback':    Ignore,
 
     # __________ numeric operations __________
 
