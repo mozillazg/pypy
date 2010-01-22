@@ -173,6 +173,9 @@ class Assembler386(object):
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         arglocs = regalloc.prepare_loop(inputargs, operations, looptoken)
         looptoken._x86_arglocs = arglocs
+        needed_mem = len(arglocs[0]) * 16 + 16
+        if needed_mem >= self.mc.bytes_free():
+            self.mc.make_new_mc()
         looptoken._x86_bootstrap_code = self.mc.tell()
         adr_stackadjust = self._assemble_bootstrap_code(inputargs, arglocs)
         curadr = self.mc.tell()
@@ -185,8 +188,8 @@ class Assembler386(object):
         looptoken._x86_param_depth = param_depth
         # we need to make sure here that we don't overload an mc badly.
         # a safe estimate is that we need at most 16 bytes per arg
-        needed_mem = len(arglocs[0]) * 16
-        if needed_mem < self.mc.bytes_free():
+        needed_mem = len(arglocs[0]) * 16 + 16
+        if needed_mem >= self.mc.bytes_free():
             self.mc.make_new_mc()
         looptoken._x86_direct_bootstrap_code = self.mc.tell()
         self._assemble_bootstrap_direct_call(arglocs, curadr,
