@@ -183,6 +183,11 @@ class Assembler386(object):
         self._patch_stackadjust(adr_stackadjust, frame_depth+param_depth)
         looptoken._x86_frame_depth = frame_depth
         looptoken._x86_param_depth = param_depth
+        # we need to make sure here that we don't overload an mc badly.
+        # a safe estimate is that we need at most 16 bytes per arg
+        needed_mem = len(arglocs[0]) * 16
+        if needed_mem < self.mc.bytes_free():
+            self.mc.make_new_mc()
         looptoken._x86_direct_bootstrap_code = self.mc.tell()
         self._assemble_bootstrap_direct_call(arglocs, curadr,
                                              frame_depth+param_depth)
