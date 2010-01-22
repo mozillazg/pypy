@@ -263,6 +263,8 @@ class Assembler386(object):
         return self._patchable_stackadjust()
 
     def _assemble_bootstrap_direct_call(self, arglocs, jmpadr, stackdepth):
+        # XXX pushing ebx esi and edi is a bit pointless, since we store
+        #     all regsiters anyway, for the case of guard_not_forced
         # XXX this can be improved greatly. Right now it'll behave like
         #     a normal call
         nonfloatlocs, floatlocs = arglocs
