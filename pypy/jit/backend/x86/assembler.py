@@ -120,10 +120,13 @@ class Assembler386(object):
                 ll_new_unicode = gc_ll_descr.get_funcptr_for_newunicode()
                 self.malloc_unicode_func_addr = rffi.cast(lltype.Signed,
                                                           ll_new_unicode)
-            if self.cpu.assembler_helper_ptr:
+            if we_are_translated():
                 self.assembler_helper_adr = self.cpu.cast_ptr_to_int(
                     self.cpu.assembler_helper_ptr)
-                
+            else:
+                if getattr(self.cpu, 'assembler_helper_ptr', None):
+                    self.assembler_helper_adr = self.cpu.cast_ptr_to_int(
+                        self.cpu.assembler_helper_ptr)
         
             # done
             # we generate the loop body in 'mc'
