@@ -676,11 +676,14 @@ class MIFrame(object):
             call_position = len(self.metainterp.history.operations)
         res = self.do_residual_call(varargs, descr=calldescr, exc=True)
         # XXX fix the call position, <UGLY!>
+        found = False
         while True:
             op = self.metainterp.history.operations[call_position]
             if op.opnum == rop.CALL or op.opnum == rop.CALL_MAY_FORCE:
+                found = True
                 break
             call_position += 1
+        assert found
         # </UGLY!>
         if token is not None:
             # this will substitute the residual call with assembler call
