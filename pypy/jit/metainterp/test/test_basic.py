@@ -22,7 +22,6 @@ def _get_bare_metainterp(func, values, CPUClass, type_system,
 
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, None, False)
-    cpu.assembler_helper_ptr = None
     graphs = rtyper.annotator.translator.graphs
     opt = history.Options(listops=listops)
     metainterp_sd = pyjitpl.MetaInterpStaticData(graphs[0], cpu, stats, opt)
