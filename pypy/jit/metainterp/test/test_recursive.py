@@ -910,6 +910,34 @@ class RecursiveTests:
                                policy=StopAtXPolicy(change))
         assert res == main(0)
 
+    def test_assembler_call_red_args(self):
+        py.test.skip("FAIL")
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
+                           get_printable_location = lambda codeno : str(codeno),
+                           can_inline = lambda codeno : False)
+
+        def residual(k):
+            if k > 40:
+                return 0
+            return 1
+
+        def portal(codeno, k):
+            i = 0
+            while i < 10:
+                driver.can_enter_jit(codeno=codeno, i=i, k=k)
+                driver.jit_merge_point(codeno=codeno, i=i, k=k)
+                if codeno == 2:
+                    k += portal(residual(k), k)
+                if codeno == 0:
+                    k += 2
+                elif codeno == 1:
+                    k += 1
+                i += 1
+            return k
+
+        res = self.meta_interp(portal, [2, 0], inline=True,
+                               policy=StopAtXPolicy(residual))
+        assert res == portal(2, 0)
 
     # There is a test which I fail to write.
     #   * what happens if we call recursive_call while blackholing
