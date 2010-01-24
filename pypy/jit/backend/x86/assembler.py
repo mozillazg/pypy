@@ -477,30 +477,34 @@ class Assembler386(object):
                 return self.implement_guard(addr, getattr(self.mc, name))
         return genop_cmp_guard_float
 
-    def _emit_call(self, x, arglocs, start=0, tmp=eax):
+    @specialize.arg(5)
+    def _emit_call(self, x, arglocs, start=0, tmp=eax, force_mc=False,
+                   mc=None):
+        if not force_mc:
+            mc = self.mc
         p = 0
         n = len(arglocs)
         for i in range(start, n):
             loc = arglocs[i]
             if isinstance(loc, REG):
                 if isinstance(loc, XMMREG):
-                    self.mc.MOVSD(mem64(esp, p), loc)
+                    mc.MOVSD(mem64(esp, p), loc)
                 else:
-                    self.mc.MOV(mem(esp, p), loc)
+                    mc.MOV(mem(esp, p), loc)
             p += round_up_to_4(loc.width)
         p = 0
         for i in range(start, n):
             loc = arglocs[i]
             if not isinstance(loc, REG):
                 if isinstance(loc, MODRM64):
-                    self.mc.MOVSD(xmm0, loc)
-                    self.mc.MOVSD(mem64(esp, p), xmm0)
+                    mc.MOVSD(xmm0, loc)
+                    mc.MOVSD(mem64(esp, p), xmm0)
                 else:
-                    self.mc.MOV(tmp, loc)
-                    self.mc.MOV(mem(esp, p), tmp)
+                    mc.MOV(tmp, loc)
+                    mc.MOV(mem(esp, p), tmp)
             p += round_up_to_4(loc.width)
         self._regalloc.reserve_param(p//WORD)
-        self.mc.CALL(x)
+        mc.CALL(x)
         self.mark_gc_roots()
         
     def call(self, addr, args, res):
@@ -1280,8 +1284,21 @@ class Assembler386(object):
         assert len(arglocs) - 2 == len(descr._x86_arglocs[0])
         self._emit_call(rel32(descr._x86_direct_bootstrap_code), arglocs, 2,
                         tmp=eax)
+        mc = self.mc._mc
+        mc.CMP(eax, imm(self.cpu.done_with_this_frame_int_v))
+        mc.write(constlistofchars('\x74\x00')) # JE below
+        je_location = mc.get_relative_pos()
         self._emit_call(rel32(self.assembler_helper_adr), [eax, arglocs[1]], 0,
-                        tmp=ecx)
+                        tmp=ecx, force_mc=True, mc=mc)
+        mc.write(constlistofchars('\xEB\x00')) # JMP below
+        jmp_location = mc.get_relative_pos()
+        offset = jmp_location - je_location
+        assert 0 < offset <= 127
+        mc.overwrite(je_location - 1, [chr(offset)])
+        mc.MOV(eax, heap(self.fail_boxes_int.get_addr_for_num(0)))
+        offset = mc.get_relative_pos() - jmp_location
+        assert 0 < offset <= 127
+        mc.overwrite(jmp_location - 1, [chr(offset)])
         if isinstance(result_loc, MODRM64):
             self.mc.FSTP(result_loc)
         else:
