@@ -875,9 +875,13 @@ class MIFrame(object):
     def opimpl_teardown_exception_block(self):
         self.exception_target = -1
 
-    @arguments("constbox", "jumptarget")
-    def opimpl_goto_if_exception_mismatch(self, vtableref, next_exc_target):
-        assert isinstance(self.exception_box, Const)    # XXX
+    @arguments("constbox", "jumptarget", "orgpc")
+    def opimpl_goto_if_exception_mismatch(self, vtableref, next_exc_target, pc):
+        # XXX used to be:
+        # assert isinstance(self.exception_box, Const)    # XXX
+        # seems this can happen that self.exception_box is not a Const,
+        # but I failed to write a test so far :-(
+        self.exception_box = self.implement_guard_value(pc, self.exception_box)
         cpu = self.metainterp.cpu
         ts = self.metainterp.cpu.ts
         if not ts.subclassOf(cpu, self.exception_box, vtableref):
