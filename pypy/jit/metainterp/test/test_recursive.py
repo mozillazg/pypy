@@ -911,7 +911,6 @@ class RecursiveTests:
         assert res == main(0)
 
     def test_assembler_call_red_args(self):
-        py.test.skip("FAIL")
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
                            get_printable_location = lambda codeno : str(codeno),
                            can_inline = lambda codeno : False)
@@ -938,6 +937,7 @@ class RecursiveTests:
         res = self.meta_interp(portal, [2, 0], inline=True,
                                policy=StopAtXPolicy(residual))
         assert res == portal(2, 0)
+        self.check_loops(call_assembler=2)
 
     # There is a test which I fail to write.
     #   * what happens if we call recursive_call while blackholing
@@ -949,4 +949,3 @@ class TestLLtype(RecursiveTests, LLJitMixin):
 
 class TestOOtype(RecursiveTests, OOJitMixin):
     pass
-    
