@@ -660,8 +660,8 @@ class MIFrame(object):
             return False
         return self.perform_call(leave_code, varargs)
         
-    @arguments("descr", "varargs")
-    def opimpl_recursive_call(self, calldescr, varargs):
+    @arguments("orgpc", "descr", "varargs")
+    def opimpl_recursive_call(self, pc, calldescr, varargs):
         warmrunnerstate = self.metainterp.staticdata.state
         token = None
         if not self.metainterp.is_blackholing() and warmrunnerstate.inlining:
@@ -674,6 +674,10 @@ class MIFrame(object):
         call_position = 0
         if token is not None:
             call_position = len(self.metainterp.history.operations)
+            # guard value for all green args, needed to make sure
+            # that assembler that we call is still correct
+            greenargs = varargs[1:num_green_args + 1]
+            self.generate_guard_value_for_green_args(pc, greenargs)
         res = self.do_residual_call(varargs, descr=calldescr, exc=True)
         if not self.metainterp.is_blackholing() and token is not None:
             # XXX fix the call position, <UGLY!>
@@ -687,7 +691,8 @@ class MIFrame(object):
             assert found
             # </UGLY!>
             # this will substitute the residual call with assembler call
-            self.metainterp.direct_assembler_call(varargs, token, call_position)
+            self.metainterp.direct_assembler_call(pc, varargs, token,
+                                                  call_position)
         return res
 
     @arguments("descr", "varargs")
@@ -798,7 +803,7 @@ class MIFrame(object):
     def opimpl_keepalive(self, box):
         pass     # xxx?
 
-    def generate_merge_point(self, pc, varargs):
+    def generate_guard_value_for_green_args(self, pc, varargs):
         num_green_args = self.metainterp.staticdata.num_green_args
         for i in range(num_green_args):
             varargs[i] = self.implement_guard_value(pc, varargs[i])
@@ -838,7 +843,7 @@ class MIFrame(object):
     @arguments("orgpc")
     def opimpl_jit_merge_point(self, pc):
         if not self.metainterp.is_blackholing():
-            self.generate_merge_point(pc, self.env)
+            self.generate_guard_value_for_green_args(pc, self.env)
             # xxx we may disable the following line in some context later
             self.debug_merge_point()
             if self.metainterp.seen_can_enter_jit:
@@ -2025,7 +2030,7 @@ class MetaInterp(object):
                 max_key = key
         return max_key
 
-    def direct_assembler_call(self, varargs, token, call_position):
+    def direct_assembler_call(self, pc, varargs, token, call_position):
         """ Generate a direct call to assembler for portal entry point.
         """
         assert not self.is_blackholing() # XXX
