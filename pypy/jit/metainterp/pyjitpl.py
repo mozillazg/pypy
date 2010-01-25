@@ -1117,6 +1117,9 @@ class MetaInterpStaticData(object):
         self._addr2name_values = []
 
         self.__dict__.update(compile.make_done_loop_tokens())
+        # store this information for fastpath of call_assembler
+        d = self.loop_tokens_done_with_this_frame_int[0].finishdescr
+        self.cpu.done_with_this_frame_int_v = self.cpu.get_fail_descr_number(d)
 
     def _freeze_(self):
         return True
