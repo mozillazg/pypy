@@ -99,7 +99,8 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     @staticmethod
     def ll_build(ll_builder):
         final_size = ll_builder.used
-        return rgc.finish_building_buffer(ll_builder.buf, final_size)
+        return rgc.finish_building_buffer(ll_builder.buf, ll_builder.allocated,
+                                          final_size)
 
 class StringBuilderRepr(BaseStringBuilderRepr):
     lowleveltype = lltype.Ptr(STRINGBUILDER)

@@ -576,36 +576,31 @@ class GCTransformer(BaseGCTransformer):
 
     def gct_resize_buffer(self, hop):
         op = hop.spaceop
-        if self._can_realloc():
-            self._gct_resize_buffer_realloc(hop, op.args[1], op.args[2], True)
-        else:
-            self._gct_resize_buffer_no_realloc(hop, op.args[1])
+        # if we want to support a general realloc, support goes here
+        self._malloc_and_copy(hop, op.args[1], op.args[2])
 
-    def _can_realloc(self):
-        return False
+    # def _malloc_and_copy(self, hop, v_oldsize, v_newsize, grow=True):
+    #     def intconst(c): return rmodel.inputconst(lltype.Signed, c)
+    #     op = hop.spaceop
+    #     flags = {'flavor':'gc', 'varsize': True}
+    #     TYPE = op.args[0].concretetype.TO
+    #     ARRAY = TYPE._flds[TYPE._arrayfld]
+    #     offset_to_length = llmemory.FieldOffset(TYPE, TYPE._arrayfld) + \
+    #                        llmemory.ArrayLengthOffset(ARRAY)
+    #     c_const_size = intconst(llmemory.sizeof(TYPE, 0))
+    #     c_item_size = intconst(llmemory.sizeof(ARRAY.OF))
 
-    def _gct_resize_buffer_realloc(self, hop, v_oldsize, v_newsize, grow=True):
-        def intconst(c): return rmodel.inputconst(lltype.Signed, c)
-        op = hop.spaceop
-        flags = {'flavor':'gc', 'varsize': True}
-        TYPE = op.args[0].concretetype.TO
-        ARRAY = TYPE._flds[TYPE._arrayfld]
-        offset_to_length = llmemory.FieldOffset(TYPE, TYPE._arrayfld) + \
-                           llmemory.ArrayLengthOffset(ARRAY)
-        c_const_size = intconst(llmemory.sizeof(TYPE, 0))
-        c_item_size = intconst(llmemory.sizeof(ARRAY.OF))
+    #     c_lengthofs = intconst(offset_to_length)
+    #     c_itemsofs = intconst(llmemory.itemoffsetof(TYPE, 0))
+    #     v_ptr = op.args[0]
+    #     v_ptr = gen_cast(hop.llops, llmemory.GCREF, v_ptr)
+    #     c_grow = rmodel.inputconst(lltype.Bool, grow)
+    #     v_raw = self.perform_realloc(hop, v_ptr, v_oldsize, v_newsize,
+    #                                  c_const_size, c_item_size, c_lengthofs,
+    #                                  c_itemsofs, c_grow)
+    #     hop.cast_result(v_raw)
 
-        c_lengthofs = intconst(offset_to_length)
-        c_itemsofs = intconst(llmemory.itemoffsetof(TYPE, 0))
-        v_ptr = op.args[0]
-        v_ptr = gen_cast(hop.llops, llmemory.GCREF, v_ptr)
-        c_grow = rmodel.inputconst(lltype.Bool, grow)
-        v_raw = self.perform_realloc(hop, v_ptr, v_oldsize, v_newsize,
-                                     c_const_size, c_item_size, c_lengthofs,
-                                     c_itemsofs, c_grow)
-        hop.cast_result(v_raw)
-
-    def _gct_resize_buffer_no_realloc(self, hop, v_lgt):
+    def _malloc_and_copy(self, hop, v_lgt):
         op = hop.spaceop
         meth = self.gct_fv_gc_malloc_varsize
         flags = {'flavor':'gc', 'varsize': True, 'keep_current_args': True}
@@ -634,6 +629,7 @@ class GCTransformer(BaseGCTransformer):
         hop.genop('raw_memcopy', vlist)
 
     def gct_finish_building_buffer(self, hop):
+        xxx
         op = hop.spaceop
         if self._can_realloc():
             return self._gct_resize_buffer_realloc(hop, op.args[1],

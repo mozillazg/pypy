@@ -308,7 +308,7 @@ class ResizeBufferEntry(ExtRegistryEntry):
         return hop.genop('resize_buffer', vlist,
                          resulttype=hop.r_result.lowleveltype)
 
-def finish_building_buffer(ptr, final_size):
+def finish_building_buffer(ptr, old_size, final_size):
     """ Finish building resizable buffer returned by resizable_buffer_of_shape
     """
     return ptr
@@ -316,20 +316,24 @@ def finish_building_buffer(ptr, final_size):
 class FinishBuildingBufferEntry(ExtRegistryEntry):
     _about_ = finish_building_buffer
 
-    def compute_result_annotation(self, s_arr, s_final_size):
+    def compute_result_annotation(self, s_arr, s_old_size, s_final_size):
         from pypy.annotation.model import SomePtr, s_ImpossibleValue,\
              SomeInteger
         assert isinstance(s_arr, SomePtr)
+        assert isinstance(s_old_size, SomeInteger)
         assert isinstance(s_final_size, SomeInteger)
         return s_arr
 
     def specialize_call(self, hop):
         from pypy.rpython.lltypesystem import lltype
         vlist = [hop.inputarg(hop.args_r[0], 0),
-                 hop.inputarg(hop.args_r[1], 1)]
-        hop.exception_cannot_occur()
-        return hop.genop('finish_building_buffer', vlist,
-                         resulttype=hop.r_result.lowleveltype)
+                 hop.inputarg(hop.args_r[1], 1),
+                 hop.inputarg(hop.args_r[2], 2)]
+        hop.exception_is_here()
+        res = hop.genop('finish_building_buffer', vlist,
+                        resulttype=hop.r_result.lowleveltype)
+        hop.genop('keepalive', [hop.args_v[0]])
+        return res
 
 def ll_arraycopy(source, dest, source_start, dest_start, length):
     from pypy.rpython.lltypesystem.lloperation import llop
