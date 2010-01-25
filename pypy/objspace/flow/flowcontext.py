@@ -290,7 +290,7 @@ class FlowExecutionContext(ExecutionContext):
                 self.recorder.crnt_block.closeblock(link)
 
             except OperationError, e:
-                #print "OE", e.w_type, e.w_value
+                #print "OE", e.w_type, e.get_w_value(self.space)
                 if (self.space.do_imports_immediately and
                     e.w_type is self.space.w_ImportError):
                     raise ImportError('import statement always raises %s' % (
