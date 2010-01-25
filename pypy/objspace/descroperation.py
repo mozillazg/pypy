@@ -574,7 +574,8 @@ def old_slice_range(space, w_obj, w_start, w_stop):
 
 def _make_binop_impl(symbol, specialnames):
     left, right = specialnames
-    errormsg = "unsupported operand type(s) for %s: '%%s' and '%%s'" % symbol
+    errormsg = "unsupported operand type(s) for %s: '%%s' and '%%s'" % (
+        symbol.replace('%', '%%'),)
 
     def binop_impl(space, w_obj1, w_obj2):
         w_typ1 = space.type(w_obj1)
