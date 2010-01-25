@@ -26,7 +26,7 @@ def new_grow_func(name):
             new_allocated = ovfcheck(new_allocated + needed)
         except OverflowError:
             raise MemoryError
-        ll_builder.buf = rgc.resize_buffer(ll_builder.buf, ll_builder.used,
+        ll_builder.buf = rgc.resize_buffer(ll_builder.buf, ll_builder.allocated,
                                            new_allocated)
         ll_builder.allocated = new_allocated
     return func_with_new_name(stringbuilder_grow, name)
