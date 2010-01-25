@@ -844,6 +844,10 @@ class Frame(object):
             except LLException, lle:
                 assert _last_exception is None, "exception left behind"
                 _last_exception = lle
+                # fish op
+                op = self.loop.operations[self.opindex]
+                if op.result is not None:
+                    return 0
         finally:
             self._may_force = -1
 
