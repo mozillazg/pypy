@@ -754,8 +754,8 @@ class LLFrame(object):
     def op_resize_buffer(self, obj, old_size, new_size):
         return self.heap.resize_buffer(obj, old_size, new_size)
 
-    def op_finish_building_buffer(self, obj, size):
-        return self.heap.finish_building_buffer(obj, size)
+    def op_finish_building_buffer(self, obj, oldsize, size):
+        return self.heap.finish_building_buffer(obj, oldsize, size)
 
     def op_free(self, obj, flavor):
         assert isinstance(flavor, str)

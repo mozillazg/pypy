@@ -135,29 +135,6 @@ class GCBase(object):
         # lots of cast and reverse-cast around...
         return llmemory.cast_ptr_to_adr(ref)
 
-    def realloc(self, source, oldlength, newlength, fixedsize, itemsize,
-                lengthofs, itemsofs, grow):
-        # by default, realloc mallocs stuff and copies it over when growing.
-        # when shrinking, we only change length and be happy
-        source_adr = llmemory.cast_ptr_to_adr(source)
-        type_id = self.get_type_id(source_adr)
-        if not hasattr(self, 'malloc_varsize'):
-            malloc_varsize = self.malloc_varsize_clear
-        else:
-            malloc_varsize = self.malloc_varsize
-        typeid = self.get_type_id(source_adr)
-        if grow:
-            dest = malloc_varsize(typeid, newlength, fixedsize, itemsize,
-                                  lengthofs, True)
-            dest_adr = llmemory.cast_ptr_to_adr(dest)
-            llmemory.raw_memcopy(source_adr + itemsofs, dest_adr + itemsofs,
-                                 itemsize * oldlength)
-            keepalive_until_here(source)
-        else:
-            (source_adr + lengthofs).signed[0] = newlength
-            dest = source
-        return dest
-
     def malloc_nonmovable(self, typeid, length=0, zero=False):
         return self.malloc(typeid, length, zero)
 

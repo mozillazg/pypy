@@ -4,7 +4,6 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.memory import gctypelayout
 from pypy.objspace.flow.model import Constant
 
-
 class GCManagedHeap(object):
 
     def __init__(self, llinterp, flowgraphs, gc_class, GC_PARAMS={}):
@@ -70,28 +69,22 @@ class GCManagedHeap(object):
     def resize_buffer(self, obj, oldlength, newlength):
         T = lltype.typeOf(obj).TO
         ARRAY = getattr(T, T._arrayfld)
+        addr = llmemory.cast_ptr_to_adr(obj)
+        newaddr = self.gc.malloc(self.gc.get_type_id(addr), newlength, True)
+        addr = llmemory.cast_ptr_to_adr(obj)
         itemsofs = (llmemory.FieldOffset(T, T._arrayfld) +
                     llmemory.itemoffsetof(ARRAY, 0))
-        fixedsize = llmemory.sizeof(T, 0)
         itemsize = llmemory.sizeof(ARRAY.OF)
-        lengthofs = llmemory.FieldOffset(T, T._arrayfld) + \
-                           llmemory.ArrayLengthOffset(ARRAY)
-        result = self.gc.realloc(obj, oldlength, newlength, fixedsize,
-                                 itemsize, lengthofs, itemsofs, True)
-        return lltype.cast_opaque_ptr(lltype.typeOf(obj), result)
+        tocopy = min(newlength, oldlength)
+        llmemory.raw_memcopy(addr + itemsofs, newaddr + itemsofs,
+                             tocopy * itemsize)
+        return llmemory.cast_adr_to_ptr(newaddr, lltype.Ptr(T))
 
-    def finish_building_buffer(self, obj, newlength):
-        T = lltype.typeOf(obj).TO
-        ARRAY = getattr(T, T._arrayfld)
-        itemsofs = (llmemory.FieldOffset(T, T._arrayfld) +
-                    llmemory.itemoffsetof(ARRAY, 0))
-        fixedsize = llmemory.sizeof(T, 0)
-        itemsize = llmemory.sizeof(ARRAY.OF)
-        lengthofs = llmemory.FieldOffset(T, T._arrayfld) + \
-                           llmemory.ArrayLengthOffset(ARRAY)
-        result = self.gc.realloc(obj, 0, newlength, fixedsize,
-                                 itemsize, lengthofs, itemsofs, False)
-        return lltype.cast_opaque_ptr(lltype.typeOf(obj), result)
+    def finish_building_buffer(self, obj, oldlength, newlength):
+        if hasattr(self.gc, 'realloc_shrink'):
+            xxx
+        else:
+            return self.resize_buffer(obj, oldlength, newlength)
 
     def free(self, TYPE, flavor='gc'):
         assert flavor != 'gc'
