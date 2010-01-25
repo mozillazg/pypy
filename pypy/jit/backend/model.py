@@ -1,8 +1,12 @@
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import history, compile
 
 
 class AbstractCPU(object):
     supports_floats = False
+    # assembler_helper_ptr - a pointer to helper to call after a direct
+    #                        assembler call
+    portal_calldescr = None
+    done_with_this_frame_int_v = -1
 
     def __init__(self):
         self.fail_descr_list = []
@@ -209,6 +213,12 @@ class AbstractCPU(object):
     def do_call(self, args, calldescr):
         raise NotImplementedError
 
+    def do_call_assembler(self, args, token):
+        raise NotImplementedError
+
+    def do_call_loopinvariant(self, args, calldescr):
+        return self.do_call(args, calldescr)
+
     def do_cond_call_gc_wb(self, args, calldescr):
         if args[0].getint() & args[1].getint():
             self.do_call(args[2:], calldescr)
@@ -217,10 +227,6 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def do_cast_ptr_to_int(self, ptrbox):
-        raise NotImplementedError
-
-    def do_force_token(self):
-        # this should not be implemented at all by the backends
         raise NotImplementedError
 
     def do_call_may_force(self, args, calldescr):

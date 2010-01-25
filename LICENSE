@@ -27,7 +27,7 @@ documentation in the 'pypy' directories is licensed as follows:
     DEALINGS IN THE SOFTWARE.
 
 
-PyPy Copyright holders 2003-2009
+PyPy Copyright holders 2003-2010
 ----------------------------------- 
 
 Except when otherwise stated (look for LICENSE files or information at
@@ -86,6 +86,7 @@ copyrighted by one or more of the following people and organizations:
     Guenter Jantzen
     Dinu Gherman
     Georg Brandl
+    Benjamin Peterson
     Ben Young
     Nicolas Chauvat
     Jean-Paul Calderone

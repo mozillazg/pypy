@@ -1,5 +1,6 @@
 import py
 from pypy.interpreter import gateway
+from pypy.objspace.test import test_descriptor
 
 
 class AppTestUserObject:
@@ -297,3 +298,10 @@ class AppTestWithMultiMethodVersion2(AppTestUserObject):
 class AppTestWithGetAttributeShortcut(AppTestUserObject):
     OPTIONS = {"objspace.std.getattributeshortcut": True}
 
+
+class AppTestDescriptorWithGetAttributeShortcut(
+    test_descriptor.AppTest_Descriptor):
+    # for the individual tests see
+    # ====> ../../test/test_descriptor.py
+
+    OPTIONS = {"objspace.std.getattributeshortcut": True}

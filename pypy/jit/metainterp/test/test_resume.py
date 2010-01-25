@@ -12,6 +12,8 @@ class Storage:
     rd_frame_info_list = None
     rd_numb = None
     rd_consts = []
+    rd_virtuals = None
+    rd_pendingfields = None
 
 def test_tag():
     assert tag(3, 1) == rffi.r_short(3<<2|1)
@@ -39,6 +41,12 @@ def test_tagged_list_eq():
                           [UNASSIGNED, tag(1, TAGBOX), tag(-2, TAGVIRTUAL)])
     assert not tagged_list_eq([tag(1, TAGBOX)], [tag(-2, TAGBOX)])
     assert not tagged_list_eq([tag(1, TAGBOX), tag(-2, TAGBOX)], [tag(1, TAGBOX)])
+
+def test_vinfo():
+    v1 = AbstractVirtualInfo()
+    v1.set_content([1, 2, 4])
+    assert v1.equals([1, 2, 4])
+    assert not v1.equals([1, 2, 6])
 
 class MyMetaInterp:
     _already_allocated_resume_virtuals = None
@@ -80,7 +88,6 @@ def test_simple_read():
                             tag(0, TAGBOX),
                             tag(1, TAGBOX)])
     storage.rd_numb = numb
-    storage.rd_virtuals = None
 
     b1s, b2s, b3s = [BoxInt(), BoxPtr(), BoxInt()]
     assert b1s != b3s
@@ -103,7 +110,6 @@ def test_simple_read_tagged_ints():
                             tag(0, TAGBOX),
                             tag(1, TAGBOX)])
     storage.rd_numb = numb
-    storage.rd_virtuals = None
     b1s, b2s, b3s = [BoxInt(), BoxPtr(), BoxInt()]
     assert b1s != b3s
     reader = ResumeDataReader(storage, [b1s, b2s, b3s], MyMetaInterp())
@@ -125,6 +131,7 @@ def test_prepare_virtuals():
         rd_virtuals = [FakeVinfo(), None]
         rd_numb = []
         rd_consts = []
+        rd_pendingfields = None
     class FakeMetainterp(object):
         _already_allocated_resume_virtuals = None
         cpu = None
@@ -175,7 +182,6 @@ def test_FrameInfo_create():
     assert fi.jitcode is jitcode
     assert fi.pc == 1
     assert fi.exception_target == 2
-    assert fi.level == 1
 
     jitcode1 = "JITCODE1"
     frame1 = FakeFrame(jitcode, 3, 4)
@@ -184,7 +190,6 @@ def test_FrameInfo_create():
     assert fi1.jitcode is jitcode
     assert fi1.pc == 3
     assert fi1.exception_target == 4
-    assert fi1.level == 2
 
 def test_Numbering_create():
     l = [1, 2]
@@ -203,29 +208,32 @@ def test_capture_resumedata():
     fs = [FakeFrame("code0", 0, -1, b1, c1, b2)]
 
     storage = Storage()
-    capture_resumedata(fs, None, storage)
+    capture_resumedata(fs, None, [], storage)
 
     assert fs[0].parent_resumedata_snapshot is None
     assert fs[0].parent_resumedata_frame_info_list is None
 
     assert storage.rd_frame_info_list.prev is None
     assert storage.rd_frame_info_list.jitcode == 'code0'
-    assert storage.rd_snapshot.prev is None
-    assert storage.rd_snapshot.boxes == fs[0].env
-    assert storage.rd_snapshot.boxes is not fs[0].env
+    assert storage.rd_snapshot.boxes == []    # for virtualrefs
+    snapshot = storage.rd_snapshot.prev
+    assert snapshot.prev is None
+    assert snapshot.boxes == fs[0].env
+    assert snapshot.boxes is not fs[0].env
 
     storage = Storage()
     fs = [FakeFrame("code0", 0, -1, b1, c1, b2),
           FakeFrame("code1", 3, 7, b3, c2, b1),
           FakeFrame("code2", 9, -1, c3, b2)]
-    capture_resumedata(fs, None, storage)
+    capture_resumedata(fs, None, [], storage)
 
     frame_info_list = storage.rd_frame_info_list
     assert frame_info_list.prev is fs[2].parent_resumedata_frame_info_list
     assert frame_info_list.jitcode == 'code2'
     assert frame_info_list.pc == 9
 
-    snapshot = storage.rd_snapshot
+    assert storage.rd_snapshot.boxes == []    # for virtualrefs
+    snapshot = storage.rd_snapshot.prev
     assert snapshot.prev is fs[2].parent_resumedata_snapshot
     assert snapshot.boxes == fs[2].env
     assert snapshot.boxes is not fs[2].env
@@ -249,8 +257,9 @@ def test_capture_resumedata():
     fs[2].env = [b2, b3]
     fs[2].pc = 15
     vbs = [b1, b2]
-    capture_resumedata(fs, vbs, storage)
-       
+    vrs = [b3]
+    capture_resumedata(fs, vbs, vrs, storage)
+
     frame_info_list = storage.rd_frame_info_list
     assert frame_info_list.prev is fs[2].parent_resumedata_frame_info_list
     assert frame_info_list.jitcode == 'code2'
@@ -259,6 +268,10 @@ def test_capture_resumedata():
     snapshot = storage.rd_snapshot
     assert snapshot.boxes == vbs
     assert snapshot.boxes is not vbs
+
+    snapshot = snapshot.prev
+    assert snapshot.boxes == vrs
+    assert snapshot.boxes is not vrs
 
     snapshot = snapshot.prev
     assert snapshot.prev is fs[2].parent_resumedata_snapshot
@@ -278,7 +291,7 @@ def test_rebuild_from_resumedata():
     fs = [FakeFrame("code0", 0, -1, b1, c1, b2),
           FakeFrame("code1", 3, 7, b3, c2, b1),
           FakeFrame("code2", 9, -1, c3, b2)]
-    capture_resumedata(fs, None, storage)
+    capture_resumedata(fs, None, [], storage)
     memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
     modifier = ResumeDataVirtualAdder(storage, memo)
     liveboxes = modifier.finish({})
@@ -289,7 +302,7 @@ def test_rebuild_from_resumedata():
 
     result = rebuild_from_resumedata(metainterp, newboxes, storage,
                                      False)
-    assert result is None
+    assert result == (None, [])
     fs2 = [FakeFrame("code0", 0, -1, b1t, c1, b2t),
            FakeFrame("code1", 3, 7, b3t, c2, b1t),
            FakeFrame("code2", 9, -1, c3, b2t)]
@@ -302,7 +315,7 @@ def test_rebuild_from_resumedata_with_virtualizable():
     fs = [FakeFrame("code0", 0, -1, b1, c1, b2),
           FakeFrame("code1", 3, 7, b3, c2, b1),
           FakeFrame("code2", 9, -1, c3, b2)]
-    capture_resumedata(fs, [b4], storage)
+    capture_resumedata(fs, [b4], [], storage)
     memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
     modifier = ResumeDataVirtualAdder(storage, memo)
     liveboxes = modifier.finish({})
@@ -313,7 +326,7 @@ def test_rebuild_from_resumedata_with_virtualizable():
 
     result = rebuild_from_resumedata(metainterp, newboxes, storage,
                                      True)
-    assert result == [b4t]
+    assert result == ([b4t], [])
     fs2 = [FakeFrame("code0", 0, -1, b1t, c1, b2t),
            FakeFrame("code1", 3, 7, b3t, c2, b1t),
            FakeFrame("code2", 9, -1, c3, b2t)]
@@ -326,10 +339,10 @@ def test_rebuild_from_resumedata_two_guards():
     fs = [FakeFrame("code0", 0, -1, b1, c1, b2),
           FakeFrame("code1", 3, 7, b3, c2, b1),
           FakeFrame("code2", 9, -1, c3, b2)]
-    capture_resumedata(fs, None, storage)
+    capture_resumedata(fs, None, [], storage)
     storage2 = Storage()
     fs = fs[:-1] + [FakeFrame("code2", 10, -1, c3, b2, b4)]
-    capture_resumedata(fs, None, storage2)
+    capture_resumedata(fs, None, [], storage2)
     
     memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
     modifier = ResumeDataVirtualAdder(storage, memo)
@@ -345,7 +358,7 @@ def test_rebuild_from_resumedata_two_guards():
 
     result = rebuild_from_resumedata(metainterp, newboxes, storage,
                                      False)
-    assert result is None
+    assert result == (None, [])
     fs2 = [FakeFrame("code0", 0, -1, b1t, c1, b2t),
            FakeFrame("code1", 3, 7, b3t, c2, b1t),
            FakeFrame("code2", 9, -1, c3, b2t)]
@@ -356,7 +369,7 @@ def test_rebuild_from_resumedata_two_guards():
     metainterp.framestack = []
     result = rebuild_from_resumedata(metainterp, newboxes, storage2,
                                      False)
-    assert result is None
+    assert result == (None, [])
     fs2 = fs2[:-1] + [FakeFrame("code2", 10, -1, c3, b2t, b4t)]
     assert metainterp.framestack == fs2
 
@@ -384,10 +397,10 @@ def test_rebuild_from_resumedata_two_guards_w_virtuals():
     fs = [FakeFrame("code0", 0, -1, b1, c1, b2),
           FakeFrame("code1", 3, 7, b3, c2, b1),
           FakeFrame("code2", 9, -1, c3, b2)]
-    capture_resumedata(fs, None, storage)
+    capture_resumedata(fs, None, [], storage)
     storage2 = Storage()
     fs = fs[:-1] + [FakeFrame("code2", 10, -1, c3, b2, b4)]
-    capture_resumedata(fs, None, storage2)
+    capture_resumedata(fs, None, [], storage2)
     
     memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
     values = {b2: virtual_value(b2, b5, c4)}
@@ -443,7 +456,7 @@ def test_rebuild_from_resumedata_two_guards_w_shared_virtuals():
                       LLtypeMixin.nodebox.constbox()]
     storage = Storage()
     fs = [FakeFrame("code0", 0, -1, c1, b2, b3)]
-    capture_resumedata(fs, None, storage)
+    capture_resumedata(fs, None, [], storage)
     
     memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
     values = {b2: virtual_value(b2, b5, c4)}
@@ -455,7 +468,7 @@ def test_rebuild_from_resumedata_two_guards_w_shared_virtuals():
 
     storage2 = Storage()
     fs = [FakeFrame("code0", 0, -1, b1, b4, b2)]
-    capture_resumedata(fs, None, storage2)
+    capture_resumedata(fs, None, [], storage2)
     values[b4] = virtual_value(b4, b6, c4)
     modifier = ResumeDataVirtualAdder(storage2, memo)
     liveboxes = modifier.finish(values)
@@ -468,7 +481,7 @@ def test_resumedata_top_recursive_virtuals():
     b1, b2, b3 = [BoxPtr(), BoxPtr(), BoxInt()]
     storage = Storage()
     fs = [FakeFrame("code0", 0, -1, b1, b2)]
-    capture_resumedata(fs, None, storage)
+    capture_resumedata(fs, None, [], storage)
     
     memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
     v1 = virtual_value(b1, b3, None)
@@ -961,6 +974,46 @@ def test_virtual_adder_make_vstruct():
     assert lltype.typeOf(ptr) == lltype.Ptr(LLtypeMixin.S)
     assert ptr.a == 111
     assert ptr.b == lltype.nullptr(LLtypeMixin.NODE)
+
+
+def test_virtual_adder_pending_fields():
+    b2s, b4s = [BoxPtr(), BoxPtr()]
+    storage = Storage()
+    memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
+    modifier = ResumeDataVirtualAdder(storage, memo)
+    modifier.liveboxes_from_env = {}
+    modifier.liveboxes = {}
+    modifier.vfieldboxes = {}
+
+    v2 = OptValue(b2s)
+    v4 = OptValue(b4s)
+    modifier.register_box(b2s)
+    modifier.register_box(b4s)
+
+    values = {b4s: v4, b2s: v2}
+    liveboxes = []
+    modifier._number_virtuals(liveboxes, values, 0)
+    assert liveboxes == [b2s, b4s]
+    modifier._add_pending_fields([(LLtypeMixin.nextdescr, b2s, b4s)])
+    storage.rd_consts = memo.consts[:]
+    storage.rd_numb = None
+    # resume
+    demo55.next = lltype.nullptr(LLtypeMixin.NODE)
+    b2t = BoxPtr(demo55o)
+    b4t = BoxPtr(demo66o)
+    newboxes = _resume_remap(liveboxes, [b2s, b4s], b2t, b4t)
+
+    metainterp = MyMetaInterp()
+    reader = ResumeDataReader(storage, newboxes, metainterp)
+    assert reader.virtuals is None
+    trace = metainterp.trace
+    b2set = (rop.SETFIELD_GC, [b2t, b4t], None, LLtypeMixin.nextdescr)
+    expected = [b2set]
+
+    for x, y in zip(expected, trace):
+        assert x == y
+    assert demo55.next == demo66
+
 
 def test_invalidation_needed():
     class options:

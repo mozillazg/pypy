@@ -16,7 +16,7 @@ essential_modules = dict.fromkeys(
 
 default_modules = essential_modules.copy()
 default_modules.update(dict.fromkeys(
-    ["_codecs", "gc", "_weakref", "marshal", "errno",
+    ["_codecs", "gc", "_weakref", "marshal", "errno", "imp",
      "math", "_sre", "_pickle_support", "operator",
      "parser", "symbol", "token", "_ast", "_random", "__pypy__",
      "_testing"]))
@@ -345,7 +345,7 @@ def set_pypy_opt_level(config, level):
         config.objspace.std.suggest(withprebuiltint=True)
         config.objspace.std.suggest(withrangelist=True)
         config.objspace.std.suggest(withprebuiltchar=True)
-        config.objspace.std.suggest(withsharingdict=True)
+        config.objspace.std.suggest(withinlineddict=True)
         config.objspace.std.suggest(withstrslice=True)
         config.objspace.std.suggest(withstrjoin=True)
         # xxx other options? ropes maybe?

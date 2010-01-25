@@ -17,11 +17,7 @@
 #include "src/mem.h"
 #include "src/exception.h"
 #include "src/support.h"
-#ifndef AVR
-#include "src/trace.h"
-#else
-    #define PY_LONG_LONG long long
-#endif
+#define PY_LONG_LONG long long
 
 #ifndef PYPY_STANDALONE
 #  include "src/pyobj.h"
@@ -51,7 +47,8 @@
 /*** modules ***/
 #ifdef HAVE_RTYPER      /* only if we have an RTyper */
 #  include "src/rtyper.h"
-#  include "src/debug.h"
+#  include "src/debug_print.h"
+#  include "src/debug_traceback.h"
 #ifndef AVR
 #  include "src/ll_os.h"
 #  include "src/ll_strtod.h"

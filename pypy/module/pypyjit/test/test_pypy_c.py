@@ -89,8 +89,12 @@ class PyPyCJITTests(object):
         print >> f, source
         # some support code...
         print >> f, py.code.Source("""
-            import sys, pypyjit
-            pypyjit.set_param(threshold=3)
+            import sys
+            try: # make the file runnable by CPython
+                import pypyjit
+                pypyjit.set_param(threshold=3)
+            except ImportError:
+                pass
 
             def check(args, expected):
                 print >> sys.stderr, 'trying:', args
@@ -113,8 +117,8 @@ class PyPyCJITTests(object):
         assert result
         assert result.splitlines()[-1].strip() == 'OK :-)'
         self.parse_loops(logfilepath)
+        self.print_loops()
         if self.total_ops > expected_max_ops:
-            self.print_loops()
             assert 0, "too many operations: got %d, expected maximum %d" % (
                 self.total_ops, expected_max_ops)
 
@@ -172,7 +176,7 @@ class PyPyCJITTests(object):
                         x = x + (i&j)
                     i = i + 1
                 return x
-        ''', 194,
+        ''', 220,
                    ([2117], 1083876708))
 
     def test_factorial(self):
@@ -183,7 +187,7 @@ class PyPyCJITTests(object):
                     r *= n
                     n -= 1
                 return r
-        ''', 26,
+        ''', 28,
                    ([5], 120),
                     ([20], 2432902008176640000L))
 
@@ -205,30 +209,43 @@ class PyPyCJITTests(object):
 
             def main():
                 return richards.main(iterations = 1)
-        ''' % (sys.path,), 7000,
+        ''' % (sys.path,), 7200,
                    ([], 42))
 
     def test_simple_call(self):
         self.run_source('''
+            OFFSET = 0
             def f(i):
-                return i + 1
+                return i + 1 + OFFSET
             def main(n):
                 i = 0
-                while i < n:
+                while i < n+OFFSET:
                     i = f(f(i))
                 return i
-        ''', 76,
+        ''', 96,
                    ([20], 20),
                     ([31], 32))
         ops = self.get_by_bytecode("LOAD_GLOBAL")
-        assert len(ops) == 2
-        assert ops[0].get_opnames() == ["getfield_gc", "getarrayitem_gc",
+        assert len(ops) == 5
+        assert ops[0].get_opnames() == ["getfield_gc", "guard_value",
+                                        "getfield_gc", "guard_isnull",
                                         "getfield_gc", "guard_nonnull_class"]
-        assert not ops[1] # second LOAD_GLOBAL folded away
+        # the second getfield on the same globals is quicker
+        assert ops[1].get_opnames() == ["getfield_gc", "guard_nonnull_class"]
+        assert not ops[2] # second LOAD_GLOBAL of the same name folded away
+        # LOAD_GLOBAL of the same name but in different function partially
+        # folded away
+        # XXX could be improved
+        assert ops[3].get_opnames() == ["guard_value",
+                                        "getfield_gc", "guard_isnull"]
+        assert not ops[4]
         ops = self.get_by_bytecode("CALL_FUNCTION")
         assert len(ops) == 2
-        for bytecode in ops:
-            assert not bytecode.get_opnames("call")
+        for i, bytecode in enumerate(ops):
+            if i == 0:
+                assert "call(getexecutioncontext)" in str(bytecode)
+            else:
+                assert not bytecode.get_opnames("call")
             assert not bytecode.get_opnames("new")
             assert len(bytecode.get_opnames("guard")) <= 10
 
@@ -258,8 +275,11 @@ class PyPyCJITTests(object):
 
         ops = self.get_by_bytecode("CALL_METHOD")
         assert len(ops) == 2
-        for bytecode in ops:
-            assert not bytecode.get_opnames("call")
+        for i, bytecode in enumerate(ops):
+            if i == 0:
+                assert "call(getexecutioncontext)" in str(bytecode)
+            else:
+                assert not bytecode.get_opnames("call")
             assert not bytecode.get_opnames("new")
             assert len(bytecode.get_opnames("guard")) <= 9
         assert len(ops[1]) < len(ops[0])
@@ -270,6 +290,35 @@ class PyPyCJITTests(object):
                                         "guard_nonnull_class"]
         assert not ops[1] # second LOAD_ATTR folded away
 
+    def test_static_classmethod_call(self):
+        self.run_source('''
+            class A(object):
+                @classmethod
+                def f(cls, i):
+                    return i + (cls is A) + 1
+
+                @staticmethod
+                def g(i):
+                    return i - 1
+
+            def main(n):
+                i = 0
+                a = A()
+                while i < n:
+                    x = a.f(i)
+                    i = a.g(x)
+                return i
+        ''', 105,
+                   ([20], 20),
+                   ([31], 31))
+        ops = self.get_by_bytecode("LOOKUP_METHOD")
+        assert len(ops) == 2
+        assert not ops[0].get_opnames("call")
+        assert not ops[0].get_opnames("new")
+        assert len(ops[0].get_opnames("guard")) <= 7
+        assert len(ops[0].get_opnames("getfield")) < 6
+        assert not ops[1] # second LOOKUP_METHOD folded away
+
     def test_default_and_kw(self):
         self.run_source('''
             def f(i, j=1):
@@ -279,16 +328,44 @@ class PyPyCJITTests(object):
                 while i < n:
                     i = f(f(i), j=1)
                 return i
-        ''', 98,
+        ''', 100,
                    ([20], 20),
                    ([31], 32))
         ops = self.get_by_bytecode("CALL_FUNCTION")
         assert len(ops) == 2
-        for bytecode in ops:
-            assert not bytecode.get_opnames("call")
+        for i, bytecode in enumerate(ops):
+            if i == 0:
+                assert "call(getexecutioncontext)" in str(bytecode)
+            else:
+                assert not bytecode.get_opnames("call")
             assert not bytecode.get_opnames("new")
         assert len(ops[0].get_opnames("guard")) <= 14
         assert len(ops[1].get_opnames("guard")) <= 3
+
+    def test_kwargs(self):
+        self.run_source('''
+            d = {}
+
+            def g(**args):
+                return len(args)
+
+            def main(x):
+                s = 0
+                d = {}
+                for i in range(x):
+                    s += g(**d)
+                    d[str(i)] = i
+                    if i % 100 == 99:
+                        d = {}
+                return s
+        ''', 100000, ([100], 4950),
+                    ([1000], 49500),
+                    ([10000], 495000),
+                    ([100000], 4950000))
+        assert len(self.loops) == 2
+        op, = self.get_by_bytecode("CALL_FUNCTION_KW")
+        # XXX a bit too many guards, but better than before
+        assert len(op.get_opnames("guard")) <= 10
 
     def test_virtual_instance(self):
         self.run_source('''
@@ -303,7 +380,7 @@ class PyPyCJITTests(object):
                     a.x = 2
                     i = i + a.x
                 return i
-        ''', 63,
+        ''', 67,
                    ([20], 20),
                    ([31], 32))
 
@@ -334,7 +411,7 @@ class PyPyCJITTests(object):
                 while i < n:
                     i = i + a.x
                 return i
-        ''', 39,
+        ''', 41,
                    ([20], 20),
                    ([31], 32))
 
@@ -375,15 +452,40 @@ class PyPyCJITTests(object):
                     i += 1
                     l.append(i)
                 return i, len(l)
-        ''', 37,
+        ''', 39,
                    ([20], (20, 18)),
                    ([31], (31, 29)))
 
         bytecode, = self.get_by_bytecode("CALL_METHOD")
         assert len(bytecode.get_opnames("new_with_vtable")) == 1 # the forcing of the int
         assert len(bytecode.get_opnames("call")) == 1 # the call to append
-        assert len(bytecode.get_opnames("guard")) == 1 # guard_no_exception after the call
+        assert len(bytecode.get_opnames("guard")) == 2 # guard for profiling disabledness + guard_no_exception after the call
 
+    def test_range_iter(self):
+        self.run_source('''
+            def g(n):
+                return range(n)
+
+            def main(n):
+                s = 0
+                for i in range(n):
+                    s += g(n)[i]
+                return s
+        ''', 143, ([1000], 1000 * 999 / 2))
+        bytecode, = self.get_by_bytecode("BINARY_SUBSCR")
+        assert bytecode.get_opnames("guard") == [
+            "guard_isnull",  # check that the range list is not forced
+            "guard_false",   # check that the index is >= 0
+            "guard_false",   # check that the index is lower than the current length
+            ]
+        bytecode, _ = self.get_by_bytecode("FOR_ITER") # second bytecode is the end of the loop
+        assert bytecode.get_opnames("guard") == [
+            "guard_class",   # check the class of the iterator
+            "guard_nonnull", # check that the iterator is not finished
+            "guard_isnull",  # check that the range list is not forced
+            "guard_false",   # check that the index is lower than the current length
+            ]
+ 
     def test_exception_inside_loop_1(self):
         py.test.skip("exceptions: in-progress")
         self.run_source('''
@@ -445,7 +547,27 @@ class TestJIT(PyPyCJITTests):
     def setup_class(cls):
         if option.pypy_c is None:
             py.test.skip("pass --pypy!")
+        if not has_info(option.pypy_c, 'translation.jit'):
+            py.test.skip("must give a pypy-c with the jit enabled")
         cls.tmpdir = udir.join('pypy-jit')
         cls.tmpdir.ensure(dir=1)
         cls.counter = 0
         cls.pypy_c = option.pypy_c
+
+def has_info(pypy_c, option):
+    g = os.popen('"%s" --info' % pypy_c, 'r')
+    lines = g.readlines()
+    g.close()
+    if not lines:
+        raise ValueError("cannot execute %r" % pypy_c)
+    for line in lines:
+        line = line.strip()
+        if line.startswith(option + ':'):
+            line = line[len(option)+1:].strip()
+            if line == 'True':
+                return True
+            elif line == 'False':
+                return False
+            else:
+                return line
+    raise ValueError(option + ' not found in ' + pypy_c)

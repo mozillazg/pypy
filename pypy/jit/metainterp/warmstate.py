@@ -196,6 +196,7 @@ class WarmEnterState(object):
         get_jitcell = self.make_jitcell_getter()
         set_future_values = self.make_set_future_values()
         self.make_jitdriver_callbacks()
+        confirm_enter_jit = self.confirm_enter_jit
 
         def maybe_compile_and_run(*args):
             """Entry point to the JIT.  Called at the point with the
@@ -211,8 +212,8 @@ class WarmEnterState(object):
             if vinfo is not None:
                 virtualizable = args[vinfo.index_of_virtualizable]
                 virtualizable = vinfo.cast_to_vtype(virtualizable)
-                assert virtualizable != globaldata.blackhole_virtualizable, (
-                    "reentering same frame via blackhole")
+                if globaldata.blackhole_virtualizable == virtualizable:
+                    return
             else:
                 virtualizable = None
 
@@ -227,6 +228,9 @@ class WarmEnterState(object):
                     cell.counter = n
                     return
                 # bound reached; start tracing
+                if not confirm_enter_jit(*args):
+                    cell.counter = 0
+                    return
                 from pypy.jit.metainterp.pyjitpl import MetaInterp
                 metainterp = MetaInterp(metainterp_sd)
                 try:
@@ -237,6 +241,8 @@ class WarmEnterState(object):
                     self.disable_noninlinable_function(metainterp)
                     raise
             else:
+                if not confirm_enter_jit(*args):
+                    return
                 # machine code was already compiled for these greenargs
                 # get the assembler and fill in the boxes
                 set_future_values(*args[num_green_args:])
@@ -252,7 +258,7 @@ class WarmEnterState(object):
                 if vinfo is not None:
                     vinfo.reset_vable_token(virtualizable)
                 loop_token = fail_descr.handle_fail(metainterp_sd)
-
+       
         maybe_compile_and_run._dont_inline_ = True
         self.maybe_compile_and_run = maybe_compile_and_run
         return maybe_compile_and_run
@@ -448,6 +454,7 @@ class WarmEnterState(object):
         unwrap_greenkey = self.make_unwrap_greenkey()
         if can_inline_ptr is None:
             def can_inline_callable(*greenargs):
+                # XXX shouldn't it be False by default?
                 return True
         else:
             rtyper = self.warmrunnerdesc.rtyper
@@ -465,7 +472,16 @@ class WarmEnterState(object):
             greenargs = unwrap_greenkey(greenkey)
             return can_inline(*greenargs)
         self.can_inline_callable = can_inline_greenkey
-
+        
+        get_jitcell = self.make_jitcell_getter()
+        def get_assembler_token(greenkey):
+            greenargs = unwrap_greenkey(greenkey)
+            cell = get_jitcell(*greenargs)
+            if cell.counter >= 0:
+                return None
+            return cell.entry_loop_token
+        self.get_assembler_token = get_assembler_token
+        
         #
         get_location_ptr = self.warmrunnerdesc.get_printable_location_ptr
         if get_location_ptr is None:
@@ -483,3 +499,16 @@ class WarmEnterState(object):
                     res = hlstr(res)
                 return res
         self.get_location_str = get_location_str
+        #
+        confirm_enter_jit_ptr = self.warmrunnerdesc.confirm_enter_jit_ptr
+        if confirm_enter_jit_ptr is None:
+            def confirm_enter_jit(*args):
+                return True
+        else:
+            rtyper = self.warmrunnerdesc.rtyper
+            #
+            def confirm_enter_jit(*args):
+                fn = support.maybe_on_top_of_llinterp(rtyper,
+                                                      confirm_enter_jit_ptr)
+                return fn(*args)
+        self.confirm_enter_jit = confirm_enter_jit

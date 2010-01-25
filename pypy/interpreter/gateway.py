@@ -386,6 +386,15 @@ def int_unwrapping_space_method(typ):
     else:
         return typ.__name__ + '_w'
 
+
+def unwrap_spec(*spec):
+    """A decorator which attaches the unwrap_spec attribute."""
+    def decorator(func):
+        func.unwrap_spec = spec
+        return func
+    return decorator
+
+
 class BuiltinCode(eval.Code):
     "The code object implementing a built-in (interpreter-level) hook."
     _immutable_ = True
@@ -1075,6 +1084,11 @@ def appdef(source, applevel=ApplevelClass):
     """ 
     if not isinstance(source, str): 
         source = str(py.code.Source(source).strip())
+        while source.startswith('@py.test.mark.'):
+            # these decorators are known to return the same function
+            # object, we may ignore them
+            assert '\n' in source
+            source = source[source.find('\n') + 1:]
         assert source.startswith("def "), "can only transform functions" 
         source = source[4:]
     p = source.find('(')

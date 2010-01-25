@@ -11,7 +11,7 @@ from pypy.jit.metainterp import heaptracker, support, history
 from pypy.tool.udir import udir
 from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
-from pypy.translator.backendopt.writeanalyze import WriteAnalyzer
+from pypy.translator.backendopt.writeanalyze import ReadWriteAnalyzer
 from pypy.jit.metainterp.typesystem import deref, arrayItem, fieldType
 from pypy.jit.metainterp.effectinfo import effectinfo_from_writeanalyze
 from pypy.jit.metainterp.effectinfo import VirtualizableAnalyzer
@@ -86,12 +86,22 @@ class CodeWriter(object):
         if leave_graph is not None:
             todo.append(leave_graph)        
         self.candidate_graphs = seen = set(todo)
+
+        def callers():
+            graph = top_graph
+            print graph
+            while graph in coming_from:
+                graph = coming_from[graph]
+                print '<-', graph
+        coming_from = {}
+
         while todo:
             top_graph = todo.pop()
             for _, op in top_graph.iterblockops():
                 if op.opname not in ("direct_call", "indirect_call", "oosend"):
                     continue
                 kind = self.guess_call_kind(op, is_candidate)
+                # use callers() to view the calling chain in pdb
                 if kind != "regular":
                     continue
                 for graph in self.graphs_from(op, is_candidate):
@@ -100,6 +110,7 @@ class CodeWriter(object):
                     assert is_candidate(graph)
                     todo.append(graph)
                     seen.add(graph)
+                    coming_from[graph] = top_graph
         return self.candidate_graphs
 
     def graphs_from(self, op, is_candidate=None):
@@ -185,7 +196,7 @@ class CodeWriter(object):
         self.portal_runner_ptr = portal_runner_ptr
         translator = self.rtyper.annotator.translator
         self.raise_analyzer = RaiseAnalyzer(translator)
-        self.write_analyzer = WriteAnalyzer(translator)
+        self.readwrite_analyzer = ReadWriteAnalyzer(translator)
         self.virtualizable_analyzer = VirtualizableAnalyzer(translator)
 
     def make_portal_bytecode(self, graph):
@@ -326,7 +337,7 @@ class CodeWriter(object):
         # ok
         if consider_effects_of is not None:
             effectinfo = effectinfo_from_writeanalyze(
-                    self.write_analyzer.analyze(consider_effects_of),
+                    self.readwrite_analyzer.analyze(consider_effects_of),
                     self.cpu,
                     self.virtualizable_analyzer.analyze(consider_effects_of))
             calldescr = self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT, effectinfo)
@@ -417,7 +428,6 @@ class BytecodeMaker(object):
         """Generate a constant of the given value.
         Returns its index in the list self.positions[].
         """
-        if constvalue is _we_are_jitted: constvalue = True
         const = Const._new(constvalue, self.cpu)
         return self.get_position(const)
 
@@ -496,9 +506,22 @@ class BytecodeMaker(object):
             linkfalse, linktrue = block.exits
             if linkfalse.llexitcase == True:
                 linkfalse, linktrue = linktrue, linkfalse
+            vpos = self.var_position(block.exitswitch)
+            #
+            # constant-fold an exitswitch
+            cv = self.get_constant_value(vpos)
+            if cv is not None:
+                if cv.value:
+                    link = linktrue
+                else:
+                    link = linkfalse
+                self.emit(*self.insert_renaming(link))
+                self.make_bytecode_block(link.target)
+                return
+            #
             self.emit("goto_if_not",
                       tlabel(linkfalse),
-                      self.var_position(block.exitswitch))
+                      vpos)
             self.minimize_variables(argument_only=True, exitswitch=False)
             truerenaming = self.insert_renaming(linktrue)
             falserenaming = self.insert_renaming(linkfalse)
@@ -818,15 +841,21 @@ class BytecodeMaker(object):
             self.serialize_op_same_as(op)
 
     def serialize_op_int_is_true(self, op):
-        if isinstance(op.args[0], Constant):
-            if op.args[0].value is objectmodel.malloc_zero_filled:
+        vpos = self.var_position(op.args[0])
+        cv = self.get_constant_value(vpos)
+        if cv is not None:
+            if cv.value is objectmodel.malloc_zero_filled:
                 # always True for now
                 warmrunnerdesc = self.codewriter.metainterp_sd.warmrunnerdesc
                 if warmrunnerdesc is not None:
                     assert warmrunnerdesc.gcdescr.malloc_zero_filled
                 self.var_positions[op.result] = self.var_position(Constant(1))
                 return
-        self.emit('int_is_true', self.var_position(op.args[0]))
+            if cv.value is _we_are_jitted:
+                # always True
+                self.var_positions[op.result] = self.var_position(Constant(1))
+                return
+        self.emit('int_is_true', vpos)
         self.register_var(op.result)
 
     serialize_op_uint_is_true = serialize_op_int_is_true
@@ -1158,16 +1187,17 @@ class BytecodeMaker(object):
                   self.var_position(op.args[3]))
 
     def serialize_op_jit_marker(self, op):
-        if op.args[0].value == 'jit_merge_point':
-            assert self.portal, "jit_merge_point in non-main graph!"
-            self.emit('jit_merge_point')
-            assert ([self.var_position(i) for i in op.args[2:]] ==
-                    range(0, 2*(len(op.args) - 2), 2))
-            #for i in range(2, len(op.args)):
-            #    arg = op.args[i]
-            #    self._eventualy_builtin(arg)
-        elif op.args[0].value == 'can_enter_jit':
-            self.emit('can_enter_jit')
+        key = op.args[0].value
+        getattr(self, 'handle_jit_marker__%s' % key)(op)
+
+    def handle_jit_marker__jit_merge_point(self, op):
+        assert self.portal, "jit_merge_point in non-main graph!"
+        self.emit('jit_merge_point')
+        assert ([self.var_position(i) for i in op.args[2:]] ==
+                range(0, 2*(len(op.args) - 2), 2))
+
+    def handle_jit_marker__can_enter_jit(self, op):
+        self.emit('can_enter_jit')
 
     def serialize_op_direct_call(self, op):
         kind = self.codewriter.guess_call_kind(op)
@@ -1205,21 +1235,26 @@ class BytecodeMaker(object):
         calldescr, non_void_args = self.codewriter.getcalldescr(
             op.args[0], args, op.result, consider_effects_of=op)
         pure = False
+        loopinvariant = False
         if op.opname == "direct_call":
             func = getattr(get_funcobj(op.args[0].value), '_callable', None)
             pure = getattr(func, "_pure_function_", False)
+            loopinvariant = getattr(func, "_jit_loop_invariant_", False)
             all_promoted_args = getattr(func,
                                "_pure_function_with_all_promoted_args_", False)
             if pure and not all_promoted_args:
                 effectinfo = calldescr.get_extra_info()
                 assert (effectinfo is not None and
-                        not effectinfo.promotes_virtualizables)
+                        not effectinfo.forces_virtual_or_virtualizable)
         try:
             canraise = self.codewriter.raise_analyzer.can_raise(op)
         except lltype.DelayedPointer:
             canraise = True  # if we need to look into the delayed ptr that is
                              # the portal, then it's certainly going to raise
-        if pure:
+        if loopinvariant:
+            self.emit("residual_call_loopinvariant")
+            assert not non_void_args, "arguments not supported for loop-invariant function!"
+        elif pure:
             # XXX check what to do about exceptions (also MemoryError?)
             self.emit('residual_call_pure')
         elif canraise:
@@ -1279,6 +1314,9 @@ class BytecodeMaker(object):
         return self._do_builtin_call(op, oopspec_name, args)
 
     def _do_builtin_call(self, op, oopspec_name, args):
+        if oopspec_name.startswith('virtual_ref'):
+            self.handle_virtual_ref_call(op, oopspec_name, args)
+            return
         argtypes = [v.concretetype for v in args]
         resulttype = op.result.concretetype
         c_func, TP = support.builtin_func_for_spec(self.codewriter.rtyper,
@@ -1298,6 +1336,15 @@ class BytecodeMaker(object):
         self.emit(self.get_position(calldescr))
         self.emit_varargs([c_func] + non_void_args)
         self.register_var(op.result)
+
+    def handle_virtual_ref_call(self, op, oopspec_name, args):
+        self.emit(oopspec_name)     # 'virtual_ref' or 'virtual_ref_finish'
+        self.emit(self.var_position(args[0]))
+        self.register_var(op.result)
+        #
+        vrefinfo = self.codewriter.metainterp_sd.virtualref_info
+        self.codewriter.register_known_gctype(vrefinfo.jit_virtual_ref_vtable,
+                                              vrefinfo.JIT_VIRTUAL_REF)
 
     def _array_of_voids(self, ARRAY):
         if isinstance(ARRAY, ootype.Array):
@@ -1557,11 +1604,14 @@ class BytecodeMaker(object):
         log.WARNING("found debug_assert in %r; should have be removed" %
                     (self.graph,))
 
-    def serialize_op_promote_virtualizable(self, op):
+    def serialize_op_jit_force_virtualizable(self, op):
         vinfo = self.codewriter.metainterp_sd.virtualizable_info
         assert vinfo is not None
         assert vinfo.is_vtypeptr(op.args[0].concretetype)
         self.vable_flags[op.args[0]] = op.args[2].value
+
+    def serialize_op_jit_force_virtual(self, op):
+        self._do_builtin_call(op, 'jit_force_virtual', op.args)
 
     serialize_op_oostring  = handle_builtin_call
     serialize_op_oounicode = handle_builtin_call
@@ -1595,6 +1645,14 @@ class BytecodeMaker(object):
                 if v in self.vable_array_vars:
                     raise VirtualizableArrayField(self.graph)
                 raise
+
+    def get_constant_value(self, vpos):
+        """Reverse of var_position().  Returns either None or a Constant."""
+        if vpos & 1:
+            value = self.constants[vpos // 2].value
+            return Constant(value)
+        else:
+            return None
 
     def emit(self, *stuff):
         self.assembler.extend(stuff)

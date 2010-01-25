@@ -9,7 +9,7 @@ from pypy.tool.uid import HUGEVAL_BYTES
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib.timer import DummyTimer, Timer
-from pypy.rlib.jit import we_are_jitted, dont_look_inside, unroll_safe
+from pypy.rlib import jit
 import os, sys
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
@@ -239,6 +239,9 @@ class ObjSpace(object):
             config = get_pypy_config(translating=False)
         self.config = config
 
+        self.builtin_modules = {}
+        self.reloading_modules = {}
+
         # import extra modules for side-effects
         import pypy.interpreter.nestedscope     # register *_DEREF bytecodes
 
@@ -266,16 +269,22 @@ class ObjSpace(object):
     def startup(self):
         # To be called before using the space
 
-        # Initialize all builtin modules
+        # Initialize already imported builtin modules
         from pypy.interpreter.module import Module
+        w_modules = self.sys.get('modules')
         for w_modname in self.unpackiterable(
                                 self.sys.get('builtin_module_names')):
+            try:
+                w_mod = self.getitem(w_modules, w_modname)
+            except OperationError, e:
+                if e.match(self, self.w_KeyError):
+                    continue
+                raise
             modname = self.str_w(w_modname)
-            mod = self.interpclass_w(self.getbuiltinmodule(modname))
+            mod = self.interpclass_w(w_mod)
             if isinstance(mod, Module):
-                import time
                 self.timer.start("startup " + modname)
-                mod.startup(self)
+                mod.init(self)
                 self.timer.stop("startup " + modname)
 
     def finish(self):
@@ -283,11 +292,9 @@ class ObjSpace(object):
         if w_exitfunc is not None:
             self.call_function(w_exitfunc)
         from pypy.interpreter.module import Module
-        for w_modname in self.unpackiterable(
-                                self.sys.get('builtin_module_names')):
-            modname = self.str_w(w_modname)
-            mod = self.interpclass_w(self.getbuiltinmodule(modname))
-            if isinstance(mod, Module):
+        for w_mod in self.builtin_modules.values():
+            mod = self.interpclass_w(w_mod)
+            if isinstance(mod, Module) and mod.startup_called:
                 mod.shutdown(self)
         if self.config.objspace.std.withdictmeasurement:
             from pypy.objspace.std.dictmultiobject import report
@@ -339,14 +346,42 @@ class ObjSpace(object):
 
         w_name = self.wrap(name)
         w_mod = self.wrap(Module(self, w_name))
-        w_modules = self.sys.get('modules')
-        self.setitem(w_modules, w_name, w_mod)
+        self.builtin_modules[name] = w_mod
         return name
 
-    def getbuiltinmodule(self, name):
+    def getbuiltinmodule(self, name, force_init=False):
         w_name = self.wrap(name)
         w_modules = self.sys.get('modules')
-        return self.getitem(w_modules, w_name)
+        try:
+            w_mod = self.getitem(w_modules, w_name)
+        except OperationError, e:
+            if not e.match(self, self.w_KeyError):
+                raise
+        else:
+            if not force_init:
+                return w_mod
+
+        # If the module is a builtin but not yet imported,
+        # retrieve it and initialize it
+        try:
+            w_mod = self.builtin_modules[name]
+        except KeyError:
+            raise OperationError(
+                self.w_SystemError,
+                self.wrap("getbuiltinmodule() called "
+                          "with non-builtin module %s" % name))
+        else:
+            # Add the module to sys.modules
+            self.setitem(w_modules, w_name, w_mod)
+
+            # And initialize it
+            from pypy.interpreter.module import Module
+            mod = self.interpclass_w(w_mod)
+            if isinstance(mod, Module):
+                self.timer.start("startup " + name)
+                mod.init(self)
+                self.timer.stop("startup " + name)
+            return w_mod
 
     def get_builtinmodule_to_install(self):
         """NOT_RPYTHON"""
@@ -390,26 +425,27 @@ class ObjSpace(object):
         "NOT_RPYTHON: only for initializing the space."
 
         from pypy.module.exceptions import Module
-        w_name_exceptions = self.wrap('exceptions')
-        self.exceptions_module = Module(self, w_name_exceptions)
+        w_name = self.wrap('exceptions')
+        self.exceptions_module = Module(self, w_name)
+        self.builtin_modules['exceptions'] = self.wrap(self.exceptions_module)
 
         from pypy.module.sys import Module
         w_name = self.wrap('sys')
         self.sys = Module(self, w_name)
-        w_modules = self.sys.get('modules')
-        self.setitem(w_modules, w_name, self.wrap(self.sys))
+        self.builtin_modules['sys'] = self.wrap(self.sys)
 
-        self.setitem(w_modules, w_name_exceptions,
-                     self.wrap(self.exceptions_module))
+        from pypy.module.imp import Module
+        w_name = self.wrap('imp')
+        self.builtin_modules['imp'] = self.wrap(Module(self, w_name))
 
         from pypy.module.__builtin__ import Module
         w_name = self.wrap('__builtin__')
         self.builtin = Module(self, w_name)
         w_builtin = self.wrap(self.builtin)
-        self.setitem(w_modules, w_name, w_builtin)
+        self.builtin_modules['__builtin__'] = self.wrap(w_builtin)
         self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), w_builtin)
 
-        bootstrap_modules = ['sys', '__builtin__', 'exceptions']
+        bootstrap_modules = ['sys', 'imp', '__builtin__', 'exceptions']
         installed_builtin_modules = bootstrap_modules[:]
 
         self.export_builtin_exceptions()
@@ -480,12 +516,11 @@ class ObjSpace(object):
 
     def setup_builtin_modules(self):
         "NOT_RPYTHON: only for initializing the space."
-        from pypy.interpreter.module import Module
-        for w_modname in self.unpackiterable(self.sys.get('builtin_module_names')):
-            modname = self.unwrap(w_modname)
-            mod = self.getbuiltinmodule(modname)
-            if isinstance(mod, Module):
-                mod.setup_after_space_initialization()
+        self.getbuiltinmodule('sys')
+        self.getbuiltinmodule('imp')
+        self.getbuiltinmodule('__builtin__')
+        for mod in self.builtin_modules.values():
+            mod.setup_after_space_initialization()
 
     def initialize(self):
         """NOT_RPYTHON: Abstract method that should put some minimal
@@ -496,6 +531,7 @@ class ObjSpace(object):
     def leave_cache_building_mode(self, val):
         "hook for the flow object space"
 
+    @jit.loop_invariant
     def getexecutioncontext(self):
         "Return what we consider to be the active execution context."
         # Important: the annotator must not see a prebuilt ExecutionContext:
@@ -700,7 +736,7 @@ class ObjSpace(object):
         """
         return self.unpackiterable(w_iterable, expected_length)
 
-    @unroll_safe
+    @jit.unroll_safe
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""
         if self.is_w(w_exc_type, w_check_class):
@@ -756,8 +792,7 @@ class ObjSpace(object):
 
     def call_valuestack(self, w_func, nargs, frame):
         from pypy.interpreter.function import Function, Method, is_builtin_code
-        if (not we_are_jitted() and frame.is_being_profiled and
-            is_builtin_code(w_func)):
+        if frame.is_being_profiled and is_builtin_code(w_func):
             # XXX: this code is copied&pasted :-( from the slow path below
             # call_valuestack().
             args = frame.make_arguments(nargs)
@@ -784,7 +819,6 @@ class ObjSpace(object):
         args = frame.make_arguments(nargs)
         return self.call_args(w_func, args)
 
-    @dont_look_inside 
     def call_args_and_c_profile(self, frame, w_func, args):
         ec = self.getexecutioncontext()
         ec.c_call_trace(frame, w_func)

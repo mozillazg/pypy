@@ -33,7 +33,8 @@ def test_decode_bool():
 def test_simple_opimpl_exist():
     rop = resoperation.rop
     for opnum, opname in resoperation.opname.items():
-        if opnum in (rop.SAME_AS, rop.CALL_PURE, rop.OOSEND_PURE):
+        if opnum in (rop.SAME_AS, rop.CALL_PURE, rop.OOSEND_PURE,
+                     rop.FORCE_TOKEN):
             continue
         if rop._NOSIDEEFFECT_FIRST <= opnum <= rop._NOSIDEEFFECT_LAST:
             assert hasattr(pyjitpl.MIFrame, 'opimpl_' + opname.lower()), opname
@@ -88,7 +89,7 @@ def test_remove_consts_and_duplicates():
         assert box.value == referencebox.value
         return True
     metainterp = pyjitpl.MetaInterp(FakeStaticData())
-    metainterp.history = History(None)
+    metainterp.history = History()
     b1 = BoxInt(1)
     b2 = BoxInt(2)
     c3 = ConstInt(3)

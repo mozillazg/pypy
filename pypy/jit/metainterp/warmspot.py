@@ -1,4 +1,4 @@
-import sys
+import sys, py
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import llhelper, MixLevelHelperAnnotator,\
@@ -11,7 +11,7 @@ from pypy.objspace.flow.model import checkgraph, Link, copygraph
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import r_uint, intmask
-from pypy.rlib.debug import debug_print
+from pypy.rlib.debug import debug_print, fatalerror
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.translator.unsimplify import call_final_function
@@ -140,7 +140,7 @@ class CannotInlineCanEnterJit(JitException):
 
 # ____________________________________________________________
 
-class WarmRunnerDesc:
+class WarmRunnerDesc(object):
 
     def __init__(self, translator, policy=None, backendopt=True, CPUClass=None,
                  optimizer=None, **kwds):
@@ -162,9 +162,13 @@ class WarmRunnerDesc:
 
         self.build_meta_interp(CPUClass, **kwds)
         self.make_args_specification()
+        #
+        from pypy.jit.metainterp.virtualref import VirtualRefInfo
+        self.metainterp_sd.virtualref_info = VirtualRefInfo(self)
         if self.jitdriver.virtualizables:
             from pypy.jit.metainterp.virtualizable import VirtualizableInfo
             self.metainterp_sd.virtualizable_info = VirtualizableInfo(self)
+        #
         self.make_exception_classes()
         self.make_driverhook_graphs()
         self.make_enter_function()
@@ -177,6 +181,7 @@ class WarmRunnerDesc:
                                           )
         self.rewrite_can_enter_jit()
         self.rewrite_set_param()
+        self.rewrite_force_virtual()
         self.add_profiler_finish()
         self.metainterp_sd.finish_setup(optimizer=optimizer)
 
@@ -339,9 +344,7 @@ class WarmRunnerDesc:
                 if sys.stdout == sys.__stdout__:
                     import pdb; pdb.post_mortem(sys.exc_info()[2])
                 raise
-            debug_print('~~~ Crash in JIT!')
-            debug_print('~~~ %s' % (e,))
-            raise history.CrashInJIT("crash in JIT")
+            fatalerror('~~~ Crash in JIT! %s' % (e,), traceback=True)
         crash_in_jit._dont_inline_ = True
 
         if self.translator.rtyper.type_system.name == 'lltypesystem':
@@ -397,9 +400,13 @@ class WarmRunnerDesc:
             annhelper, self.jitdriver.can_inline, annmodel.s_Bool)
         self.get_printable_location_ptr = self._make_hook_graph(
             annhelper, self.jitdriver.get_printable_location, s_Str)
+        self.confirm_enter_jit_ptr = self._make_hook_graph(
+            annhelper, self.jitdriver.confirm_enter_jit, annmodel.s_Bool,
+            onlygreens=False)
         annhelper.finish()
 
-    def _make_hook_graph(self, annhelper, func, s_result, s_first_arg=None):
+    def _make_hook_graph(self, annhelper, func, s_result, s_first_arg=None,
+                         onlygreens=True):
         if func is None:
             return None
         #
@@ -407,7 +414,9 @@ class WarmRunnerDesc:
         if s_first_arg is not None:
             extra_args_s.append(s_first_arg)
         #
-        args_s = self.portal_args_s[:len(self.green_args_spec)]
+        args_s = self.portal_args_s
+        if onlygreens:
+            args_s = args_s[:len(self.green_args_spec)]
         graph = annhelper.getgraph(func, extra_args_s + args_s, s_result)
         funcptr = annhelper.graph2delayed(graph)
         return funcptr
@@ -432,7 +441,8 @@ class WarmRunnerDesc:
          self.PTR_JIT_ENTER_FUNCTYPE) = self.cpu.ts.get_FuncType(ALLARGS, lltype.Void)
         (self.PORTAL_FUNCTYPE,
          self.PTR_PORTAL_FUNCTYPE) = self.cpu.ts.get_FuncType(ALLARGS, RESTYPE)
-        
+        (_, self.PTR_ASSEMBLER_HELPER_FUNCTYPE) = self.cpu.ts.get_FuncType(
+            [lltype.Signed, llmemory.GCREF], RESTYPE)
 
     def rewrite_can_enter_jit(self):
         FUNC = self.JIT_ENTER_FUNCTYPE
@@ -545,9 +555,63 @@ class WarmRunnerDesc:
                     else:
                         value = cast_base_ptr_to_instance(Exception, value)
                         raise Exception, value
-        
+
+        self.ll_portal_runner = ll_portal_runner # for debugging
         self.portal_runner_ptr = self.helper_func(self.PTR_PORTAL_FUNCTYPE,
                                                   ll_portal_runner)
+        self.cpu.portal_calldescr = self.cpu.calldescrof(
+            self.PTR_PORTAL_FUNCTYPE.TO,
+            self.PTR_PORTAL_FUNCTYPE.TO.ARGS,
+            self.PTR_PORTAL_FUNCTYPE.TO.RESULT)
+
+        vinfo = self.metainterp_sd.virtualizable_info
+
+        def assembler_call_helper(failindex, virtualizableref):
+            fail_descr = self.cpu.get_fail_descr_from_number(failindex)
+            while True:
+                try:
+                    if vinfo is not None:
+                        virtualizable = lltype.cast_opaque_ptr(
+                            vinfo.VTYPEPTR, virtualizableref)
+                        vinfo.reset_vable_token(virtualizable)
+                    loop_token = fail_descr.handle_fail(self.metainterp_sd)
+                    fail_descr = self.cpu.execute_token(loop_token)
+                except self.ContinueRunningNormally, e:
+                    args = ()
+                    for _, name, _ in portalfunc_ARGS:
+                        v = getattr(e, name)
+                        args = args + (v,)
+                    return ll_portal_runner(*args)
+                except self.DoneWithThisFrameVoid:
+                    assert result_kind == 'void'
+                    return
+                except self.DoneWithThisFrameInt, e:
+                    assert result_kind == 'int'
+                    return lltype.cast_primitive(RESULT, e.result)
+                except self.DoneWithThisFrameRef, e:
+                    assert result_kind == 'ref'
+                    return ts.cast_from_ref(RESULT, e.result)
+                except self.DoneWithThisFrameFloat, e:
+                    assert result_kind == 'float'
+                    return e.result
+                except self.ExitFrameWithExceptionRef, e:
+                    value = ts.cast_to_baseclass(e.value)
+                    if not we_are_translated():
+                        raise LLException(ts.get_typeptr(value), value)
+                    else:
+                        value = cast_base_ptr_to_instance(Exception, value)
+                        raise Exception, value
+
+        self.assembler_call_helper = assembler_call_helper # for debugging
+        self.cpu.assembler_helper_ptr = self.helper_func(
+            self.PTR_ASSEMBLER_HELPER_FUNCTYPE,
+            assembler_call_helper)
+        # XXX a bit ugly sticking
+        if vinfo is not None:
+            self.cpu.index_of_virtualizable = (vinfo.index_of_virtualizable -
+                                               self.num_green_args)
+        else:
+            self.cpu.index_of_virtualizable = -1
 
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr
@@ -598,6 +662,13 @@ class WarmRunnerDesc:
                 closures[funcname] = make_closure('set_param_' + funcname)
             op.opname = 'direct_call'
             op.args[:3] = [closures[funcname]]
+
+    def rewrite_force_virtual(self):
+        if self.cpu.ts.name != 'lltype':
+            py.test.skip("rewrite_force_virtual: port it to ootype")
+        all_graphs = self.translator.graphs
+        vrefinfo = self.metainterp_sd.virtualref_info
+        vrefinfo.replace_force_virtual_with_call(all_graphs)
 
 
 def decode_hp_hint_args(op):

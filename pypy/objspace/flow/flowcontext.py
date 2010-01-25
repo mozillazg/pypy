@@ -5,6 +5,7 @@ from pypy.interpreter import pyframe
 from pypy.interpreter.argument import ArgumentsForTranslation
 from pypy.objspace.flow.model import *
 from pypy.objspace.flow.framestate import FrameState
+from pypy.rlib import jit
 
 
 class OperationThatShouldNotBePropagatedError(OperationError):
@@ -260,8 +261,8 @@ class FlowExecutionContext(ExecutionContext):
             except StopFlowing:
                 continue   # restarting a dead SpamBlock
             try:
-                old_frame = self.some_frame
-                self.some_frame = frame
+                old_frameref = self.topframeref
+                self.topframeref = jit.non_virtual_ref(frame)
                 self.crnt_frame = frame
                 try:
                     w_result = frame.dispatch(frame.pycode,
@@ -269,7 +270,7 @@ class FlowExecutionContext(ExecutionContext):
                                               self)
                 finally:
                     self.crnt_frame = None
-                    self.some_frame = old_frame
+                    self.topframeref = old_frameref
 
             except OperationThatShouldNotBePropagatedError, e:
                 raise Exception(
@@ -383,6 +384,9 @@ class FlowExecutionContext(ExecutionContext):
             # re-raising an implicit operation makes it an explicit one
             operr = OperationError(operr.w_type, operr.w_value)
         return operr
+
+    def exception_trace(self, frame, operationerr):
+        pass    # overridden for performance only
 
     # hack for unrolling iterables, don't use this
     def replace_in_stack(self, oldvalue, newvalue):

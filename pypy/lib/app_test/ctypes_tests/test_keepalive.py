@@ -205,3 +205,50 @@ class TestKeepalive:
         s.r = r
         # obscure        
         assert s._objects == {'1': {}, '0:1': {'1': stuff}}
+
+    def test_c_char_p(self):
+        n = 2
+        xs = "hello" * n
+        x = c_char_p(xs)
+        del xs
+        import gc; gc.collect()
+        print 'x =', repr(x)
+        assert x.value == 'hellohello'
+        assert x._objects.keys() == ['0']
+        #
+        class datum(Structure):
+            _fields_ = [
+            ('dptr', c_char_p),
+            ('dsize', c_int),
+            ]
+        class union(Union):
+            _fields_ = [
+            ('dptr', c_char_p),
+            ('dsize', c_int),
+            ]
+        for wrap in [False, True]:
+            n = 2
+            xs = "hello" * n
+            if wrap:
+                xs = c_char_p(xs)
+            dat = datum()
+            dat.dptr = xs
+            dat.dsize = 15
+            del xs
+            import gc; gc.collect()
+            print 'dat.dptr =', repr(dat.dptr)
+            print 'dat._objects =', repr(dat._objects)
+            assert dat.dptr == "hellohello"
+            assert dat._objects.keys() == ['0']
+
+            xs = "hello" * n
+            if wrap:
+                xs = c_char_p(xs)
+            dat = union()
+            dat.dptr = xs
+            del xs
+            import gc; gc.collect()
+            print 'dat.dptr =', repr(dat.dptr)
+            print 'dat._objects =', repr(dat._objects)
+            assert dat.dptr == "hellohello"
+            assert dat._objects.keys() == ['0']

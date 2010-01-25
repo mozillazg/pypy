@@ -87,7 +87,10 @@ def test_sharing_field_lists_of_virtual():
 
 def test_reuse_vinfo():
     class FakeVInfo(object):
-        pass
+        def set_content(self, fieldnums):
+            self.fieldnums = fieldnums
+        def equals(self, fieldnums):
+            return self.fieldnums == fieldnums
     class FakeVirtualValue(optimizeopt.AbstractVirtualValue):
         def _make_virtual(self, *args):
             return FakeVInfo()
@@ -204,8 +207,9 @@ def test_equaloplists_fail_args():
 
 class Storage(compile.ResumeGuardDescr):
     "for tests."
-    def __init__(self):
-        pass
+    def __init__(self, metainterp_sd=None, original_greenkey=None):
+        self.metainterp_sd = metainterp_sd
+        self.original_greenkey = original_greenkey
     def store_final_boxes(self, op, boxes):
         op.fail_args = boxes
     def __eq__(self, other):
@@ -246,7 +250,10 @@ class BaseTestOptimizeOpt(BaseTest):
             loop.token.specnodes = self.unpack_specnodes(spectext)
         #
         self.loop = loop
-        optimize_loop_1(FakeMetaInterpStaticData(self.cpu), loop)
+        metainterp_sd = FakeMetaInterpStaticData(self.cpu)
+        if hasattr(self, 'vrefinfo'):
+            metainterp_sd.virtualref_info = self.vrefinfo
+        optimize_loop_1(metainterp_sd, loop)
         #
         expected = self.parse(optops)
         self.assert_equal(loop, expected)
@@ -606,10 +613,10 @@ class BaseTestOptimizeOpt(BaseTest):
         p3sub = getfield_gc(p3, descr=nextdescr)
         i3 = getfield_gc(p3sub, descr=valuedescr)
         escape(i3)
+        p1 = new_with_vtable(ConstClass(node_vtable))
         p2sub = new_with_vtable(ConstClass(node_vtable2))
         setfield_gc(p2sub, i1, descr=valuedescr)
         setfield_gc(p2, p2sub, descr=nextdescr)
-        p1 = new_with_vtable(ConstClass(node_vtable))
         jump(i1, p1, p2)
         """
         # The same as test_p123_simple, but in the end the "old" p2 contains
@@ -639,6 +646,32 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(i1)
         """
         self.optimize_loop(ops, 'Not', expected)
+
+    # ----------
+
+    def test_call_loopinvariant(self):
+        ops = """
+        [i1]
+        i2 = call_loopinvariant(1, i1, descr=nonwritedescr)
+        guard_no_exception() []
+        guard_value(i2, 1) []
+        i3 = call_loopinvariant(1, i1, descr=nonwritedescr)
+        guard_no_exception() []
+        guard_value(i2, 1) []
+        i4 = call_loopinvariant(1, i1, descr=nonwritedescr)
+        guard_no_exception() []
+        guard_value(i2, 1) []
+        jump(i1)
+        """
+        expected = """
+        [i1]
+        i2 = call(1, i1, descr=nonwritedescr)
+        guard_no_exception() []
+        guard_value(i2, 1) []
+        jump(i1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
 
     # ----------
 
@@ -919,6 +952,26 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not', expected)
 
+    def test_nonvirtual_dont_write_null_fields_on_force(self):
+        ops = """
+        [i]
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, i, descr=valuedescr)
+        i1 = getfield_gc(p1, descr=valuedescr)
+        setfield_gc(p1, 0, descr=valuedescr)
+        escape(p1)
+        i2 = getfield_gc(p1, descr=valuedescr)
+        jump(i2)
+        """
+        expected = """
+        [i]
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        escape(p1)
+        i2 = getfield_gc(p1, descr=valuedescr)
+        jump(i2)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
     def test_getfield_gc_pure_1(self):
         ops = """
         [i]
@@ -1018,6 +1071,24 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(i1, p1)
         """
         self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_nonvirtual_array_dont_write_null_fields_on_force(self):
+        ops = """
+        [i1]
+        p1 = new_array(5, descr=arraydescr)
+        setarrayitem_gc(p1, 0, i1, descr=arraydescr)
+        setarrayitem_gc(p1, 1, 0, descr=arraydescr)
+        escape(p1)
+        jump(i1)
+        """
+        expected = """
+        [i1]
+        p1 = new_array(5, descr=arraydescr)
+        setarrayitem_gc(p1, 0, i1, descr=arraydescr)
+        escape(p1)
+        jump(i1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
 
     def test_varray_2(self):
         ops = """
@@ -1292,6 +1363,204 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(p1, i1)
         """
         self.optimize_loop(ops, 'Not, Not', ops)
+
+    def test_duplicate_setfield_1(self):
+        ops = """
+        [p1, i1, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2)
+        """
+        expected = """
+        [p1, i1, i2]
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_duplicate_setfield_2(self):
+        ops = """
+        [p1, i1, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        i2 = getfield_gc(p1, descr=valuedescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        escape(i2)
+        jump(p1, i1, i3)
+        """
+        expected = """
+        [p1, i1, i3]
+        setfield_gc(p1, i3, descr=valuedescr)
+        escape(i1)
+        jump(p1, i1, i3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_duplicate_setfield_3(self):
+        ops = """
+        [p1, p2, i1, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        i2 = getfield_gc(p2, descr=valuedescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        escape(i2)
+        jump(p1, p2, i1, i3)
+        """
+        # potential aliasing of p1 and p2 means that we cannot kill the
+        # the setfield_gc
+        self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
+
+    def test_duplicate_setfield_4(self):
+        ops = """
+        [p1, i1, i2, p3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        #
+        # some operations on which the above setfield_gc cannot have effect
+        i3 = getarrayitem_gc_pure(p3, 1, descr=arraydescr)
+        i4 = getarrayitem_gc(p3, i3, descr=arraydescr)
+        i5 = int_add(i3, i4)
+        setarrayitem_gc(p3, 0, i5, descr=arraydescr)
+        setfield_gc(p1, i4, descr=nextdescr)
+        #
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2, p3)
+        """
+        expected = """
+        [p1, i1, i2, p3]
+        #
+        i3 = getarrayitem_gc_pure(p3, 1, descr=arraydescr)
+        i4 = getarrayitem_gc(p3, i3, descr=arraydescr)
+        i5 = int_add(i3, i4)
+        setarrayitem_gc(p3, 0, i5, descr=arraydescr)
+        #
+        setfield_gc(p1, i2, descr=valuedescr)
+        setfield_gc(p1, i4, descr=nextdescr)
+        jump(p1, i1, i2, p3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
+    def test_duplicate_setfield_5(self):
+        ops = """
+        [p0, i1]
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p0, p1, descr=nextdescr)
+        setfield_raw(i1, i1, descr=valuedescr)    # random op with side-effects
+        p2 = getfield_gc(p0, descr=nextdescr)
+        i2 = getfield_gc(p2, descr=valuedescr)
+        setfield_gc(p0, NULL, descr=nextdescr)
+        escape(i2)
+        jump(p0, i1)
+        """
+        expected = """
+        [p0, i1]
+        setfield_raw(i1, i1, descr=valuedescr)
+        setfield_gc(p0, NULL, descr=nextdescr)
+        escape(i1)
+        jump(p0, i1)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_duplicate_setfield_sideeffects_1(self):
+        ops = """
+        [p1, i1, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        escape()
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', ops)
+
+    def test_duplicate_setfield_residual_guard_1(self):
+        ops = """
+        [p1, i1, i2, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        guard_true(i3) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
+
+    def test_duplicate_setfield_residual_guard_2(self):
+        # the difference with the previous test is that the field value is
+        # a virtual, which we try hard to keep virtual
+        ops = """
+        [p1, i2, i3]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1, p2, descr=nextdescr)
+        guard_true(i3) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        expected = """
+        [p1, i2, i3]
+        guard_true(i3) [p1]
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_duplicate_setfield_residual_guard_3(self):
+        ops = """
+        [p1, i2, i3]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p1, p2, descr=nextdescr)
+        guard_true(i3) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        expected = """
+        [p1, i2, i3]
+        guard_true(i3) [p1, i2]
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_duplicate_setfield_residual_guard_4(self):
+        # test that the setfield_gc does not end up between int_eq and
+        # the following guard_true
+        ops = """
+        [p1, i1, i2, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        i5 = int_eq(i3, 5)
+        guard_true(i5) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, i2, descr=valuedescr)
+        jump(p1, i1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
+
+    def test_duplicate_setfield_aliasing(self):
+        # a case where aliasing issues (and not enough cleverness) mean
+        # that we fail to remove any setfield_gc
+        ops = """
+        [p1, p2, i1, i2, i3]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        jump(p1, p2, i1, i2, i3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not, Not', ops)
+
+    def test_duplicate_setfield_guard_value_const(self):
+        ops = """
+        [p1, i1, i2]
+        guard_value(p1, ConstPtr(myptr)) []
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(ConstPtr(myptr), i2, descr=valuedescr)
+        jump(p1, i1, i2)
+        """
+        expected = """
+        [i1, i2]
+        setfield_gc(ConstPtr(myptr), i2, descr=valuedescr)
+        jump(i1, i2)
+        """
+        self.optimize_loop(ops, 'Constant(myptr), Not, Not', expected)
 
     def test_duplicate_getarrayitem_1(self):
         ops = """
@@ -1592,6 +1861,36 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, "Not", expected)
 
+    def test_remove_duplicate_pure_op(self):
+        ops = """
+        [p1, p2]
+        i1 = oois(p1, p2)
+        i2 = oois(p1, p2)
+        i3 = int_add(i1, 1)
+        i3b = int_is_true(i3)
+        guard_true(i3b) []
+        i4 = int_add(i2, 1)
+        i4b = int_is_true(i4)
+        guard_true(i4b) []
+        escape(i3)
+        escape(i4)
+        guard_true(i1) []
+        guard_true(i2) []
+        jump(p1, p2)
+        """
+        expected = """
+        [p1, p2]
+        i1 = oois(p1, p2)
+        i3 = int_add(i1, 1)
+        i3b = int_is_true(i3)
+        guard_true(i3b) []
+        escape(i3)
+        escape(i3)
+        guard_true(i1) []
+        jump(p1, p2)
+        """
+        self.optimize_loop(ops, "Not, Not", expected)
+
     # ----------
 
     def make_fail_descr(self):
@@ -1634,6 +1933,14 @@ class BaseTestOptimizeOpt(BaseTest):
                 tag = ('virtual', self.namespace[match.group(2)])
             virtuals[pvar] = (tag, None, fieldstext)
         #
+        r2 = re.compile(r"([\w\d()]+)[.](\w+)\s*=\s*([\w\d()]+)")
+        pendingfields = []
+        for match in r2.finditer(text):
+            pvar = match.group(1)
+            pfieldname = match.group(2)
+            pfieldvar = match.group(3)
+            pendingfields.append((pvar, pfieldname, pfieldvar))
+        #
         def _variables_equal(box, varname, strict):
             if varname not in virtuals:
                 if strict:
@@ -1655,11 +1962,21 @@ class BaseTestOptimizeOpt(BaseTest):
                 else:
                     virtuals[varname] = tag, box, fieldstext
         #
-        basetext = text[:ends[0]]
+        basetext = text.splitlines()[0]
         varnames = [s.strip() for s in basetext.split(',')]
+        if varnames == ['']:
+            varnames = []
         assert len(boxes) == len(varnames)
         for box, varname in zip(boxes, varnames):
             _variables_equal(box, varname, strict=True)
+        for pvar, pfieldname, pfieldvar in pendingfields:
+            box = oparse.getvar(pvar)
+            fielddescr = self.namespace[pfieldname.strip()]
+            fieldbox = executor.execute(self.cpu,
+                                        rop.GETFIELD_GC,
+                                        fielddescr,
+                                        box)
+            _variables_equal(fieldbox, pfieldvar, strict=True)
         #
         for match in parts:
             pvar = match.group(1)
@@ -1918,6 +2235,57 @@ class BaseTestOptimizeOpt(BaseTest):
             where p7v is a node_vtable, valuedescr=iv
             ''')
 
+    def test_expand_fail_lazy_setfield_1(self):
+        self.make_fail_descr()
+        ops = """
+        [p1, i2, i3]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(p1, p2, descr=nextdescr)
+        guard_true(i3, descr=fdescr) []
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        expected = """
+        [p1, i2, i3]
+        guard_true(i3, descr=fdescr) [p1, i2]
+        i4 = int_neg(i2)
+        setfield_gc(p1, NULL, descr=nextdescr)
+        jump(p1, i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+        self.loop.inputargs[0].value = self.nodebox.value
+        self.check_expanded_fail_descr('''
+            p1.nextdescr = p2
+            where p2 is a node_vtable, valuedescr=i2
+            ''')
+
+    def test_expand_fail_lazy_setfield_2(self):
+        self.make_fail_descr()
+        ops = """
+        [i2, i3]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p2, i2, descr=valuedescr)
+        setfield_gc(ConstPtr(myptr), p2, descr=nextdescr)
+        guard_true(i3, descr=fdescr) []
+        i4 = int_neg(i2)
+        setfield_gc(ConstPtr(myptr), NULL, descr=nextdescr)
+        jump(i2, i4)
+        """
+        expected = """
+        [i2, i3]
+        guard_true(i3, descr=fdescr) [i2]
+        i4 = int_neg(i2)
+        setfield_gc(ConstPtr(myptr), NULL, descr=nextdescr)
+        jump(i2, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+        self.check_expanded_fail_descr('''
+            ConstPtr(myptr).nextdescr = p2
+            where p2 is a node_vtable, valuedescr=i2
+            ''')
+
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
 
@@ -2030,6 +2398,233 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         jump(p1, p2, i1)
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_residual_call_invalidates_some_read_caches_1(self):
+        ops = """
+        [p1, i1, p2, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=readadescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        expected = """
+        [p1, i1, p2, i2]
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=readadescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
+    def test_residual_call_invalidates_some_read_caches_2(self):
+        ops = """
+        [p1, i1, p2, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=writeadescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        expected = """
+        [p1, i1, p2, i2]
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=writeadescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
+    def test_residual_call_invalidates_some_read_caches_3(self):
+        ops = """
+        [p1, i1, p2, i2]
+        setfield_gc(p1, i1, descr=valuedescr)
+        setfield_gc(p2, i2, descr=adescr)
+        i3 = call(i1, descr=plaincalldescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        setfield_gc(p2, i3, descr=adescr)
+        jump(p1, i1, p2, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', ops)
+
+    def test_call_assembler_invalidates_caches(self):
+        ops = '''
+        [p1, i1]
+        setfield_gc(p1, i1, descr=valuedescr)
+        i3 = call_assembler(i1, descr=asmdescr)
+        setfield_gc(p1, i3, descr=valuedescr)
+        jump(p1, i3)
+        '''
+        self.optimize_loop(ops, 'Not, Not', ops)
+
+    def test_vref_nonvirtual_nonescape(self):
+        ops = """
+        [p1]
+        p2 = virtual_ref(p1, 5)
+        virtual_ref_finish(p2, p1)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        i0 = force_token()
+        jump(p1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_vref_nonvirtual_escape(self):
+        ops = """
+        [p1]
+        p2 = virtual_ref(p1, 5)
+        escape(p2)
+        virtual_ref_finish(p2, p1)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        i0 = force_token()
+        p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
+        setfield_gc(p2, i0, descr=virtualtokendescr)
+        setfield_gc(p2, 5, descr=virtualrefindexdescr)
+        escape(p2)
+        setfield_gc(p2, p1, descr=virtualforceddescr)
+        setfield_gc(p2, 0, descr=virtualtokendescr)
+        jump(p1)
+        """
+        # XXX we should optimize a bit more the case of a nonvirtual.
+        # in theory it is enough to just do 'p2 = p1'.
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_vref_virtual_1(self):
+        ops = """
+        [p0, i1]
+        #
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p1b = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1b, 252, descr=valuedescr)
+        setfield_gc(p1, p1b, descr=nextdescr)
+        #
+        p2 = virtual_ref(p1, 3)
+        setfield_gc(p0, p2, descr=nextdescr)
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced() [i1]
+        virtual_ref_finish(p2, p1)
+        setfield_gc(p0, NULL, descr=nextdescr)
+        jump(p0, i1)
+        """
+        expected = """
+        [p0, i1]
+        i3 = force_token()
+        #
+        p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
+        setfield_gc(p2, i3, descr=virtualtokendescr)
+        setfield_gc(p2, 3, descr=virtualrefindexdescr)
+        setfield_gc(p0, p2, descr=nextdescr)
+        #
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced() [i1]
+        setfield_gc(p0, NULL, descr=nextdescr)
+        #
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p1b = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1b, 252, descr=valuedescr)
+        setfield_gc(p1, p1b, descr=nextdescr)
+        setfield_gc(p2, p1, descr=virtualforceddescr)
+        setfield_gc(p2, 0, descr=virtualtokendescr)
+        #
+        jump(p0, i1)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_vref_virtual_2(self):
+        self.make_fail_descr()
+        ops = """
+        [p0, i1]
+        #
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p1b = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1b, i1, descr=valuedescr)
+        setfield_gc(p1, p1b, descr=nextdescr)
+        #
+        p2 = virtual_ref(p1, 2)
+        setfield_gc(p0, p2, descr=nextdescr)
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced(descr=fdescr) [p2, p1]
+        virtual_ref_finish(p2, p1)
+        setfield_gc(p0, NULL, descr=nextdescr)
+        jump(p0, i1)
+        """
+        expected = """
+        [p0, i1]
+        i3 = force_token()
+        #
+        p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
+        setfield_gc(p2, i3, descr=virtualtokendescr)
+        setfield_gc(p2, 2, descr=virtualrefindexdescr)
+        setfield_gc(p0, p2, descr=nextdescr)
+        #
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced(descr=fdescr) [p2, i1]
+        setfield_gc(p0, NULL, descr=nextdescr)
+        #
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p1b = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1b, i1, descr=valuedescr)
+        setfield_gc(p1, p1b, descr=nextdescr)
+        setfield_gc(p2, p1, descr=virtualforceddescr)
+        setfield_gc(p2, 0, descr=virtualtokendescr)
+        #
+        jump(p0, i1)
+        """
+        # the point of this test is that 'i1' should show up in the fail_args
+        # of 'guard_not_forced', because it was stored in the virtual 'p1b'.
+        self.optimize_loop(ops, 'Not, Not', expected)
+        self.check_expanded_fail_descr('''p2, p1
+            where p1 is a node_vtable, nextdescr=p1b
+            where p1b is a node_vtable, valuedescr=i1
+            ''')
+
+    def test_vref_virtual_and_lazy_setfield(self):
+        self.make_fail_descr()
+        ops = """
+        [p0, i1]
+        #
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p1b = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p1b, i1, descr=valuedescr)
+        setfield_gc(p1, p1b, descr=nextdescr)
+        #
+        p2 = virtual_ref(p1, 2)
+        setfield_gc(p0, p2, descr=refdescr)
+        call(i1, descr=nonwritedescr)
+        guard_no_exception(descr=fdescr) [p2, p1]
+        virtual_ref_finish(p2, p1)
+        setfield_gc(p0, NULL, descr=refdescr)
+        jump(p0, i1)
+        """
+        expected = """
+        [p0, i1]
+        i3 = force_token()
+        call(i1, descr=nonwritedescr)
+        guard_no_exception(descr=fdescr) [i3, i1, p0]
+        setfield_gc(p0, NULL, descr=refdescr)
+        jump(p0, i1)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+        # the fail_args contain [i3, i1, p0]:
+        #  - i3 is from the virtual expansion of p2
+        #  - i1 is from the virtual expansion of p1
+        #  - p0 is from the extra pendingfields
+        self.loop.inputargs[0].value = self.nodeobjvalue
+        self.check_expanded_fail_descr('''p2, p1
+            p0.refdescr = p2
+            where p2 is a jit_virtual_ref_vtable, virtualtokendescr=i3, virtualrefindexdescr=2
+            where p1 is a node_vtable, nextdescr=p1b
+            where p1b is a node_vtable, valuedescr=i1
+            ''')
 
 
 class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
