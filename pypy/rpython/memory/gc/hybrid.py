@@ -210,10 +210,6 @@ class HybridGC(GenerationGC):
             raise NotImplementedError("Not supported")
         return llmemory.cast_ptr_to_adr(gcref)
 
-    #def realloc(self, ...):
-    #    here we can write a bit more sophisticated realloc, that cares
-    #    about rawmalloced objects
-
     def can_move(self, addr):
         tid = self.header(addr).tid
         return not (tid & GCFLAG_EXTERNAL)

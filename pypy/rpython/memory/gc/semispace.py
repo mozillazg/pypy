@@ -119,6 +119,15 @@ class SemiSpaceGC(MovingGCBase):
         self.free = result + llarena.round_up_for_allocation(totalsize)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
+    def shrink_array(self, addr, smallersize):
+        if self._is_in_the_space(addr):
+            typeid = self.get_type_id(addr)
+            offset_to_length = self.varsize_offset_to_length(typeid)
+            (addr + offset_to_length).signed[0] = smallersize
+            return True
+        else:
+            return False
+
     def obtain_free_space(self, needed):
         # a bit of tweaking to maximize the performance and minimize the
         # amount of code in an inlined version of malloc_fixedsize_clear()
@@ -571,6 +580,9 @@ class SemiSpaceGC(MovingGCBase):
 
     def _is_external(self, obj):
         return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
+
+    def _is_in_the_space(self, obj):
+        return self.tospace <= obj < self.free
 
     def debug_check_object(self, obj):
         """Check the invariants about 'obj' that should be true
