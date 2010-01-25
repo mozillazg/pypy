@@ -24,6 +24,7 @@ class GCTest(object):
     GC_PARAMS = {}
     GC_CAN_MOVE = False
     GC_CANNOT_MALLOC_NONMOVABLE = False
+    GC_CAN_SHRINK_ARRAY = False
 
     def setup_class(cls):
         cls._saved_logstate = py.log._getstate()
@@ -470,6 +471,7 @@ class GCTest(object):
 
     def test_shrink_array(self):
         from pypy.rpython.lltypesystem.rstr import STR
+        GC_CAN_SHRINK_ARRAY = self.GC_CAN_SHRINK_ARRAY
 
         def f():
             ptr = lltype.malloc(STR, 3)
@@ -477,11 +479,12 @@ class GCTest(object):
             ptr.chars[0] = 'A'
             ptr.chars[1] = 'B'
             ptr.chars[2] = 'C'
-            ptr = rgc.ll_shrink_array(ptr, 2)
-            return ( ord(ptr.chars[0])       +
-                    (ord(ptr.chars[1]) << 8) +
-                    (len(ptr.chars)   << 16) +
-                    (ptr.hash         << 24))
+            ptr2 = rgc.ll_shrink_array(ptr, 2)
+            assert (ptr == ptr2) == GC_CAN_SHRINK_ARRAY
+            return ( ord(ptr2.chars[0])       +
+                    (ord(ptr2.chars[1]) << 8) +
+                    (len(ptr2.chars)   << 16) +
+                    (ptr2.hash         << 24))
 
         assert self.interpret(f, []) == 0x62024241
 
@@ -617,6 +620,7 @@ class TestSemiSpaceGC(GCTest, snippet.SemiSpaceGCTests):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
     GC_CAN_MOVE = True
     GC_CANNOT_MALLOC_NONMOVABLE = True
+    GC_CAN_SHRINK_ARRAY = True
 
 class TestGrowingSemiSpaceGC(TestSemiSpaceGC):
     GC_PARAMS = {'space_size': 64}
