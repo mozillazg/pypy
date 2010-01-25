@@ -724,17 +724,17 @@ class LLFrame(object):
         except MemoryError:
             self.make_llexception()
             
-    def op_malloc_nonmovable(self, obj, flags):
+    def op_malloc_nonmovable(self, TYPE, flags):
         flavor = flags['flavor']
         assert flavor == 'gc'
         zero = flags.get('zero', False)
-        return self.heap.malloc_nonmovable(obj, zero=zero)
+        return self.heap.malloc_nonmovable(TYPE, zero=zero)
         
-    def op_malloc_nonmovable_varsize(self, obj, flags, size):
+    def op_malloc_nonmovable_varsize(self, TYPE, flags, size):
         flavor = flags['flavor']
         assert flavor == 'gc'
         zero = flags.get('zero', False)
-        return self.heap.malloc_nonmovable(obj, size, zero=zero)
+        return self.heap.malloc_nonmovable(TYPE, size, zero=zero)
 
     def op_malloc_resizable_buffer(self, obj, flags, size):
         return self.heap.malloc_resizable_buffer(obj, size)
