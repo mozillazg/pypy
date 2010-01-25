@@ -59,6 +59,9 @@ class GCManagedHeap(object):
         return result
 
     def shrink_array(self, p, smallersize):
+        if hasattr(self.gc, 'shrink_array'):
+            addr = llmemory.cast_ptr_to_adr(p)
+            return self.gc.shrink_array(addr, smallersize)
         return False
 
     def free(self, TYPE, flavor='gc'):
