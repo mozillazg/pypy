@@ -255,6 +255,8 @@ _fmtcache = {}
 _fmtcache2 = {}
 
 def decompose_valuefmt(valuefmt):
+    """Returns a tuple of string parts extracted from valuefmt,
+    and a tuple of format characters."""
     formats = []
     parts = valuefmt.split('%')
     i = 1
@@ -263,10 +265,12 @@ def decompose_valuefmt(valuefmt):
             formats.append(parts[i][0])
             parts[i] = parts[i][1:]
             i += 1
-        elif parts[i].startswith('%'):
-            parts[i-1] += parts.pop(i)
+        elif parts[i] == '':    # support for '%%'
+            parts[i-1] += '%' + parts[i+1]
+            del parts[i:i+2]
         else:
             raise ValueError("invalid format string (only %s or %d supported)")
+    assert len(formats) > 0, "unsupported: no % command found"
     return tuple(parts), tuple(formats)
 
 def get_operrcls2(valuefmt):
@@ -313,6 +317,7 @@ def operationerrfmt(w_type, valuefmt, *args):
     needed."""
     OpErrFmt, strings = get_operationerr_class(valuefmt)
     return OpErrFmt(w_type, strings, *args)
+operationerrfmt._annspecialcase_ = 'specialize:arg(1)'
 
 # ____________________________________________________________
 
