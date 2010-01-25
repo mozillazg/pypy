@@ -1,5 +1,6 @@
 from pypy.objspace.std.objspace import register_all, W_Object
 from pypy.objspace.std.objspace import registerimplementation
+from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.listtype import get_list_index
