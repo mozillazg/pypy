@@ -67,19 +67,31 @@ class GCManagedHeap(object):
             gctypelayout.zero_gc_pointers(result)
         return result
 
-    def resize_buffer(self, obj, old_size, new_size):
+    def resize_buffer(self, obj, oldlength, newlength):
         T = lltype.typeOf(obj).TO
-        buf = self.malloc_resizable_buffer(T, new_size)
-        # copy contents
-        arrayfld = T._arrayfld
-        new_arr = getattr(buf, arrayfld)
-        old_arr = getattr(obj, arrayfld)
-        for i in range(old_size):
-            new_arr[i] = old_arr[i]
-        return buf
+        ARRAY = getattr(T, T._arrayfld)
+        itemsofs = (llmemory.FieldOffset(T, T._arrayfld) +
+                    llmemory.itemoffsetof(ARRAY, 0))
+        fixedsize = llmemory.sizeof(T, 0)
+        itemsize = llmemory.sizeof(ARRAY.OF)
+        lengthofs = llmemory.FieldOffset(T, T._arrayfld) + \
+                           llmemory.ArrayLengthOffset(ARRAY)
+        result = self.gc.realloc(obj, oldlength, newlength, fixedsize,
+                                 itemsize, lengthofs, itemsofs, True)
+        return lltype.cast_opaque_ptr(lltype.typeOf(obj), result)
 
-    def finish_building_buffer(self, obj, size):
-        return obj
+    def finish_building_buffer(self, obj, newlength):
+        T = lltype.typeOf(obj).TO
+        ARRAY = getattr(T, T._arrayfld)
+        itemsofs = (llmemory.FieldOffset(T, T._arrayfld) +
+                    llmemory.itemoffsetof(ARRAY, 0))
+        fixedsize = llmemory.sizeof(T, 0)
+        itemsize = llmemory.sizeof(ARRAY.OF)
+        lengthofs = llmemory.FieldOffset(T, T._arrayfld) + \
+                           llmemory.ArrayLengthOffset(ARRAY)
+        result = self.gc.realloc(obj, 0, newlength, fixedsize,
+                                 itemsize, lengthofs, itemsofs, False)
+        return lltype.cast_opaque_ptr(lltype.typeOf(obj), result)
 
     def free(self, TYPE, flavor='gc'):
         assert flavor != 'gc'

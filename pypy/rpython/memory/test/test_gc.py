@@ -11,7 +11,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.objectmodel import compute_unique_id, keepalive_until_here
 from pypy.rlib import rgc
-
+from pypy.rlib.rstring import StringBuilder
 
 def stdout_ignore_ll_functions(msg):
     strmsg = str(msg)
@@ -475,7 +475,7 @@ class GCTest(object):
         def f():
             ptr = rgc.resizable_buffer_of_shape(STR, 1)
             ptr.chars[0] = 'a'
-            ptr = rgc.resize_buffer(ptr, 1, 2)
+            ptr = rgc.resize_buffer(ptr, 1, 4)
             ptr.chars[1] = 'b'
             return len(hlstr(rgc.finish_building_buffer(ptr, 2)))
 
@@ -571,6 +571,20 @@ class GCTest(object):
 
         self.interpret(fn, [])
 
+    def test_stringbuilder(self):
+        def fn():
+            s = StringBuilder(4)
+            s.append("abcd")
+            s.append("defg")
+            s.append("rty")
+            s.append_multiple_char('y', 1000)
+            rgc.collect()
+            s.append_multiple_char('y', 1000)
+            res = s.build()[1000]
+            rgc.collect()
+            return ord(res)
+        res = self.interpret(fn, [])
+        assert res == ord('y')
 
 from pypy.rlib.objectmodel import UnboxedValue
 
