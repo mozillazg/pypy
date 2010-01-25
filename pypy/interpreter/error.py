@@ -51,7 +51,10 @@ class OperationError(Exception):
 
     def __str__(self):
         "NOT_RPYTHON: Convenience for tracebacks."
-        return '[%s: %s]' % (self.w_type, self._w_value)
+        s = self._w_value
+        if self.__class__ is not OperationError and s is None:
+            s = self._compute_value()
+        return '[%s: %s]' % (self.w_type, s)
 
     def errorstr(self, space):
         "The exception class and value, as a string."
