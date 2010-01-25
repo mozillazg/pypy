@@ -119,6 +119,7 @@ class __extend__(pyframe.PyFrame):
                 self.space.w_RuntimeError,
                 self.space.wrap(msg))
         return next_instr
+    handle_bytecode._always_inline_ = True
         
     def handle_asynchronous_error(self, ec, w_type, w_value=None):
         # catch asynchronous exceptions and turn them
@@ -270,6 +271,7 @@ class __extend__(pyframe.PyFrame):
 
             if jit.we_are_jitted():
                 return next_instr
+    dispatch_bytecode._always_inline_ = True
 
     @jit.unroll_safe
     def unrollstack(self, unroller_kind):
