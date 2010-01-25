@@ -7,7 +7,7 @@ from pypy.interpreter.gateway import interp2app, BuiltinCode
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.baseobjspace import Wrappable, W_Root, ObjSpace, \
     DescrMismatch
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.tool.sourcetools import compile2, func_with_new_name
 from pypy.rlib.objectmodel import instantiate, compute_identity_hash
 from pypy.rlib.jit import hint
@@ -52,8 +52,8 @@ def default_identity_hash(space, w_obj):
 
 def descr__hash__unhashable(space, w_obj):
     typename = space.type(w_obj).getname(space, '?')
-    msg = "%s objects are unhashable" % (typename,)
-    raise OperationError(space.w_TypeError,space.wrap(msg))
+    raise operationerrfmt(space.w_TypeError,
+                          "%s objects are unhashable", typename)
 
 no_hash_descr = interp2app(descr__hash__unhashable)
 

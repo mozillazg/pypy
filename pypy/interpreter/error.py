@@ -16,6 +16,9 @@ class OperationError(Exception):
     PyTraceback objects making the application-level traceback.
     """
 
+    __slots__ = ('w_type', '_w_value', 'application_traceback',
+                 'debug_excs')
+
     def __init__(self, w_type, w_value, tb=None):
         if w_type is None:
             from pypy.tool.error import FlowingError
@@ -234,10 +237,10 @@ class OperationError(Exception):
             pass   # ignored
 
     def get_w_value(self, space):
-        w_value = self.w_value
+        w_value = self._w_value
         if w_value is None:
             value = self._compute_value()
-            self.w_value = w_value = space.wrap(value)
+            self._w_value = w_value = space.wrap(value)
         return w_value
 
     def _compute_value(self):
@@ -305,6 +308,9 @@ def get_operationerr_class(valuefmt):
 get_operationerr_class._annspecialcase_ = 'specialize:memo'
 
 def operationerrfmt(w_type, valuefmt, *args):
+    """Equivalent to OperationError(w_type, space.wrap(valuefmt % args)).
+    More efficient in the (common) case where the value is not actually
+    needed."""
     OpErrFmt, strings = get_operationerr_class(valuefmt)
     return OpErrFmt(w_type, strings, *args)
 
