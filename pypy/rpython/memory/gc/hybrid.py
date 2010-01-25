@@ -452,6 +452,7 @@ class HybridGC(GenerationGC):
             self.last_generation_root_objects = newgen3roots
         else:
             ll_assert(False, "bogus 'generation'")
+            return
 
         surviving_objects = self.AddressStack()
         # Help the flow space
