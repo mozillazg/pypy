@@ -373,7 +373,7 @@ class FrameworkGCTransformer(GCTransformer):
             self.realloc_ptr = getfn(
                 GCClass.realloc.im_func,
                 [s_gc, s_gcref] +
-                [annmodel.SomeInteger(nonneg=True)] * 4 +
+                [annmodel.SomeInteger(nonneg=True)] * 6 +
                 [annmodel.SomeBool()],
                 s_gcref)
 
@@ -713,10 +713,11 @@ class FrameworkGCTransformer(GCTransformer):
     def _can_realloc(self):
         return True
 
-    def perform_realloc(self, hop, v_ptr, v_newsize, c_const_size,
-                        c_itemsize, c_lengthofs, c_grow):
-        vlist = [self.realloc_ptr, self.c_const_gc, v_ptr, v_newsize,
-                 c_const_size, c_itemsize, c_lengthofs, c_grow]
+    def perform_realloc(self, hop, v_ptr, v_oldsize, v_newsize, c_const_size,
+                        c_itemsize, c_lengthofs, c_itemsofs, c_grow):
+        vlist = [self.realloc_ptr, self.c_const_gc, v_ptr,
+                 v_oldsize, v_newsize,
+                 c_const_size, c_itemsize, c_lengthofs, c_itemsofs, c_grow]
         livevars = self.push_roots(hop)
         v_result = hop.genop('direct_call', vlist,
                              resulttype=llmemory.GCREF)
