@@ -748,15 +748,6 @@ class LLFrame(object):
         zero = flags.get('zero', False)
         return self.heap.malloc_nonmovable(TYPE, size, zero=zero)
 
-    def op_malloc_resizable_buffer(self, obj, flags, size):
-        return self.heap.malloc_resizable_buffer(obj, size)
-
-    def op_resize_buffer(self, obj, old_size, new_size):
-        return self.heap.resize_buffer(obj, old_size, new_size)
-
-    def op_finish_building_buffer(self, obj, oldsize, size):
-        return self.heap.finish_building_buffer(obj, oldsize, size)
-
     def op_free(self, obj, flavor):
         assert isinstance(flavor, str)
         if flavor == 'raw' and self.llinterpreter.malloc_check:
