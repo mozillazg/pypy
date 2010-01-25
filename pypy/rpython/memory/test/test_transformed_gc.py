@@ -162,6 +162,7 @@ class GCTest(object):
             return run
         
 class GenericGCTests(GCTest):
+    GC_CAN_SHRINK_ARRAY = False
 
     def heap_usage(self, statistics):
         try:
@@ -637,19 +638,24 @@ class GenericGCTests(GCTest):
         def f():
             ptr = lltype.malloc(STR, 3)
             ptr.hash = 0x62
-            ptr.chars[0] = 'A'
+            ptr.chars[0] = '0'
             ptr.chars[1] = 'B'
             ptr.chars[2] = 'C'
-            ptr = rgc.ll_shrink_array(ptr, 2)
-            return ( ord(ptr.chars[0])       +
-                    (ord(ptr.chars[1]) << 8) +
-                    (len(ptr.chars)   << 16) +
-                    (ptr.hash         << 24))
+            ptr2 = rgc.ll_shrink_array(ptr, 2)
+            return ((ptr == ptr2)             +
+                     ord(ptr2.chars[0])       +
+                    (ord(ptr2.chars[1]) << 8) +
+                    (len(ptr2.chars)   << 16) +
+                    (ptr2.hash         << 24))
         return f
 
     def test_shrink_array(self):
         run = self.runner("shrink_array")
-        assert run([]) == 0x62024241
+        if self.GC_CAN_SHRINK_ARRAY:
+            expected = 0x62024231
+        else:
+            expected = 0x62024230
+        assert run([]) == expected
 
     def define_string_builder_over_allocation(cls):
         import gc
@@ -1120,6 +1126,7 @@ class TestPrintingGC(GenericGCTests):
 
 class TestSemiSpaceGC(GenericMovingGCTests):
     gcname = "semispace"
+    GC_CAN_SHRINK_ARRAY = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
@@ -1141,6 +1148,7 @@ class TestMarkCompactGC(GenericMovingGCTests):
 
 class TestGenerationGC(GenericMovingGCTests):
     gcname = "generation"
+    GC_CAN_SHRINK_ARRAY = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
