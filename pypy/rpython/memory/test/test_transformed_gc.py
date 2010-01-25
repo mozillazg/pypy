@@ -631,22 +631,25 @@ class GenericGCTests(GCTest):
         run = self.runner("malloc_nonmovable_fixsize")
         assert run([]) == int(self.GC_CANNOT_MALLOC_NONMOVABLE)
 
-    def define_resizable_buffer(cls):
+    def define_shrink_array(cls):
         from pypy.rpython.lltypesystem.rstr import STR
-        from pypy.rpython.annlowlevel import hlstr
 
         def f():
-            ptr = rgc.resizable_buffer_of_shape(STR, 2)
-            ptr.chars[0] = 'a'
-            ptr = rgc.resize_buffer(ptr, 1, 200)
-            ptr.chars[1] = 'b'
-            return hlstr(rgc.finish_building_buffer(ptr, 2)) == "ab"
-
+            ptr = lltype.malloc(STR, 3)
+            ptr.hash = 0x62
+            ptr.chars[0] = 'A'
+            ptr.chars[1] = 'B'
+            ptr.chars[2] = 'C'
+            ptr = rgc.ll_shrink_array(ptr, 2)
+            return ( ord(ptr.chars[0])       +
+                    (ord(ptr.chars[1]) << 8) +
+                    (len(ptr.chars)   << 16) +
+                    (ptr.hash         << 24))
         return f
 
-    def test_resizable_buffer(self):
-        run = self.runner("resizable_buffer")
-        assert run([]) == 1
+    def test_shrink_array(self):
+        run = self.runner("shrink_array")
+        assert run([]) == 0x62024241
 
     def define_string_builder_over_allocation(cls):
         import gc

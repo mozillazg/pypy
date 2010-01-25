@@ -102,6 +102,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     @staticmethod
     def ll_build(ll_builder):
         final_size = ll_builder.used
+        assert final_size >= 0
         return rgc.ll_shrink_array(ll_builder.buf, final_size)
 
 class StringBuilderRepr(BaseStringBuilderRepr):
