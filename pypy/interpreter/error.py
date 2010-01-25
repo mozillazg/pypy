@@ -208,8 +208,8 @@ class OperationError(Exception):
             if not space.exception_is_valid_class_w(w_instclass):
                 instclassname = w_instclass.getname(space, '?')
                 msg = ("exceptions must be classes, or instances, "
-                       "or strings (deprecated), not %s" % (instclassname,))
-                raise OperationError(space.w_TypeError, space.wrap(msg))
+                       "or strings (deprecated), not %s")
+                raise operationerrfmt(space.w_TypeError, msg, instclassname)
 
             if not space.is_w(w_value, space.w_None):
                 raise OperationError(space.w_TypeError,
@@ -366,16 +366,3 @@ def wrap_oserror(space, e, exception_name='w_OSError'):
                                   space.wrap(msg))
     return OperationError(exc, w_error)
 wrap_oserror._annspecialcase_ = 'specialize:arg(2)'
-
-### installing the excepthook for OperationErrors
-##def operr_excepthook(exctype, value, traceback):
-##    if issubclass(exctype, OperationError):
-##        value.debug_excs.append((exctype, value, traceback))
-##        value.print_detailed_traceback()
-##    else:
-##        old_excepthook(exctype, value, traceback)
-##        from pypy.tool import tb_server
-##        tb_server.publish_exc((exctype, value, traceback))
-
-##old_excepthook = sys.excepthook
-##sys.excepthook = operr_excepthook
