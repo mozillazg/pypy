@@ -212,8 +212,8 @@ class WarmEnterState(object):
             if vinfo is not None:
                 virtualizable = args[vinfo.index_of_virtualizable]
                 virtualizable = vinfo.cast_to_vtype(virtualizable)
-                assert virtualizable != globaldata.blackhole_virtualizable, (
-                    "reentering same frame via blackhole")
+                if globaldata.blackhole_virtualizable == virtualizable:
+                    return
             else:
                 virtualizable = None
 
