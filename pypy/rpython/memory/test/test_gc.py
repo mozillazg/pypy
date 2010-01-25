@@ -571,20 +571,20 @@ class GCTest(object):
 
         self.interpret(fn, [])
 
-    # def test_stringbuilder(self):
-    #     def fn():
-    #         s = StringBuilder(4)
-    #         s.append("abcd")
-    #         s.append("defg")
-    #         s.append("rty")
-    #         s.append_multiple_char('y', 1000)
-    #         rgc.collect()
-    #         s.append_multiple_char('y', 1000)
-    #         res = s.build()[1000]
-    #         rgc.collect()
-    #         return ord(res)
-    #     res = self.interpret(fn, [])
-    #     assert res == ord('y')
+    def test_stringbuilder(self):
+        def fn():
+            s = StringBuilder(4)
+            s.append("abcd")
+            s.append("defg")
+            s.append("rty")
+            s.append_multiple_char('y', 1000)
+            rgc.collect()
+            s.append_multiple_char('y', 1000)
+            res = s.build()[1000]
+            rgc.collect()
+            return ord(res)
+        res = self.interpret(fn, [])
+        assert res == ord('y')
 
 from pypy.rlib.objectmodel import UnboxedValue
 
