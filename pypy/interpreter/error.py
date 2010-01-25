@@ -16,16 +16,19 @@ class OperationError(Exception):
     PyTraceback objects making the application-level traceback.
     """
 
-    __slots__ = ('w_type', '_w_value', 'application_traceback',
-                 'debug_excs')
+    _w_value = None
+    application_traceback = None
 
     def __init__(self, w_type, w_value, tb=None):
-        if w_type is None:
+        if not we_are_translated() and w_type is None:
             from pypy.tool.error import FlowingError
             raise FlowingError(w_value)
-        self.w_type = w_type
+        self.setup(w_type)
         self._w_value = w_value
         self.application_traceback = tb
+
+    def setup(self, w_type):
+        self.w_type = w_type
         if not we_are_translated():
             self.debug_excs = []
 
@@ -285,11 +288,14 @@ def get_operrcls2(valuefmt):
         #
         class OpErrFmt(OperationError):
             def __init__(self, w_type, strings, *args):
-                OperationError.__init__(self, w_type, None)
+                self.setup(w_type)
                 assert len(args) == len(strings) - 1
                 self.xstrings = strings
                 for i, attr in entries:
                     setattr(self, attr, args[i])
+                if not we_are_translated() and w_type is None:
+                    from pypy.tool.error import FlowingError
+                    raise FlowingError(self._compute_value())
             def _compute_value(self):
                 lst = [None] * (len(formats) + len(formats) + 1)
                 for i, attr in entries:
