@@ -11,7 +11,7 @@ from pypy.jit.metainterp.specnode import VirtualArraySpecNode
 from pypy.jit.metainterp.specnode import VirtualStructSpecNode
 from pypy.jit.metainterp.optimizeutil import _findall, sort_descrs
 from pypy.jit.metainterp.optimizeutil import descrlist_dict
-from pypy.jit.metainterp.optimizeutil import InvalidLoop
+from pypy.jit.metainterp.optimizeutil import InvalidLoop, args_dict
 from pypy.jit.metainterp import resume, compile
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rlib.objectmodel import we_are_translated
@@ -161,17 +161,17 @@ class AbstractVirtualValue(OptValue):
         return self.box
 
     def make_virtual_info(self, modifier, fieldnums):
-        vinfo = self._cached_vinfo 
-        if vinfo is not None and resume.tagged_list_eq(
-                vinfo.fieldnums, fieldnums):
+        vinfo = self._cached_vinfo
+        if vinfo is not None and vinfo.equals(fieldnums):
             return vinfo
         vinfo = self._make_virtual(modifier)
-        vinfo.fieldnums = fieldnums
+        vinfo.set_content(fieldnums)
         self._cached_vinfo = vinfo
         return vinfo
 
     def _make_virtual(self, modifier):
         raise NotImplementedError("abstract base")
+
 
 def get_fielddescrlist_cache(cpu):
     if not hasattr(cpu, '_optimizeopt_fielddescrlist_cache'):
@@ -207,6 +207,8 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
             iteritems = list(iteritems)
             iteritems.sort(key = lambda (x,y): x.sort_key())
         for ofs, value in iteritems:
+            if value.is_null():
+                continue
             subbox = value.force_box()
             op = ResOperation(rop.SETFIELD_GC, [box, subbox], None,
                               descr=ofs)
@@ -234,7 +236,6 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
 
     def get_args_for_fail(self, modifier):
         if self.box is None and not modifier.already_seen_virtual(self.keybox):
-            # modifier.already_seen_virtual()
             # checks for recursion: it is False unless
             # we have already seen the very same keybox
             lst = self._get_field_descr_list()
@@ -294,6 +295,8 @@ class VArrayValue(AbstractVirtualValue):
         for index in range(len(self._items)):
             subvalue = self._items[index]
             if subvalue is not self.constvalue:
+                if subvalue.is_null():
+                    continue
                 subbox = subvalue.force_box()
                 op = ResOperation(rop.SETARRAYITEM_GC,
                                   [box, ConstInt(index), subbox], None,
@@ -302,11 +305,9 @@ class VArrayValue(AbstractVirtualValue):
 
     def get_args_for_fail(self, modifier):
         if self.box is None and not modifier.already_seen_virtual(self.keybox):
-            # modifier.already_seen_virtual()
             # checks for recursion: it is False unless
             # we have already seen the very same keybox
             itemboxes = []
-            const = self.optimizer.new_const_item(self.arraydescr)
             for itemvalue in self._items:
                 itemboxes.append(itemvalue.get_key_box())
             modifier.register_virtual_fields(self.keybox, itemboxes)
@@ -387,6 +388,8 @@ class Optimizer(object):
         self.resumedata_memo = resume.ResumeDataLoopMemo(metainterp_sd)
         self.heap_op_optimizer = HeapOpOptimizer(self)
         self.bool_boxes = {}
+        self.loop_invariant_results = {}
+        self.pure_operations = args_dict()
 
     def forget_numberings(self, virtualbox):
         self.metainterp_sd.profiler.count(jitprof.OPT_FORCINGS)
@@ -513,17 +516,16 @@ class Optimizer(object):
         # accumulate counters
         self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
 
-    def emit_operation(self, op, must_clone=True):
+    def emit_operation(self, op):
         self.heap_op_optimizer.emitting_operation(op)
+        self._emit_operation(op)
+
+    def _emit_operation(self, op):
         for i in range(len(op.args)):
             arg = op.args[i]
             if arg in self.values:
                 box = self.values[arg].force_box()
-                if box is not arg:
-                    if must_clone:
-                        op = op.clone()
-                        must_clone = False
-                    op.args[i] = box
+                op.args[i] = box
         self.metainterp_sd.profiler.count(jitprof.OPT_OPS)
         if op.is_guard():
             self.metainterp_sd.profiler.count(jitprof.OPT_GUARDS)
@@ -535,10 +537,11 @@ class Optimizer(object):
         self.newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
+        pendingfields = self.heap_op_optimizer.force_lazy_setfields_for_guard()
         descr = op.descr
         assert isinstance(descr, compile.ResumeGuardDescr)
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
-        newboxes = modifier.finish(self.values)
+        newboxes = modifier.finish(self.values, pendingfields)
         if len(newboxes) > self.metainterp_sd.options.failargs_limit: # XXX be careful here
             raise compile.GiveUp
         descr.store_final_boxes(op, newboxes)
@@ -569,6 +572,23 @@ class Optimizer(object):
                 resbox = execute_nonspec(self.cpu, op.opnum, argboxes, op.descr)
                 self.make_constant(op.result, resbox.constbox())
                 return
+
+            if op.descr is None:
+                # did we do the exact same operation already?
+                args = op.args[:]
+                for i in range(len(args)):
+                    arg = args[i]
+                    if arg in self.values:
+                        args[i] = self.values[arg].get_key_box()
+                args.append(ConstInt(op.opnum))
+                oldop = self.pure_operations.get(args, None)
+                if oldop is not None:
+                    assert oldop.opnum == op.opnum
+                    self.make_equal_to(op.result, self.getvalue(oldop.result))
+                    return
+                else:
+                    self.pure_operations[args] = op
+
         # otherwise, the operation remains
         self.emit_operation(op)
 
@@ -582,9 +602,8 @@ class Optimizer(object):
         for i in range(len(specnodes)):
             value = self.getvalue(op.args[i])
             specnodes[i].teardown_virtual_node(self, value, exitargs)
-        op2 = op.clone()
-        op2.args = exitargs[:]
-        self.emit_operation(op2, must_clone=False)
+        op.args = exitargs[:]
+        self.emit_operation(op)
 
     def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getvalue(op.args[0])
@@ -699,7 +718,7 @@ class Optimizer(object):
         elif value.is_null():
             self.make_constant_int(op.result, not expect_nonnull)
         else:
-            self.emit_operation(op)
+            self.optimize_default(op)
 
     def optimize_INT_IS_TRUE(self, op):
         self._optimize_nullness(op, op.args[0], True)
@@ -736,6 +755,49 @@ class Optimizer(object):
     def optimize_OOIS(self, op):
         self._optimize_oois_ooisnot(op, False)
 
+    def optimize_VIRTUAL_REF(self, op):
+        indexbox = op.args[1]
+        #
+        # get some constants
+        vrefinfo = self.metainterp_sd.virtualref_info
+        c_cls = vrefinfo.jit_virtual_ref_const_class
+        descr_virtual_token = vrefinfo.descr_virtual_token
+        descr_virtualref_index = vrefinfo.descr_virtualref_index
+        #
+        # Replace the VIRTUAL_REF operation with a virtual structure of type
+        # 'jit_virtual_ref'.  The jit_virtual_ref structure may be forced soon,
+        # but the point is that doing so does not force the original structure.
+        op = ResOperation(rop.NEW_WITH_VTABLE, [c_cls], op.result)
+        vrefvalue = self.make_virtual(c_cls, op.result, op)
+        tokenbox = BoxInt()
+        self.emit_operation(ResOperation(rop.FORCE_TOKEN, [], tokenbox))
+        vrefvalue.setfield(descr_virtual_token, self.getvalue(tokenbox))
+        vrefvalue.setfield(descr_virtualref_index, self.getvalue(indexbox))
+
+    def optimize_VIRTUAL_REF_FINISH(self, op):
+        # Set the 'forced' field of the virtual_ref.
+        # In good cases, this is all virtual, so has no effect.
+        # Otherwise, this forces the real object -- but only now, as
+        # opposed to much earlier.  This is important because the object is
+        # typically a PyPy PyFrame, and now is the end of its execution, so
+        # forcing it now does not have catastrophic effects.
+        vrefinfo = self.metainterp_sd.virtualref_info
+        # - set 'forced' to point to the real object
+        op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
+                          descr = vrefinfo.descr_forced)
+        self.optimize_SETFIELD_GC(op1)
+        # - set 'virtual_token' to TOKEN_NONE
+        args = [op.args[0], ConstInt(0)]
+        op1 = ResOperation(rop.SETFIELD_GC, args, None,
+                      descr = vrefinfo.descr_virtual_token)
+        self.optimize_SETFIELD_GC(op1)
+        # Note that in some cases the virtual in op.args[1] has been forced
+        # already.  This is fine.  In that case, and *if* a residual
+        # CALL_MAY_FORCE suddenly turns out to access it, then it will
+        # trigger a ResumeGuardForcedDescr.handle_async_forcing() which
+        # will work too (but just be a little pointless, as the structure
+        # was already forced).
+
     def optimize_GETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])
         if value.is_virtual():
@@ -753,11 +815,11 @@ class Optimizer(object):
 
     def optimize_SETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])
+        fieldvalue = self.getvalue(op.args[1])
         if value.is_virtual():
-            value.setfield(op.descr, self.getvalue(op.args[1]))
+            value.setfield(op.descr, fieldvalue)
         else:
             value.ensure_nonnull()
-            fieldvalue = self.getvalue(op.args[1])
             self.heap_op_optimizer.optimize_SETFIELD_GC(op, value, fieldvalue)
 
     def optimize_NEW_WITH_VTABLE(self, op):
@@ -826,6 +888,23 @@ class Optimizer(object):
     def optimize_DEBUG_MERGE_POINT(self, op):
         self.emit_operation(op)
 
+    def optimize_CALL_LOOPINVARIANT(self, op):
+        funcvalue = self.getvalue(op.args[0])
+        if not funcvalue.is_constant():
+            self.optimize_default(op)
+            return
+        resvalue = self.loop_invariant_results.get(op.args[0].getint(), None)
+        if resvalue is not None:
+            self.make_equal_to(op.result, resvalue)
+            return
+        # change the op to be a normal call, from the backend's point of view
+        # there is no reason to have a separate operation for this
+        op.opnum = rop.CALL
+        self.optimize_default(op)
+        resvalue = self.getvalue(op.result)
+        self.loop_invariant_results[op.args[0].getint()] = resvalue
+            
+
 optimize_ops = _findall(Optimizer, 'optimize_')
 
 
@@ -839,11 +918,13 @@ class CachedArrayItems(object):
 class HeapOpOptimizer(object):
     def __init__(self, optimizer):
         self.optimizer = optimizer
-        # cached OptValues for each field descr
+        # cached fields:  {descr: {OptValue_instance: OptValue_fieldvalue}}
         self.cached_fields = {}
-
-        # cached OptValues for each field descr
+        # cached array items:  {descr: CachedArrayItems}
         self.cached_arrayitems = {}
+        # lazily written setfields (at most one per descr):  {descr: op}
+        self.lazy_setfields = {}
+        self.lazy_setfields_descrs = []     # keys (at least) of previous dict
 
     def clean_caches(self):
         self.cached_fields.clear()
@@ -851,15 +932,23 @@ class HeapOpOptimizer(object):
 
     def cache_field_value(self, descr, value, fieldvalue, write=False):
         if write:
+            # when seeing a setfield, we have to clear the cache for the same
+            # field on any other structure, just in case they are aliasing
+            # each other
             d = self.cached_fields[descr] = {}
         else:
             d = self.cached_fields.setdefault(descr, {})
         d[value] = fieldvalue
 
     def read_cached_field(self, descr, value):
+        # XXX self.cached_fields and self.lazy_setfields should probably
+        # be merged somehow
         d = self.cached_fields.get(descr, None)
         if d is None:
-            return None
+            op = self.lazy_setfields.get(descr, None)
+            if op is None:
+                return None
+            return self.optimizer.getvalue(op.args[1])
         return d.get(value, None)
 
     def cache_arrayitem_value(self, descr, value, indexvalue, fieldvalue, write=False):
@@ -908,8 +997,6 @@ class HeapOpOptimizer(object):
         return None
 
     def emitting_operation(self, op):
-        if op.is_always_pure():
-            return
         if op.has_no_side_effect():
             return
         if op.is_ovf():
@@ -921,10 +1008,20 @@ class HeapOpOptimizer(object):
             opnum == rop.SETARRAYITEM_GC or
             opnum == rop.DEBUG_MERGE_POINT):
             return
-        if opnum == rop.CALL:
-            effectinfo = op.descr.get_extra_info()
+        if (opnum == rop.CALL or
+            opnum == rop.CALL_MAY_FORCE or
+            opnum == rop.CALL_ASSEMBLER):
+            if opnum == rop.CALL_ASSEMBLER:
+                effectinfo = None
+            else:
+                effectinfo = op.descr.get_extra_info()
             if effectinfo is not None:
+                # XXX we can get the wrong complexity here, if the lists
+                # XXX stored on effectinfo are large
+                for fielddescr in effectinfo.readonly_descrs_fields:
+                    self.force_lazy_setfield(fielddescr)
                 for fielddescr in effectinfo.write_descrs_fields:
+                    self.force_lazy_setfield(fielddescr)
                     try:
                         del self.cached_fields[fielddescr]
                     except KeyError:
@@ -935,9 +1032,73 @@ class HeapOpOptimizer(object):
                     except KeyError:
                         pass
                 return
+            self.force_all_lazy_setfields()
+        elif op.is_final() or (not we_are_translated() and
+                               op.opnum < 0):   # escape() operations
+            self.force_all_lazy_setfields()
         self.clean_caches()
 
+    def force_lazy_setfield(self, descr, before_guard=False):
+        try:
+            op = self.lazy_setfields[descr]
+        except KeyError:
+            return
+        del self.lazy_setfields[descr]
+        self.optimizer._emit_operation(op)
+        #
+        # hackish: reverse the order of the last two operations if it makes
+        # sense to avoid a situation like "int_eq/setfield_gc/guard_true",
+        # which the backend (at least the x86 backend) does not handle well.
+        newoperations = self.optimizer.newoperations
+        if before_guard and len(newoperations) >= 2:
+            lastop = newoperations[-1]
+            prevop = newoperations[-2]
+            # - is_comparison() for cases like "int_eq/setfield_gc/guard_true"
+            # - CALL_MAY_FORCE: "call_may_force/setfield_gc/guard_not_forced"
+            if ((prevop.is_comparison() or prevop.opnum == rop.CALL_MAY_FORCE)
+                and prevop.result not in lastop.args):
+                newoperations[-2] = lastop
+                newoperations[-1] = prevop
+
+    def force_all_lazy_setfields(self):
+        if len(self.lazy_setfields_descrs) > 0:
+            for descr in self.lazy_setfields_descrs:
+                self.force_lazy_setfield(descr)
+            del self.lazy_setfields_descrs[:]
+
+    def force_lazy_setfields_for_guard(self):
+        pendingfields = []
+        for descr in self.lazy_setfields_descrs:
+            try:
+                op = self.lazy_setfields[descr]
+            except KeyError:
+                continue
+            # the only really interesting case that we need to handle in the
+            # guards' resume data is that of a virtual object that is stored
+            # into a field of a non-virtual object.
+            value = self.optimizer.getvalue(op.args[0])
+            assert not value.is_virtual()      # it must be a non-virtual
+            fieldvalue = self.optimizer.getvalue(op.args[1])
+            if fieldvalue.is_virtual():
+                # this is the case that we leave to resume.py
+                pendingfields.append((descr, value.box,
+                                      fieldvalue.get_key_box()))
+            else:
+                self.force_lazy_setfield(descr, before_guard=True)
+        return pendingfields
+
+    def force_lazy_setfield_if_necessary(self, op, value, write=False):
+        try:
+            op1 = self.lazy_setfields[op.descr]
+        except KeyError:
+            if write:
+                self.lazy_setfields_descrs.append(op.descr)
+        else:
+            if self.optimizer.getvalue(op1.args[0]) is not value:
+                self.force_lazy_setfield(op.descr)
+
     def optimize_GETFIELD_GC(self, op, value):
+        self.force_lazy_setfield_if_necessary(op, value)
         # check if the field was read from another getfield_gc just before
         # or has been written to recently
         fieldvalue = self.read_cached_field(op.descr, value)
@@ -952,7 +1113,8 @@ class HeapOpOptimizer(object):
         self.cache_field_value(op.descr, value, fieldvalue)
 
     def optimize_SETFIELD_GC(self, op, value, fieldvalue):
-        self.optimizer.emit_operation(op)
+        self.force_lazy_setfield_if_necessary(op, value, write=True)
+        self.lazy_setfields[op.descr] = op
         # remember the result of future reads of the field
         self.cache_field_value(op.descr, value, fieldvalue, write=True)
 

@@ -1,7 +1,7 @@
 import py
 import sys
 from pypy.rlib.jit import JitDriver, we_are_jitted, hint, dont_look_inside
-from pypy.rlib.jit import OPTIMIZER_FULL, OPTIMIZER_SIMPLE
+from pypy.rlib.jit import OPTIMIZER_FULL, OPTIMIZER_SIMPLE, loop_invariant
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp import support, codewriter, pyjitpl, history
@@ -52,6 +52,8 @@ class JitMixin:
         assert get_stats().exec_jumps <= maxcount
     def check_aborted_count(self, count):
         assert get_stats().aborted_count == count
+    def check_aborted_count_at_least(self, count):
+        assert get_stats().aborted_count >= count
 
     def meta_interp(self, *args, **kwds):
         kwds['CPUClass'] = self.CPUClass
@@ -84,6 +86,10 @@ class JitMixin:
         metainterp, rtyper = _get_bare_metainterp(f, args, self.CPUClass,
                                                   self.type_system,
                                                   **kwds)
+        metainterp.staticdata.state = FakeWarmRunnerState()
+        metainterp.staticdata.state.cpu = metainterp.staticdata.cpu
+        if hasattr(self, 'finish_metainterp_for_interp_operations'):
+            self.finish_metainterp_for_interp_operations(metainterp)
         portal_graph = rtyper.annotator.translator.graphs[0]
         cw = codewriter.CodeWriter(rtyper)
         
@@ -95,7 +101,6 @@ class JitMixin:
         cw.finish_making_bytecodes()
         metainterp.staticdata.portal_code = maingraph
         metainterp.staticdata._class_sizes = cw.class_sizes
-        metainterp.staticdata.state = FakeWarmRunnerState()
         metainterp.staticdata.DoneWithThisFrameInt = DoneWithThisFrame
         metainterp.staticdata.DoneWithThisFrameRef = DoneWithThisFrameRef
         metainterp.staticdata.DoneWithThisFrameFloat = DoneWithThisFrame
@@ -379,6 +384,26 @@ class BasicTests:
         assert f(55) == -5
         res = self.meta_interp(f, [55])
         assert res == -1
+
+    def test_confirm_enter_jit(self):
+        def confirm_enter_jit(x, y):
+            return x <= 5
+        myjitdriver = JitDriver(greens = ['x'], reds = ['y'],
+                                confirm_enter_jit = confirm_enter_jit)
+        def f(x, y):
+            while y >= 0:
+                myjitdriver.can_enter_jit(x=x, y=y)
+                myjitdriver.jit_merge_point(x=x, y=y)
+                y -= x
+            return y
+        #
+        res = self.meta_interp(f, [10, 84])
+        assert res == -6
+        self.check_loop_count(0)
+        #
+        res = self.meta_interp(f, [3, 19])
+        assert res == -2
+        self.check_loop_count(1)
 
     def test_format(self):
         def f(n):
@@ -1196,6 +1221,69 @@ class BasicTests:
         res = self.meta_interp(f, [21])
         assert res == 42
         self.check_loops(guard_nonnull=1, guard_isnull=1)
+
+    def test_loop_invariant(self):
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'res'])
+        class A(object):
+            pass
+        a = A()
+        a.current_a = A()
+        a.current_a.x = 1
+        @loop_invariant
+        def f():
+            return a.current_a
+
+        def g(x):
+            res = 0
+            while x > 0:
+                myjitdriver.can_enter_jit(x=x, res=res)
+                myjitdriver.jit_merge_point(x=x, res=res)
+                res += f().x
+                res += f().x
+                res += f().x
+                x -= 1
+            a.current_a = A()
+            a.current_a.x = 2
+            return res
+        res = self.meta_interp(g, [21])
+        assert res == 3 * 21
+        self.check_loops(call=1)
+
+    def test_bug_optimizeopt_mutates_ops(self):
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'res', 'a', 'const'])
+        class A(object):
+            pass
+        class B(A):
+            pass
+
+        glob = A()
+        glob.a = None
+        def f(x):
+            res = 0
+            a = A()
+            a.x = 0
+            glob.a = A()
+            const = 2
+            while x > 0:
+                myjitdriver.can_enter_jit(x=x, res=res, a=a, const=const)
+                myjitdriver.jit_merge_point(x=x, res=res, a=a, const=const)
+                if type(glob.a) is B:
+                    res += 1
+                if a is None:
+                    a = A()
+                    a.x = x
+                    glob.a = B()
+                    const = 2
+                else:
+                    const = hint(const, promote=True)
+                    x -= const
+                    res += a.x
+                    a = None
+                    glob.a = A()
+                    const = 1
+            return res
+        res = self.meta_interp(f, [21])
+        assert res == f(21)
         
 
 class TestOOtype(BasicTests, OOJitMixin):

@@ -54,9 +54,11 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     for box in loop.inputargs:
         assert isinstance(box, Box)
     if start > 0:
-        loop.operations = history.operations[start:]
+        ops = history.operations[start:]
     else:
-        loop.operations = history.operations
+        ops = history.operations
+    # make a copy, because optimize_loop can mutate the ops and descrs
+    loop.operations = [op.clone() for op in ops]
     metainterp_sd = metainterp.staticdata
     loop_token = make_loop_token(len(loop.inputargs))
     loop.token = loop_token
@@ -203,10 +205,18 @@ def make_done_loop_tokens():
 class ResumeDescr(AbstractFailDescr):
     def __init__(self, original_greenkey):
         self.original_greenkey = original_greenkey
+    def _clone_if_mutable(self):
+        raise NotImplementedError
 
 class ResumeGuardDescr(ResumeDescr):
     counter = 0
-    # this class also gets attributes stored by resume.py code
+    # this class also gets the following attributes stored by resume.py code
+    rd_snapshot = None
+    rd_frame_info_list = None
+    rd_numb = None
+    rd_consts = None
+    rd_virtuals = None
+    rd_pendingfields = None
 
     def __init__(self, metainterp_sd, original_greenkey):
         ResumeDescr.__init__(self, original_greenkey)
@@ -231,29 +241,67 @@ class ResumeGuardDescr(ResumeDescr):
                                new_loop.operations)
 
 
+    def _clone_if_mutable(self):
+        res = self.__class__(self.metainterp_sd, self.original_greenkey)
+        # XXX a bit ugly to have to list them all here
+        res.rd_snapshot = self.rd_snapshot
+        res.rd_frame_info_list = self.rd_frame_info_list
+        res.rd_numb = self.rd_numb
+        res.rd_consts = self.rd_consts
+        res.rd_virtuals = self.rd_virtuals
+        res.rd_pendingfields = self.rd_pendingfields
+        return res
+
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def handle_fail(self, metainterp_sd):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
         metainterp = MetaInterp(metainterp_sd)
         token = metainterp_sd.cpu.get_latest_force_token()
-        data = self.fetch_data(token)
-        if data is None:
-            data = []
-        metainterp._already_allocated_resume_virtuals = data
+        all_virtuals = self.fetch_data(token)
+        if all_virtuals is None:
+            all_virtuals = []
+        metainterp._already_allocated_resume_virtuals = all_virtuals
         self.counter = -2     # never compile
         return metainterp.handle_guard_failure(self)
 
-    def force_virtualizable(self, vinfo, virtualizable, force_token):
+    @staticmethod
+    def force_now(cpu, token):
+        # Called during a residual call from the assembler, if the code
+        # actually needs to force one of the virtualrefs or the virtualizable.
+        # Implemented by forcing *all* virtualrefs and the virtualizable.
+        faildescr = cpu.force(token)
+        assert isinstance(faildescr, ResumeGuardForcedDescr)
+        faildescr.handle_async_forcing(token)
+
+    def handle_async_forcing(self, force_token):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
         from pypy.jit.metainterp.resume import force_from_resumedata
-        metainterp = MetaInterp(self.metainterp_sd)
+        # To handle the forcing itself, we create a temporary MetaInterp
+        # as a convenience to move the various data to its proper place.
+        metainterp_sd = self.metainterp_sd
+        metainterp = MetaInterp(metainterp_sd)
         metainterp.history = None    # blackholing
-        liveboxes = metainterp.cpu.make_boxes_from_latest_values(self)
-        virtualizable_boxes, data = force_from_resumedata(metainterp,
-                                                          liveboxes, self)
-        vinfo.write_boxes(virtualizable, virtualizable_boxes)
-        self.save_data(force_token, data)
+        liveboxes = metainterp_sd.cpu.make_boxes_from_latest_values(self)
+        #
+        expect_virtualizable = metainterp_sd.virtualizable_info is not None
+        forced_data = force_from_resumedata(metainterp, liveboxes, self,
+                                            expect_virtualizable)
+        virtualizable_boxes, virtualref_boxes, all_virtuals = forced_data
+        #
+        # Handle virtualref_boxes: mark each JIT_VIRTUAL_REF as forced
+        vrefinfo = metainterp_sd.virtualref_info
+        for i in range(0, len(virtualref_boxes), 2):
+            virtualbox = virtualref_boxes[i]
+            vrefbox = virtualref_boxes[i+1]
+            vrefinfo.forced_single_vref(vrefbox.getref_base(),
+                                        virtualbox.getref_base())
+        # Handle virtualizable_boxes: store them on the real virtualizable now
+        if expect_virtualizable:
+            metainterp_sd.virtualizable_info.forced_vable(virtualizable_boxes)
+        # Handle all_virtuals: keep them for later blackholing from the
+        # future failure of the GUARD_NOT_FORCED
+        self.save_data(force_token, all_virtuals)
 
     def save_data(self, key, value):
         globaldata = self.metainterp_sd.globaldata
@@ -309,13 +357,16 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     # it does not work -- i.e. none of the existing old_loop_tokens match.
     new_loop = create_empty_loop(metainterp)
     new_loop.inputargs = metainterp.history.inputargs
-    new_loop.operations = metainterp.history.operations
+    # clone ops, as optimize_bridge can mutate the ops
+    new_loop.operations = [op.clone() for op in metainterp.history.operations]
     metainterp_sd = metainterp.staticdata
     try:
         target_loop_token = metainterp_sd.state.optimize_bridge(metainterp_sd,
                                                                 old_loop_tokens,
                                                                 new_loop)
     except InvalidLoop:
+        # XXX I am fairly convinced that optimize_bridge cannot actually raise
+        # InvalidLoop
         return None
     # Did it work?
     if target_loop_token is not None:

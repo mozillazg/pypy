@@ -27,7 +27,7 @@ def unpack_str_tuple(space,w_str_tuple):
 
 
 # Magic numbers for the bytecode version in code objects.
-# See comments in pypy/module/__builtin__/importing.
+# See comments in pypy/module/imp/importing.
 cpython_magic, = struct.unpack("<i", imp.get_magic())   # host magic number
 default_magic = (62131+2) | 0x0a0d0000                  # this PyPy's magic
                                                         # (62131=CPython 2.5.1)
@@ -117,9 +117,6 @@ class PyCode(eval.Code):
 
         self._compute_flatcall()
 
-        if self.space.config.objspace.std.withcelldict:
-            from pypy.objspace.std.celldict import init_code
-            init_code(self)
 
     def _init_flags(self):
         co_code = self.co_code

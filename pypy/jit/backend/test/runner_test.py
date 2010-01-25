@@ -1,5 +1,5 @@
 
-import py, sys, random
+import py, sys, random, os
 from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          BasicFailDescr,
                                          BoxInt, Box, BoxPtr,
@@ -15,6 +15,7 @@ from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.llinterp import LLException
+from pypy.jit.metainterp.test.oparser import parse
 
 class Runner(object):
 
@@ -464,6 +465,30 @@ class BaseBackendTest(Runner):
                                          [funcbox] + args,
                                          'float', descr=calldescr)
             assert abs(res.value - 4.6) < 0.0001
+        
+    def test_call_stack_alignment(self):
+        # test stack alignment issues, notably for Mac OS/X.
+        # also test the ordering of the arguments.
+
+        def func_ints(*ints):
+            s = str(ints) + '\n'
+            os.write(1, s)   # don't remove -- crash if the stack is misaligned
+            return sum([(10+i)*(5+j) for i, j in enumerate(ints)])
+
+        for nb_args in range(0, 35):
+            cpu = self.cpu
+            TP = lltype.Signed
+            #
+            FPTR = self.Ptr(self.FuncType([TP] * nb_args, TP))
+            func_ptr = llhelper(FPTR, func_ints)
+            FUNC = deref(FPTR)
+            calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+            funcbox = self.get_funcbox(cpu, func_ptr)
+            args = [280-24*i for i in range(nb_args)]
+            res = self.execute_operation(rop.CALL,
+                                         [funcbox] + map(BoxInt, args),
+                                         'int', descr=calldescr)
+            assert res.value == func_ints(*args)
 
     def test_field_basic(self):
         t_box, T_box = self.alloc_instance(self.T)
@@ -778,6 +803,19 @@ class BaseBackendTest(Runner):
             assert r.value == 5.5
             r = self.execute_operation(rop.SAME_AS, [BoxFloat(5.5)], 'float')
             assert r.value == 5.5
+
+    def test_virtual_ref(self):
+        # if VIRTUAL_REF reaches the backend, it should just be a SAME_AS
+        u_box = self.alloc_unicode(u"hello\u1234")
+        r = self.execute_operation(rop.VIRTUAL_REF, [u_box, ConstInt(2)],
+                                   'ref')
+        assert r.value == u_box.value
+
+    def test_virtual_ref_finish(self):
+        # if VIRTUAL_REF_FINISH reaches the backend, it is a no-op
+        self.execute_operation(rop.VIRTUAL_REF_FINISH,
+                               [BoxInt(123), BoxInt(234)],
+                               'void')
 
     def test_jump(self):
         # this test generates small loops where the JUMP passes many
@@ -1572,6 +1610,87 @@ class LLtypeBackendTest(BaseBackendTest):
         
         lltype.free(x, flavor='raw')
 
+    def test_assembler_call(self):
+        called = []
+        def assembler_helper(failindex, virtualizable):
+            assert self.cpu.get_latest_value_int(0) == 10
+            called.append(failindex)
+            return 4 + 9
+        self.cpu.index_of_virtualizable = -1
+        self.cpu.assembler_helper_ptr = llhelper(lltype.Ptr(lltype.FuncType
+            ([lltype.Signed, llmemory.GCREF], lltype.Signed)), assembler_helper)
+        
+        ops = '''
+        [i0, i1]
+        i2 = int_add(i0, i1)
+        finish(i2)'''
+        loop = parse(ops)
+        looptoken = LoopToken()
+        self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
+        ARGS = [lltype.Signed, lltype.Signed]
+        RES = lltype.Signed
+        self.cpu.portal_calldescr = self.cpu.calldescrof(
+            lltype.Ptr(lltype.FuncType(ARGS, RES)), ARGS, RES)
+        self.cpu.set_future_value_int(0, 1)
+        self.cpu.set_future_value_int(1, 2)
+        res = self.cpu.execute_token(looptoken)
+        assert self.cpu.get_latest_value_int(0) == 3
+        ops = '''
+        [i4, i5]
+        i6 = int_add(i4, 1)
+        i3 = call_assembler(i6, i5, descr=looptoken)
+        guard_not_forced()[]
+        finish(i3)
+        '''
+        loop = parse(ops, namespace=locals())
+        othertoken = LoopToken()
+        self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
+        self.cpu.set_future_value_int(0, 4)
+        self.cpu.set_future_value_int(1, 5)
+        res = self.cpu.execute_token(othertoken)
+        assert self.cpu.get_latest_value_int(0) == 13
+        assert called
+
+    def test_assembler_call_float(self):
+        called = []
+        def assembler_helper(failindex, virtualizable):
+            assert self.cpu.get_latest_value_float(0) == 1.2 + 3.2
+            called.append(failindex)
+            return 13.5
+        self.cpu.index_of_virtualizable = -1
+        self.cpu.assembler_helper_ptr = llhelper(lltype.Ptr(lltype.FuncType
+            ([lltype.Signed, llmemory.GCREF], lltype.Float)), assembler_helper)
+        ARGS = [lltype.Float, lltype.Float]
+        RES = lltype.Float
+        self.cpu.portal_calldescr = self.cpu.calldescrof(
+            lltype.Ptr(lltype.FuncType(ARGS, RES)), ARGS, RES)
+        
+        ops = '''
+        [f0, f1]
+        f2 = float_add(f0, f1)
+        finish(f2)'''
+        loop = parse(ops)
+        looptoken = LoopToken()
+        self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
+        self.cpu.set_future_value_float(0, 1.2)
+        self.cpu.set_future_value_float(1, 2.3)
+        res = self.cpu.execute_token(looptoken)
+        assert self.cpu.get_latest_value_float(0) == 1.2 + 2.3
+        ops = '''
+        [f4, f5]
+        f3 = call_assembler(f4, f5, descr=looptoken)
+        guard_not_forced()[]
+        finish(f3)
+        '''
+        loop = parse(ops, namespace=locals())
+        othertoken = LoopToken()
+        self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
+        self.cpu.set_future_value_float(0, 1.2)
+        self.cpu.set_future_value_float(1, 3.2)
+        res = self.cpu.execute_token(othertoken)
+        assert self.cpu.get_latest_value_float(0) == 13.5
+        assert called
+
 class OOtypeBackendTest(BaseBackendTest):
 
     type_system = 'ootype'
@@ -1609,3 +1728,4 @@ class OOtypeBackendTest(BaseBackendTest):
 
     def alloc_unicode(self, unicode):
         py.test.skip("implement me")
+    

@@ -427,7 +427,8 @@ LL_OPERATIONS = {
     # __________ used by the JIT ________
 
     'jit_marker':           LLOp(),
-    'promote_virtualizable':LLOp(canrun=True),
+    'jit_force_virtualizable':LLOp(canrun=True),
+    'jit_force_virtual':    LLOp(canrun=True),
     'get_exception_addr':   LLOp(),
     'get_exc_value_addr':   LLOp(),
     'do_malloc_fixedsize_clear': LLOp(canunwindgc=True),
@@ -535,6 +536,11 @@ LL_OPERATIONS = {
     'debug_fatalerror':     LLOp(),
     'debug_llinterpcall':   LLOp(), # Python func call 'res=arg[0](*arg[1:])'
                                     # in backends, abort() or whatever is fine
+    'debug_start_traceback':   LLOp(),
+    'debug_record_traceback':  LLOp(),
+    'debug_catch_exception':   LLOp(),
+    'debug_reraise_traceback': LLOp(),
+    'debug_print_traceback':   LLOp(),
 
     # __________ instrumentation _________
     'instrument_count':     LLOp(),

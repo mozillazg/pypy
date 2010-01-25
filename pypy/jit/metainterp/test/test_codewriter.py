@@ -2,6 +2,7 @@ import py
 from pypy.rlib import jit
 from pypy.jit.metainterp import support, typesystem
 from pypy.jit.metainterp.policy import JitPolicy
+from pypy.jit.metainterp.history import ConstInt
 from pypy.jit.metainterp.codewriter import CodeWriter
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.translator.translator import graphof
@@ -78,7 +79,27 @@ def test_find_all_graphs_loops():
                              supports_floats=True)
     funcs = set([graph.func for graph in res])
     assert funcs == set([f, h])
-    
+
+def test_unroll_safe_and_inline():
+    @jit.unroll_safe
+    def h(x):
+        i = 0
+        while i < x:
+            i += 1
+        return i
+    h._always_inline_ = True
+
+    def g(x):
+        return h(x)
+
+    rtyper = support.annotate(g, [7])
+    cw = CodeWriter(rtyper)
+    jitpolicy = JitPolicy()
+    translator = rtyper.annotator.translator
+    res = cw.find_all_graphs(translator.graphs[0], None, jitpolicy,
+                             supports_floats=True)
+    funcs = set([graph.func for graph in res])
+    assert funcs == set([g, h])
 
 def test_find_all_graphs_str_join():
     def i(x, y):
@@ -101,6 +122,8 @@ class TestCodeWriter:
     def make_graphs(self, func, values, type_system='lltype'):
         class FakeMetaInterpSd:
             virtualizable_info = None
+            class options:
+                listops = True
             def find_opcode(self, name):
                 default = len(self.opname_to_index)
                 return self.opname_to_index.setdefault(name, default)
@@ -283,7 +306,7 @@ class TestCodeWriter:
         assert calldescrs[0][4] is not None
         assert not calldescrs[0][4].write_descrs_fields
         assert not calldescrs[0][4].write_descrs_arrays
-        assert not calldescrs[0][4].promotes_virtualizables
+        assert not calldescrs[0][4].forces_virtual_or_virtualizable
 
     def test_oosend_look_inside_only_one(self):
         class A:
@@ -394,7 +417,7 @@ class TestCodeWriter:
         assert cw.list_of_addr2name[0][1].endswith('.A1')
         assert cw.list_of_addr2name[1][1] == 'A1.g'
 
-    def test_promote_virtualizable_effectinfo(self):
+    def test_jit_force_virtualizable_effectinfo(self):
         class Frame(object):
             _virtualizable2_ = ['x']
             
@@ -430,9 +453,64 @@ class TestCodeWriter:
         effectinfo_g1 = calldescrs[1][4]
         effectinfo_g2 = calldescrs[2][4]
         effectinfo_h  = calldescrs[3][4]
-        assert effectinfo_g1.promotes_virtualizables
-        assert effectinfo_g2.promotes_virtualizables
-        assert not effectinfo_h.promotes_virtualizables
+        assert effectinfo_g1.forces_virtual_or_virtualizable
+        assert effectinfo_g2.forces_virtual_or_virtualizable
+        assert not effectinfo_h.forces_virtual_or_virtualizable
+
+    def make_vrefinfo(self):
+        from pypy.jit.metainterp.virtualref import VirtualRefInfo
+        class FakeWarmRunnerDesc:
+            cpu = self.metainterp_sd.cpu
+        self.metainterp_sd.virtualref_info = VirtualRefInfo(FakeWarmRunnerDesc)
+
+    def test_vref_simple(self):
+        class X:
+            pass
+        def f():
+            return jit.virtual_ref(X())
+        graphs = self.make_graphs(f, [])
+        assert graphs[0].func is f
+        assert graphs[1].func is jit.virtual_ref
+        self.make_vrefinfo()
+        cw = CodeWriter(self.rtyper)
+        cw.candidate_graphs = [graphs[0]]
+        cw._start(self.metainterp_sd, None)
+        jitcode = cw.make_one_bytecode((graphs[0], None), False)
+        assert 'virtual_ref' in jitcode._source
+
+    def test_vref_forced(self):
+        class X:
+            pass
+        def f():
+            vref = jit.virtual_ref(X())
+            return vref()
+        graphs = self.make_graphs(f, [])
+        assert graphs[0].func is f
+        assert graphs[1].func is jit.virtual_ref
+        self.make_vrefinfo()
+        cw = CodeWriter(self.rtyper)
+        cw.candidate_graphs = [graphs[0]]
+        cw._start(self.metainterp_sd, None)
+        jitcode = cw.make_one_bytecode((graphs[0], None), False)
+        assert 'virtual_ref' in jitcode._source
+        # the call vref() becomes a residual call to a helper that contains
+        # itself a copy of the call.
+        assert 'residual_call' in jitcode._source
+
+    def test_we_are_jitted(self):
+        def f():
+            if jit.we_are_jitted():
+                return 55
+            else:
+                return 66
+        graphs = self.make_graphs(f, [])
+        cw = CodeWriter(self.rtyper)
+        cw.candidate_graphs = [graphs[0]]
+        cw._start(self.metainterp_sd, None)
+        jitcode = cw.make_one_bytecode((graphs[0], None), False)
+        assert 'goto_if_not' not in jitcode._source
+        assert ConstInt(55) in jitcode.constants
+        assert ConstInt(66) not in jitcode.constants
 
 
 class ImmutableFieldsTests:

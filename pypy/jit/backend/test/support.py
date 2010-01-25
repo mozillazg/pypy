@@ -100,6 +100,9 @@ class BaseCompiledMixin(object):
     def check_aborted_count(self, *args, **kwds):
         pass
 
+    def check_aborted_count_at_least(self, *args, **kwds):
+        pass
+
     def interp_operations(self, *args, **kwds):
         py.test.skip("interp_operations test skipped")
 
@@ -117,6 +120,7 @@ class CCompiledMixin(BaseCompiledMixin):
     def _get_TranslationContext(self):
         t = TranslationContext()
         t.config.translation.gc = 'boehm'
+        t.config.translation.list_comprehension_operations = True
         return t
 
     def _compile_and_run(self, t, entry_point, entry_point_graph, args):

@@ -97,9 +97,15 @@ opcodes = _proc_dict({
     'gc_set_max_heap_size':     Ignore,
     'resume_point':             Ignore,
     'jit_marker':               Ignore,
-    'promote_virtualizable':    Ignore,
+    'jit_force_virtualizable':  Ignore,
+    'jit_force_virtual':        DoNothing,
 
     'debug_assert':              [], # TODO: implement?
+    'debug_start_traceback':    Ignore,
+    'debug_record_traceback':   Ignore,
+    'debug_catch_exception':    Ignore,
+    'debug_reraise_traceback':  Ignore,
+    'debug_print_traceback':    Ignore,
 
     # __________ numeric operations __________
 

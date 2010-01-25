@@ -215,8 +215,8 @@ class BoehmGcPolicy(BasicGcPolicy):
     def compilation_info(self):
         eci = BasicGcPolicy.compilation_info(self)
 
-        from pypy.rpython.tool.rffi_platform import check_boehm
-        eci = eci.merge(check_boehm())
+        from pypy.rpython.tool.rffi_platform import configure_boehm
+        eci = eci.merge(configure_boehm())
 
         pre_include_bits = []
         if sys.platform == "linux2":
@@ -252,6 +252,9 @@ class BoehmGcPolicy(BasicGcPolicy):
     def OP_GC_SET_MAX_HEAP_SIZE(self, funcgen, op):
         nbytes = funcgen.expr(op.args[0])
         return 'GC_set_max_heap_size(%s);' % (nbytes,)
+
+    def GC_KEEPALIVE(self, funcgen, v):
+        return 'pypy_asm_keepalive(%s);' % funcgen.expr(v)
 
 class BoehmGcRuntimeTypeInfo_OpaqueNode(ContainerNode):
     nodekind = 'boehm rtti'

@@ -71,16 +71,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # Import all the object types and implementations
         self.model = StdTypeModel(self.config)
 
-        from pypy.objspace.std.celldict import get_global_cache
 
         class StdObjSpaceFrame(pyframe.PyFrame):
-            if self.config.objspace.std.withcelldict:
-                def __init__(self, space, code, w_globals, closure):
-                    pyframe.PyFrame.__init__(self, space, code, w_globals, closure)
-                    self.cache_for_globals = get_global_cache(space, code, w_globals)
-
-                from pypy.objspace.std.celldict import LOAD_GLOBAL
-
             if self.config.objspace.std.optimized_int_add:
                 if self.config.objspace.std.withsmallint:
                     def BINARY_ADD(f, oparg, *ignored):
@@ -662,15 +654,23 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 w_value = w_obj.getdictvalue_attr_is_in_class(self, name)
                 if w_value is not None:
                     return w_value
-            try:
-                return self.get(w_descr, w_obj)
-            except OperationError, e:
-                if not e.match(self, self.w_AttributeError):
-                    raise
-        else:
+            w_get = self.lookup(w_descr, "__get__")
+            if w_get is not None:
+                # __get__ is allowed to raise an AttributeError to trigger use
+                # of __getattr__.
+                try:
+                    return self.get_and_call_function(w_get, w_descr, w_obj,
+                                                      w_type)
+                except OperationError, e:
+                    if not e.match(self, self.w_AttributeError):
+                        raise
+        if e is None:
             w_value = w_obj.getdictvalue(self, name)
             if w_value is not None:
                 return w_value
+            # No value in __dict__. Fallback to the descriptor if we have it.
+            if w_descr is not None:
+                return w_descr
 
         w_descr = self.lookup(w_obj, '__getattr__')
         if w_descr is not None:

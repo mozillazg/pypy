@@ -793,8 +793,12 @@ class FunctionCodeGenerator(object):
     def OP_JIT_MARKER(self, op):
         return '/* JIT_MARKER %s */' % op
 
-    def OP_PROMOTE_VIRTUALIZABLE(self, op):
-        return '/* PROMOTE_VIRTUALIZABLE %s */' % op
+    def OP_JIT_FORCE_VIRTUALIZABLE(self, op):
+        return '/* JIT_FORCE_VIRTUALIZABLE %s */' % op
+
+    def OP_JIT_FORCE_VIRTUAL(self, op):
+        return '%s = %s; /* JIT_FORCE_VIRTUAL */' % (self.expr(op.result),
+                                                     self.expr(op.args[0]))
 
     def OP_GET_GROUP_MEMBER(self, op):
         typename = self.db.gettype(op.result.concretetype)
@@ -812,6 +816,27 @@ class FunctionCodeGenerator(object):
             self.expr(op.args[0]),
             self.expr(op.args[1]),
             self.expr(op.args[2]))
+
+    def getdebugfunctionname(self):
+        name = self.functionname
+        if not name:
+            return "?"
+        if name.startswith('pypy_g_'):
+            name = name[7:]
+        return name
+
+    def OP_DEBUG_RECORD_TRACEBACK(self, op):
+        #if self.functionname is None, we print "?" as the argument */
+        return 'PYPY_DEBUG_RECORD_TRACEBACK("%s");' % (
+            self.getdebugfunctionname(),)
+
+    def OP_DEBUG_CATCH_EXCEPTION(self, op):
+        gottype = self.expr(op.args[0])
+        exprs = []
+        for c_limited_type in op.args[1:]:
+            exprs.append('%s == %s' % (gottype, self.expr(c_limited_type)))
+        return 'PYPY_DEBUG_CATCH_EXCEPTION("%s", %s, %s);' % (
+            self.getdebugfunctionname(), gottype, ' || '.join(exprs))
 
 
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)

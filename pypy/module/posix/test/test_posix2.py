@@ -245,6 +245,21 @@ class AppTestPosix:
             assert os.WEXITSTATUS(status1) == 4
         pass # <- please, inspect.getsource(), don't crash
 
+
+    if hasattr(__import__(os.name), "openpty"):
+        def test_openpty(self):
+            os = self.posix
+            master_fd, slave_fd = self.posix.openpty()
+            try:
+                assert isinstance(master_fd, int)
+                assert isinstance(slave_fd, int)
+                os.write(slave_fd, 'x')
+                assert os.read(master_fd, 1) == 'x'
+            finally:
+                os.close(master_fd)
+                os.close(slave_fd)
+
+
     if hasattr(__import__(os.name), "execv"):
         def test_execv(self):
             os = self.posix
@@ -312,7 +327,7 @@ class AppTestPosix:
         fh.close()
         from time import time, sleep
         t0 = time()
-        sleep(1)
+        sleep(1.1)
         os.utime(path, None)
         assert os.stat(path).st_atime > t0
         os.utime(path, (int(t0), int(t0)))
