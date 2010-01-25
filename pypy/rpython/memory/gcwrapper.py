@@ -58,33 +58,8 @@ class GCManagedHeap(object):
             gctypelayout.zero_gc_pointers(result)
         return result
 
-    def malloc_resizable_buffer(self, TYPE, n):
-        typeid = self.get_type_id(TYPE)
-        addr = self.gc.malloc(typeid, n)
-        result = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
-        if not self.gc.malloc_zero_filled:
-            gctypelayout.zero_gc_pointers(result)
-        return result
-
-    def resize_buffer(self, obj, oldlength, newlength):
-        T = lltype.typeOf(obj).TO
-        ARRAY = getattr(T, T._arrayfld)
-        addr = llmemory.cast_ptr_to_adr(obj)
-        newaddr = self.gc.malloc(self.gc.get_type_id(addr), newlength, True)
-        addr = llmemory.cast_ptr_to_adr(obj)
-        itemsofs = (llmemory.FieldOffset(T, T._arrayfld) +
-                    llmemory.itemoffsetof(ARRAY, 0))
-        itemsize = llmemory.sizeof(ARRAY.OF)
-        tocopy = min(newlength, oldlength)
-        llmemory.raw_memcopy(addr + itemsofs, newaddr + itemsofs,
-                             tocopy * itemsize)
-        return llmemory.cast_adr_to_ptr(newaddr, lltype.Ptr(T))
-
-    def finish_building_buffer(self, obj, oldlength, newlength):
-        if hasattr(self.gc, 'realloc_shrink'):
-            xxx
-        else:
-            return self.resize_buffer(obj, oldlength, newlength)
+    def shrink_array(self, p, smallersize):
+        return False
 
     def free(self, TYPE, flavor='gc'):
         assert flavor != 'gc'

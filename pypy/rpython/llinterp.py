@@ -754,6 +754,9 @@ class LLFrame(object):
             self.llinterpreter.remember_free(obj)
         self.heap.free(obj, flavor=flavor)
 
+    def op_shrink_array(self, obj, smallersize):
+        return self.heap.shrink_array(obj, smallersize)
+
     def op_zero_gc_pointers_inside(self, obj):
         raise NotImplementedError("zero_gc_pointers_inside")
 
