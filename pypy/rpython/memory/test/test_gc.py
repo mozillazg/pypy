@@ -468,18 +468,22 @@ class GCTest(object):
 
         assert self.interpret(func, []) == int(self.GC_CANNOT_MALLOC_NONMOVABLE)
 
-    def test_resizable_buffer(self):
+    def test_shrink_array(self):
         from pypy.rpython.lltypesystem.rstr import STR
-        from pypy.rpython.annlowlevel import hlstr
 
         def f():
-            ptr = rgc.resizable_buffer_of_shape(STR, 1)
-            ptr.chars[0] = 'a'
-            ptr = rgc.resize_buffer(ptr, 1, 4)
-            ptr.chars[1] = 'b'
-            return len(hlstr(rgc.finish_building_buffer(ptr, 2)))
+            ptr = lltype.malloc(STR, 3)
+            ptr.hash = 0x62
+            ptr.chars[0] = 'A'
+            ptr.chars[1] = 'B'
+            ptr.chars[2] = 'C'
+            ptr = rgc.ll_shrink_array(ptr, 2)
+            return ( ord(ptr.chars[0])       +
+                    (ord(ptr.chars[1]) << 8) +
+                    (len(ptr.chars)   << 16) +
+                    (ptr.hash         << 24))
 
-        assert self.interpret(f, []) == 2
+        assert self.interpret(f, []) == 0x62024241
 
     def test_tagged_simple(self):
         from pypy.rlib.objectmodel import UnboxedValue
