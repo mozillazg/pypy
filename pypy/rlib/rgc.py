@@ -307,6 +307,7 @@ def ll_shrink_array(p, smallerlength):
     keepalive_until_here(newp)
     return newp
 ll_shrink_array._annspecialcase_ = 'specialize:ll'
+ll_shrink_array._jit_look_inside_ = False
 
 
 def no_collect(func):
