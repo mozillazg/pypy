@@ -56,8 +56,9 @@ class JitPolicy(object):
         else:
             see_function = (self.look_inside_function(func) and not
                             self._reject_function(func))
-            contains_loop = contains_loop and not getattr(
-                    func, '_jit_unroll_safe_', False)
+            contains_loop = (contains_loop
+                and not getattr(func, '_jit_unroll_safe_', False)
+                and not hasattr(func, '_jit_unroll_safe_if_const_arg_'))
 
         res = see_function and not contains_unsupported_variable_type(graph,
                                                          self.supports_floats)

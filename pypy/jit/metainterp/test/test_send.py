@@ -1,5 +1,6 @@
 import py
 from pypy.rlib.jit import JitDriver, hint, purefunction
+from pypy.rlib import jit
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.rpython.ootypesystem import ootype
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
@@ -607,6 +608,29 @@ class SendTests:
         res = self.meta_interp(fn, [20], policy=StopAtXPolicy(extern))
         assert res == 21
 
+    def test_unroll_safe_if_const_arg(self):
+        myjitdriver = JitDriver(greens=['g'], reds = ['i', 'x'])
+        @jit.unroll_safe_if_const_arg(1)
+        def do_stuff(x, y):
+            while y > 0:
+                x += 2
+                y -= 1
+            return x
+        def fn(g, i):
+            x = 0
+            while i > 0:
+                myjitdriver.can_enter_jit(g=g, i=i, x=x)
+                myjitdriver.jit_merge_point(g=g, i=i, x=x)
+                x = do_stuff(x, g)    # unroll_safe
+                x = do_stuff(x, i)    # not unroll_safe
+                i -= 1
+            return x
+        res = self.meta_interp(fn, [10, 20])
+        assert res == fn(10, 20)
+        # xxx we could get a call instead of a call_may_force,
+        # given enough efforts, but it seems not very useful in
+        # practice
+        self.check_loops(int_add=10, call_may_force=1)
 
 class TestOOtype(SendTests, OOJitMixin):
     pass

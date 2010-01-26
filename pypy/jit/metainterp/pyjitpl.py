@@ -647,6 +647,15 @@ class MIFrame(object):
     def opimpl_residual_call_loopinvariant(self, calldescr, varargs):
         return self.execute_varargs(rop.CALL_LOOPINVARIANT, varargs, calldescr, exc=True)
 
+    @arguments("int", "bytecode", "varargs")
+    def opimpl_call_if_const_arg(self, if_const_arg, callee, varargs):
+        if isinstance(varargs[if_const_arg], Const):
+            return self.perform_call(callee, varargs)
+        else:
+            assert callee.cfnptr is not None
+            return self.do_residual_call([callee.cfnptr] + varargs,
+                                         descr=callee.calldescr, exc=True)
+
     @arguments("varargs")
     def opimpl_recursion_leave_prep(self, varargs):
         warmrunnerstate = self.metainterp.staticdata.state
