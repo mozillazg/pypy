@@ -488,7 +488,11 @@ class GCTest(object):
                     (ptr2.hash         << 24))
 
         assert self.interpret(f, [3, 0]) == 0x62024241
-        assert self.interpret(f, [12, 0]) == 0x62024241
+        # don't test with larger numbers of top of the Hybrid GC, because
+        # the default settings make it a too-large varsized object that
+        # gets allocated outside the semispace
+        if not isinstance(self, TestHybridGC):
+            assert self.interpret(f, [12, 0]) == 0x62024241
 
     def test_tagged_simple(self):
         from pypy.rlib.objectmodel import UnboxedValue

@@ -271,11 +271,14 @@ def test_compiled():
     assert res == 42
 
 def test_shrink_obj():
-    S = lltype.Struct('S', ('x', lltype.Signed),
-                      ('a', lltype.Array(lltype.Signed)))
+    from pypy.rpython.memory.gcheader import GCHeaderBuilder
+    HDR = lltype.Struct('HDR', ('h', lltype.Signed))
+    gcheaderbuilder = GCHeaderBuilder(HDR)
+    size_gc_header = gcheaderbuilder.size_gc_header
+    S = lltype.GcStruct('S', ('x', lltype.Signed),
+                             ('a', lltype.Array(lltype.Signed)))
     myarenasize = 200
     a = arena_malloc(myarenasize, False)
-    arena_reserve(a, llmemory.sizeof(S, 10))
-    arena_shrink_obj(a, llmemory.sizeof(S, 5))
-    arena_reserve(a + llmemory.sizeof(S, 5), llmemory.sizeof(S, 10))
-    arena_reset(a, llmemory.sizeof(S, 5), False)
+    arena_reserve(a, size_gc_header + llmemory.sizeof(S, 10))
+    arena_shrink_obj(a, size_gc_header + llmemory.sizeof(S, 5))
+    arena_reset(a, size_gc_header + llmemory.sizeof(S, 5), False)

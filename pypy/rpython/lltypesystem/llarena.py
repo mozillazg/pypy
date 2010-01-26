@@ -104,11 +104,17 @@ class Arena(object):
         Arena.old_object_arena_location[container] = self, offset
 
     def shrink_obj(self, offset, newsize):
-        assert offset in self.objectptrs
-        oldsize = self.objectsizes[offset]
-        assert newsize <= oldsize
-        self.objectsizes[offset] = newsize
-        for i in range(offset + newsize, offset + oldsize):
+        oldbytes = self.objectsizes[offset]
+        newbytes = llmemory.raw_malloc_usage(newsize)
+        assert newbytes <= oldbytes
+        # fix self.objectsizes
+        for i in range(newbytes):
+            adr = offset + i
+            if adr in self.objectsizes:
+                assert self.objectsizes[adr] == oldbytes - i
+                self.objectsizes[adr] = newbytes - i
+        # fix self.usagemap
+        for i in range(offset + newbytes, offset + oldbytes):
             assert self.usagemap[i] == 'x'
             self.usagemap[i] = '#'
 
@@ -319,8 +325,7 @@ def arena_shrink_obj(addr, newsize):
     """ Mark object as shorter than it was
     """
     addr = _getfakearenaaddress(addr)
-    bytes = llmemory.raw_malloc_usage(newsize)
-    addr.arena.shrink_obj(addr.offset, bytes)
+    addr.arena.shrink_obj(addr.offset, newsize)
 
 def round_up_for_allocation(size, minsize=0):
     """Round up the size in order to preserve alignment of objects
