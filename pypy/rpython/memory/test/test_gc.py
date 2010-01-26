@@ -473,20 +473,22 @@ class GCTest(object):
         from pypy.rpython.lltypesystem.rstr import STR
         GC_CAN_SHRINK_ARRAY = self.GC_CAN_SHRINK_ARRAY
 
-        def f():
-            ptr = lltype.malloc(STR, 3)
+        def f(n, m):
+            ptr = lltype.malloc(STR, n)
             ptr.hash = 0x62
             ptr.chars[0] = 'A'
             ptr.chars[1] = 'B'
             ptr.chars[2] = 'C'
             ptr2 = rgc.ll_shrink_array(ptr, 2)
             assert (ptr == ptr2) == GC_CAN_SHRINK_ARRAY
+            rgc.collect()
             return ( ord(ptr2.chars[0])       +
                     (ord(ptr2.chars[1]) << 8) +
                     (len(ptr2.chars)   << 16) +
                     (ptr2.hash         << 24))
 
-        assert self.interpret(f, []) == 0x62024241
+        assert self.interpret(f, [3, 0]) == 0x62024241
+        assert self.interpret(f, [12, 0]) == 0x62024241
 
     def test_tagged_simple(self):
         from pypy.rlib.objectmodel import UnboxedValue
