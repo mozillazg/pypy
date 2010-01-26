@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem.llarena import arena_malloc, arena_reset
 from pypy.rpython.lltypesystem.llarena import arena_reserve, arena_free
 from pypy.rpython.lltypesystem.llarena import round_up_for_allocation
 from pypy.rpython.lltypesystem.llarena import ArenaError, arena_new_view
+from pypy.rpython.lltypesystem.llarena import arena_shrink_obj
 
 def test_arena():
     S = lltype.Struct('S', ('x',lltype.Signed))
@@ -268,3 +269,13 @@ def test_compiled():
     fn = compile(test_look_inside_object, [])
     res = fn()
     assert res == 42
+
+def test_shrink_obj():
+    S = lltype.Struct('S', ('x', lltype.Signed),
+                      ('a', lltype.Array(lltype.Signed)))
+    myarenasize = 200
+    a = arena_malloc(myarenasize, False)
+    arena_reserve(a, llmemory.sizeof(S, 10))
+    arena_shrink_obj(a, llmemory.sizeof(S, 5))
+    arena_reset(a + llmemory.sizeof(S, 5), llmemory.sizeof(S, 10), True)
+    arena_reserve(a + llmemory.sizeof(S, 5), llmemory.sizeof(S, 10))
