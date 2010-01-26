@@ -102,7 +102,7 @@ class CodeWriter(object):
                     continue
                 kind = self.guess_call_kind(op, is_candidate)
                 # use callers() to view the calling chain in pdb
-                if kind != "regular":
+                if kind != "regular" and kind != "unrollsafeif":
                     continue
                 for graph in self.graphs_from(op, is_candidate):
                     if graph in seen:
@@ -1230,6 +1230,7 @@ class BytecodeMaker(object):
         if if_const_arg is None:
             self.emit('call')
         else:
+            assert jitbox.calldescr is not None
             self.emit('call_if_const_arg')
             self.emit(if_const_arg)
         self.emit(self.get_position(jitbox))
