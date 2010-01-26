@@ -162,15 +162,22 @@ class CodeWriter(object):
             if getattr(funcobj, 'graph', None) is None:
                 return 'residual'
             targetgraph = funcobj.graph
-            if (hasattr(targetgraph, 'func') and
-                hasattr(targetgraph.func, 'oopspec')):
-                return 'builtin'
+            if hasattr(targetgraph, 'func'):
+                if hasattr(targetgraph.func, 'oopspec'):
+                    return 'builtin'
+                if hasattr(targetgraph.func, '_jit_unroll_safe_if_const_arg_'):
+                    return 'unrollsafeif'
         elif op.opname == 'oosend':
             SELFTYPE, methname, opargs = support.decompose_oosend(op)
             if SELFTYPE.oopspec_name is not None:
                 return 'builtin'
-        if self.graphs_from(op, is_candidate) is None:
+        graphs = self.graphs_from(op, is_candidate)
+        if graphs is None:
             return 'residual'
+        for graph in graphs:
+            if hasattr(graph, 'func'):
+                assert not hasattr(graph.func, 'oopspec')
+                assert not hasattr(graph.func, '_unroll_safe_if_const_arg_')
         return 'regular'
 
     def is_candidate(self, graph):
@@ -1211,7 +1218,7 @@ class BytecodeMaker(object):
         kind = self.codewriter.guess_call_kind(op)
         return getattr(self, 'handle_%s_oosend' % kind)(op)
 
-    def handle_regular_call(self, op, oosend_methdescr=None):
+    def handle_regular_call(self, op, oosend_methdescr=None, if_const_arg=None):
         self.minimize_variables()
         [targetgraph] = self.codewriter.graphs_from(op)
         jitbox = self.codewriter.get_jitcode(targetgraph, self.graph,
@@ -1220,11 +1227,28 @@ class BytecodeMaker(object):
             args = op.args
         else:
             args = op.args[1:]
-        self.emit('call')
+        if if_const_arg is None:
+            self.emit('call')
+        else:
+            self.emit('call_if_const_arg')
+            self.emit(if_const_arg)
         self.emit(self.get_position(jitbox))
         self.emit_varargs([x for x in args
                            if x.concretetype is not lltype.Void])
         self.register_var(op.result)
+
+    def handle_unrollsafeif_call(self, op):
+        [targetgraph] = self.codewriter.graphs_from(op)
+        argpos = targetgraph.func._jit_unroll_safe_if_const_arg_
+        assert isinstance(argpos, int)
+        # fix argpos to not count the None arguments
+        argpos2 = 0
+        args = op.args[1:]
+        for v in args[:argpos]:
+            if v.concretetype is not lltype.Void:
+                argpos2 += 1
+        assert args[argpos].concretetype is not lltype.Void
+        self.handle_regular_call(op, if_const_arg=argpos2)
 
     def handle_residual_call(self, op, skip_last=False):
         self.minimize_variables()

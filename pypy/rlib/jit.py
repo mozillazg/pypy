@@ -20,6 +20,13 @@ def unroll_safe(func):
     func._jit_unroll_safe_ = True
     return func
 
+def unroll_safe_if_const_arg(argpos):
+    assert isinstance(argpos, int)
+    def _decorate(func):
+        func._jit_unroll_safe_if_const_arg_ = argpos
+        return func
+    return _decorate
+
 def loop_invariant(func):
     dont_look_inside(func)
     func._jit_loop_invariant_ = True

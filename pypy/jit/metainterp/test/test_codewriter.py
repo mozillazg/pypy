@@ -512,6 +512,25 @@ class TestCodeWriter:
         assert ConstInt(55) in jitcode.constants
         assert ConstInt(66) not in jitcode.constants
 
+    def test_unroll_safe_if_const_arg(self):
+        @jit.unroll_safe_if_const_arg(2)
+        def g(x, z, y):
+            while y > 0:
+                x += 2
+                y -= 1
+            return x
+        def f(x, z, y):
+            return g(x, z, y)
+        graphs = self.make_graphs(f, [3, None, 5])
+        cw = CodeWriter(self.rtyper)
+        cw.candidate_graphs = graphs
+        cw._start(self.metainterp_sd, None)
+        jitcode = cw.make_one_bytecode((graphs[0], None), False)
+        assert 'call' not in jitcode._source
+        assert 'call_if_const_arg' in jitcode._source
+        index = jitcode._source.index('call_if_const_arg')
+        assert jitcode._source[index+1] == 1     # argpos without Nones
+
 
 class ImmutableFieldsTests:
 
