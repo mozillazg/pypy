@@ -4,6 +4,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.interpreter import gateway
 from pypy.rlib.debug import make_sure_not_resized
+from pypy.rlib import jit
 
 class W_TupleObject(W_Object):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
@@ -59,6 +60,7 @@ def getslice__Tuple_ANY_ANY(space, w_tuple, w_start, w_stop):
     start, stop = normalize_simple_slice(space, length, w_start, w_stop)
     return W_TupleObject(w_tuple.wrappeditems[start:stop])
 
+@jit.unroll_safe_if_const_arg(1)
 def contains__Tuple_ANY(space, w_tuple, w_obj):
     for w_item in w_tuple.wrappeditems:
         if space.eq_w(w_item, w_obj):

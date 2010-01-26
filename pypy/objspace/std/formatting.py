@@ -6,6 +6,7 @@ from pypy.rlib.rarithmetic import ovfcheck, formatd_overflow, isnan, isinf
 from pypy.interpreter.error import OperationError
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
+from pypy.rlib import jit
 
 class BaseStringFormatter(object):
     def __init__(self, space, values_w, w_valuedict):
@@ -142,10 +143,6 @@ def make_formatter_subclass(do_unicode):
 
     class StringFormatter(BaseStringFormatter):
 
-        def __init__(self, space, fmt, values_w, w_valuedict):
-            BaseStringFormatter.__init__(self, space, values_w, w_valuedict)
-            self.fmt = fmt    # either a string or a unicode
-
         def peekchr(self):
             # return the 'current' character
             try:
@@ -258,8 +255,10 @@ def make_formatter_subclass(do_unicode):
                 c = self.peekchr()
             return result
 
-        def format(self):
-            lgt = len(self.fmt) + 4 * len(self.values_w) + 10
+        @jit.unroll_safe_if_const_arg(1)
+        def format(self, fmt):
+            self.fmt = fmt    # either a string or a unicode
+            lgt = len(fmt) + 4 * len(self.values_w) + 10
             if do_unicode:
                 result = UnicodeBuilder(lgt)
             else:
@@ -267,13 +266,9 @@ def make_formatter_subclass(do_unicode):
             self.result = result
             while True:
                 # fast path: consume as many characters as possible
-                fmt = self.fmt
-                i = i0 = self.fmtpos
-                while i < len(fmt):
-                    if fmt[i] == '%':
-                        break
-                    i += 1
-                else:
+                i0 = self.fmtpos
+                i = fmt.find('%', i0)
+                if i < 0:
                     result.append_slice(fmt, i0, len(fmt))
                     break     # end of 'fmt' string
                 result.append_slice(fmt, i0, i)
@@ -479,9 +474,9 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
     "Entry point"
     if not do_unicode:
         fmt = space.str_w(w_fmt)
-        formatter = StringFormatter(space, fmt, values_w, w_valuedict)
+        formatter = StringFormatter(space, values_w, w_valuedict)
         try:
-            result = formatter.format()
+            result = formatter.format(fmt)
         except NeedUnicodeFormattingError:
             # fall through to the unicode case
             fmt = unicode(fmt)
@@ -489,8 +484,8 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
             return space.wrap(result)
     else:
         fmt = space.unicode_w(w_fmt)
-    formatter = UnicodeFormatter(space, fmt, values_w, w_valuedict)
-    result = formatter.format()
+    formatter = UnicodeFormatter(space, values_w, w_valuedict)
+    result = formatter.format(fmt)
     return space.wrap(result)
 
 def mod_format(space, w_format, w_values, do_unicode=False):
