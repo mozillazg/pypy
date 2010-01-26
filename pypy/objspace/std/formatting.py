@@ -212,6 +212,7 @@ def make_formatter_subclass(do_unicode):
 
             return w_value
 
+        @jit.unroll_safe
         def peel_flags(self):
             self.f_ljust = False
             self.f_sign  = False
@@ -234,6 +235,7 @@ def make_formatter_subclass(do_unicode):
                     break
                 self.forward()
 
+        @jit.unroll_safe
         def peel_num(self):
             space = self.space
             c = self.peekchr()
