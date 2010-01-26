@@ -366,25 +366,6 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.malloc_varsize_nonmovable_ptr = None
 
-##        if getattr(GCClass, 'malloc_varsize_resizable', False):
-##            malloc_resizable = func_with_new_name(
-##                GCClass.malloc_varsize_resizable.im_func,
-##                "malloc_varsize_resizable")
-##            self.malloc_varsize_resizable_ptr = getfn(
-##                malloc_resizable,
-##                [s_gc, s_typeid16,
-##                 annmodel.SomeInteger(nonneg=True)], s_gcref)
-##        else:
-##            self.malloc_varsize_resizable_ptr = None
-
-        if getattr(GCClass, 'realloc', False):
-            self.realloc_ptr = getfn(
-                GCClass.realloc.im_func,
-                [s_gc, s_gcref] +
-                [annmodel.SomeInteger(nonneg=True)] * 6 +
-                [annmodel.SomeBool()],
-                s_gcref)
-
         self.identityhash_ptr = getfn(GCClass.identityhash.im_func,
                                       [s_gc, s_gcref],
                                       annmodel.SomeInteger(),
@@ -635,10 +616,6 @@ class FrameworkGCTransformer(GCTransformer):
                                               info_varsize.ofstolength)
             c_varitemsize = rmodel.inputconst(lltype.Signed,
                                               info_varsize.varitemsize)
-##            if flags.get('resizable') and self.malloc_varsize_resizable_ptr:
-##                assert c_can_collect.value
-##                malloc_ptr = self.malloc_varsize_resizable_ptr
-##                args = [self.c_const_gc, c_type_id, v_length]
             if flags.get('nonmovable') and self.malloc_varsize_nonmovable_ptr:
                 # we don't have tests for such cases, let's fail
                 # explicitely
@@ -734,20 +711,6 @@ class FrameworkGCTransformer(GCTransformer):
         v_gc_adr = hop.genop('cast_ptr_to_adr', [self.c_const_gc],
                              resulttype=llmemory.Address)
         hop.genop('adr_add', [v_gc_adr, c_ofs], resultvar=op.result)
-
-    def _can_realloc(self):
-        return True
-
-    def perform_realloc(self, hop, v_ptr, v_oldsize, v_newsize, c_const_size,
-                        c_itemsize, c_lengthofs, c_itemsofs, c_grow):
-        vlist = [self.realloc_ptr, self.c_const_gc, v_ptr,
-                 v_oldsize, v_newsize,
-                 c_const_size, c_itemsize, c_lengthofs, c_itemsofs, c_grow]
-        livevars = self.push_roots(hop)
-        v_result = hop.genop('direct_call', vlist,
-                             resulttype=llmemory.GCREF)
-        self.pop_roots(hop, livevars)
-        return v_result
 
     def gct_gc_x_swap_pool(self, hop):
         op = hop.spaceop
