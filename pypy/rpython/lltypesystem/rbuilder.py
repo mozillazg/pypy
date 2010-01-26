@@ -59,7 +59,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
         ll_builder = lltype.malloc(cls.lowleveltype.TO)
         ll_builder.allocated = init_size
         ll_builder.used = 0
-        ll_builder.buf = lltype.malloc(cls.basetp, init_size)
+        ll_builder.buf = cls.mallocfn(init_size)
         return ll_builder
 
     @staticmethod
@@ -110,12 +110,14 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
 class StringBuilderRepr(BaseStringBuilderRepr):
     lowleveltype = lltype.Ptr(STRINGBUILDER)
     basetp = STR
+    mallocfn = staticmethod(rstr.mallocstr)
     string_repr = string_repr
     char_repr = char_repr
 
 class UnicodeBuilderRepr(BaseStringBuilderRepr):
     lowleveltype = lltype.Ptr(UNICODEBUILDER)
     basetp = UNICODE
+    mallocfn = staticmethod(rstr.mallocunicode)
     string_repr = unicode_repr
     char_repr = unichar_repr
 
