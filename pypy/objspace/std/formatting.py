@@ -22,13 +22,12 @@ class BaseStringFormatter(object):
 
     def nextinputvalue(self):
         # return the next value in the tuple of input arguments
-        try:
-            w_result = self.values_w[self.values_pos]
-        except IndexError:
+        if self.values_pos >= len(self.values_w):
             space = self.space
             raise OperationError(space.w_TypeError, space.wrap(
                 'not enough arguments for format string'))
         else:
+            w_result = self.values_w[self.values_pos]
             self.values_pos += 1
             return w_result
 
