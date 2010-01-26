@@ -476,6 +476,14 @@ register_external(arena_reserve, [llmemory.Address, int], None,
                   llfakeimpl=arena_reserve,
                   sandboxsafe=True)
 
+def llimpl_arena_shrink_obj(addr, newsize):
+    pass
+register_external(arena_shrink_obj, [llmemory.Address, int], None,
+                  'll_arena.arena_shrink_obj',
+                  llimpl=llimpl_arena_shrink_obj,
+                  llfakeimpl=arena_shrink_obj,
+                  sandboxsafe=True)
+
 llimpl_round_up_for_allocation = rffi.llexternal('ROUND_UP_FOR_ALLOCATION',
                                                 [lltype.Signed, lltype.Signed],
                                                  lltype.Signed,
