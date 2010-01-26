@@ -15,6 +15,10 @@ class TestStringBuilderDirect(object):
         s = StringBuilderRepr.ll_build(sb)
         assert hlstr(s) == "xabcobayyy"
 
+    def test_nooveralloc(self):
+        sb = StringBuilderRepr.ll_new(3)
+        StringBuilderRepr.ll_append(sb, llstr("abc"))
+        assert StringBuilderRepr.ll_build(sb) == sb.buf
 
 class BaseTestStringBuilder(BaseRtypingTest):
     def test_simple(self):

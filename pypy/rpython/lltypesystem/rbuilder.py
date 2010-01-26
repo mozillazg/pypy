@@ -67,7 +67,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
         used = ll_builder.used
         lgt = len(ll_str.chars)
         needed = lgt + used
-        if needed >= ll_builder.allocated:
+        if needed > ll_builder.allocated:
             ll_builder.grow(ll_builder, lgt)
         ll_str.copy_contents(ll_str, ll_builder.buf, 0, used, lgt)
         ll_builder.used = needed
@@ -83,7 +83,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     def ll_append_slice(ll_builder, ll_str, start, end):
         needed = end - start
         used = ll_builder.used
-        if needed + used >= ll_builder.allocated:
+        if needed + used > ll_builder.allocated:
             ll_builder.grow(ll_builder, needed)
         assert needed >= 0
         ll_str.copy_contents(ll_str, ll_builder.buf, start, used, needed)
@@ -92,7 +92,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     @staticmethod
     def ll_append_multiple_char(ll_builder, char, times):
         used = ll_builder.used
-        if times + used >= ll_builder.allocated:
+        if times + used > ll_builder.allocated:
             ll_builder.grow(ll_builder, times)
         for i in range(times):
             ll_builder.buf.chars[used] = char
@@ -103,6 +103,8 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     def ll_build(ll_builder):
         final_size = ll_builder.used
         assert final_size >= 0
+        if final_size == ll_builder.allocated:
+            return ll_builder.buf
         return rgc.ll_shrink_array(ll_builder.buf, final_size)
 
 class StringBuilderRepr(BaseStringBuilderRepr):
