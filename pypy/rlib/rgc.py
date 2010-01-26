@@ -285,19 +285,21 @@ def ll_shrink_array(p, smallerlength):
     if llop.shrink_array(lltype.Bool, p, smallerlength):
         return p    # done by the GC
     # XXX we assume for now that the type of p is GcStruct containing a
-    # variable array, with no further pointers anywhere
+    # variable array, with no further pointers anywhere, and exactly one
+    # field in the fixed part -- like STR and UNICODE.
 
     TP = lltype.typeOf(p).TO
     newp = lltype.malloc(TP, smallerlength)
-    
-    source_addr = llmemory.cast_ptr_to_adr(p)
-    dest_addr   = llmemory.cast_ptr_to_adr(newp)
-    staticsize  = llmemory.offsetof(TP, TP._arrayfld)
-    llmemory.raw_memcopy(source_addr, dest_addr, staticsize)
+
+    assert len(TP._names) == 2
+    field = getattr(p, TP._names[0])
+    setattr(newp, TP._names[0], field)
 
     ARRAY = getattr(TP, TP._arrayfld)
-    source_addr += staticsize + llmemory.itemoffsetof(ARRAY, 0)
-    dest_addr   += staticsize + llmemory.itemoffsetof(ARRAY, 0)
+    offset = (llmemory.offsetof(TP, TP._arrayfld) +
+              llmemory.itemoffsetof(ARRAY, 0))
+    source_addr = llmemory.cast_ptr_to_adr(p)    + offset
+    dest_addr   = llmemory.cast_ptr_to_adr(newp) + offset
     llmemory.raw_memcopy(source_addr, dest_addr, 
                          llmemory.sizeof(ARRAY.OF) * smallerlength)
 
