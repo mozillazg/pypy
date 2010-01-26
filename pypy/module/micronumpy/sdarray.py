@@ -59,7 +59,7 @@ def create_sdarray(data_type, unwrap, coerce):
             self.dtype = dtype
             make_sure_not_resized(self.storage)
 
-        def create_math_operation(f):
+        def create_client_math_operation(f):
             def scalar_operation(result, source, w_x):
                 space = result.space
                 x = coerce(space, w_x)
@@ -80,18 +80,29 @@ def create_sdarray(data_type, unwrap, coerce):
                     self.storage[i] = f(source.storage[i], self.coerce(w_x)) #TODO: probably shouldn't coerce
                     i += 1
                 return result
+            return scalar_operation, fixedview_operation
 
+        client_mul_scalar, client_mul_fixedview = create_client_math_operation(mul)
+        client_div_scalar, client_div_fixedview = create_client_math_operation(div)
+        client_add_scalar, client_add_fixedview = create_client_math_operation(add)
+        client_sub_scalar, client_sub_fixedview = create_client_math_operation(sub)
+
+        def create_math_operation(f):
+            scalar_operation_name = '_'.join(['client', f.__name__, 'scalar'])
+            fixedview_operation_name = '_'.join(['client', f.__name__, 'fixedview'])
             def math_operation(self, w_x):
                 space = self.space
                 if space.type(w_x) in (space.w_list, space.w_tuple):
                     raise OperationError(space.w_NotImplementedError,
-                                         space.wrap("Haven't implemented array * iterable yet!"))
+                                         space.wrap("Haven't implemented array %s iterable yet!" % f.__name__))
+                    result_t = result_mapping(space, (self.dtype, space.w_None))
                 else:
                     result_t = result_mapping(space, (space.type(w_x), self.dtype))
-                    result = sdresult(space, result_t)(space, self.len(), self.dtype)
-                    scalar_operation(result, self, w_x)
 
-                    w_result = space.wrap(result)
+                result = sdresult(space, result_t)(space, self.len(), self.dtype)
+                getattr(result, scalar_operation_name)(self, w_x)
+
+                w_result = space.wrap(result)
                 return w_result
             math_operation.unwrap_spec = ['self', W_Root]
             return math_operation

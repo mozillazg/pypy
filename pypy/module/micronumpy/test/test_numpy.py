@@ -1,7 +1,7 @@
 
 from pypy.conftest import gettestobjspace
 
-class AppTestNumpy(object):
+class AppTestSDArray(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('micronumpy',))
         cls.w_compare = cls.space.appexec([],
@@ -12,36 +12,65 @@ class AppTestNumpy(object):
                    assert type(x) == type(y)
                return True
            return compare""")
-        cls.w_array_type_test = cls.space.appexec([cls.w_compare],
-        """(compare):
-        def array_type_test(data_type):
-            from numpy import array
+        cls.w_length = cls.space.appexec([], """(): return 16""")
+        cls.w_value = cls.space.appexec([], """(): return 3.0""")
+
+    def test_type_array(self):
+        compare = self.compare
+        from numpy import array
+        for data_type in (int, float):
             data = [data_type(x) for x in xrange(4)] 
             ar = array(data)
-
             assert compare(ar, data)
-        return array_type_test
-        """)
-        cls.w_array_scalar_op_test = cls.space.appexec([cls.w_compare],
-        """(compare):
-        def array_scalar_op_test(self, data_type, f, value, length):
-            compare = self.compare
-            from numpy import array
-            data = [data_type(x) for x in range(length)]
-            ar = array(data)
-            assert compare(f(ar, value), [f(x, value) for x in data])
-        return array_scalar_op_test
-        """)
-
-    def test_int_array(self): self.array_type_test(int)
-    def test_float_array(self): self.array_type_test(float)
 
     def test_sdarray_operators(self):
         from operator import mul, div, add, sub
-        self.array_scalar_op_test(self, float, mul, 2.0, 16)
-        self.array_scalar_op_test(self, float, div, 2.0, 16)
-        self.array_scalar_op_test(self, float, add, 2.0, 16)
-        self.array_scalar_op_test(self, float, sub, 2.0, 16)
+        #FIXME: overkill...
+        for data_type in (int, float):
+            for operator in (mul, div, add, sub):
+                for value in xrange(1, 16):
+                    compare = self.compare
+                    from numpy import array
+                    data = [data_type(x) for x in range(self.length)]
+                    ar = array(data)
+                    assert compare(operator(ar, value), [operator(x, value) for x in data])
+
+    def test_operator_result_types(self):
+        from operator import mul, div, add, sub
+        from numpy import array
+        types = {
+                 (int, int): int,
+                 (int, float): float,
+                 (float, int): float,
+                 (float, float): float
+                }
+
+        for operand_types, result_type in types.iteritems():
+            for operator in (mul, div, add, sub):
+                a_type, b_type = operand_types
+                a = array(xrange(1, self.length + 1), dtype=a_type)
+                b = array(xrange(1, self.length + 1), dtype=b_type)
+
+                c = operator(a, b)
+                assert c.dtype == result_type
+
+                d = operator(b, a)
+                assert d.dtype == result_type
+
+                e = operator(a, b_type(self.value))
+                assert e.dtype == result_type
+
+                f = operator(a_type(self.value), b)
+                assert f.dtype == result_type
+
+    def test_iter(self):
+        from numpy import array
+        for iterable_type in (list, tuple):
+            for data_type in (int, float):
+                data = iterable_type([data_type(x) for x in xrange(self.length)])
+                ar = array(data, dtype=data_type)
+                ar_data = iterable_type([x for x in ar])
+                assert ar_data == data
 
     def test_iterable_construction(self):
         compare = self.compare
@@ -52,8 +81,9 @@ class AppTestNumpy(object):
 
     def test_zeroes(self):
         from numpy import zeros
-        ar = zeros(3, dtype=int)
-        assert ar[0] == 0
+        for data_type in (int, float):
+            ar = zeros(3, dtype=int)
+            assert ar[0] == data_type(0.0)
     
     def test_setitem_getitem(self):
         from numpy import zeros
