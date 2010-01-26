@@ -105,8 +105,12 @@ class Arena(object):
 
     def shrink_obj(self, offset, newsize):
         assert offset in self.objectptrs
-        assert newsize < self.objectsizes[offset]
+        oldsize = self.objectsizes[offset]
+        assert newsize <= oldsize
         self.objectsizes[offset] = newsize
+        for i in range(offset + newsize, offset + oldsize):
+            assert self.usagemap[i] == 'x'
+            self.usagemap[i] = '#'
 
 class fakearenaaddress(llmemory.fakeaddress):
 
