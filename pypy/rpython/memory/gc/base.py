@@ -1,6 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rlib.debug import ll_assert
-from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
