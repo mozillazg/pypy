@@ -450,6 +450,7 @@ class LLHelpers(AbstractLLHelpers):
 
         return True
 
+    @purefunction
     def ll_find_char(s, ch, start, end):
         i = start
         if end > len(s.chars):
@@ -460,6 +461,7 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
         return -1
 
+    @purefunction
     def ll_rfind_char(s, ch, start, end):
         if end > len(s.chars):
             end = len(s.chars)
