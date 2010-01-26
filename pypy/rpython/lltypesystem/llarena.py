@@ -103,11 +103,6 @@ class Arena(object):
         Arena.object_arena_location[container] = self, offset
         Arena.old_object_arena_location[container] = self, offset
 
-    def shrink_obj(self, offset, newsize):
-        assert offset in self.objectptrs
-        assert newsize < self.objectsizes[offset]
-        self.objectsizes[offset] = newsize
-
 class fakearenaaddress(llmemory.fakeaddress):
 
     def __init__(self, arena, offset):
@@ -310,13 +305,6 @@ def arena_reserve(addr, size, check_alignment=True):
         raise ArenaError("object at offset %d would not be correctly aligned"
                          % (addr.offset,))
     addr.arena.allocate_object(addr.offset, size)
-
-def arena_shrink_obj(addr, newsize):
-    """ Mark object as shorter than it was
-    """
-    addr = _getfakearenaaddress(addr)
-    bytes = llmemory.raw_malloc_usage(newsize)
-    addr.arena.shrink_obj(addr.offset, bytes)
 
 def round_up_for_allocation(size, minsize=0):
     """Round up the size in order to preserve alignment of objects
