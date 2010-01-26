@@ -482,15 +482,6 @@ def mallocHelpers():
         return result
     mh.ll_malloc_varsize_no_length_zero = _ll_malloc_varsize_no_length_zero
 
-    def ll_realloc(ptr, length, constsize, itemsize, lengthoffset):
-        size = constsize + length * itemsize
-        result = mh.realloc(ptr, size)
-        if not result:
-            raise MemoryError()
-        (result + lengthoffset).signed[0] = length
-        return result
-    mh.ll_realloc = ll_realloc
-
     return mh
 
 class GCTransformer(BaseGCTransformer):
