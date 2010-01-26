@@ -4,13 +4,15 @@ from pypy.rlib.rarithmetic import r_uint, formatd
 
 CHAR_ARRAY = GcArray(Char)
 
+# It's more efficient, but not thread safe!
+temp = malloc(CHAR_ARRAY, 25)
+
 def ll_int_str(repr, i):
     return ll_int2dec(i)
 ll_int_str._pure_function_ = True
 
 def ll_int2dec(i):
     from pypy.rpython.lltypesystem.rstr import mallocstr
-    temp = malloc(CHAR_ARRAY, 20)
     len = 0
     sign = 0
     if i < 0:
@@ -47,7 +49,6 @@ for i in range(16):
 
 def ll_int2hex(i, addPrefix):
     from pypy.rpython.lltypesystem.rstr import mallocstr
-    temp = malloc(CHAR_ARRAY, 20)
     len = 0
     sign = 0
     if i < 0:
@@ -89,7 +90,6 @@ def ll_int2oct(i, addPrefix):
         result.hash = 0
         result.chars[0] = '0'
         return result
-    temp = malloc(CHAR_ARRAY, 25)
     len = 0
     sign = 0
     if i < 0:
