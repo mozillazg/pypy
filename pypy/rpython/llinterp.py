@@ -964,14 +964,6 @@ class LLFrame(object):
         assert lltype.typeOf(size) == lltype.Signed
         return llmemory.raw_malloc(size)
 
-    def op_raw_realloc_grow(self, addr, old_size, size):
-        assert lltype.typeOf(size) == lltype.Signed
-        return llmemory.raw_realloc_grow(addr, old_size, size)
-
-    def op_raw_realloc_shrink(self, addr, old_size, size):
-        assert lltype.typeOf(size) == lltype.Signed
-        return llmemory.raw_realloc_shrink(addr, old_size, size)
-
     op_boehm_malloc = op_boehm_malloc_atomic = op_raw_malloc
 
     def op_boehm_register_finalizer(self, p, finalizer):
