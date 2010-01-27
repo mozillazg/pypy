@@ -124,5 +124,7 @@ def convert_offset_to_int(offset):
                 basesize = minsize
         mask = memory_alignment - 1
         return (basesize + mask) & ~ mask
+    elif isinstance(offset, llarena.NegativeByteIndex):
+        return ~offset.index
     else:
         raise Exception("unknown offset type %r"%offset)

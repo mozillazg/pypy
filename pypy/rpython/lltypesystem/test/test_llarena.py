@@ -1,11 +1,10 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.llmemory import cast_adr_to_ptr
-from pypy.rpython.lltypesystem.llarena import arena_malloc, arena_reset
-from pypy.rpython.lltypesystem.llarena import arena_reserve, arena_free
-from pypy.rpython.lltypesystem.llarena import round_up_for_allocation
-from pypy.rpython.lltypesystem.llarena import ArenaError, arena_new_view
-from pypy.rpython.lltypesystem.llarena import arena_shrink_obj
+from pypy.rpython.lltypesystem.llarena import (arena_malloc, arena_reset,
+    arena_reserve, arena_free, round_up_for_allocation, ArenaError,
+    arena_new_view, arena_shrink_obj, NegativeByteIndex,
+    arena_reserve_array_of_bytes)
 
 def test_arena():
     S = lltype.Struct('S', ('x',lltype.Signed))
@@ -282,3 +281,19 @@ def test_shrink_obj():
     arena_reserve(a, size_gc_header + llmemory.sizeof(S, 10))
     arena_shrink_obj(a, size_gc_header + llmemory.sizeof(S, 5))
     arena_reset(a, size_gc_header + llmemory.sizeof(S, 5), False)
+
+def test_negative_byte_index():
+    S = lltype.Struct('S', ('x',lltype.Signed))    
+    a = arena_malloc(200, True)
+    arena_reserve_array_of_bytes(a, 20)     # array of (up to) 20 bytes
+    b = a + 20
+    arena_reserve(b, llmemory.sizeof(S))
+    s1 = cast_adr_to_ptr(b, lltype.Ptr(S))
+    s1.x = 123
+    (b + NegativeByteIndex(0)).char[0] = 'X'
+    (b + NegativeByteIndex(1)).char[0] = 'Y'
+    (b + NegativeByteIndex(19)).char[0] = 'Z'
+    assert (b + NegativeByteIndex(0)).char[0] == 'X'
+    assert (b + NegativeByteIndex(1)).char[0] == 'Y'
+    assert (b + NegativeByteIndex(19)).char[0] == 'Z'
+    py.test.raises(AssertionError, "b + NegativeByteIndex(20)")
