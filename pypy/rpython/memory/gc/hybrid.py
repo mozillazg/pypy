@@ -285,6 +285,21 @@ class HybridGC(GenerationGC):
         llarena.arena_reserve(result, objectsize)
         return result
 
+    def remember_pointer_to_nursery(self, addr_struct, offset):
+        if self.header(addr_struct).tid & GCFLAG_CARDMARKS:
+            # XXX we might want to store this object in the list of old
+            #     objects pointing to young. For now we simply walk all
+            #     huge lists possibly containing gc pointers for each
+            #     nursery collection
+            # Mark the correct card, don't clear GCFLAG_NO_YOUNG_PTRS flag.
+            # Note that 'offset' does not include the size_gc_header.
+            size_gc_header = self.gcheaderbuilder.size_gc_header
+            num = raw_malloc_usage(offset) / self.card_size
+            addr = (addr_struct - size_gc_header + llarena.negative_byte_index(num>>3))
+            addr.char[0] = chr(ord(addr.char[0]) | (1 << (num&7)))
+        else:
+            GenerationGC.remember_pointer_to_nursery(addr_struct, where_in_struct)
+
     def init_gc_object_immortal(self, addr, typeid,
                                 flags=(GCFLAG_NO_YOUNG_PTRS |
                                        GCFLAG_NO_HEAP_PTRS |

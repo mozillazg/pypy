@@ -82,14 +82,16 @@ class DirectGCTest(object):
         if self.gc.needs_write_barrier:
             newaddr = llmemory.cast_ptr_to_adr(newvalue)
             addr_struct = llmemory.cast_ptr_to_adr(p)
-            self.gc.write_barrier(newaddr, addr_struct)
+            offset = llmemory.offsetof(lltype.typeOf(p).TO, fieldname)
+            self.gc.write_barrier(newaddr, addr_struct, offset)
         setattr(p, fieldname, newvalue)
 
     def writearray(self, p, index, newvalue):
         if self.gc.needs_write_barrier:
             newaddr = llmemory.cast_ptr_to_adr(newvalue)
             addr_struct = llmemory.cast_ptr_to_adr(p)
-            self.gc.write_barrier(newaddr, addr_struct)
+            offset = llmemory.itemoffsetof(lltype.typeOf(p).TO, index)
+            self.gc.write_barrier(newaddr, addr_struct, offset)
         p[index] = newvalue
 
     def malloc(self, TYPE, n=None):
@@ -339,6 +341,7 @@ class TestHybridGC(TestGenerationGC):
                  'large_object': 12,
                  'large_object_gcptrs': 12,
                  'generation3_collect_threshold': 5,
+                 'card_size': 12,
                  }
 
     def test_collect_gen(self):
@@ -376,6 +379,33 @@ class TestHybridGC(TestGenerationGC):
         assert calls == [('semispace_collect', True)]
         calls = []
 
+    def test_card_marking(self):
+        from pypy.rpython.memory.gc.generation import GCFLAG_NO_YOUNG_PTRS
+        from pypy.rpython.memory.gc.hybrid import GCFLAG_CARDMARKS
+        from pypy.rpython.lltypesystem import llarena
+        gc = self.gc 
+        
+        addr = llmemory.cast_ptr_to_adr(gc.malloc_varsize_slowpath(self.get_type_id(VAR), 12))
+        size_gc_header = gc.gcheaderbuilder.size_gc_header
+        obj = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(VAR))
+        assert gc.header(addr).tid & GCFLAG_CARDMARKS
+        assert gc.header(addr).tid & GCFLAG_NO_YOUNG_PTRS
+        for i in range(4):
+            assert (addr - size_gc_header + llarena.NegativeByteIndex(i)).char[0] == chr(0)
+
+        p = self.malloc(S)
+        self.writearray(obj, 7, p)
+        # the object looks like:
+        #    [size item0 item1][item2 item3 item4][item5 item6 item7][etc.]
+
+        assert gc.header(addr).tid & GCFLAG_CARDMARKS
+        assert gc.header(addr).tid & GCFLAG_NO_YOUNG_PTRS
+        for i in range(4):
+            res = (addr - size_gc_header + llarena.NegativeByteIndex(i)).char[0]
+            if i == 0:
+                assert res == chr(1<<2)
+            else:
+                assert res == chr(0)
 
 class TestMarkCompactGC(DirectGCTest):
     from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
