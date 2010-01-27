@@ -84,7 +84,8 @@ class GCManagedHeap(object):
         if (lltype.typeOf(toplevelcontainer).TO._gckind == 'gc' and
             isinstance(INNERTYPE, lltype.Ptr) and INNERTYPE.TO._gckind == 'gc'):
             self.gc.write_barrier(llmemory.cast_ptr_to_adr(newvalue),
-                                  llmemory.cast_ptr_to_adr(toplevelcontainer))
+                                  llmemory.cast_ptr_to_adr(toplevelcontainer),
+                                  inneraddr)
         llheap.setinterior(toplevelcontainer, inneraddr, INNERTYPE, newvalue)
 
     def collect(self, *gen):
