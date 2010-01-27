@@ -477,6 +477,7 @@ class GenerationGC(SemiSpaceGC):
                 self.last_generation_root_objects.append(addr_struct)
 
     def assume_young_pointers(self, addr_struct):
+        XXXX
         objhdr = self.header(addr_struct)
         if objhdr.tid & GCFLAG_NO_YOUNG_PTRS:
             self.old_objects_pointing_to_young.append(addr_struct)
@@ -491,6 +492,7 @@ class GenerationGC(SemiSpaceGC):
         one of the following flags a bit too eagerly, which means we'll have
         a bit more objects to track, but being on the safe side.
         """
+        XXXX
         source_hdr = self.header(source_addr)
         dest_hdr = self.header(dest_addr)
         if dest_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
@@ -556,7 +558,7 @@ class GenerationGC(SemiSpaceGC):
         if tid & GCFLAG_NO_YOUNG_PTRS:
             ll_assert(not self.is_in_nursery(obj),
                       "nursery object with GCFLAG_NO_YOUNG_PTRS")
-            self.trace(obj, self._debug_no_nursery_pointer, None)
+            self.debug_check_object_no_nursery_pointer(obj)
         elif not self.is_in_nursery(obj):
             ll_assert(self._d_oopty.contains(obj),
                       "missing from old_objects_pointing_to_young")
@@ -567,6 +569,9 @@ class GenerationGC(SemiSpaceGC):
         elif self.is_last_generation(obj):
             ll_assert(self._d_lgro.contains(obj),
                       "missing from last_generation_root_objects")
+
+    def debug_check_object_no_nursery_pointer(self, obj):
+        self.trace(obj, self._debug_no_nursery_pointer, None)
 
     def _debug_no_nursery_pointer(self, root, ignored):
         ll_assert(not self.is_in_nursery(root.address[0]),
