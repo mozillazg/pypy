@@ -526,6 +526,14 @@ register_external(arena_reserve, [llmemory.Address, int], None,
                   llfakeimpl=arena_reserve,
                   sandboxsafe=True)
 
+def llimpl_arena_reserve_array_of_bytes(addr, size):
+    pass
+register_external(arena_reserve_array_of_bytes, [llmemory.Address, int], None,
+                  'll_arena.arena_reserve_array_of_bytes',
+                  llimpl=llimpl_arena_reserve_array_of_bytes,
+                  llfakeimpl=arena_reserve_array_of_bytes,
+                  sandboxsafe=True)
+
 def llimpl_arena_shrink_obj(addr, newsize):
     pass
 register_external(arena_shrink_obj, [llmemory.Address, int], None,
