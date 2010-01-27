@@ -608,14 +608,16 @@ class HybridGC(GenerationGC):
             item += itemlength
     trace_marked_card._annspecialcase_ = 'specialize:arg(3)'
 
-    def foreach_marked_card(self, obj, callback, arg):
+    def foreach_marked_card_and_clean(self, obj, callback, arg):
         bytearraysize = self.get_extra_bitarray_size(self.get_size_incl_hash(obj))
         size_gc_header = self.gcheaderbuilder.size_gc_header
         bytearrayaddr = obj - size_gc_header
         i = 0
         while i < bytearraysize:
-            next = ord((bytearrayaddr + llarena.negative_byte_index(i)).char[0])
+            nextaddr = bytearrayaddr + llarena.negative_byte_index(i)
+            next = ord(nextaddr.char[0])
             if next != 0:
+                nextaddr.char[0] = chr(0)
                 base = i << 3
                 if next & 0x01: self.trace_marked_card(obj, base | 0, callback, arg)
                 if next & 0x02: self.trace_marked_card(obj, base | 1, callback, arg)
@@ -626,7 +628,7 @@ class HybridGC(GenerationGC):
                 if next & 0x40: self.trace_marked_card(obj, base | 6, callback, arg)
                 if next & 0x80: self.trace_marked_card(obj, base | 7, callback, arg)
             i += 1
-    foreach_marked_card._annspecialcase_ = 'specialize:arg(2)'
+    foreach_marked_card_and_clean._annspecialcase_ = 'specialize:arg(2)'
 
     # _________________________________________________________
 

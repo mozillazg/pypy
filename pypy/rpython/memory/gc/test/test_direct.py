@@ -415,25 +415,36 @@ class TestHybridGC(TestGenerationGC):
         old_trace = gc.trace_marked_card
         gc.trace_marked_card = callback
 
-        gc.foreach_marked_card(addr, 123, 456)
+        gc.foreach_marked_card_and_clean(addr, 123, 456)
         assert marked_cards == [2]
         gc.trace_marked_card = old_trace
+        assert (addr - size_gc_header + llarena.NegativeByteIndex(0)).char[0] == chr(0)
 
         objs = []
         def callback(obj, arg):
             # obj is the address inside 'addr',
             # so we need to read that array item
             objs.append(obj.address[0])
-        gc.foreach_marked_card(addr, callback, None)
+        self.writearray(obj, 7, p)
+        gc.foreach_marked_card_and_clean(addr, callback, None)
 
         addrp = llmemory.cast_ptr_to_adr(p)
         assert objs == [addrp]
+        self.writearray(obj, 7, p)
         self.writearray(obj, 8, p)
+        assert (addr - size_gc_header + llarena.NegativeByteIndex(0)).char[0] == chr(1<<2 | 1<<3)
+
         del objs[:]
-        gc.foreach_marked_card(addr, callback, None)
+        gc.foreach_marked_card_and_clean(addr, callback, None)
         assert objs == [addrp, addrp]
 
-        assert (addr - size_gc_header + llarena.NegativeByteIndex(0)).char[0] == chr(1<<2 | 1<<3)
+        self.writearray(obj, 0, p)
+        self.writearray(obj, 11, p)
+        assert (addr - size_gc_header + llarena.NegativeByteIndex(0)).char[0] == chr(1<<0 | 1<<4)
+
+        del objs[:]
+        gc.foreach_marked_card_and_clean(addr, callback, None)
+        assert objs == [addrp, addrp]
 
 class TestMarkCompactGC(DirectGCTest):
     from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
