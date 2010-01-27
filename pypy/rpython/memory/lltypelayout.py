@@ -114,6 +114,8 @@ def convert_offset_to_int(offset):
         return get_fixed_size(lltype.Signed)
     elif isinstance(offset, llmemory.GCHeaderOffset):
         return sizeof(offset.gcheaderbuilder.HDR)
+    elif isinstance(offset, llmemory.GCHeaderAntiOffset):
+        return -sizeof(offset.gcheaderbuilder.HDR)
     elif isinstance(offset, llmemory.ArrayLengthOffset):
         return 0
     elif isinstance(offset, llarena.RoundedUpForAllocation):
