@@ -580,6 +580,34 @@ class HybridGC(GenerationGC):
         else:
             GenerationGC.remember_pointer_to_nursery(addr_struct, where_in_struct)
 
+    def startoffset_from_cardno(self, typeid, cardno):
+        start = cardno * self.card_size
+        start -= raw_malloc_usage(self.varsize_offset_to_variable_part(typeid))
+        if start <= 0:
+            return 0
+        return start / raw_malloc_usage(self.varsize_item_sizes(typeid))
+
+    def trace_marked_card(self, obj, cardno, callback, arg):
+        typeid = self.get_type_id(obj)
+        start = self.startoffset_from_cardno(typeid, cardno)
+        itemlength = self.varsize_item_sizes(typeid)
+        end = (cardno + 1) * self.card_size
+        objectarrayend = raw_malloc_usage(self.get_size(obj))
+        if end > objectarrayend:
+            end = objectarrayend
+        offsets = self.varsize_offsets_to_gcpointers_in_var_part(typeid)
+        varpart = self.varsize_offset_to_variable_part(typeid)
+        item = varpart + itemlength * start
+        while raw_malloc_usage(item) < end:
+            j = 0
+            while j < len(offsets):
+                itemobj = obj + item + offsets[j]
+                if self.points_to_valid_gc_object(itemobj):
+                    callback(itemobj, arg)
+                j += 1
+            item += itemlength
+    trace_marked_card._annspecialcase_ = 'specialize:arg(3)'
+
     def foreach_marked_card(self, obj, callback, arg):
         bytearraysize = self.get_extra_bitarray_size(self.get_size_incl_hash(obj))
         size_gc_header = self.gcheaderbuilder.size_gc_header
@@ -589,14 +617,14 @@ class HybridGC(GenerationGC):
             next = ord((bytearrayaddr + llarena.negative_byte_index(i)).char[0])
             if next != 0:
                 base = i << 3
-                if next & 0x01: callback(obj, base | 0, arg)
-                if next & 0x02: callback(obj, base | 1, arg)
-                if next & 0x04: callback(obj, base | 2, arg)
-                if next & 0x08: callback(obj, base | 3, arg)
-                if next & 0x10: callback(obj, base | 4, arg)
-                if next & 0x20: callback(obj, base | 5, arg)
-                if next & 0x40: callback(obj, base | 6, arg)
-                if next & 0x80: callback(obj, base | 7, arg)
+                if next & 0x01: self.trace_marked_card(obj, base | 0, callback, arg)
+                if next & 0x02: self.trace_marked_card(obj, base | 1, callback, arg)
+                if next & 0x04: self.trace_marked_card(obj, base | 2, callback, arg)
+                if next & 0x08: self.trace_marked_card(obj, base | 3, callback, arg)
+                if next & 0x10: self.trace_marked_card(obj, base | 4, callback, arg)
+                if next & 0x20: self.trace_marked_card(obj, base | 5, callback, arg)
+                if next & 0x40: self.trace_marked_card(obj, base | 6, callback, arg)
+                if next & 0x80: self.trace_marked_card(obj, base | 7, callback, arg)
             i += 1
     foreach_marked_card._annspecialcase_ = 'specialize:arg(2)'
 
