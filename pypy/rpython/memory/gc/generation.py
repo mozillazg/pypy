@@ -433,9 +433,9 @@ class GenerationGC(SemiSpaceGC):
     #  "if newvalue.int0 & JIT_WB_IF_FLAG: remember_young_pointer()")
     JIT_WB_IF_FLAG = GCFLAG_NO_YOUNG_PTRS
 
-    def write_barrier(self, newvalue, addr_struct):
+    def write_barrier(self, newvalue, addr_struct, offset):
         if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
-            self.remember_young_pointer(addr_struct, newvalue)
+            self.remember_young_pointer(addr_struct, newvalue, offset)
 
     def _setup_wb(self):
         # The purpose of attaching remember_young_pointer to the instance
@@ -445,7 +445,7 @@ class GenerationGC(SemiSpaceGC):
         # For x86, there is also an extra requirement: when the JIT calls
         # remember_young_pointer(), it assumes that it will not touch the SSE
         # registers, so it does not save and restore them (that's a *hack*!).
-        def remember_young_pointer(addr_struct, addr):
+        def remember_young_pointer(addr_struct, addr, offset):
             #llop.debug_print(lltype.Void, "\tremember_young_pointer",
             #                 addr_struct, "<-", addr)
             ll_assert(not self.is_in_nursery(addr_struct),
@@ -457,14 +457,17 @@ class GenerationGC(SemiSpaceGC):
                 not self.is_valid_gc_object(addr)):
                 return
             if self.is_in_nursery(addr):
-                self.old_objects_pointing_to_young.append(addr_struct)
-                self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
+                self.remember_pointer_to_nursery(addr_struct, offset)
             elif (not self.config.taggedpointers and
                   not self.is_valid_gc_object(addr)):
                 return
             self.write_into_last_generation_obj(addr_struct, addr)
         remember_young_pointer._dont_inline_ = True
         self.remember_young_pointer = remember_young_pointer
+
+    def remember_pointer_to_nursery(self, addr_struct, offset):
+        self.old_objects_pointing_to_young.append(addr_struct)
+        self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
 
     def write_into_last_generation_obj(self, addr_struct, addr):
         objhdr = self.header(addr_struct)
