@@ -11,7 +11,6 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.debug import ll_assert, have_debug_prints
 from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rpython.lltypesystem import rffi
 
 #   _______in the semispaces_________      ______external (non-moving)_____
 #  /                                 \    /                                \
@@ -58,7 +57,8 @@ from pypy.rpython.lltypesystem import rffi
 MAX_SEMISPACE_AGE = 3
 
 GCFLAG_UNVISITED = GenerationGC.first_unused_gcflag << 0
-_gcflag_next_bit = GenerationGC.first_unused_gcflag << 1
+GCFLAG_CARDMARKS = GenerationGC.first_unused_gcflag << 1
+_gcflag_next_bit = GenerationGC.first_unused_gcflag << 2
 GCFLAG_AGE_ONE   = _gcflag_next_bit
 GCFLAG_AGE_MAX   = _gcflag_next_bit * MAX_SEMISPACE_AGE
 GCFLAG_AGE_MASK  = 0
@@ -84,11 +84,13 @@ class HybridGC(GenerationGC):
     TRANSLATION_PARAMS['large_object'] = 6*1024    # XXX adjust
     TRANSLATION_PARAMS['large_object_gcptrs'] = 31*1024    # XXX adjust
     TRANSLATION_PARAMS['min_nursery_size'] = 128*1024
+    TRANSLATION_PARAMS['card_size'] = 4*1024 # XXX adjust
     # condition: large_object <= large_object_gcptrs < min_nursery_size/4
 
     def __init__(self, *args, **kwds):
         large_object = kwds.pop('large_object', 24)
         large_object_gcptrs = kwds.pop('large_object_gcptrs', 32)
+        self.card_size = kwds.pop('card_size', 32)
         self.generation3_collect_threshold = kwds.pop(
             'generation3_collect_threshold', GENERATION3_COLLECT_THRESHOLD)
         GenerationGC.__init__(self, *args, **kwds)
@@ -185,11 +187,16 @@ class HybridGC(GenerationGC):
             raise MemoryError()
         if self.has_gcptr_in_varsize(typeid):
             nonlarge_max = self.nonlarge_gcptrs_max
+            large_with_gcptrs = True
         else:
             nonlarge_max = self.nonlarge_max
+            large_with_gcptrs = False
         if force_nonmovable or raw_malloc_usage(totalsize) > nonlarge_max:
-            result = self.malloc_varsize_marknsweep(totalsize)
+            result = self.malloc_varsize_marknsweep(totalsize,
+                                                    large_with_gcptrs)
             flags = self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS | GCFLAG_UNVISITED
+            if large_with_gcptrs:
+                flags |= GCFLAG_CARDMARKS
         else:
             result = self.malloc_varsize_collecting_nursery(totalsize)
             flags = self.GCFLAGS_FOR_NEW_YOUNG_OBJECTS
@@ -233,7 +240,7 @@ class HybridGC(GenerationGC):
             self.semispace_collect()
             debug_stop("gc-rawsize-collect")
 
-    def malloc_varsize_marknsweep(self, totalsize):
+    def malloc_varsize_marknsweep(self, totalsize, large_with_gcptrs):
         # In order to free the large objects from time to time, we
         # arbitrarily force a full collect() if none occurs when we have
         # allocated 'self.space_size' bytes of large objects.
@@ -242,12 +249,15 @@ class HybridGC(GenerationGC):
         # XXX many many collections if the program allocates a lot
         # XXX more than the current self.space_size.
         self._check_rawsize_alloced(raw_malloc_usage(totalsize))
-        result = self.allocate_external_object(totalsize)
-        if not result:
-            raise MemoryError()
-        # The parent classes guarantee zero-filled allocations, so we
-        # need to follow suit.
-        llmemory.raw_memclear(result, totalsize)
+        if large_with_gcptrs:
+            result = self.malloc_arena_with_cardmarking(totalsize)
+        else:
+            result = self.allocate_external_object(totalsize)
+            if not result:
+                raise MemoryError()
+            # The parent classes guarantee zero-filled allocations, so we
+            # need to follow suit.
+            llmemory.raw_memclear(result, totalsize)
         size_gc_header = self.gcheaderbuilder.size_gc_header
         self.gen2_rawmalloced_objects.append(result + size_gc_header)
         return result
@@ -256,6 +266,24 @@ class HybridGC(GenerationGC):
         # XXX maybe we should use arena_malloc() above a certain size?
         # If so, we'd also use arena_reset() in malloc_varsize_marknsweep().
         return llmemory.raw_malloc(totalsize)
+
+    def get_extra_bitarray_size(self, objecttotalsize):
+        objecttotalsize = raw_malloc_usage(objecttotalsize)
+        bitarraysize = (objecttotalsize + (self.card_size-1)) / self.card_size
+        bitarraysize = llmemory.sizeof(lltype.Char) * bitarraysize
+        bitarraysize = llarena.round_up_for_allocation(bitarraysize)
+        return raw_malloc_usage(bitarraysize)
+
+    def malloc_arena_with_cardmarking(self, objectsize):
+        bitarraysize = self.get_extra_bitarray_size(objectsize)
+        totalsize = bitarraysize + raw_malloc_usage(objectsize)
+        arena = llarena.arena_malloc(totalsize, True)
+        if not arena:
+            raise MemoryError()
+        llarena.arena_reserve_array_of_bytes(arena, bitarraysize)
+        result = arena + bitarraysize
+        llarena.arena_reserve(result, objectsize)
+        return result
 
     def init_gc_object_immortal(self, addr, typeid,
                                 flags=(GCFLAG_NO_YOUNG_PTRS |
@@ -458,6 +486,7 @@ class HybridGC(GenerationGC):
         # Help the flow space
         alive_count = alive_size = dead_count = dead_size = 0
         debug = have_debug_prints()
+        size_gc_header = self.gcheaderbuilder.size_gc_header
         while objects.non_empty():
             obj = objects.pop()
             tid = self.header(obj).tid
@@ -465,8 +494,14 @@ class HybridGC(GenerationGC):
                 if debug:
                     dead_count+=1
                     dead_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
-                addr = obj - self.gcheaderbuilder.size_gc_header
-                llmemory.raw_free(addr)
+                addr = obj - size_gc_header
+                if tid & GCFLAG_CARDMARKS:
+                    objecttotalsize = size_gc_header + self.get_size_incl_hash(obj)
+                    addr += llarena.negative_byte_index(
+                        self.get_extra_bitarray_size(objecttotalsize) - 1)
+                    llarena.arena_free(addr)
+                else:
+                    llmemory.raw_free(addr)
             else:
                 if debug:
                     alive_count+=1

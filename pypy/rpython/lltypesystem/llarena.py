@@ -329,7 +329,7 @@ def arena_malloc(nbytes, zero):
 
 def arena_free(arena_addr):
     """Release an arena."""
-    assert isinstance(arena_addr, fakearenaaddress)
+    arena_addr = _getfakearenaaddress(arena_addr)
     assert arena_addr.offset == 0
     arena_addr.arena.reset(False)
     arena_addr.arena.freed = True
@@ -377,6 +377,9 @@ def round_up_for_allocation(size, minsize=0):
 
 def _round_up_for_allocation(size, minsize):    # internal
     return RoundedUpForAllocation(size, minsize)
+
+def negative_byte_index(index):
+    return NegativeByteIndex(index)
 
 def arena_new_view(ptr):
     """Return a fresh memory view on an arena
@@ -540,6 +543,17 @@ register_external(_round_up_for_allocation, [int, int], int,
                   'll_arena.round_up_for_allocation',
                   llimpl=llimpl_round_up_for_allocation,
                   llfakeimpl=round_up_for_allocation,
+                  sandboxsafe=True)
+
+llimpl_negative_byte_index = rffi.llexternal('NEGATIVE_BYTE_INDEX',
+                                             [lltype.Signed],
+                                             lltype.Signed,
+                                             sandboxsafe=True,
+                                             _nowrapper=True)
+register_external(negative_byte_index, [int], int,
+                  'll_arena.negative_byte_index',
+                  llimpl=llimpl_negative_byte_index,
+                  llfakeimpl=negative_byte_index,
                   sandboxsafe=True)
 
 def llimpl_arena_new_view(addr):
