@@ -14,3 +14,5 @@ struct rpy_memory_alignment_test2 {
 #define ROUND_UP_FOR_ALLOCATION(x, minsize)  \
   ((((x)>=(minsize)?(x):(minsize))           \
                + (MEMORY_ALIGNMENT-1)) & ~(MEMORY_ALIGNMENT-1))
+
+#define NEGATIVE_BYTE_INDEX(x)  (~(x))
