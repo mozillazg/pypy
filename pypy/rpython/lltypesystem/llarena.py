@@ -63,6 +63,22 @@ class Arena(object):
             raise ArenaError("Address offset is outside the arena")
         return fakearenaaddress(self, offset)
 
+    def allocate_bytes_array(self, offset, size):
+        self.check()
+        if offset + size > self.nbytes:
+            raise ArenaError("object overflows beyond the end of the arena")
+        for c in self.usagemap[offset:offset+size]:
+            if c == '0':
+                pass
+            else:
+                raise ArenaError("overlap or uninitialized memory")
+        pattern = 'b' * size
+        self.usagemap[offset:offset+size] = array.array('c', pattern)
+        bytesize = llmemory.sizeof(lltype.Char)
+        for i in range(offset, offset+size):
+            addr2 = bytesize._raw_malloc([], zero=True)
+            self.setobject(addr2, i, 1)
+
     def allocate_object(self, offset, size):
         self.check()
         bytes = llmemory.raw_malloc_usage(size)
@@ -277,6 +293,26 @@ class RoundedUpForAllocation(llmemory.AddressOffset):
     def raw_memcopy(self, srcadr, dstadr):
         self.basesize.raw_memcopy(srcadr, dstadr)
 
+class NegativeByteIndex(llmemory.AddressOffset):
+    """Used to access an array of bytes just before an object.
+    For bit arrays used by the GC.
+    """
+    def __init__(self, index):
+        assert index >= 0
+        self.index = index
+
+    def __repr__(self):
+        return '< NegativeByteIndex %s >' % self.index
+
+    def ref(self, ptr):
+        addr = llmemory.cast_ptr_to_adr(ptr)
+        arena_addr = _getfakearenaaddress(addr)
+        newofs = arena_addr.offset + ~self.index
+        arena = arena_addr.arena
+        assert newofs >= 0
+        assert arena.usagemap[newofs] == 'b'
+        return arena.objectptrs[newofs]
+
 # ____________________________________________________________
 #
 # Public interface: arena_malloc(), arena_free(), arena_reset()
@@ -320,6 +356,12 @@ def arena_reserve(addr, size, check_alignment=True):
         raise ArenaError("object at offset %d would not be correctly aligned"
                          % (addr.offset,))
     addr.arena.allocate_object(addr.offset, size)
+
+def arena_reserve_array_of_bytes(addr, size):
+    """Mark some bytes in an arena as reserved for bytes array
+    """
+    addr = _getfakearenaaddress(addr)
+    addr.arena.allocate_bytes_array(addr.offset, size)
 
 def arena_shrink_obj(addr, newsize):
     """ Mark object as shorter than it was
