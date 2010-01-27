@@ -415,9 +415,11 @@ class TestHybridGC(TestGenerationGC):
         old_trace = gc.trace_marked_card
         gc.trace_marked_card = callback
 
-        gc.foreach_marked_card_and_clean(addr, 123, 456)
+        gc.foreach_marked_card(addr, 123, 456)
         assert marked_cards == [2]
         gc.trace_marked_card = old_trace
+        assert (addr - size_gc_header + llarena.NegativeByteIndex(0)).char[0] == chr(1<<2)
+        gc.clean_marked_cards(addr)
         assert (addr - size_gc_header + llarena.NegativeByteIndex(0)).char[0] == chr(0)
 
         objs = []
@@ -426,7 +428,8 @@ class TestHybridGC(TestGenerationGC):
             # so we need to read that array item
             objs.append(obj.address[0])
         self.writearray(obj, 7, p)
-        gc.foreach_marked_card_and_clean(addr, callback, None)
+        gc.foreach_marked_card(addr, callback, None)
+        gc.clean_marked_cards(addr)
 
         addrp = llmemory.cast_ptr_to_adr(p)
         assert objs == [addrp]
@@ -435,7 +438,8 @@ class TestHybridGC(TestGenerationGC):
         assert (addr - size_gc_header + llarena.NegativeByteIndex(0)).char[0] == chr(1<<2 | 1<<3)
 
         del objs[:]
-        gc.foreach_marked_card_and_clean(addr, callback, None)
+        gc.foreach_marked_card(addr, callback, None)
+        gc.clean_marked_cards(addr)
         assert objs == [addrp, addrp]
 
         self.writearray(obj, 0, p)
@@ -443,7 +447,8 @@ class TestHybridGC(TestGenerationGC):
         assert (addr - size_gc_header + llarena.NegativeByteIndex(0)).char[0] == chr(1<<0 | 1<<4)
 
         del objs[:]
-        gc.foreach_marked_card_and_clean(addr, callback, None)
+        gc.foreach_marked_card(addr, callback, None)
+        gc.clean_marked_cards(addr)
         assert objs == [addrp, addrp]
 
 class TestMarkCompactGC(DirectGCTest):

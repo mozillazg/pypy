@@ -58,7 +58,8 @@ MAX_SEMISPACE_AGE = 3
 
 GCFLAG_UNVISITED = GenerationGC.first_unused_gcflag << 0
 GCFLAG_CARDMARKS = GenerationGC.first_unused_gcflag << 1
-_gcflag_next_bit = GenerationGC.first_unused_gcflag << 2
+GCFLAG_CARDMARK_SET = GenerationGC.first_unused_gcflag << 2
+_gcflag_next_bit = GenerationGC.first_unused_gcflag << 3
 GCFLAG_AGE_ONE   = _gcflag_next_bit
 GCFLAG_AGE_MAX   = _gcflag_next_bit * MAX_SEMISPACE_AGE
 GCFLAG_AGE_MASK  = 0
@@ -491,6 +492,8 @@ class HybridGC(GenerationGC):
                     dead_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
                 addr = obj - size_gc_header
                 if tid & GCFLAG_CARDMARKS:
+                    ll_assert(tid & GCFLAG_CARDMARK_SET == 0,
+                              "unexpected flag CARDMARK_SET when freeing")
                     objectsize = self.get_size_incl_hash(obj)
                     addr += llarena.negative_byte_index(
                         self.get_extra_bitarray_size(objectsize) - 1)
@@ -566,7 +569,8 @@ class HybridGC(GenerationGC):
         return raw_malloc_usage(bitarraysize)
 
     def remember_pointer_to_nursery(self, addr_struct, offset):
-        if self.header(addr_struct).tid & GCFLAG_CARDMARKS:
+        hdr = self.header(addr_struct)
+        if hdr.tid & GCFLAG_CARDMARKS:
             # XXX we might want to store this object in the list of old
             #     objects pointing to young. For now we simply walk all
             #     huge lists possibly containing gc pointers for each
@@ -576,9 +580,44 @@ class HybridGC(GenerationGC):
             size_gc_header = self.gcheaderbuilder.size_gc_header
             num = raw_malloc_usage(offset) / self.card_size
             addr = (addr_struct - size_gc_header + llarena.negative_byte_index(num>>3))
-            addr.char[0] = chr(ord(addr.char[0]) | (1 << (num&7)))
+            flag = 1 << (num&7)
+            value = ord(addr.char[0])
+            if value & flag == 0:
+                addr.char[0] = chr(value | flag)
+                if hdr.tid & GCFLAG_CARDMARK_SET == 0:
+                    hdr.tid |= GCFLAG_CARDMARK_SET
+                    self.old_objects_pointing_to_young.append(addr_struct)
         else:
-            GenerationGC.remember_pointer_to_nursery(addr_struct, where_in_struct)
+            GenerationGC.remember_pointer_to_nursery(self, addr_struct, offset)
+
+    def reset_young_gcflags(self):
+        oldlist = self.old_objects_pointing_to_young
+        while oldlist.non_empty():
+            obj = oldlist.pop()
+            hdr = self.header(obj)
+            if hdr.tid & GCFLAG_CARDMARK_SET:
+                ll_assert(hdr.tid & GCFLAG_NO_YOUNG_PTRS,
+                          "invalid combination: CARDMARK_SET&!NO_YOUNG_PTRS")
+                self.clean_marked_cards(obj)
+            else:
+                hdr.tid |= GCFLAG_NO_YOUNG_PTRS
+
+    def collect_oldrefs_to_nursery(self):
+        count = 0
+        oldlist = self.old_objects_pointing_to_young
+        while oldlist.non_empty():
+            count += 1
+            obj = oldlist.pop()
+            hdr = self.header(obj)
+            if hdr.tid & GCFLAG_CARDMARK_SET:
+                ll_assert(hdr.tid & GCFLAG_NO_YOUNG_PTRS,
+                          "invalid combination: CARDMARK_SET&!NO_YOUNG_PTRS")
+                self.foreach_marked_card(obj, self._trace_drag_out, None)
+                self.clean_marked_cards(obj)
+            else:
+                hdr.tid |= GCFLAG_NO_YOUNG_PTRS
+                self.trace_and_drag_out_of_nursery(obj)
+        debug_print("collect_oldrefs_to_nursery", count)
 
     def startoffset_from_cardno(self, typeid, cardno):
         start = cardno * self.card_size
@@ -608,7 +647,7 @@ class HybridGC(GenerationGC):
             item += itemlength
     trace_marked_card._annspecialcase_ = 'specialize:arg(3)'
 
-    def foreach_marked_card_and_clean(self, obj, callback, arg):
+    def foreach_marked_card(self, obj, callback, arg):
         bytearraysize = self.get_extra_bitarray_size(self.get_size_incl_hash(obj))
         size_gc_header = self.gcheaderbuilder.size_gc_header
         bytearrayaddr = obj - size_gc_header
@@ -617,7 +656,6 @@ class HybridGC(GenerationGC):
             nextaddr = bytearrayaddr + llarena.negative_byte_index(i)
             next = ord(nextaddr.char[0])
             if next != 0:
-                nextaddr.char[0] = chr(0)
                 base = i << 3
                 if next & 0x01: self.trace_marked_card(obj, base | 0, callback, arg)
                 if next & 0x02: self.trace_marked_card(obj, base | 1, callback, arg)
@@ -628,7 +666,33 @@ class HybridGC(GenerationGC):
                 if next & 0x40: self.trace_marked_card(obj, base | 6, callback, arg)
                 if next & 0x80: self.trace_marked_card(obj, base | 7, callback, arg)
             i += 1
-    foreach_marked_card_and_clean._annspecialcase_ = 'specialize:arg(2)'
+    foreach_marked_card._annspecialcase_ = 'specialize:arg(2)'
+
+    def clean_marked_cards(self, obj):
+        self.header(obj).tid &= ~GCFLAG_CARDMARK_SET
+        bytearraysize = self.get_extra_bitarray_size(self.get_size_incl_hash(obj))
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        bytearrayaddr = obj - size_gc_header
+        i = 0
+        while i < bytearraysize:
+            nextaddr = bytearrayaddr + llarena.negative_byte_index(i)
+            nextaddr.char[0] = chr(0)
+            i += 1
+
+    def debug_check_object_no_nursery_pointer(self, obj):
+        tid = self.header(obj).tid
+        if tid & GCFLAG_CARDMARKS:
+            pass
+        else:
+            GenerationGC.debug_check_object_no_nursery_pointer(self, obj)
+
+    def _debug_check_flag_1(self, obj, ignored):
+        tid = self.header(obj).tid
+        if tid & GCFLAG_CARDMARKS:
+            ll_assert(tid & GCFLAG_NO_YOUNG_PTRS,
+                      "invalid combination: CARDMARK_SET&!NO_YOUNG_PTRS")
+        else:
+            GenerationGC._debug_check_flag_1(self, obj, ignored)
 
     # _________________________________________________________
 
