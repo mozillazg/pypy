@@ -407,6 +407,13 @@ class TestHybridGC(TestGenerationGC):
             else:
                 assert res == chr(0)
 
+        marked_cards = []
+        def callback(obj, cardno, arg):
+            marked_cards.append(cardno)
+
+        gc.foreach_marked_card(addr, callback, None)
+        assert marked_cards == [2]
+
 class TestMarkCompactGC(DirectGCTest):
     from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
 

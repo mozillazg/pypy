@@ -267,38 +267,18 @@ class HybridGC(GenerationGC):
         # If so, we'd also use arena_reset() in malloc_varsize_marknsweep().
         return llmemory.raw_malloc(totalsize)
 
-    def get_extra_bitarray_size(self, objecttotalsize):
-        objecttotalsize = raw_malloc_usage(objecttotalsize)
-        bitarraysize = (objecttotalsize + (self.card_size-1)) / self.card_size
-        bitarraysize = llmemory.sizeof(lltype.Char) * bitarraysize
-        bitarraysize = llarena.round_up_for_allocation(bitarraysize)
-        return raw_malloc_usage(bitarraysize)
-
-    def malloc_arena_with_cardmarking(self, objectsize):
+    def malloc_arena_with_cardmarking(self, objecttotalsize):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        objectsize = -size_gc_header + objecttotalsize
         bitarraysize = self.get_extra_bitarray_size(objectsize)
-        totalsize = bitarraysize + raw_malloc_usage(objectsize)
+        totalsize = bitarraysize + raw_malloc_usage(objecttotalsize)
         arena = llarena.arena_malloc(totalsize, True)
         if not arena:
             raise MemoryError()
         llarena.arena_reserve_array_of_bytes(arena, bitarraysize)
         result = arena + bitarraysize
-        llarena.arena_reserve(result, objectsize)
+        llarena.arena_reserve(result, objecttotalsize)
         return result
-
-    def remember_pointer_to_nursery(self, addr_struct, offset):
-        if self.header(addr_struct).tid & GCFLAG_CARDMARKS:
-            # XXX we might want to store this object in the list of old
-            #     objects pointing to young. For now we simply walk all
-            #     huge lists possibly containing gc pointers for each
-            #     nursery collection
-            # Mark the correct card, don't clear GCFLAG_NO_YOUNG_PTRS flag.
-            # Note that 'offset' does not include the size_gc_header.
-            size_gc_header = self.gcheaderbuilder.size_gc_header
-            num = raw_malloc_usage(offset) / self.card_size
-            addr = (addr_struct - size_gc_header + llarena.negative_byte_index(num>>3))
-            addr.char[0] = chr(ord(addr.char[0]) | (1 << (num&7)))
-        else:
-            GenerationGC.remember_pointer_to_nursery(addr_struct, where_in_struct)
 
     def init_gc_object_immortal(self, addr, typeid,
                                 flags=(GCFLAG_NO_YOUNG_PTRS |
@@ -511,9 +491,9 @@ class HybridGC(GenerationGC):
                     dead_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
                 addr = obj - size_gc_header
                 if tid & GCFLAG_CARDMARKS:
-                    objecttotalsize = size_gc_header + self.get_size_incl_hash(obj)
+                    objectsize = self.get_size_incl_hash(obj)
                     addr += llarena.negative_byte_index(
-                        self.get_extra_bitarray_size(objecttotalsize) - 1)
+                        self.get_extra_bitarray_size(objectsize) - 1)
                     llarena.arena_free(addr)
                 else:
                     llmemory.raw_free(addr)
@@ -575,6 +555,52 @@ class HybridGC(GenerationGC):
         return llmemory.cast_adr_to_int(result) * 2 # see comment in base.py
         # XXX a possible optimization would be to use three dicts, one
         # for each generation, instead of mixing gen2 and gen3 objects.
+
+    # _________________________________________________________
+
+    def get_extra_bitarray_size(self, objectsize):
+        objectsize = raw_malloc_usage(objectsize)
+        bitarraysize = (objectsize + (self.card_size-1)) / self.card_size
+        bitarraysize = llmemory.sizeof(lltype.Char) * bitarraysize
+        bitarraysize = llarena.round_up_for_allocation(bitarraysize)
+        return raw_malloc_usage(bitarraysize)
+
+    def remember_pointer_to_nursery(self, addr_struct, offset):
+        if self.header(addr_struct).tid & GCFLAG_CARDMARKS:
+            # XXX we might want to store this object in the list of old
+            #     objects pointing to young. For now we simply walk all
+            #     huge lists possibly containing gc pointers for each
+            #     nursery collection
+            # Mark the correct card, don't clear GCFLAG_NO_YOUNG_PTRS flag.
+            # Note that 'offset' does not include the size_gc_header.
+            size_gc_header = self.gcheaderbuilder.size_gc_header
+            num = raw_malloc_usage(offset) / self.card_size
+            addr = (addr_struct - size_gc_header + llarena.negative_byte_index(num>>3))
+            addr.char[0] = chr(ord(addr.char[0]) | (1 << (num&7)))
+        else:
+            GenerationGC.remember_pointer_to_nursery(addr_struct, where_in_struct)
+
+    def foreach_marked_card(self, obj, callback, arg):
+        bytearraysize = self.get_extra_bitarray_size(self.get_size_incl_hash(obj))
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        bytearrayaddr = obj - size_gc_header
+        i = 0
+        while i < bytearraysize:
+            next = ord((bytearrayaddr + llarena.negative_byte_index(i)).char[0])
+            if next != 0:
+                base = i << 3
+                if next & 0x01: callback(obj, base | 0, arg)
+                if next & 0x02: callback(obj, base | 1, arg)
+                if next & 0x04: callback(obj, base | 2, arg)
+                if next & 0x08: callback(obj, base | 3, arg)
+                if next & 0x10: callback(obj, base | 4, arg)
+                if next & 0x20: callback(obj, base | 5, arg)
+                if next & 0x40: callback(obj, base | 6, arg)
+                if next & 0x80: callback(obj, base | 7, arg)
+            i += 1
+    foreach_marked_card._annspecialcase_ = 'specialize:arg(2)'
+
+    # _________________________________________________________
 
     def debug_check_object(self, obj):
         """Check the invariants about 'obj' that should be true
