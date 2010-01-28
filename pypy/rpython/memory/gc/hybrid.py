@@ -676,19 +676,20 @@ class HybridGC(GenerationGC):
             i += 1
 
     def mark_cards(self, addr, start, length):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
         hdr = self.header(addr)
         hdr.tid |= GCFLAG_CARDMARK_SET
         typeid = self.get_type_id(addr)
         itemsize = self.varsize_item_sizes(typeid)
         offset = self.varsize_offset_to_variable_part(typeid) + itemsize * start
-        # XXX check details
         first_card = raw_malloc_usage(offset) / self.card_size
         offset += itemsize * length
         last_card = raw_malloc_usage(offset) / self.card_size
         i = first_card >> 3
-        while i < last_card >> 3:
-            card_adr = addr_struct - size_gc_header + llarena.negative_byte_index(i)
+        while i <= last_card >> 3:
+            card_adr = addr - size_gc_header + llarena.negative_byte_index(i)
             card_adr.char[0] = chr(0xff)
+            i += 1
 
     def _writebarrier_before_copy(self, source_addr, dest_addr, source_start,
                                   dest_start, length):
@@ -702,7 +703,7 @@ class HybridGC(GenerationGC):
                 self.mark_cards(dest_addr, dest_start, length)
                 return
         if source_hdr.tid & GCFLAG_CARDMARK_SET:
-            if dest_hdr.tid & GCFLAG_CARDMARK_SET:
+            if dest_hdr.tid & GCFLAG_CARDMARKS:
                 # large -> large, copy cardmarks.
                 # XXX for now just set all cards within range
                 # that's why we need source_start, possibly
