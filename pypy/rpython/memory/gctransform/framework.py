@@ -303,7 +303,8 @@ class FrameworkGCTransformer(GCTransformer):
         if hasattr(GCClass, 'writebarrier_before_copy'):
             self.wb_before_copy_ptr = \
                     getfn(GCClass.writebarrier_before_copy.im_func,
-                    [s_gc] + [annmodel.SomeAddress()] * 2, annmodel.SomeBool())
+                    [s_gc] + [annmodel.SomeAddress()] * 2 +
+                          [annmodel.SomeInteger()] * 3, annmodel.SomeBool())
         elif GCClass.needs_write_barrier:
             raise NotImplementedError("GC needs write barrier, but does not provide writebarrier_before_copy functionality")
 
@@ -392,7 +393,8 @@ class FrameworkGCTransformer(GCTransformer):
             self.write_barrier_ptr = getfn(GCClass.write_barrier.im_func,
                                            [s_gc,
                                             annmodel.SomeAddress(),
-                                            annmodel.SomeAddress()],
+                                            annmodel.SomeAddress(),
+                                            annmodel.SomeInteger(nonneg=True)],
                                            annmodel.s_None,
                                            inline=True)
             func = getattr(gcdata.gc, 'remember_young_pointer', None)
@@ -401,7 +403,8 @@ class FrameworkGCTransformer(GCTransformer):
                 assert isinstance(func, types.FunctionType)
                 self.write_barrier_failing_case_ptr = getfn(func,
                                                [annmodel.SomeAddress(),
-                                                annmodel.SomeAddress()],
+                                                annmodel.SomeAddress(),
+                                                annmodel.SomeInteger(nonneg=True)],
                                                annmodel.s_None)
         else:
             self.write_barrier_ptr = None
@@ -782,7 +785,8 @@ class FrameworkGCTransformer(GCTransformer):
         dest_addr = hop.genop('cast_ptr_to_adr', [op.args[1]],
                                 resulttype=llmemory.Address)
         hop.genop('direct_call', [self.wb_before_copy_ptr, self.c_const_gc,
-                                  source_addr, dest_addr],
+                                  source_addr, dest_addr, op.args[2], op.args[3],
+                                  op.args[4]],
                   resultvar=op.result)
 
     def gct_weakref_create(self, hop):
@@ -899,7 +903,6 @@ class FrameworkGCTransformer(GCTransformer):
         opname = hop.spaceop.opname
         v_struct = hop.spaceop.args[0]
         v_newvalue = hop.spaceop.args[-1]
-        assert opname in ('setfield', 'setarrayitem', 'setinteriorfield')
         assert isinstance(v_newvalue.concretetype, lltype.Ptr)
         # XXX for some GCs the skipping if the newvalue is a constant won't be
         # ok
@@ -908,6 +911,25 @@ class FrameworkGCTransformer(GCTransformer):
             and v_struct.concretetype.TO._gckind == "gc"
             and hop.spaceop not in self.clean_sets):
             self.write_barrier_calls += 1
+            TP = v_struct.concretetype.TO
+            if opname == 'setfield':
+                name = hop.spaceop.args[1].value
+                offset = llmemory.offsetof(TP, name)
+                v_offset = rmodel.inputconst(lltype.Signed, offset)
+            elif opname == 'setarrayitem':
+                v_index = hop.spaceop.args[1]
+                c_itemsofs = rmodel.inputconst(lltype.Signed,
+                                               llmemory.itemoffsetof(TP, 0))
+                c_itemsize = rmodel.inputconst(lltype.Signed,
+                                               llmemory.sizeof(TP.OF))
+                v_1 = hop.genop('int_mul', [v_index, c_itemsize],
+                                resulttype = lltype.Signed)
+                v_offset = hop.genop('int_add', [c_itemsofs, v_1],
+                                     resulttype = lltype.Signed)
+            elif opname == 'setinteriorfield':
+                XXXX #fun fun fun
+            else:
+                assert 0, "bad opname: %r" % (opname,)
             v_newvalue = hop.genop("cast_ptr_to_adr", [v_newvalue],
                                    resulttype = llmemory.Address)
             v_structaddr = hop.genop("cast_ptr_to_adr", [v_struct],
@@ -915,7 +937,8 @@ class FrameworkGCTransformer(GCTransformer):
             hop.genop("direct_call", [self.write_barrier_ptr,
                                       self.c_const_gc,
                                       v_newvalue,
-                                      v_structaddr])
+                                      v_structaddr,
+                                      v_offset])
         hop.rename('bare_' + opname)
 
     def transform_getfield_typeptr(self, hop):

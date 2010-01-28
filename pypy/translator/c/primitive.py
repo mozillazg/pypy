@@ -7,7 +7,7 @@ from pypy.rpython.lltypesystem import rffi, llgroup
 from pypy.rpython.lltypesystem.llmemory import Address, \
      AddressOffset, ItemOffset, ArrayItemsOffset, FieldOffset, \
      CompositeOffset, ArrayLengthOffset, \
-     GCHeaderOffset, GCREF
+     GCHeaderOffset, GCHeaderAntiOffset, GCREF
 from pypy.rpython.lltypesystem.llarena import RoundedUpForAllocation
 from pypy.translator.c.support import cdecl, barebonearray
 
@@ -47,7 +47,7 @@ def name_signed(value, db):
             return '(%s)' % (' + '.join(names),)
         elif type(value) == AddressOffset:
             return '0'
-        elif type(value) == GCHeaderOffset:
+        elif type(value) in (GCHeaderOffset, GCHeaderAntiOffset):
             return '0'
         elif type(value) == RoundedUpForAllocation:
             return 'ROUND_UP_FOR_ALLOCATION(%s, %s)' % (
