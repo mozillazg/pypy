@@ -24,7 +24,7 @@ class GcLLDescription(GcCache):
         return True
     def initialize(self):
         pass
-    def do_write_barrier(self, gcref_struct, gcref_newptr):
+    def do_write_barrier(self, gcref_struct, gcref_newptr, ofs):
         pass
     def rewrite_assembler(self, cpu, operations):
         pass
@@ -361,7 +361,7 @@ class GcLLDescr_framework(GcLLDescription):
         self.GC_MALLOC_BASIC = lltype.Ptr(lltype.FuncType(
             [lltype.Signed, lltype.Signed], llmemory.GCREF))
         self.WB_FUNCPTR = lltype.Ptr(lltype.FuncType(
-            [llmemory.Address, llmemory.Address], lltype.Void))
+            [llmemory.Address, llmemory.Address, lltype.Signed], lltype.Void))
         #
         def malloc_array(itemsize, tid, num_elem):
             type_id = llop.extract_ushort(rffi.USHORT, tid)
@@ -469,7 +469,7 @@ class GcLLDescr_framework(GcLLDescription):
     def get_funcptr_for_newunicode(self):
         return llhelper(self.GC_MALLOC_STR_UNICODE, self.malloc_unicode)
 
-    def do_write_barrier(self, gcref_struct, gcref_newptr):
+    def do_write_barrier(self, gcref_struct, gcref_newptr, ofs):
         hdr_addr = llmemory.cast_ptr_to_adr(gcref_struct)
         hdr_addr -= self.gcheaderbuilder.size_gc_header
         hdr = llmemory.cast_adr_to_ptr(hdr_addr, self.HDRPTR)
@@ -479,7 +479,8 @@ class GcLLDescr_framework(GcLLDescription):
             llop1 = self.llop1
             funcptr = llop1.get_write_barrier_failing_case(self.WB_FUNCPTR)
             funcptr(llmemory.cast_ptr_to_adr(gcref_struct),
-                    llmemory.cast_ptr_to_adr(gcref_newptr))
+                    llmemory.cast_ptr_to_adr(gcref_newptr),
+                    ofs)
 
     def rewrite_assembler(self, cpu, operations):
         # Perform two kinds of rewrites in parallel:
@@ -517,7 +518,8 @@ class GcLLDescr_framework(GcLLDescription):
                 v = op.args[1]
                 if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
                                              bool(v.value)): # store a non-NULL
-                    self._gen_write_barrier(cpu, newops, op.args[0], v)
+                    self._gen_write_barrier(cpu, newops, op.args[0], v,
+                                            op.descr)
                     op = ResOperation(rop.SETFIELD_RAW, op.args, None,
                                       descr=op.descr)
             # ---------- write barrier for SETARRAYITEM_GC ----------
@@ -525,7 +527,8 @@ class GcLLDescr_framework(GcLLDescription):
                 v = op.args[2]
                 if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
                                              bool(v.value)): # store a non-NULL
-                    self._gen_write_barrier(cpu, newops, op.args[0], v)
+                    self._gen_write_barrier(cpu, newops, op.args[0], v,
+                                            op.descr, op.args[1])
                     op = ResOperation(rop.SETARRAYITEM_RAW, op.args, None,
                                       descr=op.descr)
             # ----------
@@ -533,7 +536,8 @@ class GcLLDescr_framework(GcLLDescription):
         del operations[:]
         operations.extend(newops)
 
-    def _gen_write_barrier(self, cpu, newops, v_base, v_value):
+    def _gen_write_barrier(self, cpu, newops, v_base, v_value,
+                           descr, v_index=None):
         v_tid = BoxInt()
         newops.append(ResOperation(rop.GETFIELD_RAW, [v_base], v_tid,
                                    descr=self.fielddescr_tid))
@@ -541,8 +545,15 @@ class GcLLDescr_framework(GcLLDescription):
         funcptr = llop1.get_write_barrier_failing_case(self.WB_FUNCPTR)
         funcaddr = llmemory.cast_ptr_to_adr(funcptr)
         c_func = ConstInt(cpu.cast_adr_to_int(funcaddr))
-        args = [v_tid, self.c_jit_wb_if_flag, c_func, v_base, v_value]
-        newops.append(ResOperation(rop.COND_CALL_GC_WB, args, None,
+        if v_index is None:    # field
+            args = [v_tid, self.c_jit_wb_if_flag, c_func, v_base, v_value,
+                    descr]
+            opnum = rop.COND_CALL_GC_WB
+        else:
+            args = [v_tid, self.c_jit_wb_if_flag, c_func, v_base, v_value,
+                    descr, v_index]
+            opnum = rop.COND_CALL_GC_WB_ARRAY
+        newops.append(ResOperation(opnum, args, None,
                                    descr=self.calldescr_jit_wb))
 
     def can_inline_malloc(self, descr):
