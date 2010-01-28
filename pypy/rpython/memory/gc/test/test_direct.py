@@ -472,9 +472,10 @@ class TestHybridGC(TestGenerationGC):
         assert gc.header(addr1).tid & GCFLAG_CARDMARK_SET
         assert gc.header(addr2).tid & GCFLAG_CARDMARK_SET == 0
         gc.writebarrier_before_copy(addr1, addr2, 0, 0, 48)
-        for i in range(3):
+        for i in range(2):
             addr = addr2 - size_gc_header + llarena.negative_byte_index(i)
             assert addr.char[0] == '\xff', i
+        assert (addr2 - size_gc_header + llarena.negative_byte_index(2)).char[0] == '\x01'
 
         objs = []
         def callback(obj, arg):
@@ -485,6 +486,20 @@ class TestHybridGC(TestGenerationGC):
         obj2[0] = p
         gc.foreach_marked_card(addr2, callback, None)
         assert objs == [addrp]
+
+    def test_assume_young_pointers_cardmarking(self):
+        from pypy.rpython.lltypesystem import llarena
+
+        gc = self.gc
+        size_gc_header = gc.gcheaderbuilder.size_gc_header
+        typeid = self.get_type_id(VAR)
+        addr1 = llmemory.cast_ptr_to_adr(gc.malloc_varsize_slowpath(typeid, 48))
+        obj = llmemory.cast_adr_to_ptr(addr1, lltype.Ptr(VAR))
+        gc.assume_young_pointers(addr1)
+        for i in range(2):
+            addr = addr1 - size_gc_header + llarena.negative_byte_index(i)
+            assert addr.char[0] == '\xff', i
+        assert (addr1 - size_gc_header + llarena.negative_byte_index(2)).char[0] == '\x01'
         
 class TestMarkCompactGC(DirectGCTest):
     from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass

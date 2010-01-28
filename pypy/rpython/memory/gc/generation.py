@@ -476,12 +476,15 @@ class GenerationGC(SemiSpaceGC):
                 objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
                 self.last_generation_root_objects.append(addr_struct)
 
-    def assume_young_pointers(self, addr_struct):
-        # XXX fix for hybrid
+    def _assume_young_pointers(self, addr_struct):
         objhdr = self.header(addr_struct)
         if objhdr.tid & GCFLAG_NO_YOUNG_PTRS:
             self.old_objects_pointing_to_young.append(addr_struct)
             objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+
+    def assume_young_pointers(self, addr_struct):
+        self._assume_young_pointers(addr_struct)
+        objhdr = self.header(addr_struct)
         if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
             objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
             self.last_generation_root_objects.append(addr_struct)
