@@ -675,6 +675,26 @@ class HybridGC(GenerationGC):
             nextaddr.char[0] = chr(0)
             i += 1
 
+    def _writebarrier_before_copy(self, source_addr, dest_addr):
+        """ A hook for hybrid gc
+        """
+        source_hdr = self.header(source_addr)
+        dest_hdr = self.header(dest_addr)
+        if source_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
+            if dest_hdr.tid & GCFLAG_CARDMARKS:
+                xxx # we copy from small -> larg list, set all cards
+            # there might be an object in source that is in nursery
+            self.old_objects_pointing_to_young.append(dest_addr)
+            dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+        if source_hdr.tid & GCFLAG_CARDMARK_SET:
+            if dest_adr.tid & GCFLAG_CARDMARK_SET:
+                # large -> large, copy cardmarks
+                xxx
+            else:
+                # large -> small
+                self.old_objects_pointing_to_young.append(dest_addr)
+                dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+
     def debug_check_object_no_nursery_pointer(self, obj):
         tid = self.header(obj).tid
         if tid & GCFLAG_CARDMARKS:

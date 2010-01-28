@@ -486,22 +486,28 @@ class GenerationGC(SemiSpaceGC):
             objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
             self.last_generation_root_objects.append(addr_struct)
 
+    def _writebarrier_before_copy(self, source_addr, dest_addr):
+        """ A hook for hybrid gc
+        """
+        source_hdr = self.header(source_addr)
+        dest_hdr = self.header(dest_addr)
+        if source_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
+            # there might be an object in source that is in nursery
+            self.old_objects_pointing_to_young.append(dest_addr)
+            dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+
     def writebarrier_before_copy(self, source_addr, dest_addr):
         """ This has the same effect as calling writebarrier over
         each element in dest copied from source, except it might reset
         one of the following flags a bit too eagerly, which means we'll have
         a bit more objects to track, but being on the safe side.
         """
-        XXXX
         source_hdr = self.header(source_addr)
         dest_hdr = self.header(dest_addr)
         if dest_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
             return True
         # ^^^ a fast path of write-barrier
-        if source_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
-            # there might be an object in source that is in nursery
-            self.old_objects_pointing_to_young.append(dest_addr)
-            dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+        self._writebarrier_before_copy(source_addr, dest_addr)
         if dest_hdr.tid & GCFLAG_NO_HEAP_PTRS:
             if source_hdr.tid & GCFLAG_NO_HEAP_PTRS == 0:
                 # ^^^ equivalend of addr from source not being in last
