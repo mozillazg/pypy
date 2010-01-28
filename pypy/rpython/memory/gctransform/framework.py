@@ -114,6 +114,7 @@ def find_initializing_stores(collect_analyzer, graph):
     return result
 
 def find_clean_setarrayitems(collect_analyzer, graph):
+    return set() # XXX disable for now
     result = set()
     for block in graph.iterblocks():
         cache = set()
