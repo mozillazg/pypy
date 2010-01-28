@@ -71,22 +71,27 @@ class GCManagedHeap(object):
     def setfield(self, obj, fieldname, fieldvalue):
         STRUCT = lltype.typeOf(obj).TO
         addr = llmemory.cast_ptr_to_adr(obj)
-        addr += llmemory.offsetof(STRUCT, fieldname)
-        self.setinterior(obj, addr, getattr(STRUCT, fieldname), fieldvalue)
+        offset = llmemory.offsetof(STRUCT, fieldname)
+        addr += offset
+        self.setinterior(obj, addr, getattr(STRUCT, fieldname), fieldvalue,
+                         offset)
 
     def setarrayitem(self, array, index, newitem):
         ARRAY = lltype.typeOf(array).TO
         addr = llmemory.cast_ptr_to_adr(array)
-        addr += llmemory.itemoffsetof(ARRAY, index)
-        self.setinterior(array, addr, ARRAY.OF, newitem)
+        offset = llmemory.itemoffsetof(ARRAY, index)
+        addr += offset
+        self.setinterior(array, addr, ARRAY.OF, newitem, offset)
 
-    def setinterior(self, toplevelcontainer, inneraddr, INNERTYPE, newvalue):
+    def setinterior(self, toplevelcontainer, inneraddr, INNERTYPE, newvalue,
+                    offset):
         if (lltype.typeOf(toplevelcontainer).TO._gckind == 'gc' and
             isinstance(INNERTYPE, lltype.Ptr) and INNERTYPE.TO._gckind == 'gc'):
             self.gc.write_barrier(llmemory.cast_ptr_to_adr(newvalue),
                                   llmemory.cast_ptr_to_adr(toplevelcontainer),
-                                  inneraddr)
-        llheap.setinterior(toplevelcontainer, inneraddr, INNERTYPE, newvalue)
+                                  offset)
+        llheap.setinterior(toplevelcontainer, inneraddr, INNERTYPE, newvalue,
+                           offset)
 
     def collect(self, *gen):
         self.gc.collect(*gen)

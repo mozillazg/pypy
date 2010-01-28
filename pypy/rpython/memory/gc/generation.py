@@ -509,7 +509,8 @@ class GenerationGC(SemiSpaceGC):
         if dest_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
             return True
         # ^^^ a fast path of write-barrier
-        self._writebarrier_before_copy(source_addr, dest_addr)
+        self._writebarrier_before_copy(source_addr, dest_addr, source_start,
+                                       dest_start, length)
         if dest_hdr.tid & GCFLAG_NO_HEAP_PTRS:
             if source_hdr.tid & GCFLAG_NO_HEAP_PTRS == 0:
                 # ^^^ equivalend of addr from source not being in last
