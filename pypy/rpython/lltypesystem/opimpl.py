@@ -190,6 +190,10 @@ def op_int_sub(x, y):
     assert isinstance(y, int)
     return intmask(x - y)
 
+def op_int_neg(x):
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    return -x
+
 def op_int_and(x, y):
     if not isinstance(x, int):
         from pypy.rpython.lltypesystem import llgroup
