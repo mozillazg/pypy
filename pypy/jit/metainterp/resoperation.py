@@ -222,6 +222,9 @@ _oplist = [
     'RUNTIMENEW/1',     # ootype operation
     'COND_CALL_GC_WB',      # [cond, imm_and, if_true_call, args_for_call...]
                             #        => no result       (for the write barrier)
+                            #        (last arg should be the field descr)
+    'COND_CALL_GC_WB_ARRAY',# same as above, for arrays (last two args should
+                            #         be the array descr and the index)
     'COND_CALL_GC_MALLOC',  # [a, b, if_(a<=b)_result, if_(a>b)_call, args...]
                             #        => result          (for mallocs)
     'DEBUG_MERGE_POINT/1',      # debugging only

@@ -137,8 +137,8 @@ class FakeLLOp:
                             repr(offset_to_length), p))
         return p
 
-    def _write_barrier_failing_case(self, adr_struct, adr_newptr):
-        self.record.append(('barrier', adr_struct, adr_newptr))
+    def _write_barrier_failing_case(self, adr_struct, adr_newptr, offset):
+        self.record.append(('barrier', adr_struct, adr_newptr, offset))
 
     def get_write_barrier_failing_case(self, FPTRTYPE):
         return llhelper(FPTRTYPE, self._write_barrier_failing_case)
@@ -234,14 +234,15 @@ class TestFramework:
         r_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, r)
         s_adr = llmemory.cast_ptr_to_adr(s)
         r_adr = llmemory.cast_ptr_to_adr(r)
+        ofs = llmemory.offsetof(S, 'r')
         #
         s_hdr.tid &= ~gc_ll_descr.GCClass.JIT_WB_IF_FLAG
-        gc_ll_descr.do_write_barrier(s_gcref, r_gcref)
+        gc_ll_descr.do_write_barrier(s_gcref, r_gcref, ofs)
         assert self.llop1.record == []    # not called
         #
         s_hdr.tid |= gc_ll_descr.GCClass.JIT_WB_IF_FLAG
-        gc_ll_descr.do_write_barrier(s_gcref, r_gcref)
-        assert self.llop1.record == [('barrier', s_adr, r_adr)]
+        gc_ll_descr.do_write_barrier(s_gcref, r_gcref, ofs)
+        assert self.llop1.record == [('barrier', s_adr, r_adr, ofs)]
 
     def test_gen_write_barrier(self):
         gc_ll_descr = self.gc_ll_descr
@@ -250,7 +251,8 @@ class TestFramework:
         newops = []
         v_base = BoxPtr()
         v_value = BoxPtr()
-        gc_ll_descr._gen_write_barrier(self.fake_cpu, newops, v_base, v_value)
+        gc_ll_descr._gen_write_barrier(self.fake_cpu, newops, v_base, v_value,
+                                       "fielddescr")
         assert llop1.record == []
         assert len(newops) == 2
         assert newops[0].opnum == rop.GETFIELD_RAW
@@ -263,6 +265,7 @@ class TestFramework:
         assert newops[1].args[2] == ConstInt(42)     # func ptr
         assert newops[1].args[3] == v_base
         assert newops[1].args[4] == v_value
+        assert newops[1].args[5] == "fielddescr"
         assert newops[1].descr == gc_ll_descr.calldescr_jit_wb
         assert newops[1].result is None
 
@@ -327,6 +330,7 @@ class TestFramework:
         assert operations[1].args[2] == ConstInt(42)     # func ptr
         assert operations[1].args[3] == v_base
         assert operations[1].args[4] == v_value
+        assert operations[1].args[5] == field_descr
         assert operations[1].descr == gc_ll_descr.calldescr_jit_wb
         assert operations[1].result is None
         #
@@ -353,13 +357,15 @@ class TestFramework:
         assert operations[0].descr == gc_ll_descr.fielddescr_tid
         v_tid = operations[0].result
         #
-        assert operations[1].opnum == rop.COND_CALL_GC_WB
+        assert operations[1].opnum == rop.COND_CALL_GC_WB_ARRAY
         assert operations[1].args[0] == v_tid
         assert operations[1].args[1] == ConstInt(
                                             gc_ll_descr.GCClass.JIT_WB_IF_FLAG)
         assert operations[1].args[2] == ConstInt(42)     # func ptr
         assert operations[1].args[3] == v_base
         assert operations[1].args[4] == v_value
+        assert operations[1].args[5] == array_descr
+        assert operations[1].args[6] == v_index
         assert operations[1].descr == gc_ll_descr.calldescr_jit_wb
         assert operations[1].result is None
         #

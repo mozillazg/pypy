@@ -288,7 +288,8 @@ class AbstractLLCPU(AbstractCPU):
         #
         if ptr:
             vboxptr = vbox.getref_base()
-            self.gc_ll_descr.do_write_barrier(gcref, vboxptr)
+            itemofs = ofs + size * itemindex
+            self.gc_ll_descr.do_write_barrier(gcref, vboxptr, itemofs)
             # --- start of GC unsafe code (no GC operation!) ---
             items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
             items = rffi.cast(rffi.CArrayPtr(lltype.Signed), items)
@@ -387,7 +388,7 @@ class AbstractLLCPU(AbstractCPU):
             assert lltype.typeOf(gcref) is not lltype.Signed, (
                 "can't handle write barriers for setfield_raw")
             ptr = vbox.getref_base()
-            self.gc_ll_descr.do_write_barrier(gcref, ptr)
+            self.gc_ll_descr.do_write_barrier(gcref, ptr, ofs)
             # --- start of GC unsafe code (no GC operation!) ---
             field = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
             field = rffi.cast(rffi.CArrayPtr(lltype.Signed), field)
