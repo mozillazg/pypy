@@ -19,48 +19,11 @@ def result_type(space, w_types):
             }
     return types[w_types]
 
-def mul_scalar(result, source, w_x):     result.mul_scalar(source, w_x)
-def mul_fixedview(result, source, w_xs): result.mul_fixedview(source, w_xs)
-
-def div_scalar(result, source, w_x):     result.div_scalar(source, w_x)
-def div_fixedview(result, source, w_xs): result.div_fixedview(source, w_xs)
-
-def add_scalar(result, source, w_x):     result.add_scalar(source, w_x)
-def add_fixedview(result, source, w_xs): result.add_fixedview(source, w_xs)
-
-def sub_scalar(result, source, w_x):     result.sub_scalar(source, w_x)
-def sub_fixedview(result, source, w_xs): result.sub_fixedview(source, w_xs)
-
 def unpack_shape(space, w_shape):
     if space.is_true(space.isinstance(w_shape, space.w_int)):
         return [space.int_w(w_shape)]
     shape_w = space.fixedview(w_shape)
     return [space.int_w(w_i) for w_i in shape_w]
-
-class ArrayIter(Wrappable): #FIXME: 1d only!
-    def __init__(self, space, array, i):
-        self.space = space
-        self.array = array
-        self.i = i
-
-    def descr_iter(self):
-        self.space = space
-        return space.wrap(self)
-    descr_iter.unwrap_spec = ['self']
-
-    def descr_next(self):
-        space = self.space
-        try:
-            result = self.array.array.storage[self.i]
-            self.i += 1
-            return space.wrap(result)
-        except IndexError, e:
-            raise OperationError(space.w_StopIteration, space.wrap(""))
-    descr_iter.unwrap_spec = ['self']
-
-ArrayIter.typedef = TypeDef('ArrayIter',
-                            __iter__ = interp2app(ArrayIter.descr_iter),
-                            next = interp2app(ArrayIter.descr_next))
 
 def infer_shape(space, w_values): 
     return [space.int_w(space.len(w_values))] #TODO: handle multi-dimensional arrays...
@@ -109,25 +72,6 @@ class ndarray(Wrappable):
             if e.match(space, space.w_TypeError): pass
             else: raise
 
-    def create_math_operation(f):
-        def math_operation(self, w_x):
-            space = self.space
-            if space.type(w_x) in (space.w_list, space.w_tuple):
-                raise OperationError(space.w_NotImplementedError,
-                                     space.wrap("Haven't implemented array * iterable yet!"))
-            else:
-                result_t = result_type(space, (space.type(w_x), self.dtype))
-                result_array = sdresult(space, result_t)(space, self.array.length) #FIXME: support multi-dimensional array!
-                #result_array.mul_scalar(self.array, w_x) #TODO: reverse so that result_array = self.array.mul_scalar(w_x)
-                f(result_array, self.array, w_x) #TODO: can i use member function pointers?
-
-                result = ndarray(space, space.w_None, None, None)
-                result.array = result_array
-                w_result = space.wrap(result)
-            return w_result
-        math_operation.unwrap_spec = ['self', W_Root]
-        return math_operation
-
     # Math Operations
     descr_mul = create_math_operation(mul_scalar)
     descr_div = create_math_operation(div_scalar)
@@ -160,7 +104,6 @@ class ndarray(Wrappable):
     def descr_repr(self, space):
         return space.wrap("array([%s])" % self.array.str())
     descr_repr.unwrap_spec = ['self', ObjSpace]
-
 
 def descr_new(space, w_cls, w_shape,
               w_buffer=NoneNotWrapped, w_offset=NoneNotWrapped,

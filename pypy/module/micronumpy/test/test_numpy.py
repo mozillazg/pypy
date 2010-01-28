@@ -36,6 +36,7 @@ class AppTestSDArray(object):
                     assert compare(operator(ar, value), [operator(x, value) for x in data])
 
     def test_operator_result_types(self):
+        skip("Haven't implemented dispatching for array/array operations")
         from operator import mul, div, add, sub
         from numpy import array
         types = {
