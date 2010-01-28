@@ -451,6 +451,41 @@ class TestHybridGC(TestGenerationGC):
         gc.clean_marked_cards(addr)
         assert objs == [addrp, addrp]
 
+    def test_arraycopy_cardmarking_1(self):
+        from pypy.rpython.lltypesystem import llarena
+        from pypy.rpython.memory.gc.hybrid import GCFLAG_CARDMARKS, \
+             GCFLAG_CARDMARK_SET
+
+        gc = self.gc
+        size_gc_header = gc.gcheaderbuilder.size_gc_header
+        typeid = self.get_type_id(VAR)
+        addr1 = llmemory.cast_ptr_to_adr(gc.malloc_varsize_slowpath(typeid, 48))
+        obj = llmemory.cast_adr_to_ptr(addr1, lltype.Ptr(VAR))
+        self.stackroots.append(obj)
+        addr2 = llmemory.cast_ptr_to_adr(gc.malloc_varsize_slowpath(typeid, 48))
+        # should be precisely 16 cards needed (48/3) + 1 one for length
+        obj2 = llmemory.cast_adr_to_ptr(addr2, lltype.Ptr(VAR))
+        self.stackroots.append(obj2)
+        p = self.malloc(S)
+        addrp = llmemory.cast_ptr_to_adr(p)
+        self.writearray(obj, 0, p)
+        assert gc.header(addr1).tid & GCFLAG_CARDMARK_SET
+        assert gc.header(addr2).tid & GCFLAG_CARDMARK_SET == 0
+        gc.writebarrier_before_copy(addr1, addr2, 0, 0, 48)
+        for i in range(3):
+            addr = addr2 - size_gc_header + llarena.negative_byte_index(i)
+            assert addr.char[0] == '\xff', i
+
+        objs = []
+        def callback(obj, arg):
+            # obj is the address inside 'addr',
+            # so we need to read that array item
+            objs.append(obj.address[0])
+
+        obj2[0] = p
+        gc.foreach_marked_card(addr2, callback, None)
+        assert objs == [addrp]
+        
 class TestMarkCompactGC(DirectGCTest):
     from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
 
