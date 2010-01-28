@@ -675,25 +675,47 @@ class HybridGC(GenerationGC):
             nextaddr.char[0] = chr(0)
             i += 1
 
-    def _writebarrier_before_copy(self, source_addr, dest_addr):
+    def mark_cards(self, addr, start, end):
+        hdr = self.header(addr)
+        hdr |= GCFLAG_CARDMARK_SET
+
+    def mark_cards(self, addr, start, length):
+        hdr = self.header(addr)
+        hdr |= GCFLAG_CARDMARK_SET
+        typeid = hdr.tid
+        itemsize = self.varsize_item_sizes(typeid)
+        offset = self.varsize_offset_to_variable_part(typeid) + itemsize * start
+        # XXX check details
+        first_card = raw_malloc_usage(offset) / self.card_size
+        offset += itemsize * length
+        last_card = raw_malloc_usage(offset) / self.card_size
+        i = first_card >> 3
+        while i < last_card >> 3:
+            card_adr = addr_struct - size_gc_header + llarena.negative_byte_index(i)
+            card_adr.char[0] = chr(0xff)
+
+    def _writebarrier_before_copy(self, source_addr, dest_addr, source_start,
+                                  dest_start, length):
         """ A hook for hybrid gc
         """
         source_hdr = self.header(source_addr)
         dest_hdr = self.header(dest_addr)
         if source_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
             if dest_hdr.tid & GCFLAG_CARDMARKS:
-                xxx # we copy from small -> larg list, set all cards
-            # there might be an object in source that is in nursery
-            self.old_objects_pointing_to_young.append(dest_addr)
-            dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+                # we copy from small -> larg list, set all cards up
+                self.mark_cards(dest_addr, dest_start, length)
+                return
         if source_hdr.tid & GCFLAG_CARDMARK_SET:
             if dest_adr.tid & GCFLAG_CARDMARK_SET:
-                # large -> large, copy cardmarks
-                xxx
-            else:
-                # large -> small
-                self.old_objects_pointing_to_young.append(dest_addr)
-                dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+                # large -> large, copy cardmarks.
+                # XXX for now just set all cards within range
+                # that's why we need source_start, possibly
+                self.mark_cards(dest_addr, dest_start, length)
+                return
+            # large -> small
+        # there might be an object in source that is in nursery
+        self.old_objects_pointing_to_young.append(dest_addr)
+        dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
 
     def debug_check_object_no_nursery_pointer(self, obj):
         tid = self.header(obj).tid

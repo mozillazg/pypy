@@ -477,7 +477,7 @@ class GenerationGC(SemiSpaceGC):
                 self.last_generation_root_objects.append(addr_struct)
 
     def assume_young_pointers(self, addr_struct):
-        XXXX
+        # XXX fix for hybrid
         objhdr = self.header(addr_struct)
         if objhdr.tid & GCFLAG_NO_YOUNG_PTRS:
             self.old_objects_pointing_to_young.append(addr_struct)
@@ -486,7 +486,8 @@ class GenerationGC(SemiSpaceGC):
             objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
             self.last_generation_root_objects.append(addr_struct)
 
-    def _writebarrier_before_copy(self, source_addr, dest_addr):
+    def _writebarrier_before_copy(self, source_addr, dest_addr, source_start,
+                                  dest_start, length):
         """ A hook for hybrid gc
         """
         source_hdr = self.header(source_addr)
@@ -496,7 +497,8 @@ class GenerationGC(SemiSpaceGC):
             self.old_objects_pointing_to_young.append(dest_addr)
             dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
 
-    def writebarrier_before_copy(self, source_addr, dest_addr):
+    def writebarrier_before_copy(self, source_addr, dest_addr, source_start,
+                                 dest_start, length):
         """ This has the same effect as calling writebarrier over
         each element in dest copied from source, except it might reset
         one of the following flags a bit too eagerly, which means we'll have
