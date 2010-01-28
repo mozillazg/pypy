@@ -628,24 +628,25 @@ class LLFrame(object):
         addr = llmemory.cast_ptr_to_adr(obj)
         for o in offsets:
             if isinstance(o, str):
-                addr += llmemory.offsetof(TYPE, o)
+                offset = llmemory.offsetof(TYPE, o)
                 TYPE = getattr(TYPE, o)
             else:
-                addr += llmemory.itemoffsetof(TYPE, o)
+                offset = llmemory.itemoffsetof(TYPE, o)
                 TYPE = TYPE.OF
-        return addr, TYPE
+            addr += offset
+        return addr, TYPE, offset
 
     def op_setinteriorfield(self, obj, *fieldnamesval):
         offsets, fieldvalue = fieldnamesval[:-1], fieldnamesval[-1]
-        inneraddr, FIELD = self.getinneraddr(obj, *offsets)
+        inneraddr, FIELD, offset = self.getinneraddr(obj, *offsets)
         if FIELD is not lltype.Void:
-            self.heap.setinterior(obj, inneraddr, FIELD, fieldvalue)
+            self.heap.setinterior(obj, inneraddr, FIELD, fieldvalue, offset)
 
     def op_bare_setinteriorfield(self, obj, *fieldnamesval):
         offsets, fieldvalue = fieldnamesval[:-1], fieldnamesval[-1]
-        inneraddr, FIELD = self.getinneraddr(obj, *offsets)
+        inneraddr, FIELD, offset = self.getinneraddr(obj, *offsets)
         if FIELD is not lltype.Void:
-            llheap.setinterior(obj, inneraddr, FIELD, fieldvalue)
+            llheap.setinterior(obj, inneraddr, FIELD, fieldvalue, offset)
 
     def op_getarrayitem(self, array, index):
         return array[index]
