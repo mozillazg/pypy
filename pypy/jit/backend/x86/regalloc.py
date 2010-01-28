@@ -655,7 +655,15 @@ class RegAlloc(object):
         
     def consider_cond_call_gc_wb(self, op):
         assert op.result is None
-        arglocs = [self.loc(arg) for arg in op.args]
+        arglocs = []
+        for i in range(len(op.args) - 1):
+            arglocs.append(self.loc(op.args[i]))
+        descr = op.args[-1]
+        ofsloc = self._unpack_fielddescr(descr)[0]
+        arglocs.append(ofsloc)
+        self._call_wb_common(op, arglocs, 1)
+
+    def _call_wb_common(self, op, arglocs, toignore):
         # add eax, ecx and edx as extra "arguments" to ensure they are
         # saved and restored.  Fish in self.rm to know which of these
         # registers really need to be saved (a bit of a hack).  Moreover,
@@ -668,7 +676,21 @@ class RegAlloc(object):
                 and reg not in arglocs[3:]):
                 arglocs.append(reg)
         self.PerformDiscard(op, arglocs)
-        self.rm.possibly_free_vars(op.args)
+        for i in range(len(op.args) - toignore):
+            self.rm.possibly_free_var(op.args[i])
+
+    def consider_cond_call_gc_wb_array(self, op):
+        assert op.result is None
+        arglocs = []
+        index = op.args[-1]
+        index_loc = self.make_sure_var_in_reg(index)
+        for i in range(len(op.args) - 2):
+            arglocs.append(self.loc(op.args[i]))
+        descr = op.args[-2]
+        scale, ofs, ptr = self._unpack_arraydescr(descr)
+        arglocs.append(self.assembler.effective_addr(index_loc, ofs, scale))
+        self._call_wb_common(op, arglocs, 2)
+        self.rm.possibly_free_var(index)
 
     def _fastpath_malloc(self, op, descr):
         assert isinstance(descr, BaseSizeDescr)
