@@ -927,7 +927,25 @@ class FrameworkGCTransformer(GCTransformer):
                 v_offset = hop.genop('int_add', [c_itemsofs, v_1],
                                      resulttype = lltype.Signed)
             elif opname == 'setinteriorfield':
-                XXXX #fun fun fun
+                v_offset = None
+                for v_ofs in hop.spaceop.args[1:-1]:
+                    if v_ofs.concretetype is lltype.Void:    # 'fieldname'
+                        name = v_ofs.value
+                        v_nextofs = rmodel.inputconst(lltype.Signed,
+                                                      llmemory.offsetof(TP, name))
+                        TP = getattr(TP, name)
+                    else:  # array index
+                        c_itemsize = rmodel.inputconst(lltype.Signed,
+                                                       llmemory.sizeof(TP.OF))
+                        v_nextofs = hop.genop('int_mul', [v_ofs, c_itemsize],
+                                              resulttype = lltype.Signed)
+                        TP = TP.OF
+                    if v_offset is None:
+                        v_offset = v_nextofs
+                    else:
+                        v_offset = hop.genop('int_add', [v_offset, v_nextofs],
+                                             resulttype = lltype.Signed)
+                assert v_offset is not None
             else:
                 assert 0, "bad opname: %r" % (opname,)
             v_newvalue = hop.genop("cast_ptr_to_adr", [v_newvalue],
