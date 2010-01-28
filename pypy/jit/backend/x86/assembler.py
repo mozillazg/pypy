@@ -413,7 +413,10 @@ class Assembler386(object):
                                          resloc, current_depths)
 
     def load_effective_addr(self, sizereg, baseofs, scale, result):
-        self.mc.LEA(result, addr_add(imm(0), sizereg, baseofs, scale))
+        self.mc.LEA(result, self.effective_addr(sizereg, baseofs, scale))
+
+    def effective_addr(self, sizereg, baseofs, scale):
+        return addr_add(imm(0), sizereg, baseofs, scale)
 
     def _unaryop(asmop):
         def genop_unary(self, op, arglocs, resloc):
@@ -1307,6 +1310,12 @@ class Assembler386(object):
         return self.implement_guard(addr, self.mc.JL)        
 
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
+        self._cond_call_gc_wb(op, arglocs, False)
+
+    def genop_discard_cond_call_gc_wb_array(self, op, arglocs):
+        self._cond_call_gc_wb(op, arglocs, True)
+
+    def _cond_call_gc_wb(self, op, arglocs, is_array):
         # use 'mc._mc' directly instead of 'mc', to avoid
         # bad surprizes if the code buffer is mostly full
         loc_cond = arglocs[0]
@@ -1317,8 +1326,29 @@ class Assembler386(object):
         jz_location = mc.get_relative_pos()
         # the following is supposed to be the slow path, so whenever possible
         # we choose the most compact encoding over the most efficient one.
-        for i in range(len(arglocs)-1, 2, -1):
+        # At this point, arglocs is:
+        #    [cond, mask, fn, arg1, arg2, arg3, regs_to_save_and_restore....]
+        # except that arg3 needs to be replaced by "LEA reg, arg3" if is_array.
+        # First push regs_to_save_and_restore
+        for i in range(len(arglocs)-1, 5, -1):
             mc.PUSH(arglocs[i])
+        # Push arg3 or the result of "LEA reg, arg3"
+        if not is_array:
+            mc.PUSH(arglocs[5])
+        else:
+            # We need a free register in (eax, ecx, edx)
+            # which is not arglocs[3] or arglocs[4]
+            tmpreg = eax
+            if tmpreg is arglocs[3] or tmpreg is arglocs[4]:
+                tmpreg = ecx
+                if tmpreg is arglocs[3] or tmpreg is arglocs[4]:
+                    tmpreg = edx
+            mc.LEA(tmpreg, arglocs[5])
+            mc.PUSH(tmpreg)
+        # Push arg2 and arg1
+        mc.PUSH(arglocs[4])
+        mc.PUSH(arglocs[3])
+        # Done pushing arguments...
         mc.CALL(rel32(op.args[2].getint()))
         pop_count = 0
         for i in range(3, len(arglocs)):

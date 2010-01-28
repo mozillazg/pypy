@@ -1261,14 +1261,17 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.clear_exception()
 
     def test_cond_call_gc_wb(self):
-        def func_void(a, b):
-            record.append((a, b))
+        def func_void(a, b, c):
+            record.append((a, b, c))
         record = []
         #
-        FUNC = self.FuncType([lltype.Signed, lltype.Signed], lltype.Void)
+        FUNC = self.FuncType([lltype.Signed, lltype.Signed, lltype.Signed],
+                             lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), func_void)
         funcbox = self.get_funcbox(self.cpu, func_ptr)
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+        T = lltype.GcStruct('T', ('name', lltype.Signed))
+        fielddescr = self.cpu.fielddescrof(T, 'name')
         for cond in [False, True]:
             value = random.randrange(-sys.maxint, sys.maxint)
             if cond:
@@ -1278,10 +1281,42 @@ class LLtypeBackendTest(BaseBackendTest):
             del record[:]
             self.execute_operation(rop.COND_CALL_GC_WB,
                                    [BoxInt(value), ConstInt(4096),
-                                    funcbox, BoxInt(655360), BoxInt(-2121)],
+                                    funcbox, BoxInt(655360), BoxInt(-2121),
+                                    fielddescr],
                                    'void', descr=calldescr)
             if cond:
-                assert record == [(655360, -2121)]
+                assert record == [(655360, -2121, fielddescr.offset)]
+            else:
+                assert record == []
+
+    def test_cond_call_gc_wb_array(self):
+        def func_void(a, b, c):
+            record.append((a, b, c))
+        record = []
+        #
+        FUNC = self.FuncType([lltype.Signed, lltype.Signed, lltype.Signed],
+                             lltype.Void)
+        func_ptr = llhelper(lltype.Ptr(FUNC), func_void)
+        funcbox = self.get_funcbox(self.cpu, func_ptr)
+        calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+        A = lltype.GcArray(lltype.Signed)
+        arraydescr = self.cpu.arraydescrof(A)
+        for cond in [False, True]:
+            value = random.randrange(-sys.maxint, sys.maxint)
+            if cond:
+                value |= 4096
+            else:
+                value &= ~4096
+            del record[:]
+            self.execute_operation(rop.COND_CALL_GC_WB_ARRAY,
+                                   [BoxInt(value), ConstInt(4096),
+                                    funcbox, BoxInt(655360), BoxInt(-2121),
+                                    arraydescr, BoxInt(3)],
+                                   'void', descr=calldescr)
+            if cond:
+                offset = arraydescr.get_base_size(False)
+                size = arraydescr.get_item_size(False)
+                assert record == [(655360, -2121, offset + size * 3)]
             else:
                 assert record == []
 

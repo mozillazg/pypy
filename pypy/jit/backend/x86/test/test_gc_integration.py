@@ -285,3 +285,5 @@ class TestMallocFastpath(BaseTestRegalloc):
         assert gc_ll_descr.nursery[1] == self.vtable_int
         nurs_adr = rffi.cast(lltype.Signed, gc_ll_descr.nursery)
         assert gc_ll_descr.addrs[0] == nurs_adr + 8
+
+
