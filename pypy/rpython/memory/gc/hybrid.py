@@ -571,10 +571,6 @@ class HybridGC(GenerationGC):
     def remember_pointer_to_nursery(self, addr_struct, offset):
         hdr = self.header(addr_struct)
         if hdr.tid & GCFLAG_CARDMARKS:
-            # XXX we might want to store this object in the list of old
-            #     objects pointing to young. For now we simply walk all
-            #     huge lists possibly containing gc pointers for each
-            #     nursery collection
             # Mark the correct card, don't clear GCFLAG_NO_YOUNG_PTRS flag.
             # Note that 'offset' does not include the size_gc_header.
             size_gc_header = self.gcheaderbuilder.size_gc_header
