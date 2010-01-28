@@ -182,7 +182,7 @@ class WarmRunnerDesc(object):
         self.rewrite_can_enter_jit()
         self.rewrite_set_param()
         self.rewrite_force_virtual()
-        self.add_profiler_finish()
+        self.add_finish()
         self.metainterp_sd.finish_setup(optimizer=optimizer)
 
     def finish(self):
@@ -633,13 +633,14 @@ class WarmRunnerDesc(object):
         origblock.recloseblock(Link([v_result], origportalgraph.returnblock))
         checkgraph(origportalgraph)
 
-    def add_profiler_finish(self):
-        def finish_profiler():
+    def add_finish(self):
+        def finish():
             if self.metainterp_sd.profiler.initialized:
                 self.metainterp_sd.profiler.finish()
+            self.metainterp_sd.cpu.finish_once()
         
         if self.cpu.translate_support_code:
-            call_final_function(self.translator, finish_profiler,
+            call_final_function(self.translator, finish,
                                 annhelper = self.annhelper)
 
     def rewrite_set_param(self):
