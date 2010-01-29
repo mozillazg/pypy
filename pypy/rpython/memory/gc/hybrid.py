@@ -244,11 +244,7 @@ class HybridGC(GenerationGC):
     def malloc_varsize_marknsweep(self, totalsize, large_with_gcptrs):
         # In order to free the large objects from time to time, we
         # arbitrarily force a full collect() if none occurs when we have
-        # allocated 'self.space_size' bytes of large objects.
-        # XXX we should probably track the total raw_malloc'ed size
-        # XXX and adjust sizes based on it; otherwise we risk doing
-        # XXX many many collections if the program allocates a lot
-        # XXX more than the current self.space_size.
+        # allocated self.space_size + rawmalloced bytes of large objects.
         self._check_rawsize_alloced(raw_malloc_usage(totalsize))
         if large_with_gcptrs:
             result = self.malloc_arena_with_cardmarking(totalsize)
@@ -441,13 +437,13 @@ class HybridGC(GenerationGC):
         debug_print("| [hybrid] made nonmoving:         ",
                     self._nonmoving_copy_size, "bytes in",
                     self._nonmoving_copy_count, "objs")
+        rawmalloced_trigger = 0
         # sweep the nonmarked rawmalloced objects
         if self.is_collecting_gen3():
-            self.sweep_rawmalloced_objects(generation=3)
-        self.sweep_rawmalloced_objects(generation=2)
-        # As we just collected, it's fine to raw_malloc'ate up to space_size
-        # bytes again before we should force another collect.
-        self.large_objects_collect_trigger = self.space_size
+            rawmalloced_trigger += self.sweep_rawmalloced_objects(generation=3)
+        rawmalloced_trigger += self.sweep_rawmalloced_objects(generation=2)
+        self.large_objects_collect_trigger = (rawmalloced_trigger +
+                                              self.space_size)
         if self.is_collecting_gen3():
             self.count_semispaceonly_collects = 0
         self._initial_trigger = self.large_objects_collect_trigger
@@ -476,7 +472,7 @@ class HybridGC(GenerationGC):
             self.last_generation_root_objects = newgen3roots
         else:
             ll_assert(False, "bogus 'generation'")
-            return
+            return 0 # to please the flowspace
 
         surviving_objects = self.AddressStack()
         # Help the flow space
@@ -503,7 +499,7 @@ class HybridGC(GenerationGC):
             else:
                 if debug:
                     alive_count+=1
-                    alive_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
+                alive_size+=raw_malloc_usage(self.get_size_incl_hash(obj))
                 if generation == 3:
                     surviving_objects.append(obj)
                 elif generation == 2:
@@ -533,6 +529,7 @@ class HybridGC(GenerationGC):
                     "nonmoving freed:     ",
                     dead_size, "bytes in",
                     dead_count, "objs")
+        return alive_size
 
     def id(self, ptr):
         obj = llmemory.cast_ptr_to_adr(ptr)
