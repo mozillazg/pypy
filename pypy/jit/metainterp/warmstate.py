@@ -1,7 +1,7 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.annlowlevel import hlstr, cast_base_ptr_to_instance
+from pypy.rpython.annlowlevel import hlstr, llstr, cast_base_ptr_to_instance
 from pypy.rpython.annlowlevel import cast_object_to_ptr
 from pypy.rlib.objectmodel import specialize, we_are_translated, r_dict
 from pypy.rlib.rarithmetic import intmask
@@ -104,6 +104,11 @@ def set_future_value(cpu, j, value, typecode):
         cpu.set_future_value_float(j, value)
     else:
         assert False
+
+class JitCell(BaseJitCell):
+    counter = 0
+    compiled_merge_points = None
+    dont_trace_here = False
 
 # ____________________________________________________________
 
@@ -234,7 +239,8 @@ class WarmEnterState(object):
                 from pypy.jit.metainterp.pyjitpl import MetaInterp
                 metainterp = MetaInterp(metainterp_sd)
                 try:
-                    loop_token = metainterp.compile_and_run_once(*args)
+                    loop_token = metainterp.compile_and_run_once(metainterp_sd,
+                                                                 *args)
                 except ContinueRunningNormally:
                     # the trace got too long, reset the counter
                     cell.counter = 0
@@ -293,15 +299,10 @@ class WarmEnterState(object):
         if hasattr(self, 'jit_getter'):
             return self.jit_getter
         #
-        class JitCell(BaseJitCell):
-            counter = 0
-            compiled_merge_points = None
-            dont_trace_here = False
-        #
         if self.warmrunnerdesc.get_jitcell_at_ptr is None:
-            jit_getter = self._make_jitcell_getter_default(JitCell)
+            jit_getter = self._make_jitcell_getter_default()
         else:
-            jit_getter = self._make_jitcell_getter_custom(JitCell)
+            jit_getter = self._make_jitcell_getter_custom()
         #
         unwrap_greenkey = self.make_unwrap_greenkey()
         #
@@ -313,7 +314,7 @@ class WarmEnterState(object):
         #
         return jit_getter
 
-    def _make_jitcell_getter_default(self, JitCell):
+    def _make_jitcell_getter_default(self):
         "NOT_RPYTHON"
         warmrunnerdesc = self.warmrunnerdesc
         green_args_spec = unrolling_iterable(warmrunnerdesc.green_args_spec)
@@ -347,7 +348,7 @@ class WarmEnterState(object):
             return cell
         return get_jitcell
 
-    def _make_jitcell_getter_custom(self, JitCell):
+    def _make_jitcell_getter_custom(self):
         "NOT_RPYTHON"
         rtyper = self.warmrunnerdesc.rtyper
         get_jitcell_at_ptr = self.warmrunnerdesc.get_jitcell_at_ptr
@@ -485,8 +486,13 @@ class WarmEnterState(object):
         #
         get_location_ptr = self.warmrunnerdesc.get_printable_location_ptr
         if get_location_ptr is None:
+            missing = '(no jitdriver.get_printable_location!)'
+            missingll = llstr(missing)
             def get_location_str(greenkey):
-                return '(no jitdriver.get_printable_location!)'
+                if we_are_translated():
+                    return missingll
+                else:
+                    return missing
         else:
             rtyper = self.warmrunnerdesc.rtyper
             unwrap_greenkey = self.make_unwrap_greenkey()

@@ -1132,6 +1132,7 @@ class MetaInterpStaticData(object):
         self._addr2name_keys   = [key   for key, value in list_of_addr2name]
         self._addr2name_values = [value for key, value in list_of_addr2name]
         self._portal_runner_ptr = portal_runner_ptr
+        self._portal_runner_adr = llmemory.cast_ptr_to_adr(portal_runner_ptr)
 
     def finish_setup(self, optimizer=None):
         warmrunnerdesc = self.warmrunnerdesc
@@ -1171,8 +1172,7 @@ class MetaInterpStaticData(object):
                 # Build the dictionary at run-time.  This is needed
                 # because the keys are function/class addresses, so they
                 # can change from run to run.
-                k = llmemory.cast_ptr_to_adr(self._portal_runner_ptr)
-                d = {k: 'recursive call'}
+                d = {self._portal_runner_adr: 'recursive call'}
                 keys = self._addr2name_keys
                 values = self._addr2name_values
                 for i in range(len(keys)):
@@ -1509,22 +1509,24 @@ class MetaInterp(object):
                     codewriter.log.info(sys.exc_info()[0].__name__)
                 raise
 
-    def compile_and_run_once(self, *args):
+    @specialize.arg(1)
+    def compile_and_run_once(self, metainterp_sd, *args):
         debug_start('jit-tracing')
-        self.staticdata._setup_once()
+        metainterp_sd._setup_once()
         self.create_empty_history()
         try:
-            return self._compile_and_run_once(*args)
+            return self._compile_and_run_once(metainterp_sd, *args)
         finally:
             if self.history is None:
                 debug_stop('jit-blackhole')
             else:
                 debug_stop('jit-tracing')
 
-    def _compile_and_run_once(self, *args):
-        original_boxes = self.initialize_state_from_start(*args)
+    @specialize.arg(1)
+    def _compile_and_run_once(self, metainterp_sd, *args):
+        original_boxes = self.initialize_state_from_start(metainterp_sd, *args)
         self.current_merge_points = [(original_boxes, 0)]
-        num_green_args = self.staticdata.num_green_args
+        num_green_args = metainterp_sd.num_green_args
         original_greenkey = original_boxes[:num_green_args]
         redkey = original_boxes[num_green_args:]
         self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
@@ -1733,20 +1735,25 @@ class MetaInterp(object):
             specnode.extract_runtime_data(self.cpu, args[i], expanded_args)
         return expanded_args
 
-    def _initialize_from_start(self, original_boxes, num_green_args, *args):
+    @specialize.arg(2)
+    def _initialize_from_start(self, original_boxes, metainterp_sd,
+                               num_green_args, *args):
+        # NB. we pass metainterp_sd here for specialization only
         if args:
             from pypy.jit.metainterp.warmstate import wrap
             box = wrap(self.cpu, args[0], num_green_args > 0)
             original_boxes.append(box)
-            self._initialize_from_start(original_boxes, num_green_args-1,
-                                        *args[1:])
+            self._initialize_from_start(original_boxes, metainterp_sd,
+                                        num_green_args-1, *args[1:])
 
-    def initialize_state_from_start(self, *args):
+    @specialize.arg(1)
+    def initialize_state_from_start(self, metainterp_sd, *args):
         self.in_recursion = -1 # always one portal around
         self.staticdata.profiler.start_tracing()
-        num_green_args = self.staticdata.num_green_args
+        num_green_args = metainterp_sd.num_green_args
         original_boxes = []
-        self._initialize_from_start(original_boxes, num_green_args, *args)
+        self._initialize_from_start(original_boxes, metainterp_sd,
+                                    num_green_args, *args)
         # ----- make a new frame -----
         self.framestack = []
         f = self.newframe(self.staticdata.portal_code)
