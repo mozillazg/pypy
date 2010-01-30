@@ -66,13 +66,15 @@ def ll_meta_interp(function, args, backendopt=False, type_system='lltype',
 def jittify_and_run(interp, graph, args, repeat=1, CPUClass=None,
                     backendopt=False, trace_limit=sys.maxint,
                     debug_level=DEBUG_STEPS, inline=False,
+                    translate_support_code=False,
                     num_jit_drivers=1, **kwds):
     translator = interp.typer.annotator.translator
     translator.config.translation.gc = "boehm"
     translator.config.translation.list_comprehension_operations = True
     jmpps = find_jit_merge_points(translator.graphs)
     assert len(jmpps) == num_jit_drivers
-    cpu = build_cpu(translator, CPUClass)
+    cpu = build_cpu(translator, CPUClass, translate_support_code)
+    warmrunnerdescs = []
     for jmpp in jmpps:
         warmrunnerdesc = WarmRunnerDesc(translator, cpu, backendopt=backendopt,
                                         jit_merge_point_pos=jmpp, **kwds)
@@ -82,9 +84,11 @@ def jittify_and_run(interp, graph, args, repeat=1, CPUClass=None,
         warmrunnerdesc.state.set_param_inlining(inline)
         warmrunnerdesc.state.set_param_debug(debug_level)
         warmrunnerdesc.finish()
+        warmrunnerdescs.append(warmrunnerdesc)
     res = interp.eval_graph(graph, args)
-    if not kwds.get('translate_support_code', False):
-        warmrunnerdesc.metainterp_sd.profiler.finish()
+    if not translate_support_code:
+        for warmrunnerdesc in warmrunnerdescs:
+            warmrunnerdesc.metainterp_sd.profiler.finish()
     print '~~~ return value:', res
     while repeat > 1:
         print '~' * 79
