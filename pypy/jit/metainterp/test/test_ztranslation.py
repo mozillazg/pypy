@@ -7,8 +7,6 @@ from pypy.jit.metainterp.jitprof import Profiler
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 
-py.test.skip("Broken")
-
 class TranslationTest:
 
     CPUClass = None
@@ -23,6 +21,7 @@ class TranslationTest:
         # - profiler
         # - full optimizer
         # - jitdriver hooks
+        # - two JITs
 
         class Frame(object):
             _virtualizable2_ = ['i']
@@ -64,14 +63,29 @@ class TranslationTest:
                     frame.i -= 2
                 frame.i -= 1
             return total * 10
-        res = ll_meta_interp(f, [40], CPUClass=self.CPUClass,
-                             type_system=self.type_system)
-        assert res == f(40)
-        res = rpython_ll_meta_interp(f, [40], loops=2, CPUClass=self.CPUClass,
+        #
+        myjitdriver2 = JitDriver(greens = [], reds = ['m', 'x'])
+        def f2(m, x):
+            while m > 0:
+                myjitdriver2.can_enter_jit(m=m, x=x)
+                myjitdriver2.jit_merge_point(m=m, x=x)
+                m -= 1
+                x += 3
+            return x
+        #
+        def main(i, j):
+            return f(i) - f2(i, j)
+        res = ll_meta_interp(main, [40, 5], CPUClass=self.CPUClass,
+                             type_system=self.type_system,
+                             num_jit_drivers=2)
+        assert res == main(40, 5)
+        res = rpython_ll_meta_interp(main, [40, 5], loops=2,
+                                     CPUClass=self.CPUClass,
                                      type_system=self.type_system,
                                      optimizer=OPTIMIZER_FULL,
-                                     ProfilerClass=Profiler)
-        assert res == f(40)
+                                     ProfilerClass=Profiler,
+                                     num_jit_drivers=2)
+        assert res == main(40, 5)
 
     def test_external_exception_handling_translates(self):
         jitdriver = JitDriver(greens = [], reds = ['n', 'total'])
