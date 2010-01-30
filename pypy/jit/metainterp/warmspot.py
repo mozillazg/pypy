@@ -75,7 +75,7 @@ def jittify_and_run(interp, graph, args, repeat=1, CPUClass=None,
     assert len(jmpps) == num_jit_drivers
     cpu = build_cpu(translator, CPUClass, translate_support_code)
     warmrunnerdescs = []
-    for jmpp in jmpps:
+    for i, jmpp in enumerate(jmpps):
         warmrunnerdesc = WarmRunnerDesc(translator, cpu, backendopt=backendopt,
                                         jit_merge_point_pos=jmpp, **kwds)
         warmrunnerdesc.state.set_param_threshold(3)          # for tests
@@ -83,7 +83,7 @@ def jittify_and_run(interp, graph, args, repeat=1, CPUClass=None,
         warmrunnerdesc.state.set_param_trace_limit(trace_limit)
         warmrunnerdesc.state.set_param_inlining(inline)
         warmrunnerdesc.state.set_param_debug(debug_level)
-        warmrunnerdesc.finish()
+        warmrunnerdesc.finish(last=(i==len(jmpps)-1))
         warmrunnerdescs.append(warmrunnerdesc)
     res = interp.eval_graph(graph, args)
     if not translate_support_code:
@@ -157,8 +157,11 @@ class CannotInlineCanEnterJit(JitException):
 def build_cpu(translator, CPUClass, translate_support_code=False, **kwds):
     opts = history.Options(**kwds)
     gcdescr = gc.get_description(translator.config)
-    return CPUClass(translator.rtyper, opts, translate_support_code,
-                    gcdescr=gcdescr)
+    cpu = CPUClass(translator.rtyper, opts, translate_support_code,
+                   gcdescr=gcdescr)
+    if translate_support_code:
+        cpu._warmspot_annhelper = MixLevelHelperAnnotator(translator.rtyper)
+    return cpu
 
 # ____________________________________________________________
 
@@ -207,11 +210,11 @@ class WarmRunnerDesc(object):
         self.add_profiler_finish()
         self.metainterp_sd.finish_setup(optimizer=optimizer)
 
-    def finish(self):
+    def finish(self, last=True):
         vinfo = self.metainterp_sd.virtualizable_info
         if vinfo is not None:
             vinfo.finish()
-        if self.cpu.translate_support_code:
+        if self.cpu.translate_support_code and last:
             self.annhelper.finish()
 
     def _freeze_(self):
@@ -279,10 +282,7 @@ class WarmRunnerDesc(object):
             stats = history.Stats()
         self.stats = stats 
         if self.cpu.translate_support_code:
-            self.annhelper = MixLevelHelperAnnotator(self.translator.rtyper)
-            annhelper = self.annhelper
-        else:
-            annhelper = None
+            self.annhelper = self.cpu._warmspot_annhelper
         self.metainterp_sd = MetaInterpStaticData(self.portal_graph, # xxx
                                                   self.cpu,
                                                   self.stats, self.cpu.opts,
