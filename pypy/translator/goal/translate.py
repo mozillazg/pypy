@@ -259,8 +259,8 @@ def main():
                                                        default_goal='compile')
         log_config(translateconfig, "translate.py configuration")
         if config.translation.jit:
-            if 'jitpolicy' not in targetspec_dic:
-                raise Exception('target has no jitpolicy defined.')
+            if not targetspec_dic.get('supportsjit'):
+                raise Exception('target does not define "supportsjit=True".')
             if (translateconfig.goals != ['annotate'] and
                 translateconfig.goals != ['rtype']):
                 drv.set_extra_goals(['pyjitpl'])

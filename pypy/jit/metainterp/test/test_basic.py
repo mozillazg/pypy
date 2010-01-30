@@ -646,15 +646,15 @@ class BasicTests:
             return n + k
 
         from pypy.rpython.test.test_llinterp import get_interpreter, clear_tcache
-        from pypy.jit.metainterp.warmspot import WarmRunnerDesc
+        from pypy.jit.metainterp.warmspot import WarmRunnerDesc, build_cpu
         
         interp, graph = get_interpreter(f, [0, 0], backendopt=False,
                                         inline_threshold=0, type_system=self.type_system)
         clear_tcache()
         translator = interp.typer.annotator.translator
         translator.config.translation.gc = "boehm"
-        warmrunnerdesc = WarmRunnerDesc(translator,
-                                        CPUClass=self.CPUClass)
+        cpu = build_cpu(translator, self.CPUClass)
+        warmrunnerdesc = WarmRunnerDesc(translator, cpu)
         warmrunnerdesc.state.set_param_threshold(3)          # for tests
         warmrunnerdesc.state.set_param_trace_eagerness(0)    # for tests
         warmrunnerdesc.finish()

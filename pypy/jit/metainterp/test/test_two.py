@@ -20,13 +20,13 @@ class TwoJitsTests:
                 myjitdriver2.can_enter_jit(m=m, x=x)
                 myjitdriver2.jit_merge_point(m=m, x=x)
                 m -= 1
-                x += 7
+                x += 3
             return x
         #
         def main(n, m, x):
             return f1(n) * f2(m, x)
         #
-        res = self.meta_interp(main, [78, 3, 0])
+        res = self.meta_interp(main, [78, 7, 0], num_jit_drivers=2)
         assert res == -2 * 21
 
 

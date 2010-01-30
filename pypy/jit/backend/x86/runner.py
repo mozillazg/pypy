@@ -16,9 +16,9 @@ class CPU386(AbstractLLCPU):
     BOOTSTRAP_TP = lltype.FuncType([], lltype.Signed)
     dont_keepalive_stuff = False # for tests
 
-    def __init__(self, rtyper, stats, opts=None, translate_support_code=False,
+    def __init__(self, rtyper, opts=None, translate_support_code=False,
                  gcdescr=None):
-        AbstractLLCPU.__init__(self, rtyper, stats, opts,
+        AbstractLLCPU.__init__(self, rtyper, opts,
                                translate_support_code, gcdescr)
 
     def setup(self):
