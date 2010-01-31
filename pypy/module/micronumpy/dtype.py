@@ -1,3 +1,4 @@
+﻿from pypy.interpreter.error import OperationError
 def unwrap_int(space, w_x):
     return space.int_w(w_x)
 def coerce_int(space, w_x):
@@ -27,5 +28,13 @@ def iterable_type(space, w_xs):
     xs = space.fixedview(w_xs)
     result_type = space.w_int
     for i in range(len(xs)):
-        result_type = result_mapping(space, (result_type, space.type(xs[i])))
+        try:
+            space.iter(xs[i])
+        except OperationError, e:
+            if not e.match(space, space.w_TypeError):
+                raise
+            atype = space.type(xs[i])
+        else:
+            atype = iterable_type(space, xs[i])
+        result_type = result_mapping(space, (result_type, atype))
     return result_type
