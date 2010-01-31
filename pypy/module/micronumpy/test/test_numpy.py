@@ -1,4 +1,4 @@
-
+﻿
 from pypy.conftest import gettestobjspace
 
 class AppTestSDArray(object):
@@ -24,19 +24,23 @@ class AppTestSDArray(object):
             assert compare(ar, data)
 
     def test_sdarray_operators(self):
+        from numpy import array
         from operator import mul, div, add, sub
+        d = range(1, self.length)
         #FIXME: overkill...
         for data_type in (int, float):
+            data = [data_type(x) for x in d]
+            ar = array(data)
+            data.reverse()
+            ar2 = array(data)
             for operator in (mul, div, add, sub):
                 for value in xrange(1, 16):
                     compare = self.compare
-                    from numpy import array
-                    data = [data_type(x) for x in range(self.length)]
-                    ar = array(data)
-                    assert compare(operator(ar, value), [operator(x, value) for x in data])
+                    assert compare(operator(ar2, value), [operator(x, value) for x in data])
+                assert compare(operator(ar, ar2), [operator(x, y) for (x, y) in zip(ar, ar2)])
 
     def test_operator_result_types(self):
-        skip("Haven't implemented dispatching for array/array operations")
+        #skip("Haven't implemented dispatching for array/array operations")
         from operator import mul, div, add, sub
         from numpy import array
         types = {
@@ -98,6 +102,14 @@ class AppTestSDArray(object):
         assert ar[-7] == 3
         assert len(ar) == 8
 
+        ar[2:3] = [5]
+        assert ar[2] == 5
+        compare = self.compare
+        assert compare(ar[1:3], [3, 5])
+        assert compare(ar[-6:-4], [5, 0])
+        assert compare(ar[-6:-8:-1], [5, 3])
+
+
     def test_minimum(self):
         from numpy import zeros, minimum
         ar = zeros(5, dtype=int)
@@ -139,3 +151,21 @@ class AppTestMultiDim(object):
     def test_len(self):
         from numpy import zeros
         assert len(zeros((3, 2, 1), dtype=int)) == 3
+
+    def test_shape_detect(self):
+        from numpy import array
+        ar = array([range(i*3, i*3+3) for i in range(3)])
+        assert len(ar) == 3
+        for i in range(3):
+            for j in range(3):
+                assert ar[i, j] == i*3+j
+    
+    def test_various_slices(self):
+        from numpy import array
+        ar = array([range(i*3, i*3+3) for i in range(3)])
+        s1 = ar[0]
+        assert s1[1]==1
+        s2 = ar[1:3]
+        assert s2[0][0] == 3
+
+            

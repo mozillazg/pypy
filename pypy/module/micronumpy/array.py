@@ -1,8 +1,8 @@
-from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
+﻿from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import NoneNotWrapped
-from pypy.interpreter.gateway import interp2app, NoneNotWrapped
+from pypy.interpreter.gateway import interp2app
 
 from pypy.module.micronumpy.dtype import iterable_type
 
@@ -15,7 +15,9 @@ def validate_index(array, space, w_i):
         array_dimensionality = len(array.shape)
         if index_dimensionality > array_dimensionality:
             raise OperationError(space.w_IndexError,
-                    space.wrap("Index dimensionality (%d) greater than array dimensionality (%d)." % (index_dimensionality, array_dimensionality)))
+                    space.wrap("Index dimensionality (%d) "
+                        "greater than array dimensionality (%d)."
+                        % (index_dimensionality, array_dimensionality)))
     except OperationError, e:
         if e.match(space, space.w_TypeError): pass
         else: raise
@@ -67,8 +69,21 @@ def unpack_shape(space, w_shape):
     shape_w = space.fixedview(w_shape)
     return [space.int_w(w_i) for w_i in shape_w]
 
-def infer_shape(space, w_values): 
-    return [space.int_w(space.len(w_values))] #TODO: handle multi-dimensional arrays...
+def infer_shape(space, w_values):
+    shape = []
+    while True:
+        try:
+            shape.append(space.int_w(space.len(w_values)))
+        except OperationError, e:
+            if e.match(space, space.w_TypeError):
+                break
+            elif e.match(space, space.IndexError):
+                break #as numpy does
+            else:
+                raise
+        else:
+            w_values = space.getitem(w_values, space.wrap(0))
+    return shape
 
 def construct_array(space, shape, w_dtype):
     from pypy.module.micronumpy.sdarray import sdresult
@@ -78,7 +93,7 @@ def construct_array(space, shape, w_dtype):
             length = shape[0]
             return sdresult(space, w_dtype)(space, length, w_dtype)
         else:
-            return mdresult(space, w_dtype)(space, shape)
+            return mdresult(space, w_dtype)(space, shape, w_dtype)
     except KeyError, e:
         raise OperationError(space.w_NotImplementedError,
                 space.wrap("Haven't implemented generic array yet!"))
