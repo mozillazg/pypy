@@ -47,6 +47,7 @@ MAXREPEAT = 65535
 
 def getlower(char_ord, flags):
     if flags & SRE_FLAG_UNICODE:
+        assert unicodedb is not None
         char_ord = unicodedb.tolower(char_ord)
     elif flags & SRE_FLAG_LOCALE:
         return tolower(char_ord)
@@ -89,18 +90,21 @@ def is_digit(code):
     return code < 128 and (ascii_char_info[code] & 1 != 0)
 
 def is_uni_digit(code):
+    assert unicodedb is not None
     return unicodedb.isdigit(code)
 
 def is_space(code):
     return code < 128 and (ascii_char_info[code] & 2 != 0)
 
 def is_uni_space(code):
+    assert unicodedb is not None
     return unicodedb.isspace(code)
 
 def is_word(code):
     return code < 128 and (ascii_char_info[code] & 16 != 0)
 
 def is_uni_word(code):
+    assert unicodedb is not None
     return unicodedb.isalnum(code) or code == underline
 
 def is_loc_alnum(code):
@@ -113,6 +117,7 @@ def is_linebreak(code):
     return code == linebreak
 
 def is_uni_linebreak(code):
+    assert unicodedb is not None
     return unicodedb.islinebreak(code)
 
 
