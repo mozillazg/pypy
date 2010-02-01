@@ -220,8 +220,10 @@ def match(state, pattern_codes, pstart=0):
     # Optimization: Check string length. pattern_codes[3] contains the
     # minimum length for a string to possibly match.
     if pattern_codes[pstart] == OPCODE_INFO and pattern_codes[pstart+3] > 0:
+        # <INFO> <1=skip> <2=flags> <3=min>
         if state.end - state.string_position < pattern_codes[pstart+3]:
             return False
+        pstart += pattern_codes[pstart+1] + 1
     state.context_stack.append(MatchContext(state, pattern_codes, pstart))
     has_matched = MatchContext.UNDECIDED
     while len(state.context_stack) > 0:
