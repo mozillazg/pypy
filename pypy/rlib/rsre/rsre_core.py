@@ -190,7 +190,8 @@ def fast_search(state, pattern_codes):
     assert pattern_offset >= 0
     i = 0
     string_position = state.string_position
-    while string_position < state.end:
+    end = state.end
+    while string_position < end:
         while True:
             char_ord = state.get_char_ord(string_position)
             if char_ord != prefix[i]:
@@ -208,20 +209,20 @@ def fast_search(state, pattern_codes):
                     if flags & SRE_INFO_LITERAL:
                         return True # matched all of pure literal pattern
                     start = pattern_offset + 2 * prefix_skip
-                    if match(state, pattern_codes[start:]):
+                    if match(state, pattern_codes, start):
                         return True
                     i = pattern_codes[overlap_offset + i]
                 break
         string_position += 1
     return False
 
-def match(state, pattern_codes):
+def match(state, pattern_codes, pstart=0):
     # Optimization: Check string length. pattern_codes[3] contains the
     # minimum length for a string to possibly match.
-    if pattern_codes[0] == OPCODE_INFO and pattern_codes[3] > 0:
-        if state.end - state.string_position < pattern_codes[3]:
+    if pattern_codes[pstart] == OPCODE_INFO and pattern_codes[pstart+3] > 0:
+        if state.end - state.string_position < pattern_codes[pstart+3]:
             return False
-    state.context_stack.append(MatchContext(state, pattern_codes))
+    state.context_stack.append(MatchContext(state, pattern_codes, pstart))
     has_matched = MatchContext.UNDECIDED
     while len(state.context_stack) > 0:
         context = state.context_stack[-1]
