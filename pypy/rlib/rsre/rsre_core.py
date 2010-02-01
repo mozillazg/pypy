@@ -12,6 +12,7 @@ Core routines for regular expression matching and searching.
 from pypy.rlib.rsre import rsre_char
 from pypy.rlib.rsre.rsre_char import SRE_INFO_PREFIX, SRE_INFO_LITERAL
 from pypy.rlib.rsre.rsre_char import OPCODE_INFO, MAXREPEAT
+from pypy.rlib.unroll import unrolling_iterable
 
 #### Core classes
 
@@ -245,9 +246,11 @@ def dispatch_loop(context):
             opcode = context.resume_at_opcode
         else:
             opcode = context.peek_code()
-        try:
-            has_finished = opcode_dispatch_table[opcode](context)
-        except IndexError:
+        for i, function in opcode_dispatch_unroll:
+            if i == opcode and function is not None:
+                has_finished = function(context)
+                break
+        else:
             raise RuntimeError("Internal re error. Unknown opcode: %s" % opcode)
         if not has_finished:
             context.resume_at_opcode = opcode
@@ -836,19 +839,15 @@ opcode_dispatch_table = [
     None, #SUBPATTERN,
     op_min_repeat_one,
 ]
+opcode_dispatch_unroll = unrolling_iterable(enumerate(opcode_dispatch_table))
 
 ##### At dispatch
 
 def at_dispatch(atcode, context):
-    try:
-        function, negate = at_dispatch_table[atcode]
-    except IndexError:
-        return False
-    result = function(context)
-    if negate:
-        return not result
-    else:
-        return result
+    for i, function in at_dispatch_unroll:
+        if i == atcode:
+            return function(context)
+    return False
 
 def at_beginning(ctx):
     return ctx.at_beginning()
@@ -868,17 +867,27 @@ def at_end_string(ctx):
 def at_boundary(ctx):
     return ctx.at_boundary(rsre_char.is_word)
 
+def at_non_boundary(ctx):
+    return not at_boundary(ctx)
+
 def at_loc_boundary(ctx):
     return ctx.at_boundary(rsre_char.is_loc_word)
+
+def at_loc_non_boundary(ctx):
+    return not at_loc_boundary(ctx)
 
 def at_uni_boundary(ctx):
     return ctx.at_boundary(rsre_char.is_uni_word)
 
-# Maps opcodes by indices to (function, negate) tuples.
+def at_uni_non_boundary(ctx):
+    return not at_uni_boundary(ctx)
+
+# Maps opcodes by indices to functions
 at_dispatch_table = [
-    (at_beginning, False), (at_beginning_line, False), (at_beginning, False),
-    (at_boundary, False), (at_boundary, True),
-    (at_end, False), (at_end_line, False), (at_end_string, False),
-    (at_loc_boundary, False), (at_loc_boundary, True), (at_uni_boundary, False),
-    (at_uni_boundary, True)
+    at_beginning, at_beginning_line, at_beginning,
+    at_boundary, at_non_boundary,
+    at_end, at_end_line, at_end_string,
+    at_loc_boundary, at_loc_non_boundary,
+    at_uni_boundary, at_uni_non_boundary,
 ]
+at_dispatch_unroll = unrolling_iterable(enumerate(at_dispatch_table))
