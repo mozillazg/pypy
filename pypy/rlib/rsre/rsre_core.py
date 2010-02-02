@@ -20,8 +20,9 @@ class StateMixin(object):
 
     def reset(self):
         self.string_position = self.start
-        self.marks = []
+        self.marks = [0, 0, 0, 0]
         self.lastindex = -1
+        self.marks_count = 0
         # self.saved_marks is a list of ints that stores saved marks.
         # For example, if s1..sn, t1..tn are two sets of saved marks:
         #       [s1,..,sn,lastindex,x, t1,..,tn,lastindex,y, extra_unused...]
@@ -45,7 +46,7 @@ class StateMixin(object):
         for group in range(group_count):
             mark_index = 2 * group
             start = end = -1
-            if mark_index + 1 < len(self.marks):
+            if mark_index + 1 < self.marks_count:
                 start1 = self.marks[mark_index]
                 end1   = self.marks[mark_index + 1]
                 if start1 >= 0 and end1 >= 0:
@@ -59,13 +60,17 @@ class StateMixin(object):
         if mark_nr & 1:
             # This id marks the end of a group.
             self.lastindex = mark_nr / 2 + 1
-        while mark_nr >= len(self.marks):
-            self.marks.append(-1)
+        if mark_nr >= self.marks_count:
+            for i in range(self.marks_count, mark_nr):
+                self.marks[i] = -1
+            self.marks_count = mark_nr + 1
+            while mark_nr >= len(self.marks):
+                self.marks = self.marks + [0] * len(self.marks)
         self.marks[mark_nr] = position
 
     def get_marks(self, group_index):
         marks_index = 2 * group_index
-        if len(self.marks) > marks_index + 1:
+        if self.marks_count > marks_index + 1:
             return self.marks[marks_index], self.marks[marks_index + 1]
         else:
             return -1, -1
@@ -74,7 +79,7 @@ class StateMixin(object):
         # Create in saved_marks: [......, m1,..,mn,lastindex,p, ...........]
         #                                 ^p                    ^newsize
         p = self.saved_marks_top
-        n = len(self.marks)
+        n = self.marks_count
         assert p >= 0
         newsize = p + n + 2
         while len(self.saved_marks) < newsize:
@@ -95,9 +100,12 @@ class StateMixin(object):
         p1 = self.saved_marks_top - 2
         assert p1 >= 0
         p0 = self.saved_marks[p1+1]
-        assert 0 <= p0 <= p1
+        n = p1 - p0
+        assert p0 >= 0 and n >= 0
         self.lastindex = self.saved_marks[p1]
-        self.marks = self.saved_marks[p0:p1]
+        for i in range(n):
+            self.marks[i] = self.saved_marks[p0+i]
+        self.marks_count = n
         return p0
 
     def marks_pop_discard(self):
@@ -828,6 +836,7 @@ def count_repetitions(ctx, maxcount):
     for i, function in count_repetitions_unroll:
         if function is not None and code == i:
             count = function(ctx, real_maxcount)
+            break
     else:
         # This is a general solution, a bit hackisch, but works
         code_position = ctx.code_position
