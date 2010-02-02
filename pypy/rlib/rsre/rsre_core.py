@@ -791,27 +791,31 @@ def count_repetitions(ctx, maxcount):
     """Returns the number of repetitions of a single item, starting from the
     current string position. The code pointer is expected to point to a
     REPEAT_ONE operation (with the repeated 4 ahead)."""
-    count = 0
     real_maxcount = ctx.state.end - ctx.string_position
     if maxcount < real_maxcount and maxcount != MAXREPEAT:
         real_maxcount = maxcount
-    # XXX could special case every single character pattern here, as in C.
-    # This is a general solution, a bit hackisch, but works and should be
-    # efficient.
-    code_position = ctx.code_position
+    # First, special-cases for common single character patterns
     string_position = ctx.string_position
-    ctx.skip_code(4)
-    reset_position = ctx.code_position
-    while count < real_maxcount:
-        # this works because the single character pattern is followed by
-        # a success opcode
-        ctx.code_position = reset_position
-        opcode_dispatch_table[ctx.peek_code()](ctx)
-        if ctx.has_matched == ctx.NOT_MATCHED:
-            break
-        count += 1
-    ctx.has_matched = ctx.UNDECIDED
-    ctx.code_position = code_position
+    code = ctx.peek_code(4)
+    for i, function in count_repetitions_unroll:
+        if code == i and function is not None:
+            count = function(ctx, real_maxcount)
+    else:
+        # This is a general solution, a bit hackisch, but works
+        code_position = ctx.code_position
+        count = 0
+        ctx.skip_code(4)
+        reset_position = ctx.code_position
+        while count < real_maxcount:
+            # this works because the single character pattern is followed by
+            # a success opcode
+            ctx.code_position = reset_position
+            opcode_dispatch_table[code](ctx)
+            if ctx.has_matched == ctx.NOT_MATCHED:
+                break
+            count += 1
+        ctx.has_matched = ctx.UNDECIDED
+        ctx.code_position = code_position
     ctx.string_position = string_position
     return count
 
@@ -840,6 +844,91 @@ opcode_dispatch_table = [
     op_min_repeat_one,
 ]
 opcode_dispatch_unroll = unrolling_iterable(enumerate(opcode_dispatch_table))
+
+##### count_repetitions dispatch
+
+def general_cr_in(ctx, maxcount, ignore):
+    code_position = ctx.code_position
+    count = 0
+    while count < maxcount:
+        ctx.code_position = code_position
+        ctx.skip_code(6) # set op pointer to the set code
+        char_code = ctx.peek_char(count)
+        if ignore:
+            char_code = ctx.state.lower(char_code)
+        if not rsre_char.check_charset(char_code, ctx):
+            break
+        count += 1
+    ctx.code_position = code_position
+    return count
+general_cr_in._annspecialcase_ = 'specialize:arg(2)'
+
+def cr_in(ctx, maxcount):
+    return general_cr_in(ctx, maxcount, False)
+
+def cr_in_ignore(ctx, maxcount):
+    return general_cr_in(ctx, maxcount, True)
+
+def cr_any(ctx, maxcount):
+    count = 0
+    while count < maxcount:
+        if ctx.peek_char(count) == rsre_char.linebreak:
+            break
+        count += 1
+    return count
+
+def cr_any_all(ctx, maxcount):
+    return maxcount
+
+def general_cr_literal(ctx, maxcount, ignore, negate):
+    chr = ctx.peek_code(5)
+    count = 0
+    while count < maxcount:
+        char_code = ctx.peek_char(count)
+        if ignore:
+            char_code = ctx.state.lower(char_code)
+        if negate:
+            if char_code == chr:
+                break
+        else:
+            if char_code != chr:
+                break
+        count += 1
+    return count
+general_cr_literal._annspecialcase_ = 'specialize:arg(2,3)'
+
+def cr_literal(ctx, maxcount):
+    return general_cr_literal(ctx, maxcount, False, False)
+
+def cr_literal_ignore(ctx, maxcount):
+    return general_cr_literal(ctx, maxcount, True, False)
+
+def cr_not_literal(ctx, maxcount):
+    return general_cr_literal(ctx, maxcount, False, True)
+
+def cr_not_literal_ignore(ctx, maxcount):
+    return general_cr_literal(ctx, maxcount, True, True)
+
+count_repetitions_table = [
+    None, None,
+    cr_any, cr_any_all,
+    None, None,
+    None,
+    None,
+    None,
+    None,
+    None, None,
+    None, None, None,
+    cr_in, cr_in_ignore,
+    None, None,
+    cr_literal, cr_literal_ignore,
+    None,
+    None,
+    None,
+    cr_not_literal, cr_not_literal_ignore,
+]
+count_repetitions_unroll = unrolling_iterable(
+    enumerate(count_repetitions_table))
 
 ##### At dispatch
 
