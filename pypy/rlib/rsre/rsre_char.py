@@ -3,6 +3,7 @@ Character categories and charsets.
 """
 import sys
 from pypy.rlib.rsre._rsre_platform import tolower, isalnum
+from pypy.rlib.unroll import unrolling_iterable
 
 # Note: the unicode parts of this module require you to call
 # rsre.set_unicode_db() first, to select one of the modules
@@ -124,15 +125,15 @@ def is_uni_linebreak(code):
 #### Category dispatch
 
 def category_dispatch(category_code, char_code):
-    try:
-        function, negate = category_dispatch_table[category_code]
-    except IndexError:
-        return False
-    result = function(char_code)
-    if negate:
-        return not result
+    for i, (function, negate) in category_dispatch_unroll:
+        if category_code == i:
+            result = function(char_code)
+            if negate:
+                return not result
+            else:
+                return result
     else:
-        return result
+        return False
 
 # Maps opcodes by indices to (function, negate) tuples.
 category_dispatch_table = [
@@ -144,6 +145,8 @@ category_dispatch_table = [
     (is_uni_word, True), (is_uni_linebreak, False),
     (is_uni_linebreak, True)
 ]
+category_dispatch_unroll = unrolling_iterable(
+    enumerate(category_dispatch_table))
 
 ##### Charset evaluation
 
@@ -159,11 +162,12 @@ def check_charset(char_code, context):
     backup_code_position = context.code_position
     while result == SET_NOT_FINISHED:
         opcode = context.peek_code()
-        try:
-            function = set_dispatch_table[opcode]
-        except IndexError:
+        for i, function in set_dispatch_unroll:
+            if function is not None and opcode == i:
+                result = function(context, char_code)
+                break
+        else:
             return False
-        result = function(context, char_code)
     context.code_position = backup_code_position
     return result == SET_OK
 
@@ -254,3 +258,4 @@ set_dispatch_table = [
     None, None, None, None, set_literal, None, None, None, None,
     None, None, set_negate, set_range
 ]
+set_dispatch_unroll = unrolling_iterable(enumerate(set_dispatch_table))

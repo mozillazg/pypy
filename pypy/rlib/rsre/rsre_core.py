@@ -247,7 +247,7 @@ def dispatch_loop(context):
         else:
             opcode = context.peek_code()
         for i, function in opcode_dispatch_unroll:
-            if i == opcode and function is not None:
+            if function is not None and i == opcode:
                 has_finished = function(context)
                 break
         else:
@@ -798,7 +798,7 @@ def count_repetitions(ctx, maxcount):
     string_position = ctx.string_position
     code = ctx.peek_code(4)
     for i, function in count_repetitions_unroll:
-        if code == i and function is not None:
+        if function is not None and code == i:
             count = function(ctx, real_maxcount)
     else:
         # This is a general solution, a bit hackisch, but works
