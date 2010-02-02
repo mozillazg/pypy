@@ -22,7 +22,13 @@ class StateMixin(object):
         self.string_position = self.start
         self.marks = []
         self.lastindex = -1
-        self.marks_stack = []
+        # self.saved_marks is a list of ints that stores saved marks.
+        # For example, if s1..sn, t1..tn are two sets of saved marks:
+        #       [s1,..,sn,lastindex,x, t1,..,tn,lastindex,y, extra_unused...]
+        #        ^------------------'  ^------------------'
+        # with x and y saved indices to allow pops.
+        self.saved_marks = []
+        self.saved_marks_top = 0
         self.context_stack = []
         self.repeat = None
 
@@ -49,11 +55,12 @@ class StateMixin(object):
         return regs
 
     def set_mark(self, mark_nr, position):
+        assert mark_nr >= 0
         if mark_nr & 1:
             # This id marks the end of a group.
             self.lastindex = mark_nr / 2 + 1
-        if mark_nr >= len(self.marks):
-            self.marks.extend([-1] * (mark_nr - len(self.marks) + 1))
+        while mark_nr >= len(self.marks):
+            self.marks.append(-1)
         self.marks[mark_nr] = position
 
     def get_marks(self, group_index):
@@ -64,17 +71,38 @@ class StateMixin(object):
             return -1, -1
 
     def marks_push(self):
-        self.marks_stack.append((self.marks[:], self.lastindex))
+        # Create in saved_marks: [......, m1,..,mn,lastindex,p, ...........]
+        #                                 ^p                    ^newsize
+        p = self.saved_marks_top
+        n = len(self.marks)
+        assert p >= 0
+        newsize = p + n + 2
+        while len(self.saved_marks) < newsize:
+            self.saved_marks.append(-1)
+        for i in range(n):
+            self.saved_marks[p+i] = self.marks[i]
+        self.saved_marks[p+n] = self.lastindex
+        self.saved_marks[p+n+1] = p
+        self.saved_marks_top = newsize
 
     def marks_pop(self):
-        self.marks, self.lastindex = self.marks_stack.pop()
+        p0 = self.marks_pop_keep()
+        self.saved_marks_top = p0
 
     def marks_pop_keep(self):
-        marks, self.lastindex = self.marks_stack[-1]
-        self.marks = marks[:]
+        # Restore from saved_marks: [......, m1,..,mn,lastindex,p, .........]
+        #                                    ^p0      ^p1
+        p1 = self.saved_marks_top - 2
+        assert p1 >= 0
+        p0 = self.saved_marks[p1+1]
+        assert 0 <= p0 <= p1
+        self.lastindex = self.saved_marks[p1]
+        self.marks = self.saved_marks[p0:p1]
+        return p0
 
     def marks_pop_discard(self):
-        self.marks_stack.pop()
+        p0 = self.saved_marks[self.saved_marks_top-1]
+        self.saved_marks_top = p0
 
 
 class MatchContext(rsre_char.MatchContextBase):
