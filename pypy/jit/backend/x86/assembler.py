@@ -13,7 +13,7 @@ from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, lower_byte,\
      X86RegisterManager, X86XMMRegisterManager, get_ebp_ofs, FRAME_FIXED_SIZE,\
      FORCE_INDEX_OFS
 from pypy.rlib.objectmodel import we_are_translated, specialize
-from pypy.jit.backend.x86 import codebuf
+from pypy.jit.backend.x86 import codebuf, oprofile
 from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.x86.support import values_array
@@ -35,18 +35,43 @@ def align_stack_words(words):
 class MachineCodeBlockWrapper(object):
     MC_DEFAULT_SIZE = 1024*1024
 
-    def __init__(self, bigsize):
+    def __init__(self, bigsize, profile_agent=None):
         self.old_mcs = [] # keepalive
         self.bigsize = bigsize
-        self._mc = codebuf.MachineCodeBlock(bigsize)
+        self._mc = self._instantiate_mc()
+        self.function_name = None
+        self.profile_agent = profile_agent
+
+    def _instantiate_mc(self): # hook for testing
+        return codebuf.MachineCodeBlock(self.bigsize)
+
 
     def bytes_free(self):
-        return self._mc._size - self._mc._pos
+        return self._mc._size - self._mc.get_relative_pos()
+
+    def start_function(self, name):
+        self.function_name = name
+        self.start_pos = self._mc.get_relative_pos()
+
+    def end_function(self, done=True):
+        assert self.function_name is not None
+        size = self._mc.get_relative_pos() - self.start_pos
+        address = self.tell() - size
+        if self.profile_agent is not None:
+            self.profile_agent.native_code_written(self.function_name,
+                                                   address, size)
+        if done:
+            self.function_name = None
 
     def make_new_mc(self):
-        new_mc = codebuf.MachineCodeBlock(self.bigsize)
+        new_mc = self._instantiate_mc()
         debug_print('[new machine code block at', new_mc.tell(), ']')
         self._mc.JMP(rel32(new_mc.tell()))
+
+        if self.function_name is not None:
+            self.end_function(done=False)
+            self.start_pos = new_mc.get_relative_pos()
+
         self._mc.done()
         self.old_mcs.append(self._mc)
         self._mc = new_mc
@@ -69,7 +94,7 @@ def _new_method(name):
     return method
 
 for name in dir(codebuf.MachineCodeBlock):
-    if name.upper() == name:
+    if name.upper() == name or name == "writechr":
         setattr(MachineCodeBlockWrapper, name, _new_method(name))
 
 class Assembler386(object):
