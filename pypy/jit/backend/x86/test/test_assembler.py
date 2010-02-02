@@ -244,7 +244,7 @@ def do_failure_recovery_func(withfloats):
         # bits of the float were correctly saved and restored.
         assert assembler.fail_boxes_float.getitem(i) == expected_floats[i]
 
-class ProfileAgent(object):
+class FakeProfileAgent(object):
     def __init__(self):
         self.functions = []
 
