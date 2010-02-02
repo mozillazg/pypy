@@ -7,6 +7,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp import history
 from pypy.jit.backend.x86.assembler import Assembler386
 from pypy.jit.backend.x86.regalloc import FORCE_INDEX_OFS
+from pypy.jit.backend.x86.profagent import ProfileAgent
 from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
 
 class CPU386(AbstractLLCPU):
@@ -20,13 +21,15 @@ class CPU386(AbstractLLCPU):
                  gcdescr=None):
         AbstractLLCPU.__init__(self, rtyper, stats, opts,
                                translate_support_code, gcdescr)
-        profile_agent = None
+
+        profile_agent = ProfileAgent()
         if rtyper is not None:
             config = rtyper.annotator.translator.config
             if config.translation.jit_profiler == "oprofile":
                 from pypy.jit.backend.x86 import oprofile
                 profile_agent = oprofile.OProfileAgent()
-        self._profile_agent = profile_agent
+
+        self.profile_agent = profile_agent
 
     def setup(self):
         if self.opts is not None:
@@ -40,12 +43,10 @@ class CPU386(AbstractLLCPU):
         return self.assembler.leave_jitted_hook
 
     def setup_once(self):
-        if self._profile_agent is not None:
-            self._profile_agent.setup()
+        self.profile_agent.startup()
 
     def finish_once(self):
-        if self._profile_agent is not None:
-            self._profile_agent.shutdown()
+        self.profile_agent.shutdown()
 
     def compile_loop(self, inputargs, operations, looptoken):
         self.assembler.assemble_loop(inputargs, operations, looptoken)

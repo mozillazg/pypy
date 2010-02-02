@@ -8,5 +8,5 @@ class ProfileAgent(object):
     def shutdown(self):
         pass
     def native_code_written(self, name, address, size):
-        raise NotImplementedError
+        pass
 

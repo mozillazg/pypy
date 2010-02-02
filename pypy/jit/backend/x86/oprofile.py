@@ -3,6 +3,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rposix import get_errno
+from pypy.jit.backend.x86 import profagent
 
 class OProfileError(Exception):
     def __init__(self, errno, where):
@@ -39,28 +40,29 @@ else:
         rffi.INT,
         compilation_info=eci)
 
-def startup(cpu):
-    if not OPROFILE_AVAILABLE:
-        return
-    agent = op_open_agent()
-    if not agent:
-        cpu._oprofile_agent = rffi.cast(rffi.VOIDP, 0)
-        raise OProfileError(get_errno(), "startup")
-    cpu._oprofile_agent = agent
 
-def shutdown(cpu):
-    if not OPROFILE_AVAILABLE:
-        return
-    if cpu._oprofile_agent:
-        success = op_close_agent(cpu._oprofile_agent)
+class OProfileAgent(profagent.ProfileAgent):
+
+    def startup(self):
+        if not OPROFILE_AVAILABLE:
+            return
+        agent = op_open_agent()
+        if not agent:
+            raise OProfileError(get_errno(), "startup")
+        self.agent = agent
+
+    def shutdown(self):
+        if not OPROFILE_AVAILABLE:
+            return
+        success = op_close_agent(self.agent)
         if success != 0:
             raise OProfileError(get_errno(), "shutdown")
 
-def native_code_written(cpu, name, address, size):
-    assert size > 0
-    if not OPROFILE_AVAILABLE:
-        return
-    uaddress = rffi.cast(rffi.ULONG, address)
-    success = op_write_native_code(cpu._oprofile_agent, name, uaddress, rffi.cast(rffi.VOIDP, 0), size)
-    if success != 0:
-        raise OProfileError(get_errno(), "write")
+    def native_code_written(self, name, address, size):
+        assert size > 0
+        if not OPROFILE_AVAILABLE:
+            return
+        uaddress = rffi.cast(rffi.ULONG, address)
+        success = op_write_native_code(self.agent, name, uaddress, rffi.cast(rffi.VOIDP, 0), size)
+        if success != 0:
+            raise OProfileError(get_errno(), "write")
