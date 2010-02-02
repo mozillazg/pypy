@@ -156,7 +156,7 @@ class Assembler386(object):
             # done
             # we generate the loop body in 'mc'
             # 'mc2' is for guard recovery code
-            self.mc = MachineCodeBlockWrapper(self.mc_size)
+            self.mc = MachineCodeBlockWrapper(self.mc_size, self.cpu.profile_agent)
             self.mc2 = MachineCodeBlockWrapper(self.mc_size)
             self._build_failure_recovery(False)
             self._build_failure_recovery(True)
@@ -194,6 +194,8 @@ class Assembler386(object):
                _x86_param_depth
                _x86_arglocs
         """
+        funcname = self._find_debug_merge_point(operations)
+
         self.make_sure_mc_exists()
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         arglocs = regalloc.prepare_loop(inputargs, operations, looptoken)
@@ -201,6 +203,10 @@ class Assembler386(object):
         needed_mem = len(arglocs[0]) * 16 + 16
         if needed_mem >= self.mc.bytes_free():
             self.mc.make_new_mc()
+
+        # profile support
+        name = "Loop # %s: %s" % (looptoken.number, funcname)
+        self.mc.start_function(name)
         looptoken._x86_bootstrap_code = self.mc.tell()
         adr_stackadjust = self._assemble_bootstrap_code(inputargs, arglocs)
         curadr = self.mc.tell()
@@ -221,8 +227,12 @@ class Assembler386(object):
                                              frame_depth+param_depth)
         debug_print("Loop #", looptoken.number, "has address",
                     looptoken._x86_loop_code, "to", self.mc.tell())
+        self.mc.end_function()
+        
 
     def assemble_bridge(self, faildescr, inputargs, operations):
+        funcname = self._find_debug_merge_point(operations)
+
         self.make_sure_mc_exists()
         arglocs = self.rebuild_faillocs_from_descr(
             faildescr._x86_failure_recovery_bytecode)
@@ -233,6 +243,12 @@ class Assembler386(object):
         fail_depths = faildescr._x86_current_depths
         regalloc.prepare_bridge(fail_depths, inputargs, arglocs,
                                 operations)
+
+        # oprofile support
+        descr_number = self.cpu.get_fail_descr_number(faildescr)
+        name = "Bridge # %s: %s" % (descr_number, funcname)
+        self.mc.start_function(name)
+
         adr_bridge = self.mc.tell()
         adr_stackadjust = self._patchable_stackadjust()
         frame_depth, param_depth = self._assemble(regalloc, operations)
@@ -244,8 +260,16 @@ class Assembler386(object):
         # patch the jump from original guard
         self.patch_jump(faildescr, adr_bridge)
         debug_print("Bridge out of guard",
-                    self.cpu.get_fail_descr_number(faildescr),
+                    descr_number,
                     "has address", adr_bridge, "to", self.mc.tell())
+        self.mc.end_function()
+
+    def _find_debug_merge_point(self, operations):
+        for op in operations:
+            if op.opnum == rop.DEBUG_MERGE_POINT:
+                return op.args[0]._get_str()
+        return ""
+        
 
     def patch_jump(self, faildescr, adr_new_target):
         adr_jump_offset = faildescr._x86_adr_jump_offset

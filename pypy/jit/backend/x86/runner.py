@@ -20,6 +20,13 @@ class CPU386(AbstractLLCPU):
                  gcdescr=None):
         AbstractLLCPU.__init__(self, rtyper, stats, opts,
                                translate_support_code, gcdescr)
+        profile_agent = None
+        if rtyper is not None:
+            config = rtyper.annotator.translator.config
+            if config.translation.jit_profiler == "oprofile":
+                from pypy.jit.backend.x86 import oprofile
+                profile_agent = oprofile.OProfileAgent()
+        self._profile_agent = profile_agent
 
     def setup(self):
         if self.opts is not None:
@@ -33,7 +40,12 @@ class CPU386(AbstractLLCPU):
         return self.assembler.leave_jitted_hook
 
     def setup_once(self):
-        pass
+        if self._profile_agent is not None:
+            self._profile_agent.setup()
+
+    def finish_once(self):
+        if self._profile_agent is not None:
+            self._profile_agent.shutdown()
 
     def compile_loop(self, inputargs, operations, looptoken):
         self.assembler.assemble_loop(inputargs, operations, looptoken)
