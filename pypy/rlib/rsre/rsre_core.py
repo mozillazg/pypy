@@ -461,7 +461,6 @@ def op_repeat_one(ctx):
             ctx.has_matched = ctx.MATCHED
             return True
         ctx.state.marks_push()
-        # XXX literal optimization missing here
 
     # Case 2: Repetition is resumed (aka backtracked)
     else:
@@ -474,14 +473,34 @@ def op_repeat_one(ctx):
         ctx.skip_char(-1)
         count -= 1
         ctx.state.marks_pop_keep()
-        
+
     # Initialize the actual backtracking
     if count >= mincount:
-        ctx.state.string_position = ctx.string_position
-        ctx.push_new_context(ctx.peek_code(1) + 1)
-        ctx.backup_value(mincount)
-        ctx.backup_value(count)
-        return False
+        # <optimization_only>
+        ok = True
+        nextidx = ctx.peek_code(1)
+        if ctx.peek_code(nextidx + 1) == 19: # 19 == OPCODES["literal"]
+            # tail starts with a literal. skip positions where
+            # the rest of the pattern cannot possibly match
+            chr = ctx.peek_code(nextidx + 2)
+            if ctx.at_end():
+                ctx.skip_char(-1)
+                count -= 1
+                ok = count >= mincount
+            while ok:
+                if ctx.peek_char() == chr:
+                    break
+                ctx.skip_char(-1)
+                count -= 1
+                ok = count >= mincount
+        # </optimization_only>
+
+        if ok:
+            ctx.state.string_position = ctx.string_position
+            ctx.push_new_context(ctx.peek_code(1) + 1)
+            ctx.backup_value(mincount)
+            ctx.backup_value(count)
+            return False
 
     # Backtracking failed
     ctx.state.marks_pop_discard()
