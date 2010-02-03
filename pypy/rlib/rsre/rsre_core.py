@@ -61,11 +61,12 @@ class StateMixin(object):
             # This id marks the end of a group.
             self.lastindex = mark_nr / 2 + 1
         if mark_nr >= self.marks_count:
-            for i in range(self.marks_count, mark_nr):
-                self.marks[i] = -1
+            count = self.marks_count
             self.marks_count = mark_nr + 1
             while mark_nr >= len(self.marks):
                 self.marks = self.marks + [0] * len(self.marks)
+            for i in range(count, mark_nr):
+                self.marks[i] = -1
         self.marks[mark_nr] = position
 
     def get_marks(self, group_index):
