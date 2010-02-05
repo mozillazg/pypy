@@ -12,7 +12,7 @@ from pypy.jit.metainterp import codewriter, executor
 from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import BLACKHOLED_OPS, EmptyProfiler
 from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS, ABORT_ESCAPE
-from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE
+from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE, ABORT_NOASM
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
@@ -678,6 +678,8 @@ class MIFrame(object):
             # that assembler that we call is still correct
             greenargs = varargs[1:num_green_args + 1]
             self.verify_green_args(greenargs)
+        else:
+            self.metainterp.switch_to_blackhole(ABORT_NOASM)
         res = self.do_residual_call(varargs, descr=calldescr, exc=True)
         if not self.metainterp.is_blackholing() and token is not None:
             # XXX fix the call position, <UGLY!>
