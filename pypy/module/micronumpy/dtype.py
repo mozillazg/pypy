@@ -38,3 +38,11 @@ def iterable_type(space, w_xs):
             atype = iterable_type(space, xs[i])
         result_type = result_mapping(space, (result_type, atype))
     return result_type
+
+def create_factory(dict_filler):
+    result_factory = {}
+    def result(space, t):
+        if not result_factory:
+            result_factory.update(dict_filler(space))
+        return result_factory[t]
+    return result

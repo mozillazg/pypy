@@ -12,6 +12,7 @@ from pypy.module.micronumpy.array import validate_index
 
 from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
+from pypy.module.micronumpy.dtype import create_factory
 
 def compute_pos(space, indexes, dim):
     current = 1
@@ -248,18 +249,4 @@ def create_mdarray(data_type, unwrap, coerce):
 MultiDimIntArray = create_mdarray(int, unwrap_int, coerce_int)
 MultiDimFloatArray = create_mdarray(float, unwrap_float, coerce_float)
 
-class ResultFactory(object):
-    def __init__(self, space):
-        self.space = space
-
-        self.types = {
-            space.w_int:   MultiDimIntArray,
-            space.w_float: MultiDimFloatArray,
-                     }
-
-result_factory = None
-def mdresult(space, t):
-    global result_factory
-    if result_factory is None:
-        result_factory = ResultFactory(space)
-    return result_factory.types[t]
+mdresult = create_factory(lambda space: {space.w_int: MultiDimIntArray, space.w_float: MultiDimFloatArray})
