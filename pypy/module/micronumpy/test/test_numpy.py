@@ -191,7 +191,7 @@ class AppTestMultiDim(object):
         from numpy import array
         ar = array([range(i*3, i*3+3) for i in range(3)])
         assert len(ar) == 3
-        skip("mdarray.shape currently is a list instead of a tuple as it should be")
+        #skip("mdarray.shape currently is a list instead of a tuple as it should be")
         assert ar.shape == (3, 3)
         for i in range(3):
             for j in range(3):
