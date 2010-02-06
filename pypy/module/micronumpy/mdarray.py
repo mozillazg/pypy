@@ -93,7 +93,7 @@ def descr_dtype(space, self):
     return self.dtype
 
 def descr_shape(space, self):
-    return space.wrap(self.shape)
+    return space.newtuple([space.wrap(dim) for dim in self.shape])
 
 def create_mdarray(data_type, unwrap, coerce):
     class MultiDimArray(BaseMultiDimArray):
