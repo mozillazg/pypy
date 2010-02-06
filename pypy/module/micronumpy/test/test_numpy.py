@@ -131,6 +131,22 @@ class AppTestSDArray(object):
 class AppTestMultiDim(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('micronumpy',))
+        cls.w_gen_array = cls.space.appexec([],
+        """():
+           def gen_array(shape, data_type=int, start=0):
+               if len(shape) == 1:
+                   return [data_type(x) for x in xrange(start, start+shape[0])]
+               else:
+                   stride = 1
+                   for dim in shape[1:]:
+                       stride *= dim
+                   result = []
+                   for i in xrange(shape[0]):
+                       result.append(gen_array(shape[1:], data_type, start + i*stride))
+                   return result
+           return gen_array
+           """)
+                                
 
     def test_multidim(self):
         from numpy import zeros
@@ -139,7 +155,26 @@ class AppTestMultiDim(object):
         raises(IndexError, ar.__getitem__, (3, 0))
         assert ar[-2, 1] == 0
 
-    def test_multidim_getset(self):
+    def test_construction(self):
+        from numpy import array
+        gen_array = self.gen_array
+
+        #3x3
+        ar = array(gen_array((3,3)))
+        assert len(ar) == 3
+
+        skip("Non-square matrices throw IndexError")
+        #2x3
+        ar = array(gen_array((2,3)))
+        assert len(ar) == 2
+        assert ar.shape == (2, 3)
+
+        #3x2
+        ar = array(gen_array((3,2)))
+        assert len(ar) == 3
+        assert ar.shape == (3, 2)
+
+    def test_getset(self):
         from numpy import zeros
         ar = zeros((3, 3, 3), dtype=int)
         ar[1, 2, 1] = 3
@@ -156,13 +191,16 @@ class AppTestMultiDim(object):
         from numpy import array
         ar = array([range(i*3, i*3+3) for i in range(3)])
         assert len(ar) == 3
+        skip("mdarray.shape currently is a list instead of a tuple as it should be")
+        assert ar.shape == (3, 3)
         for i in range(3):
             for j in range(3):
                 assert ar[i, j] == i*3+j
     
     def test_various_slices(self):
         from numpy import array
-        ar = array([range(i*3, i*3+3) for i in range(3)])
+        gen_array = self.gen_array
+        ar = array(gen_array((3,3)))
         s1 = ar[0]
         assert s1[1]==1
         s2 = ar[1:3]
