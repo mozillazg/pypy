@@ -16,6 +16,8 @@ from pypy.module.micronumpy.dtype import\
                             unwrap_float32, coerce_float32, float32
 from pypy.module.micronumpy.dtype import result_mapping, iterable_type
 
+from pypy.module.micronumpy.dtype import create_factory
+
 #TODO: merge unwrap_spec decorator
 # from pypy.interpreter.gateway import unwrap_spec
 
@@ -279,16 +281,4 @@ FloatArray = create_sdarray(float, unwrap_float, coerce_float)
 Float32Array = create_sdarray(float32, unwrap_float32, coerce_float32)
 GenericArray = None
 
-class ResultFactory(object):
-    def __init__(self, space):
-        self.types = {
-            space.w_int:   IntArray,
-            space.w_float: FloatArray,
-                     }
-
-result_factory = None
-def sdresult(space, t):
-    global result_factory
-    if result_factory is None:
-        result_factory = ResultFactory(space)
-    return result_factory.types[t]
+sdresult = create_factory(lambda space: {space.w_int: IntArray, space.w_float: FloatArray})
