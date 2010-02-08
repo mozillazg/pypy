@@ -666,6 +666,26 @@ class RecursiveTests:
         self.meta_interp(portal, [2], inline=True)
         self.check_history(call_assembler=1)
 
+    def test_directly_call_assembler_abort_calltarget_not_present(self):
+        driver = JitDriver(greens = ['codeno'], reds = ['i'],
+                           get_printable_location = lambda codeno : str(codeno),
+                           can_inline = lambda codeno : False)
+
+        def portal(codeno):
+            i = 0
+            while i < 10:
+                driver.can_enter_jit(codeno = codeno, i = i)
+                driver.jit_merge_point(codeno = codeno, i = i)
+                if codeno == 2:
+                    if i >= 2:
+                        portal(1)
+                else:
+                    return
+                i += 1
+
+        self.meta_interp(portal, [2], inline=True)
+        self.check_history(call_assembler=1)
+
     def test_directly_call_assembler_return(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
                            get_printable_location = lambda codeno : str(codeno),
