@@ -784,6 +784,9 @@ class Optimizer(object):
         # forcing it now does not have catastrophic effects.
         vrefinfo = self.metainterp_sd.virtualref_info
         assert op.args[1].nonnull()
+        # - write code to check that op.args[1] is not null
+        op1 = ResOperation(rop.ASSERT, [op.args[1]], None)
+        self.emit_operation(op1)
         # - set 'forced' to point to the real object
         op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
                           descr = vrefinfo.descr_forced)
@@ -792,6 +795,11 @@ class Optimizer(object):
         args = [op.args[0], ConstInt(0)]
         op1 = ResOperation(rop.SETFIELD_GC, args, None,
                       descr = vrefinfo.descr_virtual_token)
+        self.optimize_SETFIELD_GC(op1)
+        # - set debug stuff
+        args = [op.args[0], ConstInt(120)]
+        op1 = ResOperation(rop.SETFIELD_GC, args, None,
+                      descr = vrefinfo.descr_debug_from)
         self.optimize_SETFIELD_GC(op1)
         # Note that in some cases the virtual in op.args[1] has been forced
         # already.  This is fine.  In that case, and *if* a residual
