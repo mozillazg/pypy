@@ -176,6 +176,48 @@ class RecursiveTests:
         else:
             py.test.fail("DID NOT RAISE")
 
+    def test_inline_function_with_loop(self):
+        from pypy.rpython.annlowlevel import hlstr
+        def p(code, pc, restart_pos):
+            code = hlstr(code)
+            return "%s %d %s" % (code, pc, code[pc])
+        def c(code, pc, restart_pos):
+            return "l" not in hlstr(code)
+        myjitdriver = JitDriver(greens=['code', 'pc', 'restart_pos'], reds=['n', 'total'],
+                                get_printable_location=p, can_inline=c)
+        def f(code, n):
+            pc = 0
+            total = 0
+            restart_pos = 0
+            while pc < len(code):
+
+                myjitdriver.jit_merge_point(n=n, code=code, pc=pc, total=total, restart_pos=restart_pos)
+                op = code[pc]
+                if op == "-":
+                    n -= 1
+                elif op == "c":
+                    total += f("---i---l", n)
+                elif op == "i":
+                    if n > 40:
+                        return n
+                    restart_pos = pc + 1
+                elif op == "l":
+                    if n > 0:
+                        pc = restart_pos
+                        myjitdriver.can_enter_jit(n=n, code=code, pc=pc, total=total, restart_pos=restart_pos)
+                        continue
+                else:
+                    assert 0
+                pc += 1
+                total += 1
+            return total
+        def main(n):
+            return f("c-l", n)
+        print main(100)
+        res = self.meta_interp(main, [100], inline=True)
+        assert res == main(100)
+        self.check_tree_loop_count(2)
+
     def test_guard_failure_in_inlined_function(self):
         from pypy.rpython.annlowlevel import hlstr
         def p(code, pc):
