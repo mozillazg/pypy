@@ -1257,10 +1257,10 @@ class BytecodeMaker(object):
             loopinvariant = getattr(func, "_jit_loop_invariant_", False)
             all_promoted_args = getattr(func,
                                "_pure_function_with_all_promoted_args_", False)
-            if pure and not all_promoted_args:
-                effectinfo = calldescr.get_extra_info()
-                assert (effectinfo is not None and
-                        not effectinfo.forces_virtual_or_virtualizable)
+            #if pure and not all_promoted_args:
+            #    effectinfo = calldescr.get_extra_info()
+            #    assert (effectinfo is not None and
+            #            not effectinfo.forces_virtual_or_virtualizable)
         try:
             canraise = self.codewriter.raise_analyzer.can_raise(op)
         except lltype.DelayedPointer:
