@@ -1,6 +1,6 @@
 from pypy.objspace.std.dictmultiobject import IteratorImplementation
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject, _is_sane_hash
-from pypy.rlib.jit import purefunction_promote, hint, we_are_jitted, unroll_safe
+from pypy.rlib.jit import purefunction_promote, we_are_jitted, unroll_safe
 from pypy.rlib.rweakref import RWeakValueDictionary
 
 NUM_DIGITS = 4
@@ -32,7 +32,7 @@ class SharedStructure(object):
         self.other_structs.set(added_key, new_structure)
         return new_structure
 
-    @purefunction_promote
+    @purefunction
     def lookup_position(self, key):
         return self.keys.get(key, -1)
 
