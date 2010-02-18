@@ -31,7 +31,7 @@ class ModuleDictImplementation(W_DictMultiObject):
             return self._getcell_makenew(key)
         return self.content.get(key, None)
 
-    @jit.purefunction
+    @jit.purefunction_promote
     def _getcell_makenew(self, key):
         res = self.content.get(key, None)
         if res is not None:
