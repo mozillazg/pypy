@@ -224,6 +224,8 @@ class GCBase(object):
             self._debug_pending.delete()
 
     def _debug_record(self, obj):
+        tid = self.header(obj).tid
+        ll_assert(0 < tid <= 0x7FFFFFF, "not a GC pointer!!!!!")
         seen = self._debug_seen
         if not seen.contains(obj):
             seen.add(obj)
