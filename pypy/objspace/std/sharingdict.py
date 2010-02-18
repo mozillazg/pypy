@@ -37,7 +37,7 @@ class SharedStructure(object):
     def lookup_position(self, key):
         return self.keys.get(key, -1)
 
-    @purefunction_promote
+    @purefunction
     def get_next_structure(self, key):
         new_structure = self.other_structs.get(key)
         if new_structure is None:
