@@ -589,7 +589,7 @@ class Assembler386(object):
     genop_virtual_ref = genop_same_as
 
     def genop_assert(self, op, arglocs, resloc):
-        mc = self._start_block()
+        mc = self.mc._mc
         mc.CMP(arglocs[0], imm8(0))
         mc.write(constlistofchars('\x75\x00'))             # JNE later
         jne_location = mc.get_relative_pos()
@@ -598,7 +598,6 @@ class Assembler386(object):
         offset = mc.get_relative_pos() - jne_location
         assert 0 < offset <= 127
         mc.overwrite(jne_location-1, [chr(offset)])
-        self._stop_block()
 
     def genop_int_mod(self, op, arglocs, resloc):
         self.mc.CDQ()
