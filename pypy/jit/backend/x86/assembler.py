@@ -588,6 +588,18 @@ class Assembler386(object):
     genop_cast_ptr_to_int = genop_same_as
     genop_virtual_ref = genop_same_as
 
+    def genop_assert(self, op, arglocs, resloc):
+        mc = self._start_block()
+        mc.CMP(arglocs[0], imm8(0))
+        mc.write(constlistofchars('\x75\x00'))             # JNE later
+        jne_location = mc.get_relative_pos()
+        mc.UD2()
+        # patch the JNE above
+        offset = mc.get_relative_pos() - jne_location
+        assert 0 < offset <= 127
+        mc.overwrite(jne_location-1, [chr(offset)])
+        self._stop_block()
+
     def genop_int_mod(self, op, arglocs, resloc):
         self.mc.CDQ()
         self.mc.IDIV(ecx)

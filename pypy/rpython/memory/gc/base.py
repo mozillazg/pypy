@@ -43,7 +43,7 @@ class GCBase(object):
     # collection.  It is automatically set to True by test_gc.py.  The
     # checking logic is translatable, so the flag can be set to True
     # here before translation.
-    DEBUG = False
+    DEBUG = True
 
     def set_query_functions(self, is_varsize, has_gcptr_in_varsize,
                             is_gcarrayofgcptr,
@@ -225,6 +225,8 @@ class GCBase(object):
             self._debug_pending.delete()
 
     def _debug_record(self, obj):
+        tid = self.header(obj).tid
+        ll_assert(0 < tid <= 0x7FFFFFF, "not a GC pointer!!!!!")
         seen = self._debug_seen
         if not seen.contains(obj):
             seen.add(obj)

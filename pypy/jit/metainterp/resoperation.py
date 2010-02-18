@@ -222,6 +222,7 @@ _oplist = [
                             #        => result          (for mallocs)
     'DEBUG_MERGE_POINT/1',      # debugging only
     'VIRTUAL_REF_FINISH/2',
+    'ASSERT/1',
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     'CALL',
