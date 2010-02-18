@@ -465,19 +465,21 @@ class FunctionCodeGenerator(object):
     def generic_get(self, op, sourceexpr):
         T = self.lltypemap(op.result)
         newvalue = self.expr(op.result, special_case_void=False)
-        result = ['%s = %s;' % (newvalue, sourceexpr)]
-        result = '\n'.join(result)
+        result = '%s = %s;' % (newvalue, sourceexpr)
         if T is Void:
             result = '/* %s */' % result
+        elif isinstance(T, Ptr) and T.TO._gckind == 'gc':
+            result = '%s RPyValidPtr(%s);' % (result, newvalue)
         return result
 
     def generic_set(self, op, targetexpr):
         newvalue = self.expr(op.args[-1], special_case_void=False)
-        result = ['%s = %s;' % (targetexpr, newvalue)]
+        result = '%s = %s;' % (targetexpr, newvalue)
         T = self.lltypemap(op.args[-1])
-        result = '\n'.join(result)
         if T is Void:
             result = '/* %s */' % result
+        elif isinstance(T, Ptr) and T.TO._gckind == 'gc':
+            result = 'RPyValidPtr(%s); %s' % (newvalue, result)
         return result
 
     def OP_GETFIELD(self, op, ampersand=''):

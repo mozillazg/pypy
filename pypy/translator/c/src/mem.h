@@ -95,7 +95,7 @@ static __declspec(noinline) void pypy_asm_stack_bottom() { }
 
 #endif
 
-#define OP_RAW_FREE(p, r) PyObject_Free(p); COUNT_FREE;
+#define OP_RAW_FREE(p, r) *(int*)p = -0x22222223; PyObject_Free(p);   /* 0xdddddddd */
 
 #define OP_RAW_MEMCLEAR(p, size, r) memset((void*)p, 0, size)
 
