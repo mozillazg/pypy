@@ -74,6 +74,7 @@ void RPyAssertFailed(const char* filename, long lineno,
  * attackers.
  */
 #  define RPyCHECK(x)           ((x) || RPyAbort())
+#  define RPyValidPtr(x)  ((!(x))||(unsigned int)(((*(unsigned int*)(x))-1)<0x7FFFFFF)||RPyAbort())
 #  define RPyField(ptr, name)   ((RPyCHECK(ptr), (ptr))->name)
 #  define RPyItem(array, index)                                             \
      ((RPyCHECK((index) >= 0 && (index) < (array)->length),                 \
@@ -96,6 +97,7 @@ int RPyAbort(void) {
 #endif
 
 #else
+#  define RPyValidPtr(x)                     /* nothing */
 #  define RPyField(ptr, name)                ((ptr)->name)
 #  define RPyItem(array, index)              ((array)->items[index])
 #  define RPyFxItem(ptr, index, fixedsize)   ((ptr)[index])
