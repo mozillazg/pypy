@@ -865,6 +865,11 @@ class RegAlloc(object):
         else:
             self.consider_int_neg(op)
 
+    def consider_assert(self, op):
+        argloc = self.loc(op.args[0])
+        self.Perform(op, [argloc], None)
+        self.rm.possibly_free_var(op.args[0])
+
     def consider_same_as(self, op):
         argloc = self.loc(op.args[0])
         self.possibly_free_var(op.args[0])

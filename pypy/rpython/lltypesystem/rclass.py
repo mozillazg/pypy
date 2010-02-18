@@ -62,6 +62,7 @@ OBJECT = GcStruct('object', ('typeptr', CLASSTYPE),
                            'typeptr': True})
 OBJECTPTR = Ptr(OBJECT)
 OBJECT_VTABLE.become(Struct('object_vtable',
+                            ('debug_minusfortytwo', Signed),
                             #('parenttypeptr', CLASSTYPE),
                             ('subclassrange_min', Signed),
                             ('subclassrange_max', Signed),
@@ -184,6 +185,7 @@ class ClassRepr(AbstractClassRepr):
         given subclass."""
         if self.classdef is None:
             # initialize the 'subclassrange_*' and 'name' fields
+            vtable.debug_minusfortytwo = -42
             if rsubcls.classdef is not None:
                 #vtable.parenttypeptr = rsubcls.rbase.getvtable()
                 vtable.subclassrange_min = rsubcls.classdef.minid
