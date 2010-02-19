@@ -1390,6 +1390,34 @@ class Assembler386(object):
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
         # use 'mc._mc' directly instead of 'mc', to avoid
         # bad surprizes if the code buffer is mostly full
+
+        # <tmp>
+        loc_value = arglocs[4]
+        mc = self._start_block()
+        mc.PUSH(eax)
+        mc.MOV(eax, loc_value)
+        mc.TEST(eax, eax)
+        mc.write(constlistofchars('\x74\x00'))             # JZ ok
+        jz_location = mc.get_relative_pos()
+        mc.MOV(eax, mem(eax))
+        mc.DEC(eax)
+        mc.CMP(eax, imm(0x7FFFFFF))
+        mc.write(constlistofchars('\x72\x00'))             # JB ok
+        jb_location = mc.get_relative_pos()
+        mc.UD2()
+        # patch the JZ above
+        offset = mc.get_relative_pos() - jz_location
+        assert 0 < offset <= 127
+        mc.overwrite(jz_location-1, [chr(offset)])
+        # patch the JB above
+        offset = mc.get_relative_pos() - jb_location
+        assert 0 < offset <= 127
+        mc.overwrite(jb_location-1, [chr(offset)])
+        #
+        mc.POP(eax)
+        self._stop_block()
+        # </tmp>
+
         loc_cond = arglocs[0]
         loc_mask = arglocs[1]
         mc = self._start_block()
