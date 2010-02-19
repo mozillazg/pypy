@@ -29,7 +29,6 @@ def purefunction_promote(promote_args='all'):
     def decorator(func):
         import inspect
         purefunction(func)
-        func._pure_function_with_all_promoted_args_ = True
         args, varargs, varkw, defaults = inspect.getargspec(func)
         args = ["v%s" % (i, ) for i in range(len(args))]
         assert varargs is None and varkw is None

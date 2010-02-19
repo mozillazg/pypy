@@ -33,11 +33,11 @@ class SharedStructure(object):
         self.other_structs.set(added_key, new_structure)
         return new_structure
 
-    @purefunction
+    @purefunction_promote(0)
     def lookup_position(self, key):
         return self.keys.get(key, -1)
 
-    @purefunction
+    @purefunction_promote(0)
     def get_next_structure(self, key):
         new_structure = self.other_structs.get(key)
         if new_structure is None:
@@ -46,7 +46,7 @@ class SharedStructure(object):
         self._size_estimate += new_structure.size_estimate()
         return new_structure
 
-    @purefunction_promote
+    @purefunction_promote()
     def size_estimate(self):
         return self._size_estimate >> NUM_DIGITS
 
