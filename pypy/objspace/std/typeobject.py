@@ -156,7 +156,7 @@ class W_TypeObject(W_Object):
     def has_object_getattribute(w_self):
         return w_self.getattribute_if_not_from_object() is None
 
-    @purefunction_promote
+    @purefunction_promote()
     def _pure_version_tag(w_self):
         return w_self._version_tag
 
@@ -660,7 +660,7 @@ def call__Type(space, w_type, __args__):
 def _issubtype(w_type1, w_type2):
     return w_type2 in w_type1.mro_w
 
-@purefunction_promote
+@purefunction_promote()
 def _pure_issubtype(w_type1, w_type2, version_tag1, version_tag2):
     return _issubtype(w_type1, w_type2)
 
