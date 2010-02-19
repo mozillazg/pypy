@@ -242,7 +242,7 @@ class W_TypeObject(W_Object):
         space = w_self.space
         w_self = hint(w_self, promote=True)
         assert space.config.objspace.std.withmethodcache
-        version_tag = w_self.version_tag()
+        version_tag = hint(w_self.version_tag(), promote=True)
         if version_tag is None:
             tup = w_self._lookup_where(name)
             return tup
