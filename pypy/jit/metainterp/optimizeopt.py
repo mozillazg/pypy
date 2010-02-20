@@ -803,6 +803,9 @@ class Optimizer(object):
         op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
                           descr = vrefinfo.descr_forced)
         self.optimize_SETFIELD_GC(op1)
+        op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
+                          descr = vrefinfo.descr_debug_setforced)
+        self.optimize_SETFIELD_GC(op1)
         # - set 'virtual_token' to TOKEN_NONE
         args = [op.args[0], ConstInt(vrefinfo.TOKEN_NONE)]
         op1 = ResOperation(rop.SETFIELD_GC, args, None,
