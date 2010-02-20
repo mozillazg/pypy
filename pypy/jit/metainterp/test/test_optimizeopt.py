@@ -2509,6 +2509,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         expected = """
         [p1]
         i0 = force_token()
+        assert(p1)
         jump(p1)
         """
         self.optimize_loop(ops, 'Not', expected)
@@ -2528,8 +2529,10 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         setfield_gc(p2, i0, descr=virtualtokendescr)
         setfield_gc(p2, 5, descr=virtualrefindexdescr)
         escape(p2)
+        assert(p1)
         setfield_gc(p2, p1, descr=virtualforceddescr)
-        setfield_gc(p2, 0, descr=virtualtokendescr)
+        setfield_gc(p2, -2, descr=virtualtokendescr)
+        setfield_gc(p2, 120, descr=virtualdebugfrom)
         jump(p1)
         """
         # XXX we should optimize a bit more the case of a nonvirtual.
@@ -2570,8 +2573,10 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         p1b = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1b, 252, descr=valuedescr)
         setfield_gc(p1, p1b, descr=nextdescr)
+        #assert(p1) -- virtual up to right here
         setfield_gc(p2, p1, descr=virtualforceddescr)
-        setfield_gc(p2, 0, descr=virtualtokendescr)
+        setfield_gc(p2, -2, descr=virtualtokendescr)
+        setfield_gc(p2, 120, descr=virtualdebugfrom)
         #
         jump(p0, i1)
         """
@@ -2612,8 +2617,10 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         p1b = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1b, i1, descr=valuedescr)
         setfield_gc(p1, p1b, descr=nextdescr)
+        #assert(p1) -- virtual up to right here
         setfield_gc(p2, p1, descr=virtualforceddescr)
-        setfield_gc(p2, 0, descr=virtualtokendescr)
+        setfield_gc(p2, -2, descr=virtualtokendescr)
+        setfield_gc(p2, 120, descr=virtualdebugfrom)
         #
         jump(p0, i1)
         """
