@@ -418,7 +418,7 @@ class GcLLDescr_framework(GcLLDescription):
                                             0, size, True, False, False)
             except MemoryError:
                 fatalerror("out of memory (from JITted code)")
-                return lltype.nullptr(llmemory.GCREF.TO)
+                return r_ulonglong(0)
             res = rffi.cast(lltype.Signed, gcref)
             nurs_free = llop1.gc_adr_of_nursery_free(llmemory.Address).signed[0]
             return r_ulonglong(nurs_free) << 32 | r_ulonglong(r_uint(res))
