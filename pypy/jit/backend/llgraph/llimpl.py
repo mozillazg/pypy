@@ -156,6 +156,7 @@ TYPES = {
     'guard_not_forced': ((), None),
     'virtual_ref'     : (('ref', 'int'), 'ref'),
     'virtual_ref_finish': (('ref', 'ref'), None),
+    'assert'          : (('int',), None),
     #'getitem'         : (('void', 'ref', 'int'), 'int'),
     #'setitem'         : (('void', 'ref', 'int', 'int'), None),
     #'newlist'         : (('void', 'varargs'), 'ref'),
@@ -1336,6 +1337,9 @@ def do_strsetitem(_, string, index, newvalue):
 def do_unicodesetitem(_, string, index, newvalue):
     uni = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), string)
     uni.chars[index] = unichr(newvalue)
+
+def do_assert(_, condition):
+    assert condition
 
 # ---------- call ----------
 
