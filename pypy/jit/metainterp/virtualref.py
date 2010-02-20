@@ -107,7 +107,6 @@ class VirtualRefInfo:
             assert vref.virtual_token == self.TOKEN_TRACING_RESCALL
             vref.virtual_token = self.TOKEN_NONE
             vref.debug_from = 102
-            vref.debug_setforced = vref.forced
             return False
         else:
             # marker "modified during residual call" set.
@@ -123,7 +122,6 @@ class VirtualRefInfo:
         vref.virtual_token = self.TOKEN_NONE
         vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
         vref.debug_from = 103
-        vref.debug_setforced = vref.forced
 
     def continue_tracing(self, gcref, real_object):
         if not self.is_virtual_ref(gcref):
@@ -134,7 +132,6 @@ class VirtualRefInfo:
         vref.virtual_token = self.TOKEN_NONE
         vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
         vref.debug_from = 104
-        vref.debug_setforced = vref.forced
 
     # ____________________________________________________________
 
@@ -173,6 +170,5 @@ class VirtualRefInfo:
         else:
             assert vref.forced
             vref.debug_from = 112
-        vref.debug_setforced = vref.forced
         return vref.forced
     force_virtual._dont_inline_ = True
