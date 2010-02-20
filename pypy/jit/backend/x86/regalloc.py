@@ -665,8 +665,7 @@ class RegAlloc(object):
         # See remember_young_pointer() in rpython/memory/gc/generation.py.
         for v, reg in self.rm.reg_bindings.items():
             if ((reg is eax or reg is ecx or reg is edx)
-                and self.rm.stays_alive(v)
-                and reg not in arglocs[3:]):
+                and self.rm.stays_alive(v)):
                 arglocs.append(reg)
         self.PerformDiscard(op, arglocs)
         self.rm.possibly_free_vars(op.args)
