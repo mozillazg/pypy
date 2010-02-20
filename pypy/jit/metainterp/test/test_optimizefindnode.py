@@ -126,6 +126,7 @@ class LLtypeMixin(object):
     virtualtokendescr = vrefinfo.descr_virtual_token
     virtualrefindexdescr = vrefinfo.descr_virtualref_index
     virtualforceddescr = vrefinfo.descr_forced
+    virtualdebugfrom = vrefinfo.descr_debug_from
     jit_virtual_ref_vtable = vrefinfo.jit_virtual_ref_vtable
     jvr_vtable_adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)
 
