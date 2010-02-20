@@ -237,6 +237,9 @@ class AbstractCPU(object):
     def do_call_may_force(self, args, calldescr):
         return self.do_call(args, calldescr)
 
+    def do_assert(self, xbox):
+        assert xbox.nonnull()
+
     def force(self, force_token):
         raise NotImplementedError
 

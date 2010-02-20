@@ -13,7 +13,9 @@ class VirtualRefInfo:
             ('super', rclass.OBJECT),
             ('virtual_token', lltype.Signed),
             ('virtualref_index', lltype.Signed),
-            ('forced', rclass.OBJECTPTR))
+            ('forced', rclass.OBJECTPTR),
+            ('debug_from', lltype.Signed),
+            ('debug_setforced', rclass.OBJECTPTR))
         self.jit_virtual_ref_vtable = lltype.malloc(rclass.OBJECT_VTABLE,
                                                     zero=True, flavor='raw')
         self.jit_virtual_ref_vtable.name = rclass.alloc_array_name(
@@ -27,6 +29,10 @@ class VirtualRefInfo:
         self.descr_virtualref_index = fielddescrof(self.JIT_VIRTUAL_REF,
                                                    'virtualref_index')
         self.descr_forced = fielddescrof(self.JIT_VIRTUAL_REF, 'forced')
+        self.descr_debug_from = fielddescrof(self.JIT_VIRTUAL_REF,
+                                             'debug_from')
+        self.descr_debug_setforced = fielddescrof(self.JIT_VIRTUAL_REF,
+                                                  'debug_setforced')
 
     def _freeze_(self):
         return True
@@ -73,6 +79,7 @@ class VirtualRefInfo:
         p.typeptr = self.jit_virtual_ref_vtable
         vref.virtual_token = self.TOKEN_NONE
         vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
+        vref.debug_from = 100
         return lltype.cast_opaque_ptr(llmemory.GCREF, vref)
 
     def is_virtual_ref(self, gcref):
@@ -87,6 +94,7 @@ class VirtualRefInfo:
         vref = lltype.cast_opaque_ptr(lltype.Ptr(self.JIT_VIRTUAL_REF), gcref)
         assert vref.virtual_token == self.TOKEN_NONE
         vref.virtual_token = self.TOKEN_TRACING_RESCALL
+        vref.debug_from = 101
 
     def tracing_after_residual_call(self, gcref):
         if not self.is_virtual_ref(gcref):
@@ -98,6 +106,8 @@ class VirtualRefInfo:
             # set to TOKEN_TRACING_RESCALL and clear it.
             assert vref.virtual_token == self.TOKEN_TRACING_RESCALL
             vref.virtual_token = self.TOKEN_NONE
+            vref.debug_from = 102
+            vref.debug_setforced = vref.forced
             return False
         else:
             # marker "modified during residual call" set.
@@ -112,6 +122,8 @@ class VirtualRefInfo:
                 vref.virtual_token != self.TOKEN_TRACING_RESCALL)
         vref.virtual_token = self.TOKEN_NONE
         vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
+        vref.debug_from = 103
+        vref.debug_setforced = vref.forced
 
     def continue_tracing(self, gcref, real_object):
         if not self.is_virtual_ref(gcref):
@@ -121,6 +133,8 @@ class VirtualRefInfo:
         assert vref.virtual_token != self.TOKEN_TRACING_RESCALL
         vref.virtual_token = self.TOKEN_NONE
         vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
+        vref.debug_from = 104
+        vref.debug_setforced = vref.forced
 
     # ____________________________________________________________
 
@@ -148,13 +162,17 @@ class VirtualRefInfo:
                 # "virtual" escapes.
                 assert vref.forced
                 vref.virtual_token = self.TOKEN_NONE
+                vref.debug_from = 110
             else:
                 assert not vref.forced
                 from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
                 ResumeGuardForcedDescr.force_now(self.cpu, token)
                 assert vref.virtual_token == self.TOKEN_NONE
                 assert vref.forced
+                vref.debug_from = 111
         else:
             assert vref.forced
+            vref.debug_from = 112
+        vref.debug_setforced = vref.forced
         return vref.forced
     force_virtual._dont_inline_ = True
