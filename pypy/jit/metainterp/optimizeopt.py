@@ -812,7 +812,7 @@ class Optimizer(object):
                       descr = vrefinfo.descr_virtual_token)
         self.optimize_SETFIELD_GC(op1)
         # - set debug stuff
-        args = [op.args[0], ConstInt(120)]
+        args = [op.args[0], ConstInt(121)]
         op1 = ResOperation(rop.SETFIELD_GC, args, None,
                       descr = vrefinfo.descr_debug_from)
         self.optimize_SETFIELD_GC(op1)
