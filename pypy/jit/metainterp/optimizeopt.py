@@ -795,16 +795,9 @@ class Optimizer(object):
         # forcing it now does not have catastrophic effects.
         vrefinfo = self.metainterp_sd.virtualref_info
         assert op.args[1].nonnull()
-        # - write code to check that op.args[1] is not null
-        if not self.getvalue(op.args[1]).is_virtual():
-            op1 = ResOperation(rop.ASSERT, [op.args[1]], None)
-            self.emit_operation(op1)
         # - set 'forced' to point to the real object
         op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
                           descr = vrefinfo.descr_forced)
-        self.optimize_SETFIELD_GC(op1)
-        op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
-                          descr = vrefinfo.descr_debug_setforced)
         self.optimize_SETFIELD_GC(op1)
         # - set 'virtual_token' to TOKEN_NONE
         args = [op.args[0], ConstInt(vrefinfo.TOKEN_NONE)]
@@ -1040,7 +1033,8 @@ class HeapOpOptimizer(object):
                 effectinfo = None
             else:
                 effectinfo = op.descr.get_extra_info()
-            if effectinfo is not None:
+            if (effectinfo is not None and
+                not effectinfo.forces_virtual_or_virtualizable):
                 # XXX we can get the wrong complexity here, if the lists
                 # XXX stored on effectinfo are large
                 for fielddescr in effectinfo.readonly_descrs_fields:
