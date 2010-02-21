@@ -1029,12 +1029,11 @@ class HeapOpOptimizer(object):
         if (opnum == rop.CALL or
             opnum == rop.CALL_MAY_FORCE or
             opnum == rop.CALL_ASSEMBLER):
-            if opnum == rop.CALL_ASSEMBLER:
+            if opnum != rop.CALL:
                 effectinfo = None
             else:
                 effectinfo = op.descr.get_extra_info()
-            if (effectinfo is not None and
-                not effectinfo.forces_virtual_or_virtualizable):
+            if effectinfo is not None:
                 # XXX we can get the wrong complexity here, if the lists
                 # XXX stored on effectinfo are large
                 for fielddescr in effectinfo.readonly_descrs_fields:
