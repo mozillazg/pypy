@@ -2,7 +2,6 @@
 
 This is transformed to become a JIT by code elsewhere: pypy/jit/*
 """
-
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.jit import JitDriver, hint, we_are_jitted
@@ -19,7 +18,6 @@ PyFrame._virtualizable2_ = ['last_instr', 'pycode',
                             'valuestackdepth', 'valuestack_w[*]',
                             'fastlocals_w[*]',
                             'last_exception',
-                            'lastblock',
                             ]
 
 JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
