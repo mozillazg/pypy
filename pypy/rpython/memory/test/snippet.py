@@ -161,6 +161,38 @@ class SemiSpaceGCTestDefines:
         res = self.run('from_objwithfinalizer_to_youngobj')
         assert res == 1
 
+
+    def define_prebuilt_becomes_unreachable(cls):
+        import gc
+        class A0:
+            pass
+        class B:
+            def __del__(self):
+                a1.count += 1
+        a1 = A0()
+        a1.count = 0
+        a1.next = A0()
+        a1.next.count = 999
+
+        def g():
+            a1.next.b = B()
+        g._dont_inline_ = True
+
+        def f():
+            g()
+            a1.next = None    # the old a1.next, although prebuilt,
+                              # becomes unreachable here
+            gc.collect()
+            gc.collect()
+            return a1.count
+
+        return f
+
+    def test_prebuilt_becomes_unreachable(self):
+        res = self.run('prebuilt_becomes_unreachable')
+        assert res == 1
+
+
 class SemiSpaceGCTests(SemiSpaceGCTestDefines):
     # xxx messy
 
@@ -169,8 +201,7 @@ class SemiSpaceGCTests(SemiSpaceGCTestDefines):
             func = self.definestr_finalizer_order()
             res = self.interpret(func, [-1])
             return ''.join(res.chars) 
-        elif name == 'from_objwithfinalizer_to_youngobj':
-            func = self.define_from_objwithfinalizer_to_youngobj()
-            return self.interpret(func, [])
         else:
-            assert 0, "don't know what to do with that"
+            meth = getattr(self, 'define_' + name)
+            func = meth()
+            return self.interpret(func, [])
