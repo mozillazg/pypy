@@ -182,17 +182,23 @@ class TypeLayoutBuilder(object):
         self.lltype2vtable = lltype2vtable
         self.make_type_info_group()
         self.id_of_type = {}      # {LLTYPE: type_id}
-        self.seen_roots = {}
-        # the following are lists of addresses of gc pointers living inside the
-        # prebuilt structures.  It should list all the locations that could
-        # possibly point to a GC heap object.
-        # this lists contains pointers in GcStructs and GcArrays
-        self.addresses_of_static_ptrs = []
-        # this lists contains pointers in raw Structs and Arrays
-        self.addresses_of_static_ptrs_in_nongc = []
-        # for debugging, the following list collects all the prebuilt
-        # GcStructs and GcArrays
-        self.all_prebuilt_gc = []
+        # This is a list of the GC objects that must be kept alive in all
+        # cases.  It lists all prebuilt GcStructs and GcArrays that are
+        # directly referenced from the code, and those that are referenced
+        # from an immutable GC pointer in some raw Struct or Array.  It
+        # does not list prebuilt GC objects that are only referenced from
+        # other prebuilt GC objects.  This is the basic 'root set'.
+        self.root_prebuilt_gc = []
+        # This is a list of all the locations in raw Structs and Arrays
+        # of type GC pointer that could possibly be modified.  They are
+        # locations that might point to either a prebuilt or a heap GC
+        # object.
+        self.addresses_of_gc_ptrs_in_nongc = []
+        #
+        self.seen_roots = {}         # set of objects in root_prebuilt_gc
+        self.seen_gcs = {}           # set of all gc objects seen so far
+        self.seen_nongcs = {}        # set of all non-gc objects seen so far
+        #
         self.finalizer_funcptrs = {}
         self.offsettable_cache = {}
 
@@ -306,34 +312,71 @@ class TypeLayoutBuilder(object):
     def initialize_gc_query_function(self, gc):
         return GCData(self.type_info_group).set_query_functions(gc)
 
-    def consider_constant(self, TYPE, value, gc):
-        if value is not lltype.top_container(value):
-            return
-        if id(value) in self.seen_roots:
-            return
-        self.seen_roots[id(value)] = True
-
-        if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
+    def consider_constant_gcobj(self, TYPE, value, gc, add_root):
+        """This is supposed to be called for every Struct, Array, GcStruct
+        or GcArray.
+        GcArray.  'add_root' is a flag that tells if the gc object must
+        be recorded in self.root_prebuilt_gc or not.
+        """
+        assert value._parentstructure() is None
+        assert isinstance(TYPE, (lltype.GcStruct, lltype.GcArray))
+        if id(value) not in self.seen_gcs:
+            self.seen_gcs[id(value)] = value
+            # initialize the gc header of the object
             typeid = self.get_type_id(TYPE)
             hdr = gc.gcheaderbuilder.new_header(value)
             adr = llmemory.cast_ptr_to_adr(hdr)
             gc.init_gc_object_immortal(adr, typeid)
-            self.all_prebuilt_gc.append(value)
+        #
+        if add_root:
+            # if the GC object is referenced from "outside"
+            self.add_root(value)
 
-        # The following collects the addresses of all the fields that have
-        # a GC Pointer type, inside the current prebuilt object.  All such
-        # fields are potential roots: unless the structure is immutable,
-        # they could be changed later to point to GC heap objects.
+    def consider_constant_nongcobj(self, TYPE, value):
+        """This is supposed to be called once for every raw Struct
+        or Array.
+
+        elif TYPE._kind != "gc":
+            # we have a raw structure or array
+            if id(value) not in self.seen_nongcs:
+                self.seen_nongcs[id(value)] = value
+                adr = llmemory.cast_ptr_to_adr(value._as_ptr())
+                for a, immutable in enum_gc_pointers_inside(value, adr):
+                    if immutable:
+                        # an immutable GC ref: find out what it points to
+                        ptr = a.ptr
+                        if ptr:
+                            ......
+                        ...
+            
+        #
+        # do the rest only once, even if we are called multiple times
+        if id(value) in self.seen_constants:
+            return
+        self.seen_constants[id(value)] = value
+        #
+        if is_gc_object:
+        else:
+            # for non-gc objects: find their mutable gc references
+            ........
+        for a in mutable_gc_pointers_inside(value, adr):
+            
+            ...
+
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
-            if gc.prebuilt_gc_objects_are_static_roots or gc.DEBUG:
+            if gc.prebuilt_gc_objects_are_static_roots:
                 appendto = self.addresses_of_static_ptrs
             else:
                 return
         else:
             appendto = self.addresses_of_static_ptrs_in_nongc
-        for a in gc_pointers_inside(value, adr, mutable_only=True):
             appendto.append(a)
+
+    def add_root(self, value):
+        if id(value) not in self.seen_roots:
+            self.seen_roots[id(value)] = True
+            self.root_prebuilt_gc.append(value)
 
 # ____________________________________________________________
 #
@@ -366,35 +409,34 @@ def offsets_to_gc_pointers(TYPE):
         offsets.append(0)
     return offsets
 
-def gc_pointers_inside(v, adr, mutable_only=False):
+def enum_gc_pointers_inside(v, adr):
+    """Enumerate the GC pointers from the constant struct or array 'v'.
+    For each of them, yields (addr-of-field, mutable-flag).
+    """
     t = lltype.typeOf(v)
     if isinstance(t, lltype.Struct):
-        skip = ()
-        if mutable_only:
-            if t._hints.get('immutable'):
-                return
-            if 'immutable_fields' in t._hints:
-                skip = t._hints['immutable_fields'].fields
+        fully_immutable = t._hints.get('immutable', False)
+        if 'immutable_fields' in t._hints:
+            immutable_fields = t._hints['immutable_fields'].fields
+        else:
+            immutable_fields = ()
         for n, t2 in t._flds.iteritems():
             if isinstance(t2, lltype.Ptr) and t2.TO._gckind == 'gc':
-                if n not in skip:
-                    yield adr + llmemory.offsetof(t, n)
+                yield (adr + llmemory.offsetof(t, n),
+                       fully_immutable or n in immutable_fields)
             elif isinstance(t2, (lltype.Array, lltype.Struct)):
-                for a in gc_pointers_inside(getattr(v, n),
-                                            adr + llmemory.offsetof(t, n),
-                                            mutable_only):
+                for a in enum_gc_pointers_inside(getattr(v, n),
+                                            adr + llmemory.offsetof(t, n)):
                     yield a
     elif isinstance(t, lltype.Array):
-        if mutable_only and t._hints.get('immutable'):
-            return
+        fully_immutable = t._hints.get('immutable', False)
         if isinstance(t.OF, lltype.Ptr) and t.OF.TO._gckind == 'gc':
             for i in range(len(v.items)):
-                yield adr + llmemory.itemoffsetof(t, i)
+                yield (adr + llmemory.itemoffsetof(t, i), fully_immutable)
         elif isinstance(t.OF, lltype.Struct):
             for i in range(len(v.items)):
-                for a in gc_pointers_inside(v.items[i],
-                                            adr + llmemory.itemoffsetof(t, i),
-                                            mutable_only):
+                for a in enum_gc_pointers_inside(v.items[i],
+                                            adr + llmemory.itemoffsetof(t, i)):
                     yield a
 
 def zero_gc_pointers(p):
