@@ -1,7 +1,7 @@
 import sys
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC
 from pypy.rpython.memory.gc.semispace import GCFLAG_EXTERNAL, GCFLAG_FORWARDED
-from pypy.rpython.memory.gc.semispace import GCFLAG_HASHTAKEN
+from pypy.rpython.memory.gc.semispace import GC_HASH_TAKEN_ADDR
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
@@ -234,7 +234,7 @@ class GenerationGC(SemiSpaceGC):
     GCFLAGS_FOR_NEW_YOUNG_OBJECTS = 0   # NO_YOUNG_PTRS never set on young objs
     GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS = (GCFLAG_EXTERNAL | GCFLAG_FORWARDED |
                                         GCFLAG_NO_YOUNG_PTRS |
-                                        GCFLAG_HASHTAKEN)
+                                        GC_HASH_TAKEN_ADDR)
 
     # ____________________________________________________________
     # Support code for full collections
@@ -533,6 +533,9 @@ class GenerationGC(SemiSpaceGC):
 
     def _id_grow_older(self, obj, id, ignored):
         self.objects_with_id.setitem(obj, id)
+
+    def _compute_current_nursery_hash(self, obj):
+        return 0      # XXX temporary!
 
     def heap_stats_walk_roots(self):
         self.last_generation_root_objects.foreach(
