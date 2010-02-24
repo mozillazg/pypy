@@ -2664,6 +2664,34 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
             where p1b is a node_vtable, valuedescr=i1
             ''')
 
+    def test_vref_virtual_after_finish(self):
+        self.make_fail_descr()
+        ops = """
+        [i1]
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        p2 = virtual_ref(p1, 7)
+        escape(p2)
+        virtual_ref_finish(p2, p1)
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced() []
+        jump(i1)
+        """
+        expected = """
+        [i1]
+        i3 = force_token()
+        p2 = new_with_vtable(ConstClass(jit_virtual_ref_vtable))
+        setfield_gc(p2, i3, descr=virtualtokendescr)
+        setfield_gc(p2, 7, descr=virtualrefindexdescr)
+        escape(p2)
+        p1 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p2, p1, descr=virtualforceddescr)
+        setfield_gc(p2, -2, descr=virtualtokendescr)
+        call_may_force(i1, descr=mayforcevirtdescr)
+        guard_not_forced() []
+        jump(i1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
     def test_vref_nonvirtual_and_lazy_setfield(self):
         self.make_fail_descr()
         ops = """
