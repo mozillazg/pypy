@@ -1033,6 +1033,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
                 hashes.append(compute_identity_hash(obj))
             unique = {}
             for i in range(len(objects)):
+                assert compute_identity_hash(objects[i]) == hashes[i]
                 unique[hashes[i]] = None
             return len(unique)
         return fn
