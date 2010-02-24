@@ -577,6 +577,11 @@ class FrameworkGCTransformer(GCTransformer):
             self.pop_roots(hop, livevars)
         else:
             self.default(hop)
+            if hop.spaceop.opname == "direct_call":
+                self.mark_call_cannotcollect(hop, hop.spaceop.args[0])
+
+    def mark_call_cannotcollect(self, hop, name):
+        pass
 
     gct_indirect_call = gct_direct_call
 

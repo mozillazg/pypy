@@ -38,6 +38,7 @@ class FunctionGcRootTracker(object):
         self.filetag = filetag
         # a "stack bottom" function is either main() or a callback from C code
         self.is_stack_bottom = False
+        self.cannot_collect = {}
 
     def computegcmaptable(self, verbose=0):
         self.findlabels()
@@ -45,6 +46,7 @@ class FunctionGcRootTracker(object):
         try:
             if not self.list_call_insns():
                 return []
+            self.find_noncollecting_calls()
             self.findframesize()
             self.fixlocalvars()
             self.trackgcroots()
@@ -65,6 +67,8 @@ class FunctionGcRootTracker(object):
         for insn in self.list_call_insns():
             if not hasattr(insn, 'framesize'):
                 continue     # calls that never end up reaching a RET
+            if insn.name in self.cannot_collect:
+                continue
             if self.is_stack_bottom:
                 retaddr = LOC_NOWHERE     # end marker for asmgcroot.py
             elif self.uses_frame_pointer:
@@ -81,10 +85,11 @@ class FunctionGcRootTracker(object):
                 if isinstance(localvar, LocalVar):
                     loc = localvar.getlocation(insn.framesize,
                                                self.uses_frame_pointer)
-                else:
-                    assert localvar in self.REG2LOC, "%s: %s" % (self.funcname,
-                                                                 localvar)
+                elif localvar in self.REG2LOC:
                     loc = self.REG2LOC[localvar]
+                else:
+                    assert False, "%s: %s" % (self.funcname,
+                                              localvar)
                 assert isinstance(loc, int)
                 if tag is None:
                     gcroots.append(loc)
@@ -115,6 +120,17 @@ class FunctionGcRootTracker(object):
             if label:
                 assert label not in self.labels, "duplicate label: %s" % label
                 self.labels[label] = Label(label, lineno)
+
+    def find_noncollecting_calls(self):
+        for line in self.lines:
+            match = self.r_gcnocollect_marker.search(line)
+            if match:
+                name = match.group(1)
+                if name in ('pypy_g_walk_roots', 'pypy_asm_stackwalk'):
+                    continue
+                if self.format in ('darwin', 'mingw32', 'msvc'):
+                    name = '_' + name
+                self.cannot_collect[name] = True
 
     def append_instruction(self, insn):
         # Add the instruction to the list, and link it to the previous one.
@@ -641,7 +657,7 @@ class FunctionGcRootTracker(object):
 
         if match is None:
             assert self.r_unaryinsn_star.match(line)   # indirect call
-            return [InsnCall(self.currentlineno),
+            return [InsnCall('<indirect>', self.currentlineno),
                     InsnSetLocal(self.EAX)]      # the result is there
 
         target = match.group(1)
@@ -691,7 +707,7 @@ class FunctionGcRootTracker(object):
                 assert  lineoffset in (1,2)
                 return [InsnStackAdjust(-4)]
 
-        insns = [InsnCall(self.currentlineno),
+        insns = [InsnCall(target, self.currentlineno),
                  InsnSetLocal(self.EAX)]      # the result is there
         if self.format in ('mingw32', 'msvc'):
             # handle __stdcall calling convention:
@@ -737,6 +753,7 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|\t\.align|"+LABEL)
 
     r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
+    r_gcnocollect_marker = re.compile(r"\t/[*] GC_NOCOLLECT ("+OPERAND+") [*]/")
     r_bottom_marker = re.compile(r"\t/[*] GC_STACK_BOTTOM [*]/")
 
     FUNCTIONS_NOT_RETURNING = {
@@ -813,6 +830,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
 
     r_gcroot_marker = re.compile(r"$1") # never matches
     r_gcroot_marker_var = re.compile(r"DWORD PTR .+_constant_always_one_.+pypy_asm_gcroot")
+    r_gcnocollect_marker = re.compile(r"\spypy_asm_gc_nocollect\(("+OPERAND+")\);")
     r_bottom_marker = re.compile(r"; .+\tpypy_asm_stack_bottom\(\);")
 
     FUNCTIONS_NOT_RETURNING = {

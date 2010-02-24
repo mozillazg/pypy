@@ -164,8 +164,8 @@ class InsnRet(InsnStop):
             return dict(zip(self.registers, self.registers))
 
 class InsnCall(Insn):
-    _args_ = ['lineno', 'gcroots']
-    def __init__(self, lineno):
+    _args_ = ['lineno', 'name', 'gcroots']
+    def __init__(self, name, lineno):
         # 'gcroots' is a dict built by side-effect during the call to
         # FunctionGcRootTracker.trackgcroots().  Its meaning is as
         # follows: the keys are the locations that contain gc roots
@@ -189,6 +189,7 @@ class InsnCall(Insn):
         # %ebx from there in the prologue and epilogue).
         self.gcroots = {}
         self.lineno = lineno
+        self.name = name
 
     def source_of(self, localvar, tag):
         tag1 = self.gcroots.setdefault(localvar, tag)
