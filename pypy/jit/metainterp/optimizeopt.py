@@ -794,7 +794,7 @@ class Optimizer(object):
         # typically a PyPy PyFrame, and now is the end of its execution, so
         # forcing it now does not have catastrophic effects.
         vrefinfo = self.metainterp_sd.virtualref_info
-        assert op.args[1].nonnull()
+        # op.args[1] should really never point to null here
         # - set 'forced' to point to the real object
         op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
                           descr = vrefinfo.descr_forced)
@@ -1028,8 +1028,7 @@ class HeapOpOptimizer(object):
                 effectinfo = None
             else:
                 effectinfo = op.descr.get_extra_info()
-            if (effectinfo is not None and
-                not effectinfo.forces_virtual_or_virtualizable):
+            if effectinfo is not None:
                 # XXX we can get the wrong complexity here, if the lists
                 # XXX stored on effectinfo are large
                 for fielddescr in effectinfo.readonly_descrs_fields:
