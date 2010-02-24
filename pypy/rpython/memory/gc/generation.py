@@ -551,7 +551,7 @@ class GenerationGC(SemiSpaceGC):
         self.objects_with_id.setitem(obj, id)
 
     def _compute_current_nursery_hash(self, obj):
-        return llmemory.cast_adr_to_int(obj) + self.nursery_hash_base
+        return intmask(llmemory.cast_adr_to_int(obj) + self.nursery_hash_base)
 
     def heap_stats_walk_roots(self):
         self.last_generation_root_objects.foreach(
