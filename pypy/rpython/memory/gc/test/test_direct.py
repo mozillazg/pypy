@@ -421,6 +421,9 @@ class TestHybridGC(TestGenerationGC):
         assert calls == [('semispace_collect', True)]
         calls = []
 
+    def test_identityhash(self):
+        py.test.skip("does not support raw_mallocs(sizeof(S)+sizeof(hash))")
+
 
 class TestMarkCompactGC(DirectGCTest):
     from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
