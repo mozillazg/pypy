@@ -29,7 +29,7 @@ GCFLAG_HASHMASK = _GCFLAG_HASH_BASE * 0x3   # also consumes 'first_gcflag << 4'
 GC_HASH_NOTTAKEN   = _GCFLAG_HASH_BASE * 0x0
 #   - someone asked, and we gave the address of the object
 GC_HASH_TAKEN_ADDR = _GCFLAG_HASH_BASE * 0x1
-#   - someone asked, and we gave the address xor'ed with nursery_hash_base
+#   - someone asked, and we gave the address plus 'nursery_hash_base'
 GC_HASH_TAKEN_NURS = _GCFLAG_HASH_BASE * 0x2
 #   - we have our own extra field to store the hash
 GC_HASH_HASFIELD   = _GCFLAG_HASH_BASE * 0x3
