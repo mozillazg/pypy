@@ -1044,6 +1044,9 @@ class HeapOpOptimizer(object):
                         del self.cached_arrayitems[arraydescr]
                     except KeyError:
                         pass
+                if effectinfo.forces_virtual_or_virtualizable:
+                    vrefinfo = self.optimizer.metainterp_sd.virtualref_info
+                    self.force_lazy_setfield(vrefinfo.descr_forced)
                 return
             self.force_all_lazy_setfields()
         elif op.is_final() or (not we_are_translated() and
