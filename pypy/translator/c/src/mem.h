@@ -34,6 +34,9 @@ extern long pypy_asm_stackwalk(void*);
                     "0" (p), "m" (__gcnoreorderhack)); \
                _r; })
 
+#define pypy_asm_gc_nocollect(f) asm volatile ("/* GC_NOCOLLECT " #f " */" \
+                                               : : )
+
 #define pypy_asm_keepalive(v)  asm volatile ("/* keepalive %0 */" : : \
                                              "g" (v))
 
@@ -57,6 +60,8 @@ pypy_asm_gcroot(void* _r1)
 	_ReadWriteBarrier();
     return _r1;
 }
+
+#define pypy_asm_gc_nocollect(f) "/* GC_NOCOLLECT " #f " */"
 
 #define pypy_asm_keepalive(v)    __asm { }
 static __declspec(noinline) void pypy_asm_stack_bottom() { }
