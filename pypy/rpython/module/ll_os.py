@@ -21,9 +21,10 @@ from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem.rstr import mallocstr
 from pypy.rpython.lltypesystem.llmemory import sizeof,\
-     itemoffsetof, cast_ptr_to_adr, cast_adr_to_ptr, offsetof
+     itemoffsetof, cast_ptr_to_adr, cast_adr_to_ptr, offsetof, raw_malloc_usage
+from pypy.rpython.lltypesystem import llmemory
 from pypy.rpython.lltypesystem.rstr import STR
-from pypy.rpython.annlowlevel import llstr
+from pypy.rpython.annlowlevel import llstr, hlstr
 from pypy.rlib import rgc
 from pypy.rlib.objectmodel import keepalive_until_here
 
@@ -732,13 +733,14 @@ class RegisterOs(BaseLazyRegistering):
             if count < 0:
                 raise OSError(errno.EINVAL, None)
             buf = lltype.malloc(STR, count)
+            addr = llmemory.cast_ptr_to_adr(buf) + offset
             # <NO GC ZONE>
-            void_buf = rffi.cast(rffi.VOIDP, buf + offset)
+            void_buf = rffi.cast(rffi.VOIDP, addr)
             got = rffi.cast(lltype.Signed, os_read(fd, void_buf, count))
             # </NO GC ZONE>
             if got < 0:
                 raise OSError(rposix.get_errno(), "os_read failed")
-            return rgc.ll_shrink_array(buf, got)
+            return hlstr(rgc.ll_shrink_array(buf, got))
             #raw_buf, gc_buf = rffi.alloc_buffer(count)
             #try:
             #    void_buf = rffi.cast(rffi.VOIDP, raw_buf)
@@ -764,10 +766,10 @@ class RegisterOs(BaseLazyRegistering):
 
         def os_write_llimpl(fd, data):
             count = len(data)
-            ll_data = llstr(data) + offset
+            ll_data = llmemory.cast_ptr_to_adr(llstr(data)) + offset
             written = rffi.cast(lltype.Signed, os_write(
                 rffi.cast(rffi.INT, fd),
-                rffi.cast(rffi.VOIDP, ll_data) + offset,
+                rffi.cast(rffi.VOIDP, ll_data),
                 rffi.cast(rffi.SIZE_T, count)))
             if written < 0:
                 raise OSError(rposix.get_errno(), "os_write failed")
