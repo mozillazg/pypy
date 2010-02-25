@@ -1243,6 +1243,18 @@ class MetaInterpStaticData(object):
 # ____________________________________________________________
 
 class MetaInterpGlobalData(object):
+    """This object contains the JIT's global, mutable data.
+
+    Warning: for any data that you put here, think that there might be
+    multiple MetaInterps accessing it at the same time.  As usual we are
+    safe from corruption thanks to the GIL, but keep in mind that any
+    MetaInterp might modify any of these fields while another MetaInterp
+    is, say, currently in a residual call to a function.  Multiple
+    MetaInterps occur either with threads or, in single-threaded cases,
+    with recursion.  This is a case that is not well-tested, so please
+    be careful :-(  But thankfully this is one of the very few places
+    where multiple concurrent MetaInterps may interact with each other.
+    """
     def __init__(self, staticdata):
         self.initialized = False
         self.indirectcall_dict = None
