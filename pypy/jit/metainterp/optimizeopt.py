@@ -1047,6 +1047,8 @@ class HeapOpOptimizer(object):
                 if effectinfo.forces_virtual_or_virtualizable:
                     vrefinfo = self.optimizer.metainterp_sd.virtualref_info
                     self.force_lazy_setfield(vrefinfo.descr_forced)
+                    # ^^^ we only need to force this field; the other fields
+                    # of virtualref_info and virtualizable_info are not ptrs.
                 return
             self.force_all_lazy_setfields()
         elif op.is_final() or (not we_are_translated() and
