@@ -40,7 +40,12 @@ class CollectAnalyzer(graphanalyze.BoolGraphAnalyzer):
                 return True
         return graphanalyze.GraphAnalyzer.analyze_direct_call(self, graph,
                                                               seen)
-    
+    def analyze_external_call(self, op, seen=None):
+        funcobj = op.args[0].value._obj
+        if funcobj._name == 'pypy_asm_stackwalk':
+            return True
+        return graphanalyze.GraphAnalyzer.analyze_external_call(self, op,
+                                                                seen)
     def analyze_simple_operation(self, op):
         if op.opname in ('malloc', 'malloc_varsize'):
             flags = op.args[1].value
