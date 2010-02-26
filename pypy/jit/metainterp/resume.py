@@ -44,17 +44,18 @@ def _ensure_parent_resumedata(framestack, n):
 
 def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
                        storage):
+    # store resume data on the PreOptGuardDescr 'storage'
     n = len(framestack)-1
     top = framestack[n]
     _ensure_parent_resumedata(framestack, n)
     frame_info_list = FrameInfo(top.parent_resumedata_frame_info_list,
                                 top)
-    storage.rd_frame_info_list = frame_info_list
+    storage.pd_frame_info_list = frame_info_list
     snapshot = Snapshot(top.parent_resumedata_snapshot, top.env[:])
     snapshot = Snapshot(snapshot, virtualref_boxes[:]) # xxx for now
     if virtualizable_boxes is not None:
         snapshot = Snapshot(snapshot, virtualizable_boxes[:]) # xxx for now
-    storage.rd_snapshot = snapshot
+    storage.pd_snapshot = snapshot
 
 class Numbering(object):
     __slots__ = ('prev', 'nums')
@@ -231,8 +232,9 @@ _frame_info_placeholder = (None, 0, 0)
 
 class ResumeDataVirtualAdder(object):
 
-    def __init__(self, storage, memo):
-        self.storage = storage
+    def __init__(self, storage_src, storage_dst, memo):
+        self.storage_src = storage_src    # the PreOptGuardDescr that we read
+        self.storage_dst = storage_dst    # the ResumeGuardDescr that we write
         self.memo = memo
 
     def make_virtual(self, known_class, fielddescrs):
@@ -270,15 +272,15 @@ class ResumeDataVirtualAdder(object):
 
     def finish(self, values, pending_setfields=[]):
         # compute the numbering
-        storage = self.storage
-        # make sure that nobody attached resume data to this guard yet
-        assert storage.rd_numb is None
+        storage_src = self.storage_src
         numb, liveboxes_from_env, v = self.memo.number(values,
-                                                       storage.rd_snapshot)
+                                                       storage_src.pd_snapshot)
         self.liveboxes_from_env = liveboxes_from_env
         self.liveboxes = {}
-        storage.rd_numb = numb
-        storage.rd_snapshot = None
+        storage_dst = self.storage_dst
+        storage_dst.rd_frame_info_list = storage_src.pd_frame_info_list
+        storage_dst.rd_numb = numb
+        storage_dst.rd_snapshot = None
 
         # collect liveboxes and virtuals
         n = len(liveboxes_from_env) - v
@@ -302,8 +304,8 @@ class ResumeDataVirtualAdder(object):
         self._number_virtuals(liveboxes, values, v)
         self._add_pending_fields(pending_setfields)
 
-        storage.rd_consts = self.memo.consts
-        dump_storage(storage, liveboxes)
+        storage_dst.rd_consts = self.memo.consts
+        dump_storage(storage_dst, liveboxes)
         return liveboxes[:]
 
     def _number_virtuals(self, liveboxes, values, num_env_virtuals):
@@ -336,12 +338,12 @@ class ResumeDataVirtualAdder(object):
         liveboxes.extend(new_liveboxes)
         nholes = len(new_liveboxes) - count
 
-        storage = self.storage
-        storage.rd_virtuals = None
+        storage_dst = self.storage_dst
+        storage_dst.rd_virtuals = None
         vfieldboxes = self.vfieldboxes
         if vfieldboxes:
             length = num_env_virtuals + memo.num_cached_virtuals()
-            virtuals = storage.rd_virtuals = [None] * length
+            virtuals = storage_dst.rd_virtuals = [None] * length
             memo.nvirtuals += length
             memo.nvholes += length - len(vfieldboxes)
             for virtualbox, fieldboxes in vfieldboxes.iteritems():
@@ -376,7 +378,7 @@ class ResumeDataVirtualAdder(object):
                 num = self._gettagged(box)
                 fieldnum = self._gettagged(fieldbox)
                 rd_pendingfields.append((descr, num, fieldnum))
-        self.storage.rd_pendingfields = rd_pendingfields
+        self.storage_dst.rd_pendingfields = rd_pendingfields
 
     def _gettagged(self, box):
         if isinstance(box, Const):
