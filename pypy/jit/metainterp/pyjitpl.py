@@ -1555,10 +1555,8 @@ class MetaInterp(object):
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
 
-    def handle_guard_failure(self, key):
+    def handle_guard_failure(self, key, must_compile):
         assert isinstance(key, compile.ResumeGuardDescr)
-        warmrunnerstate = self.staticdata.state
-        must_compile = warmrunnerstate.must_compile_from_failure(key)
         if must_compile:
             debug_start('jit-tracing')
         else:
