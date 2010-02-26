@@ -885,7 +885,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
 
     def visit_npad(self, line):
         # MASM has a nasty bug: it implements "npad 5" with "add eax, 0"
-        # which is a not no-op except because it clears flags.
+        # which is a not no-op because it clears flags.
         # I've seen this instruction appear between "test" and "jne"...
         # see http://www.masm32.com/board/index.php?topic=13122
         match = self.r_unaryinsn.match(line)
