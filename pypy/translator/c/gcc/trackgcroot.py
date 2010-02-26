@@ -880,9 +880,20 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
                                             'visit_' + name + 'l')
 
     visit_int = FunctionGcRootTracker.visit_nop
-    visit_npad = FunctionGcRootTracker.visit_nop
     # probably not GC pointers
     visit_cdq  = FunctionGcRootTracker.visit_nop
+
+    def visit_npad(self, line):
+        # MASM has a nasty bug: it implements "npad 5" with "add eax, 0"
+        # which is a not no-op except because it clears flags.
+        # I've seen this instruction appear between "test" and "jne"...
+        # see http://www.masm32.com/board/index.php?topic=13122
+        match = self.r_unaryinsn.match(line)
+        arg = match.group(1)
+        if arg == "5":
+            # replace with "npad 3; npad 2"
+            self.lines[self.currentlineno] = "\tnpad\t3\n" "\tnpad\t2\n"
+        return []
 
     def extract_immediate(self, value):
         try:
