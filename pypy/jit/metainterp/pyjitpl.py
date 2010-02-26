@@ -1555,13 +1555,9 @@ class MetaInterp(object):
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
 
-    def handle_guard_failure(self, key, must_compile):
+    def handle_guard_failure(self, key):
         assert isinstance(key, compile.ResumeGuardDescr)
-        if must_compile:
-            debug_start('jit-tracing')
-        else:
-            debug_start('jit-blackhole')
-        self.initialize_state_from_guard_failure(key, must_compile)
+        self.initialize_state_from_guard_failure(key)
         try:
             return self._handle_guard_failure(key)
         finally:
@@ -1588,8 +1584,7 @@ class MetaInterp(object):
             return self.designate_target_loop(gmp)
         except ContinueRunningNormallyBase:
             if not started_as_blackhole:
-                warmrunnerstate = self.staticdata.state
-                warmrunnerstate.reset_counter_from_failure(key, self)
+                key.reset_counter_from_failure(self)
             raise
 
     def remove_consts_and_duplicates(self, boxes, startindex, endindex,
@@ -1773,15 +1768,20 @@ class MetaInterp(object):
         self.initialize_virtualizable(original_boxes)
         return original_boxes
 
-    def initialize_state_from_guard_failure(self, resumedescr, must_compile):
+    def initialize_state_from_guard_failure(self, resumedescr):
         # guard failure: rebuild a complete MIFrame stack
         self.in_recursion = -1 # always one portal around
-        inputargs_and_holes = self.cpu.make_boxes_from_latest_values(resumedescr)
+        inputargs_and_holes = self.cpu.make_boxes_from_latest_values(
+                                                                 resumedescr)
+        must_compile = resumedescr.must_compile(self.staticdata,
+                                                inputargs_and_holes)
         if must_compile:
+            debug_start('jit-tracing')
             self.history = history.History()
             self.history.inputargs = [box for box in inputargs_and_holes if box]
             self.staticdata.profiler.start_tracing()
         else:
+            debug_start('jit-blackhole')
             self.staticdata.profiler.start_blackhole()
             self.history = None   # this means that is_blackholing() is true
         self.rebuild_state_after_failure(resumedescr, inputargs_and_holes)
