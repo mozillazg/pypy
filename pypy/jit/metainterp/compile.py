@@ -228,8 +228,10 @@ class ResumeGuardDescr(ResumeDescr):
 
     def handle_fail(self, metainterp_sd):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
+        warmrunnerstate = self.metainterp_sd.state
+        must_compile = warmrunnerstate.must_compile_from_failure(self)
         metainterp = MetaInterp(metainterp_sd)
-        return metainterp.handle_guard_failure(self)
+        return metainterp.handle_guard_failure(self, must_compile)
 
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge.  Attach the new operations
@@ -239,7 +241,6 @@ class ResumeGuardDescr(ResumeDescr):
             self._debug_suboperations = new_loop.operations
         send_bridge_to_backend(metainterp.staticdata, self, inputargs,
                                new_loop.operations)
-
 
     def _clone_if_mutable(self):
         res = self.__class__(self.metainterp_sd, self.original_greenkey)
@@ -262,8 +263,8 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         if all_virtuals is None:
             all_virtuals = []
         metainterp._already_allocated_resume_virtuals = all_virtuals
-        self.counter = -2     # never compile
-        return metainterp.handle_guard_failure(self)
+        # never compile
+        return metainterp.handle_guard_failure(self, must_compile=False)
 
     @staticmethod
     def force_now(cpu, token):
