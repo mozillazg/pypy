@@ -2,6 +2,7 @@
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.baseobjspace import W_Root
+from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.module.micronumpy.array import BaseNumArray
@@ -9,6 +10,8 @@ from pypy.module.micronumpy.array import base_typedef
 from pypy.module.micronumpy.array import construct_array
 from pypy.module.micronumpy.array import array as array_fromseq
 from pypy.module.micronumpy.array import validate_index
+from pypy.module.micronumpy.array import \
+        mul_operation, div_operation, add_operation, sub_operation
 
 from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
@@ -17,8 +20,7 @@ from pypy.module.micronumpy.dtype import create_factory
 def compute_pos(space, indexes, dim):
     current = 1
     pos = 0
-    indexes.reverse()
-    for i in range(len(indexes)):
+    for i in range(len(indexes)-1, -1, -1):
         index = indexes[i]
         d = dim[i]
         if index >= d or index <= -d - 1:
@@ -47,7 +49,7 @@ def compute_slices(space, slices, dims):
     slicelen = i #saved
     for i in range(len(slices)):
         w_index = slices[i]
-        if space.is_true(space.isinstance(w_index, space.w_slice)):
+        if isinstance(w_index, W_SliceObject):
             newextract = []
             l = shape[i]
             stride = strides[i]
@@ -96,17 +98,94 @@ def descr_dtype(space, self):
 def descr_shape(space, self):
     return space.newtuple([space.wrap(dim) for dim in self.shape])
 
+MUL = mul_operation()
+DIV = div_operation()
+ADD = add_operation()
+SUB = sub_operation()
+
 def create_mdarray(data_type, unwrap, coerce):
+
+    def create_math_operation(f):
+        opname = f.__name__
+        def math_operation(self, w_x):
+            space = self.space
+            try:
+                space.iter(w_x)
+            except OperationError, e:
+                if not e.match(space, space.w_TypeError):
+                    raise
+                result_t = result_mapping(space,
+                                            (space.type(w_x), self.dtype))
+                op2 = coerce(space, w_x)
+                result = sdresult(space, result_t)(
+                                                space, self.len(), result_t
+                                                )
+                operation = result.__class__.client_scalar[opname]
+            else:
+                op2 = array_fromseq(space, w_x)
+                if len(op2.shape) > len(self.shape):
+                    self, op2 = op2, self
+                lss = len(self.shape)
+                ls = len(op2.shape)
+                if not op2.shape == self.shape[lss-ls:lss]:
+                    raise OperationError(space.w_ValueError,
+                            space.wrap("shape mismatch: objects cannot be"
+                                         " broadcast to the same shape"))
+                result_t = result_mapping(space, (self.dtype, op2.dtype))
+                result = mdresult(space, result_t)(space, self.shape, result_t)
+                operation = result.__class__.client_fixedview[opname]
+
+            operation(result, self, op2)
+
+            w_result = space.wrap(result)
+            return w_result
+        math_operation.unwrap_spec = ['self', W_Root]
+        math_operation.__name__ = 'descr_'+opname
+        return math_operation
+
+    def create_client_math_operation(f):
+        def scalar_operation(self, source, x):
+            for i in range(len(source.storage)):
+                self.storage[i] = data_type(f(source.storage[i], x))
+
+        def fixedview_operation(self, source1, source2):
+            #Here len(s1.storage)>=len(s2.storage)
+            ll = len(source1.storage)//len(source2.storage)
+            l2 = len(source2.storage)
+            for i in range(ll):
+                for j in range(l2):
+                    idx=i*l2+j
+                    self.storage[idx] = data_type(f(source1.storage[idx],
+                                                    source2.storage[j]))
+
+        return scalar_operation, fixedview_operation
+
     class MultiDimArray(BaseMultiDimArray):
         def __init__(self, space, shape, w_dtype):
-            self.shape = shape
+            self.shape = make_sure_not_resized(shape)
             self.space = space
             self.dtype = w_dtype
             size = 1
             for dimension in shape:
                 size *= dimension
-            self.storage = [data_type(0.0)] * size
-            make_sure_not_resized(self.storage)
+            self.storage = make_sure_not_resized([data_type(0.0)] * size)
+
+        client_scalar = {}
+        client_fixedview = {}
+
+        client_scalar['mul'], client_fixedview['mul'] = \
+                                            create_client_math_operation(MUL)
+        client_scalar['div'], client_fixedview['div'] = \
+                                            create_client_math_operation(DIV)
+        client_scalar['add'], client_fixedview['add'] = \
+                                            create_client_math_operation(ADD)
+        client_scalar['sub'], client_fixedview['sub'] = \
+                                            create_client_math_operation(SUB)
+        descr_mul = create_math_operation(MUL)
+        descr_div = create_math_operation(DIV)
+        descr_add = create_math_operation(ADD)
+        descr_sub = create_math_operation(SUB)
+
 
         def load_iterable(self, w_xs):
             self._internal_load(w_xs, self.shape, [])

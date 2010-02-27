@@ -11,5 +11,6 @@ class Module(MixedModule):
         'ndarray'  : 'array.ndarray',
         'zeros'    : 'array.zeros',
         'minimum'  : 'ufunc.minimum',
+        'dot'      : 'ufunc.dot',
         }
 

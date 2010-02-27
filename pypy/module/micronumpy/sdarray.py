@@ -1,4 +1,5 @@
 ﻿from pypy.interpreter.baseobjspace import W_Root, Wrappable
+from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.gateway import interp2app
@@ -30,7 +31,51 @@ def descr_dtype(space, self):
 def descr_shape(space, self):
     return space.newtuple([space.wrap(self.len())])
 
+
+
+MUL = mul_operation()
+DIV = div_operation()
+ADD = add_operation()
+SUB = sub_operation()
+COPY = copy_operation()
+
 def create_sdarray(data_type, unwrap, coerce):
+
+    def create_math_operation(f):
+        opname = f.__name__
+        def math_operation(self, w_x):
+            space = self.space
+            try:
+                space.iter(w_x)
+            except OperationError, e:
+                if not e.match(space, space.w_TypeError):
+                    raise
+                result_t = result_mapping(space,
+                                            (space.type(w_x), self.dtype))
+                op2 = coerce(space, w_x)
+                result = sdresult(space, result_t)(space, self.len(), result_t)
+                operation = result.__class__.client_scalar[opname]
+            else:
+                lop = space.int_w(space.len(w_x))
+                if lop != self.len():
+                    raise OperationError(space.w_ValueError,
+                            space.wrap("shape mismatch: objects cannot be"
+                                         " broadcast to the same shape"))
+                dtype = iterable_type(space, w_x)
+                result_t = result_mapping(space, (dtype, self.dtype))
+                op2 = sdresult(space, dtype)(space, lop, dtype)
+                op2.load_iterable(w_x)
+                result = sdresult(space, result_t)(space, self.len(), result_t)
+                operation = result.__class__.client_fixedview[opname]
+
+            operation(result, self, op2)
+
+            w_result = space.wrap(result)
+            return w_result
+        math_operation.unwrap_spec = ['self', W_Root]
+        math_operation.__name__ = 'descr_'+opname
+        return math_operation
+
     class SingleDimIterator(Wrappable):
         def __init__(self, space, array, i):
             self.space = space
@@ -57,12 +102,6 @@ def create_sdarray(data_type, unwrap, coerce):
                         next = interp2app(SingleDimIterator.descr_next)
                         )
 
-    mul = mul_operation()
-    div = div_operation()
-    add = add_operation()
-    sub = sub_operation()
-    copy = copy_operation()
-
     def create_client_math_operation(f):
         def scalar_operation(self, source, x):
             for i in range(len(source.storage)):
@@ -74,78 +113,31 @@ def create_sdarray(data_type, unwrap, coerce):
                     data_type(f(source1.storage[i], source2.storage[i]))
         return scalar_operation, fixedview_operation
 
-    def create_math_operation(f):
-        opname = f.__name__
-        def math_operation(self, w_x):
-            space = self.space
-            try:
-                space.iter(w_x)
-            except OperationError, e:
-                if not e.match(space, space.w_TypeError):
-                    raise
-                result_t = result_mapping(space,
-                                            (space.type(w_x), self.dtype))
-                op2 = coerce(space, w_x)
-                result = sdresult(space, result_t)(
-                                                space, self.len(), result_t
-                                                )
-                operation = result.__class__.client_scalar[opname]
-            else:
-                lop = space.int_w(space.len(w_x))
-                if lop != self.len():
-                    raise OperationError(space.w_ValueError,
-                            space.wrap("shape mismatch: objects cannot be"
-                                " broadcast to the same shape"))
-                dtype = iterable_type(space, w_x)
-                result_t = result_mapping(space, (dtype, self.dtype))
-                op2 = sdresult(space, dtype)(space, lop, dtype)
-                op2.load_iterable(w_x)
-                result = sdresult(space, result_t)(
-                                                space, self.len(), result_t
-                                                )
-                operation = result.__class__.client_fixedview[opname]
-
-            operation(result, self, op2)
-
-            w_result = space.wrap(result)
-            return w_result
-        math_operation.unwrap_spec = ['self', W_Root]
-        return math_operation
-
-
     class NumArray(BaseSingleDimArray):
         def __init__(self, space, length, dtype):
             self.shape = (length,)
             self.space = space
-            self.storage = [data_type(0.0)] * length
+            self.storage = make_sure_not_resized([data_type(0.0)] * length)
             self.dtype = dtype
-            make_sure_not_resized(self.storage)
 
         
         client_scalar = {}
         client_fixedview = {}
 
         client_scalar['mul'], client_fixedview['mul'] = \
-                                            create_client_math_operation(mul)
+                                            create_client_math_operation(MUL)
         client_scalar['div'], client_fixedview['div'] = \
-                                            create_client_math_operation(div)
+                                            create_client_math_operation(DIV)
         client_scalar['add'], client_fixedview['add'] = \
-                                            create_client_math_operation(add)
+                                            create_client_math_operation(ADD)
         client_scalar['sub'], client_fixedview['sub'] = \
-                                            create_client_math_operation(sub)
+                                            create_client_math_operation(SUB)
 
 
-        descr_mul = create_math_operation(mul)
-        descr_mul.__name__ = 'descr_mul'
-
-        descr_div = create_math_operation(div)
-        descr_div.__name__ = 'descr_div'
-
-        descr_add = create_math_operation(add)
-        descr_add.__name__ = 'descr_add'
-
-        descr_sub = create_math_operation(sub)
-        descr_sub.__name__ = 'descr_sub'
+        descr_mul = create_math_operation(MUL)
+        descr_div = create_math_operation(DIV)
+        descr_add = create_math_operation(ADD)
+        descr_sub = create_math_operation(SUB)
 
         def load_iterable(self, w_values):
             space = self.space
@@ -160,7 +152,7 @@ def create_sdarray(data_type, unwrap, coerce):
 
         def descr_getitem(self, w_index):
             space = self.space
-            if space.is_true(space.isinstance(w_index, space.w_slice)):
+            if isinstance(w_index, W_SliceObject):
                 start, stop, step, slen = w_index.indices4(space, self.len())
                 res = sdresult(space, self.dtype)(space, slen, self.dtype)
                 if step == 1:
@@ -185,7 +177,7 @@ def create_sdarray(data_type, unwrap, coerce):
 
         def descr_setitem(self, w_index, w_value):
             space = self.space
-            if space.is_true(space.isinstance(w_index, space.w_slice)):
+            if isinstance(w_index, W_SliceObject):
                 start, stop, step, slen = w_index.indices4(space, self.len())
                 try:
                     space.iter(w_value)
