@@ -27,7 +27,7 @@ class AppTestSDArray(object):
         from numpy import array
         from operator import mul, div, add, sub
         d = range(1, self.length)
-        #FIXME: overkill...
+        #skip('overkill...')
         for data_type in (int, float):
             data = [data_type(x) for x in d]
             ar = array(data)
@@ -40,7 +40,6 @@ class AppTestSDArray(object):
                 assert compare(operator(ar, ar2), [operator(x, y) for (x, y) in zip(ar, ar2)])
 
     def test_operator_result_types(self):
-        #skip("Haven't implemented dispatching for array/array operations")
         from operator import mul, div, add, sub
         from numpy import array
         types = {
@@ -163,7 +162,6 @@ class AppTestMultiDim(object):
         ar = array(gen_array((3,3)))
         assert len(ar) == 3
 
-        skip("Non-square matrices throw IndexError")
         #2x3
         ar = array(gen_array((2,3)))
         assert len(ar) == 2
