@@ -1,7 +1,7 @@
 ﻿from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.gateway import interp2app
-from pypy.interpreter.baseobjspace import W_Root
+from pypy.interpreter.baseobjspace import W_Root, UnpackValueError
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.rlib.debug import make_sure_not_resized
 
@@ -16,6 +16,7 @@ from pypy.module.micronumpy.array import \
 from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
 from pypy.module.micronumpy.dtype import create_factory
+#import pdb; pdb.set_trace()
 
 def compute_pos(space, indexes, dim):
     current = 1
@@ -34,60 +35,108 @@ def compute_pos(space, indexes, dim):
 
 def compute_slices(space, slices, dims):
     slices = space.fixedview(slices)
-    if len(slices) > len(dims):
-        raise OperationError(space.w_IndexError,
-                             space.wrap('too many indices'))
-    strides = []
-    i = 1
-    for dim in dims:
-        strides.append(i)
-        i *= dim
+    strides = make_sure_not_resized([0]*len(dims))
+    stride = 1
+    for i in range(len(dims)-1, -1, -1):
+        strides[i] = stride
+        stride *= dims[i]
     shape = dims[:]
-    strides.reverse()
     newshape = []
     extract = [0]
-    slicelen = i #saved
+    slicelen = stride #saved
+    unoptimized = True
     for i in range(len(slices)):
+        factor = slicelen / strides[i-1] if i>0 else 1
         w_index = slices[i]
         if isinstance(w_index, W_SliceObject):
-            newextract = []
             l = shape[i]
             stride = strides[i]
             start, stop, step, slen = w_index.indices4(space, l)
             if slen == 0:
                 extract = []
+                newshape.append(0)
                 continue #as in numpy
             newshape.append(slen)
+            # I suspect that fiendish difficulty while will understand this code.
+            # Please, understand before to edit.
             if step == 1:
-                for i in range(len(extract)):
-                    extract[i] += start*stride
+                start *= stride
+                if unoptimized:
+                    for j in range(len(extract)):
+                        extract[j] += start
+                    unoptimized = False
+                else:
+                    newextract = make_sure_not_resized([0]*len(extract)*factor)
+                    prestride = strides[i-1]
+                    for j in range(len(extract)):
+                        jf = j*factor
+                        st = extract[j]
+                        for k in range(factor):
+                            newextract[jf+k] = st + start
+                            st += prestride
+                    extract = newextract
                 slicelen = stride*slen
             else:
-                for i in range(len(extract)):
-                    st = extract[i]
-                    for j in range(slicelength):
-                        newextract.append(st+start*stride)
-                        start += step
+                if unoptimized:
+                    newextract = make_sure_not_resized([0]*len(extract)*slen)
+                    for j in range(len(extract)):
+                        js = j*slen
+                        st = extract[j]
+                        index = start
+                        for k in range(slen):
+                            newextract[js + k] = st + index*stride
+                            index += step
+                else:
+                    newextract = make_sure_not_resized([0]*len(extract)*factor*slen)
+                    prestride = strides[i-1]
+                    for j in range(len(extract)):
+                        st = extract[j]
+                        jfs = j*factor*slen
+                        for f in range(factor):
+                            fs = f*slen
+                            index = start
+                            for k in range(slen):
+                                newextract[jfs+fs+k] = st + index*stride
+                                index +=step
+                            st += prestride
+                    unoptimized = True
                 extract = newextract
                 slicelen = stride
         elif space.is_w(w_index, space.w_Ellipsis):
             newshape.append(shape[i])
+            unoptimized = False
         else: #Must be integer
             try:
                 index = space.int_w(w_index)
             except TypeError, e:
                 raise OperationError(space.w_IndexError,
                                      space.wrap('Wrong index'))
+            if not (-shape[i] <= index < shape[i]):
+                raise OperationError(space.w_IndexError,
+                                     space.wrap('index out of range'))
+            if index < 0:
+                index += shape[i]
             stride = strides[i]
             start = index*stride
-            for i in range(len(extract)):
-                extract[i] += start
+            if unoptimized:
+                for j in range(len(extract)):
+                    extract[j] += start
+            else:
+                newextract = make_sure_not_resized([0]*len(extract)*factor)
+                prestride = strides[i-1]
+                for j in range(len(extract)):
+                    jf = j*factor
+                    st = extract[j]
+                    for k in range(factor):
+                        newextract[jf+k] = st + start
+                        st += prestride
+                extract = newextract
             #No adding for shape
             slicelen = stride
 
-        newshape.extend(shape[i+1:]) #add rest of shape
-        #all slices are absolutely eqi-length
-        return newshape, extract, slicelen
+    newshape.extend(shape[i+1:]) #add rest of shape
+    #all slices are absolutely eqi-length
+    return newshape, extract, slicelen
 
 
 class BaseMultiDimArray(BaseNumArray): pass
@@ -193,14 +242,14 @@ def create_mdarray(data_type, unwrap, coerce):
         def _internal_load(self, w_xs, shape, indexes):
             space = self.space
             length = shape[0]
-            xs = space.fixedview(w_xs, length)
             shapemismatch = OperationError(space.w_ValueError,
                                            space.wrap('shape mismatch'))
+            try:
+                xs = space.fixedview(w_xs, length)
+            except UnpackValueError:
+                raise shapemismatch
             for i in range(length):
-                try:
-                    w_x = xs[i]
-                except IndexError:
-                    raise shapemismatch
+                w_x = xs[i]
                 try:
                     space.iter(w_x)
                 except OperationError, e:
@@ -254,10 +303,19 @@ def create_mdarray(data_type, unwrap, coerce):
 
         def descr_setitem(self, w_index, w_value):
             space = self.space
+            validate_index(self, space, w_index)
+            try:
+                space.iter(w_index)
+            except OperationError, e:
+                if not (e.match(space, space.w_IndexError) or
+                        e.match(space, space.w_TypeError)):
+                    raise
+                w_index = space.newlist([w_index])
             try:
                 indexes = self._unpack_indexes(space, w_index)
             except OperationError, e:
-                if not e.match(space, space.w_IndexError):
+                if not (e.match(space, space.w_IndexError) or
+                        e.match(space, space.w_TypeError)):
                     #not raised by _unpack_indexes
                     raise
                 shape, regions, lslice = \
@@ -271,10 +329,10 @@ def create_mdarray(data_type, unwrap, coerce):
                     for start in regions:
                         self.storage[start:start+lslice]=[value]*lslice
                     return
-                arr = array_fromseq(space, w_value)
+                arr = array_fromseq(space, w_value, None)
                 ls = len(arr.shape)
-                lss = len(self.shape)
-                if not (ls <= lss and arr.shape == self.shape[lss-ls:lss]):
+                lss = len(shape)
+                if not (ls <= lss and list(arr.shape) == shape[lss-ls:lss]):
                     raise OperationError(space.w_ValueError,
                                          space.wrap('array dimensions '
                                          'are not compatible for copy'))
