@@ -16,7 +16,6 @@ from pypy.module.micronumpy.array import \
 from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
 from pypy.module.micronumpy.dtype import create_factory
-#import pdb; pdb.set_trace()
 
 def compute_pos(space, indexes, dim):
     current = 1
@@ -66,15 +65,7 @@ def compute_slices(space, slices, dims):
                         extract[j] += start
                     unoptimized = False
                 else:
-                    newextract = make_sure_not_resized([0]*len(extract)*factor)
-                    prestride = strides[i-1]
-                    for j in range(len(extract)):
-                        jf = j*factor
-                        st = extract[j]
-                        for k in range(factor):
-                            newextract[jf+k] = st + start
-                            st += prestride
-                    extract = newextract
+                    TESTME
                 slicelen = stride*slen
             else:
                 if unoptimized:
@@ -87,19 +78,7 @@ def compute_slices(space, slices, dims):
                             newextract[js + k] = st + index*stride
                             index += step
                 else:
-                    newextract = make_sure_not_resized([0]*len(extract)*factor*slen)
-                    prestride = strides[i-1]
-                    for j in range(len(extract)):
-                        st = extract[j]
-                        jfs = j*factor*slen
-                        for f in range(factor):
-                            fs = f*slen
-                            index = start
-                            for k in range(slen):
-                                newextract[jfs+fs+k] = st + index*stride
-                                index +=step
-                            st += prestride
-                    unoptimized = True
+                    TESTME
                 extract = newextract
                 slicelen = stride
         elif space.is_w(w_index, space.w_Ellipsis):
