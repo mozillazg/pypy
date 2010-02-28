@@ -26,6 +26,7 @@ class AppTestSDArray(object):
     def test_sdarray_operators(self):
         from numpy import array
         from operator import mul, div, add, sub
+        compare = self.compare
         d = range(1, self.length)
         #skip('overkill...')
         for data_type in (int, float):
@@ -35,7 +36,6 @@ class AppTestSDArray(object):
             ar2 = array(data)
             for operator in (mul, div, add, sub):
                 for value in xrange(1, 16):
-                    compare = self.compare
                     assert compare(operator(ar2, value), [operator(x, value) for x in data])
                 assert compare(operator(ar, ar2), [operator(x, y) for (x, y) in zip(ar, ar2)])
 
@@ -145,6 +145,14 @@ class AppTestMultiDim(object):
                    return result
            return gen_array
            """)
+        cls.w_compare = cls.space.appexec([],
+        """():
+           def compare(a, b):
+               for x, y in zip(a, b):
+                   if x != y: return False
+                   assert type(x) == type(y)
+               return True
+           return compare""")
                                 
 
     def test_multidim(self):
@@ -172,6 +180,9 @@ class AppTestMultiDim(object):
         assert len(ar) == 3
         assert ar.shape == (3, 2)
 
+        raises(ValueError, array, [[2, 3, 4], [5, 6]])
+        raises(ValueError, array, [2, [3, 4]])
+
     def test_getset(self):
         from numpy import zeros
         ar = zeros((3, 3, 3), dtype=int)
@@ -189,19 +200,38 @@ class AppTestMultiDim(object):
         from numpy import array
         ar = array([range(i*3, i*3+3) for i in range(3)])
         assert len(ar) == 3
-        #skip("mdarray.shape currently is a list instead of a tuple as it should be")
         assert ar.shape == (3, 3)
         for i in range(3):
             for j in range(3):
                 assert ar[i, j] == i*3+j
     
-    def test_various_slices(self):
+    def test_get_set_slices(self):
         from numpy import array
         gen_array = self.gen_array
+        compare = self.compare
+        #getitem
         ar = array(gen_array((3,3)))
         s1 = ar[0]
         assert s1[1]==1
         s2 = ar[1:3]
         assert s2[0][0] == 3
+        raises(IndexError, ar.__getitem__, 'what a strange index')
+        raises(IndexError, ar.__getitem__, (2, 2, 2)) #too many
+        raises(IndexError, ar.__getitem__, 5)
+        raises(IndexError, ar.__getitem__, (0, 6))
+        #print ar[2:2].shape
+        assert 0 in ar[2:2].shape
+        assert compare(ar[-1], ar[2])
+        assert compare(ar[2:3][0], ar[2])
+        assert compare(ar[1, 0::2], [3, 5])
+        assert compare(ar[0::2, 0], [0, 6])
+        #setitem
+        ar[2] = 3
+        assert ar[2, 0] == ar[2, 1] == ar[2, 2] == 3
+        raises(ValueError, ar.__setitem__, slice(2, 3), [1])
+        ar[2] = [0, 1, 2]
+        assert compare(ar[0], ar[2])
+        assert compare(ar[..., 0], [0, 3, 0])
+
 
             

@@ -143,6 +143,15 @@ def create_sdarray(data_type, unwrap, coerce):
             space = self.space
             i = 0
             for x in space.fixedview(w_values, self.len()):
+                try:
+                    space.iter(x)
+                except OperationError, e:
+                    if not e.match(space, space.w_TypeError):
+                        raise
+                else:
+                    raise OperationError(space.w_ValueError,
+                                           space.wrap('shape mismatch'))
+
                 self.storage[i] = coerce(space, x)
                 i += 1
 
