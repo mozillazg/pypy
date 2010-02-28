@@ -840,6 +840,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
         '__imp___wassert': None,
         'DWORD PTR __imp__abort': None,
         'DWORD PTR __imp___wassert': None,
+        '_pypy_debug_catch_fatal_exception': None,
         }
 
     @classmethod
@@ -1349,7 +1350,7 @@ class GcRootTracker(object):
 
         if self.format == 'msvc':
             print >> output, """\
-            struct { void* addr; long shape; } __gcmap[%d] = {
+            static struct { void* addr; long shape; } __gcmap[%d] = {
             """ % (len(self.gcmaptable),)
             for label, state, is_range in self.gcmaptable:
                 label = label[1:]
@@ -1367,8 +1368,8 @@ class GcRootTracker(object):
                 print >> output, '{ &%s, %d},' % (label, n)
             print >> output, """\
             };
-            void* __gcmapstart = &__gcmap;
-            void* __gcmapend = (char*)(&__gcmap) + 8 * %d;
+            void* __gcmapstart = __gcmap;
+            void* __gcmapend = __gcmap + %d;
 
             char __gccallshapes[] = {
             """ % (len(self.gcmaptable),)
