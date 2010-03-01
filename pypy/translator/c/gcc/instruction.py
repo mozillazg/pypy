@@ -194,8 +194,8 @@ class InsnCall(Insn):
     def source_of(self, localvar, tag):
         tag1 = self.gcroots.setdefault(localvar, tag)
         assert tag1 == tag, (
-            "conflicting entries for InsnCall.gcroots[%s]:\n%r and %r" % (
-            localvar, tag1, tag))
+            "conflicting entries for\n%s.gcroots[%s]:\n%r and %r" % (
+            self, localvar, tag1, tag))
         return localvar
 
     def all_sources_of(self, localvar):

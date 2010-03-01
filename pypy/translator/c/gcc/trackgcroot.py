@@ -38,15 +38,14 @@ class FunctionGcRootTracker(object):
         self.filetag = filetag
         # a "stack bottom" function is either main() or a callback from C code
         self.is_stack_bottom = False
-        self.cannot_collect = {}
 
     def computegcmaptable(self, verbose=0):
         self.findlabels()
         self.parse_instructions()
         try:
+            self.find_noncollecting_calls()
             if not self.list_collecting_call_insns():
                 return []
-            self.find_noncollecting_calls()
             self.findframesize()
             self.fixlocalvars()
             self.trackgcroots()
@@ -120,13 +119,18 @@ class FunctionGcRootTracker(object):
                 self.labels[label] = Label(label, lineno)
 
     def find_noncollecting_calls(self):
+        cannot_collect = self.CANNOT_COLLECT.copy()
         for line in self.lines:
             match = self.r_gcnocollect_marker.search(line)
             if match:
                 name = match.group(1)
-                if self.format in ('darwin', 'mingw32', 'msvc'):
-                    name = '_' + name
-                self.cannot_collect[name] = True
+                cannot_collect[name] = True
+        #
+        if self.format in ('darwin', 'mingw32', 'msvc'):
+            self.cannot_collect = dict.fromkeys(
+                ['_' + name for name in cannot_collect])
+        else:
+            self.cannot_collect = cannot_collect
 
     def append_instruction(self, insn):
         # Add the instruction to the list, and link it to the previous one.
@@ -346,6 +350,12 @@ class FunctionGcRootTracker(object):
         call.global_label = label
 
     # ____________________________________________________________
+
+    CANNOT_COLLECT = {    # some of the most used functions that cannot collect
+        'pypy_debug_catch_fatal_exception': None,
+        'RPyAbort': None,
+        'RPyAssertFailed': None,
+        }
 
     def _visit_gcroot_marker(self, line):
         match = self.r_gcroot_marker.match(line)
@@ -839,7 +849,6 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
         '__imp___wassert': None,
         'DWORD PTR __imp__abort': None,
         'DWORD PTR __imp___wassert': None,
-        '_pypy_debug_catch_fatal_exception': None,
         }
 
     @classmethod
