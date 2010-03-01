@@ -44,7 +44,7 @@ class FunctionGcRootTracker(object):
         self.findlabels()
         self.parse_instructions()
         try:
-            if not self.list_call_insns():
+            if not self.list_collecting_call_insns():
                 return []
             self.find_noncollecting_calls()
             self.findframesize()
@@ -64,11 +64,9 @@ class FunctionGcRootTracker(object):
         See format_callshape() for more details about callshape_tuple.
         """
         table = []
-        for insn in self.list_call_insns():
+        for insn in self.list_collecting_call_insns():
             if not hasattr(insn, 'framesize'):
                 continue     # calls that never end up reaching a RET
-            if insn.name in self.cannot_collect:
-                continue
             if self.is_stack_bottom:
                 retaddr = LOC_NOWHERE     # end marker for asmgcroot.py
             elif self.uses_frame_pointer:
@@ -193,8 +191,9 @@ class FunctionGcRootTracker(object):
                 raise UnrecognizedOperation(opname)
         setattr(cls, 'visit_' + opname, cls.visit_nop)
 
-    def list_call_insns(self):
-        return [insn for insn in self.insns if isinstance(insn, InsnCall)]
+    def list_collecting_call_insns(self):
+        return [insn for insn in self.insns if isinstance(insn, InsnCall)
+                     if insn.name not in self.cannot_collect]
 
     def findframesize(self):
         # the 'framesize' attached to an instruction is the number of bytes
@@ -306,7 +305,7 @@ class FunctionGcRootTracker(object):
         # walk backwards, because inserting the global labels in self.lines
         # is going to invalidate the lineno of all the InsnCall objects
         # after the current one.
-        for call in self.list_call_insns()[::-1]:
+        for call in self.list_collecting_call_insns()[::-1]:
             if hasattr(call, 'framesize'):
                 self.create_global_label(call)
 
