@@ -91,27 +91,32 @@ locals().update(constants)
 _ACCESS_DEFAULT, ACCESS_READ, ACCESS_WRITE, ACCESS_COPY = range(4)
 
 def external(name, args, result):
-    return rffi.llexternal(name, args, result,
+    unsafe = rffi.llexternal(name, args, result,
+                             compilation_info=CConfig._compilation_info_)
+    safe = rffi.llexternal(name, args, result,
                            compilation_info=CConfig._compilation_info_,
-                           sandboxsafe=True, threadsafe=True)
+                           sandboxsafe=True, threadsafe=False)
+    return unsafe, safe
 
 def winexternal(name, args, result):
-    return rffi.llexternal(name, args, result, compilation_info=CConfig._compilation_info_, calling_conv='win', sandboxsafe=True, threadsafe=True)
+    return rffi.llexternal(name, args, result, compilation_info=CConfig._compilation_info_, calling_conv='win')
 
 PTR = rffi.CCHARP
 
-c_memmove = external('memmove', [PTR, PTR, size_t], lltype.Void)
+c_memmove, _ = external('memmove', [PTR, PTR, size_t], lltype.Void)
 
 if _POSIX:
     has_mremap = cConfig['has_mremap']
-    c_mmap = external('mmap', [PTR, size_t, rffi.INT, rffi.INT,
+    c_mmap, c_mmap_safe = external('mmap', [PTR, size_t, rffi.INT, rffi.INT,
                                rffi.INT, off_t], PTR)
-    c_munmap = external('munmap', [PTR, size_t], rffi.INT)
-    c_msync = external('msync', [PTR, size_t, rffi.INT], rffi.INT)
+    c_munmap, c_munmap_safe = external('munmap', [PTR, size_t], rffi.INT)
+    c_msync, _ = external('msync', [PTR, size_t, rffi.INT], rffi.INT)
     if has_mremap:
-        c_mremap = external('mremap', [PTR, size_t, size_t, rffi.ULONG], PTR)
+        c_mremap, _ = external('mremap',
+                               [PTR, size_t, size_t, rffi.ULONG], PTR)
 
-    _get_page_size = external('getpagesize', [], rffi.INT)
+    # this one is always safe
+    _, _get_page_size = external('getpagesize', [], rffi.INT)
 
     def _get_error_no():
         return rposix.get_errno()
@@ -634,14 +639,14 @@ if _POSIX:
         flags = MAP_PRIVATE | MAP_ANONYMOUS
         prot = PROT_EXEC | PROT_READ | PROT_WRITE
         hintp = rffi.cast(PTR, hint.pos)
-        res = c_mmap(hintp, map_size, prot, flags, -1, 0)
+        res = c_mmap_safe(hintp, map_size, prot, flags, -1, 0)
         if res == rffi.cast(PTR, -1):
             raise MemoryError
         hint.pos += map_size
         return res
     alloc._annenforceargs_ = (int,)
 
-    free = c_munmap
+    free = c_munmap_safe
     
 elif _MS_WINDOWS:
     def mmap(fileno, length, tagname="", access=_ACCESS_DEFAULT):

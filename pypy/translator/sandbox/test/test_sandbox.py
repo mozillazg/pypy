@@ -153,6 +153,51 @@ def test_hybrid_gc():
     rescode = pipe.wait()
     assert rescode == 0
 
+def test_safe_alloc():
+    from pypy.rlib.rmmap import alloc, free
+    
+    def entry_point(argv):
+        one = alloc(1024)
+        free(one, 1024)
+        return 0
+
+    exe = compile(entry_point)
+    pipe = subprocess.Popen([exe], stdout=subprocess.PIPE,
+                            stdin=subprocess.PIPE)
+    g = pipe.stdin
+    f = pipe.stdout
+    g.close()
+    tail = f.read()
+    f.close()
+    assert tail == ""
+    rescode = pipe.wait()
+    assert rescode == 0
+
+def test_unsafe_mmap():
+    py.test.skip("Since this stuff is unimplemented, it won't work anyway "
+                 "however, the day it starts working, it should pass test")
+    from pypy.rlib.rmmap import mmap
+    
+    def entry_point(argv):
+        try:
+            res = mmap(0, 1024)
+        except OSError:
+            return 0
+        return 1
+
+    exe = compile(entry_point)
+    pipe = subprocess.Popen([exe], stdout=subprocess.PIPE,
+                            stdin=subprocess.PIPE)
+    g = pipe.stdin
+    f = pipe.stdout
+    expect(f, g, "mmap", ARGS, OSError(1, "xyz"))
+    g.close()
+    tail = f.read()
+    f.close()
+    assert tail == ""
+    rescode = pipe.wait()
+    assert rescode == 0
+
 class TestPrintedResults:
 
     def run(self, entry_point, args, expected):
