@@ -134,10 +134,13 @@ def test_oserror():
 
 def test_hybrid_gc():
     def entry_point(argv):
-        return int(len("x" * int(argv[0])) < 350)
+        l = []
+        for i in range(int(argv[1])):
+            l.append("x" * int(argv[2]))
+        return int(len(l) > 1000)
 
     exe = compile(entry_point, gc='hybrid')
-    pipe = subprocess.Popen([exe, '1000000'], stdout=subprocess.PIPE,
+    pipe = subprocess.Popen([exe, '10', '10000'], stdout=subprocess.PIPE,
                             stdin=subprocess.PIPE)
     g = pipe.stdin
     f = pipe.stdout
