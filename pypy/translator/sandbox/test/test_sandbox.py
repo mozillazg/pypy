@@ -1,6 +1,7 @@
 import py
 import sys, os, time
 import struct
+import subprocess
 
 from pypy.rpython.lltypesystem import rffi
 from pypy.translator.interactive import Translation
@@ -19,8 +20,8 @@ def expect(f, g, fnname, args, result, resulttype=None):
         write_message(g, result, resulttype)
         g.flush()
 
-def compile(f):
-    t = Translation(f, backend='c', standalone=True, sandbox=True, gc='ref')
+def compile(f, gc='ref'):
+    t = Translation(f, backend='c', standalone=True, sandbox=True, gc=gc)
     return str(t.compile())
 
 
@@ -130,6 +131,24 @@ def test_oserror():
     tail = f.read()
     f.close()
     assert tail == ""
+
+def test_hybrid_gc():
+    def entry_point(argv):
+        return int(len("x" * int(argv[0])) < 350)
+
+    exe = compile(entry_point, gc='hybrid')
+    pipe = subprocess.Popen([exe, '1000000'], stdout=subprocess.PIPE,
+                            stdin=subprocess.PIPE)
+    g = pipe.stdin
+    f = pipe.stdout
+    expect(f, g, "ll_os.ll_os_getenv", ("PYPY_GENERATIONGC_NURSERY",), None)
+    expect(f, g, "ll_os.ll_os_open", ("/proc/cpuinfo", 0, 420), OSError(5232, "xyz"))
+    g.close()
+    tail = f.read()
+    f.close()
+    assert tail == ""
+    rescode = pipe.wait()
+    assert rescode == 0
 
 class TestPrintedResults:
 
