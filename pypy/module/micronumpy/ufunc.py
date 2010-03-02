@@ -3,6 +3,9 @@ from pypy.module.micronumpy.array import construct_array
 from pypy.module.micronumpy.dtype import result_mapping
 from pypy.module.micronumpy.sdarray import sdresult
 from pypy.module.micronumpy.mdarray import mdresult, compute_pos
+
+from pypy.module.micronumpy.dtype import retrieve_dtype
+
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.interpreter.error import OperationError
 from pypy.rlib.debug import make_sure_not_resized
@@ -15,7 +18,7 @@ def minimum(space, w_a, w_b):
         raise OperationError(space.w_ValueError,
                              space.wrap("minimum of arrays of different length"))
     dtype = result_mapping(space, (w_a.dtype, w_b.dtype))
-    res = construct_array(space, w_a.shape, dtype)
+    res = construct_array(space, w_a.shape, retrieve_dtype(space, dtype))
     for i in range(len(w_a.storage)):
         one = w_a.storage[i]
         two = w_b.storage[i]
@@ -74,7 +77,7 @@ def dot(space, w_a, w_b):
 
     dtype = result_mapping(space, (w_a.dtype, w_b.dtype))
 
-    res = construct_array(space, shape, dtype)
+    res = construct_array(space, shape, retrieve_dtype(space, dtype))
     res.storage[:] = data
     return space.wrap(res)
 dot.unwrap_spec = [ObjSpace, W_Root, W_Root]
