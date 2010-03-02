@@ -6,6 +6,9 @@ from pypy.interpreter.gateway import interp2app
 
 from pypy.module.micronumpy.dtype import iterable_type
 
+from pypy.module.micronumpy.dtype import get_dtype
+from pypy.module.micronumpy.dtype import retrieve_dtype #FIXME: ambiguous name?
+
 class BaseNumArray(Wrappable):
     pass
 
@@ -21,7 +24,6 @@ def validate_index(array, space, w_i):
     except OperationError, e:
         if e.match(space, space.w_TypeError): pass
         else: raise
-
 
 def mul_operation():
     def mul(x, y): return x * y
@@ -91,9 +93,9 @@ def construct_array(space, shape, w_dtype):
     try:
         if len(shape) == 1:
             length = shape[0]
-            return sdresult(space, w_dtype)(space, length, w_dtype)
+            return sdresult(w_dtype.code)(space, length, w_dtype)
         else:
-            return mdresult(space, w_dtype)(space, shape, w_dtype)
+            return mdresult(w_dtype.code)(space, shape, w_dtype)
     except KeyError, e:
         raise OperationError(space.w_NotImplementedError,
                 space.wrap("Haven't implemented generic array yet!"))
@@ -102,7 +104,8 @@ def descr_new(space, w_cls, w_shape, w_dtype=NoneNotWrapped,
               w_buffer=NoneNotWrapped, w_offset=NoneNotWrapped,
               w_strides=NoneNotWrapped, order='C'):
     shape_w = unpack_shape(space, w_shape)
-    result = construct_array(space, shape_w, w_dtype)
+    dtype_w = get_dtype(space, w_dtype)
+    result = construct_array(space, shape_w, dtype_w)
     #TODO: load from buffer?
     return space.wrap(result)
 descr_new.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root,
@@ -121,8 +124,10 @@ def array(space, w_values, w_dtype=NoneNotWrapped,
     shape = infer_shape(space, w_values)
 
     if w_dtype is None:
-        w_dtype = iterable_type(space, w_values)
-    result = construct_array(space, shape, w_dtype)
+        dtype_w = retrieve_dtype(space, iterable_type(space, w_values))
+    else:
+        dtype_w = get_dtype(space, w_dtype)
+    result = construct_array(space, shape, dtype_w)
     result.load_iterable(w_values)
     return space.wrap(result)
 array.unwrap_spec = [ObjSpace, W_Root, W_Root,
@@ -131,6 +136,10 @@ array.unwrap_spec = [ObjSpace, W_Root, W_Root,
 
 def zeros(space, w_shape, w_dtype=NoneNotWrapped, order='C'):
     shape_w = unpack_shape(space, w_shape)
-    result = construct_array(space, shape_w, w_dtype)
+    if w_dtype is None:
+        dtype_w = retrieve_dtype(space, 'd')
+    else:
+        dtype_w = get_dtype(space, w_dtype)
+    result = construct_array(space, shape_w, dtype_w)
     return space.wrap(result)
 zeros.unwrap_spec = [ObjSpace, W_Root, W_Root, str]

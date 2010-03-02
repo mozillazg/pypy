@@ -49,6 +49,17 @@ class AppTestSDArray(object):
                  (float, float): float
                 }
 
+        typecodes = {int: 'i',
+                     float: 'd'}
+
+        typestrings = {int: 'int32',
+                       float: 'float64'}
+
+        def test_type(dtype, expected_type):
+            assert dtype == expected_type
+            assert dtype == typecodes[expected_type]
+            assert dtype == typestrings[expected_type]
+
         for operand_types, result_type in types.iteritems():
             for operator in (mul, div, add, sub):
                 a_type, b_type = operand_types
@@ -56,16 +67,16 @@ class AppTestSDArray(object):
                 b = array(xrange(1, self.length + 1), dtype=b_type)
 
                 c = operator(a, b)
-                assert c.dtype == result_type
+                test_type(c.dtype, result_type)
 
                 d = operator(b, a)
-                assert d.dtype == result_type
+                test_type(d.dtype, result_type)
 
                 e = operator(a, b_type(self.value))
-                assert e.dtype == result_type
+                test_type(e.dtype, result_type)
 
                 f = operator(a_type(self.value), b)
-                assert f.dtype == result_type
+                test_type(f.dtype, result_type)
 
     def test_iter(self):
         from numpy import array

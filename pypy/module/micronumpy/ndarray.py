@@ -10,15 +10,6 @@ from pypy.module.micronumpy.sdarray import GenericArray
 
 from pypy.module.micronumpy.mdarray import mdresult
 
-def result_type(space, w_types):
-    types = {
-            (space.w_int, space.w_int): space.w_int,
-            (space.w_int, space.w_float): space.w_float,
-            (space.w_float, space.w_int): space.w_float,
-            (space.w_float, space.w_float): space.w_float
-            }
-    return types[w_types]
-
 def unpack_shape(space, w_shape):
     if space.is_true(space.isinstance(w_shape, space.w_int)):
         return [space.int_w(w_shape)]

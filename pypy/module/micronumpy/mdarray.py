@@ -365,4 +365,4 @@ def create_mdarray(data_type, unwrap, coerce):
 MultiDimIntArray = create_mdarray(int, unwrap_int, coerce_int)
 MultiDimFloatArray = create_mdarray(float, unwrap_float, coerce_float)
 
-mdresult = create_factory(lambda space: {space.w_int: MultiDimIntArray, space.w_float: MultiDimFloatArray})
+mdresult = create_factory({'i': MultiDimIntArray, 'd': MultiDimFloatArray})
