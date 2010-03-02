@@ -73,7 +73,7 @@ translation_optiondescription = OptionDescription(
                               ("translation.gcremovetypeptr", False)],
                  }),
     BoolOption("gcremovetypeptr", "Remove the typeptr from every object",
-               default=False, cmdline="--gcremovetypeptr"),
+               default=True, cmdline="--gcremovetypeptr"),
     ChoiceOption("gcrootfinder",
                  "Strategy for finding GC Roots (framework GCs only)",
                  ["n/a", "shadowstack", "asmgcc"],
