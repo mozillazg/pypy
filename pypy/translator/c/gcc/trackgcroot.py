@@ -1246,36 +1246,36 @@ class GcRootTracker(object):
             long pypy_asm_stackwalk(void *callback)
             {
                __asm {
-                mov	edx, DWORD PTR [esp+4]	; my argument, which is the callback
-                mov	eax, esp		; my frame top address
-                push	eax			; ASM_FRAMEDATA[6]
-                push	ebp			; ASM_FRAMEDATA[5]
-                push	edi			; ASM_FRAMEDATA[4]
-                push	esi			; ASM_FRAMEDATA[3]
-                push	ebx			; ASM_FRAMEDATA[2]
+                mov\tedx, DWORD PTR [esp+4]\t; my argument, which is the callback
+                mov\teax, esp\t\t; my frame top address
+                push\teax\t\t\t; ASM_FRAMEDATA[6]
+                push\tebp\t\t\t; ASM_FRAMEDATA[5]
+                push\tedi\t\t\t; ASM_FRAMEDATA[4]
+                push\tesi\t\t\t; ASM_FRAMEDATA[3]
+                push\tebx\t\t\t; ASM_FRAMEDATA[2]
 
             ; Add this ASM_FRAMEDATA to the front of the circular linked
             ; list.  Let's call it 'self'.
 
-                mov	eax, DWORD PTR [__gcrootanchor+4]		; next = gcrootanchor->next
-                push	eax									; self->next = next
-                push	OFFSET __gcrootanchor              ; self->prev = gcrootanchor
-                mov	DWORD PTR [__gcrootanchor+4], esp		; gcrootanchor->next = self
-                mov	DWORD PTR [eax+0], esp					; next->prev = self
+                mov\teax, DWORD PTR [__gcrootanchor+4]\t\t; next = gcrootanchor->next
+                push\teax\t\t\t\t\t\t\t\t\t; self->next = next
+                push\tOFFSET __gcrootanchor              ; self->prev = gcrootanchor
+                mov\tDWORD PTR [__gcrootanchor+4], esp\t\t; gcrootanchor->next = self
+                mov\tDWORD PTR [eax+0], esp\t\t\t\t\t; next->prev = self
 
-                call	edx						; invoke the callback
+                call\tedx\t\t\t\t\t\t; invoke the callback
 
             ; Detach this ASM_FRAMEDATA from the circular linked list
-                pop	esi							; prev = self->prev
-                pop	edi							; next = self->next
-                mov	DWORD PTR [esi+4], edi		; prev->next = next
-                mov	DWORD PTR [edi+0], esi		; next->prev = prev
+                pop\tesi\t\t\t\t\t\t\t; prev = self->prev
+                pop\tedi\t\t\t\t\t\t\t; next = self->next
+                mov\tDWORD PTR [esi+4], edi\t\t; prev->next = next
+                mov\tDWORD PTR [edi+0], esi\t\t; next->prev = prev
 
-                pop	ebx				; restore from ASM_FRAMEDATA[2]
-                pop	esi				; restore from ASM_FRAMEDATA[3]
-                pop	edi				; restore from ASM_FRAMEDATA[4]
-                pop	ebp				; restore from ASM_FRAMEDATA[5]
-                pop	ecx				; ignored      ASM_FRAMEDATA[6]
+                pop\tebx\t\t\t\t; restore from ASM_FRAMEDATA[2]
+                pop\tesi\t\t\t\t; restore from ASM_FRAMEDATA[3]
+                pop\tedi\t\t\t\t; restore from ASM_FRAMEDATA[4]
+                pop\tebp\t\t\t\t; restore from ASM_FRAMEDATA[5]
+                pop\tecx\t\t\t\t; ignored      ASM_FRAMEDATA[6]
             ; the return value is the one of the 'call' above,
             ; because %eax (and possibly %edx) are unmodified
                 ret
@@ -1293,37 +1293,37 @@ class GcRootTracker(object):
 
             print >> output, """\
             /* See description in asmgcroot.py */
-            movl	4(%esp), %edx	/* my argument, which is the callback */
-            movl	%esp, %eax	/* my frame top address */
-            pushl	%eax		/* ASM_FRAMEDATA[6] */
-            pushl	%ebp		/* ASM_FRAMEDATA[5] */
-            pushl	%edi		/* ASM_FRAMEDATA[4] */
-            pushl	%esi		/* ASM_FRAMEDATA[3] */
-            pushl	%ebx		/* ASM_FRAMEDATA[2] */
+            movl\t4(%esp), %edx\t/* my argument, which is the callback */
+            movl\t%esp, %eax\t/* my frame top address */
+            pushl\t%eax\t\t/* ASM_FRAMEDATA[6] */
+            pushl\t%ebp\t\t/* ASM_FRAMEDATA[5] */
+            pushl\t%edi\t\t/* ASM_FRAMEDATA[4] */
+            pushl\t%esi\t\t/* ASM_FRAMEDATA[3] */
+            pushl\t%ebx\t\t/* ASM_FRAMEDATA[2] */
 
             /* Add this ASM_FRAMEDATA to the front of the circular linked */
             /* list.  Let's call it 'self'.                               */
 
-            movl	__gcrootanchor + 4, %eax	/* next = gcrootanchor->next */
-            pushl	%eax				/* self->next = next */
-            pushl	$__gcrootanchor			/* self->prev = gcrootanchor */
-            movl	%esp, __gcrootanchor + 4	/* gcrootanchor->next = self */
-            movl	%esp, 0(%eax)			/* next->prev = self */
+            movl\t__gcrootanchor + 4, %eax\t/* next = gcrootanchor->next */
+            pushl\t%eax\t\t\t\t/* self->next = next */
+            pushl\t$__gcrootanchor\t\t\t/* self->prev = gcrootanchor */
+            movl\t%esp, __gcrootanchor + 4\t/* gcrootanchor->next = self */
+            movl\t%esp, 0(%eax)\t\t\t/* next->prev = self */
 
             /* note: the Mac OS X 16 bytes aligment must be respected. */
-            call	*%edx		/* invoke the callback */
+            call\t*%edx\t\t/* invoke the callback */
 
             /* Detach this ASM_FRAMEDATA from the circular linked list */
-            popl	%esi		/* prev = self->prev */
-            popl	%edi		/* next = self->next */
-            movl	%edi, 4(%esi)	/* prev->next = next */
-            movl	%esi, 0(%edi)	/* next->prev = prev */
+            popl\t%esi\t\t/* prev = self->prev */
+            popl\t%edi\t\t/* next = self->next */
+            movl\t%edi, 4(%esi)\t/* prev->next = next */
+            movl\t%esi, 0(%edi)\t/* next->prev = prev */
 
-            popl	%ebx		/* restore from ASM_FRAMEDATA[2] */
-            popl	%esi		/* restore from ASM_FRAMEDATA[3] */
-            popl	%edi		/* restore from ASM_FRAMEDATA[4] */
-            popl	%ebp		/* restore from ASM_FRAMEDATA[5] */
-            popl	%ecx		/* ignored      ASM_FRAMEDATA[6] */
+            popl\t%ebx\t\t/* restore from ASM_FRAMEDATA[2] */
+            popl\t%esi\t\t/* restore from ASM_FRAMEDATA[3] */
+            popl\t%edi\t\t/* restore from ASM_FRAMEDATA[4] */
+            popl\t%ebp\t\t/* restore from ASM_FRAMEDATA[5] */
+            popl\t%ecx\t\t/* ignored      ASM_FRAMEDATA[6] */
 
             /* the return value is the one of the 'call' above, */
             /* because %eax (and possibly %edx) are unmodified  */
@@ -1346,8 +1346,8 @@ class GcRootTracker(object):
             .align 4
             .globl __gcrootanchor
             __gcrootanchor:
-            .long	__gcrootanchor       /* prev */
-            .long	__gcrootanchor       /* next */
+            .long\t__gcrootanchor       /* prev */
+            .long\t__gcrootanchor       /* next */
             """.replace("__gcrootanchor", _globalname("__gcrootanchor"))
 
         shapes = {}
