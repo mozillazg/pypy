@@ -244,5 +244,40 @@ class AppTestMultiDim(object):
         assert compare(ar[0], ar[2])
         assert compare(ar[..., 0], [0, 3, 0])
 
+class TestDType(object):
+    def test_lookups(self, space):
+        from pypy.module.micronumpy.dtype import retrieve_dtype
+        from pypy.module.micronumpy.dtype import get_dtype
+        a = get_dtype(space, space.wrap('i'))
+        b = get_dtype(space, space.wrap('d'))
 
-            
+        assert a == retrieve_dtype(space, 'i')
+        assert b == retrieve_dtype(space, 'd')
+
+    def test_result_types(self, space):
+        from pypy.module.micronumpy.dtype import get_dtype
+        from pypy.module.micronumpy.dtype import result_mapping
+        w_typecode_a = space.wrap('i')
+        w_typecode_b = space.wrap('d')
+        a = get_dtype(space, w_typecode_a)
+        b = get_dtype(space, w_typecode_b)
+
+        assert 'i' == result_mapping(space, (w_typecode_a, w_typecode_a))
+        assert 'd' == result_mapping(space, (w_typecode_b, w_typecode_a))
+        assert 'd' == result_mapping(space, (w_typecode_a, w_typecode_b))
+        assert 'd' == result_mapping(space, (w_typecode_b, w_typecode_b))
+
+    def test_iterable_type(self, space):
+        from pypy.module.micronumpy.dtype import iterable_type
+        w_int = space.wrap(1)
+        w_float = space.wrap(2.0)
+
+        data = [(space.wrap([1, 2, 3, 4, 5]), 'i'),
+                (space.wrap([1, 2, 3.0, 4, 5]), 'd'),
+                (space.wrap([1, 2.0, 3.0, 4, 5]), 'd'),
+                (space.wrap([1.0, 2, 3, 4, 5]), 'd'),
+                (space.wrap([1, 2, 3, 4, 5.0]), 'd'),
+                (space.wrap([1.0, 2, 3, 4, 5.0]), 'd')]
+
+        for w_xs, typecode in data:
+            assert typecode == iterable_type(space, w_xs)

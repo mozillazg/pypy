@@ -19,49 +19,6 @@ def unwrap_float32(space, w_x):
 def coerce_float32(space, w_x):
     return unwrap_float32(space, space.float(w_x))
 
-def typecode(space, w_type):
-    try:
-        assert isinstance(w_type, DynamicType)
-        return w_type.code
-    except AssertionError, e: pass
-
-    try:
-        return space.str_w(w_type)
-    except OperationError, e:
-        typecode_mapping = {
-                            space.w_int: 'i',
-                            space.w_float: 'd',
-                           }
-        try:
-            return typecode_mapping[w_type]
-        except IndexError, e:
-            raise OperationError(space.w_TypeError,
-                    space.wrap("Can't understand type."))
-
-result_types = {
-                ('i', 'i'): 'i',
-                ('i', 'd'): 'd',
-                ('d', 'i'): 'd',
-                ('d', 'd'): 'd',
-               }
-
-def result_mapping(space, types):
-    types = (typecode(space, types[0]),
-             typecode(space, types[1]))
-    return result_types[types]
-
-def iterable_type(space, w_xs):
-    xs = space.fixedview(w_xs)
-    result_type = 'i'
-    for i in range(len(xs)):
-        try:
-            atype = iterable_type(space, xs[i])
-        except OperationError, e:
-            if not e.match(space, space.w_TypeError):
-                raise
-            atype = typecode(space, space.type(xs[i]))
-        result_type = result_types[(result_type, atype)]
-    return result_type
 
 def create_factory(result_factory):
     def factory(t):
@@ -81,23 +38,68 @@ class DynamicType(Wrappable):
             try:
                 code = space.str_w(w_x)
                 if self.code == code:
-                    return space.wrap(True)
+                    return space.w_True
                 elif self.name == code:
-                    return space.wrap(True)
+                    return space.w_True
                 else:
-                    return space.wrap(False)
+                    return space.w_False
             except OperationError, e:
-                return space.wrap(False)
+                return space.w_False
             except TypeError, e:
-                return space.wrap(False) #FIXME: need to throw applevel type error
+                return space.w_False #FIXME: need to throw applevel type error
     descr_eq.unwrap_spec = ['self', ObjSpace, W_Root]
 DynamicType.typedef = TypeDef('dtype',
                               __eq__ = interp2app(DynamicType.descr_eq),
                              )
 
 class DynamicTypes(object):
+    result_types = {
+                    ('i', 'i'): 'i',
+                    ('i', 'd'): 'd',
+                    ('d', 'i'): 'd',
+                    ('d', 'd'): 'd',
+                   }
+
     def __init__(self):
         self.dtypes = {}
+
+    def typecode(self, space, w_type):
+        try:
+            assert isinstance(w_type, DynamicType)
+            return w_type.code
+        except AssertionError, e: pass
+
+        try:
+            return space.str_w(w_type)
+        except OperationError, e:
+            typecode_mapping = {
+                                space.w_int: 'i',
+                                space.w_float: 'd',
+                               }
+            try:
+                return typecode_mapping[w_type]
+            except IndexError, e:
+                raise OperationError(space.w_TypeError,
+                        space.wrap("Can't understand type."))
+
+    def result_mapping(self, space, types):
+        types = (self.typecode(space, types[0]),
+                 self.typecode(space, types[1]))
+        return self.result_types[types]
+
+    def iterable_type(self, space, w_xs):
+        xs = space.fixedview(w_xs)
+        result_type = 'i'
+        for i in range(len(xs)):
+            try:
+                atype = self.iterable_type(space, xs[i])
+            except OperationError, e:
+                if not e.match(space, space.w_TypeError):
+                    raise
+                atype = self.typecode(space, space.type(xs[i]))
+            result_type = self.result_types[(result_type, atype)]
+        return result_type
+
     def verify_dtype_dict(self, space):
         if not self.dtypes:
             self.dtypes.update(
@@ -116,11 +118,22 @@ class DynamicTypes(object):
             t = space.str_w(w_type)
         except OperationError, e:
             if e.match(space, space.w_TypeError):
-                t = typecode(space, w_type)
+                t = self.typecode(space, w_type)
             else:
                 raise
         return self.retrieve_dtype(space, t)
 
+    def sdarray(self, space, length, w_dtype):
+        from pypy.module.micronumpy.sdarray import sdresult
+        return sdresult(self.typecode(space))(space, length, w_dtype)
+
+    def mdarray(self, space, shape, w_dtype):
+        from pypy.module.micronumpy.mdarray import mdresult
+        return mdresult(self.typecode(space))(space, shape, w_dtype)
+
 dtypes = DynamicTypes()
+iterable_type = dtypes.iterable_type
+typecode = dtypes.typecode
+result_mapping = dtypes.result_mapping
 get_dtype = dtypes.get_dtype
 retrieve_dtype = dtypes.retrieve_dtype
