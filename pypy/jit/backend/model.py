@@ -10,6 +10,8 @@ class AbstractCPU(object):
 
     CallDescrClass = None # a base class for all CallDescrs
 
+    _overflow_flag = False
+
     def __init__(self):
         self.fail_descr_list = []
 
@@ -114,6 +116,12 @@ class AbstractCPU(object):
 
     def get_zero_division_error(self):
         raise NotImplementedError
+
+    def get_overflow_flag(self):
+        return self._overflow_flag
+
+    def set_overflow_flag(self, val):
+        self._overflow_flag = val
 
     @staticmethod
     def sizeof(S):
