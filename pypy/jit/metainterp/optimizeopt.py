@@ -172,6 +172,8 @@ class AbstractVirtualValue(OptValue):
     def _make_virtual(self, modifier):
         raise NotImplementedError("abstract base")
 
+    def _really_force(self):
+        raise NotImplementedError("abstract base")
 
 def get_fielddescrlist_cache(cpu):
     if not hasattr(cpu, '_optimizeopt_fielddescrlist_cache'):
@@ -358,7 +360,7 @@ class __extend__(AbstractVirtualStructSpecNode):
     def _setup_virtual_node_1(self, optimizer, box):
         raise NotImplementedError
     def teardown_virtual_node(self, optimizer, value, newexitargs):
-        assert value.is_virtual()
+        assert isinstance(value, AbstractVirtualStructValue)
         for ofs, subspecnode in self.fields:
             subvalue = value.getfield(ofs, optimizer.new_const(ofs))
             subspecnode.teardown_virtual_node(optimizer, subvalue, newexitargs)
@@ -381,7 +383,7 @@ class __extend__(VirtualArraySpecNode):
             vvalueitem = optimizer.getvalue(subbox)
             vvalue.setitem(index, vvalueitem)
     def teardown_virtual_node(self, optimizer, value, newexitargs):
-        assert value.is_virtual()
+        assert isinstance(value, VArrayValue)
         for index in range(len(self.items)):
             subvalue = value.getitem(index)
             subspecnode = self.items[index]
@@ -455,6 +457,7 @@ class Optimizer(object):
         return vvalue
 
     def make_varray(self, arraydescr, size, box, source_op=None):
+        assert isinstance(arraydescr, self.cpu.ArrayDescrClass)
         vvalue = VArrayValue(self, arraydescr, size, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
@@ -819,7 +822,7 @@ class Optimizer(object):
         value = self.getvalue(op.args[0])
         if value.is_virtual():
             # optimizefindnode should ensure that fieldvalue is found
-            assert isinstance(value, AbstractVirtualValue)
+            assert isinstance(value, AbstractVirtualStructValue)
             fieldvalue = value.getfield(op.descr, None)
             assert fieldvalue is not None
             self.make_equal_to(op.result, fieldvalue)
@@ -835,6 +838,7 @@ class Optimizer(object):
         value = self.getvalue(op.args[0])
         fieldvalue = self.getvalue(op.args[1])
         if value.is_virtual():
+            assert isinstance(value, AbstractVirtualStructValue)
             value.setfield(op.descr, fieldvalue)
         else:
             value.ensure_nonnull()
@@ -861,6 +865,7 @@ class Optimizer(object):
     def optimize_ARRAYLEN_GC(self, op):
         value = self.getvalue(op.args[0])
         if value.is_virtual():
+            assert isinstance(value, VArrayValue)
             self.make_constant_int(op.result, value.getlength())
         else:
             value.ensure_nonnull()
@@ -871,6 +876,7 @@ class Optimizer(object):
         if value.is_virtual():
             indexbox = self.get_constant_box(op.args[1])
             if indexbox is not None:
+                assert isinstance(value, VArrayValue)
                 itemvalue = value.getitem(indexbox.getint())
                 self.make_equal_to(op.result, itemvalue)
                 return
@@ -884,6 +890,7 @@ class Optimizer(object):
     def optimize_SETARRAYITEM_GC(self, op):
         value = self.getvalue(op.args[0])
         if value.is_virtual():
+            assert isinstance(value, VArrayValue)
             indexbox = self.get_constant_box(op.args[1])
             if indexbox is not None:
                 value.setitem(indexbox.getint(), self.getvalue(op.args[2]))
@@ -1032,7 +1039,9 @@ class HeapOpOptimizer(object):
             if opnum == rop.CALL_ASSEMBLER:
                 effectinfo = None
             else:
-                effectinfo = op.descr.get_extra_info()
+                descr = op.descr
+                assert isinstance(descr, self.optimizer.cpu.CallDescrClass)
+                effectinfo = descr.get_extra_info()
             if effectinfo is not None:
                 # XXX we can get the wrong complexity here, if the lists
                 # XXX stored on effectinfo are large

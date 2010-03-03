@@ -193,7 +193,9 @@ class NodeFinder(object):
             return     # var-sized arrays are not virtual
         arraynode = InstanceNode()
         arraynode.arraysize = lengthbox.getint()
-        arraynode.arraydescr = op.descr
+        descr = op.descr
+        assert isinstance(descr, self.cpu.ArrayDescrClass)
+        arraynode.arraydescr = descr
         self.nodes[op.result] = arraynode
 
     def find_nodes_ARRAYLEN_GC(self, op):
@@ -223,7 +225,7 @@ class NodeFinder(object):
             fieldnode.mark_escaped()
             return     # nothing to be gained from tracking the field
         field = op.descr
-        assert isinstance(field, AbstractValue)
+        assert isinstance(field, self.cpu.FieldDescrClass)
         if instnode.curfields is None:
             instnode.curfields = {}
         instnode.curfields[field] = fieldnode
@@ -234,7 +236,7 @@ class NodeFinder(object):
         if instnode.escaped:
             return     # nothing to be gained from tracking the field
         field = op.descr
-        assert isinstance(field, AbstractValue)
+        assert isinstance(field, self.cpu.FieldDescrClass)
         if instnode.curfields is not None and field in instnode.curfields:
             fieldnode = instnode.curfields[field]
         elif instnode.origfields is not None and field in instnode.origfields:
@@ -384,6 +386,7 @@ class PerfectSpecializationFinder(NodeFinder):
                     # uninitialized after a guard failure.
                     node = self.node_fromstart
                 specnode = self.intersect(node, d[ofs])
+                assert isinstance(ofs, self.cpu.FieldDescrClass)
                 fields.append((ofs, specnode))
         return fields
 

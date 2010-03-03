@@ -21,6 +21,8 @@ class AbstractLLCPU(AbstractCPU):
     from pypy.jit.metainterp.typesystem import llhelper as ts
 
     CallDescrClass = BaseCallDescr
+    FieldDescrClass = BaseFieldDescr
+    ArrayDescrClass = BaseArrayDescr
 
     def __init__(self, rtyper, stats, opts, translate_support_code=False,
                  gcdescr=None):

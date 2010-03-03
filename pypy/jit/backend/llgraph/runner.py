@@ -75,6 +75,8 @@ class BaseCPU(model.AbstractCPU):
     supports_floats = True
 
     CallDescrClass = Descr
+    ArrayDescrClass = Descr
+    FieldDescrClass = Descr
 
     def __init__(self, rtyper, stats=None, opts=None,
                  translate_support_code=False,
@@ -725,6 +727,8 @@ class StaticMethDescr(OODescr):
     def get_extra_info(self):
         return self.extrainfo
 
+OOtypeCPU.CallDescrClass = StaticMethDescr
+
 class MethDescr(history.AbstractMethDescr):
 
     callmeth = None
@@ -844,6 +848,8 @@ class FieldDescr(OODescr):
     def __repr__(self):
         return '<FieldDescr %r>' % self.fieldname
 
+OOtypeCPU.FieldDescrClass = FieldDescr
+OOtypeCPU.ArrayDescrClass = TypeDescr
 
 # ____________________________________________________________
 
