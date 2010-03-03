@@ -685,6 +685,7 @@ class LoopToken(AbstractDescr):
     terminating = False # see TerminatingLoopToken in compile.py
     # specnodes = ...
     # and more data specified by the backend when the loop is compiled
+    number = 0
 
     def __init__(self, number=0):
         self.number = number
@@ -864,6 +865,7 @@ class Stats(object):
     compiled_count = 0
     enter_count = 0
     aborted_count = 0
+    history = None
 
     def __init__(self):
         self.loops = []
