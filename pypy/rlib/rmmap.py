@@ -636,6 +636,10 @@ if _POSIX:
     hint = Hint()
 
     def alloc(map_size):
+        """Allocate memory.  This is intended to be used by the JIT,
+        so the memory has the executable bit set and gets allocated
+        internally in case of a sandboxed process.
+        """
         flags = MAP_PRIVATE | MAP_ANONYMOUS
         prot = PROT_EXEC | PROT_READ | PROT_WRITE
         hintp = rffi.cast(PTR, hint.pos)
@@ -748,6 +752,11 @@ elif _MS_WINDOWS:
 
     
     def alloc(map_size):
+        """Allocate memory.  This is intended to be used by the JIT,
+        so the memory has the executable bit set.  
+        XXX implement me: it should get allocated internally in
+        case of a sandboxed process
+        """
         null = lltype.nullptr(rffi.VOIDP.TO)
         res = VirtualAlloc(null, map_size, MEM_COMMIT|MEM_RESERVE,
                            PAGE_EXECUTE_READWRITE)
