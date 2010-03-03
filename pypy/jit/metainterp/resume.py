@@ -396,7 +396,8 @@ class AbstractVirtualInfo(object):
         return tagged_list_eq(self.fieldnums, fieldnums)
     def set_content(self, fieldnums):
         self.fieldnums = fieldnums
-
+    def debug_prints(self):
+        raise NotImplementedError
 
 class AbstractVirtualStructInfo(AbstractVirtualInfo):
     def __init__(self, fielddescrs):

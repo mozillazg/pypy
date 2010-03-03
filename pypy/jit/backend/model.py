@@ -9,6 +9,8 @@ class AbstractCPU(object):
     done_with_this_frame_int_v = -1
 
     CallDescrClass = None # a base class for all CallDescrs
+    ArrayDescrClass = None
+    FieldDescrClass = None
 
     _overflow_flag = False
 
