@@ -1,6 +1,43 @@
 ﻿
 from pypy.conftest import gettestobjspace
 
+class TestSDArray(object):
+    def test_unwrap(self, space):
+        w_int = space.wrap(1)
+        w_float = space.wrap(1.0)
+
+        from pypy.interpreter.error import OperationError
+        def interp_raises(exceptions, f, *args, **kwargs):
+            try:
+                f(*args, **kwargs)
+            except OperationError, e:
+                for ex in exceptions:
+                    if e.match(space, ex):
+                        return
+                raise
+            else:
+                raise AssertionError("Expected one of %s to be raised" % str(exceptions))
+
+        from pypy.module.micronumpy.dtype import unwrap_int
+        assert 1 ==  unwrap_int(space, w_int)
+        interp_raises((space.w_TypeError,), unwrap_int, space, w_float)
+
+        from pypy.module.micronumpy.dtype import unwrap_float
+        assert 1.0 == unwrap_float(space, w_float)
+        #interp_raises((space.w_TypeError,), unwrap_float, space, w_int) #er, shouldn't this raise?
+
+    def test_coerce(self, space):
+        w_int = space.wrap(1)
+        w_float = space.wrap(1.0)
+
+        from pypy.module.micronumpy.dtype import coerce_int
+        assert 1 == coerce_int(space, w_int)
+        assert 1 == coerce_int(space, w_float)
+
+        from pypy.module.micronumpy.dtype import coerce_float
+        assert 1.0 == coerce_float(space, w_int)
+        assert 1.0 == coerce_float(space, w_float)
+
 class AppTestSDArray(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('micronumpy',))

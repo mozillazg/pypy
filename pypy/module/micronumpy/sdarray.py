@@ -11,8 +11,6 @@ from pypy.module.micronumpy.array import \
 
 from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
-from pypy.module.micronumpy.dtype import\
-                            unwrap_float32, coerce_float32, float32
 from pypy.module.micronumpy.dtype import result_mapping, iterable_type
 
 from pypy.module.micronumpy.dtype import create_factory
@@ -278,7 +276,6 @@ def create_sdarray(data_type, unwrap, coerce):
 
 IntArray = create_sdarray(int, unwrap_int, coerce_int)
 FloatArray = create_sdarray(float, unwrap_float, coerce_float)
-Float32Array = create_sdarray(float32, unwrap_float32, coerce_float32)
 GenericArray = None
 
 sdresult = create_factory({'i': IntArray, 'd': FloatArray})
