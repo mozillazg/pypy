@@ -89,8 +89,10 @@ def importhook(space, modulename, w_globals=None,
             space.wrap("Empty module name"))
     w = space.wrap
 
-    ctxt_name = None
-    if w_globals is not None and not space.is_w(w_globals, space.w_None):
+    rel_modulename = None
+    if (level != 0 and
+        w_globals is not None and
+        not space.is_w(w_globals, space.w_None)):
         ctxt_w_name = space.finditem(w_globals, w('__name__'))
         ctxt_w_path = space.finditem(w_globals, w('__path__'))
         if ctxt_w_name is not None:
@@ -99,41 +101,31 @@ def importhook(space, modulename, w_globals=None,
             except OperationError, e:
                 if not e.match(space, space.w_TypeError):
                     raise
-    else:
-        ctxt_w_path = None
-        
-    rel_modulename = None
-    if ctxt_name is not None:
-        if level == 0:
-            baselevel = 0
-            rel_modulename = modulename
-        else:
-            ctxt_name_prefix_parts = ctxt_name.split('.')
-            if level > 0:
-                n = len(ctxt_name_prefix_parts)-level+1
-                assert n>=0
-                ctxt_name_prefix_parts = ctxt_name_prefix_parts[:n]
-            if ctxt_w_path is None: # plain module
-                ctxt_name_prefix_parts.pop()
-            if ctxt_name_prefix_parts:
-                rel_modulename = '.'.join(ctxt_name_prefix_parts)
-                if modulename:
-                    rel_modulename += '.' + modulename
-            baselevel = len(ctxt_name_prefix_parts)
-            
-        if rel_modulename is not None:
-            w_mod = check_sys_modules(space, w(rel_modulename))
-            if (w_mod is None or
-                not space.is_w(w_mod, space.w_None)):
-                
-                w_mod = absolute_import(space, rel_modulename,
-                                        baselevel,
-                                        w_fromlist, tentative=1)
-                if w_mod is not None:
-                    space.timer.stop_name("importhook", modulename)
-                    return w_mod
             else:
-                rel_modulename = None
+                ctxt_name_prefix_parts = ctxt_name.split('.')
+                if level > 0:
+                    n = len(ctxt_name_prefix_parts)-level+1
+                    assert n>=0
+                    ctxt_name_prefix_parts = ctxt_name_prefix_parts[:n]
+                if ctxt_w_path is None: # plain module
+                    ctxt_name_prefix_parts.pop()
+                if ctxt_name_prefix_parts:
+                    rel_modulename = '.'.join(ctxt_name_prefix_parts)
+                    if modulename:
+                        rel_modulename += '.' + modulename
+                baselevel = len(ctxt_name_prefix_parts)
+                if rel_modulename is not None:
+                    w_mod = check_sys_modules(space, w(rel_modulename))
+                    if (w_mod is None or
+                        not space.is_w(w_mod, space.w_None)):
+                        w_mod = absolute_import(space, rel_modulename,
+                                                baselevel,
+                                                w_fromlist, tentative=1)
+                        if w_mod is not None:
+                            space.timer.stop_name("importhook", modulename)
+                            return w_mod
+                    else:
+                        rel_modulename = None
     if level > 0:
         msg = "Attempted relative import in non-package"
         raise OperationError(space.w_ValueError, w(msg))
