@@ -125,6 +125,31 @@ class AbstractDescr(AbstractValue):
     def _clone_if_mutable(self):
         return self
 
+    def get_extra_info(self):
+        """ Implement in call descr
+        """
+        raise NotImplementedError
+
+    def is_array_of_pointers(self):
+        """ Implement for array descr
+        """
+        raise NotImplementedError
+
+    def is_array_of_floats(self):
+        """ Implement for array descr
+        """
+        raise NotImplementedError
+
+    def is_pointer_field(self):
+        """ Implement for field descr
+        """
+        raise NotImplementedError
+
+    def is_float_field(self):
+        """ Implement for field descr
+        """
+        raise NotImplementedError
+
 class AbstractFailDescr(AbstractDescr):
     index = -1
 
