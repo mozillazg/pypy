@@ -47,6 +47,7 @@ class OptValue(object):
     last_guard_index = -1
 
     level = LEVEL_UNKNOWN
+    known_class = None
 
     def __init__(self, box):
         self.box = box
