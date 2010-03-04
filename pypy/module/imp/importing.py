@@ -131,7 +131,7 @@ def importhook(space, modulename, w_globals=None,
         raise OperationError(space.w_ValueError, w(msg))
     w_mod = absolute_import(space, modulename, 0, w_fromlist, tentative=0)
     if rel_modulename is not None:
-        space.setitem(space.sys.get('modules'), w(rel_modulename),space.w_None)
+        space.setitem(space.sys.get('modules'), w(rel_modulename), space.w_None)
     space.timer.stop_name("importhook", modulename)
     return w_mod
 #
