@@ -42,10 +42,13 @@ class DynamicType(Wrappable):
                 elif self.name == code:
                     return space.w_True
                 else:
+                    xxx
                     return space.w_False
             except OperationError, e:
+                xxx
                 return space.w_False
             except TypeError, e:
+                xxx
                 return space.w_False #FIXME: need to throw applevel type error
     descr_eq.unwrap_spec = ['self', ObjSpace, W_Root]
 DynamicType.typedef = TypeDef('dtype',
