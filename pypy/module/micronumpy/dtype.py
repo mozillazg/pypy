@@ -42,14 +42,9 @@ class DynamicType(Wrappable):
                 elif self.name == code:
                     return space.w_True
                 else:
-                    xxx
-                    return space.w_False
+                    raise OperationError(space.w_TypeError, space.wrap("data type not understood"))
             except OperationError, e:
-                xxx
-                return space.w_False
-            except TypeError, e:
-                xxx
-                return space.w_False #FIXME: need to throw applevel type error
+                raise OperationError(space.w_TypeError, space.wrap("data type not understood"))
     descr_eq.unwrap_spec = ['self', ObjSpace, W_Root]
 DynamicType.typedef = TypeDef('dtype',
                               __eq__ = interp2app(DynamicType.descr_eq),

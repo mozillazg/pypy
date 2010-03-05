@@ -281,6 +281,27 @@ class AppTestMultiDim(object):
         assert compare(ar[0], ar[2])
         assert compare(ar[..., 0], [0, 3, 0])
 
+class AppTestDType(object):
+    def setup_class(cls):
+        cls.space = gettestobjspace(usemodules=('micronumpy',))
+    #FIXME: need DynamicType.__new__/__init__ to best test this
+    def test_eq(self):
+        from numpy import zeros
+
+        a = zeros((4,), dtype=int)
+        assert a.dtype == int
+        assert a.dtype == 'i'
+        assert a.dtype == 'int32'
+        raises((TypeError,), a.dtype, 'in')
+        raises((TypeError,), a.dtype.__eq__, 3)
+
+        b = zeros((4,), dtype=float)
+        assert b.dtype == float
+        assert b.dtype == 'd'
+        assert b.dtype == 'float64'
+        raises((TypeError,), b.dtype, 'flo')
+        raises((TypeError,), b.dtype.__eq__, 3)
+
 class TestDType(object):
     def test_lookups(self, space):
         from pypy.module.micronumpy.dtype import retrieve_dtype
