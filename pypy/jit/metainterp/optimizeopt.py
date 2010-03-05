@@ -549,18 +549,11 @@ class Optimizer(object):
 
     def store_final_boxes_in_guard(self, op):
         pendingfields = self.heap_op_optimizer.force_lazy_setfields_for_guard()
-        descr = op.descr
-        assert isinstance(descr, compile.ResumeGuardDescr)
-        modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
-        newboxes = modifier.finish(self.values, pendingfields)
-        if len(newboxes) > self.metainterp_sd.options.failargs_limit: # XXX be careful here
-            raise compile.GiveUp
-        descr.store_final_boxes(op, newboxes)
-        #
+        pdescr = op.descr
+        assert isinstance(pdescr, compile.PreOptGuardDescr)
+        metainterp_sd = self.metainterp_sd
+
         # Hack: turn guard_value(bool) into guard_true/guard_false.
-        # This is done after the operation is emitted, to let
-        # store_final_boxes_in_guard set the guard_opnum field
-        # of the descr to the original rop.GUARD_VALUE.
         if op.opnum == rop.GUARD_VALUE and op.args[0] in self.bool_boxes:
             constvalue = op.args[1].getint()
             if constvalue == 0:
@@ -571,6 +564,16 @@ class Optimizer(object):
                 raise AssertionError("uh?")
             op.opnum = opnum
             op.args = [op.args[0]]
+            rdescr = pdescr.get_final_descr_guard_value_bool(metainterp_sd)
+        else:
+            rdescr = pdescr.get_final_descr(op.opnum, metainterp_sd)
+
+        modifier = resume.ResumeDataVirtualAdder(pdescr, rdescr,
+                                                 self.resumedata_memo)
+        newboxes = modifier.finish(self.values, pendingfields)
+        if len(newboxes) > self.metainterp_sd.options.failargs_limit: # XXX be careful here
+            raise compile.GiveUp
+        rdescr.store_final_boxes(op, newboxes)
 
     def optimize_default(self, op):
         if op.is_always_pure():
@@ -654,15 +657,14 @@ class Optimizer(object):
             # replace the original guard with a guard_value
             old_guard_op = self.newoperations[value.last_guard_index]
             old_opnum = old_guard_op.opnum
-            old_guard_op.opnum = op.opnum
+            old_guard_op.opnum = rop.GUARD_VALUE
             old_guard_op.args = [old_guard_op.args[0], op.args[1]]
-            if old_opnum == rop.GUARD_NONNULL:
-                # hack hack hack.  Change the guard_opnum on
-                # old_guard_op.descr so that when resuming,
-                # the operation is not skipped by pyjitpl.py.
-                descr = old_guard_op.descr
-                assert isinstance(descr, compile.ResumeGuardDescr)
-                descr.guard_opnum = rop.GUARD_NONNULL_CLASS
+            # hack hack hack.  Change the guard_opnum on
+            # old_guard_op.descr so that when resuming,
+            # the operation is not skipped by pyjitpl.py.
+            descr = old_guard_op.descr
+            assert isinstance(descr, compile.ResumeGuardDescr)
+            descr.guard_opnum = rop.GUARD_VALUE
             emit_operation = False
         constbox = op.args[1]
         assert isinstance(constbox, Const)
@@ -699,7 +701,7 @@ class Optimizer(object):
                 # old_guard_op.descr so that when resuming,
                 # the operation is not skipped by pyjitpl.py.
                 descr = old_guard_op.descr
-                assert isinstance(descr, compile.ResumeGuardDescr)
+                assert isinstance(descr, compile.BaseResumeGuardDescr)
                 descr.guard_opnum = rop.GUARD_NONNULL_CLASS
                 emit_operation = False
         if emit_operation:

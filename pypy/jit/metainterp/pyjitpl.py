@@ -1016,12 +1016,8 @@ class MIFrame(object):
             moreargs = list(extraargs)
         metainterp_sd = metainterp.staticdata
         original_greenkey = metainterp.resumekey.original_greenkey
-        if opnum == rop.GUARD_NOT_FORCED:
-            resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
-                                                         original_greenkey)
-        else:
-            resumedescr = compile.ResumeGuardDescr(metainterp_sd,
-                                                   original_greenkey)
+        resumedescr = compile.PreOptGuardDescr(metainterp_sd,
+                                               original_greenkey)
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)       
         virtualizable_boxes = None
