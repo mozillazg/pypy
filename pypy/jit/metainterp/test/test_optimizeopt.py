@@ -13,6 +13,8 @@ from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.jit.metainterp import executor, compile, resume
 from pypy.jit.metainterp.resoperation import rop, opname, ResOperation
 from pypy.jit.metainterp.test.oparser import pure_parse
+from pypy.jit.metainterp.compile import PreOptGuardDescr
+from pypy.jit.metainterp.compile import BaseResumeGuardDescr
 
 class FakeFrame(object):
     parent_resumedata_snapshot = None
@@ -36,31 +38,33 @@ class FakeMetaInterpStaticData(object):
         self.globaldata = Fake()
     
 def test_store_final_boxes_in_guard():
-    from pypy.jit.metainterp.compile import ResumeGuardDescr
+    from pypy.jit.metainterp.compile import ResumeGuardTrueDescr
     from pypy.jit.metainterp.resume import tag, TAGBOX
     b0 = BoxInt()
     b1 = BoxInt()
     opt = optimizeopt.Optimizer(FakeMetaInterpStaticData(LLtypeMixin.cpu),
                                 None)
-    fdescr = ResumeGuardDescr(None, None)
-    op = ResOperation(rop.GUARD_TRUE, [], None, descr=fdescr)
+    pdescr = PreOptGuardDescr(None)
+    op = ResOperation(rop.GUARD_TRUE, [], None, descr=pdescr)
     # setup rd data
     fi0 = resume.FrameInfo(None, FakeFrame("code0", 1, 2))
-    fdescr.rd_frame_info_list = resume.FrameInfo(fi0,
+    pdescr.pd_frame_info_list = resume.FrameInfo(fi0,
                                                  FakeFrame("code1", 3, -1))
     snapshot0 = resume.Snapshot(None, [b0])
-    fdescr.rd_snapshot = resume.Snapshot(snapshot0, [b1])
+    pdescr.pd_snapshot = resume.Snapshot(snapshot0, [b1])
     #
     opt.store_final_boxes_in_guard(op)
+    rdescr = op.descr
+    assert isinstance(rdescr, ResumeGuardTrueDescr)
     if op.fail_args == [b0, b1]:
-        assert fdescr.rd_numb.nums      == [tag(1, TAGBOX)]
-        assert fdescr.rd_numb.prev.nums == [tag(0, TAGBOX)]
+        assert rdescr.rd_numb.nums      == [tag(1, TAGBOX)]
+        assert rdescr.rd_numb.prev.nums == [tag(0, TAGBOX)]
     else:
         assert op.fail_args == [b1, b0]
-        assert fdescr.rd_numb.nums      == [tag(0, TAGBOX)]
-        assert fdescr.rd_numb.prev.nums == [tag(1, TAGBOX)]
-    assert fdescr.rd_virtuals is None
-    assert fdescr.rd_consts == []
+        assert rdescr.rd_numb.nums      == [tag(0, TAGBOX)]
+        assert rdescr.rd_numb.prev.nums == [tag(1, TAGBOX)]
+    assert rdescr.rd_virtuals is None
+    assert rdescr.rd_consts == []
 
 def test_sharing_field_lists_of_virtual():
     class FakeOptimizer(object):
@@ -205,15 +209,14 @@ def test_equaloplists_fail_args():
 
 # ____________________________________________________________
 
-class Storage(compile.ResumeGuardDescr):
+class Storage(PreOptGuardDescr):
     "for tests."
     def __init__(self, metainterp_sd=None, original_greenkey=None):
         self.metainterp_sd = metainterp_sd
         self.original_greenkey = original_greenkey
-    def store_final_boxes(self, op, boxes):
-        op.fail_args = boxes
     def __eq__(self, other):
-        return type(self) is type(other)      # xxx obscure
+        # xxx obscure, for equaloplists()
+        return self is other or isinstance(other, BaseResumeGuardDescr)
 
 class BaseTestOptimizeOpt(BaseTest):
 
@@ -221,8 +224,8 @@ class BaseTestOptimizeOpt(BaseTest):
         if fail_args is None:
             return None
         descr = Storage()
-        descr.rd_frame_info_list = resume.FrameInfo(None, FakeFrame())
-        descr.rd_snapshot = resume.Snapshot(None, fail_args)
+        descr.pd_frame_info_list = resume.FrameInfo(None, FakeFrame())
+        descr.pd_snapshot = resume.Snapshot(None, fail_args)
         return descr
 
     def assert_equal(self, optimized, expected):
@@ -1796,41 +1799,46 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, "Not, Not, Not, Not, Not", expected)
 
     def test_merge_guard_nonnull_guard_class(self):
+        self.make_fail_descr()
         ops = """
         [p1, i0, i1, i2, p2]
-        guard_nonnull(p1) [i0]
+        guard_nonnull(p1, descr=fdescr) [i0]
         i3 = int_add(i1, i2)
         guard_class(p1, ConstClass(node_vtable)) [i1]
         jump(p2, i0, i1, i3, p2)
         """
         expected = """
         [p1, i0, i1, i2, p2]
-        guard_nonnull_class(p1, ConstClass(node_vtable)) [i0]
+        guard_nonnull_class(p1, ConstClass(node_vtable), descr=fdescr) [i0]
         i3 = int_add(i1, i2)
         jump(p2, i0, i1, i3, p2)
         """
         self.optimize_loop(ops, "Not, Not, Not, Not, Not", expected)
+        self.check_expanded_fail_descr("i0", rop.GUARD_NONNULL_CLASS)
 
     def test_merge_guard_nonnull_guard_value(self):
+        self.make_fail_descr()
         ops = """
         [p1, i0, i1, i2, p2]
-        guard_nonnull(p1) [i0]
+        guard_nonnull(p1, descr=fdescr) [i0]
         i3 = int_add(i1, i2)
         guard_value(p1, ConstPtr(myptr)) [i1]
         jump(p2, i0, i1, i3, p2)
         """
         expected = """
         [p1, i0, i1, i2, p2]
-        guard_value(p1, ConstPtr(myptr)) [i0]
+        guard_value(p1, ConstPtr(myptr), descr=fdescr) [i0]
         i3 = int_add(i1, i2)
         jump(p2, i0, i1, i3, p2)
         """
         self.optimize_loop(ops, "Not, Not, Not, Not, Not", expected)
+        self.check_expanded_fail_descr("i0", rop.GUARD_VALUE)
 
     def test_merge_guard_nonnull_guard_class_guard_value(self):
+        self.make_fail_descr()
         ops = """
         [p1, i0, i1, i2, p2]
-        guard_nonnull(p1) [i0]
+        guard_nonnull(p1, descr=fdescr) [i0]
         i3 = int_add(i1, i2)
         guard_class(p1, ConstClass(node_vtable)) [i2]
         i4 = int_sub(i3, 1)
@@ -1839,12 +1847,13 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         expected = """
         [p1, i0, i1, i2, p2]
-        guard_value(p1, ConstPtr(myptr)) [i0]
+        guard_value(p1, ConstPtr(myptr), descr=fdescr) [i0]
         i3 = int_add(i1, i2)
         i4 = int_sub(i3, 1)
         jump(p2, i0, i1, i4, p2)
         """
         self.optimize_loop(ops, "Not, Not, Not, Not, Not", expected)
+        self.check_expanded_fail_descr("i0", rop.GUARD_VALUE)
 
     def test_guard_class_oois(self):
         ops = """
@@ -2043,10 +2052,11 @@ class BaseTestOptimizeOpt(BaseTest):
                 _variables_equal(fieldbox, fieldvalue.strip(), strict=False)
                 index += 1
 
-    def check_expanded_fail_descr(self, expectedtext):
+    def check_expanded_fail_descr(self, expectedtext, guard_opnum):
         guard_op, = [op for op in self.loop.operations if op.is_guard()]
         fail_args = guard_op.fail_args
         fdescr = guard_op.descr
+        assert fdescr.guard_opnum == guard_opnum
         reader = resume.ResumeDataReader(fdescr, fail_args,
                                          MyMetaInterp(self.cpu))
         boxes = reader.consume_boxes()
@@ -2071,7 +2081,7 @@ class BaseTestOptimizeOpt(BaseTest):
         jump(1, i3)
         """
         self.optimize_loop(ops, 'Not, Not', expected)
-        self.check_expanded_fail_descr('15, i3')
+        self.check_expanded_fail_descr('15, i3', rop.GUARD_TRUE)
 
     def test_expand_fail_2(self):
         self.make_fail_descr()
@@ -2091,7 +2101,7 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not, Not', expected)
         self.check_expanded_fail_descr('''ptr
             where ptr is a node_vtable, valuedescr=i2
-            ''')
+            ''', rop.GUARD_TRUE)
 
     def test_expand_fail_3(self):
         self.make_fail_descr()
@@ -2115,7 +2125,7 @@ class BaseTestOptimizeOpt(BaseTest):
         self.check_expanded_fail_descr('''p1, i3
             where p1 is a node_vtable, valuedescr=1, nextdescr=p2
             where p2 is a node_vtable, valuedescr=i2, nextdescr=p3
-            ''')
+            ''', rop.GUARD_TRUE)
 
     def test_expand_fail_4(self):
         for arg in ['p1', 'p1,i2', 'i2,p1', 'p1,p2', 'p2,p1',
@@ -2142,8 +2152,8 @@ class BaseTestOptimizeOpt(BaseTest):
             self.optimize_loop(ops % arg, 'Not, Not, Not', expected)
             self.check_expanded_fail_descr('''i3, %s, i3
                 where p1 is a node_vtable, valuedescr=i2, nextdescr=p2
-                where p2 is a node_vtable, valuedescr=i2''' % arg)
-
+                where p2 is a node_vtable, valuedescr=i2''' % arg,
+                                           rop.GUARD_TRUE)
 
     def test_expand_fail_5(self):
         self.make_fail_descr()
@@ -2167,7 +2177,7 @@ class BaseTestOptimizeOpt(BaseTest):
         self.check_expanded_fail_descr('''p1, i3, p2, i4
             where p1 is a node_vtable, valuedescr=i4, nextdescr=p2
             where p2 is a node_vtable, valuedescr=i2, nextdescr=p1
-            ''')
+            ''', rop.GUARD_TRUE)
 
     def test_expand_fail_6(self):
         self.make_fail_descr()
@@ -2187,7 +2197,7 @@ class BaseTestOptimizeOpt(BaseTest):
                                    Not, Not''', expected)
         self.check_expanded_fail_descr('''p0
             where p0 is a node_vtable, valuedescr=i1b
-            ''')
+            ''', rop.GUARD_TRUE)
 
     def test_expand_fail_varray(self):
         self.make_fail_descr()
@@ -2208,7 +2218,7 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not', expected)
         self.check_expanded_fail_descr('''p1
             where p1 is a varray arraydescr: 25, i1
-            ''')
+            ''', rop.GUARD_TRUE)
 
     def test_expand_fail_vstruct(self):
         self.make_fail_descr()
@@ -2230,7 +2240,7 @@ class BaseTestOptimizeOpt(BaseTest):
         self.optimize_loop(ops, 'Not, Not', expected)
         self.check_expanded_fail_descr('''p2
             where p2 is a vstruct ssize, adescr=i1, bdescr=p1
-            ''')
+            ''', rop.GUARD_TRUE)
 
     def test_expand_fail_v_all_1(self):
         self.make_fail_descr()
@@ -2271,7 +2281,7 @@ class BaseTestOptimizeOpt(BaseTest):
             where p6s is a vstruct ssize, adescr=ia, bdescr=p7v
             where p5s is a vstruct ssize, adescr=i2, bdescr=p7v
             where p7v is a node_vtable, valuedescr=iv
-            ''')
+            ''', rop.GUARD_TRUE)
 
     def test_expand_fail_lazy_setfield_1(self):
         self.make_fail_descr()
@@ -2297,7 +2307,7 @@ class BaseTestOptimizeOpt(BaseTest):
         self.check_expanded_fail_descr('''
             p1.nextdescr = p2
             where p2 is a node_vtable, valuedescr=i2
-            ''')
+            ''', rop.GUARD_TRUE)
 
     def test_expand_fail_lazy_setfield_2(self):
         self.make_fail_descr()
@@ -2322,7 +2332,7 @@ class BaseTestOptimizeOpt(BaseTest):
         self.check_expanded_fail_descr('''
             ConstPtr(myptr).nextdescr = p2
             where p2 is a node_vtable, valuedescr=i2
-            ''')
+            ''', rop.GUARD_TRUE)
 
 
 class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
@@ -2621,7 +2631,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         self.check_expanded_fail_descr('''p2, p1
             where p1 is a node_vtable, nextdescr=p1b
             where p1b is a node_vtable, valuedescr=i1
-            ''')
+            ''', rop.GUARD_NOT_FORCED)
 
     def test_vref_virtual_and_lazy_setfield(self):
         self.make_fail_descr()
@@ -2660,7 +2670,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
             where p2 is a jit_virtual_ref_vtable, virtualtokendescr=i3, virtualrefindexdescr=2
             where p1 is a node_vtable, nextdescr=p1b
             where p1b is a node_vtable, valuedescr=i1
-            ''')
+            ''', rop.GUARD_NO_EXCEPTION)
 
     def test_vref_virtual_after_finish(self):
         self.make_fail_descr()

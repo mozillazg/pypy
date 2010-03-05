@@ -202,34 +202,89 @@ def make_done_loop_tokens():
                 ],
             }
 
+
 class ResumeDescr(AbstractFailDescr):
     def __init__(self, original_greenkey):
         self.original_greenkey = original_greenkey
     def _clone_if_mutable(self):
         raise NotImplementedError
 
-class ResumeGuardDescr(ResumeDescr):
-    counter = 0
+
+class PreOptGuardDescr(ResumeDescr):
+    """The descr of any guard operation before optimization."""
+
     # this class also gets the following attributes stored by resume.py code
-    rd_snapshot = None
+    pd_snapshot = None
+    pd_frame_info_list = None
+
+    # XXX temp
+    def __setattr__(self, attr, value):
+        assert not attr.startswith('rd_')
+        ResumeDescr.__setattr__(self, attr, value)
+
+    def get_final_descr(self, opnum, metainterp_sd):
+        if opnum == rop.GUARD_TRUE:
+            cls = ResumeGuardTrueDescr
+        elif opnum == rop.GUARD_FALSE:
+            cls = ResumeGuardFalseDescr
+        elif opnum == rop.GUARD_VALUE:
+            cls = ResumeGuardValueDescr
+        elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
+            cls = ResumeGuardExcDescr
+        elif opnum == rop.GUARD_NO_OVERFLOW:
+            cls = ResumeGuardNoOverflowDescr
+        elif opnum == rop.GUARD_NONNULL:
+            cls = ResumeGuardNonNullDescr
+        elif opnum == rop.GUARD_ISNULL:
+            cls = ResumeGuardIsNullDescr
+        elif opnum == rop.GUARD_NOT_FORCED:
+            cls = ResumeGuardForcedDescr
+        else:
+            cls = ResumeGuardDefaultDescr
+        return cls(metainterp_sd, self.original_greenkey)
+
+    def get_final_descr_guard_value_bool(self, metainterp_sd):
+        return ResumeGuardValueBoolDescr(metainterp_sd, self.original_greenkey)
+
+    def _clone_if_mutable(self):
+        res = PreOptGuardDescr(self.original_greenkey)
+        # XXX a bit ugly to have to list them here
+        res.rd_snapshot = self.rd_snapshot
+        res.rd_frame_info_list = self.rd_frame_info_list
+        return res
+
+
+class BaseResumeGuardDescr(ResumeDescr):
+    """The base class for the descr of guard operations after optimization."""
+    counter = 0
+
+    # this class also gets the following attributes stored by resume.py code
     rd_frame_info_list = None
     rd_numb = None
     rd_consts = None
     rd_virtuals = None
     rd_pendingfields = None
 
+    # XXX temp
+    def __setattr__(self, attr, value):
+        assert not attr.startswith('pd_')
+        ResumeDescr.__setattr__(self, attr, value)
+
     def __init__(self, metainterp_sd, original_greenkey):
         ResumeDescr.__init__(self, original_greenkey)
         self.metainterp_sd = metainterp_sd
 
     def store_final_boxes(self, guard_op, boxes):
+        guard_op.descr = self
         guard_op.fail_args = boxes
-        self.guard_opnum = guard_op.opnum
 
     def handle_fail(self, metainterp_sd):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
         metainterp = MetaInterp(metainterp_sd)
         return metainterp.handle_guard_failure(self)
+
+    def prepare_resume(self, metainterp):
+        raise NotImplementedError
 
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge.  Attach the new operations
@@ -241,18 +296,47 @@ class ResumeGuardDescr(ResumeDescr):
                                new_loop.operations)
 
 
-    def _clone_if_mutable(self):
-        res = self.__class__(self.metainterp_sd, self.original_greenkey)
-        # XXX a bit ugly to have to list them all here
-        res.rd_snapshot = self.rd_snapshot
-        res.rd_frame_info_list = self.rd_frame_info_list
-        res.rd_numb = self.rd_numb
-        res.rd_consts = self.rd_consts
-        res.rd_virtuals = self.rd_virtuals
-        res.rd_pendingfields = self.rd_pendingfields
-        return res
+# we have all the following classes as a way to save one word in each
+# instance
 
-class ResumeGuardForcedDescr(ResumeGuardDescr):
+class ResumeGuardDefaultDescr(BaseResumeGuardDescr):
+    def prepare_resume(self, metainterp):
+        pass
+
+class ResumeGuardTrueDescr(BaseResumeGuardDescr):
+    def prepare_resume(self, metainterp):
+        metainterp.prepare_resume_guard_true()
+
+class ResumeGuardFalseDescr(BaseResumeGuardDescr):
+    def prepare_resume(self, metainterp):
+        metainterp.prepare_resume_guard_false()
+
+class ResumeGuardExcDescr(BaseResumeGuardDescr):
+    def prepare_resume(self, metainterp):
+        metainterp.prepare_resume_guard_exc()
+
+class ResumeGuardNoOverflowDescr(BaseResumeGuardDescr):
+    def prepare_resume(self, metainterp):
+        metainterp.prepare_resume_guard_no_overflow()
+
+class ResumeGuardNonNullDescr(BaseResumeGuardDescr):
+    def prepare_resume(self, metainterp):
+        metainterp.prepare_resume_guard_non_null()
+
+class ResumeGuardIsNullDescr(BaseResumeGuardDescr):
+    def prepare_resume(self, metainterp):
+        metainterp.prepare_resume_guard_is_null()
+
+# for GUARD_VALUE detected to operate on a bool
+ResumeGuardValueBoolDescr = ResumeGuardDefaultDescr
+
+class ResumeGuardValueDescr(BaseResumeGuardDescr):
+    def prepare_resume(self, metainterp):
+        pass   # xxx
+
+
+class ResumeGuardForcedDescr(BaseResumeGuardDescr):
+    """A version of ResumeGuardDescr for GUARD_NOT_FORCED."""
 
     def handle_fail(self, metainterp_sd):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
@@ -317,6 +401,10 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
 
 
 class ResumeFromInterpDescr(ResumeDescr):
+    """This is used by pyjitpl as the ResumeDescr for cases where tracing
+    started from the interpreter, at a loop boundary, instead of from a
+    guard failure.
+    """
     def __init__(self, original_greenkey, redkey):
         ResumeDescr.__init__(self, original_greenkey)
         self.redkey = redkey

@@ -22,8 +22,6 @@ PyFrame._virtualizable2_ = ['last_instr', 'pycode',
                             'lastblock',
                             ]
 
-JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
-
 def can_inline(next_instr, bytecode):
     return not bool(bytecode.co_flags & CO_CONTAINSLOOP)
 
@@ -48,14 +46,6 @@ class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
     greens = ['next_instr', 'pycode']
     virtualizables = ['frame']
-
-##    def compute_invariants(self, reds, next_instr, pycode):
-##        # compute the information that really only depends on next_instr
-##        # and pycode
-##        frame = reds.frame
-##        valuestackdepth = frame.valuestackdepth
-##        blockstack = frame.blockstack
-##        return (valuestackdepth, blockstack)
 
 pypyjitdriver = PyPyJitDriver(can_inline = can_inline,
                               get_printable_location = get_printable_location,
