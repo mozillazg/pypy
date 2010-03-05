@@ -147,6 +147,7 @@ def importhook(space, modulename, w_globals=None,
 #
 importhook.unwrap_spec = [ObjSpace, str, W_Root, W_Root, W_Root, int]
 
+@jit.dont_look_inside
 def absolute_import(space, modulename, baselevel, fromlist_w, tentative):
     lock = getimportlock(space)
     lock.acquire_lock()
@@ -345,6 +346,7 @@ def _prepare_module(space, w_mod, filename, pkgdir):
     if pkgdir is not None:
         space.setattr(w_mod, w('__path__'), space.newlist([w(pkgdir)]))
 
+@jit.dont_look_inside
 def load_module(space, w_modulename, find_info, reuse=False):
     if find_info is None:
         return
@@ -428,6 +430,7 @@ def load_part(space, w_path, prefix, partname, w_parent, tentative):
         msg = "No module named %s"
         raise operationerrfmt(space.w_ImportError, msg, modulename)
 
+@jit.dont_look_inside
 def reload(space, w_module):
     """Reload the module.
     The module must have been successfully imported before."""
@@ -625,6 +628,7 @@ def exec_code_module(space, w_mod, code_w):
     code_w.exec_code(space, w_dict, w_dict)
 
 
+@jit.dont_look_inside
 def load_source_module(space, w_modulename, w_mod, pathname, source,
                        write_pyc=True):
     """
@@ -724,6 +728,7 @@ def read_compiled_module(space, cpathname, strbuf):
                               "Non-code object in %s", cpathname)
     return pycode
 
+@jit.dont_look_inside
 def load_compiled_module(space, w_modulename, w_mod, cpathname, magic,
                          timestamp, source):
     """
