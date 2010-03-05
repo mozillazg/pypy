@@ -220,8 +220,7 @@ def _absolute_import(space, modulename, baselevel, fromlist_w, tentative):
             first = w_mod
             tentative = 0
         prefix.append(part)
-        if fromlist_w is not None:
-            w_path = try_getattr(space, w_mod, w('__path__'))
+        w_path = try_getattr(space, w_mod, w('__path__'))
         level += 1
 
     if fromlist_w is not None:
