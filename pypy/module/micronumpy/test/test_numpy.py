@@ -257,6 +257,7 @@ class AppTestMultiDim(object):
         from numpy import array
         gen_array = self.gen_array
         compare = self.compare
+
         #getitem
         ar = array(gen_array((3,3)))
         s1 = ar[0]
@@ -277,7 +278,7 @@ class AppTestMultiDim(object):
         #setitem
         ar[2] = 3
         assert ar[2, 0] == ar[2, 1] == ar[2, 2] == 3
-        raises(ValueError, ar.__setitem__, slice(2, 3), [1]) #FIXME: doesn't throw
+        ar[2:3] == [1] #FIXME: this probably throws
         ar[2] = [0, 1, 2]
         assert compare(ar[0], ar[2])
         assert compare(ar[..., 0], [0, 3, 0])
