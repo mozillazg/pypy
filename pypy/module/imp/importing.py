@@ -9,7 +9,7 @@ from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 from pypy.interpreter.eval import Code
-from pypy.rlib import streamio
+from pypy.rlib import streamio, jit
 from pypy.rlib.streamio import StreamErrors
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import we_are_translated
@@ -80,6 +80,9 @@ def try_getattr(space, w_obj, w_name):
 def check_sys_modules(space, w_modulename):
     return space.finditem(space.sys.get('modules'), w_modulename)
 
+def check_sys_modules_w(space, modulename):
+    return space.finditem_str(space.sys.get('modules'), modulename)
+
 def importhook(space, modulename, w_globals=None,
                w_locals=None, w_fromlist=None, level=-1):
     space.timer.start_name("importhook", modulename)
@@ -88,6 +91,11 @@ def importhook(space, modulename, w_globals=None,
             space.w_ValueError,
             space.wrap("Empty module name"))
     w = space.wrap
+
+    if w_fromlist is not None and space.is_true(w_fromlist):
+        fromlist_w = space.fixedview(w_fromlist)
+    else:
+        fromlist_w = None
 
     rel_modulename = None
     if (level != 0 and
@@ -120,7 +128,7 @@ def importhook(space, modulename, w_globals=None,
                         not space.is_w(w_mod, space.w_None)):
                         w_mod = absolute_import(space, rel_modulename,
                                                 baselevel,
-                                                w_fromlist, tentative=1)
+                                                fromlist_w, tentative=1)
                         if w_mod is not None:
                             space.timer.stop_name("importhook", modulename)
                             return w_mod
@@ -129,7 +137,9 @@ def importhook(space, modulename, w_globals=None,
     if level > 0:
         msg = "Attempted relative import in non-package"
         raise OperationError(space.w_ValueError, w(msg))
-    w_mod = absolute_import(space, modulename, 0, w_fromlist, tentative=0)
+    w_mod = absolute_import_try(space, modulename, 0, fromlist_w)
+    if w_mod is None and not space.is_w(w_mod, space.w_None):
+        w_mod = absolute_import(space, modulename, 0, fromlist_w, tentative=0)
     if rel_modulename is not None:
         space.setitem(space.sys.get('modules'), w(rel_modulename), space.w_None)
     space.timer.stop_name("importhook", modulename)
@@ -137,16 +147,27 @@ def importhook(space, modulename, w_globals=None,
 #
 importhook.unwrap_spec = [ObjSpace, str, W_Root, W_Root, W_Root, int]
 
-def absolute_import(space, modulename, baselevel, w_fromlist, tentative):
+def absolute_import(space, modulename, baselevel, fromlist_w, tentative):
     lock = getimportlock(space)
     lock.acquire_lock()
     try:
         return _absolute_import(space, modulename, baselevel,
-                                w_fromlist, tentative)
+                                fromlist_w, tentative)
     finally:
         lock.release_lock()
 
-def _absolute_import(space, modulename, baselevel, w_fromlist, tentative):
+@jit.unroll_safe
+def absolute_import_try(space, modulename, baselevel, fromlist_w):
+    """ Only look up sys.modules, not actually try to load anything
+    """
+    last_dot = 0
+    if '.' not in modulename:
+        w_mod = check_sys_modules_w(space, modulename)
+        if fromlist_w is not None:
+            return None
+    return None
+
+def _absolute_import(space, modulename, baselevel, fromlist_w, tentative):
     w = space.wrap
 
     w_mod = None
@@ -170,13 +191,12 @@ def _absolute_import(space, modulename, baselevel, w_fromlist, tentative):
         w_path = try_getattr(space, w_mod, w('__path__'))
         level += 1
 
-    if w_fromlist is not None and space.is_true(w_fromlist):
+    if fromlist_w is not None:
         if w_path is not None:
-            fromlist_w = space.unpackiterable(w_fromlist)
             if len(fromlist_w) == 1 and space.eq_w(fromlist_w[0],w('*')):
                 w_all = try_getattr(space, w_mod, w('__all__'))
                 if w_all is not None:
-                    fromlist_w = space.unpackiterable(w_all)
+                    fromlist_w = space.fixedview(w_all)
             for w_name in fromlist_w:
                 if try_getattr(space, w_mod, w_name) is None:
                     load_part(space, w_path, prefix, space.str_w(w_name), w_mod,
