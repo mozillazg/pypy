@@ -171,6 +171,7 @@ def absolute_import_try(space, modulename, baselevel, fromlist_w):
         level = 0
         first = None
         while last_dot != -1:
+            assert last_dot >= 0 # bah
             last_dot = modulename.find('.', last_dot + 1)
             if last_dot == -1:
                 w_mod = check_sys_modules_w(space, modulename)
