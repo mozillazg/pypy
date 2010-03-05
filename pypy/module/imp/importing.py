@@ -160,12 +160,41 @@ def absolute_import(space, modulename, baselevel, fromlist_w, tentative):
 def absolute_import_try(space, modulename, baselevel, fromlist_w):
     """ Only look up sys.modules, not actually try to load anything
     """
+    w_path = None
     last_dot = 0
     if '.' not in modulename:
         w_mod = check_sys_modules_w(space, modulename)
-        if fromlist_w is not None:
-            return None
-    return None
+        first = w_mod
+        if fromlist_w is not None and w_mod is not None:
+            w_path = try_getattr(space, w_mod, space.wrap('__path__'))
+    else:
+        level = 0
+        first = None
+        while last_dot != -1:
+            last_dot = modulename.find('.', last_dot + 1)
+            if last_dot == -1:
+                w_mod = check_sys_modules_w(space, modulename)
+            else:
+                w_mod = check_sys_modules_w(space, modulename[:last_dot])
+            if w_mod is None or space.is_w(w_mod, space.w_None):
+                return None
+            if level == baselevel:
+                first = w_mod
+            if fromlist_w is not None:
+                w_path = try_getattr(space, w_mod, space.wrap('__path__'))
+            level += 1
+    if fromlist_w is not None:
+        if w_path is not None:
+            if len(fromlist_w) == 1 and space.eq_w(fromlist_w[0],
+                                                   space.wrap('*')):
+                w_all = try_getattr(space, w_mod, space.wrap('__all__'))
+                if w_all is not None:
+                    fromlist_w = space.fixedview(w_all)
+            for w_name in fromlist_w:
+                if try_getattr(space, w_mod, w_name) is None:
+                    return None
+        return w_mod
+    return first
 
 def _absolute_import(space, modulename, baselevel, fromlist_w, tentative):
     w = space.wrap
@@ -188,7 +217,8 @@ def _absolute_import(space, modulename, baselevel, fromlist_w, tentative):
             first = w_mod
             tentative = 0
         prefix.append(part)
-        w_path = try_getattr(space, w_mod, w('__path__'))
+        if fromlist_w is not None:
+            w_path = try_getattr(space, w_mod, w('__path__'))
         level += 1
 
     if fromlist_w is not None:
