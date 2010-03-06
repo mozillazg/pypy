@@ -217,8 +217,7 @@ class PyPyTarget(object):
     
     def get_entry_point(self, config):
         from pypy.lib.ctypes_config_cache import rebuild
-        import translate
-        rebuild.rebuild(translate.log)
+        rebuild.try_rebuild()
 
         space = make_objspace(config)
 
