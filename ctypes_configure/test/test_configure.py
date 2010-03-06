@@ -147,8 +147,11 @@ def test_cache():
         large = configure.DefinedConstantInteger('large')
         undef = configure.Defined('really_undefined')
 
+    res = configure.configure(CConfig)
+
     cachefile = configdir.join('cache')
-    res = configure.configure(CConfig, savecache=configdir.join('cache'))
+    configure.dumpcache('', str(cachefile), res)
+
     d = {}
     execfile(str(cachefile), d)
     assert d['XYZZY'] == res['XYZZY']
