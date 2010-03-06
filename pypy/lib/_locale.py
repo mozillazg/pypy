@@ -314,9 +314,8 @@ __all__ = (
     'setlocale', 'localeconv', 'strxfrm', 'strcoll',
     'gettext', 'dgettext', 'dcgettext', 'textdomain',
     'bindtextdomain', 'CHAR_MAX',
-) + _CONSTANTS + tuple(langinfo_names)
+) + ALL_CONSTANTS
 if _bind_textdomain_codeset:
     __all__ += ('bind_textdomain_codeset',)
 if HAS_LANGINFO:
     __all__ += ('nl_langinfo',)
-
