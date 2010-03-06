@@ -10,7 +10,7 @@ from ctypes_configure.dumpcache import dumpcache
 
 # ____________________________________________________________
 
-_CONSTANTS = [
+_CONSTANTS = (
     'LC_CTYPE',
     'LC_NUMERIC',
     'LC_TIME',
@@ -24,7 +24,7 @@ _CONSTANTS = [
     'LC_TELEPHONE',
     'LC_MEASUREMENT',
     'LC_IDENTIFICATION',
-]
+)
 
 class LocaleConfigure:
     _compilation_info_ = ExternalCompilationInfo(includes=['locale.h'])
@@ -55,9 +55,10 @@ if HAS_LANGINFO:
         setattr(LanginfoConfigure, key, ConstantInteger(key))
 
     config.update(configure(LanginfoConfigure))
+    _CONSTANTS = _CONSTANTS + tuple(langinfo_names)
 
 # ____________________________________________________________
 
-config['_CONSTANTS'] = _CONSTANTS
+config['ALL_CONSTANTS'] = _CONSTANTS
 config['HAS_LANGINFO'] = HAS_LANGINFO
 dumpcache(__file__, '_locale_cache.py', config)
