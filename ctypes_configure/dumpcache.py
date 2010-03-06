@@ -16,9 +16,6 @@ def dumpcache(referencefilename, filename, config):
             f.write("%s = %d\n" % (key, val))
         elif val is None:
             f.write("%s = None\n" % key)
-        elif isinstance(val, ctypes._SimpleCData.__class__):
-            # a simple type
-            f.write("%s = %s\n" % (key, ctypes_repr(val)))
         elif isinstance(val, ctypes.Structure.__class__):
             f.write("class %s(ctypes.Structure):\n" % key)
             f.write("    _fields_ = [\n")
@@ -31,12 +28,16 @@ def dumpcache(referencefilename, filename, config):
                        "lists of integers or strings only"
             f.write("%s = %r\n" % (key, val))
         else:
-            raise NotImplementedError("Saving of %r" % (val,))
+            # a simple type, hopefully
+            f.write("%s = %s\n" % (key, ctypes_repr(val)))
     f.close()
     print 'Wrote %s.' % (filename,)
 
 def ctypes_repr(cls):
     # ctypes_configure does not support nested structs so far
     # so let's ignore it
-    assert isinstance(cls, ctypes._SimpleCData.__class__)
-    return "ctypes." + cls.__name__
+    if isinstance(cls, ctypes._SimpleCData.__class__):
+        return "ctypes." + cls.__name__
+    if hasattr(cls, '_length_') and hasattr(cls, '_type_'):  # assume an array
+        return '%d * %s' % (cls._length_, ctypes_repr(cls._type_))
+    raise NotImplementedError("saving of object with type %r" % type(cls))

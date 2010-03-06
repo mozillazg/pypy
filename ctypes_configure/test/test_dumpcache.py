@@ -1,3 +1,4 @@
+import ctypes
 from ctypes_configure import configure, dumpcache
 from ctypes_configure.cbuild import ExternalCompilationInfo
 
@@ -37,3 +38,14 @@ def test_cache():
     assert d['undef'] == res['undef']
     assert d['large'] == res['large']
     assert d['XUZ'] == res['XUZ']
+
+
+def test_cache_array():
+    configdir = configure.configdir
+    res = {'foo': ctypes.c_short * 27}
+    cachefile = configdir.join('cache_array')
+    dumpcache.dumpcache('', str(cachefile), res)
+    #
+    d = {}
+    execfile(str(cachefile), d)
+    assert d['foo'] == res['foo']
