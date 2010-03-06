@@ -17,10 +17,18 @@ def rebuild_one(name):
     finally:
         sys.path[:] = path
 
-def rebuild():
+def rebuild(log=None):
     for p in os.listdir(_dirpath):
         if p.endswith('.ctc.py'):
-            rebuild_one(p)
+            try:
+                rebuild_one(p)
+            except Exception, e:
+                if log is None:
+                    raise
+                else:
+                    log.ERROR("Running %s:\n  %s: %s" % (
+                        os.path.join(_dirpath, p),
+                        e.__class__.__name__, e))
 
 
 if __name__ == '__main__':
