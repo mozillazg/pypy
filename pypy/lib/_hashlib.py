@@ -1,6 +1,8 @@
+import sys
 from ctypes import *
 import ctypes.util
-from ctypes_configure import configure
+from ctypes_support import cache_dir
+import os.path
 
 # Note: OpenSSL on OS X only provides md5 and sha1
 libpath = ctypes.util.find_library('ssl')
@@ -16,15 +18,25 @@ def bufferstr(x):
     else:
         return buffer(x)[:]
 
-class CConfig:
-    _compilation_info_ = configure.ExternalCompilationInfo(
-        includes=['openssl/evp.h'],
-        )
-    EVP_MD = configure.Struct('EVP_MD',
-                              [])
-    EVP_MD_CTX = configure.Struct('EVP_MD_CTX',
-                                  [('digest', c_void_p)])
-c = configure.configure(CConfig)
+cache_file = os.path.join(cache_dir, '_hashlib')
+
+try:
+    c = {}
+    execfile(cache_file, c)
+except (OSError, IOError):
+    from ctypes_configure import configure
+
+    class CConfig:
+        _compilation_info_ = configure.ExternalCompilationInfo(
+            includes=['openssl/evp.h'],
+            )
+        EVP_MD = configure.Struct('EVP_MD',
+                                  [])
+        EVP_MD_CTX = configure.Struct('EVP_MD_CTX',
+                                      [('digest', c_void_p)])
+    c = configure.configure(CConfig, savecache=cache_file)
+    del CConfig
+
 EVP_MD_CTX = c['EVP_MD_CTX']
 EVP_MD = c['EVP_MD']
 
