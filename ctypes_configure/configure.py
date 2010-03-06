@@ -151,11 +151,13 @@ class _CWriter(object):
         return try_compile([self.path], eci)
 
         
-def configure(CConfig, noerr=False):
+def configure(CConfig, savecache=None, noerr=False):
     """Examine the local system by running the C compiler.
     The CConfig class contains CConfigEntry attribues that describe
     what should be inspected; configure() returns a dict mapping
     names to the results.
+
+    savecache contains a path where to save (append) results of a call
     """
     for attr in ['_includes_', '_libraries_', '_sources_', '_library_dirs_',
                  '_include_dirs_', '_header_']:
@@ -164,7 +166,7 @@ def configure(CConfig, noerr=False):
     for key in dir(CConfig):
         value = getattr(CConfig, key)
         if isinstance(value, CConfigEntry):
-            entries.append((key, value))            
+            entries.append((key, value))
 
     if entries:   # can be empty if there are only CConfigSingleEntries
         writer = _CWriter(CConfig)
@@ -202,14 +204,35 @@ def configure(CConfig, noerr=False):
             writer.write_header()
             res[key] = value.question(writer.ask_gcc)
 
+    if savecache is not None:
+        f = py.path.local(savecache).open("w")
+        f.write('import ctypes\n\n')
+        for key, val in res.items():
+            entry = getattr(CConfig, key)
+            if isinstance(val, int):
+                f.write("%s = %d\n" % (key, val))
+            elif isinstance(val, ctypes._SimpleCData.__class__):
+                # a simple type
+                f.write("%s = %s\n" % (key, ctypes_repr(val)))
+            elif isinstance(val, ctypes.Structure.__class__):
+                f.write("class %s(ctypes.Structure):\n" % key)
+                f.write("    _fields_ = [\n")
+                for k, v in val._fields_:
+                    f.write("        ('%s', %s),\n" % (k, ctypes_repr(v)))
+                f.write("    ]\n")
+            else:
+                raise NotImplementedError("Saving of %r" % (val,))
+        f.close()
     return res
+
+def ctypes_repr(cls):
+    return "ctypes." + cls.__name__
 
 # ____________________________________________________________
 
 
 class CConfigEntry(object):
     "Abstract base class."
-
 
 class Struct(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
@@ -313,7 +336,6 @@ class Struct(CConfigEntry):
         S.__name__ = name
         return S
 
-
 class SimpleType(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
     defined simple numeric type.
@@ -349,7 +371,6 @@ class SimpleType(CConfigEntry):
         if (size, sign) != size_and_sign(ctype):
             ctype = fixup_ctype(ctype, self.name, (size, sign))
         return ctype
-
 
 class ConstantInteger(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
