@@ -7,8 +7,8 @@ from ctypes import (Structure, POINTER, create_string_buffer,
     c_ubyte, c_int, c_char_p, c_wchar_p)
 from ctypes_support import standard_c_lib as libc
 from ctypes_support import get_errno
-from ctypes_configure.configure import (configure, ExternalCompilationInfo,
-    ConstantInteger, DefinedConstantInteger, SimpleType)
+
+import os.path
 
 size_t = c_int
 
@@ -31,21 +31,33 @@ _CONSTANTS = (
     'LC_IDENTIFICATION',
 )
 
-class LocaleConfigure:
-    _compilation_info_ = ExternalCompilationInfo(includes=['locale.h'])
-for key in _CONSTANTS:
-    setattr(LocaleConfigure, key, ConstantInteger(key))
+cache_dir = os.path.join(os.path.dirname(__file__), '_ctypes', '_cache')
+cache_file = os.path.join(cache_dir, '_locale')
 
 try:
-    locale_config = configure(LocaleConfigure, noerr=True)
-except Exception, e:
-    # should probably be moved into configure()
-    # as an optional feature
-    raise ImportError("%s: %s" % (e.__class__, e))
+    locale_config = {}
+    execfile(cache_file, locale_config)
+except:
+    from ctypes_configure.configure import (configure, ExternalCompilationInfo,
+        ConstantInteger, DefinedConstantInteger, SimpleType)
+
+    class LocaleConfigure:
+        _compilation_info_ = ExternalCompilationInfo(includes=['locale.h'])
+    for key in _CONSTANTS:
+        setattr(LocaleConfigure, key, ConstantInteger(key))
+
+    try:
+        locale_config = configure(LocaleConfigure, savecache=cache_file,
+                                  noerr=True)
+    except Exception, e:
+        # should probably be moved into configure()
+        # as an optional feature
+        raise ImportError("%s: %s" % (e.__class__, e))
+
+    del LocaleConfigure
 
 for key in _CONSTANTS:
     globals()[key] = locale_config[key]
-del LocaleConfigure
 del locale_config
 
 HAS_LANGINFO = True
@@ -297,18 +309,28 @@ if HAS_LANGINFO:
     for i in range(1, 13):
         langinfo_names.append("MON_%d" % i)
         langinfo_names.append("ABMON_%d" % i)
-    
-    class LanginfoConfigure:
-        _compilation_info_ = ExternalCompilationInfo(includes=['langinfo.h'])
-        nl_item = SimpleType('nl_item')
-    for key in langinfo_names:
-        setattr(LanginfoConfigure, key, ConstantInteger(key))
 
-    config = configure(LanginfoConfigure)
+    try:
+        langinfo_cache = os.path.join(cache_dir, '_locale_langinfo')
+        config = {}
+        execfile(langinfo_cache, config)
+    except:
+        from ctypes_configure.configure import (configure,
+                                                ExternalCompilationInfo,
+            ConstantInteger, DefinedConstantInteger, SimpleType)
+
+        class LanginfoConfigure:
+            _compilation_info_ = ExternalCompilationInfo(
+                includes=['langinfo.h'])
+            nl_item = SimpleType('nl_item')
+        for key in langinfo_names:
+            setattr(LanginfoConfigure, key, ConstantInteger(key))
+
+        config = configure(LanginfoConfigure, savecache=langinfo_cache)
+        del LanginfoConfigure
     nl_item = config['nl_item']
     for key in langinfo_names:
         globals()[key] = config[key]
-    del LanginfoConfigure
     del config
 
     _nl_langinfo = libc.nl_langinfo
