@@ -232,21 +232,25 @@ def create_sdarray(data_type, unwrap, coerce):
         descr_len.unwrap_spec = ['self']
 
         def str(self):
-            return ', '.join([str(x) for x in self.storage])
+            strings = [str(x) for x in self.storage]
+            maxlen = max([len(x) for x in strings])
+            return strings, maxlen
 
         def descr_str(self):
             space = self.space
             #beautiful, as in numpy
-            strs=[str(x) for x in self.storage]
-            maxlen=max([len(x) for x in strs])
+            strings, maxlen = self.str()
             return space.wrap(
-                    "[%s]" % ' '.join(["%-*s"%(maxlen, s) for s in strs]) 
+                    "[%s]" % ' '.join(["%-*s"%(maxlen, s) for s in strings]) 
                     )
         descr_str.unwrap_spec = ['self']
 
         def descr_repr(self):
             space = self.space
-            return space.wrap("array([%s])" % self.str())
+            strings, maxlen = self.str()
+            return space.wrap(
+                    "array([%s])" % ', '.join(["%-*s"%(maxlen, s) for s in strings]) 
+                    )
         descr_repr.unwrap_spec = ['self']
 
     NumArray.typedef = TypeDef('ndarray', base_typedef,
