@@ -175,6 +175,22 @@ class AppTestSDArray(object):
         assert len(x) == 5
         raises(ValueError, minimum, ar, zeros(3, dtype=int))
 
+    def test_str(self):
+        skip("Perfect string formatting is going to be tough.")
+        from numpy import zeros, array
+
+        z = zeros(shape=(3,))
+        assert str(z) == '[ 0.  0.  0.]'
+
+        ar = array([1.0, 2.0, 3.0])
+        assert str(ar) == '[ 1.  2.  3.]'
+
+        ar = array([1.5, 2.5, 3.5])
+        assert str(ar) == '[ 1.5  2.5  3.5]'
+
+        ar = array([1, 2, 3], dtype=int)
+        assert str(ar) == '[1 2 3]'
+
 class AppTestMultiDim(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('micronumpy',))

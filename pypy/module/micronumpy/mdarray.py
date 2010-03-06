@@ -254,13 +254,13 @@ def create_mdarray(data_type, unwrap, coerce):
 
         def descr_getitem(self, w_index):
             space = self.space
-            validate_index(self, space, w_index)
             try:
                 space.iter(w_index)
             except OperationError, e:
                 if not e.match(space, space.w_TypeError):
                     raise
                 w_index = space.newlist([w_index])
+            validate_index(self, space, w_index)
             try:
                 indexes = self._unpack_indexes(space, w_index)
             except OperationError, e:
