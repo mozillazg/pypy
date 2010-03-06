@@ -39,5 +39,5 @@ def ctypes_repr(cls):
     if isinstance(cls, ctypes._SimpleCData.__class__):
         return "ctypes." + cls.__name__
     if hasattr(cls, '_length_') and hasattr(cls, '_type_'):  # assume an array
-        return '%d * %s' % (cls._length_, ctypes_repr(cls._type_))
+        return '%s*%d' % (ctypes_repr(cls._type_), cls._length_)
     raise NotImplementedError("saving of object with type %r" % type(cls))
