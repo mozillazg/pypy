@@ -164,7 +164,7 @@ def configure(CConfig, noerr=False):
     for key in dir(CConfig):
         value = getattr(CConfig, key)
         if isinstance(value, CConfigEntry):
-            entries.append((key, value))            
+            entries.append((key, value))
 
     if entries:   # can be empty if there are only CConfigSingleEntries
         writer = _CWriter(CConfig)
@@ -201,7 +201,6 @@ def configure(CConfig, noerr=False):
             writer = _CWriter(CConfig)
             writer.write_header()
             res[key] = value.question(writer.ask_gcc)
-
     return res
 
 # ____________________________________________________________
@@ -209,7 +208,6 @@ def configure(CConfig, noerr=False):
 
 class CConfigEntry(object):
     "Abstract base class."
-
 
 class Struct(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
@@ -313,7 +311,6 @@ class Struct(CConfigEntry):
         S.__name__ = name
         return S
 
-
 class SimpleType(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
     defined simple numeric type.
@@ -349,7 +346,6 @@ class SimpleType(CConfigEntry):
         if (size, sign) != size_and_sign(ctype):
             ctype = fixup_ctype(ctype, self.name, (size, sign))
         return ctype
-
 
 class ConstantInteger(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
@@ -588,14 +584,42 @@ def run_example_code(filepath, eci, noerr=False):
 
 # ____________________________________________________________
 
+def ctypes_repr(cls):
+    # ctypes_configure does not support nested structs so far
+    # so let's ignore it
+    assert isinstance(cls, ctypes._SimpleCData.__class__)
+    return "ctypes." + cls.__name__
+
 def dumpcache(referencefilename, filename, config):
     dirname = os.path.dirname(referencefilename)
     filename = os.path.join(dirname, filename)
     f = open(filename, 'w')
+    print >> f, 'import ctypes'
+    print >> f
     names = config.keys()
     names.sort()
-    for name in names:
-        print >> f, '%s = %r' % (name, config[name])
+    for key in names:
+        val = config[key]
+        if isinstance(val, (int, long)):
+            f.write("%s = %d\n" % (key, val))
+        elif val is None:
+            f.write("%s = None\n" % key)
+        elif isinstance(val, ctypes._SimpleCData.__class__):
+            # a simple type
+            f.write("%s = %s\n" % (key, ctypes_repr(val)))
+        elif isinstance(val, ctypes.Structure.__class__):
+            f.write("class %s(ctypes.Structure):\n" % key)
+            f.write("    _fields_ = [\n")
+            for k, v in val._fields_:
+                f.write("        ('%s', %s),\n" % (k, ctypes_repr(v)))
+            f.write("    ]\n")
+        elif isinstance(val, (tuple, list)):
+            for x in val:
+                assert isinstance(x, (int, long, str)), \
+                       "lists of integers or strings only"
+            f.write("%s = %r\n" % (key, val))
+        else:
+            raise NotImplementedError("Saving of %r" % (val,))
     f.close()
     print 'Wrote %s.' % (filename,)
 
