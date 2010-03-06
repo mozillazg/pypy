@@ -226,6 +226,9 @@ def configure(CConfig, savecache=None, noerr=False):
     return res
 
 def ctypes_repr(cls):
+    # ctypes_configure does not support nested structs so far
+    # so let's ignore it
+    assert isinstance(cls, ctypes._SimpleCData.__class__)
     return "ctypes." + cls.__name__
 
 # ____________________________________________________________
