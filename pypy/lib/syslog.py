@@ -6,13 +6,12 @@ syslog facility.
 """
 
 import sys
+import os.path
 if sys.platform == 'win32':
     raise ImportError("No syslog on Windows")
 
-from ctypes_support import standard_c_lib as libc
+from ctypes_support import standard_c_lib as libc, cache_dir
 from ctypes import c_int, c_char_p
-from ctypes_configure.configure import (configure,
-    ExternalCompilationInfo, ConstantInteger, DefinedConstantInteger)
 
 _CONSTANTS = (
     'LOG_EMERG',
@@ -61,14 +60,23 @@ _ALIAS = (
     ('LOG_UUCP', 'LOG_MAIL'),
 )
 
-class SyslogConfigure:
-    _compilation_info_ = ExternalCompilationInfo(includes=['sys/syslog.h'])
-for key in _CONSTANTS:
-    setattr(SyslogConfigure, key, ConstantInteger(key))
-for key in _OPTIONAL_CONSTANTS:
-    setattr(SyslogConfigure, key, DefinedConstantInteger(key))
+cache_file = os.path.join(cache_dir, 'syslog')
+try:
+    config = {}
+    execfile(cache_file, config)
+except (IOError, OSError):
+    from ctypes_configure.configure import (configure,
+        ExternalCompilationInfo, ConstantInteger, DefinedConstantInteger)
 
-config = configure(SyslogConfigure)
+    class SyslogConfigure:
+        _compilation_info_ = ExternalCompilationInfo(includes=['sys/syslog.h'])
+    for key in _CONSTANTS:
+        setattr(SyslogConfigure, key, ConstantInteger(key))
+    for key in _OPTIONAL_CONSTANTS:
+        setattr(SyslogConfigure, key, DefinedConstantInteger(key))
+
+    config = configure(SyslogConfigure, savecache=cache_file)
+
 for key in _CONSTANTS:
     globals()[key] = config[key]
 optional_constants = []
