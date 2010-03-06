@@ -19,7 +19,6 @@ def unwrap_float32(space, w_x):
 def coerce_float32(space, w_x):
     return unwrap_float32(space, space.float(w_x))
 
-
 def create_factory(result_factory):
     def factory(t):
         return result_factory[t]
