@@ -30,3 +30,11 @@ def test_syslog():
 def test_hashlib():
     d = run('hashlib.ctc.py', '_hashlib_cache.py')
     assert hasattr(d['EVP_MD_CTX'], 'digest')
+
+def test_resource():
+    d = run('resource.ctc.py', '_resource_cache.py')
+    assert 'RLIM_NLIMITS' in d
+
+def test_pyexpat():
+    d = run('pyexpat.ctc.py', '_pyexpat_cache.py')
+    assert 'XML_COMBINED_VERSION' in d
