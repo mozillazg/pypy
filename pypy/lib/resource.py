@@ -2,13 +2,11 @@ import sys
 if sys.platform == 'win32':
     raise ImportError('resource module not available for win32')
 
+import os.path
 from ctypes_support import standard_c_lib as libc
-from ctypes_support import get_errno
+from ctypes_support import get_errno, cache_dir
 from ctypes import Structure, c_int, c_long, byref, sizeof
 from errno import EINVAL, EPERM
-from ctypes_configure.configure import (configure,
-    ExternalCompilationInfo, ConstantInteger, DefinedConstantInteger,
-    SimpleType)
 import _structseq
 
 class error(Exception):
@@ -53,16 +51,28 @@ except AttributeError:
     _getpagesize = None
 
 # Setup our configure
-class ResourceConfigure:
-    _compilation_info_ = ExternalCompilationInfo(includes=['sys/resource.h'])
-    rlim_t = SimpleType('rlim_t')
-for key in _CONSTANTS:
-    setattr(ResourceConfigure, key, ConstantInteger(key))
-for key in _OPTIONAL_CONSTANTS:
-    setattr(ResourceConfigure, key, DefinedConstantInteger(key))
+
+cache_file = os.path.join(cache_dir, 'resource')
+try:
+    config = {}
+    execfile(cache_file, config)
+except (IOError, OSError):
+    from ctypes_configure.configure import (configure,
+        ExternalCompilationInfo, ConstantInteger, DefinedConstantInteger,
+        SimpleType)
+
+    class ResourceConfigure:
+        _compilation_info_ = ExternalCompilationInfo(
+            includes=['sys/resource.h'])
+        rlim_t = SimpleType('rlim_t')
+    for key in _CONSTANTS:
+        setattr(ResourceConfigure, key, ConstantInteger(key))
+    for key in _OPTIONAL_CONSTANTS:
+        setattr(ResourceConfigure, key, DefinedConstantInteger(key))
+
+    config = configure(ResourceConfigure, savecache=cache_file)
 
 # Configure constants and types
-config = configure(ResourceConfigure)
 rlim_t = config['rlim_t']
 sizeof_rlim_t = 1<<(sizeof(rlim_t) * 8)
 for key in _CONSTANTS:
