@@ -6,6 +6,9 @@ errno access, as portable as possible
 import ctypes
 import ctypes.util
 import sys
+import os.path
+
+cache_dir = os.path.join(os.path.dirname(__file__), '_ctypes', '_cache')
 
 # __________ the standard C library __________
 

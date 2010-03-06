@@ -6,7 +6,7 @@ Support for POSIX locales.
 from ctypes import (Structure, POINTER, create_string_buffer,
     c_ubyte, c_int, c_char_p, c_wchar_p)
 from ctypes_support import standard_c_lib as libc
-from ctypes_support import get_errno
+from ctypes_support import get_errno, cache_dir
 
 import os.path
 
@@ -31,13 +31,12 @@ _CONSTANTS = (
     'LC_IDENTIFICATION',
 )
 
-cache_dir = os.path.join(os.path.dirname(__file__), '_ctypes', '_cache')
 cache_file = os.path.join(cache_dir, '_locale')
 
 try:
     locale_config = {}
     execfile(cache_file, locale_config)
-except:
+except (IOError, OSError):
     from ctypes_configure.configure import (configure, ExternalCompilationInfo,
         ConstantInteger, DefinedConstantInteger, SimpleType)
 
