@@ -126,6 +126,32 @@ def test_configure():
                    'ushort': ctypes.c_ushort,
                    'XYZZY': 42}
 
+def test_cache():
+    configdir = configure.configdir
+    test_h = configdir.join('test_ctypes_platform2.h')
+    test_h.write('#define XYZZY 42\n')
+
+    class CConfig:
+        _compilation_info_ = ExternalCompilationInfo(
+            pre_include_lines = ["/* a C comment */",
+                                 "#include <stdio.h>",
+                                 "#include <test_ctypes_platform2.h>"],
+            include_dirs = [str(configdir)]
+        )
+
+        FILE = configure.Struct('FILE', [])
+        ushort = configure.SimpleType('unsigned short')
+        XYZZY = configure.ConstantInteger('XYZZY')
+
+    cachefile = configdir.join('cache')
+    res = configure.configure(CConfig, savecache=configdir.join('cache'))
+    d = {}
+    execfile(str(cachefile), d)
+    assert d['XYZZY'] == res['XYZZY']
+    assert d['ushort'] == res['ushort']
+    assert d['FILE']._fields_ == res['FILE']._fields_
+    assert d['FILE'].__mro__[1:] == res['FILE'].__mro__[1:]
+
 def test_ifdef():
     class CConfig:
         _compilation_info_ = ExternalCompilationInfo(
