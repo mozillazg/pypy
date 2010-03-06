@@ -588,6 +588,19 @@ def run_example_code(filepath, eci, noerr=False):
 
 # ____________________________________________________________
 
+def dumpcache(referencefilename, filename, config):
+    dirname = os.path.dirname(referencefilename)
+    filename = os.path.join(dirname, filename)
+    f = open(filename, 'w')
+    names = config.keys()
+    names.sort()
+    for name in names:
+        print >> f, '%s = %r' % (name, config[name])
+    f.close()
+    print 'Wrote %s.' % (filename,)
+
+# ____________________________________________________________
+
 def get_python_include_dir():
     from distutils import sysconfig
     gcv = sysconfig.get_config_vars()
