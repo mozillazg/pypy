@@ -64,17 +64,13 @@ for key in _OPTIONAL_CONSTANTS:
     setattr(SyslogConfigure, key, DefinedConstantInteger(key))
 
 config = configure(SyslogConfigure)
-optional_constants = []
 for key in _OPTIONAL_CONSTANTS:
-    if config[key] is not None:
-        optional_constants.append(key)
-    else:
+    if config[key] is None:
         del config[key]
 for alias, key in _ALIAS:
-    if alias in optional_constants:
-        continue
-    config[alias] = config[key]
-    optional_constants.append(alias)
+    config.setdefault(alias, config[key])
 
-config['optional_constants'] = optional_constants
+all_constants = config.keys()
+all_constants.sort()
+config['ALL_CONSTANTS'] = tuple(all_constants)
 dumpcache(__file__, '_syslog_cache.py', config)

@@ -56,9 +56,8 @@ def LOG_MASK(pri):
 def LOG_UPTO(pri):
     return (1 << (pri + 1)) - 1
 
-__all__ = _CONSTANTS + tuple(optional_constants) + (
+__all__ = ALL_CONSTANTS + (
     'openlog', 'syslog', 'closelog', 'setlogmask',
     'LOG_MASK', 'LOG_UPTO')
 
-del optional_constants
-
+del ALL_CONSTANTS
