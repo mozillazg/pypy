@@ -209,8 +209,10 @@ def configure(CConfig, savecache=None, noerr=False):
         f.write('import ctypes\n\n')
         for key, val in res.items():
             entry = getattr(CConfig, key)
-            if isinstance(val, int):
+            if isinstance(val, (int, long)):
                 f.write("%s = %d\n" % (key, val))
+            elif val is None:
+                f.write("%s = None\n" % key)
             elif isinstance(val, ctypes._SimpleCData.__class__):
                 # a simple type
                 f.write("%s = %s\n" % (key, ctypes_repr(val)))
