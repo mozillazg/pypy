@@ -1,6 +1,11 @@
 import py
-from pypy.lib import _locale
 import sys
+
+from pypy.lib.ctypes_config_cache import rebuild
+rebuild.rebuild_one('locale.ctc.py')
+
+from pypy.lib import _locale
+
 
 def setup_module(mod):
     if sys.platform == 'darwin':
