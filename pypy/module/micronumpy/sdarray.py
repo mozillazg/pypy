@@ -4,6 +4,8 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.gateway import interp2app
 from pypy.rlib.debug import make_sure_not_resized
 
+from pypy.objspace.std.sliceobject import W_SliceObject
+
 from pypy.module.micronumpy.array import BaseNumArray
 from pypy.module.micronumpy.array import base_typedef
 from pypy.module.micronumpy.array import \
@@ -156,8 +158,9 @@ def create_sdarray(data_type, unwrap, coerce):
         def descr_getitem(self, w_index):
             space = self.space
             if space.is_true(space.isinstance(w_index, space.w_slice)):
+                assert isinstance(w_index, W_SliceObject)
                 start, stop, step, slen = w_index.indices4(space, self.len())
-                res = sdresult(self.dtype.code)(space, slen, self.dtype)
+                res = NumArray(space, slen, self.dtype)
                 if step == 1:
                     res.storage[:] = self.storage[start:stop]
                 else:
@@ -170,7 +173,7 @@ def create_sdarray(data_type, unwrap, coerce):
                     index = space.int_w(w_index)
                 except TypeError, e:
                     raise OperationError(space.w_IndexError,
-                                        space.wrap('Wrong index'))
+                                        space.wrap("index must either be an int or a sequence"))
             try:
                 return space.wrap(self.storage[index])
             except IndexError:
@@ -181,6 +184,7 @@ def create_sdarray(data_type, unwrap, coerce):
         def descr_setitem(self, w_index, w_value):
             space = self.space
             if space.is_true(space.isinstance(w_index, space.w_slice)):
+                assert isinstance(w_index, W_SliceObject)
                 start, stop, step, slen = w_index.indices4(space, self.len())
                 try:
                     space.iter(w_value)
@@ -196,8 +200,8 @@ def create_sdarray(data_type, unwrap, coerce):
                         for i in range(start, stop, step):
                             self.storage[i] = value
                     return
-                lop = space.int_w(space.len(w_value))
-                if lop != slen:
+                operand_length = space.int_w(space.len(w_value))
+                if operand_length != slen:
                     raise OperationError(space.w_TypeError,
                                                 space.wrap('shape mismatch'))
                 value = space.fixedview(w_value)
@@ -212,11 +216,16 @@ def create_sdarray(data_type, unwrap, coerce):
             else:
                 try:
                     index = space.int_w(w_index)
-                except TypeError, e:
-                    raise OperationError(space.w_IndexError,
-                                                    space.wrap('Wrong index'))
+                except OperationError, e:
+                    if e.match(space, space.w_TypeError):
+                        raise OperationError(space.w_ValueError,
+                                             space.wrap("can't understand index")) #FIXME: more meaningful message based on type
             try:
                 self.storage[index] = coerce(space, w_value)
+            except OperationError, e:
+                if e.match(space, space.w_TypeError):
+                    raise OperationError(space.w_ValueError,
+                                         space.wrap("can't understand value")) #FIXME: more meaningful message based on type
             except IndexError:
                 raise OperationError(space.w_IndexError,
                                      space.wrap("list index out of range"))

@@ -139,11 +139,13 @@ class AppTestSDArray(object):
     
     def test_setitem_getitem(self):
         from numpy import zeros
+        compare = self.compare
+
         ar = zeros(8, dtype=int)
         assert ar[0] == 0
         ar[1] = 3
         assert ar[1] == 3
-        raises((TypeError, ValueError), ar.__getitem__, 'xyz')
+        raises((TypeError, ValueError), ar.__getitem__, 'xyz') #FIXME: why TypeError?
         raises(IndexError, ar.__getitem__, 38)
         assert ar[-2] == 0
         assert ar[-7] == 3
@@ -151,11 +153,17 @@ class AppTestSDArray(object):
 
         ar[2:3] = [5]
         assert ar[2] == 5
-        compare = self.compare
         assert compare(ar[1:3], [3, 5])
         assert compare(ar[-6:-4], [5, 0])
         assert compare(ar[-6:-8:-1], [5, 3])
 
+        #setitem
+        ar[3] = 2
+        assert ar[3] == 2
+        ar[5] = 3.5
+        assert ar[5] == 3
+        raises(ValueError, ar.__setitem__, 0, [99])
+        raises(ValueError, ar.__setitem__, 0, 'f')
 
     def test_minimum(self):
         from numpy import zeros, minimum
