@@ -49,3 +49,13 @@ def test_cache_array():
     d = {}
     execfile(str(cachefile), d)
     assert d['foo'] == res['foo']
+
+def test_cache_array_array():
+    configdir = configure.configdir
+    res = {'foo': (ctypes.c_int * 2) * 3}
+    cachefile = configdir.join('cache_array_array')
+    dumpcache.dumpcache('', str(cachefile), res)
+    #
+    d = {}
+    execfile(str(cachefile), d)
+    assert d['foo'] == res['foo']
