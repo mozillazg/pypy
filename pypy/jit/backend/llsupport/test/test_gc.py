@@ -186,7 +186,7 @@ class TestFramework:
         class FakeTranslator:
             config = config_
         class FakeCPU:
-            GC_SUPPORTED_CONSTPTR = {rop.SAME_AS: None}
+            pass
         gcdescr = get_description(config_)
         translator = FakeTranslator()
         llop1 = FakeLLOp()

@@ -412,8 +412,29 @@ class TestCompileHybrid(object):
 
     def test_compile_hybrid_external_exception_handling(self):
         self.run('compile_hybrid_external_exception_handling')
-            
-    def define_compile_hybrid_bug1(self):
+
+    def define_compile_hybrid_movable_gcref(self):
+        @purefunction
+        def moving():
+            return X(1)
+
+        @dont_look_inside
+        def do_more_stuff():
+            rgc.collect()
+            return X(5)
+
+        def f(n, x, x0, x1, x2, x3, x4, x5, x6, x7, l, s):
+            x0 = do_more_stuff()
+            check(moving().x == 1)
+            n -= 1
+            return n, x, x0, x1, x2, x3, x4, x5, x6, x7, l, s
+
+        return None, f, None
+
+    def test_compile_hybrid_movable_gcref(self):
+        self.run('compile_hybrid_movable_gcref', 200)
+
+    def define_compile_hybrid_nonmovable_gcref(self):
         @purefunction
         def nonmoving():
             x = X(1)
@@ -436,8 +457,8 @@ class TestCompileHybrid(object):
 
         return None, f, None
 
-    def test_compile_hybrid_bug1(self):
-        self.run('compile_hybrid_bug1', 200)
+    def test_compile_hybrid_nonmovable_gcref(self):
+        self.run('compile_hybrid_nonmovable_gcref', 200)
 
     def define_compile_hybrid_vref(self):
         from pypy.rlib.jit import virtual_ref, virtual_ref_finish
