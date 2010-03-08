@@ -450,6 +450,8 @@ class FunctionGcRootTracker(object):
         else:
             return self.binary_insn(line)
 
+    visit_and = visit_andl
+
     def visit_leal(self, line):
         match = self.r_binaryinsn.match(line)
         target = match.group("target")
