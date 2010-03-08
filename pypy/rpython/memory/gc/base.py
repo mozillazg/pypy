@@ -25,6 +25,9 @@ class GCBase(object):
         self.AddressDeque = get_address_deque(chunk_size)
         self.AddressDict = AddressDict
         self.config = config
+        # hooks used by the JIT:
+        self.start_tracing_varsized_part = lambda obj, typeid: None
+        self.stop_tracing_varsized_part = lambda obj, typeid: None
 
     def setup(self):
         # all runtime mutable values' setup should happen here
@@ -177,6 +180,7 @@ class GCBase(object):
                 callback(item, arg)
             i += 1
         if self.has_gcptr_in_varsize(typeid):
+            self.start_tracing_varsized_part(obj, typeid)
             item = obj + self.varsize_offset_to_variable_part(typeid)
             length = (obj + self.varsize_offset_to_length(typeid)).signed[0]
             offsets = self.varsize_offsets_to_gcpointers_in_var_part(typeid)
@@ -190,6 +194,7 @@ class GCBase(object):
                     j += 1
                 item += itemlength
                 length -= 1
+            self.stop_tracing_varsized_part(obj, typeid)
     trace._annspecialcase_ = 'specialize:arg(2)'
 
     def points_to_valid_gc_object(self, addr):

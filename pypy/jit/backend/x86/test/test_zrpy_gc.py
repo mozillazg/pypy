@@ -14,7 +14,6 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.jit import JitDriver, OPTIMIZER_SIMPLE, dont_look_inside
 from pypy.rlib.jit import purefunction
 from pypy.jit.backend.x86.runner import CPU386
-from pypy.jit.backend.llsupport.gc import GcRefList, GcRootMap_asmgcc
 from pypy.tool.udir import udir
 
 class X(object):

@@ -181,6 +181,12 @@ class FrameworkGCTransformer(GCTransformer):
         self.num_pushs = 0
         self.write_barrier_calls = 0
 
+        if hasattr(translator, '_jit2gc'):
+            fn = translator._jit2gc['start_tracing_varsized_part']
+            gcdata.gc.start_tracing_varsized_part = fn
+            fn = translator._jit2gc['stop_tracing_varsized_part']
+            gcdata.gc.stop_tracing_varsized_part = fn
+
         def frameworkgc_setup():
             # run-time initialization code
             root_walker.setup_root_walker()

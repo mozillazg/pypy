@@ -4,6 +4,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.backend.llsupport.descr import *
 from pypy.jit.backend.llsupport.gc import *
+from pypy.jit.backend.llsupport.gcframework import *
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.gc import get_description
 
@@ -46,19 +47,44 @@ def test_boehm():
 
 # ____________________________________________________________
 
-def test_GcRefList():
-    S = lltype.GcStruct('S')
-    order = range(50) * 4
-    random.shuffle(order)
-    allocs = [lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
-              for i in range(50)]
-    allocs = [allocs[i] for i in order]
+def test_GcRefHandler():
+    class FakeLayoutBuilder:
+        def get_type_id(self, TYPE):
+            return 42
+    gcrefhandler = GcRefHandler(FakeLayoutBuilder())
+    gcrefhandler.start_tracing_varsized_part(None, 27)    # no effect
+    gcrefhandler.stop_tracing_varsized_part(None, 27)    # no effect
     #
-    gcrefs = GcRefList()
-    gcrefs.initialize()
-    addrs = [gcrefs.get_address_of_gcref(ptr) for ptr in allocs]
-    for i in range(len(allocs)):
-        assert addrs[i].address[0] == llmemory.cast_ptr_to_adr(allocs[i])
+    S = lltype.GcStruct('S')
+    p0 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
+    p1 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
+    p = lltype.malloc(GcRefHandler.CONSTGCREF_ARRAY, 3)
+    #
+    ARRAY_SIGNED = lltype.Array(lltype.Signed)
+    test = lltype.malloc(ARRAY_SIGNED, 5, immortal=True)
+    test[2] = 123
+    test[3] = 456
+    test[4] = 789
+    #
+    p[0].gcref = p0
+    p[0].addr  = (llmemory.cast_ptr_to_adr(test) +
+                  llmemory.itemoffsetof(ARRAY_SIGNED, 2))
+    p[1].gcref = p0
+    p[1].addr  = (llmemory.cast_ptr_to_adr(test) +
+                  llmemory.itemoffsetof(ARRAY_SIGNED, 4))
+    p[2].gcref = p1
+    p[2].addr  = (llmemory.cast_ptr_to_adr(test) +
+                  llmemory.itemoffsetof(ARRAY_SIGNED, 3))
+    #
+    gcrefhandler.start_tracing_varsized_part(llmemory.cast_ptr_to_adr(p), 42)
+    assert test[2] == 123 - llmemory.cast_adr_to_int(p0)
+    assert test[3] == 456 - llmemory.cast_adr_to_int(p1)
+    assert test[4] == 789 - llmemory.cast_adr_to_int(p0)
+    #
+    gcrefhandler.stop_tracing_varsized_part(llmemory.cast_ptr_to_adr(p), 42)
+    assert test[2] == 123
+    assert test[3] == 456
+    assert test[4] == 789
 
 def test_GcRootMap_asmgcc():
     def frame_pos(n):
@@ -160,10 +186,7 @@ class TestFramework:
         class FakeTranslator:
             config = config_
         class FakeCPU:
-            def cast_adr_to_int(self, adr):
-                ptr = llmemory.cast_adr_to_ptr(adr, gc_ll_descr.WB_FUNCPTR)
-                assert ptr._obj._callable == llop1._write_barrier_failing_case
-                return 42
+            GC_SUPPORTED_CONSTPTR = {rop.SAME_AS: None}
         gcdescr = get_description(config_)
         translator = FakeTranslator()
         llop1 = FakeLLOp()
@@ -277,46 +300,40 @@ class TestFramework:
     def test_rewrite_assembler_1(self):
         # check rewriting of ConstPtrs
         class MyFakeCPU:
-            def cast_adr_to_int(self, adr):
-                assert adr == "some fake address"
-                return 43
-        class MyFakeGCRefList:
-            def get_address_of_gcref(self, s_gcref1):
-                assert s_gcref1 == s_gcref
-                return "some fake address"
+            GC_SUPPORTED_CONSTPTR = {rop.SAME_AS: None,
+                                     rop.OOISNOT: None}
         S = lltype.GcStruct('S')
         s = lltype.malloc(S)
         s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+        s2 = lltype.malloc(S)
+        s_gcref2 = lltype.cast_opaque_ptr(llmemory.GCREF, s2)
         v_random_box = BoxPtr()
         v_result = BoxInt()
+        v_result2 = BoxInt()
         operations = [
             ResOperation(rop.OOIS, [v_random_box, ConstPtr(s_gcref)],
                          v_result),
+            ResOperation(rop.OOISNOT, [v_random_box, ConstPtr(s_gcref2)],
+                         v_result2),
             ]
         gc_ll_descr = self.gc_ll_descr
-        gc_ll_descr.gcrefs = MyFakeGCRefList()
         gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
-        assert len(operations) == 2
-        assert operations[0].opnum == rop.GETFIELD_RAW
-        assert operations[0].args == [ConstInt(43)]
-        assert operations[0].descr == gc_ll_descr.single_gcref_descr
+        assert len(operations) == 3
+        assert operations[0].opnum == rop.SAME_AS
+        assert operations[0].args == [ConstPtr(s_gcref)]
         v_box = operations[0].result
         assert isinstance(v_box, BoxPtr)
         assert operations[1].opnum == rop.OOIS
         assert operations[1].args == [v_random_box, v_box]
         assert operations[1].result == v_result
+        assert operations[2].opnum == rop.OOISNOT
+        assert operations[2].args == [v_random_box, ConstPtr(s_gcref2)]
+        assert operations[2].result == v_result2
 
-    def test_rewrite_assembler_1_cannot_move(self):
-        # check rewriting of ConstPtrs
+    def test_rewrite_assembler_1_all_supported(self):
+        # check no rewriting of ConstPtrs if the cpu supports it fully
         class MyFakeCPU:
-            def cast_adr_to_int(self, adr):
-                xxx    # should not be called
-        class MyFakeGCRefList:
-            def get_address_of_gcref(self, s_gcref1):
-                seen.append(s_gcref1)
-                assert s_gcref1 == s_gcref
-                return "some fake address"
-        seen = []
+            GC_SUPPORTED_CONSTPTR = True
         S = lltype.GcStruct('S')
         s = lltype.malloc(S)
         s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
@@ -327,20 +344,11 @@ class TestFramework:
                          v_result),
             ]
         gc_ll_descr = self.gc_ll_descr
-        gc_ll_descr.gcrefs = MyFakeGCRefList()
-        old_can_move = rgc.can_move
-        try:
-            rgc.can_move = lambda s: False
-            gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
-        finally:
-            rgc.can_move = old_can_move
+        gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
         assert len(operations) == 1
         assert operations[0].opnum == rop.OOIS
         assert operations[0].args == [v_random_box, ConstPtr(s_gcref)]
         assert operations[0].result == v_result
-        # check that s_gcref gets added to the list anyway, to make sure
-        # that the GC sees it
-        assert seen == [s_gcref]
 
     def test_rewrite_assembler_2(self):
         # check write barriers before SETFIELD_GC
