@@ -15,7 +15,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import rclass, rstr
 from pypy.jit.backend.x86.ri386 import *
-from pypy.jit.backend.llsupport.gc import GcLLDescr_framework, GcRefList, GcPtrFieldDescr
+from pypy.jit.backend.llsupport.gcframework import GcLLDescr_framework
 
 from pypy.jit.backend.x86.test.test_regalloc import MockAssembler
 from pypy.jit.backend.x86.test.test_regalloc import BaseTestRegalloc
@@ -49,9 +49,7 @@ class MockGcDescr(GcCache):
     gcrootmap = MockGcRootMap()
 
     def initialize(self):
-        self.gcrefs = GcRefList()
-        self.gcrefs.initialize()
-        self.single_gcref_descr = GcPtrFieldDescr(0)
+        pass
         
     rewrite_assembler = GcLLDescr_framework.rewrite_assembler.im_func
 

@@ -48,24 +48,22 @@ class GcRefHandler:
     def __init__(self, layoutbuilder):
         self.constgcref_array_type_id = layoutbuilder.get_type_id(
             self.CONSTGCREF_ARRAY)
-        self.full_constgcref_array_type_id = llop.combine_ushort(
-            lltype.Signed,
-            self.constgcref_array_type_id,
-            0)
 
     def _freeze_(self):
         return True
 
     def start_tracing_varsized_part(self, obj, typeid):
         """Called by the GC just before tracing the object 'obj'."""
-        fulltypeid = llop.combine_ushort(lltype.Signed, typeid, 0)
-        if fulltypeid == self.full_constgcref_array_type_id:
+        fulltypeid = rffi.cast(lltype.Signed, typeid)
+        reftypeid = rffi.cast(lltype.Signed, self.constgcref_array_type_id)
+        if fulltypeid == reftypeid:
             self.do_start_stop_tracing(obj, False)
 
     def stop_tracing_varsized_part(self, obj, typeid):
         """Called by the GC just after tracing the object 'obj'."""
-        fulltypeid = llop.combine_ushort(lltype.Signed, typeid, 0)
-        if fulltypeid == self.full_constgcref_array_type_id:
+        fulltypeid = rffi.cast(lltype.Signed, typeid)
+        reftypeid = rffi.cast(lltype.Signed, self.constgcref_array_type_id)
+        if fulltypeid == reftypeid:
             self.do_start_stop_tracing(obj, True)
 
     def do_start_stop_tracing(self, obj, done):
