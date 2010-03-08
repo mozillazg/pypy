@@ -5,7 +5,7 @@ import autopath
 import os, sys
 import py
 
-_dirpath = os.path.dirname(__file__)
+_dirpath = os.path.dirname(__file__) or os.curdir
 
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("ctypes_config_cache")
