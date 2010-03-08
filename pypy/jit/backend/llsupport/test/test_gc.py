@@ -58,7 +58,7 @@ def test_GcRefHandler():
     S = lltype.GcStruct('S')
     p0 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
     p1 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
-    p = lltype.malloc(GcRefHandler.CONSTGCREF_ARRAY, 3)
+    p = lltype.malloc(GcRefHandler.CONSTGCREF_ARRAY, 4, zero=True)
     #
     ARRAY_SIGNED = lltype.Array(lltype.Signed)
     test = lltype.malloc(ARRAY_SIGNED, 5, immortal=True)
@@ -69,11 +69,11 @@ def test_GcRefHandler():
     p[0].gcref = p0
     p[0].addr  = (llmemory.cast_ptr_to_adr(test) +
                   llmemory.itemoffsetof(ARRAY_SIGNED, 2))
-    p[1].gcref = p0
-    p[1].addr  = (llmemory.cast_ptr_to_adr(test) +
-                  llmemory.itemoffsetof(ARRAY_SIGNED, 4))
-    p[2].gcref = p1
+    p[2].gcref = p0
     p[2].addr  = (llmemory.cast_ptr_to_adr(test) +
+                  llmemory.itemoffsetof(ARRAY_SIGNED, 4))
+    p[3].gcref = p1
+    p[3].addr  = (llmemory.cast_ptr_to_adr(test) +
                   llmemory.itemoffsetof(ARRAY_SIGNED, 3))
     #
     gcrefhandler.start_tracing_varsized_part(llmemory.cast_ptr_to_adr(p), 42)
@@ -296,59 +296,6 @@ class TestFramework:
         gc_ll_descr = self.gc_ll_descr
         gc_ll_descr.rewrite_assembler(None, operations)
         assert len(operations) == 0
-
-    def test_rewrite_assembler_1(self):
-        # check rewriting of ConstPtrs
-        class MyFakeCPU:
-            GC_SUPPORTED_CONSTPTR = {rop.SAME_AS: None,
-                                     rop.OOISNOT: None}
-        S = lltype.GcStruct('S')
-        s = lltype.malloc(S)
-        s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
-        s2 = lltype.malloc(S)
-        s_gcref2 = lltype.cast_opaque_ptr(llmemory.GCREF, s2)
-        v_random_box = BoxPtr()
-        v_result = BoxInt()
-        v_result2 = BoxInt()
-        operations = [
-            ResOperation(rop.OOIS, [v_random_box, ConstPtr(s_gcref)],
-                         v_result),
-            ResOperation(rop.OOISNOT, [v_random_box, ConstPtr(s_gcref2)],
-                         v_result2),
-            ]
-        gc_ll_descr = self.gc_ll_descr
-        gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
-        assert len(operations) == 3
-        assert operations[0].opnum == rop.SAME_AS
-        assert operations[0].args == [ConstPtr(s_gcref)]
-        v_box = operations[0].result
-        assert isinstance(v_box, BoxPtr)
-        assert operations[1].opnum == rop.OOIS
-        assert operations[1].args == [v_random_box, v_box]
-        assert operations[1].result == v_result
-        assert operations[2].opnum == rop.OOISNOT
-        assert operations[2].args == [v_random_box, ConstPtr(s_gcref2)]
-        assert operations[2].result == v_result2
-
-    def test_rewrite_assembler_1_all_supported(self):
-        # check no rewriting of ConstPtrs if the cpu supports it fully
-        class MyFakeCPU:
-            GC_SUPPORTED_CONSTPTR = True
-        S = lltype.GcStruct('S')
-        s = lltype.malloc(S)
-        s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
-        v_random_box = BoxPtr()
-        v_result = BoxInt()
-        operations = [
-            ResOperation(rop.OOIS, [v_random_box, ConstPtr(s_gcref)],
-                         v_result),
-            ]
-        gc_ll_descr = self.gc_ll_descr
-        gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
-        assert len(operations) == 1
-        assert operations[0].opnum == rop.OOIS
-        assert operations[0].args == [v_random_box, ConstPtr(s_gcref)]
-        assert operations[0].result == v_result
 
     def test_rewrite_assembler_2(self):
         # check write barriers before SETFIELD_GC

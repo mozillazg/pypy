@@ -29,6 +29,14 @@ class GcRefHandler:
     with an extra offset, e.g. as the address out of which a GETFIELD_GC
     on them should fetch data.
     """
+    # The idea is to store in an array of type CONSTGCREF_ARRAY a list
+    # of pairs (gcref, addr), where 'gcref' is some GC-tracked object,
+    # and 'addr' is the address in the assembler where 'gcref' was used.
+    # This usually means that 'gcref' is currently stored at 'addr', but
+    # it may also be the case that there is a small offset; e.g. a
+    # GETFIELD_GC(ConstPtr(0x123450), descr=<offset 8>) will end up as
+    # an assembler instruction like MOV EAX, [0x123458].
+    #
     CONSTGCREF_ARRAY = lltype.GcArray(("gcref", llmemory.GCREF),
                                       ("addr", llmemory.Address))
     gcrefarray_lengthoffset = llmemory.ArrayLengthOffset(CONSTGCREF_ARRAY)
@@ -40,39 +48,46 @@ class GcRefHandler:
     def __init__(self, layoutbuilder):
         self.constgcref_array_type_id = layoutbuilder.get_type_id(
             self.CONSTGCREF_ARRAY)
+        self.full_constgcref_array_type_id = llop.combine_ushort(
+            lltype.Signed,
+            self.constgcref_array_type_id,
+            0)
 
     def _freeze_(self):
         return True
 
     def start_tracing_varsized_part(self, obj, typeid):
         """Called by the GC just before tracing the object 'obj'."""
-        if typeid == self.constgcref_array_type_id:
+        fulltypeid = llop.combine_ushort(lltype.Signed, typeid, 0)
+        if fulltypeid == self.full_constgcref_array_type_id:
             self.do_start_stop_tracing(obj, False)
 
     def stop_tracing_varsized_part(self, obj, typeid):
         """Called by the GC just after tracing the object 'obj'."""
-        if typeid == self.constgcref_array_type_id:
+        fulltypeid = llop.combine_ushort(lltype.Signed, typeid, 0)
+        if fulltypeid == self.full_constgcref_array_type_id:
             self.do_start_stop_tracing(obj, True)
 
     def do_start_stop_tracing(self, obj, done):
         # Before tracing an object of type CONSTGCREF_ARRAY
         # (done=False), we take all addresses in the assembler and
-        # subtract the gcref from them.  This leaves the assembler in a
-        # broken state which is fixed by do_stop_tracing().  The numbers
-        # in the assembler now are just the offsets from the start of
-        # the objects.  After tracing (done=True), we add again the
-        # gcrefs to the addresses in the assembler, fixing up the
-        # numbers.
+        # subtract the gcrefs from them.  This leaves the assembler in a
+        # broken state: the numbers in the assembler now are just the
+        # offsets from the start of the objects.  After tracing
+        # (done=True), we add again the gcrefs to the addresses in the
+        # assembler, fixing up the numbers.  For any object that moved,
+        # that object's address in the assembler is now fixed.
         length = (obj + self.gcrefarray_lengthoffset).signed[0]
         item = obj + self.gcrefarray_itemsoffset
         while length > 0:
             gcref = (item + self.gcrefarrayitem_gcref).address[0]
-            addr = (item + self.gcrefarrayitem_addr).address[0]
-            gcref = llmemory.cast_adr_to_int(gcref)
-            if done:
-                addr.signed[0] += gcref
-            else:
-                addr.signed[0] -= gcref
+            if gcref:
+                gcref = llmemory.cast_adr_to_int(gcref)
+                addr = (item + self.gcrefarrayitem_addr).address[0]
+                if done:
+                    addr.signed[0] += gcref
+                else:
+                    addr.signed[0] -= gcref
             item += self.gcrefarray_singleitemoffset
             length -= 1
     do_start_stop_tracing._dont_inline_ = True
@@ -402,32 +417,12 @@ class GcLLDescr_framework(GcLLDescription):
                     llmemory.cast_ptr_to_adr(gcref_newptr))
 
     def rewrite_assembler(self, cpu, operations):
-        # Perform two kinds of rewrites in parallel:
-        #
-        # - Add COND_CALLs to the write barrier before SETFIELD_GC and
-        #   SETARRAYITEM_GC operations.
-        #
-        # - Remove "unsupported" uses of ConstPtrs away from the assembler.
-        #   The backend must support at least 'p = SAME_AS(ConstPtr(..))'
-        #   and might support more operations, like GETFIELD_GC.  It should
-        #   set GC_SUPPORTED_CONSTPTR to a dict of supported opnums.
-        #   Or, as in the x86 backend, it can directly support all usages of
-        #   ConstPtr and not need any rewrite at all (and then it should
-        #   set GC_SUPPORTED_CONSTPTR to True).
-        #
+        # Add COND_CALLs to the write barrier before SETFIELD_GC and
+        # SETARRAYITEM_GC operations.
         newops = []
         for op in operations:
             if op.opnum == rop.DEBUG_MERGE_POINT:
                 continue
-            # ---------- replace ConstPtrs with SAME_AS ----------
-            if (cpu.GC_SUPPORTED_CONSTPTR is not True and
-                op.opnum not in cpu.GC_SUPPORTED_CONSTPTR):
-                for i in range(len(op.args)):
-                    v = op.args[i]
-                    if isinstance(v, ConstPtr) and bool(v.value):
-                        box = BoxPtr(v.value)
-                        newops.append(ResOperation(rop.SAME_AS, [v], box))
-                        op.args[i] = box
             # ---------- write barrier for SETFIELD_GC ----------
             if op.opnum == rop.SETFIELD_GC:
                 v = op.args[1]
