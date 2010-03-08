@@ -186,6 +186,10 @@ class PyPyTarget(object):
         #elif config.objspace.usemodules.clr:
         #    config.translation.backend == "cli"
 
+        if config.translation.sandbox:
+            config.objspace.lonepycfiles = False
+            config.objspace.usepycfiles = False
+
         config.objspace.nofaking = True
         config.objspace.compiler = "ast"
         config.translating = True
@@ -216,6 +220,9 @@ class PyPyTarget(object):
         return PyPyJitPolicy()
     
     def get_entry_point(self, config):
+        from pypy.lib.ctypes_config_cache import rebuild
+        rebuild.try_rebuild()
+
         space = make_objspace(config)
 
         # manually imports app_main.py
