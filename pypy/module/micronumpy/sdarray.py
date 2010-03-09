@@ -183,8 +183,7 @@ def create_sdarray(data_type, unwrap, coerce):
 
         def descr_setitem(self, w_index, w_value):
             space = self.space
-            if space.is_true(space.isinstance(w_index, space.w_slice)):
-                assert isinstance(w_index, W_SliceObject)
+            if isinstance(w_index, W_SliceObject):
                 start, stop, step, slen = w_index.indices4(space, self.len())
                 try:
                     space.iter(w_value)
