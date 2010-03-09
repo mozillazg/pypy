@@ -327,6 +327,7 @@ def create_mdarray(data_type, unwrap, coerce):
                 if len(regions) == 0: return
                 l = len(arr.storage)
                 if lslice > l: #long slice
+                    xxx
                     iters = lslice // l
                     assert lslice == l * iters
                     for start in regions:
