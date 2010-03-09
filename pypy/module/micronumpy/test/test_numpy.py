@@ -276,7 +276,6 @@ class AppTestMultiDim(object):
                 assert ar[i, j] == i*3+j
     
     def test_get_set_slices(self):
-        skip("We don't raise exceptions like CPython NumPy.")
         from numpy import array
         gen_array = self.gen_array
         compare = self.compare
@@ -301,7 +300,7 @@ class AppTestMultiDim(object):
         #setitem
         ar[2] = 3
         assert ar[2, 0] == ar[2, 1] == ar[2, 2] == 3
-        ar[2:3] = [7]
+        ar[2:3, 0] = [7]
         ar[2] = [0, 1, 2]
         assert compare(ar[0], ar[2])
         assert compare(ar[..., 0], [0, 3, 0])
