@@ -65,7 +65,6 @@ class AppTestSDArray(object):
         from operator import mul, div, add, sub
         compare = self.compare
         d = range(1, self.length)
-        #skip('overkill...')
         for data_type in (int, float):
             data = [data_type(x) for x in d]
             ar = array(data)
@@ -302,7 +301,7 @@ class AppTestMultiDim(object):
         #setitem
         ar[2] = 3
         assert ar[2, 0] == ar[2, 1] == ar[2, 2] == 3
-        ar[2:3] == [1] #FIXME: this probably throws
+        ar[2:3] = [7]
         ar[2] = [0, 1, 2]
         assert compare(ar[0], ar[2])
         assert compare(ar[..., 0], [0, 3, 0])

@@ -220,15 +220,15 @@ def create_sdarray(data_type, unwrap, coerce):
                     if e.match(space, space.w_TypeError):
                         raise OperationError(space.w_ValueError,
                                              space.wrap("can't understand index")) #FIXME: more meaningful message based on type
-            try:
-                self.storage[index] = coerce(space, w_value)
-            except OperationError, e:
-                if e.match(space, space.w_TypeError):
-                    raise OperationError(space.w_ValueError,
-                                         space.wrap("can't understand value")) #FIXME: more meaningful message based on type
-            except IndexError:
-                raise OperationError(space.w_IndexError,
-                                     space.wrap("list index out of range"))
+                try:
+                    self.storage[index] = coerce(space, w_value)
+                except OperationError, e:
+                    if e.match(space, space.w_TypeError):
+                        raise OperationError(space.w_ValueError,
+                                             space.wrap("can't understand value")) #FIXME: more meaningful message based on type
+                except IndexError:
+                    raise OperationError(space.w_IndexError,
+                                         space.wrap("list index out of range"))
             return space.w_None
         descr_setitem.unwrap_spec = ['self', W_Root, W_Root]
 

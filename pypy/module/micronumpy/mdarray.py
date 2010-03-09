@@ -104,10 +104,10 @@ def compute_slices(space, slices, dims):
                 newextract = make_sure_not_resized([0]*len(extract)*factor)
                 prestride = strides[i-1]
                 for j in range(len(extract)):
-                    jf = j*factor
+                    jf = j * factor
                     st = extract[j]
                     for k in range(factor):
-                        newextract[jf+k] = st + start
+                        newextract[jf + k] = st + start
                         st += prestride
                 extract = newextract
             #No adding for shape
@@ -121,15 +121,15 @@ def compute_slices(space, slices, dims):
 class BaseMultiDimArray(BaseNumArray): pass
 
 def descr_dtype(space, self):
-    return self.dtype
+    return space.wrap(self.dtype)
 
 def descr_shape(space, self):
     return space.newtuple([space.wrap(dim) for dim in self.shape])
 
-MUL = mul_operation()
-DIV = div_operation()
-ADD = add_operation()
-SUB = sub_operation()
+mul = mul_operation()
+div = div_operation()
+add = add_operation()
+sub = sub_operation()
 
 def create_mdarray(data_type, unwrap, coerce):
 
@@ -202,18 +202,17 @@ def create_mdarray(data_type, unwrap, coerce):
         client_fixedview = {}
 
         client_scalar['mul'], client_fixedview['mul'] = \
-                                            create_client_math_operation(MUL)
+                                            create_client_math_operation(mul)
         client_scalar['div'], client_fixedview['div'] = \
-                                            create_client_math_operation(DIV)
+                                            create_client_math_operation(div)
         client_scalar['add'], client_fixedview['add'] = \
-                                            create_client_math_operation(ADD)
+                                            create_client_math_operation(add)
         client_scalar['sub'], client_fixedview['sub'] = \
-                                            create_client_math_operation(SUB)
-        descr_mul = create_math_operation(MUL)
-        descr_div = create_math_operation(DIV)
-        descr_add = create_math_operation(ADD)
-        descr_sub = create_math_operation(SUB)
-
+                                            create_client_math_operation(sub)
+        descr_mul = create_math_operation(mul)
+        descr_div = create_math_operation(div)
+        descr_add = create_math_operation(add)
+        descr_sub = create_math_operation(sub)
 
         def load_iterable(self, w_xs):
             self._internal_load(w_xs, self.shape, [])
@@ -254,6 +253,15 @@ def create_mdarray(data_type, unwrap, coerce):
 
         def descr_getitem(self, w_index):
             space = self.space
+
+            try:
+                field_name = space.str_w(w_index)
+                raise OperationError(space.w_ValueError, #FIXME: if we were honest this would be NotImplemented
+                                     space.wrap("field name %s not found" % field_name))
+            except OperationError, e:
+                if not e.match(space, space.w_TypeError):
+                    raise
+
             try:
                 space.iter(w_index)
             except OperationError, e:
@@ -306,34 +314,31 @@ def create_mdarray(data_type, unwrap, coerce):
                         raise
                     value = coerce(space, w_value)
                     for start in regions:
-                        self.storage[start:start+lslice]=[value]*lslice
+                        self.storage[start:start + lslice] = [value] * lslice
                     return
                 arr = array_fromseq(space, w_value, None)
                 ls = len(arr.shape)
                 lss = len(shape)
                 if not (ls <= lss and list(arr.shape) == shape[lss-ls:lss]):
-                    raise OperationError(space.w_ValueError,
+                    raise OperationError(space.w_ValueError, #FIXME: throws when it shouldn't
                                          space.wrap('array dimensions '
                                          'are not compatible for copy'))
-                                         #exactly as in numpy
-                # /S\ - DO NOT EDIT if you're not sure!
                 #we may exit earlier, but we are true purists and wonna check
                 if len(regions) == 0: return
                 l = len(arr.storage)
                 if lslice > l: #long slice
-                    iters = lslice//l
-                    assert lslice == l*iters
+                    iters = lslice // l
+                    assert lslice == l * iters
                     for start in regions:
                         for i in range(iters):
-                            self.storage[start:start+l] = arr.storage
+                            self.storage[start:start + l] = arr.storage
                             start += l
                 else:
                     i = 0
                     for start in regions:
-                        self.storage[start:start+l] = arr.storage[i:i+lslice]
+                        self.storage[start:start + l] = arr.storage[i:i + lslice]
                         if i > l:
                             i = i-l
-                #Looks like perfect
             else:
                 pos = compute_pos(space, indexes, self.shape)
                 self.storage[pos] = coerce(space, w_value)
