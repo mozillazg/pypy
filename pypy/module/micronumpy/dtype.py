@@ -14,6 +14,7 @@ def coerce_float(space, w_x):
     return unwrap_float(space, space.float(w_x))
 
 from pypy.rlib.rarithmetic import r_singlefloat as float32
+
 def unwrap_float32(space, w_x):
     return float32(space.float_w(w_x))
 def coerce_float32(space, w_x):

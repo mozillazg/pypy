@@ -289,6 +289,5 @@ def create_sdarray(data_type, unwrap, coerce):
 
 IntArray = create_sdarray(int, unwrap_int, coerce_int)
 FloatArray = create_sdarray(float, unwrap_float, coerce_float)
-GenericArray = None
 
 sdresult = create_factory({'i': IntArray, 'd': FloatArray})
