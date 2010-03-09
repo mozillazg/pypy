@@ -6,7 +6,6 @@ from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.module.micronumpy.sdarray import sdresult
-from pypy.module.micronumpy.sdarray import GenericArray
 
 from pypy.module.micronumpy.mdarray import mdresult
 
