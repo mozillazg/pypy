@@ -15,6 +15,7 @@ from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import builtin
 from pypy.annotation.binaryop import _clone ## XXX where to put this?
 from pypy.rpython import extregistry
+from pypy.tool.pairtype import extendabletype
 
 # convenience only!
 def immutablevalue(x):
@@ -34,6 +35,7 @@ for opname in UNARY_OPERATIONS:
 
 
 class __extend__(SomeObject):
+    __metaclass__ = extendabletype
 
     def type(obj, *moreargs):
         if moreargs:
@@ -189,6 +191,7 @@ class __extend__(SomeObject):
         return self
 
 class __extend__(SomeFloat):
+    __metaclass__ = extendabletype
 
     def pos(flt):
         return flt
@@ -204,6 +207,7 @@ class __extend__(SomeFloat):
         return s_Bool
 
 class __extend__(SomeInteger):
+    __metaclass__ = extendabletype
 
     def invert(self):
         return SomeInteger(knowntype=self.knowntype)
@@ -230,6 +234,8 @@ class __extend__(SomeInteger):
     abs_ovf = _clone(abs, [OverflowError])
 
 class __extend__(SomeBool):
+    __metaclass__ = extendabletype
+
     def is_true(self):
         return self
 
@@ -257,6 +263,7 @@ class __extend__(SomeBool):
     int = pos
 
 class __extend__(SomeTuple):
+    __metaclass__ = extendabletype
 
     def len(tup):
         return immutablevalue(len(tup.items))
@@ -277,6 +284,7 @@ class __extend__(SomeTuple):
 
 
 class __extend__(SomeList):
+    __metaclass__ = extendabletype
 
     def method_append(lst, s_value):
         lst.listdef.resize()
@@ -366,6 +374,7 @@ def check_negative_slice(s_start, s_stop):
 
 
 class __extend__(SomeDict):
+    __metaclass__ = extendabletype
 
     def _is_empty(dct):
         s_key = dct.dictdef.read_key()
@@ -451,6 +460,7 @@ class __extend__(SomeDict):
 
 class __extend__(SomeString,
                  SomeUnicodeString):
+    __metaclass__ = extendabletype
 
     def method_startswith(str, frag):
         return s_Bool
@@ -509,6 +519,8 @@ class __extend__(SomeString,
         return str.basestringclass()
 
 class __extend__(SomeUnicodeString):
+    __metaclass__ = extendabletype
+
     def method_encode(uni, s_enc):
         if not s_enc.is_constant():
             raise TypeError("Non-constant encoding not supported")
@@ -519,6 +531,8 @@ class __extend__(SomeUnicodeString):
     method_encode.can_only_throw = [UnicodeEncodeError]
 
 class __extend__(SomeString):
+    __metaclass__ = extendabletype
+
     def method_upper(str):
         return SomeString()
 
@@ -542,6 +556,7 @@ class __extend__(SomeString):
     method_decode.can_only_throw = [UnicodeDecodeError]
 
 class __extend__(SomeChar):
+    __metaclass__ = extendabletype
 
     def len(chr):
         return immutablevalue(1)
@@ -565,6 +580,7 @@ class __extend__(SomeChar):
         return s_Bool
 
 class __extend__(SomeIterator):
+    __metaclass__ = extendabletype
 
     def iter(itr):
         return itr
@@ -583,6 +599,7 @@ class __extend__(SomeIterator):
 
 
 class __extend__(SomeInstance):
+    __metaclass__ = extendabletype
 
     def getattr(ins, s_attr):
         if s_attr.is_constant() and isinstance(s_attr.const, str):
@@ -631,6 +648,8 @@ class __extend__(SomeInstance):
 
 
 class __extend__(SomeBuiltin):
+    __metaclass__ = extendabletype
+
     def simple_call(bltn, *args):
         if bltn.s_self is not None:
             return bltn.analyser(bltn.s_self, *args)
@@ -652,6 +671,7 @@ class __extend__(SomeBuiltin):
 
 
 class __extend__(SomePBC):
+    __metaclass__ = extendabletype
 
     def getattr(pbc, s_attr):
         bookkeeper = getbookkeeper()
@@ -684,6 +704,8 @@ class __extend__(SomePBC):
             return SomeObject()    # len() on a pbc? no chance
 
 class __extend__(SomeGenericCallable):
+    __metaclass__ = extendabletype
+
     def call(self, args):
         bookkeeper = getbookkeeper()
         for arg, expected in zip(args.unpack()[0], self.args_s):
@@ -692,6 +714,8 @@ class __extend__(SomeGenericCallable):
         return self.s_result
 
 class __extend__(SomeExternalObject):
+    __metaclass__ = extendabletype
+
     def getattr(p, s_attr):
         if s_attr.is_constant() and isinstance(s_attr.const, str):
             attr = s_attr.const
@@ -717,6 +741,7 @@ from pypy.annotation.model import SomeOOInstance, SomeOOBoundMeth, SomeOOStaticM
 from pypy.annotation.model import ll_to_annotation, lltype_to_annotation, annotation_to_lltype
 
 class __extend__(SomePtr):
+    __metaclass__ = extendabletype
 
     def getattr(p, s_attr):
         assert s_attr.is_constant(), "getattr on ptr %r with non-constant field-name" % p.ll_ptrtype
@@ -762,6 +787,7 @@ class __extend__(SomePtr):
         return s_Bool
 
 class __extend__(SomeLLADTMeth):
+    __metaclass__ = extendabletype
 
     def call(adtmeth, args):
         bookkeeper = getbookkeeper()
@@ -770,6 +796,8 @@ class __extend__(SomeLLADTMeth):
 
 from pypy.rpython.ootypesystem import ootype
 class __extend__(SomeOOInstance):
+    __metaclass__ = extendabletype
+
     def getattr(r, s_attr):
         assert s_attr.is_constant(), "getattr on ref %r with non-constant field-name" % r.ootype
         v = getattr(r.ootype._example(), s_attr.const)
@@ -788,6 +816,8 @@ class __extend__(SomeOOInstance):
         return s_Bool
 
 class __extend__(SomeOOBoundMeth):
+    __metaclass__ = extendabletype
+
     def simple_call(m, *args_s):
         _, meth = m.ootype._lookup(m.name)
         if isinstance(meth, ootype._overloaded_meth):
@@ -807,6 +837,7 @@ class __extend__(SomeOOBoundMeth):
 
 
 class __extend__(SomeOOStaticMeth):
+    __metaclass__ = extendabletype
 
     def call(m, args):
         args_s, kwds_s = args.unpack()
@@ -822,6 +853,8 @@ class __extend__(SomeOOStaticMeth):
 # weakrefs
 
 class __extend__(SomeWeakRef):
+    __metaclass__ = extendabletype
+
     def simple_call(s_wrf):
         if s_wrf.classdef is None:
             return s_None   # known to be a dead weakref
@@ -834,6 +867,8 @@ class __extend__(SomeWeakRef):
 from pypy.rpython.lltypesystem import llmemory
 
 class __extend__(SomeAddress):
+    __metaclass__ = extendabletype
+
     def getattr(s_addr, s_attr):
         assert s_attr.is_constant()
         assert isinstance(s_attr, SomeString)
