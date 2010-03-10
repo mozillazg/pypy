@@ -7,8 +7,11 @@ from pypy.rpython.rmodel import Repr, IntegerRepr
 from pypy.rpython.rptr import PtrRepr
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.rarithmetic import r_uint
+from pypy.tool.pairtype import extendabletype
 
 class __extend__(annmodel.SomeAddress):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return address_repr
     
@@ -16,6 +19,8 @@ class __extend__(annmodel.SomeAddress):
         return self.__class__,
 
 class __extend__(annmodel.SomeTypedAddressAccess):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return TypedAddressAccessRepr(self.type)
 

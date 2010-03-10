@@ -1,6 +1,6 @@
 import types
 import sys
-from pypy.tool.pairtype import pair, pairtype
+from pypy.tool.pairtype import pair, pairtype, extendabletype
 from pypy.annotation import model as annmodel
 from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
@@ -26,6 +26,8 @@ def small_cand(rtyper, s_pbc):
     return False
 
 class __extend__(annmodel.SomePBC):
+    __metaclass__ = extendabletype
+    
     def rtyper_makerepr(self, rtyper):
         if self.isNone():
             return none_frozen_pbc_repr 

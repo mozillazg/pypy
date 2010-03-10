@@ -4,7 +4,7 @@ from pypy.annotation import model as annmodel
 from pypy.annotation import description
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, getgcflavor
-
+from pypy.tool.pairtype import extendabletype
 
 class FieldListAccessor(object):
 
@@ -138,6 +138,8 @@ def get_type_repr(rtyper):
 
 
 class __extend__(annmodel.SomeInstance):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return getinstancerepr(rtyper, self.classdef)
     def rtyper_makekey(self):

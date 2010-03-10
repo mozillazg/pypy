@@ -1,5 +1,5 @@
 from pypy.tool.staticmethods import StaticMethods
-from pypy.tool.pairtype import pairtype, pair
+from pypy.tool.pairtype import pairtype, pair, extendabletype
 from pypy.annotation import model as annmodel
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import IntegerRepr, IteratorRepr
@@ -26,12 +26,16 @@ class AbstractUnicodeRepr(AbstractStringRepr):
         raise TypeError("Cannot do tolower on unicode string")
 
 class __extend__(annmodel.SomeString):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return rtyper.type_system.rstr.string_repr
     def rtyper_makekey(self):
         return self.__class__,
 
 class __extend__(annmodel.SomeUnicodeString):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return rtyper.type_system.rstr.unicode_repr
     
@@ -39,12 +43,16 @@ class __extend__(annmodel.SomeUnicodeString):
         return self.__class__,
 
 class __extend__(annmodel.SomeChar):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return rtyper.type_system.rstr.char_repr
     def rtyper_makekey(self):
         return self.__class__,
 
 class __extend__(annmodel.SomeUnicodeCodePoint):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return rtyper.type_system.rstr.unichar_repr
     def rtyper_makekey(self):

@@ -7,9 +7,12 @@ from pypy.rlib.objectmodel import hlinvoke
 from pypy.rpython import robject
 from pypy.rlib import objectmodel
 from pypy.rpython import rmodel
+from pypy.tool.pairtype import extendabletype
 
 
 class __extend__(annmodel.SomeDict):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         dictkey   = self.dictdef.dictkey
         dictvalue = self.dictdef.dictvalue

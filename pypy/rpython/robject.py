@@ -5,9 +5,12 @@ from pypy.rpython.lltypesystem.lltype import \
 from pypy.rpython.rmodel import Repr, VoidRepr, inputconst
 from pypy.rpython import rclass
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.tool.pairtype import extendabletype
 
 
 class __extend__(annmodel.SomeObject):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         kind = getkind(self)
         if kind == "type":
