@@ -117,39 +117,6 @@ class FixedStack(RootStack):
     def empty(self):
         return not self.ptr
 
-
-class InitializedClass(type):
-    """NOT_RPYTHON.  A meta-class that allows a class to initialize itself (or
-    its subclasses) by calling __initclass__() as a class method."""
-    def __init__(self, name, bases, dict):
-        super(InitializedClass, self).__init__(name, bases, dict)
-        for basecls in self.__mro__:
-            raw = basecls.__dict__.get('__initclass__')
-            if isinstance(raw, types.FunctionType):
-                raw(self)   # call it as a class method
-
-
-class RwDictProxy(object):
-    """NOT_RPYTHON.  A dict-like class standing for 'cls.__dict__', to work
-    around the fact that the latter is a read-only proxy for new-style
-    classes."""
-    
-    def __init__(self, cls):
-        self.cls = cls
-
-    def __getitem__(self, attr):
-        return self.cls.__dict__[attr]
-
-    def __setitem__(self, attr, value):
-        setattr(self.cls, attr, value)
-
-    def __contains__(self, value):
-        return value in self.cls.__dict__
-
-    def items(self):
-        return self.cls.__dict__.items()
-
-
 class ThreadLocals:
     """Pseudo thread-local storage, for 'space.threadlocals'.
     This is not really thread-local at all; the intention is that the PyPy
