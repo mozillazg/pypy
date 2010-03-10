@@ -12,6 +12,7 @@ from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck, widen
 from pypy.rpython.annlowlevel import ADTInterface
 from pypy.rlib import rgc
+from pypy.tool.pairtype import extendabletype
 
 ADTIFixedList = ADTInterface(None, {
     'll_newlist':      (['SELF', Signed        ], 'self'),
@@ -31,6 +32,8 @@ def dum_nocheck(): pass
 
 
 class __extend__(annmodel.SomeList):
+    __metaclass__ = extendabletype
+    
     def rtyper_makerepr(self, rtyper):
         listitem = self.listdef.listitem
         s_value = listitem.s_value

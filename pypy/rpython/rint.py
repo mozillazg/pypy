@@ -11,6 +11,7 @@ from pypy.rlib.rarithmetic import intmask, r_int, r_uint, r_ulonglong, r_longlon
 from pypy.rpython.error import TyperError, MissingRTypeOperation
 from pypy.rpython.rmodel import log
 from pypy.rlib import objectmodel
+from pypy.tool.pairtype import extendabletype
 
 _integer_reprs = {}
 def getintegerrepr(lltype, prefix=None):
@@ -22,6 +23,8 @@ def getintegerrepr(lltype, prefix=None):
     return repr
 
 class __extend__(annmodel.SomeInteger):
+    __metaclass__ = extendabletype
+    
     def rtyper_makerepr(self, rtyper):
         lltype = build_number(None, self.knowntype)
         return getintegerrepr(lltype)

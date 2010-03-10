@@ -9,8 +9,11 @@ from pypy.rpython.rmodel import externalvsinternal
 from pypy.rpython.lltypesystem.lltype import Void, Signed, Bool
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.tool.pairtype import extendabletype
 
 class __extend__(annmodel.SomeTuple):
+    __metaclass__ = extendabletype
+    
     def rtyper_makerepr(self, rtyper):
         repr_class = rtyper.type_system.rtuple.TupleRepr
         return repr_class(rtyper, [rtyper.getrepr(s_item) for s_item in self.items])
