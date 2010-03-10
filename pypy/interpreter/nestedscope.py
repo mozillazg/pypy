@@ -4,6 +4,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.mixedmodule import MixedModule
 from pypy.rlib import jit
 from pypy.tool.uid import uid
+from pypy.tool.pairtype import extendabletype
 
 class Cell(Wrappable):
     "A simple container for a wrapped value."
@@ -74,6 +75,8 @@ super_locals2fast             = pyframe.PyFrame.locals2fast
 class __extend__(pyframe.PyFrame):
     """This class enhances a standard frame with nested scope abilities,
     i.e. handling of cell/free variables."""
+
+    __metaclass__ = extendabletype
 
     # Cell Vars:
     #     my local variables that are exposed to my inner functions

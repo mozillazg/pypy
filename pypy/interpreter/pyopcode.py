@@ -18,6 +18,7 @@ from pypy.tool.stdlib_opcode import opcodedesc, HAVE_ARGUMENT
 from pypy.tool.stdlib_opcode import unrolling_opcode_descs
 from pypy.tool.stdlib_opcode import opcode_method_names
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.tool.pairtype import extendabletype
 
 def unaryoperation(operationname):
     """NOT_RPYTHON"""
@@ -66,6 +67,7 @@ class __extend__(pyframe.PyFrame):
     
     # for logbytecode:
     last_opcode = -1
+    __metaclass__ = extendabletype
     
     ### opcode dispatch ###
 

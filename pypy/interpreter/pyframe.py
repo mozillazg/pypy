@@ -1,7 +1,6 @@
 """ PyFrame class implementation with the interpreter main loop.
 """
 
-from pypy.tool.pairtype import extendabletype
 from pypy.interpreter import eval, baseobjspace, pycode
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.error import OperationError, operationerrfmt
@@ -34,8 +33,6 @@ class PyFrame(eval.Frame):
      * 'builtin' is the attached built-in module
      * 'valuestack_w', 'blockstack', control the interpretation
     """
-
-    __metaclass__ = extendabletype
 
     frame_finished_execution = False
     last_instr               = -1
