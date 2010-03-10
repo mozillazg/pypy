@@ -64,6 +64,7 @@ pypyjitdriver = PyPyJitDriver(can_inline = can_inline,
                               confirm_enter_jit = confirm_enter_jit)
 
 class __extend__(PyFrame):
+    __metaclass__ = extendabletype
 
     def dispatch(self, pycode, next_instr, ec):
         self = hint(self, access_directly=True)
