@@ -49,7 +49,7 @@ class SignatureBuilder:
 
 #________________________________________________________________
 
-class UnwrapSpecRecipe:
+class UnwrapSpecRecipe(object):
     "NOT_RPYTHON"
 
     bases_order = [Wrappable, W_Root, ObjSpace, Arguments, object]
