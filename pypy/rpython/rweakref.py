@@ -6,12 +6,15 @@ from pypy.rpython.rmodel import Repr
 from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
+from pypy.tool.pairtype import extendabletype 
 
 # ____________________________________________________________
 #
 # RTyping of RPython-level weakrefs
 
 class __extend__(annmodel.SomeWeakRef):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         if rtyper.type_system.name == 'lltypesystem':
             return LLWeakRefRepr(rtyper)

@@ -4,6 +4,7 @@ from pypy.rpython.rpbc import AbstractFunctionsPBCRepr,\
      AbstractMethodsPBCRepr
 from pypy.tool.pairtype import pairtype
 from pypy.rpython.lltypesystem import lltype
+from pypy.tool.pairtype import extendabletype
 
 class AbstractGenericCallableRepr(Repr):
     def __init__(self, rtyper, s_generic):
@@ -39,6 +40,8 @@ class AbstractGenericCallableRepr(Repr):
         self.r_result.setup()
 
 class __extend__(annmodel.SomeGenericCallable):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return rtyper.type_system.rgeneric.GenericCallableRepr(rtyper, self)
 

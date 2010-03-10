@@ -5,9 +5,11 @@ from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import IntegerRepr, BoolRepr
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.rmodel import log
-
+from pypy.tool.pairtype import extendabletype
 
 class __extend__(annmodel.SomeBool):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return bool_repr
     def rtyper_makekey(self):

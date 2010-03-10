@@ -12,8 +12,11 @@ from pypy.rpython import rptr
 from pypy.rpython.robject import pyobj_repr
 from pypy.tool import sourcetools
 from pypy.rpython import extregistry
+from pypy.tool.pairtype import extendabletype
 
 class __extend__(annmodel.SomeBuiltin):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         if self.s_self is None:
             # built-in function case

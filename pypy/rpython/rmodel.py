@@ -8,6 +8,7 @@ from pypy.rpython.lltypesystem.lltype import \
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.error import TyperError, MissingRTypeOperation 
+from pypy.tool.pairtype import extendabletype
 
 # initialization states for Repr instances 
 
@@ -265,6 +266,7 @@ class IteratorRepr(Repr):
 
 
 class __extend__(annmodel.SomeIterator):
+    __metaclass__ = extendabletype
     # NOTE: SomeIterator is for iterators over any container, not just list
     def rtyper_makerepr(self, rtyper):
         r_container = rtyper.getrepr(self.s_container)
@@ -273,6 +275,7 @@ class __extend__(annmodel.SomeIterator):
         return self.__class__, rtyper.makekey(self.s_container), self.variant
 
 class __extend__(annmodel.SomeImpossibleValue):
+    __metaclass__ = extendabletype
     def rtyper_makerepr(self, rtyper):
         return impossible_repr
     def rtyper_makekey(self):
