@@ -31,7 +31,7 @@ generic element in some specific subset of the set of all objects.
 from types import BuiltinFunctionType, MethodType, FunctionType
 import pypy
 from pypy.tool import descriptor
-from pypy.tool.pairtype import pair, extendabletype
+from pypy.tool.pairtype import pair
 from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_ulonglong, base_int
 from pypy.rlib.rarithmetic import r_singlefloat
@@ -43,7 +43,6 @@ TLS = tlsobject()
 class SomeObject(object):
     """The set of all objects.  Each instance stands
     for an arbitrary object about which nothing is known."""
-    __metaclass__ = extendabletype
     knowntype = object
     immutable = False
 

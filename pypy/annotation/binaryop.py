@@ -23,6 +23,7 @@ from pypy.annotation.model import SomeUnicodeString
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.rlib import rarithmetic
+from pypy.tool.pairtype import extendabletype
 
 # convenience only!
 def immutablevalue(x):
@@ -61,6 +62,7 @@ for opname in BINARY_OPERATIONS:
     missing_operation(pairtype(SomeObject, SomeObject), opname)
 
 class __extend__(pairtype(SomeObject, SomeObject)):
+    __metaclass__ = extendabletype
 
     def union((obj1, obj2)):
         if obj1 == obj2:
@@ -248,6 +250,7 @@ def _clone(f, can_only_throw = None):
     return newfunc
 
 class __extend__(pairtype(SomeInteger, SomeInteger)):
+    __metaclass__ = extendabletype
     # unsignedness is considered a rare and contagious disease
 
     def union((int1, int2)):
@@ -369,6 +372,7 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
 
 
 class __extend__(pairtype(SomeBool, SomeBool)):
+    __metaclass__ = extendabletype
 
     def union((boo1, boo2)):
         s = SomeBool() 
@@ -412,6 +416,7 @@ class __extend__(pairtype(SomeBool, SomeBool)):
         return s
         
 class __extend__(pairtype(SomeString, SomeString)):
+    __metaclass__ = extendabletype
 
     def union((str1, str2)):
         return SomeString(can_be_None=str1.can_be_None or str2.can_be_None)
@@ -424,6 +429,7 @@ class __extend__(pairtype(SomeString, SomeString)):
         return result
 
 class __extend__(pairtype(SomeChar, SomeChar)):
+    __metaclass__ = extendabletype
 
     def union((chr1, chr2)):
         return SomeChar()
@@ -431,10 +437,14 @@ class __extend__(pairtype(SomeChar, SomeChar)):
 
 class __extend__(pairtype(SomeChar, SomeUnicodeCodePoint),
                  pairtype(SomeUnicodeCodePoint, SomeChar)):
+    __metaclass__ = extendabletype
+
     def union((uchr1, uchr2)):
         return SomeUnicodeCodePoint()
 
 class __extend__(pairtype(SomeUnicodeCodePoint, SomeUnicodeCodePoint)):
+    __metaclass__ = extendabletype
+
     def union((uchr1, uchr2)):
         return SomeUnicodeCodePoint()
 
@@ -443,12 +453,16 @@ class __extend__(pairtype(SomeUnicodeCodePoint, SomeUnicodeCodePoint)):
 
 class __extend__(pairtype(SomeString, SomeUnicodeString),
                  pairtype(SomeString, SomeUnicodeString)):
+    __metaclass__ = extendabletype
+
     def mod((str, unistring)):
         raise NotImplementedError(
             "string formatting mixing strings and unicode not supported")
 
 
 class __extend__(pairtype(SomeString, SomeTuple)):
+    __metaclass__ = extendabletype
+
     def mod((str, s_tuple)):
         for s_item in s_tuple.items:
             if isinstance(s_item, (SomeUnicodeCodePoint, SomeUnicodeString)):
@@ -459,12 +473,14 @@ class __extend__(pairtype(SomeString, SomeTuple)):
 
 
 class __extend__(pairtype(SomeString, SomeObject)):
+    __metaclass__ = extendabletype
 
     def mod((str, args)):
         getbookkeeper().count('strformat', str, args)
         return SomeString()
 
 class __extend__(pairtype(SomeFloat, SomeFloat)):
+    __metaclass__ = extendabletype
     
     def union((flt1, flt2)):
         return SomeFloat()
@@ -485,12 +501,14 @@ class __extend__(pairtype(SomeFloat, SomeFloat)):
 
 
 class __extend__(pairtype(SomeSingleFloat, SomeSingleFloat)):
+    __metaclass__ = extendabletype
     
     def union((flt1, flt2)):
         return SomeSingleFloat()
 
 
 class __extend__(pairtype(SomeList, SomeList)):
+    __metaclass__ = extendabletype
 
     def union((lst1, lst2)):
         return SomeList(lst1.listdef.union(lst2.listdef))
@@ -505,6 +523,7 @@ class __extend__(pairtype(SomeList, SomeList)):
 
 
 class __extend__(pairtype(SomeList, SomeObject)):
+    __metaclass__ = extendabletype
 
     def inplace_add((lst1, obj2)):
         lst1.method_extend(obj2)
@@ -517,6 +536,7 @@ class __extend__(pairtype(SomeList, SomeObject)):
     inplace_mul.can_only_throw = []
 
 class __extend__(pairtype(SomeTuple, SomeTuple)):
+    __metaclass__ = extendabletype
 
     def union((tup1, tup2)):
         if len(tup1.items) != len(tup2.items):
@@ -530,12 +550,14 @@ class __extend__(pairtype(SomeTuple, SomeTuple)):
 
 
 class __extend__(pairtype(SomeDict, SomeDict)):
+    __metaclass__ = extendabletype
 
     def union((dic1, dic2)):
         return SomeDict(dic1.dictdef.union(dic2.dictdef))
 
 
 class __extend__(pairtype(SomeDict, SomeObject)):
+    __metaclass__ = extendabletype
 
     def _can_only_throw(dic1, *ignore):
         if dic1.dictdef.dictkey.custom_eq_hash:
@@ -561,6 +583,7 @@ class __extend__(pairtype(SomeDict, SomeObject)):
 
 
 class __extend__(pairtype(SomeTuple, SomeInteger)):
+    __metaclass__ = extendabletype
     
     def getitem((tup1, int2)):
         if int2.is_immutable_constant():
@@ -575,6 +598,7 @@ class __extend__(pairtype(SomeTuple, SomeInteger)):
 
 
 class __extend__(pairtype(SomeList, SomeInteger)):
+    __metaclass__ = extendabletype
     
     def mul((lst1, int2)):
         return lst1.listdef.offspring()
@@ -605,6 +629,7 @@ class __extend__(pairtype(SomeList, SomeInteger)):
     delitem.can_only_throw = [IndexError]
 
 class __extend__(pairtype(SomeString, SomeInteger)):
+    __metaclass__ = extendabletype
 
     def getitem((str1, int2)):
         getbookkeeper().count("str_getitem", int2)        
@@ -625,6 +650,8 @@ class __extend__(pairtype(SomeString, SomeInteger)):
         return SomeString()
 
 class __extend__(pairtype(SomeUnicodeString, SomeInteger)):
+    __metaclass__ = extendabletype
+
     def getitem((str1, int2)):
         getbookkeeper().count("str_getitem", int2)        
         return SomeUnicodeCodePoint()
@@ -645,6 +672,7 @@ class __extend__(pairtype(SomeUnicodeString, SomeInteger)):
 
 class __extend__(pairtype(SomeInteger, SomeString),
                  pairtype(SomeInteger, SomeUnicodeString)):
+    __metaclass__ = extendabletype
     
     def mul((int1, str2)): # xxx do we want to support this
         getbookkeeper().count("str_mul", str2, int1)
@@ -653,6 +681,8 @@ class __extend__(pairtype(SomeInteger, SomeString),
 class __extend__(pairtype(SomeUnicodeCodePoint, SomeUnicodeString),
                  pairtype(SomeUnicodeString, SomeUnicodeCodePoint),
                  pairtype(SomeUnicodeString, SomeUnicodeString)):
+    __metaclass__ = extendabletype
+
     def union((str1, str2)):
         return SomeUnicodeString(can_be_None=str1.can_be_none() or
                                  str2.can_be_none())
@@ -665,12 +695,14 @@ class __extend__(pairtype(SomeUnicodeCodePoint, SomeUnicodeString),
         return result
 
 class __extend__(pairtype(SomeInteger, SomeList)):
+    __metaclass__ = extendabletype
     
     def mul((int1, lst2)):
         return lst2.listdef.offspring()
 
 
 class __extend__(pairtype(SomeInstance, SomeInstance)):
+    __metaclass__ = extendabletype
 
     def union((ins1, ins2)):
         if ins1.classdef is None or ins2.classdef is None:
@@ -718,6 +750,7 @@ class __extend__(pairtype(SomeInstance, SomeInstance)):
 
 
 class __extend__(pairtype(SomeIterator, SomeIterator)):
+    __metaclass__ = extendabletype
 
     def union((iter1, iter2)):
         s_cont = unioncheck(iter1.s_container, iter2.s_container)
@@ -727,6 +760,7 @@ class __extend__(pairtype(SomeIterator, SomeIterator)):
 
 
 class __extend__(pairtype(SomeBuiltin, SomeBuiltin)):
+    __metaclass__ = extendabletype
 
     def union((bltn1, bltn2)):
         if (bltn1.analyser != bltn2.analyser or
@@ -738,6 +772,7 @@ class __extend__(pairtype(SomeBuiltin, SomeBuiltin)):
         return SomeBuiltin(bltn1.analyser, s_self, methodname=bltn1.methodname)
 
 class __extend__(pairtype(SomePBC, SomePBC)):
+    __metaclass__ = extendabletype
 
     def union((pbc1, pbc2)):       
         d = pbc1.descriptions.copy()
@@ -757,6 +792,8 @@ class __extend__(pairtype(SomePBC, SomePBC)):
         return s
 
 class __extend__(pairtype(SomeGenericCallable, SomePBC)):
+    __metaclass__ = extendabletype
+
     def union((gencall, pbc)):
         for desc in pbc.descriptions:
             unique_key = desc
@@ -767,14 +804,20 @@ class __extend__(pairtype(SomeGenericCallable, SomePBC)):
         return gencall
 
 class __extend__(pairtype(SomePBC, SomeGenericCallable)):
+    __metaclass__ = extendabletype
+
     def union((pbc, gencall)):
         return pair(gencall, pbc).union()
 
 class __extend__(pairtype(SomeImpossibleValue, SomeObject)):
+    __metaclass__ = extendabletype
+
     def union((imp1, obj2)):
         return obj2
 
 class __extend__(pairtype(SomeObject, SomeImpossibleValue)):
+    __metaclass__ = extendabletype
+
     def union((obj1, imp2)):
         return obj1
 
@@ -784,6 +827,8 @@ def _make_none_union(classname, constructor_args='', glob=None):
     if glob is None:
         glob = globals()
     loc = locals()
+    glob = glob.copy()
+    glob['extendabletype'] = extendabletype
     source = py.code.Source("""
         class __extend__(pairtype(%(classname)s, SomePBC)):
             def union((obj, pbc)):
@@ -812,10 +857,14 @@ _make_none_union('SomeWeakRef',         'obj.classdef')
 # getitem on SomePBCs, in particular None fails
 
 class __extend__(pairtype(SomePBC, SomeObject)):
+    __metaclass__ = extendabletype
+
     def getitem((pbc, o)):
         return s_ImpossibleValue
 
 class __extend__(pairtype(SomeExternalObject, SomeExternalObject)):
+    __metaclass__ = extendabletype
+
     def union((ext1, ext2)):
         if ext1.knowntype == ext2.knowntype:
             return SomeExternalObject(ext1.knowntype)
@@ -831,12 +880,15 @@ from pypy.rpython.ootypesystem import ootype
 _make_none_union('SomeOOInstance', 'ootype=obj.ootype, can_be_None=True')
 
 class __extend__(pairtype(SomePtr, SomePtr)):
+    __metaclass__ = extendabletype
+
     def union((p1, p2)):
         assert p1.ll_ptrtype == p2.ll_ptrtype,("mixing of incompatible pointer types: %r, %r" %
                                                (p1.ll_ptrtype, p2.ll_ptrtype))
         return SomePtr(p1.ll_ptrtype)
 
 class __extend__(pairtype(SomePtr, SomeInteger)):
+    __metaclass__ = extendabletype
 
     def getitem((p, int1)):
         example = p.ll_ptrtype._example()
@@ -855,6 +907,8 @@ class __extend__(pairtype(SomePtr, SomeInteger)):
     setitem.can_only_throw = []
 
 class __extend__(pairtype(SomePtr, SomeObject)):
+    __metaclass__ = extendabletype
+
     def union((p, obj)):
         assert False, ("mixing pointer type %r with something else %r" % (p.ll_ptrtype, obj))
 
@@ -865,17 +919,23 @@ class __extend__(pairtype(SomePtr, SomeObject)):
         assert False,"ptr %r setitem index not an int: %r" % (p.ll_ptrtype, obj)
 
 class __extend__(pairtype(SomeObject, SomePtr)):
+    __metaclass__ = extendabletype
+
     def union((obj, p2)):
         return pair(p2, obj).union()
 
 
 class __extend__(pairtype(SomeOOInstance, SomeOOInstance)):
+    __metaclass__ = extendabletype
+
     def union((r1, r2)):
         common = ootype.commonBaseclass(r1.ootype, r2.ootype)
         assert common is not None, 'Mixing of incompatible instances %r, %r' %(r1.ootype, r2.ootype)
         return SomeOOInstance(common, can_be_None=r1.can_be_None or r2.can_be_None)
 
 class __extend__(pairtype(SomeOOClass, SomeOOClass)):
+    __metaclass__ = extendabletype
+
     def union((r1, r2)):
         if r1.ootype is None:
             common = r2.ootype
@@ -892,14 +952,20 @@ class __extend__(pairtype(SomeOOClass, SomeOOClass)):
         return SomeOOClass(common)
 
 class __extend__(pairtype(SomeOOInstance, SomeObject)):
+    __metaclass__ = extendabletype
+
     def union((r, obj)):
         assert False, ("mixing reference type %r with something else %r" % (r.ootype, obj))
 
 class __extend__(pairtype(SomeObject, SomeOOInstance)):
+    __metaclass__ = extendabletype
+
     def union((obj, r2)):
         return pair(r2, obj).union()
 
 class __extend__(pairtype(SomeOOObject, SomeOOObject)):
+    __metaclass__ = extendabletype
+
     def union((r1, r2)):
         assert r1.ootype is ootype.Object and r2.ootype is ootype.Object
         return SomeOOObject()
@@ -908,6 +974,8 @@ class __extend__(pairtype(SomeOOObject, SomeOOObject)):
 # weakrefs
 
 class __extend__(pairtype(SomeWeakRef, SomeWeakRef)):
+    __metaclass__ = extendabletype
+
     def union((s_wrf1, s_wrf2)):
         if s_wrf1.classdef is None:
             basedef = s_wrf2.classdef   # s_wrf1 is known to be dead
@@ -923,6 +991,8 @@ class __extend__(pairtype(SomeWeakRef, SomeWeakRef)):
 # memory addresses
 
 class __extend__(pairtype(SomeAddress, SomeAddress)):
+    __metaclass__ = extendabletype
+
     def union((s_addr1, s_addr2)):
         return SomeAddress(is_null=s_addr1.is_null and s_addr2.is_null)
 
@@ -935,11 +1005,15 @@ class __extend__(pairtype(SomeAddress, SomeAddress)):
         assert False, "comparisons with is not supported by addresses"
 
 class __extend__(pairtype(SomeTypedAddressAccess, SomeTypedAddressAccess)):
+    __metaclass__ = extendabletype
+
     def union((s_taa1, s_taa2)):
         assert s_taa1.type == s_taa2.type
         return s_taa1
 
 class __extend__(pairtype(SomeTypedAddressAccess, SomeInteger)):
+    __metaclass__ = extendabletype
+
     def getitem((s_taa, s_int)):
         from pypy.annotation.model import lltype_to_annotation
         return lltype_to_annotation(s_taa.type)
@@ -952,6 +1026,8 @@ class __extend__(pairtype(SomeTypedAddressAccess, SomeInteger)):
 
 
 class __extend__(pairtype(SomeAddress, SomeInteger)):
+    __metaclass__ = extendabletype
+
     def add((s_addr, s_int)):
         return SomeAddress(is_null=False)
 
@@ -959,21 +1035,25 @@ class __extend__(pairtype(SomeAddress, SomeInteger)):
         return SomeAddress(is_null=False)
 
 class __extend__(pairtype(SomeAddress, SomeImpossibleValue)):
+    __metaclass__ = extendabletype
     # need to override this specifically to hide the 'raise UnionError'
     # of pairtype(SomeAddress, SomeObject).
     def union((s_addr, s_imp)):
         return s_addr
 
 class __extend__(pairtype(SomeImpossibleValue, SomeAddress)):
+    __metaclass__ = extendabletype
     # need to override this specifically to hide the 'raise UnionError'
     # of pairtype(SomeObject, SomeAddress).
     def union((s_imp, s_addr)):
         return s_addr
 
 class __extend__(pairtype(SomeAddress, SomeObject)):
+    __metaclass__ = extendabletype
     def union((s_addr, s_obj)):
         raise UnionError, "union of address and anything else makes no sense"
 
 class __extend__(pairtype(SomeObject, SomeAddress)):
+    __metaclass__ = extendabletype
     def union((s_obj, s_addr)):
         raise UnionError, "union of address and anything else makes no sense"
