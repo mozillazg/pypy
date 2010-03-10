@@ -34,7 +34,7 @@ class extendabletype(type):
         if name == '__extend__':
             for cls in bases:
                 for key, value in dict.items():
-                    if key == '__module__':
+                    if key in ['__module__', '__doc__', '__metaclass__']:
                         continue
                     # XXX do we need to provide something more for pickling?
                     setattr(cls, key, value)
