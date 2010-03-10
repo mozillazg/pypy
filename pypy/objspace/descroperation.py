@@ -32,7 +32,7 @@ def raiseattrerror(space, w_obj, name, w_descr=None):
                               "'%s' object attribute '%s' is read-only",
                               typename, name)
 
-class Object:
+class Object(object):
     def descr__getattribute__(space, w_obj, w_name):
         name = space.str_w(w_name)
         w_descr = space.lookup(w_obj, name)
@@ -81,7 +81,7 @@ class Object:
     def descr__init__(space, w_obj, __args__):
         pass
 
-class DescrOperation:
+class DescrOperation(object):
     _mixin_ = True
 
     def is_data_descr(space, w_obj):
@@ -526,7 +526,7 @@ def number_check(space, w_obj):
 
 # what is the maximum value slices can get on CPython?
 # we need to stick to that value, because fake.py etc.
-class Temp:
+class Temp(object):
     def __getslice__(self, i, j):
         return j
 slice_max = Temp()[:]
