@@ -6,11 +6,12 @@ from pypy.rpython import rbuiltin
 from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython import extregistry
 from pypy.annotation.signature import annotation
-from pypy.tool.pairtype import pairtype
+from pypy.tool.pairtype import extendabletype
 
 # ExternalObjects
 
 class __extend__(annmodel.SomeExternalObject):
+    __metaclass__ = extendabletype
 
     def rtyper_makerepr(self, rtyper):
        # delegate to the get_repr() of the extregistrered Entry class

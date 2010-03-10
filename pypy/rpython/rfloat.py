@@ -11,10 +11,13 @@ from pypy.rpython.rmodel import log
 
 from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import _hash_float
+from pypy.tool.pairtype import extendabletype
 
 import math
 
 class __extend__(annmodel.SomeFloat):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return float_repr
     def rtyper_makekey(self):

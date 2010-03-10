@@ -5,7 +5,7 @@ from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.annlowlevel import cachedtype
 from pypy.rpython.error import TyperError
-
+from pypy.tool.pairtype import extendabletype
 
 class ControllerEntry(ExtRegistryEntry):
 
@@ -226,6 +226,7 @@ class SomeControlledInstance(annmodel.SomeObject):
 _make_none_union("SomeControlledInstance", "obj.s_real_obj, obj.controller", globals())
 
 class __extend__(SomeControlledInstance):
+    __metaclass__ = extendabletype
 
     def getattr(s_cin, s_attr):
         assert s_attr.is_constant()

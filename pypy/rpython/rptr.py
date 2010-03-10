@@ -5,9 +5,11 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, IntegerRepr
 from pypy.rlib.rarithmetic import r_uint
-
+from pypy.tool.pairtype import extendabletype
 
 class __extend__(annmodel.SomePtr):
+    __metaclass__ = extendabletype
+    
     def rtyper_makerepr(self, rtyper):
 ##        if self.is_constant() and not self.const:   # constant NULL
 ##            return nullptr_repr
@@ -20,6 +22,8 @@ class __extend__(annmodel.SomePtr):
         return self.__class__, self.ll_ptrtype
 
 class __extend__(annmodel.SomeInteriorPtr):
+    __metaclass__ = extendabletype
+    
     def rtyper_makerepr(self, rtyper):
         return InteriorPtrRepr(self.ll_ptrtype)
  
@@ -190,6 +194,8 @@ class __extend__(pairtype(Repr, PtrRepr)):
 # ADT  methods
 
 class __extend__(annmodel.SomeLLADTMeth):
+    __metaclass__ = extendabletype
+
     def rtyper_makerepr(self, rtyper):
         return LLADTMethRepr(self, rtyper)
     def rtyper_makekey(self):
