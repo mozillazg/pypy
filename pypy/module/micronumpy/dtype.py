@@ -123,11 +123,11 @@ class DynamicTypes(object):
 
     def sdarray(self, space, length, w_dtype):
         from pypy.module.micronumpy.sdarray import sdresult
-        return sdresult(self.typecode(space))(space, length, w_dtype)
+        return sdresult(self.typecode(space, w_dtype))(space, length, w_dtype)
 
     def mdarray(self, space, shape, w_dtype):
         from pypy.module.micronumpy.mdarray import mdresult
-        return mdresult(self.typecode(space))(space, shape, w_dtype)
+        return mdresult(self.typecode(space, w_dtype))(space, shape, w_dtype)
 
 dtypes = DynamicTypes()
 iterable_type = dtypes.iterable_type
@@ -135,3 +135,5 @@ typecode = dtypes.typecode
 result_mapping = dtypes.result_mapping
 get_dtype = dtypes.get_dtype
 retrieve_dtype = dtypes.retrieve_dtype
+sdarray = dtypes.sdarray
+mdarray = dtypes.mdarray

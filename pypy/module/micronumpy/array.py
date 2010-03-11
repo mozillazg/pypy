@@ -13,17 +13,19 @@ class BaseNumArray(Wrappable):
     pass
 
 def validate_index(array, space, w_i):
-    try:
-        index_dimensionality = space.int_w(space.len(w_i))
-        array_dimensionality = len(array.shape)
-        if index_dimensionality > array_dimensionality:
-            raise OperationError(space.w_IndexError,
-                    space.wrap("Index dimensionality (%d) "
-                        "greater than array dimensionality (%d)."
-                        % (index_dimensionality, array_dimensionality)))
-    except OperationError, e:
-        if e.match(space, space.w_TypeError): pass
-        else: raise
+    index_dimensionality = space.int_w(space.len(w_i))
+    array_dimensionality = len(array.shape)
+    for w_index in space.fixedview(w_i):
+        if not ( space.is_true(space.isinstance(w_index, space.w_int)) or
+                space.is_true(space.isinstance(w_index, space.w_slice)) or
+                space.is_true(space.isinstance(w_index, space.w_list)) or
+                space.is_w(w_index, space.w_Ellipsis) ):
+            raise OperationError(space.w_ValueError,
+                    space.wrap("each subindex must be either a slice, "
+                        "an integer, Ellipsis, or newaxis"))
+    if index_dimensionality > array_dimensionality:
+        raise OperationError(space.w_IndexError,
+                space.wrap("invalid index")) # all as in numpy
 
 def mul_operation():
     def mul(x, y): return x * y
@@ -79,7 +81,7 @@ def infer_shape(space, w_values):
         except OperationError, e:
             if e.match(space, space.w_TypeError):
                 break
-            elif e.match(space, space.IndexError):
+            elif e.match(space, space.w_IndexError):
                 break #as numpy does
             else:
                 raise
