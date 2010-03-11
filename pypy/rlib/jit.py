@@ -220,7 +220,7 @@ class JitDriver:
     """
 
     virtualizables = []
-    
+
     def __init__(self, greens=None, reds=None, virtualizables=None,
                  get_jitcell_at=None, set_jitcell_at=None,
                  can_inline=None, get_printable_location=None,
@@ -247,6 +247,10 @@ class JitDriver:
 
     def _freeze_(self):
         return True
+
+    def getpolicy(self):
+        from pypy.jit.metainterp import policy
+        return policy.JitPolicy()
 
     def jit_merge_point(_self, **livevars):
         # special-cased by ExtRegistryEntry
