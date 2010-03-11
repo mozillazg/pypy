@@ -71,8 +71,9 @@ class AppTestSDArray(object):
             data.reverse()
             ar2 = array(data)
             for operator in (mul, div, add, sub):
-                for value in xrange(1, 16):
+                for value in xrange(1, 8): #less overkill
                     assert compare(operator(ar2, value), [operator(x, value) for x in data])
+                    assert compare(operator(value, ar2), [operator(value, x) for x in data])
                 assert compare(operator(ar, ar2), [operator(x, y) for (x, y) in zip(ar, ar2)])
 
     def test_operator_result_types(self):
@@ -144,25 +145,26 @@ class AppTestSDArray(object):
         assert ar[0] == 0
         ar[1] = 3
         assert ar[1] == 3
-        raises((TypeError, ValueError), ar.__getitem__, 'xyz') #FIXME: why TypeError?
+        raises((IndexError, ValueError), ar.__getitem__, 'xyz') #FIXME: why TypeError?
         raises(IndexError, ar.__getitem__, 38)
         assert ar[-2] == 0
         assert ar[-7] == 3
         assert len(ar) == 8
 
+        #setitem
         ar[2:3] = [5]
         assert ar[2] == 5
         assert compare(ar[1:3], [3, 5])
         assert compare(ar[-6:-4], [5, 0])
         assert compare(ar[-6:-8:-1], [5, 3])
 
-        #setitem
         ar[3] = 2
         assert ar[3] == 2
         ar[5] = 3.5
         assert ar[5] == 3
         raises(ValueError, ar.__setitem__, 0, [99])
         raises(ValueError, ar.__setitem__, 0, 'f')
+        raises(ValueError, ar.__setitem__, slice(2, 3), [4, 5, 6])
 
     def test_minimum(self):
         from numpy import zeros, minimum
@@ -286,7 +288,12 @@ class AppTestMultiDim(object):
         assert s1[1]==1
         s2 = ar[1:3]
         assert s2[0][0] == 3
-        raises(ValueError, ar.__getitem__, 'what a strange index') #FIXME: throw this exception
+        assert compare(ar[1:3, 1:3][1], [7, 8])
+        assert compare(ar[0], ar[...][0])
+        assert ar[1][2] != ar[..., 1:3][1]
+        assert not compare(ar[...][0], ar[..., 0])
+        assert compare(ar[1:3, 0::2][1], [6, 8])
+        #raises(ValueError, ar.__getitem__, 'what a strange index') #still unfixed
         raises(IndexError, ar.__getitem__, (2, 2, 2)) #too many
         raises(IndexError, ar.__getitem__, 5)
         raises(IndexError, ar.__getitem__, (0, 6))
@@ -300,10 +307,72 @@ class AppTestMultiDim(object):
         #setitem
         ar[2] = 3
         assert ar[2, 0] == ar[2, 1] == ar[2, 2] == 3
-        ar[2:3, 0] = [7]
+        ar[2:3] = [7]
+        ar[2:3] = [5, 6, 7]
         ar[2] = [0, 1, 2]
         assert compare(ar[0], ar[2])
         assert compare(ar[..., 0], [0, 3, 0])
+        raises(ValueError, ar.__setitem__, slice(1, 3), [1, 2, 3, 4]) #too much elems
+        raises(ValueError, ar.__setitem__, slice(0, 3),
+                [[[1], [2], [3]], [[4], [5], [6]], [[7], [8], [9]]]) #too large shape
+        raises(ValueError, ar.__setitem__, slice(3, 4), [5, 6]) #attempting to check
+
+        ar2 = array(gen_array((3, 3))) 
+        ar2[...] = [0, 1, 2] #long slice
+        #check preference
+        assert ar2[0, 0] == ar2[1, 0] == 0
+        assert ar2[1, 2] == 2
+
+        ar3 = array(gen_array((3, 3, 3)))
+        ar3[1:3] = [[0, 1, 2], [3, 4, 5]]
+        assert compare(ar3[1, 2], [2, 2, 2])
+
+    def test_newaxis(self):
+        from numpy import array
+        gen_array = self.gen_array
+        compare = self.compare
+
+        ar = array(gen_array((3, 3)))
+
+        assert compare(ar[[1, 2], 0], ar[1:3, 0])
+        assert compare(ar[ [[1, 2], [0, 1]] ] [1, 0], ar[0])
+
+    def test_mdarray_operators(self):
+        from numpy import array
+        import operator
+        compare = self.compare
+
+        data1 = [[i*3+j+1 for j in range(3)] for i in range(3)]
+        data2 = [[i*3+j for j in range(3, 0, -1)] for i in range(3, 0, -1)]
+
+        ar1 = array(data1)
+        ar2 = array(data2)
+
+        const = 13
+
+        for f in (operator.add,
+                  operator.sub,
+                  operator.mul,
+                  operator.div):
+            res = f(ar1, ar2)
+            for i in range(3):
+                assert compare(res[i],
+                        [f(a, b) for a, b in zip(data1[i], data2[i])])
+            rres = f(ar2, ar1)
+            for i in range(3):
+                assert compare(rres[i],
+                        [f(b, a) for a, b in zip(data1[i], data2[i])])
+
+            cres = f(ar1, const)
+            for i in range(3):
+                assert compare(cres[i],
+                        [f(a, const) for a in data1[i]])
+
+            crres = f(const, ar2)
+            for i in range(3):
+                assert compare(crres[i],
+                        [f(const, b) for b in data2[i]])
+
 
 class AppTestDType(object):
     def setup_class(cls):

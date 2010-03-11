@@ -3,11 +3,13 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.baseobjspace import W_Root, UnpackValueError
 from pypy.objspace.std.sliceobject import W_SliceObject
+from pypy.objspace.std.listobject import W_ListObject
+from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.module.micronumpy.array import BaseNumArray
 from pypy.module.micronumpy.array import base_typedef
-from pypy.module.micronumpy.array import construct_array
+from pypy.module.micronumpy.array import construct_array, infer_shape
 from pypy.module.micronumpy.array import array as array_fromseq
 from pypy.module.micronumpy.array import validate_index
 from pypy.module.micronumpy.array import \
@@ -15,7 +17,8 @@ from pypy.module.micronumpy.array import \
 
 from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
 from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
-from pypy.module.micronumpy.dtype import create_factory
+from pypy.module.micronumpy.dtype import create_factory, result_mapping
+from pypy.module.micronumpy.dtype import retrieve_dtype
 
 def compute_pos(space, indexes, dim):
     current = 1
@@ -44,9 +47,13 @@ def compute_slices(space, slices, dims):
     extract = [0]
     slicelen = stride #saved
     unoptimized = True
-    for i in range(len(slices)):
+    lenslices = len(slices)
+    add = 0 # add to index
+    for i in range(lenslices):
         factor = slicelen / strides[i-1] if i>0 else 1
         w_index = slices[i]
+        i += add
+        # somewhere here must be newaxis handling
         if isinstance(w_index, W_SliceObject):
             l = shape[i]
             stride = strides[i]
@@ -65,7 +72,15 @@ def compute_slices(space, slices, dims):
                         extract[j] += start
                     unoptimized = False
                 else:
-                    TESTME
+                    newextract = make_sure_not_resized([0]*len(extract)*factor)
+                    prestride = strides[i-1]
+                    for j in range(len(extract)):
+                        jf = j*factor
+                        st = extract[j]
+                        for k in range(factor):
+                            newextract[jf+k] = st + start
+                            st += prestride
+                    extract = newextract
                 slicelen = stride*slen
             else:
                 if unoptimized:
@@ -78,21 +93,71 @@ def compute_slices(space, slices, dims):
                             newextract[js + k] = st + index*stride
                             index += step
                 else:
-                    TESTME
+                    newextract = make_sure_not_resized([0]*len(extract)*factor*slen)
+                    prestride = strides[i-1]
+                    for j in range(len(extract)):
+                        st = extract[j]
+                        jfs = j*factor*slen
+                        for f in range(factor):
+                            fs = f*slen
+                            index = start
+                            for k in range(slen):
+                                newextract[jfs+fs+k] = st + index*stride
+                                index +=step
+                            st += prestride
+                    unoptimized = True
                 extract = newextract
                 slicelen = stride
         elif space.is_w(w_index, space.w_Ellipsis):
-            newshape.append(shape[i])
+            howmuch = len(shape) - lenslices - add
+            add += howmuch 
+            newshape.extend(shape[i:i+howmuch+1])
             unoptimized = False
+        elif space.is_w(w_index, space.w_None):
+            newshape[len(newshape)-2:len(newshape)-1] = [1]
+            add -= 1
+        elif isinstance(w_index, W_ListObject): #newaxis -- an array contains
+                                                #indices to extract
+            #raise OperationError(space.w_NotImplementedError,
+                    #space.wrap("newaxis are not implemented yet"))
+            ixshape = infer_shape(space, w_index)
+            axisarray = MultiDimIntArray(space, ixshape, 'i')
+            axisarray.load_iterable(w_index) # let an exception propagate, if one
+                                             # as in numpy
+            newshape.extend(ixshape)
+            indices = axisarray.storage
+            nind = len(indices)
+            del axisarray
+            stride = strides[i]
+            dim = shape[i]
+            if not unoptimized:
+                newextract = make_sure_not_resized([0] * len(extract) * factor)
+                prestride = strides[i-1]
+                for j in range(len(extract)):
+                    ex = extract[j]
+                    jf = j * factor
+                    for k in range(factor):
+                        newextract[jf + k] = ex
+                        ex += prestride
+            else:
+                newextract = make_sure_not_resized(extract[:])
+
+            extract = newextract
+            newextract = make_sure_not_resized([0]* len(extract)*nind)
+            for j in range(len(extract)):
+                jn = j*nind
+                for k in range(nind):
+                    newextract[jn + k] = extract[j] + indices[k]*stride
+
+            extract = newextract
+            slicelen = stride
+
         else: #Must be integer
-            try:
-                index = space.int_w(w_index)
-            except TypeError, e:
-                raise OperationError(space.w_IndexError,
-                                     space.wrap('Wrong index'))
+              #but we have checked.
+            index = space.int_w(w_index)
             if not (-shape[i] <= index < shape[i]):
                 raise OperationError(space.w_IndexError,
-                                     space.wrap('index out of range'))
+                                     space.wrap('index out of bounds'))
             if index < 0:
                 index += shape[i]
             stride = strides[i]
@@ -101,7 +166,7 @@ def compute_slices(space, slices, dims):
                 for j in range(len(extract)):
                     extract[j] += start
             else:
-                newextract = make_sure_not_resized([0]*len(extract)*factor)
+                newextract = make_sure_not_resized([0] * len(extract) * factor)
                 prestride = strides[i-1]
                 for j in range(len(extract)):
                     jf = j * factor
@@ -110,10 +175,11 @@ def compute_slices(space, slices, dims):
                         newextract[jf + k] = st + start
                         st += prestride
                 extract = newextract
+                unoptimized = True
             #No adding for shape
             slicelen = stride
 
-    newshape.extend(shape[i+1:]) #add rest of shape
+    newshape.extend(shape[i+add+1:]) #add rest of shape
     #all slices are absolutely eqi-length
     return newshape, extract, slicelen
 
@@ -135,8 +201,9 @@ def create_mdarray(data_type, unwrap, coerce):
 
     def create_math_operation(f):
         opname = f.__name__
-        def math_operation(self, w_x):
+        def common_math_operation(self, w_x, reversed):
             space = self.space
+            inverse = False
             try:
                 space.iter(w_x)
             except OperationError, e:
@@ -145,46 +212,73 @@ def create_mdarray(data_type, unwrap, coerce):
                 result_t = result_mapping(space,
                                             (space.type(w_x), self.dtype))
                 op2 = coerce(space, w_x)
-                result = sdresult(space, result_t)(
-                                                space, self.len(), result_t
-                                                )
+                result = mdresult(result_t)(space, self.shape,
+                                            retrieve_dtype(space, result_t))
                 operation = result.__class__.client_scalar[opname]
             else:
-                op2 = array_fromseq(space, w_x)
+                op2 = array_fromseq(space, w_x, None)
                 if len(op2.shape) > len(self.shape):
                     self, op2 = op2, self
+                    inverse = True
                 lss = len(self.shape)
                 ls = len(op2.shape)
-                if not op2.shape == self.shape[lss-ls:lss]:
+                if not (list(op2.shape) == self.shape[lss-ls:lss] or
+                        list(op2.shape) == self.shape[:ls]):
                     raise OperationError(space.w_ValueError,
                             space.wrap("shape mismatch: objects cannot be"
                                          " broadcast to the same shape"))
                 result_t = result_mapping(space, (self.dtype, op2.dtype))
-                result = mdresult(space, result_t)(space, self.shape, result_t)
+                result = mdresult(result_t)(space, self.shape,
+                                            retrieve_dtype(space, result_t))
                 operation = result.__class__.client_fixedview[opname]
 
-            operation(result, self, op2)
+            operation(result, self, op2, inverse^reversed)
 
             w_result = space.wrap(result)
             return w_result
+
+        def math_operation(self, w_x):
+            return common_math_operation(self, w_x, False)
         math_operation.unwrap_spec = ['self', W_Root]
-        math_operation.__name__ = 'descr_'+opname
-        return math_operation
+        math_operation.__name__ = '%s_descr_%s'%(str(data_type), opname)
+
+        def reversed_math_operation(self, w_x):
+            return common_math_operation(self, w_x, True)
+        reversed_math_operation.unwrap_spec = ['self', W_Root]
+        reversed_math_operation.__name__ = '%s_descr_r%s'%(str(data_type), opname)
+
+        return math_operation, reversed_math_operation
 
     def create_client_math_operation(f):
-        def scalar_operation(self, source, x):
+        def scalar_operation(self, source, x, inversed):
             for i in range(len(source.storage)):
-                self.storage[i] = data_type(f(source.storage[i], x))
+                y = source.storage[i]
+                self.storage[i] = data_type(f(x, y) if inversed else f(y, x))
 
-        def fixedview_operation(self, source1, source2):
+        def fixedview_operation(self, source1, source2, inversed):
             #Here len(s1.storage)>=len(s2.storage)
+            ls1 = len(source1.storage)
+            ls2 = len(source2.storage)
             ll = len(source1.storage)//len(source2.storage)
             l2 = len(source2.storage)
-            for i in range(ll):
-                for j in range(l2):
-                    idx=i*l2+j
-                    self.storage[idx] = data_type(f(source1.storage[idx],
-                                                    source2.storage[j]))
+            if list(source2.shape) == source1.shape[ls1 - ls2:ls1]:
+                for i in range(ll):
+                    il = i*l2
+                    for j in range(l2):
+                        idx = il + j
+                        a = source1.storage[idx]
+                        b = source2.storage[j]
+                        self.storage[idx] = data_type(f(b, a) if inversed
+                                                 else f(a, b))
+            else:
+                for i in range(l2):
+                    il = i*ll
+                    for j in range(ll):
+                        idx = il + j
+                        a = source1.storage[idx]
+                        b = source2.storage[i]
+                        self.storage[idx] = data_type(f(b, a) if inversed
+                                                 else f(a, b))
 
         return scalar_operation, fixedview_operation
 
@@ -209,10 +303,10 @@ def create_mdarray(data_type, unwrap, coerce):
                                             create_client_math_operation(add)
         client_scalar['sub'], client_fixedview['sub'] = \
                                             create_client_math_operation(sub)
-        descr_mul = create_math_operation(mul)
-        descr_div = create_math_operation(div)
-        descr_add = create_math_operation(add)
-        descr_sub = create_math_operation(sub)
+        descr_mul, descr_rmul = create_math_operation(mul)
+        descr_div, descr_rdiv = create_math_operation(div)
+        descr_add, descr_radd = create_math_operation(add)
+        descr_sub, descr_rsub = create_math_operation(sub)
 
         def load_iterable(self, w_xs):
             self._internal_load(w_xs, self.shape, [])
@@ -221,7 +315,8 @@ def create_mdarray(data_type, unwrap, coerce):
             space = self.space
             length = shape[0]
             shapemismatch = OperationError(space.w_ValueError,
-                                           space.wrap('shape mismatch'))
+                                           space.wrap('setting an array element'
+                                                      'with a sequence'))
             try:
                 xs = space.fixedview(w_xs, length)
             except UnpackValueError:
@@ -261,13 +356,8 @@ def create_mdarray(data_type, unwrap, coerce):
             except OperationError, e:
                 if not e.match(space, space.w_TypeError):
                     raise
-
-            try:
-                space.iter(w_index)
-            except OperationError, e:
-                if not e.match(space, space.w_TypeError):
-                    raise
-                w_index = space.newlist([w_index])
+            if not isinstance(w_index, W_TupleObject):
+                w_index = space.newtuple([w_index])
             validate_index(self, space, w_index)
             try:
                 indexes = self._unpack_indexes(space, w_index)
@@ -290,14 +380,9 @@ def create_mdarray(data_type, unwrap, coerce):
 
         def descr_setitem(self, w_index, w_value):
             space = self.space
+            if not isinstance(w_index, W_TupleObject):
+                w_index = space.newtuple([w_index])
             validate_index(self, space, w_index)
-            try:
-                space.iter(w_index)
-            except OperationError, e:
-                if not (e.match(space, space.w_IndexError) or
-                        e.match(space, space.w_TypeError)):
-                    raise
-                w_index = space.newlist([w_index])
             try:
                 indexes = self._unpack_indexes(space, w_index)
             except OperationError, e:
@@ -317,29 +402,50 @@ def create_mdarray(data_type, unwrap, coerce):
                         self.storage[start:start + lslice] = [value] * lslice
                     return
                 arr = array_fromseq(space, w_value, None)
+                larr = len(arr.storage)
                 ls = len(arr.shape)
                 lss = len(shape)
-                if not (ls <= lss and list(arr.shape) == shape[lss-ls:lss]):
-                    raise OperationError(space.w_ValueError, #FIXME: throws when it shouldn't
-                                         space.wrap('array dimensions '
-                                         'are not compatible for copy'))
-                #we may exit earlier, but we are true purists and wonna check
-                if len(regions) == 0: return
-                l = len(arr.storage)
-                if lslice > l: #long slice
-                    xxx
-                    iters = lslice // l
-                    assert lslice == l * iters
-                    for start in regions:
-                        for i in range(iters):
-                            self.storage[start:start + l] = arr.storage
-                            start += l
-                else:
+                noncompat = OperationError(space.w_ValueError, #FIXME: throws when it shouldn't
+                                     space.wrap('array dimensions '
+                                     'are not compatible for copy'))
+                if ls > lss:
+                    raise noncompat
+                if list(arr.shape) == shape[lss-ls:lss]:
+                    if len(regions) == 0: return
                     i = 0
-                    for start in regions:
-                        self.storage[start:start + l] = arr.storage[i:i + lslice]
-                        if i > l:
-                            i = i-l
+                    if lslice > larr:
+                        for start in regions:
+                            for j in range(0, lslice, larr):
+                                self.storage[start:start + larr] = arr.storage[:]
+                                start += larr
+                    else:
+                        for start in regions:
+                            self.storage[start:start + lslice] =\
+                                    arr.storage[i:i + lslice]
+                            i += lslice
+                            if i > larr:
+                                i -= larr
+                elif list(arr.shape) == shape[:ls]:
+                    if len(regions) == 0: return
+                    if len(regions) < larr:
+                        factor = larr // len(regions)
+                        slen = lslice // factor
+                        for j in range(len(regions)):
+                            start = regions[j]
+                            jf = j*factor
+                            for k in range(factor):
+                                self.storage[start:start + slen] = \
+                                        make_sure_not_resized(
+                                                [arr.storage[jf + k]] * slen)
+                                start += slen
+                    else:
+                        i = 0
+                        for item in arr.storage:
+                            for start in regions[i:i+larr]:
+                                self.storage[start:start + lslice] = [item] * lslice
+                            i += larr
+                else:
+                    raise noncompat
             else:
                 pos = compute_pos(space, indexes, self.shape)
                 self.storage[pos] = coerce(space, w_value)
@@ -362,7 +468,19 @@ def create_mdarray(data_type, unwrap, coerce):
                     __len__ = interp2app(MultiDimArray.descr_len),
                     __getitem__ = interp2app(MultiDimArray.descr_getitem),
                     __setitem__ = interp2app(MultiDimArray.descr_setitem),
+
+                    __add__ = interp2app(MultiDimArray.descr_add),
+                    __sub__ = interp2app(MultiDimArray.descr_sub),
+                    __mul__ = interp2app(MultiDimArray.descr_mul),
+                    __div__ = interp2app(MultiDimArray.descr_div),
+
+                    __radd__ = interp2app(MultiDimArray.descr_radd),
+                    __rsub__ = interp2app(MultiDimArray.descr_rsub),
+                    __rmul__ = interp2app(MultiDimArray.descr_rmul),
+                    __rdiv__ = interp2app(MultiDimArray.descr_rdiv),
+
                     __str__ = interp2app(MultiDimArray.descr_str),
+
                     dtype = GetSetProperty(descr_dtype, cls = MultiDimArray),
                     shape = GetSetProperty(descr_shape, cls = MultiDimArray),
                    )

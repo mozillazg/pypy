@@ -5,6 +5,7 @@ from pypy.interpreter.gateway import interp2app
 from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.objspace.std.sliceobject import W_SliceObject
+from pypy.objspace.std.tupleobject import W_TupleObject
 
 from pypy.module.micronumpy.array import BaseNumArray
 from pypy.module.micronumpy.array import base_typedef
@@ -60,18 +61,21 @@ def create_sdarray(data_type, unwrap, coerce):
                         )
 
     def create_client_math_operation(f):
-        def scalar_operation(self, source, x):
+        def scalar_operation(self, source, x, inverse):
             for i in range(len(source.storage)):
-                self.storage[i] = f(source.storage[i], x)
+                y = source.storage[i]
+                self.storage[i] = f(x, y) if inverse else f(y, x)
 
-        def fixedview_operation(self, a, b):
+        def fixedview_operation(self, source1, source2, inverse):
             for i in range(self.len()):
-                self.storage[i] = f(a.storage[i], b.storage[i])
+                a = source1.storage[i]
+                b = source2.storage[i]
+                self.storage[i] = f(b, a) if inverse else f(a, b)
         return scalar_operation, fixedview_operation
 
     def create_math_operation(f):
         opname = f.__name__
-        def math_operation(self, w_x):
+        def common_math_operation(self, w_x, reversed):
             space = self.space
             try:
                 space.iter(w_x)
@@ -81,10 +85,9 @@ def create_sdarray(data_type, unwrap, coerce):
                 result_t = result_mapping(space,
                                           (space.type(w_x), self.dtype))
                 x = coerce(space, w_x)
-                result = sdresult(result_t)(space,
-                                            self.len(), retrieve_dtype(space, result_t)
-                                           )
-                client_scalar[opname](result, self, x)
+                result = sdresult(result_t)(space, self.len(),
+                                            retrieve_dtype(space, result_t))
+                operation = result.__class__.client_scalar[opname]
             else:
                 operand_length = space.int_w(space.len(w_x))
                 if operand_length != self.len():
@@ -93,33 +96,31 @@ def create_sdarray(data_type, unwrap, coerce):
                                        " broadcast to the same shape"))
                 dtype_w = retrieve_dtype(space, iterable_type(space, w_x))
                 result_t = result_mapping(space, (dtype_w, self.dtype))
-                xs = sdresult(dtype_w.code)(space, operand_length, dtype_w)
+                xs = sdresult(result_t)(space, operand_length, 
+                                        retrieve_dtype(space, result_t))
                 xs.load_iterable(w_x)
-                result = sdresult(result_t)(
-                                            space, self.len(), retrieve_dtype(space, result_t)
-                                           )
-                client_fixedview[opname](result, self, xs)
+                result = sdresult(result_t)(space, self.len(),
+                                            retrieve_dtype(space, result_t))
+                x = xs
+                operation = result.__class__.client_fixedview[opname]
+
+            operation(result, self, x, reversed)
 
             return space.wrap(result)
+
+        def math_operation(self, w_x):
+            return common_math_operation(self, w_x, False)
         math_operation.unwrap_spec = ['self', W_Root]
         math_operation.__name__ = "%s_descr_%s" % (str(data_type), opname)
-        return math_operation
 
-    client_scalar = {}
-    client_fixedview = {}
+        def reversed_math_operation(self, w_x):
+            return common_math_operation(self, w_x, True)
+        reversed_math_operation.unwrap_spec = ['self', W_Root]
+        reversed_math_operation.__name__ = "%s_descr_r%s" % (str(data_type), opname)
 
-    mul = mul_operation()
-    client_scalar['mul'], client_fixedview['mul'] = \
-                                        create_client_math_operation(mul)
-    div = div_operation()
-    client_scalar['div'], client_fixedview['div'] = \
-                                        create_client_math_operation(div)
-    add = add_operation()
-    client_scalar['add'], client_fixedview['add'] = \
-                                        create_client_math_operation(add)
-    sub = sub_operation()
-    client_scalar['sub'], client_fixedview['sub'] = \
-                                        create_client_math_operation(sub)
+        return math_operation, reversed_math_operation
+
+
 
     class NumArray(BaseSingleDimArray):
         def __init__(self, space, length, dtype):
@@ -130,10 +131,28 @@ def create_sdarray(data_type, unwrap, coerce):
             self.dtype = dtype
             make_sure_not_resized(self.storage)
 
-        descr_mul = create_math_operation(mul)
-        descr_div = create_math_operation(div)
-        descr_add = create_math_operation(add)
-        descr_sub = create_math_operation(sub)
+        # Since we can't pass dtype to client_*,
+        # we must always use ones for *client* dtype, e.g. bound to his class.
+
+        client_scalar = {}
+        client_fixedview = {}
+
+        mul = mul_operation()
+        client_scalar['mul'], client_fixedview['mul'] = \
+                                            create_client_math_operation(mul)
+        div = div_operation()
+        client_scalar['div'], client_fixedview['div'] = \
+                                            create_client_math_operation(div)
+        add = add_operation()
+        client_scalar['add'], client_fixedview['add'] = \
+                                            create_client_math_operation(add)
+        sub = sub_operation()
+        client_scalar['sub'], client_fixedview['sub'] = \
+                                            create_client_math_operation(sub)
+        descr_mul, descr_rmul = create_math_operation(mul)
+        descr_div, descr_rdiv = create_math_operation(div)
+        descr_add, descr_radd = create_math_operation(add)
+        descr_sub, descr_rsub = create_math_operation(sub)
 
         def load_iterable(self, w_values):
             space = self.space
@@ -168,10 +187,20 @@ def create_sdarray(data_type, unwrap, coerce):
                         res.storage[i] = self.storage[start]
                         start += step
                 return space.wrap(res)
+            elif space.is_w(w_index, space.w_Ellipsis):
+                res = NumArray(space, self.shape[0], self.dtype)
+                res.storage[:] = self.storage
+                return space.wrap(res)
             else:
                 try:
                     index = space.int_w(w_index)
-                except TypeError, e:
+                except OperationError, e:
+                    if not e.match(space, space.w_TypeError):
+                        raise
+                    if isinstance(w_index, W_TupleObject):
+                        raise OperationError(space.w_NotImplementedError,
+                                space.wrap('multi-indexing single-dimension'
+                                           ' arrays are not implemented yet'))
                     raise OperationError(space.w_IndexError,
                                         space.wrap("index must either be an int or a sequence"))
             try:
@@ -201,8 +230,9 @@ def create_sdarray(data_type, unwrap, coerce):
                     return
                 operand_length = space.int_w(space.len(w_value))
                 if operand_length != slen:
-                    raise OperationError(space.w_TypeError,
-                                                space.wrap('shape mismatch'))
+                    raise OperationError(space.w_ValueError,
+                                        space.wrap('array dimensions are not'
+                                                   ' compatible for copy'))
                 value = space.fixedview(w_value)
                 if step == 1:
                     self.storage[start:stop] = \
@@ -267,10 +297,10 @@ def create_sdarray(data_type, unwrap, coerce):
                                __add__ = interp2app(NumArray.descr_add),
                                __sub__ = interp2app(NumArray.descr_sub),
 
-                               __rmul__ = interp2app(NumArray.descr_mul),
-                               __rdiv__ = interp2app(NumArray.descr_div),
-                               __radd__ = interp2app(NumArray.descr_add),
-                               __rsub__ = interp2app(NumArray.descr_sub),
+                               __rmul__ = interp2app(NumArray.descr_rmul),
+                               __rdiv__ = interp2app(NumArray.descr_rdiv),
+                               __radd__ = interp2app(NumArray.descr_radd),
+                               __rsub__ = interp2app(NumArray.descr_rsub),
 
                                __getitem__ = interp2app(NumArray.descr_getitem),
                                __setitem__ = interp2app(NumArray.descr_setitem),
