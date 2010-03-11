@@ -74,14 +74,15 @@ history.TreeLoop._compiled_version = lltype.nullptr(llimpl.COMPILEDLOOP.TO)
 class BaseCPU(model.AbstractCPU):
     supports_floats = True
 
-    def __init__(self, rtyper, stats=None, opts=None,
+    def __init__(self, rtyper, opts=None,
                  translate_support_code=False,
                  annmixlevel=None, gcdescr=None):
         assert type(opts) is not bool
         model.AbstractCPU.__init__(self)
         self.rtyper = rtyper
+        self.opts = opts
         self.translate_support_code = translate_support_code
-        self.stats = stats or MiniStats()
+        self.stats = MiniStats()
         self.stats.exec_counters = {}
         self.stats.exec_jumps = 0
         self.stats.exec_conditional_jumps = 0

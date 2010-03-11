@@ -94,6 +94,7 @@ class PyPyTarget(object):
     usage = SUPPRESS_USAGE
 
     take_options = True
+    supports_jit = True
 
     def opt_parser(self, config):
         parser = to_optparse(config, useoptions=["objspace.*"],
@@ -221,10 +222,6 @@ class PyPyTarget(object):
             streamio._setfd_binary = _setfd_binary_dummy
 
         return self.get_entry_point(config)
-
-    def jitpolicy(self, driver):
-        from pypy.module.pypyjit.policy import PyPyJitPolicy
-        return PyPyJitPolicy()
     
     def get_entry_point(self, config):
         from pypy.lib.ctypes_config_cache import rebuild
@@ -242,7 +239,7 @@ class PyPyTarget(object):
 
     def interface(self, ns):
         for name in ['take_options', 'handle_config', 'print_help', 'target',
-                     'jitpolicy',
+                     'supports_jit',
                      'get_additional_config_options']:
             ns[name] = getattr(self, name)
 
