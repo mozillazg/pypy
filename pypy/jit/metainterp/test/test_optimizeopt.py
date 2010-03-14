@@ -2724,7 +2724,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         self.optimize_loop(ops, 'Not, Not', expected)
 
     def test_arraycopy_1(self):
-        
+        pass
 
 class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
 
