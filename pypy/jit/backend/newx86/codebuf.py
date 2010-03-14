@@ -5,19 +5,22 @@ from pypy.jit.backend.newx86.rx86 import X86_32_CodeBuilder, X86_64_CodeBuilder
 
 
 class CodeBufAllocator(object):
+    alloc_count = 0
+
     def __init__(self, word):
         self.all_data_parts = []    # only if we are not translated
-        self.alloc_count = 0
         self.cb_class = code_builder_cls[word]
 
     def __del__(self):
-        for data, size in self.all_data_parts:
-            free(data, size)
-            self.alloc_count -= 1
+        if not we_are_translated():
+            for data, size in self.all_data_parts:
+                free(data, size)
+                CodeBufAllocator.alloc_count -= 1
 
     def new_code_buffer(self, map_size):
         data = alloc(map_size)
         if not we_are_translated():
+            CodeBufAllocator.alloc_count += 1
             self.all_data_parts.append((data, map_size))
         return self.cb_class(data, map_size)
 

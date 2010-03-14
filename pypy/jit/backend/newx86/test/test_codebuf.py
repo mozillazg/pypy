@@ -10,16 +10,18 @@ class TestCodeBuilder:
     WORD = 4
 
     def setup_method(self, meth):
+        CodeBufAllocator.alloc_count = 0
         self.cballoc = CodeBufAllocator(self.WORD)
 
     def teardown_method(self, meth):
+        del self.cballoc
         for i in range(5):
-            if self.cballoc.alloc_count == 0:
+            if CodeBufAllocator.alloc_count == 0:
                 break
             gc.collect()
         else:
             raise AssertionError("alloc_count == %d" % (
-                self.cballoc.alloc_count,))
+                CodeBufAllocator.alloc_count,))
 
     def test_alloc_free(self):
         c1 = self.cballoc.new_code_buffer(4096)
