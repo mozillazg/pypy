@@ -1,6 +1,6 @@
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rmmap import PTR, alloc, free
-from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem import rffi
 from pypy.jit.backend.newx86.rx86 import X86_32_CodeBuilder, X86_64_CodeBuilder
 
 
@@ -48,6 +48,17 @@ class CodeBuilder(object):
 
     def get_current_position(self):
         return rffi.ptradd(self.data, self.write_ofs)
+
+    def extract_subbuffer(self, subsize):
+        subbuf = self.data
+        if self.write_ofs < subsize:
+            self._overflow_detected()
+        self.write_ofs -= subsize
+        self.data = rffi.ptradd(self.data, subsize)
+        return self.__class__(subbuf, subsize)
+
+    def is_full(self):
+        return self.write_ofs == 0
 
 
 class CodeBuilder32(CodeBuilder, X86_32_CodeBuilder):
