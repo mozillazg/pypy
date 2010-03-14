@@ -3,7 +3,7 @@ import gc
 from pypy.rpython.lltypesystem import rffi
 from pypy.jit.backend.newx86.codebuf import CodeBufOverflow
 from pypy.jit.backend.newx86.codebuf import CodeBufAllocator
-from pypy.jit.backend.newx86.rx86 import R
+from pypy.jit.backend.newx86.codebuf import AbstractCodeBuilder
 
 
 class TestCodeBuilder:
@@ -11,7 +11,7 @@ class TestCodeBuilder:
 
     def setup_method(self, meth):
         CodeBufAllocator.alloc_count = 0
-        self.cballoc = CodeBufAllocator(self.WORD)
+        self.cballoc = CodeBufAllocator(AbstractCodeBuilder)
 
     def teardown_method(self, meth):
         del self.cballoc
@@ -29,59 +29,61 @@ class TestCodeBuilder:
 
     def test_writing_from_end(self):
         c = self.cballoc.new_code_buffer(4096)
-        c.RET()
-        c.NOP()
+        c.writechar('A')
+        c.writechar('B')
         p1 = c.get_current_position()
-        assert p1[0] == chr(0x90)    # NOP
-        assert p1[1] == chr(0xC3)    # RET
-        c.PUSH_r(R.ecx)
+        assert p1[0] == 'B'
+        assert p1[1] == 'A'
+        c.writechar('C')
         p2 = c.get_current_position()
-        assert p2[0] == chr(0x51)    # PUSH ecx
-        assert p2[1] == chr(0x90)    # NOP
-        assert p2[2] == chr(0xC3)    # RET
+        assert p2[0] == 'C'
+        assert p2[1] == 'B'
+        assert p2[2] == 'A'
 
     def test_overflowing(self):
         c = self.cballoc.new_code_buffer(4096)
-        c.raise_on_overflow = True
         for i in range(4096):
-            c.NOP()
-        py.test.raises(CodeBufOverflow, c.NOP)
+            c.writechar('x')
+        py.test.raises(CodeBufOverflow, c.writechar, 'x')
 
     def test_extract_subbuffer(self):
         c1 = self.cballoc.new_code_buffer(4096)
-        c1.NOP()
-        c2 = c1.extract_subbuffer(3)
+        c1.writechar('x')
+        c2 = c1.extract_subbuffer(3, False)
         p1 = c1.get_current_position()
-        assert p1[0] == chr(0x90)       # NOP
+        assert p1[0] == 'x'
         p2 = c2.get_current_position()
-        assert p2[4092] == chr(0x90)    # NOP
+        assert p2[4092] == 'x'
         assert not c2.is_full()
-        c2.RET()
-        c2.RET()
-        c2.RET()
+        c2.writechar('1')
+        c2.writechar('2')
+        c2.writechar('3')
         p2 = c2.get_current_position()
-        assert p2[0] == chr(0xC3)       # RET
-        assert p2[1] == chr(0xC3)       # RET
-        assert p2[2] == chr(0xC3)       # RET
-        assert p2[4095] == chr(0x90)    # NOP
+        assert p2[0] == '3'
+        assert p2[1] == '2'
+        assert p2[2] == '1'
+        assert p2[4095] == 'x'
         assert c2.is_full()
 
     def test_extract_subbuffer_overflow(self):
         c = self.cballoc.new_code_buffer(4096)
-        c.raise_on_overflow = True
         for i in range(4092):
-            c.NOP()
-        c1 = c.extract_subbuffer(3)
-        c1.RET()
-        c1.RET()
-        c1.RET()
-        c2 = c.extract_subbuffer(1)
-        c2.PUSH_r(R.edx)
+            c.writechar('x')
+        c1 = c.extract_subbuffer(3, False)
+        c1.writechar('1')
+        c1.writechar('2')
+        c1.writechar('3')
+        c2 = c.extract_subbuffer(1, False)
+        c2.writechar('4')
         p1 = c1.get_current_position()
-        assert p1[0] == chr(0xC3)      # RET
-        assert p1[1] == chr(0xC3)      # RET
-        assert p1[2] == chr(0xC3)      # RET
-        assert p1[3] == chr(0x52)      # PUSH edx
-        assert p1[4] == chr(0x90)      # NOP
-        assert p1[4095] == chr(0x90)   # NOP
-        py.test.raises(CodeBufOverflow, c.extract_subbuffer, 1)
+        assert p1[0] == '3'
+        assert p1[1] == '2'
+        assert p1[2] == '1'
+        assert p1[3] == '4'
+        assert p1[4] == 'x'
+        assert p1[4095] == 'x'
+        py.test.raises(CodeBufOverflow, c.extract_subbuffer, 1, False)
+
+    def test_empty_code_buffer(self):
+        c = self.cballoc.empty_code_buffer()
+        py.test.raises(CodeBufOverflow, c.writechar, 'x')
