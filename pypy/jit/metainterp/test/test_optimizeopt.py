@@ -2724,7 +2724,20 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         self.optimize_loop(ops, 'Not, Not', expected)
 
     def test_arraycopy_1(self):
-        pass
+        ops = '''
+        [i0]
+        p1 = new_array(3, descr=arraydescr)
+        setarrayitem_gc(p1, 1, 1, descr=arraydescr)
+        p2 = new_array(3, descr=arraydescr)
+        arraycopy(ConstPtr(myptr), ConstPtr(myptr), p1, p2, 1, 1, 2, descr=arraydescr)
+        i2 = getarrayitem_gc(p2, 1, descr=arraydescr)
+        jump(i2)
+        '''
+        expected = '''
+        [i0]
+        jump(1)
+        '''
+        self.optimize_loop(ops, 'Not', expected)
 
 class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
 
