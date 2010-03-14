@@ -2755,7 +2755,25 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         [i0]
         jump(3)
         '''
-        self.optimize_loop(ops, 'Not', expected)        
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_arraycopy_not_virtual(self):
+        ops = '''
+        [p0]
+        p1 = new_array(3, descr=arraydescr)
+        p2 = new_array(3, descr=arraydescr)
+        setarrayitem_gc(p1, 2, 10, descr=arraydescr)
+        setarrayitem_gc(p2, 2, 13, descr=arraydescr)
+        arraycopy(0, 0, p1, p2, 0, 0, 3, descr=arraydescr)
+        jump(p2)
+        '''
+        expected = '''
+        [p0]
+        p2 = new_array(3, descr=arraydescr)
+        setarrayitem_gc(p2, 2, 10, descr=arraydescr)
+        jump(p2)
+        '''
+        self.optimize_loop(ops, 'Not', expected)
 
 class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
 
