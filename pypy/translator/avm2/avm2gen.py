@@ -26,7 +26,7 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
         return self.cts.lltype_to_cts(TYPE)
 
     def get_class_context(self, name, DICT):
-        class_desc = query.Types.get(name, None)
+        class_desc = query.get_class_desc(name)
         if class_desc:
             BaseType = class_desc.BaseType
             if '.' in BaseType:
@@ -34,10 +34,11 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
             else:
                 ns, name = '', BaseType
             class_desc.super_name = constants.packagedQName(ns, name)
+            class_desc.name       = constants.packagedQName(class_desc.Package, class_desc.ShortName)
             return class_desc
         else:
             return super(PyPyAvm2ilasm, self).get_class_context(name, DICT)
-    
+
     def load(self, v, *args):
         if isinstance(v, flowmodel.Variable):
             if v.concretetype is ootype.Void:
@@ -51,7 +52,7 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
 
         for e in args:
             self.load(e)
-    
+
     # def prepare_call_oostring(self, OOTYPE):
     #     self.I(instructions.findpropstrict(types._str_qname))
     
@@ -86,17 +87,21 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
         self.emit('findpropstrict', t)
         self.emit('constructprop', t, 0)
 
-    def array_setitem(self, ARRAY=None):
+    def array_setitem(self):
         self.I(instructions.setproperty(constants.MultinameL(
                     constants.PROP_NAMESPACE_SET)))
-        # Hack: oosend expects a value to send to StoreResult
+        # XXX: oosend expects a value to send to StoreResult
         # We don't generate one, push a null.
         self.push_null()
 
-    def array_getitem(self, ARRAY=None):
+    def array_getitem(self):
         self.I(instructions.getproperty(constants.MultinameL(
                     constants.PROP_NAMESPACE_SET)))
 
-    def array_length(self, ARRAY=None):
+    def array_length(self):
         self.I(instructions.getproperty(constants.QName("length")))
     
+    def call_graph(self, graph, func_name=None):
+        if func_name is None:
+            self.db.pending_function(graph)
+

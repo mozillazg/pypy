@@ -7,6 +7,7 @@ from pypy.tool.udir import udir
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator import avm2
 from pypy.translator.cli.support import log
+from mech.fusion.avm2.constants import QName
 
 Types = {} # TypeName -> ClassDesc
 Namespaces = set()
@@ -37,13 +38,12 @@ def get_native_class(name):
 def load_playerglobal():
     _cache = get_cachedir()
     outfile = _cache.join('avm2_playerglobal.pickle')
-    if outfile.check():
-        f = outfile.open('rb')
-        types = pickle.load(f)
-        f.close()
-    else:
-        types = load_and_cache_playerglobal(outfile)
-
+    ## if outfile.check():
+    ##     f = outfile.open('rb')
+    ##     types = pickle.load(f)
+    ##     f.close()
+    ## else:
+    types = load_and_cache_playerglobal(outfile)
     for ttype in types:
         parts = ttype.split('.')
         ns = parts[0]
@@ -52,7 +52,6 @@ def load_playerglobal():
             ns = '%s.%s' % (ns, part)
             Namespaces.add(ns)
     Types.update(types)
-
 
 def get_cachedir():
     import pypy
@@ -79,6 +78,13 @@ def get_ootype(name):
         return avm2class._INSTANCE
 
 def get_class_desc(name):
+    
+    if isinstance(name, QName):
+        if name.ns.name:
+            name = '%s.%s' % (name.ns.name, name.name)
+        else:
+            name = name.name
+    
     if name in Types:
         return Types[name]
     
@@ -95,11 +101,11 @@ def get_class_desc(name):
             ('get', ['ootype.Signed', ], itemdesc.FullName),
             ('set', ['ootype.Signed', itemdesc.FullName], 'ootype.Void')
             ]
-    else:
-        assert False, 'Unknown desc'
+    
+        Types[name] = desc
+        return desc
 
-    Types[name] = desc
-    return desc
+    return None
 
 
 class ClassDesc(object):
@@ -180,6 +186,9 @@ class ClassDesc(object):
         RESULT = get_ootype(result)
         return Meth(ARGS, RESULT)
 
+    def __repr__(self):
+        return '<ClassDesc %r>' % (self.name,)
+
 placeholder = object()
 class NativeNamespace(object):
     def __init__(self, name):
@@ -203,7 +212,7 @@ class NativeNamespace(object):
                 setattr(parent, name, NativeNamespace(fullname))
             else:
                 setattr(self, fullname, NativeNamespace(fullname))
-
+        
         for fullname in Types.iterkeys():
             if '.' in fullname:
                 parent, name = fullname.rsplit('.', 1)

@@ -1,6 +1,8 @@
 import platform
+import sys
 
 import py
+from pypy.conftest import option
 from pypy.translator.translator import TranslationContext
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 from pypy.rpython.lltypesystem.lltype import typeOf
@@ -9,26 +11,45 @@ from pypy.annotation.model import lltype_to_annotation
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.backendopt.checkvirtual import check_virtual_methods
 from pypy.translator.oosupport.support import patch_os, unpatch_os
-from pypy.translator.avm2.test.harness import TestHarness
+from pypy.translator.avm2.test.entrypoint import SWFTestEntryPoint, TamarinTestEntryPoint
+from pypy.translator.avm2.test.browsertest import ExceptionWrapper, InstanceWrapper
 from pypy.translator.avm2.genavm import GenAVM2
 
-# def translate_space_op(gen, op):
-#     if op.opname == "cast_int_to_char":
-#         gen.push_arg(op.args[0])
-#         gen.push_const(1)
-#         gen.push_var("String")
-#         gen.call_method("fromCharCode")
+ENTRY_POINTS = dict(swf=SWFTestEntryPoint, tamarin=TamarinTestEntryPoint)
+
+def parse_result(string):
+    string = string.strip()
+    if string == "true":
+        return True
+    elif string == "false":
+        return False
+    elif string == "undefined" or string == "null":
+        return None
+    elif all(c in "123456789-" for c in string):
+        return int(string)
+    elif "," in string:
+        if string.startswith("(") and string.endswith(")"):
+            return tuple(parse_result(s) for s in string[1:-1].split(","))
+        return [parse_result(s) for s in string.split(",")]
+    elif string.startswith("ExceptionWrapper"):
+        return eval(string)
+    else:
+        try:
+            return float(string)
+        except ValueError:
+            pass
+    return string
 
 def compile_function(func, name, annotation=[], graph=None, backendopt=True,
-                     exctrans=False, annotatorpolicy=None):
+                     exctrans=False, annotatorpolicy=None, wrapexc=False):
     olddefs = patch_os()
-    gen = _build_gen(func, annotation,graph, backendopt,
+    gen = _build_gen(func, annotation, graph, backendopt,
                      exctrans, annotatorpolicy)
-    harness = TestHarness(name, gen)
-    gen.ilasm = harness.actions
+    entry_point = ENTRY_POINTS[option.tamtarget](name, gen, wrapexc)
+    gen.ilasm = entry_point.actions
     gen.generate_source()
     unpatch_os(olddefs) # restore original values
-    return gen, harness
+    return entry_point
 
 def _build_gen(func, annotation, graph=None, backendopt=True, exctrans=False,
                annotatorpolicy=None):
@@ -51,10 +72,10 @@ def _build_gen(func, annotation, graph=None, backendopt=True, exctrans=False,
     if backendopt:
         check_virtual_methods(ootype.ROOT)
         backend_optimizations(t)
-    
-    if func.func_name in ("fn_view", "ident_view"):
+
+    if option.view:
         t.view()
-    
+
     main_graph = t.graphs[0]
     tmpdir = py.path.local('.')
     
@@ -64,20 +85,27 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
     def __init__(self):
         self._func = None
         self._ann = None
-        self._genoo = None
         self._harness = None
 
-    def _compile(self, fn, args, ann=None, backendopt=True, exctrans=False):
+    def _compile(self, fn, args, ann=None, backendopt=True, exctrans=False, wrapexc=False):
+        
+        frame = sys._getframe()
+        while frame:
+            name = frame.f_code.co_name
+            if name.startswith("test_"):
+                break
+            frame = frame.f_back
+        else:
+            name = "test_unknown"
+        
         if ann is None:
             ann = [lltype_to_annotation(typeOf(x)) for x in args]
-        self._genoo, self._harness = compile_function(fn,
-                                                      "%s.%s" % (self.__class__.__name__, fn.func_name),
-                                                      ann,
-                                                      backendopt=backendopt,
-                                                      exctrans=exctrans)
+        
+        self._entry_point = compile_function(fn, "%s.%s" % (type(self).__name__, name),
+            ann, backendopt=backendopt, exctrans=exctrans, wrapexc=wrapexc)
         self._func = fn
         self._ann = ann
-        return self._harness
+        return self._entry_point
 
     def _skip_win(self, reason):
         if platform.system() == 'Windows':
@@ -89,25 +117,29 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
 
     def _skip_llinterpreter(self, reason, skipLL=True, skipOO=True):
         pass
-
+    
     def _get_backendopt(self, backendopt):
         if backendopt is None:
             backendopt = getattr(self, 'backendopt', True) # enable it by default
         return backendopt
     
-    def interpret(self, fn, args, annotation=None, backendopt=None, exctrans=False):
+    def interpret(self, fn, args, annotation=None, backendopt=None, exctrans=False, wrapexc=False):
         backendopt = self._get_backendopt(backendopt)
-        harness = self._compile(fn, args, annotation, backendopt=backendopt, exctrans=exctrans)
-        harness.start_test()
-        harness.actions.call_function_constargs(fn.func_name, *args)
-        result = harness.do_test(True)
+        entry_point = self._compile(fn, args, annotation, backendopt=backendopt,
+                                exctrans=exctrans, wrapexc=wrapexc)
+        print entry_point
+        entry_point.start_test()
+        entry_point.actions.call_function_constargs(fn.func_name, *args)
+        result = parse_result(entry_point.do_test())
+        if isinstance(result, ExceptionWrapper):
+            raise result
         return result
     
     def interpret_raises(self, exception, fn, args, backendopt=None, exctrans=False):
         import exceptions # needed by eval
         backendopt = self._get_backendopt(backendopt)
         try:
-            self.interpret(fn, args, backendopt=backendopt, exctrans=exctrans)
+            self.interpret(fn, args, backendopt=backendopt, exctrans=exctrans, wrapexc=True)
         except ExceptionWrapper, ex:
             assert issubclass(eval(ex.class_name), exception)
         else:
@@ -138,14 +170,3 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
 
     def read_attr(self, obj, name):
         py.test.skip('read_attr not supported on gencli tests')
-
-class InstanceWrapper:
-    def __init__(self, class_name):
-        self.class_name = class_name
-
-class ExceptionWrapper:
-    def __init__(self, class_name):
-        self.class_name = class_name
-
-    def __repr__(self):
-        return 'ExceptionWrapper(%s)' % repr(self.class_name)

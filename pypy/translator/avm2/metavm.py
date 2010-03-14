@@ -1,9 +1,7 @@
-from pypy.translator.cli import oopspec
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.oosupport.metavm import MicroInstruction, \
      PushAllArgs, StoreResult, GetField, SetField, DownCast
 from pypy.translator.oosupport.metavm import _Call as _OOCall
-# from pypy.translator.cli.comparer import EqualityComparer
 from pypy.translator.avm2.runtime import _static_meth, NativeInstance
 from pypy.translator.avm2 import types_ as types
 from mech.fusion.avm2 import constants
@@ -33,14 +31,15 @@ class _Call(_OOCall):
         cts = generator.cts
         generator.emit()
 
-    def _load_arg_or_null(self, generator, arg):
-        if arg.concretetype is ootype.Void:
-            if arg.value is None:
-                generator.ilasm.push_null() # special-case: use None as a null value
+    def _load_arg_or_null(self, generator, *args):
+        for arg in args:
+            if arg.concretetype is ootype.Void:
+                if arg.value is None:
+                    generator.ilasm.push_null() # special-case: use None as a null value
+                else:
+                    assert False, "Don't know how to load this arg"
             else:
-                assert False, "Don't know how to load this arg"
-        else:
-            generator.load(arg)
+                generator.load(arg)
 
 
 class _CallMethod(_Call):
@@ -51,31 +50,51 @@ class _CallMethod(_Call):
     def _render_method(self, generator, method_name, args):
         this = args[0]
         native = isinstance(this.concretetype, NativeInstance)
-        for arg in args: # push parametes
-            if native:
-                self._load_arg_or_null(generator, arg)
-            else:
-                generator.load(arg)
+        if native:
+            self._load_arg_or_null(generator, *args)
+        else:
+            generator.load(*args)
 
         if isinstance(this.concretetype, ootype.Array) and this.concretetype.ITEM is not ootype.Void:
-            v_array = args[0]
-            ARRAY = v_array.concretetype
-            if method_name == 'll_setitem_fast':
-                generator.array_setitem(ARRAY)
-            elif method_name == 'll_getitem_fast':
-                generator.array_getitem(ARRAY)
-            elif method_name == 'll_length':
-                generator.array_length(ARRAY)
+            if method_name == "ll_setitem_fast":
+                generator.array_setitem()
+            elif method_name == "ll_getitem_fast":
+                generator.array_getitem()
+            elif method_name == "ll_length":
+                generator.array_length()
             else:
                 assert False
+        elif isinstance(this.concretetype, ootype.AbstractString):
+            if method_name == "ll_append":
+                generator.emit('add')
+            elif method_name == "ll_stritem_nonneg":
+                generator.call_method("charAt", 1)
+            elif method_name == "ll_strlen":
+                generator.get_field("length")
         else:
-            generator.call_method(this.concretetype, method_name)
-
+            generator.call_method(method_name, len(args)-1)
 
 class _IndirectCall(_CallMethod):
     def render(self, generator, op):
         # discard the last argument because it's used only for analysis
         self._render_method(generator, 'Invoke', op.args[:-1])
+
+class ConstCall(MicroInstruction):
+    def __init__(self, method, *args):
+        self.__method = method
+        self.__args = args
+
+    def render(self, generator, op):
+        generator.load(*self.__args)
+        generator.call_method(self.__method, len(self.__args))
+
+class ConstCallArgs(MicroInstruction):
+    def __init__(self, method, numargs):
+        self.__method = method
+        self.__nargs = numargs
+
+    def render(self, generator, op):
+        generator.call_method(self.__method, self.__nargs)
 
 class _RuntimeNew(MicroInstruction):
     def render(self, generator, op):
@@ -88,12 +107,29 @@ class _OOString(MicroInstruction):
         if op.args[1] == -1:
             generator.emit('findpropstrict', types.str_qname)
             generator.load(op.args[0])
-            generator.emit('callproperty', 1)
+            generator.emit('callproperty', types.str_qname, 1)
         else:
-            generator.emit('findpropstrict', constants.QName("parseInt"))
-            generator.load(op.args[0])
-            generator.load(op.args[1])
-            generator.emit('callproperty', 2)
+            generator.load(*op.args)
+            generator.emit('callproperty', constants.QName("toString"), 1)
+
+class _OOParseInt(MicroInstruction):
+    def render(self, generator, op):
+        generator.load(*op.args)
+        generator.emit('getglobalscope')
+        generator.emit('callproperty', constants.QName("parseInt"), 2)
+
+class _OOParseFloat(MicroInstruction):
+    def render(self, generator, op):
+        generator.load(*op.args)
+        generator.emit('getglobalscope')
+        generator.emit('callproperty', constants.QName("parseFloat"), 1)
+
+class PushClass(MicroInstruction):
+    def __init__(self, classname):
+        self.__class = constants.QName(classname)
+
+    def render(self, generator, op):
+        generator.emit('getlex', constants.QName(self.__class))
 
 # class _NewCustomDict(MicroInstruction):
 #     def render(self, generator, op):
@@ -165,28 +201,23 @@ class _NewArray(MicroInstruction):
         v_type, v_length = op.args
         assert v_type.concretetype is ootype.Void
         TYPE = v_type.value._INSTANCE
-        typetok = generator.cts.lltype_to_cts(TYPE)
-        generator.load(v_length)
-        generator.ilasm.opcode('newarr', typetok)
+        generator.oonewarray(TYPE, v_length)
 
 class _GetArrayElem(MicroInstruction):
     def render(self, generator, op):
-        generator.load(op.args[0])
-        generator.load(op.args[1])
-        rettype = generator.cts.lltype_to_cts(op.result.concretetype)
-        generator.ilasm.opcode('getproperty', rettype)
+        v_array, v_index = op.args
+        generator.load(v_array)
+        generator.get_field(str(v_index))
 
 class _SetArrayElem(MicroInstruction):
     def render(self, generator, op):
         v_array, v_index, v_elem = op.args
         generator.load(v_array)
-        generator.load(v_index)
         if v_elem.concretetype is ootype.Void and v_elem.value is None:
-            generator.ilasm.opcode('ldnull')
+            generator.push_null()
         else:
             generator.load(v_elem)
-        elemtype = generator.cts.lltype_to_cts(v_array.concretetype)
-        generator.ilasm.opcode('stelem', elemtype)
+        generator.set_field(str(v_index))
 
 class _TypeOf(MicroInstruction):
     def render(self, generator, op):
@@ -198,6 +229,7 @@ class _TypeOf(MicroInstruction):
         else:
             cliClass = c_type.value
             fullname = cliClass._INSTANCE._name
+        generator.gettype()
 
 class _EventHandler(MicroInstruction):
     def render(self, generator, op):
@@ -218,22 +250,18 @@ class _EventHandler(MicroInstruction):
 
 class _GetStaticField(MicroInstruction):
     def render(self, generator, op):
-        cli_class = op.args[0].value
+        cts_class = op.args[0].value
         fldname = op.args[1].value
-        TYPE = op.result.concretetype
-        cts_type = generator.cts.lltype_to_cts(TYPE)
-        desc = '%s::%s' % (cli_class._name, fldname)
-        generator.ilasm.load_static_field(cts_type, desc)
+        generator.ilasm.load(cts_class)
+        generator.ilasm.get_field(fldname)
 
 class _SetStaticField(MicroInstruction):
     def render(self, generator, op):
-        cli_class = op.args[0].value
+        cts_class = op.args[0].value
         fldname = op.args[1].value
-        TYPE = op.result.concretetype
-        cts_type = generator.cts.lltype_to_cts(TYPE)
-        desc = '%s::%s' % (cli_class._name, fldname)
-        generator.load(op.args[2])
-        generator.ilasm.store_static_field(cts_type, desc)
+        generator.ilasm.load(cts_class)
+        generator.ilasm.swap()
+        generator.ilasm.set_field(fldname)
 
 class _FieldInfoForConst(MicroInstruction):
     def render(self, generator, op):
@@ -278,4 +306,6 @@ GetStaticField = _GetStaticField()
 SetStaticField = _SetStaticField()
 FieldInfoForConst = _FieldInfoForConst()
 OOString = _OOString()
+OOParseInt = _OOParseInt()
+OOParseFloat = _OOParseFloat()
 # CastPrimitive = _CastPrimitive()

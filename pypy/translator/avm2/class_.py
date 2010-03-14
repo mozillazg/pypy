@@ -16,6 +16,7 @@ class Class(Node):
         self.db = db
         self.cts = db.genoo.TypeSystem(db)
         self.INSTANCE = INSTANCE
+        self.exception = ootype.isSubclass(self.INSTANCE, self.db.genoo.EXCEPTION)
         self.namespace = namespace
         self.name = name
 
@@ -44,6 +45,8 @@ class Class(Node):
 
     def get_base_class(self):
         base_class = self.INSTANCE._superclass
+        if self.INSTANCE is self.db.genoo.EXCEPTION:
+            return c.QName("Error")
         if self.is_root(base_class):
             return c.QName("Object")
         else:
@@ -151,9 +154,10 @@ class Class(Node):
             override = False
         else:
             override = True
-            print "Overriding toString"
+        print self.exception
+        wrapper = "Exception" if self.exception else "Instance"
         self.ilasm.begin_method('toString', [], types.types.string, override=override)
-        self.ilasm.load("InstanceWrapper('%s')" % (self.name))
+        self.ilasm.load("%sWrapper('%s')" % (wrapper, self.name))
         self.ilasm.emit('returnvalue')
         self.ilasm.exit_context()
 
