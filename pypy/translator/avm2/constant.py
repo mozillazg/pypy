@@ -117,7 +117,7 @@ class Avm2ConstGenerator(BaseConstantGenerator):
 # ______________________________________________________________________
 # Mixins
 #
-# Mixins are used to add a few CLI-specific methods to each constant
+# Mixins are used to add a few Tamarin-specific methods to each constant
 # class.  Basically, any time I wanted to extend a base class (such as
 # AbstractConst or DictConst), I created a mixin, and then mixed it in
 # to each sub-class of that base-class.  Kind of awkward.
@@ -172,12 +172,22 @@ class Avm2BaseConstMixin(object):
 # and exist to combine a mixin and the generic base class.  For now,
 # though, they contain the create_pointer() and initialize_data()
 # routines.  In order to get rid of them, we would need to implement
-# the generator interface in the CLI.
+# the generator interface in Tamarin.
 
 class Avm2RecordConst(Avm2BaseConstMixin, RecordConst):
     def create_pointer(self, gen):
         self.db.const_count.inc('Record')
         super(Avm2RecordConst, self).create_pointer(gen)
+
+    def initialize_data(self, constgen, gen):
+        assert not self.is_null()
+        SELFTYPE = self.value._TYPE
+        for f_name, (FIELD_TYPE, f_default) in self.value._TYPE._fields.iteritems():
+            if FIELD_TYPE is not ootype.Void:
+                gen.dup(SELFTYPE)
+                value = self.value._items[f_name]
+                push_constant(self.db, FIELD_TYPE, value, gen)
+                gen.set_field(f_name)
 
 class Avm2InstanceConst(Avm2BaseConstMixin, InstanceConst):
     def create_pointer(self, gen):
@@ -185,6 +195,26 @@ class Avm2InstanceConst(Avm2BaseConstMixin, InstanceConst):
         self.db.const_count.inc('Instance', self.OOTYPE())
         super(Avm2InstanceConst, self).create_pointer(gen)
 
+    def initialize_data(self, constgen, gen):
+        assert not self.is_null()
+
+        # Get a list of all the constants we'll need to initialize.
+        # I am not clear on why this needs to be sorted, actually,
+        # but we sort it.
+        const_list = self._sorted_const_list()
+        
+        # Push ourself on the stack, and cast to our actual type if it
+        # is not the same as our static type
+        SELFTYPE = self.value._TYPE
+        if SELFTYPE is not self.static_type:
+            gen.downcast(SELFTYPE)
+
+        # Store each of our fields in the sorted order
+        for FIELD_TYPE, INSTANCE, name, value in const_list:
+            constgen._consider_split_current_function(gen)
+            gen.dup(SELFTYPE)
+            push_constant(self.db, FIELD_TYPE, value, gen)
+            gen.set_field(name)
 
 class Avm2ClassConst(Avm2BaseConstMixin, ClassConst):
     def is_inline(self):

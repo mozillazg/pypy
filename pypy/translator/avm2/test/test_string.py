@@ -1,8 +1,8 @@
 import py
-from pypy.translator.cli.test.runtest import CliTest
+from pypy.translator.avm2.test.runtest import AVM2Test
 import pypy.translator.oosupport.test_template.string as oostring
 
-class TestCliString(CliTest, oostring.BaseTestString):
+class TestAVM2String(AVM2Test, oostring.BaseTestString):
 
     EMPTY_STRING_HASH = 0
 

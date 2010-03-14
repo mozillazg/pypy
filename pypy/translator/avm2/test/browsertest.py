@@ -1,18 +1,15 @@
-from BaseHTTPServer import HTTPServer as BaseHTTPServer, BaseHTTPRequestHandler
+from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from cgi import parse_qs
 
 import time
 import webbrowser
-
-class HTTPServer(BaseHTTPServer):
-    allow_reuse_address = True
 
 class config(object):
     http_port = 10001
 
     html_page = """<html>
 <head>
-<title>PyPy AVM Backend Test Case: %s</title>
+<title>PyPy AVM2 Backend Test Case: %s</title>
 </head>
 <body>
 <object type="application/x-shockwave-flash" data="test.swf" width="%d" height="%d">
@@ -26,27 +23,16 @@ class config(object):
 <allow-access-from domain="*" secure="false"/>
 </cross-domain-policy>"""
 
-def parse_result(string):
-    if string.strip() == "":
-        return None
-    if string == "true":
-        return True
-    elif string == "false":
-        return False
-    elif string == "undefined" or string == "null":
-        return None
-    elif all(c in "123456789-" for c in string):
-        return int(string)
-    elif "," in string:
-        if string.startswith("(") and string.endswith(")"):
-            return tuple(parse_result(s) for s in string[1:-1].split(",") if parse_result(s) is not None)
-        return [parse_result(s) for s in string.split(",")]
-    else:
-        try:
-            return float(string)
-        except ValueError:
-            pass
-    return string
+class InstanceWrapper:
+    def __init__(self, class_name):
+        self.class_name = class_name
+
+class ExceptionWrapper:
+    def __init__(self, class_name):
+        self.class_name = class_name
+
+    def __repr__(self):
+        return 'ExceptionWrapper(%r)' % (self.class_name,)
 
 class TestCase(object):
     def __init__(self, name, swfdata):
@@ -69,7 +55,7 @@ class TestHandler(BaseHTTPRequestHandler):
             data = config.crossdomain_xml
             mime = 'text/xml'
         self.serve_data(mime, data)
-        
+
     def do_POST(self):
         if self.path == "/test.result":
             form = parse_qs(self.rfile.read(int(self.headers['content-length'])))
@@ -92,10 +78,7 @@ class BrowserTest(object):
 
     def get_result(self):
         testcase = self.httpd.testcase
-        start_time = time.time()
         while testcase.result is None:
-            if time.time() - start_time > 10:
-                assert False
             self.httpd.handle_request()
         return testcase.result
 
@@ -105,4 +88,4 @@ def browsertest(name, swfdata):
     driver.start_server(config.http_port, testcase)
     webbrowser.open('http://localhost:%d/test.html' % config.http_port)
     
-    return parse_result(driver.get_result())
+    return driver.get_result()

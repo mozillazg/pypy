@@ -133,7 +133,6 @@ class Function(OOFunction, Node):
 
     def render_raise_block(self, block):
         exc = block.inputargs[1]
-        print exc
         self.generator.load(exc)
         self.generator.emit('throw')
 
@@ -148,9 +147,9 @@ class Function(OOFunction, Node):
             if isinstance(link.last_exception, flowmodel.Variable):
                 self.ilasm.opcode('dup')
                 self.store(link.last_exc_value)
-                self.ilasm.call_method(
-                    'class [mscorlib]System.Type object::GetType()',
-                    virtual=True)
+                self.ilasm.emit('convert_o')
+                self.ilasm.get_field('prototype')
+                self.ilasm.get_field('constructor')
                 self.store(link.last_exception)
             else:
                 self.store(link.last_exc_value)

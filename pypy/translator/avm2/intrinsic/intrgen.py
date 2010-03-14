@@ -7,29 +7,29 @@ intrinsic_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "src"))
 
 from pypy.translator.avm2.query import ClassDesc
 
-def get_ootype(t, resolved={}):
+def get_type(t, resolved={}):
     if "=" in t:
-        return get_ootype(t.split("=")[0].strip(), resolved)
+        return get_type(t.split("=")[0].strip(), resolved)
     if t == "*":
         return ""
     elif t == "void":
-        return "ootype.Void"
+        return "None"
     elif t == "int":
-        return "ootype.SignedLongLong"
+        return "int"
     elif t == "uint":
-        return "ootype.UnsignedLongLong"
+        return "uint"
     elif t == "Boolean":
-        return "ootype.Bool"
+        return "bool"
     elif t == "Number":
-        return "ootype.Float"
+        return "float"
     elif t == "String":
-        return "ootype.String"
+        return "unicode"
     elif t == "Array":
-        return "ootype.List"
+        return "list"
     elif t.startswith("Vector.<"):
-        return get_ootype(t[len("Vector.<"):-1]) + "[]"
+        return get_type(t[len("Vector.<"):-1]) + "[]"
     elif t in ("Object", "Dictionary"):
-        return "ootype.Dict"
+        return "dict"
     return resolved.get(t, t)
 
 def parse_file(file):
@@ -64,7 +64,15 @@ def parse_file(file):
                 FullName = ShortName
             
             if "extends" in line:
-                BaseType = line[2]
+                name = line[2]
+                if os.path.exists(os.path.join(os.path.dirname(file.name), name+'.as')):
+                    BaseType = '%s.%s' % (Package, name)
+                elif os.path.exists(os.path.join(intrinsic_dir, name+'.as')):
+                    BaseType = name
+                elif name in Resolved:
+                    BaseType = Resolved[name]
+                else:
+                    BaseType = name
                 
         elif line.startswith(("public function ", "public static function ")):
             
@@ -87,10 +95,10 @@ def parse_file(file):
             if name == "!CONSTRUCTOR!":
                 rettype = None
             else:
-                rettype = get_ootype(arglist[arglist.rfind(":")+2:], Resolved)
+                rettype = get_type(arglist[arglist.rfind(":")+2:], Resolved)
                 
             args = [arg for arg in arglist[:arglist.find(")")].split(",")]
-            args = [(get_ootype(arg.strip().split(":")[1], Resolved) if ":" in arg else ("*args" if "..." in arg else arg.strip())) for arg in args]
+            args = [(get_type(arg.strip().split(":")[1], Resolved) if ":" in arg else ("*args" if "..." in arg else arg.strip())) for arg in args]
 
             if name in ("get", "set"):
                 
@@ -118,12 +126,13 @@ def parse_file(file):
                 StaticFields.append(tuple(line[3].split(":")))
     
     desc = ClassDesc()
-    desc.FullName = FullName
-    desc.BaseType = BaseType
-    desc.Package  = Package
-    desc.Resolved = Resolved
-    desc.Methods  = Methods
-    desc.Fields   = Fields
+    desc.FullName  = FullName
+    desc.ShortName = ShortName
+    desc.BaseType  = BaseType
+    desc.Package   = Package
+    desc.Resolved  = Resolved
+    desc.Methods   = Methods
+    desc.Fields    = Fields
     desc.StaticMethods = StaticMethods
     desc.StaticFields  = StaticFields
     
@@ -132,8 +141,10 @@ def parse_file(file):
 def print_desc(desc):
     print
     print "desc = ClassDesc()"
-    print "desc.FullName = %r" % desc.FullName
-    print "desc.BaseType = %r" % desc.BaseType
+    print "desc.FullName  = %r" % desc.FullName
+    print "desc.ShortName = %r" % desc.ShortName
+    print "desc.Package   = %r" % desc.Package
+    print "desc.BaseType  = %r" % desc.BaseType
     print_tuples("Methods", desc.Methods)
     print_tuples("StaticMethods", desc.StaticMethods)
     print_tuples("Fields", desc.Fields)
