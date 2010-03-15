@@ -27,7 +27,7 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
     def _get_type(self, TYPE):
         return self.cts.lltype_to_cts(TYPE)
 
-    def get_class_context(self, name, DICT):
+    def _get_class_context(self, name, DICT):
         class_desc = query.get_class_desc(name)
         if class_desc:
             BaseType = class_desc.BaseType

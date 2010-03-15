@@ -82,15 +82,8 @@ If no text saying "Go:" appears below, the test probably had an error.
         self.actions.finish()
 
     def do_test(self):
-        self.finish_test()
-        f = open("%s.swf" % (self.name,), "wb")
-        f.write(self.swf.serialize())
-        f.close()
-        f = open("%s.abc" % (self.name,), "wb")
-        f.write(self.abc.serialize())
-        f.close()
-        return browsertest(self.name, self.swf)
-
+        pass
+    
     def epilogue(self):
         pass
 
@@ -98,6 +91,16 @@ If no text saying "Go:" appears below, the test probably had an error.
         pass
 
 class SWFTestEntryPoint(BaseTestEntryPoint):
+    def do_test(self):
+        self.finish_test()
+        f = open("%s.flash.swf" % (self.name,), "wb")
+        f.write(self.swf.serialize())
+        f.close()
+        f = open("%s.flash.abc" % (self.name,), "wb")
+        f.write(self.abc.serialize())
+        f.close()
+        return browsertest(self.name, self.swf)
+
     def get_edittext(self):
         if not self.actions.HL('edittext'):        
             self.actions.push_this()
@@ -144,6 +147,12 @@ class SWFTestEntryPoint(BaseTestEntryPoint):
         self.actions.emit('callpropvoid', packagedQName("flash.net", "navigateToURL"), 2)
 
 class TamarinTestEntryPoint(BaseTestEntryPoint):
+    def do_test(self):
+        f = open("%s.tamarin.abc" % (self.name,), "wb")
+        f.write(self.abc.serialize())
+        f.close()
+        asdf
+
     def update_text(self):
         self.actions.push_const("\n")
         self.actions.get_field('text')
@@ -153,6 +162,7 @@ class TamarinTestEntryPoint(BaseTestEntryPoint):
 
     def epilogue(self):
         self.actions.exit_until_type("script")
+        self.actions.context.make_init()
         self.actions.push_var('this')
         self.actions.emit('constructprop', QName("PyPyTest_EntryPoint"), 0)
 
