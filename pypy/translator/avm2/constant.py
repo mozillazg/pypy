@@ -1,46 +1,15 @@
-"""
-___________________________________________________________________________
-CLI Constants
-
-This module extends the oosupport/constant.py to be specific to the
-CLI.  Most of the code in this file is in the constant generators, which
-determine how constants are stored and loaded (static fields, lazy
-initialization, etc), but some constant classes have been overloaded or
-extended to allow for special handling.
-
-The CLI implementation is broken into three sections:
-
-* Constant Generators: different generators implementing different
-  techniques for loading constants (Static fields, singleton fields, etc)
-
-* Mixins: mixins are used to add a few CLI-specific methods to each
-  constant class.  Basically, any time I wanted to extend a base class
-  (such as AbstractConst or DictConst), I created a mixin, and then
-  mixed it in to each sub-class of that base-class.
-
-* Subclasses: here are the CLI specific classes.  Eventually, these
-  probably wouldn't need to exist at all (the JVM doesn't have any,
-  for example), or could simply have empty bodies and exist to
-  combine a mixin and the generic base class.  For now, though, they
-  contain the create_pointer() and initialize_data() routines.
-"""
 
 from pypy.translator.oosupport.constant import \
      push_constant, WeakRefConst, StaticMethodConst, CustomDictConst, \
      ListConst, ClassConst, InstanceConst, RecordConst, DictConst, \
      BaseConstantGenerator, AbstractConst, ArrayConst
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli.comparer import EqualityComparer
 from pypy.translator.avm2 import types_ as types
 from pypy.rpython.lltypesystem import lltype
 
 from mech.fusion.avm2 import constants, traits
 
 CONST_CLASS = constants.packagedQName("pypy.runtime", "Constants")
-
-DEBUG_CONST_INIT = False
-DEBUG_CONST_INIT_VERBOSE = False
-SERIALIZE = False
 
 # ______________________________________________________________________
 # Constant Generators
@@ -96,6 +65,15 @@ class Avm2ConstGenerator(BaseConstantGenerator):
     
     def _store_constant(self, gen, const):
         gen.emit('initproperty', constants.QName(const.name))
+
+    def _initialize_data(self, gen, all_constants):
+        """ Iterates through each constant, initializing its data. """
+        for const in all_constants:
+            self._consider_step(gen)
+            self._push_constant_during_init(gen, const)
+            self.current_const = const
+            if not const.initialize_data(self, gen):
+                gen.pop()
 
     def _declare_step(self, gen, stepnum):
         pass
@@ -184,7 +162,7 @@ class Avm2RecordConst(Avm2BaseConstMixin, RecordConst):
         SELFTYPE = self.value._TYPE
         for f_name, (FIELD_TYPE, f_default) in self.value._TYPE._fields.iteritems():
             if FIELD_TYPE is not ootype.Void:
-                gen.dup(SELFTYPE)
+                gen.dup()
                 value = self.value._items[f_name]
                 push_constant(self.db, FIELD_TYPE, value, gen)
                 gen.set_field(f_name)
@@ -212,7 +190,7 @@ class Avm2InstanceConst(Avm2BaseConstMixin, InstanceConst):
         # Store each of our fields in the sorted order
         for FIELD_TYPE, INSTANCE, name, value in const_list:
             constgen._consider_split_current_function(gen)
-            gen.dup(SELFTYPE)
+            gen.dup()
             push_constant(self.db, FIELD_TYPE, value, gen)
             gen.set_field(name)
 
@@ -251,15 +229,14 @@ class Avm2ArrayListConst(Avm2BaseConstMixin, ListConst):
         self.db.const_count.inc('List', self.value._TYPE.ITEM)
         self.db.const_count.inc('List', llen)
         gen.oonewarray(self.value._TYPE, llen)
-        
+
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
         
         # check for special cases and avoid initialization
         if self._do_not_initialize():
             return
-
-        # set each item in the list using the OOTYPE methods
+        
         for idx, item in enumerate(self.value._array):
             gen.dup()
             gen.emit('setproperty', constants.Multiname(

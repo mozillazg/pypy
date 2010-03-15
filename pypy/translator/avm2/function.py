@@ -45,21 +45,24 @@ class Function(OOFunction, Node):
     def begin_render(self):
         self._set_args()
         self._set_locals()
-        print self.args
-        print self.locals
         if not self.args:
             self.args = ()
 
+        if self.is_method:
+            self.args = self.args[1:]
+        
         returntype, returnvar = self.cts.llvar_to_cts(self.graph.getreturnvar())
 
         if self.classname:
-            self.generator.begin_method(self.name, self.args[1:], returntype, override=self.override)
-        else:
-            self.generator.begin_method(self.name, self.args, returntype, static=True, override=self.override)
+            self.generator.begin_class(constants.packagedQName(self.namespace, self.classname))
+        
+        self.generator.begin_method(self.name, self.args, returntype, static=not self.is_method, override=self.override)
         
     def end_render(self):
         # if self.generator.scope.islabel:
         #     self.generator.exit_scope()
+        if self.classname:
+            self.generator.exit_context()
         self.generator.exit_context()
         
     def render_return_block(self, block):

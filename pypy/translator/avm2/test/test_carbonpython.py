@@ -4,7 +4,7 @@ py.test.skip("it passes usually, but fails on buildbot, no clue why")
 import os
 import os.path
 from pypy.tool import udir
-from pypy.translator.cli.rte import Target
+from pypy.translator.cli.1rte import Target
 from pypy.translator.cli.carbonpython import DllDef, export, collect_entrypoints,\
      collect_class_entrypoints, compile_dll
 from pypy.translator.cli.test.runtest import CliFunctionWrapper, CliTest

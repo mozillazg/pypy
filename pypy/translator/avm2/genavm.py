@@ -38,7 +38,7 @@ class GenAVM2(GenOO):
     
     def create_assembler(self):
         self.abc = AbcFile()
-        return PyPyAvm2ilasm(self, self.abc)
+        return PyPyAvm2ilasm(self.db, self.abc)
 
     def generate_source(self):
         if self.ilasm is None:
@@ -52,5 +52,5 @@ class GenAVM2(GenOO):
         return self.abc.serialize()
 
     # Don't do treebuilding stuff
-    def stack_optimization(self):
-        pass
+    # def stack_optimization(self):
+    #     pass
