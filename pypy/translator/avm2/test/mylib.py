@@ -1,4 +1,4 @@
-from pypy.translator.cli.carbonpython import export
+from pypy.translator.avm2.sudanpython import export
 
 @export(int, int)
 def sum(a, b):

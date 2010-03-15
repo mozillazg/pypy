@@ -6,7 +6,6 @@ import subprocess
 from pypy.tool.udir import udir
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator import avm2
-from pypy.translator.cli.support import log
 from mech.fusion.avm2.constants import QName
 
 Types = {} # TypeName -> ClassDesc
@@ -34,6 +33,12 @@ def get_native_class(name):
 #         assert ass is not None
 #         clr.AddReference(pypylib)
 #     load_assembly(pypylib)
+
+def getattr_ex(target, attr):
+    parts = attr.split('.')
+    for part in parts:
+        target = getattr(target, part)
+    return target
 
 def load_playerglobal():
     _cache = get_cachedir()
@@ -203,7 +208,6 @@ class NativeNamespace(object):
 
     def _buildtree(self):
         assert self._name is None, '_buildtree can be called only on top-level Runtime, not on namespaces'
-        from pypy.translator.cli.support import getattr_ex
         load_playerglobal()
         for fullname in sorted(list(Namespaces)):
             if '.' in fullname:

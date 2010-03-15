@@ -1,7 +1,6 @@
 import string
 #from pypy.translator.avm.class_ import Class
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli.support import Counter
 from pypy.translator.avm2 import runtime, types_ as types, class_ as c, record
 from pypy.translator.oosupport.database import Database as OODatabase
 
@@ -9,6 +8,23 @@ try:
     set
 except NameError:
     from sets import Set as set
+
+class Counter(object):
+    def __init__(self):
+        self.counters = {}
+
+    def inc(self, *label):
+        cur = self.counters.get(label, 0)
+        self.counters[label] = cur+1
+
+    def dump(self, filename):
+        f = file(filename, 'w')
+        keys = self.counters.keys()
+        keys.sort()
+        for key in keys:
+            label = ', '.join([str(item) for item in key])
+            f.write('%s: %d\n' % (label, self.counters[key]))
+        f.close()
 
 class LowLevelDatabase(OODatabase):
     def __init__(self, genoo):

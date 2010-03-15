@@ -15,11 +15,10 @@ from pypy.translator.driver import TranslationDriver
 from pypy.translator.avm2.entrypoint import LibraryEntryPoint
 
 class AbcDef:
-    def __init__(self, name, namespace, functions=[], dontmangle=True, isnetmodule=False):
+    def __init__(self, name, namespace, functions=[], dontmangle=True):
         self.name = name
         self.namespace = namespace
         self.functions = functions # [(function, annotation), ...]
-        self.isnetmodule = isnetmodule
         self.driver = TranslationDriver()
         if dontmangle:
             self.driver.config.translation.ootype.mangle = False
@@ -30,7 +29,7 @@ class AbcDef:
 
     def get_entrypoint(self, bk):
         graphs = [bk.getdesc(f).cachedgraph(None) for f, _ in self.functions]
-        return LibraryEntryPoint(self.name, graphs, self.isnetmodule)
+        return LibraryEntryPoint(self.name, graphs)
 
     def compile(self):
         # add all functions to the appropriate namespace
@@ -38,7 +37,7 @@ class AbcDef:
             for func, _ in self.functions:
                 if not hasattr(func, '_namespace_'):
                     func._namespace_ = self.namespace
-        self.driver.proceed(['compile_cli'])
+        self.driver.proceed(['compile_tamarin'])
 
 class export(object):
     def __new__(self, *args, **kwds):
@@ -119,7 +118,7 @@ def wrap_method(meth, is_init=False):
     return mydict[name]
 
 
-def compile_abc(filename, abcname=None, copy_dll=True):
+def compile_abc(filename, abcname=None):
     dirname, name = os.path.split(filename)
     if abcname is None:
         abcname, _ = os.path.splitext(name)
@@ -131,11 +130,9 @@ def compile_abc(filename, abcname=None, copy_dll=True):
     execfile(filename, module.__dict__)
     sys.path.pop(0)
 
-    dll = AbcDef(dllname, namespace)
-    dll.functions = collect_entrypoints(module.__dict__)
-    dll.compile()
-    if copy_dll:
-        dll.driver.copy_cli_dll()
+    abc = AbcDef(abcname, namespace)
+    abc.functions = collect_entrypoints(module.__dict__)
+    abc.compile()
 
 def main(argv):
     if len(argv) == 2:
@@ -153,7 +150,7 @@ def main(argv):
     if not os.path.exists(filename):
         print >> sys.stderr, "Cannot find file %s" % filename
         sys.exit(1)
-    compile_dll(filename, dllname)
+    compile_abc(filename, dllname)
 
 if __name__ == '__main__':
     main(sys.argv)

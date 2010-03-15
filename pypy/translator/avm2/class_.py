@@ -1,7 +1,6 @@
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.node import Node
 from pypy.translator.oosupport.constant import push_constant
-from pypy.translator.cli.ilgenerator import CLIBaseGenerator
 
 from mech.fusion.avm2 import constants as c, traits
 from pypy.translator.avm2 import types_ as types

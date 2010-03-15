@@ -88,10 +88,9 @@ class types:
     # weakref = CliClassType('pypylib', 'pypy.runtime.WeakReference')
     type   =  T('Class')
     object =  T('Object')
-    # list   =  N('List', 'pypy.lib')
     list   =  Avm2ArrayType
-    dict   =  N('Dict', 'pypy.lib')
-    sb     =  N('StringBuilder', 'pypy.lib')
+    dict   =  T('Object')
+#    sb     =  N('StringBuilder', 'pypy.lib')
 del T
 
 _lltype_to_cts = {
@@ -105,10 +104,10 @@ _lltype_to_cts = {
     ootype.Char: types.string,
     ootype.UniChar: types.string,
     ootype.Class: types.type,
-    ootype.String: types.string,
-    ootype.StringBuilder: types.sb,
-    ootype.Unicode: types.string,
-    ootype.UnicodeBuilder: types.sb,
+#   ootype.String: types.string,
+#   ootype.StringBuilder: types.sb,
+#   ootype.Unicode: types.string,
+#   ootype.UnicodeBuilder: types.sb,
 
     # maps generic types to their ordinal
     ootype.List.SELFTYPE_T: types.list,
@@ -175,6 +174,14 @@ class Avm2TypeSystem(object):
 
     def escape_name(self, name):
         return name
+
+    def graph_to_qname(self, graph):
+        func_name = self.graph.name
+        namespace = getattr(self.graph, '_namespace_', None)
+        if namespace:
+            return constants.packagedQName(namespace, func_name)
+        else:
+            return constants.QName(func_name)
     
     # def ctor_name(self, t):
     #     return 'instance void %s::.ctor()' % self.lltype_to_cts(t)

@@ -12,6 +12,8 @@ from pypy.translator.avm2 import types_ as types, query
 from pypy.translator.oosupport.treebuilder import SubOperation
 from pypy.translator.oosupport.metavm import Generator
 from pypy.translator.oosupport.constant import push_constant
+from pypy.translator.oosupport.function import render_sub_op
+
 
 from itertools import chain
 
@@ -19,7 +21,7 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
 
     def __init__(self, db, abc):
         super(PyPyAvm2ilasm, self).__init__(abc)
-        self.db = db
+        self.db  = db
         self.cts = db.genoo.TypeSystem(db)
 
     def _get_type(self, TYPE):
@@ -47,6 +49,8 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
                 self.push_local(v)
         elif isinstance(v, flowmodel.Constant):
             push_constant(self.db, v.concretetype, v.value, self)
+        elif isinstance(v, SubOperation):
+            render_sub_op(v, self.db, self)
         else:
             super(PyPyAvm2ilasm, self).load(v)
 
@@ -102,6 +106,36 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
         self.I(instructions.getproperty(constants.QName("length")))
     
     def call_graph(self, graph, func_name=None):
+        """
+        Call a graph.
+        """
         if func_name is None:
             self.db.pending_function(graph)
+        func_name = func_name or graph.name
+        namespace = getattr(graph.func, '_namespace_', None)
+        if namespace:
+            qname = constants.packagedQName(namespace, func_name)
+        else:
+            qname = constants.QName(func_name)
+        self.emit('findpropstrict', qname)
+        self.emit('callproperty', qname)
 
+    def store(self, v):
+        """
+        Pop a value off the stack and store it in the variable.
+        """
+        self.store_var(v.name)
+
+    def push_local(self, v):
+        """
+        Get the local occupied to "name" and push it to the stack.
+        """
+        self.push_var(v.name)
+
+    push_arg = push_local
+
+    def new(self, TYPE):
+        # XXX: assume no args for now
+        TYPE = self._get_type(TYPE)
+        self.emit('findpropstrict', TYPE)
+        self.emit('constructprop', TYPE, 0)
