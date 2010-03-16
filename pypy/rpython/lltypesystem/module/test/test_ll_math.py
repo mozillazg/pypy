@@ -26,6 +26,11 @@ class TestMath:
         ('fmod',  (0.31, 0.123), math.fmod(0.31, 0.123)),
         ('hypot', (0.31, 0.123), math.hypot(0.31, 0.123)),
         ('pow',   (0.31, 0.123), math.pow(0.31, 0.123)),
+        ('pow',   (-0.31, 0.123), ValueError),
+        ('pow',   (-0.5, 2.0), 0.25),
+        ('pow',   (-0.5, 1.0), -0.5),
+        ('pow',   (-0.5, 0.0), 1.0),
+        ('pow',   (-0.5, -1.0), -2.0),
         ('ldexp', (3.375, 2), 13.5),
         ('ldexp', (1.0, -10000), 0.0),   # underflow
         ('frexp', (-1.25,), lambda x: x == (-0.625, 1)),
@@ -75,6 +80,16 @@ class TestMath:
         ('ldexp', (-INFINITY, 3), negativeinf),
         ('modf',  (INFINITY,), lambda x: positiveinf(x[1])),
         ('modf',  (-INFINITY,), lambda x: negativeinf(x[1])),
+        ('pow', (INFINITY, 0.0), 1.0),
+        ('pow', (INFINITY, 0.001), positiveinf),
+        ('pow', (INFINITY, -0.001), 0.0),
+        ('pow', (-INFINITY, 0.0), 1.0),
+        ('pow', (-INFINITY, 0.001), ValueError),
+        ('pow', (-INFINITY, -0.001), ValueError),
+        ('pow', (-INFINITY, 3.0), negativeinf),
+        ('pow', (-INFINITY, 6.0), positiveinf),
+        ('pow', (-INFINITY, -13.0), -0.0),
+        ('pow', (-INFINITY, -128.0), 0.0),
         ]
 
     IRREGERRCASES = [
@@ -145,6 +160,7 @@ def make_test_case((fnname, args, expected), dict):
             if callable(expected):
                 ok = expected(got)
             else:
+                assert finite(expected), "badly written test"
                 gotsign = ll_math.math_copysign(1.0, got)
                 expectedsign = ll_math.math_copysign(1.0, expected)
                 ok = finite(got) and (got == expected and
