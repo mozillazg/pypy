@@ -30,7 +30,7 @@ class TestMath(BaseRtypingTest, LLRtypeMixin):
         locals()[func_name] = next_test
         del next_test
         
-    for name in ll_math.binary_math_functions:
+    for name in ['atan2', 'fmod', 'hypot', 'pow']:
         func_name = 'test_%s' % (name,)
         next_test = new_binary_test(name)
         next_test.func_name = func_name
