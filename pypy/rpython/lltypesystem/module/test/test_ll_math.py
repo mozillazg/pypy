@@ -1,70 +1,108 @@
-
-""" Just another bunch of tests for llmath, run on top of llinterp
+""" Try to test systematically all cases of ll_math.py.
 """
 
-from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin
 from pypy.rpython.lltypesystem.module import ll_math
+from pypy.rlib.rarithmetic import isinf, isnan, INFINITY, NAN
 import math
 
-# XXX no OORtypeMixin here
+def positiveinf(x):
+    return isinf(x) and x > 0.0
 
-class TestMath(BaseRtypingTest, LLRtypeMixin):
-    def new_unary_test(name):
-        def next_test(self):
-            def f(x):
-                return getattr(math, name)(x)
-            assert self.interpret(f, [0.3]) == f(0.3)
-        return next_test
+def negativeinf(x):
+    return isinf(x) and x < 0.0
 
-    def new_binary_test(name):
-        def next_test(self):
-            def f(x, y):
-                return getattr(math, name)(x, y)
-            assert self.interpret(f, [0.3, 0.4]) == f(0.3, 0.4)
-        return next_test
-    
-    for name in ll_math.unary_math_functions:
-        func_name = 'test_%s' % (name,)
-        next_test = new_unary_test(name)
-        next_test.func_name = func_name
-        locals()[func_name] = next_test
-        del next_test
-        
-    for name in ['atan2', 'fmod', 'hypot', 'pow']:
-        func_name = 'test_%s' % (name,)
-        next_test = new_binary_test(name)
-        next_test.func_name = func_name
-        locals()[func_name] = next_test
-        del next_test
-    
-    def test_ldexp(self):
-        def f(x, y):
-            return math.ldexp(x, y)
+def finite(x):
+    return not isinf(x) and not isnan(x)
 
-        assert self.interpret(f, [3.4, 2]) == f(3.4, 2)
-        # underflows give 0.0 with no exception raised
-        assert f(1.0, -10000) == 0.0     # sanity-check the host Python
-        assert self.interpret(f, [1.0, -10000]) == 0.0
 
-    def test_overflow_1(self):
-        # this (probably, depending on platform) tests the case
-        # where the C function pow() sets ERANGE.
-        def f(x, y):
-            try:
-                return math.pow(x, y)
-            except OverflowError:
-                return -42.0
+class TestMath:
 
-        assert self.interpret(f, [10.0, 40000.0]) == -42.0
+    REGCASES = [
+        (name, (0.3,), getattr(math, name)(0.3))
+        for name in ll_math.unary_math_functions]
 
-    def test_overflow_2(self):
-        # this (not on Linux but on Mac OS/X at least) tests the case
-        # where the C function ldexp() does not set ERANGE, but
-        # returns +infinity.
-        def f(x, y):
-            try:
-                return math.ldexp(x, y)
-            except OverflowError:
-                return -42.0
+    IRREGCASES = [
+        ('atan2', (0.31, 0.123), math.atan2(0.31, 0.123)),
+        ('fmod',  (0.31, 0.123), math.fmod(0.31, 0.123)),
+        ('hypot', (0.31, 0.123), math.hypot(0.31, 0.123)),
+        ('pow',   (0.31, 0.123), math.pow(0.31, 0.123)),
+        ('ldexp', (3.375, 2), 13.5),
+        ('ldexp', (1.0, -10000), 0.0),   # underflow
+        ]
 
-        assert self.interpret(f, [10.0, 40000]) == -42.0
+    OVFCASES = [
+        ('cosh', (9999.9,), OverflowError),
+        ('sinh', (9999.9,), OverflowError),
+        ('exp', (9999.9,), OverflowError),
+        ('pow', (10.0, 40000.0), OverflowError),
+        ('ldexp', (10.0, 40000), OverflowError),
+        ]
+
+    INFCASES = [
+        ('acos', (INFINITY,), ValueError),
+        ('acos', (-INFINITY,), ValueError),
+        ('asin', (INFINITY,), ValueError),
+        ('asin', (-INFINITY,), ValueError),
+        ('atan', (INFINITY,), math.pi / 2),
+        ('atan', (-INFINITY,), -math.pi / 2),
+        ('ceil', (INFINITY,), positiveinf),
+        ('ceil', (-INFINITY,), negativeinf),
+        ('cos', (INFINITY,), ValueError),
+        ('cos', (-INFINITY,), ValueError),
+        ('cosh', (INFINITY,), positiveinf),
+        ('cosh', (-INFINITY,), positiveinf),
+        ('exp', (INFINITY,), positiveinf),
+        ('exp', (-INFINITY,), 0.0),
+        ('fabs', (INFINITY,), positiveinf),
+        ('fabs', (-INFINITY,), positiveinf),
+        ('floor', (INFINITY,), positiveinf),
+        ('floor', (-INFINITY,), negativeinf),
+        ('sin', (INFINITY,), ValueError),
+        ('sin', (-INFINITY,), ValueError),
+        ('sinh', (INFINITY,), positiveinf),
+        ('sinh', (-INFINITY,), negativeinf),
+        ('sqrt', (INFINITY,), positiveinf),
+        ('sqrt', (-INFINITY,), ValueError),
+        ('tan', (INFINITY,), ValueError),
+        ('tan', (-INFINITY,), ValueError),
+        ('tanh', (INFINITY,), 1.0),
+        ('tanh', (-INFINITY,), -1.0),
+        ]
+
+    NANREGCASES = [
+        (name, (NAN,), isnan) for name in ll_math.unary_math_functions]
+
+    NANIRREGCASES = []
+
+    TESTCASES = (REGCASES + IRREGCASES + OVFCASES
+                 + INFCASES + NANREGCASES + NANIRREGCASES)
+
+
+def make_test_case((fnname, args, expected), dict):
+    #
+    def test_func(self):
+        fn = getattr(ll_math, 'll_math_' + fnname)
+        repr = "%s(%s)" % (fnname, ', '.join(map(str, args)))
+        try:
+            got = fn(*args)
+        except ValueError:
+            assert expected == ValueError, "%s: got a ValueError" % (repr,)
+        except OverflowError:
+            assert expected == OverflowError, "%s: got an OverflowError" % (
+                repr,)
+        else:
+            if callable(expected):
+                ok = expected(got)
+            else:
+                ok = finite(got) and got == expected
+            if not ok:
+                raise AssertionError("%r: got %s" % (repr, got))
+    #
+    dict[fnname] = dict.get(fnname, 0) + 1
+    testname = 'test_%s_%d' % (fnname, dict[fnname])
+    test_func.func_name = testname
+    setattr(TestMath, testname, test_func)
+
+_d = {}
+for testcase in TestMath.TESTCASES:
+    make_test_case(testcase, _d)
