@@ -90,6 +90,18 @@ class TestMath:
         ('pow', (-INFINITY, 6.0), positiveinf),
         ('pow', (-INFINITY, -13.0), -0.0),
         ('pow', (-INFINITY, -128.0), 0.0),
+        ('pow', (1.001, INFINITY), positiveinf),
+        ('pow', (1.0,   INFINITY), 1.0),
+        ('pow', (0.999, INFINITY), 0.0),
+        ('pow', (-0.999,INFINITY), 0.0),
+        #('pow', (-1.0, INFINITY), 1.0, but strange, could also be -1.0),
+        ('pow', (-1.001,INFINITY), OverflowError),
+        ('pow', (1.001, -INFINITY), 0.0),
+        ('pow', (1.0,   -INFINITY), 1.0),
+        #('pow', (0.999, -INFINITY), positiveinf, but get OverflowError),
+        #('pow', (INFINITY, INFINITY), positiveinf, but get OverflowError),
+        ('pow', (INFINITY, -INFINITY), 0.0),
+        ('pow', (-INFINITY, INFINITY), OverflowError),
         ]
 
     IRREGERRCASES = [
