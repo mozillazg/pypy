@@ -18,25 +18,24 @@ def llexternal(name, ARGS, RESULT):
     return rffi.llexternal(name, ARGS, RESULT, compilation_info=eci,
                            sandboxsafe=True)
 
+if sys.platform == 'win32':
+    underscore = '_'
+else:
+    underscore = ''
+
 math_fabs = llexternal('fabs', [rffi.DOUBLE], rffi.DOUBLE)
 math_log = llexternal('log', [rffi.DOUBLE], rffi.DOUBLE)
 math_log10 = llexternal('log10', [rffi.DOUBLE], rffi.DOUBLE)
-if sys.platform[:3] == "win":
-    _copysign = '_copysign'
-else:
-    _copysign = 'copysign'
-math_copysign = llexternal(_copysign, [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
+math_copysign = llexternal(underscore + 'copysign',
+                           [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
 math_atan2 = llexternal('atan2', [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
 math_frexp = llexternal('frexp', [rffi.DOUBLE, rffi.INTP], rffi.DOUBLE)
 math_modf  = llexternal('modf',  [rffi.DOUBLE, rffi.DOUBLEP], rffi.DOUBLE)
 math_ldexp = llexternal('ldexp', [rffi.DOUBLE, rffi.INT], rffi.DOUBLE)
 math_pow   = llexternal('pow', [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
 math_fmod  = llexternal('fmod',  [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
-
-if sys.platform == 'win32':
-    math_hypot = llexternal('_hypot', [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
-else:
-    math_hypot = llexternal('hypot', [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
+math_hypot = llexternal(underscore + 'hypot',
+                        [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
 
 # ____________________________________________________________
 #
