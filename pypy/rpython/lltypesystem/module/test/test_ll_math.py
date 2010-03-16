@@ -28,6 +28,7 @@ class TestMath:
         ('pow',   (0.31, 0.123), math.pow(0.31, 0.123)),
         ('ldexp', (3.375, 2), 13.5),
         ('ldexp', (1.0, -10000), 0.0),   # underflow
+        ('frexp', (-1.25,), lambda x: x == (-0.625, 1)),
         ]
 
     OVFCASES = [
@@ -67,15 +68,53 @@ class TestMath:
         ('tan', (-INFINITY,), ValueError),
         ('tanh', (INFINITY,), 1.0),
         ('tanh', (-INFINITY,), -1.0),
+        ('frexp', (INFINITY,), lambda x: isinf(x[0])),
+        ('ldexp', (INFINITY, 3), positiveinf),
+        ('ldexp', (-INFINITY, 3), negativeinf),
         ]
 
-    NANREGCASES = [
+    IRREGERRCASES = [
+        #
+        ('atan2', (INFINITY, -2.3), math.pi / 2),
+        ('atan2', (INFINITY, 0.0), math.pi / 2),
+        ('atan2', (INFINITY, 3.0), math.pi / 2),
+        #('atan2', (INFINITY, INFINITY), ?),
+        ('atan2', (2.1, INFINITY), 0.0),
+        ('atan2', (0.0, INFINITY), 0.0),
+        ('atan2', (-0.1, INFINITY), -0.0),
+        ('atan2', (-INFINITY, 0.4), -math.pi / 2),
+        ('atan2', (2.1, -INFINITY), math.pi),
+        ('atan2', (0.0, -INFINITY), math.pi),
+        ('atan2', (-0.1, -INFINITY), -math.pi),
+        #
+        ]
+
+    binary_math_functions = ['atan2', 'fmod', 'hypot', 'pow']
+
+    NANCASES1 = [
         (name, (NAN,), isnan) for name in ll_math.unary_math_functions]
+    NANCASES2 = [
+        (name, (NAN, 0.1), isnan) for name in binary_math_functions]
+    NANCASES3 = [
+        (name, (-0.2, NAN), isnan) for name in binary_math_functions]
+    NANCASES4 = [
+        (name, (NAN, -INFINITY), isnan) for name in binary_math_functions
+                                        if name != 'hypot']
+    NANCASES5 = [
+        (name, (INFINITY, NAN), isnan) for name in binary_math_functions
+                                       if name != 'hypot']
+    NANCASES6 = [
+        ('frexp', (NAN,), lambda x: isnan(x[0])),
+        ('ldexp', (NAN, 2), isnan),
+        ('hypot', (NAN, INFINITY), positiveinf),
+        ('hypot', (NAN, -INFINITY), positiveinf),
+        ('hypot', (INFINITY, NAN), positiveinf),
+        ('hypot', (-INFINITY, NAN), positiveinf),
+        ]
 
-    NANIRREGCASES = []
-
-    TESTCASES = (REGCASES + IRREGCASES + OVFCASES
-                 + INFCASES + NANREGCASES + NANIRREGCASES)
+    TESTCASES = (REGCASES + IRREGCASES + OVFCASES + INFCASES + IRREGERRCASES
+                 + NANCASES1 + NANCASES2 + NANCASES3 + NANCASES4 + NANCASES5
+                 + NANCASES6)
 
 
 def make_test_case((fnname, args, expected), dict):
@@ -94,7 +133,10 @@ def make_test_case((fnname, args, expected), dict):
             if callable(expected):
                 ok = expected(got)
             else:
-                ok = finite(got) and got == expected
+                gotsign = ll_math.math_copysign(1.0, got)
+                expectedsign = ll_math.math_copysign(1.0, expected)
+                ok = finite(got) and (got == expected and
+                                      gotsign == expectedsign)
             if not ok:
                 raise AssertionError("%r: got %s" % (repr, got))
     #
