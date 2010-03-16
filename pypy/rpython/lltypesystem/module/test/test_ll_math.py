@@ -29,6 +29,8 @@ class TestMath:
         ('ldexp', (3.375, 2), 13.5),
         ('ldexp', (1.0, -10000), 0.0),   # underflow
         ('frexp', (-1.25,), lambda x: x == (-0.625, 1)),
+        ('modf',  (4.25,), lambda x: x == (0.25, 4.0)),
+        ('modf',  (-4.25,), lambda x: x == (-0.25, -4.0)),
         ]
 
     OVFCASES = [
@@ -71,6 +73,8 @@ class TestMath:
         ('frexp', (INFINITY,), lambda x: isinf(x[0])),
         ('ldexp', (INFINITY, 3), positiveinf),
         ('ldexp', (-INFINITY, 3), negativeinf),
+        ('modf',  (INFINITY,), lambda x: positiveinf(x[1])),
+        ('modf',  (-INFINITY,), lambda x: negativeinf(x[1])),
         ]
 
     IRREGERRCASES = [
@@ -78,7 +82,7 @@ class TestMath:
         ('atan2', (INFINITY, -2.3), math.pi / 2),
         ('atan2', (INFINITY, 0.0), math.pi / 2),
         ('atan2', (INFINITY, 3.0), math.pi / 2),
-        #('atan2', (INFINITY, INFINITY), ?),
+        #('atan2', (INFINITY, INFINITY), ?strange),
         ('atan2', (2.1, INFINITY), 0.0),
         ('atan2', (0.0, INFINITY), 0.0),
         ('atan2', (-0.1, INFINITY), -0.0),
@@ -110,6 +114,7 @@ class TestMath:
         ('hypot', (NAN, -INFINITY), positiveinf),
         ('hypot', (INFINITY, NAN), positiveinf),
         ('hypot', (-INFINITY, NAN), positiveinf),
+        ('modf', (NAN,), lambda x: (isnan(x[0]) and isnan(x[1]))),
         ]
 
     TESTCASES = (REGCASES + IRREGCASES + OVFCASES + INFCASES + IRREGERRCASES
