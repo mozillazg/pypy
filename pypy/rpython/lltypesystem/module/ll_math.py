@@ -163,6 +163,25 @@ def ll_math_copysign(x, y):
     return math_copysign(x, y)     # no error checking needed
 
 
+def ll_math_fmod(x, y):
+    if isinf(y):
+        if isinf(x):
+            raise ValueError("math domain error")
+        return x  # fmod(x, +/-Inf) returns x for finite x (or if x is a NaN).
+
+    _error_reset()
+    r = math_fmod(x, y)
+    errno = rposix.get_errno()
+    if isnan(r):
+        if isnan(x) or isnan(y):
+            errno = 0
+        else:
+            errno = EDOM
+    if errno:
+        _likely_raise(errno, r)
+    return r
+
+
 def ll_math_hypot(x, y):
     # hypot(x, +/-Inf) returns Inf, even if x is a NaN.
     if isinf(x):
@@ -278,9 +297,10 @@ def new_unary_math_function(name, can_overflow):
 # ____________________________________________________________
 
 unary_math_functions = [
-    'acos', 'acosh', 'asin', 'asinh', 'atan', 'atanh',
+    'acos', 'asin', 'atan',
     'ceil', 'cos', 'cosh', 'exp', 'fabs', 'floor',
-    'log1p', 'sin', 'sinh', 'sqrt', 'tan', 'tanh'
+    'sin', 'sinh', 'sqrt', 'tan', 'tanh',
+    # 'log1p', 'acosh', 'asinh', 'atanh',   -- added in Python 2.6
     ]
 unary_math_functions_can_overflow = [
     'cosh', 'exp', 'log1p', 'sinh', # why log1p? CPython does it
