@@ -4,6 +4,11 @@
 import py, sys, math
 from pypy.rlib.rarithmetic import isinf, isnan, INFINITY, NAN
 
+consistent = True
+if '__pypy__' not in sys.builtin_module_names:
+    if sys.version_info < (2, 6):
+        consistent = False
+
 def positiveinf(x):
     return isinf(x) and x > 0.0
 
@@ -170,33 +175,35 @@ class MathTests:
 class TestDirect(MathTests):
     pass
 
+def do_test(fn, fnname, args, expected):
+    repr = "%s(%s)" % (fnname, ', '.join(map(str, args)))
+    try:
+        got = fn(*args)
+    except ValueError:
+        assert expected == ValueError, "%s: got a ValueError" % (repr,)
+    except OverflowError:
+        assert expected == OverflowError, "%s: got an OverflowError" % (
+            repr,)
+    else:
+        if callable(expected):
+            ok = expected(got)
+        else:
+            assert finite(expected), "badly written test"
+            gotsign = expectedsign = 1
+            if got < 0.0: gotsign = -gotsign
+            if expected < 0.0: expectedsign = -expectedsign
+            ok = finite(got) and (got == expected and
+                                  gotsign == expectedsign)
+        if not ok:
+            raise AssertionError("%r: got %s" % (repr, got))
+
 def make_test_case((fnname, args, expected), dict):
     #
     def test_func(self):
-        if '__pypy__' not in sys.builtin_module_names:
-            if sys.version_info < (2, 6):
-                py.test.skip("inconsistent behavior before 2.6")
+        if not consistent:
+            py.test.skip("inconsistent behavior before 2.6")
         fn = getattr(math, fnname)
-        repr = "%s(%s)" % (fnname, ', '.join(map(str, args)))
-        try:
-            got = fn(*args)
-        except ValueError:
-            assert expected == ValueError, "%s: got a ValueError" % (repr,)
-        except OverflowError:
-            assert expected == OverflowError, "%s: got an OverflowError" % (
-                repr,)
-        else:
-            if callable(expected):
-                ok = expected(got)
-            else:
-                assert finite(expected), "badly written test"
-                gotsign = expectedsign = 1
-                if got < 0.0: gotsign = -gotsign
-                if expected < 0.0: expectedsign = -expectedsign
-                ok = finite(got) and (got == expected and
-                                      gotsign == expectedsign)
-            if not ok:
-                raise AssertionError("%r: got %s" % (repr, got))
+        do_test(fn, fnname, args, expected)
     #
     dict[fnname] = dict.get(fnname, 0) + 1
     testname = 'test_%s_%d' % (fnname, dict[fnname])
