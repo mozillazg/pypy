@@ -95,6 +95,9 @@ class TestMath:
         ('fmod', (1.0, INFINITY), 1.0),
         ('fmod', (1.0, -INFINITY), 1.0),
         ('fmod', (INFINITY, INFINITY), ValueError),
+        #
+        ('hypot', (-INFINITY, 1.0), positiveinf),
+        ('hypot', (-2.3, -INFINITY), positiveinf),
         ]
 
     binary_math_functions = ['atan2', 'fmod', 'hypot', 'pow']
