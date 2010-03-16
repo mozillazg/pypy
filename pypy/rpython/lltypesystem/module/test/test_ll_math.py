@@ -44,6 +44,8 @@ class TestMath:
         ('exp', (9999.9,), OverflowError),
         ('pow', (10.0, 40000.0), OverflowError),
         ('ldexp', (10.0, 40000), OverflowError),
+        ('log', (0.0,), ValueError),
+        ('log10', (0.0,), ValueError),
         ]
 
     INFCASES = [
@@ -75,6 +77,10 @@ class TestMath:
         ('tan', (-INFINITY,), ValueError),
         ('tanh', (INFINITY,), 1.0),
         ('tanh', (-INFINITY,), -1.0),
+        ('log', (INFINITY,), positiveinf),
+        ('log', (-INFINITY,), ValueError),
+        ('log10', (INFINITY,), positiveinf),
+        ('log10', (-INFINITY,), ValueError),
         ('frexp', (INFINITY,), lambda x: isinf(x[0])),
         ('ldexp', (INFINITY, 3), positiveinf),
         ('ldexp', (-INFINITY, 3), negativeinf),

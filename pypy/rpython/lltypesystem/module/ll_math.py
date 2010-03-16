@@ -302,7 +302,7 @@ def new_unary_math_function(name, can_overflow):
 unary_math_functions = [
     'acos', 'asin', 'atan',
     'ceil', 'cos', 'cosh', 'exp', 'fabs', 'floor',
-    'sin', 'sinh', 'sqrt', 'tan', 'tanh',
+    'sin', 'sinh', 'sqrt', 'tan', 'tanh', 'log', 'log10',
     # 'log1p', 'acosh', 'asinh', 'atanh',   -- added in Python 2.6
     ]
 unary_math_functions_can_overflow = [
