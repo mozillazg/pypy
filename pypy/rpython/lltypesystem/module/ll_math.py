@@ -21,7 +21,11 @@ def llexternal(name, ARGS, RESULT):
 math_fabs = llexternal('fabs', [rffi.DOUBLE], rffi.DOUBLE)
 math_log = llexternal('log', [rffi.DOUBLE], rffi.DOUBLE)
 math_log10 = llexternal('log10', [rffi.DOUBLE], rffi.DOUBLE)
-math_copysign = llexternal('copysign', [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
+if sys.platform[:3] == "win":
+    _copysign = '_copysign'
+else:
+    _copysign = 'copysign'
+math_copysign = llexternal(_copysign, [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
 math_atan2 = llexternal('atan2', [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
 math_frexp = llexternal('frexp', [rffi.DOUBLE, rffi.INTP], rffi.DOUBLE)
 math_modf  = llexternal('modf',  [rffi.DOUBLE, rffi.DOUBLEP], rffi.DOUBLE)
