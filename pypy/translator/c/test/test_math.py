@@ -39,11 +39,16 @@ def fn(args):
         print "all ok"
     return 0
 
+
 class TestMath(StandaloneTests):
-    def test_math(self):
-        t, cbuilder = self.compile(fn)
+
+    def test_math(self, debug=True):
+        t, cbuilder = self.compile(fn, debug=debug)
         data = cbuilder.cmdexec('')
         if "error:" in data:
             py.test.fail(data.strip())
         else:
             assert "all ok" in data
+
+    def test_math_nodebug(self):
+        self.test_math(debug=False)
