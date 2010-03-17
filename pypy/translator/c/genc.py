@@ -116,11 +116,8 @@ class CBuilder(object):
 
     def get_eci(self):
         from distutils import sysconfig
-        python_inc = sysconfig.get_python_inc() # XXX refactor remaining dependencies
-                                                # like obmalloc into separately compilable
-                                                # modules etc.
         pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
-        include_dirs = [python_inc, pypy_include_dir]
+        include_dirs = [pypy_include_dir]
         return ExternalCompilationInfo(include_dirs=include_dirs)
 
     def build_database(self):
@@ -735,16 +732,7 @@ class SourceGenerator:
         print >> f
 
 
-def gen_size_check(f):
-    from pypy.rlib.rarithmetic import LONG_BIT
-    print >> f, '#if 8 * SIZEOF_LONG != %d' % (LONG_BIT,)
-    print >> f, '#  error "C files are generated for a %d-bit platform"' % (
-        LONG_BIT,)
-    print >> f, '#endif'
-    print >> f
-
 def gen_structdef(f, database):
-    gen_size_check(f)
     structdeflist = database.getstructdeflist()
     print >> f, '/***********************************************************/'
     print >> f, '/***  Structure definitions                              ***/'
@@ -830,6 +818,10 @@ def gen_startupcode(f, database):
     print >> f, '\treturn error;'
     print >> f, '}'
 
+def commondefs(defines):
+    from pypy.rlib.rarithmetic import LONG_BIT
+    defines['PYPY_LONG_BIT'] = LONG_BIT
+
 def gen_source_standalone(database, modulename, targetdir, eci,
                           entrypointname, defines={}): 
     assert database.standalone
@@ -845,15 +837,10 @@ def gen_source_standalone(database, modulename, targetdir, eci,
     #
     print >> f, '#include "common_header.h"'
     print >> f
+    commondefs(defines)
     defines['PYPY_STANDALONE'] = entrypointname
     for key, value in defines.items():
         print >> fi, '#define %s %s' % (key, value)
-
-    if sys.platform == 'win32':
-        print >> fi, '#define Py_BUILD_CORE /* avoid pulling python libs in */'
-        print >> fi, '#define WIN32_LEAN_AND_MEAN /* winsock/winsock2 mess */'
-
-    print >> fi, '#include "pyconfig.h"'
 
     eci.write_c_header(fi)
     print >> fi, '#include "src/g_prerequisite.h"'
@@ -902,13 +889,9 @@ def gen_source(database, modulename, targetdir, eci, defines={}, split=False):
     #
     print >> f, '#include "common_header.h"'
     print >> f
+    commondefs(defines)
     for key, value in defines.items():
         print >> fi, '#define %s %s' % (key, value)
-
-    if sys.platform == 'win32':
-        print >> fi, '#define WIN32_LEAN_AND_MEAN /* winsock/winsock2 mess */'
-
-    print >> fi, '#include "pyconfig.h"'
 
     eci.write_c_header(fi)
     print >> fi, '#include "src/g_prerequisite.h"'
