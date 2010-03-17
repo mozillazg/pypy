@@ -115,7 +115,6 @@ class CBuilder(object):
         self.eci = self.get_eci()
 
     def get_eci(self):
-        from distutils import sysconfig
         pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
         include_dirs = [pypy_include_dir]
         return ExternalCompilationInfo(include_dirs=include_dirs)
@@ -302,6 +301,12 @@ class CExtModuleBuilder(CBuilder):
     standalone = False
     _module = None
     _wrapper = None
+
+    def get_eci(self):
+        from distutils import sysconfig
+        python_inc = sysconfig.get_python_inc()
+        eci = ExternalCompilationInfo(include_dirs=[python_inc])
+        return eci.merge(CBuilder.get_eci(self))
 
     def getentrypointptr(self): # xxx
         if self._wrapper is None:
