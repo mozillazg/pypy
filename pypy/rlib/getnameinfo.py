@@ -1,6 +1,6 @@
 """
 An RPython implementation of getnameinfo().
-This is a rewrite of the CPython source: Modules/getaddrinfo.c
+This is a rewrite of the CPython source: Modules/getnameinfo.c
 """
 from pypy.rlib import _rsocket_rffi as _c
 from pypy.rlib.rsocket import RSocketError, GAIError
