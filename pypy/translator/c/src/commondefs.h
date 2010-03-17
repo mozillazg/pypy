@@ -73,3 +73,5 @@ typedef unsigned long Py_uintptr_t;
 #else
 #  error "uh? strange result"
 #endif
+
+#define Py_HUGE_VAL HUGE_VAL
