@@ -2,7 +2,13 @@
 /**************************************************************/
 /***  this is included before any code produced by genc.py  ***/
 
-#include "src/commondefs.h"
+
+#ifdef PYPY_STANDALONE
+#  include "src/commondefs.h"
+#else
+#  include "Python.h"
+#endif
+
 
 #ifndef AVR
 #include "thread.h"   /* needs to be included early to define the
