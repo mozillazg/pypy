@@ -6,9 +6,11 @@
 #    define MAX_STACK_SIZE (1 << 19)
 #endif
 
+#ifdef _WIN32
 /* This include must be done in any case to initialise
- * the header dependencies early (thread -> winsock2, before windows.h) */
-#include "thread.h"
+ * the header dependencies early (winsock2, before windows.h) */
+#    include <winsock2.h>
+#endif
 
 void LL_stack_unwind(void);
 int LL_stack_too_big_slowpath(void);

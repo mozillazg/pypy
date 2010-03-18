@@ -674,7 +674,10 @@ class TestThread(object):
         def entry_point(argv):
             os.write(1, "hello world\n")
             error = ll_thread.set_stacksize(int(argv[1]))
-            assert error == 0
+            if error != 0:
+                os.write(2, "set_stacksize(%d) returned %d\n" % (
+                    int(argv[1]), error))
+                raise AssertionError
             # malloc a bit
             s1 = State(); s2 = State(); s3 = State()
             s1.x = 0x11111111; s2.x = 0x22222222; s3.x = 0x33333333
