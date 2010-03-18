@@ -107,7 +107,6 @@ class BaseTestRint(BaseRtypingTest):
         assert res == '-' + oct(sys.maxint+1).replace('L', '').replace('l', '')
 
     def test_str_of_longlong(self):
-        py.test.skip("Fails.  Do we want to fix it or not?  Unclear.")
         def f(i):
             return str(i)
 
