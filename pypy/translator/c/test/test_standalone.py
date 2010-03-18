@@ -205,16 +205,13 @@ class TestStandalone(StandaloneTests):
         #py.process.cmdexec(exe)
 
     def test_standalone_large_files(self):
-        from pypy.module.posix.test.test_posix2 import need_sparse_files
-        need_sparse_files()
         filename = str(udir.join('test_standalone_largefile'))
         r4800000000 = r_longlong(4800000000L)
         def entry_point(argv):
             fd = os.open(filename, os.O_RDWR | os.O_CREAT, 0644)
             os.lseek(fd, r4800000000, 0)
-            os.write(fd, "$")
             newpos = os.lseek(fd, 0, 1)
-            if newpos == r4800000000 + 1:
+            if newpos == r4800000000:
                 print "OK"
             else:
                 print "BAD POS"
