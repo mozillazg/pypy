@@ -6,9 +6,8 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.module._rawffi.structure import unpack_fields
 from pypy.module._rawffi.array import get_elem, push_elem
-from pypy.module._rawffi.interp_rawffi import W_DataInstance, \
-     wrap_value, unwrap_value, unwrap_truncate_int, \
-     unpack_argshapes, unpack_resshape
+from pypy.module._rawffi.interp_rawffi import W_DataInstance, letter2tp, \
+     wrap_value, unwrap_value, unwrap_truncate_int
 from pypy.rlib.libffi import USERDATA_P, CallbackFuncPtr, FUNCFLAG_CDECL
 from pypy.rlib.libffi import ffi_type_void
 from pypy.module._rawffi.tracker import tracker
@@ -28,24 +27,24 @@ def callback(ll_args, ll_res, ll_userdata):
     userdata = rffi.cast(USERDATA_P, ll_userdata)
     callback_ptr = global_counter.CallbackPtr_by_number[userdata.addarg]
     w_callable = callback_ptr.w_callable
-    argshapes = callback_ptr.argshapes
+    args = callback_ptr.args
     space = callback_ptr.space
     try:
         # XXX The app-level callback gets the arguments as a list of integers.
         #     Irregular interface here.  Shows something, I say.
         w_args = space.newlist([space.wrap(rffi.cast(rffi.ULONG, ll_args[i]))
-                                for i in range(len(argshapes))])
+                                for i in range(len(args))])
         w_res = space.call(w_callable, w_args)
-        if callback_ptr.resshape is not None: # don't return void
+        if callback_ptr.result is not None: # don't return void
             unwrap_value(space, push_elem, ll_res, 0,
-                         callback_ptr.resshape.itemcode, w_res)
+                         callback_ptr.result, w_res)
     except OperationError, e:
         tbprint(space, space.wrap(e.application_traceback),
                 space.wrap(e.errorstr(space)))
         # force the result to be zero
-        if callback_ptr.resshape is not None:
-            size = callback_ptr.resshape.size
-            for i in range(size):
+        if callback_ptr.result is not None:
+            resshape = letter2tp(space, callback_ptr.result)
+            for i in range(resshape.size):
                 ll_res[i] = '\x00'
 
 # XXX some weird hackery to be able to recover W_CallbackPtr object
@@ -64,12 +63,14 @@ class W_CallbackPtr(W_DataInstance):
                  flags=FUNCFLAG_CDECL):
         self.space = space
         self.w_callable = w_callable
-        self.argshapes = unpack_argshapes(space, w_args)
-        self.resshape = unpack_resshape(space, w_result)
-        ffiargs = [shape.get_basic_ffi_type() for shape in self.argshapes]
-        if self.resshape is not None:
-            ffiresult = self.resshape.get_basic_ffi_type()
+        self.args = [space.str_w(w_arg) for w_arg in space.unpackiterable(
+            w_args)]
+        ffiargs = [letter2tp(space, x).get_basic_ffi_type() for x in self.args]
+        if not space.is_w(w_result, space.w_None):
+            self.result = space.str_w(w_result)
+            ffiresult = letter2tp(space, self.result).get_basic_ffi_type()
         else:
+            self.result = None
             ffiresult = ffi_type_void
         # necessary to keep stuff alive
         number = global_counter.CallbackPtr_id
