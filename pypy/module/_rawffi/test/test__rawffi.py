@@ -141,6 +141,16 @@ class AppTestFfi:
             return inp;
         }
 
+        struct s2a {
+            int bah[2];
+        };
+
+        struct s2a perturbarray(struct s2a inp) {
+            inp.bah[0] *= 4;
+            inp.bah[1] *= 5;
+            return inp;
+        }
+
         int AAA_first_ordinal_function()
         {
             return 42;
@@ -157,7 +167,7 @@ class AppTestFfi:
                      allocate_array
                      static_int static_double
                      sum_x_y
-                     give perturb
+                     give perturb perturbarray
                      AAA_first_ordinal_function
                   """.split()
         eci = ExternalCompilationInfo(export_symbols=symbols)
@@ -819,19 +829,22 @@ class AppTestFfi:
             assert 0, "Did not raise"
 
     def test_struct_byvalue(self):
-        if self.isx86_64:
-            skip("Segfaults on x86_64 because small structures "
-                 "may be passed in registers and "
-                 "c_elements must not be null")
+        #if self.isx86_64:
+        #    skip("Segfaults on x86_64 because small structures "
+        #         "may be passed in registers and "
+        #         "c_elements must not be null")
 
-        import _rawffi
+        import _rawffi, sys
         X_Y = _rawffi.Structure([('x', 'l'), ('y', 'l')])
         x_y = X_Y()
         lib = _rawffi.CDLL(self.lib_name)
+        print >> sys.stderr, "getting..."
         sum_x_y = lib.ptr('sum_x_y', [(X_Y, 1)], 'l')
         x_y.x = 200
         x_y.y = 220
+        print >> sys.stderr, "calling..."
         res = sum_x_y(x_y)
+        print >> sys.stderr, "done"
         assert res[0] == 420
         x_y.free()
 
@@ -851,6 +864,41 @@ class AppTestFfi:
         a1[0] = 13
         a2[0] = 17
         res = give(a1, a2)
+        assert isinstance(res, _rawffi.StructureInstanceAutoFree)
+        assert res.shape is S2H
+        assert res.x == 13
+        assert res.y == 17
+        a1.free()
+        a2.free()
+
+        s2h.x = 7
+        s2h.y = 11
+        perturb = lib.ptr('perturb', [(S2H, 1)], (S2H, 1))
+        res = perturb(s2h)
+        assert isinstance(res, _rawffi.StructureInstanceAutoFree)
+        assert res.shape is S2H
+        assert res.x == 14
+        assert res.y == 33
+        assert s2h.x == 7
+        assert s2h.y == 11
+        
+        s2h.free()
+
+    def test_ret_struct_containing_array(self):
+        if self.isx86_64:
+            skip("Segfaults on x86_64 because small structures "
+                 "may be passed in registers and "
+                 "c_elements must not be null")
+
+        import _rawffi
+        AoI = _rawffi.Array('i')
+        S2A = _rawffi.Structure([('bah', (AoI, 2))])
+        s2a = S2A()
+        lib = _rawffi.CDLL(self.lib_name)
+        perturbarray = lib.ptr('perturbarray', [(S2A, 1)], (S2A, 1))
+        s2a.x = 100
+        a2a.y = 200
+        res = perturbarray(s2a)
         assert isinstance(res, _rawffi.StructureInstanceAutoFree)
         assert res.shape is S2H
         assert res.x == 13
