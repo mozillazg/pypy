@@ -13,7 +13,7 @@ from pypy.interpreter.error import OperationError, wrap_oserror, operationerrfmt
 from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataShape, W_DataInstance
 from pypy.module._rawffi.interp_rawffi import wrap_value, unwrap_value
-#from pypy.module._rawffi.interp_rawffi import unpack_to_size_alignment
+from pypy.module._rawffi.interp_rawffi import unpack_shape_with_length
 from pypy.rlib import libffi
 from pypy.rlib.rarithmetic import intmask, r_uint
 
@@ -26,7 +26,7 @@ def unpack_fields(space, w_fields):
             raise OperationError(space.w_ValueError, space.wrap(
                 "Expected list of 2-size tuples"))
         name = space.str_w(l_w[0])
-        tp = unpack_to_size_alignment(space, l_w[1])
+        tp = unpack_shape_with_length(space, l_w[1])
         fields.append((name, tp))
     return fields
 
@@ -37,7 +37,10 @@ def size_alignment_pos(fields):
     size = 0
     alignment = 1
     pos = []
-    for fieldname, (letter, fieldsize, fieldalignment) in fields:
+    for fieldname, fieldtype in fields:
+        # fieldtype is a W_Array
+        fieldsize = fieldtype.size
+        fieldalignment = fieldtype.alignment
         size = round_up(size, fieldalignment)
         alignment = max(alignment, fieldalignment)
         pos.append(size)
@@ -163,7 +166,7 @@ class W_StructureInstance(W_DataInstance):
             raise segfault_exception(space, "accessing NULL pointer")
         i = self.shape.getindex(space, attr)
         _, tp = self.shape.fields[i]
-        return wrap_value(space, cast_pos, self, i, tp)
+        return wrap_value(space, cast_pos, self, i, tp.itemcode)
     getattr.unwrap_spec = ['self', ObjSpace, str]
 
     def setattr(self, space, attr, w_value):
@@ -171,7 +174,7 @@ class W_StructureInstance(W_DataInstance):
             raise segfault_exception(space, "accessing NULL pointer")
         i = self.shape.getindex(space, attr)
         _, tp = self.shape.fields[i]
-        unwrap_value(space, push_field, self, i, tp[0], w_value)
+        unwrap_value(space, push_field, self, i, tp.itemcode, w_value)
     setattr.unwrap_spec = ['self', ObjSpace, str, W_Root]
 
     def descr_fieldaddress(self, space, attr):
