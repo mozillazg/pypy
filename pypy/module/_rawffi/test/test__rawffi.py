@@ -145,10 +145,15 @@ class AppTestFfi:
             int bah[2];
         };
 
-        struct s2a perturbarray(struct s2a inp) {
-            inp.bah[0] *= 4;
-            inp.bah[1] *= 5;
-            return inp;
+        struct s2a get_s2a(void) {
+            struct s2a outp;
+            outp.bah[0] = 4;
+            outp.bah[1] = 5;
+            return outp;
+        }
+
+        int check_s2a(struct s2a inp) {
+            return (inp.bah[0] == 4 && inp.bah[1] == 5);
         }
 
         int AAA_first_ordinal_function()
@@ -167,7 +172,7 @@ class AppTestFfi:
                      allocate_array
                      static_int static_double
                      sum_x_y
-                     give perturb perturbarray
+                     give perturb get_s2a check_s2a
                      AAA_first_ordinal_function
                   """.split()
         eci = ExternalCompilationInfo(export_symbols=symbols)
@@ -188,9 +193,6 @@ class AppTestFfi:
             cls.w_libm_name = space.wrap('libm.so')
             if sys.platform == "darwin":
                 cls.w_libm_name = space.wrap('libm.dylib')
-        import platform
-        cls.w_isx86_64 = space.wrap(platform.machine() == 'x86_64')
-                
         cls.w_sizes_and_alignments = space.wrap(dict(
             [(k, (v.c_size, v.c_alignment)) for k,v in TYPEMAP.iteritems()]))
 
@@ -675,7 +677,7 @@ class AppTestFfi:
         # fragile
         S = _rawffi.Structure([('x', 'c'), ('y', 'l')])
         assert (repr(_rawffi.Array((S, 2))) ==
-                "<_rawffi.Array 'V' (%d, %d)>" % (4*lsize, lsize))
+                "<_rawffi.Array '?' (%d, %d)>" % (4*lsize, lsize))
 
         assert (repr(_rawffi.Structure([('x', 'i'), ('yz', 'i')])) ==
                 "<_rawffi.Structure 'x' 'yz' (%d, %d)>" % (2*isize, isize))
@@ -829,11 +831,6 @@ class AppTestFfi:
             assert 0, "Did not raise"
 
     def test_struct_byvalue(self):
-        #if self.isx86_64:
-        #    skip("Segfaults on x86_64 because small structures "
-        #         "may be passed in registers and "
-        #         "c_elements must not be null")
-
         import _rawffi, sys
         X_Y = _rawffi.Structure([('x', 'l'), ('y', 'l')])
         x_y = X_Y()
@@ -849,11 +846,6 @@ class AppTestFfi:
         x_y.free()
 
     def test_ret_struct(self):
-        if self.isx86_64:
-            skip("Segfaults on x86_64 because small structures "
-                 "may be passed in registers and "
-                 "c_elements must not be null")
-
         import _rawffi
         S2H = _rawffi.Structure([('x', 'h'), ('y', 'h')])
         s2h = S2H()
@@ -885,39 +877,18 @@ class AppTestFfi:
         s2h.free()
 
     def test_ret_struct_containing_array(self):
-        if self.isx86_64:
-            skip("Segfaults on x86_64 because small structures "
-                 "may be passed in registers and "
-                 "c_elements must not be null")
-
         import _rawffi
         AoI = _rawffi.Array('i')
         S2A = _rawffi.Structure([('bah', (AoI, 2))])
-        s2a = S2A()
         lib = _rawffi.CDLL(self.lib_name)
-        perturbarray = lib.ptr('perturbarray', [(S2A, 1)], (S2A, 1))
-        s2a.x = 100
-        a2a.y = 200
-        res = perturbarray(s2a)
-        assert isinstance(res, _rawffi.StructureInstanceAutoFree)
-        assert res.shape is S2H
-        assert res.x == 13
-        assert res.y == 17
-        a1.free()
-        a2.free()
+        get_s2a = lib.ptr('get_s2a', [], (S2A, 1))
+        check_s2a = lib.ptr('check_s2a', [(S2A, 1)], 'i')
 
-        s2h.x = 7
-        s2h.y = 11
-        perturb = lib.ptr('perturb', [(S2H, 1)], (S2H, 1))
-        res = perturb(s2h)
+        res = get_s2a()
         assert isinstance(res, _rawffi.StructureInstanceAutoFree)
-        assert res.shape is S2H
-        assert res.x == 14
-        assert res.y == 33
-        assert s2h.x == 7
-        assert s2h.y == 11
-        
-        s2h.free()
+        assert res.shape is S2A
+        ok = check_s2a(res)
+        assert ok[0] == 1
 
     def test_buffer(self):
         import _rawffi

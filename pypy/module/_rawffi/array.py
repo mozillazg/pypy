@@ -45,7 +45,7 @@ class W_Array(W_DataShape):
             return W_ArrayInstanceAutoFree(space, self, length)
         return W_ArrayInstance(space, self, length)
 
-    def get_ffi_type(self):
+    def get_basic_ffi_type(self):
         return self.basicffitype
 
     def descr_call(self, space, length, w_items=None, autofree=False):
@@ -64,7 +64,9 @@ class W_Array(W_DataShape):
         return space.wrap(result)
 
     def descr_repr(self, space):
-        return space.wrap("<_rawffi.Array '%s' (%d, %d)>" % self.itemcode)
+        return space.wrap("<_rawffi.Array '%s' (%d, %d)>" % (self.itemcode,
+                                                             self.size,
+                                                             self.alignment))
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
     def fromaddress(self, space, address, length):
@@ -234,7 +236,7 @@ class W_ArrayInstanceAutoFree(W_ArrayInstance):
             self._free()
 
 W_ArrayInstanceAutoFree.typedef = TypeDef(
-    'ArrayInstanceWithFree',
+    'ArrayInstanceAutoFree',
     __repr__    = interp2app(W_ArrayInstance.descr_repr),
     __setitem__ = interp2app(W_ArrayInstance.descr_setitem),
     __getitem__ = interp2app(W_ArrayInstance.descr_getitem),

@@ -65,9 +65,9 @@ class W_CallbackPtr(W_DataInstance):
         self.w_callable = w_callable
         self.argshapes = unpack_argshapes(space, w_args)
         self.resshape = unpack_resshape(space, w_result)
-        ffiargs = [shape.get_ffi_type() for shape in self.argshapes]
+        ffiargs = [shape.get_basic_ffi_type() for shape in self.argshapes]
         if self.resshape is not None:
-            ffiresult = self.resshape.get_ffi_type()
+            ffiresult = self.resshape.get_basic_ffi_type()
         else:
             ffiresult = ffi_type_void
         # necessary to keep stuff alive
