@@ -12,8 +12,8 @@ from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataShape, W_DataInstance
 from pypy.module._rawffi.interp_rawffi import unwrap_value, wrap_value
-from pypy.module._rawffi.interp_rawffi import letter2tp
-from pypy.module._rawffi.interp_rawffi import unpack_to_size_alignment
+from pypy.module._rawffi.interp_rawffi import TYPEMAP
+from pypy.module._rawffi.interp_rawffi import unpack_shape_with_length
 from pypy.rlib.rarithmetic import intmask, r_uint
 
 def push_elem(ll_array, pos, value):
@@ -27,16 +27,29 @@ def get_elem(ll_array, pos, ll_t):
     return ll_array[pos]
 get_elem._annspecialcase_ = 'specialize:arg(2)'
 
+
 class W_Array(W_DataShape):
-    def __init__(self, space, itemtp):
-        assert isinstance(itemtp, tuple)
-        self.space = space
-        self.itemtp = itemtp
+    def __init__(self, basicffitype, multiplier=1, itemcode='?'):
+        # 'multiplier' is not the length of the array!
+        # A W_Array represent the C type '*T', which can also represent
+        # the type of pointers to arrays of T.  So the following fields
+        # are used to describe T only.  It is 'multiplier' times the
+        # 'basicffitype'.
+        self.basicffitype = basicffitype
+        self.multiplier = multiplier
+        # for the W_Arrays that represent simple types only:
+        self.itemcode = itemcode
 
     def allocate(self, space, length, autofree=False):
         if autofree:
             return W_ArrayInstanceAutoFree(space, self, length)
         return W_ArrayInstance(space, self, length)
+
+    def get_basic_ffi_type(self):
+        return self.basicffitype
+
+    def get_ffi_type_with_length(self):
+        return self.basicffitype, self.multiplier
 
     def descr_call(self, space, length, w_items=None, autofree=False):
         result = self.allocate(space, length, autofree)
@@ -50,42 +63,34 @@ class W_Array(W_DataShape):
             for num in range(iterlength):
                 w_item = items_w[num]
                 unwrap_value(space, push_elem, result.ll_buffer, num,
-                             self.itemtp[0], w_item)
+                             self.itemcode, w_item)
         return space.wrap(result)
 
     def descr_repr(self, space):
-        return space.wrap("<_rawffi.Array '%s' (%d, %d)>" % self.itemtp)
+        return space.wrap("<_rawffi.Array '%s' (%d, %d)>" % self.itemcode)
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
     def fromaddress(self, space, address, length):
         return space.wrap(W_ArrayInstance(space, self, length, address))
     fromaddress.unwrap_spec = ['self', ObjSpace, r_uint, int]
 
-    def _size_alignment(self):
-        _, itemsize, alignment = self.itemtp
-        return itemsize, alignment
-
-class ArrayCache:
-    def __init__(self, space):
-        self.space = space
-        self.cache = {}
-        self.array_of_ptr = self.get_array_type(letter2tp(space, 'P'))
-
-    def get_array_type(self, itemtp):
-        try:
-            return self.cache[itemtp]
-        except KeyError:
-            result = W_Array(self.space, itemtp)
-            self.cache[itemtp] = result
-            return result
-
-def get_array_cache(space):
-    return space.fromcache(ArrayCache)
+PRIMITIVE_ARRAY_TYPES = {}
+for _code in TYPEMAP:
+    PRIMITIVE_ARRAY_TYPES[_code] = W_Array(TYPEMAP[_code], itemcode=_code)
+ARRAY_OF_PTRS = PRIMITIVE_ARRAY_TYPES['P']
 
 def descr_new_array(space, w_type, w_shape):
-    itemtp = unpack_to_size_alignment(space, w_shape)
-    array_type = get_array_cache(space).get_array_type(itemtp)
-    return space.wrap(array_type)
+    shape, length = unpack_shape_with_length(space, w_shape)
+    if length == 1:
+        return shape
+    if shape._array_shapes is None:
+        shape._array_shapes = {}
+    try:
+        result = shape._array_shapes[length]
+    except KeyError:
+        ffitype, lbase = shape.get_ffi_type_with_length()
+        result = shape._array_shapes[length] = W_Array(ffitype, lbase*length)
+    return result
 
 W_Array.typedef = TypeDef(
     'Array',
@@ -102,8 +107,7 @@ W_Array.typedef.acceptable_as_base_class = False
 
 class W_ArrayInstance(W_DataInstance):
     def __init__(self, space, shape, length, address=r_uint(0)):
-        _, itemsize, _ = shape.itemtp
-        W_DataInstance.__init__(self, space, itemsize * length, address)
+        W_DataInstance.__init__(self, space, shape.size * length, address)
         self.length = length
         self.shape = shape
 
@@ -122,7 +126,7 @@ class W_ArrayInstance(W_DataInstance):
         if num >= self.length or num < 0:
             raise OperationError(space.w_IndexError, space.w_None)
         unwrap_value(space, push_elem, self.ll_buffer, num,
-                     self.shape.itemtp[0], w_value)
+                     self.shape.itemcode, w_value)
 
     def descr_setitem(self, space, w_index, w_value):
         try:
@@ -141,7 +145,7 @@ class W_ArrayInstance(W_DataInstance):
         if num >= self.length or num < 0:
             raise OperationError(space.w_IndexError, space.w_None)
         return wrap_value(space, get_elem, self.ll_buffer, num,
-                          self.shape.itemtp)
+                          self.shape.itemcode)
 
     def descr_getitem(self, space, w_index):
         try:

@@ -13,7 +13,7 @@ from pypy.interpreter.error import OperationError, wrap_oserror, operationerrfmt
 from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataShape, W_DataInstance
 from pypy.module._rawffi.interp_rawffi import wrap_value, unwrap_value
-from pypy.module._rawffi.interp_rawffi import unpack_to_size_alignment
+#from pypy.module._rawffi.interp_rawffi import unpack_to_size_alignment
 from pypy.rlib import libffi
 from pypy.rlib.rarithmetic import intmask, r_uint
 
@@ -99,13 +99,10 @@ class W_Structure(W_DataShape):
         return space.wrap(self.ll_positions[index])
     descr_fieldoffset.unwrap_spec = ['self', ObjSpace, str]
 
-    def _size_alignment(self):
-        return self.size, self.alignment
-
     # get the corresponding ffi_type
     ffi_type = lltype.nullptr(libffi.FFI_TYPE_P.TO)
 
-    def get_ffi_type(self):
+    def get_basic_ffi_type(self):
         if not self.ffi_type:
             self.ffi_type = libffi.make_struct_ffitype(self.size,
                                                        self.alignment)
