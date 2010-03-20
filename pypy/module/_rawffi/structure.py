@@ -100,9 +100,7 @@ class W_Structure(W_DataShape):
     descr_fieldoffset.unwrap_spec = ['self', ObjSpace, str]
 
     # get the corresponding ffi_type
-    ffi_type = lltype.nullptr(libffi.FFI_TYPE_P.TO)
-
-    def get_basic_ffi_type(self):
+    def get_ffi_type(self):
         if not self.ffi_type:
             self.ffi_type = libffi.make_struct_ffitype(self.size,
                                                        self.alignment)

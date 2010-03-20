@@ -143,9 +143,9 @@ class W_CDLL(Wrappable):
             else:
                 raise
         argshapes = unpack_argshapes(space, w_argtypes)
-        ffi_argtypes = [shape.get_basic_ffi_type() for shape in argshapes]
+        ffi_argtypes = [shape.get_ffi_type() for shape in argshapes]
         if resshape is not None:
-            ffi_restype = resshape.get_basic_ffi_type()
+            ffi_restype = resshape.get_ffi_type()
         else:
             ffi_restype = ffi_type_void
 
@@ -221,15 +221,12 @@ class W_DataShape(Wrappable):
     _array_shapes = None
     size = 0
     alignment = 0
-    
+
     def allocate(self, space, length, autofree=False):
         raise NotImplementedError
 
-    def get_basic_ffi_type(self):
+    def get_ffi_type(self):
         raise NotImplementedError
-
-    def get_ffi_type_with_length(self):
-        return self.get_basic_ffi_type(), 1     # default implementation
 
     def descr_size_alignment(self, space, n=1):
         return space.newtuple([space.wrap(self.size * n),
