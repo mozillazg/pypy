@@ -357,9 +357,8 @@ class W_FuncPtr(Wrappable):
         return space.wrap(rffi.cast(lltype.Unsigned, self.ptr.funcsym))
 
     def byptr(self, space):
-        from pypy.module._rawffi.array import get_array_cache
-        array_of_ptr = get_array_cache(space).array_of_ptr
-        array = array_of_ptr.allocate(space, 1)
+        from pypy.module._rawffi.array import ARRAY_OF_PTRS
+        array = ARRAY_OF_PTRS.allocate(space, 1)
         array.setitem(space, 0, self._getbuffer(space))
         if tracker.DO_TRACING:
             # XXX this is needed, because functions tend to live forever
@@ -423,11 +422,13 @@ class W_FuncPtr(Wrappable):
     call.unwrap_spec = ['self', ObjSpace, 'args_w']
 
 def descr_new_funcptr(space, w_tp, addr, w_args, w_res, flags=FUNCFLAG_CDECL):
-    ffi_args, args = unpack_argshapes(space, w_args)
-    ffi_res, res = unpack_resshape(space, w_res)
+    argshapes = unpack_argshapes(space, w_args)
+    resshape = unpack_resshape(space, w_res)
+    ffi_args = [shape.get_ffi_type() for shape in argshapes]
+    ffi_res = resshape.get_ffi_type()
     ptr = RawFuncPtr('???', ffi_args, ffi_res, rffi.cast(rffi.VOIDP, addr),
                      flags)
-    return space.wrap(W_FuncPtr(space, ptr, args, res))
+    return space.wrap(W_FuncPtr(space, ptr, argshapes, resshape))
 descr_new_funcptr.unwrap_spec = [ObjSpace, W_Root, r_uint, W_Root, W_Root, int]
 
 W_FuncPtr.typedef = TypeDef(
