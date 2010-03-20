@@ -106,7 +106,7 @@ class JitMixin:
         metainterp.staticdata.DoneWithThisFrameFloat = DoneWithThisFrame
         self.metainterp = metainterp
         try:
-            metainterp.compile_and_run_once(*args)
+            metainterp.compile_and_run_once(metainterp.staticdata, *args)
         except DoneWithThisFrame, e:
             #if conftest.option.view:
             #    metainterp.stats.view()
