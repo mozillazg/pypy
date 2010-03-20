@@ -550,6 +550,22 @@ class AppTestFfi:
         a1.free()
         del cb
 
+    def test_void_returning_callback(self):
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
+        runcallback = lib.ptr('runcallback', ['P'], None)
+        called = []
+        def callback():
+            called.append(True)
+
+        cb = _rawffi.CallbackPtr(callback, [], None)
+        a1 = cb.byptr()
+        res = runcallback(a1)
+        assert res is None
+        assert called == [True]
+        a1.free()
+        del cb
+
     def test_another_callback_in_stackless(self):
         try:
             import _stackless
