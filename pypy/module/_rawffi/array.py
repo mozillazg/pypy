@@ -35,7 +35,6 @@ class W_Array(W_DataShape):
         # the type of pointers to arrays of T.  So the following fields
         # are used to describe T only.  It is 'basicffitype' possibly
         # repeated until reaching the length 'size'.
-        assert size > 0
         self.basicffitype = basicffitype
         self.size = size
         self.alignment = size_alignment(basicffitype)[1]
