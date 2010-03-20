@@ -154,13 +154,13 @@ class W_ArrayInstance(W_DataInstance):
     getlength.unwrap_spec = ['self', ObjSpace]
 
     def descr_itemaddress(self, space, num):
-        _, itemsize, _ = self.shape.itemtp
+        itemsize = self.shape.size
         ptr = rffi.ptradd(self.ll_buffer, itemsize * num)
         return space.wrap(rffi.cast(lltype.Unsigned, ptr))
     descr_itemaddress.unwrap_spec = ['self', ObjSpace, int]
 
     def getrawsize(self):
-        _, itemsize, _ = self.shape.itemtp
+        itemsize = self.shape.size
         return itemsize * self.length
 
     def decodeslice(self, space, w_slice):
