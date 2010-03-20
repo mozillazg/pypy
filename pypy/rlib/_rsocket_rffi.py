@@ -572,4 +572,4 @@ if WIN32:
 else:
     socket_strerror_str = os.strerror
     def gai_strerror_str(errno):
-        return rffi.charp2str(gai_strerror(self.errno))
+        return rffi.charp2str(gai_strerror(errno))
