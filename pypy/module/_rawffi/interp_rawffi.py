@@ -97,14 +97,29 @@ def unpack_simple_shape(space, w_shape):
         return space.interp_w(W_Structure, w_shapetype)
 
 def unpack_shape_with_length(space, w_shape):
-    # allow 'w_shape' to be a letter or any (shape, number).
+    # Allow 'w_shape' to be a letter or any (shape, number).
+    # The result is always a W_Array.
     if space.is_true(space.isinstance(w_shape, space.w_str)):
         letter = space.str_w(w_shape)
-        return letter2tp(space, letter), 1
+        return letter2tp(space, letter)
     else:
         w_shapetype, w_length = space.fixedview(w_shape, expected_length=2)
         length = space.int_w(w_length)
-        return space.interp_w(W_DataShape, w_shapetype), length
+        shape = space.interp_w(W_DataShape, w_shapetype)
+        if shape._array_shapes is None:
+            shape._array_shapes = {}
+        try:
+            result = shape._array_shapes[length]
+        except KeyError:
+            from pypy.module._rawffi.array import W_Array
+            if isinstance(shape, W_Array) and length == 1:
+                result = shape
+            else:
+                ffitype = shape.get_ffi_type()
+                size = shape.size * length
+                result = W_Array(ffitype, size)
+            shape._array_shapes[length] = result
+        return result
 
 def unpack_resshape(space, w_restype):
     if space.is_w(w_restype, space.w_None):
@@ -221,6 +236,7 @@ class W_DataShape(Wrappable):
     _array_shapes = None
     size = 0
     alignment = 0
+    itemcode = '?'
 
     def allocate(self, space, length, autofree=False):
         raise NotImplementedError

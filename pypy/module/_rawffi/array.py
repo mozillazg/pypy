@@ -30,7 +30,7 @@ get_elem._annspecialcase_ = 'specialize:arg(2)'
 
 
 class W_Array(W_DataShape):
-    def __init__(self, basicffitype, size, itemcode='?'):
+    def __init__(self, basicffitype, size):
         # A W_Array represent the C type '*T', which can also represent
         # the type of pointers to arrays of T.  So the following fields
         # are used to describe T only.  It is 'basicffitype' possibly
@@ -39,8 +39,6 @@ class W_Array(W_DataShape):
         self.basicffitype = basicffitype
         self.size = size
         self.alignment = size_alignment(basicffitype)[1]
-        # for the W_Arrays that represent simple types only:
-        self.itemcode = itemcode
 
     def allocate(self, space, length, autofree=False):
         if autofree:
@@ -76,23 +74,12 @@ class W_Array(W_DataShape):
 PRIMITIVE_ARRAY_TYPES = {}
 for _code in TYPEMAP:
     PRIMITIVE_ARRAY_TYPES[_code] = W_Array(TYPEMAP[_code],
-                                           size_alignment(TYPEMAP[_code])[0],
-                                           _code)
+                                           size_alignment(TYPEMAP[_code])[0])
+    PRIMITIVE_ARRAY_TYPES[_code].itemcode = _code
 ARRAY_OF_PTRS = PRIMITIVE_ARRAY_TYPES['P']
 
 def descr_new_array(space, w_type, w_shape):
-    shape, length = unpack_shape_with_length(space, w_shape)
-    if length == 1:
-        return shape
-    if shape._array_shapes is None:
-        shape._array_shapes = {}
-    try:
-        result = shape._array_shapes[length]
-    except KeyError:
-        ffitype = shape.get_ffi_type()
-        size = shape.size * length
-        result = shape._array_shapes[length] = W_Array(ffitype, size)
-    return result
+    return unpack_shape_with_length(space, w_shape)
 
 W_Array.typedef = TypeDef(
     'Array',
