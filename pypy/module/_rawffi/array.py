@@ -13,6 +13,7 @@ from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataShape, W_DataInstance
 from pypy.module._rawffi.interp_rawffi import unwrap_value, wrap_value
 from pypy.module._rawffi.interp_rawffi import TYPEMAP
+from pypy.module._rawffi.interp_rawffi import size_alignment
 from pypy.module._rawffi.interp_rawffi import unpack_shape_with_length
 from pypy.rlib.rarithmetic import intmask, r_uint
 
@@ -29,14 +30,15 @@ get_elem._annspecialcase_ = 'specialize:arg(2)'
 
 
 class W_Array(W_DataShape):
-    def __init__(self, basicffitype, multiplier=1, itemcode='?'):
-        # 'multiplier' is not the length of the array!
+    def __init__(self, basicffitype, size, itemcode='?'):
         # A W_Array represent the C type '*T', which can also represent
         # the type of pointers to arrays of T.  So the following fields
-        # are used to describe T only.  It is 'multiplier' times the
-        # 'basicffitype'.
+        # are used to describe T only.  It is 'basicffitype' possibly
+        # repeated until reaching the length 'size'.
+        assert size > 0
         self.basicffitype = basicffitype
-        self.multiplier = multiplier
+        self.size = size
+        self.alignment = size_alignment(basicffitype)[1]
         # for the W_Arrays that represent simple types only:
         self.itemcode = itemcode
 
@@ -45,11 +47,8 @@ class W_Array(W_DataShape):
             return W_ArrayInstanceAutoFree(space, self, length)
         return W_ArrayInstance(space, self, length)
 
-    def get_basic_ffi_type(self):
+    def get_ffi_type(self):
         return self.basicffitype
-
-    def get_ffi_type_with_length(self):
-        return self.basicffitype, self.multiplier
 
     def descr_call(self, space, length, w_items=None, autofree=False):
         result = self.allocate(space, length, autofree)
@@ -76,7 +75,9 @@ class W_Array(W_DataShape):
 
 PRIMITIVE_ARRAY_TYPES = {}
 for _code in TYPEMAP:
-    PRIMITIVE_ARRAY_TYPES[_code] = W_Array(TYPEMAP[_code], itemcode=_code)
+    PRIMITIVE_ARRAY_TYPES[_code] = W_Array(TYPEMAP[_code],
+                                           size_alignment(TYPEMAP[_code])[0],
+                                           _code)
 ARRAY_OF_PTRS = PRIMITIVE_ARRAY_TYPES['P']
 
 def descr_new_array(space, w_type, w_shape):
@@ -88,8 +89,9 @@ def descr_new_array(space, w_type, w_shape):
     try:
         result = shape._array_shapes[length]
     except KeyError:
-        ffitype, lbase = shape.get_ffi_type_with_length()
-        result = shape._array_shapes[length] = W_Array(ffitype, lbase*length)
+        ffitype = shape.get_ffi_type()
+        size = shape.size * length
+        result = shape._array_shapes[length] = W_Array(ffitype, size)
     return result
 
 W_Array.typedef = TypeDef(
@@ -176,7 +178,7 @@ class W_ArrayInstance(W_DataInstance):
         if not space.is_true(space.isinstance(w_slice, space.w_slice)):
             raise OperationError(space.w_TypeError,
                                  space.wrap('index must be int or slice'))
-        letter, _, _ = self.shape.itemtp
+        letter = self.shape.itemcode
         if letter != 'c':
             raise OperationError(space.w_TypeError,
                                  space.wrap("only 'c' arrays support slicing"))
