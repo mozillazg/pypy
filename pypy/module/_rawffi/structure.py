@@ -14,6 +14,7 @@ from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataShape, W_DataInstance
 from pypy.module._rawffi.interp_rawffi import wrap_value, unwrap_value
 from pypy.module._rawffi.interp_rawffi import unpack_shape_with_length
+from pypy.module._rawffi.interp_rawffi import size_alignment
 from pypy.rlib import libffi
 from pypy.rlib.rarithmetic import intmask, r_uint
 
@@ -103,17 +104,32 @@ class W_Structure(W_DataShape):
     descr_fieldoffset.unwrap_spec = ['self', ObjSpace, str]
 
     # get the corresponding ffi_type
-    ffi_type = lltype.nullptr(libffi.FFI_TYPE_P.TO)
+    ffi_struct = lltype.nullptr(libffi.FFI_STRUCT_P.TO)
 
-    def get_ffi_type(self):
-        if not self.ffi_type:
-            self.ffi_type = libffi.make_struct_ffitype(self.size,
-                                                       self.alignment)
-        return self.ffi_type
+    def get_basic_ffi_type(self):
+        if not self.ffi_struct:
+            # Repeated fields are delicate.  Consider for example
+            #     struct { int a[5]; }
+            # or  struct { struct {int x;} a[5]; }
+            # Seeing no corresponding doc in libffi, let's just repeat
+            # the field 5 times...
+            fieldtypes = []
+            for name, tp in self.fields:
+                basic_ffi_type = tp.get_basic_ffi_type()
+                basic_size, _ = size_alignment(basic_ffi_type)
+                total_size = tp.size
+                count = 0
+                while count + basic_size <= total_size:
+                    fieldtypes.append(basic_ffi_type)
+                    count += basic_size
+            self.ffi_struct = libffi.make_struct_ffitype_e(self.size,
+                                                           self.alignment,
+                                                           fieldtypes)
+        return self.ffi_struct.ffistruct
     
     def __del__(self):
-        if self.ffi_type:
-            lltype.free(self.ffi_type, flavor='raw')
+        if self.ffi_struct:
+            lltype.free(self.ffi_struct, flavor='raw')
     
 
 

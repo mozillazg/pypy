@@ -115,7 +115,7 @@ def unpack_shape_with_length(space, w_shape):
             if isinstance(shape, W_Array) and length == 1:
                 result = shape
             else:
-                ffitype = shape.get_ffi_type()
+                ffitype = shape.get_basic_ffi_type()
                 size = shape.size * length
                 result = W_Array(ffitype, size)
             shape._array_shapes[length] = result
@@ -157,10 +157,12 @@ class W_CDLL(Wrappable):
                 pass
             else:
                 raise
+        # Array arguments not supported directly (in C, an array argument
+        # will be just a pointer).  And the result cannot be an array (at all).
         argshapes = unpack_argshapes(space, w_argtypes)
-        ffi_argtypes = [shape.get_ffi_type() for shape in argshapes]
+        ffi_argtypes = [shape.get_basic_ffi_type() for shape in argshapes]
         if resshape is not None:
-            ffi_restype = resshape.get_ffi_type()
+            ffi_restype = resshape.get_basic_ffi_type()
         else:
             ffi_restype = ffi_type_void
 
@@ -241,7 +243,7 @@ class W_DataShape(Wrappable):
     def allocate(self, space, length, autofree=False):
         raise NotImplementedError
 
-    def get_ffi_type(self):
+    def get_basic_ffi_type(self):
         raise NotImplementedError
 
     def descr_size_alignment(self, space, n=1):
@@ -440,8 +442,8 @@ class W_FuncPtr(Wrappable):
 def descr_new_funcptr(space, w_tp, addr, w_args, w_res, flags=FUNCFLAG_CDECL):
     argshapes = unpack_argshapes(space, w_args)
     resshape = unpack_resshape(space, w_res)
-    ffi_args = [shape.get_ffi_type() for shape in argshapes]
-    ffi_res = resshape.get_ffi_type()
+    ffi_args = [shape.get_basic_ffi_type() for shape in argshapes]
+    ffi_res = resshape.get_basic_ffi_type()
     ptr = RawFuncPtr('???', ffi_args, ffi_res, rffi.cast(rffi.VOIDP, addr),
                      flags)
     return space.wrap(W_FuncPtr(space, ptr, argshapes, resshape))
