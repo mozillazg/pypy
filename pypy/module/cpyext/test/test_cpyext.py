@@ -21,7 +21,7 @@ def PyPy_Crash1(space):
 def PyPy_Crash2(space):
     1/0
 
-class TestApi():
+class TestApi:
     def test_signature(self):
         assert 'Py_InitModule' in api.FUNCTIONS
         assert api.FUNCTIONS['Py_InitModule'].argtypes == [
