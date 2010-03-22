@@ -119,7 +119,7 @@ def get_padded_type(T, size):
     for i in xrange(size - rffi.sizeof(T)):
         new_fields.append(("custom%i" % (i, ), lltype.Char))
     hints["padding"] = hints["padding"] + tuple(pad_fields)
-    return lltype.Struct(hints["c_name"], *new_fields, hints=hints)
+    return lltype.Struct(hints["c_name"], hints=hints, *new_fields)
 
 def make_ref(space, w_obj, borrowed=False):
     if w_obj is None:
