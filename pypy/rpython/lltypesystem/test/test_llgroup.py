@@ -67,12 +67,11 @@ def build_test():
     test.build()
     grpptr = test.grpptr
     g1x = [test.g1a, test.g1b]
-    SHIFT = CombinedSymbolic.SHIFT
-    MASK  = CombinedSymbolic.MASK
-    cs1 = CombinedSymbolic(test.g1b, 0x45 << SHIFT)
-    cs2 = CombinedSymbolic(test.g1b, 0x41 << SHIFT)
+    MASK = CombinedSymbolic.MASK
+    cs1 = CombinedSymbolic(test.g1b, 0x45 << HALFSHIFT)
+    cs2 = CombinedSymbolic(test.g1b, 0x41 << HALFSHIFT)
     assert llop.extract_ushort(HALFWORD, cs1) is test.g1b
-    assert cs1 & ~MASK == 0x45 << SHIFT
+    assert cs1 & ~MASK == 0x45 << HALFSHIFT
     cslist = [cs1, cs2]
     #
     def f():
@@ -104,8 +103,8 @@ def build_test():
             s = llop.extract_ushort(HALFWORD, cslist[i])
             p = llop.get_group_member(lltype.Ptr(test.S1), grpptr, s)
             assert p == test.p1b
-        assert cslist[0] & ~MASK == 0x45 << SHIFT
-        assert cslist[1] & ~MASK == 0x41 << SHIFT
+        assert cslist[0] & ~MASK == 0x45 << HALFSHIFT
+        assert cslist[1] & ~MASK == 0x41 << HALFSHIFT
         #
         return 42
     return f
