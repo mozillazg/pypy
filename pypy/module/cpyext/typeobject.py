@@ -217,12 +217,6 @@ def allocate_type_obj(space, w_obj):
     #  XXX fill slots in pto
     return pto
 
-def create_type_object(space, pto):
-    w_type = space.allocate_instance(W_PyCTypeObject, space.gettypeobject(W_PyCTypeObject.typedef))
-    w_type.__init__(space, pto)
-    w_type.ready()
-    return w_type
-
 @cpython_api_c()
 def PyType_Ready(space, pto):
     "Implemented in typeobject.c"
@@ -232,9 +226,12 @@ def PyPyType_Register(space, pto):
     state = space.fromcache(State)
     ptr = ctypes.addressof(pto._obj._storage)
     if ptr not in state.py_objects_r2w:
-        w_obj = create_type_object(space, pto)
+        w_obj = space.allocate_instance(W_PyCTypeObject,
+                space.gettypeobject(W_PyCTypeObject.typedef))
         state.py_objects_r2w[ptr] = w_obj
         state.py_objects_w2r[w_obj] = pto
+        w_obj.__init__(space, pto)
+        w_obj.ready()
     return 1
 
 W_PyCObject.typedef = W_ObjectObject.typedef

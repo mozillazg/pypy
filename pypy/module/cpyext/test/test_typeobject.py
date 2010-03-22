@@ -15,5 +15,7 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         print "type of obj has type", type(type(obj))
         obj2 = obj.copy()
         assert module.new().name == "Foo Example"
-        skip("In progress")
+        c = module.fooType.copy
+        assert not "im_func" in dir(module.fooType.copy)
+        assert module.fooType.copy.__objclass__ is module.fooType
         assert "copy" in repr(module.fooType.copy)
