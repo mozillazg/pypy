@@ -97,7 +97,8 @@ class CombinedSymbolic(llmemory.Symbolic):
     '&~0xFFFF' or with a direct masking like '&0x10000' (resp. on 64-bit
     platform, with '&~0xFFFFFFFF' or '&0x100000000').
     """
-    MASK = (1<<(LONG_BIT//2))-1     # 0xFFFF or 0xFFFFFFFF
+    SHIFT = LONG_BIT//2
+    MASK = (1<<SHIFT)-1     # 0xFFFF or 0xFFFFFFFF
 
     def annotation(self):
         from pypy.annotation import model
