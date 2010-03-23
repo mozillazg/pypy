@@ -30,9 +30,9 @@ PyOPtr = Ptr(lltype.Array(PyO, hints={'nolength': True}))
 PyNumberMethods = PySequenceMethods = PyMappingMethods = \
                   PyBufferProcs = PyMemberDef = rffi.VOIDP.TO
 
-freefunc = P(FT([rffi.VOIDP], Void))
+freefunc = P(FT([rffi.VOIDP_real], Void))
 destructor = P(FT([PyO], Void))
-printfunc = P(FT([PyO, rffi.VOIDP, rffi.INT_real], rffi.INT))
+printfunc = P(FT([PyO, rffi.VOIDP_real, rffi.INT_real], rffi.INT))
 getattrfunc = P(FT([PyO, rffi.CCHARP], PyO))
 getattrofunc = P(FT([PyO, PyO], PyO))
 setattrfunc = P(FT([PyO, rffi.CCHARP, PyO], rffi.INT_real))
@@ -65,8 +65,8 @@ ssizessizeobjargproc = P(FT([PyO, Py_ssize_t, Py_ssize_t, PyO], rffi.INT_real))
 objobjargproc = P(FT([PyO, PyO, PyO], rffi.INT_real))
 
 objobjproc = P(FT([PyO, PyO], rffi.INT_real))
-visitproc = P(FT([PyO, rffi.VOIDP], rffi.INT_real))
-traverseproc = P(FT([PyO, visitproc, rffi.VOIDP], rffi.INT_real))
+visitproc = P(FT([PyO, rffi.VOIDP_real], rffi.INT_real))
+traverseproc = P(FT([PyO, visitproc, rffi.VOIDP_real], rffi.INT_real))
 
 getter = P(FT([PyO, rffi.VOIDP_real], PyO))
 setter = P(FT([PyO, PyO, rffi.VOIDP_real], rffi.INT_real))
@@ -220,10 +220,13 @@ class W_PyCObject(Wrappable):
 
 
 def allocate_type_obj(space, w_obj):
-    from pypy.module.cpyext.object import PyObject_Del_cast
+    from pypy.module.cpyext.object import PyObject_Del_cast, PyObject_Del
     pto = lltype.malloc(PyTypeObject, None, flavor="raw")
     callable = PyObject_Del_cast
     pto.c_tp_dealloc = llhelper(callable.api_func.functype,
+            make_wrapper(space, callable))
+    callable = PyObject_Del
+    pto.c_tp_free = llhelper(callable.api_func.functype,
             make_wrapper(space, callable))
     #  XXX fill slots in pto
     return pto
