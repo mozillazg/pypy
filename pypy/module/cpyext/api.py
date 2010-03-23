@@ -45,20 +45,38 @@ globals().update(rffi_platform.configure(CConfig_constants))
 
 
 class ApiFunction:
-    def __init__(self, argtypes, restype, callable, borrowed, dont_deref):
+    def __init__(self, argtypes, restype, callable, borrowed):
         self.argtypes = argtypes
         self.restype = restype
         self.functype = lltype.Ptr(lltype.FuncType(argtypes, restype))
         self.callable = callable
         self.borrowed = borrowed
-        self.dont_deref = dont_deref
 
-def cpython_api(argtypes, restype, borrowed=False, dont_deref=False):
+        # extract the signature from the (CPython-level) code object
+        from pypy.interpreter import pycode
+        argnames, varargname, kwargname = pycode.cpython_code_signature(callable.func_code)
+
+        assert argnames[0] == 'space'
+        self.argnames = argnames[1:]
+        assert len(self.argnames) == len(self.argtypes)
+
+
+def cpython_api(argtypes, restype, borrowed=False):
     def decorate(func):
-        api_function = ApiFunction(argtypes, restype, func, borrowed, dont_deref)
+        api_function = ApiFunction(argtypes, restype, func, borrowed)
         FUNCTIONS[func.func_name] = api_function
+        def unwrapper(space, *args):
+            newargs = []
+            for i, arg in enumerate(args):
+                if api_function.argtypes[i] is PyObject:
+                    if (isinstance(arg, W_Root) and
+                        not api_function.argnames[i].startswith('w_')):
+                        arg = make_ref(space, arg)
+                newargs.append(arg)
+            return func(space, *newargs)
         func.api_func = api_function
-        return func
+        unwrapper.api_func = api_function
+        return unwrapper
     return decorate
 
 def cpython_api_c():
@@ -175,8 +193,8 @@ def from_ref(space, ref):
 def clear_memory(space):
     from pypy.module.cpyext.macros import Py_DECREF
     state = space.fromcache(State)
-    while state.py_objects_w2r:
-        key = state.py_objects_w2r.keys()[0]
+    while state.py_objects_r2w:
+        key = state.py_objects_r2w.keys()[0]
         Py_DECREF(space, key)
     state.reset()
 
@@ -192,7 +210,8 @@ def make_wrapper(space, callable):
         print >>sys.stderr, callable,
         for i, typ in enumerate(callable.api_func.argtypes):
             arg = args[i]
-            if typ is PyObject and not callable.api_func.dont_deref:
+            if (typ is PyObject and
+                callable.api_func.argnames[i].startswith('w_')):
                 arg = from_ref(space, arg)
             boxed_args.append(arg)
         state = space.fromcache(State)
