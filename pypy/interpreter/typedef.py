@@ -304,7 +304,7 @@ check_new_dictionary._dont_inline_ = True
 def make_descr_typecheck_wrapper(func, extraargs=(), cls=None, use_closure=False):
     # - if cls is None, the wrapped object is passed to the function
     # - if cls is a class, an unwrapped instance is passed
-    # - if cls is a string, 
+    # - if cls is a string, XXX unused?
     if func is None:
         return None
     if cls is None and use_closure:
@@ -318,7 +318,7 @@ def make_descr_typecheck_wrapper(func, extraargs=(), cls=None, use_closure=False
         'OperationError': OperationError
         }
     if isinstance(cls, str):
-        assert 0
+        assert 0, "unused?"
         #print "<CHECK", func.__module__ or '?', func.__name__
         assert cls.startswith('<'),"pythontype typecheck should begin with <"
         source = """
