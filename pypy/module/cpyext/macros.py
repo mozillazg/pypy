@@ -21,9 +21,7 @@ def Py_DECREF(space, w_obj):
     return
 
 @cpython_api([PyObject], lltype.Void)
-def Py_INCREF(space, w_obj):
-    state = space.fromcache(State)
-    obj = state.py_objects_w2r.get(w_obj)
+def Py_INCREF(space, obj):
     obj.c_obj_refcnt += 1
 
 

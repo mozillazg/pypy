@@ -18,7 +18,7 @@ def PyObject_Del(space, obj):
     # XXX cast object according to the basesize in pto
     lltype.free(obj, flavor='raw')
 
-@cpython_api([PyObject], lltype.Void, dont_deref=True)
+@cpython_api([PyObject], lltype.Void)
 def PyObject_Del_cast(space, obj):
     # XXX cast object according to the basesize in pto
     lltype.free(obj, flavor='raw')
