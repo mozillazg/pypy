@@ -2,6 +2,7 @@ import ctypes
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.lltypesystem.lltype import Ptr, FuncType, Void
+from pypy.rpython.annlowlevel import llhelper
 from pypy.interpreter.gateway import ObjSpace, W_Root
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.baseobjspace import Wrappable
@@ -11,6 +12,7 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct
 from pypy.module.cpyext.api import PyObject, PyVarObjectFields, Py_ssize_t
 from pypy.module.cpyext.api import Py_TPFLAGS_READYING, Py_TPFLAGS_READY
+from pypy.module.cpyext.api import make_wrapper
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import PyMethodDef, convert_method_defs
 from pypy.module.cpyext.state import State
@@ -204,16 +206,25 @@ class W_PyCTypeObject(W_TypeObject):
             bases_w or [space.w_object], dict_w)
 
 class W_PyCObject(Wrappable):
-    pass
+    def __init__(self, space):
+        self.space = space
 
-@unwrap_spec(ObjSpace, W_Root, W_Root)
-def cobject_descr_getattr(space, w_obj, w_name):
-    name = space.str_w(w_name)
-    return w_name
+    def __del__(self):
+        space = self.space
+        self.clear_all_weakrefs()
+        w_type = space.type(self)
+        assert isinstance(w_type, W_PyCTypeObject)
+        pto = w_type.pto
+        generic_cpy_call(space, pto.c_tp_dealloc, self)
+
 
 
 def allocate_type_obj(space, w_obj):
+    from pypy.module.cpyext.object import PyObject_Del_cast
     pto = lltype.malloc(PyTypeObject, None, flavor="raw")
+    callable = PyObject_Del_cast
+    pto.c_tp_dealloc = llhelper(callable.api_func.functype,
+            make_wrapper(space, callable))
     #  XXX fill slots in pto
     return pto
 

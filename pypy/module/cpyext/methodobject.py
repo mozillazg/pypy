@@ -28,7 +28,9 @@ def from_ref_ex(space, result):
         raise
     return ret
 
-def generic_cpy_call(space, func, *args):
+def generic_cpy_call(space, func, *args, **kwargs):
+    decref_args = kwargs.pop("decref_args", False)
+    assert not decref_args
     boxed_args = []
     for arg in args: # XXX ur needed
         if isinstance(arg, W_Root) or arg is None:
@@ -37,13 +39,16 @@ def generic_cpy_call(space, func, *args):
             boxed_args.append(arg)
     result = func(*boxed_args)
     try:
-        ret = from_ref_ex(space, result)
-        Py_DECREF(space, ret)
-        return ret
+        FT = lltype.typeOf(func).TO
+        if FT.RESULT is not lltype.Void:
+            ret = from_ref_ex(space, result)
+            Py_DECREF(space, ret)
+            return ret
     finally:
-        for arg in args: # XXX ur needed
-            if arg is not None and isinstance(arg, W_Root):
-                Py_DECREF(space, arg)
+        if decref_args:
+            for arg in args: # XXX ur needed
+                if arg is not None and isinstance(arg, W_Root):
+                    Py_DECREF(space, arg)
 
 # XXX use Function as a parent class?
 class W_PyCFunctionObject(Wrappable):

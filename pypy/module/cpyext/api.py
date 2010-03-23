@@ -45,16 +45,17 @@ globals().update(rffi_platform.configure(CConfig_constants))
 
 
 class ApiFunction:
-    def __init__(self, argtypes, restype, callable, borrowed):
+    def __init__(self, argtypes, restype, callable, borrowed, dont_deref):
         self.argtypes = argtypes
         self.restype = restype
         self.functype = lltype.Ptr(lltype.FuncType(argtypes, restype))
         self.callable = callable
         self.borrowed = borrowed
+        self.dont_deref = dont_deref
 
-def cpython_api(argtypes, restype, borrowed=False):
+def cpython_api(argtypes, restype, borrowed=False, dont_deref=False):
     def decorate(func):
-        api_function = ApiFunction(argtypes, restype, func, borrowed)
+        api_function = ApiFunction(argtypes, restype, func, borrowed, dont_deref)
         FUNCTIONS[func.func_name] = api_function
         func.api_func = api_function
         return func
@@ -177,6 +178,47 @@ def general_check(space, w_obj, w_type):
     w_obj_type = space.type(w_obj)
     return int(space.is_w(w_obj_type, w_type) or space.is_true(space.issubtype(w_obj_type, w_type)))
 
+def make_wrapper(space, callable):
+    def wrapper(*args):
+        boxed_args = []
+        # XXX use unrolling_iterable here
+        print >>sys.stderr, callable,
+        for i, typ in enumerate(callable.api_func.argtypes):
+            arg = args[i]
+            if typ is PyObject and not callable.api_func.dont_deref:
+                arg = from_ref(space, arg)
+            boxed_args.append(arg)
+        state = space.fromcache(State)
+        try:
+            retval = callable(space, *boxed_args)
+            print >>sys.stderr, " DONE"
+        except OperationError, e:
+            e.normalize_exception(space)
+            state.exc_type = e.w_type
+            state.exc_value = e.get_w_value(space)
+        except BaseException, e:
+            state.exc_type = space.w_SystemError
+            state.exc_value = space.wrap(str(e))
+            import traceback
+            traceback.print_exc()
+
+        if state.exc_value is not None:
+            restype = callable.api_func.restype
+            if restype is lltype.Void:
+                return
+            if restype is PyObject:
+                return lltype.nullptr(PyObject.TO)
+            if restype in (Py_ssize_t, rffi.INT_real):
+                return rffi.cast(restype, -1)
+            assert False, "Unknown return type"
+
+        if callable.api_func.restype is PyObject:
+            retval = make_ref(space, retval, borrowed=callable.api_func.borrowed)
+        if callable.api_func.restype is rffi.INT_real:
+            retval = rffi.cast(rffi.INT_real, retval)
+        return retval
+    return wrapper
+
 #_____________________________________________________
 # Build the bridge DLL, Allow extension DLLs to call
 # back into Pypy space functions
@@ -279,51 +321,11 @@ def build_bridge(space, rename=True):
         ptr.value = ctypes.cast(ll2ctypes.lltype2ctypes(make_ref(space, w_obj)),
             ctypes.c_void_p).value
 
-    def make_wrapper(callable):
-        def wrapper(*args):
-            boxed_args = []
-            # XXX use unrolling_iterable here
-            print >>sys.stderr, callable,
-            for i, typ in enumerate(callable.api_func.argtypes):
-                arg = args[i]
-                if typ is PyObject:
-                    arg = from_ref(space, arg)
-                boxed_args.append(arg)
-            state = space.fromcache(State)
-            try:
-                retval = callable(space, *boxed_args)
-                print >>sys.stderr, " DONE"
-            except OperationError, e:
-                e.normalize_exception(space)
-                state.exc_type = e.w_type
-                state.exc_value = e.get_w_value(space)
-            except BaseException, e:
-                state.exc_type = space.w_SystemError
-                state.exc_value = space.wrap(str(e))
-                import traceback
-                traceback.print_exc()
-
-            if state.exc_value is not None:
-                restype = callable.api_func.restype
-                if restype is lltype.Void:
-                    return
-                if restype is PyObject:
-                    return lltype.nullptr(PyObject.TO)
-                if restype in (Py_ssize_t, rffi.INT_real):
-                    return rffi.cast(restype, -1)
-                assert False, "Unknown return type"
-
-            if callable.api_func.restype is PyObject:
-                retval = make_ref(space, retval, borrowed=callable.api_func.borrowed)
-            if callable.api_func.restype is rffi.INT_real:
-                retval = rffi.cast(rffi.INT_real, retval)
-            return retval
-        return wrapper
-
     # implement structure initialization code
     for name, func in FUNCTIONS.iteritems():
         pypyAPI[structindex[name]] = ctypes.cast(
-            ll2ctypes.lltype2ctypes(llhelper(func.functype, make_wrapper(func.callable))),
+            ll2ctypes.lltype2ctypes(llhelper(func.functype,
+                make_wrapper(space, func.callable))),
             ctypes.c_void_p)
 
     return modulename.new(ext='')
