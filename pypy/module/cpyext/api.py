@@ -393,3 +393,42 @@ def load_extension_module(space, path, name):
     initfunc.call(lltype.Void)
     state.check_and_raise_exception()
 
+def generic_cpy_call(space, func, *args, **kwargs):
+    from pypy.module.cpyext.macros import Py_DECREF
+    decref_args = kwargs.pop("decref_args", True)
+    assert not kwargs
+    boxed_args = []
+    for arg in args: # XXX ur needed
+        if isinstance(arg, W_Root) or arg is None:
+            boxed_args.append(make_ref(space, arg))
+        else:
+            boxed_args.append(arg)
+    result = func(*boxed_args)
+    try:
+        FT = lltype.typeOf(func).TO
+        if FT.RESULT is not lltype.Void:
+            ret = from_ref_ex(space, result)
+            Py_DECREF(space, ret)
+            return ret
+    finally:
+        if decref_args:
+            for arg in args: # XXX ur needed
+                if arg is not None and isinstance(arg, W_Root):
+                    Py_DECREF(space, arg)
+
+def from_ref_ex(space, result):
+    try:
+        ret = from_ref(space, result)
+    except NullPointerException:
+        state = space.fromcache(State)
+        state.check_and_raise_exception()
+        assert False, "NULL returned but no exception set"
+    except InvalidPointerException:
+        if not we_are_translated():
+            import sys
+            print >>sys.stderr, "Calling a C function return an invalid PyObject" \
+                    " pointer."
+        raise
+    return ret
+
+
