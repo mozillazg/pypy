@@ -224,6 +224,25 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         skip("Hmm, how to check for the exception?")
         raises(api.InvalidPointerException, module.return_invalid_pointer)
 
+    def test_argument(self):
+        import sys
+        init = """
+        if (Py_IsInitialized())
+            Py_InitModule("foo", methods);
+        """
+        body = """
+        PyObject* foo_test(PyObject* self, PyObject *args)
+        {
+            return PyTuple_GetItem(args, 0);
+        }
+        static PyMethodDef methods[] = {
+            { "test", foo_test, METH_VARARGS },
+            { NULL }
+        };
+        """
+        module = self.import_module(name='foo', init=init, body=body)
+        assert module.test(True, True) == True
+
     def test_exception(self):
         import sys
         init = """

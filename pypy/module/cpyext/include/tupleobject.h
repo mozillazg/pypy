@@ -9,6 +9,7 @@ extern "C" {
 
 PyObject * PyTuple_New(Py_ssize_t size);
 PyObject * PyTuple_Pack(Py_ssize_t, ...);
+PyObject * PyTuple_GetItem(PyObject *, Py_ssize_t);
 int PyTuple_SetItem(PyObject *, Py_ssize_t, PyObject *);
 
 #ifdef __cplusplus
