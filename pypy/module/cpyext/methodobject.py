@@ -29,8 +29,8 @@ def from_ref_ex(space, result):
     return ret
 
 def generic_cpy_call(space, func, *args, **kwargs):
-    decref_args = kwargs.pop("decref_args", False)
-    assert not decref_args
+    decref_args = kwargs.pop("decref_args", True)
+    assert not kwargs
     boxed_args = []
     for arg in args: # XXX ur needed
         if isinstance(arg, W_Root) or arg is None:
@@ -52,7 +52,6 @@ def generic_cpy_call(space, func, *args, **kwargs):
 
 # XXX use Function as a parent class?
 class W_PyCFunctionObject(Wrappable):
-    acceptable_as_base_class = False
     def __init__(self, space, ml, w_self):
         self.space = space
         self.ml = ml
@@ -114,6 +113,8 @@ W_PyCFunctionObject.typedef = TypeDef(
     __call__ = interp2app(cfunction_descr_call),
     )
 
+W_PyCFunctionObject.typedef.acceptable_as_base_class = False
+
 W_PyCMethodObject.typedef = TypeDef(
     'method',
     __get__ = interp2app(cmethod_descr_get),
@@ -123,6 +124,7 @@ W_PyCMethodObject.typedef = TypeDef(
     __repr__ = interp2app(W_PyCMethodObject.descr_method_repr),
     )
 
+W_PyCMethodObject.typedef.acceptable_as_base_class = False
 
 def PyCFunction_NewEx(space, ml, w_self): # not directly the API sig
     return space.wrap(W_PyCFunctionObject(space, ml, w_self))
