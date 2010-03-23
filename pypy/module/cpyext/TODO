@@ -1,6 +1,7 @@
  - Generate header files programmatically.
  - Implement C API.
  - Complete the PyTypeObject initialization code.
+ - Free pto.c_tp_name correctly
 
 PyStringObject support
 ======================
