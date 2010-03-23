@@ -132,8 +132,13 @@ def make_ref(space, w_obj, borrowed=False):
     if py_obj is None:
         from pypy.module.cpyext.typeobject import allocate_type_obj,\
                 W_PyCTypeObject, W_PyCObject
-        if space.is_w(space.type(w_obj), space.w_type):
+        w_type = space.type(w_obj)
+        if space.is_w(w_type, space.w_type):
             py_obj = allocate_type_obj(space, w_obj)
+            if space.is_w(w_type, w_obj):
+                pto = py_obj
+            else:
+                pto = make_ref(space, w_type)
         elif isinstance(w_obj, W_PyCObject):
             w_type = space.type(w_obj)
             assert isinstance(w_type, W_PyCTypeObject)
@@ -143,6 +148,8 @@ def make_ref(space, w_obj, borrowed=False):
             py_obj = lltype.malloc(T, None, flavor="raw")
         else:
             py_obj = lltype.malloc(PyObject.TO, None, flavor="raw")
+            pto = make_ref(space, space.type(w_obj))
+        py_obj.c_obj_type = rffi.cast(PyObject, pto)
         py_obj.c_obj_refcnt = 1
         ctypes_obj = ll2ctypes.lltype2ctypes(py_obj)
         ptr = ctypes.cast(ctypes_obj, ctypes.c_void_p).value
