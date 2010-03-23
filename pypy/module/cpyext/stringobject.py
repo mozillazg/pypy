@@ -1,5 +1,5 @@
-from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, Py_ssize_t
+from pypy.rpython.lltypesystem import rffi
+from pypy.module.cpyext.api import cpython_api, PyObject, Py_ssize_t
 
 @cpython_api([rffi.CCHARP, Py_ssize_t], PyObject)
 def PyString_FromStringAndSize(space, char_p, length):
