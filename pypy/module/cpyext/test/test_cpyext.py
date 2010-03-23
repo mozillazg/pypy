@@ -32,6 +32,17 @@ class TestApi:
         assert rffi.sizeof(T) == 42
         print T
 
+class AppTestApi:
+    def setup_class(cls):
+        cls.space = gettestobjspace(usemodules=['cpyext'])
+        from pypy.rlib.libffi import get_libc_name
+        cls.w_libc = cls.space.wrap(get_libc_name())
+
+    def test_load_error(self):
+        import cpyext
+        raises(ImportError, cpyext.load_module, "missing.file", "foo")
+        raises(ImportError, cpyext.load_module, self.libc, "invalid.function")
+
 def compile_module(modname, **kwds):
     eci = ExternalCompilationInfo(
         export_symbols=['init%s' % (modname,)],

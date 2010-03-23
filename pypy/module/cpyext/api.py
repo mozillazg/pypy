@@ -343,11 +343,11 @@ def load_extension_module(space, path, name):
     from pypy.rlib import libffi
     try:
         dll = libffi.CDLL(path)
-    except libffi.DLOpenError:
+    except libffi.DLOpenError, e:
         raise operationerrfmt(
             space.w_ImportError,
-            "unable to load extension module %s",
-            path)
+            "unable to load extension module '%s': %s",
+            path, e.msg)
     try:
         initfunc = dll.getpointer(
             'init%s' % (name,), [], libffi.ffi_type_void)
