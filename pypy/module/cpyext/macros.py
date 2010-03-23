@@ -38,7 +38,5 @@ def _Py_Dealloc(space, w_obj):
         print "Calling ", pto.c_tp_dealloc, "of", w_obj, "'s type which is", w_type
         generic_cpy_call(space, pto.c_tp_dealloc, w_obj, decref_args=False)
     finally:
-        # XXX uncommenting the next line gives double frees, why?
-        #Py_DECREF(space, w_type) # make_ref bumps refcount
-        pass
+        Py_DECREF(space, w_type) # make_ref bumps refcount
 
