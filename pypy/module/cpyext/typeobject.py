@@ -219,7 +219,7 @@ class W_PyCObject(Wrappable):
 
 
 
-def allocate_type_obj(space, w_obj):
+def allocate_type_obj(space, w_type):
     from pypy.module.cpyext.object import PyObject_Del_cast, PyObject_Del
     pto = lltype.malloc(PyTypeObject, None, flavor="raw")
     callable = PyObject_Del_cast
@@ -228,6 +228,9 @@ def allocate_type_obj(space, w_obj):
     callable = PyObject_Del
     pto.c_tp_free = llhelper(callable.api_func.functype,
             make_wrapper(space, callable))
+    # XXX free c_tp_name again!
+    pto.c_tp_name = rffi.str2charp(w_type.getname(space, "?"))
+    pto.c_tp_basicsize = -1 # hopefully this makes malloc bail
     #  XXX fill slots in pto
     return pto
 
@@ -249,10 +252,6 @@ def PyPyType_Register(space, pto):
     return 1
 
 W_PyCObject.typedef = W_ObjectObject.typedef
-#TypeDef(
-#    'C_object',
-#    #__getattrbute__ = interp2app(cobject_descr_getattribute),
-#    )
 
 W_PyCTypeObject.typedef = TypeDef(
     'C_type', W_TypeObject.typedef
