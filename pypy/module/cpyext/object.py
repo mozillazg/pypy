@@ -1,6 +1,8 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref
+from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref, \
+        generic_cpy_call
 from pypy.module.cpyext.state import State
+from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject, W_PyCObject
 from pypy.objspace.std.objectobject import W_ObjectObject
 
@@ -19,7 +21,8 @@ def PyObject_Del(space, obj):
     lltype.free(obj, flavor='raw')
 
 @cpython_api([PyObject], lltype.Void)
-def PyObject_Del_cast(space, obj):
-    # XXX cast object according to the basesize in pto
-    lltype.free(obj, flavor='raw')
+def PyObject_dealloc(space, obj):
+    pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
+    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
 
