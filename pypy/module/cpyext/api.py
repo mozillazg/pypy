@@ -65,15 +65,28 @@ def cpython_api(argtypes, restype, borrowed=False):
     def decorate(func):
         api_function = ApiFunction(argtypes, restype, func, borrowed)
         FUNCTIONS[func.func_name] = api_function
+
         def unwrapper(space, *args):
+            "NOT_RPYTHON: XXX unsure"
             newargs = []
+            to_decref = []
             for i, arg in enumerate(args):
                 if api_function.argtypes[i] is PyObject:
                     if (isinstance(arg, W_Root) and
                         not api_function.argnames[i].startswith('w_')):
                         arg = make_ref(space, arg)
+                        to_decref.append(arg)
+                    elif (not isinstance(arg, W_Root) and
+                          api_function.argnames[i].startswith('w_')):
+                        arg = from_ref(space, arg)
                 newargs.append(arg)
-            return func(space, *newargs)
+            try:
+                return func(space, *newargs)
+            finally:
+                from pypy.module.cpyext.macros import Py_DECREF
+                for arg in to_decref:
+                    Py_DECREF(space, arg)
+
         func.api_func = api_function
         unwrapper.api_func = api_function
         return unwrapper
@@ -175,8 +188,9 @@ def make_ref(space, w_obj, borrowed=False):
         py_obj = rffi.cast(PyObject, py_obj)
         state.py_objects_w2r[w_obj] = py_obj
         state.py_objects_r2w[ptr] = w_obj
-    elif not borrowed:
+    else:
         py_obj.c_obj_refcnt += 1
+    # XXX borrowed references?
     return py_obj
 
 def from_ref(space, ref):
