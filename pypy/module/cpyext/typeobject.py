@@ -220,9 +220,9 @@ class W_PyCObject(Wrappable):
 
 
 def allocate_type_obj(space, w_type):
-    from pypy.module.cpyext.object import PyObject_Del_cast, PyObject_Del
+    from pypy.module.cpyext.object import PyObject_dealloc, PyObject_Del
     pto = lltype.malloc(PyTypeObject, None, flavor="raw")
-    callable = PyObject_Del_cast
+    callable = PyObject_dealloc
     pto.c_tp_dealloc = llhelper(callable.api_func.functype,
             make_wrapper(space, callable))
     callable = PyObject_Del
