@@ -138,6 +138,7 @@ void initfoo(void)
 	if (m == NULL)
 	    return;
 	d = PyModule_GetDict(m);
-	PyDict_SetItemString(d, "fooType", (PyObject *)&footype);
+	if (d)
+	    PyDict_SetItemString(d, "fooType", (PyObject *)&footype);
    	/* No need to check the error here, the caller will do that */
 }
