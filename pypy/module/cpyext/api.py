@@ -13,7 +13,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.tool.udir import udir
 from pypy.translator import platform
 from pypy.module.cpyext.state import State
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import ObjSpace, unwrap_spec
 
@@ -341,9 +341,21 @@ def build_bridge(space, rename=True):
 def load_extension_module(space, path, name):
     state = space.fromcache(State)
     from pypy.rlib import libffi
-    dll = libffi.CDLL(path)
-    initfunc = dll.getpointer(
-        'init%s' % (name,), [], libffi.ffi_type_void)
+    try:
+        dll = libffi.CDLL(path)
+    except libffi.DLOpenError:
+        raise operationerrfmt(
+            space.w_ImportError,
+            "unable to load extension module %s",
+            path)
+    try:
+        initfunc = dll.getpointer(
+            'init%s' % (name,), [], libffi.ffi_type_void)
+    except KeyError:
+        raise operationerrfmt(
+            space.w_ImportError,
+            "function init%s not found in library %s",
+            name, path)
     dll.unload_on_finalization = False
     initfunc.call(lltype.Void)
     state.check_and_raise_exception()
