@@ -301,47 +301,57 @@ check_new_dictionary._dont_inline_ = True
 
 # ____________________________________________________________
 
-def make_descr_typecheck_wrapper(func, extraargs=(), cls=None, cpy_property=False):
-    extra_arg = ""
-    if cpy_property:
-        extra_arg = "property, "
+def make_descr_typecheck_wrapper(func, extraargs=(), cls=None, use_closure=False):
+    # - if cls is None, the wrapped object is passed to the function
+    # - if cls is a class, an unwrapped instance is passed
+    # - if cls is a string, 
     if func is None:
         return None
-    if cls is None:
+    if cls is None and use_closure:
         return func
     if hasattr(func, 'im_func'):
         assert func.im_class is cls
         func = func.im_func
-    
+
     miniglobals = {
          func.__name__: func,
         'OperationError': OperationError
         }
     if isinstance(cls, str):
+        assert 0
         #print "<CHECK", func.__module__ or '?', func.__name__
         assert cls.startswith('<'),"pythontype typecheck should begin with <"
         source = """
-        def descr_typecheck_%(name)s(%(extra_arg)sspace, w_obj, %(extra)s):
+        def descr_typecheck_%(name)s(closure, space, w_obj, %(extra)s):
             if not space.is_true(space.isinstance(w_obj, space.w_%(cls_name)s)):
                 # xxx improve msg
                 msg =  "descriptor is for '%(expected)s'"
                 raise OperationError(space.w_TypeError, space.wrap(msg))
-            return %(name)s(%(extra_arg)sspace, w_obj, %(extra)s)
+            return %(name)s(%(closure)s space, w_obj, %(extra)s)
         """
         cls_name = cls[1:]
         expected = repr(cls_name)
+    elif cls is None:
+        source = """
+        def descr_typecheck_%(name)s(closure, space, w_obj, %(extra)s):
+            return %(name)s(%(closure)s space, w_obj, %(extra)s)
+        """
     else:
         cls_name = cls.__name__
         assert issubclass(cls, Wrappable)
         source = """
-        def descr_typecheck_%(name)s(%(extra_arg)sspace, w_obj, %(extra)s):
+        def descr_typecheck_%(name)s(closure, space, w_obj, %(extra)s):
             obj = space.descr_self_interp_w(%(cls_name)s, w_obj)
-            return %(name)s(%(extra_arg)sspace, obj, %(extra)s)
+            return %(name)s(%(closure)s space, obj, %(extra)s)
         """
         miniglobals[cls_name] = cls
     
     name = func.__name__
     extra = ', '.join(extraargs)
+    if use_closure:
+        closure = "closure,"
+    else:
+        closure = ""
     source = py.code.Source(source % locals())
     exec source.compile() in miniglobals
     return miniglobals['descr_typecheck_%s' % func.__name__]
@@ -379,13 +389,16 @@ def make_objclass_getter(func, cls, cache={}):
     return res
 
 class GetSetProperty(Wrappable):
-    def __init__(self, fget, fset=None, fdel=None, doc=None, cls=None, cpy_property=False):
+    def __init__(self, fget, fset=None, fdel=None, doc=None,
+                 cls=None, use_closure=False):
         "NOT_RPYTHON: initialization-time only"
         objclass_getter, cls = make_objclass_getter(fget, cls)
-        fget = make_descr_typecheck_wrapper(fget, cls=cls, cpy_property=cpy_property)
+        fget = make_descr_typecheck_wrapper(fget, cls=cls,
+                                            use_closure=use_closure)
         fset = make_descr_typecheck_wrapper(fset, ('w_value',), cls=cls,
-                cpy_property=cpy_property)
-        fdel = make_descr_typecheck_wrapper(fdel, cls=cls, cpy_property=cpy_property)
+                                            use_closure=use_closure)
+        fdel = make_descr_typecheck_wrapper(fdel, cls=cls,
+                                            use_closure=use_closure)
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
@@ -393,7 +406,7 @@ class GetSetProperty(Wrappable):
         self.reqcls = cls
         self.name = '<generic property>'
         self.objclass_getter = objclass_getter
-        self.cpy_property = cpy_property
+        self.use_closure = use_closure
 
     def descr_property_get(space, property, w_obj, w_cls=None):
         """property.__get__(obj[, type]) -> value
@@ -405,10 +418,7 @@ class GetSetProperty(Wrappable):
             return space.wrap(property)
         else:
             try:
-                if property.cpy_property:
-                    return property.fget(property, space, w_obj)
-                else:
-                    return property.fget(space, w_obj)
+                return property.fget(property, space, w_obj)
             except DescrMismatch, e:
                 return w_obj.descr_call_mismatch(space, '__getattribute__',\
                     property.reqcls, Arguments(space, [w_obj,
@@ -422,10 +432,7 @@ class GetSetProperty(Wrappable):
             raise OperationError(space.w_TypeError,
                                  space.wrap("readonly attribute"))
         try:
-            if property.cpy_property:
-                fset(property, space, w_obj, w_value)
-            else:
-                fset(space, w_obj, w_value)
+            fset(property, space, w_obj, w_value)
         except DescrMismatch, e:
             w_obj.descr_call_mismatch(space, '__setattr__',\
                 property.reqcls, Arguments(space, [w_obj,
@@ -439,10 +446,7 @@ class GetSetProperty(Wrappable):
             raise OperationError(space.w_AttributeError,
                                  space.wrap("cannot delete attribute"))
         try:
-            if property.cpy_property:
-                fdel(space, w_obj)
-            else:
-                fdel(property, space, w_obj)
+            fdel(property, space, w_obj)
         except DescrMismatch, e:
             w_obj.descr_call_mismatch(space, '__delattr__',\
                 property.reqcls, Arguments(space, [w_obj,
