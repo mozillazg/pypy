@@ -7,8 +7,6 @@
 extern "C" {
 #endif
 
-PyObject* PyFloat_FromDouble(double);
-double PyFloat_AsDouble(PyObject*);
 
 #ifdef __cplusplus
 }

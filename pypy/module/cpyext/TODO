@@ -1,4 +1,3 @@
- - Generate header files programmatically.
  - Implement C API.
  - Complete the PyTypeObject initialization code.
  - properly support "borrowed" references: the PyObject must be stored

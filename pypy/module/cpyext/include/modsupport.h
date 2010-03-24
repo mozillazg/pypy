@@ -10,10 +10,6 @@ extern "C" {
 #define PYTHON_API_VERSION 1013
 #define PYTHON_API_STRING "1013"
 
-PyObject *Py_InitModule4(const char* name, PyMethodDef* methods,
-                         const char *doc, PyObject *self,
-                         int apiver);
-
 #define Py_InitModule(name, methods) \
 	Py_InitModule4(name, methods, (char *)NULL, (PyObject *)NULL, \
 		       PYTHON_API_VERSION)
@@ -22,7 +18,6 @@ PyObject *Py_InitModule4(const char* name, PyMethodDef* methods,
 	Py_InitModule4(name, methods, doc, (PyObject *)NULL, \
 		       PYTHON_API_VERSION)
 
-PyObject * PyModule_GetDict(PyObject *);
 
 
 #ifdef __cplusplus

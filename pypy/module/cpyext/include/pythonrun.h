@@ -6,7 +6,6 @@
 extern "C" {
 #endif
 
-int Py_IsInitialized(void);
 
 #ifdef __cplusplus
 }
