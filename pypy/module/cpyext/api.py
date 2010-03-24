@@ -43,14 +43,17 @@ for name in constant_names:
     setattr(CConfig_constants, name, rffi_platform.ConstantInteger(name))
 globals().update(rffi_platform.configure(CConfig_constants))
 
+_NOT_SPECIFIED = object()
 
 class ApiFunction:
-    def __init__(self, argtypes, restype, callable, borrowed):
+    def __init__(self, argtypes, restype, callable, borrowed, error):
         self.argtypes = argtypes
         self.restype = restype
         self.functype = lltype.Ptr(lltype.FuncType(argtypes, restype))
         self.callable = callable
         self.borrowed = borrowed
+        if error is not _NOT_SPECIFIED:
+            self.error_value = error
 
         # extract the signature from the (CPython-level) code object
         from pypy.interpreter import pycode
@@ -60,11 +63,12 @@ class ApiFunction:
         self.argnames = argnames[1:]
         assert len(self.argnames) == len(self.argtypes)
 
+def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED):
+    if restype is PyObject and error is _NOT_SPECIFIED:
+        error = None
 
-def cpython_api(argtypes, restype, borrowed=False):
     def decorate(func):
-        api_function = ApiFunction(argtypes, restype, func, borrowed)
-        FUNCTIONS[func.func_name] = api_function
+        api_function = ApiFunction(argtypes, restype, func, borrowed, error)
 
         def unwrapper(space, *args):
             "NOT_RPYTHON: XXX unsure"
@@ -82,6 +86,14 @@ def cpython_api(argtypes, restype, borrowed=False):
                 newargs.append(arg)
             try:
                 return func(space, *newargs)
+            except OperationError, e:
+                if not hasattr(api_function, "error_value"):
+                    raise
+                state = space.fromcache(State)
+                e.normalize_exception(space)
+                state.exc_type = e.w_type
+                state.exc_value = e.get_w_value(space)
+                return api_function.error_value
             finally:
                 from pypy.module.cpyext.macros import Py_DECREF
                 for arg in to_decref:
@@ -89,6 +101,8 @@ def cpython_api(argtypes, restype, borrowed=False):
 
         func.api_func = api_function
         unwrapper.api_func = api_function
+        FUNCTIONS[func.func_name] = api_function
+        INTERPLEVEL_API[func.func_name] = unwrapper
         return unwrapper
     return decorate
 
@@ -105,6 +119,7 @@ def cpython_struct(name, fields, forward=None):
     TYPES[configname] = forward
     return forward
 
+INTERPLEVEL_API = {}
 FUNCTIONS = {}
 FUNCTIONS_C = {}
 TYPES = {}
