@@ -16,6 +16,8 @@ from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import ObjSpace, unwrap_spec
+# CPython 2.4 compatibility
+from py.builtin import BaseException
 
 
 Py_ssize_t = lltype.Signed
