@@ -38,6 +38,7 @@ class CConfig_constants:
 constant_names = """
 Py_TPFLAGS_READY Py_TPFLAGS_READYING
 METH_COEXIST METH_STATIC METH_CLASS METH_NOARGS
+Py_TPFLAGS_HEAPTYPE
 """.split()
 for name in constant_names:
     setattr(CConfig_constants, name, rffi_platform.ConstantInteger(name))
@@ -64,7 +65,7 @@ class ApiFunction:
         self.argnames = argnames[1:]
         assert len(self.argnames) == len(self.argtypes)
 
-def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED):
+def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, external=True):
     if error is _NOT_SPECIFIED:
         if restype is PyObject:
             error = lltype.nullptr(PyObject.TO)
@@ -108,7 +109,9 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED):
 
         func.api_func = api_function
         unwrapper.api_func = api_function
-        FUNCTIONS[func.func_name] = api_function
+        unwrapper.func = func
+        if external:
+            FUNCTIONS[func.func_name] = api_function
         INTERPLEVEL_API[func.func_name] = unwrapper
         return unwrapper
     return decorate
@@ -190,7 +193,7 @@ def make_ref(space, w_obj, borrowed=False):
             if space.is_w(w_type, w_obj):
                 pto = py_obj
             else:
-                pto = make_ref(space, w_type, borrowed=True)
+                pto = make_ref(space, w_type)
         elif isinstance(w_obj, W_PyCObject):
             w_type = space.type(w_obj)
             assert isinstance(w_type, W_PyCTypeObject)
@@ -200,7 +203,7 @@ def make_ref(space, w_obj, borrowed=False):
             py_obj = lltype.malloc(T, None, flavor="raw")
         else:
             py_obj = lltype.malloc(PyObject.TO, None, flavor="raw")
-            pto = make_ref(space, space.type(w_obj), borrowed=True)
+            pto = make_ref(space, space.type(w_obj))
         py_obj.c_obj_type = rffi.cast(PyObject, pto)
         py_obj.c_obj_refcnt = 1
         ctypes_obj = ll2ctypes.lltype2ctypes(py_obj)
@@ -304,6 +307,8 @@ def build_bridge(space, rename=True):
     renamed_symbols = []
     if rename:
         for name in export_symbols:
+            if name.startswith("PyPy"):
+                continue
             if "#" in name:
                 deref = "*"
             else:

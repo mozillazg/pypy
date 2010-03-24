@@ -80,4 +80,4 @@ def PyModule_GetDict(space, w_mod):
         assert isinstance(w_mod, Module)
         return w_mod.getdict()
     else:
-        PyErr_BadInternalCall()
+        PyErr_BadInternalCall(space)

@@ -139,6 +139,7 @@ class AppTestCpythonExtensionBase:
                                self.space.wrap('foo'))
             self.space.delitem(self.space.sys.get('modules'),
                                self.space.wrap('foo'))
+            Py_DECREF(self.space, w_mod)
         except OperationError:
             pass
         self.space.fromcache(State).print_refcounts()
@@ -372,6 +373,8 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
             Py_InitModule("foo", methods);
         """
         body = """
+        PyObject* PyPy_Crash1(void);
+        long PyPy_Crash2(void);
         static PyObject* foo_crash1(PyObject* self, PyObject *args)
         {
             return PyPy_Crash1();
