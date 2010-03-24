@@ -394,4 +394,7 @@ void PyObject_Del(void *);
 /* PyPy internal ----------------------------------- */
 int PyPyType_Register(PyTypeObject *);
 
+int PyObject_IsTrue(PyObject *);
+int PyObject_Not(PyObject *);
+
 #endif
