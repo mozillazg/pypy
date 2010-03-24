@@ -22,18 +22,22 @@ def PyImport_AddModule(space, name):
     space.setitem(w_modules, w_name, w_mod)
     return w_mod
 
-@cpython_api([rffi.CCHARP, lltype.Ptr(PyMethodDef)], PyObject, borrowed=True)
-def Py_InitModule(space, name, methods):
+@cpython_api([rffi.CCHARP, lltype.Ptr(PyMethodDef), rffi.CCHARP,
+              PyObject, rffi.INT_real], PyObject, borrowed=True)
+def Py_InitModule4(space, name, methods, doc, w_self, apiver):
     modname = rffi.charp2str(name)
     w_mod = PyImport_AddModule(space, modname)
     dict_w = {}
-    convert_method_defs(space, dict_w, methods, None)
+    convert_method_defs(space, dict_w, methods, None, w_self)
     for key, w_value in dict_w.items():
         space.setattr(w_mod, space.wrap(key), w_value)
+    if doc:
+        space.setattr(w_mod, space.wrap("__doc__"),
+                      space.wrap(rffi.charp2str(doc)))
     return w_mod
 
 
-def convert_method_defs(space, dict_w, methods, pto):
+def convert_method_defs(space, dict_w, methods, pto, w_self=None):
     methods = rffi.cast(rffi.CArrayPtr(PyMethodDef), methods)
     if methods:
         i = -1
@@ -48,7 +52,7 @@ def convert_method_defs(space, dict_w, methods, pto):
                 if flags & METH_CLASS or flags & METH_STATIC:
                     raise OperationError(space.w_ValueError,
                             "module functions cannot set METH_CLASS or METH_STATIC")
-                w_obj = PyCFunction_NewEx(space, method, None)
+                w_obj = PyCFunction_NewEx(space, method, w_self)
             else:
                 if methodname in dict_w and not (flags & METH_COEXIST):
                     continue

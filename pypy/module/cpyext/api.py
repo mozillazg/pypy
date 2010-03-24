@@ -226,7 +226,10 @@ def make_wrapper(space, callable):
             arg = args[i]
             if (typ is PyObject and
                 callable.api_func.argnames[i].startswith('w_')):
-                arg = from_ref(space, arg)
+                if arg:
+                    arg = from_ref(space, arg)
+                else:
+                    arg = None
             boxed_args.append(arg)
         state = space.fromcache(State)
         try:
