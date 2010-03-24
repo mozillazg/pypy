@@ -14,7 +14,6 @@ from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
 
 
-# XXX use Function as a parent class?
 class W_PyCFunctionObject(Wrappable):
     def __init__(self, space, ml, w_self):
         self.space = space
@@ -68,9 +67,6 @@ def cmethod_descr_call(space, w_self, __args__):
     return ret
 
 def cmethod_descr_get(space, w_function, w_obj, w_cls=None):
-    """functionobject.__get__(obj[, type]) -> method"""
-    # this is not defined as a method on Function because it's generally
-    # useful logic: w_function can be any callable.  It is used by Method too.
     asking_for_bound = (space.is_w(w_cls, space.w_None) or
                         not space.is_w(w_obj, space.w_None) or
                         space.is_w(w_cls, space.type(space.w_None)))
