@@ -436,7 +436,7 @@ class GCTest(object):
         assert res == 42
 
     def test_can_move(self):
-        TP = lltype.GcArray(lltype.Float)
+        TP = lltype.GcArray(lltype.UniChar)
         def func():
             return rgc.can_move(lltype.malloc(TP, 1))
         assert self.interpret(func, []) == self.GC_CAN_MOVE
