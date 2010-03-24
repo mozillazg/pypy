@@ -28,7 +28,7 @@ def _Py_Dealloc(space, obj):
     state = space.fromcache(State)
     pto = obj.c_obj_type
     pto = rffi.cast(PyTypeObjectPtr, pto)
-    print "Calling ", pto.c_tp_dealloc, "of", obj, \
+    print "Calling dealloc slot of", obj, \
           "'s type which is", rffi.charp2str(pto.c_tp_name)
     generic_cpy_call(space, pto.c_tp_dealloc, obj, decref_args=False)
 
