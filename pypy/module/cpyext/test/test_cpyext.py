@@ -23,9 +23,8 @@ def PyPy_Crash2(space):
 
 class TestApi:
     def test_signature(self):
-        assert 'Py_InitModule' in api.FUNCTIONS
-        assert api.FUNCTIONS['Py_InitModule'].argtypes == [
-            rffi.CCHARP, lltype.Ptr(api.TYPES['PyMethodDef'])]
+        assert 'PyModule_Check' in api.FUNCTIONS
+        assert api.FUNCTIONS['PyModule_Check'].argtypes == [api.PyObject]
 
     def test_padding(self):
         T = api.get_padded_type(api.PyObject.TO, 42)
@@ -172,6 +171,33 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         assert 'return_pi' in dir(module)
         assert module.return_pi is not None
         assert module.return_pi() == 3.14
+
+    def test_InitModule4(self):
+        init = """
+        PyObject *cookie = PyFloat_FromDouble(3.14);
+        Py_InitModule4("foo", methods, "docstring",
+                       cookie, PYTHON_API_VERSION);
+        Py_DECREF(cookie);
+        """
+        body = """
+        PyObject* return_cookie(PyObject* self, PyObject *args)
+        {
+            if (self)
+            {
+                Py_INCREF(self);
+                return self;
+            }
+            else
+                Py_RETURN_FALSE;
+        }
+        static PyMethodDef methods[] = {
+            { "return_cookie", return_cookie, METH_NOARGS },
+            { NULL }
+        };
+        """
+        module = self.import_module(name='foo', init=init, body=body)
+        assert module.__doc__ == "docstring"
+        assert module.return_cookie() == 3.14
 
     def test_export_function2(self):
         import sys
