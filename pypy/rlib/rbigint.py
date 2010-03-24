@@ -272,13 +272,13 @@ class rbigint(object):
         return False
 
     def le(self, other):
-        return self.lt(other) or self.eq(other)
+        return not other.lt(self)
 
     def gt(self, other):
-        return other.le(self)
+        return other.lt(self)
 
     def ge(self, other):
-        return other.lt(self)
+        return not self.lt(other)
 
     def hash(self):
         return _hash(self)

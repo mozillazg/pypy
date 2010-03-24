@@ -193,10 +193,13 @@ class Test_rbigint(object):
                 f2 = rbigint.fromlong(y)
                 assert (x < y) ==  f1.lt(f2)
 
-    def test_ge(self):
-        f1 = rbigint.fromlong(13)
-        f2 = rbigint.fromlong(13)
-        assert f1.ge(f2)
+    def test_order(self):
+        f6 = rbigint.fromint(6)
+        f7 = rbigint.fromint(7)
+        assert (f6.lt(f6), f6.lt(f7), f7.lt(f6)) == (0,1,0)
+        assert (f6.le(f6), f6.le(f7), f7.le(f6)) == (1,1,0)
+        assert (f6.gt(f6), f6.gt(f7), f7.gt(f6)) == (0,0,1)
+        assert (f6.ge(f6), f6.ge(f7), f7.ge(f6)) == (1,0,1)
 
     def test_int_conversion(self):
         f1 = rbigint.fromlong(12332)
