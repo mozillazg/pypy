@@ -396,5 +396,7 @@ int PyPyType_Register(PyTypeObject *);
 
 int PyObject_IsTrue(PyObject *);
 int PyObject_Not(PyObject *);
+int PyObject_HasAttr(PyObject *, PyObject *);
+int PyObject_SetAttr(PyObject *, PyObject *, PyObject *);
 
 #endif
