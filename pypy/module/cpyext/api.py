@@ -310,6 +310,7 @@ def build_bridge(space, rename=True):
     if rename:
         for name in export_symbols:
             if name.startswith("PyPy"):
+                renamed_symbols.append(name)
                 continue
             if "#" in name:
                 deref = "*"
