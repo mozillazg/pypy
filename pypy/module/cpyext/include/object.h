@@ -377,26 +377,18 @@ manually remove this flag though!
 
 PyAPI_DATA(PyTypeObject *) PyType_Type; /* built-in 'type' */
 PyAPI_DATA(PyTypeObject *) PyBaseObject_Type;
+// defined in typeobject.c
 int PyType_Ready(PyTypeObject *);
 
 /* objimpl.h ----------------------------------------------*/
-
-PyObject * _PyObject_New(PyObject *);
-// PyVarObject * _PyObject_NewVar(PyTypeObject *, Py_ssize_t);
 
 #define PyObject_New(type, typeobj) \
 		( (type *) _PyObject_New(typeobj) )
 #define PyObject_NewVar(type, typeobj, n) \
 		( (type *) _PyObject_NewVar((typeobj), (n)) )
 
-void PyObject_Del(void *);
 
 /* PyPy internal ----------------------------------- */
 int PyPyType_Register(PyTypeObject *);
-
-int PyObject_IsTrue(PyObject *);
-int PyObject_Not(PyObject *);
-int PyObject_HasAttr(PyObject *, PyObject *);
-int PyObject_SetAttr(PyObject *, PyObject *, PyObject *);
 
 #endif

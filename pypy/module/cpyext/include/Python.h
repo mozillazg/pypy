@@ -37,6 +37,7 @@ PyAPI_DATA(PyObject *) Py_None;
 #include "descrobject.h"
 #include "tupleobject.h"
 #include "dictobject.h"
-#include "macros.h"
+
+#include <pypy_decl.h>
 
 #endif

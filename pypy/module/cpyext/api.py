@@ -42,6 +42,7 @@ Py_TPFLAGS_HEAPTYPE
 """.split()
 for name in constant_names:
     setattr(CConfig_constants, name, rffi_platform.ConstantInteger(name))
+udir.join('pypy_decl.h').write("/* Will be filled later */")
 globals().update(rffi_platform.configure(CConfig_constants))
 
 _NOT_SPECIFIED = object()
@@ -321,6 +322,7 @@ def build_bridge(space, rename=True):
     pypy_rename_h = udir.join('pypy_rename.h')
     pypy_rename_h.write('\n'.join(pypy_rename))
 
+
     configure() # needs pypy_rename.h
 
     # Structure declaration code
@@ -337,9 +339,10 @@ def build_bridge(space, rename=True):
     struct PyPyAPI* pypyAPI = &_pypyAPI;
     """ % dict(members=structmembers)
 
-    # implement function callbacks
+    # implement function callbacks and generate function decls
     functions = []
-    for name, func in FUNCTIONS.iteritems():
+    pypy_decls = []
+    for name, func in sorted(FUNCTIONS.iteritems()):
         restype = db.gettype(func.restype).replace('@', '')
         args = []
         for i, argtype in enumerate(func.argtypes):
@@ -349,8 +352,12 @@ def build_bridge(space, rename=True):
         args = ', '.join(args)
         callargs = ', '.join('arg%d' % (i,) for i in range(len(func.argtypes)))
         header = "%s %s(%s)" % (restype, name, args)
+        pypy_decls.append(header + ";")
         body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
         functions.append('%s\n%s\n' % (header, body))
+
+    pypy_decl_h = udir.join('pypy_decl.h')
+    pypy_decl_h.write('\n'.join(pypy_decls))
 
     global_objects = []
     for name, (type, expr) in GLOBALS.iteritems():
