@@ -1,6 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, cpython_struct, PyObject, \
-        METH_STATIC, METH_CLASS, METH_COEXIST, general_check
+        METH_STATIC, METH_CLASS, METH_COEXIST, general_check, CANNOT_FAIL
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.methodobject import PyCFunction_NewEx, PyDescr_NewMethod
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
@@ -69,7 +69,7 @@ def convert_method_defs(space, dict_w, methods, pto, w_self=None):
             dict_w[methodname] = w_obj
 
 
-@cpython_api([PyObject], rffi.INT_real)
+@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyModule_Check(space, w_obj):
     w_type = space.gettypeobject(Module.typedef)
     return general_check(space, w_obj, w_type)

@@ -6,8 +6,9 @@ from pypy.module.cpyext.state import State
 @cpython_api([PyObject, rffi.CCHARP], lltype.Void)
 def PyErr_SetString(space, w_type, message_ptr):
     message = rffi.charp2str(message_ptr)
-    w_obj = space.call_function(w_type, space.wrap(message))
-    raise OperationError(w_type, w_obj)
+    state = space.fromcache(State)
+    state.exc_type = w_type
+    state.exc_value = space.call_function(w_type, space.wrap(message))
 
 @cpython_api([], PyObject)
 def PyErr_Occurred(space):

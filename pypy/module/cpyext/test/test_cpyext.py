@@ -17,7 +17,7 @@ from pypy.translator.goal import autopath
 def PyPy_Crash1(space):
     1/0
 
-@api.cpython_api([], lltype.Signed)
+@api.cpython_api([], lltype.Signed, error=-1)
 def PyPy_Crash2(space):
     1/0
 
@@ -366,7 +366,6 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
 
 
     def test_internal_exceptions(self):
-        skip("Useful to see how programming errors look like")
         import sys
         init = """
         if (Py_IsInitialized())
@@ -384,14 +383,41 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
                 return NULL;
             return PyFloat_FromDouble(a);
         }
+        static PyObject* foo_crash3(PyObject* self, PyObject *args)
+        {
+            int a = PyPy_Crash2();
+            if (a == -1)
+                PyErr_Clear();
+            return PyFloat_FromDouble(a);
+        }
+        static PyObject* foo_crash4(PyObject* self, PyObject *args)
+        {
+            int a = PyPy_Crash2();
+            return PyFloat_FromDouble(a);
+        }
+        static PyObject* foo_clear(PyObject* self, PyObject *args)
+        {
+            PyErr_Clear();
+            return NULL;
+        }
         static PyMethodDef methods[] = {
             { "crash1", foo_crash1, METH_NOARGS },
             { "crash2", foo_crash2, METH_NOARGS },
+            { "crash3", foo_crash3, METH_NOARGS },
+            { "crash4", foo_crash4, METH_NOARGS },
+            { "clear",  foo_clear, METH_NOARGS },
             { NULL }
         };
         """
         module = self.import_module(name='foo', init=init, body=body)
-        module.crash1()
-        module.crash2()
+        # uncaught interplevel exceptions are turned into SystemError
+        raises(SystemError, module.crash1)
+        raises(SystemError, module.crash2)
+        # caught exception
+        assert module.crash3() == -1
+        # An exception was set, but function returned a value
+        raises(SystemError, module.crash4)
+        # No exception set, but NULL returned
+        raises(SystemError, module.clear)
 
 

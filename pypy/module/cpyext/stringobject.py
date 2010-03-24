@@ -11,6 +11,6 @@ def PyString_FromString(space, char_p):
     s = rffi.charp2str(char_p)
     return space.wrap(s)
 
-@cpython_api([PyObject], Py_ssize_t)
+@cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyString_Size(space, w_obj):
     return space.int_w(space.len(w_obj))

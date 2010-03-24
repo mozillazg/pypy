@@ -4,11 +4,13 @@ from pypy.interpreter.gateway import ObjSpace, W_Root
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.gateway import interp2app, unwrap_spec
+from pypy.interpreter.error import OperationError
 from pypy.interpreter.function import BuiltinFunction, Method
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import PyObject, from_ref, \
-        make_ref, generic_cpy_call, from_ref_ex
+        make_ref, generic_cpy_call
 from pypy.module.cpyext.state import State
+from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
 
 

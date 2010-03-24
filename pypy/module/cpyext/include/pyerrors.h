@@ -10,7 +10,7 @@ extern "C" {
 PyAPI_DATA(PyObject *) PyExc_Exception;
 void PyErr_SetString(PyObject *, char *);
 PyObject * PyErr_Occurred(void);
-void PyErr_Clear(PyObject *, char *);
+void PyErr_Clear();
 
 #ifdef __cplusplus
 }
