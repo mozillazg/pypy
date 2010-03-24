@@ -45,16 +45,24 @@ class W_PyCMethodObject(W_PyCFunctionObject):
 @unwrap_spec(ObjSpace, W_Root, Arguments)
 def cfunction_descr_call(space, w_self, __args__):
     self = space.interp_w(W_PyCFunctionObject, w_self)
-    w_tuple = __args__.unpack_cpy()
-    ret = self.call(None, w_tuple)
+    args_w, kw_w = __args__.unpack()
+    w_args = space.newtuple(args_w)
+    if kw_w:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("keywords not yet supported"))
+    ret = self.call(None, space.newtuple(args_w))
     return ret
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
 def cmethod_descr_call(space, w_self, __args__):
     self = space.interp_w(W_PyCFunctionObject, w_self)
-    w_tuple = __args__.unpack_cpy(1)
-    w_self = __args__.arguments_w[0]
-    ret = self.call(w_self, w_tuple)
+    args_w, kw_w = __args__.unpack()
+    w_instance = args_w[0]
+    w_args = space.newtuple(args_w[1:])
+    if kw_w:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("keywords not yet supported"))
+    ret = self.call(w_instance, w_args)
     return ret
 
 def cmethod_descr_get(space, w_function, w_obj, w_cls=None):
