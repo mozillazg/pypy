@@ -5,6 +5,6 @@ from pypy.module.cpyext.api import cpython_api, PyObject
 def PyFloat_FromDouble(space, value):
     return space.wrap(value)
 
-@cpython_api([PyObject], lltype.Float)
+@cpython_api([PyObject], lltype.Float, error=-1)
 def PyFloat_AsDouble(space, w_obj):
     return space.float_w(space.float(w_obj))

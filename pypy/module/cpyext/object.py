@@ -26,11 +26,11 @@ def PyObject_dealloc(space, obj):
     obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
     generic_cpy_call(space, pto.c_tp_free, obj_voidp)
 
-@cpython_api([PyObject], rffi.INT_real)
+@cpython_api([PyObject], rffi.INT_real, error=-1)
 def PyObject_IsTrue(space, w_obj):
     return space.is_true(w_obj)
 
-@cpython_api([PyObject], rffi.INT_real)
+@cpython_api([PyObject], rffi.INT_real, error=-1)
 def PyObject_Not(space, w_obj):
     return not space.is_true(w_obj)
 

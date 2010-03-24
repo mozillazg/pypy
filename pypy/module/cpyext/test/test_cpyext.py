@@ -54,6 +54,18 @@ def compile_module(modname, **kwds):
         standalone=False)
     return str(soname)
 
+class BaseApiTest:
+    def setup_class(cls):
+        class CAPI:
+            def __getattr__(self, name):
+                return getattr(cls.space, name)
+        cls.api = CAPI()
+        CAPI.__dict__.update(api.INTERPLEVEL_API)
+
+    def teardown_method(self, func):
+        state = self.space.fromcache(State)
+        assert state.exc_value is None
+
 class AppTestCpythonExtensionBase:
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['cpyext'])
