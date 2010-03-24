@@ -1,6 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref, \
-        generic_cpy_call
+        generic_cpy_call, CANNOT_FAIL
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject, W_PyCObject
@@ -34,12 +34,12 @@ def PyObject_IsTrue(space, w_obj):
 def PyObject_Not(space, w_obj):
     return not space.is_true(w_obj)
 
-@cpython_api([PyObject, PyObject], rffi.INT_real)
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyObject_HasAttr(space, w_obj, w_name):
     w_res = operation.hasattr(space, w_obj, w_name)
     return space.is_true(w_res)
 
-@cpython_api([PyObject, PyObject, PyObject], rffi.INT_real)
+@cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)
 def PyObject_SetAttr(space, w_obj, w_name, w_value):
     operation.setattr(space, w_obj, w_name, w_value)
     return 0

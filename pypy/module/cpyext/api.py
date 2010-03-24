@@ -44,6 +44,7 @@ for name in constant_names:
 globals().update(rffi_platform.configure(CConfig_constants))
 
 _NOT_SPECIFIED = object()
+CANNOT_FAIL = object()
 
 class ApiFunction:
     def __init__(self, argtypes, restype, callable, borrowed, error):
@@ -64,12 +65,18 @@ class ApiFunction:
         assert len(self.argnames) == len(self.argtypes)
 
 def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED):
-    if restype is PyObject and error is _NOT_SPECIFIED:
-        error = None
+    if error is _NOT_SPECIFIED:
+        if restype is PyObject:
+            error = lltype.nullptr(PyObject.TO)
+        elif restype is lltype.Void:
+            error = CANNOT_FAIL
 
     def decorate(func):
         api_function = ApiFunction(argtypes, restype, func, borrowed, error)
 
+        if error is _NOT_SPECIFIED:
+            raise ValueError("function %s has no return value for exceptions"
+                             % func)
         def unwrapper(space, *args):
             "NOT_RPYTHON: XXX unsure"
             newargs = []
@@ -171,7 +178,6 @@ def get_padded_type(T, size):
 def make_ref(space, w_obj, borrowed=False):
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
-        #raise NullPointerException("Trying to pass a NULL reference")
     assert isinstance(w_obj, W_Root)
     state = space.fromcache(State)
     py_obj = state.py_objects_w2r.get(w_obj)
@@ -209,9 +215,9 @@ def make_ref(space, w_obj, borrowed=False):
     return py_obj
 
 def from_ref(space, ref):
-    state = space.fromcache(State)
     if not ref:
-        raise NullPointerException("Null pointer dereference!")
+        return None
+    state = space.fromcache(State)
     ptr = ctypes.addressof(ref._obj._storage)
     try:
         obj = state.py_objects_r2w[ptr]
@@ -251,24 +257,25 @@ def make_wrapper(space, callable):
             retval = callable(space, *boxed_args)
             print >>sys.stderr, " DONE"
         except OperationError, e:
+            failed = True
             e.normalize_exception(space)
             state.exc_type = e.w_type
             state.exc_value = e.get_w_value(space)
         except BaseException, e:
+            failed = True
             state.exc_type = space.w_SystemError
             state.exc_value = space.wrap(str(e))
             import traceback
             traceback.print_exc()
+        else:
+            failed = False
 
-        if state.exc_value is not None:
-            restype = callable.api_func.restype
-            if restype is lltype.Void:
-                return
-            if restype is PyObject:
-                return lltype.nullptr(PyObject.TO)
-            if restype in (Py_ssize_t, rffi.INT_real):
-                return rffi.cast(restype, -1)
-            assert False, "Unknown return type"
+        if failed:
+            error_value = callable.api_func.error_value
+            if error_value is CANNOT_FAIL:
+                raise SystemError("The function %r was not supposed to fail"
+                                  % (callable,))
+            return error_value
 
         if callable.api_func.restype is PyObject:
             retval = make_ref(space, retval, borrowed=callable.api_func.borrowed)
@@ -413,6 +420,8 @@ def load_extension_module(space, path, name):
 
 def generic_cpy_call(space, func, *args, **kwargs):
     from pypy.module.cpyext.macros import Py_DECREF
+    from pypy.module.cpyext.pyerrors import PyErr_Occurred
+
     decref_args = kwargs.pop("decref_args", True)
     assert not kwargs
     boxed_args = []
@@ -424,29 +433,28 @@ def generic_cpy_call(space, func, *args, **kwargs):
     result = func(*boxed_args)
     try:
         FT = lltype.typeOf(func).TO
-        if FT.RESULT is not lltype.Void:
-            ret = from_ref_ex(space, result)
-            Py_DECREF(space, ret)
+        if FT.RESULT is PyObject:
+            ret = from_ref(space, result)
+
+            # Check for exception consistency
+            has_error = PyErr_Occurred(space) is not None
+            has_result = ret is not None
+            if has_error and has_result:
+                raise OperationError(space.w_SystemError, space.wrap(
+                    "An exception was set, but function returned a value"))
+            elif not has_error and not has_result:
+                raise OperationError(space.w_SystemError, space.wrap(
+                    "Function returned a NULL result without setting an exception"))
+
+            if has_error:
+                state = space.fromcache(State)
+                state.check_and_raise_exception()
+
+            Py_DECREF(space, ret) # XXX WHY??
             return ret
     finally:
         if decref_args:
             for arg in args: # XXX ur needed
                 if arg is not None and isinstance(arg, W_Root):
                     Py_DECREF(space, arg)
-
-def from_ref_ex(space, result):
-    try:
-        ret = from_ref(space, result)
-    except NullPointerException:
-        state = space.fromcache(State)
-        state.check_and_raise_exception()
-        assert False, "NULL returned but no exception set"
-    except InvalidPointerException:
-        if not we_are_translated():
-            import sys
-            print >>sys.stderr, "Calling a C function return an invalid PyObject" \
-                    " pointer."
-        raise
-    return ret
-
 

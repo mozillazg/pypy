@@ -8,7 +8,7 @@ from pypy.objspace.std.tupleobject import W_TupleObject
 def PyTuple_New(space, size):
     return space.newtuple([space.w_None] * size)
 
-@cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real)
+@cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
 def PyTuple_SetItem(space, w_t, pos, w_obj):
     assert isinstance(w_t, W_TupleObject)
     w_t.wrappeditems[pos] = w_obj

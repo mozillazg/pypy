@@ -16,7 +16,7 @@ from pypy.module.cpyext.api import make_wrapper
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import PyMethodDef, convert_method_defs
 from pypy.module.cpyext.state import State
-from pypy.module.cpyext.methodobject import from_ref_ex, generic_cpy_call
+from pypy.module.cpyext.methodobject import generic_cpy_call
 
 
 PyTypeObject = lltype.ForwardReference()
@@ -238,7 +238,7 @@ def allocate_type_obj(space, w_type):
 def PyType_Ready(space, pto):
     "Implemented in typeobject.c"
 
-@cpython_api([PyTypeObjectPtr], rffi.INT_real)
+@cpython_api([PyTypeObjectPtr], rffi.INT_real, error=-1)
 def PyPyType_Register(space, pto):
     state = space.fromcache(State)
     ptr = ctypes.addressof(pto._obj._storage)
