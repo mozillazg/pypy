@@ -303,7 +303,6 @@ def build_bridge(space, rename=True):
     structindex = {}
 
     prologue = """\
-    #define const            /* cheat */
     #include <pypy_rename.h>
     #include <Python.h>
     """
