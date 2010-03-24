@@ -4,7 +4,7 @@ import struct, inspect
 from pypy.translator.c import gc
 from pypy.annotation import model as annmodel
 from pypy.annotation import policy as annpolicy
-from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi, llgroup
 from pypy.rpython.memory.gctransform import framework
 from pypy.rpython.lltypesystem.lloperation import llop, void
 from pypy.rpython.memory.gc.marksweep import X_CLONE, X_POOL, X_POOL_PTR
@@ -753,7 +753,7 @@ class GenericMovingGCTests(GenericGCTests):
             graph = graphof(translator, g)
             for op in graph.startblock.operations:
                 if op.opname == 'do_malloc_fixedsize_clear':
-                    op.args = [Constant(type_id, rffi.USHORT),
+                    op.args = [Constant(type_id, llgroup.HALFWORD),
                                Constant(llmemory.sizeof(P), lltype.Signed),
                                Constant(True, lltype.Bool),  # can_collect
                                Constant(False, lltype.Bool), # has_finalizer
@@ -790,7 +790,7 @@ class GenericMovingGCTests(GenericGCTests):
             graph = graphof(translator, g)
             for op in graph.startblock.operations:
                 if op.opname == 'do_malloc_fixedsize_clear':
-                    op.args = [Constant(type_id, rffi.USHORT),
+                    op.args = [Constant(type_id, llgroup.HALFWORD),
                                Constant(llmemory.sizeof(P), lltype.Signed),
                                Constant(True, lltype.Bool),  # can_collect
                                Constant(False, lltype.Bool), # has_finalizer
