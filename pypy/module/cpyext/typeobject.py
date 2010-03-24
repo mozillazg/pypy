@@ -215,7 +215,6 @@ class W_PyCObject(Wrappable):
         w_type = space.type(self)
         assert isinstance(w_type, W_PyCTypeObject)
         pto = w_type.pto
-        print "Called W_PyCObject.__del__"
         generic_cpy_call(space, pto.c_tp_dealloc, self)
 
 
@@ -234,7 +233,6 @@ def subtype_dealloc(space, obj):
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def type_dealloc(space, obj):
-    print "type_dealloc of", obj
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     type_pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
     # type_dealloc code follows:
@@ -259,9 +257,8 @@ def allocate_type_obj(space, w_type):
         callable = PyObject_dealloc
         pto.c_tp_dealloc = llhelper(callable.api_func.functype,
                 make_wrapper(space, callable))
-    print "Chose dealloc strategy %r for %r" % (callable.func, w_type)
-    callable = PyObject_Del
     pto.c_tp_flags = Py_TPFLAGS_HEAPTYPE
+    callable = PyObject_Del
     pto.c_tp_free = llhelper(callable.api_func.functype,
             make_wrapper(space, callable))
     pto.c_tp_name = rffi.str2charp(w_type.getname(space, "?"))
