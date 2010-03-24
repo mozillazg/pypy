@@ -12,7 +12,7 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct
 from pypy.module.cpyext.api import PyObject, PyVarObjectFields, Py_ssize_t
 from pypy.module.cpyext.api import Py_TPFLAGS_READYING, Py_TPFLAGS_READY
-from pypy.module.cpyext.api import make_wrapper
+from pypy.module.cpyext.api import make_wrapper, Py_TPFLAGS_HEAPTYPE
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import PyMethodDef, convert_method_defs
 from pypy.module.cpyext.state import State
@@ -215,22 +215,57 @@ class W_PyCObject(Wrappable):
         w_type = space.type(self)
         assert isinstance(w_type, W_PyCTypeObject)
         pto = w_type.pto
+        print "Called W_PyCObject.__del__"
         generic_cpy_call(space, pto.c_tp_dealloc, self)
+
+
+@cpython_api([PyObject], lltype.Void, external=False)
+def subtype_dealloc(space, obj):
+    pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    assert pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE
+    base = pto
+    #basedealloc = pto.c_tp_dealloc
+    # XXX lookup basedealloc which is not subtype_dealloc
+    # XXX call tp_del if necessary
+    # XXX call basedealloc instead of a fixed type_dealloc
+    type_dealloc(space, obj)
+    Py_DECREF(space, pto)
+
+
+@cpython_api([PyObject], lltype.Void, external=False)
+def type_dealloc(space, obj):
+    print "type_dealloc of", obj
+    obj_pto = rffi.cast(PyTypeObjectPtr, obj)
+    type_pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    # type_dealloc code follows:
+    # XXX XDECREF tp_base, tp_dict, tp_bases, tp_mro, tp_cache,
+    #             tp_subclasses
+    # free tp_doc
+    lltype.free(obj_pto.c_tp_name, flavor="raw")
+    generic_cpy_call(space, type_pto.c_tp_free, obj)
 
 
 
 def allocate_type_obj(space, w_type):
+    """ Allocates a pto from a w_type which must be a PyPy type. """
     from pypy.module.cpyext.object import PyObject_dealloc, PyObject_Del
+    assert not isinstance(w_type, W_PyCTypeObject)
     pto = lltype.malloc(PyTypeObject, None, flavor="raw")
-    callable = PyObject_dealloc
-    pto.c_tp_dealloc = llhelper(callable.api_func.functype,
-            make_wrapper(space, callable))
+    if space.is_w(w_type, space.w_type):
+        callable = subtype_dealloc
+        pto.c_tp_dealloc = llhelper(callable.api_func.functype,
+                make_wrapper(space, callable))
+    else:
+        callable = PyObject_dealloc
+        pto.c_tp_dealloc = llhelper(callable.api_func.functype,
+                make_wrapper(space, callable))
+    print "Chose dealloc strategy %r for %r" % (callable.func, w_type)
     callable = PyObject_Del
+    pto.c_tp_flags = Py_TPFLAGS_HEAPTYPE
     pto.c_tp_free = llhelper(callable.api_func.functype,
             make_wrapper(space, callable))
-    # XXX free c_tp_name again!
     pto.c_tp_name = rffi.str2charp(w_type.getname(space, "?"))
-    pto.c_tp_basicsize = -1 # hopefully this makes malloc bail
+    pto.c_tp_basicsize = -1 # hopefully this makes malloc bail out
     #  XXX fill slots in pto
     return pto
 

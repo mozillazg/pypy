@@ -1,7 +1,6 @@
  - Generate header files programmatically.
  - Implement C API.
  - Complete the PyTypeObject initialization code.
- - Free pto.c_tp_name correctly
  - properly support "borrowed" references: the PyObject must be stored
    somewhere
  - lltype.free in PyObject_Del() sometimes raise an exception (but all
