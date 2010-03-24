@@ -32,4 +32,4 @@ def PyObject_IsTrue(space, w_obj):
 
 @cpython_api([PyObject], rffi.INT_real)
 def PyObject_Not(space, w_obj):
-    return space.is_true(space.not_(w_obj))
+    return not space.is_true(w_obj)
