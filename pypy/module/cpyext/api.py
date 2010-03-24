@@ -94,15 +94,16 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
                         arg = from_ref(space, arg)
                 newargs.append(arg)
             try:
-                return func(space, *newargs)
-            except OperationError, e:
-                if not hasattr(api_function, "error_value"):
-                    raise
-                state = space.fromcache(State)
-                e.normalize_exception(space)
-                state.exc_type = e.w_type
-                state.exc_value = e.get_w_value(space)
-                return api_function.error_value
+                try:
+                    return func(space, *newargs)
+                except OperationError, e:
+                    if not hasattr(api_function, "error_value"):
+                        raise
+                    state = space.fromcache(State)
+                    e.normalize_exception(space)
+                    state.exc_type = e.w_type
+                    state.exc_value = e.get_w_value(space)
+                    return api_function.error_value
             finally:
                 from pypy.module.cpyext.macros import Py_DECREF
                 for arg in to_decref:
