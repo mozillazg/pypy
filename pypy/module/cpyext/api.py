@@ -68,6 +68,13 @@ class ApiFunction:
         self.argnames = argnames[1:]
         assert len(self.argnames) == len(self.argtypes)
 
+    def get_llhelper(self, space):
+        llh = getattr(self, '_llhelper', None)
+        if llh is None:
+            llh = llhelper(self.functype, make_wrapper(space, self.callable))
+            self._llhelper = llh
+        return llh
+
 def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, external=True):
     if error is _NOT_SPECIFIED:
         if restype is PyObject:
@@ -143,7 +150,7 @@ GLOBALS = {
     'Py_False': ('PyObject*', 'space.w_False'),
     'PyExc_Exception': ('PyObject*', 'space.w_Exception'),
     'PyExc_TypeError': ('PyObject*', 'space.w_TypeError'),
-    'PyType_Type': ('PyTypeObject*', 'space.w_type'),
+    'PyType_Type#': ('PyTypeObject*', 'space.w_type'),
     'PyBaseObject_Type#': ('PyTypeObject*', 'space.w_object'),
     }
 
@@ -400,6 +407,10 @@ def build_bridge(space, rename=True):
         ptr = ctypes.c_void_p.in_dll(bridge, name)
         ptr.value = ctypes.cast(ll2ctypes.lltype2ctypes(make_ref(space, w_obj)),
             ctypes.c_void_p).value
+        # hack, init base of the type type
+        if name == "PyType_Type":
+            pto = rffi.cast(PyTypeObjectPtr, ptr)
+            pto.c_tp_base = make_ref(space, w_object)
 
     # implement structure initialization code
     for name, func in FUNCTIONS.iteritems():

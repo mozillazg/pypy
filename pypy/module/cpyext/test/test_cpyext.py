@@ -130,7 +130,7 @@ class AppTestCpythonExtensionBase:
         self.w_import_module = self.space.wrap(self.import_module)
         self.w_import_extension = self.space.wrap(self.import_extension)
         self.w_check_refcnts = self.space.wrap(self.check_refcnts)
-        #self.check_refcnts("Object has refcnt != 1: %r -- Not executing test!")
+        self.check_refcnts("Object has refcnt != 1: %r -- Not executing test!")
         #self.space.fromcache(State).print_refcounts()
 
     def teardown_method(self, func):
@@ -143,7 +143,7 @@ class AppTestCpythonExtensionBase:
         except OperationError:
             pass
         self.space.fromcache(State).print_refcounts()
-        #self.check_refcnts("Test leaks object: %r")
+        self.check_refcnts("Test leaks object: %r")
 
     def check_refcnts(self, message):
         # check for sane refcnts
