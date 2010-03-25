@@ -53,6 +53,8 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
             ("getstring", "METH_NOARGS",
              """
                  PyObject* s = PyString_FromStringAndSize(NULL, 3);
+                 if (s == NULL)
+                    return NULL;
                  char* c = PyString_AsString(s);
                  //Py_ssize_t len = PyString_Size(s);
                  c[0] = 'a';

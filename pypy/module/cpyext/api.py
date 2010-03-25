@@ -200,13 +200,6 @@ class NullPointerException(Exception):
 class InvalidPointerException(Exception):
     pass
 
-def force_string(space, ref):
-    ref = rffi.cast(PyStringObjectPtr, ref)
-    s = rffi.charpsize2str(ref.c_buffer, ref.c_size)
-    w_str = space.wrap(s)
-    s_ptr = make_ref(space, w_str)
-    return w_str
-
 def get_padded_type(T, size):
     fields = T._flds.copy()
     hints = T._hints.copy()
@@ -265,6 +258,19 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
         py_obj.c_obj_refcnt += 1
     # XXX borrowed references?
     return py_obj
+
+def force_string(space, ref):
+    state = space.fromcache(State)
+    ref = rffi.cast(PyStringObjectPtr, ref)
+    s = rffi.charpsize2str(ref.c_buffer, ref.c_size)
+    ref = rffi.cast(PyObject, ref)
+    w_str = space.wrap(s)
+    state.py_objects_w2r[w_str] = ref
+    ctypes_obj = ll2ctypes.lltype2ctypes(ref)
+    ptr = ctypes.cast(ctypes_obj, ctypes.c_void_p).value
+    state.py_objects_r2w[ptr] = w_str
+    return w_str
+
 
 def from_ref(space, ref):
     if not ref:
