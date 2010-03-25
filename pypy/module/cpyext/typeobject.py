@@ -241,7 +241,8 @@ def subtype_dealloc(space, obj):
 def type_dealloc(space, obj):
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     type_pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
-    Py_XDECREF(space, obj_pto.c_tp_base)
+    base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
+    Py_XDECREF(space, base_pyo)
     # type_dealloc code follows:
     # XXX XDECREF tp_dict, tp_bases, tp_mro, tp_cache,
     #             tp_subclasses
