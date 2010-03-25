@@ -17,7 +17,6 @@ def _PyObject_New(space, w_type):
 
 @cpython_api([rffi.VOIDP_real], lltype.Void)
 def PyObject_Del(space, obj):
-    # XXX cast object according to the basesize in pto
     lltype.free(obj, flavor='raw')
 
 @cpython_api([PyObject], lltype.Void)
