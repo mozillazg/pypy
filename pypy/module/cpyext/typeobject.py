@@ -16,7 +16,7 @@ from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import PyMethodDef, convert_method_defs
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.methodobject import generic_cpy_call
-from pypy.module.cpyext.macros import Py_DECREF
+from pypy.module.cpyext.macros import Py_DECREF, Py_XDECREF
 
 
 PyTypeObject = lltype.ForwardReference()
@@ -225,7 +225,8 @@ def subtype_dealloc(space, obj):
     assert pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE
     base = pto
     this_func_ptr = subtype_dealloc.api_func.get_llhelper(space)
-    ref_of_object_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.w_object))
+    ref_of_object_type = rffi.cast(PyTypeObjectPtr,
+            make_ref(space, space.w_object, steal=True))
     while base.c_tp_dealloc == this_func_ptr:
         base = base.c_tp_base
         assert base
@@ -240,13 +241,16 @@ def subtype_dealloc(space, obj):
 def type_dealloc(space, obj):
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     type_pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    Py_XDECREF(space, obj_pto.c_tp_base)
     # type_dealloc code follows:
-    # XXX XDECREF tp_base, tp_dict, tp_bases, tp_mro, tp_cache,
+    # XXX XDECREF tp_dict, tp_bases, tp_mro, tp_cache,
     #             tp_subclasses
     # free tp_doc
     lltype.free(obj_pto.c_tp_name, flavor="raw")
     obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
     generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
+    pto = rffi.cast(PyObject, type_pto)
+    Py_DECREF(space, type_pto)
 
 def allocate_type_obj(space, w_type):
     """ Allocates a pto from a w_type which must be a PyPy type. """

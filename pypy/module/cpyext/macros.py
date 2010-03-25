@@ -21,6 +21,10 @@ def Py_DECREF(space, obj):
 def Py_INCREF(space, obj):
     obj.c_obj_refcnt += 1
 
+@cpython_api([PyObject], lltype.Void)
+def Py_XDECREF(space, obj):
+    if obj:
+        Py_DECREF(space, obj)
 
 def _Py_Dealloc(space, obj):
     from pypy.module.cpyext.typeobject import PyTypeObjectPtr

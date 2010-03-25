@@ -69,6 +69,7 @@ class BaseApiTest:
 class AppTestCpythonExtensionBase:
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['cpyext'])
+        cls.freeze_refcnts()
 
     def import_module(self, name, init=None, body=''):
         if init is not None:
@@ -129,9 +130,7 @@ class AppTestCpythonExtensionBase:
     def setup_method(self, func):
         self.w_import_module = self.space.wrap(self.import_module)
         self.w_import_extension = self.space.wrap(self.import_extension)
-        self.w_check_refcnts = self.space.wrap(self.check_refcnts)
-        self.check_refcnts("Object has refcnt != 1: %r -- Not executing test!")
-        #self.space.fromcache(State).print_refcounts()
+        #self.check_and_print_leaks("Object %r leaked some time ago (refcount %i) -- Not executing test!")
 
     def teardown_method(self, func):
         try:
@@ -142,16 +141,31 @@ class AppTestCpythonExtensionBase:
             Py_DECREF(self.space, w_mod)
         except OperationError:
             pass
-        self.space.fromcache(State).print_refcounts()
-        self.check_refcnts("Test leaks object: %r")
+        if self.check_and_print_leaks():
+            assert False, "Test leaks object(s)."
 
-    def check_refcnts(self, message):
+    @classmethod
+    def freeze_refcnts(cls):
+        state = cls.space.fromcache(State)
+        cls.frozen_refcounts = {}
+        for w_obj, obj in state.py_objects_w2r.iteritems():
+            cls.frozen_refcounts[w_obj] = obj.c_obj_refcnt
+
+    def check_and_print_leaks(self):
         # check for sane refcnts
-        for w_obj in (self.space.w_True, self.space.w_False,
-                self.space.w_None):
-            state = self.space.fromcache(State)
-            obj = state.py_objects_w2r.get(w_obj)
-            assert obj.c_obj_refcnt == 1, message % (w_obj, )
+        leaking = False
+        state = self.space.fromcache(State)
+        global_objects_w = set()
+        for w_obj, obj in state.py_objects_w2r.iteritems():
+            base_refcnt = self.frozen_refcounts.get(w_obj)
+            delta = obj.c_obj_refcnt
+            if base_refcnt is not None:
+                delta -= base_refcnt
+            if delta != 0:
+                leaking = True
+                print >>sys.stderr, "Leaking %r: %i references" % (w_obj, delta)
+        return leaking
+
 
 class AppTestCpythonExtension(AppTestCpythonExtensionBase):
     def test_createmodule(self):
@@ -324,7 +338,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
             refcnt_after = Py_REFCNT(true);
             Py_DECREF(true);
             Py_DECREF(true);
-            printf("REFCNT %i %i\\n", refcnt, refcnt_after);
+            fprintf(stderr, "REFCNT %i %i\\n", refcnt, refcnt_after);
             return PyBool_FromLong(refcnt_after == refcnt+2 && refcnt < 3);
         }
         static PyObject* foo_bar(PyObject* self, PyObject *args)
@@ -339,8 +353,9 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
             if (PyTuple_SetItem(tup, 0, true) < 0)
                 return NULL;
             refcnt_after = Py_REFCNT(true);
-            printf("REFCNT2 %i %i\\n", refcnt, refcnt_after);
-            return PyBool_FromLong(refcnt_after == refcnt && refcnt < 3);
+            Py_DECREF(tup);
+            fprintf(stderr, "REFCNT2 %i %i\\n", refcnt, refcnt_after);
+            return PyBool_FromLong(refcnt_after == refcnt);
         }
 
         static PyMethodDef methods[] = {

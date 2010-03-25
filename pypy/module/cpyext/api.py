@@ -208,7 +208,7 @@ def get_padded_type(T, size):
     hints["padding"] = hints["padding"] + tuple(pad_fields)
     return lltype.Struct(hints["c_name"], hints=hints, *new_fields)
 
-def make_ref(space, w_obj, borrowed=False):
+def make_ref(space, w_obj, borrowed=False, steal=False):
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
@@ -242,7 +242,7 @@ def make_ref(space, w_obj, borrowed=False):
         py_obj = rffi.cast(PyObject, py_obj)
         state.py_objects_w2r[w_obj] = py_obj
         state.py_objects_r2w[ptr] = w_obj
-    else:
+    elif not steal:
         py_obj.c_obj_refcnt += 1
     # XXX borrowed references?
     return py_obj
