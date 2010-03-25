@@ -11,13 +11,13 @@ from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyObject, PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, \
-    Py_TPFLAGS_READY, make_wrapper, Py_TPFLAGS_HEAPTYPE, make_ref
+    Py_TPFLAGS_READY, make_wrapper, Py_TPFLAGS_HEAPTYPE, make_ref, \
+    PyStringObject
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import PyMethodDef, convert_method_defs
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.methodobject import generic_cpy_call
 from pypy.module.cpyext.macros import Py_DECREF, Py_XDECREF
-
 
 PyTypeObject = lltype.ForwardReference()
 PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
@@ -238,12 +238,22 @@ def subtype_dealloc(space, obj):
 
 
 @cpython_api([PyObject], lltype.Void, external=False)
+def string_dealloc(space, obj):
+    obj = rffi.cast(PyStringObject, obj)
+    pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    if obj.c_buffer:
+        lltype.free(obj.c_buffer, flavor="raw")
+    obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
+    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
+    pto = rffi.cast(PyObject, pto)
+    Py_DECREF(space, pto)
+
+@cpython_api([PyObject], lltype.Void, external=False)
 def type_dealloc(space, obj):
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     type_pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_XDECREF(space, base_pyo)
-    # type_dealloc code follows:
     # XXX XDECREF tp_dict, tp_bases, tp_mro, tp_cache,
     #             tp_subclasses
     # free tp_doc
@@ -251,7 +261,7 @@ def type_dealloc(space, obj):
     obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
     generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
     pto = rffi.cast(PyObject, type_pto)
-    Py_DECREF(space, type_pto)
+    Py_DECREF(space, pto)
 
 def allocate_type_obj(space, w_type):
     """ Allocates a pto from a w_type which must be a PyPy type. """
@@ -263,6 +273,8 @@ def allocate_type_obj(space, w_type):
         pto.c_tp_dealloc = PyObject_dealloc.api_func.get_llhelper(space)
     elif space.is_w(w_type, space.w_type):
         pto.c_tp_dealloc = type_dealloc.api_func.get_llhelper(space)
+    elif space.is_w(w_type, space.w_str):
+        pto.c_tp_dealloc = string_dealloc.api_func.get_llhelper(space)
     else:
         pto.c_tp_dealloc = subtype_dealloc.api_func.get_llhelper(space)
     pto.c_tp_flags = Py_TPFLAGS_HEAPTYPE

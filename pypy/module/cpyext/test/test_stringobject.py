@@ -54,6 +54,10 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
                  PyObject* s = PyString_FromStringAndSize(NULL, 3);
                  if (s == NULL)
                     return NULL;
+                 PyObject* t = PyString_FromStringAndSize(NULL, 3);
+                 if (t == NULL)
+                    return NULL;
+                 Py_DECREF(t);
                  char* c = PyString_AsString(s);
                  //Py_ssize_t len = PyString_Size(s);
                  c[0] = 'a';

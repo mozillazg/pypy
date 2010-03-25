@@ -2,7 +2,8 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, PyVarObjectFields, \
     PyStringObject, Py_ssize_t, cpython_struct, make_ref, from_ref
 
-@cpython_api([rffi.CCHARP, Py_ssize_t], PyStringObject, error=None)
+
+@cpython_api([rffi.CCHARP, Py_ssize_t], PyStringObject, error=lltype.nullptr(PyStringObject.TO))
 def PyString_FromStringAndSize(space, char_p, length):
     if char_p:
         s = rffi.charpsize2str(char_p, length)
