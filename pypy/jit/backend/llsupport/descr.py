@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import lltype, rffi, llmemory
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
 from pypy.jit.metainterp.history import BasicFailDescr, LoopToken, BoxFloat
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import history, support
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 
 # The point of the class organization in this file is to make instances
@@ -13,8 +13,9 @@ from pypy.jit.metainterp.resoperation import ResOperation, rop
 
 
 class GcCache(object):
-    def __init__(self, translate_support_code):
+    def __init__(self, translate_support_code, rtyper=None):
         self.translate_support_code = translate_support_code
+        self.rtyper = rtyper
         self._cache_size = {}
         self._cache_field = {}
         self._cache_array = {}
@@ -217,7 +218,7 @@ class BaseCallDescr(AbstractDescr):
     def get_call_stub(self):
         return self.call_stub
 
-    def create_call_stub(self, FUNC):
+    def create_call_stub(self, rtyper, FUNC):
         def process(no, c):
             if c == 'i':
                 return 'lltype.cast_primitive(FUNC.ARGS[%d], args[%d].getint())' % (no - 1, no)
@@ -242,14 +243,11 @@ class BaseCallDescr(AbstractDescr):
         source = py.code.Source("""
         def call_stub(args):
             ll_callable = rffi.cast(lltype.Ptr(FUNC), args[0].getint())
-            res = ll_callable(%(args)s)
+            res = support.maybe_on_top_of_llinterp(rtyper, ll_callable)(%(args)s)
             return %(result)s
         """ % locals())
         d = locals().copy()
-        d['lltype'] = lltype
-        d['rffi'] = rffi
-        d['history'] = history
-        d['llmemory'] = llmemory
+        d.update(globals())
         exec source.compile() in d
         self.call_stub = d['call_stub']
 
@@ -297,7 +295,7 @@ def get_call_descr(gccache, ARGS, RESULT, extrainfo=None):
         return cache[key]
     except KeyError:
         calldescr = cls(arg_classes, extrainfo)
-        calldescr.create_call_stub(lltype.FuncType(ARGS, RESULT))
+        calldescr.create_call_stub(gccache.rtyper, lltype.FuncType(ARGS, RESULT))
         cache[key] = calldescr
         return calldescr
 

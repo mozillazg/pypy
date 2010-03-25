@@ -475,7 +475,14 @@ class AbstractLLCPU(AbstractCPU):
             assert (list(calldescr.arg_classes) ==
                     [arg.type for arg in args[1:]])
         callstub = calldescr.get_call_stub()
-        return callstub(args)
+        try:
+            return callstub(args)
+        except Exception, e:
+            if we_are_translated():
+                xxx
+            else:
+                import pdb
+                pdb.set_trace()
 
     def do_cast_ptr_to_int(self, ptrbox):
         return BoxInt(self.cast_gcref_to_int(ptrbox.getref_base()))
