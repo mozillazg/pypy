@@ -532,6 +532,7 @@ class PaddingDrop(object):
                 # succeeded with 'i' pads.  Drop all pads beyond that.
                 drops += consecutive_pads[i:]
             consecutive_pads = []
+        drops += consecutive_pads   # drop the final pads too
         self.cache = drops
 
 class _PaddingDropFieldLookup(CConfigEntry):
