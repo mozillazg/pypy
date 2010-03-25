@@ -1,4 +1,3 @@
-import ctypes
 import sys
 
 from pypy.rpython.lltypesystem import rffi, lltype
@@ -13,7 +12,7 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyObject, PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, make_ref, \
-    PyStringObject
+    PyStringObject, ADDR
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import PyMethodDef, convert_method_defs
 from pypy.module.cpyext.state import State
@@ -298,7 +297,7 @@ def PyType_Ready(space, pto):
 @cpython_api([PyTypeObjectPtr], rffi.INT_real, error=-1)
 def PyPyType_Register(space, pto):
     state = space.fromcache(State)
-    ptr = ctypes.addressof(pto._obj._storage)
+    ptr = rffi.cast(ADDR, pto)
     if ptr not in state.py_objects_r2w:
         w_obj = space.allocate_instance(W_PyCTypeObject,
                 space.gettypeobject(W_PyCTypeObject.typedef))
