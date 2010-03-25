@@ -7,6 +7,11 @@
 extern "C" {
 #endif
 
+typedef struct {
+    PyObject_VAR_HEAD
+    char* buffer;
+    Py_ssize_t size;
+} PyStringObject;
 
 #ifdef __cplusplus
 }
