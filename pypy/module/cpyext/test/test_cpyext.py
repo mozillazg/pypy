@@ -11,6 +11,7 @@ from pypy.module.cpyext import api
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.macros import Py_DECREF
 from pypy.translator.goal import autopath
+from pypy.lib.identity_dict import identity_dict
 
 @api.cpython_api([], api.PyObject)
 def PyPy_Crash1(space):
@@ -56,7 +57,6 @@ def compile_module(modname, **kwds):
 class AppTestCpythonExtensionBase:
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['cpyext'])
-        cls.freeze_refcnts()
 
     def import_module(self, name, init=None, body=''):
         if init is not None:
@@ -117,6 +117,7 @@ class AppTestCpythonExtensionBase:
     def setup_method(self, func):
         self.w_import_module = self.space.wrap(self.import_module)
         self.w_import_extension = self.space.wrap(self.import_extension)
+        self.freeze_refcnts()
         #self.check_and_print_leaks("Object %r leaked some time ago (refcount %i) -- Not executing test!")
 
     def teardown_method(self, func):
@@ -128,29 +129,35 @@ class AppTestCpythonExtensionBase:
             Py_DECREF(self.space, w_mod)
         except OperationError:
             pass
+        state = self.space.fromcache(State)
         if self.check_and_print_leaks():
-            assert False, "Test leaks object(s)."
+            assert False, "Test leaks or loses object(s)."
 
-    @classmethod
-    def freeze_refcnts(cls):
-        state = cls.space.fromcache(State)
-        cls.frozen_refcounts = {}
+    def freeze_refcnts(self):
+        state = self.space.fromcache(State)
+        self.frozen_refcounts = {}
         for w_obj, obj in state.py_objects_w2r.iteritems():
-            cls.frozen_refcounts[w_obj] = obj.c_obj_refcnt
+            self.frozen_refcounts[w_obj] = obj.c_obj_refcnt
+        state.print_refcounts()
 
     def check_and_print_leaks(self):
         # check for sane refcnts
         leaking = False
         state = self.space.fromcache(State)
-        global_objects_w = set()
+        lost_objects_w = identity_dict()
+        lost_objects_w.update((key, None) for key in self.frozen_refcounts.keys())
         for w_obj, obj in state.py_objects_w2r.iteritems():
             base_refcnt = self.frozen_refcounts.get(w_obj)
             delta = obj.c_obj_refcnt
             if base_refcnt is not None:
                 delta -= base_refcnt
+                lost_objects_w.pop(w_obj)
             if delta != 0:
                 leaking = True
                 print >>sys.stderr, "Leaking %r: %i references" % (w_obj, delta)
+        for w_obj in lost_objects_w:
+            print >>sys.stderr, "Lost object %r" % (w_obj, )
+            leaking = True
         return leaking
 
 
@@ -273,7 +280,9 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         body = """
         PyObject* foo_test(PyObject* self, PyObject *args)
         {
-            return PyTuple_GetItem(args, 0);
+            PyObject *t = PyTuple_GetItem(args, 0);
+            Py_INCREF(t);
+            return t;
         }
         static PyMethodDef methods[] = {
             { "test", foo_test, METH_VARARGS },

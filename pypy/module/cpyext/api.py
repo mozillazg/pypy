@@ -260,12 +260,19 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
         py_obj = ll2ctypes.ctypes2lltype(PyObject, ctypes_obj)
         py_obj = rffi.cast(PyObject, py_obj)
         if DEBUG_REFCOUNT:
-            print "MAKREF", py_obj, w_obj
+            print >>sys.stderr, "MAKREF", py_obj, w_obj
         state.py_objects_w2r[w_obj] = py_obj
         state.py_objects_r2w[ptr] = w_obj
+        if borrowed and ptr not in state.borrowed_objects:
+            state.borrowed_objects[ptr] = None
     elif not steal:
-        Py_INCREF(space, py_obj)
-    # XXX borrowed references?
+        if borrowed:
+            py_obj_addr = ctypes.addressof(py_obj._obj._storage)
+            if py_obj_addr not in state.borrowed_objects:
+                Py_INCREF(space, py_obj)
+                state.borrowed_objects[py_obj_addr] = None
+        else:
+            Py_INCREF(space, py_obj)
     return py_obj
 
 def force_string(space, ref):
@@ -289,19 +296,23 @@ def from_ref(space, ref):
     try:
         obj = state.py_objects_r2w[ptr]
     except KeyError:
-        if space.is_w(from_ref(space, ref.c_obj_type), space.w_str):
+        ref_type = ref.c_obj_type
+        if ref != ref_type and space.is_w(from_ref(space, ref_type), space.w_str):
             return force_string(space, ref)
         else:
             raise InvalidPointerException("Got invalid reference to a PyObject: %r" % (ref, ))
     return obj
 
-def clear_memory(space):
-    from pypy.module.cpyext.macros import Py_DECREF
+
+@cpython_api([PyObject, PyObject], lltype.Void, external=False)
+def add_borrowed_object(space, container, obj):
     state = space.fromcache(State)
-    while state.py_objects_r2w:
-        key = state.py_objects_r2w.keys()[0]
-        Py_DECREF(space, key)
-    state.reset()
+    container_ptr = ctypes.addressof(container._obj._storage)
+    borrowees = state.borrow_mapping.get(container_ptr)
+    if borrowees is None:
+        state.borrow_mapping[container_ptr] = borrowees = {}
+    obj_ptr = ctypes.addressof(obj._obj._storage)
+    borrowees[obj_ptr] = None
 
 
 def general_check(space, w_obj, w_type):
@@ -517,6 +528,9 @@ def generic_cpy_call(space, func, *args, **kwargs):
         if FT.RESULT is PyObject:
             ret = from_ref(space, result)
             if result:
+                # The object reference returned from a C function 
+                # that is called from Python must be an owned reference 
+                # - ownership is transferred from the function to its caller.
                 Py_DECREF(space, result)
 
             # Check for exception consistency
