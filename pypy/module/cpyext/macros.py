@@ -1,8 +1,8 @@
-import ctypes
 import sys
 
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref
+from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref, \
+        ADDR
 from pypy.module.cpyext.state import State
 
 DEBUG_REFCOUNT = False
@@ -16,7 +16,7 @@ def Py_DECREF(space, obj):
         print >>sys.stderr, "DECREF", obj, obj.c_obj_refcnt
     if obj.c_obj_refcnt == 0:
         state = space.fromcache(State)
-        ptr = ctypes.addressof(obj._obj._storage)
+        ptr = rffi.cast(ADDR, obj)
         if ptr not in state.py_objects_r2w and \
             space.is_w(from_ref(space, obj.c_obj_type), space.w_str):
             # this is a half-allocated string, lets call the deallocator
@@ -32,7 +32,7 @@ def Py_DECREF(space, obj):
                 if w_containee is not None:
                     containee = state.py_objects_w2r[w_containee]
                     Py_DECREF(space, w_containee)
-                    containee_ptr = ctypes.addressof(containee._obj._storage)
+                    containee_ptr = rffi.cast(ADDR, containee)
                     try:
                         del state.borrowed_objects[containee_ptr]
                     except KeyError:

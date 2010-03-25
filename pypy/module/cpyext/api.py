@@ -22,6 +22,7 @@ from py.builtin import BaseException
 
 
 Py_ssize_t = lltype.Signed
+ADDR = lltype.Signed
 
 include_dir = py.path.local(autopath.pypydir) / 'module' / 'cpyext' / 'include'
 include_dirs = [
@@ -101,6 +102,8 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
             error = lltype.nullptr(PyObject.TO)
         elif restype is lltype.Void:
             error = CANNOT_FAIL
+    if type(error) is int:
+        error = rffi.cast(restype, error)
 
     def decorate(func):
         api_function = ApiFunction(argtypes, restype, func, borrowed, error)
@@ -267,7 +270,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             state.borrowed_objects[ptr] = None
     elif not steal:
         if borrowed:
-            py_obj_addr = ctypes.addressof(py_obj._obj._storage)
+            py_obj_addr = rffi.cast(ADDR, py_obj)
             if py_obj_addr not in state.borrowed_objects:
                 Py_INCREF(space, py_obj)
                 state.borrowed_objects[py_obj_addr] = None
@@ -292,7 +295,7 @@ def from_ref(space, ref):
     if not ref:
         return None
     state = space.fromcache(State)
-    ptr = ctypes.addressof(ref._obj._storage)
+    ptr = rffi.cast(ADDR, ref)
     try:
         obj = state.py_objects_r2w[ptr]
     except KeyError:
@@ -307,11 +310,11 @@ def from_ref(space, ref):
 @cpython_api([PyObject, PyObject], lltype.Void, external=False)
 def add_borrowed_object(space, container, obj):
     state = space.fromcache(State)
-    container_ptr = ctypes.addressof(container._obj._storage)
+    container_ptr = rffi.cast(ADDR, container)
     borrowees = state.borrow_mapping.get(container_ptr)
     if borrowees is None:
         state.borrow_mapping[container_ptr] = borrowees = {}
-    obj_ptr = ctypes.addressof(obj._obj._storage)
+    obj_ptr = rffi.cast(ADDR, obj)
     borrowees[obj_ptr] = None
 
 
