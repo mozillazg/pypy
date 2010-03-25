@@ -2,8 +2,14 @@
  - Complete the PyTypeObject initialization code.
  - properly support "borrowed" references: the PyObject must be stored
    somewhere
+ - Use a WeakKeyDictionary to count how often a PyObject is allocated for
+   a given wrapped object and use this to assess whether optimizations are
+   useful
  - lltype.free in PyObject_Del() sometimes raise an exception (but all
    tests pass)
+   - Reported by Amaury
+   - Alexander cannot reproduce it
+
 
 PyStringObject support
 ======================
