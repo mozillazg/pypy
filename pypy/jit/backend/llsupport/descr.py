@@ -1,8 +1,9 @@
 import py
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, rffi, llmemory
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
 from pypy.jit.metainterp.history import BasicFailDescr, LoopToken, BoxFloat
+from pypy.jit.metainterp import history
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 
 # The point of the class organization in this file is to make instances
@@ -217,36 +218,38 @@ class BaseCallDescr(AbstractDescr):
         return self.call_stub
 
     def create_call_stub(self, FUNC):
-        def no_result(arg):
-            return None
-
         def process(no, c):
             if c == 'i':
-                return 'lltype.cast_primitive(FUNC.ARGS[%d], arg[%d].getint())' % (no, no)
+                return 'lltype.cast_primitive(FUNC.ARGS[%d], args[%d].getint())' % (no - 1, no)
             elif c == 'f':
                 return 'args[%d].getfloat()' % (no,)
             elif c == 'r':
-                return 'arg[%d].getptr(FUNC.ARGS[%d])' % (no, no)
+                return 'args[%d].getref(FUNC.ARGS[%d])' % (no, no - 1)
             else:
                 raise Exception("Unknown type %s for type %s" % (c, TP))
-        
-        if self.returns_a_pointer():
-            restype = 'BoxPtr'
-        elif self.returns_a_float():
-            restype = 'BoxFloat'
-        elif self.returns_a_void():
-            restype = 'no_result'
-        else:
-            restype = 'BoxInt'
-        args = ", ".join([process(i, c) for i, c in
+            
+        args = ", ".join([process(i + 1, c) for i, c in
                           enumerate(self.arg_classes)])
+
+        if self.returns_a_pointer():
+            result = 'history.BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, res))'
+        elif self.returns_a_float():
+            result = 'history.BoxFloat(res)'
+        elif self.returns_a_void():
+            result = 'None'
+        else:
+            result = 'history.BoxInt(lltype.cast_primitive(lltype.Signed, res))'
         source = py.code.Source("""
-        def call_stub(callable, args):
-            ll_callable = lltype.cast_opaque_ptr(FUNC, callable)
-            return %(restype)s(ll_callable(%(args)s))
+        def call_stub(args):
+            ll_callable = rffi.cast(lltype.Ptr(FUNC), args[0].getint())
+            res = ll_callable(%(args)s)
+            return %(result)s
         """ % locals())
         d = locals().copy()
         d['lltype'] = lltype
+        d['rffi'] = rffi
+        d['history'] = history
+        d['llmemory'] = llmemory
         exec source.compile() in d
         self.call_stub = d['call_stub']
 
