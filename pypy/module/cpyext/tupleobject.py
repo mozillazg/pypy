@@ -23,7 +23,7 @@ def PyTuple_SetItem(space, w_t, pos, w_obj):
     Py_DECREF(space, w_obj) # SetItem steals a reference! XXX this needs to go into the wrapper
     return 0
 
-@cpython_api([PyObject, Py_ssize_t], PyObject)
+@cpython_api([PyObject, Py_ssize_t], PyObject, borrowed=True)
 def PyTuple_GetItem(space, w_t, pos):
     if not PyTuple_Check(space, w_t):
         PyErr_BadInternalCall(space)
