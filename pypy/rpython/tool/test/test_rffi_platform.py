@@ -347,3 +347,13 @@ def test_generate_padding():
                                    'c__pad3', 'c__pad4')
     d = {'c_c1': 'char', 'c_i1': 'int', 'c_s1': 'short'}
     assert S._hints['get_padding_drop'](d) == ['c__pad1', 'c__pad2', 'c__pad4']
+    #
+    S = rffi_platform.getstruct("foobar_t", """
+           typedef struct {
+                char c1;
+                long l2;  /* some number of _pads */
+           } foobar_t;
+           """, [("c1", lltype.Signed)])
+    padding = list(S._hints['padding'])
+    d = {'c_c1': 'char'}
+    assert S._hints['get_padding_drop'](d) == padding
