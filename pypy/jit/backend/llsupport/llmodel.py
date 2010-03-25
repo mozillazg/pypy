@@ -31,7 +31,7 @@ class AbstractLLCPU(AbstractCPU):
             translator = rtyper.annotator.translator
         else:
             translator = None
-        self.gc_ll_descr = get_ll_description(gcdescr, translator)
+        self.gc_ll_descr = get_ll_description(gcdescr, translator, rtyper)
         if translator and translator.config.translation.gcremovetypeptr:
             self.vtable_offset = None
         else:
