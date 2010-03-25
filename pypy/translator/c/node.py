@@ -571,7 +571,19 @@ class StructNode(ContainerNode):
         if hasattr(self.T, "_hints") and self.T._hints.get('union'):
             data = data[0:1]
 
+        if 'get_padding_drop' in self.T._hints:
+            d = {}
+            for name, _ in data:
+                T = defnode.c_struct_field_type(name)
+                typename = self.db.gettype(T)
+                d[name] = cdecl(typename, '')
+            padding_drop = self.T._hints['get_padding_drop'](d)
+        else:
+            padding_drop = []
+
         for name, value in data:
+            if name in padding_drop:
+                continue
             c_expr = defnode.access_expr(self.name, name)
             lines = generic_initializationexpr(self.db, value, c_expr,
                                                decoration + name)
