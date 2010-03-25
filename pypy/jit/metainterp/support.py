@@ -80,15 +80,7 @@ def maybe_on_top_of_llinterp(rtyper, fnptr):
     if hasattr(funcobj, 'graph'):
         llinterp = LLInterpreter(rtyper)  #, exc_data_ptr=exc_data_ptr)
         def on_top_of_llinterp(*args):
-            real_args = []
-            i = 0
-            for arg in funcobj.graph.startblock.inputargs:
-                if arg.concretetype is lltype.Void:
-                    real_args.append(None)
-                else:
-                    real_args.append(args[i])
-                    i += 1
-            return llinterp.eval_graph(funcobj.graph, real_args)
+            return llinterp.eval_graph(funcobj.graph, list(args))
     else:
         assert hasattr(funcobj, '_callable')
         def on_top_of_llinterp(*args):
