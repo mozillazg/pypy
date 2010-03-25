@@ -434,8 +434,7 @@ def build_bridge(space, rename=True):
     # implement structure initialization code
     for name, func in FUNCTIONS.iteritems():
         pypyAPI[structindex[name]] = ctypes.cast(
-            ll2ctypes.lltype2ctypes(llhelper(func.functype,
-                make_wrapper(space, func.callable))),
+            ll2ctypes.lltype2ctypes(func.get_llhelper(space)),
             ctypes.c_void_p)
 
     return modulename.new(ext='')
