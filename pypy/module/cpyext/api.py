@@ -183,11 +183,11 @@ PyObjectFields = (("obj_refcnt", lltype.Signed), ("obj_type", PyObject))
 PyVarObjectFields = PyObjectFields + (("obj_size", Py_ssize_t), )
 cpython_struct('struct _object', PyObjectFields, PyObjectStruct)
 
-PyStringObject = lltype.ForwardReference()
-PyStringObjectPtr = lltype.Ptr(PyStringObject)
+PyStringObjectStruct = lltype.ForwardReference()
+PyStringObject = lltype.Ptr(PyStringObjectStruct)
 PyStringObjectFields = PyVarObjectFields + \
     (("buffer", rffi.CCHARP), ("size", Py_ssize_t))
-cpython_struct("PyStringObject", PyStringObjectFields, PyStringObject)
+cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
 
 def configure():
     for name, TYPE in rffi_platform.configure(CConfig).iteritems():
@@ -238,7 +238,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             T = get_padded_type(PyObject.TO, basicsize)
             py_obj = lltype.malloc(T, None, flavor="raw")
         elif isinstance(w_obj, W_StringObject):
-            py_obj = lltype.malloc(PyStringObjectPtr.TO, None, flavor='raw')
+            py_obj = lltype.malloc(PyStringObject.TO, None, flavor='raw')
             py_obj.c_size = len(space.str_w(w_obj))
             py_obj.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
             pto = make_ref(space, space.w_str)
@@ -261,7 +261,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
 
 def force_string(space, ref):
     state = space.fromcache(State)
-    ref = rffi.cast(PyStringObjectPtr, ref)
+    ref = rffi.cast(PyStringObject, ref)
     s = rffi.charpsize2str(ref.c_buffer, ref.c_size)
     ref = rffi.cast(PyObject, ref)
     w_str = space.wrap(s)
