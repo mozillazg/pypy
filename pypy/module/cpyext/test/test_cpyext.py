@@ -12,7 +12,6 @@ from pypy.module.cpyext.state import State
 from pypy.module.cpyext.macros import Py_DECREF
 from pypy.translator.goal import autopath
 
-
 @api.cpython_api([], api.PyObject)
 def PyPy_Crash1(space):
     1/0
@@ -53,18 +52,6 @@ def compile_module(modname, **kwds):
         [], eci,
         standalone=False)
     return str(soname)
-
-class BaseApiTest:
-    def setup_class(cls):
-        class CAPI:
-            def __getattr__(self, name):
-                return getattr(cls.space, name)
-        cls.api = CAPI()
-        CAPI.__dict__.update(api.INTERPLEVEL_API)
-
-    def teardown_method(self, func):
-        state = self.space.fromcache(State)
-        assert state.exc_value is None
 
 class AppTestCpythonExtensionBase:
     def setup_class(cls):

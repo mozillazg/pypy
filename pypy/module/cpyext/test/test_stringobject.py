@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.test.test_cpyext import BaseApiTest
+from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 
 import py
@@ -51,15 +51,19 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
         module = self.import_extension('foo', [
             ("getstring", "METH_NOARGS",
              """
-                 PyObject* s = PyString_FromStringAndSize(NULL, 3);
+                 PyObject *s, *t;
+                 char* c;
+                 Py_ssize_t len;
+
+                 s = PyString_FromStringAndSize(NULL, 3);
                  if (s == NULL)
                     return NULL;
-                 PyObject* t = PyString_FromStringAndSize(NULL, 3);
+                 t = PyString_FromStringAndSize(NULL, 3);
                  if (t == NULL)
                     return NULL;
                  Py_DECREF(t);
-                 char* c = PyString_AsString(s);
-                 //Py_ssize_t len = PyString_Size(s);
+                 c = PyString_AsString(s);
+                 //len = PyString_Size(s);
                  c[0] = 'a';
                  c[1] = 'b'; 
                  c[2] = 'c';//len-1] = 'c';
