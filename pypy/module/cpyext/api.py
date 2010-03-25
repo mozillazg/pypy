@@ -280,7 +280,7 @@ def from_ref(space, ref):
     try:
         obj = state.py_objects_r2w[ptr]
     except KeyError:
-        if from_ref(space, ref.c_obj_type) is space.w_str:
+        if space.is_w(from_ref(space, ref.c_obj_type), space.w_str):
             return force_string(space, ref)
         else:
             raise InvalidPointerException("Got invalid reference to a PyObject: %r" % (ref, ))
@@ -343,6 +343,7 @@ def make_wrapper(space, callable):
         if callable.api_func.restype is rffi.INT_real:
             retval = rffi.cast(rffi.INT_real, retval)
         return retval
+    wrapper.__name__ = "wrapper for %r" % (callable, )
     return wrapper
 
 #_____________________________________________________
