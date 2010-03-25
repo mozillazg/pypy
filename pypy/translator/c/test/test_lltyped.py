@@ -804,6 +804,7 @@ class TestLowLevelType(test_typed.CompilationTestCase):
                                            ("s1", Signed),
                                            ("l3", Signed)])
         S = rffi_platform.configure(CConfig)['STRUCT']
+        assert 'get_padding_drop' in S._hints
         s1 = malloc(S, immortal=True)
         s1.c_c1 = rffi.cast(S.c_c1, -12)
         s1.c_s1 = rffi.cast(S.c_s1, -7843)
