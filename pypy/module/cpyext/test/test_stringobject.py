@@ -7,7 +7,6 @@ import sys
 
 #class TestObject(BaseApiTest):
 #    def test_Size(self, space, api):
-#        skip('in progress')
 #        s = space.wrap("test")
 #        assert api.PyString_Size(s) == 4
 
