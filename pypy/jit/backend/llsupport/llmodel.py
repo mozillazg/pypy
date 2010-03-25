@@ -474,19 +474,8 @@ class AbstractLLCPU(AbstractCPU):
         if not we_are_translated():
             assert (list(calldescr.arg_classes) ==
                     [arg.type for arg in args[1:]])
-        loop_token = calldescr.get_token_for_call(self)
-        set_future_values(self, args)
-        self.execute_token(loop_token)
-        # Note: if an exception is set, the rest of the code does a bit of
-        # nonsense but nothing wrong (the return value should be ignored)
-        if calldescr.returns_a_pointer():
-            return BoxPtr(self.get_latest_value_ref(0))
-        elif calldescr.returns_a_float():
-            return BoxFloat(self.get_latest_value_float(0))
-        elif calldescr.get_result_size(self.translate_support_code) > 0:
-            return BoxInt(self.get_latest_value_int(0))
-        else:
-            return None
+        callstub = calldescr.get_call_stub()
+        return callstub(args)
 
     def do_cast_ptr_to_int(self, ptrbox):
         return BoxInt(self.cast_gcref_to_int(ptrbox.getref_base()))
