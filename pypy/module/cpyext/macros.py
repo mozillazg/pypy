@@ -18,6 +18,8 @@ def Py_DECREF(space, obj):
         ptr = ctypes.addressof(obj._obj._storage)
         if ptr not in state.py_objects_r2w and \
             space.is_w(from_ref(space, obj.c_obj_type), space.w_str):
+            # this is a half-allocated string, lets call the deallocator
+            # directly
             string_dealloc(space, obj)
         else:
             w_obj = state.py_objects_r2w.pop(ptr)
