@@ -16,6 +16,7 @@ from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import ObjSpace, unwrap_spec
+from pypy.objspace.std.stringobject import W_StringObject
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
@@ -182,6 +183,11 @@ PyObjectFields = (("obj_refcnt", lltype.Signed), ("obj_type", PyObject))
 PyVarObjectFields = PyObjectFields + (("obj_size", Py_ssize_t), )
 cpython_struct('struct _object', PyObjectFields, PyObjectStruct)
 
+PyStringObject = lltype.ForwardReference()
+PyStringObjectPtr = lltype.Ptr(PyStringObject)
+PyStringObjectFields = PyVarObjectFields + \
+    (("buffer", rffi.CCHARP), ("size", Py_ssize_t))
+cpython_struct("PyStringObject", PyStringObjectFields, PyStringObject)
 
 def configure():
     for name, TYPE in rffi_platform.configure(CConfig).iteritems():
@@ -193,6 +199,13 @@ class NullPointerException(Exception):
 
 class InvalidPointerException(Exception):
     pass
+
+def force_string(space, ref):
+    ref = rffi.cast(PyStringObjectPtr, ref)
+    s = rffi.charpsize2str(ref.c_buffer, ref.c_size)
+    w_str = space.wrap(s)
+    s_ptr = make_ref(space, w_str)
+    return w_str
 
 def get_padded_type(T, size):
     fields = T._flds.copy()
@@ -231,6 +244,12 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             basicsize = pto._obj.c_tp_basicsize
             T = get_padded_type(PyObject.TO, basicsize)
             py_obj = lltype.malloc(T, None, flavor="raw")
+        elif isinstance(w_obj, W_StringObject):
+            py_obj = lltype.malloc(PyStringObjectPtr.TO, None, flavor='raw')
+            py_obj.c_size = len(space.str_w(w_obj))
+            py_obj.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
+            pto = make_ref(space, space.w_str)
+            py_obj = rffi.cast(PyObject, py_obj)
         else:
             py_obj = lltype.malloc(PyObject.TO, None, flavor="raw")
             pto = make_ref(space, space.type(w_obj))
@@ -255,7 +274,10 @@ def from_ref(space, ref):
     try:
         obj = state.py_objects_r2w[ptr]
     except KeyError:
-        raise InvalidPointerException("Got invalid reference to a PyObject: %r" % (ref, ))
+        if from_ref(space, ref.c_obj_type) is space.w_str:
+            return force_string(space, ref)
+        else:
+            raise InvalidPointerException("Got invalid reference to a PyObject: %r" % (ref, ))
     return obj
 
 def clear_memory(space):
