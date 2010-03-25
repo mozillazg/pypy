@@ -275,7 +275,8 @@ def test_generate_padding():
            """, [("c1", lltype.Signed),
                  ("s1", lltype.Signed)])
     assert S._hints['padding'] == ('c__pad0',)
-    assert S._hints['padding_drop'] == ('c__pad0',)
+    d = {'c_c1': 'char', 'c_s1': 'short'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad0']
     #
     S = rffi_platform.getstruct("foobar_t", """
            typedef struct {
@@ -286,7 +287,8 @@ def test_generate_padding():
            """, [("c1", lltype.Signed),
                  ("s1", lltype.Signed)])
     assert S._hints['padding'] == ('c__pad0',)
-    assert S._hints['padding_drop'] == ()
+    d = {'c_c1': 'char', 'c_s1': 'short'}
+    assert S._hints['get_padding_drop'](d) == []
     #
     S = rffi_platform.getstruct("foobar_t", """
            typedef struct {
@@ -298,7 +300,8 @@ def test_generate_padding():
            """, [("c1", lltype.Signed),
                  ("i1", lltype.Signed)])
     assert S._hints['padding'] == ('c__pad0', 'c__pad1', 'c__pad2')
-    assert S._hints['padding_drop'] == ('c__pad1', 'c__pad2')
+    d = {'c_c1': 'char', 'c_i1': 'int'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad1', 'c__pad2']
     #
     S = rffi_platform.getstruct("foobar_t", """
            typedef struct {
@@ -311,7 +314,8 @@ def test_generate_padding():
            """, [("c1", lltype.Signed),
                  ("i1", lltype.Signed)])
     assert S._hints['padding'] == ('c__pad0', 'c__pad1', 'c__pad2')
-    assert S._hints['padding_drop'] == ('c__pad2',)
+    d = {'c_c1': 'char', 'c_i1': 'int'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad2']
     #
     S = rffi_platform.getstruct("foobar_t", """
            typedef struct {
@@ -323,7 +327,8 @@ def test_generate_padding():
            """, [("c1", lltype.Signed),
                  ("i1", lltype.Signed)])
     assert S._hints['padding'] == ('c__pad0', 'c__pad1', 'c__pad2')
-    assert S._hints['padding_drop'] == ('c__pad1', 'c__pad2')
+    d = {'c_c1': 'char', 'c_i1': 'int'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad1', 'c__pad2']
     #
     S = rffi_platform.getstruct("foobar_t", """
            typedef struct {
@@ -340,4 +345,5 @@ def test_generate_padding():
                  ("s1", lltype.Signed)])
     assert S._hints['padding'] == ('c__pad0', 'c__pad1', 'c__pad2',
                                    'c__pad3', 'c__pad4')
-    assert S._hints['padding_drop'] == ('c__pad1', 'c__pad2', 'c__pad4')
+    d = {'c_c1': 'char', 'c_i1': 'int', 'c_s1': 'short'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad1', 'c__pad2', 'c__pad4']
