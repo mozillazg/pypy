@@ -39,3 +39,21 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
         assert module.get_hello2() == 'Hello world'
         assert module.test_Size()
         raises(TypeError, module.test_Size_exception)
+
+    def test_string_buffer_init(self):
+        skip('In progress')
+        module = self.import_extension('foo', [
+            ("getstring", "METH_NOARGS",
+             """
+                 PyObject* s = PyString_FromStringAndSize(NULL, 3);
+                 char* c = PyString_AsString(s);
+                 Py_ssize_t len = PyString_Size(s);
+                 c[0] = 'a';
+                 c[1] = 'b'; 
+                 c[len-1] = 'c';
+                 return s;
+             """),
+            ])
+        s = module.getstring()
+        assert len(s) == 3
+        assert s == 'abc'
