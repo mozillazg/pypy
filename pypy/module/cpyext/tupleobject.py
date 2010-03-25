@@ -18,13 +18,15 @@ def PyTuple_New(space, size):
 def PyTuple_SetItem(space, w_t, pos, w_obj):
     if not PyTuple_Check(space, w_t):
         PyErr_BadInternalCall(space)
-    assert isinstance(w_t, W_TupleObject) # XXX add check here 
+    assert isinstance(w_t, W_TupleObject)
     w_t.wrappeditems[pos] = w_obj
     Py_DECREF(space, w_obj) # SetItem steals a reference! XXX this needs to go into the wrapper
     return 0
 
 @cpython_api([PyObject, Py_ssize_t], PyObject)
 def PyTuple_GetItem(space, w_t, pos):
-    assert isinstance(w_t, W_TupleObject) # XXX add check here
+    if not PyTuple_Check(space, w_t):
+        PyErr_BadInternalCall(space)
+    assert isinstance(w_t, W_TupleObject)
     w_obj = w_t.wrappeditems[pos]
     return w_obj
