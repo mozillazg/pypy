@@ -37,7 +37,6 @@ class TestObject(BaseApiTest):
         api.PyObject_SetAttr(space.wrap(x), space.wrap('test'), space.wrap(5))
         assert not api.PyErr_Occurred()
         assert x.test == 5
-        py.test.skip("Fails in the next line, amaury?")
         assert api.PyObject_HasAttr(space.wrap(x), space.wrap('test'))
         api.PyObject_SetAttr(space.wrap(x), space.wrap('test'), space.wrap(10))
         assert x.test == 10
