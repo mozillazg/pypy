@@ -2,7 +2,8 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.jit.backend.llsupport.descr import *
 from pypy.jit.backend.llsupport import symbolic
 from pypy.rlib.objectmodel import Symbolic
-
+from pypy.rpython.annlowlevel import llhelper
+from pypy.jit.metainterp.history import BoxInt
 
 def test_get_size_descr():
     c0 = GcCache(False)
@@ -227,3 +228,17 @@ def test_repr_of_descr():
     #
     descr4f = get_call_descr(c0, [lltype.Char, lltype.Ptr(S)], lltype.Float)
     assert 'FloatCallDescr' in descr4f.repr_of_descr()
+
+def test_call_stubs():
+    c0 = GcCache(False)
+    ARGS = [lltype.Char, lltype.Signed]
+    RES = lltype.Char
+    descr1 = get_call_descr(c0, ARGS, RES)
+    def f(a, b):
+        return 'c'
+
+    call_stub = descr1.get_call_stub()
+    fnptr = llhelper(lltype.FuncType(ARGS, RES), f)
+
+    res = call_stub(fnptr, [BoxInt(1), BoxInt(2)])
+    assert res.getint() == ord('c')
