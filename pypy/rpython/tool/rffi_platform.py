@@ -522,9 +522,12 @@ class PaddingDrop(object):
                         FIELDLOOKUP = _PaddingDropFieldLookup(self.name,
                                                               staticfields,
                                                               fieldname)
-                    got = configure(CConfig)['FIELDLOOKUP']
-                    if got == 1:
-                        break     # found
+                    try:
+                        got = configure(CConfig)['FIELDLOOKUP']
+                        if got == 1:
+                            break     # found
+                    except CompilationError:
+                        pass
                     staticfields.insert(-1, None)
                 else:
                     raise Exception("could not determine the detailed field"
