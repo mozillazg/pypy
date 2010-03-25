@@ -1,3 +1,4 @@
+import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
@@ -198,6 +199,7 @@ class BaseCallDescr(AbstractDescr):
 
     _returns_a_pointer = False        # unless overridden by GcPtrCallDescr
     _returns_a_float   = False        # unless overridden by FloatCallDescr
+    _returns_a_void    = False        # unless overridden by VoidCallDescr
 
     def returns_a_pointer(self):
         return self._returns_a_pointer
@@ -205,39 +207,48 @@ class BaseCallDescr(AbstractDescr):
     def returns_a_float(self):
         return self._returns_a_float
 
+    def returns_a_void(self):
+        return self._returns_a_void
+
     def get_result_size(self, translate_support_code):
         raise NotImplementedError
 
-    def get_token_for_call(self, cpu):
-        if self.loop_token is not None:
-            return self.loop_token
-        args = [BoxInt()] + self.instantiate_arg_classes()
-        if self.get_result_size(cpu.translate_support_code) == 0:
-            result = None
-            result_list = []
-        else:
-            if self.returns_a_pointer():
-                result = BoxPtr()
-            elif self.returns_a_float():
-                result = BoxFloat()
+    def get_call_stub(self):
+        return self.call_stub
+
+    def create_call_stub(self, FUNC):
+        def no_result(arg):
+            return None
+
+        def process(no, c):
+            if c == 'i':
+                return 'lltype.cast_primitive(FUNC.ARGS[%d], arg[%d].getint())' % (no, no)
+            elif c == 'f':
+                return 'args[%d].getfloat()' % (no,)
+            elif c == 'r':
+                return 'arg[%d].getptr(FUNC.ARGS[%d])' % (no, no)
             else:
-                result = BoxInt()
-            result_list = [result]
-        operations = [
-            ResOperation(rop.CALL, args[:], result, self),
-            ResOperation(rop.GUARD_NO_EXCEPTION, [], None,
-                         descr=BasicFailDescr()),
-            ResOperation(rop.FINISH, result_list, None,
-                         descr=BasicFailDescr())]
-        operations[1].fail_args = []
-        loop_token = LoopToken()
-        # note: the 'args' that we pass below is not the same object as the
-        # 'args[:]' that was passed above to ResOperation, because we want
-        # the argument to ResOperation to be non-resizable, but the argument
-        # to compile_loop to be resizable.
-        cpu.compile_loop(args, operations, loop_token)
-        self.loop_token = loop_token
-        return loop_token
+                raise Exception("Unknown type %s for type %s" % (c, TP))
+        
+        if self.returns_a_pointer():
+            restype = 'BoxPtr'
+        elif self.returns_a_float():
+            restype = 'BoxFloat'
+        elif self.returns_a_void():
+            restype = 'no_result'
+        else:
+            restype = 'BoxInt'
+        args = ", ".join([process(i, c) for i, c in
+                          enumerate(self.arg_classes)])
+        source = py.code.Source("""
+        def call_stub(callable, args):
+            ll_callable = lltype.cast_opaque_ptr(FUNC, callable)
+            return %(restype)s(ll_callable(%(args)s))
+        """ % locals())
+        d = locals().copy()
+        d['lltype'] = lltype
+        exec source.compile() in d
+        self.call_stub = d['call_stub']
 
     def repr_of_descr(self):
         return '<%s>' % self._clsname
@@ -254,6 +265,8 @@ class GcPtrCallDescr(NonGcPtrCallDescr):
 
 class VoidCallDescr(NonGcPtrCallDescr):
     _clsname = 'VoidCallDescr'
+    _returns_a_void = True
+    
     def get_result_size(self, translate_support_code):
         return 0
 
@@ -281,6 +294,7 @@ def get_call_descr(gccache, ARGS, RESULT, extrainfo=None):
         return cache[key]
     except KeyError:
         calldescr = cls(arg_classes, extrainfo)
+        calldescr.create_call_stub(lltype.FuncType(ARGS, RESULT))
         cache[key] = calldescr
         return calldescr
 
