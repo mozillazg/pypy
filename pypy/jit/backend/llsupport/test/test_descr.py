@@ -238,7 +238,24 @@ def test_call_stubs():
         return 'c'
 
     call_stub = descr1.get_call_stub()
-    fnptr = llhelper(lltype.FuncType(ARGS, RES), f)
+    fnptr = llhelper(lltype.Ptr(lltype.FuncType(ARGS, RES)), f)
 
-    res = call_stub(fnptr, [BoxInt(1), BoxInt(2)])
+    res = call_stub([BoxInt(rffi.cast(lltype.Signed, fnptr)),
+                     BoxInt(1), BoxInt(2)])
     assert res.getint() == ord('c')
+
+    ARRAY = lltype.GcArray(lltype.Signed)
+    ARGS = [lltype.Float, lltype.Ptr(ARRAY)]
+    RES = lltype.Float
+
+    def f(a, b):
+        return float(b[0]) + a
+
+    fnptr = llhelper(lltype.Ptr(lltype.FuncType(ARGS, RES)), f)
+    descr2 = get_call_descr(c0, ARGS, RES)
+    a = lltype.malloc(ARRAY, 3)
+    opaquea = lltype.cast_opaque_ptr(llmemory.GCREF, a)
+    a[0] = 1
+    res = descr2.get_call_stub()([BoxInt(rffi.cast(lltype.Signed, fnptr)),
+                                  BoxFloat(3.5), BoxPtr(opaquea)])
+    assert res.getfloat() == 4.5
