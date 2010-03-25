@@ -1,4 +1,4 @@
-from pypy.module.cpyext.test.test_cpyext import BaseApiTest
+from pypy.module.cpyext.test.test_api import BaseApiTest
 
 class TestFloatObject(BaseApiTest):
     def test_floatobject(self, space, api):

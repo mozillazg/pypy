@@ -11,7 +11,7 @@ from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyObject, PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, \
-    Py_TPFLAGS_READY, make_wrapper, Py_TPFLAGS_HEAPTYPE, make_ref, \
+    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, make_ref, \
     PyStringObject
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import PyMethodDef, convert_method_defs
@@ -283,9 +283,8 @@ def allocate_type_obj(space, w_type):
     pto.c_tp_basicsize = -1 # hopefully this makes malloc bail out
     bases_w = w_type.bases_w
     assert len(bases_w) <= 1
-    if not bases_w:
-        pto.c_tp_base = lltype.nullptr(PyTypeObject)
-    elif not space.is_w(w_type, space.w_type): # avoid endless recursion
+    pto.c_tp_base = lltype.nullptr(PyTypeObject)
+    if bases_w and not space.is_w(w_type, space.w_type): # avoid endless recursion
         ref = make_ref(space, bases_w[0])
         pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
     #  XXX fill slots in pto

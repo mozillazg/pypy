@@ -4,11 +4,15 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref
 from pypy.module.cpyext.state import State
 
+DEBUG_REFCOUNT = False
+
 # XXX Optimize these functions and put them into macro definitions
 @cpython_api([PyObject], lltype.Void)
 def Py_DECREF(space, obj):
     from pypy.module.cpyext.typeobject import string_dealloc
     obj.c_obj_refcnt -= 1
+    if DEBUG_REFCOUNT:
+        print "DECREF", obj, obj.c_obj_refcnt
     if obj.c_obj_refcnt == 0:
         state = space.fromcache(State)
         ptr = ctypes.addressof(obj._obj._storage)
@@ -25,6 +29,8 @@ def Py_DECREF(space, obj):
 @cpython_api([PyObject], lltype.Void)
 def Py_INCREF(space, obj):
     obj.c_obj_refcnt += 1
+    if DEBUG_REFCOUNT:
+        print "INCREF", obj, obj.c_obj_refcnt
 
 @cpython_api([PyObject], lltype.Void)
 def Py_XDECREF(space, obj):

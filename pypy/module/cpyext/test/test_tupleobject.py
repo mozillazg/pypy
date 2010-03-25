@@ -1,6 +1,4 @@
-import py.test
-
-from pypy.module.cpyext.test.test_cpyext import BaseApiTest
+from pypy.module.cpyext.test.test_api import BaseApiTest
 
 class TestTupleObject(BaseApiTest):
     def test_tupleobject(self, space, api):

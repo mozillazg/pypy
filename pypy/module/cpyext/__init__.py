@@ -38,3 +38,5 @@ import pypy.module.cpyext.object
 import pypy.module.cpyext.stringobject
 import pypy.module.cpyext.tupleobject
 import pypy.module.cpyext.dictobject
+# now that all rffi_platform.Struct types are registered, configure them
+api.configure_types()

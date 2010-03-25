@@ -66,8 +66,8 @@ CANNOT_FAIL = object()
 # Functions may raise exceptions.  In context (3), the exception flows normally
 # through the calling function.  In context (1) and (2), the exception is
 # caught; if it is an OperationError, it is stored in the thread state; other
-# exceptions generate a OperationError(w_SystemError).  In every case the
-# funtion returns the error value specifed in the API.
+# exceptions generate a OperationError(w_SystemError); and the funtion returns
+# the error value specifed in the API.
 #
 
 class ApiFunction:
@@ -189,7 +189,7 @@ PyStringObjectFields = PyVarObjectFields + \
     (("buffer", rffi.CCHARP), ("size", Py_ssize_t))
 cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
 
-def configure():
+def configure_types():
     for name, TYPE in rffi_platform.configure(CConfig).iteritems():
         if name in TYPES:
             TYPES[name].become(TYPE)
@@ -215,6 +215,7 @@ def get_padded_type(T, size):
     return lltype.Struct(hints["c_name"], hints=hints, *new_fields)
 
 def make_ref(space, w_obj, borrowed=False, steal=False):
+    from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF, DEBUG_REFCOUNT
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
@@ -226,36 +227,44 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
         w_type = space.type(w_obj)
         if space.is_w(w_type, space.w_type):
             py_obj = allocate_type_obj(space, w_obj)
+            py_obj.c_obj_refcnt = 1
             if space.is_w(w_type, w_obj):
                 pto = py_obj
+                Py_INCREF(space, pto)
             else:
                 pto = make_ref(space, w_type)
         elif isinstance(w_obj, W_PyCObject):
             w_type = space.type(w_obj)
             assert isinstance(w_type, W_PyCTypeObject)
             pto = w_type.pto
+            # Don't increase refcount for non-heaptypes
+            # Py_INCREF(space, pto)
             basicsize = pto._obj.c_tp_basicsize
             T = get_padded_type(PyObject.TO, basicsize)
             py_obj = lltype.malloc(T, None, flavor="raw")
+            py_obj.c_obj_refcnt = 1
         elif isinstance(w_obj, W_StringObject):
             py_obj = lltype.malloc(PyStringObject.TO, None, flavor='raw')
             py_obj.c_size = len(space.str_w(w_obj))
             py_obj.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
             pto = make_ref(space, space.w_str)
             py_obj = rffi.cast(PyObject, py_obj)
+            py_obj.c_obj_refcnt = 1
         else:
             py_obj = lltype.malloc(PyObject.TO, None, flavor="raw")
+            py_obj.c_obj_refcnt = 1
             pto = make_ref(space, space.type(w_obj))
         py_obj.c_obj_type = rffi.cast(PyObject, pto)
-        py_obj.c_obj_refcnt = 1
         ctypes_obj = ll2ctypes.lltype2ctypes(py_obj)
         ptr = ctypes.cast(ctypes_obj, ctypes.c_void_p).value
         py_obj = ll2ctypes.ctypes2lltype(PyObject, ctypes_obj)
         py_obj = rffi.cast(PyObject, py_obj)
+        if DEBUG_REFCOUNT:
+            print "MAKREF", py_obj, w_obj
         state.py_objects_w2r[w_obj] = py_obj
         state.py_objects_r2w[ptr] = w_obj
     elif not steal:
-        py_obj.c_obj_refcnt += 1
+        Py_INCREF(space, py_obj)
     # XXX borrowed references?
     return py_obj
 
@@ -299,6 +308,7 @@ def general_check(space, w_obj, w_type):
     w_obj_type = space.type(w_obj)
     return int(space.is_w(w_obj_type, w_type) or space.is_true(space.issubtype(w_obj_type, w_type)))
 
+# Make the wrapper for the cases (1) and (2)
 def make_wrapper(space, callable):
     def wrapper(*args):
         boxed_args = []
@@ -380,8 +390,6 @@ def build_bridge(space, rename=True):
     pypy_rename_h = udir.join('pypy_rename.h')
     pypy_rename_h.write('\n'.join(pypy_rename))
 
-
-    configure() # needs pypy_rename.h
 
     # Structure declaration code
     members = []
@@ -508,6 +516,8 @@ def generic_cpy_call(space, func, *args, **kwargs):
         FT = lltype.typeOf(func).TO
         if FT.RESULT is PyObject:
             ret = from_ref(space, result)
+            if result:
+                Py_DECREF(space, result)
 
             # Check for exception consistency
             has_error = PyErr_Occurred(space) is not None
@@ -523,11 +533,10 @@ def generic_cpy_call(space, func, *args, **kwargs):
                 state = space.fromcache(State)
                 state.check_and_raise_exception()
 
-            Py_DECREF(space, ret) # XXX WHY??
             return ret
     finally:
         if decref_args:
-            for arg in args: # XXX ur needed
-                if arg is not None and isinstance(arg, W_Root):
-                    Py_DECREF(space, arg)
+            for arg, ref in zip(args, boxed_args):
+                if isinstance(arg, W_Root) and ref:
+                    Py_DECREF(space, ref)
 
