@@ -2,13 +2,17 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.lib.identity_dict import identity_dict
 from pypy.interpreter.error import OperationError
 
+
 class State:
     def __init__(self, space):
+        self.space = space
         self.reset()
 
     def reset(self):
-        self.py_objects_w2r = identity_dict() # w_obj -> raw PyObject
-        self.py_objects_r2w = {} # addr of raw PyObject -> w_obj
+        self.py_objects_w2r = identity_dict() # { w_obj -> raw PyObject }
+        self.py_objects_r2w = {} # { addr of raw PyObject -> w_obj }
+        self.borrow_mapping = {} # { addr of container -> { addr of containee -> None } }
+        self.borrowed_objects = {} # { addr of containee -> None }
         self.exc_type = None
         self.exc_value = None
 

@@ -1,4 +1,5 @@
 import ctypes
+import sys
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.lltypesystem.lltype import Ptr, FuncType, Void
@@ -220,7 +221,7 @@ class W_PyCObject(Wrappable):
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
-    print "Dealloc of", obj
+    print >>sys.stderr, "Dealloc of", obj
     pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
     assert pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE
     base = pto
