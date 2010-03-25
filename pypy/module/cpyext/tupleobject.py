@@ -20,7 +20,7 @@ def PyTuple_SetItem(space, w_t, pos, w_obj):
         PyErr_BadInternalCall(space)
     assert isinstance(w_t, W_TupleObject)
     w_t.wrappeditems[pos] = w_obj
-    Py_DECREF(space, w_obj) # SetItem steals a reference! XXX this needs to go into the wrapper
+    Py_DECREF(space, w_obj) # SetItem steals a reference!
     return 0
 
 @cpython_api([PyObject, Py_ssize_t], PyObject, borrowed=True)
