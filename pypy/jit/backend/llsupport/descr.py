@@ -179,6 +179,7 @@ def get_array_descr(gccache, ARRAY):
 # CallDescrs
 
 class BaseCallDescr(AbstractDescr):
+    empty_box = BoxInt(0)
     _clsname = ''
     loop_token = None
     arg_classes = ''     # <-- annotation hack
@@ -189,15 +190,6 @@ class BaseCallDescr(AbstractDescr):
 
     def get_extra_info(self):
         return self.extrainfo
-
-    def instantiate_arg_classes(self):
-        result = []
-        for c in self.arg_classes:
-            if   c == 'i': box = BoxInt()
-            elif c == 'f': box = BoxFloat()
-            else:          box = BoxPtr()
-            result.append(box)
-        return result
 
     _returns_a_pointer = False        # unless overridden by GcPtrCallDescr
     _returns_a_float   = False        # unless overridden by FloatCallDescr
@@ -269,18 +261,17 @@ class BaseCallDescr(AbstractDescr):
 
 class NonGcPtrCallDescr(BaseCallDescr):
     _clsname = 'NonGcPtrCallDescr'
-    _tp = 'i' # XXX
     
     def get_result_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
 class GcPtrCallDescr(NonGcPtrCallDescr):
-    _tp = 'r'
+    empty_box = BoxPtr(lltype.nullptr(llmemory.GCREF.TO))
     _clsname = 'GcPtrCallDescr'
     _returns_a_pointer = True
 
 class VoidCallDescr(NonGcPtrCallDescr):
-    _tp = 'v'
+    empty_box = None
     _clsname = 'VoidCallDescr'
     _returns_a_void = True
     
@@ -339,6 +330,7 @@ def getDescrClass(TYPE, BaseDescr, GcPtrDescr, NonGcPtrDescr,
         #
         if TYPE is lltype.Float:
             setattr(Descr, floatattrname, True)
+            Descr.empty_box = BoxFloat(0.0)
         #
         _cache[nameprefix, TYPE] = Descr
         return Descr

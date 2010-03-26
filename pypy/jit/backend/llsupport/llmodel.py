@@ -492,11 +492,7 @@ class AbstractLLCPU(AbstractCPU):
                 self.saved_exc_value = lltype.cast_opaque_ptr(llmemory.GCREF,
                                                               ptr)
                 self.saved_exception = rffi.cast(lltype.Signed, ptr.typeptr)
-            if calldescr.returns_a_void():
-                return None
-            # we need a box to put in env. This is harmless since nobody
-            # should depend on it's value or type
-            return empty_int_box
+            return calldescr.empty_box
             
     def do_cast_ptr_to_int(self, ptrbox):
         return BoxInt(self.cast_gcref_to_int(ptrbox.getref_base()))
