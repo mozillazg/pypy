@@ -21,7 +21,7 @@ from pypy.objspace.std.stringobject import W_StringObject
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
-DEBUG_REFCOUNT = True
+DEBUG_REFCOUNT = False
 DEBUG_WRAPPER = False
 
 Py_ssize_t = lltype.Signed
