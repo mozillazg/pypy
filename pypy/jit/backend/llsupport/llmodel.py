@@ -1,7 +1,7 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values,\
@@ -478,12 +478,16 @@ class AbstractLLCPU(AbstractCPU):
         try:
             return callstub(args)
         except Exception, e:
-            if we_are_translated():
-                xxx
+            if not we_are_translated():
+                if not type(e) is LLException:
+                    raise
+                self.saved_exc_value = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                                              e.args[1])
+                self.saved_exception = rffi.cast(lltype.Signed, e.args[0])
             else:
-                import pdb
-                pdb.set_trace()
-
+                xxx
+            return None
+            
     def do_cast_ptr_to_int(self, ptrbox):
         return BoxInt(self.cast_gcref_to_int(ptrbox.getref_base()))
 

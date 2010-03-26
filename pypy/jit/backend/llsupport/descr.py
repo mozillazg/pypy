@@ -1,9 +1,9 @@
 import py
 from pypy.rpython.lltypesystem import lltype, rffi, llmemory
-from pypy.jit.backend.llsupport import symbolic
+from pypy.jit.backend.llsupport import symbolic, support
 from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
 from pypy.jit.metainterp.history import BasicFailDescr, LoopToken, BoxFloat
-from pypy.jit.metainterp import history, support
+from pypy.jit.metainterp import history
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 
 # The point of the class organization in this file is to make instances
@@ -218,16 +218,26 @@ class BaseCallDescr(AbstractDescr):
     def get_call_stub(self):
         return self.call_stub
 
-    def create_call_stub(self, rtyper, FUNC):
+    def create_call_stub(self, rtyper, RESULT):
         def process(no, c):
             if c == 'i':
-                return 'lltype.cast_primitive(FUNC.ARGS[%d], args[%d].getint())' % (no - 1, no)
+                return 'args[%d].getint()' % (no,)
             elif c == 'f':
                 return 'args[%d].getfloat()' % (no,)
             elif c == 'r':
-                return 'args[%d].getref(FUNC.ARGS[%d])' % (no, no - 1)
+                return 'args[%d].getref_base()' % (no,)
             else:
                 raise Exception("Unknown type %s for type %s" % (c, TP))
+
+        def TYPE(arg):
+            if arg == 'i':
+                return lltype.Signed
+            elif arg == 'f':
+                return lltype.Float
+            elif arg == 'r':
+                return llmemory.GCREF
+            elif arg == 'v':
+                return lltype.Void
             
         args = ", ".join([process(i + 1, c) for i, c in
                           enumerate(self.arg_classes)])
@@ -242,10 +252,12 @@ class BaseCallDescr(AbstractDescr):
             result = 'history.BoxInt(lltype.cast_primitive(lltype.Signed, res))'
         source = py.code.Source("""
         def call_stub(args):
-            ll_callable = rffi.cast(lltype.Ptr(FUNC), args[0].getint())
-            res = support.maybe_on_top_of_llinterp(rtyper, ll_callable)(%(args)s)
+            fnptr = rffi.cast(lltype.Ptr(FUNC), args[0].getint())
+            res = support.maybe_on_top_of_llinterp(rtyper, fnptr)(%(args)s)
             return %(result)s
         """ % locals())
+        ARGS = [TYPE(arg) for arg in self.arg_classes]
+        FUNC = lltype.FuncType(ARGS, RESULT)
         d = locals().copy()
         d.update(globals())
         exec source.compile() in d
@@ -257,14 +269,18 @@ class BaseCallDescr(AbstractDescr):
 
 class NonGcPtrCallDescr(BaseCallDescr):
     _clsname = 'NonGcPtrCallDescr'
+    _tp = 'i' # XXX
+    
     def get_result_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
 class GcPtrCallDescr(NonGcPtrCallDescr):
+    _tp = 'r'
     _clsname = 'GcPtrCallDescr'
     _returns_a_pointer = True
 
 class VoidCallDescr(NonGcPtrCallDescr):
+    _tp = 'v'
     _clsname = 'VoidCallDescr'
     _returns_a_void = True
     
@@ -295,7 +311,7 @@ def get_call_descr(gccache, ARGS, RESULT, extrainfo=None):
         return cache[key]
     except KeyError:
         calldescr = cls(arg_classes, extrainfo)
-        calldescr.create_call_stub(gccache.rtyper, lltype.FuncType(ARGS, RESULT))
+        calldescr.create_call_stub(gccache.rtyper, RESULT)
         cache[key] = calldescr
         return calldescr
 
