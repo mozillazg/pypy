@@ -14,6 +14,8 @@ from pypy.jit.backend.llsupport.descr import get_field_descr, BaseFieldDescr
 from pypy.jit.backend.llsupport.descr import get_array_descr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import get_call_descr,  BaseCallDescr
 
+empty_int_box = BoxInt(0)
+
 class AbstractLLCPU(AbstractCPU):
     from pypy.jit.metainterp.typesystem import llhelper as ts
 
@@ -486,7 +488,11 @@ class AbstractLLCPU(AbstractCPU):
                 self.saved_exception = rffi.cast(lltype.Signed, e.args[0])
             else:
                 xxx
-            return None
+            if calldescr.returns_a_void():
+                return None
+            # we need a box to put in env. This is harmless since nobody
+            # should depend on it's value or type
+            return empty_int_box
             
     def do_cast_ptr_to_int(self, ptrbox):
         return BoxInt(self.cast_gcref_to_int(ptrbox.getref_base()))
