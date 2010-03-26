@@ -249,7 +249,7 @@ class BaseCallDescr(AbstractDescr):
         elif self.returns_a_void():
             result = 'None'
         else:
-            result = 'history.BoxInt(lltype.cast_primitive(lltype.Signed, res))'
+            result = 'history.BoxInt(rffi.cast(lltype.Signed, res))'
         source = py.code.Source("""
         def call_stub(args):
             fnptr = rffi.cast(lltype.Ptr(FUNC), args[0].getint())
