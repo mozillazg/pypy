@@ -2,18 +2,16 @@ import sys
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref, \
-        ADDR
+        ADDR, debug_refcount
 from pypy.module.cpyext.state import State
 
-DEBUG_REFCOUNT = False
 
 # XXX Optimize these functions and put them into macro definitions
 @cpython_api([PyObject], lltype.Void)
 def Py_DECREF(space, obj):
     from pypy.module.cpyext.typeobject import string_dealloc
     obj.c_obj_refcnt -= 1
-    if DEBUG_REFCOUNT:
-        print >>sys.stderr, "DECREF", obj, obj.c_obj_refcnt
+    debug_refcount("DECREF", obj, obj.c_obj_refcnt, frame_stackdepth=3)
     if obj.c_obj_refcnt == 0:
         state = space.fromcache(State)
         ptr = rffi.cast(ADDR, obj)
@@ -37,6 +35,10 @@ def Py_DECREF(space, obj):
                         del state.borrowed_objects[containee_ptr]
                     except KeyError:
                         pass
+                else:
+                    if DEBUG_REFCOUNT:
+                        print >>sys.stderr, "Borrowed object is already gone:", \
+                                hex(containee)
             del state.borrow_mapping[ptr]
     else:
         assert obj.c_obj_refcnt > 0
@@ -44,8 +46,8 @@ def Py_DECREF(space, obj):
 @cpython_api([PyObject], lltype.Void)
 def Py_INCREF(space, obj):
     obj.c_obj_refcnt += 1
-    if DEBUG_REFCOUNT:
-        print >>sys.stderr, "INCREF", obj, obj.c_obj_refcnt
+    assert obj.c_obj_refcnt > 0
+    debug_refcount("INCREF", obj, obj.c_obj_refcnt, frame_stackdepth=3)
 
 @cpython_api([PyObject], lltype.Void)
 def Py_XDECREF(space, obj):
@@ -55,7 +57,6 @@ def Py_XDECREF(space, obj):
 def _Py_Dealloc(space, obj):
     from pypy.module.cpyext.typeobject import PyTypeObjectPtr
     from pypy.module.cpyext.methodobject import generic_cpy_call
-    state = space.fromcache(State)
     pto = obj.c_obj_type
     pto = rffi.cast(PyTypeObjectPtr, pto)
     print >>sys.stderr, "Calling dealloc slot of", obj, \

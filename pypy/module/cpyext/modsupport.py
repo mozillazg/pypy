@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, cpython_struct, PyObject, \
-        METH_STATIC, METH_CLASS, METH_COEXIST, general_check, CANNOT_FAIL
+        METH_STATIC, METH_CLASS, METH_COEXIST, general_check, CANNOT_FAIL, \
+        register_container
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.methodobject import PyCFunction_NewEx, PyDescr_NewMethod
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
@@ -23,7 +24,7 @@ def PyImport_AddModule(space, name):
     return w_mod
 
 @cpython_api([rffi.CCHARP, lltype.Ptr(PyMethodDef), rffi.CCHARP,
-              PyObject, rffi.INT_real], PyObject, borrowed=True)
+              PyObject, rffi.INT_real], PyObject, borrowed=False) # we cannot borrow here
 def Py_InitModule4(space, name, methods, doc, w_self, apiver):
     modname = rffi.charp2str(name)
     w_mod = PyImport_AddModule(space, modname)
@@ -74,10 +75,12 @@ def PyModule_Check(space, w_obj):
     w_type = space.gettypeobject(Module.typedef)
     return general_check(space, w_obj, w_type)
 
-@cpython_api([PyObject], PyObject)
+@cpython_api([PyObject], PyObject, borrowed=True)
 def PyModule_GetDict(space, w_mod):
     if PyModule_Check(space, w_mod):
         assert isinstance(w_mod, Module)
-        return w_mod.getdict()
+        w_dict = w_mod.getdict()
+        register_container(space, w_mod)
+        return w_dict
     else:
         PyErr_BadInternalCall(space)

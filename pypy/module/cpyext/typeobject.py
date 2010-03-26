@@ -12,12 +12,12 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyObject, PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, make_ref, \
-    PyStringObject, ADDR
+    PyStringObject, ADDR, from_ref
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import PyMethodDef, convert_method_defs
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.methodobject import generic_cpy_call
-from pypy.module.cpyext.macros import Py_DECREF, Py_XDECREF
+from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF, Py_XDECREF
 
 PyTypeObject = lltype.ForwardReference()
 PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
@@ -250,25 +250,37 @@ def string_dealloc(space, obj):
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def type_dealloc(space, obj):
+    state = space.fromcache(State)
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     type_pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_XDECREF(space, base_pyo)
-    # XXX XDECREF tp_dict, tp_bases, tp_mro, tp_cache,
+    Py_XDECREF(space, obj_pto.c_tp_bases)
+    # XXX XDECREF tp_dict, tp_mro, tp_cache,
     #             tp_subclasses
     # free tp_doc
-    lltype.free(obj_pto.c_tp_name, flavor="raw")
-    obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
-    generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
-    pto = rffi.cast(PyObject, type_pto)
-    Py_DECREF(space, pto)
+    if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
+        lltype.free(obj_pto.c_tp_name, flavor="raw")
+        obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
+        generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
+        pto = rffi.cast(PyObject, type_pto)
+        Py_DECREF(space, pto)
+
 
 def allocate_type_obj(space, w_type):
     """ Allocates a pto from a w_type which must be a PyPy type. """
+    state = space.fromcache(State)
     from pypy.module.cpyext.object import PyObject_dealloc, PyObject_Del
     assert not isinstance(w_type, W_PyCTypeObject)
     assert isinstance(w_type, W_TypeObject)
+
     pto = lltype.malloc(PyTypeObject, None, flavor="raw")
+    pto.c_obj_refcnt = 1
+    # put the type object early into the dict
+    # to support dependency cycles like object/type
+    state = space.fromcache(State)
+    state.py_objects_w2r[w_type] = rffi.cast(PyObject, pto)
+
     if space.is_w(w_type, space.w_object):
         pto.c_tp_dealloc = PyObject_dealloc.api_func.get_llhelper(space)
     elif space.is_w(w_type, space.w_type):
@@ -284,25 +296,64 @@ def allocate_type_obj(space, w_type):
     bases_w = w_type.bases_w
     assert len(bases_w) <= 1
     pto.c_tp_base = lltype.nullptr(PyTypeObject)
-    if bases_w and not space.is_w(w_type, space.w_type): # avoid endless recursion
-        ref = make_ref(space, bases_w[0])
-        pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
+    pto.c_tp_bases = lltype.nullptr(PyObject.TO)
+    if not space.is_w(w_type, space.w_type) and not \
+            space.is_w(w_type, space.w_object):
+        if bases_w:
+            ref = make_ref(space, bases_w[0])
+            pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
+        pto.c_obj_type = make_ref(space, space.type(space.w_type))
+        PyPyType_Ready(space, pto, w_type)
+    else:
+        pto.c_obj_type = lltype.nullptr(PyObject.TO)
+
     #  XXX fill slots in pto
     return pto
 
-@cpython_api_c()
-def PyType_Ready(space, pto):
-    "Implemented in typeobject.c"
-
 @cpython_api([PyTypeObjectPtr], rffi.INT_real, error=-1)
+def PyType_Ready(space, pto):
+    return PyPyType_Ready(space, pto, None)
+
+def PyPyType_Ready(space, pto, w_obj):
+    try:
+        pto.c_tp_dict = lltype.nullptr(PyObject.TO) # not supported
+        if pto.c_tp_flags & Py_TPFLAGS_READY:
+            return 0
+        assert pto.c_tp_flags & Py_TPFLAGS_READYING == 0
+        pto.c_tp_flags |= Py_TPFLAGS_READYING
+        base = pto.c_tp_base
+        if not base and not (w_obj is not None and
+            space.is_w(w_obj, space.w_object)):
+            base_pyo = make_ref(space, space.w_object)
+            base = pto.c_tp_base = rffi.cast(PyTypeObjectPtr, base_pyo)
+        if base and not base.c_tp_flags & Py_TPFLAGS_READY:
+            PyPyType_Ready(space, base, None)
+        if base and not pto.c_obj_type: # will be filled later
+            pto.c_obj_type = base.c_obj_type
+        if not pto.c_tp_bases and not (space.is_w(w_obj, space.w_object)
+                or space.is_w(w_obj, space.w_type)):
+            if not base:
+                bases = space.newtuple([])
+            else:
+                bases = space.newtuple([from_ref(space, base)])
+            pto.c_tp_bases = make_ref(space, bases)
+        if w_obj is None:
+            PyPyType_Register(space, pto)
+    finally:
+        pto.c_tp_flags &= ~Py_TPFLAGS_READYING
+    pto.c_tp_flags = (pto.c_tp_flags & ~Py_TPFLAGS_READYING) | Py_TPFLAGS_READY
+    return 0
+
 def PyPyType_Register(space, pto):
     state = space.fromcache(State)
     ptr = rffi.cast(ADDR, pto)
     if ptr not in state.py_objects_r2w:
         w_obj = space.allocate_instance(W_PyCTypeObject,
                 space.gettypeobject(W_PyCTypeObject.typedef))
+        state.non_heaptypes.append(w_obj)
+        pyo = rffi.cast(PyObject, pto)
         state.py_objects_r2w[ptr] = w_obj
-        state.py_objects_w2r[w_obj] = pto
+        state.py_objects_w2r[w_obj] = pyo
         w_obj.__init__(space, pto)
         w_obj.ready()
     return 1

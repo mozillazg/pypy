@@ -1,6 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, Py_ssize_t, \
-        general_check, CANNOT_FAIL, add_borrowed_object
+        general_check, CANNOT_FAIL, register_container
 from pypy.module.cpyext.macros import Py_DECREF
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.objspace.std.tupleobject import W_TupleObject
@@ -29,5 +29,5 @@ def PyTuple_GetItem(space, w_t, pos):
         PyErr_BadInternalCall(space)
     assert isinstance(w_t, W_TupleObject)
     w_obj = w_t.wrappeditems[pos]
-    add_borrowed_object(space, w_t, w_obj)
+    register_container(space, w_t)
     return w_obj
