@@ -8,6 +8,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import ll2ctypes
 from pypy.rpython.annlowlevel import llhelper
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.tool.udir import udir
@@ -20,6 +21,8 @@ from pypy.objspace.std.stringobject import W_StringObject
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
+DEBUG_REFCOUNT = True
+DEBUG_WRAPPER = False
 
 Py_ssize_t = lltype.Signed
 ADDR = lltype.Signed
@@ -144,6 +147,7 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
         func.api_func = api_function
         unwrapper.api_func = api_function
         unwrapper.func = func
+        unwrapper.__name__ = "uw(%s)" % (func.__name__, )
         if external:
             FUNCTIONS[func.func_name] = api_function
         INTERPLEVEL_API[func.func_name] = unwrapper
@@ -197,6 +201,7 @@ def configure_types():
         if name in TYPES:
             TYPES[name].become(TYPE)
 
+
 class NullPointerException(Exception):
     pass
 
@@ -217,8 +222,18 @@ def get_padded_type(T, size):
     hints["padding"] = hints["padding"] + tuple(pad_fields)
     return lltype.Struct(hints["c_name"], hints=hints, *new_fields)
 
+def debug_refcount(*args, **kwargs):
+    frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
+    assert not kwargs
+    if DEBUG_REFCOUNT:
+        frame = sys._getframe(frame_stackdepth)
+        print >>sys.stderr, "%25s" % (frame.f_code.co_name, ), 
+        for arg in args:
+            print >>sys.stderr, arg,
+        print >>sys.stderr
+
 def make_ref(space, w_obj, borrowed=False, steal=False):
-    from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF, DEBUG_REFCOUNT
+    from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
@@ -230,12 +245,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
         w_type = space.type(w_obj)
         if space.is_w(w_type, space.w_type):
             py_obj = allocate_type_obj(space, w_obj)
-            py_obj.c_obj_refcnt = 1
-            if space.is_w(w_type, w_obj):
-                pto = py_obj
-                Py_INCREF(space, pto)
-            else:
-                pto = make_ref(space, w_type)
+            # c_obj_type and c_obj_refcnt are set by allocate_type_obj
         elif isinstance(w_obj, W_PyCObject):
             w_type = space.type(w_obj)
             assert isinstance(w_type, W_PyCTypeObject)
@@ -246,6 +256,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             T = get_padded_type(PyObject.TO, basicsize)
             py_obj = lltype.malloc(T, None, flavor="raw")
             py_obj.c_obj_refcnt = 1
+            py_obj.c_obj_type = rffi.cast(PyObject, pto)
         elif isinstance(w_obj, W_StringObject):
             py_obj = lltype.malloc(PyStringObject.TO, None, flavor='raw')
             py_obj.c_size = len(space.str_w(w_obj))
@@ -253,17 +264,18 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             pto = make_ref(space, space.w_str)
             py_obj = rffi.cast(PyObject, py_obj)
             py_obj.c_obj_refcnt = 1
+            py_obj.c_obj_type = rffi.cast(PyObject, pto)
         else:
             py_obj = lltype.malloc(PyObject.TO, None, flavor="raw")
             py_obj.c_obj_refcnt = 1
             pto = make_ref(space, space.type(w_obj))
-        py_obj.c_obj_type = rffi.cast(PyObject, pto)
+            py_obj.c_obj_type = rffi.cast(PyObject, pto)
+        # XXX remove this weird casting?
         ctypes_obj = ll2ctypes.lltype2ctypes(py_obj)
         ptr = ctypes.cast(ctypes_obj, ctypes.c_void_p).value
         py_obj = ll2ctypes.ctypes2lltype(PyObject, ctypes_obj)
         py_obj = rffi.cast(PyObject, py_obj)
-        if DEBUG_REFCOUNT:
-            print >>sys.stderr, "MAKREF", py_obj, w_obj
+        debug_refcount("MAKREF", py_obj, w_obj)
         state.py_objects_w2r[w_obj] = py_obj
         state.py_objects_r2w[ptr] = w_obj
         if borrowed and ptr not in state.borrowed_objects:
@@ -307,10 +319,20 @@ def from_ref(space, ref):
     return obj
 
 
-@cpython_api([PyObject, PyObject], lltype.Void, external=False)
-def add_borrowed_object(space, container, obj):
+@cpython_api([PyObject], lltype.Void, external=False)
+def register_container(space, container):
     state = space.fromcache(State)
     container_ptr = rffi.cast(ADDR, container)
+    assert not state.last_container, "Last container was not fetched"
+    state.last_container = container_ptr
+    print "Setting last_container to", hex(container_ptr)
+
+def add_borrowed_object(space, obj):
+    state = space.fromcache(State)
+    container_ptr = state.last_container
+    state.last_container = 0
+    if not container_ptr:
+        raise NullPointerException
     borrowees = state.borrow_mapping.get(container_ptr)
     if borrowees is None:
         state.borrow_mapping[container_ptr] = borrowees = {}
@@ -327,7 +349,8 @@ def make_wrapper(space, callable):
     def wrapper(*args):
         boxed_args = []
         # XXX use unrolling_iterable here
-        print >>sys.stderr, callable,
+        if DEBUG_WRAPPER:
+            print >>sys.stderr, callable,
         for i, typ in enumerate(callable.api_func.argtypes):
             arg = args[i]
             if (typ is PyObject and
@@ -340,7 +363,8 @@ def make_wrapper(space, callable):
         state = space.fromcache(State)
         try:
             retval = callable(space, *boxed_args)
-            print >>sys.stderr, " DONE"
+            if DEBUG_WRAPPER:
+                print >>sys.stderr, " DONE"
         except OperationError, e:
             failed = True
             e.normalize_exception(space)
@@ -363,12 +387,36 @@ def make_wrapper(space, callable):
             return error_value
 
         if callable.api_func.restype is PyObject:
-            retval = make_ref(space, retval, borrowed=callable.api_func.borrowed)
-        if callable.api_func.restype is rffi.INT_real:
+            borrowed = callable.api_func.borrowed
+            retval = make_ref(space, retval, borrowed=borrowed)
+            if borrowed:
+                try:
+                    add_borrowed_object(space, retval)
+                except NullPointerException, e:
+                    if not we_are_translated():
+                        assert False, "Container not registered by %s" % (callable, )
+                    else:
+                        raise
+        elif callable.api_func.restype is rffi.INT_real:
             retval = rffi.cast(rffi.INT_real, retval)
         return retval
     wrapper.__name__ = "wrapper for %r" % (callable, )
     return wrapper
+
+def bootstrap_types(space):
+    from pypy.module.cpyext.typeobject import PyTypeObjectPtr, PyPyType_Ready
+    # bootstrap this damn cycle
+    type_pto = make_ref(space, space.w_type)
+    type_pto = rffi.cast(PyTypeObjectPtr, type_pto)
+    object_pto = make_ref(space, space.w_object)
+    object_pto = rffi.cast(PyTypeObjectPtr, object_pto)
+    type_pto.c_tp_base = object_pto
+    type_pto.c_obj_type = make_ref(space, space.w_type)
+    object_pto.c_obj_type = make_ref(space, space.w_type)
+    PyPyType_Ready(space, object_pto, space.w_object)
+    PyPyType_Ready(space, type_pto, space.w_type)
+    type_pto.c_tp_bases = make_ref(space, space.newtuple([space.w_object]))
+    object_pto.c_tp_bases = make_ref(space, space.newtuple([]))
 
 #_____________________________________________________
 # Build the bridge DLL, Allow extension DLLs to call
@@ -463,6 +511,7 @@ def build_bridge(space, rename=True):
         outputfilename=str(udir / "module_cache" / "pypyapi"),
         standalone=False)
 
+    bootstrap_types(space)
     # load the bridge, and init structure
     import ctypes
     bridge = ctypes.CDLL(str(modulename))
@@ -477,10 +526,6 @@ def build_bridge(space, rename=True):
         ptr = ctypes.c_void_p.in_dll(bridge, name)
         ptr.value = ctypes.cast(ll2ctypes.lltype2ctypes(make_ref(space, w_obj)),
             ctypes.c_void_p).value
-        # hack, init base of the type type
-        if name == "PyType_Type":
-            pto = rffi.cast(PyTypeObjectPtr, ptr)
-            pto.c_tp_base = make_ref(space, w_object)
 
     # implement structure initialization code
     for name, func in FUNCTIONS.iteritems():

@@ -118,7 +118,7 @@ class AppTestCpythonExtensionBase:
         self.w_import_module = self.space.wrap(self.import_module)
         self.w_import_extension = self.space.wrap(self.import_extension)
         self.freeze_refcnts()
-        #self.check_and_print_leaks("Object %r leaked some time ago (refcount %i) -- Not executing test!")
+        #self.check_and_print_leaks()
 
     def teardown_method(self, func):
         try:
@@ -127,6 +127,9 @@ class AppTestCpythonExtensionBase:
             self.space.delitem(self.space.sys.get('modules'),
                                self.space.wrap('foo'))
             Py_DECREF(self.space, w_mod)
+            state = self.space.fromcache(State)
+            for w_obj in state.non_heaptypes:
+                Py_DECREF(self.space, w_obj)
         except OperationError:
             pass
         state = self.space.fromcache(State)

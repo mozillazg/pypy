@@ -377,8 +377,6 @@ manually remove this flag though!
 
 PyAPI_DATA(PyTypeObject *) PyType_Type; /* built-in 'type' */
 PyAPI_DATA(PyTypeObject *) PyBaseObject_Type;
-// defined in typeobject.c
-int PyType_Ready(PyTypeObject *);
 
 /* objimpl.h ----------------------------------------------*/
 

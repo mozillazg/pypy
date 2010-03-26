@@ -1,6 +1,7 @@
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.lib.identity_dict import identity_dict
 from pypy.interpreter.error import OperationError
+from pypy.rpython.lltypesystem import lltype
 
 
 class State:
@@ -13,6 +14,8 @@ class State:
         self.py_objects_r2w = {} # { addr of raw PyObject -> w_obj }
         self.borrow_mapping = {} # { addr of container -> { addr of containee -> None } }
         self.borrowed_objects = {} # { addr of containee -> None }
+        self.non_heaptypes = [] # list of wrapped objects
+        self.last_container = 0 # addr of last container
         self.exc_type = None
         self.exc_value = None
 
