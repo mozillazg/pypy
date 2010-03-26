@@ -13,6 +13,7 @@ from pypy.jit.backend.llsupport.descr import get_size_descr,  BaseSizeDescr
 from pypy.jit.backend.llsupport.descr import get_field_descr, BaseFieldDescr
 from pypy.jit.backend.llsupport.descr import get_array_descr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import get_call_descr,  BaseCallDescr
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 
 empty_int_box = BoxInt(0)
 
@@ -487,7 +488,10 @@ class AbstractLLCPU(AbstractCPU):
                                                               e.args[1])
                 self.saved_exception = rffi.cast(lltype.Signed, e.args[0])
             else:
-                xxx
+                ptr = cast_instance_to_base_ptr(e)
+                self.saved_exc_value = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                                              ptr)
+                self.saved_exception = rffi.cast(lltype.Signed, ptr.typeptr)
             if calldescr.returns_a_void():
                 return None
             # we need a box to put in env. This is harmless since nobody
