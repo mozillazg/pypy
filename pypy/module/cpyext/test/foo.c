@@ -76,6 +76,12 @@ foo_repr(PyObject *self)
     return format;
 }
 
+static PyObject *
+foo_call(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    Py_INCREF(kwds);
+    return kwds;
+}
 
 static PyTypeObject footype = {
 	PyVarObject_HEAD_INIT(NULL, 0)
@@ -93,7 +99,7 @@ static PyTypeObject footype = {
 	0,                        /*tp_as_sequence*/
 	0,			  /*tp_as_mapping*/
 	0, 			  /*tp_hash*/
-	0,			  /*tp_call*/
+	foo_call,			  /*tp_call*/
 	0,			  /*tp_str*/
 	0,			  /*tp_getattro*/
 	0,			  /*tp_setattro*/
