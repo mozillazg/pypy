@@ -49,3 +49,23 @@ pointer to a char buffer; it may be NULL.
 
 - There could be an (expensive!) check in from_ref() that the buffer
   still corresponds to the pypy gc-managed string.
+
+PySequence_Fast support
+======================
+There are five functions for fast sequence access offered by the CPython API:
+
+PyObject* PySequence_Fast(PyObject *o, const char *m)
+
+PyObject* PySequence_Fast_GET_ITEM(	PyObject *o, int i)
+
+PyObject** PySequence_Fast_ITEMS(	PyObject *o)
+
+PyObject* PySequence_ITEM(	PyObject *o, int i)
+
+int PySequence_Fast_GET_SIZE(	PyObject *o)
+
+PyPy supports four of these, but does not support PySequence_Fast_ITEMS.
+(Various ways to support PySequence_Fast_ITEMS were considered. They all had
+two things in common: they would have taken a lot of work, and they would have
+resulted in incomplete semantics or in poor performance. We decided that a slow
+implementation of PySequence_Fast_ITEMS was not very useful.)
