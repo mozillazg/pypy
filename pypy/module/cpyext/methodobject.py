@@ -4,7 +4,7 @@ from pypy.interpreter.gateway import ObjSpace, W_Root
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.gateway import interp2app, unwrap_spec
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.function import BuiltinFunction, Method
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import PyObject, from_ref, \
@@ -44,18 +44,25 @@ class W_PyCMethodObject(W_PyCFunctionObject):
 
 
 class W_PyCWrapperObject(Wrappable):
-    def __init__(self, space, pto, method_name, wrapper_func, doc, flags, func):
+    def __init__(self, space, pto, method_name, wrapper_func, wrapper_func_kwds,
+            doc, func):
         self.space = space
         self.method_name = method_name
         self.wrapper_func = wrapper_func
+        self.wrapper_func_kwds = wrapper_func_kwds
         self.doc = doc
-        self.flags = flags
         self.func = func
-        assert flags == 0
         self.w_objclass = from_ref(space, pto)
 
-    def call(self, w_self, w_args):
-        return generic_cpy_call(self.space, self.wrapper_func, w_self, w_args, self.func)
+    def call(self, w_self, w_args, w_kw):
+        if self.wrapper_func is None:
+            assert self.wrapper_func_kwds is not None
+            return self.wrapper_func_kwds(self.space, w_self, w_args, self.func, w_kw)
+        if self.space.is_true(w_kw):
+            raise operationerrfmt(space.w_TypeError,
+                                 "wrapper %s doesn't take any keyword arguments",
+                                 self.method_name)
+        return self.wrapper_func(self.space, w_self, w_args, self.func)
 
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
@@ -64,10 +71,10 @@ def cwrapper_descr_call(space, w_self, __args__):
     args_w, kw_w = __args__.unpack()
     w_args = space.newtuple(args_w[1:])
     w_self = args_w[0]
-    if kw_w:
-        raise OperationError(space.w_TypeError,
-                             space.wrap("keywords not yet supported"))
-    return self.call(w_self, w_args)
+    w_kw = space.newdict()
+    for key, w_obj in kw_w.items():
+        space.setitem(w_kw, space.wrap(key), w_obj)
+    return self.call(w_self, w_args, w_kw)
 
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
