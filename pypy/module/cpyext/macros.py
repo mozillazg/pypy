@@ -2,7 +2,7 @@ import sys
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref, \
-        ADDR, debug_refcount
+        ADDR, debug_refcount, DEBUG_REFCOUNT
 from pypy.module.cpyext.state import State
 
 
