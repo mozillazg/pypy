@@ -526,6 +526,8 @@ class FunctionGcRootTracker(object):
                           # gcc -fno-unit-at-a-time.
         return self.insns_for_copy(source, target)
 
+    visit_mov = visit_movX
+
     def visit_pushX(self, line):
         match = self.r_unaryinsn.match(line)
         source = match.group(1)
@@ -1522,7 +1524,10 @@ def format_location(loc, cls=ElfFunctionGcRootTracker):
         if loc == LOC_NOWHERE:
             return '?'
         reg = (loc >> 2) - 1
-        return cls.CALLEE_SAVE_REGISTERS[reg]
+        result = cls.CALLEE_SAVE_REGISTERS[reg]
+        if '%' not in result:    # xxx messy, to avoid fixing tons of tests
+            result = '%' + result
+        return result
     else:
         offset = loc & ~ LOC_MASK
         if kind == LOC_EBP_PLUS:
@@ -1534,6 +1539,8 @@ def format_location(loc, cls=ElfFunctionGcRootTracker):
             result = '(%s)' % cls.ESP
         else:
             assert 0, kind
+        if '%' not in result:    # xxx messy, to avoid fixing tons of tests
+            result = result[:1] + '%' + result[1:]
         if offset != 0:
             result = str(offset) + result
         return result
