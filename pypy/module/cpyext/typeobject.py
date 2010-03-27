@@ -63,7 +63,7 @@ def add_operators(space, dict_w, pto):
     # XXX support PyObject_HashNotImplemented
     state = space.fromcache(State)
     for method_name, slot_name, _, wrapper_func, wrapper_func_kwds, doc in state.slotdefs: # XXX use UI
-        if method_name in dict_w or (wrapper_func is None and wrapper_func_kwds is None):
+        if method_name in dict_w:
             continue
         # XXX is this rpython?
         if len(slot_name) == 1:
@@ -76,6 +76,9 @@ def add_operators(space, dict_w, pto):
             func = getattr(struct, slot_name[1])
         func_voidp = rffi.cast(rffi.VOIDP_real, func)
         if not func:
+            continue
+        if wrapper_func is None and wrapper_func_kwds is None:
+            print >>sys.stderr, method_name, "used by the type but no wrapper function defined!"
             continue
         dict_w[method_name] = PyDescr_NewWrapper(space, pto, method_name, wrapper_func,
                 wrapper_func_kwds, doc, func_voidp)
