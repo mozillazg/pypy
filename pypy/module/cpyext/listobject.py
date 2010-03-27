@@ -29,7 +29,7 @@ def PyList_SetItem(space, w_list, index, w_item):
     """
     Py_XDECREF(space, w_item)
     if not isinstance(w_list, W_ListObject):
-        PyErr_BadInternalCall()
+        PyErr_BadInternalCall(space)
     wrappeditems = w_list.wrappeditems
     if index < 0 or index >= len(wrappeditems):
         raise OperationError(space.w_IndexError, space.wrap(
