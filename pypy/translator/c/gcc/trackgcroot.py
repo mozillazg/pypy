@@ -9,7 +9,8 @@ from pypy.translator.c.gcc.instruction import InsnPrologue, InsnEpilogue
 from pypy.translator.c.gcc.instruction import InsnGCROOT
 from pypy.translator.c.gcc.instruction import InsnStackAdjust
 from pypy.translator.c.gcc.instruction import InsnCannotFollowEsp
-from pypy.translator.c.gcc.instruction import LocalVar, somenewvalue
+from pypy.translator.c.gcc.instruction import LocalVar32, LocalVar64
+from pypy.translator.c.gcc.instruction import somenewvalue
 from pypy.translator.c.gcc.instruction import frameloc_esp, frameloc_ebp
 from pypy.translator.c.gcc.instruction import LOC_REG, LOC_NOWHERE, LOC_MASK
 from pypy.translator.c.gcc.instruction import LOC_EBP_PLUS, LOC_EBP_MINUS
@@ -18,8 +19,8 @@ from pypy.translator.c.gcc.instruction import LOC_ESP_PLUS
 class FunctionGcRootTracker(object):
     skip = 0
     WORD = 4
-    BITS = 32
     SUFFIX = 'l'
+    LocalVar = LocalVar32
 
     @classmethod
     def init_regexp(cls):
@@ -74,7 +75,7 @@ class FunctionGcRootTracker(object):
             if self.is_stack_bottom:
                 retaddr = LOC_NOWHERE     # end marker for asmgcroot.py
             elif self.uses_frame_pointer:
-                retaddr = frameloc_ebp(4)
+                retaddr = frameloc_ebp(self.WORD)
             else:
                 retaddr = frameloc_esp(insn.framesize)
             shape = [retaddr]
@@ -84,7 +85,7 @@ class FunctionGcRootTracker(object):
                 shape.append(LOC_NOWHERE)
             gcroots = []
             for localvar, tag in insn.gcroots.items():
-                if isinstance(localvar, LocalVar):
+                if isinstance(localvar, self.LocalVar):
                     loc = localvar.getlocation(insn.framesize,
                                                self.uses_frame_pointer)
                 elif localvar in self.REG2LOC:
@@ -271,16 +272,16 @@ class FunctionGcRootTracker(object):
                     ofs_from_esp += int(match.group(2) or '0')
                 localvar = ofs_from_esp - insn.framesize
                 assert localvar != 0    # that's the return address
-                return LocalVar(localvar, hint=hint)
+                return self.LocalVar(localvar, hint=hint)
             elif self.uses_frame_pointer:
                 match = self.r_localvar_ebp.match(localvar)
                 if match:
                     ofs_from_ebp = int(match.group(1) or '0')
                     if self.format == 'msvc':
                         ofs_from_ebp += int(match.group(2) or '0')
-                    localvar = ofs_from_ebp - 4
+                    localvar = ofs_from_ebp - self.WORD
                     assert localvar != 0    # that's the return address
-                    return LocalVar(localvar, hint='ebp')
+                    return self.LocalVar(localvar, hint='ebp')
             return localvar
 
         for insn in self.insns:
@@ -402,8 +403,10 @@ class FunctionGcRootTracker(object):
         'bswap', 'bt', 'rdtsc',
         # zero-extending moves should not produce GC pointers
         'movz',
-        # quadword operations
+        # quadword operations: ignored on 32-bit
         'movq',
+        # conversely, ignore 32-bit operations on 64-bit
+        'xorl', 'movl', 'addl', 'subl', 'andl', 'orl', 'leal',
         ])
 
     visit_movb = visit_nop
@@ -462,6 +465,7 @@ class FunctionGcRootTracker(object):
         '''.split():
         locals()['visit_cmov' + name] = binary_insn
         locals()['visit_cmov' + name + 'X'] = binary_insn
+        IGNORE_OPS_WITH_PREFIXES['cmov' + name + 'l'] = True   # for 64-bit
 
     def visit_andX(self, line):
         match = self.r_binaryinsn.match(line)
@@ -502,13 +506,15 @@ class FunctionGcRootTracker(object):
     def insns_for_copy(self, source, target):
         source = self.replace_symbols(source)
         target = self.replace_symbols(target)
-        if source == self.ESP or target == self.ESP:
-            raise UnrecognizedOperation('%s -> %s' % (source, target))
-        elif self.r_localvar.match(target):
+        if self.r_localvar.match(target):
             if self.r_localvar.match(source):
                 return [InsnCopyLocal(source, target)]
-            else:
+            elif source != self.ESP:
                 return [InsnSetLocal(target, [source])]
+            else:
+                return [InsnSetLocal(target)]    # obscure case
+        elif source == self.ESP or target == self.ESP:
+            raise UnrecognizedOperation('%s -> %s' % (source, target))
         else:
             return []
 
@@ -555,7 +561,7 @@ class FunctionGcRootTracker(object):
     def _visit_epilogue(self):
         if not self.uses_frame_pointer:
             raise UnrecognizedOperation('epilogue without prologue')
-        return [InsnEpilogue(4)]
+        return [InsnEpilogue(self.WORD)]
 
     def visit_leave(self, line):
         return self._visit_epilogue() + self._visit_pop(self.EBP)
@@ -739,7 +745,7 @@ class FunctionGcRootTracker(object):
             lineoffset = self.labels[target].lineno - self.currentlineno
             if lineoffset >= 0:
                 assert  lineoffset in (1,2)
-                return [InsnStackAdjust(-4)]
+                return [InsnStackAdjust(-self.WORD)]
 
         insns = [InsnCall(target, self.currentlineno),
                  InsnSetLocal(self.EAX)]      # the result is there
@@ -767,6 +773,7 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     LABEL   = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
     OFFSET_LABELS   = 2**30
     LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
+    RED_ZONE        = 0
 
     FUNCTIONS_NOT_RETURNING = {
         'abort': None,
@@ -795,7 +802,10 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
 
         cls.r_localvarnofp  = re.compile(cls.LOCALVAR)
         cls.r_localvarfp    = re.compile(cls.LOCALVARFP)
-        cls.r_localvar_esp  = re.compile(r"(\d*)[(]%s[)]" % cls.ESP)
+        if cls.RED_ZONE < 0:
+            cls.r_localvar_esp = re.compile(r"(-?\d*)[(]%s[)]" % cls.ESP)
+        else:
+            cls.r_localvar_esp = re.compile(r"(\d*)[(]%s[)]" % cls.ESP)
         cls.r_localvar_ebp  = re.compile(r"(-?\d*)[(]%s[)]" % cls.EBP)
 
         cls.r_functionstart = re.compile(r"\t.type\s+"+cls.LABEL+
@@ -830,14 +840,16 @@ ElfFunctionGcRootTracker.init_regexp()
 
 class Elf64FunctionGcRootTracker(ElfFunctionGcRootTracker):
     WORD = 8
-    BITS = 64
     SUFFIX = 'q'
+    LocalVar = LocalVar64
+
     ESP  = '%rsp'
     EBP  = '%rbp'
     EAX  = '%rax'
     CALLEE_SAVE_REGISTERS = ['%rbp', '%rbx', '%r12', '%r13', '%r14', '%r15']
     LOCALVAR = (r"%rax|%rdx|%rcx|%rbx|%rsi|%rdi|%rbp|"
-                r"%r8|%r9|%r10|%r11|%r12|%r13|%r14|%r15|\d*[(]%rsp[)]")
+                r"%r8|%r9|%r10|%r11|%r12|%r13|%r14|%r15|-?\d*[(]%rsp[)]")
+    RED_ZONE = -128
 
 Elf64FunctionGcRootTracker.init_regexp()
 
@@ -1068,8 +1080,9 @@ class AssemblerParser(object):
                                                           tracker.funcname)
         table = tracker.computegcmaptable(self.verbose)
         if self.verbose > 1:
+            cls = self.FunctionGcRootTracker
             for label, state in table:
-                print >> sys.stderr, label, '\t', format_callshape(state)
+                print >> sys.stderr, label, '\t', format_callshape(state, cls)
         table = compress_gcmaptable(table)
         if self.shuffle and random.random() < 0.5:
             self.gcmaptable[:0] = table
@@ -1104,7 +1117,7 @@ class ElfAssemblerParser(AssemblerParser):
             "missed the end of the previous function")
         yield False, functionlines
 
-class Elf64AssemblerParser(AssemblerParser):
+class Elf64AssemblerParser(ElfAssemblerParser):
     format = "elf64"
     FunctionGcRootTracker = Elf64FunctionGcRootTracker
 
@@ -1349,6 +1362,8 @@ class GcRootTracker(object):
             """
 
         else:
+            if self.WORD == 8:
+                xxxxxxxxxx
             print >> output, "\t.text"
             print >> output, "\t.globl %s" % _globalname('pypy_asm_stackwalk')
             _variant(elf='.type pypy_asm_stackwalk, @function',
@@ -1660,6 +1675,8 @@ if __name__ == '__main__':
         format = 'darwin'
     elif sys.platform == 'win32':
         format = 'mingw32'
+    elif sys.maxint > 2147483647:
+        format = 'elf64'
     else:
         format = 'elf'
     while len(sys.argv) > 1:
