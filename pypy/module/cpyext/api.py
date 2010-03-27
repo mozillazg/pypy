@@ -277,10 +277,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             py_obj.c_obj_refcnt = 1
             pto = make_ref(space, space.type(w_obj))
             py_obj.c_obj_type = rffi.cast(PyObject, pto)
-        # XXX remove this weird casting?
-        ctypes_obj = ll2ctypes.lltype2ctypes(py_obj)
-        ptr = ctypes.cast(ctypes_obj, ctypes.c_void_p).value
-        py_obj = ll2ctypes.ctypes2lltype(PyObject, ctypes_obj)
+        ptr = rffi.cast(ADDR, py_obj)
         py_obj = rffi.cast(PyObject, py_obj)
         debug_refcount("MAKREF", py_obj, w_obj)
         state.py_objects_w2r[w_obj] = py_obj
@@ -304,8 +301,7 @@ def force_string(space, ref):
     ref = rffi.cast(PyObject, ref)
     w_str = space.wrap(s)
     state.py_objects_w2r[w_str] = ref
-    ctypes_obj = ll2ctypes.lltype2ctypes(ref)
-    ptr = ctypes.cast(ctypes_obj, ctypes.c_void_p).value
+    ptr = rffi.cast(ADDR, ref)
     state.py_objects_r2w[ptr] = w_str
     return w_str
 
@@ -577,7 +573,7 @@ def generic_cpy_call(space, func, *args, **kwargs):
     decref_args = kwargs.pop("decref_args", True)
     assert not kwargs
     boxed_args = []
-    for arg in args: # XXX ur needed
+    for arg in args: # XXX UI needed
         if isinstance(arg, W_Root) or arg is None:
             boxed_args.append(make_ref(space, arg))
         else:
