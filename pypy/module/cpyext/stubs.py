@@ -5081,23 +5081,6 @@ def PySequence_Tuple(space, o):
     equivalent to the Python expression tuple(o)."""
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.CCHARP], PyObject)
-def PySequence_Fast(space, o, m):
-    """Returns the sequence o as a tuple, unless it is already a tuple or list, in
-    which case o is returned.  Use PySequence_Fast_GET_ITEM() to access the
-    members of the result.  Returns NULL on failure.  If the object is not a
-    sequence, raises TypeError with m as the message text."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, Py_ssize_t], PyObject, borrowed=True)
-def PySequence_Fast_GET_ITEM(space, o, i):
-    """Return the ith element of o, assuming that o was returned by
-    PySequence_Fast(), o is not NULL, and that i is within bounds.
-    
-    This function used an int type for i. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], {PyObject**})
 def PySequence_Fast_ITEMS(space, o):
     """Return the underlying array of PyObject pointers.  Assumes that o was returned
