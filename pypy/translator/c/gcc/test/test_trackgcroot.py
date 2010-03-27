@@ -10,6 +10,7 @@ from pypy.translator.c.gcc.trackgcroot import DarwinAssemblerParser
 from pypy.translator.c.gcc.trackgcroot import compress_callshape
 from pypy.translator.c.gcc.trackgcroot import decompress_callshape
 from pypy.translator.c.gcc.trackgcroot import PARSERS
+from pypy.translator.c.gcc.trackgcroot import Elf64FunctionGcRootTracker
 from StringIO import StringIO
 
 this_dir = py.path.local(__file__).dirpath()
@@ -38,6 +39,37 @@ def test_format_callshape():
                              LOC_EBP_PLUS+20,
                              LOC_EBP_PLUS+24,
                              LOC_EBP_PLUS+28)) == expected
+
+def test_format_location_64():
+    cls64 = Elf64FunctionGcRootTracker
+    assert format_location(LOC_NOWHERE, cls=cls64) == '?'
+    assert format_location(LOC_REG | (1<<2), cls=cls64) == '%rbp'
+    assert format_location(LOC_REG | (2<<2), cls=cls64) == '%rbx'
+    assert format_location(LOC_REG | (3<<2), cls=cls64) == '%r12'
+    assert format_location(LOC_REG | (4<<2), cls=cls64) == '%r13'
+    assert format_location(LOC_REG | (5<<2), cls=cls64) == '%r14'
+    assert format_location(LOC_REG | (6<<2), cls=cls64) == '%r15'
+    assert format_location(LOC_EBP_PLUS + 0, cls=cls64) == '(%rbp)'
+    assert format_location(LOC_EBP_PLUS + 8, cls=cls64) == '8(%rbp)'
+    assert format_location(LOC_EBP_MINUS + 8, cls=cls64) == '-8(%rbp)'
+    assert format_location(LOC_ESP_PLUS + 0, cls=cls64) == '(%rsp)'
+    assert format_location(LOC_ESP_PLUS + 8, cls=cls64) == '8(%rsp)'
+
+def test_format_callshape_64():
+    cls64 = Elf64FunctionGcRootTracker
+    expected = ('{8(%rbp) '               # position of the return address
+                '| 16(%rbp), 24(%rbp), 32(%rbp), 40(%rbp), '  # 6 saved regs
+                  '48(%rbp), 56(%rbp) '
+                '| 64(%rbp), 72(%rbp)}')                    # GC roots
+    assert format_callshape((LOC_EBP_PLUS+8,
+                             LOC_EBP_PLUS+16,
+                             LOC_EBP_PLUS+24,
+                             LOC_EBP_PLUS+32,
+                             LOC_EBP_PLUS+40,
+                             LOC_EBP_PLUS+48,
+                             LOC_EBP_PLUS+56,
+                             LOC_EBP_PLUS+64,
+                             LOC_EBP_PLUS+72), cls=cls64) == expected
 
 def test_compress_callshape():
     shape = (1, 127, 0x1234, 0x5678, 0x234567,
@@ -108,7 +140,7 @@ _pypy_g_RPyRaiseException:
  
 def test_computegcmaptable():
     tests = []
-    for format in ('elf', 'darwin', 'msvc'):
+    for format in ('elf', 'darwin', 'msvc', 'elf64'):
         for path in this_dir.join(format).listdir("track*.s"):
             n = path.purebasename[5:]
             try:
@@ -133,12 +165,13 @@ def check_computegcmaptable(format, path):
     print path.dirpath().basename + '/' + path.basename
     lines = path.readlines()
     expectedlines = lines[:]
-    tracker = PARSERS[format].FunctionGcRootTracker(lines)
+    trackercls = PARSERS[format].FunctionGcRootTracker
+    tracker = trackercls(lines)
     table = tracker.computegcmaptable(verbose=sys.maxint)
     tabledict = {}
     seen = {}
     for entry in table:
-        print '%s: %s' % (entry[0], format_callshape(entry[1]))
+        print '%s: %s' % (entry[0], format_callshape(entry[1], cls=trackercls))
         tabledict[entry[0]] = entry[1]
     # find the ";; expected" lines
     prevline = ""
@@ -151,7 +184,7 @@ def check_computegcmaptable(format, path):
             label = prevmatch.group(1)
             assert label in tabledict
             got = tabledict[label]
-            assert format_callshape(got) == expected
+            assert format_callshape(got, cls=trackercls) == expected
             seen[label] = True
             if format == 'msvc':
                 expectedlines.insert(i-2, 'PUBLIC\t%s\n' % (label,))
