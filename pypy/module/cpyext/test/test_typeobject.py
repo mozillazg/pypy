@@ -19,3 +19,5 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert not "im_func" in dir(module.fooType.copy)
         assert module.fooType.copy.__objclass__ is module.fooType
         assert "copy" in repr(module.fooType.copy)
+        assert repr(module.fooType) == "<type 'foo.foo'>"
+        assert repr(obj2) == "<Foo>"

@@ -66,6 +66,16 @@ static PyGetSetDef foo_getseters[] = {
     {NULL}  /* Sentinel */
 };
 
+static PyObject *
+foo_repr(PyObject *self)
+{
+    PyObject *format;
+
+    format = PyString_FromString("<Foo>");
+    if (format == NULL) return NULL;
+    return format;
+}
+
 
 static PyTypeObject footype = {
 	PyVarObject_HEAD_INIT(NULL, 0)
@@ -78,7 +88,7 @@ static PyTypeObject footype = {
 	0,                        /*tp_getattr*/
 	0,			  /*tp_setattr*/
 	0,			  /*tp_compare*/
-	0,			  /*tp_repr*/
+	foo_repr,			  /*tp_repr*/
     0,			  /*tp_as_number*/
 	0,                        /*tp_as_sequence*/
 	0,			  /*tp_as_mapping*/

@@ -43,6 +43,33 @@ class W_PyCMethodObject(W_PyCFunctionObject):
         return self.space.wrap(self.__repr__())
 
 
+class W_PyCWrapperObject(Wrappable):
+    def __init__(self, space, pto, method_name, wrapper_func, doc, flags, func):
+        self.space = space
+        self.method_name = method_name
+        self.wrapper_func = wrapper_func
+        self.doc = doc
+        self.flags = flags
+        self.func = func
+        assert flags == 0
+        self.w_objclass = from_ref(space, pto)
+
+    def call(self, w_self, w_args):
+        return generic_cpy_call(self.space, self.wrapper_func, w_self, w_args, self.func)
+
+
+@unwrap_spec(ObjSpace, W_Root, Arguments)
+def cwrapper_descr_call(space, w_self, __args__):
+    self = space.interp_w(W_PyCWrapperObject, w_self)
+    args_w, kw_w = __args__.unpack()
+    w_args = space.newtuple(args_w[1:])
+    w_self = args_w[0]
+    if kw_w:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("keywords not yet supported"))
+    return self.call(w_self, w_args)
+
+
 @unwrap_spec(ObjSpace, W_Root, Arguments)
 def cfunction_descr_call(space, w_self, __args__):
     self = space.interp_w(W_PyCFunctionObject, w_self)
@@ -51,7 +78,7 @@ def cfunction_descr_call(space, w_self, __args__):
     if kw_w:
         raise OperationError(space.w_TypeError,
                              space.wrap("keywords not yet supported"))
-    ret = self.call(None, space.newtuple(args_w))
+    ret = self.call(None, w_args)
     return ret
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
@@ -80,7 +107,6 @@ W_PyCFunctionObject.typedef = TypeDef(
     'builtin_function_or_method',
     __call__ = interp2app(cfunction_descr_call),
     )
-
 W_PyCFunctionObject.typedef.acceptable_as_base_class = False
 
 W_PyCMethodObject.typedef = TypeDef(
@@ -91,13 +117,29 @@ W_PyCMethodObject.typedef = TypeDef(
     __objclass__ = interp_attrproperty_w('w_objclass', cls=W_PyCMethodObject),
     __repr__ = interp2app(W_PyCMethodObject.descr_method_repr),
     )
-
 W_PyCMethodObject.typedef.acceptable_as_base_class = False
 
-def PyCFunction_NewEx(space, ml, w_self): # not directly the API sig
+
+W_PyCWrapperObject.typedef = TypeDef(
+    'wrapper_descriptor',
+    __call__ = interp2app(cwrapper_descr_call),
+    __get__ = interp2app(cmethod_descr_get),
+    __name__ = interp_attrproperty('method_name', cls=W_PyCWrapperObject),
+    __doc__ = interp_attrproperty('doc', cls=W_PyCWrapperObject),
+    __objclass__ = interp_attrproperty_w('w_objclass', cls=W_PyCWrapperObject),
+    # XXX missing: __getattribute__, __repr__
+    )
+W_PyCWrapperObject.typedef.acceptable_as_base_class = False
+
+
+def PyCFunction_NewEx(space, ml, w_self): # not exactly the API sig
     return space.wrap(W_PyCFunctionObject(space, ml, w_self))
 
 
 def PyDescr_NewMethod(space, pto, method):
     return space.wrap(W_PyCMethodObject(space, method, pto))
 
+def PyDescr_NewWrapper(space, pto, method_name, wrapper_func, doc, flags, func):
+    # not exactly the API sig
+    return space.wrap(W_PyCWrapperObject(space, pto, method_name,
+        wrapper_func, doc, flags, func))
