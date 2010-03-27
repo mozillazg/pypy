@@ -18,7 +18,7 @@ extern "C" {
 	Py_InitModule4(name, methods, doc, (PyObject *)NULL, \
 		       PYTHON_API_VERSION)
 
-
+int PyModule_AddObject(PyObject *m, const char *name, PyObject *o);
 
 #ifdef __cplusplus
 }
