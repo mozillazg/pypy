@@ -444,19 +444,21 @@ def build_bridge(space, rename=True):
     """
     pypy_rename = []
     renamed_symbols = []
-    if rename:
-        for name in export_symbols:
-            if name.startswith("PyPy"):
-                renamed_symbols.append(name)
-                continue
-            if "#" in name:
-                deref = "*"
-            else:
-                deref = ""
-            name = name.replace("#", "")
-            newname = name.replace('Py', 'PyPy')
-            pypy_rename.append('#define %s %s%s' % (name, deref, newname))
-            renamed_symbols.append(newname)
+    for name in export_symbols:
+        if name.startswith("PyPy"):
+            renamed_symbols.append(name)
+            continue
+        if "#" in name:
+            deref = "*"
+        else:
+            deref = ""
+            if not rename: continue
+        name = name.replace("#", "")
+        newname = name.replace('Py', 'PyPy')
+        if not rename:
+            newname = name
+        pypy_rename.append('#define %s %s%s' % (name, deref, newname))
+        renamed_symbols.append(newname)
     export_symbols = renamed_symbols
     pypy_rename_h = udir.join('pypy_rename.h')
     pypy_rename_h.write('\n'.join(pypy_rename))
