@@ -325,7 +325,6 @@ def register_container(space, container):
     container_ptr = rffi.cast(ADDR, container)
     assert not state.last_container, "Last container was not fetched"
     state.last_container = container_ptr
-    print "Setting last_container to", hex(container_ptr)
 
 def add_borrowed_object(space, obj):
     state = space.fromcache(State)
