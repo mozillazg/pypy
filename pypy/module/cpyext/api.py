@@ -406,8 +406,8 @@ def make_wrapper(space, callable):
                         assert False, "Container not registered by %s" % (callable, )
                     else:
                         raise
-        elif callable.api_func.restype is rffi.INT_real:
-            retval = rffi.cast(rffi.INT_real, retval)
+        elif callable.api_func.restype is not lltype.Void:
+            retval = rffi.cast(callable.api_func.restype, retval)
         return retval
     wrapper.__name__ = "wrapper for %r" % (callable, )
     return wrapper
