@@ -136,10 +136,12 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
                         raise
                     state = space.fromcache(State)
                     e.normalize_exception(space)
-                    state.exc_type = e.w_type
-                    state.exc_value = e.get_w_value(space)
+                    state.set_exception(e.w_type, e.get_w_value(space))
                     return api_function.error_value
             finally:
+                if api_function.borrowed:
+                    state = space.fromcache(State)
+                    state.last_container = 0
                 from pypy.module.cpyext.macros import Py_DECREF
                 for arg in to_decref:
                     Py_DECREF(space, arg)
@@ -322,7 +324,10 @@ def from_ref(space, ref):
 @cpython_api([PyObject], lltype.Void, external=False)
 def register_container(space, container):
     state = space.fromcache(State)
-    container_ptr = rffi.cast(ADDR, container)
+    if not container: # self-managed
+        container_ptr = -1
+    else:
+        container_ptr = rffi.cast(ADDR, container)
     assert not state.last_container, "Last container was not fetched"
     state.last_container = container_ptr
 
@@ -332,6 +337,8 @@ def add_borrowed_object(space, obj):
     state.last_container = 0
     if not container_ptr:
         raise NullPointerException
+    if container_ptr == -1:
+        return
     borrowees = state.borrow_mapping.get(container_ptr)
     if borrowees is None:
         state.borrow_mapping[container_ptr] = borrowees = {}
@@ -371,12 +378,10 @@ def make_wrapper(space, callable):
         except OperationError, e:
             failed = True
             e.normalize_exception(space)
-            state.exc_type = e.w_type
-            state.exc_value = e.get_w_value(space)
+            state.set_exception(e.w_type, e.get_w_value(space))
         except BaseException, e:
             failed = True
-            state.exc_type = space.w_SystemError
-            state.exc_value = space.wrap(str(e))
+            state.set_exception(space.w_SystemError, space.wrap(str(e)))
             import traceback
             traceback.print_exc()
         else:
