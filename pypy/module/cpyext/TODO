@@ -11,6 +11,12 @@
 
  - replace @cpython_api(external=False) by another explicit name: all
    it does is a lltype function pointer, no C code involved.
+ 
+ - Generate decl code for global objects.
+
+ - Make code translatable.
+
+ - Implement Members.
 
  - refactor management of py_objects_r2w and py_objects_w2r, this can
    probably be expressed in terms of _PyObject_GC_TRACK macros.
