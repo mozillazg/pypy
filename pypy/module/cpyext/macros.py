@@ -50,6 +50,11 @@ def Py_INCREF(space, obj):
     debug_refcount("INCREF", obj, obj.c_obj_refcnt, frame_stackdepth=3)
 
 @cpython_api([PyObject], lltype.Void)
+def Py_XINCREF(space, obj):
+    if obj:
+        Py_INCREF(space, obj)
+
+@cpython_api([PyObject], lltype.Void)
 def Py_XDECREF(space, obj):
     if obj:
         Py_DECREF(space, obj)
