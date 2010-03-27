@@ -254,11 +254,11 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             # Py_INCREF(space, pto)
             basicsize = pto._obj.c_tp_basicsize
             T = get_padded_type(PyObject.TO, basicsize)
-            py_obj = lltype.malloc(T, None, flavor="raw")
+            py_obj = lltype.malloc(T, None, flavor="raw", zero=True)
             py_obj.c_obj_refcnt = 1
             py_obj.c_obj_type = rffi.cast(PyObject, pto)
         elif isinstance(w_obj, W_StringObject):
-            py_obj = lltype.malloc(PyStringObject.TO, None, flavor='raw')
+            py_obj = lltype.malloc(PyStringObject.TO, None, flavor='raw', zero=True)
             py_obj.c_size = len(space.str_w(w_obj))
             py_obj.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
             pto = make_ref(space, space.w_str)
@@ -266,7 +266,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             py_obj.c_obj_refcnt = 1
             py_obj.c_obj_type = rffi.cast(PyObject, pto)
         else:
-            py_obj = lltype.malloc(PyObject.TO, None, flavor="raw")
+            py_obj = lltype.malloc(PyObject.TO, None, flavor="raw", zero=True)
             py_obj.c_obj_refcnt = 1
             pto = make_ref(space, space.type(w_obj))
             py_obj.c_obj_type = rffi.cast(PyObject, pto)
