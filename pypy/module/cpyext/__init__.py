@@ -42,5 +42,6 @@ import pypy.module.cpyext.tupleobject
 import pypy.module.cpyext.dictobject
 import pypy.module.cpyext.intobject
 import pypy.module.cpyext.listobject
+import pypy.module.cpyext.sequence
 # now that all rffi_platform.Struct types are registered, configure them
 api.configure_types()
