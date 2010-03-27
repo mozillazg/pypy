@@ -84,3 +84,4 @@ def PyModule_GetDict(space, w_mod):
         return w_dict
     else:
         PyErr_BadInternalCall(space)
+
