@@ -26,7 +26,14 @@ class AppTestListObject(AppTestCpythonExtensionBase):
              Py_INCREF(Py_None);
              return Py_None;
              """
-             )
+             ),
+             ("appendlist", "METH_VARARGS",
+             """
+             PyObject *l = PyTuple_GetItem(args, 0);
+             PyList_Append(l, PyTuple_GetItem(args, 1));
+             Py_RETURN_NONE;
+             """
+             ),
             ])
         l = module.newlist()
         assert l == [3, -5, 1000]
@@ -42,3 +49,9 @@ class AppTestListObject(AppTestCpythonExtensionBase):
         assert len(l) == 1
         
         raises(SystemError, module.setlistitem, (1, 2, 3), 0)
+    
+        l = []
+        module.appendlist(l, 14)
+        assert len(l) == 1
+        assert l[0] == 14
+

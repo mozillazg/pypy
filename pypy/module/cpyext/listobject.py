@@ -36,3 +36,10 @@ def PyList_SetItem(space, w_list, index, w_item):
             "list assignment index out of range"))
     wrappeditems[index] = w_item
     return 0
+
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
+def PyList_Append(space, w_list, w_item):
+    if not isinstance(w_list, W_ListObject):
+        PyErr_BadInternalCall(space)
+    w_list.append(w_item)
+    return 0
