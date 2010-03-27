@@ -6,7 +6,7 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.interpreter.gateway import ObjSpace, W_Root
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.baseobjspace import Wrappable
-from pypy.objspace.std.typeobject import W_TypeObject, _HEAPTYPE
+from pypy.objspace.std.typeobject import W_TypeObject, _CPYTYPE
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
@@ -203,26 +203,20 @@ class W_PyCTypeObject(W_TypeObject):
         convert_method_defs(space, dict_w, pto.c_tp_methods, pto)
         convert_getset_defs(space, dict_w, pto.c_tp_getset, pto)
         # XXX missing: convert_member_defs
-        W_TypeObject.__init__(self, space, rffi.charp2str(pto.c_tp_name),
+        full_name = rffi.charp2str(pto.c_tp_name)
+        module_name, extension_name = full_name.split(".", 1)
+        dict_w["__module__"] = space.wrap(module_name)
+        W_TypeObject.__init__(self, space, extension_name,
             bases_w or [space.w_object], dict_w)
-        self.__flags__ = _HEAPTYPE
+        self.__flags__ = _CPYTYPE
 
 class W_PyCObject(Wrappable):
     def __init__(self, space):
         self.space = space
 
-#    def __del__(self):
-#        space = self.space
-#        self.clear_all_weakrefs()
-#        w_type = space.type(self)
-#        assert isinstance(w_type, W_PyCTypeObject)
-#        pto = w_type.pto
-#        generic_cpy_call(space, pto.c_tp_dealloc, self)
-
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
-    print >>sys.stderr, "Dealloc of", obj
     pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
     assert pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE
     base = pto
