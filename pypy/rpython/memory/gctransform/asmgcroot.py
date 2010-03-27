@@ -10,6 +10,8 @@ from pypy.translator.unsimplify import copyvar
 from pypy.rlib.debug import ll_assert
 import sys
 
+X86_64 = sys.maxint > 2147483647
+
 
 #
 #  This transformer avoids the use of a shadow stack in a completely
@@ -216,16 +218,17 @@ class AsmStackRootWalker(BaseRootWalker):
         #     first word of the frame of 'caller' (see picture
         #     below).
         #
-        #   * Four "locations" that specify where the function saves
-        #     each of the four callee-saved registers (%ebx, %esi,
-        #     %edi, %ebp).
+        #   * Four or six "locations" that specify where the function
+        #     saves each of the callee-saved registers:
+        #       on x86:    %ebx, %esi, %edi, %ebp
+        #       on x86_64: %rbp, %rbx, %r12, %r13, %r14, %r15
         #
         #   * The number of live GC roots around the call.
         #
         #   * For each GC root, an integer that specify where the
         #     GC pointer is stored.  This is a "location" too.
         #
-        # XXX the details are completely specific to X86!!!
+        # XXX the details are completely specific to x86 or x86_64!!!
         # a picture of the stack may help:
         #                                           ^ ^ ^
         #     |     ...      |                 to older frames
@@ -451,8 +454,8 @@ class ShapeDecompressor:
 # The special pypy_asm_stackwalk(), implemented directly in
 # assembler, fills information about the current stack top in an
 # ASM_FRAMEDATA array and invokes an RPython callback with it.
-# An ASM_FRAMEDATA is an array of 5 values that describe everything
-# we need to know about a stack frame:
+# An ASM_FRAMEDATA is an array of 5 (or 7) values that describe
+# everything we need to know about a stack frame:
 #
 #   - the value that %ebx had when the current function started
 #   - the value that %esi had when the current function started
@@ -461,9 +464,16 @@ class ShapeDecompressor:
 #   - frame address (actually the addr of the retaddr of the current function;
 #                    that's the last word of the frame in memory)
 #
-CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
-INDEX_OF_EBP      = 3
-FRAME_PTR         = CALLEE_SAVED_REGS    # the frame is at index 4 in the array
+# On x86_64, we have 6 callee-saved registers instead of 4,
+# in the order %rbp, %rbx, %r12, %r13, %r14, %r15.
+#
+if X86_64:
+    CALLEE_SAVED_REGS = 6       # there are 6 callee-saved registers
+    INDEX_OF_EBP      = 0
+else:
+    CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
+    INDEX_OF_EBP      = 3
+FRAME_PTR = CALLEE_SAVED_REGS   # the frame is after the regs in the array
 
 ASM_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([], lltype.Void))
 
