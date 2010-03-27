@@ -3452,19 +3452,6 @@ def PyList_CheckExact(space, p):
     """
     raise NotImplementedError
 
-@cpython_api([Py_ssize_t], PyObject)
-def PyList_New(space, len):
-    """Return a new list of length len on success, or NULL on failure.
-    
-    If length is greater than zero, the returned list object's items are
-    set to NULL.  Thus you cannot use abstract API functions such as
-    PySequence_SetItem()  or expose the object to Python code before
-    setting all items to a real object with PyList_SetItem().
-    
-    This function used an int for size. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], Py_ssize_t)
 def PyList_Size(space, list):
     """
