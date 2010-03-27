@@ -21,5 +21,5 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert "copy" in repr(module.fooType.copy)
         assert repr(module.fooType) == "<type 'foo.foo'>"
         assert repr(obj2) == "<Foo>"
-        print module.fooType.__call__
+        assert repr(module.fooType.__call__) == "<slot wrapper '__call__' of 'foo' objects>"
         assert obj2(foo=1, bar=2) == dict(foo=1, bar=2)
