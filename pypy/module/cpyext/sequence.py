@@ -32,3 +32,15 @@ def PySequence_Fast_GET_ITEM(space, w_obj, index):
     register_container(space, w_obj)
     return w_res
 
+@cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
+def PySequence_Fast_GET_SIZE(space, w_obj):
+    """Returns the length of o, assuming that o was returned by
+    PySequence_Fast() and that o is not NULL.  The size can also be
+    gotten by calling PySequence_Size() on o, but
+    PySequence_Fast_GET_SIZE() is faster because it can assume o is a list
+    or tuple."""
+    if isinstance(w_obj, listobject.W_ListObject):
+        return len(w_obj.wrappeditems)
+    assert isinstance(w_obj, tupleobject.W_TupleObject)
+    return len(w_obj.wrappeditems)
+
