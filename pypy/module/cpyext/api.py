@@ -110,50 +110,55 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
 
     def decorate(func):
         api_function = ApiFunction(argtypes, restype, func, borrowed, error)
+        func.api_func = api_function
 
         if error is _NOT_SPECIFIED:
             raise ValueError("function %s has no return value for exceptions"
                              % func)
-        def unwrapper(space, *args):
-            "NOT_RPYTHON: XXX unsure"
-            newargs = []
-            to_decref = []
-            for i, arg in enumerate(args):
-                if api_function.argtypes[i] is PyObject:
-                    if (isinstance(arg, W_Root) and
-                        not api_function.argnames[i].startswith('w_')):
-                        arg = make_ref(space, arg)
-                        to_decref.append(arg)
-                    elif (not isinstance(arg, W_Root) and
-                          api_function.argnames[i].startswith('w_')):
-                        arg = from_ref(space, arg)
-                newargs.append(arg)
-            try:
+        def make_unwrapper(catch_exception):
+            def unwrapper(space, *args):
+                "NOT_RPYTHON: XXX unsure"
+                newargs = []
+                to_decref = []
+                for i, arg in enumerate(args):
+                    if api_function.argtypes[i] is PyObject:
+                        if (isinstance(arg, W_Root) and
+                            not api_function.argnames[i].startswith('w_')):
+                            arg = make_ref(space, arg)
+                            to_decref.append(arg)
+                        elif (not isinstance(arg, W_Root) and
+                              api_function.argnames[i].startswith('w_')):
+                            arg = from_ref(space, arg)
+                    newargs.append(arg)
                 try:
-                    return func(space, *newargs)
-                except OperationError, e:
-                    if not hasattr(api_function, "error_value"):
-                        raise
-                    state = space.fromcache(State)
-                    e.normalize_exception(space)
-                    state.set_exception(e.w_type, e.get_w_value(space))
-                    return api_function.error_value
-            finally:
-                if api_function.borrowed:
-                    state = space.fromcache(State)
-                    state.last_container = 0
-                from pypy.module.cpyext.macros import Py_DECREF
-                for arg in to_decref:
-                    Py_DECREF(space, arg)
+                    try:
+                        return func(space, *newargs)
+                    except OperationError, e:
+                        if not catch_exception:
+                            raise
+                        if not hasattr(api_function, "error_value"):
+                            raise
+                        state = space.fromcache(State)
+                        e.normalize_exception(space)
+                        state.set_exception(e.w_type, e.get_w_value(space))
+                        return api_function.error_value
+                finally:
+                    if api_function.borrowed:
+                        state = space.fromcache(State)
+                        state.last_container = 0
+                    from pypy.module.cpyext.macros import Py_DECREF
+                    for arg in to_decref:
+                        Py_DECREF(space, arg)
+            unwrapper.func = func
+            unwrapper.api_func = api_function
+            return unwrapper
 
-        func.api_func = api_function
-        unwrapper.api_func = api_function
-        unwrapper.func = func
-        unwrapper.__name__ = "uw(%s)" % (func.__name__, )
+        unwrapper_True = make_unwrapper(True)
+        unwrapper_False = make_unwrapper(False)
         if external:
             FUNCTIONS[func.func_name] = api_function
-        INTERPLEVEL_API[func.func_name] = unwrapper
-        return unwrapper
+        INTERPLEVEL_API[func.func_name] = unwrapper_True
+        return unwrapper_False
     return decorate
 
 def cpython_api_c():
