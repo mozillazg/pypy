@@ -294,6 +294,7 @@ def allocate_type_obj(space, w_type):
     pto.c_tp_name = rffi.str2charp(w_type.getname(space, "?"))
     pto.c_tp_basicsize = -1 # hopefully this makes malloc bail out
     pto.c_tp_itemsize = 0
+    pto.c_tp_cache = lltype.nullptr(PyObject.TO)
     # uninitialized fields:
     # c_tp_print, c_tp_getattr, c_tp_setattr
     # XXX implement
