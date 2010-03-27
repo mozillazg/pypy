@@ -11,6 +11,13 @@ class AppTestIterator(AppTestCpythonExtensionBase):
              return PySequence_Fast(PyTuple_GetItem(args, 0), "message");
              '''
              ),
+            ("fast_getitem", "METH_VARARGS",
+             '''
+             PyObject *lst = PyTuple_GetItem(args, 0);
+             long index = PyInt_AsLong(PyTuple_GetItem(args, 1));
+             return PySequence_Fast_GET_ITEM(lst, index);
+             '''
+             ),
             ])
         t = (1, 2, 3, 4)
         assert module.newiter(t) is t
@@ -24,3 +31,4 @@ class AppTestIterator(AppTestCpythonExtensionBase):
             assert te.args == ("message",)
         else:
             raise Exception("DID NOT RAISE")
+        assert module.fast_getitem((1, 2, 3), 1) == 2
