@@ -1,4 +1,5 @@
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.lib.identity_dict import identity_dict
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import lltype
@@ -19,12 +20,29 @@ class State:
         self.exc_type = None
         self.exc_value = None
 
+    def set_exception(self, w_type, w_value):
+        self.clear_exception()
+        self.exc_type = w_type
+        self.exc_value = w_value
+
+    def clear_exception(self):
+        from pypy.module.cpyext.macros import Py_DECREF
+        from pypy.module.cpyext.api import make_ref, ADDR
+        # handling of borrowed objects, remove when we have
+        # a weakkeydict
+        exc_value = make_ref(self.space, self.exc_value, borrowed=True)
+        if exc_value:
+            Py_DECREF(self.space, exc_value)
+            containee_ptr = rffi.cast(ADDR, exc_value)
+            del self.borrowed_objects[containee_ptr]
+        self.exc_type = None
+        self.exc_value = None
+
     def check_and_raise_exception(self):
         exc_value = self.exc_value
         exc_type = self.exc_type
         if exc_type is not None or exc_value is not None:
-            self.exc_value = None
-            self.exc_type = None
+            self.clear_exception()
             op_err = OperationError(exc_type, exc_value)
             raise op_err
 
