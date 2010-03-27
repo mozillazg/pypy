@@ -5105,15 +5105,6 @@ def PySequence_ITEM(space, o, i):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject], Py_ssize_t)
-def PySequence_Fast_GET_SIZE(space, o):
-    """Returns the length of o, assuming that o was returned by
-    PySequence_Fast() and that o is not NULL.  The size can also be
-    gotten by calling PySequence_Size() on o, but
-    PySequence_Fast_GET_SIZE() is faster because it can assume o is a list
-    or tuple."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], rffi.INT_real)
 def PySet_Check(space, p):
     """Return true if p is a set object or an instance of a subtype.
