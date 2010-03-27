@@ -5,6 +5,13 @@
 
 #define Py_RETURN_NONE return Py_INCREF(Py_None), Py_None
 
+
+/*
+CPyton has this for backwards compatibility with really old extensions, and now
+we have it for compatibility with CPython.
+*/
+#define staticforward static
+
 typedef void* Py_buffer;
 
 
