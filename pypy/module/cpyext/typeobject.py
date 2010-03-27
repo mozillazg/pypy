@@ -62,8 +62,8 @@ def convert_getset_defs(space, dict_w, getsets, pto):
 def add_operators(space, dict_w, pto):
     # XXX support PyObject_HashNotImplemented
     state = space.fromcache(State)
-    for method_name, slot_name, _, wrapper_func, doc, flags in state.slotdefs: # XXX use UI
-        if method_name in dict_w or wrapper_func is None:
+    for method_name, slot_name, _, wrapper_func, wrapper_func_kwds, doc in state.slotdefs: # XXX use UI
+        if method_name in dict_w or (wrapper_func is None and wrapper_func_kwds is None):
             continue
         # XXX is this rpython?
         if len(slot_name) == 1:
@@ -78,7 +78,7 @@ def add_operators(space, dict_w, pto):
         if not func:
             continue
         dict_w[method_name] = PyDescr_NewWrapper(space, pto, method_name, wrapper_func,
-                doc, flags, func_voidp)
+                wrapper_func_kwds, doc, func_voidp)
 
 
 class W_PyCTypeObject(W_TypeObject):

@@ -3,15 +3,13 @@ import re
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, \
         PyObject
-from pypy.module.cpyext.typeobjectdefs import unaryfunc, wrapperfunc
+from pypy.module.cpyext.typeobjectdefs import unaryfunc, wrapperfunc,\
+        ternaryfunc
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
 
 space = None
 
-def is_wrapper_func(func):
-    deco = cpython_api([PyObject, PyObject, rffi.VOIDP_real], PyObject, external=False)
-    return deco(func)
 
 def check_num_args(space, ob, n):
     from pypy.module.cpyext.tupleobject import PyTuple_CheckExact, \
@@ -24,17 +22,14 @@ def check_num_args(space, ob, n):
     raise operationerrfmt(space.w_TypeError,
         "expected %d arguments, got %zd", n, PyTuple_GET_SIZE(ob))
 
-def wrap_binaryfunc_l(space, w_self, w_args, func):
-    pass
-
-def wrap_binaryfunc_r(space, w_self, w_args, func):
-    pass
-
-@is_wrapper_func
 def wrap_unaryfunc(space, w_self, w_args, func):
     func_unary = rffi.cast(unaryfunc, func)
     check_num_args(space, w_args, 0)
     return generic_cpy_call(space, func_unary, w_self)
+
+def wrap_call(space, w_self, w_args, func, w_kwds):
+    func_target = rffi.cast(ternaryfunc, func)
+    return generic_cpy_call(space, func_target, w_self, w_args, w_kwds)
 
 
 PyWrapperFlag_KEYWORDS = 1
@@ -42,12 +37,15 @@ PyWrapperFlag_KEYWORDS = 1
 # adopted from typeobject.c
 def FLSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC, FLAGS):
     wrapper = globals().get(WRAPPER, None)
-    if wrapper is not None:
-        wrapper = wrapper.api_func.get_llhelper(space)
-    else:
-        wrapper = lltype.nullptr(wrapperfunc.TO)
     slotname = ("c_" + SLOT).split(".")
-    return (NAME, slotname, FUNCTION, wrapper, DOC, FLAGS)
+    assert FLAGS == 0 or FLAGS == PyWrapperFlag_KEYWORDS
+    if FLAGS:
+        wrapper1 = None
+        wrapper2 = wrapper
+    else:
+        wrapper1 = wrapper
+        wrapper2 = None
+    return (NAME, slotname, FUNCTION, wrapper1, wrapper2, DOC)
 
 def TPSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC):
     return FLSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC, 0)
@@ -67,19 +65,18 @@ def IBSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC):
     return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, WRAPPER,
             "x." + NAME + "(y) <==> x" + DOC + "y")
 def BINSLOT(NAME, SLOT, FUNCTION, DOC):
-    return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, wrap_binaryfunc_l, \
+    return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, "wrap_binaryfunc_l", \
             "x." + NAME + "(y) <==> x" + DOC + "y")
 def RBINSLOT(NAME, SLOT, FUNCTION, DOC):
-    return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, wrap_binaryfunc_r, \
+    return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, "wrap_binaryfunc_r", \
             "x." + NAME + "(y) <==> y" + DOC + "x")
 def BINSLOTNOTINFIX(NAME, SLOT, FUNCTION, DOC):
-    return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, wrap_binaryfunc_l, \
+    return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, "wrap_binaryfunc_l", \
             "x." + NAME + "(y) <==> " + DOC)
 def RBINSLOTNOTINFIX(NAME, SLOT, FUNCTION, DOC):
-    return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, wrap_binaryfunc_r, \
+    return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, "wrap_binaryfunc_r", \
             "x." + NAME + "(y) <==> " + DOC)
 
-# TODO remove all casts
 slotdef_replacements = (
         ("\s+", " "),
         ("static [^{]*{", "("),
@@ -88,6 +85,7 @@ slotdef_replacements = (
         (r"(?P<start> *R?[^ ]{3}SLOT(NOTINFIX)?\([^,]*, )(?P<fname>[^,]*), (?P<slotcname>[^,]*)", r"\g<start>'\g<fname>', '\g<slotcname>'"),
         ("'NULL'", "None"),
         ("{NULL}", ""),
+        ("\(wrapperfunc\)", ""),
         ("\),", "),\n"),
     )
 
@@ -101,7 +99,7 @@ slotdef_replacements = (
 # Instructions for update:
 # Copy new slotdefs from typeobject.c
 # Remove comments
-# Done
+# Done.
 slotdefs = """
 static slotdef slotdefs[] = {
 	SQSLOT("__len__", sq_length, slot_sq_length, wrap_lenfunc,
@@ -304,3 +302,5 @@ def init_slotdefs(space_):
     finally:
         space = None
 
+if __name__ == "__main__":
+    print slotdefs
