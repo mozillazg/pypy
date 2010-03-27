@@ -37,7 +37,7 @@ class W_PyCMethodObject(W_PyCFunctionObject):
         self.w_objclass = from_ref(space, pto)
 
     def __repr__(self):
-        return "method %r of %r objects" % (self.name, self.w_objclass.getname(self.space, '?'))
+        return "<method %r of %r objects>" % (self.name, self.w_objclass.getname(self.space, '?'))
 
     def descr_method_repr(self):
         return self.space.wrap(self.__repr__())
@@ -64,6 +64,9 @@ class W_PyCWrapperObject(Wrappable):
                                  self.method_name)
         return self.wrapper_func(self.space, w_self, w_args, self.func)
 
+    def descr_method_repr(self):
+        return self.space.wrap("<slot wrapper %r of %r objects>" % (self.method_name,
+            self.w_objclass.getname(self.space, '?')))
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
 def cwrapper_descr_call(space, w_self, __args__):
@@ -134,6 +137,7 @@ W_PyCWrapperObject.typedef = TypeDef(
     __name__ = interp_attrproperty('method_name', cls=W_PyCWrapperObject),
     __doc__ = interp_attrproperty('doc', cls=W_PyCWrapperObject),
     __objclass__ = interp_attrproperty_w('w_objclass', cls=W_PyCWrapperObject),
+    __repr__ = interp2app(W_PyCWrapperObject.descr_method_repr),
     # XXX missing: __getattribute__, __repr__
     )
 W_PyCWrapperObject.typedef.acceptable_as_base_class = False
