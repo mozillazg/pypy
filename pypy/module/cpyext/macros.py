@@ -59,7 +59,7 @@ def _Py_Dealloc(space, obj):
     from pypy.module.cpyext.methodobject import generic_cpy_call
     pto = obj.c_obj_type
     pto = rffi.cast(PyTypeObjectPtr, pto)
-    print >>sys.stderr, "Calling dealloc slot of", obj, \
-          "'s type which is", rffi.charp2str(pto.c_tp_name)
+    #print >>sys.stderr, "Calling dealloc slot of", obj, \
+    #      "'s type which is", rffi.charp2str(pto.c_tp_name)
     generic_cpy_call(space, pto.c_tp_dealloc, obj, decref_args=False)
 
