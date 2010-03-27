@@ -480,7 +480,7 @@ def build_bridge(space, rename=True):
             arg = db.gettype(argtype)
             arg = arg.replace('@', 'arg%d' % (i,))
             args.append(arg)
-        args = ', '.join(args)
+        args = ', '.join(args) or "void"
         callargs = ', '.join('arg%d' % (i,) for i in range(len(func.argtypes)))
         header = "%s %s(%s)" % (restype, name, args)
         pypy_decls.append(header + ";")
