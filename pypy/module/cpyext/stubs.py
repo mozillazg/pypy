@@ -5274,14 +5274,6 @@ def PySlice_GetIndicesEx(space, slice, length, start, stop, step, slicelength):
     raise NotImplementedError
 
 @cpython_api([PyObject], rffi.INT_real)
-def PyString_Check(space, o):
-    """Return true if the object o is a string object or an instance of a subtype of
-    the string type.
-    
-    Allowed subtypes to be accepted."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], rffi.INT_real)
 def PyString_CheckExact(space, o):
     """Return true if the object o is a string object, but not an instance of a
     subtype of the string type.

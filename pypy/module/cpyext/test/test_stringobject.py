@@ -41,11 +41,18 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
                  Py_DECREF(f);
                  return NULL;
              """),
+             ("test_is_string", "METH_VARARGS",
+             """
+                return PyBool_FromLong(PyString_Check(PyTuple_GetItem(args, 0)));
+             """),
             ])
         assert module.get_hello1() == 'Hello world'
         assert module.get_hello2() == 'Hello world'
         assert module.test_Size()
         raises(TypeError, module.test_Size_exception)
+    
+        assert module.test_is_string("")
+        assert not module.test_is_string(())
 
     def test_string_buffer_init(self):
         module = self.import_extension('foo', [
