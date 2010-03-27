@@ -3291,14 +3291,6 @@ def PyThreadState_Next(space, tstate):
     raise NotImplementedError
 
 @cpython_api([PyObject], rffi.INT_real)
-def PyInt_Check(space, o):
-    """Return true if o is of type PyInt_Type or a subtype of
-    PyInt_Type.
-    
-    Allowed subtypes to be accepted."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], rffi.INT_real)
 def PyInt_CheckExact(space, o):
     """Return true if o is of type PyInt_Type, but not a subtype of
     PyInt_Type.
