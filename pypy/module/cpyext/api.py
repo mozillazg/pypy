@@ -512,7 +512,9 @@ def build_bridge(space, rename=True):
     eci = ExternalCompilationInfo(
         include_dirs=include_dirs,
         separate_module_sources=[code],
-        separate_module_files=[include_dir / "varargwrapper.c"],
+        separate_module_files=[include_dir / "varargwrapper.c",
+                               include_dir / "pyerrors.c",
+                               include_dir / "modsupport.c"],
         export_symbols=['pypyAPI'] + export_symbols,
         )
     eci = eci.convert_sources_to_files()
