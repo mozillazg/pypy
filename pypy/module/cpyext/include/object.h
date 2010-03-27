@@ -385,6 +385,7 @@ manually remove this flag though!
 
 PyAPI_DATA(PyTypeObject *) PyType_Type; /* built-in 'type' */
 PyAPI_DATA(PyTypeObject *) PyBaseObject_Type;
+PyAPI_DATA(PyObject *) PyExc_TypeError;
 
 /* objimpl.h ----------------------------------------------*/
 
