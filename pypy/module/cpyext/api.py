@@ -344,6 +344,10 @@ def general_check(space, w_obj, w_type):
     w_obj_type = space.type(w_obj)
     return int(space.is_w(w_obj_type, w_type) or space.is_true(space.issubtype(w_obj_type, w_type)))
 
+def general_check_exact(space, w_obj, w_type):
+    w_obj_type = space.type(w_obj)
+    return int(space.is_w(w_obj_type, w_type))
+
 # Make the wrapper for the cases (1) and (2)
 def make_wrapper(space, callable):
     def wrapper(*args):
