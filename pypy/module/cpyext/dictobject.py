@@ -12,6 +12,20 @@ def PyDict_Check(space, w_obj):
     w_type = space.w_dict
     return general_check(space, w_obj, w_type)
 
+@cpython_api([PyObject, PyObject], PyObject)
+def PyDict_GetItem(space, w_dict, w_key):
+    if PyDict_Check(space, w_dict):
+        return space.getitem(w_dict, w_key)
+    else:
+        PyErr_BadInternalCall(space)
+
+@cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)
+def PyDict_SetItem(space, w_dict, w_key, w_obj):
+    if PyDict_Check(space, w_dict):
+        space.setitem(w_dict, w_key, w_obj)
+        return 0
+    else:
+        PyErr_BadInternalCall(space)
 
 @cpython_api([PyObject, rffi.CCHARP, PyObject], rffi.INT_real, error=-1)
 def PyDict_SetItemString(space, w_dict, key_ptr, w_obj):
