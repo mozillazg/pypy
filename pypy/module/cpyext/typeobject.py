@@ -6,7 +6,7 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.interpreter.gateway import ObjSpace, W_Root
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.baseobjspace import Wrappable
-from pypy.objspace.std.typeobject import W_TypeObject
+from pypy.objspace.std.typeobject import W_TypeObject, _HEAPTYPE
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
@@ -202,8 +202,10 @@ class W_PyCTypeObject(W_TypeObject):
         dict_w = {}
         convert_method_defs(space, dict_w, pto.c_tp_methods, pto)
         convert_getset_defs(space, dict_w, pto.c_tp_getset, pto)
+        # XXX missing: convert_member_defs
         W_TypeObject.__init__(self, space, rffi.charp2str(pto.c_tp_name),
             bases_w or [space.w_object], dict_w)
+        self.__flags__ = _HEAPTYPE
 
 class W_PyCObject(Wrappable):
     def __init__(self, space):
@@ -256,9 +258,7 @@ def type_dealloc(space, obj):
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_XDECREF(space, base_pyo)
     Py_XDECREF(space, obj_pto.c_tp_bases)
-    # XXX XDECREF tp_dict, tp_mro, tp_cache,
-    #             tp_subclasses
-    # free tp_doc
+    Py_XDECREF(space, obj_pto.c_tp_cache) # lets do it like cpython
     if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
         lltype.free(obj_pto.c_tp_name, flavor="raw")
         obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
@@ -293,6 +293,11 @@ def allocate_type_obj(space, w_type):
     pto.c_tp_free = PyObject_Del.api_func.get_llhelper(space)
     pto.c_tp_name = rffi.str2charp(w_type.getname(space, "?"))
     pto.c_tp_basicsize = -1 # hopefully this makes malloc bail out
+    pto.c_tp_itemsize = 0
+    # uninitialized fields:
+    # c_tp_print, c_tp_getattr, c_tp_setattr
+    # XXX implement
+    # c_tp_compare and the following fields (see http://docs.python.org/c-api/typeobj.html )
     bases_w = w_type.bases_w
     assert len(bases_w) <= 1
     pto.c_tp_base = lltype.nullptr(PyTypeObject)
@@ -308,6 +313,7 @@ def allocate_type_obj(space, w_type):
         pto.c_obj_type = lltype.nullptr(PyObject.TO)
 
     #  XXX fill slots in pto
+    #  would look like fixup_slot_dispatchers()
     return pto
 
 @cpython_api([PyTypeObjectPtr], rffi.INT_real, error=-1)
@@ -339,6 +345,11 @@ def PyPyType_Ready(space, pto, w_obj):
             pto.c_tp_bases = make_ref(space, bases)
         if w_obj is None:
             PyPyType_Register(space, pto)
+        # missing:
+        # inherit_special, inherit_slots, setting __doc__ if not defined and tp_doc defined
+        # inheriting tp_as_* slots
+        # unsupported:
+        # tp_mro, tp_subclasses
     finally:
         pto.c_tp_flags &= ~Py_TPFLAGS_READYING
     pto.c_tp_flags = (pto.c_tp_flags & ~Py_TPFLAGS_READYING) | Py_TPFLAGS_READY
