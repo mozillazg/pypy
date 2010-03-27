@@ -41,4 +41,4 @@ class AppTestListObject(AppTestCpythonExtensionBase):
         module.setlistitem(l, 0)
         assert len(l) == 1
         
-        raises(TypeError, module.setlistitem, (1, 2, 3), 0)
+        raises(SystemError, module.setlistitem, (1, 2, 3), 0)
