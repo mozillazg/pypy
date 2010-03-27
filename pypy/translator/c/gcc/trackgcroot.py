@@ -17,6 +17,9 @@ from pypy.translator.c.gcc.instruction import LOC_ESP_PLUS
 
 class FunctionGcRootTracker(object):
     skip = 0
+    WORD = 4
+    BITS = 32
+    SUFFIX = 'l'
 
     @classmethod
     def init_regexp(cls):
@@ -187,15 +190,28 @@ class FunctionGcRootTracker(object):
 
         del self.currentlineno
 
-    @classmethod
-    def find_missing_visit_method(cls, opname):
-        # only for operations that are no-ops as far as we are concerned
+    def find_missing_visit_method(self, opname):
+        # if opname ends with an 'l' (on 32-bit) or a 'q' (on 64-bit),
+        # try to find the method that ends with an 'X'.  On Windows,
+        # where SUFFIX='', try to just append 'X'.
+        if opname.endswith(self.SUFFIX):
+            basename = opname[:len(opname)-len(self.SUFFIX)]
+            try:
+                method = getattr(self, 'visit_' + basename + 'X')
+            except AttributeError:
+                pass   # not found
+            else:
+                setattr(self, 'visit_' + opname, method)
+                return
+        # not found.  This is the case only for operations that are
+        # no-ops as far as we are concerned, but check if it is really
+        # in IGNORE_OPS_WITH_PREFIXES.
         prefix = opname
-        while prefix not in cls.IGNORE_OPS_WITH_PREFIXES:
+        while prefix not in self.IGNORE_OPS_WITH_PREFIXES:
             prefix = prefix[:-1]
             if not prefix:
                 raise UnrecognizedOperation(opname)
-        setattr(cls, 'visit_' + opname, cls.visit_nop)
+        setattr(self, 'visit_' + opname, self.visit_nop)
 
     def list_collecting_call_insns(self):
         return [insn for insn in self.insns if isinstance(insn, InsnCall)
@@ -206,7 +222,7 @@ class FunctionGcRootTracker(object):
         # in the frame at this point.  This doesn't count the return address
         # which is the word immediately following the frame in memory.
         # The 'framesize' is set to an odd value if it is only an estimate
-        # (see visit_andl()).
+        # (see visit_andX()).
 
         def walker(insn, size_delta):
             check = deltas.setdefault(insn, size_delta)
@@ -399,7 +415,7 @@ class FunctionGcRootTracker(object):
     visit_xorb = visit_nop
     visit_xorw = visit_nop
 
-    def visit_addl(self, line, sign=+1):
+    def visit_addX(self, line, sign=+1):
         match = self.r_binaryinsn.match(line)
         source = match.group("source")
         target = match.group("target")
@@ -414,8 +430,8 @@ class FunctionGcRootTracker(object):
         else:
             return []
 
-    def visit_subl(self, line):
-        return self.visit_addl(line, sign=-1)
+    def visit_subX(self, line):
+        return self.visit_addX(line, sign=-1)
 
     def unary_insn(self, line):
         match = self.r_unaryinsn.match(line)
@@ -438,16 +454,16 @@ class FunctionGcRootTracker(object):
         else:
             return []
 
-    visit_xorl = binary_insn   # used in "xor reg, reg" to create a NULL GC ptr
-    visit_orl = binary_insn
+    visit_xorX = binary_insn   # used in "xor reg, reg" to create a NULL GC ptr
+    visit_orX = binary_insn
     # The various cmov* operations
     for name in '''
         e ne g ge l le a ae b be p np s ns o no
         '''.split():
         locals()['visit_cmov' + name] = binary_insn
-        locals()['visit_cmov' + name + 'l'] = binary_insn
+        locals()['visit_cmov' + name + 'X'] = binary_insn
 
-    def visit_andl(self, line):
+    def visit_andX(self, line):
         match = self.r_binaryinsn.match(line)
         target = match.group("target")
         if target == self.ESP:
@@ -459,9 +475,7 @@ class FunctionGcRootTracker(object):
         else:
             return self.binary_insn(line)
 
-    visit_and = visit_andl
-
-    def visit_leal(self, line):
+    def visit_leaX(self, line):
         match = self.r_binaryinsn.match(line)
         target = match.group("target")
         if target == self.ESP:
@@ -473,7 +487,7 @@ class FunctionGcRootTracker(object):
                     raise UnrecognizedOperation('epilogue without prologue')
                 ofs_from_ebp = int(match.group(1) or '0')
                 assert ofs_from_ebp <= 0
-                framesize = 4 - ofs_from_ebp
+                framesize = self.WORD - ofs_from_ebp
             else:
                 match = self.r_localvar_esp.match(source)
                 # leal 12(%esp), %esp
@@ -498,7 +512,7 @@ class FunctionGcRootTracker(object):
         else:
             return []
 
-    def visit_movl(self, line):
+    def visit_movX(self, line):
         match = self.r_binaryinsn.match(line)
         source = match.group("source")
         target = match.group("target")
@@ -512,20 +526,20 @@ class FunctionGcRootTracker(object):
                           # gcc -fno-unit-at-a-time.
         return self.insns_for_copy(source, target)
 
-    visit_mov = visit_movl
-
-    def visit_pushl(self, line):
+    def visit_pushX(self, line):
         match = self.r_unaryinsn.match(line)
         source = match.group(1)
-        return [InsnStackAdjust(-4)] + self.insns_for_copy(source, self.TOP_OF_STACK)
+        return ([InsnStackAdjust(-self.WORD)] +
+                self.insns_for_copy(source, self.TOP_OF_STACK))
 
     def visit_pushw(self, line):
         return [InsnStackAdjust(-2)]   # rare but not impossible
 
     def _visit_pop(self, target):
-        return self.insns_for_copy(self.TOP_OF_STACK, target) + [InsnStackAdjust(+4)]
+        return (self.insns_for_copy(self.TOP_OF_STACK, target) +
+                [InsnStackAdjust(+self.WORD)])
 
-    def visit_popl(self, line):
+    def visit_popX(self, line):
         match = self.r_unaryinsn.match(line)
         target = match.group(1)
         return self._visit_pop(target)
@@ -660,7 +674,7 @@ class FunctionGcRootTracker(object):
     visit_jc = conditional_jump
     visit_jnc = conditional_jump
 
-    def visit_xchgl(self, line):
+    def visit_xchgX(self, line):
         # only support the format used in VALGRIND_DISCARD_TRANSLATIONS
         # which is to use a marker no-op "xchgl %ebx, %ebx"
         match = self.r_binaryinsn.match(line)
@@ -747,32 +761,10 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
     EBP     = '%ebp'
     EAX     = '%eax'
     CALLEE_SAVE_REGISTERS = ['%ebx', '%esi', '%edi', '%ebp']
-    REG2LOC = dict((_reg, LOC_REG | ((_i+1)<<2))
-                   for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS))
     OPERAND = r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
     LABEL   = r'([a-zA-Z_$.][a-zA-Z0-9_$@.]*)'
     OFFSET_LABELS   = 2**30
-    TOP_OF_STACK = '0(%esp)'
-
-    r_functionstart = re.compile(r"\t.type\s+"+LABEL+",\s*[@]function\s*$")
-    r_functionend   = re.compile(r"\t.size\s+"+LABEL+",\s*[.]-"+LABEL+"\s*$")
     LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
-    LOCALVARFP      = LOCALVAR + r"|-?\d*[(]%ebp[)]"
-    r_localvarnofp  = re.compile(LOCALVAR)
-    r_localvarfp    = re.compile(LOCALVARFP)
-    r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
-    r_localvar_ebp  = re.compile(r"(-?\d*)[(]%ebp[)]")
-
-    r_rel_label      = re.compile(r"(\d+):\s*$")
-    r_jump_rel_label = re.compile(r"\tj\w+\s+"+"(\d+)f"+"\s*$")
-
-    r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+[*]("+OPERAND+")\s*$")
-    r_jmptable_item = re.compile(r"\t.long\t"+LABEL+"(-\"[A-Za-z0-9$]+\")?\s*$")
-    r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|\t\.align|"+LABEL)
-
-    r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVARFP+") [*]/")
-    r_gcnocollect_marker = re.compile(r"\t/[*] GC_NOCOLLECT ("+OPERAND+") [*]/")
-    r_bottom_marker = re.compile(r"\t/[*] GC_STACK_BOTTOM [*]/")
 
     FUNCTIONS_NOT_RETURNING = {
         'abort': None,
@@ -792,12 +784,60 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
         super(ElfFunctionGcRootTracker, self).__init__(
             funcname, lines, filetag)
 
+    @classmethod
+    def init_regexp(cls):
+        cls.REG2LOC = dict((reg, LOC_REG | ((i+1)<<2))
+                           for i, reg in enumerate(cls.CALLEE_SAVE_REGISTERS))
+        cls.TOP_OF_STACK = '0(%s)' % cls.ESP
+        cls.LOCALVARFP      = cls.LOCALVAR + r"|-?\d*[(]%s[)]" % cls.EBP
+
+        cls.r_localvarnofp  = re.compile(cls.LOCALVAR)
+        cls.r_localvarfp    = re.compile(cls.LOCALVARFP)
+        cls.r_localvar_esp  = re.compile(r"(\d*)[(]%s[)]" % cls.ESP)
+        cls.r_localvar_ebp  = re.compile(r"(-?\d*)[(]%s[)]" % cls.EBP)
+
+        cls.r_functionstart = re.compile(r"\t.type\s+"+cls.LABEL+
+                                         r",\s*[@]function\s*$")
+        cls.r_functionend   = re.compile(r"\t.size\s+"+cls.LABEL+
+                                         r",\s*[.]-"+cls.LABEL+"\s*$")
+
+        cls.r_rel_label      = re.compile(r"(\d+):\s*$")
+        cls.r_jump_rel_label = re.compile(r"\tj\w+\s+"+r"(\d+)f"+r"\s*$")
+
+        cls.r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+[*]("+cls.OPERAND+
+                                         r")\s*$")
+        cls.r_jmptable_item = re.compile(r"\t.(?:long|quad)\t"+cls.LABEL+
+                                         r'(-"[A-Za-z0-9$]+")?\s*$')
+        cls.r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text|"
+                                         r"\t\.align|"+cls.LABEL)
+
+        cls.r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+cls.LOCALVARFP+
+                                         r") [*]/")
+        cls.r_gcnocollect_marker = re.compile(r"\t/[*] GC_NOCOLLECT ("+
+                                              cls.OPERAND+r") [*]/")
+        cls.r_bottom_marker = re.compile(r"\t/[*] GC_STACK_BOTTOM [*]/")
+
+        super(ElfFunctionGcRootTracker, cls).init_regexp()
+
     def extract_immediate(self, value):
         if not value.startswith('$'):
             return None
         return int(value[1:])
 
 ElfFunctionGcRootTracker.init_regexp()
+
+class Elf64FunctionGcRootTracker(ElfFunctionGcRootTracker):
+    WORD = 8
+    BITS = 64
+    SUFFIX = 'q'
+    ESP  = '%rsp'
+    EBP  = '%rbp'
+    EAX  = '%rax'
+    CALLEE_SAVE_REGISTERS = ['%rbp', '%rbx', '%r12', '%r13', '%r14', '%r15']
+    LOCALVAR = (r"%rax|%rdx|%rcx|%rbx|%rsi|%rdi|%rbp|"
+                r"%r8|%r9|%r10|%r11|%r12|%r13|%r14|%r15|\d*[(]%rsp[)]")
+
+Elf64FunctionGcRootTracker.init_regexp()
 
 class DarwinFunctionGcRootTracker(ElfFunctionGcRootTracker):
     format = 'darwin'
@@ -821,6 +861,7 @@ class Mingw32FunctionGcRootTracker(DarwinFunctionGcRootTracker):
 
 class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     format = 'msvc'
+    SUFFIX = ''
     ESP = 'esp'
     EBP = 'ebp'
     EAX = 'eax'
@@ -897,13 +938,6 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
         for name, value in self.defines.items():
             operand = operand.replace(name, str(value))
         return operand
-
-    for name in '''
-        push pop mov lea
-        xor sub add
-        '''.split():
-        locals()['visit_' + name] = getattr(FunctionGcRootTracker,
-                                            'visit_' + name + 'l')
 
     visit_int = FunctionGcRootTracker.visit_nop
     # probably not GC pointers
@@ -1068,6 +1102,10 @@ class ElfAssemblerParser(AssemblerParser):
             "missed the end of the previous function")
         yield False, functionlines
 
+class Elf64AssemblerParser(AssemblerParser):
+    format = "elf64"
+    FunctionGcRootTracker = Elf64FunctionGcRootTracker
+
 class DarwinAssemblerParser(AssemblerParser):
     format = "darwin"
     FunctionGcRootTracker = DarwinFunctionGcRootTracker
@@ -1213,6 +1251,7 @@ class MsvcAssemblerParser(AssemblerParser):
 
 PARSERS = {
     'elf': ElfAssemblerParser,
+    'elf64': Elf64AssemblerParser,
     'darwin': DarwinAssemblerParser,
     'mingw32': Mingw32AssemblerParser,
     'msvc': MsvcAssemblerParser,
@@ -1471,7 +1510,7 @@ class NoPatternMatch(Exception):
 
 # __________ debugging output __________
 
-def format_location(loc):
+def format_location(loc, cls=ElfFunctionGcRootTracker):
     # A 'location' is a single number describing where a value is stored
     # across a call.  It can be in one of the CALLEE_SAVE_REGISTERS, or
     # in the stack frame at an address relative to either %esp or %ebp.
@@ -1483,23 +1522,23 @@ def format_location(loc):
         if loc == LOC_NOWHERE:
             return '?'
         reg = (loc >> 2) - 1
-        return ElfFunctionGcRootTracker.CALLEE_SAVE_REGISTERS[reg]
+        return cls.CALLEE_SAVE_REGISTERS[reg]
     else:
         offset = loc & ~ LOC_MASK
         if kind == LOC_EBP_PLUS:
-            result = '(%ebp)'
+            result = '(%s)' % cls.EBP
         elif kind == LOC_EBP_MINUS:
-            result = '(%ebp)'
+            result = '(%s)' % cls.EBP
             offset = -offset
         elif kind == LOC_ESP_PLUS:
-            result = '(%esp)'
+            result = '(%s)' % cls.ESP
         else:
             assert 0, kind
         if offset != 0:
             result = str(offset) + result
         return result
 
-def format_callshape(shape):
+def format_callshape(shape, cls=ElfFunctionGcRootTracker):
     # A 'call shape' is a tuple of locations in the sense of format_location().
     # They describe where in a function frame interesting values are stored,
     # when this function executes a 'call' instruction.
@@ -1512,12 +1551,15 @@ def format_callshape(shape):
     #   shape[4] is where the fn saved its own caller's %ebp value
     #   shape[>=5] are GC roots: where the fn has put its local GCPTR vars
     #
+    # On 64-bit, there are 6 registers instead of 4 that are callee-saved.
+    #
     assert isinstance(shape, tuple)
-    assert len(shape) >= 5
-    result = [format_location(loc) for loc in shape]
+    N = len(cls.CALLEE_SAVE_REGISTERS) + 1
+    assert len(shape) >= N
+    result = [format_location(loc, cls) for loc in shape]
     return '{%s | %s | %s}' % (result[0],
-                               ', '.join(result[1:5]),
-                               ', '.join(result[5:]))
+                               ', '.join(result[1:N]),
+                               ', '.join(result[N:]))
 
 # __________ table compression __________
 
