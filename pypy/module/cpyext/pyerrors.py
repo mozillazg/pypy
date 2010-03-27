@@ -23,5 +23,5 @@ def PyErr_Clear(space):
 
 @cpython_api([], lltype.Void)
 def PyErr_BadInternalCall(space):
-    raise OperationError(space.w_TypeError, space.wrap("Bad internal call!"))
+    raise OperationError(space.w_SystemError, space.wrap("Bad internal call!"))
 
