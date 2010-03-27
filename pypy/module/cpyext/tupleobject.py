@@ -23,6 +23,7 @@ def PyTuple_New(space, size):
 @cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
 def PyTuple_SetItem(space, w_t, pos, w_obj):
     if not PyTuple_Check(space, w_t):
+        # XXX this should also steal a reference, test it!!!
         PyErr_BadInternalCall(space)
     assert isinstance(w_t, W_TupleObject)
     w_t.wrappeditems[pos] = w_obj
