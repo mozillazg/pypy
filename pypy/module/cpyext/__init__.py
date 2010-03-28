@@ -1,8 +1,8 @@
 from pypy.interpreter.mixedmodule import MixedModule
 from pypy.rlib.objectmodel import we_are_translated
-import pypy.module.cpyext.api
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.slotdefs import init_slotdefs
+from pypy.module.cpyext import api
 
 
 class Module(MixedModule):
@@ -17,10 +17,10 @@ class Module(MixedModule):
         """NOT_RPYTHON"""
         state = self.space.fromcache(State)
         if not self.space.config.translating:
-            state.api_lib = str(pypy.module.cpyext.api.build_bridge(self.space))
+            state.api_lib = str(api.build_bridge(self.space))
             state.slotdefs = init_slotdefs(self.space)
         else:
-            XXX # build an import library when translating pypy.
+            api.setup_library(self.space)
 
     def startup(self, space):
         state = space.fromcache(State)
