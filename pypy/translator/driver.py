@@ -313,16 +313,16 @@ class TranslationDriver(SimpleTaskEngine):
         annmodel.DEBUG = self.config.translation.debug
         annotator = translator.buildannotator(policy=policy)
 
-        if self.entry_point:
-            s = annotator.build_types(self.entry_point, self.inputtypes)
-
-        else:
-            s = None
         if self.secondary_entrypoints is not None:
             for func, inputtypes in self.secondary_entrypoints:
                 if inputtypes == Ellipsis:
                     continue
                 rettype = annotator.build_types(func, inputtypes)
+
+        if self.entry_point:
+            s = annotator.build_types(self.entry_point, self.inputtypes)
+        else:
+            s = None
 
         self.sanity_check_annotation()
         if self.entry_point and self.standalone and s.knowntype != int:
