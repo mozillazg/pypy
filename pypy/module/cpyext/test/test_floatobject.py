@@ -14,16 +14,12 @@ class AppTestFloatObject(AppTestCpythonExtensionBase):
         module = self.import_extension("foo", [
         ("test_float_coerce", "METH_NOARGS",
         """
-            PyObject *p = PyNumber_Float(PyTuple_GetItem(args, 0));
-            if (p != NULL) {
-                return p;
-            }
-            Py_RETURN_NONE;
+            return PyNumber_Float(PyTuple_GetItem(args, 0));
         """),
         ])
         
         assert type(module.test_float_coerce(3)) is float
-        assert module.test_float_coerce([]) is None
+        raises(TypeError, module.test_float_coerce, None)
         
         class Coerce(object):
             def __float__(self):
