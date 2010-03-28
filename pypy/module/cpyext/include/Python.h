@@ -25,6 +25,7 @@ PyAPI_DATA(PyObject *) Py_None;
 
 
 #include <stdio.h>
+#include <string.h>
 
 #include "boolobject.h"
 #include "floatobject.h"
