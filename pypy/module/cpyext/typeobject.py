@@ -161,7 +161,7 @@ def allocate_type_obj(space, w_type):
     assert not isinstance(w_type, W_PyCTypeObject)
     assert isinstance(w_type, W_TypeObject)
 
-    pto = lltype.malloc(PyTypeObject, None, flavor="raw", zero=True)
+    pto = lltype.malloc(PyTypeObject, flavor="raw", zero=True)
     pto.c_ob_refcnt = 1
     # put the type object early into the dict
     # to support dependency cycles like object/type

@@ -19,6 +19,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import ObjSpace, unwrap_spec
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.rlib.entrypoint import entrypoint
+from pypy.rlib.unroll import unrolling_iterable
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
@@ -93,6 +94,9 @@ class ApiFunction:
         self.argnames = argnames[1:]
         assert len(self.argnames) == len(self.argtypes)
 
+    def _freeze_(self):
+        return True
+
     def get_llhelper(self, space):
         llh = getattr(self, '_llhelper', None)
         if llh is None:
@@ -119,25 +123,33 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
     def decorate(func):
         api_function = ApiFunction(argtypes, restype, func, borrowed, error)
         func.api_func = api_function
+        # the function is always wrapped so lets inline it into the wrapper
+        func._always_inline_ = True
 
         if error is _NOT_SPECIFIED:
             raise ValueError("function %s has no return value for exceptions"
                              % func)
         def make_unwrapper(catch_exception):
+            names = api_function.argnames
+            types_names_enum_ui = unrolling_iterable(enumerate(zip(api_function.argtypes,
+                names, [name.startswith("w_") for name in names])))
             def unwrapper(space, *args):
-                "NOT_RPYTHON: XXX unsure"
-                newargs = []
-                to_decref = []
-                for i, arg in enumerate(args):
-                    if api_function.argtypes[i] is PyObject:
-                        if (isinstance(arg, W_Root) and
-                            not api_function.argnames[i].startswith('w_')):
-                            arg = make_ref(space, arg)
-                            to_decref.append(arg)
-                        elif (not isinstance(arg, W_Root) and
-                              api_function.argnames[i].startswith('w_')):
-                            arg = from_ref(space, arg)
-                    newargs.append(arg)
+                newargs = ()
+                to_decref = ()
+                for i, (typ, name, is_wrapped) in types_names_enum_ui:
+                    if typ is PyObject:
+                        if (isinstance(args[i], W_Root) and
+                            not is_wrapped):
+                            arg = make_ref(space, args[i])
+                            to_decref += (arg, )
+                        elif (not isinstance(args[i], W_Root) and
+                              is_wrapped):
+                            arg = from_ref(space, args[i])
+                        else:
+                            arg = args[i]
+                    else:
+                        arg = args[i]
+                    newargs += (arg, )
                 try:
                     try:
                         return func(space, *newargs)
@@ -238,14 +250,18 @@ def get_padded_type(T, size):
     return lltype.Struct(hints["c_name"], hints=hints, *new_fields)
 
 def debug_refcount(*args, **kwargs):
-    frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
-    assert not kwargs
     if DEBUG_REFCOUNT:
+        frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
+        assert not kwargs
         frame = sys._getframe(frame_stackdepth)
-        print >>sys.stderr, "%25s" % (frame.f_code.co_name, ), 
+        print >>sys.stderr, "%25s" % (frame.f_code.co_name, ),
         for arg in args:
             print >>sys.stderr, arg,
         print >>sys.stderr
+
+if not DEBUG_REFCOUNT:
+    def debug_refcount(arg0, arg1, arg2, arg3=None, arg4=None, frame_stackdepth=None):
+        pass
 
 def make_ref(space, w_obj, borrowed=False, steal=False):
     from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF
@@ -253,7 +269,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
     state = space.fromcache(State)
-    py_obj = state.py_objects_w2r.get(w_obj)
+    py_obj = state.py_objects_w2r.get(w_obj, None)
     if py_obj is None:
         from pypy.module.cpyext.typeobject import allocate_type_obj,\
                 W_PyCTypeObject, W_PyCObject
@@ -269,11 +285,11 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             # Py_INCREF(space, pto)
             basicsize = pto._obj.c_tp_basicsize
             T = get_padded_type(PyObject.TO, basicsize)
-            py_obj = lltype.malloc(T, None, flavor="raw", zero=True)
+            py_obj = lltype.malloc(T, flavor="raw", zero=True)
             py_obj.c_ob_refcnt = 1
             py_obj.c_ob_type = rffi.cast(PyObject, pto)
         elif isinstance(w_obj, W_StringObject):
-            py_obj = lltype.malloc(PyStringObject.TO, None, flavor='raw', zero=True)
+            py_obj = lltype.malloc(PyStringObject.TO, flavor='raw', zero=True)
             py_obj.c_size = len(space.str_w(w_obj))
             py_obj.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
             pto = make_ref(space, space.w_str)
@@ -281,7 +297,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             py_obj.c_ob_refcnt = 1
             py_obj.c_ob_type = rffi.cast(PyObject, pto)
         else:
-            py_obj = lltype.malloc(PyObject.TO, None, flavor="raw", zero=True)
+            py_obj = lltype.malloc(PyObject.TO, flavor="raw", zero=True)
             py_obj.c_ob_refcnt = 1
             pto = make_ref(space, space.type(w_obj))
             py_obj.c_ob_type = rffi.cast(PyObject, pto)
@@ -348,7 +364,7 @@ def add_borrowed_object(space, obj):
         raise NullPointerException
     if container_ptr == -1:
         return
-    borrowees = state.borrow_mapping.get(container_ptr)
+    borrowees = state.borrow_mapping.get(container_ptr, None)
     if borrowees is None:
         state.borrow_mapping[container_ptr] = borrowees = {}
     obj_ptr = rffi.cast(ADDR, obj)
@@ -365,20 +381,25 @@ def general_check_exact(space, w_obj, w_type):
 
 # Make the wrapper for the cases (1) and (2)
 def make_wrapper(space, callable):
+    names = callable.api_func.argnames
+    argtypes_enum_ui = unrolling_iterable(enumerate(zip(callable.api_func.argtypes,
+        names, [name.startswith("w_") for name in names])))
     def wrapper(*args):
-        boxed_args = []
+        boxed_args = ()
         # XXX use unrolling_iterable here
         if DEBUG_WRAPPER:
             print >>sys.stderr, callable,
-        for i, typ in enumerate(callable.api_func.argtypes):
+        for i, (typ, argname, is_wrapped) in argtypes_enum_ui:
             arg = args[i]
             if (typ is PyObject and
-                callable.api_func.argnames[i].startswith('w_')):
+                is_wrapped):
                 if arg:
-                    arg = from_ref(space, arg)
+                    arg_conv = from_ref(space, arg)
                 else:
-                    arg = None
-            boxed_args.append(arg)
+                    arg_conv = None
+            else:
+                arg_conv = arg
+            boxed_args += (arg_conv, )
         state = space.fromcache(State)
         try:
             retval = callable(space, *boxed_args)
@@ -391,8 +412,9 @@ def make_wrapper(space, callable):
         except BaseException, e:
             failed = True
             state.set_exception(space.w_SystemError, space.wrap(str(e)))
-            import traceback
-            traceback.print_exc()
+            if not we_are_translated():
+                import traceback
+                traceback.print_exc()
         else:
             failed = False
 
@@ -557,7 +579,7 @@ def build_bridge(space, rename=True):
 
 def setup_library(space):
     for name, func in FUNCTIONS.iteritems():
-        deco = entrypoint("cpyext", (tuple(func.argtypes), ), name)
+        deco = entrypoint("cpyext", func.argtypes, name)
         deco(func.get_wrapper(space))
 
 @unwrap_spec(ObjSpace, str, str)
