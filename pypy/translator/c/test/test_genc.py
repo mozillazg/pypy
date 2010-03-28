@@ -12,6 +12,7 @@ from pypy.tool.udir import udir
 from pypy.translator.gensupp import uniquemodulename
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.interactive import Translation
+from pypy.rlib.entrypoint import entrypoint
 
 def compile(fn, argtypes, view=False, gcpolicy="ref", backendopt=True,
             annotatorpolicy=None):
@@ -396,3 +397,20 @@ def test_name():
     if py.test.config.option.view:
         t.view()
     assert 'pypy_xyz_f' in t.driver.cbuilder.c_source_filename.read()
+
+def test_entrypoints():
+    def f():
+        return 3
+
+    key = "test_entrypoints42"
+    @entrypoint(key, [int], "foobar")
+    def g(x):
+        return x + 42
+
+    t = Translation(f, [], backend="c", secondaryentrypoints="test_entrypoints42")
+    t.annotate()
+    compiled_fn = t.compile_c()
+    if py.test.config.option.view:
+        t.view()
+    assert 'foobar' in t.driver.cbuilder.c_source_filename.read()
+
