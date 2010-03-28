@@ -37,6 +37,19 @@ class FunctionGcRootTracker(object):
         cls.r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
 
     def __init__(self, funcname, lines, filetag=0):
+        # make sure that we don't create an instance of a class and later an
+        # instance of a subclass, as we might do in some tests.  This would
+        # seriously mess up find_missing_visit_method.
+        if '_abstractclass' not in self.__class__.__dict__:
+            for bc in self.__class__.__mro__:
+                if bc is not object:
+                    assert getattr(bc, '_abstractclass', True), \
+                        "already instantiated the parent class!"
+                    bc._abstractclass = True
+            self.__class__._abstractclass = False
+        assert self.__class__.__dict__['_abstractclass'] == False, \
+            "already instantiated a subclass!"
+        #
         self.funcname = funcname
         self.lines = lines
         self.uses_frame_pointer = False
@@ -151,7 +164,7 @@ class FunctionGcRootTracker(object):
             lst.append(previnsn)
 
     def parse_instructions(self):
-        self.insns = [InsnFunctionStart(self.CALLEE_SAVE_REGISTERS)]
+        self.insns = [InsnFunctionStart(self.CALLEE_SAVE_REGISTERS, self.WORD)]
         ignore_insns = False
         for lineno, line in enumerate(self.lines):
             if lineno < self.skip:
@@ -191,28 +204,31 @@ class FunctionGcRootTracker(object):
 
         del self.currentlineno
 
-    def find_missing_visit_method(self, opname):
+    @classmethod
+    def find_missing_visit_method(cls, opname):
+        # Add the correct visit_<opname> method to the class.
+        #
         # if opname ends with an 'l' (on 32-bit) or a 'q' (on 64-bit),
         # try to find the method that ends with an 'X'.  On Windows,
         # where SUFFIX='', try to just append 'X'.
-        if opname.endswith(self.SUFFIX):
-            basename = opname[:len(opname)-len(self.SUFFIX)]
+        if opname.endswith(cls.SUFFIX):
+            basename = opname[:len(opname)-len(cls.SUFFIX)]
             try:
-                method = getattr(self, 'visit_' + basename + 'X')
+                method = getattr(cls, 'visit_' + basename + 'X')
             except AttributeError:
                 pass   # not found
             else:
-                setattr(self, 'visit_' + opname, method)
+                setattr(cls, 'visit_' + opname, method)
                 return
         # not found.  This is the case only for operations that are
         # no-ops as far as we are concerned, but check if it is really
         # in IGNORE_OPS_WITH_PREFIXES.
         prefix = opname
-        while prefix not in self.IGNORE_OPS_WITH_PREFIXES:
+        while prefix not in cls.IGNORE_OPS_WITH_PREFIXES:
             prefix = prefix[:-1]
             if not prefix:
                 raise UnrecognizedOperation(opname)
-        setattr(self, 'visit_' + opname, self.visit_nop)
+        setattr(cls, 'visit_' + opname, cls.visit_nop)
 
     def list_collecting_call_insns(self):
         return [insn for insn in self.insns if isinstance(insn, InsnCall)
@@ -400,13 +416,15 @@ class FunctionGcRootTracker(object):
         # arithmetic operations should not produce GC pointers
         'inc', 'dec', 'not', 'neg', 'or', 'and', 'sbb', 'adc',
         'shl', 'shr', 'sal', 'sar', 'rol', 'ror', 'mul', 'imul', 'div', 'idiv',
-        'bswap', 'bt', 'rdtsc',
+        'bswap', 'bt', 'rdtsc', 'punpck', 'pshuf',
         # zero-extending moves should not produce GC pointers
-        'movz',
+        'movz', 'cltq',
         # quadword operations: ignored on 32-bit
         'movq',
         # conversely, ignore 32-bit operations on 64-bit
         'xorl', 'movl', 'addl', 'subl', 'andl', 'orl', 'leal',
+        # the following should only be used to load constant integers
+        'movabsq',
         ])
 
     visit_movb = visit_nop
@@ -838,6 +856,9 @@ class ElfFunctionGcRootTracker(FunctionGcRootTracker):
 
 ElfFunctionGcRootTracker.init_regexp()
 
+class Elf32FunctionGcRootTracker(ElfFunctionGcRootTracker):
+    pass
+
 class Elf64FunctionGcRootTracker(ElfFunctionGcRootTracker):
     WORD = 8
     SUFFIX = 'q'
@@ -1093,7 +1114,7 @@ class AssemblerParser(object):
 
 class ElfAssemblerParser(AssemblerParser):
     format = "elf"
-    FunctionGcRootTracker = ElfFunctionGcRootTracker
+    FunctionGcRootTracker = Elf32FunctionGcRootTracker
 
     @classmethod
     def find_functions(cls, iterlines):
