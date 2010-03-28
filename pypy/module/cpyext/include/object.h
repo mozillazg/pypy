@@ -17,7 +17,7 @@ typedef void* Py_buffer;
 
 #define PyObject_HEAD  \
     long ob_refcnt;       \
-    struct _object *ob_type;
+    struct _typeobject *ob_type;
 
 #define PyObject_VAR_HEAD		\
 	PyObject_HEAD			\
