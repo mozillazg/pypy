@@ -103,7 +103,8 @@ class CBuilder(object):
     modulename = None
     split = False
     
-    def __init__(self, translator, entrypoint, config, gcpolicy=None):
+    def __init__(self, translator, entrypoint, config, gcpolicy=None,
+            secondary_entrypoints=()):
         self.translator = translator
         self.entrypoint = entrypoint
         self.entrypoint_name = getattr(self.entrypoint, 'func_name', None)
@@ -113,6 +114,7 @@ class CBuilder(object):
         if gcpolicy is not None and gcpolicy.requires_stackless:
             config.translation.stackless = True
         self.eci = self.get_eci()
+        self.secondary_entrypoints = secondary_entrypoints
 
     def get_eci(self):
         pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
@@ -159,6 +161,11 @@ class CBuilder(object):
             self.c_entrypoint_name = None
         else:
             pfname = db.get(pf)
+
+            for func, _ in self.secondary_entrypoints:
+                bk = translator.annotator.bookkeeper
+                db.get(getfunctionptr(bk.getdesc(func).getuniquegraph()))
+
             self.c_entrypoint_name = pfname
         db.complete()
 

@@ -12,6 +12,7 @@ from pypy.annotation import policy as annpolicy
 import optparse
 from pypy.tool.udir import udir
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_DETAILED, DEBUG_PROFILE, DEBUG_STEPS
+from pypy.rlib.entrypoint import secondary_entrypoints
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -210,12 +211,22 @@ class TranslationDriver(SimpleTaskEngine):
         self.entry_point = entry_point
         self.translator = translator
         self.libdef = None
+        self.secondary_entrypoints = []
+        for key in self.config.translation.secondaryentrypoints.split(","):
+            try:
+                points = secondary_entrypoints[key]
+            except KeyError:
+                raise KeyError("Entrypoints not found. I only know the keys %r." %
+                        (", ".join(secondary_entrypoints.keys()), ))
+            self.secondary_entrypoints.extend(points)
 
         self.translator.driver_instrument_result = self.instrument_result
 
     def setup_library(self, libdef, policy=None, extra={}, empty_translator=None):
+        """ Used by carbon python only. """
         self.setup(None, None, policy, extra, empty_translator)
         self.libdef = libdef
+        self.secondary_entrypoints = libdef.functions
 
     def instrument_result(self, args):
         backend, ts = self.get_backend_and_type_system()
@@ -305,20 +316,21 @@ class TranslationDriver(SimpleTaskEngine):
         if self.entry_point:
             s = annotator.build_types(self.entry_point, self.inputtypes)
 
-            self.sanity_check_annotation()
-            if self.standalone and s.knowntype != int:
-                raise Exception("stand-alone program entry point must return an "
-                                "int (and not, e.g., None or always raise an "
-                                "exception).")
-            annotator.simplify()
-            return s
         else:
-            assert self.libdef is not None
-            for func, inputtypes in self.libdef.functions:
-                annotator.build_types(func, inputtypes)
-                func.c_name = func.func_name
-            self.sanity_check_annotation()
-            annotator.simplify()
+            s = None
+        if self.secondary_entrypoints is not None:
+            for func, inputtypes in self.secondary_entrypoints:
+                if inputtypes == Ellipsis:
+                    continue
+                rettype = annotator.build_types(func, inputtypes)
+
+        self.sanity_check_annotation()
+        if self.entry_point and self.standalone and s.knowntype != int:
+            raise Exception("stand-alone program entry point must return an "
+                            "int (and not, e.g., None or always raise an "
+                            "exception).")
+        annotator.simplify()
+
     #
     task_annotate = taskdef(task_annotate, [], "Annotating&simplifying")
 
@@ -453,7 +465,8 @@ class TranslationDriver(SimpleTaskEngine):
             else:
                 from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
             cbuilder = CBuilder(self.translator, self.entry_point,
-                                config=self.config)
+                                config=self.config,
+                                secondary_entrypoints=self.secondary_entrypoints)
             cbuilder.stackless = self.config.translation.stackless
         if not standalone:     # xxx more messy
             cbuilder.modulename = self.extmod_name
