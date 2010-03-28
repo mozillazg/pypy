@@ -16,7 +16,4 @@ def PyNumber_Float(space, w_obj):
     """
     Returns the o converted to a float object on success, or NULL on failure.
     This is the equivalent of the Python expression float(o)."""
-    try:
-        return space.float(w_obj)
-    except OperationError:
-        return None
+    return space.float(w_obj)
