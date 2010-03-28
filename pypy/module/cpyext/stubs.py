@@ -1388,12 +1388,6 @@ def PyDict_GetItem(space, p, key):
     if the key key is not present, but without setting an exception."""
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.CCHARP], PyObject, borrowed=True)
-def PyDict_GetItemString(space, p, key):
-    """This is the same as PyDict_GetItem(), but key is specified as a
-    char*, rather than a PyObject*."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObject)
 def PyDict_Items(space, p):
     """Return a PyListObject containing all the items from the
