@@ -20,7 +20,7 @@ def PyString_FromStringAndSize(space, char_p, length):
         ptr = make_ref(space, space.wrap(s))
         return rffi.cast(PyStringObject, ptr)
     else:
-        py_str = lltype.malloc(PyStringObject.TO, None, flavor='raw')
+        py_str = lltype.malloc(PyStringObject.TO, flavor='raw')
         py_str.c_ob_refcnt = 1
         
         buflen = length + 1

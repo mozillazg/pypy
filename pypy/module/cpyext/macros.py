@@ -21,7 +21,8 @@ def Py_DECREF(space, obj):
             # without modifying the r2w/w2r dicts
             _Py_Dealloc(space, obj)
         else:
-            w_obj = state.py_objects_r2w.pop(ptr)
+            w_obj = state.py_objects_r2w[ptr]
+            del state.py_objects_r2w[ptr]
             _Py_Dealloc(space, obj)
             del state.py_objects_w2r[w_obj]
         if ptr in state.borrow_mapping:
