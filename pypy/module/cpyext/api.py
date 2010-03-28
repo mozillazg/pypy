@@ -20,6 +20,7 @@ from pypy.interpreter.gateway import ObjSpace, unwrap_spec
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.rlib.entrypoint import entrypoint
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.objectmodel import specialize
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
@@ -605,6 +606,7 @@ def load_extension_module(space, path, name):
     state.check_and_raise_exception()
 
 def make_generic_cpy_call_func(decref_args):
+    @specialize.argtype(2)
     def generic_cpy_call(space, func, *args):
         from pypy.module.cpyext.macros import Py_DECREF
         from pypy.module.cpyext.pyerrors import PyErr_Occurred
