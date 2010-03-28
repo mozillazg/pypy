@@ -140,7 +140,7 @@ class AppTestCpythonExtensionBase:
         state = self.space.fromcache(State)
         self.frozen_refcounts = {}
         for w_obj, obj in state.py_objects_w2r.iteritems():
-            self.frozen_refcounts[w_obj] = obj.c_obj_refcnt
+            self.frozen_refcounts[w_obj] = obj.c_ob_refcnt
         state.print_refcounts()
 
     def check_and_print_leaks(self):
@@ -151,7 +151,7 @@ class AppTestCpythonExtensionBase:
         lost_objects_w.update((key, None) for key in self.frozen_refcounts.keys())
         for w_obj, obj in state.py_objects_w2r.iteritems():
             base_refcnt = self.frozen_refcounts.get(w_obj)
-            delta = obj.c_obj_refcnt
+            delta = obj.c_ob_refcnt
             if base_refcnt is not None:
                 delta -= base_refcnt
                 lost_objects_w.pop(w_obj)
@@ -437,4 +437,15 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         # No exception set, but NULL returned
         raises(SystemError, module.clear)
 
-
+    def test_new_exception(self):
+        skip("not working yet")
+        mod = self.import_extension('foo', [
+            ('newexc', 'METHOD_VARARGS',
+             '''
+             char *name = PyString_AsString(PyTuple_GetItem(args, 0));
+             return PyExc_NewException(name, PyTuple_GetItem(args, 1),
+                                       PyTuple_GetItem(args, 2));
+             '''
+             ),
+            ])
+        raises(SystemError, mod.newexc, "name", Exception, {})

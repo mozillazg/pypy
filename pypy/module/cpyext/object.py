@@ -21,7 +21,7 @@ def PyObject_Del(space, obj):
 
 @cpython_api([PyObject], lltype.Void)
 def PyObject_dealloc(space, obj):
-    pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
     generic_cpy_call(space, pto.c_tp_free, obj_voidp)
 

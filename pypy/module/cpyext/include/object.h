@@ -16,12 +16,12 @@ typedef void* Py_buffer;
 
 
 #define PyObject_HEAD  \
-    long obj_refcnt;       \
-    struct _object *obj_type;
+    long ob_refcnt;       \
+    struct _object *ob_type;
 
 #define PyObject_VAR_HEAD		\
 	PyObject_HEAD			\
-	Py_ssize_t obj_size; /* Number of items in variable part */
+	Py_ssize_t ob_size; /* Number of items in variable part */
 
 #define PyObject_HEAD_INIT(type)	\
 	1, type,
@@ -37,9 +37,9 @@ typedef struct {
 	PyObject_VAR_HEAD
 } PyVarObject;
 
-#define Py_REFCNT(ob)		(((PyObject*)(ob))->obj_refcnt)
-#define Py_TYPE(ob)		(((PyObject*)(ob))->obj_type)
-#define Py_SIZE(ob)		(((PyVarObject*)(ob))->obj_size)
+#define Py_REFCNT(ob)		(((PyObject*)(ob))->ob_refcnt)
+#define Py_TYPE(ob)		(((PyObject*)(ob))->ob_type)
+#define Py_SIZE(ob)		(((PyVarObject*)(ob))->ob_size)
 
 
 struct _typeobject;

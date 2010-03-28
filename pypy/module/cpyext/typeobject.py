@@ -110,7 +110,7 @@ class W_PyCObject(Wrappable):
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
-    pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     assert pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE
     base = pto
     this_func_ptr = subtype_dealloc.api_func.get_llhelper(space)
@@ -129,7 +129,7 @@ def subtype_dealloc(space, obj):
 @cpython_api([PyObject], lltype.Void, external=False)
 def string_dealloc(space, obj):
     obj = rffi.cast(PyStringObject, obj)
-    pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     if obj.c_buffer:
         lltype.free(obj.c_buffer, flavor="raw")
     obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
@@ -141,7 +141,7 @@ def string_dealloc(space, obj):
 def type_dealloc(space, obj):
     state = space.fromcache(State)
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
-    type_pto = rffi.cast(PyTypeObjectPtr, obj.c_obj_type)
+    type_pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_XDECREF(space, base_pyo)
     Py_XDECREF(space, obj_pto.c_tp_bases)
@@ -162,7 +162,7 @@ def allocate_type_obj(space, w_type):
     assert isinstance(w_type, W_TypeObject)
 
     pto = lltype.malloc(PyTypeObject, None, flavor="raw", zero=True)
-    pto.c_obj_refcnt = 1
+    pto.c_ob_refcnt = 1
     # put the type object early into the dict
     # to support dependency cycles like object/type
     state = space.fromcache(State)
@@ -194,10 +194,10 @@ def allocate_type_obj(space, w_type):
         if bases_w:
             ref = make_ref(space, bases_w[0])
             pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
-        pto.c_obj_type = make_ref(space, space.type(space.w_type))
+        pto.c_ob_type = make_ref(space, space.type(space.w_type))
         PyPyType_Ready(space, pto, w_type)
     else:
-        pto.c_obj_type = lltype.nullptr(PyObject.TO)
+        pto.c_ob_type = lltype.nullptr(PyObject.TO)
 
     #  XXX fill slots in pto
     #  would look like fixup_slot_dispatchers()
@@ -221,8 +221,8 @@ def PyPyType_Ready(space, pto, w_obj):
             base = pto.c_tp_base = rffi.cast(PyTypeObjectPtr, base_pyo)
         if base and not base.c_tp_flags & Py_TPFLAGS_READY:
             PyPyType_Ready(space, base, None)
-        if base and not pto.c_obj_type: # will be filled later
-            pto.c_obj_type = base.c_obj_type
+        if base and not pto.c_ob_type: # will be filled later
+            pto.c_ob_type = base.c_ob_type
         if not pto.c_tp_bases and not (space.is_w(w_obj, space.w_object)
                 or space.is_w(w_obj, space.w_type)):
             if not base:
