@@ -93,7 +93,11 @@ class Label(Insn):
 class InsnFunctionStart(Insn):
     framesize = 0
     previous_insns = ()
-    def __init__(self, registers):
+    REGS_ARGS_ON_64BIT = dict.fromkeys(['%rdi', '%rsi', '%rdx',
+                                        '%rcx', '%r8', '%r9'])
+
+    def __init__(self, registers, WORD):
+        self.WORD = WORD
         self.arguments = {}
         for reg in registers:
             self.arguments[reg] = somenewvalue
@@ -106,6 +110,8 @@ class InsnFunctionStart(Insn):
                 # registers.  However, this case also occurs when the
                 # the function's calling convention was optimized by gcc:
                 # the 3 registers above are then used to pass arguments
+                pass
+            elif self.WORD == 8 and localvar in self.REGS_ARGS_ON_64BIT:
                 pass
             else:
                 assert (isinstance(localvar, LocalVarAbstract) and
