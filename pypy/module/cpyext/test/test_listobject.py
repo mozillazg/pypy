@@ -19,10 +19,8 @@ class AppTestListObject(AppTestCpythonExtensionBase):
              PyObject *l = PyTuple_GetItem(args, 0);
              int index = PyInt_AsLong(PyTuple_GetItem(args, 1));
              Py_INCREF(Py_None);
-             int res = PyList_SetItem(l, index, Py_None);
-             if (res == -1) {
+             if (PyList_SetItem(l, index, Py_None) < 0)
                 return NULL;
-             }
              Py_INCREF(Py_None);
              return Py_None;
              """

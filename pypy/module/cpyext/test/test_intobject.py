@@ -22,8 +22,7 @@ class AppTestIntObject(AppTestCpythonExtensionBase):
                    return NULL;
                 }
              }
-             PyObject *ret = PyInt_FromLong(x + 1);
-             return ret;
+             return PyInt_FromLong(x + 1);
              """
              )
             ])
