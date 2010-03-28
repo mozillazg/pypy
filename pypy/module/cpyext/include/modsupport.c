@@ -1,6 +1,7 @@
 #include <pypy_rename.h>
 #include <Python.h>
-
+#if 0
+unsupported functions in it
 int
 PyModule_AddObject(PyObject *m, const char *name, PyObject *o)
 {
@@ -29,3 +30,4 @@ PyModule_AddObject(PyObject *m, const char *name, PyObject *o)
 	Py_DECREF(o);
 	return 0;
 }
+#endif

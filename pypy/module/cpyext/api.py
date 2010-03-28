@@ -540,6 +540,10 @@ def build_bridge(space, rename=True):
             '\n'.join(functions))
 
     # Build code and get pointer to the structure
+    kwds = {}
+    if sys.platform != "win32":
+        kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
+
     eci = ExternalCompilationInfo(
         include_dirs=include_dirs,
         separate_module_sources=[code],
@@ -547,6 +551,7 @@ def build_bridge(space, rename=True):
                                include_dir / "pyerrors.c",
                                include_dir / "modsupport.c"],
         export_symbols=['pypyAPI'] + export_symbols,
+        **kwds
         )
     eci = eci.convert_sources_to_files()
     modulename = platform.platform.compile(

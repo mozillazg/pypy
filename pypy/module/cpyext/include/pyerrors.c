@@ -2,6 +2,8 @@
 #include <pypy_rename.h>
 #include <Python.h>
 #include <string.h>
+#if 0
+depends on unavailable functions 
 
 PyObject *
 PyErr_NewException(char *name, PyObject *base, PyObject *dict)
@@ -52,3 +54,4 @@ PyErr_NewException(char *name, PyObject *base, PyObject *dict)
 	Py_XDECREF(modulename);
 	return result;
 }
+#endif
