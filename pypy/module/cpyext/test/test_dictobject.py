@@ -22,6 +22,11 @@ class AppTestDictObject(AppTestCpythonExtensionBase):
             );
             Py_RETURN_NONE;
         """),
+        ("dict_getitem_str", "METH_VARARGS",
+         """
+         return PyDict_GetItemString(PyTuple_GetItem(args, 0), "name");
+         """
+         ),
         ])
         
         assert module.test_dict_create() == {}
@@ -29,3 +34,7 @@ class AppTestDictObject(AppTestCpythonExtensionBase):
         d = {}
         module.test_dict_setitem(d, "c", 72)
         assert d["c"] == 72
+        d["name"] = 3
+        assert module.dict_getitem_str(d) == 3
+        del d["name"]
+        raises(KeyError, module.dict_getitem_str, d)
