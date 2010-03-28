@@ -29,7 +29,7 @@ working_modules.update(dict.fromkeys(
       "rctime" , "select", "zipimport", "_lsprof",
      "crypt", "signal", "_rawffi", "termios", "zlib",
      "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO",
-     "thread", "itertools", "pyexpat", "_ssl"]
+     "thread", "itertools", "pyexpat", "_ssl", "cpyext"]
 ))
 
 working_oo_modules = default_modules.copy()
@@ -66,6 +66,7 @@ module_suggests = {    # the reason you want _rawffi is for ctypes, which
                        # itself needs the interp-level struct module
                        # because 'P' is missing from the app-level one
                        '_rawffi': [("objspace.usemodules.struct", True)],
+                       'cpyext': [("translation.secondaryentrypoints", "cpyext")],
                        }
 
 module_import_dependencies = {
