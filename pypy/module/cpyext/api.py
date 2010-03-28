@@ -604,47 +604,54 @@ def load_extension_module(space, path, name):
     initfunc.call(lltype.Void)
     state.check_and_raise_exception()
 
-def generic_cpy_call(space, func, *args, **kwargs):
-    from pypy.module.cpyext.macros import Py_DECREF
-    from pypy.module.cpyext.pyerrors import PyErr_Occurred
+def make_generic_cpy_call_func(decref_args):
+    def generic_cpy_call(space, func, *args):
+        from pypy.module.cpyext.macros import Py_DECREF
+        from pypy.module.cpyext.pyerrors import PyErr_Occurred
 
-    decref_args = kwargs.pop("decref_args", True)
-    assert not kwargs
-    boxed_args = []
-    for arg in args: # XXX UI needed
-        if isinstance(arg, W_Root) or arg is None:
-            boxed_args.append(make_ref(space, arg))
-        else:
-            boxed_args.append(arg)
-    result = func(*boxed_args)
-    try:
-        FT = lltype.typeOf(func).TO
-        if FT.RESULT is PyObject:
-            ret = from_ref(space, result)
-            if result:
-                # The object reference returned from a C function 
-                # that is called from Python must be an owned reference 
-                # - ownership is transferred from the function to its caller.
-                Py_DECREF(space, result)
+        boxed_args = ()
+        for arg in args: # XXX UI needed
+            if isinstance(arg, W_Root) or arg is None:
+                boxed_args += (make_ref(space, arg), )
+            else:
+                boxed_args += (arg, )
+        result = func(*boxed_args)
+        try:
+            FT = lltype.typeOf(func).TO
+            if FT.RESULT is PyObject:
+                ret = from_ref(space, result)
+                if result:
+                    # The object reference returned from a C function 
+                    # that is called from Python must be an owned reference 
+                    # - ownership is transferred from the function to its caller.
+                    Py_DECREF(space, result)
 
-            # Check for exception consistency
-            has_error = PyErr_Occurred(space) is not None
-            has_result = ret is not None
-            if has_error and has_result:
-                raise OperationError(space.w_SystemError, space.wrap(
-                    "An exception was set, but function returned a value"))
-            elif not has_error and not has_result:
-                raise OperationError(space.w_SystemError, space.wrap(
-                    "Function returned a NULL result without setting an exception"))
+                # Check for exception consistency
+                has_error = PyErr_Occurred(space) is not None
+                has_result = ret is not None
+                if has_error and has_result:
+                    raise OperationError(space.w_SystemError, space.wrap(
+                        "An exception was set, but function returned a value"))
+                elif not has_error and not has_result:
+                    raise OperationError(space.w_SystemError, space.wrap(
+                        "Function returned a NULL result without setting an exception"))
 
-            if has_error:
-                state = space.fromcache(State)
-                state.check_and_raise_exception()
+                if has_error:
+                    state = space.fromcache(State)
+                    state.check_and_raise_exception()
 
-            return ret
-    finally:
-        if decref_args:
-            for arg, ref in zip(args, boxed_args):
-                if isinstance(arg, W_Root) and ref:
-                    Py_DECREF(space, ref)
+                return ret
+        finally:
+            if decref_args:
+                i = 0
+                while i < len(args):
+                    arg = args[i]
+                    ref = boxed_args[i]
+                    if isinstance(arg, W_Root) and ref:
+                        Py_DECREF(space, ref)
+                    i += 1
+    return generic_cpy_call
+
+generic_cpy_call = make_generic_cpy_call_func(True)
+generic_cpy_call_dont_decref = make_generic_cpy_call_func(False)
 
