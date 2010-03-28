@@ -18,6 +18,7 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import ObjSpace, unwrap_spec
 from pypy.objspace.std.stringobject import W_StringObject
+from pypy.rlib.entrypoint import entrypoint
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
@@ -98,6 +99,13 @@ class ApiFunction:
             llh = llhelper(self.functype, make_wrapper(space, self.callable))
             self._llhelper = llh
         return llh
+
+    def get_wrapper(self, space):
+        wrapper = getattr(self, '_wrapper', None)
+        if wrapper is None:
+            wrapper = make_wrapper(space, self.callable)
+            self._wrapper = wrapper
+        return wrapper
 
 def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, external=True):
     if error is _NOT_SPECIFIED:
@@ -547,12 +555,17 @@ def build_bridge(space, rename=True):
 
     return modulename.new(ext='')
 
+def setup_library(space):
+    for name, func in FUNCTIONS.iteritems():
+        deco = entrypoint("cpyext", func.argtypes, name)
+        deco(func.get_wrapper(space))
+
 @unwrap_spec(ObjSpace, str, str)
 def load_extension_module(space, path, name):
     state = space.fromcache(State)
     from pypy.rlib import libffi
     try:
-        dll = libffi.CDLL(path)
+        dll = libffi.CDLL(path, False)
     except libffi.DLOpenError, e:
         raise operationerrfmt(
             space.w_ImportError,
@@ -566,7 +579,6 @@ def load_extension_module(space, path, name):
             space.w_ImportError,
             "function init%s not found in library %s",
             name, path)
-    dll.unload_on_finalization = False
     initfunc.call(lltype.Void)
     state.check_and_raise_exception()
 
