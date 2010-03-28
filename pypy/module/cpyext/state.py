@@ -49,4 +49,4 @@ class State:
     def print_refcounts(self):
         print "REFCOUNTS"
         for w_obj, obj in self.py_objects_w2r.items():
-            print "%r: %i" % (w_obj, obj.c_obj_refcnt)
+            print "%r: %i" % (w_obj, obj.c_ob_refcnt)

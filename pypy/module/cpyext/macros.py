@@ -10,13 +10,13 @@ from pypy.module.cpyext.state import State
 @cpython_api([PyObject], lltype.Void)
 def Py_DECREF(space, obj):
     from pypy.module.cpyext.typeobject import string_dealloc
-    obj.c_obj_refcnt -= 1
-    debug_refcount("DECREF", obj, obj.c_obj_refcnt, frame_stackdepth=3)
-    if obj.c_obj_refcnt == 0:
+    obj.c_ob_refcnt -= 1
+    debug_refcount("DECREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
+    if obj.c_ob_refcnt == 0:
         state = space.fromcache(State)
         ptr = rffi.cast(ADDR, obj)
         if ptr not in state.py_objects_r2w and \
-            space.is_w(from_ref(space, obj.c_obj_type), space.w_str):
+            space.is_w(from_ref(space, obj.c_ob_type), space.w_str):
             # this is a half-allocated string, lets call the deallocator
             # without modifying the r2w/w2r dicts
             _Py_Dealloc(space, obj)
@@ -41,13 +41,13 @@ def Py_DECREF(space, obj):
                                 hex(containee)
             del state.borrow_mapping[ptr]
     else:
-        assert obj.c_obj_refcnt > 0
+        assert obj.c_ob_refcnt > 0
 
 @cpython_api([PyObject], lltype.Void)
 def Py_INCREF(space, obj):
-    obj.c_obj_refcnt += 1
-    assert obj.c_obj_refcnt > 0
-    debug_refcount("INCREF", obj, obj.c_obj_refcnt, frame_stackdepth=3)
+    obj.c_ob_refcnt += 1
+    assert obj.c_ob_refcnt > 0
+    debug_refcount("INCREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
 
 @cpython_api([PyObject], lltype.Void)
 def Py_XINCREF(space, obj):
@@ -62,7 +62,7 @@ def Py_XDECREF(space, obj):
 def _Py_Dealloc(space, obj):
     from pypy.module.cpyext.typeobject import PyTypeObjectPtr
     from pypy.module.cpyext.methodobject import generic_cpy_call
-    pto = obj.c_obj_type
+    pto = obj.c_ob_type
     pto = rffi.cast(PyTypeObjectPtr, pto)
     #print >>sys.stderr, "Calling dealloc slot of", obj, \
     #      "'s type which is", rffi.charp2str(pto.c_tp_name)

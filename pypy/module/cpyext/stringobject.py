@@ -21,13 +21,13 @@ def PyString_FromStringAndSize(space, char_p, length):
         return rffi.cast(PyStringObject, ptr)
     else:
         py_str = lltype.malloc(PyStringObject.TO, None, flavor='raw')
-        py_str.c_obj_refcnt = 1
+        py_str.c_ob_refcnt = 1
         
         buflen = length + 1
         py_str.c_buffer = lltype.malloc(rffi.CCHARP.TO, buflen, flavor='raw')
         py_str.c_buffer[buflen-1] = '\0'
         py_str.c_size = length
-        py_str.c_obj_type = make_ref(space, space.w_str)
+        py_str.c_ob_type = make_ref(space, space.w_str)
         
         return py_str
 
@@ -48,7 +48,7 @@ def PyString_AsString(space, ref):
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyString_Size(space, ref):
-    if from_ref(space, ref.c_obj_type) is space.w_str:
+    if from_ref(space, ref.c_ob_type) is space.w_str:
         ref = rffi.cast(PyStringObject, ref)
         return ref.c_size
     else:

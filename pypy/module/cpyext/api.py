@@ -201,8 +201,8 @@ GLOBALS = {
 # So we need a forward and backward mapping in our State instance
 PyObjectStruct = lltype.ForwardReference()
 PyObject = lltype.Ptr(PyObjectStruct)
-PyObjectFields = (("obj_refcnt", lltype.Signed), ("obj_type", PyObject))
-PyVarObjectFields = PyObjectFields + (("obj_size", Py_ssize_t), )
+PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyObject))
+PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
 cpython_struct('struct _object', PyObjectFields, PyObjectStruct)
 
 PyStringObjectStruct = lltype.ForwardReference()
@@ -260,7 +260,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
         w_type = space.type(w_obj)
         if space.is_w(w_type, space.w_type):
             py_obj = allocate_type_obj(space, w_obj)
-            # c_obj_type and c_obj_refcnt are set by allocate_type_obj
+            # c_ob_type and c_ob_refcnt are set by allocate_type_obj
         elif isinstance(w_obj, W_PyCObject):
             w_type = space.type(w_obj)
             assert isinstance(w_type, W_PyCTypeObject)
@@ -270,21 +270,21 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             basicsize = pto._obj.c_tp_basicsize
             T = get_padded_type(PyObject.TO, basicsize)
             py_obj = lltype.malloc(T, None, flavor="raw", zero=True)
-            py_obj.c_obj_refcnt = 1
-            py_obj.c_obj_type = rffi.cast(PyObject, pto)
+            py_obj.c_ob_refcnt = 1
+            py_obj.c_ob_type = rffi.cast(PyObject, pto)
         elif isinstance(w_obj, W_StringObject):
             py_obj = lltype.malloc(PyStringObject.TO, None, flavor='raw', zero=True)
             py_obj.c_size = len(space.str_w(w_obj))
             py_obj.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
             pto = make_ref(space, space.w_str)
             py_obj = rffi.cast(PyObject, py_obj)
-            py_obj.c_obj_refcnt = 1
-            py_obj.c_obj_type = rffi.cast(PyObject, pto)
+            py_obj.c_ob_refcnt = 1
+            py_obj.c_ob_type = rffi.cast(PyObject, pto)
         else:
             py_obj = lltype.malloc(PyObject.TO, None, flavor="raw", zero=True)
-            py_obj.c_obj_refcnt = 1
+            py_obj.c_ob_refcnt = 1
             pto = make_ref(space, space.type(w_obj))
-            py_obj.c_obj_type = rffi.cast(PyObject, pto)
+            py_obj.c_ob_type = rffi.cast(PyObject, pto)
         ptr = rffi.cast(ADDR, py_obj)
         py_obj = rffi.cast(PyObject, py_obj)
         debug_refcount("MAKREF", py_obj, w_obj)
@@ -322,7 +322,7 @@ def from_ref(space, ref):
     try:
         obj = state.py_objects_r2w[ptr]
     except KeyError:
-        ref_type = ref.c_obj_type
+        ref_type = ref.c_ob_type
         if ref != ref_type and space.is_w(from_ref(space, ref_type), space.w_str):
             return force_string(space, ref)
         else:
@@ -428,8 +428,8 @@ def bootstrap_types(space):
     object_pto = make_ref(space, space.w_object)
     object_pto = rffi.cast(PyTypeObjectPtr, object_pto)
     type_pto.c_tp_base = object_pto
-    type_pto.c_obj_type = make_ref(space, space.w_type)
-    object_pto.c_obj_type = make_ref(space, space.w_type)
+    type_pto.c_ob_type = make_ref(space, space.w_type)
+    object_pto.c_ob_type = make_ref(space, space.w_type)
     PyPyType_Ready(space, object_pto, space.w_object)
     PyPyType_Ready(space, type_pto, space.w_type)
     type_pto.c_tp_bases = make_ref(space, space.newtuple([space.w_object]))
