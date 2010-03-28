@@ -557,7 +557,7 @@ def build_bridge(space, rename=True):
 
 def setup_library(space):
     for name, func in FUNCTIONS.iteritems():
-        deco = entrypoint("cpyext", func.argtypes, name)
+        deco = entrypoint("cpyext", (tuple(func.argtypes), ), name)
         deco(func.get_wrapper(space))
 
 @unwrap_spec(ObjSpace, str, str)
