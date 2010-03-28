@@ -3164,6 +3164,13 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeList)
         assert s.listdef.listitem.resized
 
+    def test_varargs(self):
+        def f(*args):
+            return args[0] + 42
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int, int])
+        assert isinstance(s, annmodel.SomeInteger)
+
     def test_listitem_no_mutating(self):
         from pypy.rlib.debug import check_annotation
         called = []
