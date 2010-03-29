@@ -28,7 +28,7 @@ def Py_DECREF(space, obj):
             del state.py_objects_w2r[w_obj]
         if ptr in state.borrow_mapping:
             for containee in state.borrow_mapping[ptr]:
-                w_containee = state.py_objects_r2w.get(containee)
+                w_containee = state.py_objects_r2w.get(containee, None)
                 if w_containee is not None:
                     containee = state.py_objects_w2r[w_containee]
                     Py_DECREF(space, w_containee)
