@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 typedef struct {
-    PyObject_VAR_HEAD
+    PyObject_HEAD
     char* buffer;
     Py_ssize_t size;
 } PyStringObject;

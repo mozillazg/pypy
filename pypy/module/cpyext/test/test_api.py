@@ -10,7 +10,7 @@ def PyPy_GetWrapped(space, w_arg):
     assert isinstance(w_arg, W_Root)
 @api.cpython_api([PyObject], lltype.Void)
 def PyPy_GetReference(space, arg):
-    assert lltype.typeOf(arg) is  PyObject
+    assert lltype.typeOf(arg) ==  PyObject
 
 class BaseApiTest:
     def setup_class(cls):

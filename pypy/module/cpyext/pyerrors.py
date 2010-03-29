@@ -13,7 +13,7 @@ def PyErr_SetString(space, w_type, message_ptr):
 @cpython_api([], PyObject, borrowed=True)
 def PyErr_Occurred(space):
     state = space.fromcache(State)
-    register_container(space, None)
+    register_container(space, lltype.nullptr(PyObject.TO))
     return state.exc_value
 
 @cpython_api([], lltype.Void)
