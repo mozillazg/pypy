@@ -158,7 +158,7 @@ class SharedDictImplementation(W_DictMultiObject):
     def impl_setitem_str(self, key, w_value, shadows_type=True):
         attr = self.structure.lookup_attribute(key)
         if attr is not None:
-            attr.setfield(self.space, w_value)
+            attr.setfield(self.entries, w_value)
             return
         new_structure = self.structure.get_next_structure(key)
         self.entries = self.structure.convert_to(new_structure, self.entries)

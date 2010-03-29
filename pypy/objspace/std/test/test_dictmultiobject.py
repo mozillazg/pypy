@@ -37,6 +37,10 @@ class TestW_DictObject:
         space.setitem(d,wk1,wone)
         wback = space.getitem(d,wk1)
         assert self.space.eq_w(wback,wone)
+        wtwo = space.wrap(2)
+        space.setitem(d,wk1,wtwo)
+        wback = space.getitem(d,wk1)
+        assert self.space.eq_w(wback,wtwo)
 
     def test_delitem(self):
         space = self.space
@@ -522,6 +526,14 @@ class AppTest_DictSharing(AppTest_DictObject):
         l[0] = 24
         assert a.abc == 12
 
+    def test_setfield_twice(self):
+        class A(object):
+            pass
+        a = A()
+        a.x = 1
+        a.x = 2
+        assert a.x == 2
+
     def test_items(self):
         class A(object):
             pass
@@ -533,7 +545,7 @@ class TestW_DictSharingTagging(TestW_DictObject):
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withsharingtaggingdict": True})
 
-class AppTest_DictSharing(AppTest_DictObject):
+class AppTest_DictSharingTagging(AppTest_DictObject):
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withsharingtaggingdict": True})
 
