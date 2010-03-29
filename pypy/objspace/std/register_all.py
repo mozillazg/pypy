@@ -44,8 +44,6 @@ def register_all(module_dict, *alt_ns):
         func = hack_func_by_name(funcname, namespaces)
         func.register(obj, *l)
 
-    add_extra_comparisons()
-
 
 def hack_func_by_name(funcname, namespaces):
     for ns in namespaces:
@@ -57,57 +55,3 @@ def hack_func_by_name(funcname, namespaces):
                 return getattr(ns, funcname)
     raise NameError, ("trying hard but not finding a multimethod named %s" %
                       funcname)
-
-
-def op_negated(function):
-    def op(space, w_1, w_2):
-        return space.not_(function(space, w_1, w_2))
-    return op
-
-def op_swapped(function):
-    def op(space, w_1, w_2):
-        return function(space, w_2, w_1)
-    return op
-
-def op_swapped_negated(function):
-    def op(space, w_1, w_2):
-        return space.not_(function(space, w_2, w_1))
-    return op
-
-OPERATORS = ['lt', 'le', 'eq', 'ne', 'gt', 'ge']
-OP_CORRESPONDANCES = [
-    ('eq', 'ne', op_negated),
-    ('lt', 'gt', op_swapped),
-    ('le', 'ge', op_swapped),
-    ('lt', 'ge', op_negated),
-    ('le', 'gt', op_negated),
-    ('lt', 'le', op_swapped_negated),
-    ('gt', 'ge', op_swapped_negated),
-    ]
-for op1, op2, value in OP_CORRESPONDANCES[:]:
-    i = OP_CORRESPONDANCES.index((op1, op2, value))
-    OP_CORRESPONDANCES.insert(i+1, (op2, op1, value))
-
-def add_extra_comparisons():
-    """
-    Add the missing comparison operators if they were not explicitly
-    defined:  eq <-> ne  and  lt <-> le <-> gt <-> ge.
-    We try to add them in the order defined by the OP_CORRESPONDANCES
-    table, thus favouring swapping the arguments over negating the result.
-    """
-    originalentries = {}
-    for op in OPERATORS:
-        originalentries[op] = getattr(model.MM, op).signatures()
-
-    for op1, op2, correspondance in OP_CORRESPONDANCES:
-        mirrorfunc = getattr(model.MM, op2)
-        for types in originalentries[op1]:
-            t1, t2 = types
-            if t1 is t2:
-                if not mirrorfunc.has_signature(types):
-                    functions = getattr(model.MM, op1).getfunctions(types)
-                    assert len(functions) == 1, ('Automatic'
-                            ' registration of comparison functions'
-                            ' only work when there is a single method for'
-                            ' the operation.')
-                    mirrorfunc.register(correspondance(functions[0]), *types)

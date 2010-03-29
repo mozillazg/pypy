@@ -270,6 +270,60 @@ class StdTypeModel:
             self._typeorder_with_empty_usersubcls = result
         return self._typeorder_with_empty_usersubcls
 
+def _op_negated(function):
+    def op(space, w_1, w_2):
+        return space.not_(function(space, w_1, w_2))
+    return op
+
+def _op_swapped(function):
+    def op(space, w_1, w_2):
+        return function(space, w_2, w_1)
+    return op
+
+def _op_swapped_negated(function):
+    def op(space, w_1, w_2):
+        return space.not_(function(space, w_2, w_1))
+    return op
+
+OPERATORS = ['lt', 'le', 'eq', 'ne', 'gt', 'ge']
+OP_CORRESPONDANCES = [
+    ('eq', 'ne', _op_negated),
+    ('lt', 'gt', _op_swapped),
+    ('le', 'ge', _op_swapped),
+    ('lt', 'ge', _op_negated),
+    ('le', 'gt', _op_negated),
+    ('lt', 'le', _op_swapped_negated),
+    ('gt', 'ge', _op_swapped_negated),
+    ]
+for op1, op2, value in OP_CORRESPONDANCES[:]:
+    i = OP_CORRESPONDANCES.index((op1, op2, value))
+    OP_CORRESPONDANCES.insert(i+1, (op2, op1, value))
+
+def add_extra_comparisons():
+    """
+    Add the missing comparison operators if they were not explicitly
+    defined:  eq <-> ne  and  lt <-> le <-> gt <-> ge.
+    We try to add them in the order defined by the OP_CORRESPONDANCES
+    table, thus favouring swapping the arguments over negating the result.
+    """
+    originalentries = {}
+    for op in OPERATORS:
+        originalentries[op] = getattr(MM, op).signatures()
+
+    for op1, op2, correspondance in OP_CORRESPONDANCES:
+        mirrorfunc = getattr(MM, op2)
+        for types in originalentries[op1]:
+            t1, t2 = types
+            if t1 is t2:
+                if not mirrorfunc.has_signature(types):
+                    functions = getattr(MM, op1).getfunctions(types)
+                    assert len(functions) == 1, ('Automatic'
+                            ' registration of comparison functions'
+                            ' only work when there is a single method for'
+                            ' the operation.')
+                    mirrorfunc.register(correspondance(functions[0]), *types)
+
+
 # ____________________________________________________________
 
 W_ANY = W_Root
