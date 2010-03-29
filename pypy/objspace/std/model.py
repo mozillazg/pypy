@@ -176,11 +176,11 @@ class StdTypeModel:
             ]
         self.typeorder[longobject.W_LongObject] += [
             (floatobject.W_FloatObject, floatobject.delegate_Long2Float),
-            (complexobject.W_ComplexObject, 
+            (complexobject.W_ComplexObject,
                     complexobject.delegate_Long2Complex),
             ]
         self.typeorder[floatobject.W_FloatObject] += [
-            (complexobject.W_ComplexObject, 
+            (complexobject.W_ComplexObject,
                     complexobject.delegate_Float2Complex),
             ]
         self.typeorder[setobject.W_SetObject] += [
@@ -318,13 +318,13 @@ class StdObjSpaceMultiMethod(MultiMethodTable):
                 break
         else:
             self.name = operatorsymbol
-            
+
         if extras.get('general__args__', False):
             self.argnames_after = ['__args__']
         if extras.get('w_varargs', False):
             self.argnames_after = ['w_args']
         if extras.get('varargs_w', False):
-            self.argnames_after = ['args_w']            
+            self.argnames_after = ['args_w']
         self.argnames_after += extras.get('extra_args', [])
 
     def install_not_sliced(self, typeorder, baked_perform_call=True):
