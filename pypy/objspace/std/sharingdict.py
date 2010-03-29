@@ -10,9 +10,10 @@ class SharedStructure(object):
     _immutable_fields_ = ["keys", "length", "back_struct", "other_structs",
                           "last_key"]
 
-    def __init__(self, keys=None, length=0,
+    def __init__(self, space, keys=None, length=0,
                  last_key=None,
                  back_struct=None):
+        self.space = space
         if keys is None:
             keys = {}
         self.keys = keys
@@ -27,15 +28,15 @@ class SharedStructure(object):
 
     def new_structure(self, added_key):
         keys = self.keys.copy()
-        keys[added_key] = len(self.keys)
-        new_structure = SharedStructure(keys, self.length + 1,
+        keys[added_key] = AttributeShape(self.space, len(self.keys))
+        new_structure = SharedStructure(self.space, keys, self.length + 1,
                                         added_key, self)
         self.other_structs.set(added_key, new_structure)
         return new_structure
 
     @purefunction_promote('0')
-    def lookup_position(self, key):
-        return self.keys.get(key, -1)
+    def lookup_attribute(self, key):
+        return self.keys.get(key, None)
 
     @purefunction_promote('0')
     def get_next_structure(self, key):
@@ -49,6 +50,51 @@ class SharedStructure(object):
     @purefunction_promote()
     def size_estimate(self):
         return self._size_estimate >> NUM_DIGITS
+
+    def convert_to(self, new_structure, entries):
+        if new_structure.length > len(entries):
+            new_entries = [erase(self.space, None)] * new_structure.size_estimate()
+            for i in range(len(entries)):
+                new_entries[i] = entries[i]
+            entries = new_entries
+        assert self.length + 1 == new_structure.length
+        return entries
+
+    @purefunction_promote('0')
+    def find_structure_del_key(self, num_back):
+        keys = [None] * num_back
+        for i in range(num_back):
+            keys[i] = self.last_key
+            self = self.back_struct
+        # go back the structure that contains the deleted key
+        self = self.back_struct
+        for i in range(num_back - 1, -1, -1):
+            self = self.get_next_structure(keys[i])
+        return self
+
+
+class AttributeShape(object):
+    _immutable_ = True
+    def __init__(self, space, index):
+        self.space = space
+        self.index = index
+
+    def getfield(self, fields):
+        return unerase(self.space, fields[self.index])
+    def setfield(self, fields, val):
+        fields[self.index] = erase(self.space, val)
+    def delfield(self, fields, structure):
+        struct_len = structure.length
+        num_back = struct_len - self.index - 1
+        if num_back > 0:
+            for i in range(self.index, struct_len - 1):
+                fields[i] = fields[i + 1]
+        # don't make the entries list shorter, new keys might be added soon
+        fields[struct_len - 1] = erase(self.space, None)
+        return structure.find_structure_del_key(num_back)
+
+
+        
 
 def erase(space, w_value):
     if not space.config.objspace.std.withsharingtaggingdict:
@@ -74,7 +120,7 @@ def unerase(space, erased):
 
 class State(object):
     def __init__(self, space):
-        self.empty_structure = SharedStructure()
+        self.empty_structure = SharedStructure(space)
         self.emptylist = []
 
 
@@ -96,10 +142,10 @@ class SharedDictImplementation(W_DictMultiObject):
             return self._as_rdict().getitem(w_lookup)
 
     def impl_getitem_str(self, lookup):
-        i = self.structure.lookup_position(lookup)
-        if i == -1:
+        attr = self.structure.lookup_attribute(lookup)
+        if attr is None:
             return None
-        return unerase(self.space, self.entries[i])
+        return attr.getfield(self.entries)
 
     def impl_setitem(self, w_key, w_value):
         space = self.space
@@ -110,20 +156,14 @@ class SharedDictImplementation(W_DictMultiObject):
 
     @unroll_safe
     def impl_setitem_str(self, key, w_value, shadows_type=True):
-        e_value = erase(self.space, w_value)
-        i = self.structure.lookup_position(key)
-        if i != -1:
-            self.entries[i] = e_value
+        attr = self.structure.lookup_attribute(key)
+        if attr is not None:
+            attr.setfield(self.space, w_value)
             return
         new_structure = self.structure.get_next_structure(key)
-        if new_structure.length > len(self.entries):
-            new_entries = [erase(self.space, None)] * new_structure.size_estimate()
-            for i in range(len(self.entries)):
-                new_entries[i] = self.entries[i]
-            self.entries = new_entries
-
-        self.entries[new_structure.length - 1] = e_value
-        assert self.structure.length + 1 == new_structure.length
+        self.entries = self.structure.convert_to(new_structure, self.entries)
+        attr = new_structure.lookup_attribute(key)
+        attr.setfield(self.entries, w_value)
         self.structure = new_structure
             
     def impl_delitem(self, w_key):
@@ -131,27 +171,10 @@ class SharedDictImplementation(W_DictMultiObject):
         w_key_type = space.type(w_key)
         if space.is_w(w_key_type, space.w_str):
             key = space.str_w(w_key)
-            pos = self.structure.lookup_position(key)
-            if pos == -1:
+            attr = self.structure.lookup_attribute(key)
+            if attr is None:
                 raise KeyError
-            struct_len = self.structure.length
-            num_back = struct_len - pos - 1
-
-            if num_back > 0:
-                for i in range(pos, struct_len - 1):
-                    self.entries[i] = self.entries[i + 1]
-            # don't make the entries list shorter, new keys might be added soon
-            self.entries[struct_len - 1] = erase(self.space, None)
-            structure = self.structure
-            keys = [None] * num_back
-            for i in range(num_back):
-                keys[i] = structure.last_key
-                structure = structure.back_struct
-            # go back the structure that contains the deleted key
-            structure = structure.back_struct
-            for i in range(num_back - 1, -1, -1):
-                structure = structure.get_next_structure(keys[i])
-            self.structure = structure
+            self.structure = attr.delfield(self.entries, self.structure)
         elif _is_sane_hash(space, w_key_type):
             raise KeyError
         else:
@@ -166,7 +189,7 @@ class SharedDictImplementation(W_DictMultiObject):
     def impl_keys(self):
         space = self.space
         return [space.wrap(key)
-                    for (key, item) in self.structure.keys.iteritems()]
+                    for (key, _) in self.structure.keys.iteritems()]
 
     def impl_values(self):
         return [unerase(self.space, self.entries[i])
@@ -176,17 +199,17 @@ class SharedDictImplementation(W_DictMultiObject):
         space = self.space
         return [space.newtuple([
                         space.wrap(key),
-                        unerase(self.space, self.entries[item])])
-                    for (key, item) in self.structure.keys.iteritems()]
+                        attr.getfield(self.entries)])
+                    for (key, attr) in self.structure.keys.iteritems()]
     def impl_clear(self):
         space = self.space
         self.structure = space.fromcache(State).empty_structure
         self.entries = space.fromcache(State).emptylist
     def _as_rdict(self):
         r_dict_content = self.initialize_as_rdict()
-        for k, i in self.structure.keys.items():
-            r_dict_content[self.space.wrap(k)] = unerase(
-                self.space, self.entries[i])
+        for k, attr in self.structure.keys.items():
+            r_dict_content[self.space.wrap(k)] = attr.getfield(
+                self.entries)
         self._clear_fields()
         return self
 
@@ -202,8 +225,8 @@ class SharedIteratorImplementation(IteratorImplementation):
     def next_entry(self):
         implementation = self.dictimplementation
         assert isinstance(implementation, SharedDictImplementation)
-        for key, index in self.iterator:
-            e_value = implementation.entries[index]
-            return self.space.wrap(key), unerase(self.space, e_value)
+        for key, attr in self.iterator:
+            w_value = attr.getfield(implementation.entries)
+            return self.space.wrap(key), w_value
         else:
             return None, None

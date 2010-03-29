@@ -11,7 +11,7 @@ def instance_with_keys(structure, *keys):
     return structure
 
 def test_size_estimate():
-    empty_structure = SharedStructure()
+    empty_structure = SharedStructure(None)
     instances = []
     for i in range(100):
         instances.append(instance_with_keys(empty_structure, "a", "b", "c", "d", "e", "f"))
@@ -21,7 +21,7 @@ def test_size_estimate():
     assert empty_structure.other_structs.get("x").size_estimate() == 2
 
 def test_size_estimate2():
-    empty_structure = SharedStructure()
+    empty_structure = SharedStructure(None)
     instances = []
     for i in range(100):
         instances.append(instance_with_keys(empty_structure, "a", "b", "c", "d", "e", "f"))
@@ -33,6 +33,8 @@ def test_size_estimate2():
 
 def unerase_entries(space, d):
     return [unerase(space, e) for e in d.entries]
+def key_positions(d):
+    return dict([(key, attr.index) for key, attr in d.structure.keys.items()])
 
 def test_delete():
     space = FakeSpace()
@@ -43,7 +45,7 @@ def test_delete():
     d.delitem("b")
     assert d.r_dict_content is None
     assert unerase_entries(space, d) == [1, 3, None]
-    assert d.structure.keys == {"a": 0, "c": 1}
+    assert key_positions(d) == {"a": 0, "c": 1}
     assert d.getitem("a") == 1
     assert d.getitem("c") == 3
     assert d.getitem("b") is None
@@ -51,11 +53,11 @@ def test_delete():
 
     d.delitem("c")
     assert unerase_entries(space, d) == [1, None, None]
-    assert d.structure.keys == {"a": 0}
+    assert key_positions(d) == {"a": 0}
 
     d.delitem("a")
     assert unerase_entries(space, d) == [None, None, None]
-    assert d.structure.keys == {}
+    assert key_positions(d) == {}
 
     d = SharedDictImplementation(space)
     d.setitem_str("a", 1)
@@ -69,4 +71,4 @@ def test_delete():
     d.setitem_str("i", 9)
     d.delitem("d")
     assert unerase_entries(space, d) == [1, 2, 3, 5, 6, 7, 8, 9, None]
-    assert d.structure.keys == {"a": 0, "b": 1, "c": 2, "e": 3, "f": 4, "g": 5, "h": 6, "i": 7}
+    assert key_positions(d) == {"a": 0, "b": 1, "c": 2, "e": 3, "f": 4, "g": 5, "h": 6, "i": 7}
