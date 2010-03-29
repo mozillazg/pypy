@@ -96,8 +96,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
         self.w_False = W_BoolObject.w_False
         self.w_True  = W_BoolObject.w_True
         from pypy.interpreter.special import NotImplemented, Ellipsis
-        self.w_NotImplemented = self.wrap(NotImplemented(self))  
-        self.w_Ellipsis = self.wrap(Ellipsis(self))  
+        self.w_NotImplemented = self.wrap(NotImplemented(self))
+        self.w_Ellipsis = self.wrap(Ellipsis(self))
 
         # types
         for typedef in self.model.pythontypes:
@@ -110,14 +110,14 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # the type of old-style classes
         self.w_classobj = self.builtin.get('__metaclass__')
 
-        # fix up a problem where multimethods apparently don't 
-        # like to define this at interp-level 
+        # fix up a problem where multimethods apparently don't
+        # like to define this at interp-level
         # HACK HACK HACK
         from pypy.objspace.std.typeobject import _HEAPTYPE
         old_flags = self.w_dict.__flags__
         self.w_dict.__flags__ |= _HEAPTYPE
         self.appexec([self.w_dict], """
-            (dict): 
+            (dict):
                 def fromkeys(cls, seq, value=None):
                     r = cls()
                     for s in seq:
@@ -133,7 +133,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if self.config.objspace.std.withtproxy:
             w___pypy__ = self.getbuiltinmodule("__pypy__")
             from pypy.objspace.std.transparent import app_proxy, app_proxy_controller
-        
+
             self.setattr(w___pypy__, self.wrap('tproxy'),
                           self.wrap(app_proxy))
             self.setattr(w___pypy__, self.wrap('get_tproxy_controller'),
@@ -249,7 +249,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
             w_result = self.wrap_exception_cls(x)
             if w_result is not None:
                 return w_result
-        #print "fake-wrapping", x 
         from fake import fake_object
         return fake_object(self, x)
 
@@ -258,7 +257,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def wrap_exception_cls(self, x):
         """NOT_RPYTHON"""
         if hasattr(self, 'w_' + x.__name__):
-            w_result = getattr(self, 'w_' + x.__name__)            
+            w_result = getattr(self, 'w_' + x.__name__)
             return w_result
         return None
     wrap_exception_cls._annspecialcase_ = "override:wrap_exception_cls"
