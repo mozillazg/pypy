@@ -1,11 +1,11 @@
-from pypy.objspace.std.stdtypedef import *
-from pypy.interpreter.gateway import NoneNotWrapped
+from pypy.interpreter import gateway
+from pypy.objspace.std.stdtypedef import StdTypeDef
 
 def wraptuple(space, list_w):
     from pypy.objspace.std.tupleobject import W_TupleObject
     return W_TupleObject(list_w)
 
-def descr__new__(space, w_tupletype, w_sequence=NoneNotWrapped):
+def descr__new__(space, w_tupletype, w_sequence=gateway.NoneNotWrapped):
     from pypy.objspace.std.tupleobject import W_TupleObject
     if w_sequence is None:
         tuple_w = []
@@ -25,5 +25,5 @@ tuple_typedef = StdTypeDef("tuple",
 tuple(sequence) -> tuple initialized from sequence's items
 
 If the argument is a tuple, the return value is the same object.''',
-    __new__ = newmethod(descr__new__),
+    __new__ = gateway.interp2app(descr__new__),
     )

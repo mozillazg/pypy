@@ -10,9 +10,7 @@ from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.rlib import jit
 from pypy.tool.sourcetools import compile2
 
-__all__ = ['StdTypeDef', 'newmethod', 'gateway',
-           'GetSetProperty', 'Member',
-           'SMM', 'descr_get_dict', 'no_hash_descr']
+__all__ = ['StdTypeDef', 'SMM', 'no_hash_descr']
 
 SMM = StdObjSpaceMultiMethod
 
@@ -42,11 +40,6 @@ def issubtypedef(a, b):
 
 std_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict, descr_del_dict)
 std_dict_descr.name = '__dict__'
-
-def newmethod(descr_new, unwrap_spec=None):
-    "NOT_RPYTHON: initialization-time only."
-    # this is turned into a static method by the constructor of W_TypeObject.
-    return gateway.interp2app(descr_new, unwrap_spec=unwrap_spec)
 
 # ____________________________________________________________
 #
