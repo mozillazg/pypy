@@ -53,7 +53,7 @@ def convert_method_defs(space, dict_w, methods, pto, w_self=None):
             if pto is None:
                 if flags & METH_CLASS or flags & METH_STATIC:
                     raise OperationError(space.w_ValueError,
-                            "module functions cannot set METH_CLASS or METH_STATIC")
+                            space.wrap("module functions cannot set METH_CLASS or METH_STATIC"))
                 w_obj = PyCFunction_NewEx(space, method, w_self)
             else:
                 if methodname in dict_w and not (flags & METH_COEXIST):
@@ -61,7 +61,7 @@ def convert_method_defs(space, dict_w, methods, pto, w_self=None):
                 if flags & METH_CLASS:
                     if flags & METH_STATIC:
                         raise OperationError(space.w_ValueError,
-                                "method cannot be both class and static")
+                                space.wrap("method cannot be both class and static"))
                     #w_obj = PyDescr_NewClassMethod(pto, method)
                     w_obj = space.w_Ellipsis # XXX
                 elif flags & METH_STATIC:
