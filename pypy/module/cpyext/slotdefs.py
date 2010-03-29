@@ -21,7 +21,7 @@ def check_num_args(space, ob, n):
     if n == PyTuple_GET_SIZE(space, ob):
         return
     raise operationerrfmt(space.w_TypeError,
-        "expected %d arguments, got %zd", n, PyTuple_GET_SIZE(ob))
+        "expected %d arguments, got %d", n, PyTuple_GET_SIZE(space, ob))
 
 def wrap_unaryfunc(space, w_self, w_args, func):
     func_unary = rffi.cast(unaryfunc, func)
