@@ -51,7 +51,7 @@ def convert_method_defs(space, dict_w, methods, pto, w_self=None):
 
             methodname = rffi.charp2str(method.c_ml_name)
             flags = rffi.cast(lltype.Signed, method.c_ml_flags)
-            if pto is None:
+            if not pto:
                 if flags & METH_CLASS or flags & METH_STATIC:
                     raise OperationError(space.w_ValueError,
                             space.wrap("module functions cannot set METH_CLASS or METH_STATIC"))
