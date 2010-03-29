@@ -1,3 +1,4 @@
+import os
 import sys
 
 from pypy.rpython.lltypesystem import rffi, lltype
@@ -22,7 +23,7 @@ from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr, PyTypeObject, \
 from pypy.module.cpyext.slotdefs import slotdefs
 
 
-class W_GetSetPropertyEx(GetSetProperty): # XXX fix this to be rpython
+class W_GetSetPropertyEx(GetSetProperty):
     def getter(self, space, w_self):
         return generic_cpy_call(space, self.getset.c_get, w_self, self.getset.c_closure)
 
@@ -78,7 +79,7 @@ def add_operators(space, dict_w, pto):
         if not func:
             continue
         if wrapper_func is None and wrapper_func_kwds is None:
-            print >>sys.stderr, method_name, "used by the type but no wrapper function defined!"
+            os.write(2, method_name + " used by the type but no wrapper function defined!")
             continue
         dict_w[method_name] = PyDescr_NewWrapper(space, pto, method_name, wrapper_func,
                 wrapper_func_kwds, doc, func_voidp)
