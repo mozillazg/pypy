@@ -49,7 +49,7 @@ class Entry(ExtRegistryEntry):
     _about_ = erase
 
     def compute_result_annotation(self, s_obj):
-        return someErased
+        return SomeErased()
 
     def specialize_call(self, hop):
         return hop.r_result.specialize_call(hop)
@@ -94,7 +94,7 @@ class Entry(ExtRegistryEntry):
     def compute_annotation(self):
         from pypy.rlib import _jit_vref
         s_obj = self.bookkeeper.immutablevalue(self.instance._x)
-        return someErased
+        return SomeErased()
 
 # annotation and rtyping support 
 
@@ -112,8 +112,6 @@ class SomeErased(annmodel.SomeObject):
     def rtyper_makekey(self):
         return self.__class__,
 
-someErased = SomeErased()
-
 class __extend__(pairtype(SomeErased, SomeErased)):
 
     def union((serased1, serased2)):
@@ -127,8 +125,9 @@ class ErasedRepr(Repr):
 
     def specialize_call(self, hop):
         s_arg, = hop.args_s
-        if isinstance(s_arg, annmodel.SomeInstance):
-            r_generic_object = getinstancerepr(hop.rtyper, None)
+        r_generic_object = getinstancerepr(hop.rtyper, None)
+        if (isinstance(s_arg, annmodel.SomeInstance) or
+                (s_arg.is_constant() and s_arg.const is None)):
             hop.exception_cannot_occur()
             [v] = hop.inputargs(r_generic_object)   # might generate a cast_pointer
             return v
