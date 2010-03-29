@@ -25,13 +25,6 @@ from pypy.rlib.rstring import rsplit
 
 
 class W_GetSetPropertyEx(GetSetProperty):
-    def getter(self, space, w_self):
-        return generic_cpy_call(space, self.getset.c_get, w_self, self.getset.c_closure)
-
-    def setter(self, space, w_self, w_value):
-        return generic_cpy_call(space, self.getset.c_set, w_self, w_value,
-                self.getset.c_closure)
-
     def __init__(self, getset):
         self.getset = getset
         self.name = rffi.charp2str(getset.c_name)
@@ -39,10 +32,11 @@ class W_GetSetPropertyEx(GetSetProperty):
         if doc:
             doc = rffi.charp2str(getset.c_doc)
         if getset.c_get:
-            get = self.getter.im_func
+            get = W_PyCObject.getter
         if getset.c_set:
-            set = self.setter.im_func
-        GetSetProperty.__init__(self, get, set, None, doc, W_PyCObject, True)
+            set = W_PyCObject.setter
+        GetSetProperty.__init__(self, get, set, None, doc,
+                                cls=W_PyCObject, use_closure=True)
 
 def PyDescr_NewGetSet(space, getset, pto):
     return space.wrap(W_GetSetPropertyEx(getset))
@@ -109,6 +103,15 @@ class W_PyCObject(Wrappable):
     def __init__(self, space):
         self.space = space
 
+    def getter(self, space, w_self):
+        return generic_cpy_call(
+            space, self.getset.c_get, w_self,
+            self.getset.c_closure)
+
+    def setter(self, space, w_self, w_value):
+        return generic_cpy_call(
+            space, self.getset.c_set, w_self, w_value,
+            self.getset.c_closure)
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
