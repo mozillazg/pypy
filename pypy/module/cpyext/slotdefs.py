@@ -17,7 +17,7 @@ def check_num_args(space, ob, n):
             PyTuple_GET_SIZE
     if not PyTuple_CheckExact(space, ob):
         raise OperationError(space.w_SystemError,
-            "PyArg_UnpackTuple() argument list is not a tuple")
+            space.wrap("PyArg_UnpackTuple() argument list is not a tuple"))
     if n == PyTuple_GET_SIZE(space, ob):
         return
     raise operationerrfmt(space.w_TypeError,
