@@ -18,6 +18,8 @@
 #endif
 #define Py_ssize_t long
 
+#include "patchlevel.h"
+
 #include "object.h"
 
 /* move somewhere else */
