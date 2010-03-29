@@ -94,15 +94,13 @@ class AttributeShape(object):
         return structure.find_structure_del_key(num_back)
 
 
-        
-
 def erase(space, w_value):
     if not space.config.objspace.std.withsharingtaggingdict:
         return w_value
     from pypy.rlib.rerased import erase
     if w_value is None:
         return erase(w_value)
-    if space.is_true(space.isinstance(w_value, space.w_int)):
+    if space.is_w(space.type(w_value), space.w_int):
         val = space.int_w(w_value)
         try:
             return erase(val)
@@ -162,8 +160,8 @@ class SharedDictImplementation(W_DictMultiObject):
             attr.setfield(self.entries, w_value)
             return
         new_structure = self.structure.get_next_structure(key)
-        self.entries = self.structure.convert_to(new_structure, self.entries)
         attr = new_structure.lookup_attribute(key)
+        self.entries = self.structure.convert_to(new_structure, self.entries)
         attr.setfield(self.entries, w_value)
         self.structure = new_structure
             
