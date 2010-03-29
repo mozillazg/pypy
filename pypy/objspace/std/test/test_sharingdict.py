@@ -36,6 +36,23 @@ def unerase_entries(space, d):
 def key_positions(d):
     return dict([(key, attr.index) for key, attr in d.structure.keys.items()])
 
+def test_erase_int_subclass():
+    class FakeSpace:
+        class config:
+            class objspace:
+                class std:
+                    withsharingdict = True
+                    withsharingtaggingdict = True
+        is_true = bool
+        isinstance = isinstance
+        w_int = int
+        int_w = int
+        wrap = lambda self, x: x
+        is_w = lambda self, a, b: a is b
+        type = type
+    space = FakeSpace()
+    assert unerase(space, erase(space, True)) is True
+
 def test_delete():
     space = FakeSpace()
     d = SharedDictImplementation(space)
