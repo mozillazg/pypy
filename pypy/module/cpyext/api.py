@@ -152,7 +152,7 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
                             arg = input_arg
                     elif ARG is PyObject and is_wrapped:
                         # convert to a wrapped object
-                        if not isinstance(input_arg, W_Root):
+                        if rffi._isllptr(input_arg):
                             arg = from_ref(space, input_arg)
                         else:
                             arg = input_arg
