@@ -36,10 +36,10 @@ class W_PyCMethodObject(W_PyCFunctionObject):
         self.w_objclass = from_ref(space, pyo)
 
     def __repr__(self):
-        return "<method %r of %r objects>" % (self.name, self.w_objclass.getname(self.space, '?'))
+        self.space.unwrap(self.descr_method_repr())
 
     def descr_method_repr(self):
-        return self.space.wrap(self.__repr__())
+        return self.getrepr(self.space, "built-in method '%s' of '%s' object" % (self.name, self.w_objclass.getname(self.space, '?')))
 
 
 class W_PyCWrapperObject(Wrappable):
@@ -66,7 +66,7 @@ class W_PyCWrapperObject(Wrappable):
         return self.wrapper_func(space, w_self, w_args, self.func)
 
     def descr_method_repr(self):
-        return self.space.wrap("<slot wrapper %r of %r objects>" % (self.method_name,
+        return self.space.wrap("<slot wrapper '%s' of '%s' objects>" % (self.method_name,
             self.w_objclass.getname(self.space, '?')))
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
