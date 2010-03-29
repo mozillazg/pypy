@@ -35,7 +35,6 @@ from pypy.objspace.std.typeobject import W_TypeObject
 # types
 from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.stringtype import wrapstr
-from pypy.objspace.std.tupletype import wraptuple
 from pypy.objspace.std.unicodetype import wrapunicode
 
 
@@ -280,7 +279,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def newtuple(self, list_w):
         assert isinstance(list_w, list)
         make_sure_not_resized(list_w)
-        return wraptuple(self, list_w)
+        return W_TupleObject(list_w)
 
     def newlist(self, list_w):
         return W_ListObject(list_w)
