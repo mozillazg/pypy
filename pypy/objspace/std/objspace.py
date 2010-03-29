@@ -1,9 +1,10 @@
 import __builtin__
-from pypy.interpreter import pyframe, function
+from pypy.interpreter import pyframe, function, special
 from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
-from pypy.objspace.std import stdtypedef, frame, model
+from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
+                               typeobject)
 from pypy.objspace.descroperation import DescrOperation, raiseattrerror
 from pypy.rlib.objectmodel import instantiate
 from pypy.rlib.debug import make_sure_not_resized
@@ -11,6 +12,25 @@ from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint
 from pypy.tool.sourcetools import func_with_new_name
+
+# Object imports
+from pypy.objspace.std.boolobject import W_BoolObject
+from pypy.objspace.std.complexobject import W_ComplexObject
+from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+from pypy.objspace.std.floatobject import W_FloatObject
+from pypy.objspace.std.intobject import W_IntObject
+from pypy.objspace.std.listobject import W_ListObject
+from pypy.objspace.std.longobject import W_LongObject
+from pypy.objspace.std.noneobject import W_NoneObject
+from pypy.objspace.std.ropeobject import W_RopeObject
+from pypy.objspace.std.iterobject import W_SeqIterObject
+from pypy.objspace.std.setobject import W_SetObject, W_FrozensetObject
+from pypy.objspace.std.sliceobject import W_SliceObject
+from pypy.objspace.std.smallintobject import W_SmallIntObject
+from pypy.objspace.std.stringobject import W_StringObject
+from pypy.objspace.std.transparent import app_proxy, app_proxy_controller
+from pypy.objspace.std.tupleobject import W_TupleObject
+from pypy.objspace.std.typeobject import W_TypeObject
 
 
 class StdObjSpace(ObjSpace, DescrOperation):
@@ -25,18 +45,14 @@ class StdObjSpace(ObjSpace, DescrOperation):
         self.FrameClass = frame.build_frame(self)
 
         # store the dict class on the space to access it in various places
-        from pypy.objspace.std import dictmultiobject
-        self.DictObjectCls = dictmultiobject.W_DictMultiObject
+        self.DictObjectCls = W_DictMultiObject
 
-        from pypy.objspace.std import tupleobject
-        self.TupleObjectCls = tupleobject.W_TupleObject
+        self.TupleObjectCls = W_TupleObject
 
         if not self.config.objspace.std.withrope:
-            from pypy.objspace.std import stringobject
-            self.StringObjectCls = stringobject.W_StringObject
+            self.StringObjectCls = W_StringObject
         else:
-            from pypy.objspace.std import ropeobject
-            self.StringObjectCls = ropeobject.W_RopeObject
+            self.StringObjectCls = W_RopeObject
         assert self.StringObjectCls in self.model.typeorder
 
         # install all the MultiMethods into the space instance
@@ -72,7 +88,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 builtinshortcut.install(self, mm, fallback_mm)
 
         if self.config.objspace.std.builtinshortcut:
-            from pypy.objspace.std import builtinshortcut
             builtinshortcut.install_is_true(self, model.MM.nonzero, model.MM.len)
 
         # set up the method cache
@@ -85,19 +100,12 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 self.method_cache_hits = {}
                 self.method_cache_misses = {}
 
-        # hack to avoid imports in the time-critical functions below
-        for cls in self.model.typeorder:
-            globals()[cls.__name__] = cls
-        for cls in self.model.imported_but_not_registered:
-            globals()[cls.__name__] = cls
-
         # singletons
         self.w_None  = W_NoneObject.w_None
         self.w_False = W_BoolObject.w_False
         self.w_True  = W_BoolObject.w_True
-        from pypy.interpreter.special import NotImplemented, Ellipsis
-        self.w_NotImplemented = self.wrap(NotImplemented(self))
-        self.w_Ellipsis = self.wrap(Ellipsis(self))
+        self.w_NotImplemented = self.wrap(special.NotImplemented(self))
+        self.w_Ellipsis = self.wrap(special.Ellipsis(self))
 
         # types
         for typedef in self.model.pythontypes:
@@ -113,9 +121,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # fix up a problem where multimethods apparently don't
         # like to define this at interp-level
         # HACK HACK HACK
-        from pypy.objspace.std.typeobject import _HEAPTYPE
         old_flags = self.w_dict.__flags__
-        self.w_dict.__flags__ |= _HEAPTYPE
+        self.w_dict.__flags__ |= typeobject._HEAPTYPE
         self.appexec([self.w_dict], """
             (dict):
                 def fromkeys(cls, seq, value=None):
@@ -132,8 +139,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # Adding transparent proxy call
         if self.config.objspace.std.withtproxy:
             w___pypy__ = self.getbuiltinmodule("__pypy__")
-            from pypy.objspace.std.transparent import app_proxy, app_proxy_controller
-
             self.setattr(w___pypy__, self.wrap('tproxy'),
                           self.wrap(app_proxy))
             self.setattr(w___pypy__, self.wrap('get_tproxy_controller'),
