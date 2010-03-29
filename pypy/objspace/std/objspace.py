@@ -1,9 +1,11 @@
 import __builtin__
+import types
 from pypy.interpreter import pyframe, function, special
 from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
-from pypy.objspace.std import builtinshortcut, stdtypedef, frame, model
+from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
+                               transparent)
 from pypy.objspace.descroperation import DescrOperation, raiseattrerror
 from pypy.rlib.objectmodel import instantiate
 from pypy.rlib.debug import make_sure_not_resized
@@ -27,7 +29,6 @@ from pypy.objspace.std.setobject import W_SetObject, W_FrozensetObject
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std.smallintobject import W_SmallIntObject
 from pypy.objspace.std.stringobject import W_StringObject
-from pypy.objspace.std.transparent import app_proxy, app_proxy_controller
 from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.objspace.std.typeobject import W_TypeObject
 
@@ -38,7 +39,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def initialize(self):
         "NOT_RPYTHON: only for initializing the space."
-        # Import all the object types and implementations
+        # setup all the object types and implementations
         self.model = model.StdTypeModel(self.config)
 
         self.FrameClass = frame.build_frame(self)
@@ -54,50 +55,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
             self.StringObjectCls = W_RopeObject
         assert self.StringObjectCls in self.model.typeorder
 
-        # install all the MultiMethods into the space instance
-        for name, mm in model.MM.__dict__.items():
-            if not isinstance(mm, model.StdObjSpaceMultiMethod):
-                continue
-            if not hasattr(self, name):
-                if name.endswith('_w'): # int_w, str_w...: these do not return a wrapped object
-                    func = mm.install_not_sliced(self.model.typeorder, baked_perform_call=True)
-                else:
-                    exprargs, expr, miniglobals, fallback = (
-                        mm.install_not_sliced(self.model.typeorder, baked_perform_call=False))
+        self._install_multimethods()
 
-                    func = stdtypedef.make_perform_trampoline('__mm_'+name,
-                                                              exprargs, expr, miniglobals,
-                                                              mm)
-                                                  # e.g. add(space, w_x, w_y)
-                def make_boundmethod(func=func):
-                    def boundmethod(*args):
-                        return func(self, *args)
-                    return func_with_new_name(boundmethod, 'boundmethod_'+name)
-                boundmethod = make_boundmethod()
-                setattr(self, name, boundmethod)  # store into 'space' instance
-            elif self.config.objspace.std.builtinshortcut:
-                from pypy.objspace.std import builtinshortcut
-                if name.startswith('inplace_'):
-                    fallback_name = name[len('inplace_'):]
-                    if fallback_name in ('or', 'and'):
-                        fallback_name += '_'
-                    fallback_mm = model.MM.__dict__[fallback_name]
-                else:
-                    fallback_mm = None
-                builtinshortcut.install(self, mm, fallback_mm)
-
-        if self.config.objspace.std.builtinshortcut:
-            builtinshortcut.install_is_true(self, model.MM.nonzero, model.MM.len)
-
-        # set up the method cache
         if self.config.objspace.std.withmethodcache:
-            SIZE = 1 << self.config.objspace.std.methodcachesizeexp
-            self.method_cache_versions = [None] * SIZE
-            self.method_cache_names = [None] * SIZE
-            self.method_cache_lookup_where = [(None, None)] * SIZE
-            if self.config.objspace.std.withmethodcachecounter:
-                self.method_cache_hits = {}
-                self.method_cache_misses = {}
+            self._setup_method_cache()
 
         # singletons
         self.w_None = W_NoneObject.w_None
@@ -121,11 +82,49 @@ class StdObjSpace(ObjSpace, DescrOperation):
         self.setup_builtin_modules()
         # Adding transparent proxy call
         if self.config.objspace.std.withtproxy:
-            w___pypy__ = self.getbuiltinmodule("__pypy__")
-            self.setattr(w___pypy__, self.wrap('tproxy'),
-                          self.wrap(app_proxy))
-            self.setattr(w___pypy__, self.wrap('get_tproxy_controller'),
-                          self.wrap(app_proxy_controller))
+            transparent.setup(self)
+
+    def _setup_method_cache(self):
+        SIZE = 1 << self.config.objspace.std.methodcachesizeexp
+        self.method_cache_versions = [None] * SIZE
+        self.method_cache_names = [None] * SIZE
+        self.method_cache_lookup_where = [(None, None)] * SIZE
+        if self.config.objspace.std.withmethodcachecounter:
+            self.method_cache_hits = {}
+            self.method_cache_misses = {}
+
+    def _install_multimethods(self):
+        """Install all the MultiMethods into the space instance."""
+        for name, mm in model.MM.__dict__.items():
+            if not isinstance(mm, model.StdObjSpaceMultiMethod):
+                continue
+            if not hasattr(self, name):
+                # int_w, str_w...: these do not return a wrapped object
+                if name.endswith('_w'):
+                    func = mm.install_not_sliced(self.model.typeorder,
+                                                 baked_perform_call=True)
+                else:
+                    unsliced = mm.install_not_sliced(self.model.typeorder,
+                                                     baked_perform_call=False)
+                    exprargs, expr, miniglobals, fallback = unsliced
+                    func = stdtypedef.make_perform_trampoline('__mm_'+name,
+                                                              exprargs, expr,
+                                                              miniglobals, mm)
+
+                boundmethod = types.MethodType(func, self, self.__class__)
+                setattr(self, name, boundmethod)  # store into 'space' instance
+            elif self.config.objspace.std.builtinshortcut:
+                if name.startswith('inplace_'):
+                    fallback_name = name[len('inplace_'):]
+                    if fallback_name in ('or', 'and'):
+                        fallback_name += '_'
+                    fallback_mm = model.MM.__dict__[fallback_name]
+                else:
+                    fallback_mm = None
+                builtinshortcut.install(self, mm, fallback_mm)
+        if self.config.objspace.std.builtinshortcut:
+            builtinshortcut.install_is_true(self, model.MM.nonzero,
+                                            model.MM.len)
 
     def createexecutioncontext(self):
         # add space specific fields to execution context
