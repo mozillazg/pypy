@@ -124,3 +124,10 @@ def test_none():
     assert foo() is None
     res = interpret(foo, [])
     assert not res
+
+def test_union():
+    s_e1 = SomeErased()
+    s_e1.const = 1
+    s_e2 = SomeErased()
+    s_e2.const = 3
+    assert not annmodel.pair(s_e1, s_e2).union().is_constant()

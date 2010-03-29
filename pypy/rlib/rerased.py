@@ -115,7 +115,7 @@ class SomeErased(annmodel.SomeObject):
 class __extend__(pairtype(SomeErased, SomeErased)):
 
     def union((serased1, serased2)):
-        return serased1
+        return SomeErased()
 
 
 class ErasedRepr(Repr):
