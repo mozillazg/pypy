@@ -50,9 +50,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         self.FrameClass = frame.build_frame(self)
 
-        # store the dict class on the space to access it in various places
-        self.DictObjectCls = W_DictMultiObject
-
         self._install_multimethods()
 
         if self.config.objspace.std.withmethodcache:
@@ -462,21 +459,21 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def finditem_str(self, w_obj, key):
         # performance shortcut to avoid creating the OperationError(KeyError)
-        if (isinstance(w_obj, self.DictObjectCls) and
+        if (isinstance(w_obj, W_DictMultiObject) and
                 not w_obj.user_overridden_class):
             return w_obj.getitem_str(key)
         return ObjSpace.finditem_str(self, w_obj, key)
 
     def finditem(self, w_obj, w_key):
         # performance shortcut to avoid creating the OperationError(KeyError)
-        if (isinstance(w_obj, self.DictObjectCls) and
+        if (isinstance(w_obj, W_DictMultiObject) and
                 not w_obj.user_overridden_class):
             return w_obj.getitem(w_key)
         return ObjSpace.finditem(self, w_obj, w_key)
 
     def set_str_keyed_item(self, w_obj, key, w_value, shadows_type=True):
         # performance shortcut to avoid creating the OperationError(KeyError)
-        if (isinstance(w_obj, self.DictObjectCls) and
+        if (isinstance(w_obj, W_DictMultiObject) and
                 not w_obj.user_overridden_class):
             w_obj.set_str_keyed_item(key, w_value, shadows_type)
         else:
