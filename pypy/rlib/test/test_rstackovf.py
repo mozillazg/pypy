@@ -22,3 +22,8 @@ def test_llinterp():
     from pypy.rpython.test.test_llinterp import interpret
     res = interpret(f, [sys.maxint])
     assert res == 1
+
+def test_oointerp():
+    from pypy.rpython.test.test_llinterp import interpret
+    res = interpret(f, [sys.maxint], type_system='ootype')
+    assert res == 1
