@@ -50,6 +50,11 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         self.FrameClass = frame.build_frame(self)
 
+        if self.config.objspace.std.withrope:
+            self.StringObjectCls = W_RopeObject
+        else:
+            self.StringObjectCls = W_StringObject
+
         self._install_multimethods()
 
         if self.config.objspace.std.withmethodcache:
