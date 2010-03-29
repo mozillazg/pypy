@@ -27,3 +27,9 @@ def test_oointerp():
     from pypy.rpython.test.test_llinterp import interpret
     res = interpret(f, [sys.maxint], type_system='ootype')
     assert res == 1
+
+def test_c_translation():
+    from pypy.translator.c.test.test_genc import compile
+    fn = compile(f, [int])
+    res = fn(sys.maxint)
+    assert res == 1
