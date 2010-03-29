@@ -392,12 +392,14 @@ def general_check_exact(space, w_obj, w_type):
 def make_wrapper(space, callable):
     names = callable.api_func.argnames
     argtypes_enum_ui = unrolling_iterable(enumerate(zip(callable.api_func.argtypes,
-        names, [name.startswith("w_") for name in names])))
+        [name.startswith("w_") for name in names])))
+
+    @specialize.ll()
     def wrapper(*args):
         boxed_args = ()
         if DEBUG_WRAPPER:
             print >>sys.stderr, callable,
-        for i, (typ, argname, is_wrapped) in argtypes_enum_ui:
+        for i, (typ, is_wrapped) in argtypes_enum_ui:
             arg = args[i]
             if (typ is PyObject and
                 is_wrapped):
@@ -655,7 +657,9 @@ def make_generic_cpy_call(FT, decref_args):
         result = func(*boxed_args)
         try:
             if RESULT_TYPE is PyObject:
-                if isinstance(result, W_Root):
+                if result is None:
+                    ret = result
+                elif isinstance(result, W_Root):
                     ret = result
                 else:
                     ret = from_ref(space, result)
