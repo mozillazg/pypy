@@ -4,20 +4,20 @@ _name_mappings = {
     'and': 'and_',
     'or': 'or_',
     }
-    
+
 def register_all(module_dict, *alt_ns):
-    """register implementations for multimethods. 
+    """register implementations for multimethods.
 
     By default a (name, object) pair of the given module dictionary
     is registered on the multimethod 'name' of StdObjSpace.
     If the name doesn't exist then the alternative namespace is tried
-    for registration. 
+    for registration.
     """
     namespaces = list(alt_ns) + [model.MM]
 
     for name, obj in module_dict.items():
-        if name.startswith('app_'): 
-            print "%s: direct app definitions deprecated" % name 
+        if name.startswith('app_'):
+            print "%s: direct app definitions deprecated" % name
         if name.find('__')<1 or name.startswith('app_'):
             continue
         funcname, sig = name.split('__')
@@ -39,13 +39,6 @@ def register_all(module_dict, *alt_ns):
                           "no W_%s or W_%sObject for the definition of %s" % (
                              i, i, name)
             l.append(icls)
-
-        #XXX trying to be too clever at the moment for userobject.SpecialMethod
-        #if len(l) != obj.func_code.co_argcount-1:
-        #    raise ValueError, \
-        #          "function name %s doesn't specify exactly %d arguments" % (
-        #             repr(name), obj.func_code.co_argcount-1)
-
         funcname =  _name_mappings.get(funcname, funcname)
 
         func = hack_func_by_name(funcname, namespaces)
@@ -62,17 +55,6 @@ def hack_func_by_name(funcname, namespaces):
         else:
             if hasattr(ns, funcname):
                 return getattr(ns, funcname)
-    #import typetype
-    #try:
-    #    return getattr(typetype.W_TypeType, funcname)
-    #except AttributeError:
-    #    pass  # catches not only the getattr() but the typetype.W_TypeType
-    #          # in case it is not fully imported yet :-((((
-    from pypy.objspace.std import objecttype
-    try:
-        return getattr(objecttype, funcname)
-    except AttributeError:
-        pass
     raise NameError, ("trying hard but not finding a multimethod named %s" %
                       funcname)
 
@@ -128,9 +110,4 @@ def add_extra_comparisons():
                             ' registration of comparison functions'
                             ' only work when there is a single method for'
                             ' the operation.')
-                    #print 'adding %s <<<%s>>> %s as %s(%s)' % (
-                    #    t1, op2, t2,
-                    #    correspondance.func_name, functions[0].func_name)
-                    mirrorfunc.register(
-                        correspondance(functions[0]),
-                        *types)
+                    mirrorfunc.register(correspondance(functions[0]), *types)
