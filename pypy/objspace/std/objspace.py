@@ -5,7 +5,7 @@ from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
 from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
-                               transparent)
+                               transparent, callmethod)
 from pypy.objspace.descroperation import DescrOperation, raiseattrerror
 from pypy.rlib.objectmodel import instantiate
 from pypy.rlib.debug import make_sure_not_resized
@@ -31,6 +31,12 @@ from pypy.objspace.std.smallintobject import W_SmallIntObject
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.objspace.std.typeobject import W_TypeObject
+
+# types
+from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.stringtype import wrapstr
+from pypy.objspace.std.tupletype import wraptuple
+from pypy.objspace.std.unicodetype import wrapunicode
 
 
 class StdObjSpace(ObjSpace, DescrOperation):
@@ -171,10 +177,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
             else:
                 return self.newint(x)
         if isinstance(x, str):
-            from pypy.objspace.std.stringtype import wrapstr
             return wrapstr(self, x)
         if isinstance(x, unicode):
-            from pypy.objspace.std.unicodetype import wrapunicode
             return wrapunicode(self, x)
         if isinstance(x, float):
             return W_FloatObject(x)
@@ -260,7 +264,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # this time-critical and circular-imports-funny method was stored
         # on 'self' by initialize()
         # not sure how bad this is:
-        from pypy.objspace.std.inttype import wrapint
         return wrapint(self, intval)
 
     def newfloat(self, floatval):
@@ -273,18 +276,15 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return W_LongObject.fromint(self, val)
 
     def newtuple(self, list_w):
-        from pypy.objspace.std.tupletype import wraptuple
         assert isinstance(list_w, list)
         make_sure_not_resized(list_w)
         return wraptuple(self, list_w)
 
     def newlist(self, list_w):
-        from pypy.objspace.std.listobject import W_ListObject
         return W_ListObject(list_w)
 
     def newdict(self, module=False, instance=False, classofinstance=None,
                 from_strdict_shared=None, strdict=False):
-        from pypy.objspace.std.dictmultiobject import W_DictMultiObject
         return W_DictMultiObject.allocate_and_init_instance(
                 self, module=module, instance=instance,
                 classofinstance=classofinstance,
@@ -497,8 +497,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def call_method(self, w_obj, methname, *arg_w):
         if self.config.objspace.opcodes.CALL_METHOD:
-            from pypy.objspace.std.callmethod import call_method_opt
-            return call_method_opt(self, w_obj, methname, *arg_w)
+            return callmethod.call_method_opt(self, w_obj, methname, *arg_w)
         else:
             return ObjSpace.call_method(self, w_obj, methname, *arg_w)
 
