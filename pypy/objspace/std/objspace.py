@@ -74,9 +74,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
         self.w_Ellipsis = self.wrap(special.Ellipsis(self))
 
         # types
+        self.builtin_types = {}
         for typedef in self.model.pythontypes:
             w_type = self.gettypeobject(typedef)
+            self.builtin_types[typedef.name] = w_type
             setattr(self, 'w_' + typedef.name, w_type)
+        self.builtin_types["NotImplemented"] = self.w_NotImplemented
+        self.builtin_types["Ellipsis"] = self.w_Ellipsis
 
         # exceptions & builtins
         self.make_builtins()
@@ -89,6 +93,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # Adding transparent proxy call
         if self.config.objspace.std.withtproxy:
             transparent.setup(self)
+
+    def get_builtin_types(self):
+        return self.builtin_types
 
     def _setup_method_cache(self):
         SIZE = 1 << self.config.objspace.std.methodcachesizeexp
