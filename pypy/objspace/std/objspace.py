@@ -3,8 +3,7 @@ from pypy.interpreter import pyframe, function, special
 from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
-from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
-                               typeobject)
+from pypy.objspace.std import builtinshortcut, stdtypedef, frame, model
 from pypy.objspace.descroperation import DescrOperation, raiseattrerror
 from pypy.rlib.objectmodel import instantiate
 from pypy.rlib.debug import make_sure_not_resized
@@ -117,22 +116,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         # the type of old-style classes
         self.w_classobj = self.builtin.get('__metaclass__')
-
-        # fix up a problem where multimethods apparently don't
-        # like to define this at interp-level
-        # HACK HACK HACK
-        old_flags = self.w_dict.__flags__
-        self.w_dict.__flags__ |= typeobject._HEAPTYPE
-        self.appexec([self.w_dict], """
-            (dict):
-                def fromkeys(cls, seq, value=None):
-                    r = cls()
-                    for s in seq:
-                        r[s] = value
-                    return r
-                dict.fromkeys = classmethod(fromkeys)
-        """)
-        self.w_dict.__flags__ = old_flags
 
         # final setup
         self.setup_builtin_modules()
