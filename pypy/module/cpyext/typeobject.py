@@ -62,7 +62,7 @@ def convert_getset_defs(space, dict_w, getsets, pto):
 def add_operators(space, dict_w, pto):
     # XXX support PyObject_HashNotImplemented
     state = space.fromcache(State)
-    for method_name, slot_name, _, wrapper_func, wrapper_func_kwds, doc in state.slotdefs: # XXX use UI
+    for method_name, slot_name, _, wrapper_func, wrapper_func_kwds, doc in slotdefs:
         if method_name in dict_w:
             continue
         # XXX is this rpython?

@@ -125,8 +125,6 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
     def decorate(func):
         api_function = ApiFunction(argtypes, restype, func, borrowed, error)
         func.api_func = api_function
-        # the function is always wrapped so lets inline it into the wrapper
-        func._always_inline_ = True
 
         if error is _NOT_SPECIFIED:
             raise ValueError("function %s has no return value for exceptions"
@@ -174,6 +172,7 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
                         Py_DECREF(space, arg)
             unwrapper.func = func
             unwrapper.api_func = api_function
+            unwrapper._always_inline_ = True
             return unwrapper
 
         unwrapper_True = make_unwrapper(True)

@@ -7,6 +7,7 @@ from pypy.module.cpyext.typeobjectdefs import unaryfunc, wrapperfunc,\
         ternaryfunc
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
+from pypy.rlib.unroll import unrolling_iterable
 
 space = None
 
@@ -100,7 +101,7 @@ slotdef_replacements = (
 # Copy new slotdefs from typeobject.c
 # Remove comments
 # Done.
-slotdefs = """
+slotdefs_str = """
 static slotdef slotdefs[] = {
 	SQSLOT("__len__", sq_length, slot_sq_length, wrap_lenfunc,
 	       "x.__len__() <==> len(x)"),
@@ -293,14 +294,9 @@ static slotdef slotdefs[] = {
 };
 """
 for regex, repl in slotdef_replacements:
-    slotdefs = re.sub(regex, repl, slotdefs)
-def init_slotdefs(space_):
-    global space
-    space = space_
-    try:
-        return eval(slotdefs)
-    finally:
-        space = None
+    slotdefs_str = re.sub(regex, repl, slotdefs_str)
+
+slotdefs = unrolling_iterable(eval(slotdefs_str))
 
 if __name__ == "__main__":
-    print slotdefs
+    print slotdefs_str
