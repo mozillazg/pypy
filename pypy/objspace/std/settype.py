@@ -1,5 +1,5 @@
 from pypy.interpreter.error import OperationError
-from pypy.objspace.std.objspace import register_all
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, newmethod, no_hash_descr
 from pypy.objspace.std.stdtypedef import SMM
 from pypy.interpreter.gateway import NoneNotWrapped

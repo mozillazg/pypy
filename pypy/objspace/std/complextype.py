@@ -1,7 +1,7 @@
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import gateway
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.strutil import interp_string_to_float, ParseStringError
-from pypy.objspace.std.objspace import register_all
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.stdtypedef import GetSetProperty, StdTypeDef, newmethod
 from pypy.objspace.std.stdtypedef import StdObjSpaceMultiMethod
