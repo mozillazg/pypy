@@ -9,7 +9,7 @@ from pypy.interpreter.baseobjspace import Wrappable, W_Root, ObjSpace, \
     DescrMismatch
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.tool.sourcetools import compile2, func_with_new_name
-from pypy.rlib.objectmodel import instantiate, compute_identity_hash
+from pypy.rlib.objectmodel import instantiate, compute_identity_hash, specialize
 from pypy.rlib.jit import hint
 
 class TypeDef:
@@ -301,12 +301,17 @@ check_new_dictionary._dont_inline_ = True
 
 # ____________________________________________________________
 
+@specialize.arg(1)
 def make_descr_typecheck_wrapper(func, extraargs=(), cls=None, use_closure=False):
+    if func is None:
+        return None
+    return _make_descr_typecheck_wrapper(func, extraargs, cls, use_closure)
+
+@specialize.memo()
+def _make_descr_typecheck_wrapper(func, extraargs, cls, use_closure):
     # - if cls is None, the wrapped object is passed to the function
     # - if cls is a class, an unwrapped instance is passed
     # - if cls is a string, XXX unused?
-    if func is None:
-        return None
     if cls is None and use_closure:
         return func
     if hasattr(func, 'im_func'):
@@ -361,16 +366,16 @@ def unknown_objclass_getter(space):
     raise OperationError(space.w_AttributeError,
                          space.wrap("generic property has no __objclass__"))
 
-def make_objclass_getter(func, cls, cache={}):
-    if hasattr(func, 'im_func'):
+def make_objclass_getter(func, cls):
+    if func and hasattr(func, 'im_func'):
         assert not cls or cls is func.im_class
         cls = func.im_class
+    return _make_objclass_getter(cls)
+
+@specialize.memo()
+def _make_objclass_getter(cls):
     if not cls:
         return unknown_objclass_getter, cls
-    try:
-        return cache[cls]
-    except KeyError:
-        pass
     miniglobals = {}
     if isinstance(cls, str):
         assert cls.startswith('<'),"pythontype typecheck should begin with <"
@@ -385,13 +390,11 @@ def make_objclass_getter(func, cls, cache={}):
         \n""" % (typeexpr,)
     exec compile2(source) in miniglobals
     res = miniglobals['objclass_getter'], cls
-    cache[cls] = res
     return res
 
 class GetSetProperty(Wrappable):
     def __init__(self, fget, fset=None, fdel=None, doc=None,
                  cls=None, use_closure=False):
-        "NOT_RPYTHON: initialization-time only"
         objclass_getter, cls = make_objclass_getter(fget, cls)
         fget = make_descr_typecheck_wrapper(fget, cls=cls,
                                             use_closure=use_closure)
