@@ -103,8 +103,9 @@ def erase(space, w_value):
     if w_value is None:
         return erase(w_value)
     if space.is_true(space.isinstance(w_value, space.w_int)):
+        val = space.int_w(w_value)
         try:
-            return erase(space.int_w(w_value))
+            return erase(val)
         except OverflowError:
             pass
     return erase(w_value)
