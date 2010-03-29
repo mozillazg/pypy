@@ -231,6 +231,8 @@ class ObjSpace(object):
 
     full_exceptions = True  # full support for exceptions (normalization & more)
 
+    roottype = W_Root # for some tests
+
     def __init__(self, config=None):
         "NOT_RPYTHON: Basic initialization of objects."
         self.fromcache = InternalSpaceCache(self).getorbuild
