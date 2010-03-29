@@ -100,9 +100,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 self.method_cache_misses = {}
 
         # singletons
-        self.w_None  = W_NoneObject.w_None
+        self.w_None = W_NoneObject.w_None
         self.w_False = W_BoolObject.w_False
-        self.w_True  = W_BoolObject.w_True
+        self.w_True = W_BoolObject.w_True
         self.w_NotImplemented = self.wrap(special.NotImplemented(self))
         self.w_Ellipsis = self.wrap(special.Ellipsis(self))
 
