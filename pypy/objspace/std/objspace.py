@@ -20,13 +20,6 @@ import sys
 import os
 import __builtin__
 
-_registered_implementations = {}
-def registerimplementation(implcls):
-    # hint to objspace.std.model to register the implementation class
-    assert issubclass(implcls, W_Object)
-    _registered_implementations[implcls] = True
-
-
 ##################################################################
 
 class StdObjSpace(ObjSpace, DescrOperation):

@@ -1,11 +1,15 @@
 import operator, new
-from pypy.objspace.std.objspace import *
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.objspace import StdObjSpace
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.longobject import W_LongObject
 from pypy.rlib.rarithmetic import ovfcheck_float_to_int, intmask, isinf, isnan
 from pypy.rlib.rarithmetic import formatd, LONG_BIT
 from pypy.rlib.rbigint import rbigint
+from pypy.tool.sourcetools import func_with_new_name
 
 import math
 from pypy.objspace.std.intobject import W_IntObject

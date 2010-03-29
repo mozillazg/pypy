@@ -1,4 +1,6 @@
-from pypy.objspace.std.objspace import *
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.inttype import wrapint
 from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
@@ -8,7 +10,7 @@ from pypy.rlib.debug import make_sure_not_resized
 class W_TupleObject(W_Object):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
     _immutable_ = True
-    
+
     def __init__(w_self, wrappeditems):
         make_sure_not_resized(wrappeditems)
         w_self.wrappeditems = wrappeditems   # a list of wrapped values
