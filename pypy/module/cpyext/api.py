@@ -331,6 +331,7 @@ def force_string(space, ref):
 
 
 def from_ref(space, ref):
+    assert lltype.typeOf(ref) == PyObject
     if not ref:
         return None
     state = space.fromcache(State)
@@ -386,7 +387,6 @@ def make_wrapper(space, callable):
         names, [name.startswith("w_") for name in names])))
     def wrapper(*args):
         boxed_args = ()
-        # XXX use unrolling_iterable here
         if DEBUG_WRAPPER:
             print >>sys.stderr, callable,
         for i, (typ, argname, is_wrapped) in argtypes_enum_ui:
@@ -609,28 +609,36 @@ def load_extension_module(space, path, name):
     initfunc.call(lltype.Void)
     state.check_and_raise_exception()
 
-def make_generic_cpy_call_func(decref_args):
-    @specialize.memo()
-    def get_args_count(functype):
-        return unrolling_iterable(range(len(functype.ARGS)))
+@specialize.ll()
+def generic_cpy_call(space, func, *args):
+    FT = lltype.typeOf(func).TO
+    return make_generic_cpy_call(FT, True)(space, func, *args)
 
-    @specialize.argtype(2)
+@specialize.ll()
+def generic_cpy_call_dont_decref(space, func, *args):
+    FT = lltype.typeOf(func).TO
+    return make_generic_cpy_call(FT, False)(space, func, *args)
+
+@specialize.memo()
+def make_generic_cpy_call(FT, decref_args):
+    unrolling_arg_types = unrolling_iterable(enumerate(FT.ARGS))
+    RESULT_TYPE = FT.RESULT
+
+    @specialize.ll()
     def generic_cpy_call(space, func, *args):
         from pypy.module.cpyext.macros import Py_DECREF
         from pypy.module.cpyext.pyerrors import PyErr_Occurred
 
         boxed_args = ()
-        args_count_ui = get_args_count(lltype.typeOf(func).TO)
-        for i in args_count_ui: # this gives a warning
+        for i, _ in unrolling_arg_types:
             arg = args[i]
-            if not rffi._isllptr(arg) and (isinstance(arg, W_Root) or arg is None):
+            if not rffi._isllptr(arg) and (arg is None or isinstance(arg, W_Root)):
                 boxed_args += (make_ref(space, arg), )
             else:
                 boxed_args += (arg, )
         result = func(*boxed_args)
         try:
-            FT = lltype.typeOf(func).TO
-            if FT.RESULT is PyObject:
+            if RESULT_TYPE is PyObject:
                 ret = from_ref(space, result)
                 if result:
                     # The object reference returned from a C function 
@@ -655,15 +663,13 @@ def make_generic_cpy_call_func(decref_args):
                 return ret
         finally:
             if decref_args:
-                i = 0
-                while i < len(args):
+                for i, _ in unrolling_arg_types:
                     arg = args[i]
                     ref = boxed_args[i]
                     if isinstance(arg, W_Root) and ref:
                         Py_DECREF(space, ref)
-                    i += 1
     return generic_cpy_call
 
-generic_cpy_call = make_generic_cpy_call_func(True)
-generic_cpy_call_dont_decref = make_generic_cpy_call_func(False)
+generic_cpy_call = generic_cpy_call
+generic_cpy_call_dont_decref = generic_cpy_call_dont_decref
 
