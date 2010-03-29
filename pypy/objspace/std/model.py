@@ -8,6 +8,12 @@ from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 import pypy.interpreter.pycode
 import pypy.interpreter.special
 
+_registered_implementations = set()
+def registerimplementation(implcls):
+    """Hint to objspace.std.model to register the implementation class."""
+    assert issubclass(implcls, W_Object)
+    _registered_implementations.add(implcls)
+
 option_to_typename = {
     "withsmallint"   : ["smallintobject.W_SmallIntObject"],
     "withstrslice"   : ["strsliceobject.W_StringSliceObject"],
@@ -132,8 +138,7 @@ class StdTypeModel:
         if config.objspace.std.withrope:
             del self.typeorder[stringobject.W_StringObject]
 
-        #check if we missed implementations
-        from pypy.objspace.std.objspace import _registered_implementations
+        # check if we missed implementations
         for implcls in _registered_implementations:
             assert (implcls in self.typeorder or
                     implcls in self.imported_but_not_registered), (
@@ -146,7 +151,7 @@ class StdTypeModel:
         # register the order in which types are converted into each others
         # when trying to dispatch multimethods.
         # XXX build these lists a bit more automatically later
-        
+
         if config.objspace.std.withsmallint:
             self.typeorder[boolobject.W_BoolObject] += [
                 (smallintobject.W_SmallIntObject, boolobject.delegate_Bool2SmallInt),
