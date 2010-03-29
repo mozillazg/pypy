@@ -323,8 +323,7 @@ class LLFrame(object):
             if not (catch_exception and op is block.operations[-1]):
                 raise
         except RuntimeError, e:
-            if 'recursion' not in str(e):     # hack
-                raise
+            rstackovf.check_stack_overflow(e)
             # xxx fish fish fish for proper etype and evalue to use
             rtyper = self.llinterpreter.typer
             bk = rtyper.annotator.bookkeeper
