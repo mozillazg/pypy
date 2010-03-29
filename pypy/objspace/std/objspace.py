@@ -55,10 +55,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         self.TupleObjectCls = W_TupleObject
 
-        if not self.config.objspace.std.withrope:
-            self.StringObjectCls = W_StringObject
-        else:
+        if self.config.objspace.std.withrope:
             self.StringObjectCls = W_RopeObject
+        else:
+            self.StringObjectCls = W_StringObject
         assert self.StringObjectCls in self.model.typeorder
 
         self._install_multimethods()
