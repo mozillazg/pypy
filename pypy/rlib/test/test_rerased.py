@@ -117,3 +117,10 @@ def test_overflow():
     assert x == 16
     x = interpret(f, [sys.maxint])
     assert x == -1
+
+def test_none():
+    def foo():
+        return unerase(erase(None), X)
+    assert foo() is None
+    res = interpret(foo, [])
+    assert not res
