@@ -1,27 +1,17 @@
-from pypy.objspace.std.register_all import register_all
-from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
-from pypy.interpreter.error import OperationError, operationerrfmt, debug_print
-from pypy.interpreter.typedef import get_unique_interplevel_subclass
+import __builtin__
 from pypy.interpreter import pyframe, function
+from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
+from pypy.interpreter.error import OperationError, operationerrfmt
+from pypy.interpreter.typedef import get_unique_interplevel_subclass
+from pypy.objspace.std import stdtypedef, frame, model
+from pypy.objspace.descroperation import DescrOperation, raiseattrerror
 from pypy.rlib.objectmodel import instantiate
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.interpreter.gateway import PyPyCacheDir
-from pypy.tool.cache import Cache
-from pypy.tool.sourcetools import func_with_new_name
-from pypy.objspace.std import model
-from pypy.objspace.std.model import W_Object, UnwrapError
-from pypy.objspace.std.model import W_ANY, StdObjSpaceMultiMethod, StdTypeModel
-from pypy.objspace.std.multimethod import FailedToImplement, FailedToImplementArgs
-from pypy.objspace.descroperation import DescrOperation, raiseattrerror
-from pypy.objspace.std import stdtypedef, frame
 from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint
-import sys
-import os
-import __builtin__
+from pypy.tool.sourcetools import func_with_new_name
 
-##################################################################
 
 class StdObjSpace(ObjSpace, DescrOperation):
     """The standard object space, implementing a general-purpose object
@@ -30,7 +20,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def initialize(self):
         "NOT_RPYTHON: only for initializing the space."
         # Import all the object types and implementations
-        self.model = StdTypeModel(self.config)
+        self.model = model.StdTypeModel(self.config)
 
         self.FrameClass = frame.build_frame(self)
 
@@ -51,7 +41,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         # install all the MultiMethods into the space instance
         for name, mm in model.MM.__dict__.items():
-            if not isinstance(mm, StdObjSpaceMultiMethod):
+            if not isinstance(mm, model.StdObjSpaceMultiMethod):
                 continue
             if not hasattr(self, name):
                 if name.endswith('_w'): # int_w, str_w...: these do not return a wrapped object
@@ -183,7 +173,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # annotation (see pypy/annotation/builtin.py)
         if x is None:
             return self.w_None
-        if isinstance(x, W_Object):
+        if isinstance(x, model.W_Object):
             raise TypeError, "attempt to wrap already wrapped object: %s"%(x,)
         if isinstance(x, OperationError):
             raise TypeError, ("attempt to wrap already wrapped exception: %s"%
@@ -272,13 +262,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return w_result
         return None
     wrap_exception_cls._annspecialcase_ = "override:wrap_exception_cls"
-        
+
     def unwrap(self, w_obj):
         if isinstance(w_obj, Wrappable):
             return w_obj
-        if isinstance(w_obj, W_Object):
+        if isinstance(w_obj, model.W_Object):
             return w_obj.unwrap(self)
-        raise UnwrapError, "cannot unwrap: %r" % w_obj
+        raise model.UnwrapError, "cannot unwrap: %r" % w_obj
 
     def newint(self, intval):
         # this time-critical and circular-imports-funny method was stored

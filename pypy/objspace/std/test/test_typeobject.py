@@ -1,5 +1,5 @@
-from pypy.objspace.std.objspace import *
-from pypy.objspace.std.stdtypedef import *
+from pypy.objspace.std.model import W_Object
+from pypy.objspace.std.stdtypedef import StdTypeDef, newmethod
 from pypy.conftest import gettestobjspace
 
 from pypy.objspace.std.typeobject import W_TypeObject
