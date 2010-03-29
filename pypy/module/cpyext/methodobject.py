@@ -16,12 +16,10 @@ from pypy.rlib.objectmodel import we_are_translated
 
 class W_PyCFunctionObject(Wrappable):
     def __init__(self, space, ml, w_self):
-        self.space = space
         self.ml = ml
         self.w_self = w_self
 
-    def call(self, w_self, args_tuple):
-        space = self.space
+    def call(self, space, w_self, args_tuple):
         # Call the C function
         if w_self is None:
             w_self = self.w_self
@@ -56,15 +54,16 @@ class W_PyCWrapperObject(Wrappable):
         pyo = rffi.cast(PyObject, pto)
         self.w_objclass = from_ref(space, pyo)
 
-    def call(self, w_self, w_args, w_kw):
+    def call(self, space, w_self, w_args, w_kw):
         if self.wrapper_func is None:
             assert self.wrapper_func_kwds is not None
-            return self.wrapper_func_kwds(self.space, w_self, w_args, self.func, w_kw)
-        if self.space.is_true(w_kw):
-            raise operationerrfmt(self.space.w_TypeError,
-                                 "wrapper %s doesn't take any keyword arguments",
-                                 self.method_name)
-        return self.wrapper_func(self.space, w_self, w_args, self.func)
+            return self.wrapper_func_kwds(space, w_self, w_args, self.func, w_kw)
+        if space.is_true(w_kw):
+            raise operationerrfmt(
+                space.w_TypeError,
+                "wrapper %s doesn't take any keyword arguments",
+                self.method_name)
+        return self.wrapper_func(space, w_self, w_args, self.func)
 
     def descr_method_repr(self):
         return self.space.wrap("<slot wrapper %r of %r objects>" % (self.method_name,
@@ -79,7 +78,7 @@ def cwrapper_descr_call(space, w_self, __args__):
     w_kw = space.newdict()
     for key, w_obj in kw_w.items():
         space.setitem(w_kw, space.wrap(key), w_obj)
-    return self.call(w_self, w_args, w_kw)
+    return self.call(space, w_self, w_args, w_kw)
 
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
@@ -90,7 +89,7 @@ def cfunction_descr_call(space, w_self, __args__):
     if kw_w:
         raise OperationError(space.w_TypeError,
                              space.wrap("keywords not yet supported"))
-    ret = self.call(None, w_args)
+    ret = self.call(space, None, w_args)
     return ret
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
@@ -102,7 +101,7 @@ def cmethod_descr_call(space, w_self, __args__):
     if kw_w:
         raise OperationError(space.w_TypeError,
                              space.wrap("keywords not yet supported"))
-    ret = self.call(w_instance, w_args)
+    ret = self.call(space, w_instance, w_args)
     return ret
 
 def cmethod_descr_get(space, w_function, w_obj, w_cls=None):
