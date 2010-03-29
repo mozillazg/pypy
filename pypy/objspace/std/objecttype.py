@@ -1,10 +1,10 @@
 from pypy.interpreter.error import OperationError, operationerrfmt
+from pypy.interpreter.typedef import GetSetProperty
 from pypy.objspace.descroperation import Object
 from pypy.interpreter import gateway
 from pypy.interpreter.typedef import default_identity_hash
-from pypy.objspace.std.stdtypedef import *
+from pypy.objspace.std.stdtypedef import StdTypeDef, newmethod
 from pypy.objspace.std.register_all import register_all
-from pypy.objspace.std.objspace import StdObjSpace
 
 
 def descr__repr__(space, w_obj):
