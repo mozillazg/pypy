@@ -38,13 +38,13 @@ def PyString_FromString(space, char_p):
 
 @cpython_api([PyObject], rffi.CCHARP, error=0)
 def PyString_AsString(space, ref):
-    ref = rffi.cast(PyStringObject, ref)
-    if not ref.c_buffer:
+    ref_str = rffi.cast(PyStringObject, ref)
+    if not ref_str.c_buffer:
         # copy string buffer
         w_str = from_ref(space, ref)
         s = space.str_w(w_str)
-        ref.c_buffer = rffi.str2charp(s)
-    return ref.c_buffer
+        ref_str.c_buffer = rffi.str2charp(s)
+    return ref_str.c_buffer
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyString_Size(space, ref):
