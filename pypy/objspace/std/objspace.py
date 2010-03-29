@@ -53,14 +53,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # store the dict class on the space to access it in various places
         self.DictObjectCls = W_DictMultiObject
 
-        self.TupleObjectCls = W_TupleObject
-
-        if self.config.objspace.std.withrope:
-            self.StringObjectCls = W_RopeObject
-        else:
-            self.StringObjectCls = W_StringObject
-        assert self.StringObjectCls in self.model.typeorder
-
         self._install_multimethods()
 
         if self.config.objspace.std.withmethodcache:
