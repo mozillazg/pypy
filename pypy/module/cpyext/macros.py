@@ -11,7 +11,8 @@ from pypy.module.cpyext.state import State
 def Py_DECREF(space, obj):
     from pypy.module.cpyext.typeobject import string_dealloc
     obj.c_ob_refcnt -= 1
-    debug_refcount("DECREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
+    if DEBUG_REFCOUNT:
+        debug_refcount("DECREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
     if obj.c_ob_refcnt == 0:
         state = space.fromcache(State)
         ptr = rffi.cast(ADDR, obj)
@@ -48,7 +49,8 @@ def Py_DECREF(space, obj):
 def Py_INCREF(space, obj):
     obj.c_ob_refcnt += 1
     assert obj.c_ob_refcnt > 0
-    debug_refcount("INCREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
+    if DEBUG_REFCOUNT:
+        debug_refcount("INCREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
 
 @cpython_api([PyObject], lltype.Void)
 def Py_XINCREF(space, obj):

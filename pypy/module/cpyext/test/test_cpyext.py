@@ -27,9 +27,7 @@ class TestApi:
         assert api.FUNCTIONS['PyModule_Check'].argtypes == [api.PyObject]
 
     def test_padding(self):
-        T = api.get_padded_type(api.PyObject.TO, 42)
-        assert rffi.sizeof(T) == 42
-        print T
+        T = api.get_padded_type(api.PyObject.TO)
 
 class AppTestApi:
     def setup_class(cls):
