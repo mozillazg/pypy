@@ -212,13 +212,16 @@ class TranslationDriver(SimpleTaskEngine):
         self.translator = translator
         self.libdef = None
         self.secondary_entrypoints = []
-        for key in self.config.translation.secondaryentrypoints.split(","):
-            try:
-                points = secondary_entrypoints[key]
-            except KeyError:
-                raise KeyError("Entrypoints not found. I only know the keys %r." %
+
+        if self.config.translation.secondaryentrypoints:
+            for key in self.config.translation.secondaryentrypoints.split(","):
+                try:
+                    points = secondary_entrypoints[key]
+                except KeyError:
+                    raise KeyError(
+                        "Entrypoints not found. I only know the keys %r." %
                         (", ".join(secondary_entrypoints.keys()), ))
-            self.secondary_entrypoints.extend(points)
+                self.secondary_entrypoints.extend(points)
 
         self.translator.driver_instrument_result = self.instrument_result
 
