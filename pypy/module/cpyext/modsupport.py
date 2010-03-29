@@ -5,6 +5,7 @@ from pypy.module.cpyext.api import cpython_api, cpython_struct, PyObject, \
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.methodobject import PyCFunction_NewEx, PyDescr_NewMethod
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
+from pypy.interpreter.error import OperationError
 
 PyCFunction = lltype.Ptr(lltype.FuncType([PyObject, PyObject], PyObject))
 
@@ -61,10 +62,12 @@ def convert_method_defs(space, dict_w, methods, pto, w_self=None):
                     if flags & METH_STATIC:
                         raise OperationError(space.w_ValueError,
                                 "method cannot be both class and static")
-                    w_obj = PyDescr_NewClassMethod(pto, method)
+                    #w_obj = PyDescr_NewClassMethod(pto, method)
+                    w_obj = space.w_Ellipsis # XXX
                 elif flags & METH_STATIC:
                     w_func = PyCFunction_NewEx(space, method, None)
-                    w_obj = PyStaticMethod_New(space, w_func)
+                    w_obj = space.w_Ellipsis # XXX
+                    #w_obj = PyStaticMethod_New(space, w_func)
                 else:
                     w_obj = PyDescr_NewMethod(space, pto, method)
             dict_w[methodname] = w_obj
