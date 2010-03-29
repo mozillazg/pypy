@@ -27,10 +27,11 @@ def PyImport_AddModule(space, name):
 @cpython_api([rffi.CCHARP, lltype.Ptr(PyMethodDef), rffi.CCHARP,
               PyObject, rffi.INT_real], PyObject, borrowed=False) # we cannot borrow here
 def Py_InitModule4(space, name, methods, doc, w_self, apiver):
+    from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
     modname = rffi.charp2str(name)
     w_mod = PyImport_AddModule(space, modname)
     dict_w = {}
-    convert_method_defs(space, dict_w, methods, None, w_self)
+    convert_method_defs(space, dict_w, methods, lltype.nullptr(PyTypeObjectPtr.TO), w_self)
     for key, w_value in dict_w.items():
         space.setattr(w_mod, space.wrap(key), w_value)
     if doc:
@@ -49,7 +50,7 @@ def convert_method_defs(space, dict_w, methods, pto, w_self=None):
             if not method.c_ml_name: break
 
             methodname = rffi.charp2str(method.c_ml_name)
-            flags = method.c_ml_flags
+            flags = rffi.cast(lltype.Signed, method.c_ml_flags)
             if pto is None:
                 if flags & METH_CLASS or flags & METH_STATIC:
                     raise OperationError(space.w_ValueError,
