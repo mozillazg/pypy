@@ -54,6 +54,8 @@ def erase(space, w_value):
     if not space.config.objspace.std.withsharingtaggingdict:
         return w_value
     from pypy.rlib.rerased import erase
+    if w_value is None:
+        return erase(w_value)
     if space.is_true(space.isinstance(w_value, space.w_int)):
         try:
             return erase(space.int_w(w_value))
@@ -115,7 +117,7 @@ class SharedDictImplementation(W_DictMultiObject):
             return
         new_structure = self.structure.get_next_structure(key)
         if new_structure.length > len(self.entries):
-            new_entries = [None] * new_structure.size_estimate()
+            new_entries = [erase(self.space, None)] * new_structure.size_estimate()
             for i in range(len(self.entries)):
                 new_entries[i] = self.entries[i]
             self.entries = new_entries
