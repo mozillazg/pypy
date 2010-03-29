@@ -21,7 +21,7 @@ from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF, Py_XDECREF
 from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr, PyTypeObject, \
         PyGetSetDef
 from pypy.module.cpyext.slotdefs import slotdefs
-from pypy.rlib.string import split
+from pypy.rlib.rstring import rsplit
 
 
 class W_GetSetPropertyEx(GetSetProperty):
@@ -98,7 +98,7 @@ class W_PyCTypeObject(W_TypeObject):
         # XXX missing: convert_member_defs
 
         full_name = rffi.charp2str(pto.c_tp_name)
-        module_name, extension_name = split(full_name, ".", 1)
+        module_name, extension_name = rsplit(full_name, ".", 1)
         dict_w["__module__"] = space.wrap(module_name)
 
         W_TypeObject.__init__(self, space, extension_name,
