@@ -1,10 +1,6 @@
 from pypy.interpreter import gateway
 from pypy.objspace.std.stdtypedef import StdTypeDef
 
-def wraptuple(space, list_w):
-    from pypy.objspace.std.tupleobject import W_TupleObject
-    return W_TupleObject(list_w)
-
 def descr__new__(space, w_tupletype, w_sequence=gateway.NoneNotWrapped):
     from pypy.objspace.std.tupleobject import W_TupleObject
     if w_sequence is None:
@@ -14,8 +10,8 @@ def descr__new__(space, w_tupletype, w_sequence=gateway.NoneNotWrapped):
         return w_sequence
     else:
         tuple_w = space.fixedview(w_sequence)
-    w_obj = space.allocate_instance(space.TupleObjectCls, w_tupletype)
-    space.TupleObjectCls.__init__(w_obj, tuple_w)
+    w_obj = space.allocate_instance(W_TupleObject, w_tupletype)
+    W_TupleObject.__init__(w_obj, tuple_w)
     return w_obj
 
 # ____________________________________________________________
