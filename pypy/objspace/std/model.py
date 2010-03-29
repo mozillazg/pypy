@@ -357,3 +357,32 @@ class StdObjSpaceMultiMethod(MultiMethodTable):
         #
         mm.dispatch_tree = merge(self.dispatch_tree, other.dispatch_tree)
         return mm
+
+
+class MM:
+    """StdObjSpace multimethods"""
+
+    call    = StdObjSpaceMultiMethod('call', 1, ['__call__'],
+                                     general__args__=True)
+    init    = StdObjSpaceMultiMethod('__init__', 1, general__args__=True)
+    getnewargs = StdObjSpaceMultiMethod('__getnewargs__', 1)
+    # special visible multimethods
+    int_w   = StdObjSpaceMultiMethod('int_w', 1, [])     # returns an unwrapped int
+    str_w   = StdObjSpaceMultiMethod('str_w', 1, [])     # returns an unwrapped string
+    float_w = StdObjSpaceMultiMethod('float_w', 1, [])   # returns an unwrapped float
+    uint_w  = StdObjSpaceMultiMethod('uint_w', 1, [])    # returns an unwrapped unsigned int (r_uint)
+    unicode_w = StdObjSpaceMultiMethod('unicode_w', 1, [])    # returns an unwrapped list of unicode characters
+    bigint_w = StdObjSpaceMultiMethod('bigint_w', 1, []) # returns an unwrapped rbigint
+    # NOTE: when adding more sometype_w() methods, you need to write a
+    # stub in default.py to raise a space.w_TypeError
+    marshal_w = StdObjSpaceMultiMethod('marshal_w', 1, [], extra_args=['marshaller'])
+    log     = StdObjSpaceMultiMethod('log', 1, [], extra_args=['base'])
+
+    # add all regular multimethods here
+    for _name, _symbol, _arity, _specialnames in ObjSpace.MethodTable:
+        if _name not in locals():
+            mm = StdObjSpaceMultiMethod(_symbol, _arity, _specialnames)
+            locals()[_name] = mm
+            del mm
+
+    pow.extras['defaults'] = (None,)

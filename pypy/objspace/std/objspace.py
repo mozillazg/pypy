@@ -8,6 +8,7 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.interpreter.gateway import PyPyCacheDir
 from pypy.tool.cache import Cache
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.objspace.std import model
 from pypy.objspace.std.model import W_Object, UnwrapError
 from pypy.objspace.std.model import W_ANY, StdObjSpaceMultiMethod, StdTypeModel
 from pypy.objspace.std.multimethod import FailedToImplement, FailedToImplementArgs
@@ -49,20 +50,19 @@ class StdObjSpace(ObjSpace, DescrOperation):
         assert self.StringObjectCls in self.model.typeorder
 
         # install all the MultiMethods into the space instance
-        for name, mm in self.MM.__dict__.items():
+        for name, mm in model.MM.__dict__.items():
             if not isinstance(mm, StdObjSpaceMultiMethod):
                 continue
             if not hasattr(self, name):
                 if name.endswith('_w'): # int_w, str_w...: these do not return a wrapped object
                     func = mm.install_not_sliced(self.model.typeorder, baked_perform_call=True)
-                else:               
+                else:
                     exprargs, expr, miniglobals, fallback = (
                         mm.install_not_sliced(self.model.typeorder, baked_perform_call=False))
 
                     func = stdtypedef.make_perform_trampoline('__mm_'+name,
                                                               exprargs, expr, miniglobals,
                                                               mm)
-                
                                                   # e.g. add(space, w_x, w_y)
                 def make_boundmethod(func=func):
                     def boundmethod(*args):
@@ -76,14 +76,14 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     fallback_name = name[len('inplace_'):]
                     if fallback_name in ('or', 'and'):
                         fallback_name += '_'
-                    fallback_mm = self.MM.__dict__[fallback_name]
+                    fallback_mm = model.MM.__dict__[fallback_name]
                 else:
                     fallback_mm = None
                 builtinshortcut.install(self, mm, fallback_mm)
 
         if self.config.objspace.std.builtinshortcut:
             from pypy.objspace.std import builtinshortcut
-            builtinshortcut.install_is_true(self, self.MM.nonzero, self.MM.len)
+            builtinshortcut.install_is_true(self, model.MM.nonzero, model.MM.len)
 
         # set up the method cache
         if self.config.objspace.std.withmethodcache:
@@ -529,29 +529,3 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def raise_key_error(self, w_key):
         e = self.call_function(self.w_KeyError, w_key)
         raise OperationError(self.w_KeyError, e)
-
-    class MM:
-        "Container for multimethods."
-        call    = StdObjSpaceMultiMethod('call', 1, ['__call__'], general__args__=True)
-        init    = StdObjSpaceMultiMethod('__init__', 1, general__args__=True)
-        getnewargs = StdObjSpaceMultiMethod('__getnewargs__', 1)
-        # special visible multimethods
-        int_w   = StdObjSpaceMultiMethod('int_w', 1, [])     # returns an unwrapped int
-        str_w   = StdObjSpaceMultiMethod('str_w', 1, [])     # returns an unwrapped string
-        float_w = StdObjSpaceMultiMethod('float_w', 1, [])   # returns an unwrapped float
-        uint_w  = StdObjSpaceMultiMethod('uint_w', 1, [])    # returns an unwrapped unsigned int (r_uint)
-        unicode_w = StdObjSpaceMultiMethod('unicode_w', 1, [])    # returns an unwrapped list of unicode characters
-        bigint_w = StdObjSpaceMultiMethod('bigint_w', 1, []) # returns an unwrapped rbigint
-        # NOTE: when adding more sometype_w() methods, you need to write a
-        # stub in default.py to raise a space.w_TypeError
-        marshal_w = StdObjSpaceMultiMethod('marshal_w', 1, [], extra_args=['marshaller'])
-        log     = StdObjSpaceMultiMethod('log', 1, [], extra_args=['base'])
-
-        # add all regular multimethods here
-        for _name, _symbol, _arity, _specialnames in ObjSpace.MethodTable:
-            if _name not in locals():
-                mm = StdObjSpaceMultiMethod(_symbol, _arity, _specialnames)
-                locals()[_name] = mm
-                del mm
-
-        pow.extras['defaults'] = (None,)
