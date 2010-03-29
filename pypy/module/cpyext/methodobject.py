@@ -34,7 +34,8 @@ class W_PyCMethodObject(W_PyCFunctionObject):
         self.space = space
         self.ml = ml
         self.name = rffi.charp2str(ml.c_ml_name)
-        self.w_objclass = from_ref(space, pto)
+        pyo = rffi.cast(PyObject, pto)
+        self.w_objclass = from_ref(space, pyo)
 
     def __repr__(self):
         return "<method %r of %r objects>" % (self.name, self.w_objclass.getname(self.space, '?'))
@@ -52,14 +53,15 @@ class W_PyCWrapperObject(Wrappable):
         self.wrapper_func_kwds = wrapper_func_kwds
         self.doc = doc
         self.func = func
-        self.w_objclass = from_ref(space, pto)
+        pyo = rffi.cast(PyObject, pto)
+        self.w_objclass = from_ref(space, pyo)
 
     def call(self, w_self, w_args, w_kw):
         if self.wrapper_func is None:
             assert self.wrapper_func_kwds is not None
             return self.wrapper_func_kwds(self.space, w_self, w_args, self.func, w_kw)
         if self.space.is_true(w_kw):
-            raise operationerrfmt(space.w_TypeError,
+            raise operationerrfmt(self.space.w_TypeError,
                                  "wrapper %s doesn't take any keyword arguments",
                                  self.method_name)
         return self.wrapper_func(self.space, w_self, w_args, self.func)
