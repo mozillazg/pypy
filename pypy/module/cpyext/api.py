@@ -131,20 +131,28 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
                              % func)
         def make_unwrapper(catch_exception):
             names = api_function.argnames
-            types_names_enum_ui = unrolling_iterable(enumerate(zip(api_function.argtypes,
-                names, [name.startswith("w_") for name in names])))
-            @specialize.argtype(1)
+            types_names_enum_ui = unrolling_iterable(enumerate(
+                zip(api_function.argtypes,
+                    [name.startswith("w_") for name in names])))
+
+            @specialize.ll()
             def unwrapper(space, *args):
                 newargs = ()
-                to_decref = ()
-                for i, (typ, name, is_wrapped) in types_names_enum_ui:
+                to_decref = []
+                for i, (ARG, is_wrapped) in types_names_enum_ui:
                     input_arg = args[i]
-                    if typ is PyObject:
-                        if not is_wrapped and (input_arg is None
-                                or isinstance(input_arg, W_Root)):
+                    if ARG is PyObject and not is_wrapped:
+                        # build a reference
+                        if input_arg is None:
+                            arg = lltype.nullptr(PyObject.TO)
+                        elif isinstance(input_arg, W_Root):
                             arg = make_ref(space, input_arg)
-                            to_decref += (arg, )
-                        elif is_wrapped and not isinstance(input_arg, W_Root):
+                            to_decref.append(arg)
+                        else:
+                            arg = input_arg
+                    elif ARG is PyObject and is_wrapped:
+                        # convert to a wrapped object
+                        if not isinstance(input_arg, W_Root):
                             arg = from_ref(space, input_arg)
                         else:
                             arg = input_arg
@@ -175,12 +183,12 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
             unwrapper._always_inline_ = True
             return unwrapper
 
-        unwrapper_True = make_unwrapper(True)
-        unwrapper_False = make_unwrapper(False)
+        unwrapper_catch = make_unwrapper(True)
+        unwrapper_raise = make_unwrapper(False)
         if external:
             FUNCTIONS[func.func_name] = api_function
-        INTERPLEVEL_API[func.func_name] = unwrapper_True
-        return unwrapper_False
+        INTERPLEVEL_API[func.func_name] = unwrapper_catch # used in tests
+        return unwrapper_raise # used in 'normal' RPython code.
     return decorate
 
 def cpython_api_c():
@@ -621,30 +629,41 @@ def generic_cpy_call_dont_decref(space, func, *args):
 
 @specialize.memo()
 def make_generic_cpy_call(FT, decref_args):
+    from pypy.module.cpyext.macros import Py_DECREF
+    from pypy.module.cpyext.pyerrors import PyErr_Occurred
     unrolling_arg_types = unrolling_iterable(enumerate(FT.ARGS))
     RESULT_TYPE = FT.RESULT
 
     @specialize.ll()
     def generic_cpy_call(space, func, *args):
-        from pypy.module.cpyext.macros import Py_DECREF
-        from pypy.module.cpyext.pyerrors import PyErr_Occurred
-
         boxed_args = ()
-        for i, _ in unrolling_arg_types:
+        to_decref = []
+        for i, ARG in unrolling_arg_types:
             arg = args[i]
-            if not rffi._isllptr(arg) and (arg is None or isinstance(arg, W_Root)):
-                boxed_args += (make_ref(space, arg), )
+            if ARG is PyObject:
+                if arg is None:
+                    boxed_args += (lltype.nullptr(PyObject.TO),)
+                elif isinstance(arg, W_Root):
+                    ref = make_ref(space, arg)
+                    boxed_args += (ref,)
+                    if decref_args:
+                        to_decref.append(ref)
+                else:
+                    boxed_args += (arg,)
             else:
-                boxed_args += (arg, )
+                boxed_args += (arg,)
         result = func(*boxed_args)
         try:
             if RESULT_TYPE is PyObject:
-                ret = from_ref(space, result)
-                if result:
-                    # The object reference returned from a C function 
-                    # that is called from Python must be an owned reference 
+                if isinstance(result, W_Root):
+                    ret = result
+                else:
+                    ret = from_ref(space, result)
+                    # The object reference returned from a C function
+                    # that is called from Python must be an owned reference
                     # - ownership is transferred from the function to its caller.
-                    Py_DECREF(space, result)
+                    if result:
+                        Py_DECREF(space, result)
 
                 # Check for exception consistency
                 has_error = PyErr_Occurred(space) is not None
@@ -663,13 +682,7 @@ def make_generic_cpy_call(FT, decref_args):
                 return ret
         finally:
             if decref_args:
-                for i, _ in unrolling_arg_types:
-                    arg = args[i]
-                    ref = boxed_args[i]
-                    if isinstance(arg, W_Root) and ref:
-                        Py_DECREF(space, ref)
+                for ref in to_decref:
+                    Py_DECREF(space, ref)
     return generic_cpy_call
-
-generic_cpy_call = generic_cpy_call
-generic_cpy_call_dont_decref = generic_cpy_call_dont_decref
 
