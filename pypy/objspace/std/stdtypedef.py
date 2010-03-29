@@ -4,6 +4,7 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty, Member
 from pypy.interpreter.typedef import descr_get_dict, descr_set_dict
 from pypy.interpreter.typedef import no_hash_descr, descr_del_dict
 from pypy.interpreter.baseobjspace import SpaceCache
+from pypy.objspace.std import model
 from pypy.objspace.std.model import StdObjSpaceMultiMethod
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.rlib import jit
@@ -288,8 +289,8 @@ def slicemultimethod(space, multimethod, typedef, result, local=False):
 def slicemultimethods(space, typedef):
     """NOT_RPYTHON"""
     result = {}
-    # import and slice all multimethods of the space.MM container
-    for multimethod in hack_out_multimethods(space.MM.__dict__):
+    # import and slice all multimethods of the MM container
+    for multimethod in hack_out_multimethods(model.MM.__dict__):
         slicemultimethod(space, multimethod, typedef, result)
     # import all multimethods defined directly on the type without slicing
     for multimethod in typedef.local_multimethods:
@@ -301,9 +302,8 @@ def multimethods_defined_on(cls):
     multimethods that have an implementation whose first typed argument
     is 'cls'.
     """
-    from pypy.objspace.std.objspace import StdObjSpace   # XXX for now
     typedef = cls.typedef
-    for multimethod in hack_out_multimethods(StdObjSpace.MM.__dict__):
+    for multimethod in hack_out_multimethods(model.MM.__dict__):
         if cls in multimethod.dispatch_tree:
             yield multimethod, False
     for multimethod in typedef.local_multimethods:

@@ -1,3 +1,4 @@
+from pypy.objspace.std import model, stdtypedef
 
 _name_mappings = {
     'and': 'and_',
@@ -12,10 +13,7 @@ def register_all(module_dict, *alt_ns):
     If the name doesn't exist then the alternative namespace is tried
     for registration. 
     """
-    from pypy.objspace.std.objspace import StdObjSpace
-    from pypy.objspace.std.model import W_ANY, W_Object
-    from pypy.objspace.std.stdtypedef import StdTypeDef
-    namespaces = list(alt_ns) + [StdObjSpace.MM, StdObjSpace]
+    namespaces = list(alt_ns) + [model.MM]
 
     for name, obj in module_dict.items():
         if name.startswith('app_'): 
@@ -26,15 +24,15 @@ def register_all(module_dict, *alt_ns):
         l=[]
         for i in sig.split('_'):
             if i == 'ANY':        # just in case W_ANY is not in module_dict
-                icls = W_ANY
+                icls = model.W_ANY
             elif i == 'Object':   # just in case W_Object is not in module_dict
-                icls = W_Object
+                icls = model.W_Object
             else:
                 icls = (module_dict.get('W_%s' % i) or
                         module_dict.get('W_%sObject' % i))
                 if icls is None:
                     x = module_dict.get(i)
-                    if isinstance(x, StdTypeDef):
+                    if isinstance(x, stdtypedef.StdTypeDef):
                         icls = x.any
                 if icls is None:
                     raise ValueError, \
@@ -115,18 +113,17 @@ def add_extra_comparisons():
     We try to add them in the order defined by the OP_CORRESPONDANCES
     table, thus favouring swapping the arguments over negating the result.
     """
-    from pypy.objspace.std.objspace import StdObjSpace
     originalentries = {}
     for op in OPERATORS:
-        originalentries[op] = getattr(StdObjSpace.MM, op).signatures()
+        originalentries[op] = getattr(model.MM, op).signatures()
 
     for op1, op2, correspondance in OP_CORRESPONDANCES:
-        mirrorfunc = getattr(StdObjSpace.MM, op2)
+        mirrorfunc = getattr(model.MM, op2)
         for types in originalentries[op1]:
             t1, t2 = types
             if t1 is t2:
                 if not mirrorfunc.has_signature(types):
-                    functions = getattr(StdObjSpace.MM, op1).getfunctions(types)
+                    functions = getattr(model.MM, op1).getfunctions(types)
                     assert len(functions) == 1, ('Automatic'
                             ' registration of comparison functions'
                             ' only work when there is a single method for'
