@@ -42,6 +42,8 @@ def is_integer(e):
 class Erased(object):
     def __init__(self, x):
         self._x = x
+    def __repr__(self):
+        return "Erased(%r)" % (self._x, )
 
 class Entry(ExtRegistryEntry):
     _about_ = erase

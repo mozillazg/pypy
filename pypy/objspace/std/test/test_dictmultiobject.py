@@ -529,6 +529,22 @@ class AppTest_DictSharing(AppTest_DictObject):
         a.abc = 12
         a.__dict__.items() == [("abc", 12)]
 
+class TestW_DictSharingTagging(TestW_DictObject):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withsharingtaggingdict": True})
+
+class AppTest_DictSharing(AppTest_DictObject):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withsharingtaggingdict": True})
+
+    def test_tagging(self):
+        # slightly evil way to test this
+        class A(object):
+            pass
+        a = A()
+        a.x = x = 1231
+        assert a.x is not x
+
 
 class AppTestModuleDict(object):
     def setup_class(cls):
@@ -558,6 +574,7 @@ class FakeString(str):
 
 # the minimal 'space' needed to use a W_DictMultiObject
 class FakeSpace:
+    roottype = object
     def hash_w(self, obj):
         return hash(obj)
     def unwrap(self, x):
@@ -576,9 +593,13 @@ class FakeSpace:
     def type(self, w_obj):
         return type(w_obj)
     w_str = str
+    w_int = int
     def str_w(self, string):
         assert isinstance(string, str)
         return string
+    def int_w(self, obj):
+        assert isinstance(obj, int)
+        return obj
 
     def wrap(self, obj):
         return obj
@@ -615,6 +636,7 @@ class Config:
         class std:
             withdictmeasurement = False
             withsharingdict = False
+            withsharingtaggingdict = False
             withsmalldicts = False
             withcelldict = False
             withshadowtracking = False

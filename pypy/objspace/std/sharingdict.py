@@ -50,6 +50,26 @@ class SharedStructure(object):
     def size_estimate(self):
         return self._size_estimate >> NUM_DIGITS
 
+def erase(space, w_value):
+    if not space.config.objspace.std.withsharingtaggingdict:
+        return w_value
+    from pypy.rlib.rerased import erase
+    if space.is_true(space.isinstance(w_value, space.w_int)):
+        try:
+            return erase(space.int_w(w_value))
+        except OverflowError:
+            pass
+    return erase(w_value)
+
+def unerase(space, erased):
+    if not space.config.objspace.std.withsharingtaggingdict:
+        return erased
+    from pypy.rlib.rerased import unerase, is_integer
+    if is_integer(erased):
+        return space.wrap(unerase(erased, int))
+    return unerase(erased, space.roottype)
+
+
 class State(object):
     def __init__(self, space):
         self.empty_structure = SharedStructure()
@@ -77,7 +97,7 @@ class SharedDictImplementation(W_DictMultiObject):
         i = self.structure.lookup_position(lookup)
         if i == -1:
             return None
-        return self.entries[i]
+        return unerase(self.space, self.entries[i])
 
     def impl_setitem(self, w_key, w_value):
         space = self.space
@@ -88,9 +108,10 @@ class SharedDictImplementation(W_DictMultiObject):
 
     @unroll_safe
     def impl_setitem_str(self, key, w_value, shadows_type=True):
+        e_value = erase(self.space, w_value)
         i = self.structure.lookup_position(key)
         if i != -1:
-            self.entries[i] = w_value
+            self.entries[i] = e_value
             return
         new_structure = self.structure.get_next_structure(key)
         if new_structure.length > len(self.entries):
@@ -99,7 +120,7 @@ class SharedDictImplementation(W_DictMultiObject):
                 new_entries[i] = self.entries[i]
             self.entries = new_entries
 
-        self.entries[new_structure.length - 1] = w_value
+        self.entries[new_structure.length - 1] = e_value
         assert self.structure.length + 1 == new_structure.length
         self.structure = new_structure
             
@@ -118,7 +139,7 @@ class SharedDictImplementation(W_DictMultiObject):
                 for i in range(pos, struct_len - 1):
                     self.entries[i] = self.entries[i + 1]
             # don't make the entries list shorter, new keys might be added soon
-            self.entries[struct_len - 1] = None
+            self.entries[struct_len - 1] = erase(self.space, None)
             structure = self.structure
             keys = [None] * num_back
             for i in range(num_back):
@@ -146,11 +167,14 @@ class SharedDictImplementation(W_DictMultiObject):
                     for (key, item) in self.structure.keys.iteritems()]
 
     def impl_values(self):
-        return self.entries[:self.structure.length]
+        return [unerase(self.space, self.entries[i])
+                    for i in range(self.structure.length)]
 
     def impl_items(self):
         space = self.space
-        return [space.newtuple([space.wrap(key), self.entries[item]])
+        return [space.newtuple([
+                        space.wrap(key),
+                        unerase(self.space, self.entries[item])])
                     for (key, item) in self.structure.keys.iteritems()]
     def impl_clear(self):
         space = self.space
@@ -159,7 +183,8 @@ class SharedDictImplementation(W_DictMultiObject):
     def _as_rdict(self):
         r_dict_content = self.initialize_as_rdict()
         for k, i in self.structure.keys.items():
-            r_dict_content[self.space.wrap(k)] = self.entries[i]
+            r_dict_content[self.space.wrap(k)] = unerase(
+                self.space, self.entries[i])
         self._clear_fields()
         return self
 
@@ -176,7 +201,7 @@ class SharedIteratorImplementation(IteratorImplementation):
         implementation = self.dictimplementation
         assert isinstance(implementation, SharedDictImplementation)
         for key, index in self.iterator:
-            w_value = implementation.entries[index]
-            return self.space.wrap(key), w_value
+            e_value = implementation.entries[index]
+            return self.space.wrap(key), unerase(self.space, e_value)
         else:
             return None, None

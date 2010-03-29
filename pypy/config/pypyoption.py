@@ -223,6 +223,11 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         BoolOption("withsharingdict",
                    "use dictionaries that share the keys part",
                    default=False),
+        BoolOption("withsharingtaggingdict",
+                   "use dictionaries that share the keys part and use tagged integers inside them",
+                   default=False,
+                   requires=[("objspace.std.withsharingdict", True),
+                             ("translation.taggedpointers", True)]),
 
         BoolOption("withdictmeasurement",
                    "create huge files with masses of information "
