@@ -57,7 +57,6 @@ class AppTestCpythonExtensionBase:
     def import_module(self, name, init=None, body=''):
         if init is not None:
             code = """
-            #include <pypy_rename.h>
             #include <Python.h>
             %(body)s
 

@@ -1,4 +1,3 @@
-#include <pypy_rename.h>
 #include <Python.h>
 #if 0
 unsupported functions in it
