@@ -385,39 +385,6 @@ def test_print():
     fn = compile(f, [])
     fn(expected_extra_mallocs=1)
 
-def test_recursive_llhelper():
-    from pypy.rpython.annlowlevel import llhelper
-    from pypy.rpython.lltypesystem import lltype
-    from pypy.rlib.objectmodel import specialize
-    from pypy.rlib.nonconst import NonConstant
-    FTPTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed))
-    class A:
-        def __init__(self, func):
-            self.func = func
-        def _freeze_(self):
-            return True
-        @specialize.memo()
-        def get_llhelper(self):
-            return llhelper(FTPTR, lambda x: self.func(x))
-    STRUCT = lltype.Struct("foo", ("bar", FTPTR))
-    def f(s):
-        if s.bar == a_f.get_llhelper():
-            return 1
-        return 0
-    def g(x):
-        return 42
-    def chooser(x):
-        s = lltype.malloc(STRUCT, flavor="raw")
-        if x:
-            s.bar = a_f.get_llhelper()
-        else:
-            s.bar = a_g.get_llhelper()
-        return f(s)
-    a_f = A(f)
-    a_g = A(g)
-    fn = compile(chooser, [bool])
-    assert fn(True)
-
 def test_name():
     def f():
         return 3
