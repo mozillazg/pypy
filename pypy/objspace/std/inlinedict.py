@@ -8,8 +8,7 @@ from pypy.tool.sourcetools import func_with_new_name
 
 def make_mixin(config):
     assert config.objspace.std.withsharingdict
-    from pypy.objspace.std.sharingdict import SharedDictImplementation
-    return make_inlinedict_mixin(SharedDictImplementation, "structure")
+    return make_inlinedict_mixin()
 
 def make_indirection_method(methname, numargs):
     # *args don't work, the call normalization gets confused
@@ -24,7 +23,9 @@ def make_indirection_method(methname, numargs):
     func.func_defaults = getattr(W_DictMultiObject, methname).func_defaults
     return func
 
-def make_inlinedict_mixin(dictimplclass, attrname):
+def make_inlinedict_mixin():
+    from pypy.objspace.std.sharingdict import SharedDictImplementation
+    dictimplclass = SharedDictImplementation
     assert dictimplclass.__base__ is W_DictMultiObject
     class IndirectionIterImplementation(IteratorImplementation):
         def __init__(self, space, dictimpl, itemlist):
@@ -47,8 +48,6 @@ def make_inlinedict_mixin(dictimplclass, attrname):
                 items.append((w_key, w_value))
             return IndirectionIterImplementation(self.space, self, items)
 
-    IndirectionDictImplementation.__name__ = "IndirectionDictImplementation" + dictimplclass.__name__
-
     for methname, numargs in implementation_methods:
         implname = "impl_" + methname
         if implname != "impl_iter":
@@ -69,7 +68,7 @@ def make_inlinedict_mixin(dictimplclass, attrname):
             self.w__class__ = w_subtype
             self.w__dict__ = None
             init_dictattributes(self, space)
-            assert getattr(self, attrname) is not None
+            assert self.structure is not None
             self.user_setup_slots(w_subtype.nslots)
 
         def getdict(self):
@@ -81,7 +80,7 @@ def make_inlinedict_mixin(dictimplclass, attrname):
             return w__dict__
 
         def _inlined_dict_valid(self):
-            return getattr(self, attrname) is not None
+            return self.structure is not None
 
         def getdictvalue(self, space, attr):
             if self._inlined_dict_valid():
