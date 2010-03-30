@@ -118,7 +118,8 @@ def subtype_dealloc(space, obj):
     pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     assert pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE
     base = pto
-    this_func_ptr = subtype_dealloc.api_func.get_llhelper(space)
+    this_func_ptr = llhelper(subtype_dealloc.api_func.functype,
+            subtype_dealloc.api_func.get_wrapper(space))
     ref_of_object_type = rffi.cast(PyTypeObjectPtr,
             make_ref(space, space.w_object, steal=True))
     while base.c_tp_dealloc == this_func_ptr:
@@ -174,15 +175,20 @@ def allocate_type_obj(space, w_type):
     state.py_objects_w2r[w_type] = rffi.cast(PyObject, pto)
 
     if space.is_w(w_type, space.w_object):
-        pto.c_tp_dealloc = PyObject_dealloc.api_func.get_llhelper(space)
+        pto.c_tp_dealloc = llhelper(PyObject_dealloc.api_func.functype,
+                PyObject_dealloc.api_func.get_wrapper(space))
     elif space.is_w(w_type, space.w_type):
-        pto.c_tp_dealloc = type_dealloc.api_func.get_llhelper(space)
+        pto.c_tp_dealloc = llhelper(type_dealloc.api_func.functype,
+                type_dealloc.api_func.get_wrapper(space))
     elif space.is_w(w_type, space.w_str):
-        pto.c_tp_dealloc = string_dealloc.api_func.get_llhelper(space)
+        pto.c_tp_dealloc = llhelper(string_dealloc.api_func.functype,
+                string_dealloc.api_func.get_wrapper(space))
     else:
-        pto.c_tp_dealloc = subtype_dealloc.api_func.get_llhelper(space)
+        pto.c_tp_dealloc = llhelper(subtype_dealloc.api_func.functype,
+                subtype_dealloc.api_func.get_wrapper(space))
     pto.c_tp_flags = Py_TPFLAGS_HEAPTYPE
-    pto.c_tp_free = PyObject_Del.api_func.get_llhelper(space)
+    pto.c_tp_free = llhelper(PyObject_Del.api_func.functype,
+            PyObject_Del.api_func.get_wrapper(space))
     pto.c_tp_name = rffi.str2charp(w_type.getname(space, "?"))
     pto.c_tp_basicsize = -1 # hopefully this makes malloc bail out
     pto.c_tp_itemsize = 0
