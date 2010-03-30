@@ -195,19 +195,6 @@ def cpython_api_c():
     def decorate(func):
         FUNCTIONS_C[func.func_name] = None
     return decorate
-def get_padded_type(T):
-    fields = T._flds.copy()
-    hints = T._hints.copy()
-    del hints["fieldoffsets"]
-    pad_fields = []
-    new_fields = []
-    for name in T._names:
-        new_fields.append((name, fields[name]))
-    new_fields.append(("c_custom_padding", lltype.Array(lltype.Char,
-        hints={'nolength': True})))
-    hints["padding"] = hints["padding"] + ("c_custom_padding", )
-    return lltype.Struct(hints["c_name"], hints=hints, *new_fields)
-
 
 def cpython_struct(name, fields, forward=None):
     configname = name.replace(' ', '__')
@@ -239,7 +226,6 @@ PyObject = lltype.Ptr(PyObjectStruct)
 PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyObject))
 PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
 cpython_struct('struct _object', PyObjectFields, PyObjectStruct)
-PyObjectStructPadded = lltype.ForwardReference()
 
 PyStringObjectStruct = lltype.ForwardReference()
 PyStringObject = lltype.Ptr(PyStringObjectStruct)
@@ -251,7 +237,6 @@ def configure_types():
     for name, TYPE in rffi_platform.configure(CConfig).iteritems():
         if name in TYPES:
             TYPES[name].become(TYPE)
-    PyObjectStructPadded.become(get_padded_type(PyObjectStruct))
 
 
 class NullPointerException(Exception):
@@ -292,7 +277,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             # Don't increase refcount for non-heaptypes
             # Py_INCREF(space, pto)
             basicsize = pto.c_tp_basicsize
-            py_obj_pad = lltype.malloc(PyObjectStructPadded, basicsize,
+            py_obj_pad = lltype.malloc(rffi.VOIDP.TO, basicsize,
                     flavor="raw", zero=True)
             py_obj = rffi.cast(PyObject, py_obj_pad)
             py_obj.c_ob_refcnt = 1
