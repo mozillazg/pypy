@@ -1,46 +1,26 @@
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
+from pypy.module.cpyext.test.test_api import BaseApiTest
 
-import py
-import sys
+class TestBoolObject(BaseApiTest):
+    def test_fromlong(self, space, api):
+        for i in range(-3, 3):
+            obj = api.PyBool_FromLong(i)
+            if i:
+                assert obj is space.w_True
+            else:
+                assert obj is space.w_False
 
-class AppTestBoolObject(AppTestCpythonExtensionBase):
-    def test_boolobject(self):
+    def test_check(self, space, api):
+        assert api.PyBool_Check(space.w_True)
+        assert api.PyBool_Check(space.w_False)
+        assert not api.PyBool_Check(space.w_None)
+        assert not api.PyBool_Check(api.PyFloat_FromDouble(1.0))
+
+class AppTestBoolMacros(AppTestCpythonExtensionBase):
+    def test_macros(self):
         module = self.import_extension('foo', [
             ("get_true", "METH_NOARGS",  "Py_RETURN_TRUE;"),
             ("get_false", "METH_NOARGS", "Py_RETURN_FALSE;"),
-            ("test_FromLong", "METH_NOARGS",
-             """
-                 int i;
-                 for(i=-3; i<3; i++)
-                 {
-                     PyObject* obj = PyBool_FromLong(i);
-                     PyObject* expected = (i ? Py_True : Py_False);
-
-                     if(obj != expected)
-                     {
-                         Py_DECREF(obj);
-                         Py_RETURN_FALSE;
-                     }
-                     Py_DECREF(obj);
-                 }
-                 Py_RETURN_TRUE;
-             """),
-            ("test_Check", "METH_NOARGS",
-             """
-                 int result = 0;
-                 PyObject* f = PyFloat_FromDouble(1.0);
-
-                 if(PyBool_Check(Py_True) &&
-                    PyBool_Check(Py_False) &&
-                    !PyBool_Check(f))
-                 {
-                     result = 1;
-                 }
-                 Py_DECREF(f);
-                 return PyBool_FromLong(result);
-             """),
             ])
         assert module.get_true() == True
         assert module.get_false() == False
-        assert module.test_FromLong() == True
-        assert module.test_Check() == True
