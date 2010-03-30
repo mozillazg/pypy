@@ -30,10 +30,10 @@ class State:
         from pypy.module.cpyext.api import make_ref, ADDR
         # handling of borrowed objects, remove when we have
         # a weakkeydict
-        exc_value = make_ref(self.space, self.exc_value, borrowed=True)
-        if exc_value:
-            Py_DECREF(self.space, exc_value)
-            containee_ptr = rffi.cast(ADDR, exc_value)
+        exc_type = make_ref(self.space, self.exc_type, borrowed=True)
+        if exc_type:
+            Py_DECREF(self.space, exc_type)
+            containee_ptr = rffi.cast(ADDR, exc_type)
             del self.borrowed_objects[containee_ptr]
         self.exc_type = None
         self.exc_value = None
