@@ -547,7 +547,7 @@ def generate_macros(export_symbols, rename=True):
             newname = name
         pypy_macros.append('#define %s %s%s' % (name, deref, newname))
         renamed_symbols.append(newname)
-    export_symbols = renamed_symbols
+    export_symbols[:] = renamed_symbols
     pypy_macros_h = udir.join('pypy_macros.h')
     pypy_macros_h.write('\n'.join(pypy_macros))
 
@@ -593,7 +593,7 @@ def build_eci(build_bridge, export_symbols, code=None):
         separate_module_files=[include_dir / "varargwrapper.c",
                                include_dir / "pyerrors.c",
                                include_dir / "modsupport.c"],
-        export_symbols=export_symbols,
+        export_symbols=export_symbols_eci,
         **kwds
         )
     return eci
