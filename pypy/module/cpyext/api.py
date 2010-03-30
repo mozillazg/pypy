@@ -102,7 +102,7 @@ class ApiFunction:
     def get_llhelper(self, space):
         llh = getattr(self, '_llhelper', None)
         if llh is None:
-            llh = llhelper(self.functype, make_wrapper(space, self.callable))
+            llh = llhelper(self.functype, self.get_wrapper(space))
             self._llhelper = llh
         return llh
 
@@ -203,8 +203,9 @@ def get_padded_type(T):
     new_fields = []
     for name in T._names:
         new_fields.append((name, fields[name]))
-    new_fields.append(("custom_padding", lltype.Array(lltype.Char)))
-    hints["padding"] = hints["padding"] + ("custom_padding", )
+    new_fields.append(("c_custom_padding", lltype.Array(lltype.Char,
+        hints={'nolength': True})))
+    hints["padding"] = hints["padding"] + ("c_custom_padding", )
     return lltype.Struct(hints["c_name"], hints=hints, *new_fields)
 
 
@@ -452,6 +453,7 @@ def make_wrapper(space, callable):
         elif callable.api_func.restype is not lltype.Void:
             retval = rffi.cast(callable.api_func.restype, retval)
         return retval
+    callable._always_inline_ = True
     wrapper.__name__ = "wrapper for %r" % (callable, )
     return wrapper
 
@@ -597,7 +599,7 @@ def build_bridge(space, rename=True):
 
 def setup_library(space):
     for name, func in FUNCTIONS.iteritems():
-        deco = entrypoint("cpyext", func.argtypes, name)
+        deco = entrypoint("cpyext", func.argtypes, name, relax=True)
         deco(func.get_wrapper(space))
 
 @unwrap_spec(ObjSpace, str, str)
