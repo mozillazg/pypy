@@ -26,8 +26,6 @@ class TestApi:
         assert 'PyModule_Check' in api.FUNCTIONS
         assert api.FUNCTIONS['PyModule_Check'].argtypes == [api.PyObject]
 
-    def test_padding(self):
-        T = api.get_padded_type(api.PyObject.TO)
 
 class AppTestApi:
     def setup_class(cls):
