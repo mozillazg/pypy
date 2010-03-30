@@ -155,5 +155,6 @@ class TestInlineDict(object):
             return a
         """)
         assert w_a.w__dict__ is None
-        assert self.space.int_w(w_a.content['x']) == 12
-        assert self.space.int_w(w_a.content['y']) == 13
+        assert self.space.int_w(w_a.entries[0]) == 12
+        assert self.space.int_w(w_a.entries[1]) == 13
+        assert w_a.w__dict__ is None

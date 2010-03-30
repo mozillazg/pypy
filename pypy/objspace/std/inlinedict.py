@@ -7,11 +7,9 @@ from pypy.objspace.std.dictmultiobject import implementation_methods
 from pypy.tool.sourcetools import func_with_new_name
 
 def make_mixin(config):
-    if config.objspace.std.withsharingdict:
-        from pypy.objspace.std.sharingdict import SharedDictImplementation
-        return make_inlinedict_mixin(SharedDictImplementation, "structure")
-    else:
-        return make_inlinedict_mixin(StrDictImplementation, "content")
+    assert config.objspace.std.withsharingdict
+    from pypy.objspace.std.sharingdict import SharedDictImplementation
+    return make_inlinedict_mixin(SharedDictImplementation, "structure")
 
 def make_indirection_method(methname, numargs):
     # *args don't work, the call normalization gets confused
