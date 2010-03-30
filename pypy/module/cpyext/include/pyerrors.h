@@ -9,8 +9,6 @@ extern "C" {
 
 PyObject *PyErr_NewException(char *name, PyObject *base, PyObject *dict);
 
-PyAPI_DATA(PyObject *) PyExc_Exception;
-
 #ifdef __cplusplus
 }
 #endif

@@ -383,11 +383,6 @@ manually remove this flag though!
 #define Py_TPFLAGS_DEFAULT Py_TPFLAGS_DEFAULT_EXTERNAL
 
 
-PyAPI_DATA(PyTypeObject *) PyType_Type; /* built-in 'type' */
-PyAPI_DATA(PyTypeObject *) PyBaseObject_Type;
-PyAPI_DATA(PyObject *) PyExc_TypeError;
-PyAPI_DATA(PyObject *) PyExc_SystemError;
-
 /* objimpl.h ----------------------------------------------*/
 
 #define PyObject_New(type, typeobj) \

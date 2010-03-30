@@ -484,7 +484,7 @@ def build_bridge(space, rename=True):
     struct PyPyAPI* pypyAPI = &_pypyAPI;
     """ % dict(members=structmembers)
 
-    functions = generate_decls_and_callbacks(db)
+    functions = generate_decls_and_callbacks(db, True)
 
     global_objects = []
     for name, (type, expr) in GLOBALS.iteritems():
@@ -552,7 +552,7 @@ def generate_macros(export_symbols, rename=True):
     pypy_macros_h = udir.join('pypy_macros.h')
     pypy_macros_h.write('\n'.join(pypy_macros))
 
-def generate_decls_and_callbacks(db):
+def generate_decls_and_callbacks(db, declare_globals):
     # implement function callbacks and generate function decls
     functions = []
     pypy_decls = []
@@ -569,6 +569,9 @@ def generate_decls_and_callbacks(db):
         pypy_decls.append(header + ";")
         body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
         functions.append('%s\n%s\n' % (header, body))
+    if declare_globals:
+        for name, (typ, expr) in GLOBALS.iteritems():
+            pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
 
     pypy_decl_h = udir.join('pypy_decl.h')
     pypy_decl_h.write('\n'.join(pypy_decls))
@@ -606,9 +609,9 @@ def setup_library(space, rename=False):
 
     generate_macros(export_symbols, rename)
 
-    generate_decls_and_callbacks(db)
+    generate_decls_and_callbacks(db, False)
 
-    eci = build_eci(False, export_symbols)
+    eci = build_eci(False, export_symbols) # XXX use eci
 
     bootstrap_types(space)
 
