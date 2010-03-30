@@ -351,7 +351,10 @@ def from_ref(space, ref):
         if ref != ref_type and space.is_w(from_ref(space, ref_type), space.w_str):
             return force_string(space, ref)
         else:
-            raise InvalidPointerException("Got invalid reference to a PyObject: %r" % (ref, ))
+            msg = ""
+            if not we_are_translated():
+                msg = "Got invalid reference to a PyObject: %r" % (ref, )
+            raise InvalidPointerException(msg)
     return obj
 
 
@@ -431,8 +434,8 @@ def make_wrapper(space, callable):
         if failed:
             error_value = callable.api_func.error_value
             if error_value is CANNOT_FAIL:
-                raise SystemError("The function %r was not supposed to fail"
-                                  % (callable,))
+                raise SystemError("The function '%s' was not supposed to fail"
+                                  % (callable.__name__,))
             return error_value
 
         if callable.api_func.restype is PyObject:
