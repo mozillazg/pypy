@@ -22,6 +22,8 @@ from pypy.interpreter.baseobjspace import Wrappable, SpaceCache, DescrMismatch
 from pypy.interpreter.argument import Arguments, Signature
 from pypy.tool.sourcetools import NiceCompile, compile2
 from pypy.rlib.rarithmetic import r_longlong, r_int, r_ulonglong, r_uint
+from pypy.rlib import rstackovf
+from pypy.rlib.objectmodel import we_are_translated
 
 # internal non-translatable parts: 
 import py
@@ -124,6 +126,15 @@ class UnwrapSpec_Check(UnwrapSpecRecipe):
         self.checked_space_method(el, app_sig)
 
     def visit_nonnegint(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
+    def visit_c_int(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
+    def visit_c_uint(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
+    def visit_c_nonnegint(self, el, app_sig):
         self.checked_space_method(el, app_sig)
 
     def visit__Wrappable(self, el, app_sig):
@@ -229,6 +240,15 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
 
     def visit_nonnegint(self, typ):
         self.run_args.append("space.nonnegint_w(%s)" % (self.scopenext(),))
+
+    def visit_c_int(self, typ):
+        self.run_args.append("space.c_int_w(%s)" % (self.scopenext(),))
+
+    def visit_c_uint(self, typ):
+        self.run_args.append("space.c_uint_w(%s)" % (self.scopenext(),))
+
+    def visit_c_nonnegint(self, typ):
+        self.run_args.append("space.c_nonnegint_w(%s)" % (self.scopenext(),))
 
     def _make_unwrap_activation_class(self, unwrap_spec, cache={}):
         try:
@@ -347,6 +367,15 @@ class UnwrapSpec_FastFunc_Unwrap(UnwrapSpecEmit):
 
     def visit_nonnegint(self, typ):
         self.unwrap.append("space.nonnegint_w(%s)" % (self.nextarg(),))
+
+    def visit_c_int(self, typ):
+        self.unwrap.append("space.c_int_w(%s)" % (self.nextarg(),))
+
+    def visit_c_uint(self, typ):
+        self.unwrap.append("space.c_uint_w(%s)" % (self.nextarg(),))
+
+    def visit_c_nonnegint(self, typ):
+        self.unwrap.append("space.c_nonnegint_w(%s)" % (self.nextarg(),))
 
     def make_fastfunc(unwrap_spec, func):
         unwrap_info = UnwrapSpec_FastFunc_Unwrap()
@@ -521,26 +550,32 @@ class BuiltinCode(eval.Code):
                                  func.defs_w, self.minargs)
         try:
             w_result = activation._run(space, scope_w)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt,
-                                 space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e)))
-        except DescrMismatch, e:
+        except DescrMismatch:
             if w_obj is not None:
                 args = args.prepend(w_obj)
             return scope_w[0].descr_call_mismatch(space,
                                                   self.descrmismatch_op,
                                                   self.descr_reqcls,
                                                   args)
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
+
+    def handle_exception(self, space, e):
+        try:
+            if not we_are_translated():
+                raise
+            raise e
+        except KeyboardInterrupt: 
+            raise OperationError(space.w_KeyboardInterrupt,
+                                 space.w_None) 
+        except MemoryError: 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except rstackovf.StackOverflow, e:
+            rstackovf.check_stack_overflow()
+            raise space.prebuilt_recursion_error
 
 # (verbose) performance hack below
 
@@ -551,20 +586,13 @@ class BuiltinCodePassThroughArguments0(BuiltinCode):
         space = func.space
         try:
             w_result = self.func__args__(space, args)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
-        except DescrMismatch, e:
+        except DescrMismatch:
             return args.firstarg().descr_call_mismatch(space,
                                                   self.descrmismatch_op,
                                                   self.descr_reqcls,
                                                   args)
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -577,20 +605,13 @@ class BuiltinCodePassThroughArguments1(BuiltinCode):
         space = func.space
         try:
             w_result = self.func__args__(space, w_obj, args)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
-        except DescrMismatch, e:
+        except DescrMismatch:
             return args.firstarg().descr_call_mismatch(space,
                                                   self.descrmismatch_op,
                                                   self.descr_reqcls,
                                                   args.prepend(w_obj))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -602,15 +623,11 @@ class BuiltinCode0(BuiltinCode):
     def fastcall_0(self, space, w_func):
         try:
             w_result = self.fastfunc_0(space)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except (RuntimeError, DescrMismatch), e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
+        except DescrMismatch:
+            raise OperationError(space.w_SystemError,
+                                 space.wrap("unexpected DescrMismatch error"))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -622,20 +639,13 @@ class BuiltinCode1(BuiltinCode):
     def fastcall_1(self, space, w_func, w1):
         try:
             w_result = self.fastfunc_1(space, w1)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e)))
-        except DescrMismatch, e:
+        except DescrMismatch:
             return  w1.descr_call_mismatch(space,
                                            self.descrmismatch_op,
                                            self.descr_reqcls,
                                            Arguments(space, [w1]))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -647,20 +657,13 @@ class BuiltinCode2(BuiltinCode):
     def fastcall_2(self, space, w_func, w1, w2):
         try:
             w_result = self.fastfunc_2(space, w1, w2)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
-        except DescrMismatch, e:
+        except DescrMismatch:
             return  w1.descr_call_mismatch(space,
                                            self.descrmismatch_op,
                                            self.descr_reqcls,
                                            Arguments(space, [w1, w2]))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -672,20 +675,13 @@ class BuiltinCode3(BuiltinCode):
     def fastcall_3(self, space, func, w1, w2, w3):
         try:
             w_result = self.fastfunc_3(space, w1, w2, w3)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e)))
-        except DescrMismatch, e:
+        except DescrMismatch:
             return  w1.descr_call_mismatch(space,
                                            self.descrmismatch_op,
                                            self.descr_reqcls,
                                            Arguments(space, [w1, w2, w3]))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -697,21 +693,14 @@ class BuiltinCode4(BuiltinCode):
     def fastcall_4(self, space, func, w1, w2, w3, w4):
         try:
             w_result = self.fastfunc_4(space, w1, w2, w3, w4)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e)))
-        except DescrMismatch, e:
+        except DescrMismatch:
             return  w1.descr_call_mismatch(space,
                                            self.descrmismatch_op,
                                            self.descr_reqcls,
                                            Arguments(space,
                                                      [w1, w2, w3, w4]))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result

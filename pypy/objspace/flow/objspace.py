@@ -8,6 +8,7 @@ from pypy.objspace.flow.model import *
 from pypy.objspace.flow import flowcontext
 from pypy.objspace.flow.operation import FunctionByName
 from pypy.rlib.unroll import unrolling_iterable, _unroller
+from pypy.rlib import rstackovf
 
 debug = 0
 
@@ -201,9 +202,13 @@ class FlowObjSpace(ObjSpace):
         if not isinstance(check_class, tuple):
             # the simple case
             return ObjSpace.exception_match(self, w_exc_type, w_check_class)
+        # special case for StackOverflow (see rlib/rstackovf.py)
+        if check_class == rstackovf.StackOverflow:
+            w_real_class = self.wrap(rstackovf._StackOverflow)
+            return ObjSpace.exception_match(self, w_exc_type, w_real_class)
         # checking a tuple of classes
         for w_klass in self.fixedview(w_check_class):
-            if ObjSpace.exception_match(self, w_exc_type, w_klass):
+            if self.exception_match(w_exc_type, w_klass):
                 return True
         return False
 
@@ -230,9 +235,7 @@ class FlowObjSpace(ObjSpace):
         if func.func_closure is None:
             closure = None
         else:
-            closure = [extract_cell_content(c, name, func)
-                       for c, name in zip(func.func_closure,
-                                          func.func_code.co_freevars)]
+            closure = [extract_cell_content(c) for c in func.func_closure]
         # CallableFactory.pycall may add class_ to functions that are methods
         name = func.func_name
         class_ = getattr(func, 'class_', None)
@@ -513,23 +516,17 @@ def _add_except_ovf(names):
         lis.append(OverflowError)
         implicit_exceptions[name+"_ovf"] = lis
 
-#for _err in IndexError, KeyError:
-#    _add_exceptions("""getitem setitem delitem""", _err)
 for _name in 'getattr', 'delattr':
     _add_exceptions(_name, AttributeError)
 for _name in 'iter', 'coerce':
     _add_exceptions(_name, TypeError)
-del _name#, _err
+del _name
 
 _add_exceptions("""div mod divmod truediv floordiv pow
                    inplace_div inplace_mod inplace_divmod inplace_truediv
                    inplace_floordiv inplace_pow""", ZeroDivisionError)
 _add_exceptions("""pow inplace_pow lshift inplace_lshift rshift
                    inplace_rshift""", ValueError)
-##_add_exceptions("""add sub mul truediv floordiv div mod divmod pow
-##                   inplace_add inplace_sub inplace_mul inplace_truediv
-##                   inplace_floordiv inplace_div inplace_mod inplace_divmod
-##                   inplace_pow""", FloatingPointError)
 _add_exceptions("""truediv divmod
                    inplace_add inplace_sub inplace_mul inplace_truediv
                    inplace_floordiv inplace_div inplace_mod inplace_pow
@@ -540,25 +537,27 @@ _add_exceptions("""pow""",
                 OverflowError) # for the float case
 del _add_exceptions, _add_except_ovf
 
-def extract_cell_content(c, varname='?', func='?'):
+def extract_cell_content(c):
     """Get the value contained in a CPython 'cell', as read through
     the func_closure of a function object."""
-    # yuk! this is all I could come up with that works in Python 2.2 too
-    class X(object):
-        def __cmp__(self, other):
-            self.other = other
-            return 0
-        def __eq__(self, other):
-            self.other = other
-            return True
-    x = X()
-    x_cell, = (lambda: x).func_closure
-    x_cell == c
     try:
-        return x.other    # crashes if the cell is actually empty
+        # This is simple on 2.5
+        return getattr(c, "cell_contents")
     except AttributeError:
-        raise Exception("in %r, the free variable %r has no value" % (
-                func, varname))
+        class X(object):
+            def __cmp__(self, other):
+                self.other = other
+                return 0
+            def __eq__(self, other):
+                self.other = other
+                return True
+        x = X()
+        x_cell, = (lambda: x).func_closure
+        x_cell == c
+        try:
+            return x.other    # crashes if the cell is actually empty
+        except AttributeError:
+            raise ValueError("empty cell")
 
 def make_op(name, symbol, arity, specialnames):
     if hasattr(FlowObjSpace, name):

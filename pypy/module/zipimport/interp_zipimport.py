@@ -1,7 +1,7 @@
 
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, \
      Arguments
-from pypy.interpreter.error import OperationError, wrap_oserror, operationerrfmt
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.module import Module
@@ -131,7 +131,7 @@ class W_ZipImporter(Wrappable):
     def _find_relative_path(self, filename):
         if filename.startswith(self.filename):
             filename = filename[len(self.filename):]
-        if filename.startswith(os.sep):
+        if filename.startswith(os.path.sep) or filename.startswith(ZIPSEP):
             filename = filename[1:]
         if ZIPSEP != os.path.sep:
             filename = filename.replace(os.path.sep, ZIPSEP)
@@ -326,10 +326,12 @@ def descr_new_zipimporter(space, w_type, name):
     w_ZipImportError = space.getattr(space.getbuiltinmodule('zipimport'),
                                      w('ZipImportError'))
     ok = False
-    parts = name.split(os.path.sep)
+    parts_ends = [i for i in range(0, len(name))
+                    if name[i] == os.path.sep or name[i] == ZIPSEP]
+    parts_ends.append(len(name))
     filename = "" # make annotator happy
-    for i in range(1, len(parts) + 1):
-        filename = os.path.sep.join(parts[:i])
+    for i in parts_ends:
+        filename = name[:i]
         if not filename:
             filename = os.path.sep
         try:
@@ -359,7 +361,7 @@ def descr_new_zipimporter(space, w_type, name):
             "%s seems not to be a zipfile", filename)
     zip_file.close()
     prefix = name[len(filename):]
-    if prefix.startswith(os.sep):
+    if prefix.startswith(os.path.sep) or prefix.startswith(ZIPSEP):
         prefix = prefix[1:]
     w_result = space.wrap(W_ZipImporter(space, name, filename,
                                         zip_file.NameToInfo, prefix))

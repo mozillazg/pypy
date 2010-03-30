@@ -1,15 +1,12 @@
-"""
-Reviewed 03-06-22
-Sequence-iteration is correctly implemented, thoroughly
-tested, and complete. The only missing feature is support
-for function-iteration.
-"""
-from pypy.objspace.std.objspace import *
+"""Generic iterator implementations"""
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 
 
 class W_AbstractSeqIterObject(W_Object):
     from pypy.objspace.std.itertype import iter_typedef as typedef
-    
+
     def __init__(w_self, w_seq, index=0):
         if index < 0:
             index = 0

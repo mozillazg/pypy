@@ -2,6 +2,7 @@ from pypy.rlib import rgc
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import fatalerror
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
+from pypy.rpython.lltypesystem import llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -18,8 +19,8 @@ from pypy.jit.backend.llsupport.descr import get_call_descr
 # ____________________________________________________________
 
 class GcLLDescription(GcCache):
-    def __init__(self, gcdescr, translator=None):
-        GcCache.__init__(self, translator is not None)
+    def __init__(self, gcdescr, translator=None, rtyper=None):
+        GcCache.__init__(self, translator is not None, rtyper)
         self.gcdescr = gcdescr
     def _freeze_(self):
         return True
@@ -40,8 +41,8 @@ class GcLLDescr_boehm(GcLLDescription):
     moving_gc = False
     gcrootmap = None
 
-    def __init__(self, gcdescr, translator):
-        GcLLDescription.__init__(self, gcdescr, translator)
+    def __init__(self, gcdescr, translator, rtyper):
+        GcLLDescription.__init__(self, gcdescr, translator, rtyper)
         # grab a pointer to the Boehm 'malloc' function
         from pypy.rpython.tool import rffi_platform
         compilation_info = rffi_platform.configure_boehm()
@@ -309,7 +310,7 @@ class WriteBarrierDescr(AbstractDescr):
         # if convenient for the backend, we also compute the info about
         # the flag as (byte-offset, single-byte-flag).
         import struct
-        value = struct.pack("i", self.jit_wb_if_flag)
+        value = struct.pack("l", self.jit_wb_if_flag)
         assert value.count('\x00') == len(value) - 1    # only one byte is != 0
         i = 0
         while value[i] == '\x00': i += 1
@@ -326,11 +327,11 @@ class WriteBarrierDescr(AbstractDescr):
 class GcLLDescr_framework(GcLLDescription):
     DEBUG = False    # forced to True by x86/test/test_zrpy_gc.py
 
-    def __init__(self, gcdescr, translator, llop1=llop):
+    def __init__(self, gcdescr, translator, rtyper, llop1=llop):
         from pypy.rpython.memory.gctypelayout import _check_typeid
         from pypy.rpython.memory.gcheader import GCHeaderBuilder
         from pypy.rpython.memory.gctransform import framework
-        GcLLDescription.__init__(self, gcdescr, translator)
+        GcLLDescription.__init__(self, gcdescr, translator, rtyper)
         assert self.translate_support_code, "required with the framework GC"
         self.translator = translator
         self.llop1 = llop1
@@ -372,8 +373,8 @@ class GcLLDescr_framework(GcLLDescription):
 
         # make a malloc function, with three arguments
         def malloc_basic(size, tid):
-            type_id = llop.extract_ushort(rffi.USHORT, tid)
-            has_finalizer = bool(tid & (1<<16))
+            type_id = llop.extract_ushort(llgroup.HALFWORD, tid)
+            has_finalizer = bool(tid & (1<<llgroup.HALFSHIFT))
             _check_typeid(type_id)
             try:
                 res = llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
@@ -393,7 +394,7 @@ class GcLLDescr_framework(GcLLDescription):
         self.write_barrier_descr = WriteBarrierDescr(self)
         #
         def malloc_array(itemsize, tid, num_elem):
-            type_id = llop.extract_ushort(rffi.USHORT, tid)
+            type_id = llop.extract_ushort(llgroup.HALFWORD, tid)
             _check_typeid(type_id)
             try:
                 return llop1.do_malloc_varsize_clear(
@@ -483,7 +484,7 @@ class GcLLDescr_framework(GcLLDescription):
         type_id = self.layoutbuilder.get_type_id(S)
         assert not self.layoutbuilder.is_weakref(type_id)
         has_finalizer = bool(self.layoutbuilder.has_finalizer(S))
-        flags = int(has_finalizer) << 16
+        flags = int(has_finalizer) << llgroup.HALFSHIFT
         descr.tid = llop.combine_ushort(lltype.Signed, type_id, flags)
 
     def init_array_descr(self, A, descr):
@@ -599,7 +600,7 @@ class GcLLDescr_framework(GcLLDescription):
     def can_inline_malloc(self, descr):
         assert isinstance(descr, BaseSizeDescr)
         if descr.size < self.max_size_of_young_obj:
-            has_finalizer = bool(descr.tid & (1<<16))
+            has_finalizer = bool(descr.tid & (1<<llgroup.HALFSHIFT))
             if has_finalizer:
                 return False
             return True
@@ -610,7 +611,7 @@ class GcLLDescr_framework(GcLLDescription):
 
 # ____________________________________________________________
 
-def get_ll_description(gcdescr, translator=None):
+def get_ll_description(gcdescr, translator=None, rtyper=None):
     # translator is None if translate_support_code is False.
     if gcdescr is not None:
         name = gcdescr.config.translation.gctransformer
@@ -621,4 +622,4 @@ def get_ll_description(gcdescr, translator=None):
     except KeyError:
         raise NotImplementedError("GC transformer %r not supported by "
                                   "the JIT backend" % (name,))
-    return cls(gcdescr, translator)
+    return cls(gcdescr, translator, rtyper)

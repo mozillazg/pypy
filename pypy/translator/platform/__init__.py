@@ -10,21 +10,7 @@ from py.impl.code.code import safe_repr
 log = py.log.Producer("platform")
 py.log.setconsumer("platform", ansi_log)
 
-from subprocess import PIPE, Popen
-
-def _run_subprocess(executable, args, env=None):
-    if isinstance(args, str):
-        args = str(executable) + ' ' + args
-        shell = True
-    else:
-        if args is None:
-            args = [str(executable)]
-        else:
-            args = [str(executable)] + args
-        shell = False
-    pipe = Popen(args, stdout=PIPE, stderr=PIPE, shell=shell, env=env)
-    stdout, stderr = pipe.communicate()
-    return pipe.returncode, stdout, stderr
+from pypy.tool.runsubprocess import run_subprocess as _run_subprocess
 
 class CompilationError(Exception):
     def __init__(self, out, err):
@@ -108,9 +94,10 @@ class Platform(object):
 
     # some helpers which seem to be cross-platform enough
 
-    def _execute_c_compiler(self, cc, args, outname):
+    def _execute_c_compiler(self, cc, args, outname, cwd=None):
         log.execute(cc + ' ' + ' '.join(args))
-        returncode, stdout, stderr = _run_subprocess(cc, args, self.c_environ)
+        returncode, stdout, stderr = _run_subprocess(cc, args, self.c_environ,
+                                                     cwd)
         self._handle_error(returncode, stderr, stdout, outname)
 
     def _handle_error(self, returncode, stderr, stdout, outname):
