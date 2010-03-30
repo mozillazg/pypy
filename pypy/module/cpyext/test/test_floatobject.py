@@ -1,5 +1,4 @@
 from pypy.module.cpyext.test.test_api import BaseApiTest
-from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 
 class TestFloatObject(BaseApiTest):
     def test_floatobject(self, space, api):
@@ -9,20 +8,11 @@ class TestFloatObject(BaseApiTest):
         assert api.PyFloat_AsDouble(space.w_None) == -1
         api.PyErr_Clear()
 
-class AppTestFloatObject(AppTestCpythonExtensionBase):
-    def test_float(self):
-        module = self.import_extension("foo", [
-        ("test_float_coerce", "METH_NOARGS",
-        """
-            return PyNumber_Float(PyTuple_GetItem(args, 0));
-        """),
-        ])
-        
-        assert type(module.test_float_coerce(3)) is float
-        raises(TypeError, module.test_float_coerce, None)
-        
+    def test_coerce(self, space, api):
+        assert space.type(api.PyNumber_Float(space.wrap(3))) is space.w_float
+
         class Coerce(object):
             def __float__(self):
                 return 42.5
-        
-        assert module.test_float_coerce(Coerce()) == 42.5
+        assert space.eq_w(api.PyNumber_Float(space.wrap(Coerce())),
+                          space.wrap(42.5))

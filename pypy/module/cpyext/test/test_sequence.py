@@ -1,41 +1,31 @@
+from pypy.rpython.lltypesystem import rffi, lltype
+from pypy.interpreter.error import OperationError
+from pypy.module.cpyext.test.test_api import BaseApiTest
+from pypy.module.cpyext import sequence
 
+class TestIterator(BaseApiTest):
+    def test_sequence(self, space, api):
+        w_t = space.wrap((1, 2, 3, 4))
+        assert api.PySequence_Fast(w_t, "message") is w_t
+        w_l = space.wrap((1, 2, 3, 4))
+        assert api.PySequence_Fast(w_l, "message") is w_l
 
-from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
+        assert space.int_w(api.PySequence_Fast_GET_ITEM(w_l, 1)) == 2
+        assert api.PySequence_Fast_GET_SIZE(w_l) == 4
 
-class AppTestIterator(AppTestCpythonExtensionBase):
-    def test_iterator(self):
-        import sys
-        module = self.import_extension('foo', [
-            ("newiter", "METH_VARARGS",
-             '''
-             return PySequence_Fast(PyTuple_GetItem(args, 0), "message");
-             '''
-             ),
-            ("fast_getitem", "METH_VARARGS",
-             '''
-             PyObject *lst = PyTuple_GetItem(args, 0);
-             long index = PyInt_AsLong(PyTuple_GetItem(args, 1));
-             return PySequence_Fast_GET_ITEM(lst, index);
-             '''
-             ),
-            ("fast_getsize", "METH_VARARGS",
-             '''
-             PyObject *lst = PyTuple_GetItem(args, 0);
-             return PyInt_FromLong(PySequence_Fast_GET_SIZE(lst));
-             '''
-             ),
-            ])
-        t = (1, 2, 3, 4)
-        assert module.newiter(t) is t
-        l = [1, 2, 3, 4]
-        assert module.newiter(l) is l
-        assert isinstance(module.newiter(set([1, 2, 3])), tuple)
-        assert sorted(module.newiter(set([1, 2, 3]))) == [1, 2, 3]
-        try:
-            module.newiter(3)
-        except TypeError, te:
-            assert te.args == ("message",)
-        else:
-            raise Exception("DID NOT RAISE")
-        assert module.fast_getitem((1, 2, 3), 1) == 2
-        assert module.fast_getsize([1, 2, 3]) == 3
+        w_set = space.wrap(set((1, 2, 3, 4)))
+        w_seq = api.PySequence_Fast(w_set, "message")
+        assert space.type(w_seq) is space.w_tuple
+        assert space.int_w(space.len(w_seq)) == 4
+
+    def test_exception(self, space, api):
+        message = rffi.str2charp("message")
+        assert not api.PySequence_Fast(space.wrap(3), message)
+        assert api.PyErr_Occurred() is space.w_TypeError
+        api.PyErr_Clear()
+
+        exc = raises(OperationError, sequence.PySequence_Fast,
+                     space, space.wrap(3), message)
+        assert exc.value.match(space, space.w_TypeError)
+        assert space.str_w(exc.value.get_w_value(space)) == "message"
+        rffi.free_charp(message)

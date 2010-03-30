@@ -1,40 +1,23 @@
-from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
+from pypy.module.cpyext.test.test_api import BaseApiTest
 
+class TestDictObject(BaseApiTest):
+    def test_dict(self, space, api):
+        d = api.PyDict_New()
+        assert space.eq_w(d, space.newdict())
 
-class AppTestDictObject(AppTestCpythonExtensionBase):
-    def test_dict(self):
-        module = self.import_extension("foo", [
-        ("test_dict_create", "METH_NOARGS",
-        """
-            PyObject *p = PyDict_New();
-            return p;
-        """),
-        ("test_dict_getitem", "METH_VARARGS",
-        """
-            return PyDict_GetItem(PyTuple_GetItem(args, 0), PyTuple_GetItem(args, 1));
-        """),
-        ("test_dict_setitem", "METH_VARARGS",
-        """
-            PyDict_SetItem(
-                PyTuple_GetItem(args, 0),
-                PyTuple_GetItem(args, 1),
-                PyTuple_GetItem(args, 2)
-            );
-            Py_RETURN_NONE;
-        """),
-        ("dict_getitem_str", "METH_VARARGS",
-         """
-         return PyDict_GetItemString(PyTuple_GetItem(args, 0), "name");
-         """
-         ),
-        ])
-        
-        assert module.test_dict_create() == {}
-        assert module.test_dict_getitem({"a": 72}, "a") == 72
-        d = {}
-        module.test_dict_setitem(d, "c", 72)
-        assert d["c"] == 72
-        d["name"] = 3
-        assert module.dict_getitem_str(d) == 3
-        del d["name"]
-        raises(KeyError, module.dict_getitem_str, d)
+        assert space.eq_w(api.PyDict_GetItem(space.wrap({"a": 72}),
+                                             space.wrap("a")),
+                          space.wrap(72))
+
+        assert api.PyDict_SetItem(d, space.wrap("c"), space.wrap(42)) >= 0
+        assert space.eq_w(space.getitem(d, space.wrap("c")),
+                          space.wrap(42))
+
+        space.setitem(d, space.wrap("name"), space.wrap(3))
+        assert space.eq_w(api.PyDict_GetItem(d, space.wrap("name")),
+                          space.wrap(3))
+
+        space.delitem(d, space.wrap("name"))
+        assert not api.PyDict_GetItem(d, space.wrap("name"))
+        assert api.PyErr_Occurred() is space.w_KeyError
+        api.PyErr_Clear()
