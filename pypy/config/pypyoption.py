@@ -237,7 +237,8 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         BoolOption("withinlineddict",
                    "make instances more compact by revoming a level of indirection",
                    default=False,
-                   requires=[("objspace.std.withshadowtracking", False)]),
+                   requires=[("objspace.std.withsharingdict", True),
+                             ("objspace.std.withshadowtracking", False)]),
 
         BoolOption("withrangelist",
                    "enable special range list implementation that does not "
