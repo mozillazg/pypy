@@ -1523,14 +1523,6 @@ def PyErr_ExceptionMatches(space, exc):
     violation will occur if no exception has been raised."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject], rffi.INT_real)
-def PyErr_GivenExceptionMatches(space, given, exc):
-    """Return true if the given exception matches the exception in exc.  If
-    exc is a class object, this also returns true when given is an instance
-    of a subclass.  If exc is a tuple, all exceptions in the tuple (and
-    recursively in subtuples) are searched for a match."""
-    raise NotImplementedError
-
 @cpython_api([{PyObject**exc}, {PyObject**val}, {PyObject**tb}], lltype.Void)
 def PyErr_NormalizeException(space, , , ):
     """Under certain circumstances, the values returned by PyErr_Fetch() below

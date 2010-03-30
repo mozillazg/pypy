@@ -1,7 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.api import cpython_api, PyObject, make_ref,\
-        register_container
+        register_container, CANNOT_FAIL
 from pypy.module.cpyext.state import State
 
 @cpython_api([PyObject, rffi.CCHARP], lltype.Void)
@@ -25,3 +25,15 @@ def PyErr_Clear(space):
 def PyErr_BadInternalCall(space):
     raise OperationError(space.w_SystemError, space.wrap("Bad internal call!"))
 
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
+def PyErr_GivenExceptionMatches(space, w_given, w_exc):
+    """Return true if the given exception matches the exception in exc.  If
+    exc is a class object, this also returns true when given is an instance
+    of a subclass.  If exc is a tuple, all exceptions in the tuple (and
+    recursively in subtuples) are searched for a match."""
+    if (space.is_true(space.isinstance(w_given, space.w_BaseException)) or
+        space.is_oldstyle_instance(w_given)):
+        w_given_type = space.exception_getclass(w_given)
+    else:
+        w_given_type = w_given
+    return space.exception_match(w_given_type, w_exc)
