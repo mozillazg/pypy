@@ -14,7 +14,7 @@ def PyErr_SetString(space, w_type, message_ptr):
 def PyErr_Occurred(space):
     state = space.fromcache(State)
     register_container(space, lltype.nullptr(PyObject.TO))
-    return state.exc_value
+    return state.exc_type
 
 @cpython_api([], lltype.Void)
 def PyErr_Clear(space):
