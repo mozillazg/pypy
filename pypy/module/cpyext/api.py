@@ -21,6 +21,7 @@ from pypy.objspace.std.stringobject import W_StringObject
 from pypy.rlib.entrypoint import entrypoint
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import specialize
+from pypy.rlib.exports import export_struct
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
@@ -599,7 +600,26 @@ def build_eci(build_bridge, export_symbols, code=None):
     return eci
 
 
-def setup_library(space):
+def setup_library(space, rename=False):
+    export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
+    db = LowLevelDatabase()
+
+    generate_macros(export_symbols, rename)
+
+    generate_decls_and_callbacks(db)
+
+    eci = build_eci(False, export_symbols)
+
+    bootstrap_types(space)
+
+    # populate static data
+    for name, (type, expr) in GLOBALS.iteritems():
+        name = name.replace("#", "")
+        if rename:
+            name = name.replace('Py', 'PyPy')
+        w_obj = eval(expr)
+        export_struct(name, make_ref(space, w_obj)._obj)
+
     for name, func in FUNCTIONS.iteritems():
         deco = entrypoint("cpyext", func.argtypes, name, relax=True)
         deco(func.get_wrapper(space))
