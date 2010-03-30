@@ -1,5 +1,3 @@
-
-#include <pypy_rename.h>
 #include <Python.h>
 #include <string.h>
 #if 0

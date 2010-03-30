@@ -53,6 +53,7 @@ Py_TPFLAGS_HEAPTYPE
 for name in constant_names:
     setattr(CConfig_constants, name, rffi_platform.ConstantInteger(name))
 udir.join('pypy_decl.h').write("/* Will be filled later */")
+udir.join('pypy_macros.h').write("/* Will be filled later */")
 globals().update(rffi_platform.configure(CConfig_constants))
 
 _NOT_SPECIFIED = object()
@@ -462,40 +463,14 @@ def bootstrap_types(space):
 # back into Pypy space functions
 # Do not call this more than once per process
 def build_bridge(space, rename=True):
+    export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
     db = LowLevelDatabase()
 
-    export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
-
-    structindex = {}
-
-    prologue = """\
-    #include <pypy_rename.h>
-    #include <Python.h>
-    """
-    pypy_rename = []
-    renamed_symbols = []
-    for name in export_symbols:
-        if name.startswith("PyPy"):
-            renamed_symbols.append(name)
-            continue
-        if "#" in name:
-            deref = "*"
-        else:
-            deref = ""
-            if not rename: continue
-        name = name.replace("#", "")
-        newname = name.replace('Py', 'PyPy')
-        if not rename:
-            newname = name
-        pypy_rename.append('#define %s %s%s' % (name, deref, newname))
-        renamed_symbols.append(newname)
-    export_symbols = renamed_symbols
-    pypy_rename_h = udir.join('pypy_rename.h')
-    pypy_rename_h.write('\n'.join(pypy_rename))
-
+    generate_macros(export_symbols, rename)
 
     # Structure declaration code
     members = []
+    structindex = {}
     for name, func in FUNCTIONS.iteritems():
         cdecl = db.gettype(func.functype)
         members.append(cdecl.replace('@', name) + ';')
@@ -508,50 +483,21 @@ def build_bridge(space, rename=True):
     struct PyPyAPI* pypyAPI = &_pypyAPI;
     """ % dict(members=structmembers)
 
-    # implement function callbacks and generate function decls
-    functions = []
-    pypy_decls = []
-    for name, func in sorted(FUNCTIONS.iteritems()):
-        restype = db.gettype(func.restype).replace('@', '')
-        args = []
-        for i, argtype in enumerate(func.argtypes):
-            arg = db.gettype(argtype)
-            arg = arg.replace('@', 'arg%d' % (i,))
-            args.append(arg)
-        args = ', '.join(args) or "void"
-        callargs = ', '.join('arg%d' % (i,) for i in range(len(func.argtypes)))
-        header = "%s %s(%s)" % (restype, name, args)
-        pypy_decls.append(header + ";")
-        body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
-        functions.append('%s\n%s\n' % (header, body))
-
-    pypy_decl_h = udir.join('pypy_decl.h')
-    pypy_decl_h.write('\n'.join(pypy_decls))
+    functions = generate_decls_and_callbacks(db)
 
     global_objects = []
     for name, (type, expr) in GLOBALS.iteritems():
         global_objects.append('%s %s = NULL;' % (type, name.replace("#", "")))
     global_code = '\n'.join(global_objects)
+
+    prologue = "#include <Python.h>\n"
     code = (prologue +
             struct_declaration_code +
             global_code +
             '\n' +
             '\n'.join(functions))
 
-    # Build code and get pointer to the structure
-    kwds = {}
-    if sys.platform != "win32":
-        kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
-
-    eci = ExternalCompilationInfo(
-        include_dirs=include_dirs,
-        separate_module_sources=[code],
-        separate_module_files=[include_dir / "varargwrapper.c",
-                               include_dir / "pyerrors.c",
-                               include_dir / "modsupport.c"],
-        export_symbols=['pypyAPI'] + export_symbols,
-        **kwds
-        )
+    eci = build_eci(True, export_symbols, code)
     eci = eci.convert_sources_to_files()
     modulename = platform.platform.compile(
         [], eci,
@@ -559,6 +505,7 @@ def build_bridge(space, rename=True):
         standalone=False)
 
     bootstrap_types(space)
+
     # load the bridge, and init structure
     import ctypes
     bridge = ctypes.CDLL(str(modulename))
@@ -582,10 +529,81 @@ def build_bridge(space, rename=True):
 
     return modulename.new(ext='')
 
+def generate_macros(export_symbols, rename=True):
+    pypy_macros = []
+    renamed_symbols = []
+    for name in export_symbols:
+        if name.startswith("PyPy"):
+            renamed_symbols.append(name)
+            continue
+        if "#" in name:
+            deref = "*"
+        else:
+            deref = ""
+            if not rename: continue
+        name = name.replace("#", "")
+        newname = name.replace('Py', 'PyPy')
+        if not rename:
+            newname = name
+        pypy_macros.append('#define %s %s%s' % (name, deref, newname))
+        renamed_symbols.append(newname)
+    export_symbols = renamed_symbols
+    pypy_macros_h = udir.join('pypy_macros.h')
+    pypy_macros_h.write('\n'.join(pypy_macros))
+
+def generate_decls_and_callbacks(db):
+    # implement function callbacks and generate function decls
+    functions = []
+    pypy_decls = []
+    for name, func in sorted(FUNCTIONS.iteritems()):
+        restype = db.gettype(func.restype).replace('@', '')
+        args = []
+        for i, argtype in enumerate(func.argtypes):
+            arg = db.gettype(argtype)
+            arg = arg.replace('@', 'arg%d' % (i,))
+            args.append(arg)
+        args = ', '.join(args) or "void"
+        callargs = ', '.join('arg%d' % (i,) for i in range(len(func.argtypes)))
+        header = "%s %s(%s)" % (restype, name, args)
+        pypy_decls.append(header + ";")
+        body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
+        functions.append('%s\n%s\n' % (header, body))
+
+    pypy_decl_h = udir.join('pypy_decl.h')
+    pypy_decl_h.write('\n'.join(pypy_decls))
+    return functions
+
+def build_eci(build_bridge, export_symbols, code=None):
+    # Build code and get pointer to the structure
+    kwds = {}
+    export_symbols_eci = export_symbols[:]
+
+    if sys.platform != "win32":
+        kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
+
+    if build_bridge:
+        assert code is not None
+        kwds["separate_module_sources"] = [code]
+        export_symbols_eci.append('pypyAPI')
+    else:
+        assert code is None
+
+    eci = ExternalCompilationInfo(
+        include_dirs=include_dirs,
+        separate_module_files=[include_dir / "varargwrapper.c",
+                               include_dir / "pyerrors.c",
+                               include_dir / "modsupport.c"],
+        export_symbols=export_symbols,
+        **kwds
+        )
+    return eci
+
+
 def setup_library(space):
     for name, func in FUNCTIONS.iteritems():
         deco = entrypoint("cpyext", func.argtypes, name, relax=True)
         deco(func.get_wrapper(space))
+
 
 @unwrap_spec(ObjSpace, str, str)
 def load_extension_module(space, path, name):
