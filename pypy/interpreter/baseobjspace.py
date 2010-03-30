@@ -1,3 +1,5 @@
+import itertools
+import pypy
 from pypy.interpreter.executioncontext import ExecutionContext, ActionFlag
 from pypy.interpreter.executioncontext import UserDelAction, FrameTraceAction
 from pypy.interpreter.error import OperationError, operationerrfmt
@@ -9,10 +11,13 @@ from pypy.tool.uid import HUGEVAL_BYTES
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib.timer import DummyTimer, Timer
+from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib import jit
 import os, sys
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
+
+UINT_MAX_32_BITS = r_uint(4294967295)
 
 
 class W_Root(object):
@@ -402,7 +407,6 @@ class ObjSpace(object):
         if ('time2' in modules or 'rctime' in modules) and 'time' in modules:
             modules.remove('time')
 
-        import pypy
         if not self.config.objspace.nofaking:
             for modname in self.ALL_BUILTIN_MODULES:
                 if not (os.path.exists(
@@ -445,19 +449,18 @@ class ObjSpace(object):
         self.builtin_modules['__builtin__'] = self.wrap(w_builtin)
         self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), w_builtin)
 
-        bootstrap_modules = ['sys', 'imp', '__builtin__', 'exceptions']
-        installed_builtin_modules = bootstrap_modules[:]
+        bootstrap_modules = set(('sys', 'imp', '__builtin__', 'exceptions'))
+        installed_builtin_modules = list(bootstrap_modules)
 
-        self.export_builtin_exceptions()
+        exception_types_w = self.export_builtin_exceptions()
 
         # initialize with "bootstrap types" from objspace  (e.g. w_None)
-        for name, value in self.__dict__.items():
-            if name.startswith('w_') and not name.endswith('Type'):
-                name = name[2:]
-                #print "setitem: space instance %-20s into builtins" % name
-                self.setitem(self.builtin.w_dict, self.wrap(name), value)
+        types_w = itertools.chain(self.get_builtin_types().iteritems(),
+                                  exception_types_w.iteritems())
+        for name, w_type in types_w:
+            self.setitem(self.builtin.w_dict, self.wrap(name), w_type)
 
-        # install mixed and faked modules and set builtin_module_names on sys
+        # install mixed and faked modules
         for mixedname in self.get_builtinmodule_to_install():
             if (mixedname not in bootstrap_modules
                 and not mixedname.startswith('faked+')):
@@ -475,17 +478,28 @@ class ObjSpace(object):
         self.setitem(self.sys.w_dict, self.wrap('builtin_module_names'),
                      w_builtin_module_names)
 
+    def get_builtin_types(self):
+        """Get a dictionary mapping the names of builtin types to the type
+        objects."""
+        raise NotImplementedError
+
     def export_builtin_exceptions(self):
         """NOT_RPYTHON"""
         w_dic = self.exceptions_module.getdict()
-        names_w = self.unpackiterable(self.call_function(self.getattr(w_dic, self.wrap("keys"))))
-
-        for w_name in names_w:
+        w_keys = self.call_method(w_dic, "keys")
+        exc_types_w = {}
+        for w_name in self.unpackiterable(w_keys):
             name = self.str_w(w_name)
             if not name.startswith('__'):
                 excname = name
                 w_exc = self.getitem(w_dic, w_name)
-                setattr(self, "w_"+excname, w_exc)
+                exc_types_w[name] = w_exc
+                setattr(self, "w_" + excname, w_exc)
+        # Make a prebuilt recursion error
+        w_msg = self.wrap("maximum recursion depth exceeded")
+        self.prebuilt_recursion_error = OperationError(self.w_RuntimeError,
+                                                       w_msg)
+        return exc_types_w
 
     def install_mixedmodule(self, mixedname, installed_builtin_modules):
         """NOT_RPYTHON"""
@@ -1093,6 +1107,37 @@ class ObjSpace(object):
         if value < 0:
             raise OperationError(self.w_ValueError,
                                  self.wrap("expected a non-negative integer"))
+        return value
+
+    def c_int_w(self, w_obj):
+        # Like space.int_w(), but raises an app-level OverflowError if
+        # the integer does not fit in 32 bits.  Mostly here for gateway.py.
+        value = self.int_w(w_obj)
+        if value < -2147483647-1 or value > 2147483647:
+            raise OperationError(self.w_OverflowError,
+                                 self.wrap("expected a 32-bit integer"))
+        return value
+
+    def c_uint_w(self, w_obj):
+        # Like space.uint_w(), but raises an app-level OverflowError if
+        # the integer does not fit in 32 bits.  Mostly here for gateway.py.
+        value = self.uint_w(w_obj)
+        if value > UINT_MAX_32_BITS:
+            raise OperationError(self.w_OverflowError,
+                              self.wrap("expected an unsigned 32-bit integer"))
+        return value
+
+    def c_nonnegint_w(self, w_obj):
+        # Like space.int_w(), but raises an app-level ValueError if
+        # the integer is negative or does not fit in 32 bits.  Mostly here
+        # for gateway.py.
+        value = self.int_w(w_obj)
+        if value < 0:
+            raise OperationError(self.w_ValueError,
+                                 self.wrap("expected a non-negative integer"))
+        if value > 2147483647:
+            raise OperationError(self.w_OverflowError,
+                                 self.wrap("expected a 32-bit integer"))
         return value
 
     def warn(self, msg, w_warningcls):

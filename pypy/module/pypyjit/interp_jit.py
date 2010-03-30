@@ -78,13 +78,13 @@ class __extend__(PyFrame):
         except ExitFrame:
             return self.popvalue()
 
-    def JUMP_ABSOLUTE(f, jumpto, _, ec=None):
+    def jump_absolute(self, jumpto, _, ec=None):
         if we_are_jitted():
-            f.last_instr = intmask(jumpto)
-            ec.bytecode_trace(f)
-            jumpto = r_uint(f.last_instr)
-        pypyjitdriver.can_enter_jit(frame=f, ec=ec, next_instr=jumpto,
-                                    pycode=f.getcode())
+            self.last_instr = intmask(jumpto)
+            ec.bytecode_trace(self)
+            jumpto = r_uint(self.last_instr)
+        pypyjitdriver.can_enter_jit(frame=self, ec=ec, next_instr=jumpto,
+                                    pycode=self.getcode())
         return jumpto
 
 

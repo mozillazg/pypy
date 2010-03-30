@@ -5,9 +5,10 @@ import sys, py
 #    py.test.skip("WITHSMALLINT is not enabled")
 
 from pypy.objspace.std.inttype import wrapint
-from pypy.objspace.std.objspace import FailedToImplement
+from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.rlib.rarithmetic import r_uint
 
+from pypy.objspace.std.test.test_intobject import AppTestInt
 from pypy.conftest import gettestobjspace
 
 class TestW_IntObject:
@@ -223,3 +224,10 @@ class TestW_IntObject:
         f1 = wrapint(self.space, x)
         result = self.space.hex(f1)
         assert self.space.unwrap(result) == hex(x)
+
+
+class AppTestSmallInt(AppTestInt):
+
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.optimized_int_add" : True,
+                                       "objspace.std.withsmallint" : True})

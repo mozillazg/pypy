@@ -11,6 +11,7 @@ from pypy.translator.c.support import cdecl, forward_cdecl, somelettersfrom
 from pypy.translator.c.support import c_char_array_constant, barebonearray
 from pypy.translator.c.primitive import PrimitiveType, name_signed
 from pypy.rlib.rarithmetic import isinf, isnan
+from pypy.rlib.rstackovf import _StackOverflow
 from pypy.translator.c import extfunc
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from py.builtin import BaseException
@@ -37,6 +38,8 @@ class defaultproperty(object):
 
 class StructDefNode:
     typetag = 'struct'
+    extra_union_for_varlength = True
+
     def __init__(self, db, STRUCT, varlength=1):
         self.db = db
         self.STRUCT = STRUCT
@@ -82,7 +85,8 @@ class StructDefNode:
         self.fields = []
         db = self.db
         STRUCT = self.STRUCT
-        varlength = self.varlength
+        if self.varlength != 1:
+            self.normalizedtypename = db.gettype(STRUCT, who_asks=self)
         if needs_gcheader(self.STRUCT):
             for fname, T in db.gcpolicy.struct_gcheader_definition(self):
                 self.fields.append((fname, db.gettype(T, who_asks=self)))
@@ -151,6 +155,12 @@ class StructDefNode:
         if is_empty:
             yield '\t' + 'char _dummy; /* this struct is empty */'
         yield '};'
+        if self.varlength != 1:
+            assert self.typetag == 'struct'
+            yield 'union %su {' % self.name
+            yield '  struct %s a;' % self.name
+            yield '  %s;' % cdecl(self.normalizedtypename, 'b')
+            yield '};'
 
     def visitor_lines(self, prefix, on_field):
         for name in self.fieldnames:
@@ -162,6 +172,7 @@ class StructDefNode:
 
     def debug_offsets(self):
         # generate number exprs giving the offset of the elements in the struct
+        assert self.varlength == 1
         for name in self.fieldnames:
             FIELD_T = self.c_struct_field_type(name)
             if FIELD_T is Void:
@@ -178,15 +189,15 @@ class StructDefNode:
 
 class ArrayDefNode:
     typetag = 'struct'
+    extra_union_for_varlength = True
 
     def __init__(self, db, ARRAY, varlength=1):
         self.db = db
         self.ARRAY = ARRAY
         self.LLTYPE = ARRAY
-        original_varlength = varlength
         self.gcfields = []
         self.varlength = varlength
-        if original_varlength == 1:
+        if varlength == 1:
             basename = 'array'
             with_number = True
         else:
@@ -204,6 +215,8 @@ class ArrayDefNode:
         db = self.db
         ARRAY = self.ARRAY
         self.gcinfo    # force it to be computed
+        if self.varlength != 1:
+            self.normalizedtypename = db.gettype(ARRAY, who_asks=self)
         if needs_gcheader(ARRAY):
             for fname, T in db.gcpolicy.array_gcheader_definition(self):
                 self.gcfields.append((fname, db.gettype(T, who_asks=self)))
@@ -227,7 +240,7 @@ class ArrayDefNode:
         return '%s.items[%s]' % (baseexpr, index)
     access_expr_varindex = access_expr
 
-    def ptr_access_expr(self, baseexpr, index):
+    def ptr_access_expr(self, baseexpr, index, dummy=False):
         assert 0 <= index <= sys.maxint, "invalid constant index %r" % (index,)
         return self.itemindex_access_expr(baseexpr, index)
 
@@ -251,8 +264,14 @@ class ArrayDefNode:
                 line = 'char _dummy; ' + line
         yield '\t' + line
         yield '};'
+        if self.varlength != 1:
+            yield 'union %su {' % self.name
+            yield '  struct %s a;' % self.name
+            yield '  %s;' % cdecl(self.normalizedtypename, 'b')
+            yield '};'
 
     def visitor_lines(self, prefix, on_item):
+        assert self.varlength == 1
         ARRAY = self.ARRAY
         # we need a unique name for this C variable, or at least one that does
         # not collide with the expression in 'prefix'
@@ -279,6 +298,7 @@ class ArrayDefNode:
 
     def debug_offsets(self):
         # generate three offsets for debugging inspection
+        assert self.varlength == 1
         if not self.ARRAY._hints.get('nolength', False):
             yield 'offsetof(struct %s, length)' % (self.name,)
         else:
@@ -299,6 +319,7 @@ class BareBoneArrayDefNode:
     gcinfo = None
     name = None
     forward_decl = None
+    extra_union_for_varlength = False
 
     def __init__(self, db, ARRAY, varlength=1):
         self.db = db
@@ -325,7 +346,7 @@ class BareBoneArrayDefNode:
         return '%s[%d]' % (baseexpr, index)
     access_expr_varindex = access_expr
 
-    def ptr_access_expr(self, baseexpr, index):
+    def ptr_access_expr(self, baseexpr, index, dummy=False):
         assert 0 <= index <= sys.maxint, "invalid constant index %r" % (index,)
         return self.itemindex_access_expr(baseexpr, index)
 
@@ -349,6 +370,7 @@ class FixedSizeArrayDefNode:
     gcinfo = None
     name = None
     typetag = 'struct'
+    extra_union_for_varlength = False
 
     def __init__(self, db, FIXEDARRAY):
         self.db = db
@@ -368,7 +390,7 @@ class FixedSizeArrayDefNode:
     def getptrtype(self):
         return self.itemtypename.replace('@', '*@')
 
-    def access_expr(self, baseexpr, index):
+    def access_expr(self, baseexpr, index, dummy=False):
         if not isinstance(index, int):
             assert index.startswith('item')
             index = int(index[4:])
@@ -461,28 +483,42 @@ class ContainerNode(object):
             parentnode = db.getcontainernode(parent)
             defnode = db.gettypedefnode(parentnode.T)
             self.name = defnode.access_expr(parentnode.name, parentindex)
-        self.ptrname = '(&%s)' % self.name
         if self.typename != self.implementationtypename:
-            ptrtypename = db.gettype(Ptr(T))
-            self.ptrname = '((%s)(void*)%s)' % (cdecl(ptrtypename, ''),
-                                                self.ptrname)
+            if db.gettypedefnode(T).extra_union_for_varlength:
+                self.name += '.b'
+        self.ptrname = '(&%s)' % self.name
 
     def is_thread_local(self):
         return hasattr(self.T, "_hints") and self.T._hints.get('thread_local')
 
+    def get_declaration(self):
+        if self.name[-2:] == '.b':
+            # xxx fish fish
+            assert self.implementationtypename.startswith('struct ')
+            assert self.implementationtypename.endswith(' @')
+            uniontypename = 'union %su @' % self.implementationtypename[7:-2]
+            return uniontypename, self.name[:-2]
+        else:
+            return self.implementationtypename, self.name
+
     def forward_declaration(self):
         if llgroup.member_of_group(self.obj):
             return
+        type, name = self.get_declaration()
         yield '%s;' % (
-            forward_cdecl(self.implementationtypename,
-                self.name, self.db.standalone, self.is_thread_local()))
+            forward_cdecl(type, name, self.db.standalone,
+                          self.is_thread_local()))
 
     def implementation(self):
         if llgroup.member_of_group(self.obj):
             return []
         lines = list(self.initializationexpr())
+        type, name = self.get_declaration()
+        if name != self.name:
+            lines[0] = '{ ' + lines[0]    # extra braces around the 'a' part
+            lines[-1] += ' }'             # of the union
         lines[0] = '%s = %s' % (
-            cdecl(self.implementationtypename, self.name, self.is_thread_local()),
+            cdecl(type, name, self.is_thread_local()),
             lines[0])
         lines[-1] += ';'
         return lines
@@ -536,7 +572,19 @@ class StructNode(ContainerNode):
         if hasattr(self.T, "_hints") and self.T._hints.get('union'):
             data = data[0:1]
 
+        if 'get_padding_drop' in self.T._hints:
+            d = {}
+            for name, _ in data:
+                T = defnode.c_struct_field_type(name)
+                typename = self.db.gettype(T)
+                d[name] = cdecl(typename, '')
+            padding_drop = self.T._hints['get_padding_drop'](d)
+        else:
+            padding_drop = []
+
         for name, value in data:
+            if name in padding_drop:
+                continue
             c_expr = defnode.access_expr(self.name, name)
             lines = generic_initializationexpr(self.db, value, c_expr,
                                                decoration + name)
@@ -560,6 +608,7 @@ class GcStructNodeWithHash(StructNode):
         return 'struct _hashT_%s @' % self.name
 
     def forward_declaration(self):
+        assert self.typename == self.implementationtypename  # no array part
         hash_typename = self.get_hash_typename()
         hash_offset = self.db.gctransformer.get_hash_offset(self.T)
         yield '%s {' % cdecl(hash_typename, '')
@@ -675,6 +724,7 @@ class FixedSizeArrayNode(ContainerNode):
         return 1    # not variable-sized!
 
     def initializationexpr(self, decoration=''):
+        assert self.typename == self.implementationtypename  # not var-sized
         is_empty = True
         yield '{'
         # _names == ['item0', 'item1', ...]
@@ -928,9 +978,12 @@ class PyObjectNode(ContainerNode):
         import types, py
         if isinstance(value, (type, types.ClassType)):
             if (issubclass(value, BaseException) and
-                (value.__module__ == 'exceptions'
-                 or value is py.code._AssertionError)):
+                value.__module__ == 'exceptions'):
                 return 'PyExc_' + value.__name__
+            if value is py.code._AssertionError:
+                return 'PyExc_AssertionError'
+            if value is _StackOverflow:
+                return 'PyExc_RuntimeError'
         raise Exception("don't know how to simply render py object: %r" %
                         (value, ))
     
@@ -991,17 +1044,12 @@ class GroupNode(ContainerNode):
             forward_cdecl(ctype, self.name, self.db.standalone,
                           self.is_thread_local()))
         yield '#include "src/llgroup.h"'
+        yield 'PYPY_GROUP_CHECK_SIZE(%s)' % (self.name,)
         for i, member in enumerate(self.obj.members):
             structnode = self.db.getcontainernode(member)
             yield '#define %s %s.member%d' % (structnode.name,
                                               self.name, i)
         yield ''
-
-    def startupcode(self):
-        count = len(self.obj.members)
-        if count == 0:
-            return []
-        return ['PYPY_GROUP_CHECK_SIZE(%s, member%d);' % (self.name, count-1)]
 
     def initializationexpr(self):
         self._fix_members()

@@ -32,7 +32,8 @@ class BasePosix(Platform):
     def _compile_c_file(self, cc, cfile, compile_args):
         oname = cfile.new(ext='o')
         args = ['-c'] + compile_args + [str(cfile), '-o', str(oname)]
-        self._execute_c_compiler(cc, args, oname)
+        self._execute_c_compiler(cc, args, oname,
+                                 cwd=str(cfile.dirpath()))
         return oname
 
     def _link(self, cc, ofiles, link_args, standalone, exe_name):
@@ -40,12 +41,23 @@ class BasePosix(Platform):
         args += ['-o', str(exe_name)]
         if not standalone:
             args = self._args_for_shared(args)
-        self._execute_c_compiler(cc, args, exe_name)
+        self._execute_c_compiler(cc, args, exe_name,
+                                 cwd=str(exe_name.dirpath()))
         return exe_name
 
     def _preprocess_dirs(self, include_dirs):
         # hook for maemo
         return include_dirs
+
+    def _pkg_config(self, lib, opt, default):
+        try:
+            ret, out, err = _run_subprocess("pkg-config", [lib, opt])
+        except OSError:
+            ret = 1
+        if ret:
+            return default
+        # strip compiler flags
+        return [entry[2:] for entry in out.split()]
 
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
         cfiles = [py.path.local(f) for f in cfiles]
