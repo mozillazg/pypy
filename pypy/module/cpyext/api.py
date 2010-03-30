@@ -98,7 +98,6 @@ class ApiFunction:
     def _freeze_(self):
         return True
 
-    @specialize.memo()
     def get_llhelper(self, space):
         llh = getattr(self, '_llhelper', None)
         if llh is None:
@@ -106,6 +105,7 @@ class ApiFunction:
             self._llhelper = llh
         return llh
 
+    @specialize.memo()
     def get_wrapper(self, space):
         wrapper = getattr(self, '_wrapper', None)
         if wrapper is None:
