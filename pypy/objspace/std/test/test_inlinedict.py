@@ -10,7 +10,7 @@ class FakeSubtype:
     nslots = 0
 
 class TestMixin(object):
-    Mixin = make_inlinedict_mixin(StrDictImplementation, "content")
+    Mixin = make_inlinedict_mixin()
     class FakeObject(Mixin):
         def user_setup_slots(self, nslots):
             pass
@@ -114,14 +114,8 @@ class TestMixin(object):
         assert obj.getdictvalue(self.fakespace, "hello") is None
 
 
-class TestMixinShared(TestMixin):
-    Mixin = make_inlinedict_mixin(SharedDictImplementation, "structure")
-    class FakeObject(Mixin):
-        def user_setup_slots(self, nslots):
-            pass
-
-class TestIndirectDict(BaseTestRDictImplementation):
-    Mixin = make_inlinedict_mixin(StrDictImplementation, "content")
+class TestIndirectDictShared(BaseTestRDictImplementation):
+    Mixin = make_inlinedict_mixin()
     class FakeObject(Mixin):
         def user_setup_slots(self, nslots):
             pass
@@ -130,13 +124,6 @@ class TestIndirectDict(BaseTestRDictImplementation):
         obj = self.FakeObject()
         obj.user_setup(self.fakespace, FakeSubtype)
         return obj.getdict()
-
-
-class TestIndirectDictShared(TestIndirectDict):
-    Mixin = make_inlinedict_mixin(SharedDictImplementation, "structure")
-    class FakeObject(Mixin):
-        def user_setup_slots(self, nslots):
-            pass
 
 
 
