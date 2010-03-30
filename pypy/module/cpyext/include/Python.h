@@ -24,10 +24,6 @@
 
 #include "object.h"
 
-/* move somewhere else */
-PyAPI_DATA(PyObject *) Py_None;
-
-
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
