@@ -13,6 +13,7 @@ from pypy.tool import isolate
 from pypy.translator.c.support import log, c_string_constant
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.translator.c import gc
+from pypy.rlib import exports
 
 def import_module_from_directory(dir, modname):
     file, pathname, description = imp.find_module(modname, [str(dir)])
@@ -167,6 +168,9 @@ class CBuilder(object):
                 db.get(getfunctionptr(bk.getdesc(func).getuniquegraph()))
 
             self.c_entrypoint_name = pfname
+
+        for obj in exports.EXPORTS_obj2name.keys():
+            db.getcontainernode(obj)
         db.complete()
 
         self.collect_compilation_info(db)

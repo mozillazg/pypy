@@ -10,6 +10,7 @@ from pypy.translator.c.support import USESLOTS # set to False if necessary while
 from pypy.translator.c.support import cdecl, forward_cdecl, somelettersfrom
 from pypy.translator.c.support import c_char_array_constant, barebonearray
 from pypy.translator.c.primitive import PrimitiveType, name_signed
+from pypy.rlib import exports
 from pypy.rlib.rarithmetic import isinf, isnan
 from pypy.rlib.rstackovf import _StackOverflow
 from pypy.translator.c import extfunc
@@ -475,7 +476,10 @@ class ContainerNode(object):
         self.typename = db.gettype(T)  #, who_asks=self)
         self.implementationtypename = db.gettype(T, varlength=self.getlength())
         parent, parentindex = parentlink(obj)
-        if parent is None:
+        if obj in exports.EXPORTS_obj2name:
+            self.name = exports.EXPORTS_obj2name[obj]
+            self.globalcontainer = True
+        elif parent is None:
             self.name = db.namespace.uniquename('g_' + self.basename())
             self.globalcontainer = True
         else:

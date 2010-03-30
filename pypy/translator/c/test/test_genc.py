@@ -414,3 +414,18 @@ def test_entrypoints():
         t.view()
     assert 'foobar' in t.driver.cbuilder.c_source_filename.read()
 
+def test_exportstruct():
+    from pypy.rlib.exports import export_struct
+    def f():
+        return 42
+    FOO = Struct("FOO", ("field1", Signed))
+    foo = malloc(FOO, flavor="raw")
+    foo.field1 = 43
+    export_struct("BarStruct", foo._obj)
+    t = Translation(f, [], backend="c")
+    t.annotate()
+    compiled_fn = t.compile_c()
+    if py.test.config.option.view:
+        t.view()
+    assert ' BarStruct ' in t.driver.cbuilder.c_source_filename.read()
+
