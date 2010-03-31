@@ -9,7 +9,6 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import ll2ctypes
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.tool.udir import udir
 from pypy.translator import platform
@@ -190,6 +189,8 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
         unwrapper_raise = make_unwrapper(False)
         if external:
             FUNCTIONS[func.func_name] = api_function
+        else:
+            FUNCTIONS_STATIC[func.func_name] = api_function
         INTERPLEVEL_API[func.func_name] = unwrapper_catch # used in tests
         return unwrapper_raise # used in 'normal' RPython code.
     return decorate
@@ -209,6 +210,7 @@ def cpython_struct(name, fields, forward=None):
 
 INTERPLEVEL_API = {}
 FUNCTIONS = {}
+FUNCTIONS_STATIC = {}
 FUNCTIONS_C = {}
 TYPES = {}
 GLOBALS = {
@@ -346,6 +348,7 @@ def build_bridge(space, rename=True):
     from pypy.module.cpyext.pyobject import make_ref
 
     export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
+    from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
     generate_macros(export_symbols, rename)
@@ -494,6 +497,7 @@ def setup_library(space, rename=False):
     from pypy.module.cpyext.pyobject import make_ref
 
     export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
+    from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
     generate_macros(export_symbols, rename, False)
@@ -518,6 +522,8 @@ def setup_library(space, rename=False):
     for name, func in FUNCTIONS.iteritems():
         deco = entrypoint("cpyext", func.argtypes, name, relax=True)
         deco(func.get_wrapper(space))
+    for name, func in FUNCTIONS_STATIC.iteritems():
+        func.get_wrapper(space).c_name = name
 
 
 @unwrap_spec(ObjSpace, str, str)
