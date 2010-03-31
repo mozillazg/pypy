@@ -20,6 +20,17 @@ class State:
         self.exc_type = None
         self.exc_value = None
 
+    def _freeze_(self):
+        assert not self.borrowed_objects and not self.borrow_mapping
+        self.py_objects_r2w.clear() # is not valid anymore after translation
+        return False
+
+    def init_r2w_from_w2r(self):
+        from pypy.module.cpyext.api import ADDR
+        for w_obj, obj in self.py_objects_w2r.items():
+            ptr = rffi.cast(ADDR, obj)
+            self.py_objects_r2w[ptr] = w_obj
+
     def set_exception(self, w_type, w_value):
         self.clear_exception()
         self.exc_type = w_type
