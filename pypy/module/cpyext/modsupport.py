@@ -1,7 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, cpython_struct, PyObject, \
-        METH_STATIC, METH_CLASS, METH_COEXIST, general_check, CANNOT_FAIL, \
-        register_container
+from pypy.module.cpyext.api import cpython_api, cpython_struct, \
+        METH_STATIC, METH_CLASS, METH_COEXIST, general_check, CANNOT_FAIL
+from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.methodobject import PyCFunction_NewEx, PyDescr_NewMethod
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall

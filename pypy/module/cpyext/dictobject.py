@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, CANNOT_FAIL, \
-    general_check, general_check_exact, register_container
+from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL
+from pypy.module.cpyext.api import general_check, general_check_exact
+from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
 

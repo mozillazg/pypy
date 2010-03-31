@@ -1,10 +1,9 @@
 
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, CANNOT_FAIL,\
-     Py_ssize_t
+from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, Py_ssize_t
 from pypy.module.cpyext.api import general_check, general_check_exact
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
-from pypy.module.cpyext.macros import Py_XDECREF
+from pypy.module.cpyext.pyobject import Py_DecRef, PyObject
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.interpreter.error import OperationError
 
@@ -44,7 +43,7 @@ def PyList_SetItem(space, w_list, index, w_item):
     This function "steals" a reference to item and discards a reference to
     an item already in the list at the affected position.
     """
-    Py_XDECREF(space, w_item)
+    Py_DecRef(space, w_item)
     if not isinstance(w_list, W_ListObject):
         PyErr_BadInternalCall(space)
     wrappeditems = w_list.wrappeditems

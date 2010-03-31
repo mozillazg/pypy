@@ -10,14 +10,14 @@ from pypy.objspace.std.typeobject import W_TypeObject, _CPYTYPE
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
-    PyObject, PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, \
-    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, make_ref, \
-    PyStringObject, ADDR, from_ref, generic_cpy_call
+    PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
+    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR
+from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.modsupport import  convert_method_defs
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.methodobject import PyDescr_NewWrapper
-from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF, Py_XDECREF
+from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr, PyTypeObject, \
         PyGetSetDef
 from pypy.module.cpyext.slotdefs import slotdefs
@@ -129,7 +129,7 @@ def subtype_dealloc(space, obj):
     # XXX call tp_del if necessary
     generic_cpy_call(space, dealloc, obj)
     pto = rffi.cast(PyObject, pto)
-    Py_DECREF(space, pto)
+    Py_DecRef(space, pto)
 
 
 @cpython_api([PyObject], lltype.Void, external=False)
@@ -141,7 +141,7 @@ def string_dealloc(space, obj):
     obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
     generic_cpy_call(space, pto.c_tp_free, obj_voidp)
     pto = rffi.cast(PyObject, pto)
-    Py_DECREF(space, pto)
+    Py_DecRef(space, pto)
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def type_dealloc(space, obj):
@@ -149,15 +149,15 @@ def type_dealloc(space, obj):
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     type_pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
-    Py_XDECREF(space, base_pyo)
-    Py_XDECREF(space, obj_pto.c_tp_bases)
-    Py_XDECREF(space, obj_pto.c_tp_cache) # lets do it like cpython
+    Py_DecRef(space, base_pyo)
+    Py_DecRef(space, obj_pto.c_tp_bases)
+    Py_DecRef(space, obj_pto.c_tp_cache) # lets do it like cpython
     if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
         lltype.free(obj_pto.c_tp_name, flavor="raw")
         obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
         generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
         pto = rffi.cast(PyObject, type_pto)
-        Py_DECREF(space, pto)
+        Py_DecRef(space, pto)
 
 
 def allocate_type_obj(space, w_type):
