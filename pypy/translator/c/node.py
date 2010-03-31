@@ -465,7 +465,7 @@ class ContainerNode(object):
     if USESLOTS:
         __slots__ = """db T obj 
                        typename implementationtypename
-                        name ptrname
+                        name ptrname compilation_info
                         globalcontainer""".split()
 
     def __init__(self, db, T, obj):
@@ -490,6 +490,7 @@ class ContainerNode(object):
         if self.typename != self.implementationtypename:
             if db.gettypedefnode(T).extra_union_for_varlength:
                 self.name += '.b'
+        self.compilation_info = getattr(obj, '_compilation_info', None)
         self.ptrname = '(&%s)' % self.name
 
     def is_thread_local(self):
