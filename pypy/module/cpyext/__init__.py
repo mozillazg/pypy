@@ -26,6 +26,8 @@ class Module(MixedModule):
             space.setattr(space.wrap(self),
                           space.wrap('api_lib'),
                           space.wrap(state.api_lib))
+        else:
+            state.init_r2w_from_w2r()
 
 # import these modules to register api functions by side-effect
 import pypy.module.cpyext.pyobject
