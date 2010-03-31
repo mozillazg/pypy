@@ -7,7 +7,7 @@
 
 
 /*
-CPyton has this for backwards compatibility with really old extensions, and now
+CPython has this for backwards compatibility with really old extensions, and now
 we have it for compatibility with CPython.
 */
 #define staticforward static
