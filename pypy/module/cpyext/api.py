@@ -112,6 +112,7 @@ class ApiFunction:
         if wrapper is None:
             wrapper = make_wrapper(space, self.callable)
             self._wrapper = wrapper
+            wrapper.relax_sig_check = True
         return wrapper
 
 def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, external=True):
@@ -219,6 +220,10 @@ GLOBALS = {
     'PyType_Type#': ('PyTypeObject*', 'space.w_type'),
     'PyBaseObject_Type#': ('PyTypeObject*', 'space.w_object'),
     }
+
+def get_structtype_for_ctype(ctype):
+    from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
+    return {"PyObject*": PyObject, "PyTypeObject*": PyTypeObjectPtr}[ctype]
 
 # It is important that these PyObjects are allocated in a raw fashion
 # Thus we cannot save a forward pointer to the wrapped object
@@ -406,7 +411,7 @@ def build_bridge(space, rename=True):
 
     return modulename.new(ext='')
 
-def generate_macros(export_symbols, rename=True):
+def generate_macros(export_symbols, rename=True, do_deref=True):
     pypy_macros = []
     renamed_symbols = []
     for name in export_symbols:
@@ -415,6 +420,7 @@ def generate_macros(export_symbols, rename=True):
             continue
         if "#" in name:
             deref = "*"
+            if not do_deref and not rename: continue
         else:
             deref = ""
             if not rename: continue
@@ -471,6 +477,9 @@ def build_eci(build_bridge, export_symbols, code=None):
     else:
         assert code is None
 
+    if not build_bridge:
+        kwds["includes"] = ['Python.h'] # this is our Python.h
+
     eci = ExternalCompilationInfo(
         include_dirs=include_dirs,
         separate_module_files=[include_dir / "varargwrapper.c",
@@ -488,11 +497,11 @@ def setup_library(space, rename=False):
     export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
     db = LowLevelDatabase()
 
-    generate_macros(export_symbols, rename)
+    generate_macros(export_symbols, rename, False)
 
     generate_decls_and_callbacks(db, False)
 
-    eci = build_eci(False, export_symbols) # XXX use eci
+    eci = build_eci(False, export_symbols)
 
     bootstrap_types(space)
 
@@ -502,7 +511,10 @@ def setup_library(space, rename=False):
         if rename:
             name = name.replace('Py', 'PyPy')
         w_obj = eval(expr)
-        export_struct(name, make_ref(space, w_obj)._obj)
+        struct_ptr = make_ref(space, w_obj)
+        struct = rffi.cast(get_structtype_for_ctype(type), struct_ptr)._obj
+        struct._compilation_info = eci
+        export_struct(name, struct)
 
     for name, func in FUNCTIONS.iteritems():
         deco = entrypoint("cpyext", func.argtypes, name, relax=True)
