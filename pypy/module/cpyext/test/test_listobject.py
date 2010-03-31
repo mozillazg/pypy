@@ -1,5 +1,24 @@
-
+from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
+
+class TestListObject(BaseApiTest):
+    def test_list(self, space, api):
+        L = space.appexec([], """():
+            class L(list):
+                pass
+            return L
+        """)
+
+        l = api.PyList_New(0)
+        assert api.PyList_Check(l)
+        assert api.PyList_CheckExact(l)
+
+        l = space.call_function(L)
+        assert api.PyList_Check(l)
+        assert not api.PyList_CheckExact(l)
+
+        assert not api.PyList_Check(space.newtuple([]))
+        assert not api.PyList_CheckExact(space.newtuple([]))
 
 class AppTestListObject(AppTestCpythonExtensionBase):
     def test_listobject(self):
