@@ -365,7 +365,7 @@ def build_bridge(space, rename=True):
     struct PyPyAPI* pypyAPI = &_pypyAPI;
     """ % dict(members=structmembers)
 
-    functions = generate_decls_and_callbacks(db, True)
+    functions = generate_decls_and_callbacks(db)
 
     global_objects = []
     for name, (type, expr) in GLOBALS.iteritems():
@@ -430,11 +430,12 @@ def generate_macros(export_symbols, rename=True, do_deref=True):
             newname = name
         pypy_macros.append('#define %s %s%s' % (name, deref, newname))
         renamed_symbols.append(newname)
-    export_symbols[:] = renamed_symbols
+    if rename:
+        export_symbols[:] = renamed_symbols
     pypy_macros_h = udir.join('pypy_macros.h')
     pypy_macros_h.write('\n'.join(pypy_macros))
 
-def generate_decls_and_callbacks(db, declare_globals):
+def generate_decls_and_callbacks(db):
     # implement function callbacks and generate function decls
     functions = []
     pypy_decls = []
@@ -451,9 +452,10 @@ def generate_decls_and_callbacks(db, declare_globals):
         pypy_decls.append(header + ";")
         body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
         functions.append('%s\n%s\n' % (header, body))
-    if declare_globals:
-        for name, (typ, expr) in GLOBALS.iteritems():
-            pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
+    pypy_decls.append("#ifndef PYPY_STANDALONE\n")
+    for name, (typ, expr) in GLOBALS.iteritems():
+        pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
+    pypy_decls.append("#endif\n")
 
     pypy_decl_h = udir.join('pypy_decl.h')
     pypy_decl_h.write('\n'.join(pypy_decls))
@@ -464,20 +466,17 @@ def build_eci(build_bridge, export_symbols, code=None):
     kwds = {}
     export_symbols_eci = export_symbols[:]
 
-    if sys.platform == "win32":
-        # '%s' undefined; assuming extern returning int
-        kwds["compile_extra"] = ["/we4013"]
-    else:
-        kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
-
     if build_bridge:
         assert code is not None
+        if sys.platform == "win32":
+            # '%s' undefined; assuming extern returning int
+            kwds["compile_extra"] = ["/we4013"]
+        else:
+            kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
         kwds["separate_module_sources"] = [code]
         export_symbols_eci.append('pypyAPI')
     else:
         assert code is None
-
-    if not build_bridge:
         kwds["includes"] = ['Python.h'] # this is our Python.h
 
     eci = ExternalCompilationInfo(
@@ -499,7 +498,7 @@ def setup_library(space, rename=False):
 
     generate_macros(export_symbols, rename, False)
 
-    generate_decls_and_callbacks(db, False)
+    generate_decls_and_callbacks(db)
 
     eci = build_eci(False, export_symbols)
 
