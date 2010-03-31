@@ -217,11 +217,13 @@ GLOBALS = {
     'Py_None': ('PyObject*', 'space.w_None'),
     'Py_True': ('PyObject*', 'space.w_True'),
     'Py_False': ('PyObject*', 'space.w_False'),
-    'PyExc_Exception': ('PyObject*', 'space.w_Exception'),
-    'PyExc_TypeError': ('PyObject*', 'space.w_TypeError'),
     'PyType_Type#': ('PyTypeObject*', 'space.w_type'),
     'PyBaseObject_Type#': ('PyTypeObject*', 'space.w_object'),
     }
+
+for exc_name in ['TypeError', 'ValueError', 'KeyError', 'Exception',
+                 'BaseException']:
+    GLOBALS['PyExc_' + exc_name] = ('PyObject*', 'space.w_' + exc_name)
 
 def get_structtype_for_ctype(ctype):
     from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
