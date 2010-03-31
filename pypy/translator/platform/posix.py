@@ -60,6 +60,7 @@ class BasePosix(Platform):
         return [entry[2:] for entry in out.split()]
 
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
+        eci = eci.convert_exportsymbols_to_file()
         cfiles = [py.path.local(f) for f in cfiles]
         cfiles += [py.path.local(f) for f in eci.separate_module_files]
 
