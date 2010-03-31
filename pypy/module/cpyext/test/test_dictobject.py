@@ -21,3 +21,18 @@ class TestDictObject(BaseApiTest):
         assert not api.PyDict_GetItem(d, space.wrap("name"))
         assert api.PyErr_Occurred() is space.w_KeyError
         api.PyErr_Clear()
+
+    def test_check(self, space, api):
+        d = api.PyDict_New()
+        assert api.PyDict_Check(d)
+        assert api.PyDict_CheckExact(d)
+        sub = space.appexec([], """():
+            class D(dict):
+                pass
+            return D""")
+        d = space.call_function(sub)
+        assert api.PyDict_Check(d)
+        assert not api.PyDict_CheckExact(d)
+        i = space.wrap(2)
+        assert not api.PyDict_Check(i)
+        assert not api.PyDict_CheckExact(i)
