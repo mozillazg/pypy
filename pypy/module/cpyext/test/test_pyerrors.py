@@ -1,3 +1,4 @@
+from pypy.module.cpyext.state import State
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.rpython.lltypesystem import rffi
@@ -32,6 +33,14 @@ class TestExceptions(BaseApiTest):
         api.PyErr_SetString(space.w_ValueError, string)
         rffi.free_charp(string)
         assert api.PyErr_Occurred() is space.w_ValueError
+
+        api.PyErr_Clear()
+
+    def test_SetObject(self, space, api):
+        api.PyErr_SetObject(space.w_ValueError, space.wrap("a value"))
+        assert api.PyErr_Occurred() is space.w_ValueError
+        state = space.fromcache(State)
+        assert space.eq_w(state.exc_value, space.wrap("a value"))
 
         api.PyErr_Clear()
 
