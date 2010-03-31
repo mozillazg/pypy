@@ -74,6 +74,8 @@ class AppTestCpythonExtensionBase:
         api_library = state.api_lib
         if sys.platform == 'win32':
             kwds["libraries"] = [api_library]
+            # '%s' undefined; assuming extern returning int
+            kwds["compile_extra"] = ["/we4013"]
         else:
             kwds["link_files"] = [str(api_library + '.so')]
             kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
