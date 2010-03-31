@@ -1,6 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, CANNOT_FAIL, \
-    general_check, register_container
+    general_check, general_check_exact, register_container
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
 
@@ -12,6 +12,11 @@ def PyDict_New(space):
 def PyDict_Check(space, w_obj):
     w_type = space.w_dict
     return general_check(space, w_obj, w_type)
+
+@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
+def PyDict_CheckExact(space, w_obj):
+    w_type = space.w_dict
+    return general_check_exact(space, w_obj, w_type)
 
 @cpython_api([PyObject, PyObject], PyObject)
 def PyDict_GetItem(space, w_dict, w_key):
