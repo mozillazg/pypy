@@ -171,6 +171,7 @@ class CBuilder(object):
 
         for obj in exports.EXPORTS_obj2name.keys():
             db.getcontainernode(obj)
+        exports.clear()
         db.complete()
 
         self.collect_compilation_info(db)
