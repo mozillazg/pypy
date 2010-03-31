@@ -582,7 +582,10 @@ def build_eci(build_bridge, export_symbols, code=None):
     kwds = {}
     export_symbols_eci = export_symbols[:]
 
-    if sys.platform != "win32":
+    if sys.platform == "win32":
+        # '%s' undefined; assuming extern returning int
+        kwds["compile_extra"] = ["/we4013"]
+    else:
         kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
 
     if build_bridge:
