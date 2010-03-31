@@ -1516,13 +1516,6 @@ def PyErr_Print(space, ):
     """Alias for PyErr_PrintEx(1)."""
     raise NotImplementedError
 
-@cpython_api([PyObject], rffi.INT_real)
-def PyErr_ExceptionMatches(space, exc):
-    """Equivalent to PyErr_GivenExceptionMatches(PyErr_Occurred(), exc).  This
-    should only be called when an exception is actually set; a memory access
-    violation will occur if no exception has been raised."""
-    raise NotImplementedError
-
 @cpython_api([{PyObject**exc}, {PyObject**val}, {PyObject**tb}], lltype.Void)
 def PyErr_NormalizeException(space, , , ):
     """Under certain circumstances, the values returned by PyErr_Fetch() below

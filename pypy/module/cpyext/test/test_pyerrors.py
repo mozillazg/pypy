@@ -27,6 +27,14 @@ class TestExceptions(BaseApiTest):
         exceptions = space.newtuple([space.w_LookupError, space.w_ValueError])
         assert exc_matches(space.w_ValueError, exceptions)
 
+    def test_ExceptionMatches(self, space, api):
+        api.PyErr_SetObject(space.w_ValueError, space.wrap("message"))
+        assert api.PyErr_ExceptionMatches(space.w_Exception)
+        assert api.PyErr_ExceptionMatches(space.w_ValueError)
+        assert not api.PyErr_ExceptionMatches(space.w_TypeError)
+
+        api.PyErr_Clear()
+
     def test_Occurred(self, space, api):
         assert not api.PyErr_Occurred()
         string = rffi.str2charp("spam and eggs")

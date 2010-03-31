@@ -43,3 +43,11 @@ def PyErr_GivenExceptionMatches(space, w_given, w_exc):
     else:
         w_given_type = w_given
     return space.exception_match(w_given_type, w_exc)
+
+@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
+def PyErr_ExceptionMatches(space, w_exc):
+    """Equivalent to PyErr_GivenExceptionMatches(PyErr_Occurred(), exc).  This
+    should only be called when an exception is actually set; a memory access
+    violation will occur if no exception has been raised."""
+    w_type = PyErr_Occurred(space)
+    return PyErr_GivenExceptionMatches(space, w_type, w_exc)
