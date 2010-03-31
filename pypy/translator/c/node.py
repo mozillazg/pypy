@@ -925,7 +925,11 @@ def select_function_code_generators(fnobj, db, functionname):
             assert fnobj.external == 'CPython'
             return [CExternalFunctionCodeGenerator(fnobj, db)]
     else:
-        raise ValueError, "don't know how to generate code for %r" % (fnobj,)
+        # HACK! sandboxing missing here
+        graph = db.translator.annotator.bookkeeper.getdesc(fnobj._callable).getuniquegraph()
+        exception_policy = getattr(fnobj, 'exception_policy', None)
+        return [FunctionCodeGenerator(graph, db, exception_policy, functionname)]
+        #raise ValueError, "don't know how to generate code for %r" % (fnobj,)
 
 class ExtType_OpaqueNode(ContainerNode):
     nodekind = 'rpyopaque'
