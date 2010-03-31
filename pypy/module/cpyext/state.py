@@ -26,13 +26,13 @@ class State:
         self.exc_value = w_value
 
     def clear_exception(self):
-        from pypy.module.cpyext.macros import Py_DECREF
-        from pypy.module.cpyext.api import make_ref, ADDR
+        from pypy.module.cpyext.pyobject import Py_DecRef, make_ref
+        from pypy.module.cpyext.api import ADDR
         # handling of borrowed objects, remove when we have
         # a weakkeydict
         exc_type = make_ref(self.space, self.exc_type, borrowed=True)
         if exc_type:
-            Py_DECREF(self.space, exc_type)
+            Py_DecRef(self.space, exc_type)
             containee_ptr = rffi.cast(ADDR, exc_type)
             del self.borrowed_objects[containee_ptr]
         self.exc_type = None

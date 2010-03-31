@@ -1,8 +1,8 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, make_ref, from_ref, \
-        generic_cpy_call, CANNOT_FAIL
+from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL
+from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
+from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
-from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject, W_PyCObject
 from pypy.objspace.std.objectobject import W_ObjectObject
 import pypy.module.__builtin__.operation as operation

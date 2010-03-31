@@ -1,7 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
-from pypy.module.cpyext.api import cpython_api, PyObject, make_ref,\
-        register_container, CANNOT_FAIL
+from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL
+from pypy.module.cpyext.pyobject import PyObject, make_ref, register_container
 from pypy.module.cpyext.state import State
 
 @cpython_api([PyObject, PyObject], lltype.Void)

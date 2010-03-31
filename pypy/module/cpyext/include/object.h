@@ -37,6 +37,9 @@ typedef struct {
 	PyObject_VAR_HEAD
 } PyVarObject;
 
+#define Py_INCREF(ob)		(Py_IncRef(ob))
+#define Py_DECREF(ob)		(Py_DecRef(ob))
+
 #define Py_REFCNT(ob)		(((PyObject*)(ob))->ob_refcnt)
 #define Py_TYPE(ob)		(((PyObject*)(ob))->ob_type)
 #define Py_SIZE(ob)		(((PyVarObject*)(ob))->ob_size)

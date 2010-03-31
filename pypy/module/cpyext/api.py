@@ -25,7 +25,6 @@ from pypy.rlib.exports import export_struct
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
-DEBUG_REFCOUNT = False
 DEBUG_WRAPPER = False
 
 Py_ssize_t = lltype.Signed
@@ -139,6 +138,8 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
 
             @specialize.ll()
             def unwrapper(space, *args):
+                from pypy.module.cpyext.pyobject import Py_DecRef
+                from pypy.module.cpyext.pyobject import make_ref, from_ref
                 newargs = ()
                 to_decref = []
                 for i, (ARG, is_wrapped) in types_names_enum_ui:
@@ -177,9 +178,8 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
                     if api_function.borrowed:
                         state = space.fromcache(State)
                         state.last_container = 0
-                    from pypy.module.cpyext.macros import Py_DECREF
                     for arg in to_decref:
-                        Py_DECREF(space, arg)
+                        Py_DecRef(space, arg)
             unwrapper.func = func
             unwrapper.api_func = api_function
             unwrapper._always_inline_ = True
@@ -241,136 +241,6 @@ def configure_types():
             TYPES[name].become(TYPE)
 
 
-class NullPointerException(Exception):
-    pass
-
-class InvalidPointerException(Exception):
-    pass
-
-def debug_refcount(*args, **kwargs):
-    frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
-    assert not kwargs
-    frame = sys._getframe(frame_stackdepth)
-    print >>sys.stderr, "%25s" % (frame.f_code.co_name, ),
-    for arg in args:
-        print >>sys.stderr, arg,
-    print >>sys.stderr
-
-
-def make_ref(space, w_obj, borrowed=False, steal=False):
-    from pypy.module.cpyext.macros import Py_INCREF, Py_DECREF
-    if w_obj is None:
-        return lltype.nullptr(PyObject.TO)
-    assert isinstance(w_obj, W_Root)
-    state = space.fromcache(State)
-    py_obj = state.py_objects_w2r.get(w_obj, lltype.nullptr(PyObject.TO))
-    if not py_obj:
-        from pypy.module.cpyext.typeobject import allocate_type_obj,\
-                W_PyCTypeObject, W_PyCObject
-        w_type = space.type(w_obj)
-        if space.is_w(w_type, space.w_type):
-            pto = allocate_type_obj(space, w_obj)
-            py_obj = rffi.cast(PyObject, pto)
-            # c_ob_type and c_ob_refcnt are set by allocate_type_obj
-        elif isinstance(w_obj, W_PyCObject):
-            w_type = space.type(w_obj)
-            assert isinstance(w_type, W_PyCTypeObject)
-            pto = w_type.pto
-            # Don't increase refcount for non-heaptypes
-            # Py_INCREF(space, pto)
-            basicsize = pto.c_tp_basicsize
-            py_obj_pad = lltype.malloc(rffi.VOIDP.TO, basicsize,
-                    flavor="raw", zero=True)
-            py_obj = rffi.cast(PyObject, py_obj_pad)
-            py_obj.c_ob_refcnt = 1
-            py_obj.c_ob_type = rffi.cast(PyObject, pto)
-        elif isinstance(w_obj, W_StringObject):
-            py_obj_str = lltype.malloc(PyStringObject.TO, flavor='raw', zero=True)
-            py_obj_str.c_size = len(space.str_w(w_obj))
-            py_obj_str.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
-            pto = make_ref(space, space.w_str)
-            py_obj = rffi.cast(PyObject, py_obj_str)
-            py_obj.c_ob_refcnt = 1
-            py_obj.c_ob_type = rffi.cast(PyObject, pto)
-        else:
-            py_obj = lltype.malloc(PyObject.TO, flavor="raw", zero=True)
-            py_obj.c_ob_refcnt = 1
-            pto = make_ref(space, space.type(w_obj))
-            py_obj.c_ob_type = rffi.cast(PyObject, pto)
-        ptr = rffi.cast(ADDR, py_obj)
-        if DEBUG_REFCOUNT:
-            debug_refcount("MAKREF", py_obj, w_obj)
-        state.py_objects_w2r[w_obj] = py_obj
-        state.py_objects_r2w[ptr] = w_obj
-        if borrowed and ptr not in state.borrowed_objects:
-            state.borrowed_objects[ptr] = None
-    elif not steal:
-        if borrowed:
-            py_obj_addr = rffi.cast(ADDR, py_obj)
-            if py_obj_addr not in state.borrowed_objects:
-                Py_INCREF(space, py_obj)
-                state.borrowed_objects[py_obj_addr] = None
-        else:
-            Py_INCREF(space, py_obj)
-    return py_obj
-
-def force_string(space, ref):
-    state = space.fromcache(State)
-    ref = rffi.cast(PyStringObject, ref)
-    s = rffi.charpsize2str(ref.c_buffer, ref.c_size)
-    ref = rffi.cast(PyObject, ref)
-    w_str = space.wrap(s)
-    state.py_objects_w2r[w_str] = ref
-    ptr = rffi.cast(ADDR, ref)
-    state.py_objects_r2w[ptr] = w_str
-    return w_str
-
-
-def from_ref(space, ref):
-    assert lltype.typeOf(ref) == PyObject
-    if not ref:
-        return None
-    state = space.fromcache(State)
-    ptr = rffi.cast(ADDR, ref)
-    try:
-        obj = state.py_objects_r2w[ptr]
-    except KeyError:
-        ref_type = ref.c_ob_type
-        if ref != ref_type and space.is_w(from_ref(space, ref_type), space.w_str):
-            return force_string(space, ref)
-        else:
-            msg = ""
-            if not we_are_translated():
-                msg = "Got invalid reference to a PyObject: %r" % (ref, )
-            raise InvalidPointerException(msg)
-    return obj
-
-
-@cpython_api([PyObject], lltype.Void, external=False)
-def register_container(space, container):
-    state = space.fromcache(State)
-    if not container: # self-managed
-        container_ptr = -1
-    else:
-        container_ptr = rffi.cast(ADDR, container)
-    assert not state.last_container, "Last container was not fetched"
-    state.last_container = container_ptr
-
-def add_borrowed_object(space, obj):
-    state = space.fromcache(State)
-    container_ptr = state.last_container
-    state.last_container = 0
-    if not container_ptr:
-        raise NullPointerException
-    if container_ptr == -1:
-        return
-    borrowees = state.borrow_mapping.get(container_ptr, None)
-    if borrowees is None:
-        state.borrow_mapping[container_ptr] = borrowees = {}
-    obj_ptr = rffi.cast(ADDR, obj)
-    borrowees[obj_ptr] = None
-
-
 def general_check(space, w_obj, w_type):
     w_obj_type = space.type(w_obj)
     return int(space.is_w(w_obj_type, w_type) or space.is_true(space.issubtype(w_obj_type, w_type)))
@@ -387,6 +257,9 @@ def make_wrapper(space, callable):
 
     @specialize.ll()
     def wrapper(*args):
+        from pypy.module.cpyext.pyobject import make_ref, from_ref
+        from pypy.module.cpyext.pyobject import add_borrowed_object
+        from pypy.module.cpyext.pyobject import NullPointerException
         boxed_args = ()
         if DEBUG_WRAPPER:
             print >>sys.stderr, callable,
@@ -445,6 +318,7 @@ def make_wrapper(space, callable):
     return wrapper
 
 def bootstrap_types(space):
+    from pypy.module.cpyext.pyobject import make_ref
     from pypy.module.cpyext.typeobject import PyTypeObjectPtr, PyPyType_Ready
     # bootstrap this damn cycle
     type_pto = make_ref(space, space.w_type)
@@ -464,6 +338,8 @@ def bootstrap_types(space):
 # back into Pypy space functions
 # Do not call this more than once per process
 def build_bridge(space, rename=True):
+    from pypy.module.cpyext.pyobject import make_ref
+
     export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
     db = LowLevelDatabase()
 
@@ -607,6 +483,8 @@ def build_eci(build_bridge, export_symbols, code=None):
 
 
 def setup_library(space, rename=False):
+    from pypy.module.cpyext.pyobject import make_ref
+
     export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
     db = LowLevelDatabase()
 
@@ -665,7 +543,7 @@ def generic_cpy_call_dont_decref(space, func, *args):
 
 @specialize.memo()
 def make_generic_cpy_call(FT, decref_args):
-    from pypy.module.cpyext.macros import Py_DECREF
+    from pypy.module.cpyext.pyobject import make_ref, from_ref, Py_DecRef
     from pypy.module.cpyext.pyerrors import PyErr_Occurred
     unrolling_arg_types = unrolling_iterable(enumerate(FT.ARGS))
     RESULT_TYPE = FT.RESULT
@@ -701,7 +579,7 @@ def make_generic_cpy_call(FT, decref_args):
                     # that is called from Python must be an owned reference
                     # - ownership is transferred from the function to its caller.
                     if result:
-                        Py_DECREF(space, result)
+                        Py_DecRef(space, result)
 
                 # Check for exception consistency
                 has_error = PyErr_Occurred(space) is not None
@@ -721,6 +599,6 @@ def make_generic_cpy_call(FT, decref_args):
         finally:
             if decref_args:
                 for ref in to_decref:
-                    Py_DECREF(space, ref)
+                    Py_DecRef(space, ref)
     return generic_cpy_call
 

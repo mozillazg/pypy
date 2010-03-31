@@ -1,8 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, Py_ssize_t, \
-        general_check, CANNOT_FAIL, register_container, \
-        general_check_exact
-from pypy.module.cpyext.macros import Py_DECREF
+from pypy.module.cpyext.api import cpython_api, Py_ssize_t, \
+        general_check, CANNOT_FAIL, general_check_exact
+from pypy.module.cpyext.pyobject import PyObject, Py_DecRef, register_container
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.objspace.std.tupleobject import W_TupleObject
 
@@ -27,7 +26,7 @@ def PyTuple_SetItem(space, w_t, pos, w_obj):
         PyErr_BadInternalCall(space)
     assert isinstance(w_t, W_TupleObject)
     w_t.wrappeditems[pos] = w_obj
-    Py_DECREF(space, w_obj) # SetItem steals a reference!
+    Py_DecRef(space, w_obj) # SetItem steals a reference!
     return 0
 
 @cpython_api([PyObject, Py_ssize_t], PyObject, borrowed=True)

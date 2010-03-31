@@ -1,7 +1,7 @@
 
 from pypy.interpreter.error import OperationError
-from pypy.module.cpyext.api import cpython_api, PyObject, CANNOT_FAIL,\
-     Py_ssize_t, register_container
+from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, Py_ssize_t
+from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.objspace.std import listobject, tupleobject
 

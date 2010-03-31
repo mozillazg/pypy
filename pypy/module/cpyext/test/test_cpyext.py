@@ -9,7 +9,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator import platform
 from pypy.module.cpyext import api
 from pypy.module.cpyext.state import State
-from pypy.module.cpyext.macros import Py_DECREF
+from pypy.module.cpyext.pyobject import Py_DecRef, InvalidPointerException
 from pypy.translator.goal import autopath
 from pypy.lib.identity_dict import identity_dict
 
@@ -123,10 +123,10 @@ class AppTestCpythonExtensionBase:
                                self.space.wrap('foo'))
             self.space.delitem(self.space.sys.get('modules'),
                                self.space.wrap('foo'))
-            Py_DECREF(self.space, w_mod)
+            Py_DecRef(self.space, w_mod)
             state = self.space.fromcache(State)
             for w_obj in state.non_heaptypes:
-                Py_DECREF(self.space, w_obj)
+                Py_DecRef(self.space, w_obj)
         except OperationError:
             pass
         state = self.space.fromcache(State)

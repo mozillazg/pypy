@@ -1,7 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, PyVarObjectFields, \
-    PyStringObject, Py_ssize_t, cpython_struct, make_ref, from_ref, CANNOT_FAIL, \
-    general_check
+from pypy.module.cpyext.api import cpython_api, PyVarObjectFields, \
+    PyStringObject, Py_ssize_t, cpython_struct, CANNOT_FAIL, general_check
+from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 
 
 @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
