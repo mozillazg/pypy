@@ -1412,7 +1412,7 @@ def _get_empty_instance_of_struct_variety(flds):
 class _struct(_parentable):
     _kind = "structure"
 
-    __slots__ = ('_hash_cache_',)
+    __slots__ = ('_hash_cache_', '_compilation_info')
 
     def __new__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
         my_variety = _struct_variety(TYPE._names)
