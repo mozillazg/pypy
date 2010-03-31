@@ -438,7 +438,7 @@ def generate_macros(export_symbols, rename=True, do_deref=True):
     if rename:
         export_symbols[:] = renamed_symbols
     else:
-        export_symbols = [sym.replace("#", "") for sym in export_symbols]
+        export_symbols[:] = [sym.replace("#", "") for sym in export_symbols]
     pypy_macros_h = udir.join('pypy_macros.h')
     pypy_macros_h.write('\n'.join(pypy_macros))
 
