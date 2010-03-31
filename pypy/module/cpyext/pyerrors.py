@@ -4,11 +4,17 @@ from pypy.module.cpyext.api import cpython_api, PyObject, make_ref,\
         register_container, CANNOT_FAIL
 from pypy.module.cpyext.state import State
 
+@cpython_api([PyObject, PyObject], lltype.Void)
+def PyErr_SetObject(space, w_type, w_value):
+    """This function is similar to PyErr_SetString() but lets you specify an
+    arbitrary Python object for the "value" of the exception."""
+    state = space.fromcache(State)
+    state.set_exception(w_type, w_value)
+
 @cpython_api([PyObject, rffi.CCHARP], lltype.Void)
 def PyErr_SetString(space, w_type, message_ptr):
     message = rffi.charp2str(message_ptr)
-    state = space.fromcache(State)
-    state.set_exception(w_type, space.wrap(message))
+    PyErr_SetObject(space, w_type, space.wrap(message))
 
 @cpython_api([], PyObject, borrowed=True)
 def PyErr_Occurred(space):

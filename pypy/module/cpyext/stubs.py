@@ -1560,12 +1560,6 @@ def PyErr_Restore(space, type, value, traceback):
     exception state."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject], lltype.Void)
-def PyErr_SetObject(space, type, value):
-    """This function is similar to PyErr_SetString() but lets you specify an
-    arbitrary Python object for the "value" of the exception."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP, ...], PyObject)
 def PyErr_Format(space, exception, format, ):
     """This function sets the error indicator and returns NULL. exception should be
