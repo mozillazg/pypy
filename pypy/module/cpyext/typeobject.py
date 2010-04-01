@@ -39,7 +39,8 @@ class W_GetSetPropertyEx(GetSetProperty):
         if getset.c_set:
             set = W_PyCObject.setter
         GetSetProperty.__init__(self, get, set, None, doc,
-                                cls=W_PyCObject, use_closure=True)
+                                cls=W_PyCObject, use_closure=True,
+                                tag="cpyext_1")
 
 def PyDescr_NewGetSet(space, getset, pto):
     return space.wrap(W_GetSetPropertyEx(getset))
@@ -56,7 +57,8 @@ class W_MemberDescr(GetSetProperty):
         if not (flags & structmemberdefs.READONLY):
             set = W_PyCObject.member_setter
         GetSetProperty.__init__(self, get, set, None, doc,
-                                cls=W_PyCObject, use_closure=True)
+                                cls=W_PyCObject, use_closure=True,
+                                tag="cpyext_2")
 
 def convert_getset_defs(space, dict_w, getsets, pto):
     getsets = rffi.cast(rffi.CArrayPtr(PyGetSetDef), getsets)
