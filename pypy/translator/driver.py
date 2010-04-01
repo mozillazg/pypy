@@ -320,7 +320,7 @@ class TranslationDriver(SimpleTaskEngine):
             for func, inputtypes in self.secondary_entrypoints:
                 if inputtypes == Ellipsis:
                     continue
-                rettype = annotator.build_types(func, inputtypes)
+                rettype = annotator.build_types(func, inputtypes, False)
 
         if self.entry_point:
             s = annotator.build_types(self.entry_point, self.inputtypes)
