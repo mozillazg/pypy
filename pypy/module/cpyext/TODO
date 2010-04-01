@@ -1,4 +1,9 @@
- - Complete the PyTypeObject initialization code.
+ - Complete the PyTypeObject initialization code. (see XXX in the code)
+  - Fill the PyTypeObject slots with method callers.
+  - Copy the slots from the base.
+  - Both tasks are necessary to be able to call slots from C code correctly.
+
+ - Implement subclassing of types defined in C.
 
  - Use a WeakKeyDictionary to count how often a PyObject is allocated for
    a given wrapped object and use this to assess whether optimizations are
