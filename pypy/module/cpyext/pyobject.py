@@ -29,14 +29,16 @@ def debug_refcount(*args, **kwargs):
 
 
 def make_ref(space, w_obj, borrowed=False, steal=False):
+    from pypy.module.cpyext.typeobject import allocate_type_obj,\
+            W_PyCTypeObject, W_PyCObject, W_PyCObjectDual
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
     state = space.fromcache(State)
+    if isinstance(w_obj, W_PyCObject):
+        w_obj = w_obj.w_dual
     py_obj = state.py_objects_w2r.get(w_obj, lltype.nullptr(PyObject.TO))
     if not py_obj:
-        from pypy.module.cpyext.typeobject import allocate_type_obj,\
-                W_PyCTypeObject, W_PyCObject
         w_type = space.type(w_obj)
         if space.is_w(w_type, space.w_type):
             pto = allocate_type_obj(space, w_obj)
@@ -97,13 +99,27 @@ def force_string(space, ref):
 
 
 def from_ref(space, ref):
+    from pypy.module.cpyext.typeobject import W_PyCObjectDual, W_PyCObject
     assert lltype.typeOf(ref) == PyObject
     if not ref:
         return None
     state = space.fromcache(State)
     ptr = rffi.cast(ADDR, ref)
     try:
-        obj = state.py_objects_r2w[ptr]
+        w_obj = state.py_objects_r2w[ptr]
+        if isinstance(w_obj, W_PyCObjectDual):
+            w_obj_wr = w_obj.w_pycobject
+            w_obj_or_None = w_obj_wr()
+            if w_obj_or_None is None:
+                # resurrect new PyCObject
+                Py_IncRef(space, ref)
+                w_obj_new = space.allocate_instance(W_PyCObject, space.type(w_obj))
+                w_obj_new.__init__(space)
+                w_obj_new.set_dual(w_obj)
+                w_obj.set_pycobject(w_obj_new)
+                w_obj = w_obj_new
+            else:
+                w_obj = w_obj_or_None
     except KeyError:
         ref_type = ref.c_ob_type
         if ref != ref_type and space.is_w(from_ref(space, ref_type), space.w_str):
@@ -113,7 +129,7 @@ def from_ref(space, ref):
             if not we_are_translated():
                 msg = "Got invalid reference to a PyObject: %r" % (ref, )
             raise InvalidPointerException(msg)
-    return obj
+    return w_obj
 
 
 # XXX Optimize these functions and put them into macro definitions

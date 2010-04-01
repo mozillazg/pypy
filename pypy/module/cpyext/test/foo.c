@@ -57,9 +57,19 @@ foo_get_name(PyObject *self, void *closure)
     return PyString_FromStringAndSize("Foo Example", 11);
 }
 
+static PyObject *
+foo_get_foo(PyObject *self, void *closure)
+{
+  return PyInt_FromLong(((fooobject*)self)->foo);
+}
+
 static PyGetSetDef foo_getseters[] = {
     {"name",
      (getter)foo_get_name, NULL,
+     NULL,
+     NULL},
+     {"foo",
+     (getter)foo_get_foo, NULL,
      NULL,
      NULL},
     {NULL}  /* Sentinel */
