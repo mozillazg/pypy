@@ -223,8 +223,12 @@ for exc_name in ['TypeError', 'ValueError', 'KeyError', 'Exception',
                  'BaseException']:
     GLOBALS['PyExc_' + exc_name] = ('PyObject*', 'space.w_' + exc_name)
 
-for cpyname, pypyexpr in [("Type", "space.w_type"), ("BaseObject", "space.w_object"),
-        ("Dict", "space.w_dict"), ("Tuple", "space.w_tuple")]:
+for cpyname, pypyexpr in {"Type": "space.w_type",
+        "BaseObject": "space.w_object",
+        "Dict": "space.w_dict",
+        "Tuple": "space.w_tuple",
+        "List": "space.w_list",
+        }.items():
     GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
 def get_structtype_for_ctype(ctype):
