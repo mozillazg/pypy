@@ -169,8 +169,6 @@ class Desc(object):
 class NoStandardGraph(Exception):
     """The function doesn't have a single standard non-specialized graph."""
 
-NODEFAULT = object()
-
 class FunctionDesc(Desc):
     knowntype = types.FunctionType
     overridden = False
@@ -193,7 +191,6 @@ class FunctionDesc(Desc):
         #                                 or => s_result (overridden/memo cases)
         self.specializer = specializer
         self._cache = {}     # convenience for the specializer
-        self.memofield = {}
 
     def buildgraph(self, alt_name=None, builder=None):
         translator = self.bookkeeper.annotator.translator
@@ -358,27 +355,7 @@ class FunctionDesc(Desc):
 
             return s_sigs
 
-    def create_new_attribute(self, name, value):
-        assert name.startswith('$memofield_')
-        self.memofield[name] = value
-
-    def read_attribute(self, name, default=NODEFAULT):
-        assert name.startswith('$memofield_')
-        try:
-            return self.memofield[name]
-        except:
-            if default is not NODEFAULT:
-                return default
-            else:
-                raise AttributeError
-
-    def s_read_attribute(self, attr):
-        from pypy.annotation.model import s_ImpossibleValue
-        return s_ImpossibleValue
-
-    def mergeattrfamilies(self, others, attrname):
-        # no attr to merge
-        return False
+NODEFAULT = object()
 
 class ClassDesc(Desc):
     knowntype = type
