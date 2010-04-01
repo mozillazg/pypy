@@ -10,6 +10,8 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert 'foo' in sys.modules
         assert "copy" in dir(module.fooType)
         obj = module.new()
+        print obj.foo
+        assert obj.foo == 42
         print "Obj has type", type(obj)
         assert type(obj) is module.fooType
         print "type of obj has type", type(type(obj))
@@ -23,3 +25,6 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert repr(obj2) == "<Foo>"
         assert repr(module.fooType.__call__) == "<slot wrapper '__call__' of 'foo' objects>"
         assert obj2(foo=1, bar=2) == dict(foo=1, bar=2)
+
+        print obj.foo
+        assert obj.foo == 42

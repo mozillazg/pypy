@@ -1,5 +1,6 @@
 import os
 import sys
+from weakref import ref
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.annlowlevel import llhelper
@@ -103,6 +104,12 @@ class W_PyCObject(Wrappable):
     def __init__(self, space):
         self.space = space
 
+    def set_dual(self, w_obj):
+        self.w_dual = w_obj
+
+    def __del__(self):
+        Py_DecRef(self.space, self)
+
     def getter(self, space, w_self):
         return generic_cpy_call(
             space, self.getset.c_get, w_self,
@@ -112,6 +119,17 @@ class W_PyCObject(Wrappable):
         return generic_cpy_call(
             space, self.getset.c_set, w_self, w_value,
             self.getset.c_closure)
+
+
+class W_PyCObjectDual(W_PyCObject):
+    def __init__(self, space):
+        self.space = space
+
+    def set_pycobject(self, w_pycobject):
+        self.w_pycobject = ref(w_pycobject)
+
+    def __del__(self): # ok, subclassing isnt so sensible here
+        pass
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
