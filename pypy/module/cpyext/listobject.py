@@ -1,28 +1,14 @@
 
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, Py_ssize_t
-from pypy.module.cpyext.api import general_check, general_check_exact
+from pypy.module.cpyext.api import (cpython_api, CANNOT_FAIL, Py_ssize_t,
+                                    build_type_checkers)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.module.cpyext.pyobject import Py_DecRef, PyObject
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.interpreter.error import OperationError
 
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyList_Check(space, w_obj):
-    """Return true if p is a list object or an instance of a subtype of the list
-    type.
 
-    Allowed subtypes to be accepted."""
-    w_type = space.w_list
-    return general_check(space, w_obj, w_type)
-
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyList_CheckExact(space, w_obj):
-    """Return true if p is a list object, but not an instance of a subtype of
-    the list type.
-    """
-    w_type = space.w_list
-    return general_check_exact(space, w_obj, w_type)
+PyList_Check, PyList_CheckExact = build_type_checkers("List")
 
 @cpython_api([Py_ssize_t], PyObject)
 def PyList_New(space, len):
