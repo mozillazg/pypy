@@ -42,6 +42,9 @@
 #include "dictobject.h"
 #include "intobject.h"
 
+// XXX This shouldn't be included here
+#include "structmember.h"
+
 #include <pypy_decl.h>
 
 #endif

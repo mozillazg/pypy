@@ -15,12 +15,14 @@ from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.interpreter.module import Module
+from pypy.module.cpyext import structmemberdefs
 from pypy.module.cpyext.modsupport import  convert_method_defs
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.methodobject import PyDescr_NewWrapper
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
+from pypy.module.cpyext.structmember import PyMember_GetOne, PyMember_SetOne
 from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr, PyTypeObject, \
-        PyGetSetDef
+        PyGetSetDef, PyMemberDef
 from pypy.module.cpyext.slotdefs import slotdefs
 from pypy.rlib.rstring import rsplit
 
@@ -42,6 +44,19 @@ class W_GetSetPropertyEx(GetSetProperty):
 def PyDescr_NewGetSet(space, getset, pto):
     return space.wrap(W_GetSetPropertyEx(getset))
 
+class W_MemberDescr(GetSetProperty):
+    def __init__(self, member):
+        self.member = member
+        self.name = rffi.charp2str(member.c_name)
+        doc = set = None
+        if doc:
+            doc = rffi.charp2str(getset.c_doc)
+        get = W_PyCObject.member_getter
+        if not (member.c_flags & structmemberdefs.READONLY):
+            set = W_PyCObject.member_setter
+        GetSetProperty.__init__(self, get, set, None, doc,
+                                cls=W_PyCObject, use_closure=True)
+
 def convert_getset_defs(space, dict_w, getsets, pto):
     getsets = rffi.cast(rffi.CArrayPtr(PyGetSetDef), getsets)
     if getsets:
@@ -55,6 +70,20 @@ def convert_getset_defs(space, dict_w, getsets, pto):
             name = rffi.charp2str(name)
             w_descr = PyDescr_NewGetSet(space, getset, pto)
             dict_w[name] = w_descr
+
+def convert_member_defs(space, dict_w, members, pto):
+    members = rffi.cast(rffi.CArrayPtr(PyMemberDef), members)
+    if members:
+        i = 0
+        while True:
+            member = members[i]
+            name = member.c_name
+            if not name:
+                break
+            name = rffi.charp2str(name)
+            w_descr = space.wrap(W_MemberDescr(member))
+            dict_w[name] = w_descr
+            i += 1
 
 def add_operators(space, dict_w, pto):
     # XXX support PyObject_HashNotImplemented
@@ -90,7 +119,7 @@ class W_PyCTypeObject(W_TypeObject):
         add_operators(space, dict_w, pto)
         convert_method_defs(space, dict_w, pto.c_tp_methods, pto)
         convert_getset_defs(space, dict_w, pto.c_tp_getset, pto)
-        # XXX missing: convert_member_defs
+        convert_member_defs(space, dict_w, pto.c_tp_members, pto)
 
         full_name = rffi.charp2str(pto.c_tp_name)
         module_name, extension_name = rsplit(full_name, ".", 1)
@@ -120,6 +149,11 @@ class W_PyCObject(Wrappable):
             space, self.getset.c_set, w_self, w_value,
             self.getset.c_closure)
 
+    def member_getter(self, space, w_self):
+        return PyMember_GetOne(space, w_self, self.member)
+
+    def member_setter(self, space, w_self, w_value):
+        PyMember_SetOne(space, w_self, self.member, w_value)
 
 class W_PyCObjectDual(W_PyCObject):
     def __init__(self, space):

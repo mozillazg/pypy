@@ -15,7 +15,7 @@ PyOPtr = Ptr(lltype.Array(PyO, hints={'nolength': True}))
 
 
 # XXX
-PyBufferProcs = PyMemberDef = rffi.VOIDP.TO
+PyBufferProcs = rffi.VOIDP.TO
 
 freefunc = P(FT([rffi.VOIDP_real], Void))
 destructor = P(FT([PyO], Void))
@@ -143,6 +143,14 @@ PyBufferProcs = cpython_struct("PyBufferProcs", (
     ("bf_releasebuffer", releasebufferproc),
 ))
 """
+
+PyMemberDef = cpython_struct("PyMemberDef", (
+    ("name", rffi.CCHARP),
+    ("type",  rffi.INT_real),
+    ("offset", Py_ssize_t),
+    ("flags", rffi.INT_real),
+    ("doc", rffi.CCHARP),
+))
 
 PyTypeObjectFields = []
 PyTypeObjectFields.extend(PyVarObjectFields)
