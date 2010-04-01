@@ -1,11 +1,9 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, CANNOT_FAIL
-from pypy.module.cpyext.api import general_check
+from pypy.module.cpyext.api import (cpython_api, PyObject, CANNOT_FAIL,
+                                    build_type_checkers)
 
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyBool_Check(space, w_obj):
-    w_type = space.w_bool
-    return general_check(space, w_obj, w_type)
+# Inheriting from bool isn't actually possible.
+PyBool_Check = build_type_checkers("Bool")[1]
 
 @cpython_api([rffi.LONG], PyObject)
 def PyBool_FromLong(space, value):

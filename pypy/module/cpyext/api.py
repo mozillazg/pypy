@@ -114,7 +114,8 @@ class ApiFunction:
             wrapper.relax_sig_check = True
         return wrapper
 
-def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, external=True):
+def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
+                external=True, name=None):
     if error is _NOT_SPECIFIED:
         if restype is PyObject:
             error = lltype.nullptr(PyObject.TO)
@@ -126,6 +127,10 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
     def decorate(func):
         api_function = ApiFunction(argtypes, restype, func, borrowed, error)
         func.api_func = api_function
+        if name is None:
+            func_name = func.func_name
+        else:
+            func_name = name
 
         if error is _NOT_SPECIFIED:
             raise ValueError("function %s has no return value for exceptions"
@@ -134,7 +139,7 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
             names = api_function.argnames
             types_names_enum_ui = unrolling_iterable(enumerate(
                 zip(api_function.argtypes,
-                    [name.startswith("w_") for name in names])))
+                    [tp_name.startswith("w_") for tp_name in names])))
 
             @specialize.ll()
             def unwrapper(space, *args):
@@ -188,10 +193,10 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED, externa
         unwrapper_catch = make_unwrapper(True)
         unwrapper_raise = make_unwrapper(False)
         if external:
-            FUNCTIONS[func.func_name] = api_function
+            FUNCTIONS[func_name] = api_function
         else:
-            FUNCTIONS_STATIC[func.func_name] = api_function
-        INTERPLEVEL_API[func.func_name] = unwrapper_catch # used in tests
+            FUNCTIONS_STATIC[func_name] = api_function
+        INTERPLEVEL_API[func_name] = unwrapper_catch # used in tests
         return unwrapper_raise # used in 'normal' RPython code.
     return decorate
 
@@ -255,14 +260,23 @@ def configure_types():
         if name in TYPES:
             TYPES[name].become(TYPE)
 
-
-def general_check(space, w_obj, w_type):
-    w_obj_type = space.type(w_obj)
-    return int(space.is_w(w_obj_type, w_type) or space.is_true(space.issubtype(w_obj_type, w_type)))
-
-def general_check_exact(space, w_obj, w_type):
-    w_obj_type = space.type(w_obj)
-    return int(space.is_w(w_obj_type, w_type))
+def build_type_checkers(type_name, on_space=None):
+    if on_space is None:
+        on_space = "w_" + type_name.lower()
+    check_name = "Py" + type_name + "_Check"
+    @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL, name=check_name)
+    def check(space, w_obj):
+        w_obj_type = space.type(w_obj)
+        w_type = getattr(space, on_space)
+        return int(space.is_w(w_obj_type, w_type) or
+                   space.is_true(space.issubtype(w_obj_type, w_type)))
+    @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL,
+                 name=check_name + "Exact")
+    def check_exact(space, w_obj):
+        w_obj_type = space.type(w_obj)
+        w_type = getattr(space, on_space)
+        return int(space.is_w(w_obj_type, w_type))
+    return check, check_exact
 
 # Make the wrapper for the cases (1) and (2)
 def make_wrapper(space, callable):

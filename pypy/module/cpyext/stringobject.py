@@ -1,17 +1,11 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyVarObjectFields, \
-    PyStringObject, Py_ssize_t, cpython_struct, CANNOT_FAIL, general_check
+from pypy.module.cpyext.api import (cpython_api, PyVarObjectFields,
+                                    PyStringObject, Py_ssize_t, cpython_struct,
+                                    CANNOT_FAIL, build_type_checkers)
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 
 
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyString_Check(space, w_obj):
-    """Return true if the object o is a string object or an instance of a subtype of
-    the string type.
-    
-    Allowed subtypes to be accepted."""
-    w_type = space.w_str
-    return general_check(space, w_obj, w_type)
+PyString_Check, PyString_CheckExact = build_type_checkers("String", "w_str")
 
 @cpython_api([rffi.CCHARP, Py_ssize_t], PyStringObject, error=lltype.nullptr(PyStringObject.TO))
 def PyString_FromStringAndSize(space, char_p, length):

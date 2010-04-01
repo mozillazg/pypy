@@ -1,19 +1,12 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, Py_ssize_t, \
-        general_check, CANNOT_FAIL, general_check_exact
+from pypy.module.cpyext.api import (cpython_api, Py_ssize_t, CANNOT_FAIL,
+                                    build_type_checkers)
 from pypy.module.cpyext.pyobject import PyObject, Py_DecRef, register_container
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.objspace.std.tupleobject import W_TupleObject
 
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyTuple_Check(space, w_obj):
-    w_type = space.w_tuple
-    return general_check(space, w_obj, w_type)
 
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyTuple_CheckExact(space, w_obj):
-    w_type = space.w_tuple
-    return general_check_exact(space, w_obj, w_type)
+PyTuple_Check, PyTuple_CheckExact = build_type_checkers("Tuple")
 
 @cpython_api([Py_ssize_t], PyObject)
 def PyTuple_New(space, size):
