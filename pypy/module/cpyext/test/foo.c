@@ -1,4 +1,5 @@
 #include "Python.h"
+#include "structmember.h"
 
 typedef struct {
 	PyObject_HEAD
@@ -92,6 +93,15 @@ foo_call(PyObject *self, PyObject *args, PyObject *kwds)
     return kwds;
 }
 
+static PyMemberDef foo_members[] = {
+    {"int_member", T_INT, offsetof(fooobject, foo), 0,
+     "A helpful docstring."},
+    {"int_member_readonly", T_INT, offsetof(fooobject, foo), READONLY,
+     "A helpful docstring."},
+    {"broken_member", 0xaffe, 0, 0, ""},
+    {NULL}  /* Sentinel */
+};
+
 static PyTypeObject footype = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	"foo.foo",		  /*tp_name*/
@@ -122,7 +132,7 @@ static PyTypeObject footype = {
         0,			  /*tp_iter*/
         0,			  /*tp_iternext*/
         foo_methods,	          /*tp_methods*/
-        0,      	          /*tp_members*/
+        foo_members,              /*tp_members*/
         foo_getseters,            /*tp_getset*/
 };
 
