@@ -12,7 +12,7 @@ from pypy.module.cpyext.typeobjectdefs import PyMemberDef
 @cpython_api([PyObject, lltype.Ptr(PyMemberDef)], PyObject)
 def PyMember_GetOne(space, obj, w_member):
     ptr = rffi.cast(ADDR, obj)
-    member_type = w_member.c_type
+    member_type = rffi.cast(lltype.Signed, w_member.c_type)
     if member_type == structmemberdefs.T_INT:
         result = rffi.cast(rffi.INTP, ptr + w_member.c_offset)
         w_result = space.wrap(result[0])
@@ -25,7 +25,7 @@ def PyMember_GetOne(space, obj, w_member):
 @cpython_api([PyObject, lltype.Ptr(PyMemberDef), PyObject], rffi.INT_real, error=-1)
 def PyMember_SetOne(space, obj, w_member, w_value):
     ptr = rffi.cast(ADDR, obj)
-    member_type = w_member.c_type
+    member_type = rffi.cast(lltype.Signed, w_member.c_type)
     if member_type == structmemberdefs.T_INT:
         w_long_value = PyInt_AsLong(space, w_value)
         array = rffi.cast(rffi.INTP, ptr + w_member.c_offset)
