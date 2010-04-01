@@ -41,6 +41,7 @@
 #include "tupleobject.h"
 #include "dictobject.h"
 #include "intobject.h"
+#include "eval.h"
 
 // XXX This shouldn't be included here
 #include "structmember.h"
