@@ -8,9 +8,9 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
             ('oneargint', 'METH_VARARGS',
              '''
              int l;
-             #if (!PyArg_Parse(args, "i", &l)) {
-             #    return NULL;
-             #}
+             //if (!PyArg_Parse(args, "i", &l)) {
+             //    return NULL;
+             //}
              return PyInt_FromLong(l);
              '''
              )])
