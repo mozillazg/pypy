@@ -31,6 +31,8 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert obj.int_member == obj.foo
         obj.int_member = 23
         assert obj.int_member == 23
+        obj.int_member = 42
+        raises(TypeError, "obj.int_member = 'not a number'")
         raises(TypeError, "obj.int_member_readonly = 42")
         raises(SystemError, "obj.broken_member")
         raises(SystemError, "obj.broken_member = 42")
