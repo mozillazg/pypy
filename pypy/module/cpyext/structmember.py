@@ -28,8 +28,6 @@ def PyMember_SetOne(space, obj, w_member, w_value):
     member_type = w_member.c_type
     if member_type == structmemberdefs.T_INT:
         w_long_value = PyInt_AsLong(space, w_value)
-        if w_long_value == -1 and PyErr_Occurred(space):
-            return -1
         array = rffi.cast(rffi.INTP, ptr + w_member.c_offset)
         array[0] = rffi.cast(rffi.INT, w_long_value)
     else:
