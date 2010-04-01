@@ -213,17 +213,19 @@ FUNCTIONS = {}
 FUNCTIONS_STATIC = {}
 FUNCTIONS_C = {}
 TYPES = {}
-GLOBALS = {
+GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     'Py_None': ('PyObject*', 'space.w_None'),
     'Py_True': ('PyObject*', 'space.w_True'),
     'Py_False': ('PyObject*', 'space.w_False'),
-    'PyType_Type#': ('PyTypeObject*', 'space.w_type'),
-    'PyBaseObject_Type#': ('PyTypeObject*', 'space.w_object'),
     }
 
 for exc_name in ['TypeError', 'ValueError', 'KeyError', 'Exception',
                  'BaseException']:
     GLOBALS['PyExc_' + exc_name] = ('PyObject*', 'space.w_' + exc_name)
+
+for cpyname, pypyexpr in [("Type", "space.w_type"), ("BaseObject", "space.w_object"),
+        ("Dict", "space.w_dict"), ("Tuple", "space.w_tuple")]:
+    GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
 def get_structtype_for_ctype(ctype):
     from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
