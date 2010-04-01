@@ -48,11 +48,12 @@ class W_MemberDescr(GetSetProperty):
     def __init__(self, member):
         self.member = member
         self.name = rffi.charp2str(member.c_name)
+        flags = rffi.cast(lltype.Signed, member.c_flags)
         doc = set = None
         if doc:
             doc = rffi.charp2str(getset.c_doc)
         get = W_PyCObject.member_getter
-        if not (member.c_flags & structmemberdefs.READONLY):
+        if not (flags & structmemberdefs.READONLY):
             set = W_PyCObject.member_setter
         GetSetProperty.__init__(self, get, set, None, doc,
                                 cls=W_PyCObject, use_closure=True)
