@@ -437,7 +437,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
     def test_new_exception(self):
         skip("not working yet")
         mod = self.import_extension('foo', [
-            ('newexc', 'METHOD_VARARGS',
+            ('newexc', 'METH_VARARGS',
              '''
              char *name = PyString_AsString(PyTuple_GetItem(args, 0));
              return PyExc_NewException(name, PyTuple_GetItem(args, 1),

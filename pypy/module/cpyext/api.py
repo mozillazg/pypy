@@ -38,11 +38,13 @@ include_dirs = [
 class CConfig:
     _compilation_info_ = ExternalCompilationInfo(
         include_dirs=include_dirs,
-        includes=['Python.h']
+        includes=['Python.h', 'stdarg.h']
         )
 
 class CConfig_constants:
     _compilation_info_ = CConfig._compilation_info_
+
+va_list = rffi.COpaque('va_list')
 
 constant_names = """
 Py_TPFLAGS_READY Py_TPFLAGS_READYING
@@ -202,7 +204,10 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
 
 def cpython_api_c():
     def decorate(func):
+        def uncallable(*args, **kwds):
+            raise Exception("Uncallable")
         FUNCTIONS_C[func.func_name] = None
+        return uncallable
     return decorate
 
 def cpython_struct(name, fields, forward=None):
@@ -254,6 +259,9 @@ PyStringObject = lltype.Ptr(PyStringObjectStruct)
 PyStringObjectFields = PyObjectFields + \
     (("buffer", rffi.CCHARP), ("size", Py_ssize_t))
 cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
+
+VA_TP_LIST = {'int': rffi.INT,
+              'PyObject*': PyObject}
 
 def configure_types():
     for name, TYPE in rffi_platform.configure(CConfig).iteritems():
@@ -434,6 +442,13 @@ def build_bridge(space, rename=True):
             ll2ctypes.lltype2ctypes(func.get_llhelper(space)),
             ctypes.c_void_p)
 
+    for name, TP in VA_TP_LIST.iteritems():
+        name_no_star = name.strip('*')
+        ARGS = [lltype.Ptr(va_list)]
+        func = rffi.llexternal('pypy_va_get_%s' % name_no_star, ARGS,
+                               TP, compilation_info=eci)
+        globals()['va_get_%s' % name_no_star] = func
+
     return modulename.new(ext='')
 
 def generate_macros(export_symbols, rename=True, do_deref=True):
@@ -482,6 +497,13 @@ def generate_decls_and_callbacks(db):
     pypy_decls.append("#ifndef PYPY_STANDALONE\n")
     for name, (typ, expr) in GLOBALS.iteritems():
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
+    for name in VA_TP_LIST:
+        name_no_star = name.strip('*')
+        header = ('%s pypy_va_get_%s(va_list* vp)' %
+                  (name, name_no_star))
+        pypy_decls.append(header + ';')
+        functions.append(header + '\n{return va_arg(*vp, %s);}\n' % name)
+    
     pypy_decls.append("#endif\n")
 
     pypy_decl_h = udir.join('pypy_decl.h')
@@ -510,7 +532,8 @@ def build_eci(build_bridge, export_symbols, code=None):
         include_dirs=include_dirs,
         separate_module_files=[include_dir / "varargwrapper.c",
                                include_dir / "pyerrors.c",
-                               include_dir / "modsupport.c"],
+                               include_dir / "modsupport.c",
+                               include_dir / "getargs.c"],
         export_symbols=export_symbols_eci,
         **kwds
         )
