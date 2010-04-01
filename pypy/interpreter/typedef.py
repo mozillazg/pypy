@@ -301,22 +301,23 @@ check_new_dictionary._dont_inline_ = True
 
 # ____________________________________________________________
 
-@specialize.arg(1)
-def make_descr_typecheck_wrapper(func, extraargs=(), cls=None, use_closure=False):
+@specialize.arg(0, 2)
+def make_descr_typecheck_wrapper(tag, func, extraargs=(), cls=None,
+                                 use_closure=False):
     if func is None:
         return None
-    return _make_descr_typecheck_wrapper(func, extraargs, cls, use_closure)
+    return _make_descr_typecheck_wrapper(tag, func, extraargs, cls, use_closure)
 
 @specialize.memo()
-def _make_descr_typecheck_wrapper(func, extraargs, cls, use_closure):
+def _make_descr_typecheck_wrapper(tag, func, extraargs, cls, use_closure):
     # - if cls is None, the wrapped object is passed to the function
     # - if cls is a class, an unwrapped instance is passed
     # - if cls is a string, XXX unused?
     if cls is None and use_closure:
         return func
-    if hasattr(func, 'im_func'):
-        assert func.im_class is cls
-        func = func.im_func
+    #if hasattr(func, 'im_func'):
+    #    assert func.im_class is cls
+    #    func = func.im_func
 
     miniglobals = {
          func.__name__: func,
@@ -366,8 +367,9 @@ def unknown_objclass_getter(space):
     raise OperationError(space.w_AttributeError,
                          space.wrap("generic property has no __objclass__"))
 
-def make_objclass_getter(func, cls):
-    if func and hasattr(func, 'im_func'):
+@specialize.arg(0)
+def make_objclass_getter(tag, func, cls):
+    if func and not cls and hasattr(func, 'im_func'):
         assert not cls or cls is func.im_class
         cls = func.im_class
     return _make_objclass_getter(cls)
@@ -393,14 +395,15 @@ def _make_objclass_getter(cls):
     return res
 
 class GetSetProperty(Wrappable):
+    @specialize.arg(7)
     def __init__(self, fget, fset=None, fdel=None, doc=None,
-                 cls=None, use_closure=False):
-        objclass_getter, cls = make_objclass_getter(fget, cls)
-        fget = make_descr_typecheck_wrapper(fget, cls=cls,
+                 cls=None, use_closure=False, tag=None):
+        objclass_getter, cls = make_objclass_getter(tag, fget, cls)
+        fget = make_descr_typecheck_wrapper(tag, fget, cls=cls,
                                             use_closure=use_closure)
-        fset = make_descr_typecheck_wrapper(fset, ('w_value',), cls=cls,
+        fset = make_descr_typecheck_wrapper(tag, fset, ('w_value',), cls=cls,
                                             use_closure=use_closure)
-        fdel = make_descr_typecheck_wrapper(fdel, cls=cls,
+        fdel = make_descr_typecheck_wrapper(tag, fdel, cls=cls,
                                             use_closure=use_closure)
         self.fget = fget
         self.fset = fset
