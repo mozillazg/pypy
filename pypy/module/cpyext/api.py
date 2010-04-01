@@ -354,6 +354,15 @@ def make_wrapper(space, callable):
     wrapper.__name__ = "wrapper for %r" % (callable, )
     return wrapper
 
+def setup_va_functions(eci):
+    for name, TP in VA_TP_LIST.iteritems():
+        name_no_star = name.strip('*')
+        ARGS = [lltype.Ptr(va_list)]
+        func = rffi.llexternal('pypy_va_get_%s' % name_no_star, ARGS,
+                               TP, compilation_info=eci)
+        globals()['va_get_%s' % name_no_star] = func
+
+
 def bootstrap_types(space):
     from pypy.module.cpyext.pyobject import make_ref
     from pypy.module.cpyext.typeobject import PyTypeObjectPtr, PyPyType_Ready
@@ -442,12 +451,7 @@ def build_bridge(space, rename=True):
             ll2ctypes.lltype2ctypes(func.get_llhelper(space)),
             ctypes.c_void_p)
 
-    for name, TP in VA_TP_LIST.iteritems():
-        name_no_star = name.strip('*')
-        ARGS = [lltype.Ptr(va_list)]
-        func = rffi.llexternal('pypy_va_get_%s' % name_no_star, ARGS,
-                               TP, compilation_info=eci)
-        globals()['va_get_%s' % name_no_star] = func
+    setup_va_functions(eci)
 
     return modulename.new(ext='')
 
@@ -554,6 +558,7 @@ def setup_library(space, rename=False):
     eci = build_eci(False, export_symbols)
 
     bootstrap_types(space)
+    setup_va_functions(eci)
 
     # populate static data
     for name, (type, expr) in GLOBALS.iteritems():
