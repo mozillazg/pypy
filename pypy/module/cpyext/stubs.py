@@ -1721,25 +1721,6 @@ def PyErr_NoMemory(space, ):
     Return value: always NULL."""
     raise NotImplementedError
 
-@cpython_api([PyObject], PyObject)
-def PyErr_SetFromErrno(space, type):
-    """
-    
-    
-    
-    This is a convenience function to raise an exception when a C library function
-    has returned an error and set the C variable errno.  It constructs a
-    tuple object whose first item is the integer errno value and whose
-    second item is the corresponding error message (gotten from strerror()),
-    and then calls PyErr_SetObject(type, object).  On Unix, when the
-    errno value is EINTR, indicating an interrupted system call,
-    this calls PyErr_CheckSignals(), and if that set the error indicator,
-    leaves it set to that.  The function always returns NULL, so a wrapper
-    function around a system call can write return PyErr_SetFromErrno(type);
-    when the system call returns an error.
-    Return value: always NULL."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP], PyObject)
 def PyErr_SetFromErrnoWithFilename(space, type, filename):
     """Similar to PyErr_SetFromErrno(), with the additional behavior that if
