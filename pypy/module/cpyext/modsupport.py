@@ -91,3 +91,13 @@ def PyModule_GetDict(space, w_mod):
     else:
         PyErr_BadInternalCall(space)
 
+@cpython_api([PyObject], rffi.CCHARP, error=0)
+def PyModule_GetName(space, module):
+    """
+    
+    
+    
+    Return module's __name__ value.  If the module does not provide one,
+    or if it is not a string, SystemError is raised and NULL is returned."""
+    raise NotImplementedError
+

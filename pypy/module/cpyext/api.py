@@ -230,7 +230,7 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     }
 
 for exc_name in ['TypeError', 'ValueError', 'KeyError', 'Exception',
-                 'BaseException']:
+                 'BaseException', 'SystemError']:
     GLOBALS['PyExc_' + exc_name] = ('PyObject*', 'space.w_' + exc_name)
 
 for cpyname, pypyexpr in {"Type": "space.w_type",
@@ -253,6 +253,9 @@ PyObject = lltype.Ptr(PyObjectStruct)
 PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyObject))
 PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
 cpython_struct('struct _object', PyObjectFields, PyObjectStruct)
+
+# a pointer to PyObject
+PyObjectP = rffi.CArrayPtr(PyObject)
 
 PyStringObjectStruct = lltype.ForwardReference()
 PyStringObject = lltype.Ptr(PyStringObjectStruct)
@@ -540,7 +543,8 @@ def build_eci(build_bridge, export_symbols, code):
         separate_module_files=[include_dir / "varargwrapper.c",
                                include_dir / "pyerrors.c",
                                include_dir / "modsupport.c",
-                               include_dir / "getargs.c"],
+                               include_dir / "getargs.c",
+                               include_dir / "stringobject.c"],
         separate_module_sources = [code],
         export_symbols=export_symbols_eci,
         **kwds

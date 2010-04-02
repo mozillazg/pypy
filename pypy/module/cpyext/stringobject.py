@@ -1,7 +1,8 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, PyVarObjectFields,
                                     PyStringObject, Py_ssize_t, cpython_struct,
-                                    CANNOT_FAIL, build_type_checkers)
+                                    CANNOT_FAIL, build_type_checkers,
+                                    PyObjectP)
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 
 
@@ -48,3 +49,19 @@ def PyString_Size(space, ref):
     else:
         w_obj = from_ref(space, ref)
         return space.int_w(space.len(w_obj))
+
+@cpython_api([PyObjectP, Py_ssize_t], rffi.INT_real, error=-1)
+def _PyString_Resize(space, string, newsize):
+    """A way to resize a string object even though it is "immutable". Only use this to
+    build up a brand new string object; don't use this if the string may already be
+    known in other parts of the code.  It is an error to call this function if the
+    refcount on the input string object is not one. Pass the address of an existing
+    string object as an lvalue (it may be written into), and the new size desired.
+    On success, *string holds the resized string object and 0 is returned;
+    the address in *string may differ from its input value.  If the reallocation
+    fails, the original string object at *string is deallocated, *string is
+    set to NULL, a memory exception is set, and -1 is returned.
+    
+    This function used an int type for newsize. This might
+    require changes in your code for properly supporting 64-bit systems."""
+    raise NotImplementedError
