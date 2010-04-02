@@ -15,8 +15,7 @@ typedef struct {
     Py_ssize_t size;
 } PyStringObject;
 
-PyObject *
-PyString_FromFormatV(const char *format, va_list vargs);
+PyObject *PyString_FromFormatV(char *format, va_list vargs);
 
 #ifdef __cplusplus
 }

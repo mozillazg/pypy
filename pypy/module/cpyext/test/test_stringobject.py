@@ -96,15 +96,34 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
         s = module.getstring()
         assert s == 'test'
 
+    def test_py_string_as_string(self):
+        module = self.import_extension('foo', [
+            ("string_as_string", "METH_VARARGS",
+             '''
+             return PyString_FromStringAndSize(PyString_AsString(
+                       PyTuple_GetItem(args, 0)), 4);
+             '''
+            )])
+        assert module.string_as_string("huheduwe") == "huhe"
+
     def test_format_v(self):
-        skip("unsupported yet, think how to fak va_list")
         module = self.import_extension('foo', [
             ("test_string_format_v", "METH_VARARGS",
              '''
-                 return PyString_FromFormatV("bla %d ble %s",
+                 return helper("bla %d ble %s\\n",
                         PyInt_AsLong(PyTuple_GetItem(args, 0)),
                         PyString_AsString(PyTuple_GetItem(args, 1)));
              '''
              )
-            ])
-        pass
+            ], prologue='''
+            PyObject* helper(char* fmt, ...)
+            {
+              va_list va;
+              va_start(va, fmt);
+              PyObject* res = PyString_FromFormatV(fmt, va);
+              va_end(va);
+              return res;
+            }
+            ''')
+        res = module.test_string_format_v(1, "xyz")
+        print res
