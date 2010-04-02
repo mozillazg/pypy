@@ -264,7 +264,7 @@ PyStringObjectFields = PyObjectFields + \
     (("buffer", rffi.CCHARP), ("size", Py_ssize_t))
 cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
 
-VA_TP_LIST = {'int': rffi.INT,
+VA_TP_LIST = {'int': lltype.Signed,
               'PyObject*': PyObject,
               'int*': rffi.INTP}
 
