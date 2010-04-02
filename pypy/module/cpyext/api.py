@@ -510,8 +510,7 @@ def generate_decls_and_callbacks(db, export_symbols):
                   (name, name_no_star))
         pypy_decls.append(header + ';')
         functions.append(header + '\n{return va_arg(*vp, %s);}\n' % name)
-        if not we_are_translated():
-            export_symbols.append('pypy_va_get_%s' % (name_no_star,))
+        export_symbols.append('pypy_va_get_%s' % (name_no_star,))
     
     pypy_decls.append("#endif\n")
 
@@ -558,7 +557,7 @@ def setup_library(space, rename=False):
 
     generate_macros(export_symbols, rename, False)
 
-    generate_decls_and_callbacks(db)
+    generate_decls_and_callbacks(db, [])
 
     eci = build_eci(False, export_symbols)
 
