@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-
+#include <stddef.h> /* For offsetof */
 #ifndef offsetof
 #define offsetof(type, member) ( (int) & ((type*)0) -> member )
 #endif

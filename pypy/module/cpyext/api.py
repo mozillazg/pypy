@@ -484,7 +484,7 @@ def generate_macros(export_symbols, rename=True, do_deref=True):
     pypy_macros_h = udir.join('pypy_macros.h')
     pypy_macros_h.write('\n'.join(pypy_macros))
 
-def generate_decls_and_callbacks(db, export_symbols):
+def generate_decls_and_callbacks(db, export_symbols, api_struct=True):
     # implement function callbacks and generate function decls
     functions = []
     pypy_decls = []
@@ -496,11 +496,13 @@ def generate_decls_and_callbacks(db, export_symbols):
             arg = arg.replace('@', 'arg%d' % (i,))
             args.append(arg)
         args = ', '.join(args) or "void"
-        callargs = ', '.join('arg%d' % (i,) for i in range(len(func.argtypes)))
         header = "%s %s(%s)" % (restype, name, args)
         pypy_decls.append(header + ";")
-        body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
-        functions.append('%s\n%s\n' % (header, body))
+        if api_struct:
+            callargs = ', '.join('arg%d' % (i,)
+                                 for i in range(len(func.argtypes)))
+            body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
+            functions.append('%s\n%s\n' % (header, body))
     pypy_decls.append("#ifndef PYPY_STANDALONE\n")
     for name, (typ, expr) in GLOBALS.iteritems():
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
@@ -518,22 +520,19 @@ def generate_decls_and_callbacks(db, export_symbols):
     pypy_decl_h.write('\n'.join(pypy_decls))
     return functions
 
-def build_eci(build_bridge, export_symbols, code=None):
+def build_eci(build_bridge, export_symbols, code):
     # Build code and get pointer to the structure
     kwds = {}
     export_symbols_eci = export_symbols[:]
 
     if build_bridge:
-        assert code is not None
         if sys.platform == "win32":
             # '%s' undefined; assuming extern returning int
             kwds["compile_extra"] = ["/we4013"]
         else:
             kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
-        kwds["separate_module_sources"] = [code]
         export_symbols_eci.append('pypyAPI')
     else:
-        assert code is None
         kwds["includes"] = ['Python.h'] # this is our Python.h
 
     eci = ExternalCompilationInfo(
@@ -542,6 +541,7 @@ def build_eci(build_bridge, export_symbols, code=None):
                                include_dir / "pyerrors.c",
                                include_dir / "modsupport.c",
                                include_dir / "getargs.c"],
+        separate_module_sources = [code],
         export_symbols=export_symbols_eci,
         **kwds
         )
@@ -557,9 +557,10 @@ def setup_library(space, rename=False):
 
     generate_macros(export_symbols, rename, False)
 
-    generate_decls_and_callbacks(db, [])
+    functions = generate_decls_and_callbacks(db, [], api_struct=False)
+    code = "#include <Python.h>\n" + "\n".join(functions)
 
-    eci = build_eci(False, export_symbols)
+    eci = build_eci(False, export_symbols, code)
 
     bootstrap_types(space)
     setup_va_functions(eci)
