@@ -42,6 +42,7 @@ import pypy.module.cpyext.stringobject
 import pypy.module.cpyext.tupleobject
 import pypy.module.cpyext.dictobject
 import pypy.module.cpyext.intobject
+import pypy.module.cpyext.longobject
 import pypy.module.cpyext.listobject
 import pypy.module.cpyext.sequence
 import pypy.module.cpyext.eval
