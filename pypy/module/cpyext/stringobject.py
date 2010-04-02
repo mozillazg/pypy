@@ -54,7 +54,7 @@ def PyString_Size(space, ref):
         w_obj = from_ref(space, ref)
         return space.int_w(space.len(w_obj))
 
-@cpython_api([PyObjectP, Py_ssize_t], rffi.INT_real, error=CANNOT_FAIL)
+@cpython_api([PyObjectP, Py_ssize_t], rffi.INT_real, error=-1)
 def _PyString_Resize(space, ref, newsize):
     """A way to resize a string object even though it is "immutable". Only use this to
     build up a brand new string object; don't use this if the string may already be
