@@ -1,3 +1,5 @@
 T_INT = 1
+T_OBJECT = 6
+T_OBJECT_EX = 16
 
 READONLY = RO = 1
