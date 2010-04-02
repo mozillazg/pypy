@@ -39,6 +39,8 @@ typedef struct {
 
 #define Py_INCREF(ob)		(Py_IncRef(ob))
 #define Py_DECREF(ob)		(Py_DecRef(ob))
+#define Py_XINCREF(op) do { if ((op) == NULL) ; else Py_INCREF(op); } while (0)
+#define Py_XDECREF(op) do { if ((op) == NULL) ; else Py_DECREF(op); } while (0)
 
 #define Py_REFCNT(ob)		(((PyObject*)(ob))->ob_refcnt)
 #define Py_TYPE(ob)		(((PyObject*)(ob))->ob_type)
