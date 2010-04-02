@@ -230,7 +230,7 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     }
 
 for exc_name in ['TypeError', 'ValueError', 'KeyError', 'Exception',
-                 'BaseException', 'SystemError']:
+                 'BaseException', 'SystemError', 'OSError']:
     GLOBALS['PyExc_' + exc_name] = ('PyObject*', 'space.w_' + exc_name)
 
 for cpyname, pypyexpr in {"Type": "space.w_type",

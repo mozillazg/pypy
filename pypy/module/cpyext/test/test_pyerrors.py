@@ -52,6 +52,8 @@ class TestExceptions(BaseApiTest):
 
         api.PyErr_Clear()
 
+
+
 class AppTestFetch(AppTestCpythonExtensionBase):
     def test_occurred(self):
         module = self.import_extension('foo', [
@@ -65,3 +67,24 @@ class AppTestFetch(AppTestCpythonExtensionBase):
              ),
             ])
         module.check_error()
+
+
+    def test_SetFromErrno(self):
+        import errno
+
+        module = self.import_extension('foo', [
+                ("set_from_errno", "METH_NOARGS",
+                 '''
+                 int close(int);
+                 close(-1);
+                 PyErr_SetFromErrno(PyExc_OSError);
+                 return NULL;
+                 '''),
+                ])
+        try:
+            module.set_from_errno()
+        except OSError, e:
+            assert e.errno == errno.EBADF
+            assert e.message == os.strerror(errno.EBADF)
+
+
