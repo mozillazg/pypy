@@ -144,6 +144,8 @@ class AppTestCpythonExtensionBase:
         # check for sane refcnts
         leaking = False
         state = self.space.fromcache(State)
+        import gc
+        gc.collect()
         lost_objects_w = identity_dict()
         lost_objects_w.update((key, None) for key in self.frozen_refcounts.keys())
         for w_obj, obj in state.py_objects_w2r.iteritems():
