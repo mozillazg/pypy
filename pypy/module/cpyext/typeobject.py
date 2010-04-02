@@ -31,6 +31,9 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.rlib.rstring import rsplit
 
 
+WARN_ABOUT_MISSING_SLOT_FUNCTIONS = False
+
+
 class W_GetSetPropertyEx(GetSetProperty):
     def __init__(self, getset):
         self.getset = getset
@@ -101,7 +104,8 @@ def update_all_slots(space, w_obj, pto):
             # XXX special case iternext
             continue
         if slot_func is None:
-            os.write(2, method_name + " defined by the type but no slot function defined!\n")
+            if WARN_ABOUT_MISSING_SLOT_FUNCTIONS:
+                os.write(2, method_name + " defined by the type but no slot function defined!\n")
             continue
         if method_name == "__new__" and "bar" in repr(w_obj):
             import pdb; pdb.set_trace()
