@@ -9,6 +9,7 @@
 #define PY_LONG_LONG long long
 #define SIZEOF_LONG_LONG sizeof(PY_LONG_LONG)
 #define PY_FORMAT_SIZE_T "z"
+#define WITH_DOC_STRINGS
 
 /* Compat stuff */
 #ifndef _WIN32
@@ -68,5 +69,14 @@
 #include "structmember.h"
 
 #include <pypy_decl.h>
+
+/* Define macros for inline documentation. */
+#define PyDoc_VAR(name) static char name[]
+#define PyDoc_STRVAR(name,str) PyDoc_VAR(name) = PyDoc_STR(str)
+#ifdef WITH_DOC_STRINGS
+#define PyDoc_STR(str) str
+#else
+#define PyDoc_STR(str) ""
+#endif
 
 #endif

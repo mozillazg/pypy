@@ -195,6 +195,29 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         assert module.return_pi is not None
         assert module.return_pi() == 3.14
 
+
+    def test_export_docstring(self):
+        import sys
+        init = """
+        if (Py_IsInitialized())
+            Py_InitModule("foo", methods);
+        """
+        body = """
+        PyDoc_STRVAR(foo_pi_doc, "Return pi.");
+        PyObject* foo_pi(PyObject* self, PyObject *args)
+        {
+            return PyFloat_FromDouble(3.14);
+        }
+        static PyMethodDef methods[] ={
+            { "return_pi", foo_pi, METH_NOARGS, foo_pi_doc },
+            { NULL }
+        };
+        """
+        module = self.import_module(name='foo', init=init, body=body)
+        doc = module.return_pi.__doc__
+        assert doc == "Return pi."
+
+
     def test_InitModule4(self):
         init = """
         PyObject *cookie = PyFloat_FromDouble(3.14);

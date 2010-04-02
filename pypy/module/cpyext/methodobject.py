@@ -15,9 +15,10 @@ from pypy.rlib.objectmodel import we_are_translated
 
 
 class W_PyCFunctionObject(Wrappable):
-    def __init__(self, space, ml, w_self):
+    def __init__(self, space, ml, w_self, doc=None):
         self.ml = ml
         self.w_self = w_self
+        self.doc = doc
 
     def call(self, space, w_self, args_tuple):
         # Call the C function
@@ -117,6 +118,7 @@ def cmethod_descr_get(space, w_function, w_obj, w_cls=None):
 W_PyCFunctionObject.typedef = TypeDef(
     'builtin_function_or_method',
     __call__ = interp2app(cfunction_descr_call),
+    __doc__ = interp_attrproperty('doc', cls=W_PyCFunctionObject),
     )
 W_PyCFunctionObject.typedef.acceptable_as_base_class = False
 
