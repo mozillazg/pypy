@@ -261,7 +261,8 @@ PyStringObjectFields = PyObjectFields + \
 cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
 
 VA_TP_LIST = {'int': rffi.INT,
-              'PyObject*': PyObject}
+              'PyObject*': PyObject,
+              'int*': rffi.INTP}
 
 def configure_types():
     for name, TYPE in rffi_platform.configure(CConfig).iteritems():
@@ -452,8 +453,6 @@ def build_bridge(space, rename=True):
         pypyAPI[structindex[name]] = ctypes.cast(
             ll2ctypes.lltype2ctypes(func.get_llhelper(space)),
             ctypes.c_void_p)
-
-    setup_va_functions(eci)
 
     return modulename.new(ext='')
 
