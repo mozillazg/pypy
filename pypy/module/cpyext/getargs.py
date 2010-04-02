@@ -8,6 +8,10 @@ from pypy.rpython.lltypesystem import lltype, rffi
 def PyArg_Parse():
     pass
 
+@cpython_api_c()
+def PyArg_ParseTuple():
+    pass
+
 @cpython_api([PyObject, rffi.CCHARP, VA_LIST_P, rffi.INT_real],
              rffi.INT_real, error=0)
 def pypy_vgetargs1(space, w_obj, fmt, va_list_p, lgt):
