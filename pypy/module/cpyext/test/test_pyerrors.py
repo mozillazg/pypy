@@ -70,6 +70,9 @@ class AppTestFetch(AppTestCpythonExtensionBase):
 
 
     def test_SetFromErrno(self):
+        skip("The test does not set the errno in a way which "
+             "untranslated pypy can actually notice")
+
         import errno
 
         module = self.import_extension('foo', [
