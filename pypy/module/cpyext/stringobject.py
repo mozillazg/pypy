@@ -2,11 +2,15 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, PyVarObjectFields,
                                     PyStringObject, Py_ssize_t, cpython_struct,
                                     CANNOT_FAIL, build_type_checkers,
-                                    PyObjectP)
+                                    PyObjectP, cpython_api_c)
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 
 
 PyString_Check, PyString_CheckExact = build_type_checkers("String", "w_str")
+
+@cpython_api_c()
+def PyString_FromFormatV():
+    pass
 
 @cpython_api([rffi.CCHARP, Py_ssize_t], PyStringObject, error=lltype.nullptr(PyStringObject.TO))
 def PyString_FromStringAndSize(space, char_p, length):
@@ -50,8 +54,8 @@ def PyString_Size(space, ref):
         w_obj = from_ref(space, ref)
         return space.int_w(space.len(w_obj))
 
-@cpython_api([PyObjectP, Py_ssize_t], rffi.INT_real, error=-1)
-def _PyString_Resize(space, w_string, newsize):
+@cpython_api([PyObjectP, Py_ssize_t], rffi.INT_real, error=CANNOT_FAIL)
+def _PyString_Resize(space, ref, newsize):
     """A way to resize a string object even though it is "immutable". Only use this to
     build up a brand new string object; don't use this if the string may already be
     known in other parts of the code.  It is an error to call this function if the
@@ -64,5 +68,8 @@ def _PyString_Resize(space, w_string, newsize):
     
     This function used an int type for newsize. This might
     require changes in your code for properly supporting 64-bit systems."""
-    import pdb
-    pdb.set_trace()
+    # XXX always create a new string so fa
+    w_s = from_ref(space, ref[0])
+    ptr = make_ref(space, space.wrap(space.str_w(w_s)[:newsize]))
+    ref[0] = ptr
+    return 0
