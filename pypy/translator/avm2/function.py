@@ -1,3 +1,4 @@
+
 from functools import partial
 
 from pypy.objspace.flow import model as flowmodel
@@ -5,19 +6,18 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lltype import Void
 from pypy.translator.oosupport.function import Function as OOFunction
 from pypy.translator.cli.node import Node
-from pypy.translator.avm2 import types_ as types
 from mech.fusion.avm2 import constants
 
 class Function(OOFunction, Node):
-    
+
     auto_propagate_exceptions = True
 
-    def __init__(self, *args, **kwargs):
-        OOFunction.__init__(self, *args, **kwargs)
-        
+    def __init__(self, db, graph, name=None, is_method=False, is_entrypoint=False):
+        OOFunction.__init__(self, db, graph, name, is_method, is_entrypoint)
+
         if hasattr(self.db.genoo, 'exceptiontransformer'):
             self.auto_propagate_exceptions = False
-        
+
         namespace = getattr(self.graph.func, '_namespace_', None)
         if namespace:
             if '.' in namespace:
@@ -28,13 +28,13 @@ class Function(OOFunction, Node):
         else:
             self.namespace = None
             self.classname = None
-        
+
         self.override = False
-        
+
     def _create_generator(self, ilasm):
         ilasm.db = self.db
         return ilasm
-    
+
     def record_ll_meta_exc(self, ll_meta_exc):
         # record the type only if it doesn't belong to a native_class
         ll_exc = ll_meta_exc._INSTANCE
@@ -50,21 +50,21 @@ class Function(OOFunction, Node):
 
         if self.is_method:
             self.args = self.args[1:]
-        
+
         returntype, returnvar = self.cts.llvar_to_cts(self.graph.getreturnvar())
 
         if self.classname:
             self.generator.begin_class(constants.packagedQName(self.namespace, self.classname))
-        
+
         self.generator.begin_method(self.name, self.args, returntype, static=not self.is_method, override=self.override)
-        
+
+        self.declare_locals()
+
     def end_render(self):
-        # if self.generator.scope.islabel:
-        #     self.generator.exit_scope()
         if self.classname:
             self.generator.exit_context()
         self.generator.exit_context()
-        
+
     def render_return_block(self, block):
         return_var = block.inputargs[0]
         if return_var.concretetype is Void:
@@ -75,6 +75,11 @@ class Function(OOFunction, Node):
 
     def set_label(self, label):
         return self.generator.set_label(label)
+
+    def declare_locals(self):
+        for TYPE, name in set(self.locals):
+            TYPE.load_default(self.generator)
+            self.generator.store_var(name)
 
     def _trace_enabled(self):
         return True
@@ -88,38 +93,39 @@ class Function(OOFunction, Node):
     def _render_op(self, op):
         print "Rendering op:", op
         super(Function, self)._render_op(op)
-    
-    def _setup_link(self, link):
-        target = link.target
-        linkvars = []
-        for to_load, to_store in zip(link.args, target.inputargs):
-            if isinstance(to_load, flowmodel.Variable) and to_load.name == to_store.name:
-                continue
-            if to_load.concretetype is ootype.Void:
-                continue
-            linkvars.append((to_load, to_store))
-        
-        # after SSI_to_SSA it can happen to have to_load = [a, b] and
-        # to_store = [b, c].  If we store each variable sequentially,
-        # 'b' would be overwritten before being read.  To solve, we
-        # first load all the values on the stack, then store in the
-        # appropriate places.
 
-        if self._trace_enabled():
-            self._trace('link', writeline=True)
-            for to_load, to_store in linkvars:
-                self._trace_value('%s <-- %s' % (to_store, to_load), to_load)
-            self._trace('', writeline=True)
-        
-        for to_load, to_store in linkvars:
-            self.generator.load(to_load)
-            self.generator.store(to_store)
+    ## def _setup_link(self, link):
+    ##     target = link.target
+    ##     linkvars = []
+    ##     for to_load, to_store in zip(link.args, target.inputargs):
+    ##         if isinstance(to_load, flowmodel.Variable) and to_load.name == to_store.name:
+    ##             continue
+    ##         if to_load.concretetype is ootype.Void:
+    ##             continue
+    ##         linkvars.append((to_load, to_store))
 
-    
+    ##     # after SSI_to_SSA it can happen to have to_load = [a, b] and
+    ##     # to_store = [b, c].  If we store each variable sequentially,
+    ##     # 'b' would be overwritten before being read.  To solve, we
+    ##     # first load all the values on the stack, then store in the
+    ##     # appropriate places.
+
+    ##     if self._trace_enabled():
+    ##         self._trace('link', writeline=True)
+    ##         for to_load, to_store in linkvars:
+    ##             self._trace_value('%s <-- %s' % (to_store, to_load), to_load)
+    ##         self._trace('', writeline=True)
+
+    ##     for to_load, to_store in linkvars:
+    ##         self.generator.load(to_load)
+
+    ##     for to_load, to_store in reversed(linkvars):
+    ##         self.generator.store(to_store)
+
     def begin_try(self, cond):
         if cond:
             self.ilasm.begin_try()
-    
+
     def end_try(self, target_label, cond):
         if cond:
             self.ilasm.end_try()

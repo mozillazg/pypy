@@ -1,4 +1,3 @@
-
 # AVM1 = ActionScript Virtual Machine 1
 # Used for ActionScript 1 and 2
 
@@ -27,28 +26,28 @@ preload = dict(this="preload_this",
                _global="preload_global")
 
 class Action(object):
-    
+
     ACTION_NAME = "NotImplemented"
     ACTION_ID = 0x00
 
     offset = 0
     label_name = ""
-    
+
     def serialize(self):
         inner_data = self.gen_data()
         outer_data = self.gen_outer_data()
         header = struct.pack("<BH", self.ACTION_ID, len(inner_data))
         return header + inner_data + outer_data
-    
+
     def __len__(self):
         return 6 + len(self.gen_data()) + len(self.gen_outer_data())
-    
+
     def gen_data(self):
         return ""
 
     def gen_outer_data(self):
         return ""
-    
+
     def get_block_props_early(self, block):
         pass
 
@@ -82,7 +81,7 @@ class ActionConstantPool(Action):
             return ""
         else:
             return super(ActionConstantPool, self).serialize()
-    
+
     def gen_data(self):
         return struct.pack("H", len(self.pool)) + "\0".join(self.pool) + "\0"
 
@@ -91,7 +90,7 @@ class Block(object):
     AUTO_LABEL_TEMPLATE = "label%d"
     MAX_REGISTERS = 4
     FUNCTION_TYPE = 0
-    
+
     def __init__(self, toplevel, insert_end=False):
         if toplevel:
             self.constants = toplevel.constants
@@ -99,18 +98,18 @@ class Block(object):
         else:
             self.constants = ActionConstantPool()
             self.registers = []
-        
+
         self.code = ""
         self._sealed = False
         self.insert_end = insert_end
-        
+
         self.labels = {}
         self.branch_blocks = []
         self.actions = []
-        
+
         self.current_offset = 0
         self.label_count = 0
-    
+
     def get_free_register(self):
         if None in self.registers:
             return self.registers.index(None)
@@ -128,15 +127,15 @@ class Block(object):
             index = self.get_free_register()
         self.registers[index] = value
         return index
-    
+
     def find_register(self, value):
         if value in self.registers:
             return self.registers.index(value)
         return -1
-    
+
     def free_register(self, index):
         self.registers[index] = None
-    
+
     def __len__(self):
         return self.current_offset + (2 if self.insert_end else 0)
 
@@ -147,17 +146,17 @@ class Block(object):
     @property
     def sealed(self):
         return self._sealed
-    
+
     def add_action(self, action):
         if self._sealed:
             raise SealedBlockError("Block is sealed. Cannot add new actions")
 
         assert isinstance(action, Action)
-        
+
         self.code = "" # Dirty the code.
         action.offset = self.current_offset
         action.get_block_props_early(self)
-        
+
         # Do some early optimizations. Combine two pushes into one.
         if len(self.actions) > 0 and action.ACTION_NAME == "ActionPush" and self.actions[-1].ACTION_NAME == "ActionPush":
             old_action = self.actions[-1]
@@ -171,13 +170,13 @@ class Block(object):
             self.actions.pop()
             self.current_offset -= 1 # len(ShortAction) is 1
             return None
-            
+
         if not isinstance(action, Block): # Don't add block length until we've finalized.
             self.current_offset += len(action)
-        
+
         self.actions.append(action)
         return action
-    
+
     def serialize(self):
         if not self._sealed:
             raise SealedBlockError("Block must be sealed before it can be serialized")
@@ -201,7 +200,7 @@ class Block(object):
         name = Block.AUTO_LABEL_TEMPLATE % self.label_count
         self.labels[name] = -1
         return name
-        
+
     def set_label_here(self, name):
         self.labels[name] = self.current_offset
 
@@ -245,7 +244,7 @@ class ActionDefineFunction2(Action, Block):
         self.function_name = name
         self.params = parameters
         self.preload_register_count = 1 # Start at 1.
-        
+
         # Flags
         self.registers        = [None]
         self.preload_parent   = False
@@ -261,31 +260,31 @@ class ActionDefineFunction2(Action, Block):
 
         for name in parameters:
             self.registers.append(name)
-        
+
     def eval_flags(self):
-        
+
         # According to the docs, this is the order of register allocation.
         if self.preload_this and "this" not in self.registers:
             self.suppress_this = False
             self.registers.insert(1, "this")
-            
+
         if self.preload_args and "arguments" not in self.registers:
             self.suppress_args = False
             self.registers.insert(2, "arguments")
-            
+
         if self.preload_super and "super" not in self.registers:
             self.suppress_super = False
             self.registers.insert(3, "super")
-            
+
         if self.preload_root and "_root" not in self.registers:
             self.registers.insert(4, "_root")
-            
+
         if self.preload_parent and "_parent" not in self.registers:
             self.registers.insert(5, "_parent")
-        
+
         if self.preload_global and "_global" not in self.registers:
             self.registers.insert(6, "_global")
-        
+
     def gen_data(self):
 
         bits = BitStream()
@@ -299,15 +298,15 @@ class ActionDefineFunction2(Action, Block):
         bits.write_bit(self.preload_this)
         bits.zero_fill(7) # skip over 7 Reserved bits
         bits.write_bit(self.preload_global)
-        
+
         self.block_data = Block.serialize(self)
         bytes = [self.function_name, "\0",
                  struct.pack("HB", len(self.params), len(self.registers)),
                  bits.serialize()]
-        
+
         for name in self.params:
             bytes += [chr(self.registers.index(name)), name, "\0"]
-        
+
         bytes += [struct.pack("H", len(self.block_data))]
         return "".join(bytes)
 
@@ -417,11 +416,11 @@ class ActionPush(Action):
     ACTION_ID = 0x96
 
     USE_CONSTANTS = False
-    
+
     def __init__(self, *args):
         self.values = []
         self.add_element(*args)
-    
+
     def add_element(self, element):
         if hasattr(element, "__iter__") and not isinstance(element, (basestring, tuple)):
             for t in element:
@@ -431,14 +430,14 @@ class ActionPush(Action):
                 element = (None, element)
             assert isinstance(element, tuple)
             self.values.append(element)
-        
+
     def get_block_props_early(self, block):
         if not ActionPush.USE_CONSTANTS: return
         for index, (value, type) in enumerate(self.values):
             if type == STRING:
                 constant_index = block.constants.add_constant(value)
                 self.values[index] = (constant_index, CONSTANT8 if constant_index < 256 else CONSTANT16)
-    
+
     def gen_data(self):
         bytes = []
         for value, type in self.values:
@@ -476,7 +475,7 @@ class ActionTry(Action):
     def __init__(self, catch_object, try_block=None, catch_block=None, finally_block=None):
 
         self.catch_object = catch_object
-        
+
         self.try_block = try_block or Block()
         self.catch_block = catch_block or Block()
         self.finally_block = finally_block or Block()
@@ -513,7 +512,7 @@ class ActionWaitForFrame(Action):
 
     def gen_data(self):
         return struct.pack("HB", self.index, self.skip_count)
-    
+
 class ActionWaitForFrame2(Action):
     ACTION_NAME = "ActionWaitForFrame2"
     ACTION_ID = 0x8d
@@ -527,10 +526,10 @@ class ActionWaitForFrame2(Action):
 class ActionWith(Action):
     ACTION_NAME = "ActionWith"
     ACTION_ID = 0x94
-    
+
     def __init__(self, with_block):
         self.block = with_block or Block()
-    
+
     def gen_data(self):
         return struct.pack("H", len(self.block)) + self.block.serialize()
 
@@ -541,13 +540,12 @@ def make_underlined(name):
     return ''.join('_' + c.lower() if c.isupper() else c for c in name)[1:]
 
 def make_short_action(value, name, push_count=0):
-    
     def __len__(self):
         return 1 # 1 (Action ID)
-    
+
     def serialize(self):
         return chr(self.ACTION_ID)
-    
+
     act = type(name, (Action,), dict(ACTION_ID=value, ACTION_NAME=name, push_count=push_count,
                                      __len__=__len__, serialize=serialize))
 

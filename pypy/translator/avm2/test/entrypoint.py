@@ -1,5 +1,5 @@
-
 import py
+from pypy.conftest import option
 from pypy.translator.avm2.test.browsertest import browsertest
 from pypy.translator.avm2.avm2gen import PyPyAvm2ilasm
 
@@ -8,6 +8,7 @@ from mech.fusion.swf.tags import FileAttributes, SetBackgroundColor, \
      DefineEditText, SymbolClass, PlaceObject2, DoABC, ShowFrame, End
 from mech.fusion.swf.records import Rect, RGBA
 
+from mech.fusion.avm2.abc_ import AbcFile
 from mech.fusion.avm2.constants import QName, packagedQName
 from mech.fusion.avm2.traits import AbcSlotTrait
 
@@ -25,8 +26,8 @@ If no text saying "Go:" appears below, the test probably had an error.
 '''.strip() % (name,)), color=RGBA(0xFFFFFF)))
         self.swf.add_tag(PlaceObject2(1, 2, name="edittext"))
         self.abc = DoABC("PyPy Main")
-        self.actions = PyPyAvm2ilasm(gen.db, self.abc)
-        
+        self.actions = PyPyAvm2ilasm(gen.db, self.abc, option.mf_optim)
+
         self.swf.add_tag(self.abc)
         self.swf.add_tag(SymbolClass({0:"PyPyTest_EntryPoint"}))
         self.swf.add_tag(ShowFrame())
@@ -39,9 +40,6 @@ If no text saying "Go:" appears below, the test probably had an error.
         self.actions.push_const(text)
         self.actions.store_var('text')
         self.update_text()
-
-    def serialize_swf(self):
-        return self.swf.serialize()
 
     def print_var(self, prefix, varname):
         self.actions.push_const(prefix)
@@ -58,12 +56,12 @@ If no text saying "Go:" appears below, the test probably had an error.
 
     def start_test_maincls(self):
         pass
-    
+
     def start_test(self):
         self.start_test_maincls()
         if self.excwrap:
             self.actions.begin_try()
-        
+
     def finish_test(self):
         # WHHEEEEEEE!
         if self.excwrap:
@@ -83,7 +81,7 @@ If no text saying "Go:" appears below, the test probably had an error.
 
     def do_test(self):
         pass
-    
+
     def epilogue(self):
         pass
 
@@ -97,12 +95,13 @@ class SWFTestEntryPoint(BaseTestEntryPoint):
         f.write(self.swf.serialize())
         f.close()
         f = open("%s.flash.abc" % (self.name,), "wb")
-        f.write(self.abc.serialize())
+        f.write(AbcFile.serialize(self.abc))
         f.close()
+        
         return browsertest(self.name, self.swf)
 
     def get_edittext(self):
-        if not self.actions.HL('edittext'):        
+        if not self.actions.HL('edittext'):
             self.actions.push_this()
             self.actions.get_field('edittext')
             self.actions.store_var('edittext')
@@ -148,16 +147,17 @@ class SWFTestEntryPoint(BaseTestEntryPoint):
 
 class TamarinTestEntryPoint(BaseTestEntryPoint):
     def do_test(self):
+        self.finish_test()
         f = open("%s.tamarin.abc" % (self.name,), "wb")
-        f.write(self.abc.serialize())
+        f.write(AbcFile.serialize(self.abc))
         f.close()
         asdf
 
     def update_text(self):
-        self.actions.push_const("\n")
-        self.actions.get_field('text')
-        self.actions.emit('add')
         self.actions.emit('findpropstrict', QName("print"))
+        self.actions.push_const("\n")
+        self.actions.push_var('text')
+        self.actions.emit('add')
         self.actions.emit('callpropvoid', QName("print"), 1)
 
     def epilogue(self):

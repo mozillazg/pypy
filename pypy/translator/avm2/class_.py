@@ -2,7 +2,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.node import Node
 from pypy.translator.oosupport.constant import push_constant
 
-from mech.fusion.avm2 import constants as c, traits
+from mech.fusion.avm2 import constants, traits
 from pypy.translator.avm2 import types_ as types
 
 try:
@@ -45,12 +45,12 @@ class Class(Node):
     def get_base_class(self):
         base_class = self.INSTANCE._superclass
         if self.INSTANCE is self.db.genoo.EXCEPTION:
-            return c.QName("Error")
+            return constants.QName("Error")
         if self.is_root(base_class):
-            return c.QName("Object")
+            return constants.QName("Object")
         else:
             ns, name = self.db.class_name(base_class).rsplit('::', 1)
-            return c.packagedQName(ns, name)
+            return constants.packagedQName(ns, name)
 
     def is_abstract(self):
         return False # XXX
@@ -80,14 +80,13 @@ class Class(Node):
             return
 
         self.ilasm = ilasm
-        self.gen = CLIBaseGenerator(self.db, ilasm)
 
-        ilasm.begin_class(c.packagedQName(self.namespace, self.name), self.get_base_class())
+        ilasm.begin_class(constants.packagedQName(self.namespace, self.name), self.get_base_class())
         for f_name, (f_type, f_default) in self.INSTANCE._fields.iteritems():
             cts_type = self.cts.lltype_to_cts(f_type)
             f_name = self.cts.escape_name(f_name)
             if cts_type != types.types.void:
-                ilasm.context.add_instance_trait(traits.AbcSlotTrait(c.QName(f_name), cts_type.multiname()))
+                ilasm.context.add_instance_trait(traits.AbcSlotTrait(constants.QName(f_name), cts_type.multiname()))
 
         self._ctor()
         self._toString()
@@ -108,7 +107,6 @@ class Class(Node):
                 while context:
                     if m_name in context._methods:
                         f.override = True
-                        print "Overriding", m_name
                         break
                     context = context._superclass
 
@@ -121,16 +119,16 @@ class Class(Node):
                            if ARG is not ootype.Void]
                 returntype = self.cts.lltype_to_cts(METH.RESULT)
                 ilasm.begin_method(m_name, arglist, returntype)
-                ilasm.emit('findpropstrict', c.QName("Error"))
+                ilasm.emit('findpropstrict', constants.QName("Error"))
                 ilasm.push_const("Abstract method %s::%s called" % (self.name, m_name))
-                ilasm.emit('constructprop', c.QName("Error"), 1)
-                ilasm.emit('throw')
+                ilasm.emit('constructprop', constants.QName("Error"), 1)
+                ilasm.throw()
                 ilasm.exit_context()
 
         ilasm.exit_context()
     
     def _ctor(self):
-        self.ilasm.context.make_iinit()
+        self.ilasm.begin_constructor()
         # set default values for fields
         default_values = self.INSTANCE._fields.copy()
         default_values.update(self.INSTANCE._overridden_defaults)
@@ -144,9 +142,8 @@ class Class(Node):
                 self.ilasm.push_this()
                 push_constant(self.db, F_TYPE, f_default, self.gen)
                 # class_name = self.db.class_name(INSTANCE_DEF)
-                self.ilasm.emit('setproperty', c.QName(f_name))
-
-        self.ilasm.exit_context()
+                self.ilasm.set_field(f_name)
+        self.ilasm.end_constructor()
 
     def _toString(self):
         if self.is_root(self.INSTANCE._superclass):
@@ -157,6 +154,5 @@ class Class(Node):
         wrapper = "Exception" if self.exception else "Instance"
         self.ilasm.begin_method('toString', [], types.types.string, override=override)
         self.ilasm.load("%sWrapper('%s')" % (wrapper, self.name))
-        self.ilasm.emit('returnvalue')
-        self.ilasm.exit_context()
-
+        self.ilasm.return_value()
+        self.ilasm.end_method()

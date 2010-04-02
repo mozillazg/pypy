@@ -1,4 +1,3 @@
-
 import py
 from mech.fusion.avm2.abc_ import AbcFile
 
@@ -11,7 +10,7 @@ from pypy.translator.avm2.opcodes import opcodes
 from pypy.translator.avm2.types_ import Avm2TypeSystem
 
 class GenAVM2(GenOO):
-    
+
     opcodes    = opcodes
     Function   = TamarinFunction
     Database   = LowLevelDatabase
@@ -24,7 +23,7 @@ class GenAVM2(GenOO):
     RecordConst   = Avm2RecordConst
     ListConst     = Avm2ArrayListConst
     ArrayConst    = Avm2ArrayListConst
-    
+
     def __init__(self, tmpdir, translator, entrypoint, config=None, exctrans=False):
         GenOO.__init__(self, tmpdir, translator, entrypoint, config, exctrans)
         self.const_stat = str(tmpdir.join('const_stat'))
@@ -35,10 +34,10 @@ class GenAVM2(GenOO):
         clsdef = bk.getuniqueclassdef(Exception)
         ll_Exception = rtyper.exceptiondata.get_standard_ll_exc_instance(rtyper, clsdef)
         self.EXCEPTION = ll_Exception._inst._TYPE
-    
+
     def create_assembler(self):
         self.abc = AbcFile()
-        return PyPyAvm2ilasm(self.db, self.abc)
+        return PyPyAvm2ilasm(self.db, self.abc, True)
 
     def generate_source(self):
         if self.ilasm is None:
@@ -50,7 +49,3 @@ class GenAVM2(GenOO):
 
     def serialize_abc(self):
         return self.abc.serialize()
-
-    # Don't do treebuilding stuff
-    # def stack_optimization(self):
-    #     pass

@@ -9,7 +9,7 @@ from pypy.translator.goal.timing import Timer
 from pypy.annotation import model as annmodel
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.annotation import policy as annpolicy
-from py.compat import optparse
+import optparse
 from pypy.tool.udir import udir
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_DETAILED, DEBUG_PROFILE, DEBUG_STEPS
 
@@ -546,6 +546,28 @@ class TranslationDriver(SimpleTaskEngine):
                                       [STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE], 
                                       "LLInterpreting")
 
+    def task_compile_tamarin(self):
+        from pypy.translator.avm2.genavm import GenAVM2
+        from pypy.translator.avm2.entrypoint import get_entrypoint
+
+        if self.entry_point is not None: # executable mode
+            entry_point_graph = self.translator.graphs[0]
+            entry_point = get_entrypoint(entry_point_graph)
+        else:
+            # library mode
+            assert self.libdef is not None
+            bk = self.translator.annotator.bookkeeper
+            entry_point = self.libdef.get_entrypoint(bk)
+
+        self.gen = GenAVM2(udir, self.translator, entry_point, config=self.config)
+        self.gen.generate_source()
+        abc = self.gen.serialize_abc()
+        f = open(entry_point.get_name() + ".abc", "wb")
+        f.write(abc)
+        f.close()
+    task_compile_tamarin = taskdef(task_compile_tamarin, ["?" + OOBACKENDOPT, OOTYPE],
+                                   'Generating ABC bytecode')
+
     def task_source_cli(self):
         from pypy.translator.cli.gencli import GenCli
         from pypy.translator.cli.entrypoint import get_entrypoint
@@ -599,14 +621,25 @@ class TranslationDriver(SimpleTaskEngine):
             shutil.copy(os.path.join(usession_path, 'main.il'), dirname)
         newexename = basename
         f = file(newexename, 'w')
-        f.write("""#!/bin/bash
+        f.write(r"""#!/bin/bash
 LEDIT=`type -p ledit`
 EXE=`readlink $0`
 if [ -z $EXE ]
 then
     EXE=$0
 fi
-if  uname -s | grep -iq Cygwin ; then MONO=; else MONO=mono; fi
+if  uname -s | grep -iq Cygwin
+then 
+    MONO=
+else 
+    MONO=mono
+    # workaround for known mono buggy versions
+    VER=`mono -V | head -1 | sed s/'Mono JIT compiler version \(.*\) (.*'/'\1/'`
+    if [[ 2.1 < "$VER" && "$VER" < 2.4.3 ]]
+    then
+        MONO="mono -O=-branch"
+    fi
+fi
 $LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
 """ % main_exe_name)
         f.close()
