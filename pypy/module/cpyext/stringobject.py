@@ -70,7 +70,12 @@ def _PyString_Resize(space, ref, newsize):
     require changes in your code for properly supporting 64-bit systems."""
     # XXX always create a new string so far
     w_s = from_ref(space, ref[0])
-    ptr = make_ref(space, space.wrap(space.str_w(w_s)[:newsize]))
+    try:
+        ptr = make_ref(space, space.wrap(space.str_w(w_s)[:newsize]))
+    except:
+        Py_DecRef(space, ref[0])
+        ref[0] = lltype.nullptr(PyStringObject) 
+        raise
     Py_DecRef(space, ref[0])
     ref[0] = ptr
     return 0
