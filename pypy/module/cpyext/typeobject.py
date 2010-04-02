@@ -29,6 +29,7 @@ from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr, PyTypeObject, \
 from pypy.module.cpyext.slotdefs import slotdefs
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.rlib.rstring import rsplit
+from pypy.rlib.objectmodel import we_are_translated
 
 
 WARN_ABOUT_MISSING_SLOT_FUNCTIONS = False
@@ -108,7 +109,7 @@ def update_all_slots(space, w_obj, pto):
             if WARN_ABOUT_MISSING_SLOT_FUNCTIONS:
                 os.write(2, method_name + " defined by the type but no slot function defined!\n")
             continue
-        if method_name == "__new__" and "bar" in repr(w_obj):
+        if not we_are_translated() and method_name == "__new__" and "bar" in repr(w_obj):
             import pdb; pdb.set_trace()
         slot_func_helper = llhelper(slot_func.api_func.functype,
                 slot_func.api_func.get_wrapper(space))
@@ -236,6 +237,7 @@ def c_type_descr__call__(space, w_type, __args__):
         finally:
             Py_DecRef(space, pyo)
     else:
+        w_type = _precheck_for_new(space, w_type)
         return call__Type(space, w_type, __args__)
 
 def c_type_descr__new__(space, w_typetype, w_name, w_bases, w_dict):
@@ -290,8 +292,6 @@ def string_dealloc(space, obj):
 def type_dealloc(space, obj):
     state = space.fromcache(State)
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
-    if not obj_pto.c_tp_name or "C_type" == rffi.charp2str(obj_pto.c_tp_name):
-        import pdb; pdb.set_trace()
     type_pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_DecRef(space, obj_pto.c_tp_bases)

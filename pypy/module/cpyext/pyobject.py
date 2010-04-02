@@ -57,7 +57,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
                 pto = rffi.cast(PyTypeObjectPtr, w_type_pyo)
                 # Don't increase refcount for non-heaptypes
                 if not rffi.cast(lltype.Signed, pto.c_tp_flags) & Py_TPFLAGS_HEAPTYPE:
-                    Py_DecRef(space, pto)
+                    Py_DecRef(space, w_type_pyo)
                 basicsize = pto.c_tp_basicsize
                 py_obj_pad = lltype.malloc(rffi.VOIDP.TO, basicsize,
                         flavor="raw", zero=True)
@@ -132,6 +132,7 @@ def from_ref(space, ref):
 def Py_DecRef(space, obj):
     if not obj:
         return
+    assert lltype.typeOf(obj) == PyObject
 
     from pypy.module.cpyext.typeobject import string_dealloc, W_PyCTypeObject
     obj.c_ob_refcnt -= 1
