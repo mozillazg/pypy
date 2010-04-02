@@ -12,8 +12,7 @@ def PyArg_Parse():
              rffi.INT_real, error=-1)
 def pypy_vgetargs1(space, w_obj, fmt, va_list_p, lgt):
     i = 0
-    import pdb
-    pdb.set_trace()
+    raise Exception("This is broken so far")
     while True:
         c = fmt[i]
         if c == "\x00":
