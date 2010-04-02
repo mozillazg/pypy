@@ -9,15 +9,14 @@ def PyArg_Parse():
     pass
 
 @cpython_api([PyObject, rffi.CCHARP, VA_LIST_P, rffi.INT_real],
-             rffi.INT_real, error=-1)
+             rffi.INT_real, error=0)
 def pypy_vgetargs1(space, w_obj, fmt, va_list_p, lgt):
     i = 0
     while True:
         c = fmt[i]
         if c == "\x00":
-            return 0
+            return 1
         if c == "i":
             arr = api.va_get_int_star(va_list_p)
             arr[0] = space.int_w(space.getitem(w_obj, space.wrap(i)))
         i += 1
-    return 0
