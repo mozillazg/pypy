@@ -19,6 +19,7 @@ C_TYPE_TO_PYPY_TYPE = {
         "PyVarObject*": "PyObject",
         "const char*": "rffi.CCHARP",
         "PyObject*": "PyObject",
+        "PyObject**": "PyObjectP",
         "char*": "rffi.CCHARP",
         "PyMethodDef*": "PyMethodDef",
         "Py_ssize_t": "Py_ssize_t",

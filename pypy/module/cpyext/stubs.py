@@ -4033,16 +4033,6 @@ def PyModule_New(space, name):
     raise NotImplementedError
 
 @cpython_api([PyObject], rffi.CCHARP)
-def PyModule_GetName(space, module):
-    """
-    
-    
-    
-    Return module's __name__ value.  If the module does not provide one,
-    or if it is not a string, SystemError is raised and NULL is returned."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], rffi.CCHARP)
 def PyModule_GetFilename(space, module):
     """
     

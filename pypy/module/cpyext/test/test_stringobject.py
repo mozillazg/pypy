@@ -44,8 +44,7 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
              ("test_is_string", "METH_VARARGS",
              """
                 return PyBool_FromLong(PyString_Check(PyTuple_GetItem(args, 0)));
-             """),
-            ])
+             """)])
         assert module.get_hello1() == 'Hello world'
         assert module.get_hello2() == 'Hello world'
         assert module.test_Size()
@@ -96,3 +95,16 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
             ])
         s = module.getstring()
         assert s == 'test'
+
+    def test_format_v(self):
+        skip("unsupported yet, think how to fak va_list")
+        module = self.import_extension('foo', [
+            ("test_string_format_v", "METH_VARARGS",
+             '''
+                 return PyString_FromFormatV("bla %d ble %s",
+                        PyInt_AsLong(PyTuple_GetItem(args, 0)),
+                        PyString_AsString(PyTuple_GetItem(args, 1)));
+             '''
+             )
+            ])
+        pass

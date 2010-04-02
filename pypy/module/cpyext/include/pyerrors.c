@@ -1,5 +1,25 @@
 #include <Python.h>
 #include <string.h>
+
+PyObject *
+PyErr_Format(PyObject *exception, const char *format, ...)
+{
+	va_list vargs;
+	PyObject* string;
+
+#ifdef HAVE_STDARG_PROTOTYPES
+	va_start(vargs, format);
+#else
+  va_start(vargs);
+#endif
+
+	string = PyString_FromFormatV(format, vargs);
+	PyErr_SetObject(exception, string);
+	Py_XDECREF(string);
+	va_end(vargs);
+	return NULL;
+}
+
 #if 0
 depends on unavailable functions 
 
@@ -52,4 +72,6 @@ PyErr_NewException(char *name, PyObject *base, PyObject *dict)
 	Py_XDECREF(modulename);
 	return result;
 }
+
+
 #endif
