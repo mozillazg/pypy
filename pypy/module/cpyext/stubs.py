@@ -3549,11 +3549,6 @@ def PyLong_CheckExact(space, p):
     """
     raise NotImplementedError
 
-@cpython_api([{long}], PyObject)
-def PyLong_FromLong(space, v):
-    """Return a new PyLongObject object from v, or NULL on failure."""
-    raise NotImplementedError
-
 @cpython_api([{unsigned long}], PyObject)
 def PyLong_FromUnsignedLong(space, v):
     """Return a new PyLongObject object from a C unsigned long, or
