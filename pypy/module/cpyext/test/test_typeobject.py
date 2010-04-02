@@ -36,3 +36,12 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         raises(TypeError, "obj.int_member_readonly = 42")
         raises(SystemError, "obj.broken_member")
         raises(SystemError, "obj.broken_member = 42")
+        a = module.fooType
+        assert "cannot create" in raises(TypeError, "a()").value.message
+        skip("In Progress")
+        class bar(module.fooType):
+            pass
+        fuu = module.FuuType
+        fuu_inst = fuu(u"abc")
+        assert "cannot create" in raises(TypeError, "bar()").value.message
+

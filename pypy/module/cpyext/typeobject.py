@@ -3,27 +3,31 @@ import sys
 from weakref import ref
 
 from pypy.rpython.lltypesystem import rffi, lltype
+from pypy.tool.pairtype import extendabletype
 from pypy.rpython.annlowlevel import llhelper
-from pypy.interpreter.gateway import ObjSpace, W_Root
+from pypy.interpreter.gateway import ObjSpace, W_Root, Arguments
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.baseobjspace import Wrappable
-from pypy.objspace.std.typeobject import W_TypeObject, _CPYTYPE
+from pypy.objspace.std.typeobject import W_TypeObject, _CPYTYPE, call__Type
+from pypy.objspace.std.typetype import _precheck_for_new
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
-    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR
+    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR, \
+    Py_TPFLAGS_HAVE_CLASS
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.interpreter.module import Module
 from pypy.module.cpyext import structmemberdefs
 from pypy.module.cpyext.modsupport import  convert_method_defs
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.methodobject import PyDescr_NewWrapper
-from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
+from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef, _Py_Dealloc
 from pypy.module.cpyext.structmember import PyMember_GetOne, PyMember_SetOne
 from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr, PyTypeObject, \
         PyGetSetDef, PyMemberDef
 from pypy.module.cpyext.slotdefs import slotdefs
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.rlib.rstring import rsplit
 
 
@@ -35,11 +39,11 @@ class W_GetSetPropertyEx(GetSetProperty):
         if doc:
             doc = rffi.charp2str(getset.c_doc)
         if getset.c_get:
-            get = W_PyCObject.getter
+            get = GettersAndSetters.getter.im_func
         if getset.c_set:
-            set = W_PyCObject.setter
+            set = GettersAndSetters.setter.im_func
         GetSetProperty.__init__(self, get, set, None, doc,
-                                cls=W_PyCObject, use_closure=True,
+                                cls=None, use_closure=True, # XXX cls?
                                 tag="cpyext_1")
 
 def PyDescr_NewGetSet(space, getset, pto):
@@ -53,11 +57,11 @@ class W_MemberDescr(GetSetProperty):
         doc = set = None
         if doc:
             doc = rffi.charp2str(getset.c_doc)
-        get = W_PyCObject.member_getter
+        get = GettersAndSetters.member_getter.im_func
         if not (flags & structmemberdefs.READONLY):
-            set = W_PyCObject.member_setter
+            set = GettersAndSetters.member_setter.im_func
         GetSetProperty.__init__(self, get, set, None, doc,
-                                cls=W_PyCObject, use_closure=True,
+                                cls=None, use_closure=True, # XXX cls?
                                 tag="cpyext_2")
 
 def convert_getset_defs(space, dict_w, getsets, pto):
@@ -88,13 +92,38 @@ def convert_member_defs(space, dict_w, members, pto):
             dict_w[name] = w_descr
             i += 1
 
+def update_all_slots(space, w_obj, pto):
+    #  XXX fill slots in pto
+    state = space.fromcache(State)
+    for method_name, slot_name, slot_func, _, _, doc in slotdefs:
+        w_descr = space.lookup(w_obj, method_name)
+        if w_descr is None:
+            # XXX special case iternext
+            continue
+        if slot_func is None:
+            os.write(2, method_name + " defined by the type but no slot function defined!\n")
+            continue
+        if method_name == "__new__" and "bar" in repr(w_obj):
+            import pdb; pdb.set_trace()
+        slot_func_helper = llhelper(slot_func.api_func.functype,
+                slot_func.api_func.get_wrapper(space))
+        # XXX special case wrapper-functions and use a "specific" slot func,
+        # XXX special case tp_new
+        if len(slot_name) == 1:
+            setattr(pto, slot_name[0], slot_func_helper)
+        else:
+            assert len(slot_name) == 2
+            struct = getattr(pto, slot_name[0])
+            if not struct:
+                continue
+            setattr(struct, slot_name[1], slot_func_helper)
+
 def add_operators(space, dict_w, pto):
     # XXX support PyObject_HashNotImplemented
     state = space.fromcache(State)
     for method_name, slot_name, _, wrapper_func, wrapper_func_kwds, doc in slotdefs:
         if method_name in dict_w:
             continue
-        # XXX is this rpython?
         if len(slot_name) == 1:
             func = getattr(pto, slot_name[0])
         else:
@@ -107,16 +136,26 @@ def add_operators(space, dict_w, pto):
         if not func:
             continue
         if wrapper_func is None and wrapper_func_kwds is None:
-            os.write(2, method_name + " used by the type but no wrapper function defined!")
+            os.write(2, method_name + " used by the type but no wrapper function defined!\n")
             continue
         dict_w[method_name] = PyDescr_NewWrapper(space, pto, method_name, wrapper_func,
                 wrapper_func_kwds, doc, func_voidp)
 
+def inherit_special(space, pto, base_pto):
+    # XXX copy basicsize and flags in a magical way
+    flags = rffi.cast(lltype.Signed, pto.c_tp_flags)
+    if flags & Py_TPFLAGS_HAVE_CLASS:
+        base_object_pyo = make_ref(space, space.w_object, steal=True)
+        base_object_pto = rffi.cast(PyTypeObjectPtr, base_object_pyo)
+        if base_pto != base_object_pto or \
+                flags & Py_TPFLAGS_HEAPTYPE:
+            if not pto.c_tp_new:
+                pto.c_tp_new = base_pto.c_tp_new
+
 
 class W_PyCTypeObject(W_TypeObject):
     def __init__(self, space, pto):
-        self.pto = pto
-        bases_w = []
+        bases_w = [] # XXX fill
         dict_w = {}
 
         add_operators(space, dict_w, pto)
@@ -132,16 +171,28 @@ class W_PyCTypeObject(W_TypeObject):
             bases_w or [space.w_object], dict_w)
         self.__flags__ = _CPYTYPE # mainly disables lookup optimizations
 
-class W_PyCObject(Wrappable):
-    def __init__(self, space):
+class __extend__(W_Root):
+    __metaclass__ = extendabletype
+    __slots__ = ("_pyolifeline", )
+    _pyolifeline = None
+    def set_pyolifeline(self, lifeline):
+        self._pyolifeline = lifeline
+    def get_pyolifeline(self):
+        return self._pyolifeline
+
+class PyOLifeline(object):
+    def __init__(self, space, pyo):
+        self.pyo = pyo
         self.space = space
 
-    def set_dual(self, w_obj):
-        self.w_dual = w_obj
-
     def __del__(self):
-        Py_DecRef(self.space, self)
+        if self.pyo:
+            assert self.pyo.c_ob_refcnt == 0
+            _Py_Dealloc(self.space, self.pyo)
+            self.pyo = lltype.nullptr(PyObject.TO)
+        # XXX handle borrowed objects here
 
+class GettersAndSetters:
     def getter(self, space, w_self):
         return generic_cpy_call(
             space, self.getset.c_get, w_self,
@@ -158,15 +209,44 @@ class W_PyCObject(Wrappable):
     def member_setter(self, space, w_self, w_value):
         PyMember_SetOne(space, w_self, self.member, w_value)
 
-class W_PyCObjectDual(W_PyCObject):
-    def __init__(self, space):
-        self.space = space
+def c_type_descr__call__(space, w_type, __args__):
+    if isinstance(w_type, W_PyCTypeObject):
+        pyo = make_ref(space, w_type)
+        pto = rffi.cast(PyTypeObjectPtr, pyo)
+        tp_new = pto.c_tp_new
+        try:
+            if tp_new:
+                args_w, kw_w = __args__.unpack()
+                w_args = space.newtuple(args_w)
+                w_kw = space.newdict()
+                for key, w_obj in kw_w.items():
+                    space.setitem(w_kw, space.wrap(key), w_obj)
+                return generic_cpy_call(space, tp_new, pto, w_args, w_kw)
+            else:
+                raise operationerrfmt(space.w_TypeError,
+                    "cannot create '%s' instances", w_type.getname(space, '?'))
+        finally:
+            Py_DecRef(space, pyo)
+    else:
+        return call__Type(space, w_type, __args__)
 
-    def set_pycobject(self, w_pycobject):
-        self.w_pycobject = ref(w_pycobject)
+def c_type_descr__new__(space, w_typetype, w_name, w_bases, w_dict):
+    # copied from typetype.descr__new__, XXX missing logic: metaclass resolving
+    w_typetype = _precheck_for_new(space, w_typetype)
 
-    def __del__(self): # ok, subclassing isnt so sensible here
-        pass
+    bases_w = space.fixedview(w_bases)
+    name = space.str_w(w_name)
+    dict_w = {}
+    dictkeys_w = space.listview(w_dict)
+    for w_key in dictkeys_w:
+        key = space.str_w(w_key)
+        dict_w[key] = space.getitem(w_dict, w_key)
+    w_type = space.allocate_instance(W_PyCTypeObject, w_typetype)
+    W_TypeObject.__init__(w_type, space, name, bases_w or [space.w_object],
+                          dict_w)
+    w_type.ready()
+    return w_type
+
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
@@ -202,12 +282,14 @@ def string_dealloc(space, obj):
 def type_dealloc(space, obj):
     state = space.fromcache(State)
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
+    if not obj_pto.c_tp_name or "C_type" == rffi.charp2str(obj_pto.c_tp_name):
+        import pdb; pdb.set_trace()
     type_pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
-    Py_DecRef(space, base_pyo)
     Py_DecRef(space, obj_pto.c_tp_bases)
     Py_DecRef(space, obj_pto.c_tp_cache) # lets do it like cpython
     if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
+        Py_DecRef(space, base_pyo)
         lltype.free(obj_pto.c_tp_name, flavor="raw")
         obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
         generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
@@ -219,7 +301,6 @@ def allocate_type_obj(space, w_type):
     """ Allocates a pto from a w_type which must be a PyPy type. """
     state = space.fromcache(State)
     from pypy.module.cpyext.object import PyObject_dealloc, PyObject_Del
-    assert not isinstance(w_type, W_PyCTypeObject)
     assert isinstance(w_type, W_TypeObject)
 
     pto = lltype.malloc(PyTypeObject, flavor="raw", zero=True)
@@ -264,9 +345,16 @@ def allocate_type_obj(space, w_type):
         PyPyType_Ready(space, pto, w_type)
     else:
         pto.c_ob_type = lltype.nullptr(PyObject.TO)
+    if space.is_w(w_type, space.w_object):
+        pto.c_tp_basicsize = rffi.sizeof(PyObject.TO)
+    elif space.is_w(w_type, space.w_type):
+        pto.c_tp_basicsize = rffi.sizeof(PyTypeObject)
+    elif space.is_w(w_type, space.w_str):
+        pto.c_tp_basicsize = rffi.sizeof(PyStringObject.TO)
+    elif pto.c_tp_base:
+        pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
 
-    #  XXX fill slots in pto
-    #  would look like fixup_slot_dispatchers()
+    update_all_slots(space, w_type, pto)
     return pto
 
 @cpython_api([PyTypeObjectPtr], rffi.INT_real, error=-1)
@@ -283,7 +371,7 @@ def PyPyType_Ready(space, pto, w_obj):
         base = pto.c_tp_base
         if not base and not (w_obj is not None and
             space.is_w(w_obj, space.w_object)):
-            base_pyo = make_ref(space, space.w_object)
+            base_pyo = make_ref(space, space.w_object, steal=True)
             base = pto.c_tp_base = rffi.cast(PyTypeObjectPtr, base_pyo)
         else:
             base_pyo = rffi.cast(PyObject, base)
@@ -301,7 +389,9 @@ def PyPyType_Ready(space, pto, w_obj):
         if w_obj is None:
             PyPyType_Register(space, pto)
         # missing:
-        # inherit_special, inherit_slots, setting __doc__ if not defined and tp_doc defined
+        if base:
+            inherit_special(space, pto, base)
+        # inherit_slots, setting __doc__ if not defined and tp_doc defined
         # inheriting tp_as_* slots
         # unsupported:
         # tp_mro, tp_subclasses
@@ -324,8 +414,8 @@ def PyPyType_Register(space, pto):
         w_obj.ready()
     return 1
 
-W_PyCObject.typedef = W_ObjectObject.typedef
-
 W_PyCTypeObject.typedef = TypeDef(
-    'C_type', W_TypeObject.typedef
+    'C_type', W_TypeObject.typedef,
+    __call__ = interp2app(c_type_descr__call__, unwrap_spec=[ObjSpace, W_Root, Arguments]),
+    __new__ = interp2app(c_type_descr__new__),
     )
