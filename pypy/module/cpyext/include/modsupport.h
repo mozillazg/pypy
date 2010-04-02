@@ -29,6 +29,10 @@ int PyArg_VaParseTupleAndKeywords(PyObject *, PyObject *,
 
 int PyModule_AddObject(PyObject *m, const char *name, PyObject *o);
 
+/*
+ * This is from pyport.h.  Perhaps it belongs elsewhere.
+ */
+#define PyMODINIT_FUNC void
 
 
 #ifdef __cplusplus
