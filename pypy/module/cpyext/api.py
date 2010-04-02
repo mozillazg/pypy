@@ -410,7 +410,7 @@ def build_bridge(space, rename=True):
     struct PyPyAPI* pypyAPI = &_pypyAPI;
     """ % dict(members=structmembers)
 
-    functions = generate_decls_and_callbacks(db)
+    functions = generate_decls_and_callbacks(db, export_symbols)
 
     global_objects = []
     for name, (type, expr) in GLOBALS.iteritems():
@@ -484,7 +484,7 @@ def generate_macros(export_symbols, rename=True, do_deref=True):
     pypy_macros_h = udir.join('pypy_macros.h')
     pypy_macros_h.write('\n'.join(pypy_macros))
 
-def generate_decls_and_callbacks(db):
+def generate_decls_and_callbacks(db, export_symbols):
     # implement function callbacks and generate function decls
     functions = []
     pypy_decls = []
@@ -510,6 +510,8 @@ def generate_decls_and_callbacks(db):
                   (name, name_no_star))
         pypy_decls.append(header + ';')
         functions.append(header + '\n{return va_arg(*vp, %s);}\n' % name)
+        if not we_are_translated():
+            export_symbols.append('pypy_va_get_%s' % (name_no_star,))
     
     pypy_decls.append("#endif\n")
 
