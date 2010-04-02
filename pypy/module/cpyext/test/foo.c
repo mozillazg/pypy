@@ -4,6 +4,7 @@
 typedef struct {
 	PyObject_HEAD
     int	foo;		/* the context holder */
+    PyObject *foo_object;
 } fooobject;
 
 static PyTypeObject footype;
@@ -18,6 +19,7 @@ newfooobject(void)
 		return NULL;
 
 	foop->foo = 42;
+	foop->foo_object = NULL;
 	return foop;
 }
 
@@ -99,6 +101,10 @@ static PyMemberDef foo_members[] = {
     {"int_member_readonly", T_INT, offsetof(fooobject, foo), READONLY,
      "A helpful docstring."},
     {"broken_member", 0xaffe, 0, 0, ""},
+    {"object_member", T_OBJECT, offsetof(fooobject, foo_object), 0,
+     "A Python object."},
+    {"object_member_ex", T_OBJECT_EX, offsetof(fooobject, foo_object), 0,
+     "A Python object."},
     {NULL}  /* Sentinel */
 };
 

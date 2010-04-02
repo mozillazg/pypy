@@ -61,9 +61,10 @@ class W_MemberDescr(GetSetProperty):
         if doc:
             doc = rffi.charp2str(getset.c_doc)
         get = GettersAndSetters.member_getter.im_func
+        del_ = GettersAndSetters.member_delete.im_func
         if not (flags & structmemberdefs.READONLY):
             set = GettersAndSetters.member_setter.im_func
-        GetSetProperty.__init__(self, get, set, None, doc,
+        GetSetProperty.__init__(self, get, set, del_, doc,
                                 cls=None, use_closure=True, # XXX cls?
                                 tag="cpyext_2")
 
@@ -209,6 +210,9 @@ class GettersAndSetters:
 
     def member_getter(self, space, w_self):
         return PyMember_GetOne(space, w_self, self.member)
+
+    def member_delete(self, space, w_self):
+        PyMember_SetOne(space, w_self, self.member, None)
 
     def member_setter(self, space, w_self, w_value):
         PyMember_SetOne(space, w_self, self.member, w_value)

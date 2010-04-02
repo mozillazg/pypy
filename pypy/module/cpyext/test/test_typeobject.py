@@ -33,9 +33,27 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert obj.int_member == 23
         obj.int_member = 42
         raises(TypeError, "obj.int_member = 'not a number'")
+        raises(TypeError, "del obj.int_member")
         raises(TypeError, "obj.int_member_readonly = 42")
+        exc = raises(TypeError, "del obj.int_member_readonly")
+        assert "readonly" in str(exc.value)
         raises(SystemError, "obj.broken_member")
         raises(SystemError, "obj.broken_member = 42")
+
+        assert obj.object_member is None
+        obj.object_member = "hello"
+        assert obj.object_member == "hello"
+        del obj.object_member
+        del obj.object_member
+        assert obj.object_member is None
+        raises(AttributeError, "obj.object_member_ex")
+        obj.object_member_ex = None
+        assert obj.object_member_ex is None
+        obj.object_member_ex = 42
+        assert obj.object_member_ex == 42
+        del obj.object_member_ex
+        raises(AttributeError, "del obj.object_member_ex")
+
         a = module.fooType
         assert "cannot create" in raises(TypeError, "a()").value.message
         skip("In Progress")
