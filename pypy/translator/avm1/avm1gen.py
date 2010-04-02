@@ -50,8 +50,17 @@ class PyPyAVM1Gen(avm1gen.AVM1Gen, OOGenerator):
             
         super(PyPyAVM1Gen, self).load(v, *args)
 
-
     def new(self, TYPE):
         if isinstance(TYPE, ootype.List):
             self.oonewarray(None)
-    
+
+    def push_primitive_constant(self, TYPE, value):
+        if TYPE is ootype.Void:
+            self.push_null()
+        elif TYPE is ootype.String:
+            if value._str is None:
+                self.push_null()
+            else:
+                self.push_const(value._str)
+        else:
+            self.push_const(value)

@@ -1,4 +1,4 @@
-from py.compat import optparse
+import optparse
 
 import autopath
 from pypy.translator.translator import TranslationContext
@@ -150,7 +150,13 @@ class Translation(object):
         backend = self.ensure_backend()
         getattr(self.driver, 'compile_'+backend)()
         return self.driver.c_entryp
-       
+
+    def compile_tamarin(self, argtypes=None, **kwds):
+        self.update_options(argtypes, kwds)
+        self.ensure_backend('tamarin')
+        self.driver.compile_tamarin()
+        return self.driver.c_entryp
+    
     def compile_c(self, argtypes=None, **kwds):
         self.update_options(argtypes, kwds)
         self.ensure_backend('c')

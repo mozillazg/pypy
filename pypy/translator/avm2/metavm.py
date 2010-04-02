@@ -1,7 +1,7 @@
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.oosupport.metavm import MicroInstruction, \
-     PushAllArgs, StoreResult, GetField, SetField, DownCast
-from pypy.translator.oosupport.metavm import _Call as _OOCall
+from pypy.translator.oosupport.metavm import MicroInstruction, PushAllArgs, \
+     StoreResult, GetField, SetField, DownCast, _Call as _OOCall, \
+     get_primitive_name
 from pypy.translator.avm2.runtime import _static_meth, NativeInstance
 from pypy.translator.avm2 import types_ as types
 from mech.fusion.avm2 import constants
@@ -16,13 +16,12 @@ def functype_to_cts(cts, FUNC):
     return ret_type, arg_types
 
 class _Call(_OOCall):
-    
     def render(self, generator, op):
         callee = op.args[0].value
         if isinstance(callee, _static_meth):
             self._render_static_function(generator, callee, op.args)
         else:
-            _OOCall.render(self, generator, op)
+            generator.call_graph(op.args[0].value.graph, op.args[1:])
 
     def _render_static_function(self, generator, funcdesc, args):
         import pdb; pdb.set_trace()
@@ -43,6 +42,18 @@ class _Call(_OOCall):
 
 
 class _CallMethod(_Call):
+    DISPATCH = {
+        ootype.Array : {
+            "ll_setitem_fast": lambda gen: gen.array_setitem(),
+            "ll_getitem_fast": lambda gen: gen.array_getitem(),
+            "ll_length": lambda gen: gen.get_field("length", types.types.int),
+        },
+        ootype.AbstractString : {
+            "ll_append": lambda gen: gen.emit('add'),
+            "ll_stritem_nonneg": lambda gen: gen.call_method("charAt", 1, types.types.string),
+            "ll_strlen": lambda gen: gen.get_field("length", types.types.int),
+        },
+    }
     def render(self, generator, op):
         method = op.args[0]
         self._render_method(generator, method.value, op.args[1:])
@@ -55,22 +66,10 @@ class _CallMethod(_Call):
         else:
             generator.load(*args)
 
-        if isinstance(this.concretetype, ootype.Array) and this.concretetype.ITEM is not ootype.Void:
-            if method_name == "ll_setitem_fast":
-                generator.array_setitem()
-            elif method_name == "ll_getitem_fast":
-                generator.array_getitem()
-            elif method_name == "ll_length":
-                generator.array_length()
-            else:
-                assert False
-        elif isinstance(this.concretetype, ootype.AbstractString):
-            if method_name == "ll_append":
-                generator.emit('add')
-            elif method_name == "ll_stritem_nonneg":
-                generator.call_method("charAt", 1)
-            elif method_name == "ll_strlen":
-                generator.get_field("length")
+        for TYPE, D in self.DISPATCH.iteritems():
+            if isinstance(this.concretetype, TYPE):
+                D[method_name](generator)
+                break
         else:
             generator.call_method(method_name, len(args)-1)
 

@@ -14,7 +14,6 @@ from pypy.rpython.rint import IntegerRepr
 from pypy.rpython.ootypesystem.rootype import OOInstanceRepr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import Meth, StaticMethod
-# from pypy.translator.avm2 import constants
 
 ## Annotation model
 
@@ -293,25 +292,6 @@ class NativeClass(object):
         meth = self._static_methods[meth_name]
         return meth._resolver.annotate(args_s)
 
-    # def _load_class(self):
-    #     names = self._INSTANCE._namespace.split('.')
-    #     names.append(self._INSTANCE._classname)
-    #     obj = PythonNet
-    #     for name in names:
-    #         obj = getattr(obj, name)
-    #     self._PythonNet_class = obj
-
-    # def __getattr__(self, attr):
-    #     if attr in self._static_methods or attr in self._static_fields:
-    #         self._load_class()
-    #         return getattr(self._PythonNet_class, attr)
-    #     else:
-    #         raise AttributeError, attr
-
-    # def __call__(self, *args):
-    #     self._load_class()
-    #     return self._PythonNet_class(*args)
-
 
 class Entry(ExtRegistryEntry):
     _type_ = NativeClass
@@ -322,190 +302,6 @@ class Entry(ExtRegistryEntry):
     def compute_result_annotation(self):
         return SomeOOInstance(self.instance._INSTANCE)
 
-
-# BOXABLE_TYPES = [ootype.Signed, ootype.Unsigned, ootype.SignedLongLong,
-#                  ootype.UnsignedLongLong, ootype.Bool, ootype.Float,
-#                  ootype.Char, ootype.String]
-
-# class BoxedSpace:
-#     objects = {}
-#     index = 0
-#     def put(cls, obj):
-#         index = cls.index
-#         cls.objects[index] = obj
-#         cls.index += 1
-#         return index
-#     put = classmethod(put)
-
-#     def get(cls, index):
-#         return cls.objects[index]
-#     get = classmethod(get)
-
-# def box(x):
-#     t = type(x)
-#     if t is int:
-#         return CLR.System.Int32(x)
-#     elif t is r_uint:
-#         return CLR.System.UInt32(x)
-#     elif t is r_longlong:
-#         return CLR.System.Int64(x)
-#     elif t is r_ulonglong:
-#         return CLR.System.UInt64(x)
-#     elif t is bool:
-#         return CLR.System.Boolean(x)
-#     elif t is float:
-#         return CLR.System.Double(x)
-#     elif t is str or t is unicode:
-#         if len(x) == 1:
-#             return CLR.System.Char(x)
-#         else:
-#             return CLR.System.String(x)
-#     elif isinstance(x, ootype._class):
-#         if hasattr(x, '_FUNC'):
-#             TYPE = x._FUNC
-#             assert isinstance(TYPE, ootype.StaticMethod)
-#             return typeof(TYPE)
-#         else:
-#             name = '%s.%s' % (x._INSTANCE._namespace, x._INSTANCE._classname)
-#             t = CLR.System.Type.GetType(name)
-#             assert t is not None
-#             return t
-#     elif isinstance(x, PythonNet.System.Object):
-#         return x
-#     elif x is None:
-#         return None
-#     else:
-#         # cast RPython instances to System.Object is trivial when
-#         # translated but not when interpreting, because Python for
-#         # .NET doesn't support passing aribrary Python objects to
-#         # .NET. To solve, we store them in the BoxedSpace, then we
-#         # return an opaque objects, which will be used by unbox to
-#         # retrieve the original RPython instance.
-#         index = BoxedSpace.put(x)
-#         res = PythonNet.pypy.test.ObjectWrapper(index)
-#         return res
-
-# def unbox(x, TYPE):
-#     if isinstance(x, PythonNet.pypy.test.ObjectWrapper):
-#         x = BoxedSpace.get(x.index)
-
-#     if isinstance(TYPE, (type, types.ClassType)):
-#         # we need to check the TYPE and return None if it fails
-#         if isinstance(x, TYPE):
-#             return x
-#         else:
-#             return None
-
-#     if isinstance(TYPE, ootype.OOType) and TYPE is not ootype.String and not isinstance(TYPE, ootype.StaticMethod):
-#         try:
-#             return ootype.enforce(TYPE, x)
-#         except TypeError:
-#             return None
-
-#     # TODO: do the typechecking also in the other cases
-
-#     # this is a workaround against a pythonnet limitation: you can't
-#     # directly get the, e.g., python int from the System.Int32 object:
-#     # a simple way to do this is to put it into an ArrayList and
-#     # retrieve the value.
-#     tmp = PythonNet.System.Collections.ArrayList()
-#     tmp.Add(x)
-#     return tmp[0]
-
-
-# class Entry(ExtRegistryEntry):
-#     _about_ = box
-
-#     def compute_result_annotation(self, x_s):
-#         can_be_None = getattr(x_s, 'can_be_None', False)
-#         return SomeOOInstance(CLR.System.Object._INSTANCE, can_be_None=can_be_None)
-
-#     def specialize_call(self, hop):
-#         v_obj, = hop.inputargs(*hop.args_r)
-
-#         hop.exception_cannot_occur()
-#         TYPE = v_obj.concretetype
-#         if (TYPE is ootype.String or isinstance(TYPE, (ootype.OOType, NativeInstance))):
-#             return hop.genop('ooupcast', [v_obj], hop.r_result.lowleveltype)
-#         else:
-#             if TYPE not in BOXABLE_TYPES:
-#                 raise TyperError, "Can't box values of type %s" % v_obj.concretetype
-#             return hop.genop('clibox', [v_obj], hop.r_result.lowleveltype)
-
-
-# class Entry(ExtRegistryEntry):
-#     _about_ = unbox
-
-#     def compute_result_annotation(self, x_s, type_s):
-#         assert isinstance(x_s, SomeOOInstance)
-#         assert isinstance(x_s.ootype, NativeInstance)
-#         assert type_s.is_constant()
-#         TYPE = type_s.const
-#         if isinstance(TYPE, (type, types.ClassType)):
-#             # it's a user-defined class, so we return SomeInstance
-#             # can_be_None == True because it can always return None, if it fails
-#             classdef = self.bookkeeper.getuniqueclassdef(TYPE)
-#             return SomeInstance(classdef, can_be_None=True)
-#         elif TYPE in BOXABLE_TYPES:
-#             return OverloadingResolver.lltype_to_annotation(TYPE)
-#         elif isinstance(TYPE, ootype.StaticMethod):
-#             return SomeOOStaticMeth(TYPE)
-#         elif isinstance(TYPE, ootype.OOType):
-#             return SomeOOInstance(TYPE)
-#         else:
-#             assert False
-            
-
-#     def specialize_call(self, hop):
-#         assert hop.args_s[1].is_constant()
-#         TYPE = hop.args_s[1].const
-#         v_obj = hop.inputarg(hop.args_r[0], arg=0)
-#         if TYPE is ootype.String or isinstance(TYPE, (type, types.ClassType)) or isinstance(TYPE, ootype.OOType):
-#             return hop.genop('oodowncast', [v_obj], hop.r_result.lowleveltype)
-#         else:
-#             c_type = hop.inputconst(ootype.Void, TYPE)
-#             return hop.genop('cliunbox', [v_obj, c_type], hop.r_result.lowleveltype)
-
-
-
-# native_exc_cache = {}
-# def NativeException(cliClass):
-#     try:
-#         return native_exc_cache[cliClass._name]
-#     except KeyError:
-#         res = _create_NativeException(cliClass)
-#         native_exc_cache[cliClass._name] = res
-#         return res
-
-# def _create_NativeException(cliClass):
-#     from pypy.translator.cli.support import getattr_ex
-#     TYPE = cliClass._INSTANCE
-#     if PythonNet.__name__ in ('CLR', 'clr'):
-#         # we are using pythonnet -- use the .NET class
-#         name = '%s.%s' % (TYPE._namespace, TYPE._classname)
-#         res = getattr_ex(PythonNet, name)
-#     else:
-#         # we are not using pythonnet -- create a fake class
-#         res = types.ClassType(TYPE._classname, (Exception,), {})
-#     res._rpython_hints = {'NATIVE_INSTANCE': TYPE}
-#     return res
-
-# def native_exc(exc):
-#     return exc
-
-# class Entry(ExtRegistryEntry):
-#     _about_ = native_exc
-
-#     def compute_result_annotation(self, exc_s):
-#         assert isinstance(exc_s, SomeInstance)
-#         cls = exc_s.classdef.classdesc.pyobj
-#         assert issubclass(cls, Exception)
-#         NATIVE_INSTANCE = cls._rpython_hints['NATIVE_INSTANCE']
-#         return SomeOOInstance(NATIVE_INSTANCE)
-
-#     def specialize_call(self, hop):
-#         v_obj, = hop.inputargs(*hop.args_r)
-#         return hop.genop('same_as', [v_obj], hop.r_result.lowleveltype)
 
 def new_array(type, length):
     return [None] * length
@@ -613,69 +409,69 @@ class Entry(ExtRegistryEntry):
 #         return hop.genop('cli_eventhandler', [v_obj, c_methodname], hop.r_result.lowleveltype)
 
 
-def clidowncast(obj, TYPE):
-    return obj
+## def clidowncast(obj, TYPE):
+##     return obj
 
-class Entry(ExtRegistryEntry):
-    _about_ = clidowncast
+## class Entry(ExtRegistryEntry):
+##     _about_ = clidowncast
 
-    def compute_result_annotation(self, s_value, s_type):
-        if isinstance(s_type.const, ootype.OOType):
-            TYPE = s_type.const
-        else:
-            Class = s_type.const
-            TYPE = Class._INSTANCE
-        assert ootype.isSubclass(TYPE, s_value.ootype)
-        return SomeOOInstance(TYPE)
+##     def compute_result_annotation(self, s_value, s_type):
+##         if isinstance(s_type.const, ootype.OOType):
+##             TYPE = s_type.const
+##         else:
+##             Class = s_type.const
+##             TYPE = Class._INSTANCE
+##         assert ootype.isSubclass(TYPE, s_value.ootype)
+##         return SomeOOInstance(TYPE)
 
-    def specialize_call(self, hop):
-        assert isinstance(hop.args_s[0], annmodel.SomeOOInstance)
-        v_inst = hop.inputarg(hop.args_r[0], arg=0)
-        return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result.lowleveltype)
+##     def specialize_call(self, hop):
+##         assert isinstance(hop.args_s[0], annmodel.SomeOOInstance)
+##         v_inst = hop.inputarg(hop.args_r[0], arg=0)
+##         return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result.lowleveltype)
 
-def cast_record_to_object(record):
-    T = ootype.typeOf(record)
-    assert isinstance(T, ootype.Record)
-    return ootype._view(playerglobal.Object._INSTANCE, record)
+## def cast_record_to_object(record):
+##     T = ootype.typeOf(record)
+##     assert isinstance(T, ootype.Record)
+##     return ootype._view(playerglobal.Object._INSTANCE, record)
 
-def cast_object_to_record(T, obj):
-    assert isinstance(T, ootype.Record)
-    assert isinstance(obj, ootype._view)
-    assert isinstance(obj._inst, ootype._record)
-    record = obj._inst
-    assert ootype.typeOf(record) == T
-    return record
+## def cast_object_to_record(T, obj):
+##     assert isinstance(T, ootype.Record)
+##     assert isinstance(obj, ootype._view)
+##     assert isinstance(obj._inst, ootype._record)
+##     record = obj._inst
+##     assert ootype.typeOf(record) == T
+##     return record
 
-class Entry(ExtRegistryEntry):
-    _about_ = cast_record_to_object
+## class Entry(ExtRegistryEntry):
+##     _about_ = cast_record_to_object
 
-    def compute_result_annotation(self, s_value):
-        T = s_value.ootype
-        assert isinstance(T, ootype.Record)
-        can_be_None = getattr(s_value, 'can_be_None', False)
-        return SomeOOInstance(playerglobal.Object._INSTANCE, can_be_None=can_be_None)
+##     def compute_result_annotation(self, s_value):
+##         T = s_value.ootype
+##         assert isinstance(T, ootype.Record)
+##         can_be_None = getattr(s_value, 'can_be_None', False)
+##         return SomeOOInstance(playerglobal.Object._INSTANCE, can_be_None=can_be_None)
 
-    def specialize_call(self, hop):
-        assert isinstance(hop.args_s[0], annmodel.SomeOOInstance)
-        v_obj, = hop.inputargs(*hop.args_r)
-        hop.exception_cannot_occur()
-        return hop.genop('ooupcast', [v_obj], hop.r_result.lowleveltype)
+##     def specialize_call(self, hop):
+##         assert isinstance(hop.args_s[0], annmodel.SomeOOInstance)
+##         v_obj, = hop.inputargs(*hop.args_r)
+##         hop.exception_cannot_occur()
+##         return hop.genop('ooupcast', [v_obj], hop.r_result.lowleveltype)
 
-class Entry(ExtRegistryEntry):
-    _about_ = cast_object_to_record
+## class Entry(ExtRegistryEntry):
+##     _about_ = cast_object_to_record
 
-    def compute_result_annotation(self, s_type, s_value):
-        assert s_type.is_constant()
-        T = s_type.const
-        assert isinstance(T, ootype.Record)
-        can_be_None = getattr(s_value, 'can_be_None', False)
-        return SomeOOInstance(T, can_be_None)
+##     def compute_result_annotation(self, s_type, s_value):
+##         assert s_type.is_constant()
+##         T = s_type.const
+##         assert isinstance(T, ootype.Record)
+##         can_be_None = getattr(s_value, 'can_be_None', False)
+##         return SomeOOInstance(T, can_be_None)
 
-    def specialize_call(self, hop):
-        assert hop.args_s[0].is_constant()
-        TYPE = hop.args_s[0].const
-        v_obj = hop.inputarg(hop.args_r[1], arg=1)
-        return hop.genop('oodowncast', [v_obj], hop.r_result.lowleveltype)
+##     def specialize_call(self, hop):
+##         assert hop.args_s[0].is_constant()
+##         TYPE = hop.args_s[0].const
+##         v_obj = hop.inputarg(hop.args_r[1], arg=1)
+##         return hop.genop('oodowncast', [v_obj], hop.r_result.lowleveltype)
 
 #class _fieldinfo(object):
 #     def __init__(self, llvalue):

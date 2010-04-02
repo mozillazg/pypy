@@ -1,4 +1,3 @@
-
 """ backend generator routines
 """
 
@@ -14,32 +13,19 @@ from pypy.translator.oosupport.metavm import Generator
 from pypy.translator.oosupport.constant import push_constant
 from pypy.translator.oosupport.function import render_sub_op
 
-
 from itertools import chain
 
 class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
-
-    def __init__(self, db, abc):
-        super(PyPyAvm2ilasm, self).__init__(abc)
+    def __init__(self, db, abc, optimize=False):
+        super(PyPyAvm2ilasm, self).__init__(abc, optimize=optimize)
         self.db  = db
         self.cts = db.genoo.TypeSystem(db)
 
     def _get_type(self, TYPE):
-        return self.cts.lltype_to_cts(TYPE)
-
-    def _get_class_context(self, name, DICT):
-        class_desc = query.get_class_desc(name)
-        if class_desc:
-            BaseType = class_desc.BaseType
-            if '.' in BaseType:
-                ns, name = class_desc.BaseType.rsplit('.', 1)
-            else:
-                ns, name = '', BaseType
-            class_desc.super_name = constants.packagedQName(ns, name)
-            class_desc.name       = constants.packagedQName(class_desc.Package, class_desc.ShortName)
-            return class_desc
-        else:
-            return super(PyPyAvm2ilasm, self).get_class_context(name, DICT)
+        t = self.cts.lltype_to_cts(TYPE)
+        if t:
+            return t.multiname()
+        return super(PyPyAvm2ilasm, self)._get_type(TYPE)
 
     def load(self, v, *args):
         if isinstance(v, flowmodel.Variable):
@@ -57,29 +43,21 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
         for e in args:
             self.load(e)
 
-    # def prepare_call_oostring(self, OOTYPE):
-    #     self.I(instructions.findpropstrict(types._str_qname))
-    
-    # def call_oostring(self, OOTYPE):
-    #     self.I(instructions.callproperty(types._str_qname, 1))
-        
-    # call_oounicode = call_oostring
-    # prepare_call_oounicode = prepare_call_oostring
-    
     def oonewarray(self, TYPE, length=1):
         self.load(types.vec_qname)
         self.load(self.cts.lltype_to_cts(TYPE.ITEM))
         self.I(instructions.applytype(1))
         self.load(length)
         self.I(instructions.construct(1))
-        self.I(instructions.coerce(self.cts.lltype_to_cts(TYPE).multiname()))
-    
+        self.I(instructions.coerce(self.cts.lltype_to_cts(TYPE)))
+
     def push_primitive_constant(self, TYPE, value):
         if TYPE is ootype.Void:
             self.push_null()
         elif TYPE is ootype.String:
             if value._str is None:
                 self.push_null()
+                self.downcast(types.types.string)
             else:
                 self.push_const(value._str)
         else:
@@ -87,7 +65,7 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
 
     def new(self, TYPE):
         # XXX: assume no args for now
-        t = self.cts.lltype_to_cts(TYPE).multiname()
+        t = self._get_type(TYPE)
         self.emit('findpropstrict', t)
         self.emit('constructprop', t, 0)
 
@@ -102,23 +80,20 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
         self.I(instructions.getproperty(constants.MultinameL(
                     constants.PROP_NAMESPACE_SET)))
 
-    def array_length(self):
-        self.I(instructions.getproperty(constants.QName("length")))
-    
-    def call_graph(self, graph, func_name=None):
+    def call_graph(self, graph, args=[]):
         """
         Call a graph.
         """
-        if func_name is None:
-            self.db.pending_function(graph)
-        func_name = func_name or graph.name
+        self.db.pending_function(graph)
         namespace = getattr(graph.func, '_namespace_', None)
+        numargs = len(args)
         if namespace:
-            qname = constants.packagedQName(namespace, func_name)
+            qname = constants.packagedQName(namespace, graph.name)
         else:
-            qname = constants.QName(func_name)
+            qname = constants.QName(graph.name)
         self.emit('findpropstrict', qname)
-        self.emit('callproperty', qname)
+        self.load(*args)
+        self.emit('callproperty', qname, numargs)
 
     def store(self, v):
         """
@@ -133,9 +108,3 @@ class PyPyAvm2ilasm(avm2gen.Avm2ilasm, Generator):
         self.push_var(v.name)
 
     push_arg = push_local
-
-    def new(self, TYPE):
-        # XXX: assume no args for now
-        TYPE = self._get_type(TYPE)
-        self.emit('findpropstrict', TYPE)
-        self.emit('constructprop', TYPE, 0)

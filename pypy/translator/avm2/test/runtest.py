@@ -40,33 +40,25 @@ def parse_result(string):
             pass
     return string
 
-def compile_function(func, name, annotation=[], graph=None, backendopt=True,
+def compile_function(func, name, annotation=[], backendopt=True,
                      exctrans=False, annotatorpolicy=None, wrapexc=False):
     olddefs = patch_os()
-    gen = _build_gen(func, annotation, graph, backendopt,
-                     exctrans, annotatorpolicy)
+    gen = _build_gen(func, annotation, backendopt, exctrans, annotatorpolicy)
     entry_point = ENTRY_POINTS[option.tamtarget](name, gen, wrapexc)
     gen.ilasm = entry_point.actions
     gen.generate_source()
     unpatch_os(olddefs) # restore original values
-    return entry_point
+    return entry_point, gen
 
-def _build_gen(func, annotation, graph=None, backendopt=True, exctrans=False,
+def _build_gen(func, annotation, backendopt=True, exctrans=False,
                annotatorpolicy=None):
-    try: 
+    try:
         func = func.im_func
-    except AttributeError: 
+    except AttributeError:
         pass
     t = TranslationContext()
-    if graph is not None:
-        graph.func = func
-        ann = t.buildannotator(policy=annotatorpolicy)
-        inputcells = [ann.typeannotation(an) for an in annotation]
-        ann.build_graph_types(graph, inputcells)
-        t.graphs.insert(0, graph)
-    else:
-        ann = t.buildannotator(policy=annotatorpolicy)
-        ann.build_types(func, annotation)
+    ann = t.buildannotator(policy=annotatorpolicy)
+    ann.build_types(func, annotation)
 
     t.buildrtyper(type_system="ootype").specialize()
     if backendopt:
@@ -76,9 +68,8 @@ def _build_gen(func, annotation, graph=None, backendopt=True, exctrans=False,
     if option.view:
         t.view()
 
-    main_graph = t.graphs[0]
     tmpdir = py.path.local('.')
-    
+
     return GenAVM2(tmpdir, t, None, exctrans)
 
 class AVM2Test(BaseRtypingTest, OORtypeMixin):
@@ -88,7 +79,6 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
         self._harness = None
 
     def _compile(self, fn, args, ann=None, backendopt=True, exctrans=False, wrapexc=False):
-        
         frame = sys._getframe()
         while frame:
             name = frame.f_code.co_name
@@ -97,10 +87,10 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
             frame = frame.f_back
         else:
             name = "test_unknown"
-        
+
         if ann is None:
             ann = [lltype_to_annotation(typeOf(x)) for x in args]
-        
+
         self._entry_point = compile_function(fn, "%s.%s" % (type(self).__name__, name),
             ann, backendopt=backendopt, exctrans=exctrans, wrapexc=wrapexc)
         self._func = fn
@@ -117,25 +107,26 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
 
     def _skip_llinterpreter(self, reason, skipLL=True, skipOO=True):
         pass
-    
+
     def _get_backendopt(self, backendopt):
         if backendopt is None:
             backendopt = getattr(self, 'backendopt', True) # enable it by default
         return backendopt
-    
-    def interpret(self, fn, args, annotation=None, backendopt=None, exctrans=False, wrapexc=False):
+
+    def interpret(self, fn, args, annotation=None, backendopt=None,
+                  exctrans=False, wrapexc=False):
         backendopt = self._get_backendopt(backendopt)
-        entry_point = self._compile(fn, args, annotation, backendopt=backendopt,
-                                exctrans=exctrans, wrapexc=wrapexc)
-        print entry_point
+        entry_point, gen = self._compile(fn, args, annotation,
+            backendopt, exctrans, wrapexc)
         entry_point.start_test()
-        entry_point.actions.call_function_constargs(fn.func_name, *args)
+        entry_point.actions.call_graph(gen.translator.graphs[0], args)
         result = parse_result(entry_point.do_test())
         if isinstance(result, ExceptionWrapper):
             raise result
         return result
-    
-    def interpret_raises(self, exception, fn, args, backendopt=None, exctrans=False):
+
+    def interpret_raises(self, exception, fn, args, backendopt=None,
+                         exctrans=False):
         import exceptions # needed by eval
         backendopt = self._get_backendopt(backendopt)
         try:
@@ -163,7 +154,7 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
         return t
 
     def class_name(self, value):
-        return value.class_name.split(".")[-1] 
+        return value.class_name.split(".")[-1]
 
     def is_of_instance_type(self, val):
         return isinstance(val, InstanceWrapper)
