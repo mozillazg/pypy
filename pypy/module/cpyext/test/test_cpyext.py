@@ -245,6 +245,17 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         assert module.__doc__ == "docstring"
         assert module.return_cookie() == 3.14
 
+
+    def test_modinit_func(self):
+        """
+        A module can use the PyMODINIT_FUNC macro to declare or define its
+        module initializer function.
+        """
+        skip("This leaks references for some reason")
+        module = self.import_module(name='modinit')
+        assert module.__name__ == 'modinit'
+
+
     def test_export_function2(self):
         import sys
         init = """
