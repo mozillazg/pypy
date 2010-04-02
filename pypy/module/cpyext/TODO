@@ -3,6 +3,8 @@
   - Copy the slots from the base.
   - Both tasks are necessary to be able to call slots from C code correctly.
 
+  - test_typeobject leaks something
+
  - Implement subclassing of types defined in C.
 
  - Use a WeakKeyDictionary to count how often a PyObject is allocated for
@@ -25,7 +27,3 @@
 
  - refactor management of py_objects_r2w and py_objects_w2r, this can
    probably be expressed in terms of _PyObject_GC_TRACK macros.
-
- - Use the standard CPython attribute names: ob_type, ob_refcnt.
-
- - ob_type should be a PyTypeObject.
