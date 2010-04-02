@@ -17,7 +17,8 @@ def pypy_vgetargs1(space, w_obj, fmt, va_list_p, lgt):
         if c == "\x00":
             return 0
         if c == "i":
-            pyobj = api.va_get_int_star(va_list_p)
+            #pyobj = api.va_get_int_star(va_list_p)
             # XXX processs....
+            pass
         i += 1
     return 0
