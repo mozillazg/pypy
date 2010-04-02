@@ -82,6 +82,7 @@ class AppTestCpythonExtensionBase:
         mod = compile_module(name, **kwds)
 
         api.load_extension_module(self.space, mod, name)
+        self.name = name
         return self.space.getitem(
             self.space.sys.get('modules'),
             self.space.wrap(name))
@@ -120,14 +121,16 @@ class AppTestCpythonExtensionBase:
     def teardown_method(self, func):
         try:
             w_mod = self.space.getitem(self.space.sys.get('modules'),
-                               self.space.wrap('foo'))
+                               self.space.wrap(self.name))
             self.space.delitem(self.space.sys.get('modules'),
-                               self.space.wrap('foo'))
+                               self.space.wrap(self.name))
             Py_DecRef(self.space, w_mod)
             state = self.space.fromcache(State)
             for w_obj in state.non_heaptypes:
                 Py_DecRef(self.space, w_obj)
         except OperationError:
+            pass
+        except AttributeError:
             pass
         state = self.space.fromcache(State)
         if self.check_and_print_leaks():
@@ -267,7 +270,6 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         A module can use the PyMODINIT_FUNC macro to declare or define its
         module initializer function.
         """
-        skip("This leaks references for some reason")
         module = self.import_module(name='modinit')
         assert module.__name__ == 'modinit'
 
