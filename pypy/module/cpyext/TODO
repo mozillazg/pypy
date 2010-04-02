@@ -27,3 +27,5 @@
 
  - refactor management of py_objects_r2w and py_objects_w2r, this can
    probably be expressed in terms of _PyObject_GC_TRACK macros.
+
+ - ob_type should be a PyTypeObject.
