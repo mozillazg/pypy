@@ -4,7 +4,8 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, \
         PyObject
 from pypy.module.cpyext.typeobjectdefs import unaryfunc, wrapperfunc,\
-        ternaryfunc
+        ternaryfunc, PyTypeObjectPtr
+from pypy.module.cpyext.pyobject import from_ref
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.rlib.unroll import unrolling_iterable
@@ -32,12 +33,25 @@ def wrap_call(space, w_self, w_args, func, w_kwds):
     func_target = rffi.cast(ternaryfunc, func)
     return generic_cpy_call(space, func_target, w_self, w_args, w_kwds)
 
+@cpython_api([PyTypeObjectPtr, PyObject, PyObject], PyObject, external=True)
+def slot_tp_new(space, type, w_args, w_kwds):
+    from pypy.module.cpyext.tupleobject import PyTuple_Check
+    pyo = rffi.cast(PyObject, type)
+    w_type = from_ref(space, pyo)
+    w_func = space.getattr(w_type, space.wrap("__new__"))
+    assert PyTuple_Check(space, w_args)
+    args_w = space.listview(w_args)[:]
+    args_w.insert(0, w_type)
+    w_args_new = space.newtuple(args_w)
+    return space.call(w_func, w_args_new, w_kwds)
+
 
 PyWrapperFlag_KEYWORDS = 1
 
 # adopted from typeobject.c
 def FLSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC, FLAGS):
     wrapper = globals().get(WRAPPER, None)
+    function = globals().get(FUNCTION, None)
     slotname = ("c_" + SLOT).split(".")
     assert FLAGS == 0 or FLAGS == PyWrapperFlag_KEYWORDS
     if FLAGS:
@@ -46,7 +60,7 @@ def FLSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC, FLAGS):
     else:
         wrapper1 = wrapper
         wrapper2 = None
-    return (NAME, slotname, FUNCTION, wrapper1, wrapper2, DOC)
+    return (NAME, slotname, function, wrapper1, wrapper2, DOC)
 
 def TPSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC):
     return FLSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC, 0)

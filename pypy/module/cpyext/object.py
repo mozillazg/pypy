@@ -3,22 +3,16 @@ from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
-from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject, W_PyCObject,\
-        W_PyCObjectDual
+from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject
 from pypy.objspace.std.objectobject import W_ObjectObject
+from pypy.objspace.std.typeobject import W_TypeObject
 import pypy.module.__builtin__.operation as operation
 
 @cpython_api([PyObject], PyObject)
 def _PyObject_New(space, w_type):
     if isinstance(w_type, W_PyCTypeObject):
-        w_pycobj = space.allocate_instance(W_PyCObject, w_type)
-        w_pycobj.__init__(space)
-        w_pycobjd = space.allocate_instance(W_PyCObjectDual, w_type)
-        w_pycobjd.__init__(space)
-        w_pycobjd.set_pycobject(w_pycobj)
-        w_pycobj.set_dual(w_pycobjd)
-        Py_IncRef(space, w_pycobj)
-        return w_pycobj
+        w_obj = space.allocate_instance(W_ObjectObject, w_type)
+        return w_obj
     assert False, "Please add more cases in get_cls_for_type_object!"
 
 @cpython_api([rffi.VOIDP_real], lltype.Void)

@@ -49,7 +49,7 @@ VA_LIST_P = rffi.VOIDP # rffi.COpaquePtr('va_list')
 constant_names = """
 Py_TPFLAGS_READY Py_TPFLAGS_READYING
 METH_COEXIST METH_STATIC METH_CLASS METH_NOARGS
-Py_TPFLAGS_HEAPTYPE
+Py_TPFLAGS_HEAPTYPE Py_TPFLAGS_HAVE_CLASS
 """.split()
 for name in constant_names:
     setattr(CConfig_constants, name, rffi_platform.ConstantInteger(name))
@@ -238,6 +238,7 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
         "Dict": "space.w_dict",
         "Tuple": "space.w_tuple",
         "List": "space.w_list",
+        "Unicode": "space.w_unicode",
         }.items():
     GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
