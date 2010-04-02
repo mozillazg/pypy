@@ -315,9 +315,9 @@ def _make_descr_typecheck_wrapper(tag, func, extraargs, cls, use_closure):
     # - if cls is a string, XXX unused?
     if cls is None and use_closure:
         return func
-    #if hasattr(func, 'im_func'):
-    #    assert func.im_class is cls
-    #    func = func.im_func
+    if hasattr(func, 'im_func'):
+        assert func.im_class is cls
+        func = func.im_func
 
     miniglobals = {
          func.__name__: func,
