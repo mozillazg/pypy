@@ -3,7 +3,7 @@ from pypy.module.cpyext.api import cpython_api, cpython_struct, \
         METH_STATIC, METH_CLASS, METH_COEXIST, CANNOT_FAIL
 from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.interpreter.module import Module
-from pypy.module.cpyext.methodobject import PyCFunction_NewEx, PyDescr_NewMethod
+from pypy.module.cpyext.methodobject import W_PyCFunctionObject, PyCFunction_NewEx, PyDescr_NewMethod
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
 
@@ -14,6 +14,7 @@ PyMethodDef = cpython_struct(
     [('ml_name', rffi.CCHARP),
      ('ml_meth', PyCFunction),
      ('ml_flags', rffi.INT_real),
+     ('ml_doc', rffi.CCHARP),
      ])
 
 def PyImport_AddModule(space, name):
@@ -51,11 +52,16 @@ def convert_method_defs(space, dict_w, methods, pto, w_self=None):
 
             methodname = rffi.charp2str(method.c_ml_name)
             flags = rffi.cast(lltype.Signed, method.c_ml_flags)
+            if method.c_ml_doc:
+                doc = rffi.charp2str(method.c_ml_doc)
+            else:
+                doc = None
+
             if not pto:
                 if flags & METH_CLASS or flags & METH_STATIC:
                     raise OperationError(space.w_ValueError,
                             space.wrap("module functions cannot set METH_CLASS or METH_STATIC"))
-                w_obj = PyCFunction_NewEx(space, method, w_self)
+                w_obj = space.wrap(W_PyCFunctionObject(space, method, w_self, doc))
             else:
                 if methodname in dict_w and not (flags & METH_COEXIST):
                     continue
@@ -71,6 +77,7 @@ def convert_method_defs(space, dict_w, methods, pto, w_self=None):
                     #w_obj = PyStaticMethod_New(space, w_func)
                 else:
                     w_obj = PyDescr_NewMethod(space, pto, method)
+
             dict_w[methodname] = w_obj
 
 
