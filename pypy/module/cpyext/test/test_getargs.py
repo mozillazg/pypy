@@ -15,3 +15,10 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
              '''
              )])
         assert mod.oneargint(1) == 1
+        raises(TypeError, mod.oneargint, None)
+        try:
+            mod.oneargint()
+        except IndexError:
+            pass
+        else:
+            raise Exception("DID NOT RAISE")
