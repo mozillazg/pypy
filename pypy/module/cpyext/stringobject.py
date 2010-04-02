@@ -51,7 +51,7 @@ def PyString_Size(space, ref):
         return space.int_w(space.len(w_obj))
 
 @cpython_api([PyObjectP, Py_ssize_t], rffi.INT_real, error=-1)
-def _PyString_Resize(space, string, newsize):
+def _PyString_Resize(space, w_string, newsize):
     """A way to resize a string object even though it is "immutable". Only use this to
     build up a brand new string object; don't use this if the string may already be
     known in other parts of the code.  It is an error to call this function if the
@@ -64,4 +64,5 @@ def _PyString_Resize(space, string, newsize):
     
     This function used an int type for newsize. This might
     require changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
+    import pdb
+    pdb.set_trace()

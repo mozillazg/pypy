@@ -87,7 +87,7 @@ class AppTestCpythonExtensionBase:
             self.space.sys.get('modules'),
             self.space.wrap(name))
 
-    def import_extension(self, modname, functions):
+    def import_extension(self, modname, functions, prologue=""):
 
         methods_table = []
         codes = []
@@ -103,7 +103,7 @@ class AppTestCpythonExtensionBase:
             """ % (cfuncname, code)
             codes.append(func_code)
 
-        body = "\n".join(codes) + """
+        body = prologue + "\n".join(codes) + """
         static PyMethodDef methods[] = {
         %s
         { NULL }
