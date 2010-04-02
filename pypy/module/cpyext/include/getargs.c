@@ -36,7 +36,7 @@ const char *, char **, va_list);*/
 
 
 /* Forward */
-int pypy_vgetargs1(struct _object *, char *, va_list *, int);
+int pypy_vgetargs1(struct _object *, char *, char *, int);
   //static void seterror(int, const char *, int *, const char *, const char *);
   //static char *convertitem(PyObject *, const char **, va_list *, int, int *, 
   //                       char *, size_t, PyObject **);
@@ -58,7 +58,7 @@ PyArg_Parse(PyObject *args, const char *format, ...)
 	va_list va;
 	
 	va_start(va, format);
-	retval = pypy_vgetargs1(args, format, &va, FLAG_COMPAT);
+	retval = pypy_vgetargs1(args, format, (char*)(&va), FLAG_COMPAT);
 	va_end(va);
 	return retval;
 }

@@ -44,7 +44,7 @@ class CConfig:
 class CConfig_constants:
     _compilation_info_ = CConfig._compilation_info_
 
-va_list = rffi.COpaque('va_list')
+VA_LIST_P = rffi.VOIDP # rffi.COpaquePtr('va_list')
 
 constant_names = """
 Py_TPFLAGS_READY Py_TPFLAGS_READYING
@@ -354,11 +354,13 @@ def make_wrapper(space, callable):
     wrapper.__name__ = "wrapper for %r" % (callable, )
     return wrapper
 
+def process_va_name(name):
+    return name.replace('*', '_star')
+
 def setup_va_functions(eci):
     for name, TP in VA_TP_LIST.iteritems():
-        name_no_star = name.strip('*')
-        ARGS = [lltype.Ptr(va_list)]
-        func = rffi.llexternal('pypy_va_get_%s' % name_no_star, ARGS,
+        name_no_star = process_va_name(name)
+        func = rffi.llexternal('pypy_va_get_%s' % name_no_star, [VA_LIST_P],
                                TP, compilation_info=eci)
         globals()['va_get_%s' % name_no_star] = func
 
@@ -502,7 +504,7 @@ def generate_decls_and_callbacks(db):
     for name, (typ, expr) in GLOBALS.iteritems():
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
     for name in VA_TP_LIST:
-        name_no_star = name.strip('*')
+        name_no_star = process_va_name(name)
         header = ('%s pypy_va_get_%s(va_list* vp)' %
                   (name, name_no_star))
         pypy_decls.append(header + ';')
