@@ -454,6 +454,8 @@ def build_bridge(space, rename=True):
             ll2ctypes.lltype2ctypes(func.get_llhelper(space)),
             ctypes.c_void_p)
 
+    setup_va_functions(eci)
+
     return modulename.new(ext='')
 
 def generate_macros(export_symbols, rename=True, do_deref=True):
