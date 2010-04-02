@@ -369,7 +369,7 @@ def unknown_objclass_getter(space):
 
 @specialize.arg(0)
 def make_objclass_getter(tag, func, cls):
-    if func and not cls and hasattr(func, 'im_func'):
+    if func and hasattr(func, 'im_func'):
         assert not cls or cls is func.im_class
         cls = func.im_class
     return _make_objclass_getter(cls)
