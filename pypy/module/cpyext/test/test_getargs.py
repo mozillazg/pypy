@@ -14,4 +14,4 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
              return PyInt_FromLong(l);
              '''
              )])
-        mod.oneargint(1)
+        assert mod.oneargint(1) == 1
