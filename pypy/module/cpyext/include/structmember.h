@@ -5,6 +5,11 @@ extern "C" {
 #endif
 
 
+#ifndef offsetof
+#define offsetof(type, member) ( (int) & ((type*)0) -> member )
+#endif
+
+
 typedef struct PyMemberDef {
 	/* Current version, use this */
 	char *name;
