@@ -3,7 +3,7 @@ from pypy.module.cpyext.api import (cpython_api, PyVarObjectFields,
                                     PyStringObject, Py_ssize_t, cpython_struct,
                                     CANNOT_FAIL, build_type_checkers,
                                     PyObjectP, cpython_api_c)
-from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
+from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, Py_DecRef
 
 
 PyString_Check, PyString_CheckExact = build_type_checkers("String", "w_str")
@@ -71,5 +71,6 @@ def _PyString_Resize(space, ref, newsize):
     # XXX always create a new string so fa
     w_s = from_ref(space, ref[0])
     ptr = make_ref(space, space.wrap(space.str_w(w_s)[:newsize]))
+    Py_DecRef(space, ref[0])
     ref[0] = ptr
     return 0
