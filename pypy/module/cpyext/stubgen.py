@@ -26,6 +26,8 @@ C_TYPE_TO_PYPY_TYPE = {
         "Py_ssize_t*": "Py_ssize_t",
         "...": "...",
         "char": "lltype.Char",
+        "long": "lltype.Signed",
+        "": "",
         }
 
 C_TYPE_TO_PYPY_TYPE_ARGS = C_TYPE_TO_PYPY_TYPE.copy()
