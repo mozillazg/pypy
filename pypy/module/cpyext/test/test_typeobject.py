@@ -65,13 +65,17 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         raises(TypeError, "obj.string_member_inplace = 42")
         raises(TypeError, "del obj.string_member_inplace")
 
-        skip("In progress")
+        #skip("In progress") # not at all, how does this fail for you amaury?
 
         a = module.fooType
         assert "cannot create" in raises(TypeError, "a()").value.message
         class bar(module.fooType):
-            pass
+            def baz(self):
+                return self
         assert "cannot create" in raises(TypeError, "bar()").value.message
         fuu = module.FuuType
-        fuu_inst = fuu(u"abc")
+        class fuu2(fuu):
+            def baz(self):
+                return self
+        assert fuu2(u"abc").baz().escape()
 
