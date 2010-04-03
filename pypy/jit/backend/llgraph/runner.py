@@ -79,8 +79,8 @@ class BaseCPU(model.AbstractCPU):
                  translate_support_code=False,
                  annmixlevel=None, gcdescr=None):
         assert type(opts) is not bool
-        model.AbstractCPU.__init__(self)
         self.rtyper = rtyper
+        model.AbstractCPU.__init__(self)
         self.translate_support_code = translate_support_code
         self.stats = stats or MiniStats()
         self.stats.exec_counters = {}
@@ -286,6 +286,10 @@ class BaseCPU(model.AbstractCPU):
     def get_zero_division_error(self):
         return (self.cast_adr_to_int(llimpl.get_zero_division_error()),
                 llimpl.get_zero_division_error_value())
+
+    def get_unwind_exception(self):
+        return (self.cast_adr_to_int(llimpl.get_unwind_exception()),
+                llimpl.get_unwind_exception_value())
 
     def sizeof(self, S):
         assert not isinstance(S, lltype.Ptr)
@@ -583,6 +587,11 @@ class OOtypeCPU(BaseCPU):
 
     def get_zero_division_error(self):
         ll_err = llimpl._get_error(ZeroDivisionError)
+        return (ootype.cast_to_object(ll_err.args[0]),
+                ootype.cast_to_object(ll_err.args[1]))
+
+    def get_unwind_exception(self):
+        ll_err = llimpl._get_error(UnwindException)
         return (ootype.cast_to_object(ll_err.args[0]),
                 ootype.cast_to_object(ll_err.args[1]))
 

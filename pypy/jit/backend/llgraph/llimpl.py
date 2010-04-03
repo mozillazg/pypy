@@ -13,7 +13,7 @@ from pypy.jit.metainterp.history import (ConstInt, ConstPtr, ConstAddr,
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.module.support import LLSupport, OOSupport
-from pypy.rpython.llinterp import LLException
+from pypy.rpython.llinterp import LLException, type_name
 from pypy.rpython.extregistry import ExtRegistryEntry
 
 from pypy.jit.metainterp import resoperation, executor
@@ -22,6 +22,7 @@ from pypy.jit.backend.llgraph import symbolic
 
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.translator.stackless.code import UnwindException
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -611,6 +612,9 @@ class Frame(object):
             raise GuardFailed
 
     def op_guard_no_exception(self, _):
+        if self.cpu.stackless:
+            if isinstance(_last_exception, LLException) and type_name(_last_exception.args[0]) == "UnwindException":
+                raise UnwindException
         if _last_exception:
             raise GuardFailed
 
@@ -638,6 +642,9 @@ class Frame(object):
 
     def op_guard_exception(self, _, expected_exception):
         global _last_exception
+        if self.cpu.stackless:
+            if isinstance(_last_exception, LLException) and type_name(_last_exception.args[0]) == "UnwindException":
+                raise UnwindException
         if not self._check_exception(expected_exception):
             raise GuardFailed
         res = _last_exception[1]
@@ -1131,6 +1138,13 @@ def get_zero_division_error_value():
     return lltype.cast_opaque_ptr(llmemory.GCREF,
                                   _get_error(ZeroDivisionError).args[1])
 
+def get_unwind_exception():
+    return llmemory.cast_ptr_to_adr(_get_error(UnwindException).args[0])
+
+def get_unwind_exception_value():
+    return lltype.cast_opaque_ptr(llmemory.GCREF,
+                                  _get_error(UnwindException).args[1])
+
 def force(opaque_frame):
     frame = _from_opaque(opaque_frame)
     assert not frame._forced
@@ -1520,6 +1534,8 @@ setannotation(get_overflow_error, annmodel.SomeAddress())
 setannotation(get_overflow_error_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(get_zero_division_error, annmodel.SomeAddress())
 setannotation(get_zero_division_error_value, annmodel.SomePtr(llmemory.GCREF))
+setannotation(get_unwind_exception, annmodel.SomeAddress())
+setannotation(get_unwind_exception_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, annmodel.SomeInteger())
 setannotation(get_forced_token_frame, s_Frame)
 setannotation(get_frame_forced_token, annmodel.SomeAddress())
