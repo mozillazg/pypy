@@ -56,6 +56,34 @@ def PyErr_Clear(space):
 def PyErr_BadInternalCall(space):
     raise OperationError(space.w_SystemError, space.wrap("Bad internal call!"))
 
+@cpython_api([], rffi.INT_real, error=-1)
+def PyErr_CheckSignals(space):
+    """
+    This function interacts with Python's signal handling.  It checks whether a
+    signal has been sent to the processes and if so, invokes the corresponding
+    signal handler.  If the signal module is supported, this can invoke a
+    signal handler written in Python.  In all cases, the default effect for
+    SIGINT is to raise the  KeyboardInterrupt exception.  If an
+    exception is raised the error indicator is set and the function returns -1;
+    otherwise the function returns 0.  The error indicator may or may not be
+    cleared if it was previously set."""
+    # XXX implement me
+    return 0
+
+@cpython_api([], PyObject, error=CANNOT_FAIL)
+def PyErr_NoMemory(space):
+    """This is a shorthand for PyErr_SetNone(PyExc_MemoryError); it returns NULL
+    so an object allocation function can write return PyErr_NoMemory(); when it
+    runs out of memory.
+    Return value: always NULL."""
+    PyErr_SetNone(space.w_MemoryError)
+
+@cpython_api([PyObject], lltype.Void, error=CANNOT_FAIL)
+def PyErr_SetNone(space, w_type):
+    """This is a shorthand for PyErr_SetObject(type, Py_None)."""
+    PyErr_SetObject(w_type, space.w_None)
+
+
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyErr_GivenExceptionMatches(space, w_given, w_exc):
     """Return true if the given exception matches the exception in exc.  If
