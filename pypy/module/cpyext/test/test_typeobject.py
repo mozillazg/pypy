@@ -39,7 +39,8 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert "readonly" in str(exc.value)
         raises(SystemError, "obj.broken_member")
         raises(SystemError, "obj.broken_member = 42")
-
+        assert module.fooType.broken_member.__doc__ is None
+        assert module.fooType.object_member.__doc__ == "A Python object."
         assert obj.object_member is None
         obj.object_member = "hello"
         assert obj.object_member == "hello"
