@@ -54,6 +54,15 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         del obj.object_member_ex
         raises(AttributeError, "del obj.object_member_ex")
 
+        assert obj.string_member == "Hello from PyPy"
+        raises(TypeError, "obj.string_member = 42")
+        raises(TypeError, "del obj.string_member")
+        obj.unset_string_member()
+        assert obj.string_member is None
+        assert obj.string_member_inplace == "spam"
+        raises(TypeError, "obj.string_member_inplace = 42")
+        raises(TypeError, "del obj.string_member_inplace")
+
         a = module.fooType
         assert "cannot create" in raises(TypeError, "a()").value.message
         skip("In Progress")
