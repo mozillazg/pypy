@@ -22,5 +22,6 @@ def pypy_vgetargs1(space, w_obj, fmt, va_list_p, flags):
             return 1
         if c == "i":
             arr = api.va_get_int_star(va_list_p)
-            arr[0] = space.int_w(space.getitem(w_obj, space.wrap(i)))
+            arr[0] = rffi.cast(rffi.INT,
+                               space.int_w(space.getitem(w_obj, space.wrap(i))))
         i += 1
