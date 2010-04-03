@@ -119,8 +119,9 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
             PyObject* helper(char* fmt, ...)
             {
               va_list va;
+              PyObject* res;
               va_start(va, fmt);
-              PyObject* res = PyString_FromFormatV(fmt, va);
+              res = PyString_FromFormatV(fmt, va);
               va_end(va);
               return res;
             }
