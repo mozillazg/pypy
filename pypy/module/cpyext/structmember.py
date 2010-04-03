@@ -6,7 +6,8 @@ from pypy.module.cpyext.api import ADDR, PyObjectP, cpython_api
 from pypy.module.cpyext.intobject import PyInt_AsLong
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.module.cpyext.pyobject import PyObject, Py_DecRef, from_ref, make_ref
-from pypy.module.cpyext.stringobject import PyString_FromString
+from pypy.module.cpyext.stringobject import (PyString_FromString,
+                                             PyString_FromStringAndSize)
 from pypy.module.cpyext.typeobjectdefs import PyMemberDef
 
 
@@ -27,6 +28,9 @@ def PyMember_GetOne(space, obj, w_member):
     elif member_type == structmemberdefs.T_STRING_INPLACE:
         result = rffi.cast(rffi.CCHARP, addr)
         w_result = PyString_FromString(space, result)
+    elif member_type == structmemberdefs.T_CHAR:
+        result = rffi.cast(rffi.CCHARP, addr)
+        w_result = space.wrap(result[0])
     elif member_type in [structmemberdefs.T_OBJECT,
                          structmemberdefs.T_OBJECT_EX]:
         obj_ptr = rffi.cast(PyObjectP, addr)
@@ -68,6 +72,13 @@ def PyMember_SetOne(space, obj, w_member, w_value):
         w_long_value = PyInt_AsLong(space, w_value)
         array = rffi.cast(rffi.INTP, addr)
         array[0] = rffi.cast(rffi.INT, w_long_value)
+    elif member_type == structmemberdefs.T_CHAR:
+        str_value = space.str_w(w_value)
+        if len(str_value) != 1:
+            raise OperationError(space.w_TypeError,
+                                 space.wrap("string of length 1 expected"))
+        array = rffi.cast(rffi.CCHARP, addr)
+        array[0] = str_value
     elif member_type in [structmemberdefs.T_OBJECT,
                          structmemberdefs.T_OBJECT_EX]:
         array = rffi.cast(PyObjectP, addr)

@@ -121,6 +121,7 @@ static PyMemberDef foo_members[] = {
      "A string."},
     {"string_member_inplace", T_STRING_INPLACE,
      offsetof(fooobject, foo_string_inplace), 0, "An inplace string."},
+    {"char_member", T_CHAR, offsetof(fooobject, foo_string_inplace), 0, NULL},
     {NULL}  /* Sentinel */
 };
 

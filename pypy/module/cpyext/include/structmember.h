@@ -24,6 +24,7 @@ typedef struct PyMemberDef {
 #define T_INT		1
 #define T_STRING	5
 #define T_OBJECT	6
+#define T_CHAR		7	/* 1-character string */
 #define T_STRING_INPLACE 13     /* Strings contained in the structure */
 #define T_OBJECT_EX	16	/* Like T_OBJECT, but raises AttributeError
 				   when the value is NULL, instead of
