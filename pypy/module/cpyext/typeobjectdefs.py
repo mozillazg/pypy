@@ -152,79 +152,86 @@ PyMemberDef = cpython_struct("PyMemberDef", (
     ("doc", rffi.CCHARP),
 ))
 
+# These fields are supported and used in different ways
+# The following comments mean:
+#    #E    essential, initialized for all PTOs
+#    #S    supported
+#    #U    unsupported
+#    #N    not yet implemented
 PyTypeObjectFields = []
 PyTypeObjectFields.extend(PyVarObjectFields)
 PyTypeObjectFields.extend([
-    ("tp_name", rffi.CCHARP), # For printing, in format "<module>.<name>"
-    ("tp_basicsize", Py_ssize_t), ("tp_itemsize", Py_ssize_t), # For allocation
+    ("tp_name", rffi.CCHARP), #E For printing, in format "<module>.<name>"
+    ("tp_basicsize", Py_ssize_t), #E  For allocation
+    ("tp_itemsize", Py_ssize_t),  #E       "
 
     # Methods to implement standard operations
-    ("tp_dealloc", destructor),
-    ("tp_print", printfunc),
-    ("tp_getattr", getattrfunc),
-    ("tp_setattr", setattrfunc),
-    ("tp_compare", cmpfunc),
-    ("tp_repr", reprfunc),
+    ("tp_dealloc", destructor),   #E
+    ("tp_print", printfunc),      #U
+    ("tp_getattr", getattrfunc),  #U
+    ("tp_setattr", setattrfunc),  #U
+    ("tp_compare", cmpfunc),      #N
+    ("tp_repr", reprfunc),        #N
 
     # Method suites for standard classes
-    ("tp_as_number", Ptr(PyNumberMethods)),
-    ("tp_as_sequence", Ptr(PySequenceMethods)),
-    ("tp_as_mapping", Ptr(PyMappingMethods)),
+    ("tp_as_number", Ptr(PyNumberMethods)), #N
+    ("tp_as_sequence", Ptr(PySequenceMethods)), #N
+    ("tp_as_mapping", Ptr(PyMappingMethods)), #N
 
     # More standard operations (here for binary compatibility)
-    ("tp_hash", hashfunc),
-    ("tp_call", ternaryfunc),
-    ("tp_str", reprfunc),
-    ("tp_getattro", getattrofunc),
-    ("tp_setattro", setattrofunc),
+    ("tp_hash", hashfunc),        #N
+    ("tp_call", ternaryfunc),     #N
+    ("tp_str", reprfunc),         #N
+    ("tp_getattro", getattrofunc),#N
+    ("tp_setattro", setattrofunc),#N
 
     # Functions to access object as input/output buffer
-    ("tp_as_buffer", Ptr(PyBufferProcs)),
+    ("tp_as_buffer", Ptr(PyBufferProcs)), #U
 
     # Flags to define presence of optional/expanded features
-    ("tp_flags", lltype.Signed),
+    ("tp_flags", lltype.Signed),  #E
 
-    ("tp_doc", rffi.CCHARP), # Documentation string
+    ("tp_doc", rffi.CCHARP),      #N Documentation string
 
     # Assigned meaning in release 2.0
     # call function for all accessible objects
-    ("tp_traverse", traverseproc),
+    ("tp_traverse", traverseproc),#U
 
     # delete references to contained objects
-    ("tp_clear", inquiry),
+    ("tp_clear", inquiry),        #U
 
     # Assigned meaning in release 2.1
     # rich comparisons 
-    ("tp_richcompare", richcmpfunc),
+    ("tp_richcompare", richcmpfunc), #N
 
     # weak reference enabler
-    ("tp_weaklistoffset", Py_ssize_t),
+    ("tp_weaklistoffset", Py_ssize_t), #U
 
     # Added in release 2.2
     # Iterators
-    ("tp_iter", getiterfunc),
-    ("tp_iternext", iternextfunc),
+    ("tp_iter", getiterfunc),       #N
+    ("tp_iternext", iternextfunc),  #N
 
     # Attribute descriptor and subclassing stuff
-    ("tp_methods", Ptr(PyMethodDef)),
-    ("tp_members", Ptr(PyMemberDef)),
-    ("tp_getset", Ptr(PyGetSetDef)),
-    ("tp_base", Ptr(PyTypeObject)),
-    ("tp_dict", PyObject),
-    ("tp_descr_get", descrgetfunc),
-    ("tp_descr_set", descrsetfunc),
-    ("tp_dictoffset", Py_ssize_t),  # can be ignored in PyPy
-    ("tp_init", initproc),
-    ("tp_alloc", allocfunc),
-    ("tp_new", newfunc),
-    ("tp_free", freefunc), # Low-level free-memory routine
-    ("tp_is_gc", inquiry), # For PyObject_IS_GC
-    ("tp_bases", PyObject),
-    ("tp_mro", PyObject), # method resolution order
-    ("tp_cache", PyObject),
-    ("tp_subclasses", PyObject),
-    ("tp_weaklist", PyObject),
-    ("tp_del", destructor),
+    ("tp_methods", Ptr(PyMethodDef)), #S
+    ("tp_members", Ptr(PyMemberDef)), #S
+    ("tp_getset", Ptr(PyGetSetDef)),  #S
+    ("tp_base", Ptr(PyTypeObject)),   #E
+    ("tp_dict", PyObject),            #U
+    ("tp_descr_get", descrgetfunc),   #N
+    ("tp_descr_set", descrsetfunc),   #N
+    ("tp_dictoffset", Py_ssize_t),    #U
+    ("tp_init", initproc),            #N
+    ("tp_alloc", allocfunc),          #N
+    ("tp_new", newfunc),              #S
+    ("tp_free", freefunc), #E Low-level free-memory routine
+    ("tp_is_gc", inquiry), #U For PyObject_IS_GC
+    ("tp_bases", PyObject),#E
+    ("tp_mro", PyObject),  #U method resolution order
+    ("tp_cache", PyObject),#S
+    ("tp_subclasses", PyObject), #U
+    ("tp_weaklist", PyObject),   #U
+    ("tp_del", destructor),      #N
     ])
 cpython_struct("PyTypeObject", PyTypeObjectFields, PyTypeObject)
 
