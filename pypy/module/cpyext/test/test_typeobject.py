@@ -64,6 +64,11 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert obj.string_member_inplace == "spam"
         raises(TypeError, "obj.string_member_inplace = 42")
         raises(TypeError, "del obj.string_member_inplace")
+        assert obj.char_member == "s"
+        obj.char_member = "a"
+        assert obj.char_member == "a"
+        raises(TypeError, "obj.char_member = 'spam'")
+        raises(TypeError, "obj.char_member = 42")
 
         #skip("In progress") # not at all, how does this fail for you amaury?
 
