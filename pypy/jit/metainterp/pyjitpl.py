@@ -17,6 +17,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
 from pypy.jit.metainterp.compile import GiveUp
+from pypy.translator.stackless.code import UnwindException
 
 # ____________________________________________________________
 
@@ -1404,6 +1405,12 @@ class MetaInterp(object):
             self.cpu.ts.get_exception_box(etype),
             self.cpu.ts.get_exc_value_box(evalue))
 
+    def raise_unwind_exception(self):
+        etype, evalue = self.cpu.get_unwind_exception()
+        return self.finishframe_exception(
+            self.cpu.ts.get_exception_box(etype),
+            self.cpu.ts.get_exc_value_box(evalue))
+
     def create_empty_history(self):
         warmrunnerstate = self.staticdata.state
         self.history = history.History()
@@ -1888,13 +1895,19 @@ class MetaInterp(object):
         self.cpu.clear_exception()
         frame = self.framestack[-1]
         if etype:
-            exception_box = self.cpu.ts.get_exception_box(etype)
-            exc_value_box = self.cpu.ts.get_exc_value_box(evalue)
-            op = frame.generate_guard(frame.pc, rop.GUARD_EXCEPTION,
-                                      None, [exception_box])
-            if op:
-                op.result = exc_value_box
-            return self.finishframe_exception(exception_box, exc_value_box)
+            # Handle UnwindException here, because we need to invoke
+            # special state saver code in order to handle stackless.
+            if etype is UnwindException: 
+                assert self.cpu.stackless
+                return self.finishframe_unwind()
+            else:
+                exception_box = self.cpu.ts.get_exception_box(etype)
+                exc_value_box = self.cpu.ts.get_exc_value_box(evalue)
+                op = frame.generate_guard(frame.pc, rop.GUARD_EXCEPTION,
+                                          None, [exception_box])
+                if op:
+                    op.result = exc_value_box
+                return self.finishframe_exception(exception_box, exc_value_box)
         else:
             frame.generate_guard(frame.pc, rop.GUARD_NO_EXCEPTION, None, [])
             return False

@@ -14,6 +14,7 @@ from pypy.jit.backend.llsupport.descr import get_field_descr, BaseFieldDescr
 from pypy.jit.backend.llsupport.descr import get_array_descr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import get_call_descr,  BaseCallDescr
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.translator.stackless.code import UnwindException
 
 empty_int_box = BoxInt(0)
 
@@ -24,10 +25,11 @@ class AbstractLLCPU(AbstractCPU):
                  gcdescr=None):
         assert type(opts) is not bool
         self.opts = opts
+        self.rtyper = rtyper
 
         from pypy.jit.backend.llsupport.gc import get_ll_description
         AbstractCPU.__init__(self)
-        self.rtyper = rtyper
+
         self.stats = stats
         self.translate_support_code = translate_support_code
         if translate_support_code:
@@ -43,6 +45,7 @@ class AbstractLLCPU(AbstractCPU):
                                                         translate_support_code)
         self._setup_prebuilt_error('ovf', OverflowError)
         self._setup_prebuilt_error('zer', ZeroDivisionError)
+        self._setup_prebuilt_error('stku', UnwindException)
         if translate_support_code:
             self._setup_exception_handling_translated()
         else:
@@ -246,6 +249,12 @@ class AbstractLLCPU(AbstractCPU):
         zer_inst = lltype.cast_opaque_ptr(llmemory.GCREF,
                                           self._zer_error_inst)
         return zer_vtable, zer_inst
+
+    def get_unwind_exception(self):
+        stku_vtable = self.cast_adr_to_int(self._stku_error_vtable)
+        stku_inst = lltype.cast_opaque_ptr(llmemory.GCREF, 
+                                           zelf._stku_error_inst)
+        return stku_vtable, stku_inst
 
     # ____________________________________________________________
 

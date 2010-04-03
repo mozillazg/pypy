@@ -17,6 +17,8 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.x86.support import values_array
 from pypy.rlib.debug import debug_print
 from pypy.rlib import rgc
+from pypy.translator.stackless.frame import STATE_HEADER
+from pypy.translator.stackless.code import global_state
 
 # our calling convention - we pass first 6 args in registers
 # and the rest stays on the stack
@@ -29,6 +31,12 @@ else:
 
 def align_stack_words(words):
     return (words + CALL_ALIGN - 1) & ~(CALL_ALIGN-1)
+
+JIT_STATE_HEADER = lltype.Struct('JIT_STATE_HEADER',
+                                 ('header', STATE_HEADER),
+                                 ('saved_ints', lltype.Ptr(lltype.GcArray(lltype.Signed))),
+                                 ('saved_floats', lltype.Ptr(lltype.GcArray(lltype.Float))),
+                                 ('saved_refs', lltype.Ptr(lltype.GcArray(lltype.Ptr))))
 
 class MachineCodeBlockWrapper(object):
     MC_DEFAULT_SIZE = 1024*1024
@@ -121,6 +129,7 @@ class Assembler386(object):
         self.malloc_fixedsize_slowpath1 = 0
         self.malloc_fixedsize_slowpath2 = 0
         self.setup_failure_recovery()
+        self.setup_unwinder_recovery()
 
     def leave_jitted_hook(self):
         ptrs = self.fail_boxes_ptr.ar
@@ -159,13 +168,19 @@ class Assembler386(object):
             # 'mc2' is for guard recovery code
             self.mc = MachineCodeBlockWrapper(self.mc_size, self.cpu.profile_agent)
             self.mc2 = MachineCodeBlockWrapper(self.mc_size)
+
             self._build_failure_recovery(False)
             self._build_failure_recovery(True)
+            self._build_unwinder_recovery(False)
+            self._build_unwinder_recovery(True)
             if self.cpu.supports_floats:
                 self._build_failure_recovery(False, withfloats=True)
                 self._build_failure_recovery(True, withfloats=True)
+                self._build_unwinder_recovery(False, withfloats=True)
+                self._build_unwinder_recovery(True, withfloats=True)
                 codebuf.ensure_sse2_floats()
                 self._build_float_constants()
+
             if hasattr(gc_ll_descr, 'get_malloc_fixedsize_slowpath_addr'):
                 self._build_malloc_fixedsize_slowpath()
 
@@ -490,7 +505,11 @@ class Assembler386(object):
             dispatch_opnum = guard_opnum
         else:
             dispatch_opnum = op.opnum
-        res = genop_guard_list[dispatch_opnum](self, op, guard_op, failaddr,
+        if dispatch_opnum == "GUARD_EXCEPTION" or dispatch_opnum == "GUARD_NO_EXCEPTION":
+            res = genop_guard_list[dispatch_opnum](self, op, guard_op, failaddr,
+                                               arglocs, resloc, faillocs)
+        else:
+            res = genop_guard_list[dispatch_opnum](self, op, guard_op, failaddr,
                                                arglocs, resloc)
         faildescr._x86_adr_jump_offset = res
 
@@ -952,14 +971,25 @@ class Assembler386(object):
     genop_guard_guard_nonnull = genop_guard_guard_true
 
     def genop_guard_guard_no_exception(self, ign_1, guard_op, addr,
-                                       locs, ign_2):
+                                       locs, ign_2, faillocs):
+        loc = locs[0]
+        if self.cpu.stackless:
+            unwinder_addr = self.generate_unwinder_failure(guard_op.descr, guard_op.fail_args, faillocs)
+            stku_type, stku_instance = self.cpu.get_unwind_exception() 
+            self.mc.CMP(heap(self.cpu.pos_exception()), imm(stku_type))
+            self.mc.JE(rel32(unwinder_addr)) # if this is indeed an unwind exception jump to saver code 
         self.mc.CMP(heap(self.cpu.pos_exception()), imm(0))
         return self.implement_guard(addr, self.mc.JNZ)
 
     def genop_guard_guard_exception(self, ign_1, guard_op, addr,
-                                    locs, resloc):
+                                    locs, resloc, faillocs):
         loc = locs[0]
         loc1 = locs[1]
+        if self.cpu.stackless:
+            unwinder_addr = self.generate_unwinder_failure(guard_op.descr, guard_op.fail_args, faillocs)
+            stku_type, stku_instance = self.cpu.get_unwind_exception() 
+            self.mc.CMP(heap(self.cpu.pos_exception()), imm(stku_type))
+            self.mc.JE(rel32(unwinder_addr)) # if this is indeed an unwind exception jump to saver code 
         self.mc.MOV(loc1, heap(self.cpu.pos_exception()))
         self.mc.CMP(loc1, loc)
         addr = self.implement_guard(addr, self.mc.JNE)
@@ -1043,6 +1073,12 @@ class Assembler386(object):
         return self.generate_quick_failure(faildescr, failargs, fail_locs, exc)
 
     def generate_quick_failure(self, faildescr, failargs, fail_locs, exc):
+        self.generate_quick_failure_generic(self.failure_recovery_code, faildescr, failargs, fail_locs, exc)
+
+    def generate_unwinder_failure(self, faildescr, failargs, fail_locs):
+        self.generate_quick_failure_generic(self.stackless_recovery_func, faildescr, failargs, fail_locs, True)
+
+    def generate_quick_failure_generic(self, recovery_func, faildescr, failargs, fail_locs, exc):
         """Generate the initial code for handling a failure.  We try to
         keep it as compact as possible.  The idea is that this code is
         executed at most once (and very often, zero times); when
@@ -1060,7 +1096,7 @@ class Assembler386(object):
             if box is not None and box.type == FLOAT:
                 withfloats = True
                 break
-        mc.CALL(rel32(self.failure_recovery_code[exc + 2 * withfloats]))
+        mc.CALL(rel32(recovery_func[exc + 2 * withfloats]))
         # write tight data that describes the failure recovery
         faildescr._x86_failure_recovery_bytecode = mc.tell()
         self.write_failure_recovery_description(mc, failargs, fail_locs)
@@ -1191,6 +1227,40 @@ class Assembler386(object):
         return boxes
 
     @rgc.no_collect
+    def unwind_frame_values(self, bytecode, frame_addr, allregisters):
+        # Okay allocate a frame for us,
+
+        # then set the proper values in global_state
+
+        bytecode = rffi.cast(rffi.UCHARP, bytecode)
+        boxes = []
+        while 1:
+            # decode the next instruction from the bytecode
+            code = rffi.cast(lltype.Signed, bytecode[0])
+            bytecode = rffi.ptradd(bytecode, 1)
+            kind = code & 3
+            while code > 0x7F:
+                code = rffi.cast(lltype.Signed, bytecode[0])
+                bytecode = rffi.ptradd(bytecode, 1)
+            index = len(boxes)
+            # Now kind contains information at the type of data that will go here
+            if kind != self.DESCR_SPECIAL:
+                kinds.append(kind)
+            else:
+                if code == self.CODE_STOP:
+                    break
+                assert code == self.CODE_HOLE, "Bad code"
+
+        # Now kinds contains the types we need to store
+        state_header = lltype.malloc(JIT_STATE_HEADER, zero=True)
+        
+        state_header.saved_ints = lltype.malloc(lltype.GcArray(lltype.Signed), len([x for x in kinds if x == self.DESCR_INT]))
+        state_header.saved_floats = lltype.malloc(lltype.GcArray(lltype.Float), len([x for x in kinds if x == self.DESCR_FLOAT]))
+        state_header.saved_floats = lltype.malloc(lltype.GcArray(lltype.Ptr), len([x for x in kinds if x == self.DESCR_REF]))
+
+        
+
+    @rgc.no_collect
     def grab_frame_values(self, bytecode, frame_addr, allregisters):
         # no malloc allowed here!!
         self.fail_ebp = allregisters[16 + ebp.op]
@@ -1269,14 +1339,40 @@ class Assembler386(object):
         self.failure_recovery_func = failure_recovery_func
         self.failure_recovery_code = [0, 0, 0, 0]
 
+    def setup_unwinder_recovery(self):
+        
+        @rgc.no_collect
+        def unwinder_recovery_func(registers):
+            stack_at_ebp = registers[ebp.op]
+            bytecode = rffi.cast(rffi.UCHARP, registers[8])
+            allregisters = rffi.ptradd(registers, -16)
+            return self.unwind_frame_values(bytecode, stack_at_ebp, allregisters)
+
+        self.unwinder_recovery_func = unwinder_recovery_func
+        self.unwinder_recovery_code = [0, 0, 0, 0]
+
     _FAILURE_RECOVERY_FUNC = lltype.Ptr(lltype.FuncType([rffi.LONGP],
                                                         lltype.Signed))
+    _UNWINDER_RECOVERY_FUNC = lltype.Ptr(lltype.FuncType([rffi.LONGP],
+                                                         lltype.Signed))
 
     def _build_failure_recovery(self, exc, withfloats=False):
         failure_recovery_func = llhelper(self._FAILURE_RECOVERY_FUNC,
                                          self.failure_recovery_func)
         failure_recovery_func = rffi.cast(lltype.Signed,
                                           failure_recovery_func)
+        recovery_addr = self._build_failure_recovery_generic(failure_recovery_func, exc, withfloats=withfloats)
+        self.failure_recovery_code[exc + 2 * withfloats] = recovery_addr
+
+    def _build_unwinder_recovery(self, exc, withfloats=False):
+        unwinder_recovery_func = llhelper(self._UNWINDER_RECOVERY_FUNC,
+                                          self.unwinder_recovery_func)
+        unwinder_recovery_func = rffi.cast(lltype.Signed,
+                                           unwinder_recovery_func)
+        recovery_addr = self._build_failure_recovery_generic(unwinder_recovery_func, exc, withfloats=withfloats)
+        self.unwinder_recovery_code[exc + 2 * withfloats] = recovery_addr
+        
+    def _build_failure_recovery_generic(self, recovery_func, exc, withfloats=False):
         mc = self.mc2._mc
         # Assume that we are called at the beginning, when there is no risk
         # that 'mc' runs out of space.  Checked by asserts in mc.write().
@@ -1312,7 +1408,7 @@ class Assembler386(object):
         # generate_quick_failure().  XXX misaligned stack in the call, but
         # it's ok because failure_recovery_func is not calling anything more
         mc.PUSH(esi)
-        mc.CALL(rel32(failure_recovery_func))
+        mc.CALL(rel32(recovery_func))
         # returns in eax the fail_index
 
         # now we return from the complete frame, which starts from
@@ -1325,7 +1421,7 @@ class Assembler386(object):
         mc.POP(ebp)    # [ebp]
         mc.RET()
         self.mc2.done()
-        self.failure_recovery_code[exc + 2 * withfloats] = recovery_addr
+        return recovery_addr
 
     def generate_failure(self, fail_index, locs, exc, locs_are_ref):
         mc = self.mc

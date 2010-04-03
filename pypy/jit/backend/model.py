@@ -8,8 +8,14 @@ class AbstractCPU(object):
     portal_calldescr = None
     done_with_this_frame_int_v = -1
 
+    stackless = False # this is set to true in __init__, if we are indeed a stackless build
+
     def __init__(self):
         self.fail_descr_list = []
+
+        if self.rtyper is not None:
+            config = self.rtyper.annotator.translator.config
+            self.stackless = True
 
     def get_fail_descr_number(self, descr):
         assert isinstance(descr, history.AbstractFailDescr)

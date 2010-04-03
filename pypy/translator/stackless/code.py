@@ -391,10 +391,18 @@ def slp_main_loop(depth):
         while True:
             prevdepth = pending.f_depth - 1
             back = pending.f_back
-            decoded = frame.decodestate(pending.f_restart)
-            (fn, global_state.restart_substate, signature_index) = decoded
+            enter_jit = False 
+            if pending.f_restart_addr != llmemory.NULL:
+                # we're going to enter directly into jitted code
+                enter_jit = True
+            else:
+                decoded = frame.decodestate(pending.f_restart)
+                (fn, global_state.restart_substate, signature_index) = decoded
             try:
-                call_function(fn, signature_index)
+                if enter_jit:
+                    pass
+                else: # enter native code
+                    call_function(fn, signature_index)
             except UnwindException, u:   #XXX annotation support needed
                 u.frame_bottom.f_back = back
                 depth = prevdepth + u.depth
