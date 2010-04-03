@@ -112,7 +112,7 @@ static PyMemberDef foo_members[] = {
      "A helpful docstring."},
     {"int_member_readonly", T_INT, offsetof(fooobject, foo), READONLY,
      "A helpful docstring."},
-    {"broken_member", 0xaffe, 0, 0, ""},
+    {"broken_member", 0xaffe, 0, 0, NULL},
     {"object_member", T_OBJECT, offsetof(fooobject, foo_object), 0,
      "A Python object."},
     {"object_member_ex", T_OBJECT_EX, offsetof(fooobject, foo_object), 0,

@@ -59,8 +59,8 @@ class W_MemberDescr(GetSetProperty):
         self.name = rffi.charp2str(member.c_name)
         flags = rffi.cast(lltype.Signed, member.c_flags)
         doc = set = None
-        if doc:
-            doc = rffi.charp2str(getset.c_doc)
+        if member.c_doc:
+            doc = rffi.charp2str(member.c_doc)
         get = GettersAndSetters.member_getter.im_func
         del_ = GettersAndSetters.member_delete.im_func
         if not (flags & structmemberdefs.READONLY):
