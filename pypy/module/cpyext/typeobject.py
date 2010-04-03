@@ -18,6 +18,7 @@ from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     Py_TPFLAGS_HAVE_CLASS
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.interpreter.module import Module
+from pypy.interpreter.function import FunctionWithFixedCode, StaticMethod
 from pypy.module.cpyext import structmemberdefs
 from pypy.module.cpyext.modsupport import  convert_method_defs
 from pypy.module.cpyext.state import State
@@ -25,11 +26,11 @@ from pypy.module.cpyext.methodobject import PyDescr_NewWrapper
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef, _Py_Dealloc
 from pypy.module.cpyext.structmember import PyMember_GetOne, PyMember_SetOne
 from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr, PyTypeObject, \
-        PyGetSetDef, PyMemberDef
+        PyGetSetDef, PyMemberDef, newfunc
 from pypy.module.cpyext.slotdefs import slotdefs
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.rlib.rstring import rsplit
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.objectmodel import we_are_translated, specialize
 
 
 WARN_ABOUT_MISSING_SLOT_FUNCTIONS = False
@@ -100,7 +101,7 @@ def convert_member_defs(space, dict_w, members, pto):
 def update_all_slots(space, w_obj, pto):
     #  XXX fill slots in pto
     state = space.fromcache(State)
-    for method_name, slot_name, slot_func, _, _, doc in slotdefs:
+    for method_name, slot_name, slot_func, _, _, _ in slotdefs:
         w_descr = space.lookup(w_obj, method_name)
         if w_descr is None:
             # XXX special case iternext
@@ -109,12 +110,14 @@ def update_all_slots(space, w_obj, pto):
             if WARN_ABOUT_MISSING_SLOT_FUNCTIONS:
                 os.write(2, method_name + " defined by the type but no slot function defined!\n")
             continue
-        if not we_are_translated() and method_name == "__new__" and "bar" in repr(w_obj):
-            import pdb; pdb.set_trace()
         slot_func_helper = llhelper(slot_func.api_func.functype,
                 slot_func.api_func.get_wrapper(space))
-        # XXX special case wrapper-functions and use a "specific" slot func,
-        # XXX special case tp_new
+        # XXX special case wrapper-functions and use a "specific" slot func
+
+        # the special case of __new__ in CPython works a bit differently, hopefully
+        # this matches the semantics
+        if method_name == "__new__" and not pto.c_tp_new:
+            continue
         if len(slot_name) == 1:
             setattr(pto, slot_name[0], slot_func_helper)
         else:
@@ -146,11 +149,38 @@ def add_operators(space, dict_w, pto):
             continue
         dict_w[method_name] = PyDescr_NewWrapper(space, pto, method_name, wrapper_func,
                 wrapper_func_kwds, doc, func_voidp)
+    if pto.c_tp_new:
+        add_tp_new_wrapper(space, dict_w, pto)
+
+@cpython_api([PyObject, PyObject, PyObject], PyObject, external=False)
+def tp_new_wrapper(space, w_self, w_args, w_kwds): # XXX untested code
+    args_w = space.listview(w_args)[:]
+    args_w.insert(0, w_self)
+    w_args_new = space.newlist(args_w)
+    return space.call(space.lookup(space.w_type, space.wrap("__new__")), w_args_new, w_kwds)
+
+@specialize.memo()
+def get_new_method_def(space):
+    from pypy.module.cpyext.modsupport import PyMethodDef
+    ptr = llmemory.malloc(Ptr(PyMethodDef), flavor="raw")
+    ptr.c_ml_name = rffi.str2charp("__new__")
+    ptr.c_ml_meth = llhelper(tp_new_wrapper.api_func.functype,
+            tp_new_wrapper.get_wrapper(space))
+    ptr.c_ml_flags = METH_VARARGS | METH_KEYWORDS
+    ptr.c_ml_doc = rffi.str2charp("T.__new__(S, ...) -> a new object with type S, a subtype of T")
+    return ptr
+
+def add_tp_new_wrapper(space, dict_w, pto):
+    if "__new__" in dict_w:
+        return
+    pyo = rffi.cast(PyObject, pto)
+    dict_w["__new__"] = PyCFunction_NewEx(space, get_new_method_def(space),
+            from_ref(space, pyo))
 
 def inherit_special(space, pto, base_pto):
-    # XXX copy basicsize and flags in a magical way
+    # XXX missing: copy basicsize and flags in a magical way
     flags = rffi.cast(lltype.Signed, pto.c_tp_flags)
-    if flags & Py_TPFLAGS_HAVE_CLASS:
+    if True or flags & Py_TPFLAGS_HAVE_CLASS: # XXX i do not understand this check
         base_object_pyo = make_ref(space, space.w_object, steal=True)
         base_object_pto = rffi.cast(PyTypeObjectPtr, base_object_pyo)
         if base_pto != base_object_pto or \
@@ -161,7 +191,7 @@ def inherit_special(space, pto, base_pto):
 
 class W_PyCTypeObject(W_TypeObject):
     def __init__(self, space, pto):
-        bases_w = [] # XXX fill
+        bases_w = space.fixedview(from_ref(space, pto.c_tp_bases))
         dict_w = {}
 
         add_operators(space, dict_w, pto)
@@ -179,7 +209,7 @@ class W_PyCTypeObject(W_TypeObject):
 
 class __extend__(W_Root):
     __metaclass__ = extendabletype
-    __slots__ = ("_pyolifeline", )
+    __slots__ = ("_pyolifeline", ) # hint for the annotator
     _pyolifeline = None
     def set_pyolifeline(self, lifeline):
         self._pyolifeline = lifeline
@@ -261,20 +291,18 @@ def c_type_descr__new__(space, w_typetype, w_name, w_bases, w_dict):
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
     pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
-    assert pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE
     base = pto
     this_func_ptr = llhelper(subtype_dealloc.api_func.functype,
             subtype_dealloc.api_func.get_wrapper(space))
-    ref_of_object_type = rffi.cast(PyTypeObjectPtr,
-            make_ref(space, space.w_object, steal=True))
     while base.c_tp_dealloc == this_func_ptr:
         base = base.c_tp_base
         assert base
     dealloc = base.c_tp_dealloc
     # XXX call tp_del if necessary
     generic_cpy_call(space, dealloc, obj)
-    pto = rffi.cast(PyObject, pto)
-    Py_DecRef(space, pto)
+    if pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
+        pto = rffi.cast(PyObject, pto)
+        Py_DecRef(space, pto)
 
 
 @cpython_api([PyObject], lltype.Void, external=False)
@@ -302,7 +330,7 @@ def type_dealloc(space, obj):
         obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
         generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
         pto = rffi.cast(PyObject, type_pto)
-        Py_DecRef(space, pto)
+        Py_DecRef(space, pto) # XXX duplicate decref? (see above)
 
 
 def allocate_type_obj(space, w_type):
@@ -362,12 +390,29 @@ def allocate_type_obj(space, w_type):
     elif pto.c_tp_base:
         pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
 
+    # will be filled later on with the correct value
+    # may not be 0
+    if space.is_w(w_type, space.w_object):
+        pto.c_tp_new = rffi.cast(newfunc, 1)
     update_all_slots(space, w_type, pto)
     return pto
 
 @cpython_api([PyTypeObjectPtr], rffi.INT_real, error=-1)
 def PyType_Ready(space, pto):
     return PyPyType_Ready(space, pto, None)
+
+def inherit_slots(space, pto, w_base):
+    # XXX missing: nearly everything
+    base_pyo = make_ref(space, w_base)
+    try:
+        base = rffi.cast(PyTypeObjectPtr, base_pyo)
+        if not pto.c_tp_dealloc:
+            pto.c_tp_dealloc = base.c_tp_dealloc
+        # XXX check for correct GC flags!
+        if not pto.c_tp_free:
+            pto.c_tp_free = base.c_tp_free
+    finally:
+        Py_DecRef(space, base_pyo)
 
 def PyPyType_Ready(space, pto, w_obj):
     try:
@@ -396,10 +441,13 @@ def PyPyType_Ready(space, pto, w_obj):
             pto.c_tp_bases = make_ref(space, bases)
         if w_obj is None:
             PyPyType_Register(space, pto)
-        # missing:
         if base:
             inherit_special(space, pto, base)
-        # inherit_slots, setting __doc__ if not defined and tp_doc defined
+        if pto.c_tp_bases: # this is false while bootstrapping
+            for w_base in space.fixedview(from_ref(space, pto.c_tp_bases)):
+                inherit_slots(space, pto, w_base)
+        # missing:
+        # setting __doc__ if not defined and tp_doc defined
         # inheriting tp_as_* slots
         # unsupported:
         # tp_mro, tp_subclasses

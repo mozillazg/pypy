@@ -372,7 +372,8 @@ def setup_va_functions(eci):
 
 def bootstrap_types(space):
     from pypy.module.cpyext.pyobject import make_ref
-    from pypy.module.cpyext.typeobject import PyTypeObjectPtr, PyPyType_Ready
+    from pypy.module.cpyext.typeobject import PyTypeObjectPtr, PyPyType_Ready, \
+            inherit_slots
     # bootstrap this damn cycle
     type_pto = make_ref(space, space.w_type)
     type_pto = rffi.cast(PyTypeObjectPtr, type_pto)
@@ -385,6 +386,7 @@ def bootstrap_types(space):
     PyPyType_Ready(space, type_pto, space.w_type)
     type_pto.c_tp_bases = make_ref(space, space.newtuple([space.w_object]))
     object_pto.c_tp_bases = make_ref(space, space.newtuple([]))
+    inherit_slots(space, type_pto, space.w_object)
 
 #_____________________________________________________
 # Build the bridge DLL, Allow extension DLLs to call
