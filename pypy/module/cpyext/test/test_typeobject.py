@@ -15,6 +15,7 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         print "Obj has type", type(obj)
         assert type(obj) is module.fooType
         print "type of obj has type", type(type(obj))
+        print "type of type of obj has type", type(type(type(obj)))
         obj2 = obj.copy()
         assert module.new().name == "Foo Example"
         c = module.fooType.copy
@@ -66,10 +67,9 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
 
         a = module.fooType
         assert "cannot create" in raises(TypeError, "a()").value.message
-        skip("In Progress")
         class bar(module.fooType):
             pass
+        assert "cannot create" in raises(TypeError, "bar()").value.message
         fuu = module.FuuType
         fuu_inst = fuu(u"abc")
-        assert "cannot create" in raises(TypeError, "bar()").value.message
 
