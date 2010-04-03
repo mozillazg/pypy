@@ -1,3 +1,7 @@
+import StringIO
+import traceback
+import sys
+
 import py
 from pypy.rlib.rarithmetic import r_int, r_uint, intmask, r_singlefloat
 from pypy.rlib.rarithmetic import r_ulonglong, r_longlong, base_int
@@ -14,6 +18,7 @@ import weakref
 log = py.log.Producer('lltype')
 
 TLS = tlsobject()
+TRACK_ALLOCATIONS = False
 
 class _uninitialized(object):
     def __init__(self, TYPE):
@@ -1315,26 +1320,48 @@ class _container(object):
     def _was_freed(self):
         return False
 
+ALLOCATED = identity_dict()
+
 class _parentable(_container):
     _kind = "?"
 
     __slots__ = ('_TYPE',
                  '_parent_type', '_parent_index', '_keepparent',
                  '_wrparent',
-                 '__weakref__',
-                 '_storage')
+                 '__weakref__', '_traceback',
+                 '__storage')
 
-    def __init__(self, TYPE):
+    def __init__(self, TYPE, track_allocation=None):
         self._wrparent = None
         self._TYPE = TYPE
         self._storage = True    # means "use default storage", as opposed to:
                                 #    None            - container was freed
                                 #    <ctypes object> - using ctypes
                                 #                      (see ll2ctypes.py)
+        if track_allocation is not False and TRACK_ALLOCATIONS:
+            self._traceback = self._get_traceback()
+            ALLOCATED[self] = None
+        else:
+            self._traceback = None
+
+    def _get_traceback(self):
+        frame = sys._getframe().f_back.f_back.f_back.f_back
+        sio = StringIO.StringIO()
+        traceback.print_stack(frame, file=sio)
+        return sio.getvalue()
 
     def _free(self):
         self._check()   # no double-frees
         self._storage = None
+
+    def _storage_get(self):
+        return self.__storage
+
+    def _storage_set(self, value):
+        self.__storage = value
+        if value is not True and self in ALLOCATED:
+            del ALLOCATED[self]
+    _storage = property(_storage_get, _storage_set)
 
     def _was_freed(self):
         if self._storage is None:
@@ -1414,12 +1441,12 @@ class _struct(_parentable):
 
     __slots__ = ('_hash_cache_', '_compilation_info')
 
-    def __new__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
+    def __new__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None, track_allocation=None):
         my_variety = _struct_variety(TYPE._names)
         return object.__new__(my_variety)
 
-    def __init__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
-        _parentable.__init__(self, TYPE)
+    def __init__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None, track_allocation=None):
+        _parentable.__init__(self, TYPE, track_allocation)
         if n is not None and TYPE._arrayfld is None:
             raise TypeError("%r is not variable-sized" % (TYPE,))
         if n is None and TYPE._arrayfld is not None:
@@ -1488,12 +1515,12 @@ class _array(_parentable):
 
     __slots__ = ('items',)
 
-    def __init__(self, TYPE, n, initialization=None, parent=None, parentindex=None):
+    def __init__(self, TYPE, n, initialization=None, parent=None, parentindex=None, track_allocation=None):
         if not isinstance(n, int):
             raise TypeError, "array length must be an int"
         if n < 0:
             raise ValueError, "negative array length"
-        _parentable.__init__(self, TYPE)
+        _parentable.__init__(self, TYPE, track_allocation)
         try:
             myrange = range(n)
         except OverflowError:
@@ -1790,9 +1817,9 @@ def malloc(T, n=None, flavor='gc', immortal=False, zero=False):
     else:
         initialization = 'malloc'
     if isinstance(T, Struct):
-        o = _struct(T, n, initialization=initialization)
+        o = _struct(T, n, initialization=initialization, track_allocation=flavor == "raw" and not immortal)
     elif isinstance(T, Array):
-        o = _array(T, n, initialization=initialization)
+        o = _array(T, n, initialization=initialization, track_allocation=flavor == "raw" and not immortal)
     elif isinstance(T, OpaqueType):
         assert n is None
         o = _opaque(T, initialization=initialization)

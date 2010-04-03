@@ -4,7 +4,7 @@ import py
 
 from pypy.conftest import gettestobjspace
 from pypy.interpreter.error import OperationError
-from pypy.rpython.lltypesystem import rffi, lltype
+from pypy.rpython.lltypesystem import rffi, lltype, ll2ctypes
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator import platform
 from pypy.module.cpyext import api
@@ -26,6 +26,14 @@ class TestApi:
         assert 'PyModule_Check' in api.FUNCTIONS
         assert api.FUNCTIONS['PyModule_Check'].argtypes == [api.PyObject]
 
+def set_difference(id_dict1, id_dict2):
+    d = id_dict1.copy()
+    for key in id_dict2.keys():
+        try:
+            del d[key]
+        except KeyError:
+            pass
+    return d
 
 class AppTestApi:
     def setup_class(cls):
@@ -141,7 +149,10 @@ class AppTestCpythonExtensionBase:
         self.frozen_refcounts = {}
         for w_obj, obj in state.py_objects_w2r.iteritems():
             self.frozen_refcounts[w_obj] = obj.c_ob_refcnt
-        state.print_refcounts()
+        #state.print_refcounts()
+        self.frozen_ll2callocations = set(ll2ctypes.ALLOCATED.values())
+        self.frozen_lltallocations = lltype.ALLOCATED.copy()
+        lltype.TRACK_ALLOCATIONS = True
 
     def check_and_print_leaks(self):
         # check for sane refcnts
@@ -179,6 +190,16 @@ class AppTestCpythonExtensionBase:
         for w_obj in lost_objects_w:
             print >>sys.stderr, "Lost object %r" % (w_obj, )
             leaking = True
+        for llvalue in set(ll2ctypes.ALLOCATED.values()) - self.frozen_ll2callocations:
+            if getattr(llvalue, "_traceback", None): # this means that the allocation should be tracked
+                leaking = True
+                print >>sys.stderr, "Did not deallocate %r (ll2ctypes)" % (llvalue, )
+                print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
+        for llvalue in set_difference(lltype.ALLOCATED, self.frozen_lltallocations).keys():
+            leaking = True
+            print >>sys.stderr, "Did not deallocate %r (llvalue)" % (llvalue, )
+            print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
+
         return leaking
 
 
