@@ -666,7 +666,8 @@ def ctypes2lltype(T, cobj):
     if T is lltype.Void:
         return None
     if isinstance(T, lltype.Ptr):
-        if not cobj:   # NULL pointer
+        if not cobj or not ctypes.cast(cobj, ctypes.c_void_p).value:   # NULL pointer
+            # CFunctionType.__nonzero__ is broken before Python 2.6
             return lltype.nullptr(T.TO)
         if isinstance(T.TO, lltype.Struct):
             REAL_TYPE = T.TO
