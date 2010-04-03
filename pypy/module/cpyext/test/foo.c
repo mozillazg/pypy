@@ -5,6 +5,8 @@ typedef struct {
 	PyObject_HEAD
     int	foo;		/* the context holder */
     PyObject *foo_object;
+    char *foo_string;
+    char foo_string_inplace[5];
 } fooobject;
 
 static PyTypeObject footype;
@@ -20,6 +22,8 @@ newfooobject(void)
 
 	foop->foo = 42;
 	foop->foo_object = NULL;
+	foop->foo_string = "Hello from PyPy";
+	strncpy(foop->foo_string_inplace, "spam", 5);
 	return foop;
 }
 
@@ -48,9 +52,17 @@ foo_copy(fooobject *self)
 	return (PyObject *)foop;
 }
 
+static PyObject *
+foo_unset(fooobject *self)
+{
+    self->foo_string = NULL;
+    Py_RETURN_NONE;
+}
+
 
 static PyMethodDef foo_methods[] = {
 	{"copy",      (PyCFunction)foo_copy,      METH_NOARGS,  NULL},
+	{"unset_string_member", (PyCFunction)foo_unset, METH_NOARGS, NULL},
 	{NULL, NULL}			     /* sentinel */
 };
 
@@ -105,6 +117,10 @@ static PyMemberDef foo_members[] = {
      "A Python object."},
     {"object_member_ex", T_OBJECT_EX, offsetof(fooobject, foo_object), 0,
      "A Python object."},
+    {"string_member", T_STRING, offsetof(fooobject, foo_string), 0,
+     "A string."},
+    {"string_member_inplace", T_STRING_INPLACE,
+     offsetof(fooobject, foo_string_inplace), 0, "An inplace string."},
     {NULL}  /* Sentinel */
 };
 
