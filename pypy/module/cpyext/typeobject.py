@@ -15,14 +15,15 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR, \
-    Py_TPFLAGS_HAVE_CLASS
+    Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import FunctionWithFixedCode, StaticMethod
 from pypy.module.cpyext import structmemberdefs
-from pypy.module.cpyext.modsupport import  convert_method_defs
+from pypy.module.cpyext.modsupport import convert_method_defs, PyCFunction
 from pypy.module.cpyext.state import State
-from pypy.module.cpyext.methodobject import PyDescr_NewWrapper
+from pypy.module.cpyext.methodobject import PyDescr_NewWrapper, \
+     PyCFunction_NewEx
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef, _Py_Dealloc
 from pypy.module.cpyext.structmember import PyMember_GetOne, PyMember_SetOne
 from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr, PyTypeObject, \
@@ -162,11 +163,12 @@ def tp_new_wrapper(space, w_self, w_args, w_kwds): # XXX untested code
 @specialize.memo()
 def get_new_method_def(space):
     from pypy.module.cpyext.modsupport import PyMethodDef
-    ptr = llmemory.malloc(Ptr(PyMethodDef), flavor="raw")
+    ptr = lltype.malloc(PyMethodDef, flavor="raw")
     ptr.c_ml_name = rffi.str2charp("__new__")
-    ptr.c_ml_meth = llhelper(tp_new_wrapper.api_func.functype,
-            tp_new_wrapper.get_wrapper(space))
-    ptr.c_ml_flags = METH_VARARGS | METH_KEYWORDS
+    ptr.c_ml_meth = rffi.cast(PyCFunction,
+        llhelper(tp_new_wrapper.api_func.functype,
+                 tp_new_wrapper.api_func.get_wrapper(space)))
+    rffi.setintfield(ptr, 'c_ml_flags', METH_VARARGS | METH_KEYWORDS)
     ptr.c_ml_doc = rffi.str2charp("T.__new__(S, ...) -> a new object with type S, a subtype of T")
     return ptr
 
