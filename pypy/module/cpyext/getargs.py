@@ -14,7 +14,7 @@ def PyArg_ParseTuple():
 
 @cpython_api([PyObject, rffi.CCHARP, VA_LIST_P, rffi.INT_real],
              rffi.INT_real, error=0)
-def pypy_vgetargs1(space, w_obj, fmt, va_list_p, lgt):
+def pypy_vgetargs1(space, w_obj, fmt, va_list_p, flags):
     i = 0
     while True:
         c = fmt[i]
