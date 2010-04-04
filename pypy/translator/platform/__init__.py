@@ -107,8 +107,8 @@ class Platform(object):
             stderrlines = stderr.splitlines()
             for line in stderrlines[:50]:
                 log.ERROR(line)
-            if len(stderrlines) > 50:
-                log.ERROR('...')
+            #if len(stderrlines) > 50:
+            #    log.ERROR('...')
             raise CompilationError(stdout, stderr)
         else:
             for line in stderr.splitlines():
