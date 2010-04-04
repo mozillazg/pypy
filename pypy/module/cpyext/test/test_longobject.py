@@ -14,4 +14,9 @@ class TestLongObject(BaseApiTest):
 
         value = api.PyLong_FromLong(sys.maxint + 1)
         assert isinstance(value, W_LongObject)
-        assert space.unwrap(value) == sys.maxint + 1
+        assert space.unwrap(value) == sys.maxint + 1 # should obviously fail but doesnt
+    def test_asulong(self, space, api):
+        w_value = api.PyLong_FromLong((sys.maxint - 1) / 2)
+        w_value = space.mul(w_value, space.wrap(4))
+        value = api.PyLong_AsUnsignedLong(w_value)
+        assert value == (sys.maxint - 1) * 2
