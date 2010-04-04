@@ -48,7 +48,14 @@ def PySequence_Fast_GET_SIZE(space, w_obj):
 def PySequence_GetSlice(space, w_obj, start, end):
     """Return the slice of sequence object o between i1 and i2, or NULL on
     failure. This is the equivalent of the Python expression o[i1:i2].
-    
+
     This function used an int type for i1 and i2. This might
     require changes in your code for properly supporting 64-bit systems."""
     return space.getslice(w_obj, space.wrap(start), space.wrap(end))
+
+@cpython_api([PyObject, Py_ssize_t], PyObject)
+def PySequence_GetItem(space, w_obj, i):
+    """Return the ith element of o, or NULL on failure. This is the equivalent of
+    the Python expression o[i]."""
+    return space.getitem(w_obj, space.wrap(i))
+
