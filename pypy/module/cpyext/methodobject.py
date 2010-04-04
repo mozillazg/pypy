@@ -170,7 +170,7 @@ def PyDescr_NewWrapper(space, pto, method_name, wrapper_func, doc, flags, func):
     return space.wrap(W_PyCWrapperObject(space, pto, method_name,
         wrapper_func, doc, flags, func))
 
-@cpython_api([PyMethodDef, PyObject, rffi.CCHARP], PyObject)
+@cpython_api([lltype.Ptr(PyMethodDef), PyObject, rffi.CCHARP], PyObject)
 def Py_FindMethod(space, table, w_ob, name_ptr):
     """Return a bound method object for an extension type implemented in C.  This
     can be useful in the implementation of a tp_getattro or

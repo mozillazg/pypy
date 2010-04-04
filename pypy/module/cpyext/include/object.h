@@ -396,6 +396,7 @@ manually remove this flag though!
 #define PyObject_NewVar(type, typeobj, n) \
 		( (type *) _PyObject_NewVar((typeobj), (n)) )
 
+#define _PyObject_SIZE(typeobj) ( (typeobj)->tp_basicsize )
 #define _PyObject_VAR_SIZE(typeobj, nitems)	\
 	(size_t)				\
 	( ( (typeobj)->tp_basicsize +		\
