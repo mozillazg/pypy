@@ -1,5 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL
+from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
+        Py_ssize_t
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
@@ -42,3 +43,18 @@ def PyObject_HasAttr(space, w_obj, w_name):
 def PyObject_SetAttr(space, w_obj, w_name, w_value):
     operation.setattr(space, w_obj, w_name, w_value)
     return 0
+
+@cpython_api([PyObject], lltype.Void)
+def PyObject_ClearWeakRefs(space, w_object):
+    w_object.clear_all_weakrefs()
+
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PyObject_Size(space, w_obj):
+    return space.len(w_obj)
+
+@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
+def PyCallable_Check(space, w_obj):
+    """Determine if the object o is callable.  Return 1 if the object is callable
+    and 0 otherwise.  This function always succeeds."""
+    return int(space.is_true(space.callable(w_obj)))
+
