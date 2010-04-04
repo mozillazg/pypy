@@ -70,8 +70,6 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         raises(TypeError, "obj.char_member = 'spam'")
         raises(TypeError, "obj.char_member = 42")
 
-        #skip("In progress") # not at all, how does this fail for you amaury?
-
         a = module.fooType
         assert "cannot create" in raises(TypeError, "a()").value.message
         class bar(module.fooType):
@@ -83,4 +81,8 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
             def baz(self):
                 return self
         assert fuu2(u"abc").baz().escape()
+
+    def test_sre(self):
+        skip("In Progress")
+        module = self.import_module(name='_sre')
 
