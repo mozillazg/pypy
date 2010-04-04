@@ -19,6 +19,12 @@ class TestListObject(BaseApiTest):
 
         assert not api.PyList_Check(space.newtuple([]))
         assert not api.PyList_CheckExact(space.newtuple([]))
+    
+    def test_get_size(self, space, api):
+        l = api.PyList_New(0)
+        assert api.PyList_GET_SIZE(l) == 0
+        api.PyList_Append(l, space.wrap(3))
+        assert api.PyList_GET_SIZE(l) == 1
 
 class AppTestListObject(AppTestCpythonExtensionBase):
     def test_listobject(self):

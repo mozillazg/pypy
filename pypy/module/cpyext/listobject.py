@@ -45,3 +45,11 @@ def PyList_Append(space, w_list, w_item):
         PyErr_BadInternalCall(space)
     w_list.append(w_item)
     return 0
+
+@cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
+def PyList_GET_SIZE(space, w_list):
+    """Macro form of PyList_Size() without error checking.
+    
+    This macro returned an int. This might require changes in your
+    code for properly supporting 64-bit systems."""
+    return len(w_list.wrappeditems)

@@ -3329,14 +3329,6 @@ def PyList_Size(space, list):
     your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject], Py_ssize_t)
-def PyList_GET_SIZE(space, list):
-    """Macro form of PyList_Size() without error checking.
-    
-    This macro returned an int. This might require changes in your
-    code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, Py_ssize_t], PyObject, borrowed=True)
 def PyList_GetItem(space, list, index):
     """Return the object at position pos in the list pointed to by p.  The
