@@ -9,6 +9,7 @@ from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.objspace.std.typeobject import W_TypeObject
 import pypy.module.__builtin__.operation as operation
 
+
 @cpython_api([PyObject], PyObject)
 def _PyObject_New(space, w_type):
     if isinstance(w_type, W_PyCTypeObject):
@@ -33,6 +34,14 @@ def PyObject_IsTrue(space, w_obj):
 @cpython_api([PyObject], rffi.INT_real, error=-1)
 def PyObject_Not(space, w_obj):
     return not space.is_true(w_obj)
+
+@cpython_api([PyObject, rffi.CCHARP], PyObject)
+def PyObject_GetAttrString(space, w_obj, name_ptr):
+    """Retrieve an attribute named attr_name from object o. Returns the attribute
+    value on success, or NULL on failure. This is the equivalent of the Python
+    expression o.attr_name."""
+    name = rffi.charp2str(name_ptr)
+    return space.getattr(w_obj, space.wrap(name))
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyObject_HasAttr(space, w_obj, w_name):
