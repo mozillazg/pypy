@@ -21,12 +21,16 @@ from pypy.rlib.entrypoint import entrypoint
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.exports import export_struct
+from pypy.module import exceptions
+from pypy.module.exceptions import interp_exceptions
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 
 DEBUG_WRAPPER = False
 
+# update these for other platforms
 Py_ssize_t = lltype.Signed
+size_t = rffi.ULONG
 ADDR = lltype.Signed
 
 include_dir = py.path.local(autopath.pypydir) / 'module' / 'cpyext' / 'include'
@@ -229,9 +233,8 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     'Py_False': ('PyObject*', 'space.w_False'),
     }
 
-for exc_name in ['TypeError', 'ValueError', 'KeyError', 'Exception',
-                 'BaseException', 'SystemError', 'OSError']:
-    GLOBALS['PyExc_' + exc_name] = ('PyObject*', 'space.w_' + exc_name)
+for exc_name in exceptions.Module.interpleveldefs.keys():
+    GLOBALS['PyExc_' + exc_name] = ('PyObject*', 'space.gettypeobject(interp_exceptions.W_%s.typedef)'% (exc_name, ))
 
 for cpyname, pypyexpr in {"Type": "space.w_type",
         "BaseObject": "space.w_object",
@@ -254,6 +257,8 @@ PyObject = lltype.Ptr(PyObjectStruct)
 PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyObject))
 PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
 cpython_struct('struct _object', PyObjectFields, PyObjectStruct)
+PyVarObjectStruct = cpython_struct("PyVarObject", PyVarObjectFields)
+PyVarObject = lltype.Ptr(PyVarObjectStruct)
 
 # a pointer to PyObject
 PyObjectP = rffi.CArrayPtr(PyObject)
