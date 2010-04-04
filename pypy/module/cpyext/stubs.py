@@ -3674,12 +3674,6 @@ def PyMapping_HasKey(space, o, key):
     raise NotImplementedError
 
 @cpython_api([PyObject], PyObject)
-def PyMapping_Keys(space, o):
-    """On success, return a list of the keys in object o.  On failure, return NULL.
-    This is equivalent to the Python expression o.keys()."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
 def PyMapping_Values(space, o):
     """On success, return a list of the values in object o.  On failure, return
     NULL. This is equivalent to the Python expression o.values()."""
