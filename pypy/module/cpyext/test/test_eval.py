@@ -28,3 +28,30 @@ class TestEval(BaseApiTest):
         space.setitem(w_d, space.wrap("xyz"), space.wrap(3))
         w_res = api.PyEval_CallObjectWithKeywords(w_f, w_t, w_d)
         assert space.int_w(w_res) == 21
+    
+    def test_call_object(self, space, api):
+        w_l, w_f = space.fixedview(space.appexec([], """():
+        l = []
+        def f(arg1, arg2):
+            l.append(arg1)
+            l.append(arg2)
+            return len(l)
+        return l, f
+        """))
+
+        w_t = space.newtuple([space.wrap(1), space.wrap(2)])
+        w_res = api.PyObject_CallObject(w_f, w_t)
+        assert space.int_w(w_res) == 2
+        assert space.int_w(space.len(w_l)) == 2
+        
+        w_f = space.appexec([], """():
+            def f(*args):
+                assert isinstance(args, tuple)
+                return len(args) + 8
+            return f
+            """)
+
+        w_t = space.newtuple([space.wrap(1), space.wrap(2)])
+        w_res = api.PyObject_CallObject(w_f, w_t)
+        
+        assert space.int_w(w_res) == 10
