@@ -10,6 +10,8 @@ extern "C" {
 /* defined in varargswrapper.c */
 PyObject * PyTuple_Pack(Py_ssize_t, ...);
 
+#define PyTuple_SET_ITEM PyTuple_SetItem
+
 #ifdef __cplusplus
 }
 #endif
