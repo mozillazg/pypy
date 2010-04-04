@@ -40,3 +40,11 @@ class TestObject(BaseApiTest):
         assert api.PyObject_HasAttr(space.wrap(x), space.wrap('test'))
         api.PyObject_SetAttr(space.wrap(x), space.wrap('test'), space.wrap(10))
         assert x.test == 10
+    
+    def test_getitem(self, space, api):
+        w_t = space.wrap((1, 2, 3, 4, 5))
+        assert space.unwrap(api.PyObject_GetItem(w_t, space.wrap(3))) == 4
+
+        w_d = space.newdict()
+        space.setitem(w_d, space.wrap("a key!"), space.wrap(72))
+        assert space.unwrap(api.PyObject_GetItem(w_d, space.wrap("a key!"))) == 72

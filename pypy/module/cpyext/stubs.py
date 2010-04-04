@@ -4616,12 +4616,6 @@ def PyObject_Length(space, o):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject], PyObject)
-def PyObject_GetItem(space, o, key):
-    """Return element of o corresponding to the object key or NULL on failure.
-    This is the equivalent of the Python expression o[key]."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject, PyObject], rffi.INT_real)
 def PyObject_SetItem(space, o, key, v):
     """Map the object key to the value v.  Returns -1 on failure.  This is the

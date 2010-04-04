@@ -58,3 +58,8 @@ def PyCallable_Check(space, w_obj):
     and 0 otherwise.  This function always succeeds."""
     return int(space.is_true(space.callable(w_obj)))
 
+@cpython_api([PyObject, PyObject], PyObject)
+def PyObject_GetItem(space, w_obj, w_key):
+    """Return element of o corresponding to the object key or NULL on failure.
+    This is the equivalent of the Python expression o[key]."""
+    return space.getitem(w_obj, w_key)
