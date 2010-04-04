@@ -1,14 +1,11 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
+from pypy.module.cpyext.stringobject import new_empty_str
+from pypy.module.cpyext.api import PyStringObject, PyObjectP, PyObject
 
 import py
 import sys
-
-#class TestObject(BaseApiTest):
-#    def test_Size(self, space, api):
-#        s = space.wrap("test")
-#        assert api.PyString_Size(s) == 4
 
 class AppTestStringObject(AppTestCpythonExtensionBase):
     def test_stringobject(self):
@@ -128,3 +125,26 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
             ''')
         res = module.test_string_format_v(1, "xyz")
         print res
+
+class TestString(BaseApiTest):
+    def test_string_resize(self, space, api):
+        py_str = new_empty_str(space, 10)
+        ar = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
+        py_str.c_buffer[0] = 'a'
+        py_str.c_buffer[1] = 'b'
+        py_str.c_buffer[2] = 'c'
+        ar[0] = rffi.cast(PyObject, py_str)
+        api._PyString_Resize(ar, 3)
+        py_str = rffi.cast(PyStringObject, ar[0])
+        assert py_str.c_size == 3
+        assert py_str.c_buffer[1] == 'b'
+        assert py_str.c_buffer[3] == '\x00'
+        # the same for growing
+        ar[0] = rffi.cast(PyObject, py_str)
+        api._PyString_Resize(ar, 10)
+        py_str = rffi.cast(PyStringObject, ar[0])
+        assert py_str.c_size == 10
+        assert py_str.c_buffer[1] == 'b'
+        assert py_str.c_buffer[10] == '\x00'
+        lltype.free(ar, flavor='raw')
+        
