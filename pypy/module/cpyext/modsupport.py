@@ -3,19 +3,9 @@ from pypy.module.cpyext.api import cpython_api, cpython_struct, \
         METH_STATIC, METH_CLASS, METH_COEXIST, CANNOT_FAIL
 from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.interpreter.module import Module
-from pypy.module.cpyext.methodobject import W_PyCFunctionObject, PyCFunction_NewEx, PyDescr_NewMethod
+from pypy.module.cpyext.methodobject import W_PyCFunctionObject, PyCFunction_NewEx, PyDescr_NewMethod, PyMethodDef, PyCFunction
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
-
-PyCFunction = lltype.Ptr(lltype.FuncType([PyObject, PyObject], PyObject))
-
-PyMethodDef = cpython_struct(
-    'PyMethodDef',
-    [('ml_name', rffi.CCHARP),
-     ('ml_meth', PyCFunction),
-     ('ml_flags', rffi.INT_real),
-     ('ml_doc', rffi.CCHARP),
-     ])
 
 def PyImport_AddModule(space, name):
     w_name = space.wrap(name)
@@ -101,10 +91,8 @@ def PyModule_GetDict(space, w_mod):
 @cpython_api([PyObject], rffi.CCHARP, error=0)
 def PyModule_GetName(space, module):
     """
-    
-    
-    
     Return module's __name__ value.  If the module does not provide one,
     or if it is not a string, SystemError is raised and NULL is returned."""
     raise NotImplementedError
+
 

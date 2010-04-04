@@ -8,10 +8,22 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.function import BuiltinFunction, Method
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref
-from pypy.module.cpyext.api import generic_cpy_call
+from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject,\
+        cpython_struct
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
+
+
+PyCFunction = lltype.Ptr(lltype.FuncType([PyObject, PyObject], PyObject))
+
+PyMethodDef = cpython_struct(
+    'PyMethodDef',
+    [('ml_name', rffi.CCHARP),
+     ('ml_meth', PyCFunction),
+     ('ml_flags', rffi.INT_real),
+     ('ml_doc', rffi.CCHARP),
+     ])
 
 
 class W_PyCFunctionObject(Wrappable):
@@ -157,3 +169,24 @@ def PyDescr_NewWrapper(space, pto, method_name, wrapper_func, doc, flags, func):
     # not exactly the API sig
     return space.wrap(W_PyCWrapperObject(space, pto, method_name,
         wrapper_func, doc, flags, func))
+
+@cpython_api([PyMethodDef, PyObject, rffi.CCHARP], PyObject)
+def Py_FindMethod(space, table, w_ob, name_ptr):
+    """Return a bound method object for an extension type implemented in C.  This
+    can be useful in the implementation of a tp_getattro or
+    tp_getattr handler that does not use the
+    PyObject_GenericGetAttr() function."""
+    # XXX handle __doc__
+
+    name = rffi.charp2str(name_ptr)
+    methods = rffi.cast(rffi.CArrayPtr(PyMethodDef), methods)
+    if methods:
+        i = -1
+        while True:
+            i = i + 1
+            method = methods[i]
+            if not method.c_ml_name: break
+            if rffi.charp2str(method.c_ml_name) == name: # XXX expensive copying
+                return PyCFunction_NewEx(space, method, w_ob)
+    raise OperationError(space.w_AttributeError, space.wrap(name))
+
