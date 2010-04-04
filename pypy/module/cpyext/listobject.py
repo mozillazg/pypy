@@ -39,6 +39,22 @@ def PyList_SetItem(space, w_list, index, w_item):
     wrappeditems[index] = w_item
     return 0
 
+@cpython_api([PyObject, Py_ssize_t], PyObject, borrowed=True)
+def PyList_GetItem(space, w_list, index):
+    """Return the object at position pos in the list pointed to by p.  The
+    position must be positive, indexing from the end of the list is not
+    supported.  If pos is out of bounds, return NULL and set an
+    IndexError exception."""
+    register_container(space, w_list)
+    if not isinstance(w_list, W_ListObject):
+        PyErr_BadInternalCall(space)
+    wrappeditems = w_list.wrappeditems
+    if index < 0 or index >= len(wrappeditems):
+        raise OperationError(space.w_IndexError, space.wrap(
+            "list index out of range"))
+    return wrappeditems[index]
+
+
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
 def PyList_Append(space, w_list, w_item):
     if not isinstance(w_list, W_ListObject):
