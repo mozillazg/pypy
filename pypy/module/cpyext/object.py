@@ -1,10 +1,11 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
-        Py_ssize_t
+        Py_ssize_t, PyVarObject
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject
+from pypy.module.cpyext.pyerrors import PyErr_NoMemory
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.objspace.std.typeobject import W_TypeObject
 import pypy.module.__builtin__.operation as operation
@@ -72,3 +73,28 @@ def PyObject_GetItem(space, w_obj, w_key):
     """Return element of o corresponding to the object key or NULL on failure.
     This is the equivalent of the Python expression o[key]."""
     return space.getitem(w_obj, w_key)
+
+@cpython_api([PyObject, PyTypeObjectPtr], PyObject, borrowed=True)
+def PyObject_Init(space, op, type):
+    """Initialize a newly-allocated object op with its type and initial
+    reference.  Returns the initialized object.  If type indicates that the
+    object participates in the cyclic garbage detector, it is added to the
+    detector's set of observed objects. Other fields of the object are not
+    affected."""
+    if not op:
+        PyErr_NoMemory(space)
+    op.c_ob_type = type
+    op.c_ob_refcnt = 1
+    return op
+
+@cpython_api([PyVarObject, PyTypeObjectPtr, Py_ssize_t], PyObject, borrowed=True)
+def PyObject_InitVar(space, op, type, size):
+    """This does everything PyObject_Init() does, and also initializes the
+    length information for a variable-size object."""
+    if not op:
+        PyErr_NoMemory(space)
+    op.c_ob_size = size
+    op.c_ob_type = type
+    op.c_ob_refcnt = 1
+    return rffi.cast(PyObject, op)
+
