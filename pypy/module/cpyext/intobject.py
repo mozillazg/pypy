@@ -1,7 +1,7 @@
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, PyObject, CANNOT_FAIL,
-                                    build_type_checkers)
+                                    build_type_checkers, Py_ssize_t)
 
 
 PyInt_Check, PyInt_CheckExact = build_type_checkers("Int")
@@ -20,3 +20,20 @@ def PyInt_AsLong(space, w_obj):
     returned, and the caller should check PyErr_Occurred() to find out whether
     there was an error, or whether the value just happened to be -1."""
     return space.int_w(w_obj)
+
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PyInt_AsSsize_t(space, w_obj):
+    """Will first attempt to cast the object to a PyIntObject or
+    PyLongObject, if it is not already one, and then return its value as
+    Py_ssize_t.
+    """
+    return space.int_w(w_obj) # XXX this is wrong on win64
+
+@cpython_api([Py_ssize_t], PyObject)
+def PyInt_FromSsize_t(space, ival):
+    """Create a new integer object with a value of ival. If the value is larger
+    than LONG_MAX or smaller than LONG_MIN, a long integer object is
+    returned.
+    """
+    return space.wrap(ival) # XXX this is wrong on win64
+
