@@ -44,3 +44,11 @@ def PySequence_Fast_GET_SIZE(space, w_obj):
     assert isinstance(w_obj, tupleobject.W_TupleObject)
     return len(w_obj.wrappeditems)
 
+@cpython_api([PyObject, Py_ssize_t, Py_ssize_t], PyObject)
+def PySequence_GetSlice(space, w_obj, w_start, w_end):
+    """Return the slice of sequence object o between i1 and i2, or NULL on
+    failure. This is the equivalent of the Python expression o[i1:i2].
+    
+    This function used an int type for i1 and i2. This might
+    require changes in your code for properly supporting 64-bit systems."""
+    return space.getslice(w_obj, w_start, w_end)

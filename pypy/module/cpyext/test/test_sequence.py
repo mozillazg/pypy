@@ -29,3 +29,8 @@ class TestIterator(BaseApiTest):
         assert exc.value.match(space, space.w_TypeError)
         assert space.str_w(exc.value.get_w_value(space)) == "message"
         rffi.free_charp(message)
+    
+    def test_get_slice(self, space, api):
+        w_t = space.wrap((1, 2, 3, 4, 5))
+        assert space.unwrap(api.PySequence_GetSlice(w_t, space.wrap(2), space.wrap(4))) == (3, 4)
+        assert space.unwrap(api.PySequence_GetSlice(w_t, space.wrap(1), space.wrap(-1))) == (2, 3, 4)
