@@ -27,6 +27,8 @@
 # endif
 #endif
 #define Py_ssize_t long
+#define PY_SSIZE_T_MAX ((Py_ssize_t)(((size_t)-1)>>1))
+#define PY_SSIZE_T_MIN (-PY_SSIZE_T_MAX-1)
 
 /* Convert a possibly signed character to a nonnegative int */
 /* XXX This assumes characters are 8 bits wide */
@@ -63,6 +65,7 @@
 #include "tupleobject.h"
 #include "dictobject.h"
 #include "intobject.h"
+#include "listobject.h"
 #include "unicodeobject.h"
 #include "eval.h"
 #include "pymem.h"
