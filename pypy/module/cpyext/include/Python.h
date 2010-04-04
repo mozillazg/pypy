@@ -11,6 +11,7 @@
 #define PY_FORMAT_SIZE_T "z"
 #define SIZEOF_VOID_P sizeof(void *)
 #define WITH_DOC_STRINGS
+#define HAVE_UNICODE
 
 /* Compat stuff */
 #ifndef _WIN32
