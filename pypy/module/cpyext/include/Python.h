@@ -39,6 +39,8 @@
 #define Py_CHARMASK(c)		((unsigned char)((c) & 0xff))
 #endif
 
+#define statichere static
+
 #define Py_MEMCPY memcpy
 
 #include <pypy_macros.h>
