@@ -78,7 +78,7 @@ def PyMember_SetOne(space, obj, w_member, w_value):
             raise OperationError(space.w_TypeError,
                                  space.wrap("string of length 1 expected"))
         array = rffi.cast(rffi.CCHARP, addr)
-        array[0] = str_value
+        array[0] = str_value[0]
     elif member_type in [structmemberdefs.T_OBJECT,
                          structmemberdefs.T_OBJECT_EX]:
         array = rffi.cast(PyObjectP, addr)
