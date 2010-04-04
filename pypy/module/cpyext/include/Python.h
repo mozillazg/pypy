@@ -9,6 +9,7 @@
 #define PY_LONG_LONG long long
 #define SIZEOF_LONG_LONG sizeof(PY_LONG_LONG)
 #define PY_FORMAT_SIZE_T "z"
+#define SIZEOF_VOID_P sizeof(void *)
 #define WITH_DOC_STRINGS
 
 /* Compat stuff */
