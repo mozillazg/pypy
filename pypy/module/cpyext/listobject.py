@@ -52,4 +52,5 @@ def PyList_GET_SIZE(space, w_list):
     
     This macro returned an int. This might require changes in your
     code for properly supporting 64-bit systems."""
+    assert isinstance(w_list, W_ListObject)
     return len(w_list.wrappeditems)

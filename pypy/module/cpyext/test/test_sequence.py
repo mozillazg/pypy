@@ -32,5 +32,5 @@ class TestIterator(BaseApiTest):
     
     def test_get_slice(self, space, api):
         w_t = space.wrap((1, 2, 3, 4, 5))
-        assert space.unwrap(api.PySequence_GetSlice(w_t, space.wrap(2), space.wrap(4))) == (3, 4)
-        assert space.unwrap(api.PySequence_GetSlice(w_t, space.wrap(1), space.wrap(-1))) == (2, 3, 4)
+        assert space.unwrap(api.PySequence_GetSlice(w_t, 2, 4)) == (3, 4)
+        assert space.unwrap(api.PySequence_GetSlice(w_t, 1, -1)) == (2, 3, 4)
