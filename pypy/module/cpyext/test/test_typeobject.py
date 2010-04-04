@@ -83,6 +83,6 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert fuu2(u"abc").baz().escape()
 
     def test_sre(self):
-        skip("In Progress")
+#        skip("In Progress")
         module = self.import_module(name='_sre')
 

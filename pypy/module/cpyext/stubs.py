@@ -4325,13 +4325,6 @@ def PyObject_GetAttr(space, o, attr_name):
     expression o.attr_name."""
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.CCHARP], PyObject)
-def PyObject_GetAttrString(space, o, attr_name):
-    """Retrieve an attribute named attr_name from object o. Returns the attribute
-    value on success, or NULL on failure. This is the equivalent of the Python
-    expression o.attr_name."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject], PyObject)
 def PyObject_GenericGetAttr(space, o, name):
     """Generic attribute getter function that is meant to be put into a type

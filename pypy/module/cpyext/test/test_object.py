@@ -1,6 +1,8 @@
 import py
 
 from pypy.module.cpyext.test.test_api import BaseApiTest
+from pypy.rpython.lltypesystem import rffi
+
 
 class TestObject(BaseApiTest):
     def test_IsTrue(self, space, api):
@@ -40,6 +42,13 @@ class TestObject(BaseApiTest):
         assert api.PyObject_HasAttr(space.wrap(x), space.wrap('test'))
         api.PyObject_SetAttr(space.wrap(x), space.wrap('test'), space.wrap(10))
         assert x.test == 10
+    
+    def test_getattr_string(self, space, api):
+        assert api.PyObject_GetAttrString(space.wrap(""), rffi.str2charp("__len__"))
+        assert not api.PyObject_GetAttrString(space.wrap(""), rffi.str2charp("not_real"))
+        assert api.PyErr_Occurred() is space.w_AttributeError
+        api.PyErr_Clear()
+
     
     def test_getitem(self, space, api):
         w_t = space.wrap((1, 2, 3, 4, 5))
