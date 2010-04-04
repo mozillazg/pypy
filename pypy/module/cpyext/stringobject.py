@@ -1,3 +1,4 @@
+from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, PyVarObjectFields,
                                     PyStringObject, Py_ssize_t, cpython_struct,
