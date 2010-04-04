@@ -396,6 +396,14 @@ manually remove this flag though!
 #define PyObject_NewVar(type, typeobj, n) \
 		( (type *) _PyObject_NewVar((typeobj), (n)) )
 
+#define _PyObject_VAR_SIZE(typeobj, nitems)	\
+	(size_t)				\
+	( ( (typeobj)->tp_basicsize +		\
+	    (nitems)*(typeobj)->tp_itemsize +	\
+	    (SIZEOF_VOID_P - 1)			\
+	  ) & ~(SIZEOF_VOID_P - 1)		\
+	)
+
 #define PyObject_INIT(op, typeobj) \
 	( Py_TYPE(op) = (typeobj), _Py_NewReference((PyObject *)(op)), (op) )
 #define PyObject_INIT_VAR(op, typeobj, size) \

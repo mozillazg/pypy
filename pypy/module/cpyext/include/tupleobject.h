@@ -11,6 +11,8 @@ extern "C" {
 PyObject * PyTuple_Pack(Py_ssize_t, ...);
 
 #define PyTuple_SET_ITEM PyTuple_SetItem
+#define PyTuple_GET_ITEM PyTuple_GetItem
+
 
 #ifdef __cplusplus
 }
