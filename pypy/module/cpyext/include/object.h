@@ -388,12 +388,27 @@ manually remove this flag though!
 #define Py_TPFLAGS_DEFAULT Py_TPFLAGS_DEFAULT_EXTERNAL
 
 
-/* objimpl.h ----------------------------------------------*/
 
+/* objimpl.h ----------------------------------------------*/
+#define PyObject_DEL PyObject_Del
 #define PyObject_New(type, typeobj) \
 		( (type *) _PyObject_New(typeobj) )
 #define PyObject_NewVar(type, typeobj, n) \
 		( (type *) _PyObject_NewVar((typeobj), (n)) )
+
+#define PyObject_INIT(op, typeobj) \
+	( Py_TYPE(op) = (typeobj), _Py_NewReference((PyObject *)(op)), (op) )
+#define PyObject_INIT_VAR(op, typeobj, size) \
+	( Py_SIZE(op) = (size), PyObject_INIT((op), (typeobj)) )
+
+#define PyObject_NEW(type, typeobj) \
+( (type *) PyObject_Init( \
+	(PyObject *) PyObject_MALLOC( _PyObject_SIZE(typeobj) ), (typeobj)) )
+
+#define PyObject_NEW_VAR(type, typeobj, n) \
+( (type *) PyObject_InitVar( \
+      (PyVarObject *) PyObject_MALLOC(_PyObject_VAR_SIZE((typeobj),(n)) ),\
+      (typeobj), (n)) )
 
 
 /* PyPy internal ----------------------------------- */
