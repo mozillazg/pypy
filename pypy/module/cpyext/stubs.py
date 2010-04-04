@@ -4820,15 +4820,6 @@ def PySequence_GetItem(space, o, i):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject, Py_ssize_t, Py_ssize_t], PyObject)
-def PySequence_GetSlice(space, o, i1, i2):
-    """Return the slice of sequence object o between i1 and i2, or NULL on
-    failure. This is the equivalent of the Python expression o[i1:i2].
-    
-    This function used an int type for i1 and i2. This might
-    require changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real)
 def PySequence_SetItem(space, o, i, v):
     """Assign object v to the ith element of o.  Returns -1 on failure.  This
