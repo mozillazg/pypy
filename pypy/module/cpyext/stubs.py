@@ -5690,33 +5690,8 @@ def PyUnicode_ClearFreeList(space, ):
     raise NotImplementedError
 
 @cpython_api([{Py_UNICODE}], rffi.INT_real)
-def Py_UNICODE_ISSPACE(space, ch):
-    """Return 1 or 0 depending on whether ch is a whitespace character."""
-    raise NotImplementedError
-
-@cpython_api([{Py_UNICODE}], rffi.INT_real)
-def Py_UNICODE_ISLOWER(space, ch):
-    """Return 1 or 0 depending on whether ch is a lowercase character."""
-    raise NotImplementedError
-
-@cpython_api([{Py_UNICODE}], rffi.INT_real)
-def Py_UNICODE_ISUPPER(space, ch):
-    """Return 1 or 0 depending on whether ch is an uppercase character."""
-    raise NotImplementedError
-
-@cpython_api([{Py_UNICODE}], rffi.INT_real)
 def Py_UNICODE_ISTITLE(space, ch):
     """Return 1 or 0 depending on whether ch is a titlecase character."""
-    raise NotImplementedError
-
-@cpython_api([{Py_UNICODE}], rffi.INT_real)
-def Py_UNICODE_ISLINEBREAK(space, ch):
-    """Return 1 or 0 depending on whether ch is a linebreak character."""
-    raise NotImplementedError
-
-@cpython_api([{Py_UNICODE}], rffi.INT_real)
-def Py_UNICODE_ISDECIMAL(space, ch):
-    """Return 1 or 0 depending on whether ch is a decimal character."""
     raise NotImplementedError
 
 @cpython_api([{Py_UNICODE}], rffi.INT_real)
@@ -5732,16 +5707,6 @@ def Py_UNICODE_ISNUMERIC(space, ch):
 @cpython_api([{Py_UNICODE}], rffi.INT_real)
 def Py_UNICODE_ISALPHA(space, ch):
     """Return 1 or 0 depending on whether ch is an alphabetic character."""
-    raise NotImplementedError
-
-@cpython_api([{Py_UNICODE}], rffi.INT_real)
-def Py_UNICODE_ISALNUM(space, ch):
-    """Return 1 or 0 depending on whether ch is an alphanumeric character."""
-    raise NotImplementedError
-
-@cpython_api([{Py_UNICODE}], {Py_UNICODE})
-def Py_UNICODE_TOLOWER(space, ch):
-    """Return the character ch converted to lower case."""
     raise NotImplementedError
 
 @cpython_api([{Py_UNICODE}], {Py_UNICODE})
