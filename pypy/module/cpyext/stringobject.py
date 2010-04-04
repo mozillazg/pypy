@@ -8,6 +8,17 @@ from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, Py_DecRef
 
 PyString_Check, PyString_CheckExact = build_type_checkers("String", "w_str")
 
+def new_empty_str(space, length):
+    py_str = lltype.malloc(PyStringObject.TO, flavor='raw')
+    py_str.c_ob_refcnt = 1
+    
+    buflen = length + 1
+    py_str.c_buffer = lltype.malloc(rffi.CCHARP.TO, buflen, flavor='raw')
+    py_str.c_buffer[buflen-1] = '\0'
+    py_str.c_size = length
+    py_str.c_ob_type = make_ref(space, space.w_str)
+    return py_str    
+
 @cpython_api_c()
 def PyString_FromFormatV():
     pass
@@ -19,16 +30,7 @@ def PyString_FromStringAndSize(space, char_p, length):
         ptr = make_ref(space, space.wrap(s))
         return rffi.cast(PyStringObject, ptr)
     else:
-        py_str = lltype.malloc(PyStringObject.TO, flavor='raw')
-        py_str.c_ob_refcnt = 1
-        
-        buflen = length + 1
-        py_str.c_buffer = lltype.malloc(rffi.CCHARP.TO, buflen, flavor='raw')
-        py_str.c_buffer[buflen-1] = '\0'
-        py_str.c_size = length
-        py_str.c_ob_type = make_ref(space, space.w_str)
-        
-        return py_str
+        return new_empty_str(space, length)
 
 @cpython_api([rffi.CCHARP], PyObject)
 def PyString_FromString(space, char_p):
@@ -69,13 +71,23 @@ def _PyString_Resize(space, ref, newsize):
     This function used an int type for newsize. This might
     require changes in your code for properly supporting 64-bit systems."""
     # XXX always create a new string so far
-    w_s = from_ref(space, ref[0])
+    py_str = rffi.cast(PyStringObject, ref[0])
+    if not py_str.c_buffer:
+        raise OperationError(space.w_SystemError, space.wrap(
+            "_PyString_Resize called on already created string"))
     try:
-        ptr = make_ref(space, space.wrap(space.str_w(w_s)[:newsize]))
-    except:
+        py_newstr = new_empty_str(space, newsize)
+    except MemoryError:
         Py_DecRef(space, ref[0])
-        ref[0] = lltype.nullptr(PyStringObject) 
+        ref[0] = lltype.nullptr(PyObject)
         raise
+    to_cp = newsize
+    oldsize = py_str.c_size
+    if oldsize < newsize:
+        to_cp = oldsize
+    for i in range(to_cp):
+        py_newstr.c_buffer[i] = py_str.c_buffer[i]
+    py_newstr.c_buffer[newsize] = '\x00'
     Py_DecRef(space, ref[0])
-    ref[0] = ptr
+    ref[0] = rffi.cast(PyObject, py_newstr)
     return 0
