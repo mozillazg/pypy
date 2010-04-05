@@ -13,7 +13,15 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
              }
              return PyInt_FromLong(l);
              '''
-             )])
+             ),
+            ('oneargandform', 'METH_VARARGS',
+             '''
+             int l;
+             if (!PyArg_ParseTuple(args, "i:oneargandstuff", &l)) {
+                 return NULL;
+             }
+             return PyInt_FromLong(l);
+             ''')])
         assert mod.oneargint(1) == 1
         raises(TypeError, mod.oneargint, None)
         try:
@@ -22,3 +30,5 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
             pass
         else:
             raise Exception("DID NOT RAISE")
+        assert mod.oneargandform(1) == 1
+        
