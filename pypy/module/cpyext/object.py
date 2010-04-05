@@ -1,6 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
-        Py_ssize_t, PyVarObject
+        Py_ssize_t, PyVarObject, Py_TPFLAGS_HEAPTYPE
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
@@ -27,6 +27,8 @@ def PyObject_dealloc(space, obj):
     pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
     obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
     generic_cpy_call(space, pto.c_tp_free, obj_voidp)
+    if pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
+        Py_DecRef(space, rffi.cast(PyObject, obj.c_ob_type))
 
 @cpython_api([PyObject], rffi.INT_real, error=-1)
 def PyObject_IsTrue(space, w_obj):

@@ -303,9 +303,9 @@ def subtype_dealloc(space, obj):
     dealloc = base.c_tp_dealloc
     # XXX call tp_del if necessary
     generic_cpy_call(space, dealloc, obj)
-    if pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
-        pto = rffi.cast(PyObject, pto)
-        Py_DecRef(space, pto)
+    # XXX cpy decrefs the pto here but we do it in the base-dealloc
+    # hopefully this does not clash with the memory model assumed in
+    # extension modules
 
 
 @cpython_api([PyObject], lltype.Void, external=False)
@@ -344,7 +344,7 @@ def type_dealloc(space, obj):
         obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
         generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
         pto = rffi.cast(PyObject, type_pto)
-        Py_DecRef(space, pto) # XXX duplicate decref? (see above)
+        Py_DecRef(space, pto)
 
 
 def allocate_type_obj(space, w_type):
