@@ -556,7 +556,9 @@ def build_eci(build_bridge, export_symbols, code):
                                include_dir / "pyerrors.c",
                                include_dir / "modsupport.c",
                                include_dir / "getargs.c",
-                               include_dir / "stringobject.c"],
+                               include_dir / "stringobject.c",
+                               include_dir / "mysnprintf.c",
+                               include_dir / "pythonrun.c"],
         separate_module_sources = [code],
         export_symbols=export_symbols_eci,
         **kwds

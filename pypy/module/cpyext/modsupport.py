@@ -1,11 +1,15 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, cpython_struct, \
-        METH_STATIC, METH_CLASS, METH_COEXIST, CANNOT_FAIL
+        METH_STATIC, METH_CLASS, METH_COEXIST, CANNOT_FAIL, cpython_api_c
 from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.methodobject import W_PyCFunctionObject, PyCFunction_NewEx, PyDescr_NewMethod, PyMethodDef, PyCFunction
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
+
+@cpython_api_c()
+def PyModule_AddObject():
+    pass
 
 def PyImport_AddModule(space, name):
     w_name = space.wrap(name)

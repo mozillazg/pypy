@@ -12,6 +12,7 @@
 #define SIZEOF_VOID_P sizeof(void *)
 #define WITH_DOC_STRINGS
 #define HAVE_UNICODE
+#define INT_MAX (1 << (8 * sizeof(int) - 1))
 
 /* Compat stuff */
 #ifndef _WIN32
@@ -56,6 +57,7 @@
 #include <assert.h>
 #include <locale.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 #include "boolobject.h"
 #include "floatobject.h"

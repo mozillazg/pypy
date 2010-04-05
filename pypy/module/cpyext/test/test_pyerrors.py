@@ -1,7 +1,9 @@
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
-from pypy.rpython.lltypesystem import rffi
+from pypy.rpython.lltypesystem import rffi, ll2ctypes
+
+from pypy.interpreter.gateway import interp2app
 
 class TestExceptions(BaseApiTest):
     def test_GivenExceptionMatches(self, space, api):
@@ -55,6 +57,17 @@ class TestExceptions(BaseApiTest):
 
 
 class AppTestFetch(AppTestCpythonExtensionBase):
+    def setup_class(cls):
+        AppTestCpythonExtensionBase.setup_class.im_func(cls)
+        space = cls.space
+
+        def set_errno(num):
+            import pdb
+            pdb.set_trace()
+            ll2ctypes.TLS.errno = num
+        
+        cls.w_set_errno = space.wrap(interp2app(set_errno, unwrap_spec=[int]))
+    
     def test_occurred(self):
         module = self.import_extension('foo', [
             ("check_error", "METH_NOARGS",
@@ -78,13 +91,12 @@ class AppTestFetch(AppTestCpythonExtensionBase):
         module = self.import_extension('foo', [
                 ("set_from_errno", "METH_NOARGS",
                  '''
-                 int close(int);
-                 close(-1);
                  PyErr_SetFromErrno(PyExc_OSError);
                  return NULL;
                  '''),
                 ])
         try:
+            self.set_errno(errno.EBADF)
             module.set_from_errno()
         except OSError, e:
             assert e.errno == errno.EBADF
