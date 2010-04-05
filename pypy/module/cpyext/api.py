@@ -234,7 +234,7 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     }
 
 for exc_name in exceptions.Module.interpleveldefs.keys():
-    GLOBALS['PyExc_' + exc_name] = ('PyObject*', 'space.gettypeobject(interp_exceptions.W_%s.typedef)'% (exc_name, ))
+    GLOBALS['PyExc_' + exc_name] = ('PyTypeObject*', 'space.gettypeobject(interp_exceptions.W_%s.typedef)'% (exc_name, ))
 
 for cpyname, pypyexpr in {"Type": "space.w_type",
         "BaseObject": "space.w_object",
@@ -242,6 +242,8 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
         "Tuple": "space.w_tuple",
         "List": "space.w_list",
         "Unicode": "space.w_unicode",
+        'Bool': 'space.w_bool',
+        'None': 'space.w_None',
         }.items():
     GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
