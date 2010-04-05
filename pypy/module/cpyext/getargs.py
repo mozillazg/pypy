@@ -20,8 +20,10 @@ def pypy_vgetargs1(space, w_obj, fmt, va_list_p, flags):
         c = fmt[i]
         if c == "\x00":
             return 1
-        if c == "i":
+        elif c == "i":
             arr = api.va_get_int_star(va_list_p)
             arr[0] = rffi.cast(rffi.INT,
                                space.int_w(space.getitem(w_obj, space.wrap(i))))
+        elif c == ':':
+            return 1
         i += 1
