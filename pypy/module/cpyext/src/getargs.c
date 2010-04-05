@@ -667,7 +667,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 			*p = ival;
 		break;
 	}
-	
+#endif	
 	case 'n': /* Py_ssize_t */
 #if SIZEOF_SIZE_T != SIZEOF_LONG
 	{
@@ -696,6 +696,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 		break;
 	}
 
+#if 0
 	case 'k': { /* long sized bitfield */
 		unsigned long *p = va_arg(*p_va, unsigned long *);
 		unsigned long ival;
