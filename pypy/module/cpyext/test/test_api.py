@@ -3,6 +3,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext import api
+from pypy.module.cpyext.test.test_cpyext import freeze_refcnts, check_and_print_leaks
 PyObject = api.PyObject
 
 @api.cpython_api([PyObject], lltype.Void)
@@ -21,9 +22,14 @@ class BaseApiTest:
         cls.api = CAPI()
         CAPI.__dict__.update(api.INTERPLEVEL_API)
 
+    def setup_method(self, func):
+        freeze_refcnts(self)
+
     def teardown_method(self, func):
         state = self.space.fromcache(State)
         assert state.exc_value is None
+        if check_and_print_leaks(self):
+            assert False, "Test leaks or loses object(s)."
 
 class TestConversion(BaseApiTest):
     def test_conversions(self, space, api):
