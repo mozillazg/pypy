@@ -6,6 +6,4 @@ from pypy.module.cpyext.pyobject import PyObject
 def PyMapping_Keys(space, w_obj):
     """On success, return a list of the keys in object o.  On failure, return NULL.
     This is equivalent to the Python expression o.keys()."""
-    # XXX: Cpython implements this in terms of PyObject_CallMethod, we should
-    # do that eventually.
     return space.call_method(w_obj, "keys")
