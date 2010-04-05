@@ -12,7 +12,6 @@
 #define SIZEOF_VOID_P sizeof(void *)
 #define WITH_DOC_STRINGS
 #define HAVE_UNICODE
-#define INT_MAX (1 << (8 * sizeof(int) - 1))
 #define WITHOUT_COMPLEX
 
 /* Compat stuff */
@@ -20,6 +19,7 @@
 # include <inttypes.h>
 # include <stdint.h>
 # include <stddef.h>
+# include <limits.h>
 # define Py_DEPRECATED(VERSION_UNUSED) __attribute__((__deprecated__))
 # define PyAPI_DATA(RTYPE) extern RTYPE
 #else
@@ -33,6 +33,7 @@
 #define Py_ssize_t long
 #define PY_SSIZE_T_MAX ((Py_ssize_t)(((size_t)-1)>>1))
 #define PY_SSIZE_T_MIN (-PY_SSIZE_T_MAX-1)
+#define Py_SAFE_DOWNCAST(VALUE, WIDE, NARROW) (NARROW)(VALUE)
 
 /* Convert a possibly signed character to a nonnegative int */
 /* XXX This assumes characters are 8 bits wide */
@@ -48,6 +49,7 @@
 
 #include <pypy_macros.h>
 
+int PyOS_snprintf(char *str, size_t size, const  char  *format, ...);
 #include "patchlevel.h"
 
 #include "object.h"
@@ -76,6 +78,7 @@
 #include "unicodeobject.h"
 #include "eval.h"
 #include "pymem.h"
+#include "pycobject.h"
 
 // XXX This shouldn't be included here
 #include "structmember.h"
