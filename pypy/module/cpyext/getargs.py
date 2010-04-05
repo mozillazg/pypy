@@ -30,4 +30,6 @@ def pypy_vgetargs1(space, w_obj, fmt, va_list_p, flags):
                                space.int_w(space.getitem(w_obj, space.wrap(i))))
         elif c == ':':
             return 1
+        else:
+            raise Exception("Unsupported parameter: %s" % (c,))
         i += 1
