@@ -6,6 +6,7 @@
 extern "C" {
 #endif
 
+  void Py_FatalError(const char *msg);
 
 #ifdef __cplusplus
 }
