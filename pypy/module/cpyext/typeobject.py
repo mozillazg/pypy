@@ -15,7 +15,8 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR, \
-    Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS
+    Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS, \
+    PyUnicodeObject
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import FunctionWithFixedCode, StaticMethod
@@ -319,6 +320,17 @@ def string_dealloc(space, obj):
     Py_DecRef(space, pto)
 
 @cpython_api([PyObject], lltype.Void, external=False)
+def unicode_dealloc(space, obj):
+    obj = rffi.cast(PyUnicodeObject, obj)
+    pto = obj.c_ob_type
+    if obj.c_buffer:
+        lltype.free(obj.c_buffer, flavor="raw")
+    obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
+    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
+    pto = rffi.cast(PyObject, pto)
+    Py_DecRef(space, pto)
+
+@cpython_api([PyObject], lltype.Void, external=False)
 def type_dealloc(space, obj):
     state = space.fromcache(State)
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
@@ -357,6 +369,9 @@ def allocate_type_obj(space, w_type):
     elif space.is_w(w_type, space.w_str):
         pto.c_tp_dealloc = llhelper(string_dealloc.api_func.functype,
                 string_dealloc.api_func.get_wrapper(space))
+    elif space.is_w(w_type, space.w_unicode):
+        pto.c_tp_dealloc = llhelper(unicode_dealloc.api_func.functype,
+                unicode_dealloc.api_func.get_wrapper(space))
     else:
         pto.c_tp_dealloc = llhelper(subtype_dealloc.api_func.functype,
                 subtype_dealloc.api_func.get_wrapper(space))
