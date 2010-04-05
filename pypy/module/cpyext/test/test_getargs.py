@@ -21,6 +21,24 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
                  return NULL;
              }
              return PyInt_FromLong(l);
+             '''),
+            ('oneargobject', 'METH_VARARGS',
+             '''
+             PyObject *obj;
+             if (!PyArg_Parse(args, "O", &obj)) {
+                 return NULL;
+             }
+             Py_INCREF(obj);
+             return obj;
+             '''),
+            ('oneargobjectandlisttype', 'METH_VARARGS',
+             '''
+             PyObject *obj;
+             if (!PyArg_Parse(args, "O!", &PyList_Type, &obj)) {
+                 return NULL;
+             }
+             Py_INCREF(obj);
+             return obj;
              ''')])
         assert mod.oneargint(1) == 1
         raises(TypeError, mod.oneargint, None)
@@ -31,4 +49,8 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
         else:
             raise Exception("DID NOT RAISE")
         assert mod.oneargandform(1) == 1
-        
+
+        sentinel = object()
+        res = mod.oneargobject(sentinel)
+        raises(TypeError, "mod.oneargobjectandlisttype(sentinel)")
+        assert res is sentinel
