@@ -1,7 +1,7 @@
 import py
 
 from pypy.module.cpyext.test.test_api import BaseApiTest
-from pypy.rpython.lltypesystem import rffi
+from pypy.rpython.lltypesystem import rffi, lltype
 
 
 class TestObject(BaseApiTest):
@@ -44,10 +44,14 @@ class TestObject(BaseApiTest):
         assert x.test == 10
     
     def test_getattr_string(self, space, api):
-        assert api.PyObject_GetAttrString(space.wrap(""), rffi.str2charp("__len__"))
-        assert not api.PyObject_GetAttrString(space.wrap(""), rffi.str2charp("not_real"))
+        charp1 = rffi.str2charp("__len__")
+        charp2 = rffi.str2charp("not_real")
+        assert api.PyObject_GetAttrString(space.wrap(""), charp1)
+        assert not api.PyObject_GetAttrString(space.wrap(""), charp2)
         assert api.PyErr_Occurred() is space.w_AttributeError
         api.PyErr_Clear()
+        lltype.free(charp1, flavor="raw")
+        lltype.free(charp2, flavor="raw")
 
     
     def test_getitem(self, space, api):
