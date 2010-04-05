@@ -2,6 +2,9 @@
 from pypy.module.cpyext.test.test_api import BaseApiTest
 
 class TestUnicode(BaseApiTest):
+    def test_unicodeobject(self, space, api):
+        assert space.unwrap(api.PyUnicode_GET_SIZE(space.wrap(u'späm'))) == 4
+
     def test_IS(self, space, api):
         for char in [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f,
                      0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002,

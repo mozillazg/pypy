@@ -5654,15 +5654,6 @@ def PyUnicode_CheckExact(space, o):
     raise NotImplementedError
 
 @cpython_api([PyObject], Py_ssize_t)
-def PyUnicode_GET_SIZE(space, o):
-    """Return the size of the object.  o has to be a PyUnicodeObject (not
-    checked).
-    
-    This function returned an int type. This might require changes
-    in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], Py_ssize_t)
 def PyUnicode_GET_DATA_SIZE(space, o):
     """Return the size of the object's internal buffer in bytes.  o has to be a
     PyUnicodeObject (not checked).

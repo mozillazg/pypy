@@ -1,6 +1,9 @@
 from pypy.rpython.lltypesystem import rffi
 from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
-from pypy.module.cpyext.api import CANNOT_FAIL, build_type_checkers, cpython_api
+from pypy.module.cpyext.api import (CANNOT_FAIL, Py_ssize_t,
+                                    build_type_checkers, cpython_api)
+from pypy.module.cpyext.pyobject import PyObject
+from pypy.objspace.std import unicodeobject
 
 PyUnicode_Check, PyUnicode_CheckExact = build_type_checkers("Unicode", "w_unicode")
 
@@ -51,3 +54,13 @@ def Py_UNICODE_ISUPPER(space, w_ch):
 def Py_UNICODE_TOLOWER(space, w_ch):
     """Return the character ch converted to lower case."""
     return unicodedb.tolower(w_ch)
+
+@cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
+def PyUnicode_GET_SIZE(space, w_obj):
+    """Return the size of the object.  o has to be a PyUnicodeObject (not
+    checked).
+
+    This function returned an int type. This might require changes
+    in your code for properly supporting 64-bit systems."""
+    assert isinstance(w_obj, unicodeobject.W_UnicodeObject)
+    return space.len(w_obj)
