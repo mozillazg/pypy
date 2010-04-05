@@ -1,6 +1,8 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject
+from pypy.module.cpyext.api import cpython_api, PyObject, build_type_checkers
 from pypy.interpreter.error import OperationError
+
+PyFloat_Check, PyFloat_CheckExact = build_type_checkers("Float")
 
 @cpython_api([lltype.Float], PyObject)
 def PyFloat_FromDouble(space, value):
