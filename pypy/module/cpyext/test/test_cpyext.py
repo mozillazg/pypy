@@ -58,6 +58,65 @@ def compile_module(modname, **kwds):
         standalone=False)
     return str(soname)
 
+def freeze_refcnts(self):
+    state = self.space.fromcache(State)
+    self.frozen_refcounts = {}
+    for w_obj, obj in state.py_objects_w2r.iteritems():
+        self.frozen_refcounts[w_obj] = obj.c_ob_refcnt
+    #state.print_refcounts()
+    self.frozen_ll2callocations = set(ll2ctypes.ALLOCATED.values())
+    self.frozen_lltallocations = lltype.ALLOCATED.copy()
+    lltype.TRACK_ALLOCATIONS = True
+
+def check_and_print_leaks(self):
+    # check for sane refcnts
+    leaking = False
+    state = self.space.fromcache(State)
+    import gc
+    gc.collect()
+    lost_objects_w = identity_dict()
+    lost_objects_w.update((key, None) for key in self.frozen_refcounts.keys())
+    for w_obj, obj in state.py_objects_w2r.iteritems():
+        base_refcnt = self.frozen_refcounts.get(w_obj)
+        delta = obj.c_ob_refcnt
+        if base_refcnt is not None:
+            delta -= base_refcnt
+            lost_objects_w.pop(w_obj)
+        if delta != 0:
+            leaking = True
+            print >>sys.stderr, "Leaking %r: %i references" % (w_obj, delta)
+            lifeline = w_obj.get_pyolifeline()
+            if lifeline is not None:
+                refcnt = lifeline.pyo.c_ob_refcnt
+                if refcnt > 0:
+                    print >>sys.stderr, "\tThe object also held by C code."
+                else:
+                    referrers_repr = []
+                    for o in gc.get_referrers(w_obj):
+                        try:
+                            repr_str = repr(o)
+                        except TypeError, e:
+                            repr_str = "%s (type of o is %s)" % (str(e), type(o))
+                        referrers_repr.append(repr_str)
+                    referrers = ", ".join(referrers_repr)
+                    print >>sys.stderr, "\tThe object is referenced by these objects:", \
+                            referrers
+    for w_obj in lost_objects_w:
+        print >>sys.stderr, "Lost object %r" % (w_obj, )
+        leaking = True
+    for llvalue in set(ll2ctypes.ALLOCATED.values()) - self.frozen_ll2callocations:
+        if getattr(llvalue, "_traceback", None): # this means that the allocation should be tracked
+            leaking = True
+            print >>sys.stderr, "Did not deallocate %r (ll2ctypes)" % (llvalue, )
+            print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
+    for llvalue in set_difference(lltype.ALLOCATED, self.frozen_lltallocations).keys():
+        leaking = True
+        print >>sys.stderr, "Did not deallocate %r (llvalue)" % (llvalue, )
+        print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
+
+    return leaking
+
+
 class AppTestCpythonExtensionBase:
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['cpyext'])
@@ -123,7 +182,7 @@ class AppTestCpythonExtensionBase:
     def setup_method(self, func):
         self.w_import_module = self.space.wrap(self.import_module)
         self.w_import_extension = self.space.wrap(self.import_extension)
-        self.freeze_refcnts()
+        freeze_refcnts(self)
         #self.check_and_print_leaks()
 
     def teardown_method(self, func):
@@ -140,67 +199,8 @@ class AppTestCpythonExtensionBase:
             pass
         except AttributeError:
             pass
-        state = self.space.fromcache(State)
-        if self.check_and_print_leaks():
+        if check_and_print_leaks(self):
             assert False, "Test leaks or loses object(s)."
-
-    def freeze_refcnts(self):
-        state = self.space.fromcache(State)
-        self.frozen_refcounts = {}
-        for w_obj, obj in state.py_objects_w2r.iteritems():
-            self.frozen_refcounts[w_obj] = obj.c_ob_refcnt
-        #state.print_refcounts()
-        self.frozen_ll2callocations = set(ll2ctypes.ALLOCATED.values())
-        self.frozen_lltallocations = lltype.ALLOCATED.copy()
-        lltype.TRACK_ALLOCATIONS = True
-
-    def check_and_print_leaks(self):
-        # check for sane refcnts
-        leaking = False
-        state = self.space.fromcache(State)
-        import gc
-        gc.collect()
-        lost_objects_w = identity_dict()
-        lost_objects_w.update((key, None) for key in self.frozen_refcounts.keys())
-        for w_obj, obj in state.py_objects_w2r.iteritems():
-            base_refcnt = self.frozen_refcounts.get(w_obj)
-            delta = obj.c_ob_refcnt
-            if base_refcnt is not None:
-                delta -= base_refcnt
-                lost_objects_w.pop(w_obj)
-            if delta != 0:
-                leaking = True
-                print >>sys.stderr, "Leaking %r: %i references" % (w_obj, delta)
-                lifeline = w_obj.get_pyolifeline()
-                if lifeline is not None:
-                    refcnt = lifeline.pyo.c_ob_refcnt
-                    if refcnt > 0:
-                        print >>sys.stderr, "\tThe object also held by C code."
-                    else:
-                        referrers_repr = []
-                        for o in gc.get_referrers(w_obj):
-                            try:
-                                repr_str = repr(o)
-                            except TypeError, e:
-                                repr_str = "%s (type of o is %s)" % (str(e), type(o))
-                            referrers_repr.append(repr_str)
-                        referrers = ", ".join(referrers_repr)
-                        print >>sys.stderr, "\tThe object is referenced by these objects:", \
-                                referrers
-        for w_obj in lost_objects_w:
-            print >>sys.stderr, "Lost object %r" % (w_obj, )
-            leaking = True
-        for llvalue in set(ll2ctypes.ALLOCATED.values()) - self.frozen_ll2callocations:
-            if getattr(llvalue, "_traceback", None): # this means that the allocation should be tracked
-                leaking = True
-                print >>sys.stderr, "Did not deallocate %r (ll2ctypes)" % (llvalue, )
-                print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
-        for llvalue in set_difference(lltype.ALLOCATED, self.frozen_lltallocations).keys():
-            leaking = True
-            print >>sys.stderr, "Did not deallocate %r (llvalue)" % (llvalue, )
-            print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
-
-        return leaking
 
 
 class AppTestCpythonExtension(AppTestCpythonExtensionBase):
