@@ -33,6 +33,7 @@ def debug_refcount(*args, **kwargs):
 def make_ref(space, w_obj, borrowed=False, steal=False):
     from pypy.module.cpyext.typeobject import allocate_type_obj,\
             W_PyCTypeObject, PyOLifeline
+    from pypy.module.cpyext.pycobject import W_PyCObject, PyCObject
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
@@ -79,6 +80,12 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             py_obj_unicode.c_buffer = lltype.nullptr(rffi.VOIDP.TO)
             pto = make_ref(space, space.w_unicode)
             py_obj = rffi.cast(PyObject, py_obj_unicode)
+            py_obj.c_ob_refcnt = 1
+            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
+        elif isinstance(w_obj, W_PyCObject): # a PyCObject
+            py_cobj = lltype.malloc(PyCObject.TO, flavor='raw', zero=True)
+            pto = make_ref(space, space.type(w_obj))
+            py_obj = rffi.cast(PyObject, py_cobj)
             py_obj.c_ob_refcnt = 1
             py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
         else:
