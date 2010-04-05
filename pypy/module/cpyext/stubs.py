@@ -5653,25 +5653,10 @@ def PyUnicode_CheckExact(space, o):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject], Py_ssize_t)
-def PyUnicode_GET_DATA_SIZE(space, o):
-    """Return the size of the object's internal buffer in bytes.  o has to be a
-    PyUnicodeObject (not checked).
-    
-    This function returned an int type. This might require changes
-    in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], {Py_UNICODE*})
 def PyUnicode_AS_UNICODE(space, o):
     """Return a pointer to the internal Py_UNICODE buffer of the object.  o
     has to be a PyUnicodeObject (not checked)."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], rffi.CCHARP)
-def PyUnicode_AS_DATA(space, o):
-    """Return a pointer to the internal buffer of the object. o has to be a
-    PyUnicodeObject (not checked)."""
     raise NotImplementedError
 
 @cpython_api([], rffi.INT_real)

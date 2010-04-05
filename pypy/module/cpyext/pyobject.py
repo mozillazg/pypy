@@ -3,9 +3,10 @@ import sys
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, PyStringObject, ADDR,\
-        Py_TPFLAGS_HEAPTYPE
+        Py_TPFLAGS_HEAPTYPE, PyUnicodeObject
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.stringobject import W_StringObject
+from pypy.objspace.std.unicodeobject import W_UnicodeObject
 from pypy.rlib.objectmodel import we_are_translated
 
 #________________________________________________________
@@ -71,6 +72,14 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             py_obj_str.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
             pto = make_ref(space, space.w_str)
             py_obj = rffi.cast(PyObject, py_obj_str)
+            py_obj.c_ob_refcnt = 1
+            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
+        elif isinstance(w_obj, W_UnicodeObject):
+            py_obj_unicode = lltype.malloc(PyUnicodeObject.TO, flavor='raw', zero=True)
+            py_obj_unicode.c_size = len(space.unicode_w(w_obj))
+            py_obj_unicode.c_buffer = lltype.nullptr(rffi.VOIDP.TO)
+            pto = make_ref(space, space.w_unicode)
+            py_obj = rffi.cast(PyObject, py_obj_unicode)
             py_obj.c_ob_refcnt = 1
             py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
         else:
