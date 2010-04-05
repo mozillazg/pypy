@@ -3,6 +3,7 @@ import os
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL
+from pypy.module.exceptions.interp_exceptions import W_RuntimeWarning
 from pypy.module.cpyext.pyobject import PyObject, make_ref, register_container
 from pypy.module.cpyext.state import State
 from pypy.rlib.rposix import get_errno
@@ -104,3 +105,57 @@ def PyErr_ExceptionMatches(space, w_exc):
     violation will occur if no exception has been raised."""
     w_type = PyErr_Occurred(space)
     return PyErr_GivenExceptionMatches(space, w_type, w_exc)
+
+
+@cpython_api([PyObject, rffi.CCHARP, rffi.INT_real], rffi.INT_real, error=-1)
+def PyErr_WarnEx(space, w_category, message_ptr, stacklevel):
+    """Issue a warning message.  The category argument is a warning category (see
+    below) or NULL; the message argument is a message string.  stacklevel is a
+    positive number giving a number of stack frames; the warning will be issued from
+    the  currently executing line of code in that stack frame.  A stacklevel of 1
+    is the function calling PyErr_WarnEx(), 2 is  the function above that,
+    and so forth.
+    
+    This function normally prints a warning message to sys.stderr; however, it is
+    also possible that the user has specified that warnings are to be turned into
+    errors, and in that case this will raise an exception.  It is also possible that
+    the function raises an exception because of a problem with the warning machinery
+    (the implementation imports the warnings module to do the heavy lifting).
+    The return value is 0 if no exception is raised, or -1 if an exception
+    is raised.  (It is not possible to determine whether a warning message is
+    actually printed, nor what the reason is for the exception; this is
+    intentional.)  If an exception is raised, the caller should do its normal
+    exception handling (for example, Py_DECREF() owned references and return
+    an error value).
+    
+    Warning categories must be subclasses of Warning; the default warning
+    category is RuntimeWarning.  The standard Python warning categories are
+    available as global variables whose names are PyExc_ followed by the Python
+    exception name. These have the type PyObject*; they are all class
+    objects. Their names are PyExc_Warning, PyExc_UserWarning,
+    PyExc_UnicodeWarning, PyExc_DeprecationWarning,
+    PyExc_SyntaxWarning, PyExc_RuntimeWarning, and
+    PyExc_FutureWarning.  PyExc_Warning is a subclass of
+    PyExc_Exception; the other warning categories are subclasses of
+    PyExc_Warning.
+    
+    For information about warning control, see the documentation for the
+    warnings module and the -W option in the command line
+    documentation.  There is no C API for warning control."""
+    message = rffi.charp2str(message_ptr)
+    if category is None:
+        category = space.gettypeobject(W_RuntimeWarning.typedef)
+    os.write(2, "WARNING: " + message + "\n")
+    return 0
+
+@cpython_api([PyObject, rffi.CCHARP], rffi.INT_real, error=-1)
+def PyErr_Warn(space, w_category, message):
+    """Issue a warning message.  The category argument is a warning category (see
+    below) or NULL; the message argument is a message string.  The warning will
+    appear to be issued from the function calling PyErr_Warn(), equivalent to
+    calling PyErr_WarnEx() with a stacklevel of 1.
+    
+    Deprecated; use PyErr_WarnEx() instead."""
+    return PyErr_WarnEx(w_category, message, 1)
+
+
