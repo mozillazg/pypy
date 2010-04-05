@@ -282,6 +282,7 @@ cpython_struct("PyUnicodeObject", PyUnicodeObjectFields, PyUnicodeObjectStruct)
 
 VA_TP_LIST = {'int': lltype.Signed,
               'PyObject*': PyObject,
+              'PyObject**': PyObjectP,
               'int*': rffi.INTP}
 
 def configure_types():
