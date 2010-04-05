@@ -594,6 +594,8 @@ class ObjSpace(object):
 
     def createframe(self, code, w_globals, closure=None):
         "Create an empty PyFrame suitable for this code object."
+        from pypy.interpreter.pycode import PyCode
+        assert isinstance(code, PyCode)
         magic = code.magic
         if magic == self.host_magic:
             return self.HostFrameClass(self, code, w_globals, closure)
