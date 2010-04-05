@@ -16,7 +16,7 @@ from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR, \
     Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS, \
-    PyUnicodeObject
+    PyUnicodeObject, CANNOT_FAIL
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import FunctionWithFixedCode, StaticMethod
@@ -33,6 +33,7 @@ from pypy.module.cpyext.slotdefs import slotdefs
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.rlib.rstring import rsplit
 from pypy.rlib.objectmodel import we_are_translated, specialize
+from pypy.module.__builtin__.abstractinst import abstract_issubclass_w
 
 
 WARN_ABOUT_MISSING_SLOT_FUNCTIONS = False
@@ -492,3 +493,12 @@ W_PyCTypeObject.typedef = TypeDef(
     __call__ = interp2app(c_type_descr__call__, unwrap_spec=[ObjSpace, W_Root, Arguments]),
     __new__ = interp2app(c_type_descr__new__),
     )
+
+@cpython_api([PyTypeObjectPtr, PyTypeObjectPtr], rffi.INT_real, error=CANNOT_FAIL)
+def PyType_IsSubtype(space, a, b):
+    """Return true if a is a subtype of b.
+    """
+    w_type1 = from_ref(space, rffi.cast(PyObject, a))
+    w_type2 = from_ref(space, rffi.cast(PyObject, b))
+    return int(abstract_issubclass_w(space, w_type1, w_type2)) #XXX correct?
+
