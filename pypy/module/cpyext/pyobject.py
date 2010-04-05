@@ -3,7 +3,7 @@ import sys
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, PyObject, PyStringObject, ADDR,\
-        Py_TPFLAGS_HEAPTYPE, PyUnicodeObject
+        Py_TPFLAGS_HEAPTYPE, PyUnicodeObject, PyTypeObjectPtr
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
@@ -18,7 +18,7 @@ class NullPointerException(Exception):
 class InvalidPointerException(Exception):
     pass
 
-DEBUG_REFCOUNT = False
+DEBUG_REFCOUNT = True
 
 def debug_refcount(*args, **kwargs):
     frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
@@ -33,7 +33,6 @@ def debug_refcount(*args, **kwargs):
 def make_ref(space, w_obj, borrowed=False, steal=False):
     from pypy.module.cpyext.typeobject import allocate_type_obj,\
             W_PyCTypeObject, PyOLifeline
-    from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
@@ -150,11 +149,12 @@ def Py_DecRef(space, obj):
     if obj.c_ob_refcnt == 0:
         state = space.fromcache(State)
         ptr = rffi.cast(ADDR, obj)
-        if ptr not in state.py_objects_r2w and \
-            space.is_w(from_ref(space, rffi.cast(PyObject, obj.c_ob_type)), space.w_str):
-            # this is a half-allocated string, lets call the deallocator
-            # without modifying the r2w/w2r dicts
-            _Py_Dealloc(space, obj)
+        if ptr not in state.py_objects_r2w:
+            w_type = from_ref(space, rffi.cast(PyObject, obj.c_ob_type))
+            if space.is_w(w_type, space.w_str) or space.is_w(w_type, space.w_unicode):
+                # this is a half-allocated string, lets call the deallocator
+                # without modifying the r2w/w2r dicts
+                _Py_Dealloc(space, obj)
         else:
             w_obj = state.py_objects_r2w[ptr]
             del state.py_objects_r2w[ptr]
@@ -180,7 +180,9 @@ def Py_DecRef(space, obj):
                                 hex(containee)
             del state.borrow_mapping[ptr]
     else:
-        assert obj.c_ob_refcnt > 0
+        if not we_are_translated() and obj.c_ob_refcnt < 0:
+            print >>sys.stderr, "Negative refcount for obj %s with type %s" % (obj, rffi.charp2str(obj.c_ob_type.c_tp_name))
+            assert False
 
 @cpython_api([PyObject], lltype.Void)
 def Py_IncRef(space, obj):
@@ -192,7 +194,6 @@ def Py_IncRef(space, obj):
         debug_refcount("INCREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
 
 def _Py_Dealloc(space, obj):
-    from pypy.module.cpyext.typeobject import PyTypeObjectPtr
     from pypy.module.cpyext.api import generic_cpy_call_dont_decref
     pto = obj.c_ob_type
     #print >>sys.stderr, "Calling dealloc slot", pto.c_tp_dealloc, "of", obj, \
