@@ -5,7 +5,9 @@ from pypy.rpython.lltypesystem import rffi
 
 class TestUnicode(BaseApiTest):
     def test_unicodeobject(self, space, api):
-        assert space.unwrap(api.PyUnicode_GET_SIZE(space.wrap(u'späm'))) == 4
+        assert api.PyUnicode_GET_SIZE(space.wrap(u'späm')) == 4
+        # XXX assuming UCS-4
+        assert api.PyUnicode_GET_DATA_SIZE(space.wrap(u'späm')) == 16
 
     def test_AS_DATA(self, space, api):
         word = space.wrap(u'spam')

@@ -71,7 +71,7 @@ def PyUnicode_AS_DATA(space, ref):
 def PyUnicode_GET_DATA_SIZE(space, obj):
     """Return the size of the object's internal buffer in bytes.  o has to be a
     PyUnicodeObject (not checked)."""
-    return rffi.sizeof(lltype.UniChar) * (PyUnicode_GET_SIZE(space, obj) + 1)
+    return rffi.sizeof(lltype.UniChar) * PyUnicode_GET_SIZE(space, obj)
 
 @cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
 def PyUnicode_GET_SIZE(space, w_obj):
@@ -81,4 +81,4 @@ def PyUnicode_GET_SIZE(space, w_obj):
     This function returned an int type. This might require changes
     in your code for properly supporting 64-bit systems."""
     assert isinstance(w_obj, unicodeobject.W_UnicodeObject)
-    return space.len(w_obj)
+    return space.int_w(space.len(w_obj))
