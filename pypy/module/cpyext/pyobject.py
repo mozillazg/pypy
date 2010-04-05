@@ -18,7 +18,7 @@ class NullPointerException(Exception):
 class InvalidPointerException(Exception):
     pass
 
-DEBUG_REFCOUNT = True
+DEBUG_REFCOUNT = False
 
 def debug_refcount(*args, **kwargs):
     frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
