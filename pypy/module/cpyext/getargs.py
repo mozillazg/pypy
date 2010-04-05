@@ -18,9 +18,13 @@ def PyArg_ParseTuple():
 def PyArg_UnpackTuple():
     pass
 
+@cpython_api_c()
+def PyArg_ParseTupleAndKeywords():
+    pass
+
 @cpython_api([PyObject, rffi.CCHARP, VA_LIST_P, rffi.INT_real],
              rffi.INT_real, error=0)
-def pypy_vgetargs1(space, w_obj, fmt, va_list_p, flags):
+def pypy_vgetargs1(space, w_obj, fmt, va_list_p, flags): #XXX unused, kill me, fijal?
     arg_i = 0
     fmt_i = 0
     while True:
@@ -46,6 +50,6 @@ def pypy_vgetargs1(space, w_obj, fmt, va_list_p, flags):
         elif c == ':':
             return 1
         else:
-            raise Exception("Unsupported parameter: %s" % (c,))
+            raise Exception("Unsupported parameter in vgetargs1: %s" % (c,))
         arg_i += 1
         fmt_i += 1
