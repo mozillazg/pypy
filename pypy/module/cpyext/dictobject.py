@@ -1,5 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, build_type_checkers
+from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, build_type_checkers,\
+        Py_ssize_t, PyObjectP
 from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
@@ -47,3 +48,56 @@ def PyDict_GetItemString(space, w_dict, key):
         raise OperationError(space.w_KeyError, space.wrap("Key not found"))
     register_container(space, w_dict)
     return w_res
+
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PyDict_Size(space, w_obj):
+    """
+    Return the number of items in the dictionary.  This is equivalent to
+    len(p) on a dictionary."""
+    return space.int_w(space.len(w_obj))
+
+@cpython_api([PyObject, Py_ssize_t, PyObjectP, PyObjectP], rffi.INT_real, error=CANNOT_FAIL)
+def PyDict_Next(space, p, ppos, pkey, pvalue):
+    """Iterate over all key-value pairs in the dictionary p.  The
+    Py_ssize_t referred to by ppos must be initialized to 0
+    prior to the first call to this function to start the iteration; the
+    function returns true for each pair in the dictionary, and false once all
+    pairs have been reported.  The parameters pkey and pvalue should either
+    point to PyObject* variables that will be filled in with each key
+    and value, respectively, or may be NULL.  Any references returned through
+    them are borrowed.  ppos should not be altered during iteration. Its
+    value represents offsets within the internal dictionary structure, and
+    since the structure is sparse, the offsets are not consecutive.
+    
+    For example:
+    
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    
+    while (PyDict_Next(self->dict, &pos, &key, &value)) {
+        /* do something interesting with the values... */
+        ...
+    }
+    
+    The dictionary p should not be mutated during iteration.  It is safe
+    (since Python 2.1) to modify the values of the keys as you iterate over the
+    dictionary, but only so long as the set of keys does not change.  For
+    example:
+    
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    
+    while (PyDict_Next(self->dict, &pos, &key, &value)) {
+        int i = PyInt_AS_LONG(value) + 1;
+        PyObject *o = PyInt_FromLong(i);
+        if (o == NULL)
+            return -1;
+        if (PyDict_SetItem(self->dict, key, o) < 0) {
+            Py_DECREF(o);
+            return -1;
+        }
+        Py_DECREF(o);
+    }"""
+    raise NotImplementedError
+
+
