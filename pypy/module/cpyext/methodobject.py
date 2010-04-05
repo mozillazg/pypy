@@ -179,7 +179,7 @@ def Py_FindMethod(space, table, w_ob, name_ptr):
     # XXX handle __doc__
 
     name = rffi.charp2str(name_ptr)
-    methods = rffi.cast(rffi.CArrayPtr(PyMethodDef), methods)
+    methods = rffi.cast(rffi.CArrayPtr(PyMethodDef), table)
     if methods:
         i = -1
         while True:
