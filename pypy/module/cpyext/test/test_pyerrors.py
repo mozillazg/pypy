@@ -62,8 +62,6 @@ class AppTestFetch(AppTestCpythonExtensionBase):
         space = cls.space
 
         def set_errno(num):
-            import pdb
-            pdb.set_trace()
             ll2ctypes.TLS.errno = num
         
         cls.w_set_errno = space.wrap(interp2app(set_errno, unwrap_spec=[int]))
