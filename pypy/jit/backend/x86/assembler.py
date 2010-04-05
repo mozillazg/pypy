@@ -32,11 +32,11 @@ else:
 def align_stack_words(words):
     return (words + CALL_ALIGN - 1) & ~(CALL_ALIGN-1)
 
-JIT_STATE_HEADER = lltype.Struct('JIT_STATE_HEADER',
-                                 ('header', STATE_HEADER),
-                                 ('saved_ints', lltype.Ptr(lltype.GcArray(lltype.Signed))),
-                                 ('saved_floats', lltype.Ptr(lltype.GcArray(lltype.Float))),
-                                 ('saved_refs', lltype.Ptr(lltype.GcArray(lltype.Ptr))))
+JIT_STATE_HEADER = lltype.GcStruct('JIT_STATE_HEADER',
+                                   ('header', STATE_HEADER),
+                                   ('saved_ints', lltype.Ptr(lltype.GcArray(lltype.Signed))),
+                                   ('saved_floats', lltype.Ptr(lltype.GcArray(lltype.Float))),
+                                   ('saved_refs', lltype.Ptr(lltype.GcArray(llmemory.GCREF))))
 
 class MachineCodeBlockWrapper(object):
     MC_DEFAULT_SIZE = 1024*1024
@@ -987,7 +987,7 @@ class Assembler386(object):
         loc1 = locs[1]
         if self.cpu.stackless:
             unwinder_addr = self.generate_unwinder_failure(guard_op.descr, guard_op.fail_args, faillocs)
-            stku_type, stku_instance = self.cpu.get_unwind_exception() 
+            stku_type, stku_instance = self.cpu.get_unwind_exception()
             self.mc.CMP(heap(self.cpu.pos_exception()), imm(stku_type))
             self.mc.JE(rel32(unwinder_addr)) # if this is indeed an unwind exception jump to saver code 
         self.mc.MOV(loc1, heap(self.cpu.pos_exception()))
@@ -1228,37 +1228,97 @@ class Assembler386(object):
 
     @rgc.no_collect
     def unwind_frame_values(self, bytecode, frame_addr, allregisters):
-        # Okay allocate a frame for us,
+        # Allocate a frame for us,
 
-        # then set the proper values in global_state
+        # XXX set the proper values in global_state 
+        self.fail_ebp = allregisters[16 + ebp.op]
 
-        bytecode = rffi.cast(rffi.UCHARP, bytecode)
         boxes = []
+        kinds = []
+        ints, floats, refs = (0, 0, 0)
+        int_num, float_num, ref_num = (0, 0, 0)
+        int_boxes, float_boxes, ref_boxes = (None, None, None)
+        num = 0
         while 1:
             # decode the next instruction from the bytecode
             code = rffi.cast(lltype.Signed, bytecode[0])
             bytecode = rffi.ptradd(bytecode, 1)
-            kind = code & 3
-            while code > 0x7F:
-                code = rffi.cast(lltype.Signed, bytecode[0])
-                bytecode = rffi.ptradd(bytecode, 1)
-            index = len(boxes)
-            # Now kind contains information at the type of data that will go here
-            if kind != self.DESCR_SPECIAL:
-                kinds.append(kind)
+            if code >= self.CODE_FROMSTACK:
+                if code > 0x7F:
+                    shift = 7
+                    code &= 0x7F
+                    while True:
+                        nextcode = rffi.cast(lltype.Signed, bytecode[0])
+                        bytecode = rffi.ptradd(bytecode, 1)
+                        code |= (nextcode & 0x7F) << shift
+                        shift += 7
+                        if nextcode <= 0x7F:
+                            break
+                # load the value from the stack
+                kind = code & 3
+                code = (code - self.CODE_FROMSTACK) >> 2
+                stackloc = frame_addr + get_ebp_ofs(code)
+                value = rffi.cast(rffi.LONGP, stackloc)[0]
+                kinds.append((kind, True, stackloc))
             else:
-                if code == self.CODE_STOP:
+                kind = code & 3
+                if kind == self.DESCR_SPECIAL:
+                    if code == self.CODE_HOLE:
+                        num += 1
+                        continue
+                    assert code == self.CODE_STOP
                     break
-                assert code == self.CODE_HOLE, "Bad code"
+                code >>= 2
+                kinds.append((kind, False, code))
 
-        # Now kinds contains the types we need to store
+            if kind == self.DESCR_INT:
+                ints += 1
+            elif kind == self.DESCR_FLOAT:
+                floats += 1
+            elif kind == self.DESCR_REF:
+                refs += 1
+
+        # Now kinds contains the types we need to store in the right order
         state_header = lltype.malloc(JIT_STATE_HEADER, zero=True)
         
-        state_header.saved_ints = lltype.malloc(lltype.GcArray(lltype.Signed), len([x for x in kinds if x == self.DESCR_INT]))
-        state_header.saved_floats = lltype.malloc(lltype.GcArray(lltype.Float), len([x for x in kinds if x == self.DESCR_FLOAT]))
-        state_header.saved_floats = lltype.malloc(lltype.GcArray(lltype.Ptr), len([x for x in kinds if x == self.DESCR_REF]))
+        if ints:
+            int_boxes = values_array(lltype.Signed, ints)
+            state_header.saved_ints = int_boxes.ar
+        if floats:
+            float_boxes = values_array(lltype.Float, floats)
+            state_header.saved_floats = float_boxes.ar
+        if refs:
+            ref_boxes = values_array(llmemory.GCREF, refs)
+            state_header.saved_refs = ref_boxes.ar
 
-        
+        value, value_hi = (0, 0)
+
+        for (kind, in_stack, loc) in kinds:
+            if in_stack:
+                value = rffi.cast(rffi.LONGP, loc)[0]
+                if kind == self.DESCR_FLOAT:
+                    value_hi = value
+                    value = rffi.cast(rffi.LONGP, loc - 4)[0]
+            else:
+                if kind == self.DESCR_FLOAT:
+                    value = allregisters[2*loc]
+                    value_hi = allregisters[2*loc+1]
+                else:
+                    value = allregisters[16 + loc]
+
+            if kind == self.DESCR_INT:
+                tgt = int_boxes.get_addr_for_num(int_num)
+                int_num += 1
+            elif kind == self.DESCR_REF:
+                tgt = ref_boxes.get_addr_for_num(ref_num)
+                ref_num += 1
+            elif kind == self.DESCR_FLOAT:
+                tgt = float_boxes.get_addr_for_num(float_num)
+                float_num += 1
+                rffi.cast(rffi.LONGP, tgt)[1] = value_hi
+            rffi.cast(rffi.LONGP, tgt)[0] = value
+
+        return state_header
 
     @rgc.no_collect
     def grab_frame_values(self, bytecode, frame_addr, allregisters):

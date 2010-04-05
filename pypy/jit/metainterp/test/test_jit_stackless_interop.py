@@ -13,8 +13,8 @@ from pypy.jit.metainterp import history
 from pypy.translator.stackless.code import yield_current_frame_to_caller
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.annotation.listdef import s_list_of_strings
+from pypy.rpython import llinterp
 from pypy.translator.stackless.transform import StacklessTransformer, FrameTyper
-from pypy.translator.c.genc import CStandaloneBuilder
 from pypy.translator.c import gc
 from pypy.rpython.test.test_llinterp import get_interpreter, clear_tcache
 from pypy import conftest
@@ -57,3 +57,42 @@ def test_simple_unwind():
         return x
     res = meta_interp(f, [100])
     assert res == 100
+
+def rtype_stackless_function(fn):
+    t = TranslationContext()
+    t.config.translation.stackless = True
+    annotator = t.buildannotator()
+    annotator.policy.allow_someobjects = False
+
+    s_returnvar = annotator.build_types(fn, [s_list_of_strings])
+    if not isinstance(s_returnvar, annmodel.SomeInteger):
+        raise Exception, "this probably isn't going to work"
+    t.buildrtyper().specialize()
+
+    from pypy.translator.transform import insert_ll_stackcheck
+    insert_ll_stackcheck(t)
+
+#    if conftest.option.view:
+#        t.view()
+    return t
+
+def llinterp_stackless_function(fn, returntranslator=False,
+                                assert_unwind=True):
+    def wrapper(argv):
+        return fn()
+    t = rtype_stackless_function(wrapper)
+    st = StacklessTransformer(t, wrapper, assert_unwind=assert_unwind)
+    st.transform_all()
+    if conftest.option.view:
+        t.view()
+
+    graph = graphof(t, st.slp_entry_point)
+    r_list_of_strings = t.rtyper.getrepr(
+        t.annotator.binding(graph.startblock.inputargs[0]))
+    ll_list = r_list_of_strings.convert_const([''])
+    interp = llinterp.LLInterpreter(t.rtyper)
+    res = interp.eval_graph(graph, [ll_list])
+    if returntranslator:
+        return res, t
+    else:
+        return res

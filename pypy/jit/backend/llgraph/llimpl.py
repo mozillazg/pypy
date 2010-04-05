@@ -463,6 +463,10 @@ class Frame(object):
                             log.trace('failed: %s' % (
                                 ', '.join(map(str, fail_args)),))
                         return op.fail_index
+                except UnwindException:
+                    assert op.is_guard()
+                    self._populate_fail_args(op)
+                    raise
                 #verbose = self.verbose
                 assert (result is None) == (op.result is None)
                 if op.result is not None:
