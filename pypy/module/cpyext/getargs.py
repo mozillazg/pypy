@@ -40,7 +40,7 @@ def pypy_vgetargs1(space, w_obj, fmt, va_list_p, flags):
                     raise OperationError(space.w_TypeError,
                                          space.wrap("wrong type"))
             arr = api.va_get_PyObject_star_star(va_list_p)
-            arr[0] = make_ref(space, w_item)
+            arr[0] = make_ref(space, w_item, borrowed=True)
             register_container(space, w_obj)
             add_borrowed_object(space, arr[0])
         elif c == ':':
