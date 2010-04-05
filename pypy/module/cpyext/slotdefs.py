@@ -40,13 +40,9 @@ def slot_tp_new(space, type, w_args, w_kwds):
     w_type = from_ref(space, pyo)
     w_func = space.getattr(w_type, space.wrap("__new__"))
     assert PyTuple_Check(space, w_args)
-    args_w = space.int_w(space.len(w_args)) * [space.w_None]
-    for i in range(space.len(w_args)):
-        args_w[i+1] = space.getitem(w_args, space.wrap(i))
-    args_w[0] = w_type
+    args_w = [w_type] + space.fixedview(w_args)
     w_args_new = space.newtuple(args_w)
     return space.call(w_func, w_args_new, w_kwds)
-
 
 PyWrapperFlag_KEYWORDS = 1
 
