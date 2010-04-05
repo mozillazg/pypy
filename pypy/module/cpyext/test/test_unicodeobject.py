@@ -1,9 +1,17 @@
 # encoding: iso-8859-15
 from pypy.module.cpyext.test.test_api import BaseApiTest
+from pypy.module.cpyext.unicodeobject import Py_UNICODE
+from pypy.rpython.lltypesystem import rffi
 
 class TestUnicode(BaseApiTest):
     def test_unicodeobject(self, space, api):
         assert space.unwrap(api.PyUnicode_GET_SIZE(space.wrap(u'späm'))) == 4
+
+    def test_AS_DATA(self, space, api):
+        word = space.wrap(u'spam')
+        array = rffi.cast(rffi.CWCHARP, api.PyUnicode_AS_DATA(word))
+        for (i, char) in enumerate(space.unwrap(word)):
+            assert array[i] == char
 
     def test_IS(self, space, api):
         for char in [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f,
