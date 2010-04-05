@@ -2,13 +2,12 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.lltypesystem.lltype import Ptr, FuncType, Void
 from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, \
-    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR
+    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR, \
+    PyTypeObject, PyTypeObjectPtr
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.module.cpyext.modsupport import PyMethodDef
 
 
-PyTypeObject = lltype.ForwardReference()
-PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
 PyCFunction = Ptr(FuncType([PyObject, PyObject], PyObject))
 P, FT, PyO = Ptr, FuncType, PyObject
 PyOPtr = Ptr(lltype.Array(PyO, hints={'nolength': True}))

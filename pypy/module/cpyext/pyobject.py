@@ -63,7 +63,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
                         flavor="raw", zero=True)
                 py_obj = rffi.cast(PyObject, py_obj_pad)
                 py_obj.c_ob_refcnt = 1
-                py_obj.c_ob_type = rffi.cast(PyObject, pto)
+                py_obj.c_ob_type = pto
                 w_obj.set_pyolifeline(PyOLifeline(space, py_obj))
         elif isinstance(w_obj, W_StringObject):
             py_obj_str = lltype.malloc(PyStringObject.TO, flavor='raw', zero=True)
@@ -72,12 +72,12 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
             pto = make_ref(space, space.w_str)
             py_obj = rffi.cast(PyObject, py_obj_str)
             py_obj.c_ob_refcnt = 1
-            py_obj.c_ob_type = rffi.cast(PyObject, pto)
+            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
         else:
             py_obj = lltype.malloc(PyObject.TO, flavor="raw", zero=True)
             py_obj.c_ob_refcnt = 1
             pto = make_ref(space, space.type(w_obj))
-            py_obj.c_ob_type = rffi.cast(PyObject, pto)
+            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
         ptr = rffi.cast(ADDR, py_obj)
         if DEBUG_REFCOUNT:
             debug_refcount("MAKREF", py_obj, w_obj)
@@ -116,7 +116,7 @@ def from_ref(space, ref):
     try:
         w_obj = state.py_objects_r2w[ptr]
     except KeyError:
-        ref_type = ref.c_ob_type
+        ref_type = rffi.cast(PyObject, ref.c_ob_type)
         if ref != ref_type and space.is_w(from_ref(space, ref_type), space.w_str):
             return force_string(space, ref)
         else:
@@ -142,7 +142,7 @@ def Py_DecRef(space, obj):
         state = space.fromcache(State)
         ptr = rffi.cast(ADDR, obj)
         if ptr not in state.py_objects_r2w and \
-            space.is_w(from_ref(space, obj.c_ob_type), space.w_str):
+            space.is_w(from_ref(space, rffi.cast(PyObject, obj.c_ob_type)), space.w_str):
             # this is a half-allocated string, lets call the deallocator
             # without modifying the r2w/w2r dicts
             _Py_Dealloc(space, obj)
@@ -186,7 +186,6 @@ def _Py_Dealloc(space, obj):
     from pypy.module.cpyext.typeobject import PyTypeObjectPtr
     from pypy.module.cpyext.api import generic_cpy_call_dont_decref
     pto = obj.c_ob_type
-    pto = rffi.cast(PyTypeObjectPtr, pto)
     #print >>sys.stderr, "Calling dealloc slot", pto.c_tp_dealloc, "of", obj, \
     #      "'s type which is", rffi.charp2str(pto.c_tp_name)
     generic_cpy_call_dont_decref(space, pto.c_tp_dealloc, obj)
