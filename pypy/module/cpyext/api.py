@@ -34,6 +34,7 @@ size_t = rffi.ULONG
 ADDR = lltype.Signed
 
 include_dir = py.path.local(autopath.pypydir) / 'module' / 'cpyext' / 'include'
+source_dir = py.path.local(autopath.pypydir) / 'module' / 'cpyext' / 'src'
 include_dirs = [
     include_dir,
     udir,
@@ -552,13 +553,13 @@ def build_eci(build_bridge, export_symbols, code):
 
     eci = ExternalCompilationInfo(
         include_dirs=include_dirs,
-        separate_module_files=[include_dir / "varargwrapper.c",
-                               include_dir / "pyerrors.c",
-                               include_dir / "modsupport.c",
-                               include_dir / "getargs.c",
-                               include_dir / "stringobject.c",
-                               include_dir / "mysnprintf.c",
-                               include_dir / "pythonrun.c"],
+        separate_module_files=[source_dir / "varargwrapper.c",
+                               source_dir / "pyerrors.c",
+                               source_dir / "modsupport.c",
+                               source_dir / "getargs.c",
+                               source_dir / "stringobject.c",
+                               source_dir / "mysnprintf.c",
+                               source_dir / "pythonrun.c"],
         separate_module_sources = [code],
         export_symbols=export_symbols_eci,
         **kwds
