@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, PyVarObjectFields,
                                     PyStringObject, Py_ssize_t, cpython_struct,
                                     CANNOT_FAIL, build_type_checkers,
-                                    PyObjectP, cpython_api_c)
+                                    PyObjectP, cpython_api_c, PyTypeObjectPtr)
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, Py_DecRef
 
 
@@ -17,8 +17,8 @@ def new_empty_str(space, length):
     py_str.c_buffer = lltype.malloc(rffi.CCHARP.TO, buflen, flavor='raw')
     py_str.c_buffer[buflen-1] = '\0'
     py_str.c_size = length
-    py_str.c_ob_type = make_ref(space, space.w_str)
-    return py_str    
+    py_str.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.w_str))
+    return py_str
 
 @cpython_api_c()
 def PyString_FromFormatV():
@@ -50,7 +50,7 @@ def PyString_AsString(space, ref):
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyString_Size(space, ref):
-    if from_ref(space, ref.c_ob_type) is space.w_str:
+    if from_ref(space, rffi.cast(PyObject, ref.c_ob_type)) is space.w_str:
         ref = rffi.cast(PyStringObject, ref)
         return ref.c_size
     else:
@@ -80,7 +80,7 @@ def _PyString_Resize(space, ref, newsize):
         py_newstr = new_empty_str(space, newsize)
     except MemoryError:
         Py_DecRef(space, ref[0])
-        ref[0] = lltype.nullptr(PyObject)
+        ref[0] = lltype.nullptr(PyObject.TO)
         raise
     to_cp = newsize
     oldsize = py_str.c_size

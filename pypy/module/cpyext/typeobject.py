@@ -292,7 +292,7 @@ def c_type_descr__new__(space, w_typetype, w_name, w_bases, w_dict):
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
-    pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
+    pto = obj.c_ob_type
     base = pto
     this_func_ptr = llhelper(subtype_dealloc.api_func.functype,
             subtype_dealloc.api_func.get_wrapper(space))
@@ -310,7 +310,7 @@ def subtype_dealloc(space, obj):
 @cpython_api([PyObject], lltype.Void, external=False)
 def string_dealloc(space, obj):
     obj = rffi.cast(PyStringObject, obj)
-    pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
+    pto = obj.c_ob_type
     if obj.c_buffer:
         lltype.free(obj.c_buffer, flavor="raw")
     obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
@@ -322,7 +322,7 @@ def string_dealloc(space, obj):
 def type_dealloc(space, obj):
     state = space.fromcache(State)
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
-    type_pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
+    type_pto = obj.c_ob_type
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_DecRef(space, obj_pto.c_tp_bases)
     Py_DecRef(space, obj_pto.c_tp_cache) # lets do it like cpython
@@ -379,10 +379,10 @@ def allocate_type_obj(space, w_type):
         if bases_w:
             ref = make_ref(space, bases_w[0])
             pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
-        pto.c_ob_type = make_ref(space, space.type(space.w_type))
+        pto.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.type(space.w_type)))
         PyPyType_Ready(space, pto, w_type)
     else:
-        pto.c_ob_type = lltype.nullptr(PyObject.TO)
+        pto.c_ob_type = lltype.nullptr(PyTypeObjectPtr.TO)
     if space.is_w(w_type, space.w_object):
         pto.c_tp_basicsize = rffi.sizeof(PyObject.TO)
     elif space.is_w(w_type, space.w_type):

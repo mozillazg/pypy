@@ -85,7 +85,7 @@ def PyObject_Init(space, op, type):
         PyErr_NoMemory(space)
     op.c_ob_type = type
     op.c_ob_refcnt = 1
-    return op
+    return from_ref(space, op) # XXX will give an exception
 
 @cpython_api([PyVarObject, PyTypeObjectPtr, Py_ssize_t], PyObject, borrowed=True)
 def PyObject_InitVar(space, op, type, size):
@@ -96,5 +96,5 @@ def PyObject_InitVar(space, op, type, size):
     op.c_ob_size = size
     op.c_ob_type = type
     op.c_ob_refcnt = 1
-    return rffi.cast(PyObject, op)
+    return from_ref(space, rffi.cast(PyObject, op)) # XXX likewise
 

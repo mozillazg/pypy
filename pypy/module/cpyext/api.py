@@ -251,12 +251,14 @@ def get_structtype_for_ctype(ctype):
     from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
     return {"PyObject*": PyObject, "PyTypeObject*": PyTypeObjectPtr}[ctype]
 
+PyTypeObject = lltype.ForwardReference()
+PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
 # It is important that these PyObjects are allocated in a raw fashion
 # Thus we cannot save a forward pointer to the wrapped object
 # So we need a forward and backward mapping in our State instance
 PyObjectStruct = lltype.ForwardReference()
 PyObject = lltype.Ptr(PyObjectStruct)
-PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyObject))
+PyObjectFields = (("ob_refcnt", lltype.Signed), ("ob_type", PyTypeObjectPtr))
 PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
 cpython_struct('struct _object', PyObjectFields, PyObjectStruct)
 PyVarObjectStruct = cpython_struct("PyVarObject", PyVarObjectFields)
@@ -387,8 +389,8 @@ def bootstrap_types(space):
     object_pto = make_ref(space, space.w_object)
     object_pto = rffi.cast(PyTypeObjectPtr, object_pto)
     type_pto.c_tp_base = object_pto
-    type_pto.c_ob_type = make_ref(space, space.w_type)
-    object_pto.c_ob_type = make_ref(space, space.w_type)
+    type_pto.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.w_type))
+    object_pto.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.w_type))
     PyPyType_Ready(space, object_pto, space.w_object)
     PyPyType_Ready(space, type_pto, space.w_type)
     type_pto.c_tp_bases = make_ref(space, space.newtuple([space.w_object]))
