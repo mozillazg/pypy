@@ -13,6 +13,7 @@
 #define WITH_DOC_STRINGS
 #define HAVE_UNICODE
 #define INT_MAX (1 << (8 * sizeof(int) - 1))
+#define WITHOUT_COMPLEX
 
 /* Compat stuff */
 #ifndef _WIN32
