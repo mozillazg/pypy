@@ -3,6 +3,7 @@ from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.stringobject import new_empty_str
 from pypy.module.cpyext.api import PyStringObject, PyObjectP, PyObject
+from pypy.module.cpyext.pyobject import Py_DecRef
 
 import py
 import sys
@@ -146,5 +147,5 @@ class TestString(BaseApiTest):
         assert py_str.c_size == 10
         assert py_str.c_buffer[1] == 'b'
         assert py_str.c_buffer[10] == '\x00'
+        Py_DecRef(space, ar[0])
         lltype.free(ar, flavor='raw')
-        
