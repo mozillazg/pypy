@@ -14,12 +14,10 @@ int PyArg_Parse(PyObject *, const char *, ...);
 int PyArg_ParseTuple(PyObject *, const char *, ...);
 int PyArg_VaParse(PyObject *, const char *, va_list);
 
-/* NOT YET IMPLEMENTED
 int PyArg_ParseTupleAndKeywords(PyObject *, PyObject *,
 				const char *, char **, ...);
 int PyArg_VaParseTupleAndKeywords(PyObject *, PyObject *,
 				const char *, char **, va_list);
-*/
 
 #define Py_InitModule(name, methods) \
 	Py_InitModule4(name, methods, (char *)NULL, (PyObject *)NULL, \
