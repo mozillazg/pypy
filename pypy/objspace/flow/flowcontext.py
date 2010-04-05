@@ -1,7 +1,7 @@
 import collections
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter.error import OperationError
-from pypy.interpreter import pyframe
+from pypy.interpreter import pyframe, pycode
 from pypy.interpreter.argument import ArgumentsForTranslation
 from pypy.objspace.flow.model import *
 from pypy.objspace.flow.framestate import FrameState
@@ -219,8 +219,12 @@ class FlowExecutionContext(ExecutionContext):
         # create an empty frame suitable for the code object
         # while ignoring any operation like the creation of the locals dict
         self.recorder = []
-        frame = FlowSpaceFrame(self.space, self.code,
-                               self.w_globals, self.closure)
+        if self.code.magic == pycode.cpython_magic:
+            frame = FlowSpaceHostPyFrame(self.space, self.code,
+                                         self.w_globals, self.closure)
+        else:
+            frame = FlowSpacePyPyFrame(self.space, self.code,
+                                       self.w_globals, self.closure)
         frame.last_instr = 0
         return frame
 
@@ -398,7 +402,7 @@ class FlowExecutionContext(ExecutionContext):
                 if w_v.value is oldvalue:
                     stack_items_w[i] = w_new
 
-class FlowSpaceFrame(pyframe.PyFrame):
+class FlowSpaceFrameBase(object):
     def make_arguments(self, nargs):
         return ArgumentsForTranslation(self.space, self.peekvalues(nargs))
     def argument_factory(self, *args):
@@ -410,3 +414,10 @@ class FlowSpaceFrame(pyframe.PyFrame):
             raise operr
         return pyframe.PyFrame.handle_operation_error(self, ec, operr,
                                                       *args, **kwds)
+
+class FlowSpacePyPyFrame(FlowSpaceFrameBase, pyframe.PyPyFrame):
+    pass
+
+class FlowSpaceHostPyFrame(FlowSpaceFrameBase, pyframe.HostPyFrame):
+    pass
+

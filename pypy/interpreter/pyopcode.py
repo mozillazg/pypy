@@ -14,9 +14,9 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib import jit, rstackovf
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.tool.stdlib_opcode import (opcodedesc, HAVE_ARGUMENT,
-                                     unrolling_opcode_descs,
-                                     opcode_method_names)
+from pypy.tool.stdlib_opcode import (unrolling_opcode_descs,
+    HAVE_ARGUMENT, host_HAVE_ARGUMENT, opcodedesc, host_opcodedesc,
+    opcode_method_names, host_opcode_method_names, )
 
 def unaryoperation(operationname):
     """NOT_RPYTHON"""
@@ -180,7 +180,7 @@ class __extend__(pyframe.PyFrame):
                 probs[opcode] = probs.get(opcode, 0) + 1
                 self.last_opcode = opcode
 
-            if opcode >= HAVE_ARGUMENT:
+            if opcode >= self.HAVE_ARGUMENT:
                 lo = ord(co_code[next_instr])
                 hi = ord(co_code[next_instr+1])
                 next_instr += 2
@@ -188,16 +188,16 @@ class __extend__(pyframe.PyFrame):
             else:
                 oparg = 0
 
-            while opcode == opcodedesc.EXTENDED_ARG.index:
+            while opcode == self.opcodedesc.EXTENDED_ARG.index:
                 opcode = ord(co_code[next_instr])
-                if opcode < HAVE_ARGUMENT:
+                if opcode < self.HAVE_ARGUMENT:
                     raise BytecodeCorruption
                 lo = ord(co_code[next_instr+1])
                 hi = ord(co_code[next_instr+2])
                 next_instr += 3
                 oparg = (oparg << 16) | (hi << 8) | lo
 
-            if opcode == opcodedesc.RETURN_VALUE.index:
+            if opcode == self.opcodedesc.RETURN_VALUE.index:
                 w_returnvalue = self.popvalue()
                 block = self.unrollstack(SReturnValue.kind)
                 if block is None:
@@ -208,11 +208,11 @@ class __extend__(pyframe.PyFrame):
                     next_instr = block.handle(self, unroller)
                     return next_instr    # now inside a 'finally' block
 
-            if opcode == opcodedesc.YIELD_VALUE.index:
+            if opcode == self.opcodedesc.YIELD_VALUE.index:
                 #self.last_instr = intmask(next_instr - 1) XXX clean up!
                 raise Yield
 
-            if opcode == opcodedesc.END_FINALLY.index:
+            if opcode == self.opcodedesc.END_FINALLY.index:
                 unroller = self.end_finally()
                 if isinstance(unroller, SuspendedUnroller):
                     # go on unrolling the stack
@@ -225,7 +225,7 @@ class __extend__(pyframe.PyFrame):
                         next_instr = block.handle(self, unroller)
                 return next_instr
 
-            if opcode == opcodedesc.JUMP_ABSOLUTE.index:
+            if opcode == self.opcodedesc.JUMP_ABSOLUTE.index:
                 return self.jump_absolute(oparg, next_instr, ec)
 
             if we_are_translated():
@@ -242,7 +242,7 @@ class __extend__(pyframe.PyFrame):
                         # dispatch to the opcode method
                         meth = getattr(self, opdesc.methodname)
                         res = meth(oparg, next_instr)
-                        if opdesc.index == opcodedesc.CALL_FUNCTION.index:
+                        if opdesc.index == self.opcodedesc.CALL_FUNCTION.index:
                             rstack.resume_point("dispatch_call", self, co_code, next_instr, ec)
                         # !! warning, for the annotator the next line is not
                         # comparing an int and None - you can't do that.
@@ -254,7 +254,7 @@ class __extend__(pyframe.PyFrame):
                     self.MISSING_OPCODE(oparg, next_instr)
 
             else:  # when we are not translated, a list lookup is much faster
-                methodname = opcode_method_names[opcode]
+                methodname = self.opcode_method_names[opcode]
                 res = getattr(self, methodname)(oparg, next_instr)
                 if res is not None:
                     next_instr = res
@@ -690,26 +690,6 @@ class __extend__(pyframe.PyFrame):
         w_list = self.space.newlist(items)
         self.pushvalue(w_list)
 
-    def BUILD_MAP(self, itemcount, next_instr):
-        if not we_are_translated() and sys.version_info >= (2, 6):
-            # We could pre-allocate a dict here
-            # but for the moment this code is not translated.
-            pass
-        else:
-            if itemcount != 0:
-                raise BytecodeCorruption
-        w_dict = self.space.newdict()
-        self.pushvalue(w_dict)
-
-    def STORE_MAP(self, zero, next_instr):
-        if not we_are_translated() and sys.version_info >= (2, 6):
-            w_key = self.popvalue()
-            w_value = self.popvalue()
-            w_dict = self.peekvalue()
-            self.space.setitem(w_dict, w_key, w_value)
-        else:
-            raise BytecodeCorruption
-
     def LOAD_ATTR(self, nameindex, next_instr):
         "obj.attributename"
         w_attributename = self.getname_w(nameindex)
@@ -1018,6 +998,48 @@ class __extend__(pyframe.PyFrame):
                                  (ofs, ord(c), name) )
 
     STOP_CODE = MISSING_OPCODE
+
+
+class __extend__(pyframe.PyPyFrame):
+    opcode_method_names = opcode_method_names
+    opcodedesc = opcodedesc
+    HAVE_ARGUMENT = HAVE_ARGUMENT
+    
+    def BUILD_MAP(self, itemcount, next_instr):
+        if itemcount != 0:
+            raise BytecodeCorruption
+        w_dict = self.space.newdict()
+        self.pushvalue(w_dict)
+
+    def STORE_MAP(self, zero, next_instr):
+        raise BytecodeCorruption
+
+host_version_info = sys.version_info
+
+class __extend__(pyframe.HostPyFrame):
+    opcode_method_names = host_opcode_method_names
+    opcodedesc = host_opcodedesc
+    HAVE_ARGUMENT = host_HAVE_ARGUMENT
+
+    def BUILD_MAP(self, itemcount, next_instr):
+        if host_version_info >= (2, 6):
+            # We could pre-allocate a dict here
+            # but for the moment this code is not translated.
+            pass
+        else:
+            if itemcount != 0:
+                raise BytecodeCorruption
+        w_dict = self.space.newdict()
+        self.pushvalue(w_dict)
+
+    def STORE_MAP(self, zero, next_instr):
+        if host_version_info >= (2, 6):
+            w_key = self.popvalue()
+            w_value = self.popvalue()
+            w_dict = self.peekvalue()
+            self.space.setitem(w_dict, w_key, w_value)
+        else:
+            raise BytecodeCorruption
 
 
 ### ____________________________________________________________ ###

@@ -135,8 +135,9 @@ class PyFrame(eval.Frame):
         from pypy.rlib import rstack
         # the following 'assert' is an annotation hint: it hides from
         # the annotator all methods that are defined in PyFrame but
-        # overridden in the FrameClass subclass of PyFrame.
-        assert isinstance(self, self.space.FrameClass)
+        # overridden in the {,Host}FrameClass subclasses of PyFrame.
+        assert (isinstance(self, self.space.FrameClass)
+             or isinstance(self, self.space.HostFrameClass))
         executioncontext = self.space.getexecutioncontext()
         executioncontext.enter(self)
         try:
@@ -627,6 +628,13 @@ class PyFrame(eval.Frame):
         if space.config.objspace.honor__builtins__:
             return space.wrap(self.builtin is not space.builtin)
         return space.w_False
+
+
+class PyPyFrame(PyFrame):
+    pass
+
+class HostPyFrame(PyFrame):
+    pass
 
 # ____________________________________________________________
 
