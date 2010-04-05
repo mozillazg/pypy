@@ -5,6 +5,22 @@ from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.objspace.std import listobject, tupleobject
 
+
+@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
+def PySequence_Check(space, w_obj):
+    """Return 1 if the object provides sequence protocol, and 0 otherwise.
+    This function always succeeds."""
+    return int(space.findattr(w_obj, space.wrap("__getitem__")) is not None)
+
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PySequence_Size(space, w_obj):
+    """
+    Returns the number of objects in sequence o on success, and -1 on failure.
+    For objects that do not provide sequence protocol, this is equivalent to the
+    Python expression len(o)."""
+    return space.int_w(space.len(w_obj))
+
+
 @cpython_api([PyObject, rffi.CCHARP], PyObject)
 def PySequence_Fast(space, w_obj, m):
     """Returns the sequence o as a tuple, unless it is already a tuple or list, in
