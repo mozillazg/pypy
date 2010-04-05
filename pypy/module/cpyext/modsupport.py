@@ -11,6 +11,10 @@ from pypy.interpreter.error import OperationError
 def PyModule_AddObject():
     pass
 
+@cpython_api_c()
+def Py_BuildValue():
+    pass
+
 def PyImport_AddModule(space, name):
     w_name = space.wrap(name)
     w_mod = space.wrap(Module(space, w_name))

@@ -29,6 +29,12 @@ int PyArg_VaParseTupleAndKeywords(PyObject *, PyObject *,
 
 int PyModule_AddObject(PyObject *m, const char *name, PyObject *o);
 
+PyObject * Py_BuildValue(const char *, ...);
+PyObject * _Py_BuildValue_SizeT(const char *, ...);
+int _PyArg_NoKeywords(const char *funcname, PyObject *kw);
+
+int PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t max, ...);
+
 /*
  * This is from pyport.h.  Perhaps it belongs elsewhere.
  */
