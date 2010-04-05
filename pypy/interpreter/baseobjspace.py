@@ -257,8 +257,13 @@ class ObjSpace(object):
         self.actionflag.register_action(self.user_del_action)
         self.actionflag.register_action(self.frame_trace_action)
 
-        from pypy.interpreter.pyframe import PyFrame
-        self.FrameClass = PyFrame    # can be overridden to a subclass
+        from pypy.interpreter.pycode import cpython_magic, default_magic
+        from pypy.interpreter.pyframe import PyPyFrame, HostPyFrame
+        self.our_magic = default_magic
+        self.host_magic = cpython_magic
+        # can be overridden to a subclass
+        self.FrameClass = PyPyFrame
+        self.HostFrameClass = HostPyFrame
 
         if self.config.objspace.logbytecodes:
             self.bytecodecounts = [0] * 256
@@ -589,7 +594,12 @@ class ObjSpace(object):
 
     def createframe(self, code, w_globals, closure=None):
         "Create an empty PyFrame suitable for this code object."
-        return self.FrameClass(self, code, w_globals, closure)
+        magic = code.magic
+        if magic == self.host_magic:
+            return self.HostFrameClass(self, code, w_globals, closure)
+        elif magic == self.our_magic:
+            return self.FrameClass(self, code, w_globals, closure)
+        raise ValueError("bad magic %s" % magic)
 
     def allocate_lock(self):
         """Return an interp-level Lock object if threads are enabled,

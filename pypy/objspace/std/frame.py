@@ -3,14 +3,16 @@
 import operator
 
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.interpreter import pyframe, pyopcode, function
+from pypy.interpreter import pyopcode, function
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.module.__builtin__ import OPTIMIZED_BUILTINS, Module
 from pypy.objspace.std.multimethod import FailedToImplement
 
 
-class BaseFrame(pyframe.PyFrame):
+
+class BaseFrame(object):
     """These opcodes are always overridden."""
+    _mixin_ = True
 
     def LIST_APPEND(f, oparg, next_instr):
         from pypy.objspace.std.listobject import W_ListObject
@@ -135,9 +137,9 @@ def fast_COMPARE_OP(f, testnum, next_instr):
     f.pushvalue(w_result)
 
 
-def build_frame(space):
+def build_frame(space, baseclass):
     """Consider the objspace config and return a patched frame object."""
-    class StdObjSpaceFrame(BaseFrame):
+    class StdObjSpaceFrame(baseclass, BaseFrame):
         pass
     if space.config.objspace.std.optimized_int_add:
         if space.config.objspace.std.withsmallint:

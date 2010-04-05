@@ -47,7 +47,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # setup all the object types and implementations
         self.model = model.StdTypeModel(self.config)
 
-        self.FrameClass = frame.build_frame(self)
+        from pypy.interpreter.pyframe import PyPyFrame, HostPyFrame
+        self.FrameClass = frame.build_frame(self, PyPyFrame)
+        self.HostFrameClass = frame.build_frame(self, HostPyFrame)
 
         if self.config.objspace.std.withrope:
             self.StringObjectCls = W_RopeObject
@@ -133,7 +135,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if not we_are_translated() and isinstance(code, CPythonFakeCode):
             return CPythonFakeFrame(self, code, w_globals)
         else:
-            return self.FrameClass(self, code, w_globals, closure)
+            return ObjSpace.createframe(self, code, w_globals, closure)
 
     def gettypefor(self, cls):
         return self.gettypeobject(cls.typedef)
