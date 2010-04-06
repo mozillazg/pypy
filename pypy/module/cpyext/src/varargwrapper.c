@@ -1,7 +1,7 @@
 #include <Python.h>
 #include <stdarg.h>
 
-PyObject * PyPyTuple_Pack(Py_ssize_t size, ...)
+PyObject * PyTuple_Pack(Py_ssize_t size, ...)
 {
     va_list ap;
     PyObject *cur, *tuple;
