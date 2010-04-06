@@ -311,7 +311,7 @@ def subtype_dealloc(space, obj):
              error=CANNOT_FAIL)
 def str_segcount(space, w_obj, ref):
     if ref:
-        ref[0] = space.int_w(space.len(w_obj))
+        ref[0] = rffi.cast(rffi.INT, space.int_w(space.len(w_obj)))
     return 1
 
 def get_helper(space, func):
