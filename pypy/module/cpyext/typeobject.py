@@ -12,7 +12,7 @@ from pypy.objspace.std.typeobject import W_TypeObject, _CPYTYPE, call__Type
 from pypy.objspace.std.typetype import _precheck_for_new
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
-from pypy.module.cpyext.api import cpython_api, cpython_api_c, cpython_struct, \
+from pypy.module.cpyext.api import cpython_api, cpython_struct, \
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR, \
     Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS, \

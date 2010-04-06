@@ -207,13 +207,11 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
         return unwrapper_raise # used in 'normal' RPython code.
     return decorate
 
-def cpython_api_c():
-    def decorate(func):
-        def uncallable(*args, **kwds):
-            raise Exception("Uncallable")
-        FUNCTIONS_C[func.func_name] = None
-        return uncallable
-    return decorate
+def register_c_function(name):
+    """ Register a function implemented in C as a part of API
+    (not yet callable from RPython)
+    """
+    FUNCTIONS_C[name] = None
 
 def cpython_struct(name, fields, forward=None):
     configname = name.replace(' ', '__')

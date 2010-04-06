@@ -3,7 +3,8 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, PyVarObjectFields,
                                     PyStringObject, Py_ssize_t, cpython_struct,
                                     CANNOT_FAIL, build_type_checkers,
-                                    PyObjectP, cpython_api_c, PyTypeObjectPtr)
+                                    PyObjectP, PyTypeObjectPtr,
+                                    register_c_function)
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, Py_DecRef
 
 
@@ -20,9 +21,7 @@ def new_empty_str(space, length):
     py_str.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.w_str))
     return py_str
 
-@cpython_api_c()
-def PyString_FromFormatV():
-    pass
+register_c_function('PyString_FromFormatV')
 
 @cpython_api([rffi.CCHARP, Py_ssize_t], PyStringObject, error=lltype.nullptr(PyStringObject.TO))
 def PyString_FromStringAndSize(space, char_p, length):
