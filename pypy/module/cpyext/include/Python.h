@@ -14,6 +14,14 @@
 #define HAVE_UNICODE
 #define WITHOUT_COMPLEX
 
+/* PyPy supposes Py_UNICODE == wchar_t */
+#define HAVE_USABLE_WCHAR_T 1
+#ifndef _WIN32
+#define Py_UNICODE_SIZE 4
+#else
+#define Py_UNICODE_SIZE 2
+#endif
+
 /* Compat stuff */
 #ifndef _WIN32
 # include <inttypes.h>
@@ -23,6 +31,7 @@
 # define Py_DEPRECATED(VERSION_UNUSED) __attribute__((__deprecated__))
 # define PyAPI_DATA(RTYPE) extern RTYPE
 #else
+# define MS_WIN32 1
 # include <crtdefs.h>
 # define Py_DEPRECATED(VERSION_UNUSED)
 # ifdef Py_BUILD_CORE
@@ -31,6 +40,7 @@
 #  define PyAPI_DATA(RTYPE) extern __declspec(dllimport) RTYPE
 # endif
 #endif
+
 #define Py_ssize_t long
 #define PY_SSIZE_T_MAX ((Py_ssize_t)(((size_t)-1)>>1))
 #define PY_SSIZE_T_MIN (-PY_SSIZE_T_MAX-1)

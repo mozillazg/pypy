@@ -1,13 +1,13 @@
 # encoding: iso-8859-15
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.unicodeobject import Py_UNICODE
-from pypy.rpython.lltypesystem import rffi
+from pypy.rpython.lltypesystem import rffi, lltype
 
 class TestUnicode(BaseApiTest):
     def test_unicodeobject(self, space, api):
         assert api.PyUnicode_GET_SIZE(space.wrap(u'späm')) == 4
-        # XXX assuming UCS-4
-        assert api.PyUnicode_GET_DATA_SIZE(space.wrap(u'späm')) == 16
+        unichar = rffi.sizeof(lltype.UniChar)
+        assert api.PyUnicode_GET_DATA_SIZE(space.wrap(u'späm')) == 4 * unichar
 
     def test_AS_DATA(self, space, api):
         word = space.wrap(u'spam')
