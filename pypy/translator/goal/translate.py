@@ -213,10 +213,6 @@ def main():
     else:
         prof = None
 
-    import gc
-    a, b, c = gc.get_threshold()
-    gc.set_threshold(a * 2, b * 2, c * 8)
-
     t = translator.TranslationContext(config=config)
 
     pdb_plus_show = PdbPlusShow(t) # need a translator to support extended commands
