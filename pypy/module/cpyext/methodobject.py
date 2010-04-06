@@ -9,13 +9,14 @@ from pypy.interpreter.function import BuiltinFunction, Method
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject,\
-        cpython_struct
+        cpython_struct, METH_KEYWORDS
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
 
 
 PyCFunction = lltype.Ptr(lltype.FuncType([PyObject, PyObject], PyObject))
+PyCFunctionKwArgs = lltype.Ptr(lltype.FuncType([PyObject, PyObject, PyObject], PyObject))
 
 PyMethodDef = cpython_struct(
     'PyMethodDef',
@@ -32,11 +33,20 @@ class W_PyCFunctionObject(Wrappable):
         self.w_self = w_self
         self.doc = doc
 
-    def call(self, space, w_self, args_tuple):
+    def call(self, space, w_self, w_args, w_kw):
         # Call the C function
         if w_self is None:
             w_self = self.w_self
-        return generic_cpy_call(space, self.ml.c_ml_meth, w_self, args_tuple)
+        flags = rffi.cast(lltype.Signed, self.ml.c_ml_flags)
+        if space.is_true(w_kw) and not flags & METH_KEYWORDS:
+            raise OperationError(space.w_TypeError,
+                    space.wrap(rffi.charp2str(self.ml.c_ml_name) + "() takes no keyword arguments"))
+        # XXX support METH_NOARGS, METH_O
+        if flags & METH_KEYWORDS:
+            func = rffi.cast(PyCFunctionKwArgs, self.ml.c_ml_meth)
+            return generic_cpy_call(space, func, w_self, w_args, w_kw)
+        else:
+            return generic_cpy_call(space, self.ml.c_ml_meth, w_self, w_args)
 
 
 class W_PyCMethodObject(W_PyCFunctionObject):
@@ -99,22 +109,22 @@ def cfunction_descr_call(space, w_self, __args__):
     self = space.interp_w(W_PyCFunctionObject, w_self)
     args_w, kw_w = __args__.unpack()
     w_args = space.newtuple(args_w)
-    if kw_w:
-        raise OperationError(space.w_TypeError,
-                             space.wrap("keywords not yet supported"))
-    ret = self.call(space, None, w_args)
+    w_kw = space.newdict()
+    for key, w_obj in kw_w.items():
+        space.setitem(w_kw, space.wrap(key), w_obj)
+    ret = self.call(space, None, w_args, w_kw)
     return ret
 
 @unwrap_spec(ObjSpace, W_Root, Arguments)
 def cmethod_descr_call(space, w_self, __args__):
     self = space.interp_w(W_PyCFunctionObject, w_self)
     args_w, kw_w = __args__.unpack()
-    w_instance = args_w[0]
+    w_instance = args_w[0] # XXX typecheck missing
     w_args = space.newtuple(args_w[1:])
-    if kw_w:
-        raise OperationError(space.w_TypeError,
-                             space.wrap("keywords not yet supported"))
-    ret = self.call(space, w_instance, w_args)
+    w_kw = space.newdict()
+    for key, w_obj in kw_w.items():
+        space.setitem(w_kw, space.wrap(key), w_obj)
+    ret = self.call(space, w_instance, w_args, w_kw)
     return ret
 
 def cmethod_descr_get(space, w_function, w_obj, w_cls=None):
