@@ -143,8 +143,8 @@ def PyErr_WarnEx(space, w_category, message_ptr, stacklevel):
     warnings module and the -W option in the command line
     documentation.  There is no C API for warning control."""
     message = rffi.charp2str(message_ptr)
-    if category is None:
-        category = space.gettypeobject(W_RuntimeWarning.typedef)
+    if w_category is None:
+        w_category = space.gettypeobject(W_RuntimeWarning.typedef)
     os.write(2, "WARNING: " + message + "\n")
     return 0
 
