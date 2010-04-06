@@ -224,7 +224,7 @@ FUNCTIONS_C = [
     'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormatV', 'PyModule_AddObject', 'Py_BuildValue',
-    'PyTuple_Pack',
+    'PyTuple_Pack', 'PyErr_Format',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
