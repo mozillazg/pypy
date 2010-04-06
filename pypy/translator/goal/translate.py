@@ -213,6 +213,14 @@ def main():
     else:
         prof = None
 
+    import gc
+    try:
+        # Reduce CPython GC pressure by raising the thresholds
+        a, b, c = gc.get_threshold()
+        gc.set_threshold(a * 2, b * 3, c * 15)
+    except (AttributeError, NotImplementedError):
+        pass
+
     t = translator.TranslationContext(config=config)
 
     pdb_plus_show = PdbPlusShow(t) # need a translator to support extended commands
