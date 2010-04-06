@@ -122,7 +122,7 @@ def force_string(space, ref):
     return w_str
 
 
-def from_ref(space, ref):
+def from_ref(space, ref, recurse=False):
     from pypy.module.cpyext.typeobject import PyPyType_Ready
     assert lltype.typeOf(ref) == PyObject
     if not ref:
@@ -132,19 +132,18 @@ def from_ref(space, ref):
     try:
         w_obj = state.py_objects_r2w[ptr]
     except KeyError:
+        if recurse:
+            raise InvalidPointerException(str(ref))
         ref_type = rffi.cast(PyObject, ref.c_ob_type)
         if ref != ref_type:
-            w_type = from_ref(space, ref_type)
+            w_type = from_ref(space, ref_type, True)
             if space.is_w(w_type, space.w_str):
-                return force_string(space, ref)
+                return force_string(space, ref, True)
             elif space.is_w(w_type, space.w_type):
                 PyPyType_Ready(space, rffi.cast(PyTypeObjectPtr, ref), None)
-                return from_ref(space, ref)
+                return from_ref(space, ref, True)
             else:
-                msg = ""
-                if not we_are_translated():
-                    msg = "Got invalid reference to a PyObject: %r" % (ref, )
-                raise InvalidPointerException(msg)
+                raise InvalidPointerException(str(ref))
         else:
             raise InvalidPointerException("This should never happen")
     return w_obj
