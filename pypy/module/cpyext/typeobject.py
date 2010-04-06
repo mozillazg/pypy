@@ -166,7 +166,7 @@ def tp_new_wrapper(space, w_self, w_args, w_kwds): # XXX untested code
 @specialize.memo()
 def get_new_method_def(space):
     from pypy.module.cpyext.modsupport import PyMethodDef
-    ptr = lltype.malloc(PyMethodDef, flavor="raw")
+    ptr = lltype.malloc(PyMethodDef, flavor="raw", zero=True)
     ptr.c_ml_name = rffi.str2charp("__new__")
     ptr.c_ml_meth = rffi.cast(PyCFunction,
         llhelper(tp_new_wrapper.api_func.functype,
