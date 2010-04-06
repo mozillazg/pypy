@@ -30,7 +30,7 @@ def debug_refcount(*args, **kwargs):
     print >>sys.stderr
 
 
-def make_ref(space, w_obj, borrowed=False, steal=False):
+def make_ref(space, w_obj, borrowed=False, steal=False, items=0):
     from pypy.module.cpyext.typeobject import allocate_type_obj,\
             W_PyCTypeObject, PyOLifeline
     from pypy.module.cpyext.pycobject import W_PyCObject, PyCObject
@@ -59,7 +59,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False):
                 # Don't increase refcount for non-heaptypes
                 if not rffi.cast(lltype.Signed, pto.c_tp_flags) & Py_TPFLAGS_HEAPTYPE:
                     Py_DecRef(space, w_type_pyo)
-                basicsize = pto.c_tp_basicsize
+                basicsize = pto.c_tp_basicsize + items * pto.c_tp_itemsize
                 py_obj_pad = lltype.malloc(rffi.VOIDP.TO, basicsize,
                         flavor="raw", zero=True)
                 py_obj = rffi.cast(PyObject, py_obj_pad)
