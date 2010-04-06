@@ -207,12 +207,6 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
         return unwrapper_raise # used in 'normal' RPython code.
     return decorate
 
-def register_c_function(name):
-    """ Register a function implemented in C as a part of API
-    (not yet callable from RPython)
-    """
-    FUNCTIONS_C[name] = None
-
 def cpython_struct(name, fields, forward=None):
     configname = name.replace(' ', '__')
     setattr(CConfig, configname, rffi_platform.Struct(name, fields))
@@ -224,7 +218,11 @@ def cpython_struct(name, fields, forward=None):
 INTERPLEVEL_API = {}
 FUNCTIONS = {}
 FUNCTIONS_STATIC = {}
-FUNCTIONS_C = {}
+FUNCTIONS_C = [
+    'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
+    'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
+    'PyString_FromFormatV', 'PyModule_AddObject', 'Py_BuildValue',
+]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     'Py_None': ('PyObject*', 'space.w_None'),
@@ -412,7 +410,7 @@ def bootstrap_types(space):
 def build_bridge(space, rename=True):
     from pypy.module.cpyext.pyobject import make_ref
 
-    export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
+    export_symbols = list(FUNCTIONS) + FUNCTIONS_C + list(GLOBALS)
     from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
@@ -577,7 +575,7 @@ def build_eci(build_bridge, export_symbols, code):
 def setup_library(space, rename=False):
     from pypy.module.cpyext.pyobject import make_ref
 
-    export_symbols = list(FUNCTIONS) + list(FUNCTIONS_C) + list(GLOBALS)
+    export_symbols = list(FUNCTIONS) + FUNCTIONS_C + list(GLOBALS)
     from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 

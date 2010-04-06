@@ -46,12 +46,10 @@ import pypy.module.cpyext.longobject
 import pypy.module.cpyext.listobject
 import pypy.module.cpyext.sequence
 import pypy.module.cpyext.eval
-import pypy.module.cpyext.getargs
 import pypy.module.cpyext.import_
 import pypy.module.cpyext.mapping
 import pypy.module.cpyext.iterator
 import pypy.module.cpyext.unicodeobject
-import pypy.module.cpyext.misc
 import pypy.module.cpyext.pycobject
 
 # now that all rffi_platform.Struct types are registered, configure them
