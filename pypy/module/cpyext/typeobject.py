@@ -326,12 +326,9 @@ def str_segcount(space, w_obj, ref):
         ref[0] = rffi.cast(rffi.INT, space.int_w(space.len(w_obj)))
     return 1
 
-def get_helper(space, func):
-    return llhelper(func.api_func.functype, func.api_func.get_wrapper(space))
-
 def setup_string_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
-    c_buf.c_bf_getsegcount = get_helper(space, str_segcount)
+    c_buf.c_bf_getsegcount = llhelper(str_segcount.api_func.functype, str_segcount.api_func.get_wrapper(space))
     pto.c_tp_as_buffer = c_buf
 
 @cpython_api([PyObject], lltype.Void, external=False)
