@@ -261,7 +261,22 @@ class __extend__(pyframe.PyFrame):
 
             else:  # when we are not translated, a list lookup is much faster
                 methodname = self.opcode_method_names[opcode]
-                res = getattr(self, methodname)(oparg, next_instr)
+                try:
+                    meth = getattr(self, methodname)
+                except AttributeError:
+                    raise BytecodeCorruption("unimplemented opcode, ofs=%d, code=%d, name=%s" %
+                                             (self.last_instr, opcode, methodname))
+                try:
+                    res = meth(oparg, next_instr)
+                except Exception:
+                    if 0:
+                        import dis, sys
+                        print "*** %s at offset %d (%s)" % (sys.exc_info()[0], self.last_instr, methodname)
+                        try:
+                            dis.dis(co_code)
+                        except:
+                            pass
+                    raise
                 if res is not None:
                     next_instr = res
 
@@ -997,7 +1012,7 @@ class __extend__(pyframe.PyFrame):
         self.pushvalue(w_result)
 
     def MISSING_OPCODE(self, oparg, next_instr):
-        ofs = next_instr - 1
+        ofs = self.last_instr
         c = self.pycode.co_code[ofs]
         name = self.pycode.co_name
         raise BytecodeCorruption("unknown opcode, ofs=%d, code=%d, name=%s" %
@@ -1007,6 +1022,9 @@ class __extend__(pyframe.PyFrame):
 
 
 class __extend__(pyframe.PyPyFrame):
+    """
+    Execution of PyPy opcodes (mostly derived from Python 2.5.2).
+    """
     bytecode_spec = bytecode_spec
     opcode_method_names = bytecode_spec.method_names
     opcodedesc = bytecode_spec.opcodedesc
@@ -1025,6 +1043,9 @@ class __extend__(pyframe.PyPyFrame):
 host_version_info = sys.version_info
 
 class __extend__(pyframe.HostPyFrame):
+    """
+    Execution of host (CPython) opcodes.
+    """
     bytecode_spec = host_bytecode_spec
     opcode_method_names = host_bytecode_spec.method_names
     opcodedesc = host_bytecode_spec.opcodedesc
@@ -1050,6 +1071,40 @@ class __extend__(pyframe.HostPyFrame):
             self.space.setitem(w_dict, w_key, w_value)
         else:
             raise BytecodeCorruption
+
+    def POP_JUMP_IF_FALSE(self, jumpto, next_instr):
+        w_cond = self.popvalue()
+        if not self.space.is_true(w_cond):
+            next_instr = jumpto
+        return next_instr
+
+    def POP_JUMP_IF_TRUE(self, jumpto, next_instr):
+        w_cond = self.popvalue()
+        if self.space.is_true(w_cond):
+            return jumpto
+        return next_instr
+
+    def JUMP_IF_FALSE_OR_POP(self, jumpto, next_instr):
+        w_cond = self.peekvalue()
+        if not self.space.is_true(w_cond):
+            return jumpto
+        self.popvalue()
+        return next_instr
+
+    def JUMP_IF_TRUE_OR_POP(self, jumpto, next_instr):
+        w_cond = self.peekvalue()
+        if self.space.is_true(w_cond):
+            return jumpto
+        self.popvalue()
+        return next_instr
+
+    def LIST_APPEND(self, oparg, next_instr):
+        w = self.popvalue()
+        if host_version_info < (2, 7):
+            v = self.popvalue()
+        else:
+            v = self.peekvalue(oparg - 1)
+        self.space.call_method(v, 'append', w)
 
 
 ### ____________________________________________________________ ###
