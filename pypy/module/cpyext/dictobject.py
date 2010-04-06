@@ -57,7 +57,7 @@ def PyDict_Size(space, w_obj):
     return space.int_w(space.len(w_obj))
 
 @cpython_api([PyObject, Py_ssize_t, PyObjectP, PyObjectP], rffi.INT_real, error=CANNOT_FAIL)
-def PyDict_Next(space, p, ppos, pkey, pvalue):
+def PyDict_Next(space, w_obj, ppos, pkey, pvalue):
     """Iterate over all key-value pairs in the dictionary p.  The
     Py_ssize_t referred to by ppos must be initialized to 0
     prior to the first call to this function to start the iteration; the
@@ -98,6 +98,8 @@ def PyDict_Next(space, p, ppos, pkey, pvalue):
         }
         Py_DECREF(o);
     }"""
+    if w_obj is None:
+        return 0
     raise NotImplementedError
 
 
