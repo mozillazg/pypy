@@ -9,11 +9,17 @@ class TestUnicode(BaseApiTest):
         unichar = rffi.sizeof(Py_UNICODE)
         assert api.PyUnicode_GET_DATA_SIZE(space.wrap(u'späm')) == 4 * unichar
 
-    def test_AS_DATA(self, space, api):
+    def test_AS(self, space, api):
         word = space.wrap(u'spam')
         array = rffi.cast(rffi.CWCHARP, api.PyUnicode_AS_DATA(word))
+        array2 = api.PyUnicode_AS_UNICODE(word)
+        array3 = api.PyUnicode_AsUnicode(word)
         for (i, char) in enumerate(space.unwrap(word)):
             assert array[i] == char
+            assert array2[i] == char
+            assert array3[i] == char
+        raises(TypeError, api.PyUnicode_AsUnicode(space.wrap('spam')))
+        api.PyErr_Clear()
 
     def test_IS(self, space, api):
         for char in [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f,

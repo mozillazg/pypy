@@ -5653,12 +5653,6 @@ def PyUnicode_CheckExact(space, o):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject], {Py_UNICODE*})
-def PyUnicode_AS_UNICODE(space, o):
-    """Return a pointer to the internal Py_UNICODE buffer of the object.  o
-    has to be a PyUnicodeObject (not checked)."""
-    raise NotImplementedError
-
 @cpython_api([], rffi.INT_real)
 def PyUnicode_ClearFreeList(space, ):
     """Clear the free list. Return the total number of freed items.
@@ -5724,12 +5718,6 @@ def PyUnicode_FromUnicode(space, u, size):
     
     This function used an int type for size. This might require
     changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], {Py_UNICODE*})
-def PyUnicode_AsUnicode(space, unicode):
-    """Return a read-only pointer to the Unicode object's internal Py_UNICODE
-    buffer, NULL if unicode is not a Unicode object."""
     raise NotImplementedError
 
 @cpython_api([PyObject], Py_ssize_t)

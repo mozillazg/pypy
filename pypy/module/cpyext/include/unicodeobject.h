@@ -6,13 +6,6 @@ extern "C" {
 #endif
 
 
-typedef struct {
-    PyObject_HEAD
-    void *buffer;
-    Py_ssize_t size;
-} PyUnicodeObject;
-
-
 typedef unsigned int Py_UCS4;
 #ifdef HAVE_USABLE_WCHAR_T
 #define PY_UNICODE_TYPE wchar_t
@@ -23,7 +16,14 @@ typedef unsigned int Py_UCS4;
 #endif
 typedef PY_UNICODE_TYPE Py_UNICODE;
 
-  
+
+typedef struct {
+    PyObject_HEAD
+    Py_UNICODE *buffer;
+    Py_ssize_t size;
+} PyUnicodeObject;
+
+
 #ifdef __cplusplus
 }
 #endif

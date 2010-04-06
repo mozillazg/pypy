@@ -1,3 +1,4 @@
+from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
 from pypy.module.cpyext.api import (CANNOT_FAIL, Py_ssize_t, PyUnicodeObject,
@@ -58,13 +59,7 @@ def Py_UNICODE_TOLOWER(space, ch):
 def PyUnicode_AS_DATA(space, ref):
     """Return a pointer to the internal buffer of the object. o has to be a
     PyUnicodeObject (not checked)."""
-    ref_unicode = rffi.cast(PyUnicodeObject, ref)
-    if not ref_unicode.c_buffer:
-        # Copy unicode buffer
-        w_unicode = from_ref(space, ref)
-        u = space.unicode_w(w_unicode)
-        ref_unicode.c_buffer = rffi.cast(rffi.VOIDP, rffi.unicode2wcharp(u))
-    return rffi.cast(rffi.CCHARP, ref_unicode.c_buffer)
+    return rffi.cast(rffi.CCHARP, PyUnicode_AS_UNICODE(space, ref))
 
 @cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
 def PyUnicode_GET_DATA_SIZE(space, w_obj):
@@ -81,3 +76,24 @@ def PyUnicode_GET_SIZE(space, w_obj):
     in your code for properly supporting 64-bit systems."""
     assert isinstance(w_obj, unicodeobject.W_UnicodeObject)
     return space.int_w(space.len(w_obj))
+
+@cpython_api([PyObject], rffi.CWCHARP, error=CANNOT_FAIL)
+def PyUnicode_AS_UNICODE(space, ref):
+    """Return a pointer to the internal Py_UNICODE buffer of the object.  ref
+    has to be a PyUnicodeObject (not checked)."""
+    ref_unicode = rffi.cast(PyUnicodeObject, ref)
+    if not ref_unicode.c_buffer:
+        # Copy unicode buffer
+        w_unicode = from_ref(space, ref)
+        u = space.unicode_w(w_unicode)
+        ref_unicode.c_buffer = rffi.unicode2wcharp(u)
+    return ref_unicode.c_buffer
+
+@cpython_api([PyObject], rffi.CWCHARP, error=0)
+def PyUnicode_AsUnicode(space, ref):
+    """Return a read-only pointer to the Unicode object's internal Py_UNICODE
+    buffer, NULL if unicode is not a Unicode object."""
+    if not PyUnicode_Check(space, ref):
+        raise OperationError(space.w_TypeError,
+                             space.wrap("expected unicode object"))
+    return PyUnicode_AS_UNICODE(space, ref)
