@@ -7,7 +7,7 @@ from pypy.tool.pairtype import extendabletype
 from pypy.rpython.annlowlevel import llhelper
 from pypy.interpreter.gateway import ObjSpace, W_Root, Arguments
 from pypy.interpreter.gateway import interp2app, unwrap_spec
-from pypy.interpreter.baseobjspace import Wrappable
+from pypy.interpreter.baseobjspace import Wrappable, DescrMismatch
 from pypy.objspace.std.typeobject import W_TypeObject, _CPYTYPE, call__Type
 from pypy.objspace.std.typetype import _precheck_for_new
 from pypy.objspace.std.objectobject import W_ObjectObject
@@ -40,9 +40,10 @@ WARN_ABOUT_MISSING_SLOT_FUNCTIONS = False
 
 
 class W_GetSetPropertyEx(GetSetProperty):
-    def __init__(self, getset):
+    def __init__(self, getset, pto):
         self.getset = getset
         self.name = rffi.charp2str(getset.c_name)
+        self.pto = pto
         doc = set = get = None
         if doc:
             doc = rffi.charp2str(getset.c_doc)
@@ -55,12 +56,13 @@ class W_GetSetPropertyEx(GetSetProperty):
                                 tag="cpyext_1")
 
 def PyDescr_NewGetSet(space, getset, pto):
-    return space.wrap(W_GetSetPropertyEx(getset))
+    return space.wrap(W_GetSetPropertyEx(getset, pto))
 
 class W_MemberDescr(GetSetProperty):
-    def __init__(self, member):
+    def __init__(self, member, pto):
         self.member = member
         self.name = rffi.charp2str(member.c_name)
+        self.pto = pto
         flags = rffi.cast(lltype.Signed, member.c_flags)
         doc = set = None
         if member.c_doc:
@@ -97,7 +99,7 @@ def convert_member_defs(space, dict_w, members, pto):
             if not name:
                 break
             name = rffi.charp2str(name)
-            w_descr = space.wrap(W_MemberDescr(member))
+            w_descr = space.wrap(W_MemberDescr(member, pto))
             dict_w[name] = w_descr
             i += 1
 
@@ -231,24 +233,34 @@ class PyOLifeline(object):
             self.pyo = lltype.nullptr(PyObject.TO)
         # XXX handle borrowed objects here
 
+def check_descr(space, w_self, pto):
+    w_type = from_ref(space, (rffi.cast(PyObject, pto)))
+    if not space.is_true(space.isinstance(w_self, w_type)):
+        raise DescrMismatch()
+
 class GettersAndSetters:
     def getter(self, space, w_self):
+        check_descr(space, w_self, self.pto)
         return generic_cpy_call(
             space, self.getset.c_get, w_self,
             self.getset.c_closure)
 
     def setter(self, space, w_self, w_value):
+        check_descr(space, w_self, self.pto)
         return generic_cpy_call(
             space, self.getset.c_set, w_self, w_value,
             self.getset.c_closure)
 
     def member_getter(self, space, w_self):
+        check_descr(space, w_self, self.pto)
         return PyMember_GetOne(space, w_self, self.member)
 
     def member_delete(self, space, w_self):
+        check_descr(space, w_self, self.pto)
         PyMember_SetOne(space, w_self, self.member, None)
 
     def member_setter(self, space, w_self, w_value):
+        check_descr(space, w_self, self.pto)
         PyMember_SetOne(space, w_self, self.member, w_value)
 
 def c_type_descr__call__(space, w_type, __args__):
