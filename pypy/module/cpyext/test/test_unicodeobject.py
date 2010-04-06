@@ -6,7 +6,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 class TestUnicode(BaseApiTest):
     def test_unicodeobject(self, space, api):
         assert api.PyUnicode_GET_SIZE(space.wrap(u'späm')) == 4
-        unichar = rffi.sizeof(lltype.UniChar)
+        unichar = rffi.sizeof(Py_UNICODE)
         assert api.PyUnicode_GET_DATA_SIZE(space.wrap(u'späm')) == 4 * unichar
 
     def test_AS_DATA(self, space, api):

@@ -7,8 +7,7 @@ from pypy.objspace.std import unicodeobject
 
 PyUnicode_Check, PyUnicode_CheckExact = build_type_checkers("Unicode", "w_unicode")
 
-# XXX
-Py_UNICODE = rffi.UINT
+Py_UNICODE = lltype.UniChar
 
 @cpython_api([Py_UNICODE], rffi.INT_real, error=CANNOT_FAIL)
 def Py_UNICODE_ISSPACE(space, w_ch):
