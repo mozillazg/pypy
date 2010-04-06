@@ -230,7 +230,7 @@ class __extend__(pyframe.PyFrame):
             if opcode == self.opcodedesc.JUMP_ABSOLUTE.index:
                 return self.jump_absolute(oparg, next_instr, ec)
 
-            if 1 or we_are_translated():
+            if we_are_translated():
                 from pypy.rlib import rstack # for resume points
 
                 for opdesc in unrolling_all_opcode_descs:
