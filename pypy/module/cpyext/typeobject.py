@@ -16,7 +16,7 @@ from pypy.module.cpyext.api import cpython_api, cpython_struct, \
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR, \
     Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS, \
-    PyUnicodeObject, CANNOT_FAIL
+    PyUnicodeObject, CANNOT_FAIL, PyBufferProcs
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import FunctionWithFixedCode, StaticMethod
@@ -307,6 +307,20 @@ def subtype_dealloc(space, obj):
     # hopefully this does not clash with the memory model assumed in
     # extension modules
 
+@cpython_api([PyObject, rffi.INTP], lltype.Signed, external=False,
+             error=CANNOT_FAIL)
+def str_segcount(space, w_obj, ref):
+    if ref:
+        ref[0] = space.int_w(space.len(w_obj))
+    return 1
+
+def get_helper(space, func):
+    return llhelper(func.api_func.functype, func.api_func.get_wrapper(space))
+
+def setup_string_buffer_procs(space, pto):
+    c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
+    c_buf.c_bf_getsegcount = get_helper(space, str_segcount)
+    pto.c_tp_as_buffer = c_buf
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def string_dealloc(space, obj):
@@ -338,6 +352,9 @@ def type_dealloc(space, obj):
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_DecRef(space, obj_pto.c_tp_bases)
     Py_DecRef(space, obj_pto.c_tp_cache) # lets do it like cpython
+    if obj_pto.c_tp_as_buffer:
+        lltype.free(obj_pto.c_tp_as_buffer, flavor='raw')
+        # this does not have a refcount
     if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
         Py_DecRef(space, base_pyo)
         lltype.free(obj_pto.c_tp_name, flavor="raw")
@@ -369,6 +386,8 @@ def allocate_type_obj(space, w_type):
     elif space.is_w(w_type, space.w_str):
         pto.c_tp_dealloc = llhelper(string_dealloc.api_func.functype,
                 string_dealloc.api_func.get_wrapper(space))
+        # buffer protocol
+        setup_string_buffer_procs(space, pto)
     elif space.is_w(w_type, space.w_unicode):
         pto.c_tp_dealloc = llhelper(unicode_dealloc.api_func.functype,
                 unicode_dealloc.api_func.get_wrapper(space))
