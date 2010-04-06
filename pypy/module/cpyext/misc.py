@@ -1,14 +1,5 @@
 
-from pypy.module.cpyext.api import cpython_api_c
+from pypy.module.cpyext.api import register_c_function
 
-@cpython_api_c()
-def Py_FatalError():
-    pass
-
-@cpython_api_c()
-def PyOS_snprintf():
-    pass
-
-@cpython_api_c()
-def PyOS_vsnprintf():
-    pass
+for name in ['Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf']:
+    register_c_function(name)
