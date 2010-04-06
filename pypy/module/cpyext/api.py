@@ -26,7 +26,6 @@ from pypy.module.exceptions import interp_exceptions
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.objspace.std.noneobject import W_NoneObject
 
 DEBUG_WRAPPER = False
 
@@ -246,7 +245,7 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
         "List": "space.w_list",
         "Unicode": "space.w_unicode",
         'Bool': 'space.w_bool',
-        'None': 'space.gettypeobject(W_NoneObject.typedef)',
+        'None': 'space.type(space.w_None)',
         }.items():
     GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
