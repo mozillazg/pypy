@@ -94,3 +94,5 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert prog.match(s)
         m = re.search(u"xyz", u"xyzxyz")
         assert m
+        re._cache.clear()
+        re._cache_repl.clear()
