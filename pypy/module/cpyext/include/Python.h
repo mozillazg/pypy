@@ -23,6 +23,7 @@
 # define Py_DEPRECATED(VERSION_UNUSED) __attribute__((__deprecated__))
 # define PyAPI_DATA(RTYPE) extern RTYPE
 #else
+# include <crtdefs.h>
 # define Py_DEPRECATED(VERSION_UNUSED)
 # ifdef Py_BUILD_CORE
 #  define PyAPI_DATA(RTYPE) extern __declspec(dllexport) RTYPE
