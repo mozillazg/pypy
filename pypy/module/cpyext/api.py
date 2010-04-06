@@ -169,7 +169,7 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
                             arg = input_arg
                     elif ARG is PyObject and is_wrapped:
                         # convert to a wrapped object
-                        if rffi._isllptr(input_arg):
+                        if input_arg and rffi._isllptr(input_arg):
                             arg = from_ref(space, input_arg)
                         else:
                             arg = input_arg
@@ -324,8 +324,7 @@ def make_wrapper(space, callable):
             print >>sys.stderr, callable,
         for i, (typ, is_wrapped) in argtypes_enum_ui:
             arg = args[i]
-            if (typ is PyObject and
-                is_wrapped):
+            if typ is PyObject and is_wrapped:
                 if arg:
                     arg_conv = from_ref(space, arg)
                 else:

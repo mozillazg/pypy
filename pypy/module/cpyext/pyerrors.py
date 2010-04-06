@@ -156,6 +156,6 @@ def PyErr_Warn(space, w_category, message):
     calling PyErr_WarnEx() with a stacklevel of 1.
     
     Deprecated; use PyErr_WarnEx() instead."""
-    return PyErr_WarnEx(w_category, message, 1)
+    return PyErr_WarnEx(space, w_category, message, 1)
 
 

@@ -19,7 +19,7 @@ class W_PyCObjectFromVoidPtr(W_PyCObject):
     def __init__(self, space, voidp):
         W_PyCObject.__init__(self, space)
         self.voidp = voidp
-        self.pyo = lltype.nullptr(PyObject.TO)
+        self.pyo = lltype.nullptr(PyCObject.TO)
 
     def set_pycobject(self, pyo):
         self.pyo = pyo
@@ -33,6 +33,7 @@ def PyCObject_FromVoidPtr(space, cobj, destr):
     """Create a PyCObject from the void * cobj.  The destr function
     will be called when the object is reclaimed, unless it is NULL."""
     w_pycobject = space.wrap(W_PyCObjectFromVoidPtr(space, cobj))
+    assert isinstance(w_pycobject, W_PyCObjectFromVoidPtr)
     pyo = make_ref(space, w_pycobject)
     pycobject = rffi.cast(PyCObject, pyo)
     w_pycobject.set_pycobject(pycobject)
