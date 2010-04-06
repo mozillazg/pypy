@@ -319,10 +319,6 @@ def subtype_dealloc(space, obj):
     # hopefully this does not clash with the memory model assumed in
     # extension modules
 
-@specialize.memo()
-def get_helper(space, func):
-    return llhelper(func.api_func.functype, func.api_func.get_wrapper(space))
-
 @cpython_api([PyObject, rffi.INTP], lltype.Signed, external=False,
              error=CANNOT_FAIL)
 def str_segcount(space, w_obj, ref):
@@ -343,8 +339,10 @@ def str_getreadbuffer(space, w_str, segment, ref):
 
 def setup_string_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
-    c_buf.c_bf_getsegcount = get_helper(space, str_segcount)
-    c_buf.c_bf_getreadbuffer = get_helper(space, str_getreadbuffer)
+    c_buf.c_bf_getsegcount = llhelper(str_segcount.api_func.functype,
+                                      str_segcount.api_func.get_wrapper(space))
+    c_buf.c_bf_getreadbuffer = llhelper(str_getreadbuffer.api_func.functype,
+                                 str_getreadbuffer.api_func.get_wrapper(space))
     pto.c_tp_as_buffer = c_buf
 
 @cpython_api([PyObject], lltype.Void, external=False)
