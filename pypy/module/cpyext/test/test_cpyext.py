@@ -195,6 +195,7 @@ class AppTestCpythonExtensionBase:
             state = self.space.fromcache(State)
             for w_obj in state.non_heaptypes:
                 Py_DecRef(self.space, w_obj)
+            state.non_heaptypes[:] = []
         except OperationError:
             pass
         except AttributeError:
