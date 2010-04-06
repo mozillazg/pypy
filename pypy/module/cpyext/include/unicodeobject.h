@@ -13,10 +13,14 @@ typedef struct {
 } PyUnicodeObject;
 
 
-//XXX
-typedef unsigned int Py_UCS4; 
-// pypy only supports only UCS4
+typedef unsigned int Py_UCS4;
+#ifdef HAVE_USABLE_WCHAR_T
+#define PY_UNICODE_TYPE wchar_t
+#elif Py_UNICODE_SIZE == 4
 #define PY_UNICODE_TYPE Py_UCS4
+#else
+#define PY_UNICODE_TYPE unsigned short
+#endif
 typedef PY_UNICODE_TYPE Py_UNICODE;
 
   
