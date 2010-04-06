@@ -4,7 +4,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, \
         PyObject
 from pypy.module.cpyext.typeobjectdefs import unaryfunc, wrapperfunc,\
-        ternaryfunc, PyTypeObjectPtr
+        ternaryfunc, PyTypeObjectPtr, binaryfunc, getattrfunc
 from pypy.module.cpyext.pyobject import from_ref
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
@@ -29,6 +29,22 @@ def wrap_unaryfunc(space, w_self, w_args, func):
     check_num_args(space, w_args, 0)
     return generic_cpy_call(space, func_unary, w_self)
 
+def wrap_binaryfunc(space, w_self, w_args, func):
+    func_binary = rffi.cast(binaryfunc, func)
+    check_num_args(space, w_args, 1)
+    args_w = space.fixedview(w_args)
+    return generic_cpy_call(space, func_binary, w_self, args_w[0])
+
+def wrap_getattr(space, w_self, w_args, func):
+    func_target = rffi.cast(getattrfunc, func)
+    check_num_args(space, w_args, 1)
+    args_w = space.fixedview(w_args)
+    name_ptr = rffi.str2charp(space.str_w(args_w[0]))
+    try:
+        return generic_cpy_call(space, func_target, w_self, name_ptr)
+    finally:
+        lltype.free(name_ptr, flavor="raw")
+
 def wrap_call(space, w_self, w_args, func, w_kwds):
     func_target = rffi.cast(ternaryfunc, func)
     return generic_cpy_call(space, func_target, w_self, w_args, w_kwds)
@@ -48,14 +64,24 @@ PyWrapperFlag_KEYWORDS = 1
 
 # adopted from typeobject.c
 def FLSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC, FLAGS):
-    wrapper = globals().get(WRAPPER, None)
+    wrapper = globals().get(WRAPPER, Ellipsis)
+    if WRAPPER is None:
+        wrapper = None
+    if NAME == "__getattr__":
+        wrapper = wrap_getattr
     function = globals().get(FUNCTION, None)
     slotname = ("c_" + SLOT).split(".")
     assert FLAGS == 0 or FLAGS == PyWrapperFlag_KEYWORDS
     if FLAGS:
+        if wrapper is Ellipsis:
+            def wrapper(space, w_self, w_args, func, w_kwds):
+                raise NotImplementedError("Wrapper for slot " + NAME)
         wrapper1 = None
         wrapper2 = wrapper
     else:
+        if wrapper is Ellipsis:
+            def wrapper(space, w_self, w_args, func):
+                raise NotImplementedError("Wrapper for slot " + NAME)
         wrapper1 = wrapper
         wrapper2 = None
     return (NAME, slotname, function, wrapper1, wrapper2, DOC)
