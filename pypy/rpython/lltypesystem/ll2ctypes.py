@@ -964,7 +964,7 @@ def get_ctypes_trampoline(FUNCTYPE, cfunc):
     def invoke_via_ctypes(*argvalues):
         global _callback_exc_info
         cargs = []
-        for i in range(len(FUNCTYPE.ARGS)):
+        for i in range(len(argvalues)):
             if i not in void_arguments:
                 cvalue = lltype2ctypes(argvalues[i])
                 if i in container_arguments:
