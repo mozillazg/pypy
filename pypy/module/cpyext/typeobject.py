@@ -319,6 +319,10 @@ def subtype_dealloc(space, obj):
     # hopefully this does not clash with the memory model assumed in
     # extension modules
 
+@specialize.memo()
+def get_helper(space, func):
+    return llhelper(func.api_func.functype, func.api_func.get_wrapper(space))
+
 @cpython_api([PyObject, rffi.INTP], lltype.Signed, external=False,
              error=CANNOT_FAIL)
 def str_segcount(space, w_obj, ref):
@@ -326,10 +330,21 @@ def str_segcount(space, w_obj, ref):
         ref[0] = rffi.cast(rffi.INT, space.int_w(space.len(w_obj)))
     return 1
 
+@cpython_api([PyObject, lltype.Signed, rffi.VOIDPP], lltype.Signed,
+             external=False, error=-1)
+def str_getreadbuffer(space, w_str, segment, ref):
+    if segment != 0:
+        raise OperationError(space.w_SystemError, space.wrap
+                             ("accessing non-existent string segment"))
+    pyref = make_ref(space, w_str, steal=True)
+    py_str = rffi.cast(PyStringObject, pyref)
+    ref[0] = py_str.c_buffer
+    return 1
+
 def setup_string_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
-    c_buf.c_bf_getsegcount = llhelper(str_segcount.api_func.functype,
-            str_segcount.api_func.get_wrapper(space))
+    c_buf.c_bf_getsegcount = get_helper(space, str_segcount)
+    c_buf.c_bf_getreadbuffer = get_helper(space, str_getreadbuffer)
     pto.c_tp_as_buffer = c_buf
 
 @cpython_api([PyObject], lltype.Void, external=False)
