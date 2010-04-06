@@ -22,6 +22,8 @@ class Module(MixedModule):
 
     def startup(self, space):
         state = space.fromcache(State)
+        from pypy.module.cpyext.typeobject import setup_new_method_def
+        setup_new_method_def(space)
         if not we_are_translated():
             space.setattr(space.wrap(self),
                           space.wrap('api_lib'),
