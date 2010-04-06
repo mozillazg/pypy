@@ -360,7 +360,8 @@ def make_wrapper(space, callable):
 
         if callable.api_func.restype is PyObject:
             borrowed = callable.api_func.borrowed
-            retval = make_ref(space, retval, borrowed=borrowed)
+            if not rffi._isllptr(retval):
+                retval = make_ref(space, retval, borrowed=borrowed)
             if borrowed:
                 try:
                     add_borrowed_object(space, retval)
