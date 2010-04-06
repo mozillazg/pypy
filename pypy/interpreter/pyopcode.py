@@ -14,9 +14,8 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib import jit, rstackovf
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.tool.stdlib_opcode import (unrolling_opcode_descs,
-    HAVE_ARGUMENT, host_HAVE_ARGUMENT, opcodedesc, host_opcodedesc,
-    opcode_method_names, host_opcode_method_names, )
+from pypy.tool.stdlib_opcode import (
+    bytecode_spec, host_bytecode_spec, unrolling_all_opcode_descs, opmap, host_opmap)
 
 def unaryoperation(operationname):
     """NOT_RPYTHON"""
@@ -164,6 +163,9 @@ class __extend__(pyframe.PyFrame):
     @jit.unroll_safe
     def dispatch_bytecode(self, co_code, next_instr, ec):
         space = self.space
+        cls = self.__class__
+        # PyFrame is really an abstract class
+        assert self.__class__ is not pyframe.PyFrame
         while True:
             self.last_instr = intmask(next_instr)
             if not jit.we_are_jitted():
@@ -228,15 +230,19 @@ class __extend__(pyframe.PyFrame):
             if opcode == self.opcodedesc.JUMP_ABSOLUTE.index:
                 return self.jump_absolute(oparg, next_instr, ec)
 
-            if we_are_translated():
+            if 1 or we_are_translated():
                 from pypy.rlib import rstack # for resume points
 
-                for opdesc in unrolling_opcode_descs:
+                for opdesc in unrolling_all_opcode_descs:
                     # static checks to skip this whole case if necessary
+                    if opdesc.bytecode_spec is not self.bytecode_spec:
+                        continue
                     if not opdesc.is_enabled(space):
                         continue
-                    if not hasattr(pyframe.PyFrame, opdesc.methodname):
-                        continue   # e.g. for JUMP_ABSOLUTE, implemented above
+                    if opdesc.methodname in (
+                        'EXTENDED_ARG', 'RETURN_VALUE', 'YIELD_VALUE',
+                        'END_FINALLY', 'JUMP_ABSOLUTE'):
+                        continue   # opcodes implemented above
 
                     if opcode == opdesc.index:
                         # dispatch to the opcode method
@@ -1001,9 +1007,11 @@ class __extend__(pyframe.PyFrame):
 
 
 class __extend__(pyframe.PyPyFrame):
-    opcode_method_names = opcode_method_names
-    opcodedesc = opcodedesc
-    HAVE_ARGUMENT = HAVE_ARGUMENT
+    bytecode_spec = bytecode_spec
+    opcode_method_names = bytecode_spec.method_names
+    opcodedesc = bytecode_spec.opcodedesc
+    opdescmap = bytecode_spec.opdescmap
+    HAVE_ARGUMENT = bytecode_spec.HAVE_ARGUMENT
     
     def BUILD_MAP(self, itemcount, next_instr):
         if itemcount != 0:
@@ -1017,9 +1025,11 @@ class __extend__(pyframe.PyPyFrame):
 host_version_info = sys.version_info
 
 class __extend__(pyframe.HostPyFrame):
-    opcode_method_names = host_opcode_method_names
-    opcodedesc = host_opcodedesc
-    HAVE_ARGUMENT = host_HAVE_ARGUMENT
+    bytecode_spec = host_bytecode_spec
+    opcode_method_names = host_bytecode_spec.method_names
+    opcodedesc = host_bytecode_spec.opcodedesc
+    opdescmap = host_bytecode_spec.opdescmap
+    HAVE_ARGUMENT = host_bytecode_spec.HAVE_ARGUMENT
 
     def BUILD_MAP(self, itemcount, next_instr):
         if host_version_info >= (2, 6):
