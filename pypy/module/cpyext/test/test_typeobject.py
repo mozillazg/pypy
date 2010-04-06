@@ -88,4 +88,6 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         sre_compile._sre = module
         assert sre_compile.MAGIC == module.MAGIC
         import re
-
+        skip("explodes")
+        m = re.search("xyz", "xyzxyz")
+        assert m
