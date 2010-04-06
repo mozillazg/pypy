@@ -39,6 +39,18 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
              }
              Py_INCREF(obj);
              return obj;
+             '''),
+            ('twoopt', 'METH_VARARGS',
+             '''
+             PyObject *a;
+             PyObject *b = NULL;
+             if (!PyArg_ParseTuple(args, "O|O", &a, &b)) {
+                 return NULL;
+             }
+             if (!b) {
+                 b = PyInt_FromLong(42);
+             }
+             return b;
              ''')])
         assert mod.oneargint(1) == 1
         raises(TypeError, mod.oneargint, None)
@@ -49,3 +61,6 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
         res = mod.oneargobject(sentinel)
         raises(TypeError, "mod.oneargobjectandlisttype(sentinel)")
         assert res is sentinel
+        assert mod.twoopt(1) == 42
+        assert mod.twoopt(1, 2) == 2
+        raises(TypeError, mod.twoopt, 1, 2, 3)
