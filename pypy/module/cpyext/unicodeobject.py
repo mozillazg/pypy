@@ -52,7 +52,7 @@ def Py_UNICODE_ISUPPER(space, ch):
 @cpython_api([Py_UNICODE], Py_UNICODE, error=CANNOT_FAIL)
 def Py_UNICODE_TOLOWER(space, ch):
     """Return the character ch converted to lower case."""
-    return unicodedb.tolower(ord(ch))
+    return unichr(unicodedb.tolower(ord(ch)))
 
 @cpython_api([PyObject], rffi.CCHARP, error=CANNOT_FAIL)
 def PyUnicode_AS_DATA(space, ref):
