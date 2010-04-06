@@ -26,6 +26,7 @@ from pypy.module.exceptions import interp_exceptions
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.objspace.std.noneobject import W_NoneObject
 
 DEBUG_WRAPPER = False
 
@@ -245,7 +246,7 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
         "List": "space.w_list",
         "Unicode": "space.w_unicode",
         'Bool': 'space.w_bool',
-        'None': 'space.w_None',
+        'None': 'space.gettypeobject(W_NoneObject.typedef)',
         }.items():
     GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
@@ -418,6 +419,7 @@ def bootstrap_types(space):
     type_pto.c_tp_bases = make_ref(space, space.newtuple([space.w_object]))
     object_pto.c_tp_bases = make_ref(space, space.newtuple([]))
     inherit_slots(space, type_pto, space.w_object)
+
 
 #_____________________________________________________
 # Build the bridge DLL, Allow extension DLLs to call
