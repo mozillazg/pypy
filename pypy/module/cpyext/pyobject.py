@@ -138,7 +138,7 @@ def from_ref(space, ref, recurse=False):
         if ref != ref_type:
             w_type = from_ref(space, ref_type, True)
             if space.is_w(w_type, space.w_str):
-                return force_string(space, ref, True)
+                return force_string(space, ref)
             elif space.is_w(w_type, space.w_type):
                 PyPyType_Ready(space, rffi.cast(PyTypeObjectPtr, ref), None)
                 return from_ref(space, ref, True)
