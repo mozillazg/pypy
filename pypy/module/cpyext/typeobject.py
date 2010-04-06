@@ -148,7 +148,6 @@ def add_operators(space, dict_w, pto):
         if not func:
             continue
         if wrapper_func is None and wrapper_func_kwds is None:
-            os.write(2, method_name + " used by the type but no wrapper function defined!\n")
             continue
         dict_w[method_name] = PyDescr_NewWrapper(space, pto, method_name, wrapper_func,
                 wrapper_func_kwds, doc, func_voidp)
