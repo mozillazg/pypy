@@ -328,7 +328,8 @@ def str_segcount(space, w_obj, ref):
 
 def setup_string_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
-    c_buf.c_bf_getsegcount = llhelper(str_segcount.api_func.functype, str_segcount.api_func.get_wrapper(space))
+    c_buf.c_bf_getsegcount = llhelper(str_segcount.api_func.functype,
+            str_segcount.api_func.get_wrapper(space))
     pto.c_tp_as_buffer = c_buf
 
 @cpython_api([PyObject], lltype.Void, external=False)
@@ -361,10 +362,9 @@ def type_dealloc(space, obj):
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_DecRef(space, obj_pto.c_tp_bases)
     Py_DecRef(space, obj_pto.c_tp_cache) # lets do it like cpython
-    if obj_pto.c_tp_as_buffer:
-        lltype.free(obj_pto.c_tp_as_buffer, flavor='raw')
-        # this does not have a refcount
     if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
+        if obj_pto.c_tp_as_buffer:
+            lltype.free(obj_pto.c_tp_as_buffer, flavor='raw')
         Py_DecRef(space, base_pyo)
         lltype.free(obj_pto.c_tp_name, flavor="raw")
         obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
