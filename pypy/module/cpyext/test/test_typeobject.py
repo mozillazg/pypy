@@ -81,6 +81,7 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
             def baz(self):
                 return self
         assert fuu2(u"abc").baz().escape()
+        raises(TypeError, module.fooType.object_member.__get__, 1)
 
     def test_sre(self):
         module = self.import_module(name='_sre')
