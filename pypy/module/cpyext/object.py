@@ -11,12 +11,20 @@ from pypy.objspace.std.typeobject import W_TypeObject
 import pypy.module.__builtin__.operation as operation
 
 
-@cpython_api([PyObject], PyObject)
-def _PyObject_New(space, w_type):
+@cpython_api([PyTypeObjectPtr], PyObject)
+def _PyObject_New(space, type):
+    try:
+        w_type = from_ref(space, rffi.cast(PyObject, type))
+    except:
+        import pdb; pdb.set_trace()
     if isinstance(w_type, W_PyCTypeObject):
         w_obj = space.allocate_instance(W_ObjectObject, w_type)
         return w_obj
-    assert False, "Please add more cases in get_cls_for_type_object!"
+    assert False, "Please add more cases in _PyObject_New"
+
+@cpython_api([PyTypeObjectPtr, Py_ssize_t], PyObject)
+def _PyObject_NewVar(space, type, size): # XXX use size!
+    return _PyObject_New(space, type)
 
 @cpython_api([rffi.VOIDP_real], lltype.Void)
 def PyObject_Del(space, obj):

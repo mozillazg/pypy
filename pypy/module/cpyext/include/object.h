@@ -410,15 +410,20 @@ manually remove this flag though!
 #define PyObject_INIT_VAR(op, typeobj, size) \
 	( Py_SIZE(op) = (size), PyObject_INIT((op), (typeobj)) )
 
+/*
 #define PyObject_NEW(type, typeobj) \
 ( (type *) PyObject_Init( \
 	(PyObject *) PyObject_MALLOC( _PyObject_SIZE(typeobj) ), (typeobj)) )
+*/
+#define PyObject_NEW PyObject_New
+#define PyObject_NEW_VAR PyObject_NewVar
 
+/*
 #define PyObject_NEW_VAR(type, typeobj, n) \
 ( (type *) PyObject_InitVar( \
       (PyVarObject *) PyObject_MALLOC(_PyObject_VAR_SIZE((typeobj),(n)) ),\
       (typeobj), (n)) )
-
+*/
 
 /* PyPy internal ----------------------------------- */
 int PyPyType_Register(PyTypeObject *);
