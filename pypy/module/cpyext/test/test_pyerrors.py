@@ -54,6 +54,16 @@ class TestExceptions(BaseApiTest):
 
         api.PyErr_Clear()
 
+    def test_SetNone(self, space, api):
+        api.PyErr_SetNone(space.w_KeyError)
+        state = space.fromcache(State)
+        assert space.eq_w(state.exc_type, space.w_KeyError)
+        assert space.eq_w(state.exc_value, space.w_None)
+        api.PyErr_Clear()
+
+        api.PyErr_NoMemory()
+        assert space.eq_w(state.exc_type, space.w_MemoryError)
+        api.PyErr_Clear()
 
 
 class AppTestFetch(AppTestCpythonExtensionBase):
