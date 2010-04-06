@@ -149,3 +149,15 @@ class TestString(BaseApiTest):
         assert py_str.c_buffer[10] == '\x00'
         Py_DecRef(space, ar[0])
         lltype.free(ar, flavor='raw')
+
+    def test_string_buffer(self, space, api):
+        py_str = new_empty_str(space, 10)
+        c_buf = py_str.c_ob_type.c_tp_as_buffer
+        assert c_buf
+        py_obj = rffi.cast(PyObject, py_str)
+        assert c_buf.c_bf_getsegcount(py_obj, lltype.nullptr(rffi.INTP.TO)) == 1
+        ref = lltype.malloc(rffi.INTP.TO, 1, flavor='raw')
+        assert c_buf.c_bf_getsegcount(py_obj, ref) == 1
+        assert ref[0] == 10
+        lltype.free(ref, flavor='raw')
+        Py_DecRef(space, py_obj)
