@@ -25,6 +25,7 @@ from pypy.module import exceptions
 from pypy.module.exceptions import interp_exceptions
 # CPython 2.4 compatibility
 from py.builtin import BaseException
+from pypy.tool.sourcetools import func_with_new_name
 
 DEBUG_WRAPPER = False
 
@@ -132,12 +133,13 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
         error = rffi.cast(restype, error)
 
     def decorate(func):
-        api_function = ApiFunction(argtypes, restype, func, borrowed, error)
-        func.api_func = api_function
         if name is None:
             func_name = func.func_name
         else:
             func_name = name
+            func = func_with_new_name(func, name)
+        api_function = ApiFunction(argtypes, restype, func, borrowed, error)
+        func.api_func = api_function
 
         if error is _NOT_SPECIFIED:
             raise ValueError("function %s has no return value for exceptions"
