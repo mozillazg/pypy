@@ -88,6 +88,9 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         sre_compile._sre = module
         assert sre_compile.MAGIC == module.MAGIC
         import re
-        skip("segfaulting: unsupported METH_KEYWORDS so we get junk")
-        m = re.search("xyz", "xyzxyz")
+        import time
+        s = u"Foo " * 1000 + u"Bar"
+        prog = re.compile(ur"Foo.*Bar")
+        assert prog.match(s)
+        m = re.search(u"xyz", u"xyzxyz")
         assert m
