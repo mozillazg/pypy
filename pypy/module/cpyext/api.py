@@ -290,7 +290,7 @@ cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
 PyUnicodeObjectStruct = lltype.ForwardReference()
 PyUnicodeObject = lltype.Ptr(PyUnicodeObjectStruct)
 PyUnicodeObjectFields = (PyObjectFields +
-    (("buffer", rffi.VOIDP), ("size", Py_ssize_t)))
+    (("buffer", rffi.CWCHARP), ("size", Py_ssize_t)))
 cpython_struct("PyUnicodeObject", PyUnicodeObjectFields, PyUnicodeObjectStruct)
 
 VA_TP_LIST = {}
