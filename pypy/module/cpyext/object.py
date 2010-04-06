@@ -13,18 +13,15 @@ import pypy.module.__builtin__.operation as operation
 
 @cpython_api([PyTypeObjectPtr], PyObject)
 def _PyObject_New(space, type):
-    try:
-        w_type = from_ref(space, rffi.cast(PyObject, type))
-    except:
-        import pdb; pdb.set_trace()
-    if isinstance(w_type, W_PyCTypeObject):
-        w_obj = space.allocate_instance(W_ObjectObject, w_type)
-        return w_obj
-    assert False, "Please add more cases in _PyObject_New"
+    return _PyObject_NewVar(space, type, 0)
 
 @cpython_api([PyTypeObjectPtr, Py_ssize_t], PyObject)
-def _PyObject_NewVar(space, type, size): # XXX use size!
-    return _PyObject_New(space, type)
+def _PyObject_NewVar(space, type, size):
+    w_type = from_ref(space, rffi.cast(PyObject, type))
+    if isinstance(w_type, W_PyCTypeObject):
+        w_obj = space.allocate_instance(W_ObjectObject, w_type)
+        return make_ref(space, w_obj, items=size)
+    assert False, "Please add more cases in _PyObject_New"
 
 @cpython_api([rffi.VOIDP_real], lltype.Void)
 def PyObject_Del(space, obj):
