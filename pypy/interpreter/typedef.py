@@ -301,7 +301,7 @@ check_new_dictionary._dont_inline_ = True
 
 # ____________________________________________________________
 
-@specialize.arg(0, 2)
+@specialize.arg(0)
 def make_descr_typecheck_wrapper(tag, func, extraargs=(), cls=None,
                                  use_closure=False):
     if func is None:
@@ -399,12 +399,12 @@ class GetSetProperty(Wrappable):
     def __init__(self, fget, fset=None, fdel=None, doc=None,
                  cls=None, use_closure=False, tag=None):
         objclass_getter, cls = make_objclass_getter(tag, fget, cls)
-        fget = make_descr_typecheck_wrapper(tag, fget, cls=cls,
-                                            use_closure=use_closure)
-        fset = make_descr_typecheck_wrapper(tag, fset, ('w_value',), cls=cls,
-                                            use_closure=use_closure)
-        fdel = make_descr_typecheck_wrapper(tag, fdel, cls=cls,
-                                            use_closure=use_closure)
+        fget = make_descr_typecheck_wrapper((tag, 0), fget,
+                                            cls=cls, use_closure=use_closure)
+        fset = make_descr_typecheck_wrapper((tag, 1), fset, ('w_value',),
+                                            cls=cls, use_closure=use_closure)
+        fdel = make_descr_typecheck_wrapper((tag, 2), fdel,
+                                            cls=cls, use_closure=use_closure)
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
