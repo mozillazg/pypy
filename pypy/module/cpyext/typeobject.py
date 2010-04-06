@@ -168,12 +168,15 @@ def get_new_method_def(space):
     from pypy.module.cpyext.modsupport import PyMethodDef
     ptr = lltype.malloc(PyMethodDef, flavor="raw", zero=True)
     ptr.c_ml_name = rffi.str2charp("__new__")
-    ptr.c_ml_meth = rffi.cast(PyCFunction,
-        llhelper(tp_new_wrapper.api_func.functype,
-                 tp_new_wrapper.api_func.get_wrapper(space)))
     rffi.setintfield(ptr, 'c_ml_flags', METH_VARARGS | METH_KEYWORDS)
     ptr.c_ml_doc = rffi.str2charp("T.__new__(S, ...) -> a new object with type S, a subtype of T")
     return ptr
+
+def setup_new_method_def(space):
+    ptr = get_new_method_def(space)
+    ptr.c_ml_meth = rffi.cast(PyCFunction,
+        llhelper(tp_new_wrapper.api_func.functype,
+                 tp_new_wrapper.api_func.get_wrapper(space)))
 
 def add_tp_new_wrapper(space, dict_w, pto):
     if "__new__" in dict_w:
