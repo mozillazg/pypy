@@ -51,7 +51,7 @@ class W_GetSetPropertyEx(GetSetProperty):
         if getset.c_set:
             set = GettersAndSetters.setter.im_func
         GetSetProperty.__init__(self, get, set, None, doc,
-                                cls=None, use_closure=True, # XXX cls?
+                                cls=None, use_closure=True,
                                 tag="cpyext_1")
 
 def PyDescr_NewGetSet(space, getset, pto):
@@ -70,7 +70,7 @@ class W_MemberDescr(GetSetProperty):
         if not (flags & structmemberdefs.READONLY):
             set = GettersAndSetters.member_setter.im_func
         GetSetProperty.__init__(self, get, set, del_, doc,
-                                cls=None, use_closure=True, # XXX cls?
+                                cls=None, use_closure=True,
                                 tag="cpyext_2")
 
 def convert_getset_defs(space, dict_w, getsets, pto):
