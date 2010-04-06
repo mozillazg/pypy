@@ -135,12 +135,13 @@ cleanup_ptr(void *ptr)
 	PyMem_FREE(ptr);
 }
 
+#if 0
 static void
 cleanup_buffer(void *ptr)
 {
-  Py_FatalError("cleanup_buffer(void *ptr) unimplemented\n");
-	//PyBuffer_Release((Py_buffer *) ptr);
+	PyBuffer_Release((Py_buffer *) ptr);
 }
+#endif
 
 static int
 addcleanup(void *ptr, PyObject **freelist, void (*destr)(void *))
@@ -1219,7 +1220,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 			inquiry pred = va_arg(*p_va, inquiry);
 			p = va_arg(*p_va, PyObject **);
 			format++;
-			if ((*pred)(arg)) 
+			if ((*pred)(arg))
 				*p = arg;
 			else
 				return converterr("(unspecified)", 
