@@ -163,7 +163,6 @@ class __extend__(pyframe.PyFrame):
     @jit.unroll_safe
     def dispatch_bytecode(self, co_code, next_instr, ec):
         space = self.space
-        cls = self.__class__
         # PyFrame is really an abstract class
         assert self.__class__ is not pyframe.PyFrame
         while True:
