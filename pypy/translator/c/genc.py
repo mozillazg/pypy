@@ -79,8 +79,15 @@ class CCompilerDriver(object):
         self.profbased = profbased
 
     def _build(self, eci=ExternalCompilationInfo(), shared=False):
+        outputfilename = self.outputfilename
+        if shared:
+            if outputfilename:
+                basename = outputfilename
+            else:
+                basename = self.cfiles[0].purebasename
+            outputfilename = 'lib' + basename
         return self.platform.compile(self.cfiles, self.eci.merge(eci),
-                                     outputfilename=self.outputfilename,
+                                     outputfilename=outputfilename,
                                      standalone=not shared)
 
     def build(self, shared=False):
@@ -468,26 +475,33 @@ class CStandaloneBuilder(CBuilder):
             return res.out, res.err
         return res.out
 
-    def build_main_for_shared(self, shared_library_name, entrypoint):
+    def build_main_for_shared(self, shared_library_name, entrypoint, exe_name):
+        import time
+        time.sleep(1)
         self.shared_library_name = shared_library_name
         # build main program
         eci = self.get_eci()
+        kw = {}
+        if self.translator.platform.so_ext == 'so':
+            kw['libraries'] = [self.shared_library_name.purebasename[3:]]
+            kw['library_dirs'] = [self.targetdir]
+        else:
+            kw['libraries'] = [self.shared_library_name.new(ext='')]
         eci = eci.merge(ExternalCompilationInfo(
             separate_module_sources=['''
-                int %s(argc, argv);
+                int %s(int argc, char* argv[]);
 
                 int main(int argc, char* argv[])
-                { %s(argc, argv); }
+                { return %s(argc, argv); }
                 ''' % (entrypoint, entrypoint)
                 ],
-            libraries=[self.shared_library_name.new(ext='')]
+            **kw
             ))
         eci = eci.convert_sources_to_files(
             cache_dir=self.targetdir)
-        outfilename = self.shared_library_name.new(ext='')
         return self.translator.platform.compile(
             [], eci,
-            outputfilename=str(outfilename))
+            outputfilename=exe_name)
 
     def compile(self, exe_name=None):
         assert self.c_source_filename
@@ -510,7 +524,7 @@ class CStandaloneBuilder(CBuilder):
             self.executable_name = compiler.build(shared=shared)
             if shared:
                 self.executable_name = self.build_main_for_shared(
-                    self.executable_name, "pypy_main_startup")
+                    self.executable_name, "pypy_main_startup", exe_name)
             assert self.executable_name
         self._compiled = True
         return self.executable_name

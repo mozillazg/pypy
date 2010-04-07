@@ -589,7 +589,7 @@ class TestStandalone(StandaloneTests):
         # The traceback stops at f() because it's the first function that
         # captures the AssertionError, which makes the program abort.
 
-    def test_shared(self):
+    def test_shared(self, monkeypatch):
         def f(argv):
             print len(argv)
         def entry_point(argv):
@@ -598,6 +598,8 @@ class TestStandalone(StandaloneTests):
         t, cbuilder = self.compile(entry_point, shared=True)
         assert cbuilder.shared_library_name is not None
         assert cbuilder.shared_library_name != cbuilder.executable_name
+        monkeypatch.setenv('LD_LIBRARY_PATH',
+                           cbuilder.shared_library_name.dirpath())
         out, err = cbuilder.cmdexec("a b")
         assert out == "3"
 
