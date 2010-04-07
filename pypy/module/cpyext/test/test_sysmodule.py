@@ -1,14 +1,15 @@
-from pypy.module.cpyext.test.test_api import BaseApiTest
+from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.rpython.lltypesystem import rffi
 
-class TestSysModule(BaseApiTest):
-    def test_sysmodule(self, space, api):
-        version_info = rffi.str2charp("version_info")
-        assert api.PySys_GetObject(version_info)
-        assert not api.PyErr_Occurred()
-        rffi.free_charp(version_info)
+class AppTestSysModule(AppTestCpythonExtensionBase):
+    def test_sysmodule(self):
+        module = self.import_extension('foo', [
+            ("get", "METH_VARARGS",
+             """
+                 char *name = PyString_AsString(PyTuple_GetItem(args, 0));
+                 PyObject *retval = PySys_GetObject(name);
+                 return PyBool_FromLong(retval != NULL);
+             """)])
+        assert module.get("excepthook")
+        assert not module.get("spam_spam_spam")
 
-        i_do_not_exist = rffi.str2charp("i_do_not_exist")
-        assert not api.PySys_GetObject(i_do_not_exist)
-        assert not api.PyErr_Occurred()
-        rffi.free_charp(i_do_not_exist)
