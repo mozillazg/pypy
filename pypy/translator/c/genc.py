@@ -78,14 +78,15 @@ class CCompilerDriver(object):
         self.outputfilename = outputfilename
         self.profbased = profbased
 
-    def _build(self, eci=ExternalCompilationInfo()):
+    def _build(self, eci=ExternalCompilationInfo(), shared=False):
         return self.platform.compile(self.cfiles, self.eci.merge(eci),
-                                     outputfilename=self.outputfilename)
+                                     outputfilename=self.outputfilename,
+                                     standalone=not shared)
 
-    def build(self):
+    def build(self, shared=False):
         if self.profbased:
             return self._do_profbased()
-        return self._build()
+        return self._build(shared=shared)
 
     def _do_profbased(self):
         ProfDriver, args = self.profbased
@@ -252,6 +253,10 @@ class CBuilder(object):
             if CBuilder.have___thread:
                 if not self.config.translation.no__thread:
                     defines['USE___THREAD'] = 1
+            if self.config.translation.shared:
+                defines['PYPY_MAIN_FUNCTION'] = "pypy_main_startup"
+                self.eci = self.eci.merge(ExternalCompilationInfo(
+                    export_symbols=["pypy_main_startup"]))
             self.eci, cfile, extra = gen_source_standalone(db, modulename,
                                                  targetdir,
                                                  self.eci,
@@ -422,6 +427,7 @@ _rpython_startup()
 class CStandaloneBuilder(CBuilder):
     standalone = True
     executable_name = None
+    shared_library_name = None
 
     def getprofbased(self):
         profbased = None
@@ -462,9 +468,33 @@ class CStandaloneBuilder(CBuilder):
             return res.out, res.err
         return res.out
 
-    def compile(self):
+    def build_main_for_shared(self, shared_library_name, entrypoint):
+        self.shared_library_name = shared_library_name
+        # build main program
+        eci = self.get_eci()
+        eci = eci.merge(ExternalCompilationInfo(
+            separate_module_sources=['''
+                int %s(argc, argv);
+
+                int main(int argc, char* argv[])
+                { %s(argc, argv); }
+                ''' % (entrypoint, entrypoint)
+                ],
+            libraries=[self.shared_library_name.new(ext='')]
+            ))
+        eci = eci.convert_sources_to_files(
+            cache_dir=self.targetdir)
+        outfilename = self.shared_library_name.new(ext='')
+        return self.translator.platform.compile(
+            [], eci,
+            outputfilename=str(outfilename))
+
+    def compile(self, exe_name=None):
         assert self.c_source_filename
         assert not self._compiled
+
+        shared = self.config.translation.shared
+
         if (self.config.translation.gcrootfinder == "asmgcc" or
             self.config.translation.force_make):
             extra_opts = []
@@ -475,16 +505,21 @@ class CStandaloneBuilder(CBuilder):
         else:
             compiler = CCompilerDriver(self.translator.platform,
                                        [self.c_source_filename] + self.extrafiles,
-                                       self.eci, profbased=self.getprofbased())
-            self.executable_name = compiler.build()
+                                       self.eci, profbased=self.getprofbased(),
+                                       outputfilename=exe_name)
+            self.executable_name = compiler.build(shared=shared)
+            if shared:
+                self.executable_name = self.build_main_for_shared(
+                    self.executable_name, "pypy_main_startup")
             assert self.executable_name
         self._compiled = True
         return self.executable_name
 
-    def gen_makefile(self, targetdir):
+    def gen_makefile(self, targetdir, exe_name=None):
         cfiles = [self.c_source_filename] + self.extrafiles
         mk = self.translator.platform.gen_makefile(cfiles, self.eci,
-                                                   path=targetdir)
+                                                   path=targetdir,
+                                                   exe_name=exe_name)
         if self.has_profopt():
             profopt = self.config.translation.profopt
             mk.definition('ABS_TARGET', '$(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))')
