@@ -71,7 +71,7 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("geninterp")
 py.log.setconsumer("geninterp", ansi_log)
 
-GI_VERSION = '1.2.7'  # bump this for substantial changes
+GI_VERSION = '1.2.8'  # bump this for substantial changes
 # ____________________________________________________________
 
 try:
@@ -1475,10 +1475,7 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
     """
     # create something like a module
     if type(sourcetext) is str:
-        if filename is None: 
-            code = py.code.Source(sourcetext).compile()
-        else: 
-            code = NiceCompile(filename)(sourcetext)
+        code = py.code.Source(sourcetext).compile()
     else:
         # assume we got an already compiled source
         code = sourcetext

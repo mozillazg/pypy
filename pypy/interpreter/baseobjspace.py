@@ -13,7 +13,7 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib.timer import DummyTimer, Timer
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib import jit
-import os, sys
+import os, sys, py
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
 
@@ -948,12 +948,15 @@ class ObjSpace(object):
             raise TypeError, 'space.eval(): expected a string, code or PyCode object'
         return expression.exec_code(self, w_globals, w_locals)
 
-    def exec_(self, statement, w_globals, w_locals, hidden_applevel=False):
+    def exec_(self, statement, w_globals, w_locals, hidden_applevel=False,
+              filename=None):
         "NOT_RPYTHON: For internal debugging."
         import types
+        if filename is None:
+            filename = '?'
         from pypy.interpreter.pycode import PyCode
         if isinstance(statement, str):
-            statement = compile(statement, '?', 'exec')
+            statement = py.code.Source(statement).compile()
         if isinstance(statement, types.CodeType):
             statement = PyCode._from_code(self, statement,
                                           hidden_applevel=hidden_applevel)
