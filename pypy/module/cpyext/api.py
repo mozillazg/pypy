@@ -251,7 +251,7 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
 
 def get_structtype_for_ctype(ctype):
     from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
-    return {"PyObject": PyObject, "PyTypeObject*": PyTypeObjectPtr}[ctype]
+    return {"PyObject*": PyObject, "PyTypeObject*": PyTypeObjectPtr}[ctype]
 
 PyTypeObject = lltype.ForwardReference()
 PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
