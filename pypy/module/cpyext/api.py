@@ -526,6 +526,7 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
     # implement function callbacks and generate function decls
     functions = []
     pypy_decls = []
+    pypy_decls.append("#ifndef PYPY_STANDALONE\n")
     for name, func in sorted(FUNCTIONS.iteritems()):
         restype = db.gettype(func.restype).replace('@', '')
         args = []
@@ -541,11 +542,13 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
                                  for i in range(len(func.argtypes)))
             body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
             functions.append('%s\n%s\n' % (header, body))
-    pypy_decls.append("#ifndef PYPY_STANDALONE\n")
     for name, (typ, expr) in GLOBALS.iteritems():
-        if not globals_are_pointers and "#" in name:
+        name_clean = name.replace("#", "")
+        if not globals_are_pointers:
             typ = typ.replace("*", "")
-        pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
+        pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name_clean))
+        if not globals_are_pointers and "#" not in name:
+            pypy_decls.append("#define %s &%s" % (name, name,))
     for name in VA_TP_LIST:
         name_no_star = process_va_name(name)
         header = ('%s pypy_va_get_%s(va_list* vp)' %
