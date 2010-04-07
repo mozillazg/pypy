@@ -90,10 +90,15 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert sre_compile.MAGIC == module.MAGIC
         import re
         import time
-        s = u"Foo " * 1000 + u"Bar"
-        prog = re.compile(ur"Foo.*Bar")
-        assert prog.match(s)
-        m = re.search(u"xyz", u"xyzxyz")
-        assert m
-        re._cache.clear()
-        re._cache_repl.clear()
+        try:
+            s = u"Foo " * 1000 + u"Bar"
+            prog = re.compile(ur"Foo.*Bar")
+            assert prog.match(s)
+            m = re.search(u"xyz", u"xyzxyz")
+            assert m
+            skip("Crashing in fijals code")
+            m = re.search("xyz", "xyzxyz")
+            assert m
+        finally:
+            re._cache.clear()
+            re._cache_repl.clear()
