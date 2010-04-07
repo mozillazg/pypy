@@ -117,6 +117,11 @@ class PyCode(eval.Code):
 
         self._compute_flatcall()
 
+    def _freeze_(self):
+        if self.magic == cpython_magic:
+            raise Exception("CPython host codes should not be rendered")
+        # XXX since PyCode is an immutable object, why not return True?
+        return False
 
     def _init_flags(self):
         co_code = self.co_code
