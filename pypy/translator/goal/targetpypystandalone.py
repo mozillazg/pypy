@@ -233,8 +233,8 @@ class PyPyTarget(object):
 
         # manually imports app_main.py
         filename = os.path.join(this_dir, 'app_main.py')
-        w_dict = space.newdict()
-        space.exec_(open(filename).read(), w_dict, w_dict)
+        app = gatway.applevel(open(filename).read(), 'app_main.py', 'app_main')
+        w_dict = app.getwdict()
         entry_point = create_entry_point(space, w_dict)
 
         return entry_point, None, PyPyAnnotatorPolicy(single_space = space)
