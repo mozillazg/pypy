@@ -36,6 +36,10 @@ class BasePosix(Platform):
                                  cwd=str(cfile.dirpath()))
         return oname
 
+    def _link_args_from_eci(self, eci, standalone):
+        eci = eci.convert_exportsymbols_to_file()
+        return Platform._link_args_from_eci(self, eci, standalone)
+
     def _link(self, cc, ofiles, link_args, standalone, exe_name):
         args = [str(ofile) for ofile in ofiles] + link_args
         args += ['-o', str(exe_name)]
