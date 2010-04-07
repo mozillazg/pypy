@@ -956,7 +956,8 @@ class ObjSpace(object):
             filename = '?'
         from pypy.interpreter.pycode import PyCode
         if isinstance(statement, str):
-            statement = py.code.Source(statement).compile()
+            compiler = self.createcompiler()
+            statement = compiler.compile(statement, filename, 'exec', 0)
         if isinstance(statement, types.CodeType):
             statement = PyCode._from_code(self, statement,
                                           hidden_applevel=hidden_applevel)
@@ -1177,7 +1178,7 @@ class AppExecCache(SpaceCache):
         assert source.startswith('('), "incorrect header in:\n%s" % (source,)
         source = py.code.Source("def anonymous%s\n" % source)
         w_glob = space.newdict()
-        space.exec_(source.compile(), w_glob, w_glob)
+        space.exec_(str(source), w_glob, w_glob)
         return space.getitem(w_glob, space.wrap('anonymous'))
 
 class DummyLock(object):

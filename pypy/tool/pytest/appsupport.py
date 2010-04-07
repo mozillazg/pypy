@@ -87,7 +87,7 @@ class AppExceptionInfo(py.code.ExceptionInfo):
         if debug_excs:
             self._excinfo = debug_excs[0]
 
-    def exconly(self, tryshort=True): 
+    def exconly(self, tryshort=True):
         return '(application-level) ' + self.operr.errorstr(self.space)
 
     def errisinstance(self, exc): 

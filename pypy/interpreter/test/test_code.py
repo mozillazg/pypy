@@ -10,7 +10,7 @@ class AppTestCodeIntrospection:
         if py.test.config.option.runappdirect:
             filename = __file__
         else:
-            filename = baseobjspace.__file__
+            filename = gateway.__file__
 
         if filename[-3:] != '.py':
             filename = filename[:-1]
