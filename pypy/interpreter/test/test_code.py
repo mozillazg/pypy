@@ -1,5 +1,6 @@
 from pypy.conftest import gettestobjspace
 from pypy.interpreter import gateway
+from pypy.interpreter import baseobjspace
 import py
 
 class AppTestCodeIntrospection:
@@ -9,7 +10,7 @@ class AppTestCodeIntrospection:
         if py.test.config.option.runappdirect:
             filename = __file__
         else:
-            filename = gateway.__file__
+            filename = baseobjspace.__file__
 
         if filename[-3:] != '.py':
             filename = filename[:-1]
