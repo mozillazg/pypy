@@ -522,7 +522,7 @@ def generate_macros(export_symbols, rename=True, do_deref=True):
     pypy_macros_h = udir.join('pypy_macros.h')
     pypy_macros_h.write('\n'.join(pypy_macros))
 
-def generate_decls_and_callbacks(db, export_symbols, api_struct=True):
+def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_are_pointers=True):
     # implement function callbacks and generate function decls
     functions = []
     pypy_decls = []
@@ -543,6 +543,8 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True):
             functions.append('%s\n%s\n' % (header, body))
     pypy_decls.append("#ifndef PYPY_STANDALONE\n")
     for name, (typ, expr) in GLOBALS.iteritems():
+        if not globals_are_pointers:
+            typ = typ.replace("*", "")
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
     for name in VA_TP_LIST:
         name_no_star = process_va_name(name)
@@ -598,7 +600,7 @@ def setup_library(space, rename=False):
 
     generate_macros(export_symbols, rename, False)
 
-    functions = generate_decls_and_callbacks(db, [], api_struct=False)
+    functions = generate_decls_and_callbacks(db, [], api_struct=False, globals_are_pointers=False)
     code = "#include <Python.h>\n" + "\n".join(functions)
 
     eci = build_eci(False, export_symbols, code)
