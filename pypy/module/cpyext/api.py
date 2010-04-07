@@ -230,9 +230,9 @@ FUNCTIONS_C = [
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
-    'Py_None': ('PyObject*', 'space.w_None'),
-    'Py_True': ('PyObject*', 'space.w_True'),
-    'Py_False': ('PyObject*', 'space.w_False'),
+    '_Py_NoneStruct#': ('PyObject*', 'space.w_None'),
+    '_Py_TrueStruct#': ('PyObject*', 'space.w_True'),
+    '_Py_ZeroStruct#': ('PyObject*', 'space.w_False'),
     }
 
 for exc_name in exceptions.Module.interpleveldefs.keys():
@@ -251,7 +251,7 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
 
 def get_structtype_for_ctype(ctype):
     from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
-    return {"PyObject*": PyObject, "PyTypeObject*": PyTypeObjectPtr}[ctype]
+    return {"PyObject": PyObject, "PyTypeObject*": PyTypeObjectPtr}[ctype]
 
 PyTypeObject = lltype.ForwardReference()
 PyTypeObjectPtr = lltype.Ptr(PyTypeObject)
@@ -543,7 +543,7 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
             functions.append('%s\n%s\n' % (header, body))
     pypy_decls.append("#ifndef PYPY_STANDALONE\n")
     for name, (typ, expr) in GLOBALS.iteritems():
-        if not globals_are_pointers:
+        if not globals_are_pointers and "#" in name:
             typ = typ.replace("*", "")
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name.replace("#", "")))
     for name in VA_TP_LIST:
