@@ -332,13 +332,13 @@ def str_segcount(space, w_obj, ref):
 @cpython_api([PyObject, lltype.Signed, rffi.VOIDPP], lltype.Signed,
              external=False, error=-1)
 def str_getreadbuffer(space, w_str, segment, ref):
+    from pypy.module.cpyext.stringobject import PyString_AsString
     if segment != 0:
         raise OperationError(space.w_SystemError, space.wrap
                              ("accessing non-existent string segment"))
     pyref = make_ref(space, w_str, steal=True)
-    py_str = rffi.cast(PyStringObject, pyref)
-    ref[0] = py_str.c_buffer
-    return 1
+    ref[0] = PyString_AsString(space, pyref)
+    return 1 # XXX is this correct?
 
 def setup_string_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
