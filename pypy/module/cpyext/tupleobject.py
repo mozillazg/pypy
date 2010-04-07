@@ -1,3 +1,4 @@
+from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, Py_ssize_t, CANNOT_FAIL,
                                     build_type_checkers)
@@ -38,3 +39,10 @@ def PyTuple_GET_SIZE(space, w_t):
     assert isinstance(w_t, W_TupleObject)
     return len(w_t.wrappeditems)
 
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PyTuple_Size(space, ref):
+    """Take a pointer to a tuple object, and return the size of that tuple."""
+    if not PyTuple_Check(space, ref):
+        raise OperationError(space.w_TypeError,
+                             space.wrap("expected tuple object"))
+    return PyTuple_GET_SIZE(space, ref)

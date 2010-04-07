@@ -5519,14 +5519,6 @@ def PyTuple_Pack(space, n, ):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject], Py_ssize_t)
-def PyTuple_Size(space, p):
-    """Take a pointer to a tuple object, and return the size of that tuple.
-    
-    This function returned an int type. This might require changes
-    in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, Py_ssize_t], PyObject, borrowed=True)
 def PyTuple_GET_ITEM(space, p, pos):
     """Like PyTuple_GetItem(), but does no checking of its arguments.
