@@ -1040,7 +1040,8 @@ class __extend__(pyframe.PyPyFrame):
     def STORE_MAP(self, zero, next_instr):
         raise BytecodeCorruption
 
-host_version_info = sys.version_info
+# Need to cast 2.7's "named struct" to a plain struct
+host_version_info = tuple(sys.version_info)
 
 class __extend__(pyframe.HostPyFrame):
     """
@@ -1106,10 +1107,25 @@ class __extend__(pyframe.HostPyFrame):
             v = self.peekvalue(oparg - 1)
         self.space.call_method(v, 'append', w)
     
-    # XXX: Missing 2.7 opcodes:
-    # - BUILD_SET, SET_ADD: set literals and set comprehensions
-    # - MAP_ADD: dict comprehensions
-    # - SETUP_WITH: `with` statement
+    # XXX Unimplemented 2.7 opcodes ----------------
+
+    # Set literals, set comprehensions
+
+    def BUILD_SET(self, oparg, next_instr):
+        raise NotImplementedError("BUILD_SET")
+
+    def SET_ADD(self, oparg, next_instr):
+        raise NotImplementedError("SET_ADD")
+
+    # Dict comprehensions
+
+    def MAP_ADD(self, oparg, next_instr):
+        raise NotImplementedError("MAP_ADD")
+
+    # `with` statement
+
+    def SETUP_WITH(self, oparg, next_instr):
+        raise NotImplementedError("SETUP_WITH")
 
 
 ### ____________________________________________________________ ###
