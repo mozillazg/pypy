@@ -161,7 +161,7 @@ def tp_new_wrapper(space, w_self, w_args, w_kwds): # XXX untested code
     args_w = space.listview(w_args)[:]
     args_w.insert(0, w_self)
     w_args_new = space.newlist(args_w)
-    return space.call(space.lookup(space.w_type, space.wrap("__new__")), w_args_new, w_kwds)
+    return space.call(space.lookup(space.w_type, "__new__"), w_args_new, w_kwds)
 
 @specialize.memo()
 def get_new_method_def(space):
