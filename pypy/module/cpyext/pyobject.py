@@ -163,6 +163,10 @@ def Py_DecRef(space, obj):
     if obj.c_ob_refcnt == 0:
         state = space.fromcache(State)
         ptr = rffi.cast(ADDR, obj)
+        try:
+            del state.borrowed_objects[ptr]
+        except KeyError:
+            pass
         if ptr not in state.py_objects_r2w:
             w_type = from_ref(space, rffi.cast(PyObject, obj.c_ob_type))
             if space.is_w(w_type, space.w_str) or space.is_w(w_type, space.w_unicode):
