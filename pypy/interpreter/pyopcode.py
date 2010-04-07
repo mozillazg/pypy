@@ -1105,6 +1105,11 @@ class __extend__(pyframe.HostPyFrame):
         else:
             v = self.peekvalue(oparg - 1)
         self.space.call_method(v, 'append', w)
+    
+    # XXX: Missing 2.7 opcodes:
+    # - BUILD_SET, SET_ADD: set literals and set comprehensions
+    # - MAP_ADD: dict comprehensions
+    # - SETUP_WITH: `with` statement
 
 
 ### ____________________________________________________________ ###
