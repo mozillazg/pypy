@@ -4,20 +4,14 @@
   - Those tasks are necessary to be able to call slots from C code correctly.
   - Additionally, implement further slot wrappers. This is necessary to call
     slots of PTOs defined in C.
+ - Complete the Members support.
 
  - Use a WeakKeyDictionary to count how often a PyObject is allocated for
    a given wrapped object and use this to assess whether optimizations are
    useful
 
- - lltype.free in PyObject_Del() sometimes raise an exception (but all
-   tests pass). FIXED?
-   - Reported by Amaury
-   - Alexander cannot reproduce it
-
  - replace @cpython_api(external=False) by another explicit name: all
    it does is a lltype function pointer, no C code involved.
-
- - Implement Members.
 
  - Fix distutil's build_ext to work with cpyext.
 
@@ -26,4 +20,4 @@
  - refactor management of py_objects_r2w and py_objects_w2r, this can
    probably be expressed in terms of _PyObject_GC_TRACK macros.
 
- - ob_type should be a PyTypeObject.
+ - Test cpyext together with the jit.
