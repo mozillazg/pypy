@@ -812,6 +812,9 @@ class interp2app_temp(interp2app):
 # and now for something completely different ... 
 #
 
+class MyStr(str):
+    pass
+
 class ApplevelClass:
     """NOT_RPYTHON
     A container for app-level source code that should be executed
@@ -822,6 +825,11 @@ class ApplevelClass:
     hidden_applevel = True
 
     def __init__(self, source, filename=None, modname='__builtin__'):
+        # HAAACK (but a good one)
+        if filename is None:
+            f = sys._getframe(2)
+            filename = MyStr('<%s:%d>' % (f.f_code.co_filename, f.f_lineno))
+            filename.__source__ = py.code.Source(source)
         self.filename = filename
         self.source = str(py.code.Source(source).deindent())
         self.modname = modname
