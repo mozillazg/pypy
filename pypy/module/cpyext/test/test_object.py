@@ -61,3 +61,6 @@ class TestObject(BaseApiTest):
         w_d = space.newdict()
         space.setitem(w_d, space.wrap("a key!"), space.wrap(72))
         assert space.unwrap(api.PyObject_GetItem(w_d, space.wrap("a key!"))) == 72
+
+    def test_size(self, space, api):
+        assert api.PyObject_Size(space.newlist([space.w_None])) == 1
