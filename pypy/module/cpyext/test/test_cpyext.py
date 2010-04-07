@@ -196,6 +196,12 @@ class AppTestCpythonExtensionBase:
             for w_obj in state.non_heaptypes:
                 Py_DecRef(self.space, w_obj)
             state.non_heaptypes[:] = []
+            while state.borrowed_objects:
+                addr = state.borrowed_objects.keys()[0]
+                w_obj = state.py_objects_r2w[addr]
+                Py_DecRef(self.space, w_obj)
+            state.borrowed_objects = {}
+            state.borrow_mapping = {}
         except OperationError:
             pass
         except AttributeError:
