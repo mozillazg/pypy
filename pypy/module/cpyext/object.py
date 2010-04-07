@@ -67,7 +67,7 @@ def PyObject_ClearWeakRefs(space, w_object):
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyObject_Size(space, w_obj):
-    return space.len(w_obj)
+    return space.int_w(space.len(w_obj))
 
 @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyCallable_Check(space, w_obj):
