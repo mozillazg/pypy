@@ -324,6 +324,7 @@ class TranslationDriver(SimpleTaskEngine):
 
         if self.entry_point:
             s = annotator.build_types(self.entry_point, self.inputtypes)
+            translator.entry_point_graph = annotator.bookkeeper.getdesc(self.entry_point).getuniquegraph()
         else:
             s = None
 
