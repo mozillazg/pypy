@@ -5409,12 +5409,6 @@ def PyOS_setsig(space, i, h):
     alias for void (*)(int)."""
     raise NotImplementedError
 
-@cpython_api([rffi.CCHARP], PyObject, borrowed=True)
-def PySys_GetObject(space, name):
-    """Return the object name from the sys module or NULL if it does
-    not exist, without setting an exception."""
-    raise NotImplementedError
-
 @cpython_api([rffi.CCHARP, {FILE*}], {FILE*})
 def PySys_GetFile(space, name, def):
     """Return the FILE* associated with the object name in the
