@@ -516,12 +516,16 @@ class TranslationDriver(SimpleTaskEngine):
             exename = mkexename(self.c_entryp)
             newexename = self.compute_exe_name()
             shutil.copy(str(exename), str(newexename))
+            if self.cbuilder.shared_library_name is not None:
+                soname = self.cbuilder.shared_library_name
+                newsoname = newexename.new(basename=soname.basename)
+                shutil.copy(str(soname), str(newsoname))
             self.c_entryp = newexename
         self.log.info("created: %s" % (self.c_entryp,))
 
     def task_compile_c(self): # xxx messy
         cbuilder = self.cbuilder
-        cbuilder.compile()
+        cbuilder.compile(exe_name=self.compute_exe_name().basename)
 
         if self.standalone:
             self.c_entryp = cbuilder.executable_name
