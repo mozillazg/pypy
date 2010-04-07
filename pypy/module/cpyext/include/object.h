@@ -46,6 +46,7 @@ typedef struct {
 #define Py_TYPE(ob)		(((PyObject*)(ob))->ob_type)
 #define Py_SIZE(ob)		(((PyVarObject*)(ob))->ob_size)
 
+#define Py_None (&_Py_NoneStruct)
 
 struct _typeobject;
 typedef void (*freefunc)(void *);
