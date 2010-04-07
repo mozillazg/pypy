@@ -26,6 +26,7 @@ from pypy.module.exceptions import interp_exceptions
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rpython.lltypesystem.lloperation import llop
 
 DEBUG_WRAPPER = False
 
@@ -333,6 +334,9 @@ def make_wrapper(space, callable):
         from pypy.module.cpyext.pyobject import make_ref, from_ref
         from pypy.module.cpyext.pyobject import add_borrowed_object
         from pypy.module.cpyext.pyobject import NullPointerException
+        # we hope that malloc removal removes the newtuple() that is
+        # inserted exactly here by the varargs specializer
+        llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
         boxed_args = ()
         if DEBUG_WRAPPER:
             print >>sys.stderr, callable,
