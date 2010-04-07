@@ -338,7 +338,7 @@ def str_getreadbuffer(space, w_str, segment, ref):
                              ("accessing non-existent string segment"))
     pyref = make_ref(space, w_str, steal=True)
     ref[0] = PyString_AsString(space, pyref)
-    return 1 # XXX is this correct?
+    return space.int_w(space.len(w_str))
 
 def setup_string_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)

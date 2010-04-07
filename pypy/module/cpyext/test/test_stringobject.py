@@ -161,6 +161,6 @@ class TestString(BaseApiTest):
         assert ref[0] == 10
         lltype.free(ref, flavor='raw')
         ref = lltype.malloc(rffi.VOIDPP.TO, 1, flavor='raw')
-        assert c_buf.c_bf_getreadbuffer(py_obj, 0, ref)
+        assert c_buf.c_bf_getreadbuffer(py_obj, 0, ref) == 10
         lltype.free(ref, flavor='raw')
         Py_DecRef(space, py_obj)
