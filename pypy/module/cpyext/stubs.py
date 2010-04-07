@@ -5666,11 +5666,6 @@ def Py_UNICODE_ISALPHA(space, ch):
     raise NotImplementedError
 
 @cpython_api([{Py_UNICODE}], {Py_UNICODE})
-def Py_UNICODE_TOUPPER(space, ch):
-    """Return the character ch converted to upper case."""
-    raise NotImplementedError
-
-@cpython_api([{Py_UNICODE}], {Py_UNICODE})
 def Py_UNICODE_TOTITLE(space, ch):
     """Return the character ch converted to title case."""
     raise NotImplementedError

@@ -48,3 +48,6 @@ class TestUnicode(BaseApiTest):
         assert api.Py_UNICODE_TOLOWER(u'ä') == u'ä'
         assert api.Py_UNICODE_TOLOWER(u'Ä') == u'ä'
 
+    def test_TOUPPER(self, space, api):
+        assert api.Py_UNICODE_TOUPPER(u'ä') == u'Ä'
+        assert api.Py_UNICODE_TOUPPER(u'Ä') == u'Ä'
