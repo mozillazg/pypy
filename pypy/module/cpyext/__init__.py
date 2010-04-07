@@ -53,6 +53,7 @@ import pypy.module.cpyext.mapping
 import pypy.module.cpyext.iterator
 import pypy.module.cpyext.unicodeobject
 import pypy.module.cpyext.pycobject
+import pypy.module.cpyext.sysmodule
 
 # now that all rffi_platform.Struct types are registered, configure them
 api.configure_types()
