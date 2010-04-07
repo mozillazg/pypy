@@ -241,7 +241,7 @@ class PyPyTarget(object):
 
     def interface(self, ns):
         for name in ['take_options', 'handle_config', 'print_help', 'target',
-                     'jitpolicy',
+                     'jitpolicy', 'get_entry_point',
                      'get_additional_config_options']:
             ns[name] = getattr(self, name)
 
