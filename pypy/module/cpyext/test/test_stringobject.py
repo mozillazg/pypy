@@ -125,7 +125,20 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
             }
             ''')
         res = module.test_string_format_v(1, "xyz")
-        print res
+        assert res == "bla 1 ble xyz\n"
+        
+    def test_format(self):
+        module = self.import_extension('foo', [
+            ("test_string_format", "METH_VARARGS",
+             '''
+                 return PyString_FromFormat("bla %d ble %s\\n",
+                        PyInt_AsLong(PyTuple_GetItem(args, 0)),
+                        PyString_AsString(PyTuple_GetItem(args, 1)));
+             '''
+             )
+            ])
+        res = module.test_string_format(1, "xyz")
+        assert res == "bla 1 ble xyz\n"
 
 class TestString(BaseApiTest):
     def test_string_resize(self, space, api):
