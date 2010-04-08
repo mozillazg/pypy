@@ -428,7 +428,7 @@ _rpython_startup()
         if isinstance(self._module, isolate.Isolate):
             isolate.close_isolate(self._module)
 
-    def gen_makefile(self, targetdir):
+    def gen_makefile(self, targetdir, exe_name=None):
         pass
 
 class CStandaloneBuilder(CBuilder):
@@ -531,9 +531,11 @@ class CStandaloneBuilder(CBuilder):
 
     def gen_makefile(self, targetdir, exe_name=None):
         cfiles = [self.c_source_filename] + self.extrafiles
-        mk = self.translator.platform.gen_makefile(cfiles, self.eci,
-                                                   path=targetdir,
-                                                   exe_name=exe_name)
+        mk = self.translator.platform.gen_makefile(
+            cfiles, self.eci,
+            path=targetdir, exe_name=exe_name,
+            shared=self.config.translation.shared)
+
         if self.has_profopt():
             profopt = self.config.translation.profopt
             mk.definition('ABS_TARGET', '$(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))')
@@ -577,6 +579,11 @@ class CStandaloneBuilder(CBuilder):
             mk.definition('GCMAPFILES', gcmapfiles)
             mk.definition('DEBUGFLAGS', '-O2 -fomit-frame-pointer -g')
 
+            if self.config.translation.shared:
+                mk.definition('PYPY_MAIN_FUNCTION', "pypy_main_startup")
+            else:
+                mk.definition('PYPY_MAIN_FUNCTION', "main")
+
             if sys.platform == 'win32':
                 python = sys.executable.replace('\\', '/') + ' '
             else:
@@ -602,7 +609,7 @@ class CStandaloneBuilder(CBuilder):
                         'cmd /c $(MASM) /nologo /Cx /Cp /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
                 mk.rule('.c.gcmap', '',
                         ['$(CC) /nologo $(ASM_CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
-                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc -t $*.s > $@']
+                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc -m$(PYPY_MAIN_FUNCTION) -t $*.s > $@']
                         )
                 mk.rule('gcmaptable.c', '$(GCMAPFILES)',
                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc $(GCMAPFILES) > $@')
@@ -611,7 +618,7 @@ class CStandaloneBuilder(CBuilder):
                 mk.definition('OBJECTS', '$(ASMLBLFILES) gcmaptable.s')
                 mk.rule('%.s', '%.c', '$(CC) $(CFLAGS) $(CFLAGSEXTRA) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)')
                 mk.rule('%.lbl.s %.gcmap', '%.s',
-                        python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $*.gcmap')
+                        python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -m$(PYPY_MAIN_FUNCTION) -t $< > $*.gcmap')
                 mk.rule('gcmaptable.s', '$(GCMAPFILES)',
                         python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
 
