@@ -1,6 +1,5 @@
 from pypy.conftest import gettestobjspace
 from pypy.interpreter import gateway
-from pypy.interpreter import baseobjspace
 import py
 
 class AppTestCodeIntrospection:
