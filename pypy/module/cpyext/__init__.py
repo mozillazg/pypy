@@ -2,7 +2,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext import api
-
+from pypy.rpython.lltypesystem import rffi, lltype
 
 class Module(MixedModule):
     interpleveldefs = {
@@ -30,6 +30,9 @@ class Module(MixedModule):
                           space.wrap(state.api_lib))
         else:
             state.init_r2w_from_w2r()
+        
+        for func in api.INIT_FUNCTIONS:
+            func()
 
 # import these modules to register api functions by side-effect
 import pypy.module.cpyext.pyobject
