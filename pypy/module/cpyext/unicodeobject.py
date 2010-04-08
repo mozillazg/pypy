@@ -3,7 +3,9 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
 from pypy.module.cpyext.api import (CANNOT_FAIL, Py_ssize_t, PyUnicodeObject,
                                     build_type_checkers, cpython_api)
+from pypy.module.cpyext.pyerrors import PyErr_BadArgument
 from pypy.module.cpyext.pyobject import PyObject, from_ref
+from pypy.module.cpyext.stringobject import PyString_Check
 from pypy.module.sys.interp_encoding import setdefaultencoding
 from pypy.objspace.std import unicodeobject, unicodetype
 
@@ -128,3 +130,20 @@ def PyUnicode_SetDefaultEncoding(space, encoding):
     setdefaultencoding(space, w_encoding)
     default_encoding[0] = '\x00'
     return 0
+
+@cpython_api([PyObject, rffi.CCHARP, rffi.CCHARP], PyObject)
+def PyUnicode_AsEncodedString(space, w_unicode, encoding, errors):
+    """Encode a Unicode object and return the result as Python string object.
+    encoding and errors have the same meaning as the parameters of the same name
+    in the Unicode encode() method. The codec to be used is looked up using
+    the Python codec registry. Return NULL if an exception was raised by the
+    codec."""
+    if not PyUnicode_Check(space, w_unicode):
+        PyErr_BadArgument()
+
+    w_encoding = w_errors = None
+    if encoding:
+        w_encoding = rffi.charp2str(encoding)
+    if errors:
+        w_errors = rffi.charp2str(encoding)
+    return unicodetype.encode_object(space, w_unicode, w_encoding, w_errors)

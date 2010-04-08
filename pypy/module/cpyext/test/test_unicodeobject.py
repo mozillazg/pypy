@@ -39,6 +39,14 @@ class TestUnicode(BaseApiTest):
         raises(TypeError, api.PyUnicode_AsUnicode(space.wrap('spam')))
         api.PyErr_Clear()
 
+        utf_8 = rffi.str2charp('utf-8')
+        encoded = api.PyUnicode_AsEncodedString(space.wrap(u'späm'),
+                                                utf_8, None)
+        assert space.unwrap(encoded) == 'sp\xc3\xa4m'
+        raises(TypeError, api.PyUnicode_AsEncodedString,
+               space.wrap(''), None, None)
+        rffi.free_charp(utf_8)
+
     def test_IS(self, space, api):
         for char in [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f,
                      0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002,
