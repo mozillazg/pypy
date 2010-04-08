@@ -32,6 +32,7 @@ DEBUG_WRAPPER = False
 
 # update these for other platforms
 Py_ssize_t = lltype.Signed
+Py_ssize_tP = lltype.Ptr(lltype.Array(Py_ssize_t, hints={'nolength': True}))
 size_t = rffi.ULONG
 ADDR = lltype.Signed
 
@@ -590,7 +591,8 @@ def build_eci(build_bridge, export_symbols, code):
                                source_dir / "getargs.c",
                                source_dir / "stringobject.c",
                                source_dir / "mysnprintf.c",
-                               source_dir / "pythonrun.c"],
+                               source_dir / "pythonrun.c",
+                               ],
         separate_module_sources = [code],
         export_symbols=export_symbols_eci,
         **kwds
