@@ -31,8 +31,9 @@ class Module(MixedModule):
         else:
             state.init_r2w_from_w2r()
         
-        for func in api.INIT_FUNCTIONS:
-            func()
+        #XXX: segfaults
+        #for func in api.INIT_FUNCTIONS:
+        #    func()
 
 # import these modules to register api functions by side-effect
 import pypy.module.cpyext.pyobject
