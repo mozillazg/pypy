@@ -97,6 +97,6 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert m
         m = re.search("xyz", "xyzxyz")
         assert m
-        assert dir(m)
+        assert "groupdict" in dir(m)
         re._cache.clear()
         re._cache_repl.clear()
