@@ -2,9 +2,6 @@
 /* Buffer object implementation */
 
 #include "Python.h"
-#include <sys/types.h>
-#include <signal.h>
-#include <unistd.h>
 
 
 typedef struct {
