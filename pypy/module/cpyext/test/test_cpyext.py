@@ -120,6 +120,7 @@ def check_and_print_leaks(self):
 class AppTestCpythonExtensionBase:
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['cpyext'])
+        cls.space.getbuiltinmodule("cpyext")
 
     def import_module(self, name, init=None, body=''):
         if init is not None:
