@@ -229,6 +229,7 @@ FUNCTIONS_C = [
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject', 
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format',
+    'PyBuffer_FromMemory',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
@@ -236,6 +237,7 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     '_Py_TrueStruct#': ('PyObject*', 'space.w_True'),
     '_Py_ZeroStruct#': ('PyObject*', 'space.w_False'),
     }
+INIT_FUNCTIONS = []
 
 for exc_name in exceptions.Module.interpleveldefs.keys():
     GLOBALS['PyExc_' + exc_name] = ('PyTypeObject*', 'space.gettypeobject(interp_exceptions.W_%s.typedef)'% (exc_name, ))
@@ -498,7 +500,10 @@ def build_bridge(space, rename=True):
             ctypes.c_void_p)
 
     setup_va_functions(eci)
-
+    
+    INIT_FUNCTIONS.extend([
+        rffi.llexternal('init_bufferobject', [], lltype.Void, compilation_info=eci)
+    ])
     return modulename.new(ext='')
 
 def generate_macros(export_symbols, rename=True, do_deref=True):
@@ -592,6 +597,7 @@ def build_eci(build_bridge, export_symbols, code):
                                source_dir / "stringobject.c",
                                source_dir / "mysnprintf.c",
                                source_dir / "pythonrun.c",
+                               source_dir / "bufferobject.c"
                                ],
         separate_module_sources = [code],
         export_symbols=export_symbols_eci,
