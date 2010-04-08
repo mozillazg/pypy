@@ -411,6 +411,8 @@ manually remove this flag though!
 #define PyObject_INIT_VAR(op, typeobj, size) \
 	( Py_SIZE(op) = (size), PyObject_INIT((op), (typeobj)) )
 
+#define PyObject_INIT PyObject_Init
+#define PyObject_INIT_VAR PyObject_InitVar
 /*
 #define PyObject_NEW(type, typeobj) \
 ( (type *) PyObject_Init( \
