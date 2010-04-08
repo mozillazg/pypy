@@ -17,6 +17,7 @@ typedef struct {
 } PyStringObject;
 
 PyObject *PyString_FromFormatV(char *format, va_list vargs);
+PyObject *PyString_FromFormat(const char *format, ...);
 
 #ifdef __cplusplus
 }
