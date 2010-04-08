@@ -295,18 +295,21 @@ class ExternalCompilationInfo(object):
         d['separate_module_files'] = ()
         return files, ExternalCompilationInfo(**d)
 
-    def compile_shared_lib(self):
+    def compile_shared_lib(self, outputfilename=None):
         self = self.convert_sources_to_files()
         if not self.separate_module_files:
             return self
-        # find more or less unique name there
-        basepath = py.path.local(self.separate_module_files[0]).dirpath()
-        pth = basepath.join('externmod').new(ext=host.so_ext)
-        num = 0
-        while pth.check():
-            pth = basepath.join('externmod_%d' % (num,)).new(ext=host.so_ext)
-            num += 1
-        lib = str(host.compile([], self, outputfilename=pth.purebasename,
+        if outputfilename is None:
+            # find more or less unique name there
+            basepath = py.path.local(self.separate_module_files[0]).dirpath()
+            pth = basepath.join('externmod').new(ext=host.so_ext)
+            num = 0
+            while pth.check():
+                pth = basepath.join(
+                    'externmod_%d' % (num,)).new(ext=host.so_ext)
+                num += 1
+            outputfilename=pth.purebasename
+        lib = str(host.compile([], self, outputfilename=outputfilename,
                                standalone=False))
         d = self._copy_attributes()
         d['libraries'] += (lib,)
