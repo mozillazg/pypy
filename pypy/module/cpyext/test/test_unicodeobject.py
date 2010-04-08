@@ -9,6 +9,24 @@ class TestUnicode(BaseApiTest):
         unichar = rffi.sizeof(Py_UNICODE)
         assert api.PyUnicode_GET_DATA_SIZE(space.wrap(u'späm')) == 4 * unichar
 
+        encoding = rffi.charp2str(api.PyUnicode_GetDefaultEncoding())
+        w_default_encoding = space.call_function(
+            space.sys.get('getdefaultencoding')
+        )
+        assert encoding == space.unwrap(w_default_encoding)
+        invalid = rffi.str2charp('invalid')
+        utf_8 = rffi.str2charp('utf-8')
+        prev_encoding = rffi.str2charp(space.unwrap(w_default_encoding))
+        assert api.PyUnicode_SetDefaultEncoding(invalid) == -1
+        assert api.PyErr_Occurred() is space.w_LookupError
+        api.PyErr_Clear()
+        assert api.PyUnicode_SetDefaultEncoding(utf_8) == 0
+        assert rffi.charp2str(api.PyUnicode_GetDefaultEncoding()) == 'utf-8'
+        assert api.PyUnicode_SetDefaultEncoding(prev_encoding) == 0
+        rffi.free_charp(invalid)
+        rffi.free_charp(utf_8)
+        rffi.free_charp(prev_encoding)
+
     def test_AS(self, space, api):
         word = space.wrap(u'spam')
         array = rffi.cast(rffi.CWCHARP, api.PyUnicode_AS_DATA(word))

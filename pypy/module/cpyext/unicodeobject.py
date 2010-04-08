@@ -4,7 +4,13 @@ from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
 from pypy.module.cpyext.api import (CANNOT_FAIL, Py_ssize_t, PyUnicodeObject,
                                     build_type_checkers, cpython_api)
 from pypy.module.cpyext.pyobject import PyObject, from_ref
-from pypy.objspace.std import unicodeobject
+from pypy.module.sys.interp_encoding import setdefaultencoding
+from pypy.objspace.std import unicodeobject, unicodetype
+
+# Buffer for the default encoding (used by PyUnicde_GetDefaultEncoding)
+DEFAULT_ENCODING_SIZE = 100
+default_encoding = lltype.malloc(rffi.CCHARP.TO, DEFAULT_ENCODING_SIZE,
+                                 flavor='raw', zero=True)
 
 PyUnicode_Check, PyUnicode_CheckExact = build_type_checkers("Unicode", "w_unicode")
 
@@ -102,3 +108,23 @@ def PyUnicode_AsUnicode(space, ref):
         raise OperationError(space.w_TypeError,
                              space.wrap("expected unicode object"))
     return PyUnicode_AS_UNICODE(space, ref)
+
+@cpython_api([], rffi.CCHARP, error=CANNOT_FAIL)
+def PyUnicode_GetDefaultEncoding(space):
+    """Returns the currently active default encoding."""
+    if default_encoding[0] == '\x00':
+        encoding = unicodetype.getdefaultencoding(space)
+        i = 0
+        while i < len(encoding) and i < DEFAULT_ENCODING_SIZE:
+            default_encoding[i] = encoding[i]
+            i += 1
+    return default_encoding
+
+@cpython_api([rffi.CCHARP], rffi.INT_real, error=-1)
+def PyUnicode_SetDefaultEncoding(space, encoding):
+    """Sets the currently active default encoding. Returns 0 on
+    success, -1 in case of an error."""
+    w_encoding = space.wrap(rffi.charp2str(encoding))
+    setdefaultencoding(space, w_encoding)
+    default_encoding[0] = '\x00'
+    return 0
