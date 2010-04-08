@@ -20,6 +20,13 @@ def PyErr_SetString(space, w_type, message_ptr):
     message = rffi.charp2str(message_ptr)
     PyErr_SetObject(space, w_type, space.wrap(message))
 
+@cpython_api([], lltype.Void)
+def PyErr_BadArgument(space):
+    """This is a shorthand for PyErr_SetString(PyExc_TypeError, message), where
+    message indicates that a built-in operation was invoked with an illegal
+    argument.  It is mostly for internal use."""
+    raise OperationError(space.w_TypeError, 
+            space.wrap("bad argument type for built-in operation"))
 
 @cpython_api([PyObject], PyObject)
 def PyErr_SetFromErrno(space, w_type):
