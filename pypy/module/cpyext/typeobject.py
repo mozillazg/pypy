@@ -208,8 +208,11 @@ class W_PyCTypeObject(W_TypeObject):
         convert_member_defs(space, dict_w, pto.c_tp_members, pto)
 
         full_name = rffi.charp2str(pto.c_tp_name)
-        module_name, extension_name = rsplit(full_name, ".", 1)
-        dict_w["__module__"] = space.wrap(module_name)
+        if '.' in full_name:
+            module_name, extension_name = rsplit(full_name, ".", 1)
+            dict_w["__module__"] = space.wrap(module_name)
+        else:
+            extension_name = None
 
         W_TypeObject.__init__(self, space, extension_name,
             bases_w or [space.w_object], dict_w)
