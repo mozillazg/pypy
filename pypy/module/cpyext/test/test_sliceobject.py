@@ -11,9 +11,7 @@ class TestSliceObject(BaseApiTest):
         assert not api.PySlice_Check(w_i)
 
     def test_GetIndicesEx(self, space, api):
-        
         w = space.wrap
-        
         def get_indices(w_start, w_stop, w_step, length):
             w_slice = space.newslice(w_start, w_stop, w_step)
             values = lltype.malloc(Py_ssize_tP.TO, 4, flavor='raw')
@@ -23,9 +21,7 @@ class TestSliceObject(BaseApiTest):
                 rffi.ptradd(values, 2), 
                 rffi.ptradd(values, 3))
             assert res == 0
-            
             rv = values[0], values[1], values[2], values[3]
             lltype.free(values, flavor='raw')
             return rv
-        
         assert get_indices(w(10), w(20), w(1), 200) == (10, 20, 1, 10)
