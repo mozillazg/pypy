@@ -10,3 +10,5 @@
 //#define PyObject_REALLOC	PyMem_REALLOC
 #define PyObject_FREE		PyMem_FREE
 
+#define PyMem_Malloc PyMem_MALLOC
+#define PyMem_Free  PyMem_FREE

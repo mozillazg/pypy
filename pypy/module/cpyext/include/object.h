@@ -390,8 +390,6 @@ manually remove this flag though!
 
 #define PyType_HasFeature(t,f)  (((t)->tp_flags & (f)) != 0)
 
-#define _Py_NewReference(op) (Py_REFCNT(op) = 1)
-
 /* objimpl.h ----------------------------------------------*/
 #define PyObject_DEL PyObject_Del
 #define PyObject_New(type, typeobj) \
@@ -407,11 +405,6 @@ manually remove this flag though!
 	    (SIZEOF_VOID_P - 1)			\
 	  ) & ~(SIZEOF_VOID_P - 1)		\
 	)
-
-#define PyObject_INIT(op, typeobj) \
-	( Py_TYPE(op) = (typeobj), _Py_NewReference((PyObject *)(op)), (op) )
-#define PyObject_INIT_VAR(op, typeobj, size) \
-	( Py_SIZE(op) = (size), PyObject_INIT((op), (typeobj)) )
 
 #define PyObject_INIT PyObject_Init
 #define PyObject_INIT_VAR PyObject_InitVar
