@@ -229,7 +229,7 @@ FUNCTIONS_C = [
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject', 
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format',
-    'PyBuffer_FromMemory', 'PyBufferType',
+    'PyBuffer_FromMemory', 'PyBuffer_Type',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
