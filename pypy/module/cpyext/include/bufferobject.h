@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-static PyTypeObject PyBuffer_Type;
+PyTypeObject PyBuffer_Type;
 
 #define PyBuffer_Check(op) (Py_TYPE(op) == &PyBuffer_Type)
 

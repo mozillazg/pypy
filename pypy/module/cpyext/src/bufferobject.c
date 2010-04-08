@@ -2,6 +2,9 @@
 /* Buffer object implementation */
 
 #include "Python.h"
+#include <sys/types.h>
+#include <signal.h>
+#include <unistd.h>
 
 
 typedef struct {
@@ -822,7 +825,7 @@ static PyBufferProcs buffer_as_buffer = {
 	(charbufferproc)buffer_getcharbuf,
 };
 
-static PyTypeObject PyBuffer_Type = {
+PyTypeObject PyBuffer_Type = {
     PyObject_HEAD_INIT(NULL)
     0,
 	"buffer",

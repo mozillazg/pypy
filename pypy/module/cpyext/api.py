@@ -28,7 +28,7 @@ from py.builtin import BaseException
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.lltypesystem.lloperation import llop
 
-DEBUG_WRAPPER = False
+DEBUG_WRAPPER = True
 
 # update these for other platforms
 Py_ssize_t = lltype.Signed
@@ -229,7 +229,7 @@ FUNCTIONS_C = [
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject', 
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format',
-    'PyBuffer_FromMemory',
+    'PyBuffer_FromMemory', 'PyBufferType',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
@@ -407,6 +407,10 @@ def setup_va_functions(eci):
                                TP, compilation_info=eci)
         globals()['va_get_%s' % name_no_star] = func
 
+def setup_init_functions(eci):
+    INIT_FUNCTIONS.extend([
+        rffi.llexternal('init_bufferobject', [], lltype.Void, compilation_info=eci)
+    ])
 
 def bootstrap_types(space):
     from pypy.module.cpyext.pyobject import make_ref
@@ -500,10 +504,8 @@ def build_bridge(space, rename=True):
             ctypes.c_void_p)
 
     setup_va_functions(eci)
-    
-    INIT_FUNCTIONS.extend([
-        rffi.llexternal('init_bufferobject', [], lltype.Void, compilation_info=eci)
-    ])
+   
+    setup_init_functions(eci)
     return modulename.new(ext='')
 
 def generate_macros(export_symbols, rename=True, do_deref=True):
@@ -640,6 +642,7 @@ def setup_library(space, rename=False):
     for name, func in FUNCTIONS_STATIC.iteritems():
         func.get_wrapper(space).c_name = name
 
+    setup_init_functions(eci)
 
 @unwrap_spec(ObjSpace, str, str)
 def load_extension_module(space, path, name):
