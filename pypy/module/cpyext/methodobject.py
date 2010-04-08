@@ -190,13 +190,19 @@ def Py_FindMethod(space, table, w_ob, name_ptr):
 
     name = rffi.charp2str(name_ptr)
     methods = rffi.cast(rffi.CArrayPtr(PyMethodDef), table)
+    method_list_w = []
+
     if methods:
         i = -1
         while True:
             i = i + 1
             method = methods[i]
             if not method.c_ml_name: break
-            if rffi.charp2str(method.c_ml_name) == name: # XXX expensive copying
+            if name == "__methods__":
+                method_list_w.append(space.wrap(rffi.charp2str(method.c_ml_name)))
+            elif rffi.charp2str(method.c_ml_name) == name: # XXX expensive copying
                 return PyCFunction_NewEx(space, method, w_ob)
+    if name == "__methods__":
+        return space.newlist(method_list_w)
     raise OperationError(space.w_AttributeError, space.wrap(name))
 
