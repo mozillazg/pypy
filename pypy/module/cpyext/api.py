@@ -229,7 +229,7 @@ FUNCTIONS_C = [
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject', 
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format',
-    'PyBuffer_FromMemory', 'PyBuffer_Type',
+    'PyBuffer_FromMemory', 'PyBuffer_Type', 'init_bufferobject',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
@@ -474,11 +474,9 @@ def build_bridge(space, rename=True):
             '\n'.join(functions))
 
     eci = build_eci(True, export_symbols, code)
-    eci = eci.convert_sources_to_files()
-    modulename = platform.platform.compile(
-        [], eci,
-        outputfilename=str(udir / "module_cache" / "pypyapi"),
-        standalone=False)
+    eci = eci.compile_shared_lib(
+        outputfilename=str(udir / "module_cache" / "pypyapi"))
+    modulename = py.path.local(eci.libraries[-1])
 
     bootstrap_types(space)
 

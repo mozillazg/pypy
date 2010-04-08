@@ -13,7 +13,7 @@ class AppTestBufferObject(AppTestCpythonExtensionBase):
                  cbuf[0] = 'a';
                  cbuf[1] = 'b';
                  cbuf[2] = 'c';
-                 cbuf[3] = '\0';
+                 cbuf[3] = '\\0';
                  return PyBuffer_FromMemory(cbuf, 4);
              """),
             ("free_buffer", "METH_NOARGS",
@@ -22,8 +22,8 @@ class AppTestBufferObject(AppTestCpythonExtensionBase):
                  Py_RETURN_NONE;
              """)
             ], prologue = """
-            char* cbuf = NULL;
+            static char* cbuf = NULL;
             """)
-        w_buffer = module.get_FromMemory()
-        assert False, w_buffer
+        buffer = module.get_FromMemory()
+        assert str(buffer) == 'abc\0'
         module.free_buffer()
