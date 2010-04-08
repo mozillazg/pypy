@@ -1613,6 +1613,7 @@ if __name__ == '__main__':
         format = 'mingw32'
     else:
         format = 'elf'
+    entrypoint = 'main'
     while len(sys.argv) > 1:
         if sys.argv[1] == '-v':
             del sys.argv[1]
@@ -1625,6 +1626,9 @@ if __name__ == '__main__':
             output_raw_table = True
         elif sys.argv[1].startswith('-f'):
             format = sys.argv[1][2:]
+            del sys.argv[1]
+        elif sys.argv[1].startswith('-m'):
+            entrypoint = sys.argv[1][2:]
             del sys.argv[1]
         else:
             break
@@ -1642,7 +1646,7 @@ if __name__ == '__main__':
             lblfn = fn[:-2] + '.lbl.s'
             g = open(lblfn, 'w')
             try:
-                tracker.process(f, g, filename=fn)
+                tracker.process(f, g, entrypoint=entrypoint, filename=fn)
             except:
                 g.close()
                 os.unlink(lblfn)

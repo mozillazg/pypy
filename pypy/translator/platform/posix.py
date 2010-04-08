@@ -59,7 +59,8 @@ class BasePosix(Platform):
         # strip compiler flags
         return [entry[2:] for entry in out.split()]
 
-    def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
+    def gen_makefile(self, cfiles, eci, exe_name=None, path=None,
+                     shared=False):
         eci = eci.convert_exportsymbols_to_file()
         cfiles = [py.path.local(f) for f in cfiles]
         cfiles += [py.path.local(f) for f in eci.separate_module_files]
@@ -71,6 +72,10 @@ class BasePosix(Platform):
 
         if exe_name is None:
             exe_name = cfiles[0].new(ext=self.exe_ext)
+
+        linkflags = self.link_flags
+        if shared:
+            linkflags = self._args_for_shared(linkflags)
 
         m = GnuMakefile(path)
         m.exe_name = exe_name
@@ -102,7 +107,7 @@ class BasePosix(Platform):
             ('INCLUDEDIRS', self._includedirs(rel_includedirs)),
             ('CFLAGS', self.cflags),
             ('CFLAGSEXTRA', list(eci.compile_extra)),
-            ('LDFLAGS', self.link_flags),
+            ('LDFLAGS', linkflags),
             ('LDFLAGSEXTRA', list(eci.link_extra)),
             ('CC', self.cc),
             ('CC_LINK', eci.use_cpp_linker and 'g++' or '$(CC)'),
