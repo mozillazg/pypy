@@ -34,6 +34,7 @@ class Module(MixedModule):
         for func in api.INIT_FUNCTIONS:
             func()
             state.check_and_raise_exception()
+        state.non_heaptypes[:] = []
 
 # import these modules to register api functions by side-effect
 import pypy.module.cpyext.pyobject
