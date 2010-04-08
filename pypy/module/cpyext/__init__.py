@@ -34,6 +34,7 @@ class Module(MixedModule):
         #XXX: segfaults
         #for func in api.INIT_FUNCTIONS:
         #    func()
+        #    state.check_and_raise_exception()
 
 # import these modules to register api functions by side-effect
 import pypy.module.cpyext.pyobject
