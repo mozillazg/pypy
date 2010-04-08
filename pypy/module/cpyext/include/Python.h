@@ -74,6 +74,7 @@ int PyOS_snprintf(char *str, size_t size, const  char  *format, ...);
 #include "patchlevel.h"
 
 #include "object.h"
+#include "pyport.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -100,6 +101,8 @@ int PyOS_snprintf(char *str, size_t size, const  char  *format, ...);
 #include "eval.h"
 #include "pymem.h"
 #include "pycobject.h"
+#include "bufferobject.h"
+#include "sliceobject.h"
 
 // XXX This shouldn't be included here
 #include "structmember.h"

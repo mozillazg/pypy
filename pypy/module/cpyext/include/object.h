@@ -388,7 +388,9 @@ manually remove this flag though!
 
 #define Py_TPFLAGS_DEFAULT Py_TPFLAGS_DEFAULT_EXTERNAL
 
+#define PyType_HasFeature(t,f)  (((t)->tp_flags & (f)) != 0)
 
+#define _Py_NewReference(op) (Py_REFCNT(op) = 1)
 
 /* objimpl.h ----------------------------------------------*/
 #define PyObject_DEL PyObject_Del
