@@ -77,6 +77,12 @@ class BasePosix(Platform):
         if shared:
             linkflags = self._args_for_shared(linkflags)
 
+        if shared:
+            libname = exe_name.new(ext='').basename
+            target_name = 'lib' + exe_name.new(ext=self.so_ext).basename
+        else:
+            target_name = exe_name.basename
+
         m = GnuMakefile(path)
         m.exe_name = exe_name
         m.eci = eci
@@ -98,8 +104,8 @@ class BasePosix(Platform):
         m.comment('automatically generated makefile')
         definitions = [
             ('PYPYDIR', autopath.pypydir),
-            ('TARGET', exe_name.basename),
-            ('DEFAULT_TARGET', '$(TARGET)'),
+            ('TARGET', target_name),
+            ('DEFAULT_TARGET', exe_name.basename),
             ('SOURCES', rel_cfiles),
             ('OBJECTS', rel_ofiles),
             ('LIBS', self._libs(eci.libraries)),
@@ -124,6 +130,16 @@ class BasePosix(Platform):
 
         for rule in rules:
             m.rule(*rule)
+
+        if shared:
+            m.definition('SHARED_IMPORT_LIB', libname),
+            m.rule('main.c', '',
+                   'echo "'
+                   'int $(PYPY_MAIN_FUNCTION)(int, char*[]); '
+                   'int main(int argc, char* argv[]) '
+                   '{ return $(PYPY_MAIN_FUNCTION)(argc, argv); }" > $@')
+            m.rule('$(DEFAULT_TARGET)', ['$(TARGET)', 'main.o'],
+                   '$(CC_LINK) main.o -L. -l$(SHARED_IMPORT_LIB) -o $@')
 
         return m
 

@@ -53,7 +53,12 @@ class AbstractTestAsmGCRoot:
                 redirect = ' 2> NUL'
             else:
                 redirect = ''
-            g = os.popen('"%s" %s %d%s' % (exe_name, arg0, arg1, redirect), 'r')
+            if config.translation.shared and os.name == 'posix':
+                env = 'LD_LIBRARY_PATH="%s" ' % (exe_name.dirpath(),)
+            else:
+                env = ''
+            g = os.popen(
+                '%s"%s" %s %d%s' % (env, exe_name, arg0, arg1, redirect), 'r')
             for line in g:
                 print >> sys.stderr, 'RUN:', line.rstrip()
                 lines.append(line)
