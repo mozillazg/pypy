@@ -4308,16 +4308,6 @@ def PyObject_GetAttr(space, o, attr_name):
     expression o.attr_name."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject], PyObject)
-def PyObject_GenericGetAttr(space, o, name):
-    """Generic attribute getter function that is meant to be put into a type
-    object's tp_getattro slot.  It looks for a descriptor in the dictionary
-    of classes in the object's MRO as well as an attribute in the object's
-    __dict__ (if present).  As outlined in descriptors, data
-    descriptors take preference over instance attributes, while non-data
-    descriptors don't.  Otherwise, an AttributeError is raised."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP, PyObject], rffi.INT_real)
 def PyObject_SetAttrString(space, o, attr_name, v):
     """Set the value of the attribute named attr_name, for object o, to the value
