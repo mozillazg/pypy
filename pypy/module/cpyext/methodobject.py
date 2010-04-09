@@ -9,7 +9,7 @@ from pypy.interpreter.function import BuiltinFunction, Method
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject,\
-        cpython_struct, METH_KEYWORDS
+        cpython_struct, METH_KEYWORDS, METH_O
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
@@ -41,10 +41,18 @@ class W_PyCFunctionObject(Wrappable):
         if space.is_true(w_kw) and not flags & METH_KEYWORDS:
             raise OperationError(space.w_TypeError,
                     space.wrap(rffi.charp2str(self.ml.c_ml_name) + "() takes no keyword arguments"))
-        # XXX support METH_NOARGS, METH_O
+        # XXX support METH_NOARGS
         if flags & METH_KEYWORDS:
             func = rffi.cast(PyCFunctionKwArgs, self.ml.c_ml_meth)
             return generic_cpy_call(space, func, w_self, w_args, w_kw)
+        elif flags & METH_O:
+            if len(w_args.wrappeditems) != 1:
+                raise OperationError(space.w_TypeError,
+                        space.wrap("%s() takes exactly one argument (%d given)" %  (
+                        rffi.charp2str(self.ml.c_ml_name), 
+                        len(w_args.wrappeditems))))
+            w_arg = w_args.wrappeditems[0]
+            return generic_cpy_call(space, self.ml.c_ml_meth, w_self, w_arg)
         else:
             return generic_cpy_call(space, self.ml.c_ml_meth, w_self, w_args)
 
