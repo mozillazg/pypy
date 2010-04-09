@@ -342,7 +342,7 @@ def make_wrapper(space, callable):
         # inserted exactly here by the varargs specializer
         llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
         boxed_args = ()
-        if DEBUG_WRAPPER:
+        if not we_are_translated() and DEBUG_WRAPPER:
             print >>sys.stderr, callable,
         for i, (typ, is_wrapped) in argtypes_enum_ui:
             arg = args[i]
@@ -357,7 +357,7 @@ def make_wrapper(space, callable):
         state = space.fromcache(State)
         try:
             retval = callable(space, *boxed_args)
-            if DEBUG_WRAPPER:
+            if not we_are_translated() and DEBUG_WRAPPER:
                 print >>sys.stderr, " DONE"
         except OperationError, e:
             failed = True
