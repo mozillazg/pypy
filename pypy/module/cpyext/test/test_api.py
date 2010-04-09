@@ -5,6 +5,8 @@ from pypy.module.cpyext.state import State
 from pypy.module.cpyext import api
 from pypy.module.cpyext.test.test_cpyext import freeze_refcnts, check_and_print_leaks
 PyObject = api.PyObject
+from pypy.interpreter.error import OperationError
+from pypy.module.cpyext.state import State
 
 @api.cpython_api([PyObject], lltype.Void)
 def PyPy_GetWrapped(space, w_arg):
@@ -22,6 +24,18 @@ class BaseApiTest:
                 return getattr(cls.space, name)
         cls.api = CAPI()
         CAPI.__dict__.update(api.INTERPLEVEL_API)
+
+    def raises(self, space, api, expected_exc, f, *args):
+        if not callable(f):
+            raise Exception("%s is not callable" % (f,))
+        f(*args)
+        state = space.fromcache(State)
+        tp = state.exc_type
+        if not tp:
+            raise Exception("DID NOT RAISE")
+        if getattr(space, 'w_' + expected_exc.__name__) is not tp:
+            raise Exception("Wrong exception")
+        state.clear_exception()
 
     def setup_method(self, func):
         freeze_refcnts(self)
