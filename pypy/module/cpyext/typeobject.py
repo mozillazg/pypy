@@ -212,7 +212,7 @@ class W_PyCTypeObject(W_TypeObject):
             module_name, extension_name = rsplit(full_name, ".", 1)
             dict_w["__module__"] = space.wrap(module_name)
         else:
-            extension_name = None
+            extension_name = full_name
 
         W_TypeObject.__init__(self, space, extension_name,
             bases_w or [space.w_object], dict_w)

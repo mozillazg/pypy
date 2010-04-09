@@ -1,7 +1,7 @@
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 
-class AppTestGetargs(AppTestCpythonExtensionBase):
+class AppTestMethodObject(AppTestCpythonExtensionBase):
     def test_METH_O(self):
         mod = self.import_extension('foo', [
             ('getarg', 'METH_O',
