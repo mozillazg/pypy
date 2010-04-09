@@ -19,7 +19,7 @@ def PyInt_AsLong(space, w_obj):
     already one, and then return its value. If there is an error, -1 is
     returned, and the caller should check PyErr_Occurred() to find out whether
     there was an error, or whether the value just happened to be -1."""
-    return space.int_w(w_obj)
+    return space.int_w(space.int(w_obj))
 
 @cpython_api([PyObject], lltype.Signed, error=CANNOT_FAIL)
 def PyInt_AS_LONG(space, w_int):
