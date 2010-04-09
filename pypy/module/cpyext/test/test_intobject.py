@@ -18,3 +18,9 @@ class TestIntObject(BaseApiTest):
         assert api.PyInt_AsLong(space.w_None) == -1
         assert api.PyErr_Occurred() is space.w_TypeError
         api.PyErr_Clear()
+
+    def test_coerce(self, space, api):
+        class Coerce(object):
+            def __int__(self):
+                return 42
+        assert api.PyInt_AsLong(space.wrap(Coerce())) == 42
