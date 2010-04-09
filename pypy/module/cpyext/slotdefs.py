@@ -4,7 +4,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, \
         PyObject
 from pypy.module.cpyext.typeobjectdefs import unaryfunc, wrapperfunc,\
-        ternaryfunc, PyTypeObjectPtr, binaryfunc, getattrfunc
+        ternaryfunc, PyTypeObjectPtr, binaryfunc, getattrfunc, lenfunc
 from pypy.module.cpyext.pyobject import from_ref
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
@@ -48,6 +48,11 @@ def wrap_getattr(space, w_self, w_args, func):
 def wrap_call(space, w_self, w_args, func, w_kwds):
     func_target = rffi.cast(ternaryfunc, func)
     return generic_cpy_call(space, func_target, w_self, w_args, w_kwds)
+
+def wrap_lenfunc(space, w_self, w_args, func):
+    func_len = rffi.cast(lenfunc, func)
+    check_num_args(space, w_args, 0)
+    return generic_cpy_call(space, func_len, w_self)
 
 @cpython_api([PyTypeObjectPtr, PyObject, PyObject], PyObject, external=True)
 def slot_tp_new(space, type, w_args, w_kwds):
