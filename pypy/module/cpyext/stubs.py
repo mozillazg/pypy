@@ -2051,12 +2051,6 @@ def PyFloat_FromString(space, str, pend):
     backward compatibility."""
     raise NotImplementedError
 
-@cpython_api([PyObject], {double})
-def PyFloat_AS_DOUBLE(space, pyfloat):
-    """Return a C double representation of the contents of pyfloat, but
-    without error checking."""
-    raise NotImplementedError
-
 @cpython_api([rffi.VOIDP_real], PyObject)
 def PyFloat_GetInfo(space, ):
     """Return a structseq instance which contains information about the
@@ -3225,11 +3219,6 @@ def PyInt_FromSize_t(space, ival):
     """Create a new integer object with a value of ival. If the value exceeds
     LONG_MAX, a long integer object is returned.
     """
-    raise NotImplementedError
-
-@cpython_api([PyObject], lltype.Signed)
-def PyInt_AS_LONG(space, io):
-    """Return the value of the object io.  No error checking is performed."""
     raise NotImplementedError
 
 @cpython_api([PyObject], {unsigned long})
