@@ -21,6 +21,11 @@ def PyInt_AsLong(space, w_obj):
     there was an error, or whether the value just happened to be -1."""
     return space.int_w(w_obj)
 
+@cpython_api([PyObject], lltype.Signed, error=CANNOT_FAIL)
+def PyInt_AS_LONG(space, w_int):
+    """Return the value of the object w_int. No error checking is performed."""
+    return space.int_w(w_int)
+
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyInt_AsSsize_t(space, w_obj):
     """Will first attempt to cast the object to a PyIntObject or
