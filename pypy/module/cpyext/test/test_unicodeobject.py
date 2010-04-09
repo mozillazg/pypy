@@ -36,14 +36,16 @@ class TestUnicode(BaseApiTest):
             assert array[i] == char
             assert array2[i] == char
             assert array3[i] == char
-        raises(TypeError, api.PyUnicode_AsUnicode(space.wrap('spam')))
-        api.PyErr_Clear()
+        self.raises(space, api, TypeError, api.PyUnicode_AsUnicode,
+                    space.wrap('spam'))
 
         utf_8 = rffi.str2charp('utf-8')
         encoded = api.PyUnicode_AsEncodedString(space.wrap(u'späm'),
                                                 utf_8, None)
         assert space.unwrap(encoded) == 'sp\xc3\xa4m'
-        raises(TypeError, api.PyUnicode_AsEncodedString,
+        self.raises(space, api, TypeError, api.PyUnicode_AsEncodedString,
+               space.newtuple([1, 2, 3]), None, None)
+        self.raises(space, api, TypeError, api.PyUnicode_AsEncodedString,
                space.wrap(''), None, None)
         rffi.free_charp(utf_8)
 
