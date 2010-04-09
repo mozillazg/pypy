@@ -13,7 +13,7 @@ from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject,\
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
-
+from pypy.objspace.std.tupleobject import W_TupleObject
 
 PyCFunction = lltype.Ptr(lltype.FuncType([PyObject, PyObject], PyObject))
 PyCFunctionKwArgs = lltype.Ptr(lltype.FuncType([PyObject, PyObject, PyObject], PyObject))
@@ -46,6 +46,7 @@ class W_PyCFunctionObject(Wrappable):
             func = rffi.cast(PyCFunctionKwArgs, self.ml.c_ml_meth)
             return generic_cpy_call(space, func, w_self, w_args, w_kw)
         elif flags & METH_O:
+            assert isinstance(w_args, W_TupleObject)
             if len(w_args.wrappeditems) != 1:
                 raise OperationError(space.w_TypeError,
                         space.wrap("%s() takes exactly one argument (%d given)" %  (
