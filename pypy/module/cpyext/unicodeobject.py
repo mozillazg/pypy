@@ -139,7 +139,7 @@ def PyUnicode_AsEncodedString(space, w_unicode, encoding, errors):
     the Python codec registry. Return NULL if an exception was raised by the
     codec."""
     if not PyUnicode_Check(space, w_unicode):
-        PyErr_BadArgument()
+        PyErr_BadArgument(space)
 
     w_encoding = w_errors = None
     if encoding:
