@@ -165,11 +165,15 @@ def tp_new_wrapper(space, w_self, w_args, w_kwds): # XXX untested code
 
 @specialize.memo()
 def get_new_method_def(space):
+    state = space.fromcache(State)
+    if state.new_method_def:
+        return state.new_method_def
     from pypy.module.cpyext.modsupport import PyMethodDef
     ptr = lltype.malloc(PyMethodDef, flavor="raw", zero=True)
     ptr.c_ml_name = rffi.str2charp("__new__")
     rffi.setintfield(ptr, 'c_ml_flags', METH_VARARGS | METH_KEYWORDS)
     ptr.c_ml_doc = rffi.str2charp("T.__new__(S, ...) -> a new object with type S, a subtype of T")
+    state.new_method_def = ptr
     return ptr
 
 def setup_new_method_def(space):
