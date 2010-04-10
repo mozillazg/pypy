@@ -7,7 +7,8 @@
 
 /* XXX use obmalloc like cpython and pypy do, otherwise we might get segfaults */
 #define PyObject_MALLOC		PyMem_MALLOC
-#define PyObject_REALLOC	PyMem_REALLOC
+// we won't support this 
+// #define PyObject_REALLOC	PyMem_REALLOC
 #define PyObject_FREE		PyMem_FREE
 
 #define PyMem_Malloc PyMem_MALLOC
