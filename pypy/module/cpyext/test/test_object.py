@@ -64,3 +64,7 @@ class TestObject(BaseApiTest):
 
     def test_size(self, space, api):
         assert api.PyObject_Size(space.newlist([space.w_None])) == 1
+        
+    def test_repr(self, space, api):
+        w_list = space.newlist([space.w_None, space.wrap(42)])
+        assert space.str_w(api.PyObject_Repr(w_list)) == "[None, 42]"

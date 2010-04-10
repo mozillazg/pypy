@@ -105,3 +105,10 @@ def PyObject_InitVar(space, op, type, size):
     op.c_ob_refcnt = 1
     return from_ref(space, rffi.cast(PyObject, op)) # XXX likewise
 
+@cpython_api([PyObject], PyObject)
+def PyObject_Repr(space, w_obj):
+    """Compute a string representation of object o.  Returns the string
+    representation on success, NULL on failure.  This is the equivalent of the
+    Python expression repr(o).  Called by the repr() built-in function and
+    by reverse quotes."""
+    return space.repr(w_obj)
