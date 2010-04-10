@@ -447,6 +447,23 @@ manually remove this flag though!
       (typeobj), (n)) )
 */
 
+#define PyObject_GC_New(type, typeobj) \
+                ( (type *) _PyObject_GC_New(typeobj) )
+
+/* Utility macro to help write tp_traverse functions.
+ * To use this macro, the tp_traverse function must name its arguments
+ * "visit" and "arg".  This is intended to keep tp_traverse functions
+ * looking as much alike as possible.
+ */
+#define Py_VISIT(op)                                                    \
+        do {                                                            \
+                if (op) {                                               \
+                        int vret = visit((PyObject *)(op), arg);        \
+                        if (vret)                                       \
+                                return vret;                            \
+                }                                                       \
+        } while (0)
+
 /* PyPy internal ----------------------------------- */
 int PyPyType_Register(PyTypeObject *);
 
