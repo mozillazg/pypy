@@ -2,7 +2,8 @@ import py
 
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.rpython.lltypesystem import rffi, lltype
-
+from pypy.module.cpyext.api import Py_LT, Py_LE, Py_NE, Py_EQ,\
+    Py_GE, Py_GT
 
 class TestObject(BaseApiTest):
     def test_IsTrue(self, space, api):
@@ -53,7 +54,6 @@ class TestObject(BaseApiTest):
         lltype.free(charp1, flavor="raw")
         lltype.free(charp2, flavor="raw")
 
-    
     def test_getitem(self, space, api):
         w_t = space.wrap((1, 2, 3, 4, 5))
         assert space.unwrap(api.PyObject_GetItem(w_t, space.wrap(3))) == 4
@@ -68,3 +68,28 @@ class TestObject(BaseApiTest):
     def test_repr(self, space, api):
         w_list = space.newlist([space.w_None, space.wrap(42)])
         assert space.str_w(api.PyObject_Repr(w_list)) == "[None, 42]"
+        
+    def test_RichCompare(self, space, api):
+        w_i1 = space.wrap(1)
+        w_i2 = space.wrap(2)
+        w_i3 = space.wrap(3)
+        
+        def compare(w_o1, w_o2, opid):
+            res = api.PyObject_RichCompareBool(w_o1, w_o2, opid)
+            w_res = api.PyObject_RichCompare(w_o1, w_o2, opid)
+            assert space.is_true(w_res) == res
+            return res
+        
+        def test_compare(o1, o2):
+            w_o1 = space.wrap(o1)
+            w_o2 = space.wrap(o2)
+            
+            for opid, expected in [
+                    (Py_LT, o1 <  o2), (Py_LE, o1 <= o2),
+                    (Py_NE, o1 != o2), (Py_EQ, o1 == o2),
+                    (Py_GT, o1 >  o2), (Py_GE, o1 >= o2)]:
+                assert compare(w_o1, w_o2, opid) == expected
+
+        test_compare(1, 2)
+        test_compare(2, 2)
+        test_compare('2', '1')

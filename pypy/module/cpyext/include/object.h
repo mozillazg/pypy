@@ -57,6 +57,21 @@ typedef struct {
 
 #define Py_None (&_Py_NoneStruct)
 
+/*
+Py_NotImplemented is a singleton used to signal that an operation is
+not implemented for a given type combination.
+*/
+PyAPI_DATA(PyObject) _Py_NotImplementedStruct; /* Don't use this directly */
+#define Py_NotImplemented (&_Py_NotImplementedStruct)
+
+/* Rich comparison opcodes */
+#define Py_LT 0
+#define Py_LE 1
+#define Py_EQ 2
+#define Py_NE 3
+#define Py_GT 4
+#define Py_GE 5
+
 struct _typeobject;
 typedef void (*freefunc)(void *);
 typedef void (*destructor)(PyObject *);
