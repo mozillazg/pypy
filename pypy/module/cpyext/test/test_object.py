@@ -4,7 +4,6 @@ from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import Py_LT, Py_LE, Py_NE, Py_EQ,\
     Py_GE, Py_GT
-from pypy.module.cpyext.pyobject import make_ref
 
 class TestObject(BaseApiTest):
     def test_IsTrue(self, space, api):
