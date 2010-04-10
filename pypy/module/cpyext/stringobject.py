@@ -88,3 +88,31 @@ def _PyString_Resize(space, ref, newsize):
     Py_DecRef(space, ref[0])
     ref[0] = rffi.cast(PyObject, py_newstr)
     return 0
+
+@cpython_api([PyObjectP, PyObject], lltype.Void)
+def PyString_Concat(space, ref, w_newpart):
+    """Create a new string object in *string containing the contents of newpart
+    appended to string; the caller will own the new reference.  The reference to
+    the old value of string will be stolen.  If the new string cannot be created,
+    the old reference to string will still be discarded and the value of
+    *string will be set to NULL; the appropriate exception will be set."""
+    
+    if not ref[0]: 
+        return
+    
+    if w_newpart is None or not PyString_Check(space, ref[0]) or \
+            not PyString_Check(space, w_newpart):
+         Py_DecRef(space, ref[0])
+         ref[0] = lltype.nullptr(PyObject.TO)
+         return
+    w_str = from_ref(space, ref[0])
+    w_newstr = space.add(w_str, w_newpart)
+    Py_DecRef(space, ref[0])
+    ref[0] = make_ref(space, w_newstr)
+
+@cpython_api([PyObjectP, PyObject], lltype.Void)
+def PyString_ConcatAndDel(space, ref, newpart):
+    """Create a new string object in *string containing the contents of newpart
+    appended to string.  This version decrements the reference count of newpart."""
+    PyString_Concat(space, ref, newpart)
+    Py_DecRef(space, newpart)

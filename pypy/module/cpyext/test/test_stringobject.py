@@ -3,7 +3,7 @@ from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.stringobject import new_empty_str
 from pypy.module.cpyext.api import PyStringObject, PyObjectP, PyObject
-from pypy.module.cpyext.pyobject import Py_DecRef
+from pypy.module.cpyext.pyobject import Py_DecRef, from_ref, make_ref
 
 import py
 import sys
@@ -177,3 +177,30 @@ class TestString(BaseApiTest):
         assert c_buf.c_bf_getreadbuffer(py_obj, 0, ref) == 10
         lltype.free(ref, flavor='raw')
         Py_DecRef(space, py_obj)
+        
+    def test_Concat(self, space, api):
+        ref = make_ref(space, space.wrap('abc'))
+        ptr = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
+        ptr[0] = ref
+        api.PyString_Concat(ptr, space.wrap('def'))
+        assert space.str_w(from_ref(space, ptr[0])) == 'abcdef'
+        api.PyString_Concat(ptr, space.w_None)
+        assert not ptr[0]
+        ptr[0] = lltype.nullptr(PyObject.TO)
+        api.PyString_Concat(ptr, space.wrap('def')) # should not crash
+        lltype.free(ptr, flavor='raw')
+    
+    def test_ConcatAndDel(self, space, api):
+        ref1 = make_ref(space, space.wrap('abc'))
+        ref2 = make_ref(space, space.wrap('def'))
+        ptr = lltype.malloc(PyObjectP.TO, 1, flavor='raw')
+        ptr[0] = ref1
+        api.PyString_ConcatAndDel(ptr, ref2)
+        assert space.str_w(from_ref(space, ptr[0])) == 'abcdef'
+        assert ref2.c_ob_refcnt == 0
+        Py_DecRef(space, ptr[0])
+        ptr[0] = lltype.nullptr(PyObject.TO)
+        ref2 = make_ref(space, space.wrap('foo'))
+        api.PyString_ConcatAndDel(ptr, ref2) # should not crash
+        assert ref2.c_ob_refcnt == 0
+        lltype.free(ptr, flavor='raw')
