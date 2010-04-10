@@ -552,3 +552,10 @@ def PyType_IsSubtype(space, a, b):
     w_type2 = from_ref(space, rffi.cast(PyObject, b))
     return int(abstract_issubclass_w(space, w_type1, w_type2)) #XXX correct?
 
+@cpython_api([PyTypeObjectPtr, Py_ssize_t], PyObject)
+def PyType_GenericAlloc(space, type, nitems):
+    """This function used an int type for nitems. This might require
+    changes in your code for properly supporting 64-bit systems."""
+    from pypy.module.cpyext.object import _PyObject_NewVar
+    return _PyObject_NewVar(space, type, nitems)
+

@@ -19,3 +19,11 @@ def PyLong_AsUnsignedLong(space, w_long):
     raised."""
     return rffi.cast(rffi.ULONG, space.uint_w(w_long))
 
+@cpython_api([rffi.VOIDP], PyObject)
+def PyLong_FromVoidPtr(space, p):
+    """Create a Python integer or long integer from the pointer p. The pointer value
+    can be retrieved from the resulting value using PyLong_AsVoidPtr().
+
+    If the integer is larger than LONG_MAX, a positive long integer is returned."""
+    return space.wrap(rffi.cast(rffi.LONG, p))
+
