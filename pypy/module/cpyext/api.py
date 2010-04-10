@@ -239,6 +239,7 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     '_Py_NoneStruct#': ('PyObject*', 'space.w_None'),
     '_Py_TrueStruct#': ('PyObject*', 'space.w_True'),
     '_Py_ZeroStruct#': ('PyObject*', 'space.w_False'),
+    '_Py_NotImplementedStruct#': ('PyObject*', 'space.w_False'),
     }
 INIT_FUNCTIONS = []
 
@@ -253,7 +254,7 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
         "Unicode": "space.w_unicode",
         'Bool': 'space.w_bool',
         'None': 'space.type(space.w_None)',
-        'NotImplemented': 'space.w_NotImplemented',
+        'NotImplemented': 'space.type(space.w_NotImplemented)',
         }.items():
     GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
