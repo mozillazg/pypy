@@ -253,6 +253,7 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
         "Unicode": "space.w_unicode",
         'Bool': 'space.w_bool',
         'None': 'space.type(space.w_None)',
+        'NotImplemented': 'space.w_NotImplemented',
         }.items():
     GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
