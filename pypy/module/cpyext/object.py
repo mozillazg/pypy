@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
-        Py_ssize_t, PyVarObject, Py_TPFLAGS_HEAPTYPE
+        Py_ssize_t, PyVarObject, Py_TPFLAGS_HEAPTYPE,\
+        Py_LT, Py_LE, Py_EQ, Py_NE, Py_GT, Py_GE
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
@@ -112,3 +113,31 @@ def PyObject_Repr(space, w_obj):
     Python expression repr(o).  Called by the repr() built-in function and
     by reverse quotes."""
     return space.repr(w_obj)
+
+@cpython_api([PyObject, PyObject, rffi.INT_real], PyObject)
+def PyObject_RichCompare(space, w_o1, w_o2, opid):
+    """Compare the values of o1 and o2 using the operation specified by opid,
+    which must be one of Py_LT, Py_LE, Py_EQ,
+    Py_NE, Py_GT, or Py_GE, corresponding to <,
+    <=, ==, !=, >, or >= respectively. This is the equivalent of
+    the Python expression o1 op o2, where op is the operator corresponding
+    to opid. Returns the value of the comparison on success, or NULL on failure."""
+    if opid == Py_LT: return space.lt(w_o1, w_o2)
+    if opid == Py_LE: return space.le(w_o1, w_o2)
+    if opid == Py_EQ: return space.eq(w_o1, w_o2)
+    if opid == Py_NE: return space.ne(w_o1, w_o2)
+    if opid == Py_GT: return space.gt(w_o1, w_o2)
+    if opid == Py_GE: return space.ge(w_o1, w_o2)
+    PyErr_BadInternalCall(space)
+
+@cpython_api([PyObject, PyObject, rffi.INT_real], rffi.INT_real, error=-1)
+def PyObject_RichCompareBool(space, ref1, ref2, opid):
+    """Compare the values of o1 and o2 using the operation specified by opid,
+    which must be one of Py_LT, Py_LE, Py_EQ,
+    Py_NE, Py_GT, or Py_GE, corresponding to <,
+    <=, ==, !=, >, or >= respectively. Returns -1 on error,
+    0 if the result is false, 1 otherwise. This is the equivalent of the
+    Python expression o1 op o2, where op is the operator corresponding to
+    opid."""
+    w_res = PyObject_RichCompare(space, ref1, ref2, opid)
+    return PyObject_IsTrue(space, w_res)
