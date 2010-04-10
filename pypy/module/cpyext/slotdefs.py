@@ -4,7 +4,8 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, \
         PyObject
 from pypy.module.cpyext.typeobjectdefs import unaryfunc, wrapperfunc,\
-        ternaryfunc, PyTypeObjectPtr, binaryfunc, getattrfunc, lenfunc
+        ternaryfunc, PyTypeObjectPtr, binaryfunc, getattrfunc, lenfunc,\
+        ssizeargfunc
 from pypy.module.cpyext.pyobject import from_ref
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
@@ -53,6 +54,13 @@ def wrap_lenfunc(space, w_self, w_args, func):
     func_len = rffi.cast(lenfunc, func)
     check_num_args(space, w_args, 0)
     return generic_cpy_call(space, func_len, w_self)
+
+def wrap_sq_item(space, w_self, w_args, func):
+    func_target = rffi.cast(ssizeargfunc, func)
+    check_num_args(space, w_args, 1)
+    args_w = space.fixedview(w_args)
+    index = space.int_w(space.index(args_w[0]))
+    return generic_cpy_call(space, func_target, w_self, index)
 
 @cpython_api([PyTypeObjectPtr, PyObject, PyObject], PyObject, external=True)
 def slot_tp_new(space, type, w_args, w_kwds):
