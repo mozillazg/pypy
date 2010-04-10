@@ -1,5 +1,6 @@
 import ctypes
 import sys
+import atexit
 
 import py
 
@@ -36,11 +37,14 @@ Py_ssize_tP = lltype.Ptr(lltype.Array(Py_ssize_t, hints={'nolength': True}))
 size_t = rffi.ULONG
 ADDR = lltype.Signed
 
-include_dir = py.path.local(autopath.pypydir) / 'module' / 'cpyext' / 'include'
-source_dir = py.path.local(autopath.pypydir) / 'module' / 'cpyext' / 'src'
+pypydir = py.path.local(autopath.pypydir)
+include_dir = pypydir / 'module' / 'cpyext' / 'include'
+source_dir = pypydir / 'module' / 'cpyext' / 'src'
+interfaces_dir = pypydir / "_interfaces"
 include_dirs = [
     include_dir,
     udir,
+    interfaces_dir,
     ]
 
 class CConfig:
@@ -66,6 +70,10 @@ for name in constant_names:
 udir.join('pypy_decl.h').write("/* Will be filled later */")
 udir.join('pypy_macros.h').write("/* Will be filled later */")
 globals().update(rffi_platform.configure(CConfig_constants))
+
+def copy_header_files():
+    for name in ("pypy_decl.h", "pypy_macros.h"):
+        udir.join(name).copy(interfaces_dir / name)
 
 _NOT_SPECIFIED = object()
 CANNOT_FAIL = object()
@@ -557,13 +565,6 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
                                  for i in range(len(func.argtypes)))
             body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
             functions.append('%s\n%s\n' % (header, body))
-    for name, (typ, expr) in GLOBALS.iteritems():
-        name_clean = name.replace("#", "")
-        if not globals_are_pointers:
-            typ = typ.replace("*", "")
-        pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name_clean))
-        if not globals_are_pointers and "#" not in name:
-            pypy_decls.append("#define %s &%s" % (name, name,))
     for name in VA_TP_LIST:
         name_no_star = process_va_name(name)
         header = ('%s pypy_va_get_%s(va_list* vp)' %
@@ -571,7 +572,14 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
         pypy_decls.append(header + ';')
         functions.append(header + '\n{return va_arg(*vp, %s);}\n' % name)
         export_symbols.append('pypy_va_get_%s' % (name_no_star,))
-    
+
+    for name, (typ, expr) in GLOBALS.iteritems():
+        name_clean = name.replace("#", "")
+        if not globals_are_pointers:
+            typ = typ.replace("*", "")
+        pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name_clean))
+        if not globals_are_pointers and "#" not in name:
+            pypy_decls.append("#define %s &%s" % (name, name,))
     pypy_decls.append("#endif\n")
 
     pypy_decl_h = udir.join('pypy_decl.h')
@@ -646,6 +654,7 @@ def setup_library(space, rename=False):
         func.get_wrapper(space).c_name = name
 
     setup_init_functions(eci)
+    copy_header_files()
 
 @unwrap_spec(ObjSpace, str, str)
 def load_extension_module(space, path, name):
