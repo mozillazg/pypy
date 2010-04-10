@@ -239,7 +239,7 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     '_Py_NoneStruct#': ('PyObject*', 'space.w_None'),
     '_Py_TrueStruct#': ('PyObject*', 'space.w_True'),
     '_Py_ZeroStruct#': ('PyObject*', 'space.w_False'),
-    '_Py_NotImplementedStruct#': ('PyObject*', 'space.w_False'),
+    '_Py_NotImplementedStruct#': ('PyObject*', 'space.w_NotImplemented'),
     }
 INIT_FUNCTIONS = []
 
