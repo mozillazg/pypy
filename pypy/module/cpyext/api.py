@@ -232,6 +232,7 @@ FUNCTIONS_C = [ # XXX rename to SYMBOLS_C
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject', 
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format',
     'PyBuffer_FromMemory', 'PyBuffer_Type', 'init_bufferobject',
+    '_PyArg_NoKeywords',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
