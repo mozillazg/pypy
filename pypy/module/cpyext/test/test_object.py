@@ -70,10 +70,6 @@ class TestObject(BaseApiTest):
         assert space.str_w(api.PyObject_Repr(w_list)) == "[None, 42]"
         
     def test_RichCompare(self, space, api):
-        w_i1 = space.wrap(1)
-        w_i2 = space.wrap(2)
-        w_i3 = space.wrap(3)
-        
         def compare(w_o1, w_o2, opid):
             res = api.PyObject_RichCompareBool(w_o1, w_o2, opid)
             w_res = api.PyObject_RichCompare(w_o1, w_o2, opid)
