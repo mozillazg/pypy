@@ -36,6 +36,32 @@ def PyObject_dealloc(space, obj):
     if pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
         Py_DecRef(space, rffi.cast(PyObject, obj.c_ob_type))
 
+@cpython_api([PyTypeObjectPtr], PyObject)
+def _PyObject_GC_New(space, type):
+    return _PyObject_New(space, type)
+
+@cpython_api([rffi.VOIDP_real], lltype.Void)
+def PyObject_GC_Del(space, obj):
+    PyObject_Del(space, obj)
+    
+@cpython_api([PyObject], lltype.Void)
+def PyObject_GC_Track(space, op):
+    """Adds the object op to the set of container objects tracked by the
+    collector.  The collector can run at unexpected times so objects must be
+    valid while being tracked.  This should be called once all the fields
+    followed by the tp_traverse handler become valid, usually near the
+    end of the constructor."""
+    pass
+
+@cpython_api([rffi.VOIDP], lltype.Void)
+def PyObject_GC_UnTrack(space, op):
+    """Remove the object op from the set of container objects tracked by the
+    collector.  Note that PyObject_GC_Track() can be called again on
+    this object to add it back to the set of tracked objects.  The deallocator
+    (tp_dealloc handler) should call this for the object before any of
+    the fields used by the tp_traverse handler become invalid."""
+    pass
+
 @cpython_api([PyObject], rffi.INT_real, error=-1)
 def PyObject_IsTrue(space, w_obj):
     return space.is_true(w_obj)
@@ -151,3 +177,21 @@ def PyObject_TypeCheck(space, w_obj, w_type):
     assert isinstance(w_type, W_TypeObject)
     return int(space.is_w(w_obj_type, w_type) or
                    space.is_true(space.issubtype(w_obj_type, w_type)))
+
+@cpython_api([PyObject], PyObject)
+def PyObject_SelfIter(space, ref):
+    """Undocumented function, this is wat CPython does."""
+    Py_IncRef(space, ref)
+    return ref
+
+@cpython_api([PyObject, PyObject], PyObject)
+def PyObject_GenericGetAttr(space, w_obj, w_name):
+    """Generic attribute getter function that is meant to be put into a type
+    object's tp_getattro slot.  It looks for a descriptor in the dictionary
+    of classes in the object's MRO as well as an attribute in the object's
+    __dict__ (if present).  As outlined in descriptors, data
+    descriptors take preference over instance attributes, while non-data
+    descriptors don't.  Otherwise, an AttributeError is raised."""
+    from pypy.objspace.descroperation import object_getattribute
+    w_descr = object_getattribute(space)
+    return space.get_and_call_function(w_descr, w_obj, w_name)
