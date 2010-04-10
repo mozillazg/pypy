@@ -225,7 +225,7 @@ def cpython_struct(name, fields, forward=None):
 INTERPLEVEL_API = {}
 FUNCTIONS = {}
 FUNCTIONS_STATIC = {}
-FUNCTIONS_C = [
+FUNCTIONS_C = [ # XXX rename to SYMBOLS_C
     'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject', 
