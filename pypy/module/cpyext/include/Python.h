@@ -75,6 +75,7 @@ int PyOS_snprintf(char *str, size_t size, const  char  *format, ...);
 
 #include "object.h"
 #include "pyport.h"
+#include "warnings.h"
 
 #include <stdarg.h>
 #include <stdio.h>
