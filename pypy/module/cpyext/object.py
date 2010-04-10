@@ -6,7 +6,7 @@ from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject
-from pypy.module.cpyext.pyerrors import PyErr_NoMemory
+from pypy.module.cpyext.pyerrors import PyErr_NoMemory, PyErr_BadInternalCall
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.objspace.std.typeobject import W_TypeObject
 import pypy.module.__builtin__.operation as operation
@@ -140,4 +140,4 @@ def PyObject_RichCompareBool(space, ref1, ref2, opid):
     Python expression o1 op o2, where op is the operator corresponding to
     opid."""
     w_res = PyObject_RichCompare(space, ref1, ref2, opid)
-    return PyObject_IsTrue(space, w_res)
+    return int(space.is_true(w_res))

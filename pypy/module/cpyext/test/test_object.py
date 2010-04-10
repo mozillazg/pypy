@@ -89,3 +89,8 @@ class TestObject(BaseApiTest):
         test_compare(1, 2)
         test_compare(2, 2)
         test_compare('2', '1')
+        
+        w_i = space.wrap(1)
+        assert api.PyObject_RichCompareBool(w_i, w_i, 123456) == -1
+        assert api.PyErr_Occurred() is space.w_SystemError
+        api.PyErr_Clear()
