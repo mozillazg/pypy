@@ -25,6 +25,13 @@ class TestListObject(BaseApiTest):
         assert api.PyList_GET_SIZE(l) == 0
         api.PyList_Append(l, space.wrap(3))
         assert api.PyList_GET_SIZE(l) == 1
+    
+    def test_size(self, space, api):
+        l = space.newlist([space.w_None, space.w_None])
+        assert api.PyList_Size(l) == 2
+        assert api.PyList_Size(space.w_None) == -1
+        assert api.PyErr_Occurred() is space.w_TypeError
+        api.PyErr_Clear()
 
 class AppTestListObject(AppTestCpythonExtensionBase):
     def test_listobject(self):
