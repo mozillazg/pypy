@@ -1,4 +1,5 @@
 import sys
+import os.path
 
 import py
 
@@ -122,7 +123,7 @@ class AppTestCpythonExtensionBase:
         cls.space = gettestobjspace(usemodules=['cpyext'])
         cls.space.getbuiltinmodule("cpyext")
 
-    def import_module(self, name, init=None, body=''):
+    def import_module(self, name, init=None, body='', load_it=True):
         if init is not None:
             code = """
             #include <Python.h>
@@ -149,14 +150,16 @@ class AppTestCpythonExtensionBase:
             kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
         mod = compile_module(name, **kwds)
 
-        api.load_extension_module(self.space, mod, name)
         self.name = name
-        return self.space.getitem(
-            self.space.sys.get('modules'),
-            self.space.wrap(name))
+        if load_it:
+            api.load_extension_module(self.space, mod, name)
+            return self.space.getitem(
+                self.space.sys.get('modules'),
+                self.space.wrap(name))
+        else:
+            return os.path.dirname(mod)
 
     def import_extension(self, modname, functions, prologue=""):
-
         methods_table = []
         codes = []
         for funcname, flags, code in functions:
