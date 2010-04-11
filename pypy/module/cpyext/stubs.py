@@ -4568,20 +4568,6 @@ def PyObject_TypeCheck(space, o, type):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject], Py_ssize_t)
-def PyObject_Length(space, o):
-    """
-    
-    
-    
-    Return the length of object o.  If the object o provides either the sequence
-    and mapping protocols, the sequence length is returned.  On error, -1 is
-    returned.  This is the equivalent to the Python expression len(o).
-    
-    These functions returned an int type. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject, PyObject], rffi.INT_real)
 def PyObject_SetItem(space, o, key, v):
     """Map the object key to the value v.  Returns -1 on failure.  This is the

@@ -96,6 +96,17 @@ def PyObject_ClearWeakRefs(space, w_object):
 def PyObject_Size(space, w_obj):
     return space.int_w(space.len(w_obj))
 
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PyObject_Length(space, w_obj):
+    """
+    Return the length of object o.  If the object o provides either the sequence
+    and mapping protocols, the sequence length is returned.  On error, -1 is
+    returned.  This is the equivalent to the Python expression len(o).
+    
+    These functions returned an int type. This might require
+    changes in your code for properly supporting 64-bit systems."""
+    return PyObject_Size(space, w_obj)
+
 @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyCallable_Check(space, w_obj):
     """Determine if the object o is callable.  Return 1 if the object is callable
