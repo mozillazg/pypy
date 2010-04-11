@@ -11,9 +11,9 @@ class TestImport(BaseApiTest):
 
 class AppTestImportLogic(AppTestCpythonExtensionBase):
     def test_import_logic(self):
-        path = self.import_module(name='foo', load_it=False)
+        path = self.import_module(name='test_import_module', load_it=False)
         import sys
         sys.path.append(path)
-        import foo
-        assert foo.fooType
+        import test_import_module
+        assert test_import_module.TEST is None
 
