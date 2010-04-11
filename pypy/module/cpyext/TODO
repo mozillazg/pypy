@@ -13,9 +13,7 @@
  - replace @cpython_api(external=False) by another explicit name: all
    it does is a lltype function pointer, no C code involved.
 
- - Fix distutil's build_ext to work with cpyext.
-
- - Extend the import machinery to load .so/.pyd files.
+ - Fix distutil's build_ext to work with cpyext on windows.
 
  - refactor management of py_objects_r2w and py_objects_w2r, this can
    probably be expressed in terms of _PyObject_GC_TRACK macros.
