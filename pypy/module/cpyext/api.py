@@ -237,10 +237,10 @@ FUNCTIONS_STATIC = {}
 FUNCTIONS_C = [ # XXX rename to SYMBOLS_C
     'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
-    'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject', 
+    'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject',
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format',
     'PyBuffer_FromMemory', 'PyBuffer_Type', 'init_bufferobject',
-    '_PyArg_NoKeywords',
+    '_PyArg_NoKeywords', 'PyObject_AsReadBuffer', 'PyObject_CheckReadBuffer',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
@@ -622,7 +622,8 @@ def build_eci(build_bridge, export_symbols, code):
                                source_dir / "stringobject.c",
                                source_dir / "mysnprintf.c",
                                source_dir / "pythonrun.c",
-                               source_dir / "bufferobject.c"
+                               source_dir / "bufferobject.c",
+                               source_dir / "object.c",
                                ],
         separate_module_sources = [code],
         export_symbols=export_symbols_eci,
