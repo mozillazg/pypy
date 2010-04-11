@@ -33,3 +33,14 @@ def PyLong_FromUnsignedLong(space, v):
     """Return a new PyLongObject object from a C unsigned long, or
     NULL on failure."""
     raise NotImplementedError
+
+FILE = rffi.VOIDP_real.TO
+FILEP = lltype.Ptr(FILE)
+@cpython_api([PyObject, FILEP, rffi.INT_real], rffi.INT_real, error=-1)
+def PyObject_Print(space, o, fp, flags):
+    """Print an object o, on file fp.  Returns -1 on error.  The flags argument
+    is used to enable certain printing options.  The only option currently supported
+    is Py_PRINT_RAW; if given, the str() of the object is written
+    instead of the repr()."""
+    raise NotImplementedError
+
