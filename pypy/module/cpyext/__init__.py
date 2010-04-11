@@ -63,6 +63,7 @@ import pypy.module.cpyext.sysmodule
 import pypy.module.cpyext.number
 import pypy.module.cpyext.sliceobject
 import pypy.module.cpyext.stubsactive
+import pypy.module.cpyext.pystate
 
 # now that all rffi_platform.Struct types are registered, configure them
 api.configure_types()
