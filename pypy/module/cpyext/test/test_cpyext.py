@@ -8,6 +8,8 @@ from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype, ll2ctypes
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator import platform
+from pypy.translator.gensupp import uniquemodulename
+from pypy.tool.udir import udir
 from pypy.module.cpyext import api
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyobject import Py_DecRef, InvalidPointerException
@@ -54,10 +56,17 @@ def compile_module(modname, **kwds):
         **kwds
         )
     eci = eci.convert_sources_to_files()
+    dirname = (udir/uniquemodulename('module')).ensure(dir=1)
     soname = platform.platform.compile(
         [], eci,
+        outputfilename=str(dirname/modname),
         standalone=False)
-    return str(soname)
+    if sys.platform == 'win32':
+        pydname = soname.new(purebasename=modname, ext='.pyd')
+    else:
+        pydname = soname.new(purebasename=modname, ext='.so')
+    soname.rename(pydname)
+    return str(pydname)
 
 def freeze_refcnts(self):
     state = self.space.fromcache(State)
