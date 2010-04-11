@@ -7,6 +7,7 @@
 # include <stdint.h>
 # include <stddef.h>
 # include <limits.h>
+# include <math.h>
 # define Py_DEPRECATED(VERSION_UNUSED) __attribute__((__deprecated__))
 # define PyAPI_DATA(RTYPE) extern RTYPE
 #else
@@ -39,6 +40,10 @@
 #define Py_CHARMASK(c)		(c)
 #else
 #define Py_CHARMASK(c)		((unsigned char)((c) & 0xff))
+#endif
+
+#ifndef DL_EXPORT	/* declarations for DLL import/export */
+#define DL_EXPORT(RTYPE) RTYPE
 #endif
 
 #define statichere static
@@ -83,6 +88,7 @@ int PyOS_snprintf(char *str, size_t size, const  char  *format, ...);
 #include "pycobject.h"
 #include "bufferobject.h"
 #include "sliceobject.h"
+#include "pystate.h"
 
 // XXX This shouldn't be included here
 #include "structmember.h"
