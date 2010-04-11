@@ -141,13 +141,14 @@ def PyObject_Repr(space, w_obj):
     return space.repr(w_obj)
 
 @cpython_api([PyObject, PyObject, rffi.INT_real], PyObject)
-def PyObject_RichCompare(space, w_o1, w_o2, opid):
+def PyObject_RichCompare(space, w_o1, w_o2, opid_int):
     """Compare the values of o1 and o2 using the operation specified by opid,
     which must be one of Py_LT, Py_LE, Py_EQ,
     Py_NE, Py_GT, or Py_GE, corresponding to <,
     <=, ==, !=, >, or >= respectively. This is the equivalent of
     the Python expression o1 op o2, where op is the operator corresponding
     to opid. Returns the value of the comparison on success, or NULL on failure."""
+    opid = rffi.cast(lltype.Signed, opid_int)
     if opid == Py_LT: return space.lt(w_o1, w_o2)
     if opid == Py_LE: return space.le(w_o1, w_o2)
     if opid == Py_EQ: return space.eq(w_o1, w_o2)
