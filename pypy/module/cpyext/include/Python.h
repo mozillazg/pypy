@@ -1,27 +1,6 @@
 #ifndef Py_PYTHON_H
 #define Py_PYTHON_H
 
-// XXX this should be in pyconfig.h
-
-#define HAVE_LONG_LONG 1
-#define HAVE_STDARG_PROTOTYPES 1
-#define PY_FORMAT_LONG_LONG "ll"
-#define PY_LONG_LONG long long
-#define SIZEOF_LONG_LONG sizeof(PY_LONG_LONG)
-#define PY_FORMAT_SIZE_T "z"
-#define SIZEOF_VOID_P sizeof(void *)
-#define WITH_DOC_STRINGS
-#define HAVE_UNICODE
-#define WITHOUT_COMPLEX
-
-/* PyPy supposes Py_UNICODE == wchar_t */
-#define HAVE_USABLE_WCHAR_T 1
-#ifndef _WIN32
-#define Py_UNICODE_SIZE 4
-#else
-#define Py_UNICODE_SIZE 2
-#endif
-
 /* Compat stuff */
 #ifndef _WIN32
 # include <inttypes.h>
@@ -46,8 +25,6 @@
 #define PY_SSIZE_T_MIN (-PY_SSIZE_T_MAX-1)
 #define Py_SAFE_DOWNCAST(VALUE, WIDE, NARROW) (NARROW)(VALUE)
 // obviously wrong
-#define SIZEOF_SIZE_T 4
-#define SIZEOF_LONG 4
 
 // from pyport.h
 #ifdef SIZE_MAX
@@ -84,6 +61,8 @@ int PyOS_snprintf(char *str, size_t size, const  char  *format, ...);
 #include <locale.h>
 #include <ctype.h>
 #include <stdlib.h>
+
+#include "pyconfig.h"
 
 #include "boolobject.h"
 #include "floatobject.h"
