@@ -495,7 +495,7 @@ def build_bridge(space, rename=True):
 
     # load the bridge, and init structure
     import ctypes
-    bridge = ctypes.CDLL(str(modulename))
+    bridge = ctypes.CDLL(str(modulename), mode=ctypes.RTLD_GLOBAL)
     pypyAPI = ctypes.POINTER(ctypes.c_void_p).in_dll(bridge, 'pypyAPI')
 
     # populate static data
