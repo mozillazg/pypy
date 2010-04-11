@@ -6,8 +6,9 @@ from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject,\
         cpython_struct, PyObjectFields
 
 
-destructor = lltype.Ptr(lltype.FuncType([rffi.VOIDP_real], lltype.Void))
-PyCObjectStruct = cpython_struct('PyCObject', PyObjectFields + (("destructor", destructor), ))
+destructor_short = lltype.Ptr(lltype.FuncType([rffi.VOIDP_real], lltype.Void))
+destructor_long = lltype.Ptr(lltype.FuncType([rffi.VOIDP_real, rffi.VOIDP_real], lltype.Void))
+PyCObjectStruct = cpython_struct('PyCObject', PyObjectFields + (("destructor", destructor_short), ))
 PyCObject = lltype.Ptr(PyCObjectStruct)
 
 
@@ -16,28 +17,48 @@ class W_PyCObject(Wrappable):
         self.space = space
 
 class W_PyCObjectFromVoidPtr(W_PyCObject):
-    def __init__(self, space, voidp):
+    def __init__(self, space, voidp, desc):
         W_PyCObject.__init__(self, space)
         self.voidp = voidp
         self.pyo = lltype.nullptr(PyCObject.TO)
+        self.desc = desc
 
     def set_pycobject(self, pyo):
         self.pyo = pyo
 
     def __del__(self):
         if self.pyo and self.pyo.c_destructor:
-            self.pyo.c_destructor(self.voidp)
+            if self.desc:
+                rffi.cast(self.pyo.c_destructor, destructor_long)(self.pyo, self.desc)
+            else:
+                self.pyo.c_destructor(self.voidp)
 
-@cpython_api([rffi.VOIDP_real, destructor], PyObject)
+
+@cpython_api([rffi.VOIDP_real, destructor_short], PyObject)
 def PyCObject_FromVoidPtr(space, cobj, destr):
     """Create a PyCObject from the void * cobj.  The destr function
     will be called when the object is reclaimed, unless it is NULL."""
-    w_pycobject = space.wrap(W_PyCObjectFromVoidPtr(space, cobj))
+    w_pycobject = space.wrap(W_PyCObjectFromVoidPtr(space, cobj,
+        lltype.nullptr(rffi.VOIDP_real.TO)))
     assert isinstance(w_pycobject, W_PyCObjectFromVoidPtr)
     pyo = make_ref(space, w_pycobject)
     pycobject = rffi.cast(PyCObject, pyo)
     w_pycobject.set_pycobject(pycobject)
     pycobject.c_destructor = destr
+    return pyo
+
+@cpython_api([rffi.VOIDP_real, rffi.VOIDP_real, destructor_long], PyObject)
+def PyCObject_FromVoidPtrAndDesc(space, cobj, desc, destr):
+    """Create a PyCObject from the void * cobj.  The destr
+    function will be called when the object is reclaimed. The desc argument can
+    be used to pass extra callback data for the destructor function."""
+    w_pycobject = space.wrap(W_PyCObjectFromVoidPtr(space, cobj,
+        desc))
+    assert isinstance(w_pycobject, W_PyCObjectFromVoidPtr)
+    pyo = make_ref(space, w_pycobject)
+    pycobject = rffi.cast(PyCObject, pyo)
+    w_pycobject.set_pycobject(pycobject)
+    pycobject.c_destructor = rffi.cast(destructor_short, destr)
     return pyo
 
 

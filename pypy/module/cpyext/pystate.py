@@ -28,4 +28,3 @@ def PyEval_RestoreThread(space, tstate):
         from pypy.module.thread.gil import after_external_call
         after_external_call()
 
-
