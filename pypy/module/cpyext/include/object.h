@@ -464,7 +464,7 @@ manually remove this flag though!
         } while (0)
 
 /* Copied from CPython ----------------------------- */
-int PyObject_AsReadBuffer(PyObject *, void **, Py_ssize_t *);
+int PyObject_AsReadBuffer(PyObject *, const void **, Py_ssize_t *);
 int PyObject_CheckReadBuffer(PyObject *);
 
 
