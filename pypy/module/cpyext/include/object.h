@@ -463,6 +463,8 @@ manually remove this flag though!
                 }                                                       \
         } while (0)
 
+#define PyObject_Length PyObject_Size
+
 /* PyPy internal ----------------------------------- */
 int PyPyType_Register(PyTypeObject *);
 
