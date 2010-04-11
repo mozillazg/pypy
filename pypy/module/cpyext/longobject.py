@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.module.cpyext.api import cpython_api, PyObject, build_type_checkers
+from pypy.module.cpyext.api import cpython_api, PyObject, build_type_checkers, ADDR
 from pypy.objspace.std.longobject import W_LongObject
 from pypy.interpreter.error import OperationError
 
@@ -9,7 +9,7 @@ PyLong_Check, PyLong_CheckExact = build_type_checkers("Long")
 @cpython_api([lltype.Signed], PyObject)
 def PyLong_FromLong(space, val):
     """Return a new PyLongObject object from v, or NULL on failure."""
-    return space.wrap(val)
+    return space.newlong(val)
 
 @cpython_api([PyObject], rffi.ULONG, error=0)
 def PyLong_AsUnsignedLong(space, w_long):
@@ -25,5 +25,5 @@ def PyLong_FromVoidPtr(space, p):
     can be retrieved from the resulting value using PyLong_AsVoidPtr().
 
     If the integer is larger than LONG_MAX, a positive long integer is returned."""
-    return space.wrap(rffi.cast(rffi.LONG, p))
+    return space.wrap(rffi.cast(ADDR, p))
 
