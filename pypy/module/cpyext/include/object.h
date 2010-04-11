@@ -463,9 +463,14 @@ manually remove this flag though!
                 }                                                       \
         } while (0)
 
-#define PyObject_Length PyObject_Size
+/* Copied from CPython ----------------------------- */
+int PyObject_AsReadBuffer(PyObject *, void **, Py_ssize_t *);
+int PyObject_CheckReadBuffer(PyObject *);
+
 
 /* PyPy internal ----------------------------------- */
 int PyPyType_Register(PyTypeObject *);
+#define PyObject_Length PyObject_Size
+
 
 #endif
