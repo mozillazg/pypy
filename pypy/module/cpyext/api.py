@@ -542,6 +542,18 @@ def generate_macros(export_symbols, rename=True, do_deref=True):
         export_symbols[:] = renamed_symbols
     else:
         export_symbols[:] = [sym.replace("#", "") for sym in export_symbols]
+    
+    # Generate defines
+    for macro_name, size in [
+        ("SIZEOF_LONG_LONG", rffi.LONGLONG),
+        ("SIZEOF_VOID_P", rffi.VOIDP),
+        ("SIZEOF_SIZE_T", rffi.SIZE_T),
+        ("SIZEOF_LONG", rffi.LONG),
+        ("SIZEOF_SHORT", rffi.SHORT),
+        ("SIZEOF_INT", rffi.INT)
+    ]:
+        pypy_macros.append("#define %s %s" % (macro_name, rffi.sizeof(size)))
+    
     pypy_macros_h = udir.join('pypy_macros.h')
     pypy_macros_h.write('\n'.join(pypy_macros))
 
