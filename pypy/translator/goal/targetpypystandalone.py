@@ -234,6 +234,7 @@ class PyPyTarget(object):
         # manually imports app_main.py
         filename = os.path.join(this_dir, 'app_main.py')
         app = gateway.applevel(open(filename).read(), 'app_main.py', 'app_main')
+        app.hidden_applevel = False
         app.can_use_geninterp = False
         w_dict = app.getwdict(space)
         entry_point = create_entry_point(space, w_dict)
