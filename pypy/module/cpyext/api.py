@@ -290,7 +290,7 @@ PyBufferProcsFields = (
     ("bf_getbuffer", rffi.VOIDP),
     ("bf_releasebuffer", rffi.VOIDP))
 PyVarObjectFields = PyObjectFields + (("ob_size", Py_ssize_t), )
-cpython_struct('struct _object', PyObjectFields, PyObjectStruct)
+cpython_struct('PyObject', PyObjectFields, PyObjectStruct)
 cpython_struct('PyBufferProcs', PyBufferProcsFields, PyBufferProcs)
 PyVarObjectStruct = cpython_struct("PyVarObject", PyVarObjectFields)
 PyVarObject = lltype.Ptr(PyVarObjectStruct)
