@@ -957,7 +957,8 @@ class ObjSpace(object):
         from pypy.interpreter.pycode import PyCode
         if isinstance(statement, str):
             compiler = self.createcompiler()
-            statement = compiler.compile(statement, filename, 'exec', 0)
+            statement = compiler.compile(statement, filename, 'exec', 0,
+                                         hidden_applevel=True)
         if isinstance(statement, types.CodeType):
             statement = PyCode._from_code(self, statement,
                                           hidden_applevel=hidden_applevel)
