@@ -563,11 +563,11 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
     pypy_decls = []
     pypy_decls.append("#ifndef PYPY_STANDALONE\n")
     for name, func in sorted(FUNCTIONS.iteritems()):
-        restype = db.gettype(func.restype).replace('@', '')
+        restype = db.gettype(func.restype).replace('@', '').strip()
         args = []
         for i, argtype in enumerate(func.argtypes):
             arg = db.gettype(argtype)
-            arg = arg.replace('@', 'arg%d' % (i,))
+            arg = arg.replace('@', 'arg%d' % (i,)).strip()
             args.append(arg)
         args = ', '.join(args) or "void"
         header = "%s %s(%s)" % (restype, name, args)
