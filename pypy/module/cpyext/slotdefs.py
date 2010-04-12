@@ -53,7 +53,7 @@ def wrap_call(space, w_self, w_args, func, w_kwds):
 def wrap_lenfunc(space, w_self, w_args, func):
     func_len = rffi.cast(lenfunc, func)
     check_num_args(space, w_args, 0)
-    return generic_cpy_call(space, func_len, w_self)
+    return space.wrap(generic_cpy_call(space, func_len, w_self))
 
 def wrap_sq_item(space, w_self, w_args, func):
     func_target = rffi.cast(ssizeargfunc, func)

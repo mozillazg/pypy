@@ -756,8 +756,7 @@ def make_generic_cpy_call(FT, decref_args):
                     state.check_and_raise_exception()
 
                 return ret
-            else:
-                return space.wrap(result)
+            return result
         finally:
             if decref_args:
                 for ref in to_decref:
