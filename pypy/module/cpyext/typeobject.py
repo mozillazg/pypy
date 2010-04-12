@@ -257,9 +257,12 @@ class GettersAndSetters:
 
     def setter(self, space, w_self, w_value):
         check_descr(space, w_self, self.pto)
-        return generic_cpy_call(
+        res = generic_cpy_call(
             space, self.getset.c_set, w_self, w_value,
             self.getset.c_closure)
+        if rffi.cast(lltype.Signed, res) < 0:
+            state = space.fromcache(State)
+            state.check_and_raise_exception()
 
     def member_getter(self, space, w_self):
         check_descr(space, w_self, self.pto)
