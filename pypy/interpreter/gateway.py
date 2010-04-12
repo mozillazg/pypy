@@ -827,7 +827,7 @@ class ApplevelClass:
     def __init__(self, source, filename=None, modname='__builtin__'):
         # HAAACK (but a good one)
         if filename is None:
-            f = sys._getframe(2)
+            f = sys._getframe(1)
             filename = MyStr('<%s:%d>' % (f.f_code.co_filename, f.f_lineno))
             filename.__source__ = py.code.Source(source)
         self.filename = filename
