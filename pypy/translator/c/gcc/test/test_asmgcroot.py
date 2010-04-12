@@ -7,7 +7,7 @@ from pypy.annotation.listdef import s_list_of_strings
 from pypy import conftest
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.rlib.entrypoint import entrypoint
+from pypy.rlib.entrypoint import entrypoint, secondary_entrypoints
 
 class AbstractTestAsmGCRoot:
     # the asmgcroot gc transformer doesn't generate gc_reload_possibly_moved
@@ -20,8 +20,6 @@ class AbstractTestAsmGCRoot:
         config = get_pypy_config(translating=True)
         config.translation.gc = cls.gcpolicy
         config.translation.gcrootfinder = "asmgcc"
-        config.translation.secondaryentrypoints = 'x42'
-        # ^^^  from secondary entry point test
         return config
 
     @classmethod
@@ -39,11 +37,14 @@ class AbstractTestAsmGCRoot:
         config = cls.make_config()
         t = TranslationContext(config=config)
         a = t.buildannotator()
+        for f, inputtypes in cls.secondary_entrypoints:
+            a.build_types(f, inputtypes, False)
         a.build_types(main, [s_list_of_strings])
         t.buildrtyper().specialize()
         t.checkgraphs()
 
-        cbuilder = CStandaloneBuilder(t, main, config=config)
+        cbuilder = CStandaloneBuilder(t, main, config=config,
+                secondary_entrypoints=cls.secondary_entrypoints)
         c_source_filename = cbuilder.generate_source(
             defines = cbuilder.DEBUG_DEFINES)
         cls._patch_makefile(cbuilder.targetdir)
@@ -111,6 +112,7 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
                                    test_newgc.TestSemiSpaceGC):
     # for the individual tests see
     # ====> ../../test/test_newgc.py
+    secondary_entrypoints = []
 
     def define_large_function(cls):
         class A(object):
@@ -158,7 +160,6 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
 
         return f
 
-
     def test_callback_simple(self):
         res = self.run('callback_simple')
         assert res == 4900
@@ -170,16 +171,18 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
             return a + b
 
         c_source = py.code.Source("""
-        int mystuff()
+        int mystuff2()
         {
             return callback(40, 2) + callback(3, 4);
         }
         """)
 
         eci = ExternalCompilationInfo(separate_module_sources=[c_source])
-        z = rffi.llexternal('mystuff', [], lltype.Signed,
+        z = rffi.llexternal('mystuff2', [], lltype.Signed,
                             compilation_info=eci)
         S = lltype.GcStruct('S', ('x', lltype.Signed))
+
+        self.secondary_entrypoints.extend(secondary_entrypoints["x42"])
 
         def f():
             p = lltype.malloc(S)
@@ -187,10 +190,6 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
             result = z()
             return result * p.x
 
-        def update_config(config):
-            config.translation.secondaryentrypoints = 'x42'
-
-        f.update_config = update_config
         return f
 
     def test_secondary_entrypoint_callback(self):
