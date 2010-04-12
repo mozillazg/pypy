@@ -594,14 +594,7 @@ class ObjSpace(object):
 
     def createframe(self, code, w_globals, closure=None):
         "Create an empty PyFrame suitable for this code object."
-        from pypy.interpreter.pycode import PyCode
-        assert isinstance(code, PyCode)
-        magic = code.magic
-        if magic == self.host_magic:
-            return self.HostFrameClass(self, code, w_globals, closure)
-        elif magic == self.our_magic:
-            return self.FrameClass(self, code, w_globals, closure)
-        raise ValueError("bad magic %s" % magic)
+        return self.FrameClass(self, code, w_globals, closure)
 
     def allocate_lock(self):
         """Return an interp-level Lock object if threads are enabled,
@@ -940,10 +933,11 @@ class ObjSpace(object):
         import types
         from pypy.interpreter.pycode import PyCode
         if isinstance(expression, str):
-            expression = compile(expression, '?', 'eval')
+            compiler = self.createcompiler()
+            expression = compiler.compile(expression, '?', 'eval', 0,
+                                         hidden_applevel=hidden_applevel)
         if isinstance(expression, types.CodeType):
-            expression = PyCode._from_code(self, expression,
-                                          hidden_applevel=hidden_applevel)
+            raise Exception("space.eval(cpycode) Should not be used")
         if not isinstance(expression, PyCode):
             raise TypeError, 'space.eval(): expected a string, code or PyCode object'
         return expression.exec_code(self, w_globals, w_locals)
@@ -960,8 +954,7 @@ class ObjSpace(object):
             statement = compiler.compile(statement, filename, 'exec', 0,
                                          hidden_applevel=hidden_applevel)
         if isinstance(statement, types.CodeType):
-            statement = PyCode._from_code(self, statement,
-                                          hidden_applevel=hidden_applevel)
+            raise Exception("space.eval(cpycode) Should not be used")
         if not isinstance(statement, PyCode):
             raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
         w_key = self.wrap('__builtins__')
