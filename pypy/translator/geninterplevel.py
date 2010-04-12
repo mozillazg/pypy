@@ -161,11 +161,11 @@ class GenRpy:
                          Constant(OperationError).key: late_OperationError,
                          Constant(Arguments).key: late_Arguments,
                        }
-        u = UniqueList
-        self.initcode = u()    # list of lines for the module's initxxx()
-        self.latercode = u()   # list of generators generating extra lines
-                               #   for later in initxxx() -- for recursive
-                               #   objects
+        self.initcode = UniqueList() # list of lines for the module's initxxx()
+        self.latercode = UniqueList()
+        # list of generators generating extra lines
+        #   for later in initxxx() -- for recursive
+        #   objects
         self.namespace = NameManager()
         self.namespace.make_reserved_names('__doc__ __args__ space goto')
         self.globaldecl = []
