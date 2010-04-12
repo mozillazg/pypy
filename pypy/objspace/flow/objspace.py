@@ -85,6 +85,14 @@ class FlowObjSpace(ObjSpace):
             return Constant({})
         return self.do_operation('newdict')
 
+    def createframe(self, code, w_globals, closure=None):
+        magic = code.magic
+        if magic == self.host_magic:
+            return self.HostFrameClass(self, code, w_globals, closure)
+        elif magic == self.our_magic:
+            return self.FrameClass(self, code, w_globals, closure)
+        raise ValueError("bad magic %s" % magic)
+
     def newtuple(self, args_w):
         try:
             content = [self.unwrap(w_arg) for w_arg in args_w]
