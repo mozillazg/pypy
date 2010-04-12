@@ -448,14 +448,14 @@ def bootstrap_types(space):
 # Build the bridge DLL, Allow extension DLLs to call
 # back into Pypy space functions
 # Do not call this more than once per process
-def build_bridge(space, rename=True):
+def build_bridge(space):
     from pypy.module.cpyext.pyobject import make_ref
 
     export_symbols = list(FUNCTIONS) + FUNCTIONS_C + list(GLOBALS)
     from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
-    generate_macros(export_symbols, rename)
+    generate_macros(export_symbols, rename=True, do_deref=True)
 
     # Structure declaration code
     members = []
@@ -501,8 +501,7 @@ def build_bridge(space, rename=True):
     # populate static data
     for name, (type, expr) in GLOBALS.iteritems():
         name = name.replace("#", "")
-        if rename:
-            name = name.replace('Py', 'PyPy')
+        name = name.replace('Py', 'PyPy')
         w_obj = eval(expr)
         ptr = ctypes.c_void_p.in_dll(bridge, name)
         ptr.value = ctypes.cast(ll2ctypes.lltype2ctypes(make_ref(space, w_obj)),
@@ -598,12 +597,12 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
     pypy_decl_h.write('\n'.join(pypy_decls))
     return functions
 
-def build_eci(build_bridge, export_symbols, code):
+def build_eci(building_bridge, export_symbols, code):
     # Build code and get pointer to the structure
     kwds = {}
     export_symbols_eci = export_symbols[:]
 
-    if build_bridge:
+    if building_bridge:
         if sys.platform == "win32":
             # '%s' undefined; assuming extern returning int
             kwds["compile_extra"] = ["/we4013"]
@@ -632,14 +631,14 @@ def build_eci(build_bridge, export_symbols, code):
     return eci
 
 
-def setup_library(space, rename=False):
+def setup_library(space):
     from pypy.module.cpyext.pyobject import make_ref
 
     export_symbols = list(FUNCTIONS) + FUNCTIONS_C + list(GLOBALS)
     from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
-    generate_macros(export_symbols, rename, False)
+    generate_macros(export_symbols, rename=False, do_deref=False)
 
     functions = generate_decls_and_callbacks(db, [], api_struct=False, globals_are_pointers=False)
     code = "#include <Python.h>\n" + "\n".join(functions)
@@ -652,8 +651,6 @@ def setup_library(space, rename=False):
     # populate static data
     for name, (type, expr) in GLOBALS.iteritems():
         name = name.replace("#", "")
-        if rename:
-            name = name.replace('Py', 'PyPy')
         w_obj = eval(expr)
         struct_ptr = make_ref(space, w_obj)
         struct = rffi.cast(get_structtype_for_ctype(type), struct_ptr)._obj
