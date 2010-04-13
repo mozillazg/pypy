@@ -259,8 +259,12 @@ for cpyname, pypyexpr in {"Type": "space.w_type",
         "Dict": "space.w_dict",
         "Tuple": "space.w_tuple",
         "List": "space.w_list",
+        "String": "space.w_str",
         "Unicode": "space.w_unicode",
-        'Bool': 'space.w_bool',
+        "Int": "space.w_int",
+        "Bool": "space.w_bool",
+        "Float": "space.w_float",
+        "Long": "space.w_long",
         'None': 'space.type(space.w_None)',
         'NotImplemented': 'space.type(space.w_NotImplemented)',
         }.items():
@@ -505,9 +509,11 @@ def build_bridge(space):
 
     # populate static data
     for name, (type, expr) in GLOBALS.iteritems():
-        name = name.replace("#", "")
-        name = name.replace('Py', 'PyPy')
         w_obj = eval(expr)
+        name = name.replace("#", "")
+        INTERPLEVEL_API[name] = w_obj
+
+        name = name.replace('Py', 'PyPy')
         ptr = ctypes.c_void_p.in_dll(bridge, name)
         ptr.value = ctypes.cast(ll2ctypes.lltype2ctypes(make_ref(space, w_obj)),
             ctypes.c_void_p).value
