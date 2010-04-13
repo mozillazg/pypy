@@ -13,6 +13,7 @@
 
 #define PyMem_Malloc PyMem_MALLOC
 #define PyMem_Free  PyMem_FREE
+#define PyMem_Realloc  PyMem_REALLOC
 
 /*
  * Type-oriented memory interface
