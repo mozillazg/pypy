@@ -97,5 +97,11 @@ class TestObject(BaseApiTest):
         
     def test_TypeCheck(self, space, api):
         assert api.PyObject_TypeCheck(space.wrap(1), space.w_int)
+        assert api.PyObject_TypeCheck(space.wrap(1), api.PyInt_Type)
         assert api.PyObject_TypeCheck(space.wrap('foo'), space.w_str)
+        assert api.PyObject_TypeCheck(space.wrap('foo'), api.PyString_Type)
         assert api.PyObject_TypeCheck(space.wrap('foo'), space.w_object)
+        assert api.PyObject_TypeCheck(space.wrap(1L), api.PyLong_Type)
+        assert api.PyObject_TypeCheck(space.wrap(True), api.PyBool_Type)
+        assert api.PyObject_TypeCheck(space.wrap(1.2), api.PyFloat_Type)
+        assert api.PyObject_TypeCheck(space.w_int, api.PyType_Type)
