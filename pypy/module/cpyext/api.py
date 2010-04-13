@@ -405,9 +405,9 @@ def make_wrapper(space, callable):
                     add_borrowed_object(space, retval)
             elif callable.api_func.restype is not lltype.Void:
                 retval = rffi.cast(callable.api_func.restype, result)
-        except NullPointerException, e:
+        except NullPointerException:
             print "Container not registered by %s" % callable.__name__
-        except:
+        except Exception:
             print "Fatal exception encountered"
         rffi.stackcounter.stacks_counter -= 1
         return retval
