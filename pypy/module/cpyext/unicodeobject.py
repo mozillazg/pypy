@@ -147,3 +147,21 @@ def PyUnicode_AsEncodedString(space, w_unicode, encoding, errors):
     if errors:
         w_errors = rffi.charp2str(encoding)
     return unicodetype.encode_object(space, w_unicode, w_encoding, w_errors)
+
+@cpython_api([rffi.CWCHARP, Py_ssize_t], PyObject)
+def PyUnicode_FromUnicode(space, wchar_p, length):
+    """Create a Unicode Object from the Py_UNICODE buffer u of the given size. u
+    may be NULL which causes the contents to be undefined. It is the user's
+    responsibility to fill in the needed data.  The buffer is copied into the new
+    object. If the buffer is not NULL, the return value might be a shared object.
+    Therefore, modification of the resulting Unicode object is only allowed when u
+    is NULL."""
+    if not wchar_p:
+        raise NotImplementedError
+    s = rffi.wcharpsize2unicode(wchar_p, length)
+    ptr = make_ref(space, space.wrap(s))
+    return ptr
+
+@cpython_api([PyObject, rffi.CCHARP], PyObject)
+def _PyUnicode_AsDefaultEncodedString(space, w_unicode, errors):
+    return PyUnicode_AsEncodedString(space, w_unicode, lltype.nullptr(rffi.CCHARP.TO), errors)
