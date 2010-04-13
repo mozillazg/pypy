@@ -8,6 +8,7 @@ from pypy import conftest
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.entrypoint import entrypoint, secondary_entrypoints
+from pypy.rpython.lltypesystem.lloperation import llop
 
 class AbstractTestAsmGCRoot:
     # the asmgcroot gc transformer doesn't generate gc_reload_possibly_moved
@@ -167,6 +168,7 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
     def define_secondary_entrypoint_callback(self):
         @entrypoint("x42", [lltype.Signed, lltype.Signed], c_name='callback')
         def mycallback(a, b):
+            llop.gc_stack_bottom(lltype.Void)
             gc.collect()
             return a + b
 
