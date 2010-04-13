@@ -715,6 +715,29 @@ def make_generic_cpy_call(FT, decref_args):
     unrolling_arg_types = unrolling_iterable(enumerate(FT.ARGS))
     RESULT_TYPE = FT.RESULT
 
+    # copied and modified from rffi.py
+    # The around-handlers are releasing the GIL in a threaded pypy.
+    # We need tons of care to ensure that no GC operation and no
+    # exception checking occurs while the GIL is released.
+    argnames = ', '.join(['a%d' % i for i in range(len(FT.ARGS))])
+    source = py.code.Source("""
+        def call_external_function(funcptr, %(argnames)s):
+            # NB. it is essential that no exception checking occurs here!
+            res = funcptr(%(argnames)s)
+            return res
+    """ % locals())
+    miniglobals = {'__name__':    __name__, # for module name propagation
+                   }
+    exec source.compile() in miniglobals
+    call_external_function = miniglobals['call_external_function']
+    call_external_function._dont_inline_ = True
+    call_external_function._annspecialcase_ = 'specialize:ll'
+    call_external_function._gctransformer_hint_close_stack_ = True
+    call_external_function = func_with_new_name(call_external_function,
+                                                'ccall_' + name)
+    # don't inline, as a hack to guarantee that no GC pointer is alive
+    # anywhere in call_external_function
+
     @specialize.ll()
     def generic_cpy_call(space, func, *args):
         boxed_args = ()
@@ -733,7 +756,7 @@ def make_generic_cpy_call(FT, decref_args):
                     boxed_args += (arg,)
             else:
                 boxed_args += (arg,)
-        result = func(*boxed_args)
+        result = call_external_function(func, *boxed_args)
         try:
             if RESULT_TYPE is PyObject:
                 if result is None:
