@@ -353,59 +353,63 @@ def make_wrapper(space, callable):
         # we hope that malloc removal removes the newtuple() that is
         # inserted exactly here by the varargs specializer
         llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
+        rffi.stackcounter.stacks_counter += 1
         boxed_args = ()
-        if not we_are_translated() and DEBUG_WRAPPER:
-            print >>sys.stderr, callable,
-        for i, (typ, is_wrapped) in argtypes_enum_ui:
-            arg = args[i]
-            if typ is PyObject and is_wrapped:
-                if arg:
-                    arg_conv = from_ref(space, arg)
-                else:
-                    arg_conv = None
-            else:
-                arg_conv = arg
-            boxed_args += (arg_conv, )
-        state = space.fromcache(State)
         try:
-            retval = callable(space, *boxed_args)
             if not we_are_translated() and DEBUG_WRAPPER:
-                print >>sys.stderr, " DONE"
-        except OperationError, e:
-            failed = True
-            e.normalize_exception(space)
-            state.set_exception(e.w_type, e.get_w_value(space))
-        except BaseException, e:
-            failed = True
-            state.set_exception(space.w_SystemError, space.wrap(str(e)))
-            if not we_are_translated():
-                import traceback
-                traceback.print_exc()
-        else:
-            failed = False
-
-        if failed:
-            error_value = callable.api_func.error_value
-            if error_value is CANNOT_FAIL:
-                raise SystemError("The function '%s' was not supposed to fail"
-                                  % (callable.__name__,))
-            return error_value
-
-        if callable.api_func.restype is PyObject:
-            borrowed = callable.api_func.borrowed
-            if not rffi._isllptr(retval):
-                retval = make_ref(space, retval, borrowed=borrowed)
-            if borrowed:
-                try:
-                    add_borrowed_object(space, retval)
-                except NullPointerException, e:
-                    if not we_are_translated():
-                        assert False, "Container not registered by %s" % (callable, )
+                print >>sys.stderr, callable,
+            for i, (typ, is_wrapped) in argtypes_enum_ui:
+                arg = args[i]
+                if typ is PyObject and is_wrapped:
+                    if arg:
+                        arg_conv = from_ref(space, arg)
                     else:
-                        raise
-        elif callable.api_func.restype is not lltype.Void:
-            retval = rffi.cast(callable.api_func.restype, retval)
-        return retval
+                        arg_conv = None
+                else:
+                    arg_conv = arg
+                boxed_args += (arg_conv, )
+            state = space.fromcache(State)
+            try:
+                retval = callable(space, *boxed_args)
+                if not we_are_translated() and DEBUG_WRAPPER:
+                    print >>sys.stderr, " DONE"
+            except OperationError, e:
+                failed = True
+                e.normalize_exception(space)
+                state.set_exception(e.w_type, e.get_w_value(space))
+            except BaseException, e:
+                failed = True
+                state.set_exception(space.w_SystemError, space.wrap(str(e)))
+                if not we_are_translated():
+                    import traceback
+                    traceback.print_exc()
+            else:
+                failed = False
+
+            if failed:
+                error_value = callable.api_func.error_value
+                if error_value is CANNOT_FAIL:
+                    raise SystemError("The function '%s' was not supposed to fail"
+                                      % (callable.__name__,))
+                return error_value
+
+            if callable.api_func.restype is PyObject:
+                borrowed = callable.api_func.borrowed
+                if not rffi._isllptr(retval):
+                    retval = make_ref(space, retval, borrowed=borrowed)
+                if borrowed:
+                    try:
+                        add_borrowed_object(space, retval)
+                    except NullPointerException, e:
+                        if not we_are_translated():
+                            assert False, "Container not registered by %s" % (callable, )
+                        else:
+                            raise
+            elif callable.api_func.restype is not lltype.Void:
+                retval = rffi.cast(callable.api_func.restype, retval)
+            return retval
+        finally:
+            rffi.stackcounter.stacks_counter -= 1
     callable._always_inline_ = True
     wrapper.__name__ = "wrapper for %r" % (callable, )
     return wrapper
