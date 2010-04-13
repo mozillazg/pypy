@@ -51,6 +51,7 @@ class _IsLLPtrEntry(ExtRegistryEntry):
         result = isinstance(s_p, annmodel.SomePtr)
         return self.bookkeeper.immutablevalue(result)
     def specialize_call(self, hop):
+        hop.exception_cannot_occur()
         return hop.inputconst(lltype.Bool, hop.s_result.const)
 
 def llexternal(name, args, result, _callable=None,
