@@ -716,9 +716,8 @@ def make_generic_cpy_call(FT, decref_args):
     RESULT_TYPE = FT.RESULT
 
     # copied and modified from rffi.py
-    # The around-handlers are releasing the GIL in a threaded pypy.
     # We need tons of care to ensure that no GC operation and no
-    # exception checking occurs while the GIL is released.
+    # exception checking occurs in call_external_function.
     argnames = ', '.join(['a%d' % i for i in range(len(FT.ARGS))])
     source = py.code.Source("""
         def call_external_function(funcptr, %(argnames)s):
