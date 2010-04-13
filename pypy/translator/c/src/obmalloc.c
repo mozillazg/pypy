@@ -225,7 +225,7 @@
 #define ulong			unsigned long	/* assuming >= 32 bits */
 
 #undef uptr
-#define uptr			Py_uintptr_t
+#define uptr			unsigned long
 
 /* When you say memory, my mind reasons in terms of (pointers to) blocks */
 typedef uchar block;

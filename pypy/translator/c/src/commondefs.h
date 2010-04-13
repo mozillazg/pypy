@@ -69,9 +69,6 @@
 
 /********************************************************/
 
-typedef long Py_intptr_t;
-typedef unsigned long Py_uintptr_t;
-
 #if ((-1) >> 1) > 0
 #  define Py_ARITHMETIC_RIGHT_SHIFT(TYPE, I, J) \
 	  ((I) < 0 ? -1-((-1-(I)) >> (J)) : (I) >> (J))
