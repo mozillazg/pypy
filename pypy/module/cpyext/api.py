@@ -344,6 +344,7 @@ def make_wrapper(space, callable):
     names = callable.api_func.argnames
     argtypes_enum_ui = unrolling_iterable(enumerate(zip(callable.api_func.argtypes,
         [name.startswith("w_") for name in names])))
+    fatal_value = callable.api_func.restype._defl()
 
     @specialize.ll()
     def wrapper(*args):
@@ -354,6 +355,7 @@ def make_wrapper(space, callable):
         # inserted exactly here by the varargs specializer
         llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
         rffi.stackcounter.stacks_counter += 1
+        retval = fatal_value
         boxed_args = ()
         try:
             if not we_are_translated() and DEBUG_WRAPPER:
@@ -391,25 +393,22 @@ def make_wrapper(space, callable):
                 if error_value is CANNOT_FAIL:
                     raise SystemError("The function '%s' was not supposed to fail"
                                       % (callable.__name__,))
-                return error_value
+                retval = error_value
 
-            if callable.api_func.restype is PyObject:
+            elif callable.api_func.restype is PyObject:
                 borrowed = callable.api_func.borrowed
                 if not rffi._isllptr(retval):
                     retval = make_ref(space, retval, borrowed=borrowed)
                 if borrowed:
-                    try:
-                        add_borrowed_object(space, retval)
-                    except NullPointerException, e:
-                        if not we_are_translated():
-                            assert False, "Container not registered by %s" % (callable, )
-                        else:
-                            raise
+                    add_borrowed_object(space, retval)
             elif callable.api_func.restype is not lltype.Void:
                 retval = rffi.cast(callable.api_func.restype, retval)
-            return retval
-        finally:
-            rffi.stackcounter.stacks_counter -= 1
+        except NullPointerException, e:
+            print "Container not registered by %s" % callable.__name__
+        except:
+            print "Fatal exception encountered"
+        rffi.stackcounter.stacks_counter -= 1
+        return retval
     callable._always_inline_ = True
     wrapper.__name__ = "wrapper for %r" % (callable, )
     return wrapper
