@@ -94,7 +94,7 @@ class TranslationDriver(SimpleTaskEngine):
 
         if setopts is not None:
             self.config.set(**setopts)
-        
+
         self.exe_name = exe_name
         self.extmod_name = extmod_name
 
@@ -525,7 +525,10 @@ class TranslationDriver(SimpleTaskEngine):
 
     def task_compile_c(self): # xxx messy
         cbuilder = self.cbuilder
-        cbuilder.compile(exe_name=self.compute_exe_name().basename)
+        kwds = {}
+        if self.standalone:
+            kwds['exe_name'] = self.compute_exe_name().basename
+        cbuilder.compile(**kwds)
 
         if self.standalone:
             self.c_entryp = cbuilder.executable_name
