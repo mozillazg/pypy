@@ -372,7 +372,7 @@ def make_wrapper(space, callable):
                 boxed_args += (arg_conv, )
             state = space.fromcache(State)
             try:
-                retval = callable(space, *boxed_args)
+                result = callable(space, *boxed_args)
                 if not we_are_translated() and DEBUG_WRAPPER:
                     print >>sys.stderr, " DONE"
             except OperationError, e:
@@ -397,12 +397,14 @@ def make_wrapper(space, callable):
 
             elif callable.api_func.restype is PyObject:
                 borrowed = callable.api_func.borrowed
-                if not rffi._isllptr(retval):
-                    retval = make_ref(space, retval, borrowed=borrowed)
+                if not rffi._isllptr(result):
+                    retval = make_ref(space, result, borrowed=borrowed)
+                else:
+                    retval = result
                 if borrowed:
                     add_borrowed_object(space, retval)
             elif callable.api_func.restype is not lltype.Void:
-                retval = rffi.cast(callable.api_func.restype, retval)
+                retval = rffi.cast(callable.api_func.restype, result)
         except NullPointerException, e:
             print "Container not registered by %s" % callable.__name__
         except:
