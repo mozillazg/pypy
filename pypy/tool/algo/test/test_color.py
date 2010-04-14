@@ -25,3 +25,10 @@ def test_lexicographic_order():
         'cabde', 'cabed', 'cadbe', 'cadeb', 'caebd', 'caedb',
         ]
     assert dg.size_of_largest_clique() == 3
+    coloring = dg.find_node_coloring()
+    assert len(coloring) == 5
+    assert sorted(coloring.keys()) == list('abcde')
+    assert set(coloring.values()) == set([0, 1, 2])
+    for v1, v2list in dg.neighbours.items():
+        for v2 in v2list:
+            assert coloring[v1] != coloring[v2]
