@@ -12,12 +12,12 @@ from pypy.objspace.std.typeobject import W_TypeObject, _CPYTYPE, call__Type
 from pypy.objspace.std.typetype import _precheck_for_new
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
-from pypy.module.cpyext.api import cpython_api, cpython_struct, \
+from pypy.module.cpyext.api import cpython_api, cpython_struct, bootstrap_function, \
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
-    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, PyStringObject, ADDR, \
+    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, ADDR, \
     Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS, \
-    PyUnicodeObject, CANNOT_FAIL, PyBufferProcs
-from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
+    CANNOT_FAIL, PyBufferProcs
+from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, get_typedescr, make_typedescr
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import FunctionWithFixedCode, StaticMethod
 from pypy.module.cpyext import structmemberdefs
@@ -276,6 +276,12 @@ class GettersAndSetters:
         check_descr(space, w_self, self.pto)
         PyMember_SetOne(space, w_self, self.member, w_value)
 
+@bootstrap_function
+def init_unicodeobject(space):
+    make_typedescr(space.w_type.instancetypedef,
+                   basestruct=PyTypeObject,
+                   dealloc=type_dealloc)
+
 def c_type_descr__call__(space, w_type, __args__):
     if isinstance(w_type, W_PyCTypeObject):
         pyo = make_ref(space, w_type)
@@ -359,28 +365,6 @@ def setup_string_buffer_procs(space, pto):
     pto.c_tp_as_buffer = c_buf
 
 @cpython_api([PyObject], lltype.Void, external=False)
-def string_dealloc(space, obj):
-    obj = rffi.cast(PyStringObject, obj)
-    pto = obj.c_ob_type
-    if obj.c_buffer:
-        lltype.free(obj.c_buffer, flavor="raw")
-    obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
-    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
-    pto = rffi.cast(PyObject, pto)
-    Py_DecRef(space, pto)
-
-@cpython_api([PyObject], lltype.Void, external=False)
-def unicode_dealloc(space, obj):
-    obj = rffi.cast(PyUnicodeObject, obj)
-    pto = obj.c_ob_type
-    if obj.c_buffer:
-        lltype.free(obj.c_buffer, flavor="raw")
-    obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
-    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
-    pto = rffi.cast(PyObject, pto)
-    Py_DecRef(space, pto)
-
-@cpython_api([PyObject], lltype.Void, external=False)
 def type_dealloc(space, obj):
     state = space.fromcache(State)
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
@@ -399,36 +383,33 @@ def type_dealloc(space, obj):
         Py_DecRef(space, pto)
 
 
-def allocate_type_obj(space, w_type):
-    """ Allocates a pto from a w_type which must be a PyPy type. """
-    state = space.fromcache(State)
+def allocate_type_obj(space, py_obj, w_type):
+    """ Allocates a PyTypeObject from a w_type which must be a PyPy type. """
     from pypy.module.cpyext.object import PyObject_dealloc, PyObject_Del
+
     assert isinstance(w_type, W_TypeObject)
 
-    pto = lltype.malloc(PyTypeObject, flavor="raw", zero=True)
-    pto.c_ob_refcnt = 1
-    # put the type object early into the dict
-    # to support dependency cycles like object/type
-    state = space.fromcache(State)
-    state.py_objects_w2r[w_type] = rffi.cast(PyObject, pto)
+    pto = rffi.cast(PyTypeObjectPtr, py_obj)
 
+    # dealloc
     if space.is_w(w_type, space.w_object):
         pto.c_tp_dealloc = llhelper(PyObject_dealloc.api_func.functype,
                 PyObject_dealloc.api_func.get_wrapper(space))
     elif space.is_w(w_type, space.w_type):
         pto.c_tp_dealloc = llhelper(type_dealloc.api_func.functype,
                 type_dealloc.api_func.get_wrapper(space))
+        #pto.c_tp_dealloc = get_typedescr(w_type.instancetypedef).get_dealloc(space)
     elif space.is_w(w_type, space.w_str):
-        pto.c_tp_dealloc = llhelper(string_dealloc.api_func.functype,
-                string_dealloc.api_func.get_wrapper(space))
-        # buffer protocol
-        setup_string_buffer_procs(space, pto)
+        pto.c_tp_dealloc = get_typedescr(w_type.instancetypedef).get_dealloc(space)
     elif space.is_w(w_type, space.w_unicode):
-        pto.c_tp_dealloc = llhelper(unicode_dealloc.api_func.functype,
-                unicode_dealloc.api_func.get_wrapper(space))
+        pto.c_tp_dealloc = get_typedescr(w_type.instancetypedef).get_dealloc(space)
     else:
         pto.c_tp_dealloc = llhelper(subtype_dealloc.api_func.functype,
                 subtype_dealloc.api_func.get_wrapper(space))
+    # buffer protocol
+    if space.is_w(w_type, space.w_str):
+        setup_string_buffer_procs(space, pto)
+
     pto.c_tp_flags = Py_TPFLAGS_HEAPTYPE
     pto.c_tp_free = llhelper(PyObject_Del.api_func.functype,
             PyObject_Del.api_func.get_wrapper(space))
@@ -448,16 +429,13 @@ def allocate_type_obj(space, w_type):
         if bases_w:
             ref = make_ref(space, bases_w[0])
             pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
-        pto.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.type(space.w_type)))
         PyPyType_Ready(space, pto, w_type)
-    else:
-        pto.c_ob_type = lltype.nullptr(PyTypeObjectPtr.TO)
     if space.is_w(w_type, space.w_object):
         pto.c_tp_basicsize = rffi.sizeof(PyObject.TO)
     elif space.is_w(w_type, space.w_type):
         pto.c_tp_basicsize = rffi.sizeof(PyTypeObject)
     elif space.is_w(w_type, space.w_str):
-        pto.c_tp_basicsize = rffi.sizeof(PyStringObject.TO)
+        pto.c_tp_basicsize = rffi.sizeof(get_typedescr(w_type.instancetypedef).basestruct)
     elif pto.c_tp_base:
         pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
 
