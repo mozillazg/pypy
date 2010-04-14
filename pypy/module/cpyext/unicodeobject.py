@@ -1,13 +1,26 @@
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
-from pypy.module.cpyext.api import (CANNOT_FAIL, Py_ssize_t, PyUnicodeObject,
-                                    build_type_checkers, cpython_api)
+from pypy.module.cpyext.api import (CANNOT_FAIL, Py_ssize_t,
+                                    build_type_checkers, cpython_api,
+                                    bootstrap_function, generic_cpy_call)
 from pypy.module.cpyext.pyerrors import PyErr_BadArgument
-from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref
+from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref, Py_DecRef, make_typedescr
 from pypy.module.cpyext.stringobject import PyString_Check
 from pypy.module.sys.interp_encoding import setdefaultencoding
 from pypy.objspace.std import unicodeobject, unicodetype
+
+PyUnicodeObjectStruct = lltype.ForwardReference()
+PyUnicodeObject = lltype.Ptr(PyUnicodeObjectStruct)
+PyUnicodeObjectFields = (PyObjectFields +
+    (("buffer", rffi.CWCHARP), ("size", Py_ssize_t)))
+cpython_struct("PyUnicodeObject", PyUnicodeObjectFields, PyUnicodeObjectStruct)
+
+@bootstrap_function
+def init_unicodeobject(space):
+    make_typedescr(space.w_unicode.instancetypedef,
+                   basestruct=PyUnicodeObject.TO,
+                   dealloc=unicode_dealloc)
 
 # Buffer for the default encoding (used by PyUnicde_GetDefaultEncoding)
 DEFAULT_ENCODING_SIZE = 100
@@ -17,6 +30,17 @@ default_encoding = lltype.malloc(rffi.CCHARP.TO, DEFAULT_ENCODING_SIZE,
 PyUnicode_Check, PyUnicode_CheckExact = build_type_checkers("Unicode", "w_unicode")
 
 Py_UNICODE = lltype.UniChar
+
+@cpython_api([PyObject], lltype.Void, external=False)
+def unicode_dealloc(space, obj):
+    obj = rffi.cast(PyUnicodeObject, obj)
+    pto = obj.c_ob_type
+    if obj.c_buffer:
+        lltype.free(obj.c_buffer, flavor="raw")
+    obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
+    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
+    pto = rffi.cast(PyObject, pto)
+    Py_DecRef(space, pto)
 
 @cpython_api([Py_UNICODE], rffi.INT_real, error=CANNOT_FAIL)
 def Py_UNICODE_ISSPACE(space, ch):

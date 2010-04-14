@@ -249,6 +249,7 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     '_Py_NotImplementedStruct#': ('PyObject*', 'space.w_NotImplemented'),
     }
 INIT_FUNCTIONS = []
+BOOTSTRAP_FUNCTIONS = []
 
 for exc_name in exceptions.Module.interpleveldefs.keys():
     GLOBALS['PyExc_' + exc_name] = ('PyTypeObject*', 'space.gettypeobject(interp_exceptions.W_%s.typedef)'% (exc_name, ))
@@ -300,18 +301,6 @@ PyVarObject = lltype.Ptr(PyVarObjectStruct)
 
 # a pointer to PyObject
 PyObjectP = rffi.CArrayPtr(PyObject)
-
-PyStringObjectStruct = lltype.ForwardReference()
-PyStringObject = lltype.Ptr(PyStringObjectStruct)
-PyStringObjectFields = PyObjectFields + \
-    (("buffer", rffi.CCHARP), ("size", Py_ssize_t))
-cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
-
-PyUnicodeObjectStruct = lltype.ForwardReference()
-PyUnicodeObject = lltype.Ptr(PyUnicodeObjectStruct)
-PyUnicodeObjectFields = (PyObjectFields +
-    (("buffer", rffi.CWCHARP), ("size", Py_ssize_t)))
-cpython_struct("PyUnicodeObject", PyUnicodeObjectFields, PyUnicodeObjectStruct)
 
 VA_TP_LIST = {}
 #{'int': lltype.Signed,
@@ -411,6 +400,9 @@ def make_wrapper(space, callable):
         except NullPointerException:
             print "Container not registered by %s" % callable.__name__
         except Exception:
+            if not we_are_translated():
+                import traceback
+                traceback.print_exc()
             print "Fatal exception encountered"
         rffi.stackcounter.stacks_counter -= 1
         return retval
@@ -429,17 +421,31 @@ def setup_va_functions(eci):
         globals()['va_get_%s' % name_no_star] = func
 
 def setup_init_functions(eci):
+    init_buffer = rffi.llexternal('init_bufferobject', [], lltype.Void, compilation_info=eci)
     INIT_FUNCTIONS.extend([
-        rffi.llexternal('init_bufferobject', [], lltype.Void, compilation_info=eci)
+        lambda space: init_buffer(),
     ])
+
+def init_function(func):
+    INIT_FUNCTIONS.append(func)
+    return func
+
+def bootstrap_function(func):
+    BOOTSTRAP_FUNCTIONS.append(func)
+    return func
 
 def bootstrap_types(space):
     from pypy.module.cpyext.pyobject import make_ref
     from pypy.module.cpyext.typeobject import PyTypeObjectPtr, PyPyType_Ready, \
             inherit_slots
+
+    for func in BOOTSTRAP_FUNCTIONS:
+        func(space)
+
     # bootstrap this damn cycle
     type_pto = make_ref(space, space.w_type)
     type_pto = rffi.cast(PyTypeObjectPtr, type_pto)
+    
     object_pto = make_ref(space, space.w_object)
     object_pto = rffi.cast(PyTypeObjectPtr, object_pto)
     type_pto.c_tp_base = object_pto

@@ -32,7 +32,7 @@ class Module(MixedModule):
             state.init_r2w_from_w2r()
 
         for func in api.INIT_FUNCTIONS:
-            func()
+            func(space)
             state.check_and_raise_exception()
         if not we_are_translated():
             state.non_heaptypes[:] = []

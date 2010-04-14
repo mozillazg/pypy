@@ -1,8 +1,8 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
-from pypy.module.cpyext.stringobject import new_empty_str
-from pypy.module.cpyext.api import PyStringObject, PyObjectP, PyObject
+from pypy.module.cpyext.stringobject import new_empty_str, PyStringObject
+from pypy.module.cpyext.api import PyObjectP, PyObject
 from pypy.module.cpyext.pyobject import Py_DecRef, from_ref, make_ref
 
 import py

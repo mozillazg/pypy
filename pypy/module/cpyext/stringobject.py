@@ -1,11 +1,24 @@
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import (cpython_api, PyVarObjectFields,
-                                    PyStringObject, Py_ssize_t, cpython_struct,
-                                    CANNOT_FAIL, build_type_checkers,
-                                    PyObjectP, PyTypeObjectPtr)
-from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, Py_DecRef
+from pypy.module.cpyext.api import (cpython_api, bootstrap_function, PyVarObjectFields,
+                                    Py_ssize_t, cpython_struct, PyObjectFields,
+                                    ADDR, CANNOT_FAIL, build_type_checkers,
+                                    PyObjectP, PyTypeObjectPtr, generic_cpy_call)
+from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, Py_DecRef, make_typedescr
+from pypy.module.cpyext.state import State
 
+PyStringObjectStruct = lltype.ForwardReference()
+PyStringObject = lltype.Ptr(PyStringObjectStruct)
+PyStringObjectFields = PyObjectFields + \
+    (("buffer", rffi.CCHARP), ("size", Py_ssize_t))
+cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
+
+@bootstrap_function
+def init_stringobject(space):
+    make_typedescr(space.w_str.instancetypedef,
+                   basestruct=PyStringObject.TO,
+                   dealloc=string_dealloc,
+                   realize=string_realize)
 
 PyString_Check, PyString_CheckExact = build_type_checkers("String", "w_str")
 
@@ -19,6 +32,28 @@ def new_empty_str(space, length):
     py_str.c_size = length
     py_str.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.w_str))
     return py_str
+
+def string_realize(space, ref):
+    state = space.fromcache(State)
+    ref = rffi.cast(PyStringObject, ref)
+    s = rffi.charpsize2str(ref.c_buffer, ref.c_size)
+    ref = rffi.cast(PyObject, ref)
+    w_str = space.wrap(s)
+    state.py_objects_w2r[w_str] = ref
+    ptr = rffi.cast(ADDR, ref)
+    state.py_objects_r2w[ptr] = w_str
+    return w_str
+
+@cpython_api([PyObject], lltype.Void, external=False)
+def string_dealloc(space, obj):
+    obj = rffi.cast(PyStringObject, obj)
+    pto = obj.c_ob_type
+    if obj.c_buffer:
+        lltype.free(obj.c_buffer, flavor="raw")
+    obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
+    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
+    pto = rffi.cast(PyObject, pto)
+    Py_DecRef(space, pto)
 
 @cpython_api([rffi.CCHARP, Py_ssize_t], PyStringObject, error=lltype.nullptr(PyStringObject.TO))
 def PyString_FromStringAndSize(space, char_p, length):

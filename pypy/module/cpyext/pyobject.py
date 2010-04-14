@@ -1,13 +1,89 @@
 import sys
 
-from pypy.interpreter.baseobjspace import W_Root
+from pypy.interpreter.baseobjspace import W_Root, Wrappable, SpaceCache
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, PyObject, PyStringObject, ADDR,\
-        Py_TPFLAGS_HEAPTYPE, PyUnicodeObject, PyTypeObjectPtr
+from pypy.module.cpyext.api import cpython_api, \
+     PyObject, ADDR,\
+     Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.objspace.std.typeobject import W_TypeObject
+from pypy.objspace.std.objectobject import W_ObjectObject
+from pypy.rlib.objectmodel import specialize, we_are_translated
+from pypy.rpython.annlowlevel import llhelper
+
+#________________________________________________________
+# type description
+
+class BaseCpyTypedescr(object):
+    pass
+
+typedescr_cache = {}
+
+def make_typedescr(typedef, **kw):
+    """NOT_RPYTHON
+
+    basestruct: The basic structure to allocate
+    realize   : Function called to create a pypy object from a raw struct
+    dealloc   : a cpython_api(external=False), similar to PyObject_dealloc
+    """
+
+    tp_basestruct = kw.get('basestruct', PyObject.TO)
+    tp_realize    = kw.get('realize')
+    tp_dealloc    = kw.get('dealloc')
+
+    null_dealloc = lltype.nullptr(lltype.FuncType([PyObject], lltype.Void))
+
+    class CpyTypedescr(BaseCpyTypedescr):
+        basestruct = tp_basestruct
+        realize = tp_realize
+
+        def get_dealloc(self, space):
+            if tp_dealloc:
+                return llhelper(
+                    tp_dealloc.api_func.functype,
+                    tp_dealloc.api_func.get_wrapper(space))
+            else:
+                return null_dealloc # XXX PyObject_dealloc?
+
+        def allocate(self, space, w_type):
+            # similar to PyType_GenericAlloc?
+            # except that it's not related to any pypy object.
+            obj = lltype.malloc(tp_basestruct, flavor='raw', zero=True)
+            pyobj = rffi.cast(PyObject, obj)
+            pyobj.c_ob_refcnt = 1
+            if w_type is not space.w_type:
+                pyobj.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
+            return pyobj
+
+        if tp_realize:
+            def realize(self, space, ref):
+                return tp_realize(space, ref)
+        else:
+            def realize(self, space, ref):
+                raise TypeError("cannot realize")
+    if typedef:
+        CpyTypedescr.__name__ = "CpyTypedescr_%s" % (typedef.name,)
+
+    typedescr_cache[typedef] = CpyTypedescr()
+
+make_typedescr(None)
+
+@specialize.memo()
+def _get_typedescr_1(typedef):
+    try:
+        return typedescr_cache[typedef]
+    except KeyError:
+        if typedef.base is not None:
+            return _get_typedescr_1(typedef.base)
+        return typedescr_cache[None]
+
+def get_typedescr(typedef):
+    if typedef is None:
+        return typedescr_cache[None]
+    else:
+        return _get_typedescr_1(typedef)
 
 #________________________________________________________
 # refcounted object support
@@ -29,11 +105,60 @@ def debug_refcount(*args, **kwargs):
         print >>sys.stderr, arg,
     print >>sys.stderr
 
-
-def make_ref(space, w_obj, borrowed=False, steal=False, items=0):
+def create_ref(space, w_obj, items=0):
     from pypy.module.cpyext.typeobject import allocate_type_obj,\
             W_PyCTypeObject, PyOLifeline
     from pypy.module.cpyext.pycobject import W_PyCObject, PyCObject
+    w_type = space.type(w_obj)
+    if space.is_w(w_type, space.w_type) or space.is_w(w_type,
+            space.gettypeobject(W_PyCTypeObject.typedef)):
+        py_obj = get_typedescr(w_obj.typedef).allocate(space, w_type)
+
+        # put the type object early into the dict
+        # to support dependency cycles like object/type
+        state = space.fromcache(State)
+        state.py_objects_w2r[w_obj] = py_obj
+        py_obj.c_ob_type = rffi.cast(
+            PyTypeObjectPtr, make_ref(space, w_type,
+                                      steal=not space.is_w(w_type, space.w_type)))
+
+        allocate_type_obj(space, py_obj, w_obj)
+    elif isinstance(w_type, W_PyCTypeObject):
+        lifeline = w_obj.get_pyolifeline()
+        if lifeline is not None: # make old PyObject ready for use in C code
+            py_obj = lifeline.pyo
+            assert py_obj.c_ob_refcnt == 0
+            Py_IncRef(space, py_obj)
+        else:
+            w_type_pyo = make_ref(space, w_type)
+            pto = rffi.cast(PyTypeObjectPtr, w_type_pyo)
+            # Don't increase refcount for non-heaptypes
+            if not rffi.cast(lltype.Signed, pto.c_tp_flags) & Py_TPFLAGS_HEAPTYPE:
+                Py_DecRef(space, w_type_pyo)
+            basicsize = pto.c_tp_basicsize + items * pto.c_tp_itemsize
+            py_obj_pad = lltype.malloc(rffi.VOIDP.TO, basicsize,
+                    flavor="raw", zero=True)
+            py_obj = rffi.cast(PyObject, py_obj_pad)
+            py_obj.c_ob_refcnt = 1
+            py_obj.c_ob_type = pto
+            w_obj.set_pyolifeline(PyOLifeline(space, py_obj))
+    elif isinstance(w_obj, W_StringObject):
+        py_obj = get_typedescr(w_obj.typedef).allocate(space, w_type)
+        from pypy.module.cpyext.stringobject import PyStringObject
+        py_str = rffi.cast(PyStringObject, py_obj)
+        py_str.c_size = len(space.str_w(w_obj))
+        py_str.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
+    elif isinstance(w_obj, W_UnicodeObject):
+        py_obj = get_typedescr(w_obj.typedef).allocate(space, w_type)
+        from pypy.module.cpyext.unicodeobject import PyUnicodeObject
+        py_unicode = rffi.cast(PyUnicodeObject, py_obj)
+        py_unicode.c_size = len(space.unicode_w(w_obj))
+        py_unicode.c_buffer = lltype.nullptr(rffi.CWCHARP.TO)
+    else:
+        py_obj = get_typedescr(w_obj.typedef).allocate(space, w_type)
+    return py_obj
+
+def make_ref(space, w_obj, borrowed=False, steal=False, items=0):
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
@@ -41,58 +166,7 @@ def make_ref(space, w_obj, borrowed=False, steal=False, items=0):
     py_obj = state.py_objects_w2r.get(w_obj, lltype.nullptr(PyObject.TO))
     if not py_obj:
         assert not steal
-        w_type = space.type(w_obj)
-        if space.is_w(w_type, space.w_type) or space.is_w(w_type,
-                space.gettypeobject(W_PyCTypeObject.typedef)):
-            pto = allocate_type_obj(space, w_obj)
-            py_obj = rffi.cast(PyObject, pto)
-            # c_ob_type and c_ob_refcnt are set by allocate_type_obj
-        elif isinstance(w_type, W_PyCTypeObject):
-            lifeline = w_obj.get_pyolifeline()
-            if lifeline is not None: # make old PyObject ready for use in C code
-                py_obj = lifeline.pyo
-                assert py_obj.c_ob_refcnt == 0
-                Py_IncRef(space, py_obj)
-            else:
-                w_type_pyo = make_ref(space, w_type)
-                pto = rffi.cast(PyTypeObjectPtr, w_type_pyo)
-                # Don't increase refcount for non-heaptypes
-                if not rffi.cast(lltype.Signed, pto.c_tp_flags) & Py_TPFLAGS_HEAPTYPE:
-                    Py_DecRef(space, w_type_pyo)
-                basicsize = pto.c_tp_basicsize + items * pto.c_tp_itemsize
-                py_obj_pad = lltype.malloc(rffi.VOIDP.TO, basicsize,
-                        flavor="raw", zero=True)
-                py_obj = rffi.cast(PyObject, py_obj_pad)
-                py_obj.c_ob_refcnt = 1
-                py_obj.c_ob_type = pto
-                w_obj.set_pyolifeline(PyOLifeline(space, py_obj))
-        elif isinstance(w_obj, W_StringObject):
-            py_obj_str = lltype.malloc(PyStringObject.TO, flavor='raw', zero=True)
-            py_obj_str.c_size = len(space.str_w(w_obj))
-            py_obj_str.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
-            pto = make_ref(space, space.w_str)
-            py_obj = rffi.cast(PyObject, py_obj_str)
-            py_obj.c_ob_refcnt = 1
-            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
-        elif isinstance(w_obj, W_UnicodeObject):
-            py_obj_unicode = lltype.malloc(PyUnicodeObject.TO, flavor='raw', zero=True)
-            py_obj_unicode.c_size = len(space.unicode_w(w_obj))
-            py_obj_unicode.c_buffer = lltype.nullptr(rffi.CWCHARP.TO)
-            pto = make_ref(space, space.w_unicode)
-            py_obj = rffi.cast(PyObject, py_obj_unicode)
-            py_obj.c_ob_refcnt = 1
-            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
-        elif isinstance(w_obj, W_PyCObject): # a PyCObject
-            py_cobj = lltype.malloc(PyCObject.TO, flavor='raw', zero=True)
-            pto = make_ref(space, space.type(w_obj))
-            py_obj = rffi.cast(PyObject, py_cobj)
-            py_obj.c_ob_refcnt = 1
-            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
-        else:
-            py_obj = lltype.malloc(PyObject.TO, flavor="raw", zero=True)
-            py_obj.c_ob_refcnt = 1
-            pto = make_ref(space, space.type(w_obj))
-            py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr, pto)
+        py_obj = create_ref(space, w_obj, items)
         ptr = rffi.cast(ADDR, py_obj)
         if DEBUG_REFCOUNT:
             debug_refcount("MAKREF", py_obj, w_obj)
@@ -110,17 +184,6 @@ def make_ref(space, w_obj, borrowed=False, steal=False, items=0):
             Py_IncRef(space, py_obj)
     return py_obj
 
-def force_string(space, ref):
-    state = space.fromcache(State)
-    ref = rffi.cast(PyStringObject, ref)
-    s = rffi.charpsize2str(ref.c_buffer, ref.c_size)
-    ref = rffi.cast(PyObject, ref)
-    w_str = space.wrap(s)
-    state.py_objects_w2r[w_str] = ref
-    ptr = rffi.cast(ADDR, ref)
-    state.py_objects_r2w[ptr] = w_str
-    return w_str
-
 
 def from_ref(space, ref, recurse=False):
     from pypy.module.cpyext.typeobject import PyPyType_Ready
@@ -137,8 +200,9 @@ def from_ref(space, ref, recurse=False):
         ref_type = rffi.cast(PyObject, ref.c_ob_type)
         if ref != ref_type:
             w_type = from_ref(space, ref_type, True)
+            assert isinstance(w_type, W_TypeObject)
             if space.is_w(w_type, space.w_str):
-                return force_string(space, ref)
+                return get_typedescr(w_type.instancetypedef).realize(space, ref)
             elif space.is_w(w_type, space.w_type):
                 PyPyType_Ready(space, rffi.cast(PyTypeObjectPtr, ref), None)
                 return from_ref(space, ref, True)
@@ -156,7 +220,7 @@ def Py_DecRef(space, obj):
         return
     assert lltype.typeOf(obj) == PyObject
 
-    from pypy.module.cpyext.typeobject import string_dealloc, W_PyCTypeObject
+    from pypy.module.cpyext.typeobject import W_PyCTypeObject
     obj.c_ob_refcnt -= 1
     if DEBUG_REFCOUNT:
         debug_refcount("DECREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)

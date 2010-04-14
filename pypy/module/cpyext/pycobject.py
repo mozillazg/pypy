@@ -1,9 +1,9 @@
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import TypeDef
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.pyobject import make_ref
-from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject,\
-        cpython_struct, PyObjectFields
+from pypy.module.cpyext.pyobject import make_ref, make_typedescr
+from pypy.module.cpyext.api import generic_cpy_call, cpython_api, bootstrap_function, \
+     PyObject, cpython_struct, PyObjectFields
 
 
 destructor_short = lltype.Ptr(lltype.FuncType([rffi.VOIDP_real], lltype.Void))
@@ -15,6 +15,16 @@ PyCObject = lltype.Ptr(PyCObjectStruct)
 class W_PyCObject(Wrappable):
     def __init__(self, space):
         self.space = space
+
+W_PyCObject.typedef = TypeDef(
+    'PyCObject',
+    )
+W_PyCObject.typedef.acceptable_as_base_class = False
+
+@bootstrap_function
+def init_pycobject(space):
+    make_typedescr(W_PyCObject.typedef,
+                   basestruct=PyCObjectStruct)
 
 class W_PyCObjectFromVoidPtr(W_PyCObject):
     def __init__(self, space, voidp, desc):
@@ -62,11 +72,5 @@ def PyCObject_FromVoidPtrAndDesc(space, cobj, desc, destr):
     w_pycobject.set_pycobject(pycobject)
     pycobject.c_destructor = rffi.cast(destructor_short, destr)
     return pyo
-
-
-W_PyCObject.typedef = TypeDef(
-    'PyCObject',
-    )
-W_PyCObject.typedef.acceptable_as_base_class = False
 
 
