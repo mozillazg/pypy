@@ -277,7 +277,7 @@ class GettersAndSetters:
         PyMember_SetOne(space, w_self, self.member, w_value)
 
 @bootstrap_function
-def init_unicodeobject(space):
+def init_typeobject(space):
     make_typedescr(space.w_type.instancetypedef,
                    basestruct=PyTypeObject,
                    attach=type_attach,
@@ -420,14 +420,11 @@ def type_attach(space, py_obj, w_type):
             ref = make_ref(space, bases_w[0])
             pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
         PyPyType_Ready(space, pto, w_type)
-    if space.is_w(w_type, space.w_object):
-        pto.c_tp_basicsize = rffi.sizeof(PyObject.TO)
-    elif space.is_w(w_type, space.w_type):
-        pto.c_tp_basicsize = rffi.sizeof(PyTypeObject)
-    elif space.is_w(w_type, space.w_str):
-        pto.c_tp_basicsize = rffi.sizeof(get_typedescr(w_type.instancetypedef).basestruct)
-    elif pto.c_tp_base:
+
+    if pto.c_tp_base:
         pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
+    else:
+        pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)
 
     # will be filled later on with the correct value
     # may not be 0
