@@ -87,9 +87,11 @@ def make_typedescr(typedef, **kw):
 @bootstrap_function
 def init_pyobject(space):
     from pypy.module.cpyext.object import PyObject_dealloc
-    make_typedescr(None)
+    # typedescr for the 'object' type
     make_typedescr(space.w_object.instancetypedef,
                    dealloc=PyObject_dealloc)
+    # almost all types, which should better inherit from object.
+    make_typedescr(None)
 
 @specialize.memo()
 def _get_typedescr_1(typedef):
