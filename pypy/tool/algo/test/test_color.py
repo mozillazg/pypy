@@ -22,12 +22,10 @@ def test_lexicographic_order():
     order = list(dg.lexicographic_order())
     assert len(order) == 5
     order.reverse()
-    assert ''.join(order) in [
-        'adbce', 'adbec', 'adcbe', 'adceb', 'adebc', 'adecb',
-        'acbde', 'acbed', 'acdbe', 'acdeb', 'acebd', 'acedb',
-        'cebad', 'cebda', 'ceabd', 'ceadb', 'cedba', 'cedab',
-        'cabde', 'cabed', 'cadbe', 'cadeb', 'caebd', 'caedb',
-        ]
+    # there are many orders that are correct answers, but check that we get
+    # the following one, which is somehow the 'first' answer in the order
+    # of insertion of nodes.
+    assert ''.join(order) == 'acbde'
 
 def test_size_of_largest_clique():
     dg = graph1()
