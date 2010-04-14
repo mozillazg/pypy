@@ -1,7 +1,7 @@
 from pypy.tool.algo.color import DependencyGraph
 
 
-def test_perfect_elimination_order():
+def test_lexicographic_order():
     dg = DependencyGraph()
     dg.add_node('a')
     dg.add_node('b')
@@ -15,8 +15,9 @@ def test_perfect_elimination_order():
     dg.add_edge('b', 'c')
     dg.add_edge('b', 'e')
     dg.add_edge('e', 'c')
-    order = list(dg.perfect_elimination_order())
+    order = list(dg.lexicographic_order())
     assert len(order) == 5
+    order.reverse()
     assert ''.join(order) in [
         'adbce', 'adbec', 'adcbe', 'adceb', 'adebc', 'adecb',
         'acbde', 'acbed', 'acdbe', 'acdeb', 'acebd', 'acedb',
