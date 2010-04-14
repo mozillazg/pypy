@@ -21,6 +21,7 @@ cpython_struct("PyUnicodeObject", PyUnicodeObjectFields, PyUnicodeObjectStruct)
 def init_unicodeobject(space):
     make_typedescr(space.w_unicode.instancetypedef,
                    basestruct=PyUnicodeObject.TO,
+                   attach=unicode_attach,
                    dealloc=unicode_dealloc)
 
 # Buffer for the default encoding (used by PyUnicde_GetDefaultEncoding)
@@ -31,6 +32,11 @@ default_encoding = lltype.malloc(rffi.CCHARP.TO, DEFAULT_ENCODING_SIZE,
 PyUnicode_Check, PyUnicode_CheckExact = build_type_checkers("Unicode", "w_unicode")
 
 Py_UNICODE = lltype.UniChar
+
+def unicode_attach(space, py_obj, w_obj):
+    py_unicode = rffi.cast(PyUnicodeObject, py_obj)
+    py_unicode.c_size = len(space.unicode_w(w_obj))
+    py_unicode.c_buffer = lltype.nullptr(rffi.CWCHARP.TO)
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def unicode_dealloc(space, obj):
