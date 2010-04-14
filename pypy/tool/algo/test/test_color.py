@@ -24,3 +24,4 @@ def test_lexicographic_order():
         'cebad', 'cebda', 'ceabd', 'ceadb', 'cedba', 'cedab',
         'cabde', 'cabed', 'cadbe', 'cadeb', 'caebd', 'caedb',
         ]
+    assert dg.size_of_largest_clique() == 3

@@ -21,6 +21,7 @@ class DependencyGraph(object):
         self.neighbours[v2].add(v1)
 
     def lexicographic_order(self):
+        """Enumerate a lexicographic breath-first ordering of the nodes."""
         sigma = [set(self.neighbours)]
         result = []
         while sigma:
@@ -42,8 +43,20 @@ class DependencyGraph(object):
                     newsigma.append(s2)
             sigma = newsigma
 
-
-_emptyset = frozenset()
+    def size_of_largest_clique(self):
+        """Assuming that the graph is chordal, compute the size of
+        the largest clique in it."""
+        result = 0
+        seen = set()
+        for v in self.lexicographic_order():
+            num = 1
+            for n in self.neighbours[v]:
+                if n in seen:
+                    num += 1
+            if num > result:
+                result = num
+            seen.add(v)
+        return result
 
 
 ##class Unit(object):
