@@ -1,7 +1,7 @@
 from pypy.tool.algo.color import DependencyGraph
 
 
-def test_lexicographic_order():
+def graph1():
     dg = DependencyGraph()
     dg.add_node('a')
     dg.add_node('b')
@@ -15,6 +15,10 @@ def test_lexicographic_order():
     dg.add_edge('b', 'c')
     dg.add_edge('b', 'e')
     dg.add_edge('e', 'c')
+    return dg
+
+def test_lexicographic_order():
+    dg = graph1()
     order = list(dg.lexicographic_order())
     assert len(order) == 5
     order.reverse()
@@ -24,7 +28,13 @@ def test_lexicographic_order():
         'cebad', 'cebda', 'ceabd', 'ceadb', 'cedba', 'cedab',
         'cabde', 'cabed', 'cadbe', 'cadeb', 'caebd', 'caedb',
         ]
+
+def test_size_of_largest_clique():
+    dg = graph1()
     assert dg.size_of_largest_clique() == 3
+
+def test_find_node_coloring():
+    dg = graph1()
     coloring = dg.find_node_coloring()
     assert len(coloring) == 5
     assert sorted(coloring.keys()) == list('abcde')

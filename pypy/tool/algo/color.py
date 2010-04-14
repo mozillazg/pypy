@@ -1,6 +1,3 @@
-"""
-"""
-
 
 class DependencyGraph(object):
 
@@ -18,7 +15,6 @@ class DependencyGraph(object):
     def lexicographic_order(self):
         """Enumerate a lexicographic breath-first ordering of the nodes."""
         sigma = [set(self.neighbours)]
-        result = []
         while sigma:
             v = sigma[0].pop()
             yield v
@@ -55,7 +51,8 @@ class DependencyGraph(object):
 
     def find_node_coloring(self):
         """Return a random minimal node coloring, assuming that
-        the graph is chordal."""
+        the graph is chordal.  For non-chordal graphs this is just
+        an approximately good answer (but still a valid one)."""
         result = {}
         for v in self.lexicographic_order():
             forbidden = 0      # bitset
