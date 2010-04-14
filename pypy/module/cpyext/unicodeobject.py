@@ -3,7 +3,8 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
 from pypy.module.cpyext.api import (CANNOT_FAIL, Py_ssize_t,
                                     build_type_checkers, cpython_api,
-                                    bootstrap_function, generic_cpy_call)
+                                    bootstrap_function, generic_cpy_call,
+                                    PyObjectFields, cpython_struct)
 from pypy.module.cpyext.pyerrors import PyErr_BadArgument
 from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref, Py_DecRef, make_typedescr
 from pypy.module.cpyext.stringobject import PyString_Check
