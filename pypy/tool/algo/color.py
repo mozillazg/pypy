@@ -1,9 +1,4 @@
 """
-the whole algorithm is based on the following paper:
-http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.86.1578&rep=rep1&type=pdf
-
-and the source code of libFIRM (file ir/be/becopyheur.c):
-http://pp.info.uni-karlsruhe.de/firm/Main_Page
 """
 
 
@@ -58,13 +53,18 @@ class DependencyGraph(object):
             seen.add(v)
         return result
 
-
-##class Unit(object):
-##    """An optimization unit.  Represents a phi instruction."""
-##    def __init__(self, result, args):
-##        self.result = result
-##        self.args = args
-
-##    def optimize(self, depgraph):
-##        self.queue = []
-##        self.insert_qnode(QNode(...
+    def find_node_coloring(self):
+        """Return a random minimal node coloring, assuming that
+        the graph is chordal."""
+        result = {}
+        for v in self.lexicographic_order():
+            forbidden = 0      # bitset
+            for n in self.neighbours[v]:
+                if n in result:
+                    forbidden |= (1 << result[n])
+            # find the lowest 0 bit
+            num = 0
+            while forbidden & (1 << num):
+                num += 1
+            result[v] = num
+        return result
