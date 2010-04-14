@@ -414,12 +414,11 @@ def type_attach(space, py_obj, w_type):
     assert len(bases_w) <= 1
     pto.c_tp_base = lltype.nullptr(PyTypeObject)
     pto.c_tp_bases = lltype.nullptr(PyObject.TO)
-    if not space.is_w(w_type, space.w_type) and not \
-            space.is_w(w_type, space.w_object):
-        if bases_w:
-            ref = make_ref(space, bases_w[0])
-            pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
-        PyPyType_Ready(space, pto, w_type)
+
+    if bases_w:
+        ref = make_ref(space, bases_w[0])
+        pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
+    PyPyType_Ready(space, pto, w_type)
 
     if pto.c_tp_base:
         pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
