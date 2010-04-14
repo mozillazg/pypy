@@ -22,6 +22,7 @@ class W_PyCObjectFromVoidPtr(W_PyCObject):
         self.voidp = voidp
         self.pyo = lltype.nullptr(PyCObject.TO)
         self.desc = desc
+        self.space = space
 
     def set_pycobject(self, pyo):
         self.pyo = pyo
@@ -29,9 +30,10 @@ class W_PyCObjectFromVoidPtr(W_PyCObject):
     def __del__(self):
         if self.pyo and self.pyo.c_destructor:
             if self.desc:
-                generic_cpy_call(rffi.cast(destructor_long, self.pyo.c_destructor), self.voidp, self.desc)
+                generic_cpy_call(self.space, rffi.cast(destructor_long,
+                    self.pyo.c_destructor), self.voidp, self.desc)
             else:
-                generic_cpy_call(self.pyo.c_destructor, self.voidp)
+                generic_cpy_call(self.space, self.pyo.c_destructor, self.voidp)
 
 
 @cpython_api([rffi.VOIDP_real, destructor_short], PyObject)
