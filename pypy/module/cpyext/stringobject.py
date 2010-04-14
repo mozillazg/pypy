@@ -17,6 +17,7 @@ cpython_struct("PyStringObject", PyStringObjectFields, PyStringObjectStruct)
 def init_stringobject(space):
     make_typedescr(space.w_str.instancetypedef,
                    basestruct=PyStringObject.TO,
+                   attach=string_attach,
                    dealloc=string_dealloc,
                    realize=string_realize)
 
@@ -32,6 +33,11 @@ def new_empty_str(space, length):
     py_str.c_size = length
     py_str.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.w_str))
     return py_str
+
+def string_attach(space, py_obj, w_obj):
+    py_str = rffi.cast(PyStringObject, py_obj)
+    py_str.c_size = len(space.str_w(w_obj))
+    py_str.c_buffer = lltype.nullptr(rffi.CCHARP.TO)
 
 def string_realize(space, ref):
     state = space.fromcache(State)

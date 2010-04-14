@@ -280,6 +280,7 @@ class GettersAndSetters:
 def init_unicodeobject(space):
     make_typedescr(space.w_type.instancetypedef,
                    basestruct=PyTypeObject,
+                   attach=type_attach,
                    dealloc=type_dealloc)
 
 def c_type_descr__call__(space, w_type, __args__):
@@ -383,7 +384,7 @@ def type_dealloc(space, obj):
         Py_DecRef(space, pto)
 
 
-def allocate_type_obj(space, py_obj, w_type):
+def type_attach(space, py_obj, w_type):
     """ Allocates a PyTypeObject from a w_type which must be a PyPy type. """
     from pypy.module.cpyext.object import PyObject_dealloc, PyObject_Del
 
