@@ -2,10 +2,12 @@
 class DependencyGraph(object):
 
     def __init__(self):
+        self.nodes = []
         self.neighbours = {}
 
     def add_node(self, v):
         assert v not in self.neighbours, "duplicate vertex %r" % (v,)
+        self.nodes.append(v)
         self.neighbours[v] = set()
 
     def add_edge(self, v1, v2):
@@ -14,20 +16,20 @@ class DependencyGraph(object):
 
     def lexicographic_order(self):
         """Enumerate a lexicographic breath-first ordering of the nodes."""
-        sigma = [set(self.neighbours)]
+        sigma = [self.nodes[:]]
         while sigma:
             v = sigma[0].pop()
             yield v
             newsigma = []
             neighb = self.neighbours[v]
             for s in sigma:
-                s1 = set()
-                s2 = set()
+                s1 = []
+                s2 = []
                 for x in s:
                     if x in neighb:
-                        s1.add(x)
+                        s1.append(x)
                     else:
-                        s2.add(x)
+                        s2.append(x)
                 if s1:
                     newsigma.append(s1)
                 if s2:
