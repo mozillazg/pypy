@@ -15,7 +15,7 @@
 
  - Fix distutil's build_ext to work with cpyext on windows.
 
- - Fix GIL handling (e.g. init is called without GIL held).
+ - Fix GIL handling (e.g. after releasing the GIL, GC operations might occur in savethreads).
 
  - refactor management of py_objects_r2w and py_objects_w2r, this can
    probably be expressed in terms of _PyObject_GC_TRACK macros.
