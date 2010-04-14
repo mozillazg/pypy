@@ -20,12 +20,12 @@ class DependencyGraph(object):
         self.neighbours[v1].add(v2)
         self.neighbours[v2].add(v1)
 
-    def perfect_elimination_order(self):
+    def lexicographic_order(self):
         sigma = [set(self.neighbours)]
         result = []
         while sigma:
             v = sigma[0].pop()
-            result.append(v)
+            yield v
             newsigma = []
             neighb = self.neighbours[v]
             for s in sigma:
@@ -41,8 +41,6 @@ class DependencyGraph(object):
                 if s2:
                     newsigma.append(s2)
             sigma = newsigma
-        result.reverse()
-        return result
 
 
 _emptyset = frozenset()
