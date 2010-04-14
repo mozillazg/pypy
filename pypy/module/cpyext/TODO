@@ -20,9 +20,6 @@
  - refactor management of py_objects_r2w and py_objects_w2r, this can
    probably be expressed in terms of _PyObject_GC_TRACK macros.
 
- - Test cpyext together with the jit. Branch does not work, but it's not
-   cpyext's fault (it doesn't work even with --withoutmod-cpyext).
-
  - sort out pypy's buffer protocol. PyPy's buffer right now don't support
    raw memory (except array which supports it in a hackish way), which
    should be fixed in order to make it nicely work with cpyext.

@@ -676,6 +676,7 @@ def setup_library(space):
     setup_init_functions(eci)
     copy_header_files()
 
+initfunctype = lltype.Ptr(lltype.FuncType([], lltype.Void))
 @unwrap_spec(ObjSpace, str, str)
 def load_extension_module(space, path, name):
     state = space.fromcache(State)
@@ -688,14 +689,14 @@ def load_extension_module(space, path, name):
             "unable to load extension module '%s': %s",
             path, e.msg)
     try:
-        initfunc = dll.getpointer(
-            'init%s' % (name,), [], libffi.ffi_type_void)
+        initptr = libffi.dlsym(dll.lib, 'init%s' % (name,))
     except KeyError:
         raise operationerrfmt(
             space.w_ImportError,
             "function init%s not found in library %s",
             name, path)
-    initfunc.call(lltype.Void)
+    initfunc = rffi.cast(initfunctype, initptr)
+    generic_cpy_call(space, initfunc)
     state.check_and_raise_exception()
 
 @specialize.ll()
