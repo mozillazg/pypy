@@ -386,27 +386,16 @@ def type_dealloc(space, obj):
 
 def type_attach(space, py_obj, w_type):
     """ Allocates a PyTypeObject from a w_type which must be a PyPy type. """
-    from pypy.module.cpyext.object import PyObject_dealloc, PyObject_Del
+    from pypy.module.cpyext.object import PyObject_Del
 
     assert isinstance(w_type, W_TypeObject)
 
     pto = rffi.cast(PyTypeObjectPtr, py_obj)
 
+    typedescr = get_typedescr(w_type.instancetypedef)
+
     # dealloc
-    if space.is_w(w_type, space.w_object):
-        pto.c_tp_dealloc = llhelper(PyObject_dealloc.api_func.functype,
-                PyObject_dealloc.api_func.get_wrapper(space))
-    elif space.is_w(w_type, space.w_type):
-        pto.c_tp_dealloc = llhelper(type_dealloc.api_func.functype,
-                type_dealloc.api_func.get_wrapper(space))
-        #pto.c_tp_dealloc = get_typedescr(w_type.instancetypedef).get_dealloc(space)
-    elif space.is_w(w_type, space.w_str):
-        pto.c_tp_dealloc = get_typedescr(w_type.instancetypedef).get_dealloc(space)
-    elif space.is_w(w_type, space.w_unicode):
-        pto.c_tp_dealloc = get_typedescr(w_type.instancetypedef).get_dealloc(space)
-    else:
-        pto.c_tp_dealloc = llhelper(subtype_dealloc.api_func.functype,
-                subtype_dealloc.api_func.get_wrapper(space))
+    pto.c_tp_dealloc = typedescr.get_dealloc(space)
     # buffer protocol
     if space.is_w(w_type, space.w_str):
         setup_string_buffer_procs(space, pto)

@@ -2,7 +2,7 @@ import sys
 
 from pypy.interpreter.baseobjspace import W_Root, Wrappable, SpaceCache
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import cpython_api, \
+from pypy.module.cpyext.api import cpython_api, bootstrap_function, \
      PyObject, ADDR,\
      Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr
 from pypy.module.cpyext.state import State
@@ -47,7 +47,10 @@ def make_typedescr(typedef, **kw):
                     tp_dealloc.api_func.functype,
                     tp_dealloc.api_func.get_wrapper(space))
             else:
-                return null_dealloc # XXX PyObject_dealloc?
+                from pypy.module.cpyext.typeobject import subtype_dealloc
+                return llhelper(
+                    subtype_dealloc.api_func.functype,
+                    subtype_dealloc.api_func.get_wrapper(space))
 
         if tp_alloc:
             def allocate(self, space, w_type):
@@ -81,7 +84,12 @@ def make_typedescr(typedef, **kw):
 
     typedescr_cache[typedef] = CpyTypedescr()
 
-make_typedescr(None)
+@bootstrap_function
+def init_pyobject(space):
+    from pypy.module.cpyext.object import PyObject_dealloc
+    make_typedescr(None)
+    make_typedescr(space.w_object.instancetypedef,
+                   dealloc=PyObject_dealloc)
 
 @specialize.memo()
 def _get_typedescr_1(typedef):
