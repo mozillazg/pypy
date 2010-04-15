@@ -3,7 +3,7 @@ from pypy.rlib import jit
 from pypy.jit.metainterp import support, typesystem
 from pypy.jit.metainterp.policy import JitPolicy
 from pypy.jit.metainterp.history import ConstInt
-from pypy.jit.metainterp.codewriter import CodeWriter
+from pypy.jit.metainterp.codewriter import CodeWriter, BytecodeMaker
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.translator.translator import graphof
 from pypy.rpython.lltypesystem.rbuiltin import ll_instantiate
@@ -173,6 +173,104 @@ class TestCodeWriter:
     def graphof(self, func):
         rtyper = self.metainterp_sd.cpu.rtyper
         return graphof(rtyper.annotator.translator, func)
+
+    def encoding_test(self, func, args, ...):
+        graphs = self.make_graphs(func, args)
+        cw = CodeWriter(self.rtyper)
+        cw.candidate_graphs = graphs
+        cw._start(self.metainterp_sd, None)
+        maker = BytecodeMaker(cw, (graphs[0], None), False)
+        maker.generate()
+        ...
+
+    def test_bytecodemaker_generate_simple(self):
+        def f(n):
+            return n + 10
+        self.encoding_test(f, [5], """
+            [%i0]
+            int_add %i0 $10 %i0
+            int_return %i0
+        """)
+
+    def test_bytecodemaker_generate_regs(self):
+        def f(a, b, c):
+            return (((a + 10) * 2) + (b - c)) * a
+        self.encoding_test(f, [5, 6, 7], """
+            [%i0, %i1, %i2]
+            int_add %i0 $10 %i3
+            int_mul %i3 $2 %i3
+            int_sub %i1 %i2 %i1
+            int_add %i3 %i1 %i1
+            int_mul %i1 %i0 %i0
+            int_return %i0
+        """)
+
+    def test_bytecodemaker_generate_loop(self):
+        def f(a, b):
+            while a > 0:
+                b += a
+                a -= 1
+            return b
+        self.encoding_test(f, [5, 6], """
+            [%i0, %i1]
+            L0:
+            int_gt %i0 $0 %i2
+            goto_if_not %i2 L1
+            int_add %i1 %i0 %i1
+            int_sub %i0 $1 %i0
+            goto L0
+            L1:
+            int_return %i1
+        """)
+
+    def test_bytecodemaker_generate_swap(self):
+        def f(a, b):
+            while a > 0:
+                a, b = b, b+a
+            return b
+        self.encoding_test(f, [5, 6], """
+            [%i0, %i1]
+            L0:
+            int_gt %i0 $0 %i2
+            goto_if_not %i2 L1
+            int_add %i1 %i0 %i0
+            int_swap %i0 %i1
+            goto L0
+            L1:
+            int_return %i1
+        """)
+
+    def test_bytecodemaker_generate_cycle(self):
+        def f(a, b, c):
+            while a > 0:
+                a, b, c = b, c, a
+            return b
+        self.encoding_test(f, [5, 6], """
+            [%i0, %i1, %i2]
+            L0:
+            int_gt %i0 $0 %i3
+            goto_if_not %i3 L1
+            int_swap_cycle [%i0, %i2, %i1]
+            goto L0
+            L1:
+            int_return %i1
+        """)
+
+    def test_bytecodemaker_generate_same_as(self):
+        def f(a, b, c):
+            while a > 0:
+                b = c
+            return b
+        self.encoding_test(f, [5, 6], """
+            [%i0, %i1, %i2]
+            L0:
+            int_gt %i0 $0 %i3
+            goto_if_not %i3 L1
+            int_same_as %i2 %i1
+            goto L0
+            L1:
+            int_return %i1
+        """)
 
     def test_basic(self):
         def f(n):

@@ -229,6 +229,7 @@ class CodeWriter(object):
     def make_one_bytecode(self, graph_key, portal, called_from=None):
         maker = BytecodeMaker(self, graph_key, portal)
         if not hasattr(maker.bytecode, 'code'):
+            maker.generate()
             maker.assemble()
             self.counter += 1
             if not self.counter % 500:
@@ -389,8 +390,9 @@ class BytecodeMaker(object):
         assert codewriter.is_candidate(graph)
         self.graph = graph
 
-    def assemble(self):
-        """Assemble the opcodes for self.bytecode."""
+    def generate(self):
+        """Generate in self.assembler the assembler corresponding to
+        this graph."""
         self.assembler = []
         self.constants = []
         self.positions = {}
@@ -403,6 +405,8 @@ class BytecodeMaker(object):
             exc_handler = self.pending_exception_handlers.pop()
             self.make_exception_handler(exc_handler)
 
+    def assemble(self):
+        """Assemble the opcodes for self.bytecode."""
         labelpos = {}
         code = assemble(labelpos, self.codewriter.metainterp_sd,
                         self.assembler)
