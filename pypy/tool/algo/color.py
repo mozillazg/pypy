@@ -2,21 +2,33 @@
 class DependencyGraph(object):
 
     def __init__(self):
-        self.nodes = []
+        self._all_nodes = []
         self.neighbours = {}
 
     def add_node(self, v):
         assert v not in self.neighbours, "duplicate vertex %r" % (v,)
-        self.nodes.append(v)
+        self._all_nodes.append(v)
         self.neighbours[v] = set()
 
     def add_edge(self, v1, v2):
         self.neighbours[v1].add(v2)
         self.neighbours[v2].add(v1)
 
+    def coalesce(self, vold, vnew):
+        """Remove vold from the graph, and attach all its edges to vnew."""
+        for n in self.neighbours.pop(vold):
+            self.neighbours[n].remove(vold)
+            self.neighbours[n].add(vnew)
+            self.neighbours[vnew].add(n)
+        # we should remove vold from self._all_nodes, but it's too costly
+        # so we rely on getnodes() to filter self._all_nodes.
+
+    def getnodes(self):
+        return [v for v in self._all_nodes if v in self.neighbours]
+
     def lexicographic_order(self):
         """Enumerate a lexicographic breath-first ordering of the nodes."""
-        sigma = [self.nodes[:]]
+        sigma = [self.getnodes()[::-1]]
         while sigma:
             v = sigma[0].pop()
             yield v
