@@ -214,8 +214,7 @@ class TestCodeWriter:
         self.encoding_test(f, [5, 6], """
             [%i0, %i1]
             L0:
-            int_gt %i0 $0 %i2
-            goto_if_not %i2 L1
+            goto_if_not_int_gt %i0 $0 L1
             int_add %i1 %i0 %i1
             int_sub %i0 $1 %i0
             goto L0
@@ -231,8 +230,7 @@ class TestCodeWriter:
         self.encoding_test(f, [5, 6], """
             [%i0, %i1]
             L0:
-            int_gt %i0 $0 %i2
-            goto_if_not %i2 L1
+            goto_if_not_int_gt %i0 $0 L1
             int_add %i1 %i0 %i0
             int_swap %i0 %i1
             goto L0
@@ -248,15 +246,14 @@ class TestCodeWriter:
         self.encoding_test(f, [5, 6], """
             [%i0, %i1, %i2]
             L0:
-            int_gt %i0 $0 %i3
-            goto_if_not %i3 L1
+            goto_if_not_int_gt %i0 $0 L1
             int_swap_cycle [%i0, %i2, %i1]
             goto L0
             L1:
             int_return %i1
         """)
 
-    def test_bytecodemaker_generate_same_as(self):
+    def test_bytecodemaker_generate_same_as_var(self):
         def f(a, b, c):
             while a > 0:
                 b = c
@@ -264,9 +261,23 @@ class TestCodeWriter:
         self.encoding_test(f, [5, 6], """
             [%i0, %i1, %i2]
             L0:
-            int_gt %i0 $0 %i3
-            goto_if_not %i3 L1
+            goto_if_not_int_gt %i0 $0 L1
             int_same_as %i2 %i1
+            goto L0
+            L1:
+            int_return %i1
+        """)
+
+    def test_bytecodemaker_generate_same_as_const(self):
+        def f(a, b, c):
+            while a > 0:
+                b = -17
+            return b
+        self.encoding_test(f, [5, 6], """
+            [%i0, %i1, %i2]
+            L0:
+            goto_if_not_int_gt %i0 $0 L1
+            int_same_as $-17 %i1
             goto L0
             L1:
             int_return %i1
