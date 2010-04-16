@@ -1,6 +1,6 @@
 import sys
 
-from pypy.interpreter.baseobjspace import W_Root, Wrappable, SpaceCache
+from pypy.interpreter.baseobjspace import W_Root, SpaceCache
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, bootstrap_function, \
      PyObject, ADDR,\
@@ -29,6 +29,7 @@ def make_typedescr(typedef, **kw):
     """
 
     tp_basestruct = kw.pop('basestruct', PyObject.TO)
+    tp_make_ref   = kw.pop('make_ref', None)
     tp_attach     = kw.pop('attach', None)
     tp_realize    = kw.pop('realize', None)
     tp_dealloc    = kw.pop('dealloc', None)
@@ -74,6 +75,18 @@ def make_typedescr(typedef, **kw):
             pyobj.c_ob_refcnt = 1
             pyobj.c_ob_type = pytype
             return pyobj
+
+        # Specialized by meta-type
+        if tp_make_ref:
+            def make_ref(self, space, w_type, w_obj, itemcount=0):
+                return tp_make_ref(space, w_type, w_obj, itemcount=itemcount)
+        else:
+            def make_ref(self, space, w_type, w_obj, itemcount=0):
+                typedescr = get_typedescr(w_obj.typedef)
+                w_type = space.type(w_obj)
+                py_obj = typedescr.allocate(space, w_type, itemcount=itemcount)
+                typedescr.attach(space, py_obj, w_obj)
+                return py_obj
 
         if tp_attach:
             def attach(self, space, pyobj, w_obj):
@@ -140,23 +153,9 @@ def debug_refcount(*args, **kwargs):
     print >>sys.stderr
 
 def create_ref(space, w_obj, items=0):
-    from pypy.module.cpyext.typeobject import W_PyCTypeObject, PyOLifeline
     w_type = space.type(w_obj)
-    typedescr = get_typedescr(w_obj.typedef)
-
-    if isinstance(w_type, W_PyCTypeObject):
-        lifeline = w_obj.get_pyolifeline()
-        if lifeline is not None: # make old PyObject ready for use in C code
-            py_obj = lifeline.pyo
-            assert py_obj.c_ob_refcnt == 0
-            Py_IncRef(space, py_obj)
-        else:
-            py_obj = typedescr.allocate(space, w_type, itemcount=items)
-            w_obj.set_pyolifeline(PyOLifeline(space, py_obj))
-    else:
-        py_obj = typedescr.allocate(space, w_type, itemcount=items)
-        typedescr.attach(space, py_obj, w_obj)
-    return py_obj
+    metatypedescr = get_typedescr(w_type.typedef)
+    return metatypedescr.make_ref(space, w_type, w_obj, itemcount=items)
 
 def track_reference(space, py_obj, w_obj, borrowed=False):
     # XXX looks like a PyObject_GC_TRACK
