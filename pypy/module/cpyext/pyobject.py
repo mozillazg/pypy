@@ -28,10 +28,11 @@ def make_typedescr(typedef, **kw):
     dealloc   : a cpython_api(external=False), similar to PyObject_dealloc
     """
 
-    tp_basestruct = kw.get('basestruct', PyObject.TO)
-    tp_attach     = kw.get('attach')
-    tp_realize    = kw.get('realize')
-    tp_dealloc    = kw.get('dealloc')
+    tp_basestruct = kw.pop('basestruct', PyObject.TO)
+    tp_attach     = kw.pop('attach', None)
+    tp_realize    = kw.pop('realize', None)
+    tp_dealloc    = kw.pop('dealloc', None)
+    assert not kw, "Extra arguments to make_typedescr"
 
     null_dealloc = lltype.nullptr(lltype.FuncType([PyObject], lltype.Void))
 
