@@ -130,7 +130,6 @@ def debug_refcount(*args, **kwargs):
 
 def create_ref(space, w_obj, items=0):
     from pypy.module.cpyext.typeobject import W_PyCTypeObject, PyOLifeline
-    from pypy.module.cpyext.pycobject import W_PyCObject, PyCObject
     w_type = space.type(w_obj)
     typedescr = get_typedescr(w_obj.typedef)
 
@@ -264,8 +263,10 @@ def Py_DecRef(space, obj):
             del state.borrow_mapping[ptr]
     else:
         if not we_are_translated() and obj.c_ob_refcnt < 0:
-            print >>sys.stderr, "Negative refcount for obj %s with type %s" % (obj, rffi.charp2str(obj.c_ob_type.c_tp_name))
-            assert False
+            message = "Negative refcount for obj %s with type %s" % (
+                obj, rffi.charp2str(obj.c_ob_type.c_tp_name))
+            print >>sys.stderr, message
+            assert False, message
 
 @cpython_api([PyObject], lltype.Void)
 def Py_IncRef(space, obj):
