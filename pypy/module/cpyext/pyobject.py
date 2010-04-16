@@ -29,7 +29,6 @@ def make_typedescr(typedef, **kw):
     """
 
     tp_basestruct = kw.get('basestruct', PyObject.TO)
-    tp_alloc      = kw.get('alloc')
     tp_attach     = kw.get('attach')
     tp_realize    = kw.get('realize')
     tp_dealloc    = kw.get('dealloc')
@@ -51,33 +50,29 @@ def make_typedescr(typedef, **kw):
                     subtype_dealloc.api_func.functype,
                     subtype_dealloc.api_func.get_wrapper(space))
 
-        if tp_alloc:
-            def allocate(self, space, w_type, itemcount=0):
-                return tp_alloc(space, w_type)
-        else:
-            def allocate(self, space, w_type, itemcount=0):
-                # similar to PyType_GenericAlloc?
-                # except that it's not related to any pypy object.
+        def allocate(self, space, w_type, itemcount=0):
+            # similar to PyType_GenericAlloc?
+            # except that it's not related to any pypy object.
 
-                pytype = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
-                # Don't increase refcount for non-heaptypes
-                if pytype:
-                    flags = rffi.cast(lltype.Signed, pytype.c_tp_flags)
-                    if not flags & Py_TPFLAGS_HEAPTYPE:
-                        Py_DecRef(space, w_type)
+            pytype = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
+            # Don't increase refcount for non-heaptypes
+            if pytype:
+                flags = rffi.cast(lltype.Signed, pytype.c_tp_flags)
+                if not flags & Py_TPFLAGS_HEAPTYPE:
+                    Py_DecRef(space, w_type)
 
-                if pytype:
-                    size = pytype.c_tp_basicsize
-                else:
-                    size = rffi.sizeof(tp_basestruct)
-                if itemcount:
-                    size += itemcount * pytype.c_tp_itemsize
-                buf = lltype.malloc(rffi.VOIDP.TO, size,
-                                    flavor='raw', zero=True)
-                pyobj = rffi.cast(PyObject, buf)
-                pyobj.c_ob_refcnt = 1
-                pyobj.c_ob_type = pytype
-                return pyobj
+            if pytype:
+                size = pytype.c_tp_basicsize
+            else:
+                size = rffi.sizeof(tp_basestruct)
+            if itemcount:
+                size += itemcount * pytype.c_tp_itemsize
+            buf = lltype.malloc(rffi.VOIDP.TO, size,
+                                flavor='raw', zero=True)
+            pyobj = rffi.cast(PyObject, buf)
+            pyobj.c_ob_refcnt = 1
+            pyobj.c_ob_type = pytype
+            return pyobj
 
         if tp_attach:
             def attach(self, space, pyobj, w_obj):
