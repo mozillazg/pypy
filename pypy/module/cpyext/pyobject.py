@@ -52,16 +52,31 @@ def make_typedescr(typedef, **kw):
                     subtype_dealloc.api_func.get_wrapper(space))
 
         if tp_alloc:
-            def allocate(self, space, w_type):
+            def allocate(self, space, w_type, itemcount=0):
                 return tp_alloc(space, w_type)
         else:
-            def allocate(self, space, w_type):
+            def allocate(self, space, w_type, itemcount=0):
                 # similar to PyType_GenericAlloc?
                 # except that it's not related to any pypy object.
-                obj = lltype.malloc(tp_basestruct, flavor='raw', zero=True)
-                pyobj = rffi.cast(PyObject, obj)
+
+                pytype = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
+                # Don't increase refcount for non-heaptypes
+                if pytype:
+                    flags = rffi.cast(lltype.Signed, pytype.c_tp_flags)
+                    if not flags & Py_TPFLAGS_HEAPTYPE:
+                        Py_DecRef(space, w_type)
+
+                if pytype:
+                    size = pytype.c_tp_basicsize
+                else:
+                    size = rffi.sizeof(tp_basestruct)
+                if itemcount:
+                    size += itemcount * pytype.c_tp_itemsize
+                buf = lltype.malloc(rffi.VOIDP.TO, size,
+                                    flavor='raw', zero=True)
+                pyobj = rffi.cast(PyObject, buf)
                 pyobj.c_ob_refcnt = 1
-                pyobj.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
+                pyobj.c_ob_type = pytype
                 return pyobj
 
         if tp_attach:
@@ -140,20 +155,10 @@ def create_ref(space, w_obj, items=0):
             assert py_obj.c_ob_refcnt == 0
             Py_IncRef(space, py_obj)
         else:
-            w_type_pyo = make_ref(space, w_type)
-            pto = rffi.cast(PyTypeObjectPtr, w_type_pyo)
-            # Don't increase refcount for non-heaptypes
-            if not rffi.cast(lltype.Signed, pto.c_tp_flags) & Py_TPFLAGS_HEAPTYPE:
-                Py_DecRef(space, w_type_pyo)
-            basicsize = pto.c_tp_basicsize + items * pto.c_tp_itemsize
-            py_obj_pad = lltype.malloc(rffi.VOIDP.TO, basicsize,
-                    flavor="raw", zero=True)
-            py_obj = rffi.cast(PyObject, py_obj_pad)
-            py_obj.c_ob_refcnt = 1
-            py_obj.c_ob_type = pto
+            py_obj = typedescr.allocate(space, w_type, itemcount=items)
             w_obj.set_pyolifeline(PyOLifeline(space, py_obj))
     else:
-        py_obj = get_typedescr(w_obj.typedef).allocate(space, w_type)
+        py_obj = typedescr.allocate(space, w_type, itemcount=items)
         typedescr.attach(space, py_obj, w_obj)
     return py_obj
 
