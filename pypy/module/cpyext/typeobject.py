@@ -201,27 +201,6 @@ def inherit_special(space, pto, base_pto):
                 pto.c_tp_new = base_pto.c_tp_new
 
 
-class W_PyCTypeObject(W_TypeObject):
-    def __init__(self, space, pto):
-        bases_w = space.fixedview(from_ref(space, pto.c_tp_bases))
-        dict_w = {}
-
-        add_operators(space, dict_w, pto)
-        convert_method_defs(space, dict_w, pto.c_tp_methods, pto)
-        convert_getset_defs(space, dict_w, pto.c_tp_getset, pto)
-        convert_member_defs(space, dict_w, pto.c_tp_members, pto)
-
-        full_name = rffi.charp2str(pto.c_tp_name)
-        if '.' in full_name:
-            module_name, extension_name = rsplit(full_name, ".", 1)
-            dict_w["__module__"] = space.wrap(module_name)
-        else:
-            extension_name = full_name
-
-        W_TypeObject.__init__(self, space, extension_name,
-            bases_w or [space.w_object], dict_w)
-        self.__flags__ = _CPYTYPE # mainly disables lookup optimizations
-
 class __extend__(W_Root):
     __metaclass__ = extendabletype
     __slots__ = ("_pyolifeline", ) # hint for the annotator
@@ -276,14 +255,6 @@ class GettersAndSetters:
         check_descr(space, w_self, self.pto)
         PyMember_SetOne(space, w_self, self.member, w_value)
 
-@bootstrap_function
-def init_typeobject(space):
-    make_typedescr(space.w_type.instancetypedef,
-                   basestruct=PyTypeObject,
-                   attach=type_attach,
-                   realize=type_realize,
-                   dealloc=type_dealloc)
-
 def c_type_descr__call__(space, w_type, __args__):
     if isinstance(w_type, W_PyCTypeObject):
         pyo = make_ref(space, w_type)
@@ -323,6 +294,40 @@ def c_type_descr__new__(space, w_typetype, w_name, w_bases, w_dict):
     w_type.ready()
     return w_type
 
+class W_PyCTypeObject(W_TypeObject):
+    def __init__(self, space, pto):
+        bases_w = space.fixedview(from_ref(space, pto.c_tp_bases))
+        dict_w = {}
+
+        add_operators(space, dict_w, pto)
+        convert_method_defs(space, dict_w, pto.c_tp_methods, pto)
+        convert_getset_defs(space, dict_w, pto.c_tp_getset, pto)
+        convert_member_defs(space, dict_w, pto.c_tp_members, pto)
+
+        full_name = rffi.charp2str(pto.c_tp_name)
+        if '.' in full_name:
+            module_name, extension_name = rsplit(full_name, ".", 1)
+            dict_w["__module__"] = space.wrap(module_name)
+        else:
+            extension_name = full_name
+
+        W_TypeObject.__init__(self, space, extension_name,
+            bases_w or [space.w_object], dict_w)
+        self.__flags__ = _CPYTYPE # mainly disables lookup optimizations
+
+W_PyCTypeObject.typedef = TypeDef(
+    'C_type', W_TypeObject.typedef,
+    __call__ = interp2app(c_type_descr__call__, unwrap_spec=[ObjSpace, W_Root, Arguments]),
+    __new__ = interp2app(c_type_descr__new__),
+    )
+
+@bootstrap_function
+def init_typeobject(space):
+    make_typedescr(space.w_type.instancetypedef,
+                   basestruct=PyTypeObject,
+                   attach=type_attach,
+                   realize=type_realize,
+                   dealloc=type_dealloc)
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
@@ -507,12 +512,6 @@ def PyPyType_Register(space, pto):
         w_obj.__init__(space, pto)
         w_obj.ready()
     return 1
-
-W_PyCTypeObject.typedef = TypeDef(
-    'C_type', W_TypeObject.typedef,
-    __call__ = interp2app(c_type_descr__call__, unwrap_spec=[ObjSpace, W_Root, Arguments]),
-    __new__ = interp2app(c_type_descr__new__),
-    )
 
 @cpython_api([PyTypeObjectPtr, PyTypeObjectPtr], rffi.INT_real, error=CANNOT_FAIL)
 def PyType_IsSubtype(space, a, b):
