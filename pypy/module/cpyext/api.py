@@ -470,9 +470,9 @@ def bootstrap_types(space):
 
     pto_object = rffi.cast(PyTypeObjectPtr, py_object)
     pto_type.c_tp_base = pto_object
+    pto_tuple = rffi.cast(PyTypeObjectPtr, py_tuple)
     pto_tuple.c_tp_base = pto_object
 
-    pto_tuple = rffi.cast(PyTypeObjectPtr, py_tuple)
     pto_type.c_tp_bases.c_ob_type = pto_tuple
     pto_object.c_tp_bases.c_ob_type = pto_tuple
     pto_tuple.c_tp_bases.c_ob_type = pto_tuple
