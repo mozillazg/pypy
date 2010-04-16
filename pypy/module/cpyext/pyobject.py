@@ -62,8 +62,7 @@ def make_typedescr(typedef, **kw):
                 obj = lltype.malloc(tp_basestruct, flavor='raw', zero=True)
                 pyobj = rffi.cast(PyObject, obj)
                 pyobj.c_ob_refcnt = 1
-                if w_type is not space.w_type:
-                    pyobj.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
+                pyobj.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, w_type))
                 return pyobj
 
         if tp_attach:
@@ -134,20 +133,7 @@ def create_ref(space, w_obj, items=0):
     w_type = space.type(w_obj)
     typedescr = get_typedescr(w_obj.typedef)
 
-    if space.is_w(w_type, space.w_type) or space.is_w(w_type,
-            space.gettypeobject(W_PyCTypeObject.typedef)):
-        py_obj = typedescr.allocate(space, w_type)
-
-        # put the type object early into the dict
-        # to support dependency cycles like object/type
-        state = space.fromcache(State)
-        state.py_objects_w2r[w_obj] = py_obj
-        py_obj.c_ob_type = rffi.cast(
-            PyTypeObjectPtr, make_ref(space, w_type,
-                                      steal=not space.is_w(w_type, space.w_type)))
-
-        typedescr.attach(space, py_obj, w_obj)
-    elif isinstance(w_type, W_PyCTypeObject):
+    if isinstance(w_type, W_PyCTypeObject):
         lifeline = w_obj.get_pyolifeline()
         if lifeline is not None: # make old PyObject ready for use in C code
             py_obj = lifeline.pyo
@@ -171,23 +157,31 @@ def create_ref(space, w_obj, items=0):
         typedescr.attach(space, py_obj, w_obj)
     return py_obj
 
+def track_reference(space, py_obj, w_obj, borrowed=False):
+    # XXX looks like a PyObject_GC_TRACK
+    ptr = rffi.cast(ADDR, py_obj)
+    if DEBUG_REFCOUNT:
+        debug_refcount("MAKREF", py_obj, w_obj)
+    state = space.fromcache(State)
+    state.py_objects_w2r[w_obj] = py_obj
+    state.py_objects_r2w[ptr] = w_obj
+    if borrowed and ptr not in state.borrowed_objects:
+        state.borrowed_objects[ptr] = None
+
 def make_ref(space, w_obj, borrowed=False, steal=False, items=0):
     if w_obj is None:
         return lltype.nullptr(PyObject.TO)
     assert isinstance(w_obj, W_Root)
     state = space.fromcache(State)
-    py_obj = state.py_objects_w2r.get(w_obj, lltype.nullptr(PyObject.TO))
-    if not py_obj:
+    try:
+        py_obj = state.py_objects_w2r[w_obj]
+    except KeyError:
         assert not steal
         py_obj = create_ref(space, w_obj, items)
-        ptr = rffi.cast(ADDR, py_obj)
-        if DEBUG_REFCOUNT:
-            debug_refcount("MAKREF", py_obj, w_obj)
-        state.py_objects_w2r[w_obj] = py_obj
-        state.py_objects_r2w[ptr] = w_obj
-        if borrowed and ptr not in state.borrowed_objects:
-            state.borrowed_objects[ptr] = None
-    elif not steal:
+        track_reference(space, py_obj, w_obj, borrowed=borrowed)
+        return py_obj
+
+    if not steal:
         if borrowed:
             py_obj_addr = rffi.cast(ADDR, py_obj)
             if py_obj_addr not in state.borrowed_objects:

@@ -457,8 +457,7 @@ def PyPyType_Ready(space, pto, w_obj):
         assert pto.c_tp_flags & Py_TPFLAGS_READYING == 0
         pto.c_tp_flags |= Py_TPFLAGS_READYING
         base = pto.c_tp_base
-        if not base and not (w_obj is not None and
-            space.is_w(w_obj, space.w_object)):
+        if not base and not space.is_w(w_obj, space.w_object):
             base_pyo = make_ref(space, space.w_object, steal=True)
             base = pto.c_tp_base = rffi.cast(PyTypeObjectPtr, base_pyo)
         else:
@@ -467,8 +466,7 @@ def PyPyType_Ready(space, pto, w_obj):
             PyPyType_Ready(space, base, None)
         if base and not pto.c_ob_type: # will be filled later
             pto.c_ob_type = base.c_ob_type
-        if not pto.c_tp_bases and not (space.is_w(w_obj, space.w_object)
-                or space.is_w(w_obj, space.w_type)):
+        if not pto.c_tp_bases:
             if not base:
                 bases = space.newtuple([])
             else:
