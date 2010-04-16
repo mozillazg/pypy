@@ -281,6 +281,7 @@ def init_typeobject(space):
     make_typedescr(space.w_type.instancetypedef,
                    basestruct=PyTypeObject,
                    attach=type_attach,
+                   realize=type_realize,
                    dealloc=type_dealloc)
 
 def c_type_descr__call__(space, w_type, __args__):
@@ -448,6 +449,10 @@ def inherit_slots(space, pto, w_base):
             pto.c_tp_free = base.c_tp_free
     finally:
         Py_DecRef(space, base_pyo)
+
+def type_realize(space, ref):
+    PyPyType_Ready(space, rffi.cast(PyTypeObjectPtr, ref), None)
+    return from_ref(space, ref, True)
 
 def PyPyType_Ready(space, pto, w_obj):
     try:
