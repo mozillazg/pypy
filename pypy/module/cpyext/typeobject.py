@@ -328,6 +328,12 @@ def init_typeobject(space):
                    attach=type_attach,
                    realize=type_realize,
                    dealloc=type_dealloc)
+    make_typedescr(W_PyCTypeObject.typedef,
+                   basestruct=PyTypeObject,
+                   make_ref=pyctype_make_ref,
+                   attach=type_attach,
+                   realize=type_realize,
+                   dealloc=type_dealloc)
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def subtype_dealloc(space, obj):
@@ -344,6 +350,18 @@ def subtype_dealloc(space, obj):
     # XXX cpy decrefs the pto here but we do it in the base-dealloc
     # hopefully this does not clash with the memory model assumed in
     # extension modules
+
+def pyctype_make_ref(space, w_type, w_obj, itemcount=0):
+    lifeline = w_obj.get_pyolifeline()
+    if lifeline is not None: # make old PyObject ready for use in C code
+        py_obj = lifeline.pyo
+        assert py_obj.c_ob_refcnt == 0
+        Py_IncRef(space, py_obj)
+    else:
+        typedescr = get_typedescr(w_obj.typedef)
+        py_obj = typedescr.allocate(space, w_type, itemcount=itemcount)
+        w_obj.set_pyolifeline(PyOLifeline(space, py_obj))
+    return py_obj
 
 @cpython_api([PyObject, rffi.INTP], lltype.Signed, external=False,
              error=CANNOT_FAIL)
