@@ -192,14 +192,11 @@ def add_tp_new_wrapper(space, dict_w, pto):
 def inherit_special(space, pto, base_pto):
     # XXX missing: copy basicsize and flags in a magical way
     flags = rffi.cast(lltype.Signed, pto.c_tp_flags)
-    if True or flags & Py_TPFLAGS_HAVE_CLASS: # XXX i do not understand this check
-        base_object_pyo = make_ref(space, space.w_object, steal=True)
-        base_object_pto = rffi.cast(PyTypeObjectPtr, base_object_pyo)
-        if base_pto != base_object_pto or \
-                flags & Py_TPFLAGS_HEAPTYPE:
-            if not pto.c_tp_new:
-                pto.c_tp_new = base_pto.c_tp_new
-
+    base_object_pyo = make_ref(space, space.w_object, steal=True)
+    base_object_pto = rffi.cast(PyTypeObjectPtr, base_object_pyo)
+    if base_pto != base_object_pto or flags & Py_TPFLAGS_HEAPTYPE:
+        if not pto.c_tp_new:
+            pto.c_tp_new = base_pto.c_tp_new
 
 class __extend__(W_Root):
     __metaclass__ = extendabletype
