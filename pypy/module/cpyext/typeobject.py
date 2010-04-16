@@ -485,7 +485,7 @@ def PyPyType_Ready(space, pto, w_obj):
         assert pto.c_tp_flags & Py_TPFLAGS_READYING == 0
         pto.c_tp_flags |= Py_TPFLAGS_READYING
         base = pto.c_tp_base
-        if not base and not space.is_w(w_obj, space.w_object):
+        if not base:
             base_pyo = make_ref(space, space.w_object, steal=True)
             base = pto.c_tp_base = rffi.cast(PyTypeObjectPtr, base_pyo)
         else:
@@ -504,9 +504,8 @@ def PyPyType_Ready(space, pto, w_obj):
             PyPyType_Register(space, pto)
         if base:
             inherit_special(space, pto, base)
-        if pto.c_tp_bases: # this is false while bootstrapping
-            for w_base in space.fixedview(from_ref(space, pto.c_tp_bases)):
-                inherit_slots(space, pto, w_base)
+        for w_base in space.fixedview(from_ref(space, pto.c_tp_bases)):
+            inherit_slots(space, pto, w_base)
         # missing:
         # setting __doc__ if not defined and tp_doc defined
         # inheriting tp_as_* slots
