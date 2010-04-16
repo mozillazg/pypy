@@ -7,7 +7,6 @@ from pypy.module.cpyext.api import cpython_api, bootstrap_function, \
      Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.typeobject import W_TypeObject
-from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rpython.annlowlevel import llhelper
 
@@ -77,7 +76,9 @@ def make_typedescr(typedef, **kw):
                 return tp_realize(space, ref)
         else:
             def realize(self, space, ref):
-                raise TypeError("cannot realize")
+                # For most types, a reference cannot exist without
+                # a real interpreter object
+                raise InvalidPointerException(str(ref))
     if typedef:
         CpyTypedescr.__name__ = "CpyTypedescr_%s" % (typedef.name,)
 
@@ -193,31 +194,24 @@ def make_ref(space, w_obj, borrowed=False, steal=False, items=0):
 
 
 def from_ref(space, ref, recurse=False):
-    from pypy.module.cpyext.typeobject import PyPyType_Ready
     assert lltype.typeOf(ref) == PyObject
     if not ref:
         return None
     state = space.fromcache(State)
     ptr = rffi.cast(ADDR, ref)
+
     try:
-        w_obj = state.py_objects_r2w[ptr]
+        return state.py_objects_r2w[ptr]
     except KeyError:
         if recurse:
             raise InvalidPointerException(str(ref))
-        ref_type = rffi.cast(PyObject, ref.c_ob_type)
-        if ref != ref_type:
-            w_type = from_ref(space, ref_type, True)
-            assert isinstance(w_type, W_TypeObject)
-            if space.is_w(w_type, space.w_str):
-                return get_typedescr(w_type.instancetypedef).realize(space, ref)
-            elif space.is_w(w_type, space.w_type):
-                PyPyType_Ready(space, rffi.cast(PyTypeObjectPtr, ref), None)
-                return from_ref(space, ref, True)
-            else:
-                raise InvalidPointerException(str(ref))
-        else:
-            raise InvalidPointerException("This should never happen")
-    return w_obj
+
+    # This reference is not yet a real interpreter object.
+    # Realize it.
+    ref_type = rffi.cast(PyObject, ref.c_ob_type)
+    w_type = from_ref(space, ref_type, True)
+    assert isinstance(w_type, W_TypeObject)
+    return get_typedescr(w_type.instancetypedef).realize(space, ref)
 
 
 # XXX Optimize these functions and put them into macro definitions
