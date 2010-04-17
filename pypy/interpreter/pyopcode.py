@@ -65,6 +65,12 @@ class __extend__(pyframe.PyFrame):
     # for logbytecode:
     last_opcode = -1
 
+    bytecode_spec = bytecode_spec
+    opcode_method_names = bytecode_spec.method_names
+    opcodedesc = bytecode_spec.opcodedesc
+    opdescmap = bytecode_spec.opdescmap
+    HAVE_ARGUMENT = bytecode_spec.HAVE_ARGUMENT
+
     ### opcode dispatch ###
 
     def dispatch(self, pycode, next_instr, ec):
@@ -1016,17 +1022,6 @@ class __extend__(pyframe.PyFrame):
                                  (ofs, ord(c), name) )
 
     STOP_CODE = MISSING_OPCODE
-
-
-class __extend__(pyframe.PyPyFrame):
-    """
-    Execution of PyPy opcodes (mostly derived from Python 2.5.2).
-    """
-    bytecode_spec = bytecode_spec
-    opcode_method_names = bytecode_spec.method_names
-    opcodedesc = bytecode_spec.opcodedesc
-    opdescmap = bytecode_spec.opdescmap
-    HAVE_ARGUMENT = bytecode_spec.HAVE_ARGUMENT
     
     def BUILD_MAP(self, itemcount, next_instr):
         if itemcount != 0:
@@ -1036,94 +1031,6 @@ class __extend__(pyframe.PyPyFrame):
 
     def STORE_MAP(self, zero, next_instr):
         raise BytecodeCorruption
-
-# Need to cast 2.7's "named struct" to a plain struct
-host_version_info = tuple(sys.version_info)
-
-class __extend__(pyframe.HostPyFrame):
-    """
-    Execution of host (CPython) opcodes.
-    """
-    bytecode_spec = host_bytecode_spec
-    opcode_method_names = host_bytecode_spec.method_names
-    opcodedesc = host_bytecode_spec.opcodedesc
-    opdescmap = host_bytecode_spec.opdescmap
-    HAVE_ARGUMENT = host_bytecode_spec.HAVE_ARGUMENT
-
-    def BUILD_MAP(self, itemcount, next_instr):
-        if host_version_info >= (2, 6):
-            # We could pre-allocate a dict here
-            # but for the moment this code is not translated.
-            pass
-        else:
-            if itemcount != 0:
-                raise BytecodeCorruption
-        w_dict = self.space.newdict()
-        self.pushvalue(w_dict)
-
-    def STORE_MAP(self, zero, next_instr):
-        if host_version_info >= (2, 6):
-            w_key = self.popvalue()
-            w_value = self.popvalue()
-            w_dict = self.peekvalue()
-            self.space.setitem(w_dict, w_key, w_value)
-        else:
-            raise BytecodeCorruption
-
-    def POP_JUMP_IF_FALSE(self, jumpto, next_instr):
-        w_cond = self.popvalue()
-        if not self.space.is_true(w_cond):
-            next_instr = jumpto
-        return next_instr
-
-    def POP_JUMP_IF_TRUE(self, jumpto, next_instr):
-        w_cond = self.popvalue()
-        if self.space.is_true(w_cond):
-            return jumpto
-        return next_instr
-
-    def JUMP_IF_FALSE_OR_POP(self, jumpto, next_instr):
-        w_cond = self.peekvalue()
-        if not self.space.is_true(w_cond):
-            return jumpto
-        self.popvalue()
-        return next_instr
-
-    def JUMP_IF_TRUE_OR_POP(self, jumpto, next_instr):
-        w_cond = self.peekvalue()
-        if self.space.is_true(w_cond):
-            return jumpto
-        self.popvalue()
-        return next_instr
-
-    def LIST_APPEND(self, oparg, next_instr):
-        w = self.popvalue()
-        if host_version_info < (2, 7):
-            v = self.popvalue()
-        else:
-            v = self.peekvalue(oparg - 1)
-        self.space.call_method(v, 'append', w)
-    
-    # XXX Unimplemented 2.7 opcodes ----------------
-
-    # Set literals, set comprehensions
-
-    def BUILD_SET(self, oparg, next_instr):
-        raise NotImplementedError("BUILD_SET")
-
-    def SET_ADD(self, oparg, next_instr):
-        raise NotImplementedError("SET_ADD")
-
-    # Dict comprehensions
-
-    def MAP_ADD(self, oparg, next_instr):
-        raise NotImplementedError("MAP_ADD")
-
-    # `with` statement
-
-    def SETUP_WITH(self, oparg, next_instr):
-        raise NotImplementedError("SETUP_WITH")
-
 
 ### ____________________________________________________________ ###
 

@@ -258,12 +258,9 @@ class ObjSpace(object):
         self.actionflag.register_action(self.frame_trace_action)
 
         from pypy.interpreter.pycode import cpython_magic, default_magic
-        from pypy.interpreter.pyframe import PyPyFrame, HostPyFrame
         self.our_magic = default_magic
         self.host_magic = cpython_magic
         # can be overridden to a subclass
-        self.FrameClass = PyPyFrame
-        self.HostFrameClass = HostPyFrame
 
         if self.config.objspace.logbytecodes:
             self.bytecodecounts = [0] * 256

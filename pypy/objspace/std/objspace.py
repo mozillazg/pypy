@@ -47,9 +47,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # setup all the object types and implementations
         self.model = model.StdTypeModel(self.config)
 
-        from pypy.interpreter.pyframe import PyPyFrame, HostPyFrame
-        self.FrameClass = frame.build_frame(self, PyPyFrame)
-        self.HostFrameClass = frame.build_frame(self, HostPyFrame)
+        from pypy.interpreter.pyframe import PyFrame
+        self.FrameClass = frame.build_frame(self, PyFrame)
 
         if self.config.objspace.std.withrope:
             self.StringObjectCls = W_RopeObject
