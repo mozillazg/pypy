@@ -1,12 +1,13 @@
 import collections
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter.error import OperationError
-from pypy.interpreter import pyframe, pycode
+from pypy.interpreter import pyframe
 from pypy.interpreter.argument import ArgumentsForTranslation
 from pypy.objspace.flow.model import *
 from pypy.objspace.flow.framestate import FrameState
 from pypy.rlib import jit
-
+from pypy.tool.stdlib_opcode import host_bytecode_spec
+import sys
 
 class OperationThatShouldNotBePropagatedError(OperationError):
     pass
@@ -219,12 +220,8 @@ class FlowExecutionContext(ExecutionContext):
         # create an empty frame suitable for the code object
         # while ignoring any operation like the creation of the locals dict
         self.recorder = []
-        if self.code.magic == pycode.cpython_magic:
-            frame = FlowSpaceHostPyFrame(self.space, self.code,
-                                         self.w_globals, self.closure)
-        else:
-            frame = FlowSpacePyPyFrame(self.space, self.code,
-                                       self.w_globals, self.closure)
+        frame = FlowSpaceFrame(self.space, self.code,
+                               self.w_globals, self.closure)
         frame.last_instr = 0
         return frame
 
@@ -402,7 +399,91 @@ class FlowExecutionContext(ExecutionContext):
                 if w_v.value is oldvalue:
                     stack_items_w[i] = w_new
 
-class FlowSpaceFrameBase(object):
+class FlowSpaceFrame(pyframe.PyFrame):
+    """
+    Execution of host (CPython) opcodes.
+    """
+    bytecode_spec = host_bytecode_spec
+    opcode_method_names = host_bytecode_spec.method_names
+    opcodedesc = host_bytecode_spec.opcodedesc
+    opdescmap = host_bytecode_spec.opdescmap
+    HAVE_ARGUMENT = host_bytecode_spec.HAVE_ARGUMENT
+
+    def BUILD_MAP(self, itemcount, next_instr):
+        if sys.version_info >= (2, 6):
+            # We could pre-allocate a dict here
+            # but for the moment this code is not translated.
+            pass
+        else:
+            if itemcount != 0:
+                raise BytecodeCorruption
+        w_dict = self.space.newdict()
+        self.pushvalue(w_dict)
+
+    def STORE_MAP(self, zero, next_instr):
+        if sys.version_info >= (2, 6):
+            w_key = self.popvalue()
+            w_value = self.popvalue()
+            w_dict = self.peekvalue()
+            self.space.setitem(w_dict, w_key, w_value)
+        else:
+            raise BytecodeCorruption
+
+    def POP_JUMP_IF_FALSE(self, jumpto, next_instr):
+        w_cond = self.popvalue()
+        if not self.space.is_true(w_cond):
+            next_instr = jumpto
+        return next_instr
+
+    def POP_JUMP_IF_TRUE(self, jumpto, next_instr):
+        w_cond = self.popvalue()
+        if self.space.is_true(w_cond):
+            return jumpto
+        return next_instr
+
+    def JUMP_IF_FALSE_OR_POP(self, jumpto, next_instr):
+        w_cond = self.peekvalue()
+        if not self.space.is_true(w_cond):
+            return jumpto
+        self.popvalue()
+        return next_instr
+
+    def JUMP_IF_TRUE_OR_POP(self, jumpto, next_instr):
+        w_cond = self.peekvalue()
+        if self.space.is_true(w_cond):
+            return jumpto
+        self.popvalue()
+        return next_instr
+
+    def LIST_APPEND(self, oparg, next_instr):
+        w = self.popvalue()
+        if sys.version_info < (2, 7):
+            v = self.popvalue()
+        else:
+            v = self.peekvalue(oparg - 1)
+        self.space.call_method(v, 'append', w)
+    
+    # XXX Unimplemented 2.7 opcodes ----------------
+
+    # Set literals, set comprehensions
+
+    def BUILD_SET(self, oparg, next_instr):
+        raise NotImplementedError("BUILD_SET")
+
+    def SET_ADD(self, oparg, next_instr):
+        raise NotImplementedError("SET_ADD")
+
+    # Dict comprehensions
+
+    def MAP_ADD(self, oparg, next_instr):
+        raise NotImplementedError("MAP_ADD")
+
+    # `with` statement
+
+    def SETUP_WITH(self, oparg, next_instr):
+        raise NotImplementedError("SETUP_WITH")
+
+    
     def make_arguments(self, nargs):
         return ArgumentsForTranslation(self.space, self.peekvalues(nargs))
     def argument_factory(self, *args):
@@ -414,10 +495,3 @@ class FlowSpaceFrameBase(object):
             raise operr
         return pyframe.PyFrame.handle_operation_error(self, ec, operr,
                                                       *args, **kwds)
-
-class FlowSpacePyPyFrame(FlowSpaceFrameBase, pyframe.PyPyFrame):
-    pass
-
-class FlowSpaceHostPyFrame(FlowSpaceFrameBase, pyframe.HostPyFrame):
-    pass
-
