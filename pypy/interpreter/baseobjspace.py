@@ -934,7 +934,8 @@ class ObjSpace(object):
             expression = compiler.compile(expression, '?', 'eval', 0,
                                          hidden_applevel=hidden_applevel)
         if isinstance(expression, types.CodeType):
-            raise Exception("space.eval(cpycode) Should not be used")
+            # XXX only used by appsupport
+            expression = PyCode._from_code(self, expression)
         if not isinstance(expression, PyCode):
             raise TypeError, 'space.eval(): expected a string, code or PyCode object'
         return expression.exec_code(self, w_globals, w_locals)
@@ -951,7 +952,8 @@ class ObjSpace(object):
             statement = compiler.compile(statement, filename, 'exec', 0,
                                          hidden_applevel=hidden_applevel)
         if isinstance(statement, types.CodeType):
-            raise Exception("space.eval(cpycode) Should not be used")
+            # XXX only used by appsupport
+            statement = PyCode._from_code(self, statement)
         if not isinstance(statement, PyCode):
             raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
         w_key = self.wrap('__builtins__')
