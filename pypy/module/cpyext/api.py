@@ -434,54 +434,9 @@ def bootstrap_function(func):
     BOOTSTRAP_FUNCTIONS.append(func)
     return func
 
-def bootstrap_types(space):
-    from pypy.module.cpyext.pyobject import make_ref, create_ref, track_reference
-    from pypy.module.cpyext.typeobject import PyTypeObjectPtr
-
+def run_bootstrap_functions(space):
     for func in BOOTSTRAP_FUNCTIONS:
         func(space)
-
-    # some types are difficult to create because of cycles.
-    # - object.ob_type = type
-    # - type.ob_type   = type
-    # - tuple.ob_type  = type
-    # - type.tp_base   = object
-    # - tuple.tp_base  = object
-    # - type.tp_bases is a tuple
-    # - object.tp_bases is a tuple
-    # - tuple.tp_bases is a tuple
-
-    # insert null placeholders to please make_ref()
-    state = space.fromcache(State)
-    state.py_objects_w2r[space.w_type] = lltype.nullptr(PyObject.TO)
-    state.py_objects_w2r[space.w_object] = lltype.nullptr(PyObject.TO)
-    state.py_objects_w2r[space.w_tuple] = lltype.nullptr(PyObject.TO)
-
-    # create the objects
-    py_type = create_ref(space, space.w_type)
-    py_object = create_ref(space, space.w_object)
-    py_tuple = create_ref(space, space.w_tuple)
-
-    # form cycles
-    pto_type = rffi.cast(PyTypeObjectPtr, py_type)
-    py_type.c_ob_type = pto_type
-    py_object.c_ob_type = pto_type
-    py_tuple.c_ob_type = pto_type
-
-    pto_object = rffi.cast(PyTypeObjectPtr, py_object)
-    pto_type.c_tp_base = pto_object
-    pto_tuple = rffi.cast(PyTypeObjectPtr, py_tuple)
-    pto_tuple.c_tp_base = pto_object
-
-    pto_type.c_tp_bases.c_ob_type = pto_tuple
-    pto_object.c_tp_bases.c_ob_type = pto_tuple
-    pto_tuple.c_tp_bases.c_ob_type = pto_tuple
-
-    # Restore the mapping
-    track_reference(space, py_type, space.w_type)
-    track_reference(space, py_object, space.w_object)
-    track_reference(space, py_tuple, space.w_tuple)
-
 
 #_____________________________________________________
 # Build the bridge DLL, Allow extension DLLs to call
@@ -530,7 +485,7 @@ def build_bridge(space):
         outputfilename=str(udir / "module_cache" / "pypyapi"))
     modulename = py.path.local(eci.libraries[-1])
 
-    bootstrap_types(space)
+    run_bootstrap_functions(space)
 
     # load the bridge, and init structure
     import ctypes
@@ -686,7 +641,7 @@ def setup_library(space):
 
     eci = build_eci(False, export_symbols, code)
 
-    bootstrap_types(space)
+    run_bootstrap_functions(space)
     setup_va_functions(eci)
 
     # populate static data
