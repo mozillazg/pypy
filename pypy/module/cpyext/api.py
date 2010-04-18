@@ -233,7 +233,7 @@ def cpython_struct(name, fields, forward=None):
 INTERPLEVEL_API = {}
 FUNCTIONS = {}
 FUNCTIONS_STATIC = {}
-FUNCTIONS_C = [ # XXX rename to SYMBOLS_C
+SYMBOLS_C = [
     'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject',
@@ -445,7 +445,7 @@ def run_bootstrap_functions(space):
 def build_bridge(space):
     from pypy.module.cpyext.pyobject import make_ref
 
-    export_symbols = list(FUNCTIONS) + FUNCTIONS_C + list(GLOBALS)
+    export_symbols = list(FUNCTIONS) + SYMBOLS_C + list(GLOBALS)
     from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
@@ -630,7 +630,7 @@ def build_eci(building_bridge, export_symbols, code):
 def setup_library(space):
     from pypy.module.cpyext.pyobject import make_ref
 
-    export_symbols = list(FUNCTIONS) + FUNCTIONS_C + list(GLOBALS)
+    export_symbols = list(FUNCTIONS) + SYMBOLS_C + list(GLOBALS)
     from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
