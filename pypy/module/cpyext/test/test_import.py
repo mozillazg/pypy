@@ -8,7 +8,6 @@ class TestImport(BaseApiTest):
         BaseApiTest.setup_method(self, func)
 
     def test_import(self, space, api):
-        # failing because we dont have a caller
         pdb = api.PyImport_Import(space.wrap("pdb"))
         assert pdb
         assert space.getattr(pdb, space.wrap("pm"))
