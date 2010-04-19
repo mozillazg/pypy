@@ -1,23 +1,26 @@
 import sys
+from pypy.objspace.flow.model import Variable
 from pypy.tool.algo.color import DependencyGraph
 from pypy.tool.algo.unionfind import UnionFind
-from pypy.objspace.flow.model import Variable
 
 
-class BytecodeMaker(object):
+def perform_register_allocation(graph):
+    regalloc = RegAllocator(graph)
+    regalloc.make_dependencies()
+    regalloc.coalesce_variables()
+    regalloc.find_node_coloring()
+    return regalloc
+
+
+class RegAllocator(object):
     DEBUG_REGALLOC = False
 
     def __init__(self, graph):
         self.graph = graph
 
-    def generate(self):
-        self.register_allocation()
-
-    def register_allocation(self):
+    def make_dependencies(self):
         dg = DependencyGraph()
-        #
-        pendingblocks = list(self.graph.iterblocks())
-        for block in pendingblocks:
+        for block in self.graph.iterblocks():
             # Compute die_at = {Variable: index_of_operation_with_last_usage}
             die_at = dict.fromkeys(block.inputargs, 0)
             for i, op in enumerate(block.operations):
@@ -26,10 +29,10 @@ class BytecodeMaker(object):
                         die_at[v] = i
                 if op.result is not None:
                     die_at[op.result] = i
-            die_at[block.exitswitch] = sys.maxint
+            die_at.pop(block.exitswitch, None)
             for link in block.exits:
                 for v in link.args:
-                    die_at[v] = sys.maxint
+                    die_at.pop(v, None)
             # Add the variables of this block to the dependency graph
             for i, v in enumerate(block.inputargs):
                 dg.add_node(v)
@@ -49,24 +52,37 @@ class BytecodeMaker(object):
                     dg.add_node(op.result)
                     for v in livevars:
                         dg.add_edge(v, op.result)
-        #
+        self._depgraph = dg
+
+    def coalesce_variables(self):
         uf = UnionFind()
+        dg = self._depgraph
+        pendingblocks = list(self.graph.iterblocks())
         while pendingblocks:
             block = pendingblocks.pop()
-            # Aggressively try to coalesce each source variable with its target
+            # Aggressively try to coalesce each source variable with its
+            # target.  We start from the end of the graph instead of
+            # from the beginning.  This is a bit arbitrary, but the idea
+            # is that the end of the graph runs typically more often
+            # than the start, given that we resume execution from the
+            # middle during blackholing.
             for link in block.exits:
                 for i, v in enumerate(link.args):
                     if isinstance(v, Variable):
                         w = link.target.inputargs[i]
                         v0 = uf.find_rep(v)
                         w0 = uf.find_rep(w)
-                        if v0 not in dg.neighbours[w0]:
+                        if v0 is not w0 and v0 not in dg.neighbours[w0]:
                             _, rep, _ = uf.union(v0, w0)
-                            assert rep is v0
-                            dg.coalesce(w0, v0)
-        #
-        self._coloring = dg.find_node_coloring()
+                            if rep is v0:
+                                dg.coalesce(w0, v0)
+                            else:
+                                assert rep is w0
+                                dg.coalesce(v0, w0)
         self._unionfind = uf
+
+    def find_node_coloring(self):
+        self._coloring = self._depgraph.find_node_coloring()
         if self.DEBUG_REGALLOC:
             for block in self.graph.iterblocks():
                 print block
@@ -75,3 +91,10 @@ class BytecodeMaker(object):
 
     def getcolor(self, v):
         return self._coloring[self._unionfind.find_rep(v)]
+
+    def swapcolors(self, col1, col2):
+        for key, value in self._coloring.items():
+            if value == col1:
+                self._coloring[key] = col2
+            elif value == col2:
+                self._coloring[key] = col1
