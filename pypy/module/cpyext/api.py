@@ -200,7 +200,10 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
                         state = space.fromcache(State)
                         e.normalize_exception(space)
                         state.set_exception(e.w_type, e.get_w_value(space))
-                        return api_function.error_value
+                        if restype is PyObject:
+                            return None
+                        else:
+                            return api_function.error_value
                 finally:
                     if api_function.borrowed:
                         state = space.fromcache(State)

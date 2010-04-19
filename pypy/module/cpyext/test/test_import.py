@@ -2,12 +2,16 @@ from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 
 class TestImport(BaseApiTest):
+    def setup_method(self, func):
+        from pypy.module.imp.importing import importhook
+        importhook(self.space, "os") # warm up reference counts
+        BaseApiTest.setup_method(self, func)
+
     def test_import(self, space, api):
         # failing because we dont have a caller
-        skip("Fails currently, dont know how to fix")
         pdb = api.PyImport_Import(space.wrap("pdb"))
         assert pdb
-        assert pdb.get("pm")
+        assert space.getattr(pdb, space.wrap("pm"))
 
 class AppTestImportLogic(AppTestCpythonExtensionBase):
     def test_import_logic(self):
