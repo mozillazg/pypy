@@ -37,4 +37,4 @@ def PyImport_Import(space, w_name):
 
 @cpython_api([rffi.CCHARP], PyObject)
 def PyImport_ImportModule(space, name):
-    return PyImport_Import(space, space.wrap(name))
+    return PyImport_Import(space, space.wrap(rffi.charp2str(name)))
