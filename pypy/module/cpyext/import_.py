@@ -1,5 +1,6 @@
 from pypy.interpreter import module
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject
+from pypy.rpython.lltypesystem import rffi
 from pypy.interpreter.error import OperationError
 
 @cpython_api([PyObject], PyObject)
@@ -12,18 +13,28 @@ def PyImport_Import(space, w_name):
 
     Always uses absolute imports."""
     caller = space.getexecutioncontext().gettopframe_nohidden()
+    # Get the builtins from current globals
     if caller is not None:
         w_globals = caller.w_globals
-        try:
-            w_builtin = space.getitem(w_globals, space.wrap('__builtins__'))
-        except OperationError, e:
-            if not e.match(space, space.w_KeyError):
-                raise
-        else:
-            if space.is_true(space.isinstance(w_builtin, space.w_dict)):
-                 w_builtin = module.Module(space, None, w_builtin)
-            builtin = space.interpclass_w(w_builtin)
-            if isinstance(builtin, module.Module):
-                return space.call(builtin.get("__import__"), space.newtuple([w_name]))
-    raise OperationError(space.w_KeyError, space.wrap("__builtins__"))
+        w_builtin = space.getitem(w_globals, space.wrap('__builtins__'))
+    else:
+        # No globals -- use standard builtins, and fake globals
+        w_builtin = space.getbuiltinmodule('__builtin__')
+        w_globals = space.newdict()
+        space.setitem(w_globals, space.wrap("__builtins__"), w_builtin)
 
+    # Get the __import__ function from the builtins
+    if space.is_true(space.isinstance(w_builtin, space.w_dict)):
+        w_import = space.getitem(w_builtin, space.wrap("__import__"))
+    else:
+        w_import = space.getattr(w_builtin, space.wrap("__import__"))
+
+	# Call the __import__ function with the proper argument list
+	# Always use absolute import here.
+    return space.call(w_import, space.newtuple(
+        [w_name, w_globals, w_globals,
+         space.newlist([space.wrap("__doc__")])]))
+
+@cpython_api([rffi.CCHARP], PyObject)
+def PyImport_ImportModule(space, name):
+    return PyImport_Import(space, space.wrap(name))

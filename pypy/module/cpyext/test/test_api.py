@@ -42,7 +42,11 @@ class BaseApiTest:
 
     def teardown_method(self, func):
         state = self.space.fromcache(State)
-        assert state.exc_value is None
+        try:
+            state.check_and_raise_exception()
+        except OperationError, e:
+            print e.errorstr(self.space)
+            raise
         if check_and_print_leaks(self):
             assert False, "Test leaks or loses object(s)."
 
