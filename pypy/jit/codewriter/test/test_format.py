@@ -8,13 +8,13 @@ def test_format_assembler_simple():
     ssarepr = SSARepr()
     i0, i1, i2 = Register(0), Register(1), Register(2)
     ssarepr.insns = [
-        ('livevars', [i0, i1]),
+        ('foobar', [i0, i1]),
         ('int_add', i0, i1, i2),
         ('int_return', i2),
         ]
     asm = format_assembler(ssarepr)
     expected = """
-        livevars [%i0, %i1]
+        foobar [%i0, %i1]
         int_add %i0, %i1, %i2
         int_return %i2
     """
@@ -24,7 +24,7 @@ def test_format_assembler_loop():
     ssarepr = SSARepr()
     i0, i1 = Register(0), Register(1)
     ssarepr.insns = [
-        ('livevars', [i0, i1]),
+        ('foobar', [i0, i1]),
         (Label('L1'),),
         ('goto_if_not_int_gt', TLabel('L2'), i0, Constant(0)),
         ('int_add', i1, i0, i1),
@@ -35,7 +35,7 @@ def test_format_assembler_loop():
         ]
     asm = format_assembler(ssarepr)
     expected = """
-        livevars [%i0, %i1]
+        foobar [%i0, %i1]
         L1:
         goto_if_not_int_gt L2, %i0, $0
         int_add %i1, %i0, %i1
