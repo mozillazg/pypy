@@ -1,4 +1,5 @@
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.rarithmetic import intmask, LONG_BIT
 from pypy.tool.sourcetools import func_with_new_name
 
 
@@ -13,6 +14,11 @@ def arguments(*argtypes, **kwds):
 
 class LeaveFrame(Exception):
     pass
+
+def signedord(c):
+    value = ord(c)
+    value = intmask(value << (LONG_BIT-8)) >> (LONG_BIT-8)
+    return value
 
 
 class BlackholeInterpreter(object):
@@ -35,46 +41,65 @@ class BlackholeInterpreter(object):
             all_funcs.append(self._get_method(name, argcodes))
         all_funcs = unrolling_iterable(enumerate(all_funcs))
         #
-        def dispatch(code, position):
-            opcode = ord(code[position])
-            position += 1
-            for i, func in all_funcs:
-                if opcode == i:
-                    return func(code, position)
-            else:
-                raise AssertionError("bad opcode")
-        self.dispatch = dispatch
+        def dispatch_loop(code, position):
+            while True:
+                opcode = ord(code[position])
+                position += 1
+                for i, func in all_funcs:
+                    if opcode == i:
+                        position = func(code, position)
+                        break
+                else:
+                    raise AssertionError("bad opcode")
+        self.dispatch_loop = dispatch_loop
 
     def _get_method(self, name, argcodes):
         #
         def handler(code, position):
             args = ()
-            for argcode, argtype in arg_codes_and_types:
-                if argcode == 'i':
-                    value = self.registers_i[ord(code[position])]
+            next_argcode = 0
+            for argtype in argtypes:
+                if argtype == 'i':
+                    # argcode can be 'i' or 'c'; 'c' stands for a single
+                    # signed byte that gives the value of a small constant.
+                    argcode = argcodes[next_argcode]
+                    next_argcode = next_argcode + 1
+                    if argcode == 'i':
+                        value = self.registers_i[ord(code[position])]
+                    elif argcode == 'c':
+                        value = signedord(code[position])
+                    else:
+                        raise AssertionError("bad argcode")
                     position += 1
-                    args += (value,)
-                    assert argtype == 'i'
+                elif argtype == 'L':
+                    # argcode should be 'L' too
+                    assert argcodes[next_argcode] == 'L'
+                    next_argcode = next_argcode + 1
+                    value = ord(code[position]) | (ord(code[position+1])<<8)
+                    position += 2
+                elif argtype == 'pc':
+                    value = position
                 else:
-                    raise AssertionError("bad arg code: %r" % (argcode,))
+                    raise AssertionError("bad argtype")
+                args += (value,)
             result = boundmethod(*args)
             if resulttype == 'i':
-                assert type(result) is int
+                # argcode should be 'i' too
+                assert argcodes[next_argcode] == 'i'
+                next_argcode = next_argcode + 1
                 self.registers_i[ord(code[position])] = result
                 position += 1
+            elif resulttype == 'L':
+                position = result
             else:
                 assert resulttype is None
                 assert result is None
+            assert next_argcode == len(argcodes)
             return position
         #
         boundmethod = getattr(self, 'opimpl_' + name)
-        argtypes = boundmethod.argtypes
+        argtypes = unrolling_iterable(boundmethod.argtypes)
         resulttype = boundmethod.resulttype
-        if resulttype is not None:
-            assert argcodes[-1] == 'i'
-            argcodes = argcodes[:-1]
-        assert len(argcodes) == len(argtypes)
-        arg_codes_and_types = unrolling_iterable(zip(argcodes, argtypes))
         handler = func_with_new_name(handler, 'handler_' + name)
         return handler
 
@@ -85,8 +110,7 @@ class BlackholeInterpreter(object):
         code = jitcode.code
         constants = jitcode.constants
         try:
-            while True:
-                position = self.dispatch(code, position)
+            self.dispatch_loop(code, position)
         except LeaveFrame:
             pass
 
@@ -96,7 +120,22 @@ class BlackholeInterpreter(object):
     def opimpl_int_add(self, a, b):
         return a + b
 
+    @arguments("i", "i", returns="i")
+    def opimpl_int_sub(self, a, b):
+        return a - b
+
     @arguments("i")
     def opimpl_int_return(self, a):
         self.result_i = a
         raise LeaveFrame
+
+    @arguments("L", "i", "i", "pc", returns="L")
+    def opimpl_goto_if_not_int_gt(self, target, a, b, pc):
+        if a > b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", returns="L")
+    def opimpl_goto(self, target):
+        return target
