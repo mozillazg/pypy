@@ -20,6 +20,7 @@ extern "C" {
 #define HAVE_USABLE_WCHAR_T 1
 #ifndef _WIN32
 #define Py_UNICODE_SIZE 4
+#define Py_UNICODE_WIDE
 #else
 #define Py_UNICODE_SIZE 2
 #endif
