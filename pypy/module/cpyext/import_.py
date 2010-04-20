@@ -1,5 +1,6 @@
 from pypy.interpreter import module
-from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject
+from pypy.module.cpyext.api import (
+    generic_cpy_call, cpython_api, PyObject, CONST_STRING)
 from pypy.rpython.lltypesystem import rffi
 from pypy.interpreter.error import OperationError
 
@@ -35,6 +36,6 @@ def PyImport_Import(space, w_name):
         [w_name, w_globals, w_globals,
          space.newlist([space.wrap("__doc__")])]))
 
-@cpython_api([rffi.CCHARP], PyObject)
+@cpython_api([CONST_STRING], PyObject)
 def PyImport_ImportModule(space, name):
     return PyImport_Import(space, space.wrap(rffi.charp2str(name)))

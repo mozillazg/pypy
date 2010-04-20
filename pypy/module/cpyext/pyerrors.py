@@ -2,7 +2,7 @@ import os
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
-from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL
+from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, CONST_STRING
 from pypy.module.exceptions.interp_exceptions import W_RuntimeWarning
 from pypy.module.cpyext.pyobject import PyObject, make_ref, register_container
 from pypy.module.cpyext.state import State
@@ -15,7 +15,7 @@ def PyErr_SetObject(space, w_type, w_value):
     state = space.fromcache(State)
     state.set_exception(w_type, w_value)
 
-@cpython_api([PyObject, rffi.CCHARP], lltype.Void)
+@cpython_api([PyObject, CONST_STRING], lltype.Void)
 def PyErr_SetString(space, w_type, message_ptr):
     message = rffi.charp2str(message_ptr)
     PyErr_SetObject(space, w_type, space.wrap(message))
@@ -114,7 +114,7 @@ def PyErr_ExceptionMatches(space, w_exc):
     return PyErr_GivenExceptionMatches(space, w_type, w_exc)
 
 
-@cpython_api([PyObject, rffi.CCHARP, rffi.INT_real], rffi.INT_real, error=-1)
+@cpython_api([PyObject, CONST_STRING, rffi.INT_real], rffi.INT_real, error=-1)
 def PyErr_WarnEx(space, w_category, message_ptr, stacklevel):
     """Issue a warning message.  The category argument is a warning category (see
     below) or NULL; the message argument is a message string.  stacklevel is a
@@ -155,7 +155,7 @@ def PyErr_WarnEx(space, w_category, message_ptr, stacklevel):
     os.write(2, "WARNING: " + message + "\n")
     return 0
 
-@cpython_api([PyObject, rffi.CCHARP], rffi.INT_real, error=-1)
+@cpython_api([PyObject, CONST_STRING], rffi.INT_real, error=-1)
 def PyErr_Warn(space, w_category, message):
     """Issue a warning message.  The category argument is a warning category (see
     below) or NULL; the message argument is a message string.  The warning will

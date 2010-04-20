@@ -1,7 +1,7 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
         Py_ssize_t, PyVarObject, Py_TPFLAGS_HEAPTYPE,\
-        Py_LT, Py_LE, Py_EQ, Py_NE, Py_GT, Py_GE
+        Py_LT, Py_LE, Py_EQ, Py_NE, Py_GT, Py_GE, CONST_STRING
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
@@ -70,7 +70,7 @@ def PyObject_IsTrue(space, w_obj):
 def PyObject_Not(space, w_obj):
     return not space.is_true(w_obj)
 
-@cpython_api([PyObject, rffi.CCHARP], PyObject)
+@cpython_api([PyObject, CONST_STRING], PyObject)
 def PyObject_GetAttrString(space, w_obj, name_ptr):
     """Retrieve an attribute named attr_name from object o. Returns the attribute
     value on success, or NULL on failure. This is the equivalent of the Python

@@ -1,6 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, cpython_struct, \
-        METH_STATIC, METH_CLASS, METH_COEXIST, CANNOT_FAIL
+        METH_STATIC, METH_CLASS, METH_COEXIST, CANNOT_FAIL, CONST_STRING
 from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.interpreter.module import Module
 from pypy.module.cpyext.methodobject import W_PyCFunctionObject, PyCFunction_NewEx, PyDescr_NewMethod, PyMethodDef, PyCFunction
@@ -15,7 +15,7 @@ def PyImport_AddModule(space, name):
     space.setitem(w_modules, w_name, w_mod)
     return w_mod
 
-@cpython_api([rffi.CCHARP, lltype.Ptr(PyMethodDef), rffi.CCHARP,
+@cpython_api([CONST_STRING, lltype.Ptr(PyMethodDef), CONST_STRING,
               PyObject, rffi.INT_real], PyObject, borrowed=False) # we cannot borrow here
 def Py_InitModule4(space, name, methods, doc, w_self, apiver):
     from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
