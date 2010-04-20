@@ -3385,12 +3385,6 @@ def PyList_SetSlice(space, list, low, high, itemlist):
     raise NotImplementedError
 
 @cpython_api([PyObject], rffi.INT_real)
-def PyList_Sort(space, list):
-    """Sort the items of list in place.  Return 0 on success, -1 on
-    failure.  This is equivalent to list.sort()."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], rffi.INT_real)
 def PyList_Reverse(space, list):
     """Reverse the items of list in place.  Return 0 on success, -1 on
     failure.  This is the equivalent of list.reverse()."""

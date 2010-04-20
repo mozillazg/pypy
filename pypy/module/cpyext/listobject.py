@@ -83,3 +83,10 @@ def PyList_Size(space, ref):
         raise OperationError(space.w_TypeError,
                              space.wrap("expected list object"))
     return PyList_GET_SIZE(space, ref)
+
+@cpython_api([PyObject], rffi.INT_real, error=-1)
+def PyList_Sort(space, w_list):
+    """Sort the items of list in place.  Return 0 on success, -1 on
+    failure.  This is equivalent to list.sort()."""
+    space.call_method(w_list, "sort")
+    return 0
