@@ -67,7 +67,8 @@ def wrap_sq_setitem(space, w_self, w_args, func):
     check_num_args(space, w_args, 2)
     args_w = space.fixedview(w_args)
     index = space.int_w(space.index(args_w[0]))
-    if generic_cpy_call(space, func_target, w_self, index, args_w[1]) == -1:
+    res = generic_cpy_call(space, func_target, w_self, index, args_w[1])
+    if rffi.cast(lltype.Signed, res) == -1:
         space.fromcache(State).check_and_raise_exception()
 
 def wrap_sq_delitem(space, w_self, w_args, func):
@@ -76,7 +77,8 @@ def wrap_sq_delitem(space, w_self, w_args, func):
     args_w = space.fixedview(w_args)
     index = space.int_w(space.index(args_w[0]))
     null = lltype.nullptr(PyObject.TO)
-    if generic_cpy_call(space, func_target, w_self, index, null) == -1:
+    res = generic_cpy_call(space, func_target, w_self, index, args_w[1])
+    if rffi.cast(lltype.Signed, res) == -1:
         space.fromcache(State).check_and_raise_exception(always=True)
 
 def wrap_ssizessizeargfunc(space, w_self, w_args, func):

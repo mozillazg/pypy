@@ -323,6 +323,7 @@ cpython_struct('PyBufferProcs', PyBufferProcsFields, PyBufferProcs)
 PyVarObjectStruct = cpython_struct("PyVarObject", PyVarObjectFields)
 PyVarObject = lltype.Ptr(PyVarObjectStruct)
 
+@specialize.memo()
 def is_PyObject(TYPE):
     if not isinstance(TYPE, lltype.Ptr):
         return False
