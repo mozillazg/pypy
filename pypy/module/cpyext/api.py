@@ -255,27 +255,38 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     '_Py_ZeroStruct#': ('PyObject*', 'space.w_False'),
     '_Py_NotImplementedStruct#': ('PyObject*', 'space.w_NotImplemented'),
     }
+FORWARD_DECLS = []
 INIT_FUNCTIONS = []
 BOOTSTRAP_FUNCTIONS = []
 
-for exc_name in exceptions.Module.interpleveldefs.keys():
-    GLOBALS['PyExc_' + exc_name] = ('PyTypeObject*', 'space.gettypeobject(interp_exceptions.W_%s.typedef)'% (exc_name, ))
+def build_exported_objects():
+    # Standard exceptions
+    for exc_name in exceptions.Module.interpleveldefs.keys():
+        GLOBALS['PyExc_' + exc_name] = (
+            'PyTypeObject*',
+            'space.gettypeobject(interp_exceptions.W_%s.typedef)'% (exc_name, ))
 
-for cpyname, pypyexpr in {"Type": "space.w_type",
-        "BaseObject": "space.w_object",
+    # Common types with their own struct
+    for cpyname, pypyexpr in {
+        "Type": "space.w_type",
+        "String": "space.w_str",
+        "Unicode": "space.w_unicode",
         "Dict": "space.w_dict",
         "Tuple": "space.w_tuple",
         "List": "space.w_list",
-        "String": "space.w_str",
-        "Unicode": "space.w_unicode",
         "Int": "space.w_int",
         "Bool": "space.w_bool",
         "Float": "space.w_float",
         "Long": "space.w_long",
+        "BaseObject": "space.w_object",
         'None': 'space.type(space.w_None)',
         'NotImplemented': 'space.type(space.w_NotImplemented)',
         }.items():
-    GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
+        GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
+
+    for cpyname in 'Method List Int Long Dict Tuple'.split():
+        FORWARD_DECLS.append('struct Py%sObject' % (cpyname, ))
+build_exported_objects()
 
 def get_structtype_for_ctype(ctype):
     from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
@@ -564,6 +575,10 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
     functions = []
     pypy_decls = []
     pypy_decls.append("#ifndef PYPY_STANDALONE\n")
+
+    for decl in FORWARD_DECLS:
+        pypy_decls.append("%s;" % (decl,))
+
     for name, func in sorted(FUNCTIONS.iteritems()):
         restype = db.gettype(func.restype).replace('@', '').strip()
         args = []
@@ -597,7 +612,7 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name_clean))
         if not globals_are_pointers and "#" not in name:
             pypy_decls.append("#define %s &%s" % (name, name,))
-    pypy_decls.append("#endif\n")
+    pypy_decls.append("#endif /*PYPY_STANDALONE*/\n")
 
     pypy_decl_h = udir.join('pypy_decl.h')
     pypy_decl_h.write('\n'.join(pypy_decls))
