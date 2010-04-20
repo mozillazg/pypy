@@ -241,6 +241,8 @@ SYMBOLS_C = [
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject',
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format',
+    'PyEval_CallFunction', 'PyEval_CallMethod', 'PyObject_CallFunction',
+    'PyObject_CallMethod',
     'PyBuffer_FromMemory', 'PyBuffer_Type', 'init_bufferobject',
     '_PyArg_NoKeywords', 'PyObject_AsReadBuffer', 'PyObject_CheckReadBuffer',
 ]
