@@ -278,6 +278,7 @@ def build_exported_objects():
         "Bool": "space.w_bool",
         "Float": "space.w_float",
         "Long": "space.w_long",
+        "Complex": "space.w_complex",
         "BaseObject": "space.w_object",
         'None': 'space.type(space.w_None)',
         'NotImplemented': 'space.type(space.w_NotImplemented)',
