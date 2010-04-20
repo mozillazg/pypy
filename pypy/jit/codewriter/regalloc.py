@@ -2,10 +2,12 @@ import sys
 from pypy.objspace.flow.model import Variable
 from pypy.tool.algo.color import DependencyGraph
 from pypy.tool.algo.unionfind import UnionFind
+from pypy.jit.metainterp.history import getkind
 
-
-def perform_register_allocation(graph):
-    regalloc = RegAllocator(graph)
+def perform_register_allocation(graph, kind):
+    """Perform register allocation for the Variables of the given 'kind'
+    in the 'graph'."""
+    regalloc = RegAllocator(graph, kind)
     regalloc.make_dependencies()
     regalloc.coalesce_variables()
     regalloc.find_node_coloring()
@@ -15,8 +17,9 @@ def perform_register_allocation(graph):
 class RegAllocator(object):
     DEBUG_REGALLOC = False
 
-    def __init__(self, graph):
+    def __init__(self, graph, kind):
         self.graph = graph
+        self.kind = kind
 
     def make_dependencies(self):
         dg = DependencyGraph()
@@ -38,20 +41,23 @@ class RegAllocator(object):
                 dg.add_node(v)
                 for j in range(i):
                     dg.add_edge(block.inputargs[j], v)
-            livevars = set(block.inputargs)
             die_at = [(value, key) for (key, value) in die_at.items()]
             die_at.sort()
             die_at.append((sys.maxint,))
+            # Done.  XXX the code above this line runs 3 times
+            # (for kind in KINDS) to produce the same result...
+            livevars = set(block.inputargs)
             die_index = 0
             for i, op in enumerate(block.operations):
                 while die_at[die_index][0] == i:
                     livevars.remove(die_at[die_index][1])
                     die_index += 1
-                if op.result is not None:
+                if getkind(op.result.concretetype) == self.kind:
                     livevars.add(op.result)
                     dg.add_node(op.result)
                     for v in livevars:
-                        dg.add_edge(v, op.result)
+                        if getkind(v.concretetype) == self.kind:
+                            dg.add_edge(v, op.result)
         self._depgraph = dg
 
     def coalesce_variables(self):
@@ -68,7 +74,8 @@ class RegAllocator(object):
             # middle during blackholing.
             for link in block.exits:
                 for i, v in enumerate(link.args):
-                    if isinstance(v, Variable):
+                    if (isinstance(v, Variable) and
+                        getkind(v.concretetype) == self.kind):
                         w = link.target.inputargs[i]
                         v0 = uf.find_rep(v)
                         w0 = uf.find_rep(w)

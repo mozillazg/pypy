@@ -35,7 +35,6 @@ class BlackholeInterpreter(object):
         #
         all_funcs = []
         for key in self._insns:
-            assert key is not None, "hole!"
             assert key.count('/') == 1, "bad key: %r" % (key,)
             name, argcodes = key.split('/')
             all_funcs.append(self._get_method(name, argcodes))
