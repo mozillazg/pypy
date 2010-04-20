@@ -59,7 +59,7 @@ class State:
             op_err = OperationError(exc_type, exc_value)
             raise op_err
         if always:
-            raise OperationError(space.w_SystemError, space.wrap(
+            raise OperationError(self.space.w_SystemError, self.space.wrap(
                 "Function returned an error result without setting an exception"))
 
     def print_refcounts(self):
