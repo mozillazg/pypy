@@ -88,6 +88,8 @@ def PyList_Size(space, ref):
 def PyList_Sort(space, w_list):
     """Sort the items of list in place.  Return 0 on success, -1 on
     failure.  This is equivalent to list.sort()."""
+    if not isinstance(w_list, W_ListObject):
+        PyErr_BadInternalCall(space)
     space.call_method(w_list, "sort")
     return 0
 
@@ -95,6 +97,8 @@ def PyList_Sort(space, w_list):
 def PyList_Reverse(space, w_list):
     """Reverse the items of list in place.  Return 0 on success, -1 on
     failure.  This is the equivalent of list.reverse()."""
+    if not isinstance(w_list, W_ListObject):
+        PyErr_BadInternalCall(space)
     space.call_method(w_list, "reverse")
     return 0
 
