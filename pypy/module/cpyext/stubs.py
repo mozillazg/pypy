@@ -5626,30 +5626,6 @@ def PyUnicode_FromObject(space, obj):
     throughout the interpreter whenever coercion to Unicode is needed."""
     raise NotImplementedError
 
-@cpython_api([{const wchar_t*}, Py_ssize_t], PyObject)
-def PyUnicode_FromWideChar(space, w, size):
-    """Create a Unicode object from the wchar_t buffer w of the given size.
-    Return NULL on failure.
-    
-    This function used an int type for size. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
-@cpython_api([{PyUnicodeObject*}, {wchar_t*}, Py_ssize_t], Py_ssize_t)
-def PyUnicode_AsWideChar(space, unicode, w, size):
-    """Copy the Unicode object contents into the wchar_t buffer w.  At most
-    size wchar_t characters are copied (excluding a possibly trailing
-    0-termination character).  Return the number of wchar_t characters
-    copied or -1 in case of an error.  Note that the resulting wchar_t
-    string may or may not be 0-terminated.  It is the responsibility of the caller
-    to make sure that the wchar_t string is 0-terminated in case this is
-    required by the application.
-    
-    This function returned an int type and used an int
-    type for size. This might require changes in your code for properly
-    supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([rffi.CCHARP, Py_ssize_t, rffi.CCHARP, rffi.CCHARP], PyObject)
 def PyUnicode_Decode(space, s, size, encoding, errors):
     """Create a Unicode object by decoding size bytes of the encoded string s.
