@@ -27,6 +27,11 @@ def test_lexicographic_order():
     # of insertion of nodes.
     assert ''.join(order) == 'acbde'
 
+def test_lexicographic_order_empty():
+    dg = DependencyGraph()
+    order = list(dg.lexicographic_order())
+    assert order == []
+
 def test_size_of_largest_clique():
     dg = graph1()
     assert dg.size_of_largest_clique() == 3
@@ -40,3 +45,8 @@ def test_find_node_coloring():
     for v1, v2list in dg.neighbours.items():
         for v2 in v2list:
             assert coloring[v1] != coloring[v2]
+
+def test_find_node_coloring_empty():
+    dg = DependencyGraph()
+    coloring = dg.find_node_coloring()
+    assert coloring == {}
