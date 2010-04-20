@@ -28,6 +28,8 @@ class Register(object):
         self.kind = kind
         self.index = index
 
+KINDS = ['int', 'ref', 'float']
+
 # ____________________________________________________________
 
 def flatten_graph(graph, regallocs):
@@ -85,7 +87,12 @@ class GraphFlattener(object):
     def make_return(self, args):
         if len(args) == 1:
             # return from function
-            self.emitline("int_return", self.getcolor(args[0]))
+            [v] = args
+            kind = getkind(v.concretetype)
+            if kind == 'void':
+                self.emitline("void_return")
+            else:
+                self.emitline("%s_return" % kind, self.getcolor(args[0]))
         elif len(args) == 2:
             # exception block, raising an exception from a function
             xxx

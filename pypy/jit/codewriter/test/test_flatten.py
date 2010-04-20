@@ -24,7 +24,9 @@ class TestFlatten:
 
     def encoding_test(self, func, args, expected, optimize=True):
         graphs = self.make_graphs(func, args)
-        ssarepr = flatten_graph(graphs[0], {'int': FakeRegAlloc()})
+        ssarepr = flatten_graph(graphs[0], {'int': FakeRegAlloc(),
+                                            'ref': FakeRegAlloc(),
+                                            'float': FakeRegAlloc()})
         asm = format_assembler(ssarepr)
         expected = str(py.code.Source(expected)).strip() + '\n'
         assert asm == expected
@@ -55,4 +57,15 @@ class TestFlatten:
             goto L1
             L2:
             int_return %i3
+        """)
+
+    def test_float(self):
+        def f(i, f):
+            return (i*5) + (f*0.25)
+        self.encoding_test(f, [4, 7.5], """
+            int_mul %i0, $5, %i1
+            float_mul %f0, $0.25, %f1
+            cast_int_to_float %i1, %f2
+            float_add %f2, %f1, %f3
+            float_return %f3
         """)

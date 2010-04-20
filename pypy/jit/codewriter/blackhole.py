@@ -15,6 +15,9 @@ def arguments(*argtypes, **kwds):
 class LeaveFrame(Exception):
     pass
 
+class MissingValue(object):
+    pass
+
 def signedord(c):
     value = ord(c)
     value = intmask(value << (LONG_BIT-8)) >> (LONG_BIT-8)
@@ -24,7 +27,15 @@ def signedord(c):
 class BlackholeInterpreter(object):
 
     def __init__(self):
+        self.registers_i = [MissingValue()] * 256
+        self.registers_r = [MissingValue()] * 256
+        self.registers_f = [MissingValue()] * 256
+
+    def _freeze_(self):
         self.registers_i = [0] * 256
+        self.registers_r = [NULL] * 256
+        self.registers_f = [0.0] * 256
+        return False
 
     def setup_insns(self, insns):
         assert len(insns) <= 256, "too many instructions!"
@@ -106,12 +117,23 @@ class BlackholeInterpreter(object):
         self.registers_i[index] = value
 
     def run(self, jitcode, position):
+        self.copy_constants(self.registers_i, jitcode.constants_i)
+        self.copy_constants(self.registers_r, jitcode.constants_r)
+        self.copy_constants(self.registers_f, jitcode.constants_f)
         code = jitcode.code
-        constants = jitcode.constants
         try:
             self.dispatch_loop(code, position)
         except LeaveFrame:
             pass
+
+    # XXX must be specialized
+    def copy_constants(self, registers, constants):
+        i = len(constants)
+        while i > 0:
+            j = 256 - i
+            assert j >= 0
+            i -= 1
+            registers[j] = constants[i]
 
     # ----------
 
