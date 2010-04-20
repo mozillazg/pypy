@@ -155,3 +155,10 @@ def PyString_ConcatAndDel(space, ref, newpart):
     appended to string.  This version decrements the reference count of newpart."""
     PyString_Concat(space, ref, newpart)
     Py_DecRef(space, newpart)
+
+@cpython_api([PyObject, PyObject], PyObject)
+def PyString_Format(space, w_format, w_args):
+    """Return a new string object from format and args. Analogous to format %
+    args.  The args argument must be a tuple."""
+    return space.mod(w_format, w_args)
+

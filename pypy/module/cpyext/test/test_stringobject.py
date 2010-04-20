@@ -203,3 +203,7 @@ class TestString(BaseApiTest):
         api.PyString_ConcatAndDel(ptr, ref2) # should not crash
         assert ref2.c_ob_refcnt == 0
         lltype.free(ptr, flavor='raw')
+
+    def test_format(self, space, api):
+        assert "1 2" == space.unwrap(
+            api.PyString_Format(space.wrap('%s %d'), space.wrap((1, 2))))
