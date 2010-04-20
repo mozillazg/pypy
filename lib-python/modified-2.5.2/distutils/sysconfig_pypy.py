@@ -7,18 +7,15 @@ import os
 from distutils.errors import DistutilsPlatformError
 
 
-if hasattr(sys,  "pypy_prefix"):
-    PYPY_PREFIX = os.path.normpath(sys.pypy_prefix)
-else:
-    PYPY_PREFIX = "/home/alex/projects/pypy-cpy/"
+PYPY_PREFIX = os.path.normpath(sys.pypy_prefix)
 python_build = False
 
 
 def get_python_inc(plat_specific=0, prefix=None):
     from os.path import join as j
     if plat_specific:
-        return j(PYPY_PREFIX, "pypy", "_interfaces")
-    return j(PYPY_PREFIX, 'pypy', 'module', 'cpyext', 'include')
+        return j(sys.pypy_prefix, "pypy", "_interfaces")
+    return j(sys.pypy_prefix, 'pypy', 'module', 'cpyext', 'include')
 
 def get_python_version():
     """Return a string containing the major and minor Python version,
