@@ -3,6 +3,8 @@ from pypy.jit.codewriter.regalloc import perform_register_allocation
 from pypy.jit.codewriter.flatten import flatten_graph
 from pypy.jit.codewriter.assembler import Assembler
 
+KINDS = ['int', 'ref', 'float']
+
 
 class CodeWriter(object):
 
@@ -16,7 +18,9 @@ class CodeWriter(object):
         return self.transform_graph_to_jitcode(graph)
 
     def transform_graph_to_jitcode(self, graph):
-        regalloc = perform_register_allocation(graph)
-        ssarepr = flatten_graph(graph, regalloc)
+        regallocs = {}
+        for kind in KINDS:
+            regallocs[kind] = perform_register_allocation(graph, kind)
+        ssarepr = flatten_graph(graph, regallocs)
         jitcode = self.assembler.assemble(ssarepr)
         return jitcode

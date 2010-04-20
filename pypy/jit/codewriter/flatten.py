@@ -1,4 +1,5 @@
 from pypy.objspace.flow.model import Variable
+from pypy.jit.metainterp.history import getkind
 
 
 class SSARepr(object):
@@ -28,10 +29,10 @@ class Register(object):
 
 # ____________________________________________________________
 
-def flatten_graph(graph, regalloc):
+def flatten_graph(graph, regallocs):
     """Flatten the graph into an SSARepr, with already-computed register
-    allocations."""
-    flattener = GraphFlattener(graph, regalloc)
+    allocations.  'regallocs' in a dict {kind: RegAlloc}."""
+    flattener = GraphFlattener(graph, regallocs)
     flattener.enforce_input_args()
     flattener.generate_ssa_form()
     return flattener.assembler
@@ -39,20 +40,24 @@ def flatten_graph(graph, regalloc):
 
 class GraphFlattener(object):
 
-    def __init__(self, graph, regalloc):
+    def __init__(self, graph, regallocs):
         self.graph = graph
-        self.regalloc = regalloc
+        self.regallocs = regallocs
         self.registers = {}
 
     def enforce_input_args(self):
         inputargs = self.graph.startblock.inputargs
-        for i in range(len(inputargs)):
-            col = self.regalloc.getcolor(inputargs[i])
-            if col != i:
-                assert col > i
-                self.regalloc.swapcolors(i, col)
-        for i in range(len(inputargs)):
-            assert self.regalloc.getcolor(inputargs[i]) == i
+        numkinds = {}
+        for v in inputargs:
+            kind = getkind(v.concretetype)
+            if kind == 'void':
+                continue
+            curcol = self.regallocs[kind].getcolor(v)
+            realcol = numkinds.get(kind, 0)
+            numkinds[kind] = realcol + 1
+            if curcol != realcol:
+                assert curcol > realcol
+                self.regallocs[kind].swapcolors(realcol, curcol)
 
     def generate_ssa_form(self):
         self.assembler = SSARepr(self.graph.name)
@@ -162,7 +167,8 @@ class GraphFlattener(object):
         self.emitline(op.opname, *args)
 
     def getcolor(self, v):
-        col = self.regalloc.getcolor(v)
+        kind = getkind(v.concretetype)
+        col = self.regallocs[kind].getcolor(v)    # if kind=='void', fix caller
         try:
             r = self.registers[col]
         except KeyError:

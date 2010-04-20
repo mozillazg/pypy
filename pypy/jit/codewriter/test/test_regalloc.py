@@ -12,8 +12,11 @@ class TestRegAlloc:
         return self.rtyper.annotator.translator.graphs
 
     def check_assembler(self, graph, expected):
-        regalloc = perform_register_allocation(graph)
-        ssarepr = flatten_graph(graph, regalloc)
+        """Only for simple graphs.  More complex graphs must first be
+        transformed by jitter.py before they can be subjected to
+        register allocation and flattening."""
+        regalloc = perform_register_allocation(graph, 'int')
+        ssarepr = flatten_graph(graph, {'int': regalloc})
         asm = format_assembler(ssarepr)
         assert asm == str(py.code.Source(expected).strip()) + '\n'
 
@@ -21,12 +24,22 @@ class TestRegAlloc:
         def f(a, b):
             return a + b
         graph = self.make_graphs(f, [5, 6])[0]
-        regalloc = perform_register_allocation(graph)
+        regalloc = perform_register_allocation(graph, 'int')
         va, vb = graph.startblock.inputargs
         vc = graph.startblock.operations[0].result
         assert regalloc.getcolor(va) == 0
         assert regalloc.getcolor(vb) == 1
         assert regalloc.getcolor(vc) == 0
+
+    def test_regalloc_void(self):
+        def f(a, b):
+            while a > 0:
+                b += a
+                a -= 1
+            return b
+        graph = self.make_graphs(f, [5, 6])[0]
+        regalloc = perform_register_allocation(graph, 'float')
+        # assert did not crash
 
     def test_regalloc_loop(self):
         def f(a, b):
