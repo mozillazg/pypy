@@ -3429,18 +3429,6 @@ def PyLong_FromSize_t(space, v):
     """
     raise NotImplementedError
 
-@cpython_api([{PY_LONG_LONG}], PyObject)
-def PyLong_FromLongLong(space, v):
-    """Return a new PyLongObject object from a C long long, or NULL
-    on failure."""
-    raise NotImplementedError
-
-@cpython_api([{unsigned PY_LONG_LONG}], PyObject)
-def PyLong_FromUnsignedLongLong(space, v):
-    """Return a new PyLongObject object from a C unsigned long long,
-    or NULL on failure."""
-    raise NotImplementedError
-
 @cpython_api([{double}], PyObject)
 def PyLong_FromDouble(space, v):
     """Return a new PyLongObject object from the integer part of v, or
