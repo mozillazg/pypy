@@ -1,9 +1,7 @@
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.regalloc import perform_register_allocation
-from pypy.jit.codewriter.flatten import flatten_graph
+from pypy.jit.codewriter.flatten import flatten_graph, KINDS
 from pypy.jit.codewriter.assembler import Assembler
-
-KINDS = ['int', 'ref', 'float']
 
 
 class CodeWriter(object):

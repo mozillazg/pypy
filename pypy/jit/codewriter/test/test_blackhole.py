@@ -27,6 +27,18 @@ def test_simple_const():
     blackholeinterp.run(jitcode, 0)
     assert blackholeinterp.result_i == 42
 
+def test_simple_bigconst():
+    jitcode = JitCode("test")
+    jitcode.setup("\x00\xFD\x01\x02"
+                  "\x01\x02",
+                  [666, 666, 10042, 666])
+    blackholeinterp = BlackholeInterpreter()
+    blackholeinterp.setup_insns({'int_sub/iii': 0,
+                                 'int_return/i': 1})
+    blackholeinterp.setarg_i(1, 10000)
+    blackholeinterp.run(jitcode, 0)
+    assert blackholeinterp.result_i == 42
+
 def test_simple_loop():
     jitcode = JitCode("test")
     jitcode.setup("\x00\x10\x00\x16\x02"  # L1: goto_if_not_int_gt L2, %i0, 2
