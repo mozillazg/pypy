@@ -3435,19 +3435,6 @@ def PyLong_FromDouble(space, v):
     NULL on failure."""
     raise NotImplementedError
 
-@cpython_api([rffi.CCHARP, {char**}, rffi.INT_real], PyObject)
-def PyLong_FromString(space, str, pend, base):
-    """Return a new PyLongObject based on the string value in str, which is
-    interpreted according to the radix in base.  If pend is non-NULL,
-    *pend will point to the first character in str which follows the
-    representation of the number.  If base is 0, the radix will be determined
-    based on the leading characters of str: if str starts with '0x' or
-    '0X', radix 16 will be used; if str starts with '0', radix 8 will be
-    used; otherwise radix 10 will be used.  If base is not 0, it must be
-    between 2 and 36, inclusive.  Leading spaces are ignored.  If there are
-    no digits, ValueError will be raised."""
-    raise NotImplementedError
-
 @cpython_api([{Py_UNICODE*}, Py_ssize_t, rffi.INT_real], PyObject)
 def PyLong_FromUnicode(space, u, length, base):
     """Convert a sequence of Unicode digits to a Python long integer value.  The first

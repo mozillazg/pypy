@@ -1,5 +1,6 @@
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.module.cpyext.api import cpython_api, PyObject, build_type_checkers, ADDR
+from pypy.module.cpyext.api import (cpython_api, PyObject, build_type_checkers,
+                                    CONST_STRING, ADDR)
 from pypy.objspace.std.longobject import W_LongObject
 from pypy.interpreter.error import OperationError
 
@@ -46,6 +47,24 @@ def PyLong_AsUnsignedLongLong(space, w_long):
     If pylong is greater than ULONG_MAX, an OverflowError is
     raised."""
     return rffi.cast(rffi.ULONGLONG, space.r_ulonglong_w(w_long))
+
+@cpython_api([CONST_STRING, rffi.CCHARP, rffi.INT_real], PyObject)
+def PyLong_FromString(space, str, pend, base):
+    """Return a new PyLongObject based on the string value in str, which is
+    interpreted according to the radix in base.  If pend is non-NULL,
+    *pend will point to the first character in str which follows the
+    representation of the number.  If base is 0, the radix will be determined
+    based on the leading characters of str: if str starts with '0x' or
+    '0X', radix 16 will be used; if str starts with '0', radix 8 will be
+    used; otherwise radix 10 will be used.  If base is not 0, it must be
+    between 2 and 36, inclusive.  Leading spaces are ignored.  If there are
+    no digits, ValueError will be raised."""
+    s = rffi.charp2str(str)
+    w_str = space.wrap(s)
+    w_base = space.wrap(base)
+    if pend:
+        pend[0] = rffi.ptradd(str, len(s))
+    return space.call_function(space.w_long, w_str, w_base)
 
 @cpython_api([rffi.VOIDP], PyObject)
 def PyLong_FromVoidPtr(space, p):
