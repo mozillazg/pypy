@@ -3384,12 +3384,6 @@ def PyList_SetSlice(space, list, low, high, itemlist):
     require changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject], rffi.INT_real)
-def PyList_Reverse(space, list):
-    """Reverse the items of list in place.  Return 0 on success, -1 on
-    failure.  This is the equivalent of list.reverse()."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObject)
 def PyList_AsTuple(space, list):
     """

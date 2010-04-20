@@ -37,6 +37,11 @@ class TestListObject(BaseApiTest):
         l = space.newlist([space.wrap(1), space.wrap(0), space.wrap(7000)])
         assert api.PyList_Sort(l) == 0
         assert space.eq_w(l, space.newlist([space.wrap(0), space.wrap(1), space.wrap(7000)]))
+    
+    def test_reverse(self, space, api):
+        l = space.newlist([space.wrap(3), space.wrap(2), space.wrap(1)])
+        assert api.PyList_Reverse(l) == 0
+        assert space.eq_w(l, space.newlist([space.wrap(1), space.wrap(2), space.wrap(3)]))
 
 class AppTestListObject(AppTestCpythonExtensionBase):
     def test_listobject(self):

@@ -90,3 +90,11 @@ def PyList_Sort(space, w_list):
     failure.  This is equivalent to list.sort()."""
     space.call_method(w_list, "sort")
     return 0
+
+@cpython_api([PyObject], rffi.INT_real, error=-1)
+def PyList_Reverse(space, w_list):
+    """Reverse the items of list in place.  Return 0 on success, -1 on
+    failure.  This is the equivalent of list.reverse()."""
+    space.call_method(w_list, "reverse")
+    return 0
+
