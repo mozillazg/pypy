@@ -6,7 +6,7 @@ from pypy.jit.metainterp.history import ConstInt
 
 def test_assemble_simple():
     ssarepr = SSARepr("test")
-    i0, i1, i2 = Register(0), Register(1), Register(2)
+    i0, i1, i2 = Register('int', 0), Register('int', 1), Register('int', 2)
     ssarepr.insns = [
         ('int_add', i0, i1, i2),
         ('int_return', i2),
@@ -21,7 +21,7 @@ def test_assemble_simple():
 def test_assemble_consts():
     ssarepr = SSARepr("test")
     ssarepr.insns = [
-        ('int_return', Register(13)),
+        ('int_return', Register('int', 13)),
         ('int_return', Constant(18)),
         ('int_return', Constant(-4)),
         ('int_return', Constant(128)),
@@ -40,7 +40,7 @@ def test_assemble_consts():
 
 def test_assemble_loop():
     ssarepr = SSARepr("test")
-    i0, i1 = Register(0x16), Register(0x17)
+    i0, i1 = Register('int', 0x16), Register('int', 0x17)
     ssarepr.insns = [
         (Label('L1'),),
         ('goto_if_not_int_gt', TLabel('L2'), i0, Constant(4)),

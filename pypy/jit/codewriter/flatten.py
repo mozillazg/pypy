@@ -24,7 +24,8 @@ class TLabel(object):
         return isinstance(other, TLabel) and other.name == self.name
 
 class Register(object):
-    def __init__(self, index):
+    def __init__(self, kind, index):
+        self.kind = kind
         self.index = index
 
 # ____________________________________________________________
@@ -170,7 +171,7 @@ class GraphFlattener(object):
         kind = getkind(v.concretetype)
         col = self.regallocs[kind].getcolor(v)    # if kind=='void', fix caller
         try:
-            r = self.registers[col]
+            r = self.registers[kind, col]
         except KeyError:
-            r = self.registers[col] = Register(col)
+            r = self.registers[kind, col] = Register(kind, col)
         return r
