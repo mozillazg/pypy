@@ -56,8 +56,12 @@ class CConfig_constants:
     _compilation_info_ = CConfig._compilation_info_
 
 VA_LIST_P = rffi.VOIDP # rffi.COpaquePtr('va_list')
-CONST_STRING = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True}))
+CONST_STRING = lltype.Ptr(lltype.Array(lltype.Char,
+                                       hints={'nolength': True}))
+CONST_WSTRING = lltype.Ptr(lltype.Array(lltype.UniChar,
+                                        hints={'nolength': True}))
 assert CONST_STRING is not rffi.CCHARP
+assert CONST_WSTRING is not rffi.CWCHARP
 
 constant_names = """
 Py_TPFLAGS_READY Py_TPFLAGS_READYING
@@ -586,6 +590,8 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
         for i, argtype in enumerate(func.argtypes):
             if argtype is CONST_STRING:
                 arg = 'const char *@'
+            elif argtype is CONST_WSTRING:
+                arg = 'const wchar_t *@'
             else:
                 arg = db.gettype(argtype)
             arg = arg.replace('@', 'arg%d' % (i,)).strip()

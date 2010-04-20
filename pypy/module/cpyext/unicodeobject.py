@@ -4,7 +4,7 @@ from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
 from pypy.module.cpyext.api import (
     CANNOT_FAIL, Py_ssize_t, build_type_checkers, cpython_api,
     bootstrap_function, generic_cpy_call, PyObjectFields,
-    cpython_struct, CONST_STRING)
+    cpython_struct, CONST_STRING, CONST_WSTRING)
 from pypy.module.cpyext.pyerrors import PyErr_BadArgument
 from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref, Py_DecRef, make_typedescr
 from pypy.module.cpyext.stringobject import PyString_Check
@@ -142,6 +142,37 @@ def PyUnicode_AsUnicode(space, ref):
                              space.wrap("expected unicode object"))
     return PyUnicode_AS_UNICODE(space, ref)
 
+@cpython_api([PyUnicodeObject, rffi.CWCHARP, Py_ssize_t], Py_ssize_t, error=-1)
+def PyUnicode_AsWideChar(space, ref, buf, size):
+    """Copy the Unicode object contents into the wchar_t buffer w.  At most
+    size wchar_t characters are copied (excluding a possibly trailing
+    0-termination character).  Return the number of wchar_t characters
+    copied or -1 in case of an error.  Note that the resulting wchar_t
+    string may or may not be 0-terminated.  It is the responsibility of the caller
+    to make sure that the wchar_t string is 0-terminated in case this is
+    required by the application."""
+    if not PyUnicode_Check(space, ref):
+        raise OperationError(space.w_TypeError,
+                             space.wrap("expected unicode object"))
+
+    c_buffer = PyUnicode_AS_UNICODE(space, ref)
+    c_size = rffi.cast(PyUnicodeObject, ref).c_size
+
+    # If possible, try to copy the 0-termination as well
+    if size > c_size:
+        size = c_size + 1
+
+
+    i = 0
+    while i < size:
+        buf[i] = c_buffer[i]
+        i += 1
+
+    if size > c_size:
+        return c_size
+    else:
+        return size
+
 @cpython_api([], rffi.CCHARP, error=CANNOT_FAIL)
 def PyUnicode_GetDefaultEncoding(space):
     """Returns the currently active default encoding."""
@@ -179,7 +210,7 @@ def PyUnicode_AsEncodedString(space, w_unicode, encoding, errors):
         w_errors = rffi.charp2str(encoding)
     return unicodetype.encode_object(space, w_unicode, w_encoding, w_errors)
 
-@cpython_api([rffi.CWCHARP, Py_ssize_t], PyObject)
+@cpython_api([CONST_WSTRING, Py_ssize_t], PyObject)
 def PyUnicode_FromUnicode(space, wchar_p, length):
     """Create a Unicode Object from the Py_UNICODE buffer u of the given size. u
     may be NULL which causes the contents to be undefined. It is the user's
@@ -192,6 +223,13 @@ def PyUnicode_FromUnicode(space, wchar_p, length):
     s = rffi.wcharpsize2unicode(wchar_p, length)
     ptr = make_ref(space, space.wrap(s))
     return ptr
+
+@cpython_api([CONST_WSTRING, Py_ssize_t], PyObject)
+def PyUnicode_FromWideChar(space, wchar_p, length):
+    """Create a Unicode object from the wchar_t buffer w of the given size.
+    Return NULL on failure."""
+    # PyPy supposes Py_UNICODE == wchar_t
+    return PyUnicode_FromUnicode(space, wchar_p, length)
 
 @cpython_api([PyObject, CONST_STRING], PyObject)
 def _PyUnicode_AsDefaultEncodedString(space, w_unicode, errors):

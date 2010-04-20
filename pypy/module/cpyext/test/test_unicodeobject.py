@@ -49,6 +49,13 @@ class TestUnicode(BaseApiTest):
                space.wrap(''), None, None)
         rffi.free_charp(utf_8)
 
+        buf = rffi.unicode2wcharp(u"12345")
+        api.PyUnicode_AsWideChar(space.wrap(u'longword'), buf, 5)
+        assert rffi.wcharp2unicode(buf) == 'longw'
+        api.PyUnicode_AsWideChar(space.wrap(u'a'), buf, 5)
+        assert rffi.wcharp2unicode(buf) == 'a'
+        lltype.free(buf, flavor='raw')
+
     def test_IS(self, space, api):
         for char in [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f,
                      0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002,
