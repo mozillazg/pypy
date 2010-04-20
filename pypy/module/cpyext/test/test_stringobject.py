@@ -59,7 +59,7 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
                  char* c;
                  Py_ssize_t len;
 
-                 s = PyString_FromStringAndSize(NULL, 3);
+                 s = PyString_FromStringAndSize(NULL, 4);
                  if (s == NULL)
                     return NULL;
                  t = PyString_FromStringAndSize(NULL, 3);
@@ -67,16 +67,15 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
                     return NULL;
                  Py_DECREF(t);
                  c = PyString_AsString(s);
-                 //len = PyString_Size(s);
                  c[0] = 'a';
-                 c[1] = 'b'; 
-                 c[2] = 'c';//len-1] = 'c';
+                 c[1] = 'b';
+                 c[3] = 'c';
                  return s;
              """),
             ])
         s = module.getstring()
-        assert len(s) == 3
-        assert s == 'abc'
+        assert len(s) == 4
+        assert s == 'ab\x00c'
 
 
 

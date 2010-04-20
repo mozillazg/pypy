@@ -28,8 +28,8 @@ def new_empty_str(space, length):
     py_str.c_ob_refcnt = 1
     
     buflen = length + 1
-    py_str.c_buffer = lltype.malloc(rffi.CCHARP.TO, buflen, flavor='raw')
-    py_str.c_buffer[buflen-1] = '\0'
+    py_str.c_buffer = lltype.malloc(rffi.CCHARP.TO, buflen,
+                                    flavor='raw', zero=True)
     py_str.c_size = length
     py_str.c_ob_type = rffi.cast(PyTypeObjectPtr, make_ref(space, space.w_str))
     return py_str
@@ -61,14 +61,13 @@ def string_dealloc(space, obj):
     pto = rffi.cast(PyObject, pto)
     Py_DecRef(space, pto)
 
-@cpython_api([CONST_STRING, Py_ssize_t], PyStringObject, error=lltype.nullptr(PyStringObject.TO))
+@cpython_api([CONST_STRING, Py_ssize_t], PyObject)
 def PyString_FromStringAndSize(space, char_p, length):
     if char_p:
         s = rffi.charpsize2str(char_p, length)
-        ptr = make_ref(space, space.wrap(s))
-        return rffi.cast(PyStringObject, ptr)
+        return make_ref(space, space.wrap(s))
     else:
-        return new_empty_str(space, length)
+        return rffi.cast(PyObject, new_empty_str(space, length))
 
 @cpython_api([CONST_STRING], PyObject)
 def PyString_FromString(space, char_p):
@@ -125,7 +124,6 @@ def _PyString_Resize(space, ref, newsize):
         to_cp = oldsize
     for i in range(to_cp):
         py_newstr.c_buffer[i] = py_str.c_buffer[i]
-    py_newstr.c_buffer[newsize] = '\x00'
     Py_DecRef(space, ref[0])
     ref[0] = rffi.cast(PyObject, py_newstr)
     return 0
