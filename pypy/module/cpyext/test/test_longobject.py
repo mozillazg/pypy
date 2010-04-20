@@ -64,3 +64,12 @@ class AppTestLongObject(AppTestCpythonExtensionBase):
              """)])
         assert module.from_longlong() == -1
         assert module.from_unsignedlonglong() == (1<<64) - 1
+
+    def test_fromstring(self):
+        module = self.import_extension('foo', [
+            ("from_string", "METH_NOARGS",
+             """
+                 return PyLong_FromString("0x1234", NULL, 0);
+             """),
+            ])
+        assert module.from_string() == 0x1234
