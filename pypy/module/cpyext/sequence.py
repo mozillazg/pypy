@@ -1,6 +1,7 @@
 
 from pypy.interpreter.error import OperationError
-from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, Py_ssize_t
+from pypy.module.cpyext.api import (
+    cpython_api, CANNOT_FAIL, CONST_STRING, Py_ssize_t)
 from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.objspace.std import listobject, tupleobject
@@ -21,7 +22,7 @@ def PySequence_Size(space, w_obj):
     return space.int_w(space.len(w_obj))
 
 
-@cpython_api([PyObject, rffi.CCHARP], PyObject)
+@cpython_api([PyObject, CONST_STRING], PyObject)
 def PySequence_Fast(space, w_obj, m):
     """Returns the sequence o as a tuple, unless it is already a tuple or list, in
     which case o is returned.  Use PySequence_Fast_GET_ITEM() to access the

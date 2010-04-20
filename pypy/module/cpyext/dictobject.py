@@ -1,6 +1,6 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, build_type_checkers,\
-        Py_ssize_t, PyObjectP
+        Py_ssize_t, PyObjectP, CONST_STRING
 from pypy.module.cpyext.pyobject import PyObject, register_container
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.interpreter.error import OperationError
@@ -26,7 +26,7 @@ def PyDict_SetItem(space, w_dict, w_key, w_obj):
     else:
         PyErr_BadInternalCall(space)
 
-@cpython_api([PyObject, rffi.CCHARP, PyObject], rffi.INT_real, error=-1)
+@cpython_api([PyObject, CONST_STRING, PyObject], rffi.INT_real, error=-1)
 def PyDict_SetItemString(space, w_dict, key_ptr, w_obj):
     if PyDict_Check(space, w_dict):
         key = rffi.charp2str(key_ptr)
@@ -37,7 +37,7 @@ def PyDict_SetItemString(space, w_dict, key_ptr, w_obj):
     else:
         PyErr_BadInternalCall(space)
 
-@cpython_api([PyObject, rffi.CCHARP], PyObject, borrowed=True)
+@cpython_api([PyObject, CONST_STRING], PyObject, borrowed=True)
 def PyDict_GetItemString(space, w_dict, key):
     """This is the same as PyDict_GetItem(), but key is specified as a
     char*, rather than a PyObject*."""

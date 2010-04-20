@@ -9,7 +9,7 @@ from pypy.interpreter.function import BuiltinFunction, Method
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject,\
-        cpython_struct, METH_KEYWORDS, METH_O
+        cpython_struct, METH_KEYWORDS, METH_O, CONST_STRING
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
@@ -189,7 +189,7 @@ def PyDescr_NewWrapper(space, pto, method_name, wrapper_func, doc, flags, func):
     return space.wrap(W_PyCWrapperObject(space, pto, method_name,
         wrapper_func, doc, flags, func))
 
-@cpython_api([lltype.Ptr(PyMethodDef), PyObject, rffi.CCHARP], PyObject)
+@cpython_api([lltype.Ptr(PyMethodDef), PyObject, CONST_STRING], PyObject)
 def Py_FindMethod(space, table, w_ob, name_ptr):
     """Return a bound method object for an extension type implemented in C.  This
     can be useful in the implementation of a tp_getattro or

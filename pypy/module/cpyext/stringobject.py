@@ -1,9 +1,9 @@
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import (cpython_api, bootstrap_function, PyVarObjectFields,
-                                    Py_ssize_t, cpython_struct, PyObjectFields,
-                                    ADDR, CANNOT_FAIL, build_type_checkers,
-                                    PyObjectP, PyTypeObjectPtr, generic_cpy_call)
+from pypy.module.cpyext.api import (
+    cpython_api, bootstrap_function, PyVarObjectFields, Py_ssize_t,
+    cpython_struct, PyObjectFields, ADDR, CONST_STRING, CANNOT_FAIL,
+    build_type_checkers, PyObjectP, PyTypeObjectPtr, generic_cpy_call)
 from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, Py_DecRef, make_typedescr
 from pypy.module.cpyext.state import State
 
@@ -61,7 +61,7 @@ def string_dealloc(space, obj):
     pto = rffi.cast(PyObject, pto)
     Py_DecRef(space, pto)
 
-@cpython_api([rffi.CCHARP, Py_ssize_t], PyStringObject, error=lltype.nullptr(PyStringObject.TO))
+@cpython_api([CONST_STRING, Py_ssize_t], PyStringObject, error=lltype.nullptr(PyStringObject.TO))
 def PyString_FromStringAndSize(space, char_p, length):
     if char_p:
         s = rffi.charpsize2str(char_p, length)
@@ -70,7 +70,7 @@ def PyString_FromStringAndSize(space, char_p, length):
     else:
         return new_empty_str(space, length)
 
-@cpython_api([rffi.CCHARP], PyObject)
+@cpython_api([CONST_STRING], PyObject)
 def PyString_FromString(space, char_p):
     s = rffi.charp2str(char_p)
     return space.wrap(s)

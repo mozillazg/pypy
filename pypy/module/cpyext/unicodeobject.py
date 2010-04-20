@@ -1,10 +1,10 @@
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
-from pypy.module.cpyext.api import (CANNOT_FAIL, Py_ssize_t,
-                                    build_type_checkers, cpython_api,
-                                    bootstrap_function, generic_cpy_call,
-                                    PyObjectFields, cpython_struct)
+from pypy.module.cpyext.api import (
+    CANNOT_FAIL, Py_ssize_t, build_type_checkers, cpython_api,
+    bootstrap_function, generic_cpy_call, PyObjectFields,
+    cpython_struct, CONST_STRING)
 from pypy.module.cpyext.pyerrors import PyErr_BadArgument
 from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref, Py_DecRef, make_typedescr
 from pypy.module.cpyext.stringobject import PyString_Check
@@ -153,7 +153,7 @@ def PyUnicode_GetDefaultEncoding(space):
             i += 1
     return default_encoding
 
-@cpython_api([rffi.CCHARP], rffi.INT_real, error=-1)
+@cpython_api([CONST_STRING], rffi.INT_real, error=-1)
 def PyUnicode_SetDefaultEncoding(space, encoding):
     """Sets the currently active default encoding. Returns 0 on
     success, -1 in case of an error."""
@@ -162,7 +162,7 @@ def PyUnicode_SetDefaultEncoding(space, encoding):
     default_encoding[0] = '\x00'
     return 0
 
-@cpython_api([PyObject, rffi.CCHARP, rffi.CCHARP], PyObject)
+@cpython_api([PyObject, CONST_STRING, CONST_STRING], PyObject)
 def PyUnicode_AsEncodedString(space, w_unicode, encoding, errors):
     """Encode a Unicode object and return the result as Python string object.
     encoding and errors have the same meaning as the parameters of the same name
@@ -193,6 +193,6 @@ def PyUnicode_FromUnicode(space, wchar_p, length):
     ptr = make_ref(space, space.wrap(s))
     return ptr
 
-@cpython_api([PyObject, rffi.CCHARP], PyObject)
+@cpython_api([PyObject, CONST_STRING], PyObject)
 def _PyUnicode_AsDefaultEncodedString(space, w_unicode, errors):
     return PyUnicode_AsEncodedString(space, w_unicode, lltype.nullptr(rffi.CCHARP.TO), errors)
