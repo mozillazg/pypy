@@ -8,9 +8,9 @@ def graph1():
     dg.add_node('c')
     dg.add_node('d')
     dg.add_node('e')
-    dg.add_edge('a', 'b')
-    dg.add_edge('a', 'd')
-    dg.add_edge('d', 'b')
+    dg.add_edge('a', 'b')       #       d---e
+    dg.add_edge('a', 'd')       #      / \ / \
+    dg.add_edge('d', 'b')       #     a---b---c
     dg.add_edge('d', 'e')
     dg.add_edge('b', 'c')
     dg.add_edge('b', 'e')
@@ -21,11 +21,10 @@ def test_lexicographic_order():
     dg = graph1()
     order = list(dg.lexicographic_order())
     assert len(order) == 5
-    order.reverse()
     # there are many orders that are correct answers, but check that we get
     # the following one, which is somehow the 'first' answer in the order
     # of insertion of nodes.
-    assert ''.join(order) == 'acbde'
+    assert ''.join(order) == 'abdec'
 
 def test_lexicographic_order_empty():
     dg = DependencyGraph()
