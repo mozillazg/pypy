@@ -4,6 +4,7 @@ import sys
 from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.longobject import W_LongObject
 from pypy.module.cpyext.test.test_api import BaseApiTest
+from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 
 
 class TestLongObject(BaseApiTest):
@@ -39,3 +40,27 @@ class TestLongObject(BaseApiTest):
         l = space.call_function(L)
         assert api.PyLong_Check(l)
         assert not api.PyLong_CheckExact(l)
+
+    def test_as_longlong(self, space, api):
+        assert api.PyLong_AsLongLong(space.wrap(1<<62)) == 1<<62
+        assert api.PyLong_AsLongLong(space.wrap(1<<63)) == -1
+        api.PyErr_Clear()
+
+        assert api.PyLong_AsUnsignedLongLong(space.wrap(1<<63)) == 1<<63
+        assert api.PyLong_AsUnsignedLongLong(space.wrap(1<<64)) == (1<<64) - 1
+        assert api.PyErr_Occurred()
+        api.PyErr_Clear()
+
+class AppTestLongObject(AppTestCpythonExtensionBase):
+    def test_fromlonglong(self):
+        module = self.import_extension('foo', [
+            ("from_longlong", "METH_NOARGS",
+             """
+                 return PyLong_FromLongLong((long long)-1);
+             """),
+            ("from_unsignedlonglong", "METH_NOARGS",
+             """
+                 return PyLong_FromUnsignedLongLong((unsigned long long)-1);
+             """)])
+        assert module.from_longlong() == -1
+        assert module.from_unsignedlonglong() == (1<<64) - 1
