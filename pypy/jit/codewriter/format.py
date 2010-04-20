@@ -10,7 +10,7 @@ def format_assembler(ssarepr):
     #
     def repr(x):
         if isinstance(x, Register):
-            return '%i' + str(x.index)
+            return '%%%s%d' % (x.kind[0], x.index)    # e.g. %i1 or %r2 or %f3
         elif isinstance(x, Constant):
             return '$' + str(x.value)
         elif isinstance(x, TLabel):

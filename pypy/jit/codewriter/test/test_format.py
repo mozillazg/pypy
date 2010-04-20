@@ -6,7 +6,7 @@ from pypy.jit.codewriter.flatten import Label, TLabel, SSARepr, Register
 
 def test_format_assembler_simple():
     ssarepr = SSARepr("test")
-    i0, i1, i2 = Register(0), Register(1), Register(2)
+    i0, i1, i2 = Register('int', 0), Register('int', 1), Register('int', 2)
     ssarepr.insns = [
         ('foobar', [i0, i1]),
         ('int_add', i0, i1, i2),
@@ -20,9 +20,21 @@ def test_format_assembler_simple():
     """
     assert asm == str(py.code.Source(expected)).strip() + '\n'
 
+def test_format_assembler_float():
+    ssarepr = SSARepr("test")
+    i1, r2, f3 = Register('int', 1), Register('ref', 2), Register('float', 3)
+    ssarepr.insns = [
+        ('foobar', i1, r2, f3),
+        ]
+    asm = format_assembler(ssarepr)
+    expected = """
+        foobar %i1, %r2, %f3
+    """
+    assert asm == str(py.code.Source(expected)).strip() + '\n'
+
 def test_format_assembler_loop():
     ssarepr = SSARepr("test")
-    i0, i1 = Register(0), Register(1)
+    i0, i1 = Register('int', 0), Register('int', 1)
     ssarepr.insns = [
         ('foobar', [i0, i1]),
         (Label('L1'),),
