@@ -36,21 +36,26 @@ class RegAllocator(object):
             for link in block.exits:
                 for v in link.args:
                     die_at.pop(v, None)
-            # Add the variables of this block to the dependency graph
-            for i, v in enumerate(block.inputargs):
-                dg.add_node(v)
-                for j in range(i):
-                    dg.add_edge(block.inputargs[j], v)
             die_at = [(value, key) for (key, value) in die_at.items()]
             die_at.sort()
             die_at.append((sys.maxint,))
             # Done.  XXX the code above this line runs 3 times
             # (for kind in KINDS) to produce the same result...
-            livevars = set(block.inputargs)
+            livevars = [v for v in block.inputargs
+                          if getkind(v.concretetype) == self.kind]
+            # Add the variables of this block to the dependency graph
+            for i, v in enumerate(livevars):
+                dg.add_node(v)
+                for j in range(i):
+                    dg.add_edge(livevars[j], v)
+            livevars = set(livevars)
             die_index = 0
             for i, op in enumerate(block.operations):
                 while die_at[die_index][0] == i:
-                    livevars.remove(die_at[die_index][1])
+                    try:
+                        livevars.remove(die_at[die_index][1])
+                    except KeyError:
+                        pass
                     die_index += 1
                 if getkind(op.result.concretetype) == self.kind:
                     livevars.add(op.result)
