@@ -4429,38 +4429,6 @@ def PyObject_Unicode(space, o):
     function."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject], rffi.INT_real)
-def PyObject_IsInstance(space, inst, cls):
-    """Returns 1 if inst is an instance of the class cls or a subclass of
-    cls, or 0 if not.  On error, returns -1 and sets an exception.  If
-    cls is a type object rather than a class object, PyObject_IsInstance()
-    returns 1 if inst is of type cls.  If cls is a tuple, the check will
-    be done against every entry in cls. The result will be 1 when at least one
-    of the checks returns 1, otherwise it will be 0. If inst is not a
-    class instance and cls is neither a type object, nor a class object, nor a
-    tuple, inst must have a __class__ attribute --- the class relationship
-    of the value of that attribute with cls will be used to determine the result
-    of this function.
-    
-    
-    
-    Support for a tuple as the second argument added."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject], rffi.INT_real)
-def PyObject_IsSubclass(space, derived, cls):
-    """Returns 1 if the class derived is identical to or derived from the class
-    cls, otherwise returns 0.  In case of an error, returns -1. If cls
-    is a tuple, the check will be done against every entry in cls. The result will
-    be 1 when at least one of the checks returns 1, otherwise it will be
-    0. If either derived or cls is not an actual class object (or tuple),
-    this function uses the generic algorithm described above.
-    
-    
-    
-    Older versions of Python did not support a tuple as the second argument."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], rffi.INT_real)
 def PyCallable_Check(space, o):
     """Determine if the object o is callable.  Return 1 if the object is callable
