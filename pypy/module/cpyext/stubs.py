@@ -4411,21 +4411,6 @@ def PyCallable_Check(space, o):
     and 0 otherwise.  This function always succeeds."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject, PyObject], PyObject)
-def PyObject_Call(space, callable_object, args, kw):
-    """
-    
-    
-    
-    Call a callable Python object callable_object, with arguments given by the
-    tuple args, and named arguments given by the dictionary kw. If no named
-    arguments are needed, kw may be NULL. args must not be NULL, use an
-    empty tuple if no arguments are needed. Returns the result of the call on
-    success, or NULL on failure.  This is the equivalent of the Python expression
-    apply(callable_object, args, kw) or callable_object(*args, **kw).
-    """
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP, ...], PyObject)
 def PyObject_CallFunction(space, callable, format, ):
     """

@@ -1,4 +1,4 @@
-
+from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.test.test_api import BaseApiTest
 
 class TestEval(BaseApiTest):
@@ -55,3 +55,22 @@ class TestEval(BaseApiTest):
         w_res = api.PyObject_CallObject(w_f, w_t)
         
         assert space.int_w(w_res) == 10
+
+class AppTestCall(AppTestCpythonExtensionBase):
+    def test_CallFunction(self):
+        module = self.import_extension('foo', [
+            ("call_func", "METH_VARARGS",
+             """
+                return PyObject_CallFunction(PyTuple_GetItem(args, 0),
+                   "siO", "text", 42, Py_None);
+             """),
+            ("call_method", "METH_VARARGS",
+             """
+                return PyObject_CallMethod(PyTuple_GetItem(args, 0),
+                   "count", "s", "t");
+             """),
+            ])
+        def f(*args):
+            return args
+        assert module.call_func(f) == ("text", 42, None)
+        assert module.call_method("text") == 2
