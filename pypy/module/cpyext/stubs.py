@@ -5144,27 +5144,6 @@ def PyString_AsStringAndSize(space, obj, buffer, length):
     require changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObjectP, PyObject], lltype.Void)
-def PyString_Concat(space, string, newpart):
-    """Create a new string object in *string containing the contents of newpart
-    appended to string; the caller will own the new reference.  The reference to
-    the old value of string will be stolen.  If the new string cannot be created,
-    the old reference to string will still be discarded and the value of
-    *string will be set to NULL; the appropriate exception will be set."""
-    raise NotImplementedError
-
-@cpython_api([PyObjectP, PyObject], lltype.Void)
-def PyString_ConcatAndDel(space, string, newpart):
-    """Create a new string object in *string containing the contents of newpart
-    appended to string.  This version decrements the reference count of newpart."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject], PyObject)
-def PyString_Format(space, format, args):
-    """Return a new string object from format and args. Analogous to format %
-    args.  The args argument must be a tuple."""
-    raise NotImplementedError
-
 @cpython_api([PyObjectP], lltype.Void)
 def PyString_InternInPlace(space, string):
     """Intern the argument *string in place.  The argument must be the address of a
