@@ -175,16 +175,17 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
                 to_decref = []
                 for i, (ARG, is_wrapped) in types_names_enum_ui:
                     input_arg = args[i]
-                    if ARG is PyObject and not is_wrapped:
+                    if is_PyObject(ARG) and not is_wrapped:
                         # build a reference
                         if input_arg is None:
                             arg = lltype.nullptr(PyObject.TO)
                         elif isinstance(input_arg, W_Root):
-                            arg = make_ref(space, input_arg)
-                            to_decref.append(arg)
+                            ref = make_ref(space, input_arg)
+                            to_decref.append(ref)
+                            arg = rffi.cast(ARG, ref)
                         else:
                             arg = input_arg
-                    elif ARG is PyObject and is_wrapped:
+                    elif is_PyObject(ARG) and is_wrapped:
                         # convert to a wrapped object
                         if input_arg is None:
                             arg = input_arg
@@ -321,6 +322,11 @@ cpython_struct('PyObject', PyObjectFields, PyObjectStruct)
 cpython_struct('PyBufferProcs', PyBufferProcsFields, PyBufferProcs)
 PyVarObjectStruct = cpython_struct("PyVarObject", PyVarObjectFields)
 PyVarObject = lltype.Ptr(PyVarObjectStruct)
+
+def is_PyObject(TYPE):
+    if not isinstance(TYPE, lltype.Ptr):
+        return False
+    return hasattr(TYPE.TO, 'c_ob_refcnt') and hasattr(TYPE.TO, 'c_ob_type')
 
 # a pointer to PyObject
 PyObjectP = rffi.CArrayPtr(PyObject)
