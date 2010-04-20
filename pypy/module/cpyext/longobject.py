@@ -48,7 +48,7 @@ def PyLong_AsUnsignedLongLong(space, w_long):
     raised."""
     return rffi.cast(rffi.ULONGLONG, space.r_ulonglong_w(w_long))
 
-@cpython_api([CONST_STRING, rffi.CCHARP, rffi.INT_real], PyObject)
+@cpython_api([CONST_STRING, rffi.CCHARPP, rffi.INT_real], PyObject)
 def PyLong_FromString(space, str, pend, base):
     """Return a new PyLongObject based on the string value in str, which is
     interpreted according to the radix in base.  If pend is non-NULL,
