@@ -196,3 +196,29 @@ def PyObject_GenericGetAttr(space, w_obj, w_name):
     from pypy.objspace.descroperation import object_getattribute
     w_descr = object_getattribute(space)
     return space.get_and_call_function(w_descr, w_obj, w_name)
+
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
+def PyObject_IsInstance(space, w_inst, w_cls):
+    """Returns 1 if inst is an instance of the class cls or a subclass of
+    cls, or 0 if not.  On error, returns -1 and sets an exception.  If
+    cls is a type object rather than a class object, PyObject_IsInstance()
+    returns 1 if inst is of type cls.  If cls is a tuple, the check will
+    be done against every entry in cls. The result will be 1 when at least one
+    of the checks returns 1, otherwise it will be 0. If inst is not a class
+    instance and cls is neither a type object, nor a class object, nor a
+    tuple, inst must have a __class__ attribute --- the class relationship
+    of the value of that attribute with cls will be used to determine the result
+    of this function."""
+    from pypy.module.__builtin__.abstractinst import abstract_isinstance_w
+    return abstract_isinstance_w(space, w_inst, w_cls)
+
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
+def PyObject_IsSubclass(space, w_derived, w_cls):
+    """Returns 1 if the class derived is identical to or derived from the class
+    cls, otherwise returns 0.  In case of an error, returns -1. If cls
+    is a tuple, the check will be done against every entry in cls. The result will
+    be 1 when at least one of the checks returns 1, otherwise it will be
+    0. If either derived or cls is not an actual class object (or tuple),
+    this function uses the generic algorithm described above."""
+    from pypy.module.__builtin__.abstractinst import abstract_issubclass_w
+    return abstract_issubclass_w(space, w_derived, w_cls)

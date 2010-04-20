@@ -105,3 +105,22 @@ class TestObject(BaseApiTest):
         assert api.PyObject_TypeCheck(space.wrap(True), api.PyBool_Type)
         assert api.PyObject_TypeCheck(space.wrap(1.2), api.PyFloat_Type)
         assert api.PyObject_TypeCheck(space.w_int, api.PyType_Type)
+
+    def test_IsInstance(self, space, api):
+        assert api.PyObject_IsInstance(space.wrap(1), space.w_int) == 1
+        assert api.PyObject_IsInstance(space.wrap(1), space.w_float) == 0
+        assert api.PyObject_IsInstance(space.w_True, space.w_int) == 1
+        assert api.PyObject_IsInstance(
+            space.wrap(1), space.newtuple([space.w_int, space.w_float])) == 1
+        assert api.PyObject_IsInstance(space.w_type, space.w_type) == 1
+        assert api.PyObject_IsInstance(space.wrap(1), space.w_None) == -1
+        api.PyErr_Clear()
+
+    def test_IsSubclass(self, space, api):
+        assert api.PyObject_IsSubclass(space.w_type, space.w_type) == 1
+        assert api.PyObject_IsSubclass(space.w_type, space.w_object) == 1
+        assert api.PyObject_IsSubclass(space.w_object, space.w_type) == 0
+        assert api.PyObject_IsSubclass(
+            space.w_type, space.newtuple([space.w_int, space.w_type])) == 1
+        assert api.PyObject_IsSubclass(space.wrap(1), space.w_type) == -1
+        api.PyErr_Clear()
