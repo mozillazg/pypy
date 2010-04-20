@@ -2,7 +2,8 @@ from pypy.objspace.flow.model import Variable
 
 
 class SSARepr(object):
-    def __init__(self):
+    def __init__(self, name):
+        self.name = name
         self.insns = []
 
 class Label(object):
@@ -54,7 +55,7 @@ class GraphFlattener(object):
             assert self.regalloc.getcolor(inputargs[i]) == i
 
     def generate_ssa_form(self):
-        self.assembler = SSARepr()
+        self.assembler = SSARepr(self.graph.name)
         self.seen_blocks = {}
         self.make_bytecode_block(self.graph.startblock)
 

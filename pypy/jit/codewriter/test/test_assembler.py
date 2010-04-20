@@ -1,10 +1,11 @@
 from pypy.jit.codewriter.assembler import Assembler
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
+from pypy.objspace.flow.model import Constant
 from pypy.jit.metainterp.history import ConstInt
 
 
 def test_assemble_simple():
-    ssarepr = SSARepr()
+    ssarepr = SSARepr("test")
     i0, i1, i2 = Register(0), Register(1), Register(2)
     ssarepr.insns = [
         ('int_add', i0, i1, i2),
@@ -18,7 +19,7 @@ def test_assemble_simple():
                                'int_return/i': 1}
 
 def test_assemble_consts():
-    ssarepr = SSARepr()
+    ssarepr = SSARepr("test")
     ssarepr.insns = [
         ('int_return', Register(13)),
         ('int_return', Constant(18)),
@@ -35,11 +36,11 @@ def test_assemble_consts():
                             "\x00\xFE")
     assert assembler.insns == {'int_return/i': 0,
                                'int_return/c': 1}
-    assert assembler.constants == [ConstInt(-129), ConstInt(128)]
+    assert jitcode.constants == [ConstInt(-129), ConstInt(128)]
 
 def test_assemble_loop():
-    ssarepr = SSARepr()
-    i0, i1 = Register(16), Register(17)
+    ssarepr = SSARepr("test")
+    i0, i1 = Register(0x16), Register(0x17)
     ssarepr.insns = [
         (Label('L1'),),
         ('goto_if_not_int_gt', TLabel('L2'), i0, Constant(4)),
@@ -51,7 +52,7 @@ def test_assemble_loop():
         ]
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
-    assert jitcode.code == ("\x00\x10\x00\x10\x04"
+    assert jitcode.code == ("\x00\x10\x00\x16\x04"
                             "\x01\x17\x16\x17"
                             "\x02\x16\x01\x16"
                             "\x03\x00\x00"
