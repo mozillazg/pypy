@@ -29,6 +29,8 @@ class DependencyGraph(object):
     def lexicographic_order(self):
         """Enumerate a lexicographic breath-first ordering of the nodes."""
         sigma = [self.getnodes()[::-1]]
+        if not sigma[0]:
+            return
         while sigma:
             v = sigma[0].pop()
             yield v
