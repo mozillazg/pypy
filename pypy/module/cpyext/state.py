@@ -51,13 +51,16 @@ class State:
         self.exc_type = None
         self.exc_value = None
 
-    def check_and_raise_exception(self):
+    def check_and_raise_exception(self, always=False):
         exc_value = self.exc_value
         exc_type = self.exc_type
         if exc_type is not None or exc_value is not None:
             self.clear_exception()
             op_err = OperationError(exc_type, exc_value)
             raise op_err
+        if always:
+            raise OperationError(space.w_SystemError, space.wrap(
+                "Function returned an error result without setting an exception"))
 
     def print_refcounts(self):
         print "REFCOUNTS"
