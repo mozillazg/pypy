@@ -61,7 +61,7 @@ def PyLong_FromString(space, str, pend, base):
     no digits, ValueError will be raised."""
     s = rffi.charp2str(str)
     w_str = space.wrap(s)
-    w_base = space.wrap(base)
+    w_base = space.wrap(rffi.cast(lltype.Signed, base))
     if pend:
         pend[0] = rffi.ptradd(str, len(s))
     return space.call_function(space.w_long, w_str, w_base)
