@@ -16,7 +16,7 @@ from pypy.module.cpyext.api import cpython_api, cpython_struct, bootstrap_functi
     PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
     Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, ADDR, \
     Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS, \
-    CANNOT_FAIL, PyBufferProcs
+    CANNOT_FAIL, PyBufferProcs, build_type_checkers
 from pypy.module.cpyext.pyobject import PyObject, make_ref, create_ref, from_ref
 from pypy.module.cpyext.pyobject import get_typedescr, make_typedescr, track_reference
 from pypy.interpreter.module import Module
@@ -39,6 +39,7 @@ from pypy.module.__builtin__.abstractinst import abstract_issubclass_w
 
 WARN_ABOUT_MISSING_SLOT_FUNCTIONS = False
 
+PyType_Check, PyType_CheckExact = build_type_checkers("Type", "w_type")
 
 class W_GetSetPropertyEx(GetSetProperty):
     def __init__(self, getset, pto):
