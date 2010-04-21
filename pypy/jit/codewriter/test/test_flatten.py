@@ -1,6 +1,6 @@
 import py
 from pypy.jit.codewriter import support
-from pypy.jit.codewriter.flatten import flatten_graph
+from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
 from pypy.jit.codewriter.format import format_assembler
 
 
@@ -14,6 +14,18 @@ class FakeRegAlloc:
             self.seen[v] = self.num_colors
             self.num_colors += 1
         return self.seen[v]
+
+def test_reorder_renaming_list():
+    result = reorder_renaming_list([], [])
+    assert result == []
+    result = reorder_renaming_list([1, 2, 3], [4, 5, 6])
+    assert result == [(1, 4), (2, 5), (3, 6)]
+    result = reorder_renaming_list([4, 5, 1, 2], [1, 2, 3, 4])
+    assert result == [(1, 3), (4, 1), (2, 4), (5, 2)]
+    result = reorder_renaming_list([1, 2], [2, 1])
+    assert result == None
+    result = reorder_renaming_list([4, 3, 1, 2, 6], [1, 2, 3, 4, 5])
+    assert result == None
 
 
 class TestFlatten:
@@ -46,14 +58,17 @@ class TestFlatten:
                 a -= 1
             return b
         self.encoding_test(f, [5, 6], """
-            int_rename [%i0, %i1], [%i2, %i3]
+            int_copy %i0, %i2
+            int_copy %i1, %i3
             L1:
             int_gt %i2, $0, %i4
             goto_if_not L2, %i4
-            int_rename [%i2, %i3], [%i5, %i6]
+            int_copy %i2, %i5
+            int_copy %i3, %i6
             int_add %i6, %i5, %i7
             int_sub %i5, $1, %i8
-            int_rename [%i8, %i7], [%i2, %i3]
+            int_copy %i8, %i2
+            int_copy %i7, %i3
             goto L1
             L2:
             int_return %i3

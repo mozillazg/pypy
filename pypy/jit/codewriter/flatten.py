@@ -146,8 +146,7 @@ class GraphFlattener(object):
         raise CannotOptimize   # variable is not produced in cur block
 
     def insert_renamings(self, link):
-        renamings_from = []
-        renamings_to = []
+        renamings = {}
         lst = [(v, self.getcolor(link.target.inputargs[i]))
                for i, v in enumerate(link.args)]
         lst.sort(key=lambda(v, w): w.index)
@@ -156,10 +155,20 @@ class GraphFlattener(object):
                 v = self.getcolor(v)
                 if v == w:
                     continue
-            renamings_from.append(v)
-            renamings_to.append(w)
-        if renamings_from:
-            self.emitline('int_rename', renamings_from, renamings_to)
+            frm, to = renamings.setdefault(w.kind, ([], []))
+            frm.append(v)
+            to.append(w)
+        for kind in KINDS:
+            if kind in renamings:
+                frm, to = renamings[kind]
+                # If there is no cycle among the renamings, produce a series
+                # of %s_copy.  Otherwise, just one %s_rename.
+                result = reorder_renaming_list(frm, to)
+                if result is not None:
+                    for v, w in result:
+                        self.emitline('%s_copy' % kind, v, w)
+                else:
+                    self.emitline('%s_rename' % kind, frm, to)
 
     def emitline(self, *line):
         self.assembler.insns.append(line)
@@ -182,3 +191,21 @@ class GraphFlattener(object):
         except KeyError:
             r = self.registers[kind, col] = Register(kind, col)
         return r
+
+# ____________________________________________________________
+
+def reorder_renaming_list(frm, to):
+    result = []
+    pending_indices = range(len(to))
+    while pending_indices:
+        not_read = dict.fromkeys([frm[i] for i in pending_indices])
+        still_pending_indices = []
+        for i in pending_indices:
+            if to[i] not in not_read:
+                result.append((frm[i], to[i]))
+            else:
+                still_pending_indices.append(i)
+        if len(pending_indices) == len(still_pending_indices):
+            return None    # no progress -- there is a cycle
+        pending_indices = still_pending_indices
+    return result
