@@ -77,7 +77,7 @@ def wrap_sq_delitem(space, w_self, w_args, func):
     args_w = space.fixedview(w_args)
     index = space.int_w(space.index(args_w[0]))
     null = lltype.nullptr(PyObject.TO)
-    res = generic_cpy_call(space, func_target, w_self, index, args_w[1])
+    res = generic_cpy_call(space, func_target, w_self, index, null)
     if rffi.cast(lltype.Signed, res) == -1:
         space.fromcache(State).check_and_raise_exception(always=True)
 
