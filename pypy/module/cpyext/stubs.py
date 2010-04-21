@@ -4737,18 +4737,6 @@ def PySequence_List(space, o):
     returned list is guaranteed to be new."""
     raise NotImplementedError
 
-@cpython_api([PyObject], PyObject)
-def PySequence_Tuple(space, o):
-    """
-    
-    
-    
-    Return a tuple object with the same contents as the arbitrary sequence o or
-    NULL on failure.  If o is a tuple, a new reference will be returned,
-    otherwise a tuple will be constructed with the appropriate contents.  This is
-    equivalent to the Python expression tuple(o)."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObjectP)
 def PySequence_Fast_ITEMS(space, o):
     """Return the underlying array of PyObject pointers.  Assumes that o was returned

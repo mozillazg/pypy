@@ -18,6 +18,10 @@ class TestIterator(BaseApiTest):
         assert space.type(w_seq) is space.w_tuple
         assert space.int_w(space.len(w_seq)) == 4
 
+        w_seq = api.PySequence_Tuple(w_set)
+        assert space.type(w_seq) is space.w_tuple
+        assert sorted(space.unwrap(w_seq)) == [1, 2, 3, 4]
+
     def test_exception(self, space, api):
         message = rffi.str2charp("message")
         assert not api.PySequence_Fast(space.wrap(3), message)
