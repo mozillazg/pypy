@@ -4496,14 +4496,6 @@ def PyObject_DelItem(space, o, key):
     equivalent of the Python statement del o[key]."""
     raise NotImplementedError
 
-@cpython_api([PyObject], rffi.INT_real)
-def PyObject_AsFileDescriptor(space, o):
-    """Derives a file descriptor from a Python object.  If the object is an integer or
-    long integer, its value is returned.  If not, the object's fileno() method
-    is called if it exists; the method must return an integer or long integer, which
-    is returned as the file descriptor value.  Returns -1 on failure."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObject)
 def PyObject_Dir(space, o):
     """This is equivalent to the Python expression dir(o), returning a (possibly

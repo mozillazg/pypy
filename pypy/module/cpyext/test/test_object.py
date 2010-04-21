@@ -124,3 +124,17 @@ class TestObject(BaseApiTest):
             space.w_type, space.newtuple([space.w_int, space.w_type])) == 1
         assert api.PyObject_IsSubclass(space.wrap(1), space.w_type) == -1
         api.PyErr_Clear()
+
+    def test_fileno(self, space, api):
+        assert api.PyObject_AsFileDescriptor(space.wrap(1)) == 1
+        assert api.PyObject_AsFileDescriptor(space.wrap(-20)) == -1
+        assert api.PyErr_Occurred() is space.w_ValueError
+        api.PyErr_Clear()
+
+        w_File = space.appexec([], """():
+            class File:
+                def fileno(self):
+                    return 42
+            return File""")
+        w_f = space.call_function(w_File)
+        assert api.PyObject_AsFileDescriptor(w_f) == 42
