@@ -8,8 +8,10 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.function import BuiltinFunction, Method
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref
-from pypy.module.cpyext.api import generic_cpy_call, cpython_api, PyObject,\
-        cpython_struct, METH_KEYWORDS, METH_O, CONST_STRING
+from pypy.module.cpyext.api import (
+    generic_cpy_call, cpython_api, PyObject, cpython_struct, METH_KEYWORDS,
+    METH_O, CONST_STRING, METH_CLASS, METH_STATIC, METH_COEXIST, METH_NOARGS,
+    METH_VARARGS)
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
@@ -38,13 +40,18 @@ class W_PyCFunctionObject(Wrappable):
         if w_self is None:
             w_self = self.w_self
         flags = rffi.cast(lltype.Signed, self.ml.c_ml_flags)
+        flags &= ~(METH_CLASS | METH_STATIC | METH_COEXIST)
         if space.is_true(w_kw) and not flags & METH_KEYWORDS:
-            raise OperationError(space.w_TypeError,
-                    space.wrap(rffi.charp2str(self.ml.c_ml_name) + "() takes no keyword arguments"))
-        # XXX support METH_NOARGS
+            raise OperationError(space.w_TypeError, space.wrap(
+                rffi.charp2str(self.ml.c_ml_name) + "() takes no keyword arguments"))
         if flags & METH_KEYWORDS:
             func = rffi.cast(PyCFunctionKwArgs, self.ml.c_ml_meth)
             return generic_cpy_call(space, func, w_self, w_args, w_kw)
+        elif flags & METH_NOARGS:
+            if len(w_args.wrappeditems) == 0:
+                return generic_cpy_call(space, self.ml.c_ml_meth, w_self, None)
+            raise OperationError(space.w_TypeError, space.wrap(
+                rffi.charp2str(self.ml.c_ml_name) + "() takes no arguments"))
         elif flags & METH_O:
             assert isinstance(w_args, W_TupleObject)
             if len(w_args.wrappeditems) != 1:
@@ -54,8 +61,17 @@ class W_PyCFunctionObject(Wrappable):
                         len(w_args.wrappeditems))))
             w_arg = w_args.wrappeditems[0]
             return generic_cpy_call(space, self.ml.c_ml_meth, w_self, w_arg)
-        else:
+        elif flags & METH_VARARGS:
             return generic_cpy_call(space, self.ml.c_ml_meth, w_self, w_args)
+        else: # METH_OLDARGS, the really old style
+            size = len(w_args.wrappeditems)
+            if size == 1:
+                w_arg = w_args.wrappeditems[0]
+            elif size == 0:
+                w_arg = None
+            else:
+                w_arg = w_args
+            return generic_cpy_call(space, self.ml.c_ml_meth, w_self, w_arg)
 
 
 class W_PyCMethodObject(W_PyCFunctionObject):
