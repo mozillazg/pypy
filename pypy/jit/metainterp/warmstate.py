@@ -11,7 +11,8 @@ from pypy.rlib.jit import PARAMETERS, OPTIMIZER_SIMPLE, OPTIMIZER_FULL
 from pypy.rlib.jit import DEBUG_PROFILE
 from pypy.rlib.jit import BaseJitCell
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
-from pypy.jit.metainterp import support, history
+from pypy.jit.metainterp import history
+from pypy.jit.codewriter import support
 
 # ____________________________________________________________
 

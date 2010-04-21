@@ -1,5 +1,5 @@
 from pypy.translator.simplify import get_funcobj
-from pypy.jit.metainterp import support, history
+from pypy.jit.metainterp import history
 from pypy.rpython.lltypesystem import lltype, rclass
 from pypy.tool.udir import udir
 
