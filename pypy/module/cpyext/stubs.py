@@ -4627,20 +4627,6 @@ def PySequence_Check(space, o):
     This function always succeeds."""
     raise NotImplementedError
 
-@cpython_api([PyObject], Py_ssize_t)
-def PySequence_Size(space, o):
-    """
-    
-    
-    
-    Returns the number of objects in sequence o on success, and -1 on failure.
-    For objects that do not provide sequence protocol, this is equivalent to the
-    Python expression len(o).
-    
-    These functions returned an int type. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject], PyObject)
 def PySequence_Concat(space, o1, o2):
     """Return the concatenation of o1 and o2 on success, and NULL on failure.
