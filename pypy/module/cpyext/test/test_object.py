@@ -56,8 +56,8 @@ class TestObject(BaseApiTest):
         assert not api.PyObject_GetAttrString(space.wrap(""), charp2)
         assert api.PyErr_Occurred() is space.w_AttributeError
         api.PyErr_Clear()
-        lltype.free(charp1, flavor="raw")
-        lltype.free(charp2, flavor="raw")
+        rffi.free_charp(charp1)
+        rffi.free_charp(charp2)
 
     def test_getitem(self, space, api):
         w_t = space.wrap((1, 2, 3, 4, 5))
