@@ -33,6 +33,11 @@ class TestObject(BaseApiTest):
         assert hasattr_(space.w_int, '__eq__')
         assert not hasattr_(space.w_int, 'nonexistingattr')
 
+        buf = rffi.str2charp('__len__')
+        assert api.PyObject_HasAttrString(space.w_str, buf)
+        assert not api.PyObject_HasAttrString(space.w_int, buf)
+        rffi.free_charp(buf)
+
     def test_SetAttr(self, space, api):
         class X:
             pass
