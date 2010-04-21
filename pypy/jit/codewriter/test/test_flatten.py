@@ -2,6 +2,7 @@ import py
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
 from pypy.jit.codewriter.format import format_assembler
+from pypy.jit.codewriter.jitter import transform_graph
 
 
 class FakeRegAlloc:
@@ -34,8 +35,10 @@ class TestFlatten:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
-    def encoding_test(self, func, args, expected, optimize=True):
+    def encoding_test(self, func, args, expected, optimize=False):
         graphs = self.make_graphs(func, args)
+        if optimize:
+            transform_graph(graphs[0])
         ssarepr = flatten_graph(graphs[0], {'int': FakeRegAlloc(),
                                             'ref': FakeRegAlloc(),
                                             'float': FakeRegAlloc()})
@@ -73,6 +76,28 @@ class TestFlatten:
             L2:
             int_return %i3
         """)
+
+    def test_loop_opt(self):
+        def f(a, b):
+            while a > 0:
+                b += a
+                a -= 1
+            return b
+        self.encoding_test(f, [5, 6], """
+            int_copy %i0, %i2
+            int_copy %i1, %i3
+            L1:
+            goto_if_not_int_gt L2, %i2, $0
+            int_copy %i2, %i4
+            int_copy %i3, %i5
+            int_add %i5, %i4, %i6
+            int_sub %i4, $1, %i7
+            int_copy %i7, %i2
+            int_copy %i6, %i3
+            goto L1
+            L2:
+            int_return %i3
+        """, optimize=True)
 
     def test_float(self):
         def f(i, f):

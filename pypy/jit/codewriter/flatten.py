@@ -1,5 +1,6 @@
 from pypy.objspace.flow.model import Variable
 from pypy.jit.metainterp.history import getkind
+from pypy.rpython.lltypesystem import lltype
 
 
 class SSARepr(object):
@@ -112,38 +113,26 @@ class GraphFlattener(object):
             assert link.exitcase is None
             self.make_link(link)
         else:
-            assert len(block.exits) == 2
+            assert len(block.exits) == 2, "XXX"
             linkfalse, linktrue = block.exits
             if linkfalse.llexitcase == True:
                 linkfalse, linktrue = linktrue, linkfalse
+            if isinstance(block.exitswitch, tuple):
+                # special case produced by jitter.optimize_goto_if_not()
+                opname = 'goto_if_not_' + block.exitswitch[0]
+                opargs = block.exitswitch[1:]
+            else:
+                assert block.exitswitch.concretetype == lltype.Bool
+                opname = 'goto_if_not'
+                opargs = [block.exitswitch]
             #
-            self.emitline('goto_if_not', TLabel(linkfalse),
-                          self.getcolor(block.exitswitch))
+            self.emitline(opname, TLabel(linkfalse),
+                          *self.flatten_list(opargs))
             # true path:
             self.make_link(linktrue)
             # false path:
             self.emitline(Label(linkfalse))
             self.make_link(linkfalse)
-
-    def optimize_goto_if_not(self, block):
-        xxxxxxx
-        if not self.optimize:
-            raise CannotOptimize
-        v = block.exitswitch
-        for link in block.exits:
-            if v in link.args:
-                raise CannotOptimize   # variable escapes to next block
-        for op in block.operations[::-1]:
-            if v in op.args:
-                raise CannotOptimize   # variable is also used in cur block
-            if v is op.result:
-                if op.opname not in ('int_lt', 'int_le', 'int_eq', 'int_ne',
-                                     'int_gt', 'int_ge'):
-                    raise CannotOptimize    # not a supported operation
-                killop = (op.opname,) + tuple(op.args) + (v,)
-                self.assembler.insns.remove(killop)
-                return 'goto_if_not_' + op.opname, op.args
-        raise CannotOptimize   # variable is not produced in cur block
 
     def insert_renamings(self, link):
         renamings = {}
@@ -173,12 +162,16 @@ class GraphFlattener(object):
     def emitline(self, *line):
         self.assembler.insns.append(line)
 
-    def serialize_op(self, op):
+    def flatten_list(self, list):
         args = []
-        for v in op.args:
+        for v in list:
             if isinstance(v, Variable):
                 v = self.getcolor(v)
             args.append(v)
+        return args
+
+    def serialize_op(self, op):
+        args = self.flatten_list(op.args)
         if op.result is not None:
             args.append(self.getcolor(op.result))
         self.emitline(op.opname, *args)
