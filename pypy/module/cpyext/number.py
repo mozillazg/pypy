@@ -47,7 +47,7 @@ def make_unary_numbermethod(name, spacemeth):
 def make_inplace_numbermethod(name, spacemeth):
     spacemeth = 'inplace_' + spacemeth.rstrip('_')
     @cpython_api([PyObject, PyObject], PyObject)
-    @func_rename('PyNumber_Inplace%s' % (name,))
+    @func_rename('PyNumber_InPlace%s' % (name,))
     def PyNumber_Method(space, w_o1, w_o2):
         meth = getattr(space, spacemeth)
         return meth(w_o1, w_o2)
@@ -83,9 +83,9 @@ def PyNumber_Power(space, w_o1, w_o2, w_o3):
     return space.pow(w_o1, w_o2, w_o3)
 
 @cpython_api([PyObject, PyObject, PyObject], PyObject)
-def PyNumber_InplacePower(space, w_o1, w_o2, w_o3):
+def PyNumber_InPlacePower(space, w_o1, w_o2, w_o3):
     if not space.is_w(w_o3, space.w_None):
         raise OperationError(space.w_ValueError, space.wrap(
-            "PyNumber_InplacePower with non-None modulus is not supported"))
+            "PyNumber_InPlacePower with non-None modulus is not supported"))
     return space.inplace_pow(w_o1, w_o2)
 
