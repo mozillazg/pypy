@@ -63,6 +63,7 @@ def _init_nt():
     """Initialize the module as appropriate for NT"""
     g = {}
     g['EXE'] = ".exe"
+    g['SO'] = ".pyd"
 
     global _config_vars
     _config_vars = g
