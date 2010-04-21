@@ -5592,18 +5592,6 @@ def PyUnicode_FromObject(space, obj):
     throughout the interpreter whenever coercion to Unicode is needed."""
     raise NotImplementedError
 
-@cpython_api([rffi.CCHARP, Py_ssize_t, rffi.CCHARP, rffi.CCHARP], PyObject)
-def PyUnicode_Decode(space, s, size, encoding, errors):
-    """Create a Unicode object by decoding size bytes of the encoded string s.
-    encoding and errors have the same meaning as the parameters of the same name
-    in the unicode() built-in function.  The codec to be used is looked up
-    using the Python codec registry.  Return NULL if an exception was raised by
-    the codec.
-    
-    This function used an int type for size. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([{const Py_UNICODE*}, Py_ssize_t, rffi.CCHARP, rffi.CCHARP], PyObject)
 def PyUnicode_Encode(space, s, size, encoding, errors):
     """Encode the Py_UNICODE buffer of the given size and return a Python
