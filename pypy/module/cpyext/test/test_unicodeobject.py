@@ -86,3 +86,11 @@ class TestUnicode(BaseApiTest):
     def test_TOUPPER(self, space, api):
         assert api.Py_UNICODE_TOUPPER(u'ä') == u'Ä'
         assert api.Py_UNICODE_TOUPPER(u'Ä') == u'Ä'
+
+    def test_decode(self, space, api):
+        b_text = rffi.str2charp('caf\x82xx')
+        b_encoding = rffi.str2charp('cp437')
+        assert space.unwrap(
+            api.PyUnicode_Decode(b_text, 4, b_encoding, None)) == u'caf\xe9'
+        lltype.free(b_text, flavor='raw')
+        lltype.free(b_encoding, flavor='raw')

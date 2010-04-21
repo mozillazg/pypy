@@ -230,3 +230,18 @@ def PyUnicode_FromWideChar(space, wchar_p, length):
 @cpython_api([PyObject, CONST_STRING], PyObject)
 def _PyUnicode_AsDefaultEncodedString(space, w_unicode, errors):
     return PyUnicode_AsEncodedString(space, w_unicode, lltype.nullptr(rffi.CCHARP.TO), errors)
+
+@cpython_api([CONST_STRING, Py_ssize_t, CONST_STRING, CONST_STRING], PyObject)
+def PyUnicode_Decode(space, s, size, encoding, errors):
+    """Create a Unicode object by decoding size bytes of the encoded string s.
+    encoding and errors have the same meaning as the parameters of the same name
+    in the unicode() built-in function.  The codec to be used is looked up
+    using the Python codec registry.  Return NULL if an exception was raised by
+    the codec."""
+    w_str = space.wrap(rffi.charpsize2str(s, size))
+    w_encoding = space.wrap(rffi.charp2str(encoding))
+    if errors:
+        w_errors = space.wrap(rffi.charp2str(errors))
+    else:
+        w_errors = space.w_None
+    return space.call_method(w_str, 'decode', w_encoding, w_errors)
