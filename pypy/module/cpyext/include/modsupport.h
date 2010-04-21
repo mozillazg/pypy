@@ -28,6 +28,9 @@ int PyArg_VaParseTupleAndKeywords(PyObject *, PyObject *,
 		       PYTHON_API_VERSION)
 
 int PyModule_AddObject(PyObject *m, const char *name, PyObject *o);
+int PyModule_AddIntConstant(PyObject *m, const char *name, long value);
+int PyModule_AddStringConstant(PyObject *m, const char *name, const char *value);
+
 
 PyObject * Py_BuildValue(const char *, ...);
 PyObject * _Py_BuildValue_SizeT(const char *, ...);
