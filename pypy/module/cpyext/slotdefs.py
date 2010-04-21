@@ -44,7 +44,7 @@ def wrap_getattr(space, w_self, w_args, func):
     try:
         return generic_cpy_call(space, func_target, w_self, name_ptr)
     finally:
-        lltype.free(name_ptr, flavor="raw")
+        rffi.free_charp(name_ptr)
 
 def wrap_call(space, w_self, w_args, func, w_kwds):
     func_target = rffi.cast(ternaryfunc, func)

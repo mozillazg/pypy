@@ -442,7 +442,7 @@ def type_dealloc(space, obj):
         if obj_pto.c_tp_as_buffer:
             lltype.free(obj_pto.c_tp_as_buffer, flavor='raw')
         Py_DecRef(space, base_pyo)
-        lltype.free(obj_pto.c_tp_name, flavor="raw")
+        rffi.free_charp(obj_pto.c_tp_name)
         obj_pto_voidp = rffi.cast(rffi.VOIDP_real, obj_pto)
         generic_cpy_call(space, type_pto.c_tp_free, obj_pto_voidp)
         pto = rffi.cast(PyObject, type_pto)

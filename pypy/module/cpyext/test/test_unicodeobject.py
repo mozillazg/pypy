@@ -54,7 +54,7 @@ class TestUnicode(BaseApiTest):
         assert rffi.wcharp2unicode(buf) == 'longw'
         api.PyUnicode_AsWideChar(space.wrap(u'a'), buf, 5)
         assert rffi.wcharp2unicode(buf) == 'a'
-        lltype.free(buf, flavor='raw')
+        rffi.free_wcharp(buf)
 
     def test_IS(self, space, api):
         for char in [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f,
@@ -92,5 +92,5 @@ class TestUnicode(BaseApiTest):
         b_encoding = rffi.str2charp('cp437')
         assert space.unwrap(
             api.PyUnicode_Decode(b_text, 4, b_encoding, None)) == u'caf\xe9'
-        lltype.free(b_text, flavor='raw')
-        lltype.free(b_encoding, flavor='raw')
+        rffi.free_charp(b_text)
+        rffi.free_charp(b_encoding)
