@@ -61,6 +61,7 @@ class BlackholeInterpreter(object):
                         break
                 else:
                     raise AssertionError("bad opcode")
+        dispatch_loop._dont_inline_ = True
         self.dispatch_loop = dispatch_loop
 
     def _get_method(self, name, argcodes):
@@ -128,12 +129,15 @@ class BlackholeInterpreter(object):
 
     # XXX must be specialized
     def copy_constants(self, registers, constants):
-        i = len(constants)
-        while i > 0:
-            j = 256 - i
+        """Copy jitcode.constants[0] to registers[255],
+                jitcode.constants[1] to registers[254],
+                jitcode.constants[2] to registers[253], etc."""
+        i = len(constants) - 1
+        while i >= 0:
+            j = 255 - i
             assert j >= 0
-            i -= 1
             registers[j] = constants[i]
+            i -= 1
 
     # ----------
 
@@ -149,6 +153,18 @@ class BlackholeInterpreter(object):
     def opimpl_int_return(self, a):
         self.result_i = a
         raise LeaveFrame
+
+    @arguments("i", returns="i")
+    def opimpl_int_copy(self, a):
+        return a
+
+    @arguments("r", returns="r")
+    def opimpl_ref_copy(self, a):
+        return a
+
+    @arguments("f", returns="f")
+    def opimpl_float_copy(self, a):
+        return a
 
     @arguments("L", "i", "i", "pc", returns="L")
     def opimpl_goto_if_not_int_gt(self, target, a, b, pc):

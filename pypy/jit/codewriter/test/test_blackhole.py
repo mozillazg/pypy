@@ -53,7 +53,7 @@ def test_simple_loop():
                                  'int_sub/ici': 2,
                                  'goto/L': 3,
                                  'int_return/i': 4})
-    blackholeinterp.setarg_i(0x16, 6)
-    blackholeinterp.setarg_i(0x17, 100)
+    blackholeinterp.setarg_i(0x16, 6)    # %i0
+    blackholeinterp.setarg_i(0x17, 100)  # %i1
     blackholeinterp.run(jitcode, 0)
     assert blackholeinterp.result_i == 100+6+5+4+3
