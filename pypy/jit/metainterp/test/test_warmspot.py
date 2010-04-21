@@ -288,7 +288,7 @@ class TestOOWarmspot(WarmspotTests, OOJitMixin):
 class TestWarmspotDirect(object):
     def setup_class(cls):
         from pypy.jit.metainterp.typesystem import llhelper
-        from pypy.jit.metainterp.support import annotate
+        from pypy.jit.codewriter.support import annotate
         from pypy.jit.metainterp.warmspot import WarmRunnerDesc
         from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
         from pypy.rpython.lltypesystem import lltype, llmemory

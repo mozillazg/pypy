@@ -4,8 +4,9 @@ from pypy.rlib.jit import JitDriver, we_are_jitted, hint, dont_look_inside
 from pypy.rlib.jit import OPTIMIZER_FULL, OPTIMIZER_SIMPLE, loop_invariant
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
-from pypy.jit.metainterp import support, codewriter, pyjitpl, history
+from pypy.jit.metainterp import codewriter, pyjitpl, history
 from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
+from pypy.jit.codewriter import support
 from pypy import conftest
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
@@ -93,7 +94,7 @@ class JitMixin:
         portal_graph = rtyper.annotator.translator.graphs[0]
         cw = codewriter.CodeWriter(rtyper)
         
-        graphs = cw.find_all_graphs(portal_graph, None, JitPolicy(),
+        graphs = cw.find_all_graphs(portal_graph, JitPolicy(),
                                     self.CPUClass.supports_floats)
         cw._start(metainterp.staticdata, None)
         portal_graph.func._jit_unroll_safe_ = True
