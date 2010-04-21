@@ -485,10 +485,10 @@ def type_attach(space, py_obj, w_type):
         pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
     PyPyType_Ready(space, pto, w_type)
 
+    pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)
     if pto.c_tp_base:
-        pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
-    else:
-        pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)
+        if pto.c_tp_base.c_tp_basicsize > pto.c_tp_basicsize:
+            pto.c_tp_basicsize = pto.c_tp_base.c_tp_basicsize
 
     # will be filled later on with the correct value
     # may not be 0
