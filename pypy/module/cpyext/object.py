@@ -9,6 +9,7 @@ from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject
 from pypy.module.cpyext.pyerrors import PyErr_NoMemory, PyErr_BadInternalCall
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.objspace.std.typeobject import W_TypeObject
+from pypy.interpreter.error import OperationError
 import pypy.module.__builtin__.operation as operation
 
 
@@ -222,3 +223,31 @@ def PyObject_IsSubclass(space, w_derived, w_cls):
     this function uses the generic algorithm described above."""
     from pypy.module.__builtin__.abstractinst import abstract_issubclass_w
     return abstract_issubclass_w(space, w_derived, w_cls)
+
+@cpython_api([PyObject], rffi.INT_real, error=-1)
+def PyObject_AsFileDescriptor(space, w_obj):
+    """Derives a file descriptor from a Python object.  If the object is an
+    integer or long integer, its value is returned.  If not, the object's
+    fileno() method is called if it exists; the method must return an integer or
+    long integer, which is returned as the file descriptor value.  Returns -1 on
+    failure."""
+    try:
+        fd = space.int_w(w_obj)
+    except OperationError:
+        try:
+            w_meth = space.getattr(w_obj, space.wrap('fileno'))
+        except OperationError:
+            raise OperationError(
+                space.w_TypeError, space.wrap(
+                "argument must be an int, or have a fileno() method."))
+        else:
+            w_fd = space.call_function(w_meth)
+            fd = space.int_w(w_fd)
+
+    if fd < 0:
+        raise OperationError(
+            space.w_ValueError, space.wrap(
+            "file descriptor cannot be a negative integer"))
+
+    return rffi.cast(rffi.INT_real, fd)
+
