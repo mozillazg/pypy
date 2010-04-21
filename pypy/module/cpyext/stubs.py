@@ -4257,13 +4257,6 @@ def PyObject_Print(space, o, fp, flags):
     instead of the repr()."""
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.CCHARP], rffi.INT_real)
-def PyObject_HasAttrString(space, o, attr_name):
-    """Returns 1 if o has the attribute attr_name, and 0 otherwise.  This
-    is equivalent to the Python expression hasattr(o, attr_name).  This function
-    always succeeds."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject], PyObject)
 def PyObject_GetAttr(space, o, attr_name):
     """Retrieve an attribute named attr_name from object o. Returns the attribute

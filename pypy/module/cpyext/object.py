@@ -81,8 +81,20 @@ def PyObject_GetAttrString(space, w_obj, name_ptr):
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyObject_HasAttr(space, w_obj, w_name):
-    w_res = operation.hasattr(space, w_obj, w_name)
-    return space.is_true(w_res)
+    try:
+        w_res = operation.hasattr(space, w_obj, w_name)
+        return space.is_true(w_res)
+    except OperationError:
+        return 0
+
+@cpython_api([PyObject, CONST_STRING], rffi.INT_real, error=CANNOT_FAIL)
+def PyObject_HasAttrString(space, w_obj, name_ptr):
+    try:
+        name = rffi.charp2str(name_ptr)
+        w_res = operation.hasattr(space, w_obj, space.wrap(name))
+        return space.is_true(w_res)
+    except OperationError:
+        return 0
 
 @cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)
 def PyObject_SetAttr(space, w_obj, w_name, w_value):
