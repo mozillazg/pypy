@@ -2,6 +2,7 @@ from pypy.jit.codewriter import support
 from pypy.jit.codewriter.regalloc import perform_register_allocation
 from pypy.jit.codewriter.flatten import flatten_graph, KINDS
 from pypy.jit.codewriter.assembler import Assembler
+from pypy.jit.codewriter.jitter import transform_graph
 
 
 class CodeWriter(object):
@@ -16,6 +17,7 @@ class CodeWriter(object):
         return self.transform_graph_to_jitcode(graph)
 
     def transform_graph_to_jitcode(self, graph):
+        transform_graph(graph)
         regallocs = {}
         for kind in KINDS:
             regallocs[kind] = perform_register_allocation(graph, kind)
