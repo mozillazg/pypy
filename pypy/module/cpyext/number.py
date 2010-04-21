@@ -2,6 +2,7 @@ from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, Py_ssize_t
 from pypy.module.cpyext.pyobject import PyObject
 from pypy.rpython.lltypesystem import rffi, lltype
+from pypy.tool.sourcetools import func_with_new_name
 
 @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyIndex_Check(space, w_obj):
@@ -25,3 +26,66 @@ def PyNumber_AsSsize_t(space, w_obj, w_exc):
     integer or PY_SSIZE_T_MAX for a positive integer.
     """
     return space.int_w(w_obj) #XXX: this is wrong
+
+def func_rename(newname):
+    return lambda func: func_with_new_name(func, newname)
+
+def make_numbermethod(name, spacemeth):
+    @cpython_api([PyObject, PyObject], PyObject)
+    @func_rename('PyNumber_%s' % (name,))
+    def PyNumber_Method(space, w_o1, w_o2):
+        meth = getattr(space, spacemeth)
+        return meth(w_o1, w_o2)
+
+def make_unary_numbermethod(name, spacemeth):
+    @cpython_api([PyObject], PyObject)
+    @func_rename('PyNumber_%s' % (name,))
+    def PyNumber_Method(space, w_o1):
+        meth = getattr(space, spacemeth)
+        return meth(w_o1)
+
+def make_inplace_numbermethod(name, spacemeth):
+    spacemeth = 'inplace_' + spacemeth.rstrip('_')
+    @cpython_api([PyObject, PyObject], PyObject)
+    @func_rename('PyNumber_Inplace%s' % (name,))
+    def PyNumber_Method(space, w_o1, w_o2):
+        meth = getattr(space, spacemeth)
+        return meth(w_o1, w_o2)
+
+for name, spacemeth in [
+    ('Add', 'add'),
+    ('Subtract', 'sub'),
+    ('Multiply', 'mul'),
+    ('Divide', 'div'),
+    ('FloorDivide', 'floordiv'),
+    ('TrueDivide', 'truediv'),
+    ('Remainder', 'mod'),
+    ('Lshift', 'lshift'),
+    ('Rshift', 'rshift'),
+    ('And', 'and_'),
+    ('Xor', 'xor'),
+    ('Or', 'or_'),
+    ('Divmod', 'divmod'),
+    ]:
+    make_numbermethod(name, spacemeth)
+    if name != 'Divmod':
+        make_inplace_numbermethod(name, spacemeth)
+
+for name, spacemeth in [
+    ('Negative', 'neg'),
+    ('Positive', 'pos'),
+    ('Absolute', 'abs'),
+    ('Invert', 'invert')]:
+    make_unary_numbermethod(name, spacemeth)
+
+@cpython_api([PyObject, PyObject, PyObject], PyObject)
+def PyNumber_Power(space, w_o1, w_o2, w_o3):
+    return space.pow(w_o1, w_o2, w_o3)
+
+@cpython_api([PyObject, PyObject, PyObject], PyObject)
+def PyNumber_InplacePower(space, w_o1, w_o2, w_o3):
+    if not space.is_w(w_o3, space.w_None):
+        raise OperationError(space.w_ValueError, space.wrap(
+            "PyNumber_InplacePower with non-None modulus is not supported"))
+    return space.inplace_pow(w_o1, w_o2)
+
