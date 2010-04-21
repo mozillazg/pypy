@@ -96,14 +96,6 @@ def PyObject_ClearWeakRefs(space, w_object):
 def PyObject_Size(space, w_obj):
     return space.int_w(space.len(w_obj))
 
-@cpython_api([PyObject], Py_ssize_t, error=-1)
-def PySequence_Size(space, w_obj):
-    return space.int_w(space.len(w_obj))
-
-@cpython_api([PyObject], Py_ssize_t, error=-1)
-def PySequence_Length(space, w_obj):
-    return space.int_w(space.len(w_obj))
-
 @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyCallable_Check(space, w_obj):
     """Determine if the object o is callable.  Return 1 if the object is callable

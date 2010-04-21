@@ -21,6 +21,10 @@ def PySequence_Size(space, w_obj):
     Python expression len(o)."""
     return space.int_w(space.len(w_obj))
 
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PySequence_Length(space, w_obj):
+    return space.int_w(space.len(w_obj))
+
 
 @cpython_api([PyObject, CONST_STRING], PyObject)
 def PySequence_Fast(space, w_obj, m):
@@ -76,3 +80,10 @@ def PySequence_GetItem(space, w_obj, i):
     the Python expression o[i]."""
     return space.getitem(w_obj, space.wrap(i))
 
+@cpython_api([PyObject], PyObject)
+def PySequence_Tuple(space, w_obj):
+    """Return a tuple object with the same contents as the arbitrary sequence o or
+    NULL on failure.  If o is a tuple, a new reference will be returned,
+    otherwise a tuple will be constructed with the appropriate contents.  This is
+    equivalent to the Python expression tuple(o)."""
+    return space.call_function(space.w_tuple, w_obj)
