@@ -19,7 +19,7 @@ class TestIterator(BaseApiTest):
         assert api.PyObject_Size(w_l2) == 9
         assert api.PyObject_Size(w_l) == 3
 
-        w_l3 = api.PyNumber_InplaceMultiply(w_l, space.wrap(3))
+        w_l3 = api.PyNumber_InPlaceMultiply(w_l, space.wrap(3))
         assert api.PyObject_Size(w_l) == 9
         assert w_l3 is w_l
 
@@ -32,4 +32,4 @@ class TestIterator(BaseApiTest):
         assert 4 == space.unwrap(
             api.PyNumber_Power(space.wrap(3), space.wrap(2), space.wrap(5)))
         assert 9 == space.unwrap(
-            api.PyNumber_InplacePower(space.wrap(3), space.wrap(2), space.w_None))
+            api.PyNumber_InPlacePower(space.wrap(3), space.wrap(2), space.w_None))
