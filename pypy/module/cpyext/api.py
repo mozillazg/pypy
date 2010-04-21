@@ -247,7 +247,7 @@ SYMBOLS_C = [
     'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV', 'PyModule_AddObject',
-    'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format',
+    'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format', 'PyErr_NewException',
     'PyEval_CallFunction', 'PyEval_CallMethod', 'PyObject_CallFunction',
     'PyObject_CallMethod',
     'PyBuffer_FromMemory', 'PyBuffer_Type', 'init_bufferobject',

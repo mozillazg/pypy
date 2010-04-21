@@ -20,9 +20,6 @@ PyErr_Format(PyObject *exception, const char *format, ...)
 	return NULL;
 }
 
-#if 0
-depends on unavailable functions 
-
 PyObject *
 PyErr_NewException(char *name, PyObject *base, PyObject *dict)
 {
@@ -72,6 +69,3 @@ PyErr_NewException(char *name, PyObject *base, PyObject *dict)
 	Py_XDECREF(modulename);
 	return result;
 }
-
-
-#endif
