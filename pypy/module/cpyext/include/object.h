@@ -300,8 +300,11 @@ typedef struct _typeobject {
 
 } PyTypeObject;
 
+/* Flag bits for printing: */
+#define Py_PRINT_RAW	1	/* No string quotes etc. */
+
 /*
-`Type flags (tp_flags)
+Type flags (tp_flags)
 
 These flags are used to extend the type structure in a backwards-compatible
 fashion. Extensions can use the flags to indicate (and test) when a given
