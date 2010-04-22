@@ -67,19 +67,23 @@ def test_residual_call():
                     else: expectedkind = 'r'          # only references
                     yield residual_call_test, ARGS, RESTYPE, expectedkind
 
-def residual_call_test(argtypes, restype, expectedkind):
+def get_direct_call_op(argtypes, restype):
     FUNC = lltype.FuncType(argtypes, restype)
     fnptr = lltype.functionptr(FUNC, "g")    # no graph
     c_fnptr = Constant(fnptr, concretetype=lltype.typeOf(fnptr))
     vars = [varoftype(TYPE) for TYPE in argtypes]
     v_result = varoftype(restype)
     op = SpaceOperation('direct_call', [c_fnptr] + vars, v_result)
+    return op
+
+def residual_call_test(argtypes, restype, expectedkind):
+    op = get_direct_call_op(argtypes, restype)
     op1 = jitter.rewrite_operation(op)
     reskind = getkind(restype)[0]
     assert op1.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
-    assert op1.result == v_result
-    assert op1.args[0] == c_fnptr
+    assert op1.result == op.result
+    assert op1.args[0] == op.args[0]
     assert len(op1.args) == 1 + len(expectedkind)
     for sublist, kind in zip(op1.args[1:], expectedkind):
-        assert sublist == [v for v in vars
+        assert sublist == [v for v in op.args[1:]
                              if getkind(v.concretetype).startswith(kind)]
