@@ -11,6 +11,7 @@ class DependencyGraph(object):
         self.neighbours[v] = set()
 
     def add_edge(self, v1, v2):
+        assert v1 != v2
         self.neighbours[v1].add(v2)
         self.neighbours[v2].add(v1)
 
@@ -18,6 +19,7 @@ class DependencyGraph(object):
         """Remove vold from the graph, and attach all its edges to vnew."""
         for n in self.neighbours.pop(vold):
             self.neighbours[n].remove(vold)
+            assert vnew != n
             self.neighbours[n].add(vnew)
             self.neighbours[vnew].add(n)
         # we should remove vold from self._all_nodes, but it's too costly
