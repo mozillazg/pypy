@@ -52,28 +52,32 @@ def test_optimize_goto_if_not__unknownop():
     assert not jitter.optimize_goto_if_not(block)
 
 def test_residual_call():
-    for with_i in [False, True]:
-        for with_r in [False, True]:
-            for with_f in [False, True]:
-                args = []
-                if with_i: args += [lltype.Signed, lltype.Char]
-                if with_r: args += [rclass.OBJECTPTR, lltype.Ptr(rstr.STR)]
-                if with_f: args += [lltype.Float, lltype.Float]
-                random.shuffle(args)
-                if with_f: expectedkind = 'irf'    # all kinds
-                elif with_i: expectedkind = 'ir'   # integers and references
-                else: expectedkind = 'r'           # only references
-                yield residual_call_test, args, expectedkind
+    for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,
+                    lltype.Float, lltype.Void]:
+        for with_i in [False, True]:
+            for with_r in [False, True]:
+                for with_f in [False, True]:
+                    ARGS = []
+                    if with_i: ARGS += [lltype.Signed, lltype.Char]
+                    if with_r: ARGS += [rclass.OBJECTPTR, lltype.Ptr(rstr.STR)]
+                    if with_f: ARGS += [lltype.Float, lltype.Float]
+                    random.shuffle(ARGS)
+                    if with_f: expectedkind = 'irf'   # all kinds
+                    elif with_i: expectedkind = 'ir'  # integers and references
+                    else: expectedkind = 'r'          # only references
+                    yield residual_call_test, ARGS, RESTYPE, expectedkind
 
-def residual_call_test(argtypes, expectedkind):
-    FUNC = lltype.FuncType(argtypes, lltype.Signed)
+def residual_call_test(argtypes, restype, expectedkind):
+    FUNC = lltype.FuncType(argtypes, restype)
     fnptr = lltype.functionptr(FUNC, "g")    # no graph
     c_fnptr = Constant(fnptr, concretetype=lltype.typeOf(fnptr))
     vars = [varoftype(TYPE) for TYPE in argtypes]
-    op = SpaceOperation('direct_call', [c_fnptr] + vars,
-                        varoftype(lltype.Signed))
+    v_result = varoftype(restype)
+    op = SpaceOperation('direct_call', [c_fnptr] + vars, v_result)
     op1 = jitter.rewrite_operation(op)
-    assert op1.opname == 'residual_call_' + expectedkind
+    reskind = getkind(restype)[0]
+    assert op1.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
+    assert op1.result == v_result
     assert op1.args[0] == c_fnptr
     assert len(op1.args) == 1 + len(expectedkind)
     for sublist, kind in zip(op1.args[1:], expectedkind):
