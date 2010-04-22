@@ -1587,7 +1587,7 @@ class _subarray(_parentable):     # only for direct_fieldptr()
     _cache = weakref.WeakKeyDictionary()  # parentarray -> {subarrays}
 
     def __init__(self, TYPE, parent, baseoffset_or_fieldname):
-        _parentable.__init__(self, TYPE)
+        _parentable.__init__(self, TYPE, track_allocation=False)
         self._setparentstructure(parent, baseoffset_or_fieldname)
         # Keep the parent array alive, we share the same allocation.
         # Don't do it if we are inside a GC object, though -- it's someone
