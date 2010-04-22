@@ -6,15 +6,33 @@ from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp import pyjitpl, history
 from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
-from pypy.jit.codewriter import support
 from pypy import conftest
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 
-def _get_bare_metainterp(func, values, CPUClass, type_system,
-                         listops=False):
+def _get_jitcodes(func, values, type_system):
+    from pypy.jit.codewriter import support, codewriter
+
+    rtyper = support.annotate(func, values, type_system=type_system)
+    graphs = rtyper.annotator.translator.graphs
+    cw = codewriter.CodeWriter(rtyper)
+    mainjitcode = cw.make_jitcodes(graphs[0], verbose=True)
+    return cw, mainjitcode
+
+def _run_with_blackhole(CPUClass, cw, mainjitcode, args):
+    from pypy.jit.metainterp.blackhole import BlackholeInterpreter
+    stats = history.Stats()
+    cpu = CPUClass(cw.rtyper, stats, None, False)
+    blackholeinterp = BlackholeInterpreter(cpu)
+    blackholeinterp.setup_insns(cw.assembler.insns)
+    for i, value in enumerate(args):
+        blackholeinterp.setarg_i(i, value)
+    blackholeinterp.run(mainjitcode, 0)
+    return blackholeinterp.result_i
+
+def _get_bare_metainterp(func, values, CPUClass, type_system):
     from pypy.annotation.policy import AnnotatorPolicy
     from pypy.annotation.model import lltype_to_annotation
     from pypy.rpython.test.test_llinterp import gengraph
@@ -64,6 +82,14 @@ class JitMixin:
         return ll_meta_interp(*args, **kwds)
 
     def interp_operations(self, f, args, **kwds):
+        # get the JitCodes for the function f
+        cw, mainjitcode = _get_jitcodes(f, args, self.type_system)
+        # try to run it with blackhole.py
+        result = _run_with_blackhole(self.CPUClass, cw, mainjitcode, args)
+        # try to run it with pyjitpl.py
+        # -- XXX --- missing
+        return result
+
         from pypy.jit.metainterp import simple_optimize
 
         class DoneWithThisFrame(Exception):
