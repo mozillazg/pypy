@@ -1,6 +1,8 @@
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.rarithmetic import intmask, LONG_BIT
+from pypy.rlib.rarithmetic import intmask, LONG_BIT, r_uint
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem.lloperation import llop
 
 
 def arguments(*argtypes, **kwds):
@@ -149,6 +151,11 @@ class BlackholeInterpreter(object):
     @arguments("i", "i", returns="i")
     def opimpl_int_sub(self, a, b):
         return a - b
+
+    @arguments("i", "i", returns="i")
+    def opimpl_uint_floordiv(self, a, b):
+        c = llop.uint_floordiv(lltype.Unsigned, r_uint(a), r_uint(b))
+        return intmask(c)
 
     @arguments("i")
     def opimpl_int_return(self, a):
