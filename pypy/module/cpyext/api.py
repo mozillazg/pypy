@@ -626,7 +626,7 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
             typ = typ.replace("*", "")
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name_clean))
         if not globals_are_pointers and "#" not in name:
-            pypy_decls.append("#define %s &%s" % (name, name,))
+            pypy_decls.append("#define %s (PyObject*)&%s" % (name, name,))
     pypy_decls.append("#endif /*PYPY_STANDALONE*/\n")
 
     pypy_decl_h = udir.join('pypy_decl.h')
