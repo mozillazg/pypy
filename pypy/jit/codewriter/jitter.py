@@ -46,9 +46,9 @@ def rewrite_operation(op):
         return op
 
 def rewrite_op_direct_call(op):
-    """Turn direct_call(fn, i1, i2, ref1, ref2)
-       into residual_call_ir(fn, [i1, i2], [ref1, ref2])
-       (or residual_call_r or residual_call_irf)."""
+    """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'
+       into e.g. 'i0 = residual_call_ir_i(fn, [i1, i2], [ref1, ref2])'.
+       The name is one of 'residual_call_{r,ir,irf}_{i,r,f,v}'."""
     args_i = []
     args_r = []
     args_f = []
@@ -61,7 +61,8 @@ def rewrite_op_direct_call(op):
     if 'i' in kinds: sublists.append(args_i)
     if 'r' in kinds: sublists.append(args_r)
     if 'f' in kinds: sublists.append(args_f)
-    return SpaceOperation('residual_call_' + kinds,
+    reskind = getkind(op.result.concretetype)[0]
+    return SpaceOperation('residual_call_%s_%s' % (kinds, reskind),
                           [op.args[0]] + sublists,
                           op.result)
 
