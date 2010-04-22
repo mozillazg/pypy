@@ -26,7 +26,8 @@ def signedord(c):
 
 class BlackholeInterpreter(object):
 
-    def __init__(self):
+    def __init__(self, cpu=None):
+        self.cpu = cpu
         self.registers_i = [MissingValue()] * 256
         self.registers_r = [MissingValue()] * 256
         self.registers_f = [MissingValue()] * 256
