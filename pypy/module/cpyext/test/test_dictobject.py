@@ -22,6 +22,12 @@ class TestDictObject(BaseApiTest):
         assert api.PyErr_Occurred() is space.w_KeyError
         api.PyErr_Clear()
 
+        assert api.PyDict_DelItem(d, space.wrap("c")) == 0
+        assert api.PyDict_DelItem(d, space.wrap("name")) < 0
+        assert api.PyErr_Occurred() is space.w_KeyError
+        api.PyErr_Clear()
+        assert api.PyDict_Size(d) == 0
+
     def test_check(self, space, api):
         d = api.PyDict_New()
         assert api.PyDict_Check(d)
