@@ -1,5 +1,6 @@
 from pypy.jit.codewriter.assembler import Assembler
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
+from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype
 
@@ -79,3 +80,16 @@ def test_assemble_loop():
                                'int_sub/ici': 2,
                                'goto/L': 3,
                                'int_return/i': 4}
+
+def test_assemble_list():
+    ssarepr = SSARepr("test")
+    i0, i1 = Register('int', 0x16), Register('int', 0x17)
+    ssarepr.insns = [
+        ('foobar', ListOfKind('int', [i0, i1, Constant(42, lltype.Signed)]),
+                   ListOfKind('ref', [])),
+        ]
+    assembler = Assembler()
+    jitcode = assembler.assemble(ssarepr)
+    assert jitcode.code == "\x00\x03\x16\x17\xFF\x00"
+    assert assembler.insns == {'foobar/IR': 0}
+    assert jitcode.constants_i == [42]

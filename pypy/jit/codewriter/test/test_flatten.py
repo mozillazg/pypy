@@ -1,7 +1,7 @@
 import py
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
-from pypy.jit.codewriter.flatten import GraphFlattener
+from pypy.jit.codewriter.flatten import GraphFlattener, ListOfKind
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.jitter import transform_graph
 from pypy.rpython.lltypesystem import lltype, rclass, rstr
@@ -128,11 +128,11 @@ class TestFlatten:
         v5 = varoftype(lltype.Float)
         op = SpaceOperation('residual_call_ir_f',
                             [Constant(12345, lltype.Signed),  # function ptr
-                             [v1, v2],              # int args
-                             [v3, v4]],             # ref args
+                             ListOfKind('int', [v1, v2]),     # int args
+                             ListOfKind('ref', [v3, v4])],    # ref args
                             v5)                    # result
         flattener = GraphFlattener(None, fake_regallocs())
         flattener.serialize_op(op)
         self.assert_format(flattener.ssarepr, """
-            residual_call_ir_f $12345, [%i0, %i1], [%r0, %r1], %f0
+            residual_call_ir_f $12345, i[%i0, %i1], r[%r0, %r1], %f0
         """)

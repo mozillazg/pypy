@@ -84,6 +84,7 @@ def residual_call_test(argtypes, restype, expectedkind):
     assert op1.result == op.result
     assert op1.args[0] == op.args[0]
     assert len(op1.args) == 1 + len(expectedkind)
-    for sublist, kind in zip(op1.args[1:], expectedkind):
-        assert sublist == [v for v in op.args[1:]
-                             if getkind(v.concretetype).startswith(kind)]
+    for sublist, kind1 in zip(op1.args[1:], expectedkind):
+        assert sublist.kind.startswith(kind1)
+        assert list(sublist) == [v for v in op.args[1:]
+                                 if getkind(v.concretetype) == sublist.kind]
