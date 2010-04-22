@@ -84,6 +84,29 @@ def PyString_AsString(space, ref):
         ref_str.c_buffer = rffi.str2charp(s)
     return ref_str.c_buffer
 
+@cpython_api([PyObject, rffi.CCHARPP, rffi.CArrayPtr(Py_ssize_t)], rffi.INT_real, error=-1)
+def PyString_AsStringAndSize(space, ref, buffer, length):
+    if not PyString_Check(space, ref):
+        raise OperationError(space.w_TypeError, space.wrap(
+            "PyString_AsStringAndSize only support strings"))
+    ref_str = rffi.cast(PyStringObject, ref)
+    if not ref_str.c_buffer:
+        # copy string buffer
+        w_str = from_ref(space, ref)
+        s = space.str_w(w_str)
+        ref_str.c_buffer = rffi.str2charp(s)
+    buffer[0] = ref_str.c_buffer
+    if length:
+        length[0] = ref_str.c_size
+    else:
+        i = 0
+        while ref_str.c_buffer[i] != '\0':
+            i += 1
+        if i != ref_str.c_size:
+            raise OperationError(space.w_TypeError, space.wrap(
+                "expected string without null bytes"))
+    return 0
+
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyString_Size(space, ref):
     if from_ref(space, rffi.cast(PyObject, ref.c_ob_type)) is space.w_str:
