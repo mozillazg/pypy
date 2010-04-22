@@ -17,6 +17,11 @@ PyObject * PyEval_CallMethod(PyObject *obj, const char *name, const char *format
 PyObject * PyObject_CallFunction(PyObject *obj, char *format, ...);
 PyObject * PyObject_CallMethod(PyObject *obj, char *name, char *format, ...);
 
+/* These constants are also defined in cpyext/eval.py */
+#define Py_single_input 256
+#define Py_file_input 257
+#define Py_eval_input 258
+
 #ifdef __cplusplus
 }
 #endif
