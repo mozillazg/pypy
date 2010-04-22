@@ -251,8 +251,9 @@ SYMBOLS_C = [
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format', 'PyErr_NewException',
     'PyEval_CallFunction', 'PyEval_CallMethod', 'PyObject_CallFunction',
     'PyObject_CallMethod',
-    'PyBuffer_FromMemory', 'PyBuffer_Type', 'init_bufferobject',
-    '_PyArg_NoKeywords', 'PyObject_AsReadBuffer', 'PyObject_CheckReadBuffer',
+    'PyBuffer_FromMemory', 'PyBuffer_New', 'PyBuffer_Type', 'init_bufferobject',
+    '_PyArg_NoKeywords',
+    'PyObject_AsReadBuffer', 'PyObject_AsWriteBuffer', 'PyObject_CheckReadBuffer',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
