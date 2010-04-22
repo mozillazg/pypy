@@ -8,7 +8,7 @@ from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, Box
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp import codewriter, executor
+from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import BLACKHOLED_OPS, EmptyProfiler
 from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS, ABORT_ESCAPE
@@ -182,23 +182,6 @@ class MIFrame(object):
         self.env.append(box)
 
     # ------------------------------
-
-    for _n in range(codewriter.MAX_MAKE_NEW_VARS):
-        _decl = ', '.join(["'box'" for _i in range(_n)])
-        _allargs = ', '.join(["box%d" % _i for _i in range(_n)])
-        exec py.code.Source("""
-            @arguments(%s)
-            def opimpl_make_new_vars_%d(self, %s):
-                if not we_are_translated():
-                    check_args(%s)
-                self.env = [%s]
-        """ % (_decl, _n, _allargs, _allargs, _allargs)).compile()
-
-    @arguments("varargs")
-    def opimpl_make_new_vars(self, newenv):
-        if not we_are_translated():
-            check_args(*newenv)
-        self.env = newenv
 
     for _opimpl in ['int_add', 'int_sub', 'int_mul', 'int_floordiv', 'int_mod',
                     'int_lt', 'int_le', 'int_eq',

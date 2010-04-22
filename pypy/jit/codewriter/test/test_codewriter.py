@@ -1,5 +1,4 @@
 from pypy.jit.codewriter.codewriter import CodeWriter
-from pypy.jit.codewriter.blackhole import BlackholeInterpreter
 
 
 def test_loop():
@@ -22,6 +21,7 @@ def test_loop():
                                   'int_return/i': 4}
 
 def test_integration():
+    from pypy.jit.metainterp.blackhole import BlackholeInterpreter
     def f(a, b):
         while a > 2:
             b += a
