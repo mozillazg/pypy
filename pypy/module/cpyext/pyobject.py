@@ -277,6 +277,10 @@ def Py_IncRef(space, obj):
     if DEBUG_REFCOUNT:
         debug_refcount("INCREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
 
+@cpython_api([PyObject], lltype.Void)
+def _Py_NewReference(space, obj):
+    obj.c_ob_refcnt = 1
+
 def _Py_Dealloc(space, obj):
     from pypy.module.cpyext.api import generic_cpy_call_dont_decref
     pto = obj.c_ob_type
