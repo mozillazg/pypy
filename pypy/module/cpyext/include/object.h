@@ -3,6 +3,10 @@
 
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define Py_RETURN_NONE return Py_INCREF(Py_None), Py_None
 
 
@@ -476,4 +480,7 @@ int PyPyType_Register(PyTypeObject *);
 #define PyObject_Length PyObject_Size
 
 
+#ifdef __cplusplus
+}
 #endif
+#endif /* !Py_OBJECT_H */
