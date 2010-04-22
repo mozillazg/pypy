@@ -1,6 +1,6 @@
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 
-class AppTestStringObject(AppTestCpythonExtensionBase):
+class AppTestThreads(AppTestCpythonExtensionBase):
     def test_allow_threads(self):
         module = self.import_extension('foo', [
             ("test", "METH_NOARGS",

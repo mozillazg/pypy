@@ -264,7 +264,7 @@ void initfoo(void)
 {
 	PyObject *m, *d;
 
-    Py_TYPE(&footype) = &PyType_Type;
+    footype.ob_type = &PyType_Type;
 
     /* Workaround for quirk in Visual Studio, see
         <http://www.python.it/faq/faq-3.html#3.24> */

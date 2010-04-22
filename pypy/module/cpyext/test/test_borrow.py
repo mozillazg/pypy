@@ -19,7 +19,7 @@ class TestBorrowing(BaseApiTest):
         state.print_refcounts()
         py.test.raises(AssertionError, api.Py_DecRef, one_pyo)
 
-class AppTestStringObject(AppTestCpythonExtensionBase):
+class AppTestBorrow(AppTestCpythonExtensionBase):
     def test_tuple_borrowing(self):
         module = self.import_extension('foo', [
             ("test_borrowing", "METH_NOARGS",
@@ -27,13 +27,13 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
                 PyObject *t = PyTuple_New(1);
                 PyObject *f = PyFloat_FromDouble(42.0);
                 PyObject *g = NULL;
-                printf("Refcnt1: %i\\n", Py_REFCNT(f));
+                printf("Refcnt1: %i\\n", f->ob_refcnt);
                 PyTuple_SetItem(t, 0, f); // steals reference
-                printf("Refcnt2: %i\\n", Py_REFCNT(f));
+                printf("Refcnt2: %i\\n", f->ob_refcnt);
                 f = PyTuple_GetItem(t, 0); // borrows reference
-                printf("Refcnt3: %i\\n", Py_REFCNT(f));
+                printf("Refcnt3: %i\\n", f->ob_refcnt);
                 g = PyTuple_GetItem(t, 0); // borrows reference again
-                printf("Refcnt4: %i\\n", Py_REFCNT(f));
+                printf("Refcnt4: %i\\n", f->ob_refcnt);
                 printf("COMPARE: %i\\n", f == g);
                 Py_DECREF(t);
                 Py_RETURN_TRUE;
