@@ -21,6 +21,13 @@ def PyInt_AsLong(space, w_obj):
     there was an error, or whether the value just happened to be -1."""
     return space.int_w(space.int(w_obj))
 
+@cpython_api([PyObject], lltype.Unsigned, error=-1)
+def PyInt_AsUnsignedLong(space, w_obj):
+    """Return a C unsigned long representation of the contents of pylong.
+    If pylong is greater than ULONG_MAX, an OverflowError is
+    raised."""
+    return space.uint_w(space.int(w_obj))
+
 @cpython_api([PyObject], lltype.Signed, error=CANNOT_FAIL)
 def PyInt_AS_LONG(space, w_int):
     """Return the value of the object w_int. No error checking is performed."""
