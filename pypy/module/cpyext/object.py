@@ -214,6 +214,18 @@ def PyObject_GenericGetAttr(space, w_obj, w_name):
     w_descr = object_getattribute(space)
     return space.get_and_call_function(w_descr, w_obj, w_name)
 
+@cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)
+def PyObject_GenericSetAttr(space, w_obj, w_name, w_value):
+    """Generic attribute setter function that is meant to be put into a type
+    object's tp_setattro slot.  It looks for a data descriptor in the
+    dictionary of classes in the object's MRO, and if found it takes preference
+    over setting the attribute in the instance dictionary. Otherwise, the
+    attribute is set in the object's __dict__ (if present).  Otherwise,
+    an AttributeError is raised and -1 is returned."""
+    from pypy.objspace.descroperation import object_setattr
+    w_descr = object_setattr(space)
+    return space.get_and_call_function(w_descr, w_obj, w_name, w_value)
+
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
 def PyObject_IsInstance(space, w_inst, w_cls):
     """Returns 1 if inst is an instance of the class cls or a subclass of
