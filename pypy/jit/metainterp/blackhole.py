@@ -189,8 +189,43 @@ class BlackholeInterpreter(object):
         return a
 
     @arguments("L", "i", "i", "pc", returns="L")
+    def opimpl_goto_if_not_int_lt(self, target, a, b, pc):
+        if a < b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "i", "i", "pc", returns="L")
+    def opimpl_goto_if_not_int_le(self, target, a, b, pc):
+        if a <= b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "i", "i", "pc", returns="L")
+    def opimpl_goto_if_not_int_eq(self, target, a, b, pc):
+        if a == b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "i", "i", "pc", returns="L")
+    def opimpl_goto_if_not_int_ne(self, target, a, b, pc):
+        if a != b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "i", "i", "pc", returns="L")
     def opimpl_goto_if_not_int_gt(self, target, a, b, pc):
         if a > b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "i", "i", "pc", returns="L")
+    def opimpl_goto_if_not_int_ge(self, target, a, b, pc):
+        if a >= b:
             return pc
         else:
             return target
@@ -202,4 +237,21 @@ class BlackholeInterpreter(object):
     @arguments("i", "I", "R", returns="i")
     def opimpl_residual_call_ir_i(self, function, args_i, args_r):
         # XXX!
+        assert not args_r
         return function(*args_i)
+
+    @arguments("i", "I", "R", returns="r")
+    def opimpl_residual_call_ir_r(self, function, args_i, args_r):
+        # XXX!
+        assert not args_r
+        return function(*args_i)
+
+    @arguments("i", "R", returns="i")
+    def opimpl_residual_call_r_i(self, function, args_r):
+        # XXX!
+        return function(*args_r)
+
+    @arguments("i", "R", returns="r")
+    def opimpl_residual_call_r_r(self, function, args_r):
+        # XXX!
+        return function(*args_r)
