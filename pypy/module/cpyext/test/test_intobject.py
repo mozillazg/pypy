@@ -19,6 +19,11 @@ class TestIntObject(BaseApiTest):
         assert api.PyErr_Occurred() is space.w_TypeError
         api.PyErr_Clear()
 
+        assert api.PyInt_AsUnsignedLong(space.wrap(sys.maxint)) == sys.maxint
+        assert api.PyInt_AsUnsignedLong(space.wrap(-5)) == sys.maxint * 2 + 1
+        assert api.PyErr_Occurred() is space.w_ValueError
+        api.PyErr_Clear()
+
     def test_coerce(self, space, api):
         class Coerce(object):
             def __int__(self):
