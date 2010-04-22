@@ -4,9 +4,21 @@ from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext import sequence
 
 class TestIterator(BaseApiTest):
-    def test_index(self, space, api):
+    def test_check(self, space, api):
         assert api.PyIndex_Check(space.wrap(12))
+        assert api.PyIndex_Check(space.wrap(-12L))
+        assert not api.PyIndex_Check(space.wrap(12.1))
         assert not api.PyIndex_Check(space.wrap('12'))
+
+        assert api.PyNumber_Check(space.wrap(12))
+        assert api.PyNumber_Check(space.wrap(-12L))
+        assert api.PyNumber_Check(space.wrap(12.1))
+        assert not api.PyNumber_Check(space.wrap('12'))
+        assert not api.PyNumber_Check(space.wrap(1+3j))
+
+    def test_number_long(self, space, api):
+        w_l = api.PyNumber_Long(space.wrap(123))
+        assert api.PyLong_CheckExact(w_l)
 
     def test_numbermethods(self, space, api):
         assert "ab" == space.unwrap(

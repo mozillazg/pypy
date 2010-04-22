@@ -15,6 +15,16 @@ def PyIndex_Check(space, w_obj):
     except OperationError:
         return 0
 
+@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
+def PyNumber_Check(space, w_obj):
+    """Returns 1 if the object o provides numeric protocols, and false otherwise.
+    This function always succeeds."""
+    try:
+        space.float_w(w_obj)
+        return 1
+    except OperationError:
+        return 0
+
 @cpython_api([PyObject, PyObject], Py_ssize_t, error=-1)
 def PyNumber_AsSsize_t(space, w_obj, w_exc):
     """Returns o converted to a Py_ssize_t value if o can be interpreted as an
@@ -25,7 +35,13 @@ def PyNumber_AsSsize_t(space, w_obj, w_exc):
     exception is cleared and the value is clipped to PY_SSIZE_T_MIN for a negative
     integer or PY_SSIZE_T_MAX for a positive integer.
     """
-    return space.int_w(w_obj) #XXX: this is wrong
+    return space.int_w(w_obj) #XXX: this is wrong on win64
+
+@cpython_api([PyObject], PyObject)
+def PyNumber_Long(space, w_obj):
+    """    Returns the o converted to a long integer object on success, or NULL on
+    failure.  This is the equivalent of the Python expression long(o)."""
+    return space.long(w_obj)
 
 def func_rename(newname):
     return lambda func: func_with_new_name(func, newname)
