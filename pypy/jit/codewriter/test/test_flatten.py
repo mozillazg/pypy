@@ -136,3 +136,12 @@ class TestFlatten:
         self.assert_format(flattener.ssarepr, """
             residual_call_ir_f $12345, i[%i0, %i1], r[%r0, %r1], %f0
         """)
+
+    def test_same_as_removal(self):
+        def f(a):
+            b = chr(a)
+            return ord(b) + a
+        self.encoding_test(f, [65], """
+            int_add %i0, %i0, %i1
+            int_return %i1
+        """, transform=True)

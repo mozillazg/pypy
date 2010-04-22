@@ -153,14 +153,12 @@ class GraphFlattener(object):
 
     def insert_renamings(self, link):
         renamings = {}
-        lst = [(v, self.getcolor(link.target.inputargs[i]))
+        lst = [(self.getcolor(v), self.getcolor(link.target.inputargs[i]))
                for i, v in enumerate(link.args)]
         lst.sort(key=lambda(v, w): w.index)
         for v, w in lst:
-            if isinstance(v, Variable):
-                v = self.getcolor(v)
-                if v == w:
-                    continue
+            if v == w:
+                continue
             frm, to = renamings.setdefault(w.kind, ([], []))
             frm.append(v)
             to.append(w)
@@ -189,11 +187,7 @@ class GraphFlattener(object):
             elif isinstance(v, Constant):
                 pass
             elif isinstance(v, ListOfKind):
-                lst = []
-                for x in v:
-                    if isinstance(x, Variable):
-                        x = self.getcolor(x)
-                    lst.append(x)
+                lst = [self.getcolor(x) for x in v]
                 v = ListOfKind(v.kind, lst)
             else:
                 raise NotImplementedError(type(v))
@@ -207,6 +201,8 @@ class GraphFlattener(object):
         self.emitline(op.opname, *args)
 
     def getcolor(self, v):
+        if isinstance(v, Constant):
+            return v
         kind = getkind(v.concretetype)
         col = self.regallocs[kind].getcolor(v)    # if kind=='void', fix caller
         try:

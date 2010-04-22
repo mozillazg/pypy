@@ -9,8 +9,18 @@ def transform_graph(graph):
     being flattened in a JitCode.
     """
     for block in graph.iterblocks():
-        for i in range(len(block.operations)):
-            block.operations[i] = rewrite_operation(block.operations[i])
+        rename = {}
+        newoperations = []
+        for op in block.operations:
+            if is_noop_operation(op):
+                rename[op.result] = rename.get(op.args[0], op.args[0])
+            else:
+                for i, v in enumerate(op.args):
+                    if v in rename:
+                        op = SpaceOperation(op.opname, op.args[:], op.result)
+                        op.args[i] = rename[v]
+                newoperations.append(rewrite_operation(op))
+        block.operations = newoperations
         optimize_goto_if_not(block)
 
 
@@ -39,6 +49,13 @@ def optimize_goto_if_not(block):
     return False
 
 # ____________________________________________________________
+
+def is_noop_operation(op):
+    return op.opname in _noop_operations
+
+_noop_operations = {'same_as': True,
+                    'cast_int_to_char': True,
+                    'cast_char_to_int': True}
 
 def rewrite_operation(op):
     try:
