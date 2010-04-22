@@ -105,6 +105,31 @@ class AppTestStringObject(AppTestCpythonExtensionBase):
             )])
         assert module.string_as_string("huheduwe") == "huhe"
 
+    def test_AsStringAndSize(self):
+        module = self.import_extension('foo', [
+            ("getstring", "METH_NOARGS",
+             """
+                 PyObject* s1 = PyString_FromStringAndSize("te\\0st", 5);
+                 char *buf;
+                 Py_ssize_t len;
+                 if (PyString_AsStringAndSize(s1, &buf, &len) < 0)
+                     return NULL;
+                 if (len != 5) {
+                     PyErr_SetString(PyExc_AssertionError, "Bad Length");
+                     return NULL;
+                 }
+                 if (PyString_AsStringAndSize(s1, &buf, NULL) >= 0) {
+                     PyErr_SetString(PyExc_AssertionError, "Should Have failed");
+                     return NULL;
+                 }
+                 PyErr_Clear();
+                 Py_DECREF(s1);
+                 Py_INCREF(Py_None);
+                 return Py_None;
+             """),
+            ])
+        module.getstring()
+
     def test_format_v(self):
         module = self.import_extension('foo', [
             ("test_string_format_v", "METH_VARARGS",
