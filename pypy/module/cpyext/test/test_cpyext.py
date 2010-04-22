@@ -421,12 +421,12 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         static PyObject* foo_pi(PyObject* self, PyObject *args)
         {
             PyObject *true = Py_True;
-            int refcnt = Py_REFCNT(true);
+            int refcnt = true->ob_refcnt;
             int refcnt_after;
             Py_INCREF(true);
             Py_INCREF(true);
             PyBool_Check(true);
-            refcnt_after = Py_REFCNT(true);
+            refcnt_after = true->ob_refcnt;
             Py_DECREF(true);
             Py_DECREF(true);
             fprintf(stderr, "REFCNT %i %i\\n", refcnt, refcnt_after);
@@ -436,14 +436,14 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         {
             PyObject *true = Py_True;
             PyObject *tup = NULL;
-            int refcnt = Py_REFCNT(true);
+            int refcnt = true->ob_refcnt;
             int refcnt_after;
 
             tup = PyTuple_New(1);
             Py_INCREF(true);
             if (PyTuple_SetItem(tup, 0, true) < 0)
                 return NULL;
-            refcnt_after = Py_REFCNT(true);
+            refcnt_after = true->ob_refcnt;
             Py_DECREF(tup);
             fprintf(stderr, "REFCNT2 %i %i\\n", refcnt, refcnt_after);
             return PyBool_FromLong(refcnt_after == refcnt);

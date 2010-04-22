@@ -81,6 +81,9 @@ static char copyright[] =
 #define PyObject_DEL(op) PyMem_DEL((op))
 #endif
 
+#define Py_SIZE(ob)		(((PyVarObject*)(ob))->ob_size)
+#define Py_TYPE(ob)		(((PyObject*)(ob))->ob_type)
+
 /* -------------------------------------------------------------------- */
 
 #if defined(_MSC_VER)
