@@ -63,6 +63,10 @@ CONST_WSTRING = lltype.Ptr(lltype.Array(lltype.UniChar,
 assert CONST_STRING is not rffi.CCHARP
 assert CONST_WSTRING is not rffi.CWCHARP
 
+PyGILState_STATE = rffi.COpaquePtr('PyGILState_STATE',
+                                   typedef='PyGILState_STATE',
+                                   compilation_info=CConfig._compilation_info_)
+
 constant_names = """
 Py_TPFLAGS_READY Py_TPFLAGS_READYING
 METH_COEXIST METH_STATIC METH_CLASS 
