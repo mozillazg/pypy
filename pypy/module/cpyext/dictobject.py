@@ -26,6 +26,14 @@ def PyDict_SetItem(space, w_dict, w_key, w_obj):
     else:
         PyErr_BadInternalCall(space)
 
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
+def PyDict_DelItem(space, w_dict, w_key):
+    if PyDict_Check(space, w_dict):
+        space.delitem(w_dict, w_key)
+        return 0
+    else:
+        PyErr_BadInternalCall(space)
+
 @cpython_api([PyObject, CONST_STRING, PyObject], rffi.INT_real, error=-1)
 def PyDict_SetItemString(space, w_dict, key_ptr, w_obj):
     if PyDict_Check(space, w_dict):
