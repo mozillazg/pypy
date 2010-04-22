@@ -16,12 +16,25 @@ class TestLongObject(BaseApiTest):
         value = api.PyLong_FromLong(sys.maxint + 1)
         assert isinstance(value, W_LongObject)
         assert space.unwrap(value) == sys.maxint + 1 # should obviously fail but doesnt
-    
-    def test_asulong(self, space, api):
+
+    def test_aslong(self, space, api):
         w_value = api.PyLong_FromLong((sys.maxint - 1) / 2)
-        w_value = space.mul(w_value, space.wrap(4))
+
+        w_value = space.mul(w_value, space.wrap(2))
+        value = api.PyLong_AsLong(w_value)
+        assert value == (sys.maxint - 1)
+
+        w_value = space.mul(w_value, space.wrap(2))
+
+        value = api.PyLong_AsLong(w_value)
+        assert value == -1 and api.PyErr_Occurred() is space.w_OverflowError
+        api.PyErr_Clear()
         value = api.PyLong_AsUnsignedLong(w_value)
         assert value == (sys.maxint - 1) * 2
+
+    def test_fromdouble(self, space, api):
+        w_value = api.PyLong_FromDouble(-12.74)
+        assert space.unwrap(w_value) == -12
     
     def test_type_check(self, space, api):
         w_l = space.wrap(sys.maxint + 1)
