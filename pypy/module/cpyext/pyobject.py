@@ -3,7 +3,7 @@ import sys
 from pypy.interpreter.baseobjspace import W_Root, SpaceCache
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, bootstrap_function, \
-     PyObject, PyObjectP, ADDR,\
+     PyObject, PyObjectP, ADDR, CANNOT_FAIL, \
      Py_TPFLAGS_HEAPTYPE, PyTypeObjectPtr
 from pypy.module.cpyext.state import State
 from pypy.objspace.std.typeobject import W_TypeObject
@@ -315,4 +315,8 @@ def add_borrowed_object(space, obj):
     obj_ptr = rffi.cast(ADDR, obj)
     borrowees[obj_ptr] = None
 
+#___________________________________________________________
 
+@cpython_api([rffi.VOIDP_real], lltype.Signed, error=CANNOT_FAIL)
+def _Py_HashPointer(space, ptr):
+    return rffi.cast(lltype.Signed, ptr)
