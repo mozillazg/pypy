@@ -541,3 +541,15 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
              ),
             ])
         raises(SystemError, mod.newexc, "name", Exception, {})
+
+    def test_hash_pointer(self):
+        mod = self.import_extension('foo', [
+            ('get_hash', 'METH_NOARGS',
+             '''
+             return PyInt_FromLong(_Py_HashPointer(Py_None));
+             '''
+             ),
+            ])
+        h = mod.get_hash()
+        assert h != 0
+        assert h % 4 == 0 # it's the pointer value
