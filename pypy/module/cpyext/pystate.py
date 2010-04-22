@@ -1,5 +1,5 @@
 from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
-        cpython_struct
+        cpython_struct, PyGILState_STATE
 from pypy.rpython.lltypesystem import rffi, lltype
 
 
@@ -27,4 +27,12 @@ def PyEval_RestoreThread(space, tstate):
     if space.config.objspace.usemodules.thread:
         from pypy.module.thread.gil import after_external_call
         after_external_call()
+
+@cpython_api([], PyGILState_STATE, error=CANNOT_FAIL)
+def PyGILState_Ensure(space):
+    return 0
+
+@cpython_api([PyGILState_STATE], lltype.Void)
+def PyGILState_Release(space, state):
+    return
 
