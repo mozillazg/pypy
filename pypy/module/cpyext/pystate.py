@@ -1,9 +1,10 @@
 from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
-        cpython_struct, PyGILState_STATE
+        cpython_struct
 from pypy.rpython.lltypesystem import rffi, lltype
 
 
 PyThreadState = lltype.Ptr(cpython_struct("PyThreadState", ()))
+PyInterpreterState = lltype.Ptr(cpython_struct("PyInterpreterState", ()))
 
 @cpython_api([], PyThreadState, error=CANNOT_FAIL)
 def PyEval_SaveThread(space):
@@ -28,11 +29,12 @@ def PyEval_RestoreThread(space, tstate):
         from pypy.module.thread.gil import after_external_call
         after_external_call()
 
-@cpython_api([], PyGILState_STATE, error=CANNOT_FAIL)
-def PyGILState_Ensure(space):
-    return 0
-
-@cpython_api([PyGILState_STATE], lltype.Void)
-def PyGILState_Release(space, state):
+@cpython_api([], lltype.Void)
+def PyEval_InitThreads(space):
     return
+
+@cpython_api([], rffi.INT_real, error=CANNOT_FAIL)
+def PyEval_ThreadsInitialized(space):
+    return 1
+
 

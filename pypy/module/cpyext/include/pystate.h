@@ -1,13 +1,16 @@
 #ifndef Py_PYSTATE_H
 #define Py_PYSTATE_H
 
-typedef struct _ts {
-    int initialized; // not used
-} PyThreadState;
+struct _ts; /* Forward */
+struct _is; /* Forward */
 
 typedef struct _is {
     int _foo;
 } PyInterpreterState;
+
+typedef struct _ts {
+    PyInterpreterState *interp;
+} PyThreadState;
 
 #define Py_BEGIN_ALLOW_THREADS { \
 			PyThreadState *_save; \
