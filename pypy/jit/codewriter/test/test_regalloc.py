@@ -69,7 +69,7 @@ class TestRegAlloc:
             L1:
             int_gt %i0, $0, %i2
             goto_if_not L2, %i2
-            int_rename [%i1, %i0], [%i0, %i1]
+            int_rename i[%i1, %i0], i[%i0, %i1]
             goto L1
             L2:
             int_return %i1
@@ -102,7 +102,7 @@ class TestRegAlloc:
             L1:
             int_gt %i0, $0, %i3
             goto_if_not L2, %i3
-            int_rename [%i1, %i2, %i0], [%i0, %i1, %i2]
+            int_rename i[%i1, %i2, %i0], i[%i0, %i1, %i2]
             goto L1
             L2:
             int_return %i1

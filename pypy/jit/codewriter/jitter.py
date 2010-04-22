@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp.history import getkind
 from pypy.objspace.flow.model import SpaceOperation
+from pypy.jit.codewriter.flatten import ListOfKind
 
 
 def transform_graph(graph):
@@ -58,9 +59,9 @@ def rewrite_op_direct_call(op):
     elif args_i: kinds = 'ir'
     else:        kinds = 'r'
     sublists = []
-    if 'i' in kinds: sublists.append(args_i)
-    if 'r' in kinds: sublists.append(args_r)
-    if 'f' in kinds: sublists.append(args_f)
+    if 'i' in kinds: sublists.append(ListOfKind('int', args_i))
+    if 'r' in kinds: sublists.append(ListOfKind('ref', args_r))
+    if 'f' in kinds: sublists.append(ListOfKind('float', args_f))
     reskind = getkind(op.result.concretetype)[0]
     return SpaceOperation('residual_call_%s_%s' % (kinds, reskind),
                           [op.args[0]] + sublists,

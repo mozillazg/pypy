@@ -1,9 +1,10 @@
 import py
 from pypy.objspace.flow.model import Constant
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
+from pypy.jit.codewriter.flatten import ListOfKind
 
 
-def format_assembler(ssarepr):
+def format_assembler(ssarepr, dump=True):
     """For testing: format a SSARepr as a multiline string."""
     from cStringIO import StringIO
     seen = {}
@@ -15,8 +16,8 @@ def format_assembler(ssarepr):
             return '$' + str(x.value)
         elif isinstance(x, TLabel):
             return getlabelname(x)
-        elif isinstance(x, list):
-            return '[%s]' % ', '.join(map(repr, x))
+        elif isinstance(x, ListOfKind):
+            return '%s[%s]' % (x.kind[0], ', '.join(map(repr, x)))
         else:
             return '<unknown object: %r>' % (x,)
     #
@@ -43,4 +44,8 @@ def format_assembler(ssarepr):
                 print >> output, ', '.join(map(repr, asm[1:]))
             else:
                 print >> output
-    return output.getvalue()
+    res = output.getvalue()
+    if dump:
+        print res
+    return res
+

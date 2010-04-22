@@ -1,4 +1,4 @@
-from pypy.objspace.flow.model import Variable
+from pypy.objspace.flow.model import Variable, Constant
 from pypy.jit.metainterp.history import getkind
 from pypy.rpython.lltypesystem import lltype
 
@@ -26,8 +26,21 @@ class TLabel(object):
 
 class Register(object):
     def __init__(self, kind, index):
-        self.kind = kind
+        self.kind = kind          # 'int', 'ref' or 'float'
         self.index = index
+
+class ListOfKind(object):
+    # a list of Regs/Consts, all of the same 'kind'.
+    # We cannot use a plain list, because we wouldn't know what 'kind' of
+    # Regs/Consts would be expected in case the list is empty.
+    def __init__(self, kind, content):
+        assert kind in KINDS
+        self.kind = kind
+        self.content = tuple(content)
+    def __repr__(self):
+        return '%s%s' % (self.kind[0], self.content)
+    def __iter__(self):
+        return iter(self.content)
 
 KINDS = ['int', 'ref', 'float']
 
@@ -161,6 +174,8 @@ class GraphFlattener(object):
                     for v, w in result:
                         self.emitline('%s_copy' % kind, v, w)
                 else:
+                    frm = ListOfKind(kind, frm)
+                    to  = ListOfKind(kind, to)
                     self.emitline('%s_rename' % kind, frm, to)
 
     def emitline(self, *line):
@@ -171,13 +186,17 @@ class GraphFlattener(object):
         for v in arglist:
             if isinstance(v, Variable):
                 v = self.getcolor(v)
-            elif isinstance(v, list):
-                lst = v
-                v = []
-                for x in lst:
+            elif isinstance(v, Constant):
+                pass
+            elif isinstance(v, ListOfKind):
+                lst = []
+                for x in v:
                     if isinstance(x, Variable):
                         x = self.getcolor(x)
-                    v.append(x)
+                    lst.append(x)
+                v = ListOfKind(v.kind, lst)
+            else:
+                raise NotImplementedError(type(v))
             args.append(v)
         return args
 
