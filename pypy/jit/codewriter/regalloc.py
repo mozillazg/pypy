@@ -58,16 +58,15 @@ class RegAllocator(object):
                         pass
                     die_index += 1
                 if getkind(op.result.concretetype) == self.kind:
-                    livevars.add(op.result)
                     dg.add_node(op.result)
                     for v in livevars:
                         if getkind(v.concretetype) == self.kind:
                             dg.add_edge(v, op.result)
+                    livevars.add(op.result)
         self._depgraph = dg
 
     def coalesce_variables(self):
-        uf = UnionFind()
-        dg = self._depgraph
+        self._unionfind = UnionFind()
         pendingblocks = list(self.graph.iterblocks())
         while pendingblocks:
             block = pendingblocks.pop()
@@ -79,19 +78,22 @@ class RegAllocator(object):
             # middle during blackholing.
             for link in block.exits:
                 for i, v in enumerate(link.args):
-                    if (isinstance(v, Variable) and
-                        getkind(v.concretetype) == self.kind):
-                        w = link.target.inputargs[i]
-                        v0 = uf.find_rep(v)
-                        w0 = uf.find_rep(w)
-                        if v0 is not w0 and v0 not in dg.neighbours[w0]:
-                            _, rep, _ = uf.union(v0, w0)
-                            if rep is v0:
-                                dg.coalesce(w0, v0)
-                            else:
-                                assert rep is w0
-                                dg.coalesce(v0, w0)
-        self._unionfind = uf
+                    self._try_coalesce(v, link.target.inputargs[i])
+
+    def _try_coalesce(self, v, w):
+        if isinstance(v, Variable) and getkind(v.concretetype) == self.kind:
+            dg = self._depgraph
+            uf = self._unionfind
+            v0 = uf.find_rep(v)
+            w0 = uf.find_rep(w)
+            if v0 is not w0 and v0 not in dg.neighbours[w0]:
+                _, rep, _ = uf.union(v0, w0)
+                assert uf.find_rep(v0) is uf.find_rep(w0) is rep
+                if rep is v0:
+                    dg.coalesce(w0, v0)
+                else:
+                    assert rep is w0
+                    dg.coalesce(v0, w0)
 
     def find_node_coloring(self):
         self._coloring = self._depgraph.find_node_coloring()
