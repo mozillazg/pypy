@@ -32,6 +32,14 @@ def PyLong_AsUnsignedLong(space, w_long):
     raised."""
     return rffi.cast(rffi.ULONG, space.uint_w(w_long))
 
+@cpython_api([PyObject], lltype.Signed, error=-1)
+def PyLong_AsLong(space, w_long):
+    """
+    Return a C long representation of the contents of pylong.  If
+    pylong is greater than LONG_MAX, an OverflowError is raised
+    and -1 will be returned."""
+    return space.int_w(w_long)
+
 @cpython_api([PyObject], rffi.LONGLONG, error=-1)
 def PyLong_AsLongLong(space, w_long):
     """
@@ -47,6 +55,11 @@ def PyLong_AsUnsignedLongLong(space, w_long):
     If pylong is greater than ULONG_MAX, an OverflowError is
     raised."""
     return rffi.cast(rffi.ULONGLONG, space.r_ulonglong_w(w_long))
+
+@cpython_api([lltype.Float], PyObject)
+def PyLong_FromDouble(space, val):
+    """Return a new PyLongObject object from v, or NULL on failure."""
+    return space.long(space.wrap(val))
 
 @cpython_api([CONST_STRING, rffi.CCHARPP, rffi.INT_real], PyObject)
 def PyLong_FromString(space, str, pend, base):
