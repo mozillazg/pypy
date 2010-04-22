@@ -1,8 +1,12 @@
 import py
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
+from pypy.jit.codewriter.flatten import GraphFlattener
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.jitter import transform_graph
+from pypy.rpython.lltypesystem import lltype, rclass, rstr
+from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
+from pypy.translator.unsimplify import varoftype
 
 
 class FakeRegAlloc:
@@ -15,6 +19,11 @@ class FakeRegAlloc:
             self.seen[v] = self.num_colors
             self.num_colors += 1
         return self.seen[v]
+
+def fake_regallocs():
+    return {'int': FakeRegAlloc(),
+            'ref': FakeRegAlloc(),
+            'float': FakeRegAlloc()}
 
 def test_reorder_renaming_list():
     result = reorder_renaming_list([], [])
@@ -35,13 +44,14 @@ class TestFlatten:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
-    def encoding_test(self, func, args, expected, optimize=False):
+    def encoding_test(self, func, args, expected, transform=False):
         graphs = self.make_graphs(func, args)
-        if optimize:
+        if transform:
             transform_graph(graphs[0])
-        ssarepr = flatten_graph(graphs[0], {'int': FakeRegAlloc(),
-                                            'ref': FakeRegAlloc(),
-                                            'float': FakeRegAlloc()})
+        ssarepr = flatten_graph(graphs[0], fake_regallocs())
+        self.assert_format(ssarepr, expected)
+
+    def assert_format(self, ssarepr, expected):
         asm = format_assembler(ssarepr)
         expected = str(py.code.Source(expected)).strip() + '\n'
         assert asm == expected
@@ -97,7 +107,7 @@ class TestFlatten:
             goto L1
             L2:
             int_return %i3
-        """, optimize=True)
+        """, transform=True)
 
     def test_float(self):
         def f(i, f):
@@ -108,4 +118,21 @@ class TestFlatten:
             cast_int_to_float %i1, %f2
             float_add %f2, %f1, %f3
             float_return %f3
+        """)
+
+    def test_arg_sublist_1(self):
+        v1 = varoftype(lltype.Signed)
+        v2 = varoftype(lltype.Char)
+        v3 = varoftype(rclass.OBJECTPTR)
+        v4 = varoftype(lltype.Ptr(rstr.STR))
+        v5 = varoftype(lltype.Float)
+        op = SpaceOperation('residual_call_ir_f',
+                            [Constant(12345, lltype.Signed),  # function ptr
+                             [v1, v2],              # int args
+                             [v3, v4]],             # ref args
+                            v5)                    # result
+        flattener = GraphFlattener(None, fake_regallocs())
+        flattener.serialize_op(op)
+        self.assert_format(flattener.ssarepr, """
+            residual_call_ir_f $12345, [%i0, %i1], [%r0, %r1], %f0
         """)

@@ -39,7 +39,7 @@ def flatten_graph(graph, regallocs):
     flattener = GraphFlattener(graph, regallocs)
     flattener.enforce_input_args()
     flattener.generate_ssa_form()
-    return flattener.assembler
+    return flattener.ssarepr
 
 
 class GraphFlattener(object):
@@ -48,6 +48,11 @@ class GraphFlattener(object):
         self.graph = graph
         self.regallocs = regallocs
         self.registers = {}
+        if graph:
+            name = graph.name
+        else:
+            name = '?'
+        self.ssarepr = SSARepr(name)
 
     def enforce_input_args(self):
         inputargs = self.graph.startblock.inputargs
@@ -64,7 +69,6 @@ class GraphFlattener(object):
                 self.regallocs[kind].swapcolors(realcol, curcol)
 
     def generate_ssa_form(self):
-        self.assembler = SSARepr(self.graph.name)
         self.seen_blocks = {}
         self.make_bytecode_block(self.graph.startblock)
 
@@ -160,13 +164,20 @@ class GraphFlattener(object):
                     self.emitline('%s_rename' % kind, frm, to)
 
     def emitline(self, *line):
-        self.assembler.insns.append(line)
+        self.ssarepr.insns.append(line)
 
-    def flatten_list(self, list):
+    def flatten_list(self, arglist):
         args = []
-        for v in list:
+        for v in arglist:
             if isinstance(v, Variable):
                 v = self.getcolor(v)
+            elif isinstance(v, list):
+                lst = v
+                v = []
+                for x in lst:
+                    if isinstance(x, Variable):
+                        x = self.getcolor(x)
+                    v.append(x)
             args.append(v)
         return args
 

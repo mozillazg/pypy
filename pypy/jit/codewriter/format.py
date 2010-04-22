@@ -18,7 +18,7 @@ def format_assembler(ssarepr):
         elif isinstance(x, list):
             return '[%s]' % ', '.join(map(repr, x))
         else:
-            return `x`   # ?
+            return '<unknown object: %r>' % (x,)
     #
     seenlabels = {}
     for asm in ssarepr.insns:
