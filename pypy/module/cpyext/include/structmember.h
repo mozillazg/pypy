@@ -21,10 +21,15 @@ typedef struct PyMemberDef {
 
 
 /* Types */
+#define T_SHORT		0
 #define T_INT		1
+#define T_LONG		2
 #define T_STRING	5
 #define T_OBJECT	6
 #define T_CHAR		7	/* 1-character string */
+#define T_USHORT	10
+#define T_UINT		11
+#define T_ULONG		12
 #define T_STRING_INPLACE 13     /* Strings contained in the structure */
 #define T_OBJECT_EX	16	/* Like T_OBJECT, but raises AttributeError
 				   when the value is NULL, instead of
