@@ -2,10 +2,12 @@
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext.unicodeobject import Py_UNICODE
 from pypy.rpython.lltypesystem import rffi, lltype
+import sys, py
 
 class TestUnicode(BaseApiTest):
     def test_unicodeobject(self, space, api):
         assert api.PyUnicode_GET_SIZE(space.wrap(u'späm')) == 4
+        assert api.PyUnicode_GetSize(space.wrap(u'späm')) == 4
         unichar = rffi.sizeof(Py_UNICODE)
         assert api.PyUnicode_GET_DATA_SIZE(space.wrap(u'späm')) == 4 * unichar
 
@@ -94,3 +96,27 @@ class TestUnicode(BaseApiTest):
             api.PyUnicode_Decode(b_text, 4, b_encoding, None)) == u'caf\xe9'
         rffi.free_charp(b_text)
         rffi.free_charp(b_encoding)
+
+    def test_leak(self):
+        py.test.skip("This test seems to leak memory")
+        size = 50
+        raw_buf, gc_buf = rffi.alloc_buffer(size)
+        for i in range(size): raw_buf[i] = 'a'
+        str = rffi.str_from_buffer(raw_buf, gc_buf, size, size)
+        rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
+
+    def test_mbcs(self, space, api):
+        if sys.platform != 'win32':
+            py.test.skip("mcbs encoding only exists on Windows")
+        # unfortunately, mbcs is locale-dependent.
+        # This tests works at least on a Western Windows.
+        unichars = u"abc" + unichr(12345)
+        wbuf = rffi.unicode2wcharp(unichars)
+        w_str = api.PyUnicode_EncodeMBCS(wbuf, 4, None)
+        rffi.free_wcharp(wbuf)
+        assert space.type(w_str) is space.w_str
+        assert space.str_w(w_str) == "abc?"
+
+        # XXX this test seems to leak references, see test_leak above
+        from pypy.module.cpyext.test.test_cpyext import freeze_refcnts
+        freeze_refcnts(self)

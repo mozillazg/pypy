@@ -10,6 +10,7 @@ from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref, Py_DecRef,
 from pypy.module.cpyext.stringobject import PyString_Check
 from pypy.module.sys.interp_encoding import setdefaultencoding
 from pypy.objspace.std import unicodeobject, unicodetype
+import sys
 
 PyUnicodeObjectStruct = lltype.ForwardReference()
 PyUnicodeObject = lltype.Ptr(PyUnicodeObjectStruct)
@@ -142,6 +143,15 @@ def PyUnicode_AsUnicode(space, ref):
                              space.wrap("expected unicode object"))
     return PyUnicode_AS_UNICODE(space, ref)
 
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PyUnicode_GetSize(space, ref):
+    if from_ref(space, rffi.cast(PyObject, ref.c_ob_type)) is space.w_unicode:
+        ref = rffi.cast(PyUnicodeObject, ref)
+        return ref.c_size
+    else:
+        w_obj = from_ref(space, ref)
+        return space.int_w(space.len(w_obj))
+
 @cpython_api([PyUnicodeObject, rffi.CWCHARP, Py_ssize_t], Py_ssize_t, error=-1)
 def PyUnicode_AsWideChar(space, ref, buf, size):
     """Copy the Unicode object contents into the wchar_t buffer w.  At most
@@ -245,3 +255,31 @@ def PyUnicode_Decode(space, s, size, encoding, errors):
     else:
         w_errors = space.w_None
     return space.call_method(w_str, 'decode', w_encoding, w_errors)
+
+
+if sys.platform == 'win32':
+    @cpython_api([CONST_WSTRING, Py_ssize_t, CONST_STRING], PyObject)
+    def PyUnicode_EncodeMBCS(space, wchar_p, length, errors):
+        """Encode the Py_UNICODE buffer of the given size using MBCS and return a
+        Python string object.  Return NULL if an exception was raised by the codec.
+        """
+        w_unicode = space.wrap(rffi.wcharpsize2unicode(wchar_p, length))
+        if errors:
+            w_errors = space.wrap(rffi.charp2str(errors))
+        else:
+            w_errors = space.w_None
+        return space.call_method(w_unicode, "encode",
+                                 space.wrap("mbcs"), w_errors)
+
+    @cpython_api([CONST_STRING, Py_ssize_t, CONST_STRING], PyObject)
+    def PyUnicode_DecodeMBCS(space, s, size, errors):
+        """Create a Unicode object by decoding size bytes of the MBCS encoded string s.
+        Return NULL if an exception was raised by the codec.
+        """
+        w_str = space.wrap(rffi.charpsize2str(s, size))
+        w_encoding = space.wrap("mbcs")
+        if errors:
+            w_errors = space.wrap(rffi.charp2str(errors))
+        else:
+            w_errors = space.w_None
+        return space.call_method(w_str, 'decode', w_encoding, w_errors)
