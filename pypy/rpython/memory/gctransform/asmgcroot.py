@@ -28,20 +28,10 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
         return livevars
 
     def pop_roots(self, hop, livevars):
-        if not livevars:
-            return
-        # mark the values as gc roots
-        for var in livevars:
-            v_adr = gen_cast(hop.llops, llmemory.Address, var)
-            v_newaddr = hop.genop("direct_call", [c_asm_gcroot, v_adr],
-                                  resulttype=llmemory.Address)
-            hop.genop("gc_reload_possibly_moved", [v_newaddr, var])
+        hop.genop("gc_asmgcroot", livevars)
 
     def build_root_walker(self):
         return AsmStackRootWalker(self)
-
-    def mark_call_cannotcollect(self, hop, name):
-        hop.genop("direct_call", [c_asm_nocollect, name])
 
     def gct_direct_call(self, hop):
         fnptr = hop.spaceop.args[0].value
@@ -482,19 +472,6 @@ pypy_asm_stackwalk = rffi.llexternal('pypy_asm_stackwalk',
                                      _nowrapper=True)
 c_asm_stackwalk = Constant(pypy_asm_stackwalk,
                            lltype.typeOf(pypy_asm_stackwalk))
-
-pypy_asm_gcroot = rffi.llexternal('pypy_asm_gcroot',
-                                  [llmemory.Address],
-                                  llmemory.Address,
-                                  sandboxsafe=True,
-                                  _nowrapper=True)
-c_asm_gcroot = Constant(pypy_asm_gcroot, lltype.typeOf(pypy_asm_gcroot))
-
-pypy_asm_nocollect = rffi.llexternal('pypy_asm_gc_nocollect',
-                                     [rffi.CCHARP], lltype.Void,
-                                     sandboxsafe=True,
-                                     _nowrapper=True)
-c_asm_nocollect = Constant(pypy_asm_nocollect, lltype.typeOf(pypy_asm_nocollect))
 
 QSORT_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([llmemory.Address,
                                                  llmemory.Address], rffi.INT))
