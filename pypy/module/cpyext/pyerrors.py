@@ -4,7 +4,8 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, CONST_STRING
 from pypy.module.exceptions.interp_exceptions import W_RuntimeWarning
-from pypy.module.cpyext.pyobject import PyObject, make_ref, register_container
+from pypy.module.cpyext.pyobject import (
+    PyObject, PyObjectP, make_ref, Py_DecRef, register_container)
 from pypy.module.cpyext.state import State
 from pypy.rlib.rposix import get_errno
 
@@ -59,6 +60,43 @@ def PyErr_Occurred(space):
 def PyErr_Clear(space):
     state = space.fromcache(State)
     state.clear_exception()
+
+@cpython_api([PyObjectP, PyObjectP, PyObjectP], lltype.Void)
+def PyErr_Fetch(space, ptype, pvalue, ptraceback):
+    """Retrieve the error indicator into three variables whose addresses are passed.
+    If the error indicator is not set, set all three variables to NULL.  If it is
+    set, it will be cleared and you own a reference to each object retrieved.  The
+    value and traceback object may be NULL even when the type object is not.
+    
+    This function is normally only used by code that needs to handle exceptions or
+    by code that needs to save and restore the error indicator temporarily."""
+    state = space.fromcache(State)
+    ptype[0] = make_ref(space, state.exc_type, steal=True)
+    pvalue[0] = make_ref(space, state.exc_type, steal=True)
+    state.exc_type = None
+    state.exc_value = None
+    ptraceback[0] = lltype.nullptr(PyObject.TO)
+
+@cpython_api([PyObject, PyObject, PyObject], lltype.Void)
+def PyErr_Restore(space, w_type, w_value, w_traceback):
+    """Set  the error indicator from the three objects.  If the error indicator is
+    already set, it is cleared first.  If the objects are NULL, the error
+    indicator is cleared.  Do not pass a NULL type and non-NULL value or
+    traceback.  The exception type should be a class.  Do not pass an invalid
+    exception type or value. (Violating these rules will cause subtle problems
+    later.)  This call takes away a reference to each object: you must own a
+    reference to each object before the call and after the call you no longer own
+    these references.  (If you don't understand this, don't use this function.  I
+    warned you.)
+    
+    This function is normally only used by code that needs to save and restore the
+    error indicator temporarily; use PyErr_Fetch() to save the current
+    exception state."""
+    state = space.fromcache(State)
+    state.exc_type = w_type
+    state.exc_value = w_value
+    Py_DecRef(space, w_type)
+    Py_DecRef(space, w_value)
 
 @cpython_api([], lltype.Void)
 def PyErr_BadInternalCall(space):

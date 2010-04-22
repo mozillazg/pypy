@@ -94,6 +94,29 @@ class AppTestFetch(AppTestCpythonExtensionBase):
             ])
         module.check_error()
 
+    def test_fetch_and_restore(self):
+        module = self.import_extension('foo', [
+            ("check_error", "METH_NOARGS",
+             '''
+             PyObject *type, *val, *tb;
+             PyErr_SetString(PyExc_TypeError, "message");
+
+             PyErr_Fetch(&type, &val, &tb);
+             if (PyErr_Occurred())
+                 return NULL;
+             if (type != PyExc_TypeError)
+                 Py_RETURN_FALSE;
+             if (val->ob_type != type)
+                 Py_RETURN_FALSE;
+             PyErr_Restore(type, val, tb);
+             if (!PyErr_Occurred())
+                 Py_RETURN_FALSE;
+             PyErr_Clear();
+             Py_RETURN_TRUE;
+             '''
+             ),
+            ])
+        module.check_error()
 
     def test_SetFromErrno(self):
         skip("The test does not set the errno in a way which "
