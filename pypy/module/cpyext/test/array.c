@@ -15,6 +15,9 @@
 #endif /* HAVE_SYS_TYPES_H */
 #endif /* !STDC_HEADERS */
 
+#define Py_SIZE(ob)		(((PyVarObject*)(ob))->ob_size)
+#define Py_TYPE(ob)		(((PyObject*)(ob))->ob_type)
+
 struct arrayobject; /* Forward */
 
 /* All possible arraydescr values are defined in the vector "descriptors"
