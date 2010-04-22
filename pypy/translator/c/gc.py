@@ -326,12 +326,30 @@ class FrameworkGcPolicy(BasicGcPolicy):
     def convert_weakref_to(self, ptarget):
         return framework.convert_weakref_to(ptarget)
 
-    def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op):
-        if isinstance(op.args[1], Constant):
-            return '/* %s */' % (op,)
-        else:
-            args = [funcgen.expr(v) for v in op.args]
-            return '%s = %s; /* for moving GCs */' % (args[1], args[0])
+    def OP_GC_ASMGCROOT(self, funcgen, op):
+        # The following pseudo-instruction is used by --gcrootfinder=asmgcc
+        # just after a call to tell gcc to put a GCROOT mark on each gc-pointer
+        # local variable.  In practice the asm statement is often a no-op
+        # in the final machine code and doesn't prevent most optimizations,
+        # except that so far it forces its arguments to be in memory (instead
+        # of in the registers that are preserved by the call).
+        lines = []
+        regs = []
+        def generate(end=True):
+            bodylines = ['GCROOT %' + str(i) for i in range(len(regs))]
+            if end:
+                bodylines.append('GCREND')
+            lines.append('asm volatile ("%s" : :%s : "memory");' % (
+                '\\n\\t'.join(bodylines), ','.join(regs)))
+            del regs[:]
+        #
+        for v in op.args:
+            if not isinstance(v, Constant):
+                if len(regs) == 8:
+                    generate(end=False)
+                regs.append(' "m"(%s)' % funcgen.expr(v))
+        generate()
+        return ''.join(lines)
 
     def common_gcheader_definition(self, defnode):
         return defnode.db.gctransformer.gc_fields()
