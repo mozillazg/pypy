@@ -16,7 +16,6 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.translator.unsimplify import call_final_function
 
-from pypy.jit.metainterp import codewriter
 from pypy.jit.metainterp import history, pyjitpl, gc
 from pypy.jit.metainterp.pyjitpl import MetaInterpStaticData, MetaInterp
 from pypy.jit.metainterp.policy import JitPolicy

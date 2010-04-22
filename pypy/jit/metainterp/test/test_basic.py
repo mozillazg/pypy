@@ -4,7 +4,7 @@ from pypy.rlib.jit import JitDriver, we_are_jitted, hint, dont_look_inside
 from pypy.rlib.jit import OPTIMIZER_FULL, OPTIMIZER_SIMPLE, loop_invariant
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
-from pypy.jit.metainterp import codewriter, pyjitpl, history
+from pypy.jit.metainterp import pyjitpl, history
 from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
 from pypy.jit.codewriter import support
 from pypy import conftest
