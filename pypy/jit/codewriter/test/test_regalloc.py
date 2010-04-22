@@ -8,7 +8,8 @@ from pypy.jit.codewriter.format import format_assembler
 class TestRegAlloc:
 
     def make_graphs(self, func, values, type_system='lltype'):
-        self.rtyper = support.annotate(func, values, type_system=type_system)
+        self.rtyper = support.annotate(func, values, type_system=type_system,
+                                       backendoptimize=False)
         return self.rtyper.annotator.translator.graphs
 
     def check_assembler(self, graph, expected):
