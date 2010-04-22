@@ -91,10 +91,23 @@ class BlackholeInterpreter(object):
                     next_argcode = next_argcode + 1
                     value = ord(code[position]) | (ord(code[position+1])<<8)
                     position += 2
+                elif argtype == 'I' or argtype == 'R' or argtype == 'F':
+                    assert argcodes[next_argcode] == argtype
+                    next_argcode = next_argcode + 1
+                    length = ord(code[position])
+                    position += 1
+                    value = []
+                    for i in range(length):
+                        index = ord(code[position+i])
+                        if   argtype == 'I': reg = self.registers_i[index]
+                        elif argtype == 'R': reg = self.registers_r[index]
+                        elif argtype == 'F': reg = self.registers_f[index]
+                        value.append(reg)
+                    position += length
                 elif argtype == 'pc':
                     value = position
                 else:
-                    raise AssertionError("bad argtype")
+                    raise AssertionError("bad argtype: %r" % (argtype,))
                 args += (value,)
             result = boundmethod(*args)
             if resulttype == 'i':
@@ -131,6 +144,7 @@ class BlackholeInterpreter(object):
             pass
 
     # XXX must be specialized
+    # XXX the real performance impact of the following loop is unclear
     def copy_constants(self, registers, constants):
         """Copy jitcode.constants[0] to registers[255],
                 jitcode.constants[1] to registers[254],
@@ -184,3 +198,8 @@ class BlackholeInterpreter(object):
     @arguments("L", returns="L")
     def opimpl_goto(self, target):
         return target
+
+    @arguments("i", "I", "R", returns="i")
+    def opimpl_residual_call_ir_i(self, function, args_i, args_r):
+        # XXX!
+        return function(*args_i)
