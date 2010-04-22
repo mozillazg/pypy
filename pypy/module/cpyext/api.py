@@ -589,6 +589,9 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
     functions = []
     pypy_decls = []
     pypy_decls.append("#ifndef PYPY_STANDALONE\n")
+    pypy_decls.append("#ifdef __cplusplus")
+    pypy_decls.append("extern \"C\" {")
+    pypy_decls.append("#endif\n")
 
     for decl in FORWARD_DECLS:
         pypy_decls.append("%s;" % (decl,))
@@ -628,6 +631,10 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
         pypy_decls.append('PyAPI_DATA(%s) %s;' % (typ, name_clean))
         if not globals_are_pointers and "#" not in name:
             pypy_decls.append("#define %s (PyObject*)&%s" % (name, name,))
+
+    pypy_decls.append("#ifdef __cplusplus")
+    pypy_decls.append("}")
+    pypy_decls.append("#endif")
     pypy_decls.append("#endif /*PYPY_STANDALONE*/\n")
 
     pypy_decl_h = udir.join('pypy_decl.h')
