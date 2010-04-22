@@ -66,7 +66,7 @@ def PyLong_FromString(space, str, pend, base):
         pend[0] = rffi.ptradd(str, len(s))
     return space.call_function(space.w_long, w_str, w_base)
 
-@cpython_api([rffi.VOIDP], PyObject)
+@cpython_api([rffi.VOIDP_real], PyObject)
 def PyLong_FromVoidPtr(space, p):
     """Create a Python integer or long integer from the pointer p. The pointer value
     can be retrieved from the resulting value using PyLong_AsVoidPtr().
