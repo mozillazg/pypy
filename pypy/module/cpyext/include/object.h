@@ -467,6 +467,7 @@ manually remove this flag though!
 
 /* Copied from CPython ----------------------------- */
 int PyObject_AsReadBuffer(PyObject *, const void **, Py_ssize_t *);
+int PyObject_AsWriteBuffer(PyObject *, void **, Py_ssize_t *);
 int PyObject_CheckReadBuffer(PyObject *);
 
 
