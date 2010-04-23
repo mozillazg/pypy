@@ -11,7 +11,7 @@ from pypy.annotation.model import \
      s_ImpossibleValue, s_Bool, s_None, \
      unionof, set, missing_operation, add_knowntypedata, HarmlesslyBlocked, \
      SomeGenericCallable, SomeWeakRef, SomeUnicodeString
-from pypy.annotation.bookkeeper import getbookkeeper
+from pypy.annotation.bookkeeper import getbookkeeper, RPythonCallsSpace
 from pypy.annotation import builtin
 from pypy.annotation.binaryop import _clone ## XXX where to put this?
 from pypy.rpython import extregistry
@@ -584,30 +584,33 @@ class __extend__(SomeIterator):
 
 class __extend__(SomeInstance):
 
+    def _lookup_const_attr(ins, attr):
+        if attr == '__class__':
+            return ins.classdef.read_attr__class__()
+        attrdef = ins.classdef.find_attribute(attr)
+        position = getbookkeeper().position_key
+        attrdef.read_locations[position] = True
+        s_result = attrdef.getvalue()
+        # hack: if s_result is a set of methods, discard the ones
+        #       that can't possibly apply to an instance of ins.classdef.
+        # XXX do it more nicely
+        if isinstance(s_result, SomePBC):
+            s_result = ins.classdef.lookup_filter(s_result, attr,
+                                                  ins.flags)
+        elif isinstance(s_result, SomeImpossibleValue):
+            ins.classdef.check_missing_attribute_update(attr)
+            # blocking is harmless if the attribute is explicitly listed
+            # in the class or a parent class.
+            for basedef in ins.classdef.getmro():
+                if basedef.classdesc.all_enforced_attrs is not None:
+                    if attr in basedef.classdesc.all_enforced_attrs:
+                        raise HarmlesslyBlocked("get enforced attr")
+        return s_result
+
     def getattr(ins, s_attr):
         if s_attr.is_constant() and isinstance(s_attr.const, str):
             attr = s_attr.const
-            if attr == '__class__':
-                return ins.classdef.read_attr__class__()
-            attrdef = ins.classdef.find_attribute(attr)
-            position = getbookkeeper().position_key
-            attrdef.read_locations[position] = True
-            s_result = attrdef.getvalue()
-            # hack: if s_result is a set of methods, discard the ones
-            #       that can't possibly apply to an instance of ins.classdef.
-            # XXX do it more nicely
-            if isinstance(s_result, SomePBC):
-                s_result = ins.classdef.lookup_filter(s_result, attr,
-                                                      ins.flags)
-            elif isinstance(s_result, SomeImpossibleValue):
-                ins.classdef.check_missing_attribute_update(attr)
-                # blocking is harmless if the attribute is explicitly listed
-                # in the class or a parent class.
-                for basedef in ins.classdef.getmro():
-                    if basedef.classdesc.all_enforced_attrs is not None:
-                        if attr in basedef.classdesc.all_enforced_attrs:
-                            raise HarmlesslyBlocked("get enforced attr")
-            return s_result
+            return ins._lookup_const_attr(attr)
         return SomeObject()
     getattr.can_only_throw = []
 
@@ -629,6 +632,16 @@ class __extend__(SomeInstance):
         if not ins.can_be_None:
             s.const = True
 
+    def iter(ins):
+        s_result = SomeIterator(ins)
+        s_result.s_next_pbc = ins._lookup_const_attr('next')
+        return s_result
+
+    def getanyitem(ins):
+        bk = getbookkeeper()
+        args = bk.build_args("simple_call", [])
+        s_pbc = ins._lookup_const_attr('next')
+        return bk.pbc_call(s_pbc, args)
 
 class __extend__(SomeBuiltin):
     def simple_call(bltn, *args):
