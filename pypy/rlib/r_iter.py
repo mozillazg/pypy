@@ -10,6 +10,9 @@ class r_iter(object):
         """
         return self
 
+    def length_hint(self):
+        return 0
+
 class list_iter(r_iter):
     def __init__(self, l):
         self.l = l
@@ -21,4 +24,6 @@ class list_iter(r_iter):
         res = self.l[self.pos]
         self.pos += 1
         return res
-        
+
+    def length_hint(self):
+        return len(self.l)
