@@ -4,6 +4,7 @@ from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
 from pypy.jit.codewriter.flatten import GraphFlattener, ListOfKind
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.jitter import transform_graph
+from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rpython.lltypesystem import lltype, rclass, rstr
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.translator.unsimplify import varoftype
@@ -145,3 +146,14 @@ class TestFlatten:
             int_add %i0, %i0, %i1
             int_return %i1
         """, transform=True)
+
+    def test_descr(self):
+        class FooDescr(AbstractDescr):
+            def __repr__(self):
+                return 'hi_there!'
+        op = SpaceOperation('foobar', [FooDescr()], None)
+        flattener = GraphFlattener(None, fake_regallocs())
+        flattener.serialize_op(op)
+        self.assert_format(flattener.ssarepr, """
+            foobar hi_there!
+        """)
