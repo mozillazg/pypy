@@ -27,6 +27,7 @@ typedef struct PyMemberDef {
 #define T_STRING	5
 #define T_OBJECT	6
 #define T_CHAR		7	/* 1-character string */
+#define T_BYTE		8	/* 8-bit signed int */
 #define T_USHORT	10
 #define T_UINT		11
 #define T_ULONG		12

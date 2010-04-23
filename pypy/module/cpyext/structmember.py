@@ -34,6 +34,9 @@ def PyMember_GetOne(space, obj, w_member):
     elif member_type == structmemberdefs.T_ULONG:
         result = rffi.cast(rffi.ULONGP, addr)
         w_result = space.wrap(result[0])
+    elif member_type == structmemberdefs.T_BYTE:
+        result = rffi.cast(rffi.CCHARP, addr)
+        w_result = space.wrap(result[0])
     elif member_type == structmemberdefs.T_STRING:
         result = rffi.cast(rffi.CCHARPP, addr)
         if result[0]:
@@ -107,6 +110,10 @@ def PyMember_SetOne(space, obj, w_member, w_value):
         w_long_value = PyInt_AsUnsignedLong(space, w_value)
         array = rffi.cast(rffi.ULONGP, addr)
         array[0] = rffi.cast(rffi.ULONG, w_long_value)
+    elif member_type == structmemberdefs.T_BYTE:
+        w_long_value = PyInt_AsLong(space, w_value)
+        array = rffi.cast(rffi.CCHARP, addr)
+        array[0] = rffi.cast(rffi.CHAR, w_long_value)
     elif member_type == structmemberdefs.T_CHAR:
         str_value = space.str_w(w_value)
         if len(str_value) != 1:
