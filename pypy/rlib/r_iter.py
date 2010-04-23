@@ -5,7 +5,12 @@ class r_iter(object):
     def next(self):
         raise NotImplementedError("abstract base class")
 
-class list_iter(object):
+    def __iter__(self):
+        """ NOT_RPYTHON, for untranslated version only
+        """
+        return self
+
+class list_iter(r_iter):
     def __init__(self, l):
         self.l = l
         self.pos = 0
@@ -16,9 +21,4 @@ class list_iter(object):
         res = self.l[self.pos]
         self.pos += 1
         return res
-
-    def __iter__(self):
-        """ NOT_RPYTHON, for untranslated version only
-        """
-        return self
         
