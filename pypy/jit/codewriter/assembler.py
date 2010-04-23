@@ -1,4 +1,4 @@
-from pypy.jit.metainterp.history import AbstractValue, getkind
+from pypy.jit.metainterp.history import AbstractValue, AbstractDescr, getkind
 from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
 from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.objspace.flow.model import Constant
@@ -29,6 +29,8 @@ class Assembler(object):
 
     def __init__(self):
         self.insns = {}
+        self.descrs = []
+        self._descr_dict = {}
 
     def assemble(self, ssarepr):
         self.setup()
@@ -108,6 +110,15 @@ class Assembler(object):
                         raise NotImplementedError("found in ListOfKind(): %r"
                                                   % (item,))
                 argcodes.append(itemkind[0].upper())
+            elif isinstance(x, AbstractDescr):
+                if x not in self._descr_dict:
+                    self._descr_dict[x] = len(self.descrs)
+                    self.descrs.append(x)
+                num = self._descr_dict[x]
+                assert 0 <= num <= 0xFFFF, "too many AbstractDescrs!"
+                self.code.append(chr(num & 0xFF))
+                self.code.append(chr(num >> 8))
+                argcodes.append('d')
             else:
                 raise NotImplementedError(x)
         #
