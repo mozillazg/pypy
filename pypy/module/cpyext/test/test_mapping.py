@@ -1,5 +1,5 @@
 from pypy.module.cpyext.test.test_api import BaseApiTest
-
+from pypy.rpython.lltypesystem import lltype, rffi
 
 class TestMapping(BaseApiTest):
     def test_check(self, space, api):
@@ -15,3 +15,11 @@ class TestMapping(BaseApiTest):
         w_d = space.newdict()
         space.setitem(w_d, space.wrap("a"), space.wrap("b"))
         assert space.eq_w(api.PyMapping_Items(w_d), space.wrap([("a", "b")]))
+
+    def test_setitemstring(self, space, api):
+        w_d = space.newdict()
+        key = rffi.str2charp("key")
+        api.PyMapping_SetItemString(w_d, key, space.wrap(42))
+        assert 42 == space.unwrap(
+            api.PyMapping_GetItemString(w_d, key, space.wrap(42)))
+        rffi.free_charp(key)
