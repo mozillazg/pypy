@@ -64,6 +64,7 @@ class AppTestUnicodeString:
         check(', '.join([u'a']), u'a')
         check(', '.join(['a', u'b']), u'a, b')
         check(u', '.join(['a', 'b']), u'a, b')
+        raises(TypeError, u'x'.join, [u'x', (1, 2, 3)])
 
     if sys.version_info >= (2,3):
         def test_contains_ex(self):
