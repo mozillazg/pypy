@@ -8,8 +8,8 @@ from pypy.jit.codewriter.format import format_assembler
 
 class CodeWriter(object):
 
-    def __init__(self, rtyper=None):
-        self.rtyper = rtyper
+    def __init__(self, cpu=None):
+        self.cpu = cpu
         self.assembler = Assembler()
 
     def transform_func_to_jitcode(self, func, values, type_system='lltype'):
@@ -19,7 +19,7 @@ class CodeWriter(object):
         return self.transform_graph_to_jitcode(graph)
 
     def transform_graph_to_jitcode(self, graph, verbose=False):
-        transform_graph(graph)
+        transform_graph(graph, self.cpu)
         regallocs = {}
         for kind in KINDS:
             regallocs[kind] = perform_register_allocation(graph, kind)
