@@ -36,7 +36,21 @@ from pypy.objspace.std.typeobject import W_TypeObject
 from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.stringtype import wrapstr
 from pypy.objspace.std.unicodetype import wrapunicode
+from pypy.rlib.r_iter import r_iter, list_iter
 
+class iterate_w_root(r_iter):
+    def __init__(self, space, w_iterable):
+        self.w_iterator = space.iter(w_iterable)
+        self.space = space
+
+    def next(self):
+        space = self.space
+        try:
+            return space.next(self.w_iterator)
+        except OperationError, oe:
+            if oe.match(space, space.w_StopIteration):
+                raise StopIteration
+            raise
 
 class StdObjSpace(ObjSpace, DescrOperation):
     """The standard object space, implementing a general-purpose object
@@ -346,6 +360,14 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if expected_length != -1 and len(t) != expected_length:
             raise self._wrap_expected_length(expected_length, len(t))
         return t
+
+    def iterate_w(self, w_iterable):
+        """ Returns a thing that can be iterated over. No more
+        operations are allowed, primarily, this is not a list
+        """
+        if isinstance(w_iterable, W_ListObject):
+            return list_iter(w_iterable.wrappeditems)
+        return iterate_w_root(self, w_iterable)
 
     def fixedview(self, w_obj, expected_length=-1):
         """ Fast paths
