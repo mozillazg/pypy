@@ -13,6 +13,7 @@
 #else
 # define MS_WIN32 1
 # include <crtdefs.h>
+# include <io.h>
 # define Py_DEPRECATED(VERSION_UNUSED)
 # ifdef Py_BUILD_CORE
 #  define PyAPI_DATA(RTYPE) extern __declspec(dllexport) RTYPE
@@ -79,7 +80,6 @@ typedef PY_LONG_LONG        Py_intptr_t;
 
 #include <pypy_macros.h>
 
-int PyOS_snprintf(char *str, size_t size, const  char  *format, ...);
 #include "patchlevel.h"
 
 #include "object.h"
