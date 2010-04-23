@@ -1,6 +1,8 @@
+import struct
 from pypy.jit.codewriter.assembler import Assembler
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
 from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.metainterp.history import AbstractDescr
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype
 
@@ -93,3 +95,16 @@ def test_assemble_list():
     assert jitcode.code == "\x00\x03\x16\x17\xFF\x00"
     assert assembler.insns == {'foobar/IR': 0}
     assert jitcode.constants_i == [42]
+
+def test_assemble_descr():
+    class FooDescr(AbstractDescr):
+        pass
+    descrs = [FooDescr() for i in range(300)]
+    ssarepr = SSARepr("test")
+    ssarepr.insns = [('foobar', d) for d in descrs[::-1]]
+    assembler = Assembler()
+    jitcode = assembler.assemble(ssarepr)
+    assert jitcode.code == ''.join(["\x00" + struct.pack("<H", i)
+                                    for i in range(300)])
+    assert assembler.insns == {'foobar/d': 0}
+    assert assembler.descrs == descrs[::-1]
