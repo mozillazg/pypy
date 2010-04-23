@@ -20,7 +20,7 @@ Return a file descriptor (a small integer)."""
     except OSError, e: 
         raise wrap_oserror(space, e, fname)
     return space.wrap(fd)
-open.unwrap_spec = [ObjSpace, str, "c_int", "c_int"]
+open.unwrap_spec = [ObjSpace, 'path', "c_int", "c_int"]
 
 def lseek(space, fd, pos, how):
     """Set the current position of a file descriptor.  Return the new position.
@@ -180,7 +180,7 @@ with (at least) the following attributes:
         raise wrap_oserror(space, e, path)
     else: 
         return build_stat_result(space, st)
-stat.unwrap_spec = [ObjSpace, str]
+stat.unwrap_spec = [ObjSpace, 'path']
 
 def lstat(space, path):
     "Like stat(path), but do no follow symbolic links."
@@ -190,7 +190,7 @@ def lstat(space, path):
         raise wrap_oserror(space, e, path)
     else:
         return build_stat_result(space, st)
-lstat.unwrap_spec = [ObjSpace, str]
+lstat.unwrap_spec = [ObjSpace, 'path']
 
 class StatState(object):
     def __init__(self, space):
@@ -284,7 +284,7 @@ def unlink(space, path):
         os.unlink(path)
     except OSError, e: 
         raise wrap_oserror(space, e, path)
-unlink.unwrap_spec = [ObjSpace, str]
+unlink.unwrap_spec = [ObjSpace, 'path']
 
 def remove(space, path):
     """Remove a file (same as unlink(path))."""
@@ -292,7 +292,7 @@ def remove(space, path):
         os.unlink(path)
     except OSError, e: 
         raise wrap_oserror(space, e, path)
-remove.unwrap_spec = [ObjSpace, str]
+remove.unwrap_spec = [ObjSpace, 'path']
 
 def _getfullpathname(space, path):
     """helper for ntpath.abspath """

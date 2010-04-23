@@ -1,3 +1,6 @@
+
+# -*- coding: utf-8 -*-
+
 from pypy.objspace.std import StdObjSpace 
 from pypy.tool.udir import udir
 from pypy.conftest import gettestobjspace
@@ -35,10 +38,12 @@ def need_sparse_files():
     if os.name == 'nt':
         py.test.skip("no sparse files on Windows")
 
+GET_POSIX = "(): import %s as m ; return m" % os.name
+
 class AppTestPosix: 
     def setup_class(cls): 
         cls.space = space 
-        cls.w_posix = space.appexec([], "(): import %s as m ; return m" % os.name)
+        cls.w_posix = space.appexec([], GET_POSIX)
         cls.w_path = space.wrap(str(path))
         cls.w_path2 = space.wrap(str(path2))
         cls.w_pdir = space.wrap(str(pdir))
@@ -636,6 +641,46 @@ class AppTestEnvironment(object):
         f.seek(0, 0)
         assert isinstance(f, file)
         assert f.read() == 'xxx'
+
+class AppTestPosixUnicode:
+
+    def setup_class(cls):
+        cls.space = space
+        cls.w_posix = space.appexec([], GET_POSIX)
+        if py.test.config.option.runappdirect:
+            # Can't change encoding
+            try:
+                u"ą".encode(sys.getfilesystemencoding())
+            except UnicodeEncodeError:
+                py.test.skip("encoding not good enough")
+        else:
+            cls.save_fs_encoding = space.sys.filesystemencoding
+            space.sys.filesystemencoding = "utf-8"
+
+    def teardown_class(cls):
+        cls.space.sys.filesystemencoding = cls.save_fs_encoding
+
+    def test_stat_unicode(self):
+        # test that passing unicode would not raise UnicodeDecodeError
+        try:
+            self.posix.stat(u"ą")
+        except OSError:
+            pass
+
+    def test_open_unicode(self):
+        # Ensure passing unicode doesn't raise UnicodeEncodeError
+        try:
+            self.posix.open(u"ą", self.posix.O_WRONLY)
+        except OSError:
+            pass
+
+    def test_remove_unicode(self):
+        # See 2 above ;)
+        try:
+            self.posix.remove(u"ą")
+        except OSError:
+            pass
+
 
 class TestPexpect(object):
     # XXX replace with AppExpectTest class as soon as possible

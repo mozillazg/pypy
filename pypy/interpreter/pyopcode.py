@@ -6,17 +6,17 @@ The rest, dealing with variables in optimized ways, is in nestedscope.py.
 
 import sys
 from pypy.interpreter.error import OperationError, operationerrfmt
-from pypy.interpreter.baseobjspace import UnpackValueError, Wrappable
+from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter import gateway, function, eval, pyframe, pytraceback
 from pypy.interpreter.pycode import PyCode
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib import jit, rstackovf
+from pypy.rlib import jit, rstackovf, rstack
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.tool.stdlib_opcode import (opcodedesc, HAVE_ARGUMENT,
-                                     unrolling_opcode_descs,
-                                     opcode_method_names)
+from pypy.tool.stdlib_opcode import (bytecode_spec, host_bytecode_spec,
+                                     unrolling_all_opcode_descs, opmap,
+                                     host_opmap)
 
 def unaryoperation(operationname):
     """NOT_RPYTHON"""
@@ -66,12 +66,16 @@ class __extend__(pyframe.PyFrame):
     # for logbytecode:
     last_opcode = -1
 
+    bytecode_spec = bytecode_spec
+    opcode_method_names = bytecode_spec.method_names
+    opcodedesc = bytecode_spec.opcodedesc
+    opdescmap = bytecode_spec.opdescmap
+    HAVE_ARGUMENT = bytecode_spec.HAVE_ARGUMENT
+
     ### opcode dispatch ###
 
     def dispatch(self, pycode, next_instr, ec):
         # For the sequel, force 'next_instr' to be unsigned for performance
-        from pypy.rlib import rstack # for resume points
-
         next_instr = r_uint(next_instr)
         co_code = pycode.co_code
 
@@ -84,8 +88,6 @@ class __extend__(pyframe.PyFrame):
             return self.popvalue()
 
     def handle_bytecode(self, co_code, next_instr, ec):
-        from pypy.rlib import rstack # for resume points
-
         try:
             next_instr = self.dispatch_bytecode(co_code, next_instr, ec)
             rstack.resume_point("handle_bytecode", self, co_code, ec,
@@ -180,7 +182,7 @@ class __extend__(pyframe.PyFrame):
                 probs[opcode] = probs.get(opcode, 0) + 1
                 self.last_opcode = opcode
 
-            if opcode >= HAVE_ARGUMENT:
+            if opcode >= self.HAVE_ARGUMENT:
                 lo = ord(co_code[next_instr])
                 hi = ord(co_code[next_instr+1])
                 next_instr += 2
@@ -188,16 +190,16 @@ class __extend__(pyframe.PyFrame):
             else:
                 oparg = 0
 
-            while opcode == opcodedesc.EXTENDED_ARG.index:
+            while opcode == self.opcodedesc.EXTENDED_ARG.index:
                 opcode = ord(co_code[next_instr])
-                if opcode < HAVE_ARGUMENT:
+                if opcode < self.HAVE_ARGUMENT:
                     raise BytecodeCorruption
                 lo = ord(co_code[next_instr+1])
                 hi = ord(co_code[next_instr+2])
                 next_instr += 3
                 oparg = (oparg << 16) | (hi << 8) | lo
 
-            if opcode == opcodedesc.RETURN_VALUE.index:
+            if opcode == self.opcodedesc.RETURN_VALUE.index:
                 w_returnvalue = self.popvalue()
                 block = self.unrollstack(SReturnValue.kind)
                 if block is None:
@@ -208,11 +210,11 @@ class __extend__(pyframe.PyFrame):
                     next_instr = block.handle(self, unroller)
                     return next_instr    # now inside a 'finally' block
 
-            if opcode == opcodedesc.YIELD_VALUE.index:
+            if opcode == self.opcodedesc.YIELD_VALUE.index:
                 #self.last_instr = intmask(next_instr - 1) XXX clean up!
                 raise Yield
 
-            if opcode == opcodedesc.END_FINALLY.index:
+            if opcode == self.opcodedesc.END_FINALLY.index:
                 unroller = self.end_finally()
                 if isinstance(unroller, SuspendedUnroller):
                     # go on unrolling the stack
@@ -225,25 +227,28 @@ class __extend__(pyframe.PyFrame):
                         next_instr = block.handle(self, unroller)
                 return next_instr
 
-            if opcode == opcodedesc.JUMP_ABSOLUTE.index:
+            if opcode == self.opcodedesc.JUMP_ABSOLUTE.index:
                 return self.jump_absolute(oparg, next_instr, ec)
 
             if we_are_translated():
-                from pypy.rlib import rstack # for resume points
-
-                for opdesc in unrolling_opcode_descs:
+                for opdesc in unrolling_all_opcode_descs:
                     # static checks to skip this whole case if necessary
+                    if opdesc.bytecode_spec is not self.bytecode_spec:
+                        continue
                     if not opdesc.is_enabled(space):
                         continue
-                    if not hasattr(pyframe.PyFrame, opdesc.methodname):
-                        continue   # e.g. for JUMP_ABSOLUTE, implemented above
+                    if opdesc.methodname in (
+                        'EXTENDED_ARG', 'RETURN_VALUE', 'YIELD_VALUE',
+                        'END_FINALLY', 'JUMP_ABSOLUTE'):
+                        continue   # opcodes implemented above
 
                     if opcode == opdesc.index:
                         # dispatch to the opcode method
                         meth = getattr(self, opdesc.methodname)
                         res = meth(oparg, next_instr)
-                        if opdesc.index == opcodedesc.CALL_FUNCTION.index:
-                            rstack.resume_point("dispatch_call", self, co_code, next_instr, ec)
+                        if opdesc.index == self.opcodedesc.CALL_FUNCTION.index:
+                            rstack.resume_point("dispatch_call", self, co_code,
+                                                next_instr, ec)
                         # !! warning, for the annotator the next line is not
                         # comparing an int and None - you can't do that.
                         # Instead, it's constant-folded to either True or False
@@ -254,8 +259,27 @@ class __extend__(pyframe.PyFrame):
                     self.MISSING_OPCODE(oparg, next_instr)
 
             else:  # when we are not translated, a list lookup is much faster
-                methodname = opcode_method_names[opcode]
-                res = getattr(self, methodname)(oparg, next_instr)
+                methodname = self.opcode_method_names[opcode]
+                try:
+                    meth = getattr(self, methodname)
+                except AttributeError:
+                    raise BytecodeCorruption("unimplemented opcode, ofs=%d, "
+                                             "code=%d, name=%s" %
+                                             (self.last_instr, opcode,
+                                              methodname))
+                try:
+                    res = meth(oparg, next_instr)
+                except Exception:
+                    if 0:
+                        import dis, sys
+                        print "*** %s at offset %d (%s)" % (sys.exc_info()[0],
+                                                            self.last_instr,
+                                                            methodname)
+                        try:
+                            dis.dis(co_code)
+                        except:
+                            pass
+                    raise
                 if res is not None:
                     next_instr = res
 
@@ -536,9 +560,8 @@ class __extend__(pyframe.PyFrame):
             # common case
             raise operror
         else:
-            from pypy.interpreter.pytraceback import check_traceback
             msg = "raise: arg 3 must be a traceback or None"
-            tb = check_traceback(space, w_traceback, msg)
+            tb = pytraceback.check_traceback(space, w_traceback, msg)
             operror.application_traceback = tb
             # special 3-arguments raise, no new traceback obj will be attached
             raise RaiseWithExplicitTraceback(operror)
@@ -599,7 +622,7 @@ class __extend__(pyframe.PyFrame):
     def STORE_NAME(self, varindex, next_instr):
         varname = self.getname_u(varindex)
         w_newvalue = self.popvalue()
-        self.space.set_str_keyed_item(self.w_locals, varname, w_newvalue)
+        self.space.setitem_str(self.w_locals, varname, w_newvalue)
 
     def DELETE_NAME(self, varindex, next_instr):
         w_varname = self.getname_w(varindex)
@@ -615,11 +638,7 @@ class __extend__(pyframe.PyFrame):
 
     def UNPACK_SEQUENCE(self, itemcount, next_instr):
         w_iterable = self.popvalue()
-        try:
-            items = self.space.fixedview(w_iterable, itemcount)
-        except UnpackValueError, e:
-            w_msg = self.space.wrap(e.msg)
-            raise OperationError(self.space.w_ValueError, w_msg)
+        items = self.space.fixedview(w_iterable, itemcount)
         self.pushrevvalues(itemcount, items)
 
     def STORE_ATTR(self, nameindex, next_instr):
@@ -638,7 +657,7 @@ class __extend__(pyframe.PyFrame):
     def STORE_GLOBAL(self, nameindex, next_instr):
         varname = self.getname_u(nameindex)
         w_newvalue = self.popvalue()
-        self.space.set_str_keyed_item(self.w_globals, varname, w_newvalue)
+        self.space.setitem_str(self.w_globals, varname, w_newvalue)
 
     def DELETE_GLOBAL(self, nameindex, next_instr):
         w_varname = self.getname_w(nameindex)
@@ -689,26 +708,6 @@ class __extend__(pyframe.PyFrame):
         items = self.popvalues_mutable(itemcount)
         w_list = self.space.newlist(items)
         self.pushvalue(w_list)
-
-    def BUILD_MAP(self, itemcount, next_instr):
-        if not we_are_translated() and sys.version_info >= (2, 6):
-            # We could pre-allocate a dict here
-            # but for the moment this code is not translated.
-            pass
-        else:
-            if itemcount != 0:
-                raise BytecodeCorruption
-        w_dict = self.space.newdict()
-        self.pushvalue(w_dict)
-
-    def STORE_MAP(self, zero, next_instr):
-        if not we_are_translated() and sys.version_info >= (2, 6):
-            w_key = self.popvalue()
-            w_value = self.popvalue()
-            w_dict = self.peekvalue()
-            self.space.setitem(w_dict, w_key, w_value)
-        else:
-            raise BytecodeCorruption
 
     def LOAD_ATTR(self, nameindex, next_instr):
         "obj.attributename"
@@ -887,7 +886,6 @@ class __extend__(pyframe.PyFrame):
 
     @jit.unroll_safe
     def call_function(self, oparg, w_star=None, w_starstar=None):
-        from pypy.rlib import rstack # for resume points
         from pypy.interpreter.function import is_builtin_code
 
         n_arguments = oparg & 0xff
@@ -920,8 +918,6 @@ class __extend__(pyframe.PyFrame):
         self.pushvalue(w_result)
 
     def CALL_FUNCTION(self, oparg, next_instr):
-        from pypy.rlib import rstack # for resume points
-
         # XXX start of hack for performance
         if (oparg >> 8) & 0xff == 0:
             # Only positional arguments
@@ -1011,14 +1007,22 @@ class __extend__(pyframe.PyFrame):
         self.pushvalue(w_result)
 
     def MISSING_OPCODE(self, oparg, next_instr):
-        ofs = next_instr - 1
+        ofs = self.last_instr
         c = self.pycode.co_code[ofs]
         name = self.pycode.co_name
         raise BytecodeCorruption("unknown opcode, ofs=%d, code=%d, name=%s" %
                                  (ofs, ord(c), name) )
 
     STOP_CODE = MISSING_OPCODE
+    
+    def BUILD_MAP(self, itemcount, next_instr):
+        if itemcount != 0:
+            raise BytecodeCorruption
+        w_dict = self.space.newdict()
+        self.pushvalue(w_dict)
 
+    def STORE_MAP(self, zero, next_instr):
+        raise BytecodeCorruption
 
 ### ____________________________________________________________ ###
 

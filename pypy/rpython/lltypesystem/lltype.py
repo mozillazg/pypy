@@ -3,9 +3,9 @@ import traceback
 import sys
 
 import py
-from pypy.rlib.rarithmetic import r_int, r_uint, intmask, r_singlefloat
-from pypy.rlib.rarithmetic import r_ulonglong, r_longlong, base_int
-from pypy.rlib.rarithmetic import normalizedinttype
+from pypy.rlib.rarithmetic import (r_int, r_uint, intmask, r_singlefloat,
+                                   r_ulonglong, r_longlong, base_int,
+                                   normalizedinttype)
 from pypy.rlib.objectmodel import Symbolic
 from pypy.tool.uid import Hashable
 from pypy.tool.tls import tlsobject
@@ -14,8 +14,6 @@ from types import NoneType
 from sys import maxint
 import struct
 import weakref
-
-log = py.log.Producer('lltype')
 
 TLS = tlsobject()
 TRACK_ALLOCATIONS = False
