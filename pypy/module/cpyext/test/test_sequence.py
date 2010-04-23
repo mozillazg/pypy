@@ -3,7 +3,7 @@ from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext import sequence
 
-class TestIterator(BaseApiTest):
+class TestSequence(BaseApiTest):
     def test_sequence(self, space, api):
         w_t = space.wrap((1, 2, 3, 4))
         assert api.PySequence_Fast(w_t, "message") is w_t
@@ -21,6 +21,11 @@ class TestIterator(BaseApiTest):
         w_seq = api.PySequence_Tuple(w_set)
         assert space.type(w_seq) is space.w_tuple
         assert sorted(space.unwrap(w_seq)) == [1, 2, 3, 4]
+
+    def test_concat(self, space, api):
+        w_t1 = space.wrap(range(4))
+        w_t2 = space.wrap(range(4, 8))
+        assert space.unwrap(api.PySequence_Concat(w_t1, w_t2)) == range(8)
 
     def test_exception(self, space, api):
         message = rffi.str2charp("message")
