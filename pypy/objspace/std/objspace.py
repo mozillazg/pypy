@@ -1,7 +1,7 @@
 import __builtin__
 import types
 from pypy.interpreter import pyframe, function, special
-from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
+from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
 from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
@@ -133,7 +133,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if not we_are_translated() and isinstance(code, CPythonFakeCode):
             return CPythonFakeFrame(self, code, w_globals)
         else:
-            return self.FrameClass(self, code, w_globals, closure)
+            return ObjSpace.createframe(self, code, w_globals, closure)
 
     def gettypefor(self, cls):
         return self.gettypeobject(cls.typedef)
@@ -252,9 +252,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         raise model.UnwrapError, "cannot unwrap: %r" % w_obj
 
     def newint(self, intval):
-        # this time-critical and circular-imports-funny method was stored
-        # on 'self' by initialize()
-        # not sure how bad this is:
         return wrapint(self, intval)
 
     def newfloat(self, floatval):
@@ -338,6 +335,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
     # have different return type. First one is a resizable list, second
     # one is not
 
+    def _wrap_expected_length(self, expected, got):
+        return OperationError(self.w_ValueError,
+                self.wrap("Expected length %d, got %d" % (expected, got)))
+
     def unpackiterable(self, w_obj, expected_length=-1):
         if isinstance(w_obj, W_TupleObject):
             t = w_obj.wrappeditems[:]
@@ -346,7 +347,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         else:
             return ObjSpace.unpackiterable(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
-            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            raise self._wrap_expected_length(expected_length, len(t))
         return t
 
     def fixedview(self, w_obj, expected_length=-1):
@@ -359,7 +360,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         else:
             return ObjSpace.fixedview(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
-            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            raise self._wrap_expected_length(expected_length, len(t))
         return t
 
     def listview(self, w_obj, expected_length=-1):
@@ -370,7 +371,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         else:
             return ObjSpace.listview(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
-            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            raise self._wrap_expected_length(expected_length, len(t))
         return t
 
     def sliceindices(self, w_slice, w_length):
@@ -465,11 +466,11 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return w_obj.getitem(w_key)
         return ObjSpace.finditem(self, w_obj, w_key)
 
-    def set_str_keyed_item(self, w_obj, key, w_value, shadows_type=True):
+    def setitem_str(self, w_obj, key, w_value, shadows_type=True):
         # performance shortcut to avoid creating the OperationError(KeyError)
         if (isinstance(w_obj, W_DictMultiObject) and
                 not w_obj.user_overridden_class):
-            w_obj.set_str_keyed_item(key, w_value, shadows_type)
+            w_obj.setitem_str(key, w_value, shadows_type)
         else:
             self.setitem(w_obj, self.wrap(key), w_value)
 

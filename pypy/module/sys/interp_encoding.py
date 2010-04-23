@@ -1,3 +1,6 @@
+import sys
+from pypy.rlib import rlocale
+
 def getdefaultencoding(space):
     """Return the current default string encoding used by the Unicode 
 implementation."""
@@ -22,3 +25,31 @@ def get_w_default_encoder(space):
     w_encoder = space.getitem(w_functuple, space.wrap(0))
     space.sys.w_default_encoder = w_encoder    # cache it
     return w_encoder
+
+if sys.platform == "win32":
+    base_encoding = "mbcs"
+elif sys.platform == "darwin":
+    base_encoding = "utf-8"
+else:
+    base_encoding = None
+
+def _getfilesystemencoding(space):
+    encoding = base_encoding
+    if rlocale.HAVE_LANGINFO and rlocale.CODESET:
+        oldlocale = rlocale.setlocale(rlocale.LC_CTYPE, None)
+        rlocale.setlocale(rlocale.LC_CTYPE, "")
+        loc_codeset = rlocale.nl_langinfo(rlocale.CODESET)
+        if loc_codeset:
+            codecmod = space.getbuiltinmodule('_codecs')
+            w_res = space.call_function(space.getattr(codecmod,
+                                                      space.wrap('lookup')),
+                                        space.wrap(loc_codeset))
+            if space.is_true(w_res):
+                encoding = loc_codeset
+    return encoding
+
+def getfilesystemencoding(space):
+    """Return the encoding used to convert Unicode filenames in
+    operating system filenames.
+    """
+    return space.wrap(space.sys.filesystemencoding)

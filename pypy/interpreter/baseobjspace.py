@@ -13,7 +13,7 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib.timer import DummyTimer, Timer
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib import jit
-import os, sys
+import os, sys, py
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
 
@@ -42,7 +42,7 @@ class W_Root(object):
     def setdictvalue(self, space, attr, w_value, shadows_type=True):
         w_dict = self.getdict()
         if w_dict is not None:
-            space.set_str_keyed_item(w_dict, attr, w_value, shadows_type)
+            space.setitem_str(w_dict, attr, w_value, shadows_type)
             return True
         return False
 
@@ -209,12 +209,6 @@ class SpaceCache(Cache):
     def ready(self, result):
         pass
 
-class UnpackValueError(ValueError):
-    def __init__(self, msg):
-        self.msg = msg
-    def __str__(self):
-        return self.msg
-
 class DescrMismatch(Exception):
     pass
 
@@ -257,8 +251,10 @@ class ObjSpace(object):
         self.actionflag.register_action(self.user_del_action)
         self.actionflag.register_action(self.frame_trace_action)
 
-        from pypy.interpreter.pyframe import PyFrame
-        self.FrameClass = PyFrame    # can be overridden to a subclass
+        from pypy.interpreter.pycode import cpython_magic, default_magic
+        self.our_magic = default_magic
+        self.host_magic = cpython_magic
+        # can be overridden to a subclass
 
         if self.config.objspace.logbytecodes:
             self.bytecodecounts = [0] * 256
@@ -628,7 +624,7 @@ class ObjSpace(object):
         """shortcut for space.int_w(space.hash(w_obj))"""
         return self.int_w(self.hash(w_obj))
 
-    def set_str_keyed_item(self, w_obj, key, w_value, shadows_type=True):
+    def setitem_str(self, w_obj, key, w_value, shadows_type=True):
         return self.setitem(w_obj, self.wrap(key), w_value)
 
     def finditem_str(self, w_obj, key):
@@ -721,7 +717,8 @@ class ObjSpace(object):
                     raise
                 break  # done
             if expected_length != -1 and len(items) == expected_length:
-                raise UnpackValueError("too many values to unpack")
+                raise OperationError(space.w_ValueError,
+                                     space.wrap("too many values to unpack"))
             items.append(w_item)
         if expected_length != -1 and len(items) < expected_length:
             i = len(items)
@@ -729,8 +726,9 @@ class ObjSpace(object):
                 plural = ""
             else:
                 plural = "s"
-            raise UnpackValueError("need more than %d value%s to unpack" %
-                                   (i, plural))
+            raise OperationError(space.w_ValueError,
+                      space.wrap("need more than %d value%s to unpack" %
+                                 (i, plural)))
         return items
 
     def fixedview(self, w_iterable, expected_length=-1):
@@ -877,6 +875,9 @@ class ObjSpace(object):
         w_objtype = self.type(w_obj)
         return self.issubtype(w_objtype, w_type)
 
+    def isinstance_w(self, w_obj, w_type):
+        return self.is_true(self.isinstance(w_obj, w_type))
+
     # The code below only works
     # for the simple case (new-style instance).
     # These methods are patched with the full logic by the __builtin__
@@ -928,23 +929,30 @@ class ObjSpace(object):
         import types
         from pypy.interpreter.pycode import PyCode
         if isinstance(expression, str):
-            expression = compile(expression, '?', 'eval')
+            compiler = self.createcompiler()
+            expression = compiler.compile(expression, '?', 'eval', 0,
+                                         hidden_applevel=hidden_applevel)
         if isinstance(expression, types.CodeType):
-            expression = PyCode._from_code(self, expression,
-                                          hidden_applevel=hidden_applevel)
+            # XXX only used by appsupport
+            expression = PyCode._from_code(self, expression)
         if not isinstance(expression, PyCode):
             raise TypeError, 'space.eval(): expected a string, code or PyCode object'
         return expression.exec_code(self, w_globals, w_locals)
 
-    def exec_(self, statement, w_globals, w_locals, hidden_applevel=False):
+    def exec_(self, statement, w_globals, w_locals, hidden_applevel=False,
+              filename=None):
         "NOT_RPYTHON: For internal debugging."
         import types
+        if filename is None:
+            filename = '?'
         from pypy.interpreter.pycode import PyCode
         if isinstance(statement, str):
-            statement = compile(statement, '?', 'exec')
+            compiler = self.createcompiler()
+            statement = compiler.compile(statement, filename, 'exec', 0,
+                                         hidden_applevel=hidden_applevel)
         if isinstance(statement, types.CodeType):
-            statement = PyCode._from_code(self, statement,
-                                          hidden_applevel=hidden_applevel)
+            # XXX only used by appsupport
+            statement = PyCode._from_code(self, statement)
         if not isinstance(statement, PyCode):
             raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
         w_key = self.wrap('__builtins__')
@@ -1095,6 +1103,17 @@ class ObjSpace(object):
                                  self.wrap('argument must be a unicode'))
         return self.unicode_w(w_obj)
 
+    def path_w(space, w_obj):
+        """ Like str_w, but if the object is unicode, encode it using
+        filesystemencoding
+        """
+        filesystemencoding = space.sys.filesystemencoding
+        if (filesystemencoding and
+            space.is_true(space.isinstance(w_obj, space.w_unicode))):
+            w_obj = space.call_method(w_obj, "encode",
+                                      space.wrap(filesystemencoding))
+        return space.str_w(w_obj)
+
     def bool_w(self, w_obj):
         # Unwraps a bool, also accepting an int for compatibility.
         # This is here mostly just for gateway.int_unwrapping_space_method().
@@ -1162,7 +1181,7 @@ class AppExecCache(SpaceCache):
         assert source.startswith('('), "incorrect header in:\n%s" % (source,)
         source = py.code.Source("def anonymous%s\n" % source)
         w_glob = space.newdict()
-        space.exec_(source.compile(), w_glob, w_glob)
+        space.exec_(str(source), w_glob, w_glob)
         return space.getitem(w_glob, space.wrap('anonymous'))
 
 class DummyLock(object):

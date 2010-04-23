@@ -1,4 +1,4 @@
-from pypy.interpreter.mixedmodule import MixedModule 
+from pypy.interpreter.mixedmodule import MixedModule
 from pypy.interpreter.error import OperationError
 
 class Module(MixedModule):
@@ -10,6 +10,7 @@ class Module(MixedModule):
         self.recursionlimit = 100
         self.w_default_encoder = None
         self.defaultencoding = "ascii"
+        self.filesystemencoding = None
         
     interpleveldefs = {
         '__name__'              : '(space.wrap("sys"))', 
@@ -68,13 +69,14 @@ class Module(MixedModule):
         
         'getdefaultencoding'    : 'interp_encoding.getdefaultencoding', 
         'setdefaultencoding'    : 'interp_encoding.setdefaultencoding',
-}
+        'getfilesystemencoding' : 'interp_encoding.getfilesystemencoding',
+        }
+    
     appleveldefs = {
         'excepthook'            : 'app.excepthook', 
         '__excepthook__'        : 'app.excepthook', 
         'exit'                  : 'app.exit', 
         'exitfunc'              : 'app.exitfunc',
-        'getfilesystemencoding' : 'app.getfilesystemencoding', 
         'callstats'             : 'app.callstats',
         'copyright'             : 'app.copyright_str', 
     }
@@ -83,6 +85,10 @@ class Module(MixedModule):
         w_name = self.space.wrap(name)
         w_modules = self.get('modules')
         self.space.setitem(w_modules, w_name, w_module)
+
+    def startup(self, space):
+        from pypy.module.sys.interp_encoding import _getfilesystemencoding
+        self.filesystemencoding = _getfilesystemencoding(space)
 
     def getmodule(self, name): 
         space = self.space
