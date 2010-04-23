@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL
+from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, CONST_STRING
 from pypy.module.cpyext.pyobject import PyObject
 
 
@@ -21,4 +21,19 @@ def PyMapping_Items(space, w_obj):
     containing a key-value pair.  On failure, return NULL. This is equivalent to
     the Python expression o.items()."""
     return space.call_method(w_obj, "items")
+
+@cpython_api([PyObject, CONST_STRING], PyObject)
+def PyMapping_GetItemString(space, w_obj, key):
+    """Return element of o corresponding to the object key or NULL on failure.
+    This is the equivalent of the Python expression o[key]."""
+    w_key = space.wrap(rffi.charp2str(key))
+    return space.getitem(w_obj, w_key)
+
+@cpython_api([PyObject, CONST_STRING, PyObject], rffi.INT_real, error=-1)
+def PyMapping_SetItemString(space, w_obj, key, w_value):
+    """Map the object key to the value v in object o. Returns -1 on failure.
+    This is the equivalent of the Python statement o[key] = v."""
+    w_key = space.wrap(rffi.charp2str(key))
+    space.setitem(w_obj, w_key, w_value)
+    return 0
 
