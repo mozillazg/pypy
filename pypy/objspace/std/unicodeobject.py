@@ -187,10 +187,14 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
     #    space.is_w(space.type(l[0]), space.w_unicode)):
     #    return l[0]
     
-    values_list = []#None] * len(l)
     i = 0
-    for w_item in space.iterate_w(w_list):
-        i += 1
+    iterator = space.iterate_w(w_list)
+    values_list = [None] * iterator.length_hint()
+    if values_list:
+        append = False
+    else:
+        append = True
+    for w_item in iterator:
         if isinstance(w_item, W_UnicodeObject):
             # shortcut for performane
             item = w_item._value
@@ -199,7 +203,11 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
         else:
             raise operationerrfmt(space.w_TypeError,
                 "sequence item %d: expected string or Unicode", i)
-        values_list.append(item)
+        if append:
+            values_list.append(item)
+        else:
+            values_list[i] = item
+        i += 1
     return W_UnicodeObject(w_self._value.join(values_list))
 
 def hash__Unicode(space, w_uni):

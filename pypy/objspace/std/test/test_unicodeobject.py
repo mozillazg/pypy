@@ -66,6 +66,19 @@ class AppTestUnicodeString:
         check(u', '.join(['a', 'b']), u'a, b')
         raises(TypeError, u'x'.join, [u'x', (1, 2, 3)])
 
+        class X(object):
+            def __init__(self, num):
+                self.num = num
+            def __iter__(self):
+                return self
+            def next(self):
+                if self.num == 0:
+                    raise StopIteration
+                self.num -= 1
+                return u"abc"
+
+        check(u''.join(X(3)), u"abcabcabc")
+
     if sys.version_info >= (2,3):
         def test_contains_ex(self):
             assert u'' in 'abc'
