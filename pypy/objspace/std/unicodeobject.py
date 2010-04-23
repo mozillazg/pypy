@@ -181,27 +181,23 @@ def contains__Unicode_Unicode(space, w_container, w_item):
     return space.newbool(container.find(item) != -1)
 
 def unicode_join__Unicode_ANY(space, w_self, w_list):
-    l = space.unpackiterable(w_list)
-    delim = w_self._value
-    totlen = 0
-    if len(l) == 0:
-        return W_UnicodeObject.EMPTY
-    if (len(l) == 1 and
-        space.is_w(space.type(l[0]), space.w_unicode)):
-        return l[0]
+    #if len(l) == 0:
+    #    return W_UnicodeObject.EMPTY
+    #if (len(l) == 1 and
+    #    space.is_w(space.type(l[0]), space.w_unicode)):
+    #    return l[0]
     
-    values_list = [None] * len(l)
-    for i in range(len(l)):
-        item = l[i]
-        if isinstance(item, W_UnicodeObject):
+    values_list = []#None] * len(l)
+    for w_item in space.iterate_w(w_list):
+        if isinstance(w_item, W_UnicodeObject):
             # shortcut for performane
-            item = item._value
-        elif space.is_true(space.isinstance(item, space.w_str)):
-            item = space.unicode_w(item)
+            item = w_item._value
+        elif space.is_true(space.isinstance(w_item, space.w_str)):
+            item = space.unicode_w(w_item)
         else:
             raise operationerrfmt(space.w_TypeError,
                 "sequence item %d: expected string or Unicode", i)
-        values_list[i] = item
+        values_list.append(item)
     return W_UnicodeObject(w_self._value.join(values_list))
 
 def hash__Unicode(space, w_uni):
