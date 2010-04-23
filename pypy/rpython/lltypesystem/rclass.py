@@ -595,11 +595,16 @@ class InstanceRepr(AbstractInstanceRepr):
         return vinst
 
     def rtype_next(self, hop):
-        vinst, = hop.inputargs(self)
-        r_method = self.rtyper.makerepr(hop.args_s[0].s_next_pbc)
-        v_meth = r_method.get_method_from_instance(self, vinst, hop.llops)
-        import pdb
-        pdb.set_trace()
+        # XXX should be moved to rpython/rclass.py
+        bk = hop.rtyper.annotator.bookkeeper
+        hop2 = hop.copy()
+        # XXX fish fish fish
+        from pypy.annotation.unaryop import call_next
+        c_func = Constant(call_next)
+        s_func = bk.immutablevalue(call_next)
+        hop2.v_s_insertfirstarg(c_func, s_func)
+        hop2.forced_opname = 'simple_call'
+        return hop2.dispatch()
 
 class __extend__(pairtype(InstanceRepr, InstanceRepr)):
     def convert_from_to((r_ins1, r_ins2), v, llops):
