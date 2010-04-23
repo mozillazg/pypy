@@ -188,7 +188,9 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
     #    return l[0]
     
     values_list = []#None] * len(l)
+    i = 0
     for w_item in space.iterate_w(w_list):
+        i += 1
         if isinstance(w_item, W_UnicodeObject):
             # shortcut for performane
             item = w_item._value
