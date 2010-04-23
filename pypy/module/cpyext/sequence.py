@@ -87,3 +87,9 @@ def PySequence_Tuple(space, w_obj):
     otherwise a tuple will be constructed with the appropriate contents.  This is
     equivalent to the Python expression tuple(o)."""
     return space.call_function(space.w_tuple, w_obj)
+
+@cpython_api([PyObject, PyObject], PyObject)
+def PySequence_Concat(space, w_o1, w_o2):
+    """Return the concatenation of o1 and o2 on success, and NULL on failure.
+    This is the equivalent of the Python expression o1 + o2."""
+    return space.add(w_o1, w_o2)
