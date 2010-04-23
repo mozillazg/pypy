@@ -74,6 +74,16 @@ class AppTestListObject(AppTestCpythonExtensionBase):
              Py_RETURN_NONE;
              """
              ),
+             ("setslice", "METH_VARARGS",
+             """
+             PyObject *l = PyTuple_GetItem(args, 0);
+             PyObject *seq = PyTuple_GetItem(args, 1);
+             if (seq == Py_None) seq = NULL;
+             if (PyList_SetSlice(l, 1, 4, seq) < 0)
+                 return NULL;
+             Py_RETURN_NONE;
+             """
+             ),
             ])
         l = module.newlist()
         assert l == [3, -5, 1000]
@@ -94,4 +104,12 @@ class AppTestListObject(AppTestCpythonExtensionBase):
         module.appendlist(l, 14)
         assert len(l) == 1
         assert l[0] == 14
+
+        l = range(6)
+        module.setslice(l, ['a'])
+        assert l == [0, 'a', 4, 5]
+
+        l = range(6)
+        module.setslice(l, None)
+        assert l == [0, 4, 5]
 
