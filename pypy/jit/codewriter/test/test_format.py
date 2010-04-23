@@ -3,6 +3,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.flatten import Label, TLabel, SSARepr, Register
 from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rpython.lltypesystem import lltype
 
 
@@ -65,5 +66,19 @@ def test_format_assembler_list():
     asm = format_assembler(ssarepr)
     expected = """
         foobar i[%i0, $123, %i1]
+    """
+    assert asm == str(py.code.Source(expected)).strip() + '\n'
+
+def test_format_assembler_descr():
+    class FooDescr(AbstractDescr):
+        def __repr__(self):
+            return 'hi_there!'
+    ssarepr = SSARepr("test")
+    ssarepr.insns = [
+        ('foobar', FooDescr()),
+        ]
+    asm = format_assembler(ssarepr)
+    expected = """
+        foobar hi_there!
     """
     assert asm == str(py.code.Source(expected)).strip() + '\n'

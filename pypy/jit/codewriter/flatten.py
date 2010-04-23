@@ -1,5 +1,5 @@
 from pypy.objspace.flow.model import Variable, Constant
-from pypy.jit.metainterp.history import getkind
+from pypy.jit.metainterp.history import AbstractDescr, getkind
 from pypy.rpython.lltypesystem import lltype
 
 
@@ -189,6 +189,8 @@ class GraphFlattener(object):
             elif isinstance(v, ListOfKind):
                 lst = [self.getcolor(x) for x in v]
                 v = ListOfKind(v.kind, lst)
+            elif isinstance(v, AbstractDescr):
+                pass
             else:
                 raise NotImplementedError(type(v))
             args.append(v)

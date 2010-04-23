@@ -2,6 +2,7 @@ import py
 from pypy.objspace.flow.model import Constant
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
 from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.metainterp.history import AbstractDescr
 
 
 def format_assembler(ssarepr, dump=True):
@@ -18,6 +19,8 @@ def format_assembler(ssarepr, dump=True):
             return getlabelname(x)
         elif isinstance(x, ListOfKind):
             return '%s[%s]' % (x.kind[0], ', '.join(map(repr, x)))
+        elif isinstance(x, AbstractDescr):
+            return '%r' % (x,)
         else:
             return '<unknown object: %r>' % (x,)
     #
