@@ -1505,34 +1505,6 @@ def PyErr_NormalizeException(space, , , ):
     The delayed normalization is implemented to improve performance."""
     raise NotImplementedError
 
-@cpython_api([PyObjectP, PyObjectP, PyObjectP], lltype.Void)
-def PyErr_Fetch(space, ptype, pvalue, ptraceback):
-    """Retrieve the error indicator into three variables whose addresses are passed.
-    If the error indicator is not set, set all three variables to NULL.  If it is
-    set, it will be cleared and you own a reference to each object retrieved.  The
-    value and traceback object may be NULL even when the type object is not.
-    
-    This function is normally only used by code that needs to handle exceptions or
-    by code that needs to save and restore the error indicator temporarily."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject, PyObject], lltype.Void)
-def PyErr_Restore(space, type, value, traceback):
-    """Set  the error indicator from the three objects.  If the error indicator is
-    already set, it is cleared first.  If the objects are NULL, the error
-    indicator is cleared.  Do not pass a NULL type and non-NULL value or
-    traceback.  The exception type should be a class.  Do not pass an invalid
-    exception type or value. (Violating these rules will cause subtle problems
-    later.)  This call takes away a reference to each object: you must own a
-    reference to each object before the call and after the call you no longer own
-    these references.  (If you don't understand this, don't use this function.  I
-    warned you.)
-    
-    This function is normally only used by code that needs to save and restore the
-    error indicator temporarily; use PyErr_Fetch() to save the current
-    exception state."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP, ...], PyObject)
 def PyErr_Format(space, exception, format, ):
     """This function sets the error indicator and returns NULL. exception should be
@@ -2834,55 +2806,6 @@ def Py_GetPythonHome(space, ):
     raise NotImplementedError
 
 @cpython_api([], lltype.Void)
-def PyEval_InitThreads(space, ):
-    """
-    
-    
-    
-    Initialize and acquire the global interpreter lock.  It should be called in the
-    main thread before creating a second thread or engaging in any other thread
-    operations such as PyEval_ReleaseLock() or
-    PyEval_ReleaseThread(tstate). It is not needed before calling
-    PyEval_SaveThread() or PyEval_RestoreThread().
-    
-    
-    
-    
-    
-    This is a no-op when called for a second time.  It is safe to call this function
-    before calling Py_Initialize().
-    
-    
-    
-    
-    
-    When only the main thread exists, no GIL operations are needed. This is a
-    common situation (most Python programs do not use threads), and the lock
-    operations slow the interpreter down a bit. Therefore, the lock is not
-    created initially.  This situation is equivalent to having acquired the lock:
-    when there is only a single thread, all object accesses are safe.  Therefore,
-    when this function initializes the global interpreter lock, it also acquires
-    it.  Before the Python thread module creates a new thread, knowing
-    that either it has the lock or the lock hasn't been created yet, it calls
-    PyEval_InitThreads().  When this call returns, it is guaranteed that
-    the lock has been created and that the calling thread has acquired it.
-    
-    It is not safe to call this function when it is unknown which thread (if
-    any) currently has the global interpreter lock.
-    
-    This function is not available when thread support is disabled at compile time."""
-    raise NotImplementedError
-
-@cpython_api([], rffi.INT_real)
-def PyEval_ThreadsInitialized(space, ):
-    """Returns a non-zero value if PyEval_InitThreads() has been called.  This
-    function can be called without holding the GIL, and therefore can be used to
-    avoid calls to the locking API when running single-threaded.  This function is
-    not available when thread support is disabled at compile time.
-    """
-    raise NotImplementedError
-
-@cpython_api([], lltype.Void)
 def PyEval_AcquireLock(space, ):
     """Acquire the global interpreter lock.  The lock must have been created earlier.
     If this thread already has the lock, a deadlock ensues.  This function is not
@@ -2893,24 +2816,6 @@ def PyEval_AcquireLock(space, ):
 def PyEval_ReleaseLock(space, ):
     """Release the global interpreter lock.  The lock must have been created earlier.
     This function is not available when thread support is disabled at compile time."""
-    raise NotImplementedError
-
-@cpython_api([{PyThreadState*}], lltype.Void)
-def PyEval_AcquireThread(space, tstate):
-    """Acquire the global interpreter lock and set the current thread state to
-    tstate, which should not be NULL.  The lock must have been created earlier.
-    If this thread already has the lock, deadlock ensues.  This function is not
-    available when thread support is disabled at compile time."""
-    raise NotImplementedError
-
-@cpython_api([{PyThreadState*}], lltype.Void)
-def PyEval_ReleaseThread(space, tstate):
-    """Reset the current thread state to NULL and release the global interpreter
-    lock.  The lock must have been created earlier and must be held by the current
-    thread.  The tstate argument, which must not be NULL, is only used to check
-    that it represents the current thread state --- if it isn't, a fatal error is
-    reported. This function is not available when thread support is disabled at
-    compile time."""
     raise NotImplementedError
 
 @cpython_api([], {PyThreadState*})
@@ -2958,37 +2863,11 @@ def PyInterpreterState_Delete(space, interp):
     PyInterpreterState_Clear()."""
     raise NotImplementedError
 
-@cpython_api([{PyInterpreterState*}], {PyThreadState*})
-def PyThreadState_New(space, interp):
-    """Create a new thread state object belonging to the given interpreter object.
-    The global interpreter lock need not be held, but may be held if it is
-    necessary to serialize calls to this function."""
-    raise NotImplementedError
-
-@cpython_api([{PyThreadState*}], lltype.Void)
-def PyThreadState_Clear(space, tstate):
-    """Reset all information in a thread state object.  The global interpreter lock
-    must be held."""
-    raise NotImplementedError
-
-@cpython_api([{PyThreadState*}], lltype.Void)
-def PyThreadState_Delete(space, tstate):
-    """Destroy a thread state object.  The global interpreter lock need not be held.
-    The thread state must have been reset with a previous call to
-    PyThreadState_Clear()."""
-    raise NotImplementedError
-
 @cpython_api([], {PyThreadState*})
 def PyThreadState_Get(space, ):
     """Return the current thread state.  The global interpreter lock must be held.
     When the current thread state is NULL, this issues a fatal error (so that
     the caller needn't check for NULL)."""
-    raise NotImplementedError
-
-@cpython_api([{PyThreadState*}], {PyThreadState*})
-def PyThreadState_Swap(space, tstate):
-    """Swap the current thread state with the thread state given by the argument
-    tstate, which may be NULL.  The global interpreter lock must be held."""
     raise NotImplementedError
 
 @cpython_api([], PyObject, borrowed=True)
@@ -3393,12 +3272,6 @@ def PyLong_FromSize_t(space, v):
     """
     raise NotImplementedError
 
-@cpython_api([{double}], PyObject)
-def PyLong_FromDouble(space, v):
-    """Return a new PyLongObject object from the integer part of v, or
-    NULL on failure."""
-    raise NotImplementedError
-
 @cpython_api([{Py_UNICODE*}, Py_ssize_t, rffi.INT_real], PyObject)
 def PyLong_FromUnicode(space, u, length, base):
     """Convert a sequence of Unicode digits to a Python long integer value.  The first
@@ -3421,17 +3294,6 @@ def PyLong_FromVoidPtr(space, p):
     
     
     If the integer is larger than LONG_MAX, a positive long integer is returned."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], lltype.Signed)
-def PyLong_AsLong(space, pylong):
-    """
-    
-    
-    
-    Return a C long representation of the contents of pylong.  If
-    pylong is greater than LONG_MAX, an OverflowError is raised
-    and -1 will be returned."""
     raise NotImplementedError
 
 @cpython_api([PyObject, {int*}], lltype.Signed)
@@ -3891,16 +3753,6 @@ def PyNumber_Int(space, o):
     raise NotImplementedError
 
 @cpython_api([PyObject], PyObject)
-def PyNumber_Long(space, o):
-    """
-    
-    
-    
-    Returns the o converted to a long integer object on success, or NULL on
-    failure.  This is the equivalent of the Python expression long(o)."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
 def PyNumber_Index(space, o):
     """Returns the o converted to a Python int or long on success or NULL with a
     TypeError exception raised on failure.
@@ -4006,16 +3858,6 @@ def PyObject_SetAttrString(space, o, attr_name, v):
     o.attr_name = v."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject, PyObject], rffi.INT_real)
-def PyObject_GenericSetAttr(space, o, name, value):
-    """Generic attribute setter function that is meant to be put into a type
-    object's tp_setattro slot.  It looks for a data descriptor in the
-    dictionary of classes in the object's MRO, and if found it takes preference
-    over setting the attribute in the instance dictionary. Otherwise, the
-    attribute is set in the object's __dict__ (if present).  Otherwise,
-    an AttributeError is raised and -1 is returned."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject], rffi.INT_real)
 def PyObject_DelAttr(space, o, attr_name):
     """Delete attribute named attr_name, for object o. Returns -1 on failure.
@@ -4072,30 +3914,6 @@ def PyObject_Compare(space, o1, o2):
     comparison on success.  On error, the value returned is undefined; use
     PyErr_Occurred() to detect an error.  This is equivalent to the Python
     expression cmp(o1, o2)."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
-def PyObject_Repr(space, o):
-    """
-    
-    
-    
-    Compute a string representation of object o.  Returns the string
-    representation on success, NULL on failure.  This is the equivalent of the
-    Python expression repr(o).  Called by the repr() built-in function and
-    by reverse quotes."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
-def PyObject_Str(space, o):
-    """
-    
-    
-    
-    Compute a string representation of object o.  Returns the string
-    representation on success, NULL on failure.  This is the equivalent of the
-    Python expression str(o).  Called by the str() built-in function and
-    by the print statement."""
     raise NotImplementedError
 
 @cpython_api([PyObject], PyObject)
@@ -4913,14 +4731,6 @@ def PyString_AsEncodedObject(space, str, encoding, errors):
     This function is not available in 3.x and does not have a PyBytes alias."""
     raise NotImplementedError
 
-@cpython_api([{PyMethodDef}, PyObject, rffi.CCHARP], PyObject)
-def Py_FindMethod(space, table[], ob, name):
-    """Return a bound method object for an extension type implemented in C.  This
-    can be useful in the implementation of a tp_getattro or
-    tp_getattr handler that does not use the
-    PyObject_GenericGetAttr() function."""
-    raise NotImplementedError
-
 @cpython_api([{FILE*}, rffi.CCHARP], rffi.INT_real)
 def Py_FdIsInteractive(space, fp, filename):
     """Return true (nonzero) if the standard I/O file fp with name filename is
@@ -5253,14 +5063,6 @@ def PyUnicode_FromUnicode(space, u, size):
     
     This function used an int type for size. This might require
     changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], Py_ssize_t)
-def PyUnicode_GetSize(space, unicode):
-    """Return the length of the Unicode object.
-    
-    This function returned an int type. This might require changes
-    in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
 @cpython_api([PyObject, rffi.CCHARP, rffi.CCHARP], PyObject)
@@ -5627,15 +5429,6 @@ def PyUnicode_TranslateCharmap(space, s, size, table, errors):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([rffi.CCHARP, Py_ssize_t, rffi.CCHARP], PyObject)
-def PyUnicode_DecodeMBCS(space, s, size, errors):
-    """Create a Unicode object by decoding size bytes of the MBCS encoded string s.
-    Return NULL if an exception was raised by the codec.
-    
-    This function used an int type for size. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([rffi.CCHARP, rffi.INT_real, rffi.CCHARP, {int*}], PyObject)
 def PyUnicode_DecodeMBCSStateful(space, s, size, errors, consumed):
     """If consumed is NULL, behave like PyUnicode_DecodeMBCS(). If
@@ -5643,15 +5436,6 @@ def PyUnicode_DecodeMBCSStateful(space, s, size, errors, consumed):
     trailing lead byte and the number of bytes that have been decoded will be stored
     in consumed.
     """
-    raise NotImplementedError
-
-@cpython_api([{const Py_UNICODE*}, Py_ssize_t, rffi.CCHARP], PyObject)
-def PyUnicode_EncodeMBCS(space, s, size, errors):
-    """Encode the Py_UNICODE buffer of the given size using MBCS and return a
-    Python string object.  Return NULL if an exception was raised by the codec.
-    
-    This function used an int type for size. This might require
-    changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
 @cpython_api([PyObject], PyObject)
