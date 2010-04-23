@@ -92,8 +92,11 @@ class Transformer(object):
         if 'r' in kinds: sublists.append(ListOfKind('ref', args_r))
         if 'f' in kinds: sublists.append(ListOfKind('float', args_f))
         reskind = getkind(op.result.concretetype)[0]
+        FUNC = op.args[0].concretetype.TO
+        NONVOIDARGS = tuple([ARG for ARG in FUNC.ARGS if ARG != lltype.Void])
+        calldescr = self.cpu.calldescrof(FUNC, NONVOIDARGS, FUNC.RESULT)
         return SpaceOperation('residual_call_%s_%s' % (kinds, reskind),
-                              [op.args[0]] + sublists,
+                              [op.args[0], calldescr] + sublists,
                               op.result)
 
     def add_in_correct_list(self, v, lst_i, lst_r, lst_f):
