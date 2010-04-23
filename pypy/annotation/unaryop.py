@@ -11,7 +11,7 @@ from pypy.annotation.model import \
      s_ImpossibleValue, s_Bool, s_None, \
      unionof, set, missing_operation, add_knowntypedata, HarmlesslyBlocked, \
      SomeGenericCallable, SomeWeakRef, SomeUnicodeString
-from pypy.annotation.bookkeeper import getbookkeeper, RPythonCallsSpace
+from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import builtin
 from pypy.annotation.binaryop import _clone ## XXX where to put this?
 from pypy.rpython import extregistry
@@ -633,15 +633,17 @@ class __extend__(SomeInstance):
             s.const = True
 
     def iter(ins):
-        s_result = SomeIterator(ins)
-        s_result.s_next_pbc = ins._lookup_const_attr('next')
-        return s_result
+        return SomeIterator(ins)
 
     def getanyitem(ins):
         bk = getbookkeeper()
-        args = bk.build_args("simple_call", [])
-        s_pbc = ins._lookup_const_attr('next')
-        return bk.pbc_call(s_pbc, args)
+        s_func = bk.immutablevalue(call_next)
+        return bk.emulate_pbc_call(bk.position_key, s_func, [ins],
+                                   callback = bk.position_key)
+
+# XXX temporary!
+def call_next(instance):
+    return instance.next()
 
 class __extend__(SomeBuiltin):
     def simple_call(bltn, *args):
