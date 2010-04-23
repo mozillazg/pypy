@@ -6,6 +6,10 @@ from pypy.jit.metainterp.history import getkind
 from pypy.rpython.lltypesystem import lltype, rclass, rstr
 from pypy.translator.unsimplify import varoftype
 
+class FakeCPU:
+    def calldescrof(self, FUNC, ARGS, RESULT):
+        return ('calldescr', FUNC, ARGS, RESULT)
+
 class FakeLink:
     args = []
 
@@ -54,18 +58,20 @@ def test_optimize_goto_if_not__unknownop():
 def test_residual_call():
     for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,
                     lltype.Float, lltype.Void]:
+      for with_void in [False, True]:
         for with_i in [False, True]:
-            for with_r in [False, True]:
-                for with_f in [False, True]:
-                    ARGS = []
-                    if with_i: ARGS += [lltype.Signed, lltype.Char]
-                    if with_r: ARGS += [rclass.OBJECTPTR, lltype.Ptr(rstr.STR)]
-                    if with_f: ARGS += [lltype.Float, lltype.Float]
-                    random.shuffle(ARGS)
-                    if with_f: expectedkind = 'irf'   # all kinds
-                    elif with_i: expectedkind = 'ir'  # integers and references
-                    else: expectedkind = 'r'          # only references
-                    yield residual_call_test, ARGS, RESTYPE, expectedkind
+          for with_r in [False, True]:
+            for with_f in [False, True]:
+              ARGS = []
+              if with_void: ARGS += [lltype.Void, lltype.Void]
+              if with_i: ARGS += [lltype.Signed, lltype.Char]
+              if with_r: ARGS += [rclass.OBJECTPTR, lltype.Ptr(rstr.STR)]
+              if with_f: ARGS += [lltype.Float, lltype.Float]
+              random.shuffle(ARGS)
+              if with_f: expectedkind = 'irf'   # all kinds
+              elif with_i: expectedkind = 'ir'  # integers and references
+              else: expectedkind = 'r'          # only references
+              yield residual_call_test, ARGS, RESTYPE, expectedkind
 
 def get_direct_call_op(argtypes, restype):
     FUNC = lltype.FuncType(argtypes, restype)
@@ -78,13 +84,19 @@ def get_direct_call_op(argtypes, restype):
 
 def residual_call_test(argtypes, restype, expectedkind):
     op = get_direct_call_op(argtypes, restype)
-    op1 = Transformer().rewrite_operation(op)
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
     reskind = getkind(restype)[0]
     assert op1.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
     assert op1.result == op.result
     assert op1.args[0] == op.args[0]
-    assert len(op1.args) == 1 + len(expectedkind)
-    for sublist, kind1 in zip(op1.args[1:], expectedkind):
+    FUNC = op.args[0].concretetype.TO
+    NONVOIDARGS = tuple([ARG for ARG in FUNC.ARGS if ARG != lltype.Void])
+    assert op1.args[1] == ('calldescr', FUNC, NONVOIDARGS, FUNC.RESULT)
+    assert len(op1.args) == 2 + len(expectedkind)
+    for sublist, kind1 in zip(op1.args[2:], expectedkind):
         assert sublist.kind.startswith(kind1)
         assert list(sublist) == [v for v in op.args[1:]
                                  if getkind(v.concretetype) == sublist.kind]
+    for v in op.args[1:]:
+        kind = getkind(v.concretetype)
+        assert kind == 'void' or kind[0] in expectedkind
