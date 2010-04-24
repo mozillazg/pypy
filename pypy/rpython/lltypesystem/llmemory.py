@@ -479,10 +479,8 @@ class fakeaddress(object):
             return lltype.nullptr(EXPECTED_TYPE.TO)
 
     def _cast_to_int(self):
-        # This is a bit annoying. We want this method to still work when the
-        # pointed-to object is dead
         if self:
-            return self.ptr._cast_to_int(False)
+            return AddressAsInt(self)
         else:
             return 0
 
@@ -493,6 +491,18 @@ class fakeaddress(object):
             return llarena.getfakearenaaddress(self)
         else:
             return self
+
+# ____________________________________________________________
+
+class AddressAsInt(Symbolic):
+    # a symbolic, rendered as an address cast to an integer.
+    def __init__(self, adr):
+        self.adr = adr
+    def annotation(self):
+        from pypy.annotation import model
+        return model.SomeInteger()
+    def lltype(self):
+        return lltype.Signed
 
 # ____________________________________________________________
 
@@ -608,6 +618,8 @@ def cast_adr_to_int(adr):
 
 _NONGCREF = lltype.Ptr(lltype.OpaqueType('NONGCREF'))
 def cast_int_to_adr(int):
+    if isinstance(int, AddressAsInt):
+        return int.adr
     ptr = lltype.cast_int_to_ptr(_NONGCREF, int)
     return cast_ptr_to_adr(ptr)
 
