@@ -2,6 +2,7 @@ from pypy.jit.metainterp.history import AbstractValue, AbstractDescr, getkind
 from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
 from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.objspace.flow.model import Constant
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 
 class JitCode(AbstractValue):
@@ -55,19 +56,38 @@ class Assembler(object):
             self.highest_regs[reg.kind] = reg.index
         self.code.append(chr(reg.index))
 
-    def emit_const(self, const, kind):
+    def emit_const(self, const, kind, allow_short=False):
         if const not in self.constants_dict:
+            value = const.value
+            TYPE = lltype.typeOf(value)
             if kind == 'int':
+                if isinstance(TYPE, lltype.Ptr):
+                    assert TYPE.TO._gckind == 'raw'
+                    value = llmemory.cast_ptr_to_adr(value)
+                    TYPE = llmemory.Address
+                if TYPE == llmemory.Address:
+                    value = llmemory.cast_adr_to_int(value)
+                else:
+                    value = lltype.cast_primitive(lltype.Signed, value)
+                    if allow_short and -128 <= value <= 127:  # xxx symbolic
+                        # emit the constant as a small integer
+                        self.code.append(chr(value & 0xFF))
+                        return True
                 constants = self.constants_i
             elif kind == 'ref':
+                value = lltype.cast_opaque_ptr(llmemory.GCREF, value)
                 constants = self.constants_r
             elif kind == 'float':
+                assert TYPE == lltype.Float
                 constants = self.constants_f
             else:
                 raise NotImplementedError(const)
-            constants.append(const.value)
+            constants.append(value)
             self.constants_dict[const] = 256 - len(constants)
+        # emit the constant normally, as one byte that is an index in the
+        # list of constants
         self.code.append(chr(self.constants_dict[const]))
+        return False
 
     def write_insn(self, insn):
         if isinstance(insn[0], Label):
@@ -83,11 +103,10 @@ class Assembler(object):
                 argcodes.append(x.kind[0])
             elif isinstance(x, Constant):
                 kind = getkind(x.concretetype)
-                if kind == 'int' and -128 <= x.value <= 127:
-                    self.code.append(chr(x.value & 0xFF))
+                is_short = self.emit_const(x, kind, allow_short=True)
+                if is_short:
                     argcodes.append('c')
                 else:
-                    self.emit_const(x, kind)
                     argcodes.append(kind[0])
             elif isinstance(x, TLabel):
                 self.tlabel_positions.append((x.name, len(self.code)))

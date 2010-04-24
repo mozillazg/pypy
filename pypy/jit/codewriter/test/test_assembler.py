@@ -4,7 +4,7 @@ from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
 from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.objspace.flow.model import Constant
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 
 def test_assemble_simple():
@@ -57,6 +57,32 @@ def test_assemble_float_consts():
                             "\x00\xFD")
     assert assembler.insns == {'float_return/f': 0}
     assert jitcode.constants_f == [18.0, -4.0, 128.1]
+
+def test_assemble_cast_consts():
+    ssarepr = SSARepr("test")
+    S = lltype.GcStruct('S')
+    s = lltype.malloc(S)
+    F = lltype.FuncType([], lltype.Signed)
+    f = lltype.functionptr(F, 'f')
+    ssarepr.insns = [
+        ('int_return', Constant('X', lltype.Char)),
+        ('int_return', Constant(unichr(0x1234), lltype.UniChar)),
+        ('int_return', Constant(f, lltype.Ptr(F))),
+        ('ref_return', Constant(s, lltype.Ptr(S))),
+        ]
+    assembler = Assembler()
+    jitcode = assembler.assemble(ssarepr)
+    assert jitcode.code == ("\x00\x58"
+                            "\x01\xFF"
+                            "\x01\xFE"
+                            "\x02\xFF")
+    assert assembler.insns == {'int_return/c': 0,
+                               'int_return/i': 1,
+                               'ref_return/r': 2}
+    f_int = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(f))
+    assert jitcode.constants_i == [0x1234, f_int]
+    s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+    assert jitcode.constants_r == [s_gcref]
 
 def test_assemble_loop():
     ssarepr = SSARepr("test")
