@@ -1,8 +1,11 @@
 import py
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.regalloc import perform_register_allocation
-from pypy.jit.codewriter.flatten import flatten_graph
+from pypy.jit.codewriter.flatten import flatten_graph, ListOfKind
 from pypy.jit.codewriter.format import format_assembler
+from pypy.objspace.flow.model import Variable, Constant, SpaceOperation
+from pypy.objspace.flow.model import FunctionGraph, Block, Link
+from pypy.rpython.lltypesystem import lltype
 
 
 class TestRegAlloc:
@@ -69,7 +72,7 @@ class TestRegAlloc:
             L1:
             int_gt %i0, $0, %i2
             goto_if_not L2, %i2
-            int_rename i[%i1, %i0], i[%i0, %i1]
+            int_rename I[%i1, %i0], I[%i0, %i1]
             goto L1
             L2:
             int_return %i1
@@ -102,7 +105,7 @@ class TestRegAlloc:
             L1:
             int_gt %i0, $0, %i3
             goto_if_not L2, %i3
-            int_rename i[%i1, %i2, %i0], i[%i0, %i1, %i2]
+            int_rename I[%i1, %i2, %i0], I[%i0, %i1, %i2]
             goto L1
             L2:
             int_return %i1
@@ -122,4 +125,23 @@ class TestRegAlloc:
             goto L1
             L2:
             int_return %i1
+        """)
+
+    def test_regalloc_call(self):
+        v1 = Variable(); v1.concretetype = lltype.Signed
+        v2 = Variable(); v2.concretetype = lltype.Signed
+        v3 = Variable(); v3.concretetype = lltype.Signed
+        v4 = Variable(); v4.concretetype = lltype.Signed
+        block = Block([v1])
+        block.operations = [
+            SpaceOperation('int_add', [v1, Constant(1, lltype.Signed)], v2),
+            SpaceOperation('rescall', [ListOfKind('int', [v1, v2])], v3),
+            ]
+        graph = FunctionGraph('f', block, v4)
+        block.closeblock(Link([v3], graph.returnblock))
+        #
+        self.check_assembler(graph, """
+            int_add %i0, $1, %i1
+            rescall I[%i0, %i1], %i0
+            int_return %i0
         """)

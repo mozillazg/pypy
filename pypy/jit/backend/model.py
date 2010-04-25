@@ -220,6 +220,16 @@ class AbstractCPU(object):
     def do_unicodesetitem(self, stringbox, indexbox, charbox):
         raise NotImplementedError
 
+    # blackhole interface
+    def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
+        raise NotImplementedError
+    def bh_call_r(self, func, calldescr, args_i, args_r, args_f):
+        raise NotImplementedError
+    def bh_call_f(self, func, calldescr, args_i, args_r, args_f):
+        raise NotImplementedError
+    def bh_call_v(self, func, calldescr, args_i, args_r, args_f):
+        raise NotImplementedError
+
     def do_call(self, args, calldescr):
         raise NotImplementedError
 

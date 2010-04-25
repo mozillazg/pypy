@@ -496,26 +496,31 @@ class LLtypeCPU(BaseCPU):
         newvalue = newvaluebox.getint()
         llimpl.do_unicodesetitem(0, string, index, newvalue)
 
-    def do_call(self, args, calldescr):
+    def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
+        self._prepare_call(INT, calldescr, args_i, args_r, args_f)
+        return llimpl.do_call_int(func)
+    def bh_call_r(self, func, calldescr, args_i, args_r, args_f):
+        self._prepare_call(REF, calldescr, args_i, args_r, args_f)
+        return llimpl.do_call_ptr(func)
+    def bh_call_f(self, func, calldescr, args_i, args_r, args_f):
+        self._prepare_call(FLOAT, calldescr, args_i, args_r, args_f)
+        return llimpl.do_call_float(func)
+    def bh_call_v(self, func, calldescr, args_i, args_r, args_f):
+        self._prepare_call('v', calldescr, args_i, args_r, args_f)
+        llimpl.do_call_void(func)
+
+    def _prepare_call(self, resulttypeinfo, calldescr, args_i, args_r, args_f):
         assert isinstance(calldescr, Descr)
-        func = args[0].getint()
-        for arg in args[1:]:
-            if arg.type == REF:
-                llimpl.do_call_pushptr(arg.getref_base())
-            elif arg.type == FLOAT:
-                llimpl.do_call_pushfloat(arg.getfloat())
-            else:
-                llimpl.do_call_pushint(arg.getint())
-        if calldescr.typeinfo == REF:
-            return history.BoxPtr(llimpl.do_call_ptr(func, self.memo_cast))
-        elif calldescr.typeinfo == INT:
-            return history.BoxInt(llimpl.do_call_int(func, self.memo_cast))
-        elif calldescr.typeinfo == FLOAT:
-            return history.BoxFloat(llimpl.do_call_float(func, self.memo_cast))
-        elif calldescr.typeinfo == 'v':  # void
-            llimpl.do_call_void(func, self.memo_cast)
-        else:
-            raise NotImplementedError
+        assert calldescr.typeinfo == resulttypeinfo
+        if args_i is not None:
+            for x in args_i:
+                llimpl.do_call_pushint(x)
+        if args_r is not None:
+            for x in args_r:
+                llimpl.do_call_pushptr(x)
+        if args_f is not None:
+            for x in args_f:
+                llimpl.do_call_pushfloat(x)
 
     def do_cast_ptr_to_int(self, ptrbox):
         return history.BoxInt(llimpl.cast_to_int(ptrbox.getref_base(),
@@ -629,7 +634,7 @@ class OOtypeCPU(BaseCPU):
         assert isinstance(typedescr, TypeDescr)
         return typedescr.getarraylength(box1)
 
-    def do_call(self, args, descr):
+    def do_call_XXX(self, args, descr):
         assert isinstance(descr, StaticMethDescr)
         funcbox = args[0]
         argboxes = args[1:]

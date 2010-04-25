@@ -5,7 +5,7 @@ from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.jit.metainterp.history import AbstractDescr
 
 
-def format_assembler(ssarepr, dump=True):
+def format_assembler(ssarepr):
     """For testing: format a SSARepr as a multiline string."""
     from cStringIO import StringIO
     seen = {}
@@ -14,11 +14,11 @@ def format_assembler(ssarepr, dump=True):
         if isinstance(x, Register):
             return '%%%s%d' % (x.kind[0], x.index)    # e.g. %i1 or %r2 or %f3
         elif isinstance(x, Constant):
-            return '$' + str(x.value)
+            return '$%r' % (x.value,)
         elif isinstance(x, TLabel):
             return getlabelname(x)
         elif isinstance(x, ListOfKind):
-            return '%s[%s]' % (x.kind[0], ', '.join(map(repr, x)))
+            return '%s[%s]' % (x.kind[0].upper(), ', '.join(map(repr, x)))
         elif isinstance(x, AbstractDescr):
             return '%r' % (x,)
         else:
@@ -48,7 +48,4 @@ def format_assembler(ssarepr, dump=True):
             else:
                 print >> output
     res = output.getvalue()
-    if dump:
-        print res
     return res
-
