@@ -422,6 +422,10 @@ class LLtypeCPU(BaseCPU):
         count = countbox.getint()
         return history.BoxPtr(llimpl.do_new_array(size.ofs, count))
 
+    def bh_new_array(self, arraydescr, length):
+        assert isinstance(arraydescr, Descr)
+        return llimpl.do_new_array(arraydescr.ofs, length)
+
     def do_setarrayitem_gc(self, arraybox, indexbox, newvaluebox, arraydescr):
         assert isinstance(arraydescr, Descr)
         array = arraybox.getref_base()
@@ -438,6 +442,10 @@ class LLtypeCPU(BaseCPU):
             llimpl.do_setarrayitem_gc_float(array, index, newvalue)
         else:
             raise NotImplementedError
+
+    def bh_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
+        assert isinstance(arraydescr, Descr)
+        llimpl.do_setarrayitem_gc_ptr(array, index, newvalue)
 
     def do_setfield_gc(self, structbox, newvaluebox, fielddescr):
         assert isinstance(fielddescr, Descr)

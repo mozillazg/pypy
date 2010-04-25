@@ -62,7 +62,8 @@ class RegAllocator(object):
                     except KeyError:
                         pass
                     die_index += 1
-                if getkind(op.result.concretetype) == self.kind:
+                if (op.result is not None and
+                    getkind(op.result.concretetype) == self.kind):
                     dg.add_node(op.result)
                     for v in livevars:
                         if getkind(v.concretetype) == self.kind:
