@@ -42,6 +42,9 @@ class ListOfKind(object):
     def __iter__(self):
         return iter(self.content)
 
+class SwitchDictDescr(AbstractDescr):
+    "Get a 'dict' attribute mapping integer values to bytecode positions."
+
 KINDS = ['int', 'ref', 'float']
 
 # ____________________________________________________________
@@ -126,12 +129,15 @@ class GraphFlattener(object):
 
     def insert_exits(self, block):
         if len(block.exits) == 1:
+            # A single link, fall-through
             link = block.exits[0]
             assert link.exitcase is None
             self.make_link(link)
+        #
         elif len(block.exits) == 2 and (
                 isinstance(block.exitswitch, tuple) or
                 block.exitswitch.concretetype == lltype.Bool):
+            # Two exit links with a boolean condition
             linkfalse, linktrue = block.exits
             if linkfalse.llexitcase == True:
                 linkfalse, linktrue = linktrue, linkfalse
@@ -151,14 +157,40 @@ class GraphFlattener(object):
             # false path:
             self.emitline(Label(linkfalse))
             self.make_link(linkfalse)
+        #
         else:
+            # A switch.
+            #
+            def emitdefaultpath():
+                if block.exits[-1].exitcase == 'default':
+                    self.make_link(block.exits[-1])
+                else:
+                    self.emitline('unreachable')
+            #
             switches = [link for link in block.exits
                         if link.exitcase != 'default']
-            if len(switches) >= 5 and isinstance(block.exitswitch.concretetype,
-                                                 lltype.Primitive):
-                XXX
+            switches.sort(key=lambda link: link.llexitcase)
+            kind = getkind(block.exitswitch.concretetype)
+            if len(switches) >= 5 and kind == 'int':
+                # A large switch on an integer, implementable efficiently
+                # with the help of a SwitchDictDescr
+                switchdict = SwitchDictDescr()
+                switchdict._labels = []
+                self.emitline('switch', self.getcolor(block.exitswitch),
+                                        switchdict)
+                emitdefaultpath()
+                #
+                for switch in switches:
+                    key = lltype.cast_primitive(lltype.Signed,
+                                                switch.llexitcase)
+                    switchdict._labels.append((key, TLabel(switch)))
+                    # emit code for that path
+                    self.emitline(Label(switch))
+                    self.make_link(switch)
+            #
             else:
-                kind = getkind(block.exitswitch.concretetype)
+                # A switch with several possible answers, though not too
+                # many of them -- a chain of int_eq comparisons is fine
                 assert kind == 'int'    # XXX
                 for switch in switches:
                     # make the case described by 'switch'
@@ -172,10 +204,7 @@ class GraphFlattener(object):
                     # finally, emit the label for the "non-taken" path
                     self.emitline(Label(switch))
                 #
-                if block.exits[-1].exitcase == 'default':
-                    self.make_link(block.exits[-1])
-                else:
-                    self.emitline('unreachable')
+                emitdefaultpath()
 
     def insert_renamings(self, link):
         renamings = {}

@@ -1,7 +1,7 @@
 import py
 from pypy.objspace.flow.model import Constant
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
-from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.codewriter.flatten import ListOfKind, SwitchDictDescr
 from pypy.jit.metainterp.history import AbstractDescr
 
 
@@ -19,19 +19,19 @@ def format_assembler(ssarepr):
             return getlabelname(x)
         elif isinstance(x, ListOfKind):
             return '%s[%s]' % (x.kind[0].upper(), ', '.join(map(repr, x)))
+        elif isinstance(x, SwitchDictDescr):
+            return '<SwitchDictDescr %s>' % (
+                ', '.join(['%s:%s' % (key, getlabelname(lbl))
+                           for key, lbl in x._labels]))
         elif isinstance(x, AbstractDescr):
             return '%r' % (x,)
         else:
             return '<unknown object: %r>' % (x,)
     #
     seenlabels = {}
-    for asm in ssarepr.insns:
-        for x in asm:
-            if isinstance(x, TLabel):
-                seenlabels[x.name] = -1
     labelcount = [0]
     def getlabelname(lbl):
-        if seenlabels[lbl.name] == -1:
+        if lbl.name not in seenlabels:
             labelcount[0] += 1
             seenlabels[lbl.name] = labelcount[0]
         return 'L%d' % seenlabels[lbl.name]
