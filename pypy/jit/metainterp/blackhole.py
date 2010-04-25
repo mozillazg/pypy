@@ -75,15 +75,20 @@ class BlackholeInterpBuilder(object):
             args = ()
             next_argcode = 0
             for argtype in argtypes:
-                if argtype == 'i':
-                    # argcode can be 'i' or 'c'; 'c' stands for a single
-                    # signed byte that gives the value of a small constant.
+                if argtype == 'i' or argtype == 'r' or argtype == 'f':
+                    # if argtype is 'i', then argcode can be 'i' or 'c';
+                    # 'c' stands for a single signed byte that gives the
+                    # value of a small constant.
                     argcode = argcodes[next_argcode]
                     next_argcode = next_argcode + 1
                     if argcode == 'i':
                         value = self.registers_i[ord(code[position])]
                     elif argcode == 'c':
                         value = signedord(code[position])
+                    elif argcode == 'r':
+                        value = self.registers_r[ord(code[position])]
+                    elif argcode == 'f':
+                        value = self.registers_f[ord(code[position])]
                     else:
                         raise AssertionError("bad argcode")
                     position += 1
@@ -289,6 +294,9 @@ class BlackholeInterpreter(object):
     def opimpl_goto(self, target):
         return target
 
+    # ----------
+    # the following operations are directly implemented by the backend
+
     @arguments("i", "d", "R", returns="i")
     def opimpl_residual_call_r_i(self, func, calldescr, args_r):
         return self.cpu.bh_call_i(func, calldescr, None, args_r, None)
@@ -327,3 +335,10 @@ class BlackholeInterpreter(object):
     @arguments("i", "d", "I", "R", "F", returns="v")
     def opimpl_residual_call_irf_v(self, func, calldescr,args_i,args_r,args_f):
         return self.cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
+
+    @arguments("d", "i", returns="r")
+    def opimpl_new_array(self, arraydescr, length):
+        return self.cpu.bh_new_array(arraydescr, length)
+    @arguments("d", "r", "i", "r")
+    def opimpl_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
+        self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)

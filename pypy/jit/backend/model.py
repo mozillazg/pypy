@@ -192,11 +192,21 @@ class AbstractCPU(object):
 
     def do_new_with_vtable(self, classbox):
         raise NotImplementedError
-    
+
     def do_new_array(self, lengthbox, arraydescr):
+        raise NotImplementedError
+
+    def bh_new_array(self, arraydescr, length):
         raise NotImplementedError
     
     def do_setarrayitem_gc(self, arraybox, indexbox, newvaluebox, arraydescr):
+        raise NotImplementedError
+
+    def bh_setarrayitem_gc_i(self, arraydescr, array, index, newvalue):
+        raise NotImplementedError
+    def bh_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
+        raise NotImplementedError
+    def bh_setarrayitem_gc_f(self, arraydescr, array, index, newvalue):
         raise NotImplementedError
 
     def do_setarrayitem_raw(self, arraybox, indexbox, newvaluebox, arraydescr):

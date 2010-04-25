@@ -1,4 +1,4 @@
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.jit.metainterp.history import getkind
 from pypy.objspace.flow.model import SpaceOperation
 from pypy.jit.codewriter.flatten import ListOfKind
@@ -119,14 +119,50 @@ class Transformer(object):
         hints = op.args[1].value
         if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
             #self.minimize_variables()
-            from pypy.rpython.lltypesystem.rstr import STR
-            assert op.args[0].concretetype != lltype.Ptr(STR)
+            assert op.args[0].concretetype != lltype.Ptr(rstr.STR)
             kind = getkind(op.args[0].concretetype)
             return SpaceOperation('%s_guard_value' % kind,
                                   [op.args[0]], op.result)
         else:
             log.WARNING('ignoring hint %r at %r' % (hints, self.graph))
             raise NoOp
+
+    def rewrite_op_malloc_varsize(self, op):
+        assert op.args[1].value == {'flavor': 'gc'}
+        if op.args[0].value == rstr.STR:
+            return SpaceOperation('newstr', [op.args[2]], op.result)
+        elif op.args[0].value == rstr.UNICODE:
+            return SpaceOperation('newunicode', [op.args[2]], op.result)
+        else:
+            # XXX only strings or simple arrays for now
+            ARRAY = op.args[0].value
+            arraydescr = self.cpu.arraydescrof(ARRAY)
+            return SpaceOperation('new_array', [arraydescr, op.args[2]],
+                                  op.result)
+
+    def rewrite_op_setarrayitem(self, op):
+        ARRAY = op.args[0].concretetype.TO
+        assert ARRAY._gckind == 'gc'
+        if self._array_of_voids(ARRAY):
+            return
+##        if op.args[0] in self.vable_array_vars:     # for virtualizables
+##            (v_base, arrayindex) = self.vable_array_vars[op.args[0]]
+##            self.emit('setarrayitem_vable',
+##                      self.var_position(v_base),
+##                      arrayindex,
+##                      self.var_position(op.args[1]),
+##                      self.var_position(op.args[2]))
+##            return
+        arraydescr = self.cpu.arraydescrof(ARRAY)
+        kind = getkind(op.args[2].concretetype)
+        return SpaceOperation('setarrayitem_gc_%s' % kind[0],
+                              [arraydescr] + op.args, None)
+
+    def _array_of_voids(self, ARRAY):
+        #if isinstance(ARRAY, ootype.Array):
+        #    return ARRAY.ITEM == ootype.Void
+        #else:
+        return ARRAY.OF == lltype.Void
 
 # ____________________________________________________________
 
