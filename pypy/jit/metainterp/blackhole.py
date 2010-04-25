@@ -1,7 +1,8 @@
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import intmask, LONG_BIT, r_uint
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 
 
@@ -18,7 +19,7 @@ class LeaveFrame(Exception):
     pass
 
 class MissingValue(object):
-    pass
+    "NOT_RPYTHON"
 
 def signedord(c):
     value = ord(c)
@@ -26,18 +27,16 @@ def signedord(c):
     return value
 
 
-class BlackholeInterpreter(object):
+class BlackholeInterpBuilder(object):
 
-    def __init__(self, cpu=None):
-        self.cpu = cpu
-        self.registers_i = [MissingValue()] * 256
-        self.registers_r = [MissingValue()] * 256
-        self.registers_f = [MissingValue()] * 256
+    def __init__(self, codewriter):
+        self.cpu = codewriter.cpu
+        self.setup_insns(codewriter.assembler.insns)
+        self.setup_descrs(codewriter.assembler.descrs)
+        self._freeze_()
 
     def _freeze_(self):
-        self.registers_i = [0] * 256
-        self.registers_r = [NULL] * 256
-        self.registers_f = [0.0] * 256
+        self.blackholeinterps = []
         return False
 
     def setup_insns(self, insns):
@@ -54,22 +53,25 @@ class BlackholeInterpreter(object):
             all_funcs.append(self._get_method(name, argcodes))
         all_funcs = unrolling_iterable(enumerate(all_funcs))
         #
-        def dispatch_loop(code, position):
+        def dispatch_loop(self, code, position):
             while True:
                 opcode = ord(code[position])
                 position += 1
                 for i, func in all_funcs:
                     if opcode == i:
-                        position = func(code, position)
+                        position = func(self, code, position)
                         break
                 else:
                     raise AssertionError("bad opcode")
         dispatch_loop._dont_inline_ = True
         self.dispatch_loop = dispatch_loop
 
+    def setup_descrs(self, descrs):
+        self.descrs = descrs
+
     def _get_method(self, name, argcodes):
         #
-        def handler(code, position):
+        def handler(self, code, position):
             args = ()
             next_argcode = 0
             for argtype in argtypes:
@@ -106,15 +108,36 @@ class BlackholeInterpreter(object):
                     position += length
                 elif argtype == 'pc':
                     value = position
+                elif argtype == 'd':
+                    assert argcodes[next_argcode] == 'd'
+                    next_argcode = next_argcode + 1
+                    index = ord(code[position]) | (ord(code[position+1])<<8)
+                    value = self.descrs[index]
+                    position += 2
                 else:
                     raise AssertionError("bad argtype: %r" % (argtype,))
                 args += (value,)
-            result = boundmethod(*args)
+            result = unboundmethod(self, *args)
             if resulttype == 'i':
                 # argcode should be 'i' too
                 assert argcodes[next_argcode] == 'i'
                 next_argcode = next_argcode + 1
+                assert lltype.typeOf(result) == lltype.Signed
                 self.registers_i[ord(code[position])] = result
+                position += 1
+            elif resulttype == 'r':
+                # argcode should be 'r' too
+                assert argcodes[next_argcode] == 'r'
+                next_argcode = next_argcode + 1
+                assert lltype.typeOf(result) == llmemory.GCREF
+                self.registers_r[ord(code[position])] = result
+                position += 1
+            elif resulttype == 'f':
+                # argcode should be 'f' too
+                assert argcodes[next_argcode] == 'f'
+                next_argcode = next_argcode + 1
+                assert lltype.typeOf(result) == lltype.Float
+                self.registers_f[ord(code[position])] = result
                 position += 1
             elif resulttype == 'L':
                 position = result
@@ -124,11 +147,39 @@ class BlackholeInterpreter(object):
             assert next_argcode == len(argcodes)
             return position
         #
-        boundmethod = getattr(self, 'opimpl_' + name)
-        argtypes = unrolling_iterable(boundmethod.argtypes)
-        resulttype = boundmethod.resulttype
+        unboundmethod = getattr(BlackholeInterpreter, 'opimpl_' + name)
+        argtypes = unrolling_iterable(unboundmethod.argtypes)
+        resulttype = unboundmethod.resulttype
         handler = func_with_new_name(handler, 'handler_' + name)
         return handler
+
+    def acquire_interp(self):
+        if len(self.blackholeinterps) > 0:
+            return self.blackholeinterps.pop()
+        else:
+            return BlackholeInterpreter(self)
+
+    def release_interp(self, interp):
+        self.blackholeinterps.append(interp)
+
+
+class BlackholeInterpreter(object):
+
+    def __init__(self, builder):
+        self.cpu           = builder.cpu
+        self.dispatch_loop = builder.dispatch_loop
+        self.descrs        = builder.descrs
+        if we_are_translated():
+            default_i = 0
+            default_r = lltype.nullptr(llmemory.GCREF.TO)
+            default_f = 0.0
+        else:
+            default_i = MissingValue()
+            default_r = MissingValue()
+            default_f = MissingValue()
+        self.registers_i = [default_i] * 256
+        self.registers_r = [default_r] * 256
+        self.registers_f = [default_f] * 256
 
     def setarg_i(self, index, value):
         self.registers_i[index] = value
@@ -139,7 +190,7 @@ class BlackholeInterpreter(object):
         self.copy_constants(self.registers_f, jitcode.constants_f)
         code = jitcode.code
         try:
-            self.dispatch_loop(code, position)
+            self.dispatch_loop(self, code, position)
         except LeaveFrame:
             pass
 
@@ -188,6 +239,10 @@ class BlackholeInterpreter(object):
     def opimpl_float_copy(self, a):
         return a
 
+    opimpl_int_guard_value = opimpl_int_copy
+    opimpl_ref_guard_value = opimpl_ref_copy
+    opimpl_float_guard_value = opimpl_float_copy
+
     @arguments("L", "i", "i", "pc", returns="L")
     def opimpl_goto_if_not_int_lt(self, target, a, b, pc):
         if a < b:
@@ -234,24 +289,41 @@ class BlackholeInterpreter(object):
     def opimpl_goto(self, target):
         return target
 
-    @arguments("i", "I", "R", returns="i")
-    def opimpl_residual_call_ir_i(self, function, args_i, args_r):
-        # XXX!
-        assert not args_r
-        return function(*args_i)
+    @arguments("i", "d", "R", returns="i")
+    def opimpl_residual_call_r_i(self, func, calldescr, args_r):
+        return self.cpu.bh_call_i(func, calldescr, None, args_r, None)
+    @arguments("i", "d", "R", returns="r")
+    def opimpl_residual_call_r_r(self, func, calldescr, args_r):
+        return self.cpu.bh_call_r(func, calldescr, None, args_r, None)
+    @arguments("i", "d", "R", returns="f")
+    def opimpl_residual_call_r_f(self, func, calldescr, args_r):
+        return self.cpu.bh_call_f(func, calldescr, None, args_r, None)
+    @arguments("i", "d", "R", returns="v")
+    def opimpl_residual_call_r_v(self, func, calldescr, args_r):
+        return self.cpu.bh_call_v(func, calldescr, None, args_r, None)
 
-    @arguments("i", "I", "R", returns="r")
-    def opimpl_residual_call_ir_r(self, function, args_i, args_r):
-        # XXX!
-        assert not args_r
-        return function(*args_i)
+    @arguments("i", "d", "I", "R", returns="i")
+    def opimpl_residual_call_ir_i(self, func, calldescr, args_i, args_r):
+        return self.cpu.bh_call_i(func, calldescr, args_i, args_r, None)
+    @arguments("i", "d", "I", "R", returns="r")
+    def opimpl_residual_call_ir_r(self, func, calldescr, args_i, args_r):
+        return self.cpu.bh_call_r(func, calldescr, args_i, args_r, None)
+    @arguments("i", "d", "I", "R", returns="f")
+    def opimpl_residual_call_ir_f(self, func, calldescr, args_i, args_r):
+        return self.cpu.bh_call_f(func, calldescr, args_i, args_r, None)
+    @arguments("i", "d", "I", "R", returns="v")
+    def opimpl_residual_call_ir_v(self, func, calldescr, args_i, args_r):
+        return self.cpu.bh_call_v(func, calldescr, args_i, args_r, None)
 
-    @arguments("i", "R", returns="i")
-    def opimpl_residual_call_r_i(self, function, args_r):
-        # XXX!
-        return function(*args_r)
-
-    @arguments("i", "R", returns="r")
-    def opimpl_residual_call_r_r(self, function, args_r):
-        # XXX!
-        return function(*args_r)
+    @arguments("i", "d", "I", "R", "F", returns="i")
+    def opimpl_residual_call_irf_i(self, func, calldescr,args_i,args_r,args_f):
+        return self.cpu.bh_call_i(func, calldescr, args_i, args_r, args_f)
+    @arguments("i", "d", "I", "R", "F", returns="r")
+    def opimpl_residual_call_irf_r(self, func, calldescr,args_i,args_r,args_f):
+        return self.cpu.bh_call_r(func, calldescr, args_i, args_r, args_f)
+    @arguments("i", "d", "I", "R", "F", returns="f")
+    def opimpl_residual_call_irf_f(self, func, calldescr,args_i,args_r,args_f):
+        return self.cpu.bh_call_f(func, calldescr, args_i, args_r, args_f)
+    @arguments("i", "d", "I", "R", "F", returns="v")
+    def opimpl_residual_call_irf_v(self, func, calldescr,args_i,args_r,args_f):
+        return self.cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)

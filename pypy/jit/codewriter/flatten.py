@@ -199,7 +199,9 @@ class GraphFlattener(object):
     def serialize_op(self, op):
         args = self.flatten_list(op.args)
         if op.result is not None:
-            args.append(self.getcolor(op.result))
+            kind = getkind(op.result.concretetype)
+            if kind != 'void':
+                args.append(self.getcolor(op.result))
         self.emitline(op.opname, *args)
 
     def getcolor(self, v):

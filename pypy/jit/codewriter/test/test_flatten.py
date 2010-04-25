@@ -135,7 +135,7 @@ class TestFlatten:
         flattener = GraphFlattener(None, fake_regallocs())
         flattener.serialize_op(op)
         self.assert_format(flattener.ssarepr, """
-            residual_call_ir_f $12345, i[%i0, %i1], r[%r0, %r1], %f0
+            residual_call_ir_f $12345, I[%i0, %i1], R[%r0, %r1], %f0
         """)
 
     def test_same_as_removal(self):

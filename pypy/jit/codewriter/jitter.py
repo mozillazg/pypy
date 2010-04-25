@@ -12,25 +12,31 @@ def transform_graph(graph, cpu=None):
     t.transform(graph)
 
 
+class NoOp(Exception):
+    pass
+
+
 class Transformer(object):
 
     def __init__(self, cpu=None):
         self.cpu = cpu
 
     def transform(self, graph):
+        self.graph = graph
         for block in graph.iterblocks():
             rename = {}
             newoperations = []
             for op in block.operations:
-                if self.is_noop_operation(op):
-                    rename[op.result] = rename.get(op.args[0], op.args[0])
-                else:
-                    for i, v in enumerate(op.args):
-                        if v in rename:
-                            op = SpaceOperation(op.opname, op.args[:],
-                                                op.result)
-                            op.args[i] = rename[v]
+                for i, v in enumerate(op.args):
+                    if v in rename:
+                        op = SpaceOperation(op.opname, op.args[:],
+                                            op.result)
+                        op.args[i] = rename[v]
+                try:
                     newoperations.append(self.rewrite_operation(op))
+                except NoOp:
+                    if op.result is not None:
+                        rename[op.result] = rename.get(op.args[0], op.args[0])
             block.operations = newoperations
             self.optimize_goto_if_not(block)
 
@@ -62,18 +68,19 @@ class Transformer(object):
 
     # ----------
 
-    def is_noop_operation(self, op):
-        return op.opname in self._noop_operations
-
-    _noop_operations = {'same_as': True,
-                        'cast_int_to_char': True,
-                        'cast_char_to_int': True}
-
     def rewrite_operation(self, op):
         try:
-            return _rewrite_ops[op.opname](self, op)
+            rewrite = _rewrite_ops[op.opname]
         except KeyError:
             return op
+        else:
+            return rewrite(self, op)
+
+    def rewrite_op_same_as(self, op): raise NoOp
+    def rewrite_op_cast_int_to_char(self, op): raise NoOp
+    def rewrite_op_cast_int_to_unichar(self, op): raise NoOp
+    def rewrite_op_cast_char_to_int(self, op): raise NoOp
+    def rewrite_op_cast_unichar_to_int(self, op): raise NoOp
 
     def rewrite_op_direct_call(self, op):
         """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'
@@ -107,6 +114,19 @@ class Transformer(object):
         elif kind == 'float': lst = lst_f
         else: raise AssertionError(kind)
         lst.append(v)
+
+    def rewrite_op_hint(self, op):
+        hints = op.args[1].value
+        if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
+            #self.minimize_variables()
+            from pypy.rpython.lltypesystem.rstr import STR
+            assert op.args[0].concretetype != lltype.Ptr(STR)
+            kind = getkind(op.args[0].concretetype)
+            return SpaceOperation('%s_guard_value' % kind,
+                                  [op.args[0]], op.result)
+        else:
+            log.WARNING('ignoring hint %r at %r' % (hints, self.graph))
+            raise NoOp
 
 # ____________________________________________________________
 

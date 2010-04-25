@@ -736,7 +736,7 @@ class Frame(object):
         size = get_class_size(self.memocast, vtable)
         result = do_new(size)
         value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, result)
-        value.typeptr = cast_from_int(rclass.CLASSTYPE, vtable, self.memocast)
+        value.typeptr = cast_from_int(rclass.CLASSTYPE, vtable)
         return result
 
     def op_setarrayitem_gc(self, arraydescr, array, index, newvalue):
@@ -785,7 +785,7 @@ class Frame(object):
             err_result = 0.0
         else:
             raise NotImplementedError
-        return _do_call_common(func, self.memocast, err_result)
+        return _do_call_common(func, err_result)
 
     op_call_pure = op_call
 
@@ -925,7 +925,7 @@ class OOFrame(Frame):
 
     def op_call(self, calldescr, func, *args):
         sm = ootype.cast_from_object(calldescr.FUNC, func)
-        newargs = cast_call_args(calldescr.FUNC.ARGS, args, self.memocast)
+        newargs = cast_call_args(calldescr.FUNC.ARGS, args)
         res = call_maybe_on_top_of_llinterp(sm, newargs)
         if isinstance(calldescr.FUNC.RESULT, ootype.OOType):
             return ootype.cast_to_object(res)
@@ -937,7 +937,7 @@ class OOFrame(Frame):
         METH = descr.METH
         obj = ootype.cast_from_object(descr.SELFTYPE, obj)
         meth = getattr(obj, descr.methname)
-        newargs = cast_call_args(METH.ARGS, args, self.memocast)
+        newargs = cast_call_args(METH.ARGS, args)
         res = call_maybe_on_top_of_llinterp(meth, newargs)
         if isinstance(METH.RESULT, ootype.OOType):
             return ootype.cast_to_object(res)
@@ -973,27 +973,27 @@ class OOFrame(Frame):
 
 # ____________________________________________________________
 
-def cast_to_int(x, memocast):
+def cast_to_int(x):
     TP = lltype.typeOf(x)
     if isinstance(TP, lltype.Ptr):
-        return cast_adr_to_int(memocast, llmemory.cast_ptr_to_adr(x))
+        return llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
     if TP == llmemory.Address:
-        return cast_adr_to_int(memocast, x)
+        return llmemory.cast_adr_to_int(x)
     return lltype.cast_primitive(lltype.Signed, x)
 
-def cast_from_int(TYPE, x, memocast):
+def cast_from_int(TYPE, x):
     if isinstance(TYPE, lltype.Ptr):
-        if isinstance(x, (int, long)):
-            x = cast_int_to_adr(memocast, x)
+        if isinstance(x, (int, long, llmemory.AddressAsInt)):
+            x = llmemory.cast_int_to_adr(x)
         return llmemory.cast_adr_to_ptr(x, TYPE)
     elif TYPE == llmemory.Address:
-        if isinstance(x, (int, long)):
-            x = cast_int_to_adr(memocast, x)
+        if isinstance(x, (int, long, llmemory.AddressAsInt)):
+            x = llmemory.cast_int_to_adr(x)
         assert lltype.typeOf(x) == llmemory.Address
         return x
     else:
         if lltype.typeOf(x) == llmemory.Address:
-            x = cast_adr_to_int(memocast, x)
+            x = llmemory.cast_adr_to_int(x)
         return lltype.cast_primitive(TYPE, x)
 
 def cast_to_ptr(x):
@@ -1161,22 +1161,22 @@ def new_memo_cast():
     memocast = MemoCast()
     return _to_opaque(memocast)
 
-def cast_adr_to_int(memocast, adr):
-    # xxx slow
-    assert lltype.typeOf(adr) == llmemory.Address
-    memocast = _from_opaque(memocast)
-    addresses = memocast.addresses
-    for i in xrange(len(addresses)-1, -1, -1):
-        if addresses[i] == adr:
-            return i
-    i = len(addresses)
-    addresses.append(adr)
-    return i
+##def cast_adr_to_int(memocast, adr):
+##    # xxx slow
+##    assert lltype.typeOf(adr) == llmemory.Address
+##    memocast = _from_opaque(memocast)
+##    addresses = memocast.addresses
+##    for i in xrange(len(addresses)-1, -1, -1):
+##        if addresses[i] == adr:
+##            return i
+##    i = len(addresses)
+##    addresses.append(adr)
+##    return i
 
-def cast_int_to_adr(memocast, int):
-    memocast = _from_opaque(memocast)
-    assert 0 <= int < len(memocast.addresses)
-    return memocast.addresses[int]
+##def cast_int_to_adr(memocast, int):
+##    memocast = _from_opaque(memocast)
+##    assert 0 <= int < len(memocast.addresses)
+##    return memocast.addresses[int]
 
 def get_class_size(memocast, vtable):
     memocast = _from_opaque(memocast)
@@ -1339,25 +1339,29 @@ def do_unicodesetitem(_, string, index, newvalue):
 
 # ---------- call ----------
 
-_call_args = []
+_call_args_i = []
+_call_args_r = []
+_call_args_f = []
 
 def do_call_pushint(x):
-    _call_args.append(x)
-
-def do_call_pushfloat(x):
-    _call_args.append(x)
+    _call_args_i.append(x)
 
 def do_call_pushptr(x):
-    _call_args.append(x)
+    _call_args_r.append(x)
 
-def _do_call_common(f, memocast, err_result=None):
+def do_call_pushfloat(x):
+    _call_args_f.append(x)
+
+def _do_call_common(f, err_result=None):
     global _last_exception
     assert _last_exception is None, "exception left behind"
-    ptr = cast_int_to_adr(memocast, f).ptr
+    ptr = llmemory.cast_int_to_adr(f).ptr
     FUNC = lltype.typeOf(ptr).TO
     ARGS = FUNC.ARGS
-    args = cast_call_args(ARGS, _call_args, memocast)
-    del _call_args[:]
+    args = cast_call_args(ARGS, _call_args_i, _call_args_r, _call_args_f)
+    del _call_args_i[:]
+    del _call_args_r[:]
+    del _call_args_f[:]
     assert len(ARGS) == len(args)
     try:
         if hasattr(ptr._obj, 'graph'):
@@ -1370,39 +1374,46 @@ def _do_call_common(f, memocast, err_result=None):
         result = err_result
     return result
 
-def do_call_void(f, memocast):
-    _do_call_common(f, memocast)
+def do_call_void(f):
+    _do_call_common(f)
 
-def do_call_int(f, memocast):
-    x = _do_call_common(f, memocast, 0)
-    return cast_to_int(x, memocast)
+def do_call_int(f):
+    x = _do_call_common(f, 0)
+    return cast_to_int(x)
 
-def do_call_float(f, memocast):
-    x = _do_call_common(f, memocast, 0)
+def do_call_float(f):
+    x = _do_call_common(f, 0)
     return cast_to_float(x)
 
-def do_call_ptr(f, memocast):
-    x = _do_call_common(f, memocast, lltype.nullptr(llmemory.GCREF.TO))
+def do_call_ptr(f):
+    x = _do_call_common(f, lltype.nullptr(llmemory.GCREF.TO))
     return cast_to_ptr(x)
 
-def cast_call_args(ARGS, args, memocast):
-    argsiter = iter(args)
+def cast_call_args(ARGS, args_i, args_r, args_f):
+    argsiter_i = iter(args_i)
+    argsiter_r = iter(args_r)
+    argsiter_f = iter(args_f)
     args = []
     for TYPE in ARGS:
         if TYPE is lltype.Void:
             x = None
         else:
-            x = argsiter.next()
             if isinstance(TYPE, ootype.OOType):
+                x = argsiter_r.next()
                 x = ootype.cast_from_object(TYPE, x)
             elif isinstance(TYPE, lltype.Ptr) and TYPE.TO._gckind == 'gc':
+                x = argsiter_r.next()
                 x = cast_from_ptr(TYPE, x)
             elif TYPE is lltype.Float:
+                x = argsiter_f.next()
                 x = cast_from_float(TYPE, x)
             else:
-                x = cast_from_int(TYPE, x, memocast)
+                x = argsiter_i.next()
+                x = cast_from_int(TYPE, x)
         args.append(x)
-    assert list(argsiter) == []
+    assert list(argsiter_i) == []
+    assert list(argsiter_r) == []
+    assert list(argsiter_f) == []
     return args
 
 
@@ -1525,8 +1536,8 @@ setannotation(get_forced_token_frame, s_Frame)
 setannotation(get_frame_forced_token, annmodel.SomeAddress())
 
 setannotation(new_memo_cast, s_MemoCast)
-setannotation(cast_adr_to_int, annmodel.SomeInteger())
-setannotation(cast_int_to_adr, annmodel.SomeAddress())
+##setannotation(cast_adr_to_int, annmodel.SomeInteger())
+##setannotation(cast_int_to_adr, annmodel.SomeAddress())
 setannotation(set_class_size, annmodel.s_None)
 
 setannotation(do_arraylen_gc, annmodel.SomeInteger())

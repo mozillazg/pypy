@@ -3,6 +3,7 @@ from pypy.objspace.flow.model import Variable
 from pypy.tool.algo.color import DependencyGraph
 from pypy.tool.algo.unionfind import UnionFind
 from pypy.jit.metainterp.history import getkind
+from pypy.jit.codewriter.flatten import ListOfKind
 
 def perform_register_allocation(graph, kind):
     """Perform register allocation for the Variables of the given 'kind'
@@ -30,6 +31,10 @@ class RegAllocator(object):
                 for v in op.args:
                     if isinstance(v, Variable):
                         die_at[v] = i
+                    elif isinstance(v, ListOfKind):
+                        for v1 in v:
+                            if isinstance(v1, Variable):
+                                die_at[v1] = i
                 if op.result is not None:
                     die_at[op.result] = i
             die_at.pop(block.exitswitch, None)

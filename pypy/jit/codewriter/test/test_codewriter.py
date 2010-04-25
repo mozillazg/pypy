@@ -21,7 +21,7 @@ def test_loop():
                                   'int_return/i': 4}
 
 def test_integration():
-    from pypy.jit.metainterp.blackhole import BlackholeInterpreter
+    from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
     def f(a, b):
         while a > 2:
             b += a
@@ -29,8 +29,8 @@ def test_integration():
         return b
     cw = CodeWriter()
     jitcode = cw.transform_func_to_jitcode(f, [5, 6])
-    blackholeinterp = BlackholeInterpreter()
-    blackholeinterp.setup_insns(cw.assembler.insns)
+    blackholeinterpbuilder = BlackholeInterpBuilder(cw)
+    blackholeinterp = blackholeinterpbuilder.acquire_interp()
     blackholeinterp.setarg_i(0, 6)
     blackholeinterp.setarg_i(1, 100)
     blackholeinterp.run(jitcode, 0)

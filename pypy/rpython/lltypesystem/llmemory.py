@@ -503,6 +503,10 @@ class AddressAsInt(Symbolic):
         return model.SomeInteger()
     def lltype(self):
         return lltype.Signed
+    def __cmp__(self, other):
+        if isinstance(other, AddressAsInt):
+            return cmp(self.adr, other.adr)
+        return Symbolic.__cmp__(self, other)
 
 # ____________________________________________________________
 

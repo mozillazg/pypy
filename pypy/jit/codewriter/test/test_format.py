@@ -65,7 +65,7 @@ def test_format_assembler_list():
         ]
     asm = format_assembler(ssarepr)
     expected = """
-        foobar i[%i0, $123, %i1]
+        foobar I[%i0, $123, %i1]
     """
     assert asm == str(py.code.Source(expected)).strip() + '\n'
 
