@@ -1,6 +1,6 @@
 from pypy.jit.metainterp.history import AbstractValue, AbstractDescr, getkind
 from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
-from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.codewriter.flatten import ListOfKind, SwitchDictDescr
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory
 
@@ -49,6 +49,7 @@ class Assembler(object):
         self.constants_f = []
         self.label_positions = {}
         self.tlabel_positions = []
+        self.switchdictdescrs = []
         self.highest_regs = dict.fromkeys(KINDS, 0)
 
     def emit_reg(self, reg):
@@ -133,6 +134,8 @@ class Assembler(object):
                 if x not in self._descr_dict:
                     self._descr_dict[x] = len(self.descrs)
                     self.descrs.append(x)
+                if isinstance(x, SwitchDictDescr):
+                    self.switchdictdescrs.append(x)
                 num = self._descr_dict[x]
                 assert 0 <= num <= 0xFFFF, "too many AbstractDescrs!"
                 self.code.append(chr(num & 0xFF))
@@ -153,6 +156,11 @@ class Assembler(object):
             assert 0 <= target <= 0xFFFF
             self.code[pos  ] = chr(target & 0xFF)
             self.code[pos+1] = chr(target >> 8)
+        for descr in self.switchdictdescrs:
+            descr.dict = {}
+            for key, switchlabel in descr._labels:
+                target = self.label_positions[switchlabel.name]
+                descr.dict[key] = target
 
     def check_result(self):
         # Limitation of the number of registers, from the single-byte encoding
