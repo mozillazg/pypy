@@ -176,3 +176,29 @@ class TestFlatten:
             L3:
             int_return $42
         """)
+
+    def test_switch_dict(self):
+        def f(x):
+            if   x == 1: return 61
+            elif x == 2: return 511
+            elif x == 3: return -22
+            elif x == 4: return 81
+            elif x == 5: return 17
+            elif x == 6: return 54
+            return -1
+        self.encoding_test(f, [65], """
+            switch %i0, <SwitchDictDescr 1:L1, 2:L2, 3:L3, 4:L4, 5:L5, 6:L6>
+            int_return $-1
+            L1:
+            int_return $61
+            L2:
+            int_return $511
+            L3:
+            int_return $-22
+            L4:
+            int_return $81
+            L5:
+            int_return $17
+            L6:
+            int_return $54
+        """)
