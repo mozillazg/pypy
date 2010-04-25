@@ -4,6 +4,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.jit.codewriter.flatten import SwitchDictDescr
 
 
 def arguments(*argtypes, **kwds):
@@ -293,6 +294,14 @@ class BlackholeInterpreter(object):
     @arguments("L", returns="L")
     def opimpl_goto(self, target):
         return target
+
+    @arguments("i", "d", "pc", returns="L")
+    def opimpl_switch(self, switchvalue, switchdict, pc):
+        assert isinstance(switchdict, SwitchDictDescr)
+        try:
+            return switchdict.dict[switchvalue]
+        except KeyError:
+            return pc
 
     # ----------
     # the following operations are directly implemented by the backend
