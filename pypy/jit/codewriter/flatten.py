@@ -129,8 +129,9 @@ class GraphFlattener(object):
             link = block.exits[0]
             assert link.exitcase is None
             self.make_link(link)
-        else:
-            assert len(block.exits) == 2, "XXX"
+        elif len(block.exits) == 2 and (
+                isinstance(block.exitswitch, tuple) or
+                block.exitswitch.concretetype == lltype.Bool):
             linkfalse, linktrue = block.exits
             if linkfalse.llexitcase == True:
                 linkfalse, linktrue = linktrue, linkfalse
@@ -150,6 +151,31 @@ class GraphFlattener(object):
             # false path:
             self.emitline(Label(linkfalse))
             self.make_link(linkfalse)
+        else:
+            switches = [link for link in block.exits
+                        if link.exitcase != 'default']
+            if len(switches) >= 5 and isinstance(block.exitswitch.concretetype,
+                                                 lltype.Primitive):
+                XXX
+            else:
+                kind = getkind(block.exitswitch.concretetype)
+                assert kind == 'int'    # XXX
+                for switch in switches:
+                    # make the case described by 'switch'
+                    self.emitline('goto_if_not_int_eq',
+                                  TLabel(switch),
+                                  self.getcolor(block.exitswitch),
+                                  Constant(switch.llexitcase,
+                                           block.exitswitch.concretetype))
+                    # emit code for the "taken" path
+                    self.make_link(switch)
+                    # finally, emit the label for the "non-taken" path
+                    self.emitline(Label(switch))
+                #
+                if block.exits[-1].exitcase == 'default':
+                    self.make_link(block.exits[-1])
+                else:
+                    self.emitline('unreachable')
 
     def insert_renamings(self, link):
         renamings = {}
