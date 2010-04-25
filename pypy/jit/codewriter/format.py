@@ -29,9 +29,16 @@ def format_assembler(ssarepr):
             return '<unknown object: %r>' % (x,)
     #
     seenlabels = {}
+    for asm in ssarepr.insns:
+        for x in asm:
+            if isinstance(x, TLabel):
+                seenlabels[x.name] = -1
+            elif isinstance(x, SwitchDictDescr):
+                for _, switch in x._labels:
+                    seenlabels[switch.name] = -1
     labelcount = [0]
     def getlabelname(lbl):
-        if lbl.name not in seenlabels:
+        if seenlabels[lbl.name] == -1:
             labelcount[0] += 1
             seenlabels[lbl.name] = labelcount[0]
         return 'L%d' % seenlabels[lbl.name]
