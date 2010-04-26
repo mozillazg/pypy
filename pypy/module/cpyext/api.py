@@ -346,21 +346,29 @@ def configure_types():
         if name in TYPES:
             TYPES[name].become(TYPE)
 
-def build_type_checkers(type_name, on_space=None):
-    if on_space is None:
-        on_space = "w_" + type_name.lower()
+def build_type_checkers(type_name, cls=None):
+    if cls is None:
+        attrname = "w_" + type_name.lower()
+        def get_w_type(space):
+            return getattr(space, attrname)
+    elif isinstance(cls, str):
+        def get_w_type(space):
+            return getattr(space, cls)
+    else:
+        def get_w_type(space):
+            return space.gettypeobject(cls.typedef)
     check_name = "Py" + type_name + "_Check"
     @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL, name=check_name)
     def check(space, w_obj):
         w_obj_type = space.type(w_obj)
-        w_type = getattr(space, on_space)
+        w_type = get_w_type(space)
         return int(space.is_w(w_obj_type, w_type) or
                    space.is_true(space.issubtype(w_obj_type, w_type)))
     @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL,
                  name=check_name + "Exact")
     def check_exact(space, w_obj):
         w_obj_type = space.type(w_obj)
-        w_type = getattr(space, on_space)
+        w_type = get_w_type(space)
         return int(space.is_w(w_obj_type, w_type))
     return check, check_exact
 

@@ -3,7 +3,7 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.pyobject import make_ref, make_typedescr
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, bootstrap_function, \
-     PyObject, cpython_struct, PyObjectFields
+     PyObject, cpython_struct, PyObjectFields, build_type_checkers
 
 
 destructor_short = lltype.Ptr(lltype.FuncType([rffi.VOIDP_real], lltype.Void))
@@ -25,6 +25,8 @@ W_PyCObject.typedef = TypeDef(
     'PyCObject',
     )
 W_PyCObject.typedef.acceptable_as_base_class = False
+
+PyCObject_Check, _ = build_type_checkers("CObject", W_PyCObject)
 
 @bootstrap_function
 def init_pycobject(space):
@@ -75,4 +77,9 @@ def PyCObject_FromVoidPtrAndDesc(space, cobj, desc, destr):
     pycobject.c_destructor = rffi.cast(destructor_short, destr)
     return pyo
 
-
+@cpython_api([PyObject], rffi.VOIDP_real, error=lltype.nullptr(rffi.VOIDP_real.TO))
+def PyCObject_AsVoidPtr(space, w_obj):
+    """Return the object void * that the PyCObject self was
+    created with."""
+    assert isinstance(w_obj, W_PyCObjectFromVoidPtr)
+    return w_obj.pyo.c_cobject

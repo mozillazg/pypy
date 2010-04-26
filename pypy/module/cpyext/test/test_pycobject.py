@@ -8,7 +8,7 @@ class TestPyCObject(BaseApiTest):
     def test_pycobject(self, space, api):
         ptr = rffi.cast(rffi.VOIDP_real, 1234)
         obj = api.PyCObject_FromVoidPtr(ptr, lltype.nullptr(destructor_short.TO))
-        try:
-            assert rffi.cast(PyCObject, obj).c_cobject == ptr
-        finally:
-            api.Py_DecRef(obj)
+        assert api.PyCObject_Check(obj)
+        assert api.PyCObject_AsVoidPtr(obj) == ptr
+        assert rffi.cast(PyCObject, obj).c_cobject == ptr
+        api.Py_DecRef(obj)
