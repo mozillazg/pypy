@@ -202,3 +202,24 @@ class TestFlatten:
             L6:
             int_return $54
         """)
+
+    def test_exc_exitswitch(self):
+        py.test.skip("not implemented")
+        def g(i):
+            if i == 2:
+                raise ValueError
+            elif i == 3:
+                raise KeyError
+        
+        def f(i):
+            try:
+                g(i)
+            except ValueError:
+                return 1
+            except KeyError:
+                return 2
+            else:
+                return 3
+
+        self.encoding_test(f, [65], """
+        """)
