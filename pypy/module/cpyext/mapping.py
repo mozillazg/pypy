@@ -1,5 +1,6 @@
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, CONST_STRING
+from pypy.module.cpyext.api import (
+    cpython_api, CANNOT_FAIL, CONST_STRING, Py_ssize_t)
 from pypy.module.cpyext.pyobject import PyObject
 
 
@@ -9,11 +10,25 @@ def PyMapping_Check(space, w_obj):
     function always succeeds."""
     return int(space.findattr(w_obj, space.wrap("items")) is not None)
 
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PyMapping_Size(space, w_obj):
+    return space.int_w(space.len(w_obj))
+
+@cpython_api([PyObject], Py_ssize_t, error=-1)
+def PyMapping_Length(space, w_obj):
+    return space.int_w(space.len(w_obj))
+
 @cpython_api([PyObject], PyObject)
 def PyMapping_Keys(space, w_obj):
     """On success, return a list of the keys in object o.  On failure, return NULL.
     This is equivalent to the Python expression o.keys()."""
     return space.call_method(w_obj, "keys")
+
+@cpython_api([PyObject], PyObject)
+def PyMapping_Values(space, w_obj):
+    """On success, return a list of the values in object o.  On failure, return
+    NULL. This is equivalent to the Python expression o.values()."""
+    return space.call_method(w_obj, "values")
 
 @cpython_api([PyObject], PyObject)
 def PyMapping_Items(space, w_obj):
@@ -36,4 +51,27 @@ def PyMapping_SetItemString(space, w_obj, key, w_value):
     w_key = space.wrap(rffi.charp2str(key))
     space.setitem(w_obj, w_key, w_value)
     return 0
+
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
+def PyMapping_HasKey(space, w_obj, w_key):
+    """Return 1 if the mapping object has the key key and 0 otherwise.
+    This is equivalent to o[key], returning True on success and False
+    on an exception.  This function always succeeds."""
+    try:
+        space.getitem(w_obj, w_key)
+        return 1
+    except:
+        return 0
+
+@cpython_api([PyObject, CONST_STRING], rffi.INT_real, error=CANNOT_FAIL)
+def PyMapping_HasKeyString(space, w_obj, key):
+    """Return 1 if the mapping object has the key key and 0 otherwise.
+    This is equivalent to o[key], returning True on success and False
+    on an exception.  This function always succeeds."""
+    try:
+        w_key = space.wrap(rffi.charp2str(key))
+        space.getitem(w_obj, w_key)
+        return 1
+    except:
+        return 0
 

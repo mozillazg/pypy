@@ -2770,20 +2770,6 @@ def PyLong_AsUnsignedLongLongMask(space, io):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject], Py_ssize_t)
-def PyMapping_Size(space, o):
-    """
-    
-    
-    
-    Returns the number of keys in object o on success, and -1 on failure.  For
-    objects that do not provide mapping protocol, this is equivalent to the Python
-    expression len(o).
-    
-    These functions returned an int type. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP], rffi.INT_real, error=-1)
 def PyMapping_DelItemString(space, o, key):
     """Remove the mapping for object key from the object o. Return -1 on
@@ -2794,26 +2780,6 @@ def PyMapping_DelItemString(space, o, key):
 def PyMapping_DelItem(space, o, key):
     """Remove the mapping for object key from the object o. Return -1 on
     failure.  This is equivalent to the Python statement del o[key]."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, rffi.CCHARP], rffi.INT_real, error=CANNOT_FAIL)
-def PyMapping_HasKeyString(space, o, key):
-    """On success, return 1 if the mapping object has the key key and 0
-    otherwise.  This is equivalent to o[key], returning True on success
-    and False on an exception.  This function always succeeds."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyMapping_HasKey(space, o, key):
-    """Return 1 if the mapping object has the key key and 0 otherwise.
-    This is equivalent to o[key], returning True on success and False
-    on an exception.  This function always succeeds."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
-def PyMapping_Values(space, o):
-    """On success, return a list of the values in object o.  On failure, return
-    NULL. This is equivalent to the Python expression o.values()."""
     raise NotImplementedError
 
 @cpython_api([lltype.Signed, FILE, rffi.INT_real], lltype.Void)
