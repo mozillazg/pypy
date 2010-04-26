@@ -9,6 +9,7 @@
 # include <limits.h>
 # include <math.h>
 # define Py_DEPRECATED(VERSION_UNUSED) __attribute__((__deprecated__))
+# define PyAPI_FUNC(RTYPE) RTYPE
 # define PyAPI_DATA(RTYPE) extern RTYPE
 #else
 # define MS_WIN32 1
@@ -16,8 +17,10 @@
 # include <io.h>
 # define Py_DEPRECATED(VERSION_UNUSED)
 # ifdef Py_BUILD_CORE
+#  define PyAPI_FUNC(RTYPE) __declspec(dllexport) RTYPE
 #  define PyAPI_DATA(RTYPE) extern __declspec(dllexport) RTYPE
 # else
+#  define PyAPI_FUNC(RTYPE) __declspec(dllimport) RTYPE
 #  define PyAPI_DATA(RTYPE) extern __declspec(dllimport) RTYPE
 # endif
 #endif

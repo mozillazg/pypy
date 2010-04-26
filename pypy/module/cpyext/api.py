@@ -618,13 +618,12 @@ def generate_decls_and_callbacks(db, export_symbols, api_struct=True, globals_ar
             arg = arg.replace('@', 'arg%d' % (i,)).strip()
             args.append(arg)
         args = ', '.join(args) or "void"
-        header = "%s %s(%s)" % (restype, name, args)
-        pypy_decls.append(header + ";")
+        pypy_decls.append("PyAPI_FUNC(%s) %s(%s);" % (restype, name, args))
         if api_struct:
             callargs = ', '.join('arg%d' % (i,)
                                  for i in range(len(func.argtypes)))
             body = "{ return _pypyAPI.%s(%s); }" % (name, callargs)
-            functions.append('%s\n%s\n' % (header, body))
+            functions.append('%s %s(%s)\n%s' % (restype, name, args, body))
     for name in VA_TP_LIST:
         name_no_star = process_va_name(name)
         header = ('%s pypy_va_get_%s(va_list* vp)' %
