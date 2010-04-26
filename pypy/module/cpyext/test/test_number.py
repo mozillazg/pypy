@@ -20,6 +20,10 @@ class TestIterator(BaseApiTest):
         w_l = api.PyNumber_Long(space.wrap(123))
         assert api.PyLong_CheckExact(w_l)
 
+    def test_number_int(self, space, api):
+        w_l = api.PyNumber_Int(space.wrap(123L))
+        assert api.PyInt_CheckExact(w_l)
+
     def test_numbermethods(self, space, api):
         assert "ab" == space.unwrap(
             api.PyNumber_Add(space.wrap("a"), space.wrap("b")))

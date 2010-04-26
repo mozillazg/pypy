@@ -3693,17 +3693,6 @@ def PyNumber_CoerceEx(space, p1, p2):
     raise NotImplementedError
 
 @cpython_api([PyObject], PyObject)
-def PyNumber_Int(space, o):
-    """
-    
-    
-    
-    Returns the o converted to an integer object on success, or NULL on failure.
-    If the argument is outside the integer range a long object will be returned
-    instead. This is the equivalent of the Python expression int(o)."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
 def PyNumber_Index(space, o):
     """Returns the o converted to a Python int or long on success or NULL with a
     TypeError exception raised on failure.
