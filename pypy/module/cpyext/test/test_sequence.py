@@ -2,6 +2,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.test.test_api import BaseApiTest
 from pypy.module.cpyext import sequence
+import py.test
 
 class TestSequence(BaseApiTest):
     def test_sequence(self, space, api):
@@ -43,3 +44,11 @@ class TestSequence(BaseApiTest):
         w_t = space.wrap((1, 2, 3, 4, 5))
         assert space.unwrap(api.PySequence_GetSlice(w_t, 2, 4)) == (3, 4)
         assert space.unwrap(api.PySequence_GetSlice(w_t, 1, -1)) == (2, 3, 4)
+
+    def test_iter(self, space, api):
+        w_t = space.wrap((1, 2))
+        w_iter = api.PySeqIter_New(w_t)
+        assert space.unwrap(space.next(w_iter)) == 1
+        assert space.unwrap(space.next(w_iter)) == 2
+        exc = raises(OperationError, space.next, w_iter)
+        assert exc.value.match(space, space.w_StopIteration)
