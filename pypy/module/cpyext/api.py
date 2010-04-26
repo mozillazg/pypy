@@ -297,7 +297,8 @@ def build_exported_objects():
         GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
     for cpyname in 'Method List Int Long Dict Tuple'.split():
-        FORWARD_DECLS.append('struct Py%sObject' % (cpyname, ))
+        FORWARD_DECLS.append('typedef struct { PyObject_HEAD } '
+                             'Py%sObject' % (cpyname, ))
 build_exported_objects()
 
 def get_structtype_for_ctype(ctype):
