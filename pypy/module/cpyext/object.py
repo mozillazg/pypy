@@ -101,6 +101,12 @@ def PyObject_SetAttr(space, w_obj, w_name, w_value):
     operation.setattr(space, w_obj, w_name, w_value)
     return 0
 
+@cpython_api([PyObject, CONST_STRING, PyObject], rffi.INT_real, error=-1)
+def PyObject_SetAttrString(space, w_obj, name_ptr, w_value):
+    w_name = space.wrap(rffi.charp2str(name_ptr))
+    operation.setattr(space, w_obj, w_name, w_value)
+    return 0
+
 @cpython_api([PyObject], lltype.Void)
 def PyObject_ClearWeakRefs(space, w_object):
     w_object.clear_all_weakrefs()

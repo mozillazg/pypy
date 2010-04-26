@@ -48,7 +48,12 @@ class TestObject(BaseApiTest):
         assert api.PyObject_HasAttr(space.wrap(x), space.wrap('test'))
         api.PyObject_SetAttr(space.wrap(x), space.wrap('test'), space.wrap(10))
         assert x.test == 10
-    
+
+        buf = rffi.str2charp('test')
+        api.PyObject_SetAttrString(space.wrap(x), buf, space.wrap(20))
+        rffi.free_charp(buf)
+        assert x.test == 20
+
     def test_getattr_string(self, space, api):
         charp1 = rffi.str2charp("__len__")
         charp2 = rffi.str2charp("not_real")
