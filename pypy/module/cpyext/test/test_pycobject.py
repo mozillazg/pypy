@@ -12,3 +12,7 @@ class TestPyCObject(BaseApiTest):
         assert api.PyCObject_AsVoidPtr(obj) == ptr
         assert rffi.cast(PyCObject, obj).c_cobject == ptr
         api.Py_DecRef(obj)
+
+        obj = api.PyCObject_FromVoidPtrAndDesc(ptr, ptr,
+                                               lltype.nullptr(destructor_short.TO))
+        api.Py_DecRef(obj)
