@@ -3555,12 +3555,6 @@ def PyMem_Del(space, p):
     """Same as PyMem_Free()."""
     raise NotImplementedError
 
-@cpython_api([PyObject], rffi.INT_real)
-def PyMethod_Check(space, o):
-    """Return true if o is a method object (has type PyMethod_Type).  The
-    parameter must not be NULL."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject, PyObject], PyObject)
 def PyMethod_New(space, func, self, class):
     """Return a new method object, with func being any callable object; this is the
