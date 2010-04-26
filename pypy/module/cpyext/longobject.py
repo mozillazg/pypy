@@ -61,6 +61,13 @@ def PyLong_FromDouble(space, val):
     """Return a new PyLongObject object from v, or NULL on failure."""
     return space.long(space.wrap(val))
 
+@cpython_api([PyObject], lltype.Float, error=-1.0)
+def PyLong_AsDouble(space, w_long):
+    """Return a C double representation of the contents of pylong.  If
+    pylong cannot be approximately represented as a double, an
+    OverflowError exception is raised and -1.0 will be returned."""
+    return space.float_w(space.float(w_long))
+
 @cpython_api([CONST_STRING, rffi.CCHARPP, rffi.INT_real], PyObject)
 def PyLong_FromString(space, str, pend, base):
     """Return a new PyLongObject based on the string value in str, which is
@@ -86,4 +93,13 @@ def PyLong_FromVoidPtr(space, p):
 
     If the integer is larger than LONG_MAX, a positive long integer is returned."""
     return space.wrap(rffi.cast(ADDR, p))
+
+@cpython_api([PyObject], rffi.VOIDP_real, error=lltype.nullptr(rffi.VOIDP_real.TO))
+def PyLong_AsVoidPtr(space, w_long):
+    """Convert a Python integer or long integer pylong to a C void pointer.
+    If pylong cannot be converted, an OverflowError will be raised.  This
+    is only assured to produce a usable void pointer for values created
+    with PyLong_FromVoidPtr().
+    For values outside 0..LONG_MAX, both signed and unsigned integers are accepted."""
+    return rffi.cast(rffi.VOIDP_real, space.uint_w(w_long))
 

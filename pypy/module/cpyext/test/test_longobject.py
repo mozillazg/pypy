@@ -1,6 +1,5 @@
-
 import sys
-
+from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.longobject import W_LongObject
 from pypy.module.cpyext.test.test_api import BaseApiTest
@@ -35,7 +34,8 @@ class TestLongObject(BaseApiTest):
     def test_fromdouble(self, space, api):
         w_value = api.PyLong_FromDouble(-12.74)
         assert space.unwrap(w_value) == -12
-    
+        assert api.PyLong_AsDouble(w_value) == -12
+
     def test_type_check(self, space, api):
         w_l = space.wrap(sys.maxint + 1)
         assert api.PyLong_Check(w_l)
@@ -63,6 +63,11 @@ class TestLongObject(BaseApiTest):
         assert api.PyLong_AsUnsignedLongLong(space.wrap(1<<64)) == (1<<64) - 1
         assert api.PyErr_Occurred()
         api.PyErr_Clear()
+
+    def test_as_voidptr(self, space, api):
+        w_l = api.PyLong_FromVoidPtr(lltype.nullptr(rffi.VOIDP.TO))
+        assert space.unwrap(w_l) == 0L
+        assert api.PyLong_AsVoidPtr(w_l) == lltype.nullptr(rffi.VOIDP_real.TO)
 
 class AppTestLongObject(AppTestCpythonExtensionBase):
     def test_fromlonglong(self):
