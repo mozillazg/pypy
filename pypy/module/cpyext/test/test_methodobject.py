@@ -34,6 +34,16 @@ class AppTestMethodObject(AppTestCpythonExtensionBase):
              }
              '''
              ),
+            ('isCFunction', 'METH_O',
+             '''
+             if(PyCFunction_Check(args)) {
+                 Py_RETURN_TRUE;
+             }
+             else {
+                 Py_RETURN_FALSE;
+             }
+             '''
+             ),
             ])
         assert mod.getarg_O(1) == 1
         raises(TypeError, mod.getarg_O)
@@ -46,3 +56,5 @@ class AppTestMethodObject(AppTestCpythonExtensionBase):
         assert mod.getarg_OLD(1) == 1
         assert mod.getarg_OLD() is None
         assert mod.getarg_OLD(1, 2) == (1, 2)
+
+        assert mod.isCFunction(mod.getarg_O)

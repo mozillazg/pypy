@@ -11,7 +11,7 @@ from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref
 from pypy.module.cpyext.api import (
     generic_cpy_call, cpython_api, PyObject, cpython_struct, METH_KEYWORDS,
     METH_O, CONST_STRING, METH_CLASS, METH_STATIC, METH_COEXIST, METH_NOARGS,
-    METH_VARARGS)
+    METH_VARARGS, build_type_checkers)
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
@@ -89,6 +89,8 @@ class W_PyCMethodObject(W_PyCFunctionObject):
     def descr_method_repr(self):
         return self.getrepr(self.space, "built-in method '%s' of '%s' object" % (self.name, self.w_objclass.getname(self.space, '?')))
 
+PyMethod_Check, PyMethod_CheckExact = build_type_checkers("Method", W_PyCMethodObject)
+PyCFunction_Check, PyCFunction_CheckExact = build_type_checkers("CFunction", W_PyCFunctionObject)
 
 class W_PyCWrapperObject(Wrappable):
     def __init__(self, space, pto, method_name, wrapper_func, wrapper_func_kwds,
