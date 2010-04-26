@@ -1,6 +1,5 @@
 import os
 import sys
-from weakref import ref
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.tool.pairtype import extendabletype
