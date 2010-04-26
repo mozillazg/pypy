@@ -66,16 +66,6 @@ def Py_UNICODE_ISLINEBREAK(space, ch):
     return unicodedb.islinebreak(ord(ch))
 
 @cpython_api([Py_UNICODE], rffi.INT_real, error=CANNOT_FAIL)
-def Py_UNICODE_ISSPACE(space, ch):
-    """Return 1 or 0 depending on whether ch is a whitespace character."""
-    return unicodedb.isspace(ord(ch))
-
-@cpython_api([Py_UNICODE], rffi.INT_real, error=CANNOT_FAIL)
-def Py_UNICODE_ISALNUM(space, ch):
-    """Return 1 or 0 depending on whether ch is an alphanumeric character."""
-    return unicodedb.isalnum(ord(ch))
-
-@cpython_api([Py_UNICODE], rffi.INT_real, error=CANNOT_FAIL)
 def Py_UNICODE_ISDECIMAL(space, ch):
     """Return 1 or 0 depending on whether ch is a decimal character."""
     return unicodedb.isdecimal(ord(ch))

@@ -159,6 +159,9 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
         api_function = ApiFunction(argtypes, restype, func, borrowed, error)
         func.api_func = api_function
 
+        assert func_name not in FUNCTIONS
+        assert func_name not in FUNCTIONS_STATIC
+
         if error is _NOT_SPECIFIED:
             raise ValueError("function %s has no return value for exceptions"
                              % func)
