@@ -3362,25 +3362,6 @@ def PyLong_AsUnsignedLongLongMask(space, io):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject], {double})
-def PyLong_AsDouble(space, pylong):
-    """Return a C double representation of the contents of pylong.  If
-    pylong cannot be approximately represented as a double, an
-    OverflowError exception is raised and -1.0 will be returned."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], {void*})
-def PyLong_AsVoidPtr(space, pylong):
-    """Convert a Python integer or long integer pylong to a C void pointer.
-    If pylong cannot be converted, an OverflowError will be raised.  This
-    is only assured to produce a usable void pointer for values created
-    with PyLong_FromVoidPtr().
-    
-    
-    
-    For values outside 0..LONG_MAX, both signed and unsigned integers are accepted."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], Py_ssize_t)
 def PyMapping_Size(space, o):
     """
