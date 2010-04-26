@@ -9,6 +9,8 @@ from pypy.translator.unsimplify import varoftype
 class FakeCPU:
     def calldescrof(self, FUNC, ARGS, RESULT):
         return ('calldescr', FUNC, ARGS, RESULT)
+    def fielddescrof(self, STRUCT, name):
+        return ('fielddescr', STRUCT, name)
 
 class FakeLink:
     args = []
@@ -100,3 +102,33 @@ def residual_call_test(argtypes, restype, expectedkind):
     for v in op.args[1:]:
         kind = getkind(v.concretetype)
         assert kind == 'void' or kind[0] in expectedkind
+
+def test_getfield():
+    # XXX a more compact encoding would be possible, something along
+    # the lines of  getfield_gc_r %r0, $offset, %r1
+    # which would not need a Descr at all.
+    S1 = lltype.Struct('S1')
+    S2 = lltype.GcStruct('S2')
+    S  = lltype.GcStruct('S', ('int', lltype.Signed),
+                              ('ps1', lltype.Ptr(S1)),
+                              ('ps2', lltype.Ptr(S2)),
+                              ('flt', lltype.Float),
+                              ('boo', lltype.Bool),
+                              ('chr', lltype.Char),
+                              ('unc', lltype.UniChar))
+    for name, suffix in [('int', 'i'),
+                         ('ps1', 'i'),
+                         ('ps2', 'r'),
+                         ('flt', 'f'),
+                         ('boo', 'c'),
+                         ('chr', 'c'),
+                         ('unc', 'u')]:
+        v_parent = varoftype(lltype.Ptr(S))
+        c_name = Constant(name, lltype.Void)
+        v_result = varoftype(getattr(S, name))
+        op = SpaceOperation('getfield', [v_parent, c_name], v_result)
+        op1 = Transformer(FakeCPU()).rewrite_operation(op)
+        assert op1.opname == 'getfield_gc_' + suffix
+        fielddescr = ('fielddescr', S, name)
+        assert op1.args == [v_parent, fielddescr]
+        assert op1.result == v_result
