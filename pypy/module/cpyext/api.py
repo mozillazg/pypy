@@ -486,7 +486,7 @@ def run_bootstrap_functions(space):
 def build_bridge(space):
     from pypy.module.cpyext.pyobject import make_ref
 
-    export_symbols = list(FUNCTIONS) + SYMBOLS_C + list(GLOBALS)
+    export_symbols = SYMBOLS_C + list(GLOBALS)
     from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
@@ -689,7 +689,7 @@ def build_eci(building_bridge, export_symbols, code):
 def setup_library(space):
     from pypy.module.cpyext.pyobject import make_ref
 
-    export_symbols = list(FUNCTIONS) + SYMBOLS_C + list(GLOBALS)
+    export_symbols = SYMBOLS_C + list(GLOBALS)
     from pypy.translator.c.database import LowLevelDatabase
     db = LowLevelDatabase()
 
