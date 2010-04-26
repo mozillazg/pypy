@@ -840,30 +840,6 @@ def PyInstance_NewRaw(space, class, dict):
     instance."""
     raise NotImplementedError
 
-@cpython_api([PyObject], rffi.INT_real)
-def PyCObject_Check(space, p):
-    """Return true if its argument is a PyCObject."""
-    raise NotImplementedError
-
-@cpython_api([{void*}, {void (*destr)(void*}], PyObject)
-def PyCObject_FromVoidPtr(space, cobj, )):
-    """Create a PyCObject from the void * cobj.  The destr function
-    will be called when the object is reclaimed, unless it is NULL."""
-    raise NotImplementedError
-
-@cpython_api([{void*}, {void*}, {void (*destr)(void*}, {void*}], PyObject)
-def PyCObject_FromVoidPtrAndDesc(space, cobj, desc, , )):
-    """Create a PyCObject from the void * cobj.  The destr
-    function will be called when the object is reclaimed. The desc argument can
-    be used to pass extra callback data for the destructor function."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], {void*})
-def PyCObject_AsVoidPtr(space, self):
-    """Return the object void * that the PyCObject self was
-    created with."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], {void*})
 def PyCObject_GetDesc(space, self):
     """Return the description void * that the PyCObject self was
@@ -3849,13 +3825,6 @@ def PyObject_GetAttr(space, o, attr_name):
     """Retrieve an attribute named attr_name from object o. Returns the attribute
     value on success, or NULL on failure.  This is the equivalent of the Python
     expression o.attr_name."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, rffi.CCHARP, PyObject], rffi.INT_real)
-def PyObject_SetAttrString(space, o, attr_name, v):
-    """Set the value of the attribute named attr_name, for object o, to the value
-    v. Returns -1 on failure.  This is the equivalent of the Python statement
-    o.attr_name = v."""
     raise NotImplementedError
 
 @cpython_api([PyObject, PyObject], rffi.INT_real)
