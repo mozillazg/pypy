@@ -49,7 +49,8 @@ include_dirs = [
 class CConfig:
     _compilation_info_ = ExternalCompilationInfo(
         include_dirs=include_dirs,
-        includes=['Python.h', 'stdarg.h']
+        includes=['Python.h', 'stdarg.h'],
+        compile_extra=['-DPy_BUILD_CORE'],
         )
 
 class CConfig_constants:
@@ -646,12 +647,14 @@ def build_eci(building_bridge, export_symbols, code):
     kwds = {}
     export_symbols_eci = export_symbols[:]
 
+    compile_extra=['-DPy_BUILD_CORE']
+
     if building_bridge:
         if sys.platform == "win32":
             # '%s' undefined; assuming extern returning int
-            kwds["compile_extra"] = ["/we4013"]
+            compile_extra.append("/we4013")
         else:
-            kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
+            compile_extra.append("-Werror=implicit-function-declaration")
         export_symbols_eci.append('pypyAPI')
     else:
         kwds["includes"] = ['Python.h'] # this is our Python.h
@@ -670,6 +673,7 @@ def build_eci(building_bridge, export_symbols, code):
                                ],
         separate_module_sources = [code],
         export_symbols=export_symbols_eci,
+        compile_extra=compile_extra,
         **kwds
         )
     return eci
