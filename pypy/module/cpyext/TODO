@@ -13,9 +13,8 @@
  - replace @cpython_api(external=False) by another explicit name: all
    it does is a lltype function pointer, no C code involved.
 
- - Fix distutil's build_ext to work with cpyext on windows.
-
  - Fix GIL handling (e.g. after releasing the GIL, GC operations might occur in savethreads).
+ - Fix PyEval_SaveThread: http://paste.pocoo.org/show/206521/
 
  - Make Numpy work.
 
