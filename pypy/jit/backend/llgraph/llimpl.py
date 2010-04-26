@@ -1229,8 +1229,8 @@ def _getfield_gc(struct, fieldnum):
     ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
     return getattr(ptr, fieldname)
 
-def do_getfield_gc_int(struct, fieldnum, memocast):
-    return cast_to_int(_getfield_gc(struct, fieldnum), memocast)
+def do_getfield_gc_int(struct, fieldnum):
+    return cast_to_int(_getfield_gc(struct, fieldnum))
 
 def do_getfield_gc_float(struct, fieldnum):
     return cast_to_float(_getfield_gc(struct, fieldnum))
@@ -1238,19 +1238,19 @@ def do_getfield_gc_float(struct, fieldnum):
 def do_getfield_gc_ptr(struct, fieldnum):
     return cast_to_ptr(_getfield_gc(struct, fieldnum))
 
-def _getfield_raw(struct, fieldnum, memocast):
+def _getfield_raw(struct, fieldnum):
     STRUCT, fieldname = symbolic.TokenToField[fieldnum]
-    ptr = cast_from_int(lltype.Ptr(STRUCT), struct, memocast)
+    ptr = cast_from_int(lltype.Ptr(STRUCT), struct)
     return getattr(ptr, fieldname)
 
-def do_getfield_raw_int(struct, fieldnum, memocast):
-    return cast_to_int(_getfield_raw(struct, fieldnum, memocast), memocast)
+def do_getfield_raw_int(struct, fieldnum):
+    return cast_to_int(_getfield_raw(struct, fieldnum))
 
-def do_getfield_raw_float(struct, fieldnum, memocast):
-    return cast_to_float(_getfield_raw(struct, fieldnum, memocast))
+def do_getfield_raw_float(struct, fieldnum):
+    return cast_to_float(_getfield_raw(struct, fieldnum))
 
-def do_getfield_raw_ptr(struct, fieldnum, memocast):
-    return cast_to_ptr(_getfield_raw(struct, fieldnum, memocast))
+def do_getfield_raw_ptr(struct, fieldnum):
+    return cast_to_ptr(_getfield_raw(struct, fieldnum))
 
 def do_new(size):
     TYPE = symbolic.Size2Type[size]

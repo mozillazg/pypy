@@ -224,6 +224,10 @@ class BlackholeInterpreter(object):
         return a - b
 
     @arguments("i", "i", returns="i")
+    def opimpl_int_mul(self, a, b):
+        return a * b
+
+    @arguments("i", "i", returns="i")
     def opimpl_uint_floordiv(self, a, b):
         c = llop.uint_floordiv(lltype.Unsigned, r_uint(a), r_uint(b))
         return intmask(c)
@@ -351,3 +355,47 @@ class BlackholeInterpreter(object):
     @arguments("d", "r", "i", "r")
     def opimpl_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
         self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
+
+    @arguments("r", "d", returns="i")
+    def opimpl_getfield_gc_i(self, struct, fielddescr):
+        return self.cpu.bh_getfield_gc_i(struct, fielddescr)
+    @arguments("r", "d", returns="i")
+    def opimpl_getfield_gc_c(self, struct, fielddescr):
+        return self.cpu.bh_getfield_gc_c(struct, fielddescr)
+    @arguments("r", "d", returns="i")
+    def opimpl_getfield_gc_u(self, struct, fielddescr):
+        return self.cpu.bh_getfield_gc_u(struct, fielddescr)
+    @arguments("r", "d", returns="r")
+    def opimpl_getfield_gc_r(self, struct, fielddescr):
+        return self.cpu.bh_getfield_gc_r(struct, fielddescr)
+    @arguments("r", "d", returns="f")
+    def opimpl_getfield_gc_f(self, struct, fielddescr):
+        return self.cpu.bh_getfield_gc_f(struct, fielddescr)
+
+    opimpl_getfield_gc_i_pure = opimpl_getfield_gc_i
+    opimpl_getfield_gc_c_pure = opimpl_getfield_gc_c
+    opimpl_getfield_gc_u_pure = opimpl_getfield_gc_u
+    opimpl_getfield_gc_r_pure = opimpl_getfield_gc_r
+    opimpl_getfield_gc_f_pure = opimpl_getfield_gc_f
+
+    @arguments("r", "d", returns="i")
+    def opimpl_getfield_raw_i(self, struct, fielddescr):
+        return self.cpu.bh_getfield_raw_i(struct, fielddescr)
+    @arguments("r", "d", returns="i")
+    def opimpl_getfield_raw_c(self, struct, fielddescr):
+        return self.cpu.bh_getfield_raw_c(struct, fielddescr)
+    @arguments("r", "d", returns="i")
+    def opimpl_getfield_raw_u(self, struct, fielddescr):
+        return self.cpu.bh_getfield_raw_u(struct, fielddescr)
+    @arguments("r", "d", returns="r")
+    def opimpl_getfield_raw_r(self, struct, fielddescr):
+        return self.cpu.bh_getfield_raw_r(struct, fielddescr)
+    @arguments("r", "d", returns="f")
+    def opimpl_getfield_raw_f(self, struct, fielddescr):
+        return self.cpu.bh_getfield_raw_f(struct, fielddescr)
+
+    opimpl_getfield_raw_i_pure = opimpl_getfield_raw_i
+    opimpl_getfield_raw_c_pure = opimpl_getfield_raw_c
+    opimpl_getfield_raw_u_pure = opimpl_getfield_raw_u
+    opimpl_getfield_raw_r_pure = opimpl_getfield_raw_r
+    opimpl_getfield_raw_f_pure = opimpl_getfield_raw_f

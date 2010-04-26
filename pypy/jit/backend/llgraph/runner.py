@@ -371,39 +371,63 @@ class LLtypeCPU(BaseCPU):
         else:
             raise NotImplementedError
 
-    def do_getfield_gc(self, structbox, fielddescr):
-        assert isinstance(fielddescr, Descr)
-        struct = structbox.getref_base()
-        if fielddescr.typeinfo == REF:
-            return history.BoxPtr(llimpl.do_getfield_gc_ptr(struct,
-                                                            fielddescr.ofs))
-        elif fielddescr.typeinfo == INT:
-            return history.BoxInt(llimpl.do_getfield_gc_int(struct,
-                                                            fielddescr.ofs,
-                                                            self.memo_cast))
-        elif fielddescr.typeinfo == FLOAT:
-            return history.BoxFloat(llimpl.do_getfield_gc_float(struct,
-                                                            fielddescr.ofs))
-        else:
-            raise NotImplementedError
+##    def do_getfield_gc(self, structbox, fielddescr):
+##        assert isinstance(fielddescr, Descr)
+##        struct = structbox.getref_base()
+##        if fielddescr.typeinfo == REF:
+##            return history.BoxPtr(llimpl.do_getfield_gc_ptr(struct,
+##                                                            fielddescr.ofs))
+##        elif fielddescr.typeinfo == INT:
+##            return history.BoxInt(llimpl.do_getfield_gc_int(struct,
+##                                                            fielddescr.ofs,
+##                                                            self.memo_cast))
+##        elif fielddescr.typeinfo == FLOAT:
+##            return history.BoxFloat(llimpl.do_getfield_gc_float(struct,
+##                                                            fielddescr.ofs))
+##        else:
+##            raise NotImplementedError
 
-    def do_getfield_raw(self, structbox, fielddescr):
+    def bh_getfield_gc_i(self, struct, fielddescr):
         assert isinstance(fielddescr, Descr)
-        struct = self.cast_int_to_adr(structbox.getint())
-        if fielddescr.typeinfo == REF:
-            return history.BoxPtr(llimpl.do_getfield_raw_ptr(struct,
-                                                             fielddescr.ofs,
-                                                             self.memo_cast))
-        elif fielddescr.typeinfo == INT:
-            return history.BoxInt(llimpl.do_getfield_raw_int(struct,
-                                                             fielddescr.ofs,
-                                                             self.memo_cast))
-        elif fielddescr.typeinfo == FLOAT:
-            return history.BoxFloat(llimpl.do_getfield_raw_float(struct,
-                                                             fielddescr.ofs,
-                                                             self.memo_cast))
-        else:
-            raise NotImplementedError
+        return llimpl.do_getfield_gc_int(struct, fielddescr.ofs)
+    bh_getfield_gc_c = bh_getfield_gc_i
+    bh_getfield_gc_u = bh_getfield_gc_i
+    def bh_getfield_gc_r(self, struct, fielddescr):
+        assert isinstance(fielddescr, Descr)
+        return llimpl.do_getfield_gc_ptr(struct, fielddescr.ofs)
+    def bh_getfield_gc_f(self, struct, fielddescr):
+        assert isinstance(fielddescr, Descr)
+        return llimpl.do_getfield_gc_float(struct, fielddescr.ofs)
+
+##    def do_getfield_raw(self, structbox, fielddescr):
+##        assert isinstance(fielddescr, Descr)
+##        struct = self.cast_int_to_adr(structbox.getint())
+##        if fielddescr.typeinfo == REF:
+##            return history.BoxPtr(llimpl.do_getfield_raw_ptr(struct,
+##                                                             fielddescr.ofs,
+##                                                             self.memo_cast))
+##        elif fielddescr.typeinfo == INT:
+##            return history.BoxInt(llimpl.do_getfield_raw_int(struct,
+##                                                             fielddescr.ofs,
+##                                                             self.memo_cast))
+##        elif fielddescr.typeinfo == FLOAT:
+##            return history.BoxFloat(llimpl.do_getfield_raw_float(struct,
+##                                                             fielddescr.ofs,
+##                                                             self.memo_cast))
+##        else:
+##            raise NotImplementedError
+
+    def bh_getfield_raw_i(self, struct, fielddescr):
+        assert isinstance(fielddescr, Descr)
+        return llimpl.do_getfield_raw_int(struct, fielddescr.ofs)
+    bh_getfield_raw_c = bh_getfield_raw_i
+    bh_getfield_raw_u = bh_getfield_raw_i
+    def bh_getfield_raw_r(self, struct, fielddescr):
+        assert isinstance(fielddescr, Descr)
+        return llimpl.do_getfield_raw_ptr(struct, fielddescr.ofs)
+    def bh_getfield_raw_f(self, struct, fielddescr):
+        assert isinstance(fielddescr, Descr)
+        return llimpl.do_getfield_raw_float(struct, fielddescr.ofs)
 
     def do_new(self, size):
         assert isinstance(size, Descr)
