@@ -62,6 +62,14 @@ def PyList_Append(space, w_list, w_item):
     w_list.append(w_item)
     return 0
 
+@cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
+def PyList_Insert(space, w_list, index, w_item):
+    """Insert the item item into list list in front of index index.  Return
+    0 if successful; return -1 and set an exception if unsuccessful.
+    Analogous to list.insert(index, item)."""
+    space.call_method(w_list, "insert", space.wrap(index), w_item)
+    return 0
+
 @cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
 def PyList_GET_SIZE(space, w_list):
     """Macro form of PyList_Size() without error checking.
