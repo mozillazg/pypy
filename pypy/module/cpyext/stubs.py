@@ -2635,14 +2635,6 @@ def PySeqIter_Check(space, seq):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject], PyObject)
-def PySeqIter_New(space, seq):
-    """Return an iterator that works with a general sequence object, seq.  The
-    iteration ends when the sequence raises IndexError for the subscripting
-    operation.
-    """
-    raise NotImplementedError
-
 @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyCallIter_Check(space, iter):
     """Return true if the type of op is PyCallIter_Type.

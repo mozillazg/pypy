@@ -93,3 +93,12 @@ def PySequence_Concat(space, w_o1, w_o2):
     """Return the concatenation of o1 and o2 on success, and NULL on failure.
     This is the equivalent of the Python expression o1 + o2."""
     return space.add(w_o1, w_o2)
+
+@cpython_api([PyObject], PyObject)
+def PySeqIter_New(space, w_seq):
+    """Return an iterator that works with a general sequence object, seq.  The
+    iteration ends when the sequence raises IndexError for the subscripting
+    operation.
+    """
+    return space.iter(w_seq)
+
