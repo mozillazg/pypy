@@ -73,7 +73,7 @@ def PyCObject_FromVoidPtrAndDesc(space, cobj, desc, destr):
     pycobject = rffi.cast(PyCObject, pyo)
     w_pycobject.set_pycobject(pycobject)
     pycobject.c_cobject = cobj
-    pybobject.c_desc = desc
+    pycobject.c_desc = desc
     pycobject.c_destructor = rffi.cast(destructor_short, destr)
     return pyo
 
