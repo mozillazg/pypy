@@ -166,8 +166,8 @@ class TestRegAlloc:
                          exclink)
         #
         self.check_assembler(graph, """
-            try_catch L1
             res_call %i0
+            catch_exception L1
             int_return %i0
             L1:
             goto_if_exception_mismatch $123, L2

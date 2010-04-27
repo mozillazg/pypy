@@ -149,7 +149,7 @@ class GraphFlattener(object):
             # An exception block. See test_exc_exitswitch in test_flatten.py
             # for an example of what kind of code this makes.
             assert block.exits[0].exitcase is None # is this always True?
-            self.emitlinebefore('_call', 'try_catch', TLabel(block.exits[0]))
+            self.emitline('catch_exception', TLabel(block.exits[0]))
             self.make_link(block.exits[0])
             self.emitline(Label(block.exits[0]))
             for link in block.exits[1:]:
@@ -273,13 +273,6 @@ class GraphFlattener(object):
 
     def emitline(self, *line):
         self.ssarepr.insns.append(line)
-
-    def emitlinebefore(self, name_extract, *line):
-        assert name_extract in self.ssarepr.insns[-1][0], (
-            "emitlinebefore: the %s operation should be inserted before %s,"
-            " but it does not look like a %r operation" % (
-                line, self.ssarepr.insns[-1], name_extract))
-        self.ssarepr.insns.insert(-1, line)
 
     def flatten_list(self, arglist):
         args = []
