@@ -738,7 +738,7 @@ def load_extension_module(space, path, name):
             "unable to load extension module '%s': %s",
             path, e.msg)
     try:
-        initptr = libffi.dlsym(dll.lib, 'init%s' % (name,))
+        initptr = libffi.dlsym(dll.lib, 'init%s' % (name.split('.')[-1],))
     except KeyError:
         raise operationerrfmt(
             space.w_ImportError,
