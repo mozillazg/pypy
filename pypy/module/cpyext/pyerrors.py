@@ -21,34 +21,10 @@ def PyErr_SetString(space, w_type, message_ptr):
     message = rffi.charp2str(message_ptr)
     PyErr_SetObject(space, w_type, space.wrap(message))
 
-@cpython_api([], lltype.Void)
-def PyErr_BadArgument(space):
-    """This is a shorthand for PyErr_SetString(PyExc_TypeError, message), where
-    message indicates that a built-in operation was invoked with an illegal
-    argument.  It is mostly for internal use."""
-    raise OperationError(space.w_TypeError, 
-            space.wrap("bad argument type for built-in operation"))
-
-@cpython_api([PyObject], PyObject)
-def PyErr_SetFromErrno(space, w_type):
-    """
-    This is a convenience function to raise an exception when a C library function
-    has returned an error and set the C variable errno.  It constructs a
-    tuple object whose first item is the integer errno value and whose
-    second item is the corresponding error message (gotten from strerror()),
-    and then calls PyErr_SetObject(type, object).  On Unix, when the
-    errno value is EINTR, indicating an interrupted system call,
-    this calls PyErr_CheckSignals(), and if that set the error indicator,
-    leaves it set to that.  The function always returns NULL, so a wrapper
-    function around a system call can write return PyErr_SetFromErrno(type);
-    when the system call returns an error.
-    Return value: always NULL."""
-    # XXX Doesn't actually do anything with PyErr_CheckSignals.
-    errno = get_errno()
-    errno_w = space.wrap(errno)
-    message_w = space.wrap(os.strerror(errno))
-    PyErr_SetObject(space, w_type, errno_w, message_w)
-
+@cpython_api([PyObject], lltype.Void, error=CANNOT_FAIL)
+def PyErr_SetNone(space, w_type):
+    """This is a shorthand for PyErr_SetObject(type, Py_None)."""
+    PyErr_SetObject(space, w_type, space.w_None)
 
 @cpython_api([], PyObject, borrowed=True)
 def PyErr_Occurred(space):
@@ -99,8 +75,44 @@ def PyErr_Restore(space, w_type, w_value, w_traceback):
     Py_DecRef(space, w_value)
 
 @cpython_api([], lltype.Void)
+def PyErr_BadArgument(space):
+    """This is a shorthand for PyErr_SetString(PyExc_TypeError, message), where
+    message indicates that a built-in operation was invoked with an illegal
+    argument.  It is mostly for internal use."""
+    raise OperationError(space.w_TypeError, 
+            space.wrap("bad argument type for built-in operation"))
+
+@cpython_api([], lltype.Void)
 def PyErr_BadInternalCall(space):
     raise OperationError(space.w_SystemError, space.wrap("Bad internal call!"))
+
+@cpython_api([], PyObject, error=CANNOT_FAIL)
+def PyErr_NoMemory(space):
+    """This is a shorthand for PyErr_SetNone(PyExc_MemoryError); it returns NULL
+    so an object allocation function can write return PyErr_NoMemory(); when it
+    runs out of memory.
+    Return value: always NULL."""
+    PyErr_SetNone(space, space.w_MemoryError)
+
+@cpython_api([PyObject], PyObject)
+def PyErr_SetFromErrno(space, w_type):
+    """
+    This is a convenience function to raise an exception when a C library function
+    has returned an error and set the C variable errno.  It constructs a
+    tuple object whose first item is the integer errno value and whose
+    second item is the corresponding error message (gotten from strerror()),
+    and then calls PyErr_SetObject(type, object).  On Unix, when the
+    errno value is EINTR, indicating an interrupted system call,
+    this calls PyErr_CheckSignals(), and if that set the error indicator,
+    leaves it set to that.  The function always returns NULL, so a wrapper
+    function around a system call can write return PyErr_SetFromErrno(type);
+    when the system call returns an error.
+    Return value: always NULL."""
+    # XXX Doesn't actually do anything with PyErr_CheckSignals.
+    errno = get_errno()
+    errno_w = space.wrap(errno)
+    message_w = space.wrap(os.strerror(errno))
+    PyErr_SetObject(space, w_type, errno_w, message_w)
 
 @cpython_api([], rffi.INT_real, error=-1)
 def PyErr_CheckSignals(space):
@@ -115,20 +127,6 @@ def PyErr_CheckSignals(space):
     cleared if it was previously set."""
     # XXX implement me
     return 0
-
-@cpython_api([], PyObject, error=CANNOT_FAIL)
-def PyErr_NoMemory(space):
-    """This is a shorthand for PyErr_SetNone(PyExc_MemoryError); it returns NULL
-    so an object allocation function can write return PyErr_NoMemory(); when it
-    runs out of memory.
-    Return value: always NULL."""
-    PyErr_SetNone(space, space.w_MemoryError)
-
-@cpython_api([PyObject], lltype.Void, error=CANNOT_FAIL)
-def PyErr_SetNone(space, w_type):
-    """This is a shorthand for PyErr_SetObject(type, Py_None)."""
-    PyErr_SetObject(space, w_type, space.w_None)
-
 
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyErr_GivenExceptionMatches(space, w_given, w_exc):
