@@ -21,6 +21,16 @@ class FakeRegAlloc:
             self.num_colors += 1
         return self.seen[v]
 
+class FakeDescr(AbstractDescr):
+    def __repr__(self):
+        return '<Descr>'
+
+class FakeCPU:
+    def calldescrof(self, FUNC, ARGS, RESULT):
+        return FakeDescr()
+    def fielddescrof(self, STRUCT, name):
+        return FakeDescr()
+
 def fake_regallocs():
     return {'int': FakeRegAlloc(),
             'ref': FakeRegAlloc(),
@@ -48,7 +58,7 @@ class TestFlatten:
     def encoding_test(self, func, args, expected, transform=False):
         graphs = self.make_graphs(func, args)
         if transform:
-            transform_graph(graphs[0])
+            transform_graph(graphs[0], FakeCPU())
         ssarepr = flatten_graph(graphs[0], fake_regallocs())
         self.assert_format(ssarepr, expected)
 
@@ -234,7 +244,7 @@ class TestFlatten:
 
         self.encoding_test(f, [65], """
         direct_call $<* fn g>, %i0
-        goto_if_exception L1
+        catch L1
         int_return $3
         L1:
         goto_if_exception_mismatch $<* struct object_vtable>, L2
@@ -245,3 +255,33 @@ class TestFlatten:
         L3:
         reraise
         """)
+
+    def test_exc_exitswitch_2(self):
+        class FooError(Exception):
+            pass
+        def g(i):
+            FooError().num = 1
+            FooError().num = 2
+        def f(i):
+            try:
+                g(i)
+            except FooError, e:
+                return e.num
+            except Exception:
+                return 3
+            else:
+                return 4
+
+        self.encoding_test(f, [65], """
+        residual_call_ir_v $<* fn g>, <Descr>, I[%i0], R[]
+        catch L1
+        int_return $4
+        L1:
+        goto_if_exception_mismatch $<* struct object_vtable>, L2
+        last_exc_value %r0
+        ref_copy %r0, %r1
+        getfield_gc_i %r1, <Descr>, %i1
+        int_return %i1
+        L2:
+        int_return $3
+        """, transform=True)
