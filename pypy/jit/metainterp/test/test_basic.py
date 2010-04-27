@@ -761,21 +761,26 @@ class BasicTests:
     def test_zerodivisionerror(self):
         # test the case of exception-raising operation that is not delegated
         # to the backend at all: ZeroDivisionError
-        from pypy.rpython.lltypesystem.lloperation import llop
         #
         def f(n):
+            assert n >= 0
             try:
-                return llop.int_mod_ovf_zer(lltype.Signed, 5, n)
+                return ovfcheck(5 % n)
             except ZeroDivisionError:
                 return -666
+            except OverflowError:
+                return -777
         res = self.interp_operations(f, [0])
         assert res == -666
         #
         def f(n):
+            assert n >= 0
             try:
-                return llop.int_floordiv_ovf_zer(lltype.Signed, 6, n)
+                return ovfcheck(6 // n)
             except ZeroDivisionError:
                 return -667
+            except OverflowError:
+                return -778
         res = self.interp_operations(f, [0])
         assert res == -667
 
