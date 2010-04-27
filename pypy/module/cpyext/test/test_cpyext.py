@@ -195,6 +195,10 @@ class AppTestCpythonExtensionBase:
     def setup_method(self, func):
         self.w_import_module = self.space.wrap(self.import_module)
         self.w_import_extension = self.space.wrap(self.import_extension)
+
+        # create the file lock before we count allocations
+        self.space.call_method(self.space.sys.get("stdout"), "flush")
+
         freeze_refcnts(self)
         #self.check_and_print_leaks()
 

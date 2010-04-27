@@ -12,7 +12,7 @@ class Directory(py.test.collect.Directory):
         return super(Directory, self).collect()
 
 def pytest_funcarg__space(request):
-    return gettestobjspace(usemodules=['cpyext'])
+    return gettestobjspace(usemodules=['cpyext', 'thread'])
 
 def pytest_funcarg__api(request):
     return request.cls.api
