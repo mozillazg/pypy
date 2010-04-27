@@ -25,27 +25,32 @@ class Transformer(object):
     def transform(self, graph):
         self.graph = graph
         for block in graph.iterblocks():
-            if block.operations == ():
-                continue
-            rename = {}
-            newoperations = []
-            if block.exitswitch == c_last_exception:
-                op_raising_exception = block.operations[-1]
+            self.optimize_block(block)
+
+    def optimize_block(self, block):
+        if block.operations == ():
+            return
+        rename = {}
+        newoperations = []
+        if block.exitswitch == c_last_exception:
+            op_raising_exception = block.operations[-1]
+        else:
+            op_raising_exception = Ellipsis
+        for op in block.operations:
+            try:
+                op1 = self.rewrite_operation(op)
+            except NoOp:
+                if op.result is not None:
+                    rename[op.result] = rename.get(op.args[0], op.args[0])
+                if op is op_raising_exception:
+                    self.killed_exception_raising_operation(block)
             else:
-                op_raising_exception = Ellipsis
-            for op in block.operations:
-                try:
-                    op1 = self.rewrite_operation(op)
-                except NoOp:
-                    if op.result is not None:
-                        rename[op.result] = rename.get(op.args[0], op.args[0])
-                    if op is op_raising_exception:
-                        self.killed_exception_raising_operation(block)
-                else:
-                    op2 = self.do_renaming(rename, op1)
-                    newoperations.append(op2)
-            block.operations = newoperations
-            self.optimize_goto_if_not(block)
+                op2 = self.do_renaming(rename, op1)
+                newoperations.append(op2)
+        block.operations = newoperations
+        self.optimize_goto_if_not(block)
+        for link in block.exits:
+            self.do_renaming_on_link(rename, link)
 
     def do_renaming(self, rename, op):
         op = SpaceOperation(op.opname, op.args[:], op.result)
@@ -61,6 +66,12 @@ class Transformer(object):
                     newlst.append(x)
                 op.args[i] = ListOfKind(v.kind, newlst)
         return op
+
+    def do_renaming_on_link(self, rename, link):
+        for i, v in enumerate(link.args):
+            if isinstance(v, Variable):
+                if v in rename:
+                    link.args[i] = rename[v]
 
     def killed_exception_raising_operation(self, block):
         assert block.exits[0].exitcase is None
