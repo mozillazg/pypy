@@ -160,3 +160,17 @@ def test_getfield():
         fielddescr = ('fielddescr', S, name)
         assert op1.args == [v_parent, fielddescr]
         assert op1.result == v_result
+
+def test_rename_on_links():
+    v1 = Variable()
+    v2 = Variable()
+    v3 = Variable()
+    block = Block([v1])
+    block.operations = [SpaceOperation('cast_pointer', [v1], v2)]
+    block2 = Block([v3])
+    block.closeblock(Link([v2], block2))
+    Transformer().optimize_block(block)
+    assert block.inputargs == [v1]
+    assert block.operations == []
+    assert block.exits[0].target is block2
+    assert block.exits[0].args == [v1]
