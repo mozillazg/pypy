@@ -153,10 +153,10 @@ class AppTestCpythonExtensionBase:
             """ % dict(name=name, init=init, body=body)
             kwds = dict(separate_module_sources=[code])
         else:
-            if filename is not None:
-                name = filename
+            if filename is None:
+                filename = name
             filename = py.path.local(autopath.pypydir) / 'module' \
-                    / 'cpyext'/ 'test' / (name + ".c")
+                    / 'cpyext'/ 'test' / (filename + ".c")
             kwds = dict(separate_module_files=[filename])
 
         state = self.space.fromcache(State)
@@ -327,7 +327,6 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         the module name (the part after the last dot) is considered when
         computing the name of the module initializer function.
         """
-        skip("This is not supported at present.")
         expected_name = "pypy.module.cpyext.test.dotted"
         module = self.import_module(name=expected_name, filename="dotted")
         assert module.__name__ == expected_name
