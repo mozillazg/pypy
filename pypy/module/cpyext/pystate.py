@@ -13,9 +13,8 @@ def PyEval_SaveThread(space):
     previous thread state (which is not NULL except in PyPy).  If the lock has been created,
     the current thread must have acquired it.  (This function is available even
     when thread support is disabled at compile time.)"""
-    if space.config.objspace.usemodules.thread:
-        from pypy.module.thread.gil import before_external_call
-        before_external_call()
+    if rffi.aroundstate.before:
+        rffi.aroundstate.before()
     return lltype.nullptr(PyThreadState.TO)
 
 @cpython_api([PyThreadState], lltype.Void)
@@ -25,9 +24,8 @@ def PyEval_RestoreThread(space, tstate):
     NULL.  If the lock has been created, the current thread must not have
     acquired it, otherwise deadlock ensues.  (This function is available even
     when thread support is disabled at compile time.)"""
-    if space.config.objspace.usemodules.thread:
-        from pypy.module.thread.gil import after_external_call
-        after_external_call()
+    if rffi.aroundstate.after:
+        rffi.aroundstate.after()
 
 @cpython_api([], lltype.Void)
 def PyEval_InitThreads(space):
