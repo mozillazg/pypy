@@ -17,7 +17,7 @@ def PyPy_GetReference(space, arg):
 
 class BaseApiTest:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['cpyext'])
+        cls.space = gettestobjspace(usemodules=['cpyext', 'thread'])
         cls.space.getbuiltinmodule("cpyext")
         class CAPI:
             def __getattr__(self, name):
