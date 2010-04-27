@@ -2,8 +2,9 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import intmask, LONG_BIT, r_uint
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.llinterp import LLException
 from pypy.jit.codewriter.flatten import SwitchDictDescr
 
 
@@ -29,6 +30,7 @@ def signedord(c):
 
 
 class BlackholeInterpBuilder(object):
+    verbose = True
 
     def __init__(self, codewriter):
         self.cpu = codewriter.cpu
@@ -124,14 +126,27 @@ class BlackholeInterpBuilder(object):
                 else:
                     raise AssertionError("bad argtype: %r" % (argtype,))
                 args += (value,)
+
+            if verbose and not we_are_translated():
+                print '\t', name, list(args),
+
             # call the method opimpl_xxx()
             try:
                 result = unboundmethod(self, *args)
-            except Exception:
+            except Exception, e:
+                if verbose and not we_are_translated():
+                    print '-> %s!' % (e.__class__.__name__,)
                 if resulttype == 'i' or resulttype == 'r' or resulttype == 'f':
                     position += 1
                 self.exception_pc = position
                 raise
+
+            if verbose and not we_are_translated():
+                if result is None:
+                    print
+                else:
+                    print '->', result
+
             if resulttype == 'i':
                 # argcode should be 'i' too
                 assert argcodes[next_argcode] == 'i'
@@ -161,6 +176,7 @@ class BlackholeInterpBuilder(object):
             assert next_argcode == len(argcodes)
             return position
         #
+        verbose = self.verbose
         unboundmethod = getattr(BlackholeInterpreter, 'opimpl_' + name)
         argtypes = unrolling_iterable(unboundmethod.argtypes)
         resulttype = unboundmethod.resulttype
@@ -213,6 +229,9 @@ class BlackholeInterpreter(object):
             #except JitException:
             #    ...
             except Exception, e:
+                if not we_are_translated():
+                    if not isinstance(e, LLException):
+                        raise
                 position = self.handle_exception_in_frame(e, code)
 
     def handle_exception_in_frame(self, e, code):
@@ -224,6 +243,8 @@ class BlackholeInterpreter(object):
             raise e      # no 'catch_exception' insn follows: just reraise
         else:
             # else store the exception on 'self', and jump to the handler
+            if not we_are_translated():     # get the lltyped exception
+                e = e.args[1]               #   object out of the LLException
             self.exception_last_value = e
             target = ord(code[position+1]) | (ord(code[position+2])<<8)
             return target
@@ -341,6 +362,36 @@ class BlackholeInterpreter(object):
         and the instruction that raised is immediately followed by a
         catch_exception, then the code in handle_exception_in_frame()
         will capture the exception and jump to 'target'."""
+
+    @arguments("i", "L", "pc", returns="L")
+    def opimpl_goto_if_exception_mismatch(self, vtable, target, pc):
+        adr = llmemory.cast_int_to_adr(vtable)
+        bounding_class = llmemory.cast_adr_to_ptr(adr, rclass.CLASSTYPE)
+        real_instance = self.exception_last_value
+        assert real_instance
+        if rclass.ll_issubclass(real_instance.typeptr, bounding_class):
+            return pc
+        else:
+            return target
+
+    @arguments(returns="i")
+    def opimpl_last_exception(self):
+        real_instance = self.exception_last_value
+        assert real_instance
+        adr = llmemory.cast_ptr_to_adr(real_instance.typeptr)
+        return llmemory.cast_adr_to_int(adr)
+
+    @arguments(returns="r")
+    def opimpl_last_exc_value(self):
+        real_instance = self.exception_last_value
+        assert real_instance
+        return lltype.cast_opaque_ptr(llmemory.GCREF, real_instance)
+
+    @arguments()
+    def opimpl_reraise(self):
+        real_instance = self.exception_last_value
+        assert real_instance
+        raise real_instance
 
     # ----------
     # the following operations are directly implemented by the backend

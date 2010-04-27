@@ -270,12 +270,6 @@ class BaseCPU(model.AbstractCPU):
 
     # ----------
 
-    def get_exception(self):
-        return self.cast_adr_to_int(llimpl.get_exception())
-
-    def get_exc_value(self):
-        return llimpl.get_exc_value()
-
     def clear_exception(self):
         llimpl.clear_exception()
 
