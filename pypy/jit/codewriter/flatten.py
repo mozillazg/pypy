@@ -127,6 +127,17 @@ class GraphFlattener(object):
         self.insert_renamings(link)
         self.make_bytecode_block(link.target)
 
+    def make_exception_link(self, link):
+        # Like make_link(), but also introduces the 'last_exception' and
+        # 'last_exc_value' as variables if needed
+        assert link.last_exception is not None
+        assert link.last_exc_value is not None
+        if link.last_exception in link.args:
+            self.emitline("last_exception", self.getcolor(link.last_exception))
+        if link.last_exc_value in link.args:
+            self.emitline("last_exc_value", self.getcolor(link.last_exc_value))
+        self.make_link(link)
+
     def insert_exits(self, block):
         if len(block.exits) == 1:
             # A single link, fall-through
@@ -168,22 +179,29 @@ class GraphFlattener(object):
             # exc_2 case
             # reraise
             assert block.exits[0].exitcase is None # is this always True?
-            self.emitline('goto_if_exception', TLabel(block.exits[0]))
+            self.emitline('catch', TLabel(block.exits[0]))
             self.make_link(block.exits[0])
             self.emitline(Label(block.exits[0]))
             for link in block.exits[1:]:
-                if (link.exitcase is Exception and link.target.operations == ()
-                    and len(link.target.inputargs) == 2):
-                    # default exit-by-exception block, if the link is going
-                    # directly to the except block.
-                    self.emitline("reraise")
-                else:
-                    self.emitline('goto_if_exception_mismatch',
-                                  Constant(link.llexitcase,
-                                           lltype.typeOf(link.llexitcase)),
-                                  TLabel(link))
-                    self.make_link(link)
-                    self.emitline(Label(link))
+                if link.exitcase is Exception:
+                    # this link captures all exceptions
+                    if (link.target.operations == ()
+                        and len(link.target.inputargs) == 2):
+                        # the link is going directly to the except block
+                        self.emitline("reraise")
+                    else:
+                        self.make_exception_link(link)
+                    break
+                self.emitline('goto_if_exception_mismatch',
+                              Constant(link.llexitcase,
+                                       lltype.typeOf(link.llexitcase)),
+                              TLabel(link))
+                self.make_exception_link(link)
+                self.emitline(Label(link))
+            else:
+                # no link captures all exceptions, so we have to put a reraise
+                # for the other exceptions
+                self.emitline("reraise")
         else:
             # A switch.
             #
