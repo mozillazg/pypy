@@ -329,8 +329,9 @@ class TestFlatten:
         """, transform=True)
 
     def test_int_floordiv_ovf_zer(self):
-        py.test.skip("in-progress")
         def f(i, j):
+            assert i >= 0
+            assert j >= 0
             try:
                 return ovfcheck(i // j)
             except OverflowError:
@@ -346,8 +347,8 @@ class TestFlatten:
             goto_if_not_int_ne L2, %i3, $-1
             int_floordiv %i0, %i1, %i4
             int_return %i4
-            L1:
-            int_return $-42
             L2:
             int_return $42
+            L1:
+            int_return $-42
         """.replace('MAXINT', str(sys.maxint)), transform=True)

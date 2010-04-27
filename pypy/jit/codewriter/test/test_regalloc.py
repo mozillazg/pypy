@@ -1,12 +1,14 @@
-import py
+import py, sys
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.regalloc import perform_register_allocation
 from pypy.jit.codewriter.flatten import flatten_graph, ListOfKind
 from pypy.jit.codewriter.format import format_assembler
+from pypy.jit.codewriter.jitter import transform_graph
 from pypy.objspace.flow.model import Variable, Constant, SpaceOperation
 from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import c_last_exception
 from pypy.rpython.lltypesystem import lltype, rclass
+from pypy.rlib.rarithmetic import ovfcheck
 
 
 class TestRegAlloc:
@@ -15,10 +17,12 @@ class TestRegAlloc:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
-    def check_assembler(self, graph, expected):
-        """Only for simple graphs.  More complex graphs must first be
-        transformed by jitter.py before they can be subjected to
-        register allocation and flattening."""
+    def check_assembler(self, graph, expected, transform=False):
+        # 'transform' can be False only for simple graphs.  More complex
+        # graphs must first be transformed by jitter.py before they can be
+        # subjected to register allocation and flattening.
+        if transform:
+            transform_graph(graph)
         regalloc = perform_register_allocation(graph, 'int')
         ssarepr = flatten_graph(graph, {'int': regalloc})
         asm = format_assembler(ssarepr)
@@ -176,3 +180,27 @@ class TestRegAlloc:
             L2:
             reraise
         """)
+
+    def test_int_floordiv_ovf_zer(self):
+        def f(i, j):
+            assert i >= 0
+            assert j >= 0
+            try:
+                return ovfcheck(i // j)
+            except OverflowError:
+                return 42
+            except ZeroDivisionError:
+                return -42
+        graph = self.make_graphs(f, [5, 6])[0]
+        self.check_assembler(graph, """
+            goto_if_not_int_is_true L1, %i1
+            int_add %i0, $MAXINT, %i2
+            int_and %i2, %i1, %i2
+            goto_if_not_int_ne L2, %i2, $-1
+            int_floordiv %i0, %i1, %i0
+            int_return %i0
+            L2:
+            int_return $42
+            L1:
+            int_return $-42
+        """.replace('MAXINT', str(sys.maxint)), transform=True)
