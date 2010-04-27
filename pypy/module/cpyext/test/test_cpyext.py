@@ -40,7 +40,7 @@ def set_difference(id_dict1, id_dict2):
 
 class AppTestApi:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['cpyext'])
+        cls.space = gettestobjspace(usemodules=['cpyext', 'thread'])
         from pypy.rlib.libffi import get_libc_name
         cls.w_libc = cls.space.wrap(get_libc_name())
 
@@ -129,7 +129,7 @@ def check_and_print_leaks(self):
 
 class AppTestCpythonExtensionBase:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['cpyext'])
+        cls.space = gettestobjspace(usemodules=['cpyext', 'thread'])
         cls.space.getbuiltinmodule("cpyext")
 
     def import_module(self, name, init=None, body='', load_it=True):
