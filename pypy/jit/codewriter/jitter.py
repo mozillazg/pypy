@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.jit.metainterp.history import getkind
-from pypy.objspace.flow.model import SpaceOperation, Variable, c_last_exception
+from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
+from pypy.objspace.flow.model import c_last_exception
 from pypy.jit.codewriter.flatten import ListOfKind
 
 
@@ -84,11 +85,25 @@ class Transformer(object):
                 return False   # variable is also used in cur block
             if v is op.result:
                 if op.opname not in ('int_lt', 'int_le', 'int_eq', 'int_ne',
-                                     'int_gt', 'int_ge'):
+                                     'int_gt', 'int_ge', 'int_is_true'):
                     return False    # not a supported operation
                 # ok! optimize this case
                 block.operations.remove(op)
-                block.exitswitch = (op.opname,) + tuple(op.args)
+                opname = op.opname
+                args = op.args
+                if op.opname in ('int_ne', 'int_eq'):
+                    if isinstance(args[0], Constant):
+                        args = args[::-1]
+                    if isinstance(args[1], Constant) and args[1].value == 0:
+                        if opname == 'int_eq':
+                            # must invert the two exit links
+                            link = block.exits[0]
+                            link.llexitcase = link.exitcase = not link.exitcase
+                            link = block.exits[1]
+                            link.llexitcase = link.exitcase = not link.exitcase
+                        opname = 'int_is_true'
+                        args = [args[0]]
+                block.exitswitch = (opname,) + tuple(args)
                 return True
         return False
 
