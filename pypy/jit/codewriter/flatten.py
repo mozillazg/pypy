@@ -116,7 +116,7 @@ class GraphFlattener(object):
                 self.emitline("%s_return" % kind, self.getcolor(args[0]))
         elif len(args) == 2:
             # exception block, raising an exception from a function
-            xxx
+            self.emitline("raise", self.getcolor(args[1]))
         else:
             raise Exception("?")
 
@@ -145,6 +145,35 @@ class GraphFlattener(object):
             assert link.exitcase is None
             self.make_link(link)
         #
+        elif block.exitswitch is c_last_exception:
+            # An exception block. See test_exc_exitswitch in test_flatten.py
+            # for an example of what kind of code this makes.
+            assert block.exits[0].exitcase is None # is this always True?
+            self.emitlinebefore('_call', 'try_catch', TLabel(block.exits[0]))
+            self.make_link(block.exits[0])
+            self.emitline(Label(block.exits[0]))
+            for link in block.exits[1:]:
+                if link.exitcase is Exception:
+                    # this link captures all exceptions
+                    if (link.target.operations == ()
+                        and link.args == [link.last_exception,
+                                          link.last_exc_value]):
+                        # the link is going directly to the except block
+                        self.emitline("reraise")
+                    else:
+                        self.make_exception_link(link)
+                    break
+                self.emitline('goto_if_exception_mismatch',
+                              Constant(link.llexitcase,
+                                       lltype.typeOf(link.llexitcase)),
+                              TLabel(link))
+                self.make_exception_link(link)
+                self.emitline(Label(link))
+            else:
+                # no link captures all exceptions, so we have to put a reraise
+                # for the other exceptions
+                self.emitline("reraise")
+        #
         elif len(block.exits) == 2 and (
                 isinstance(block.exitswitch, tuple) or
                 block.exitswitch.concretetype == lltype.Bool):
@@ -169,39 +198,6 @@ class GraphFlattener(object):
             self.emitline(Label(linkfalse))
             self.make_link(linkfalse)
         #
-        elif block.exitswitch is c_last_exception:
-            # An exception block. Would create something like:
-            # if exception jump first check
-            # defaultcase
-            # if not exc_1 jmp next check
-            # exc_1 case
-            # if not exc_2 jmp next check
-            # exc_2 case
-            # reraise
-            assert block.exits[0].exitcase is None # is this always True?
-            self.emitline('catch', TLabel(block.exits[0]))
-            self.make_link(block.exits[0])
-            self.emitline(Label(block.exits[0]))
-            for link in block.exits[1:]:
-                if link.exitcase is Exception:
-                    # this link captures all exceptions
-                    if (link.target.operations == ()
-                        and len(link.target.inputargs) == 2):
-                        # the link is going directly to the except block
-                        self.emitline("reraise")
-                    else:
-                        self.make_exception_link(link)
-                    break
-                self.emitline('goto_if_exception_mismatch',
-                              Constant(link.llexitcase,
-                                       lltype.typeOf(link.llexitcase)),
-                              TLabel(link))
-                self.make_exception_link(link)
-                self.emitline(Label(link))
-            else:
-                # no link captures all exceptions, so we have to put a reraise
-                # for the other exceptions
-                self.emitline("reraise")
         else:
             # A switch.
             #
@@ -277,6 +273,13 @@ class GraphFlattener(object):
 
     def emitline(self, *line):
         self.ssarepr.insns.append(line)
+
+    def emitlinebefore(self, name_extract, *line):
+        assert name_extract in self.ssarepr.insns[-1][0], (
+            "emitlinebefore: the %s operation should be inserted before %s,"
+            " but it does not look like a %r operation" % (
+                line, self.ssarepr.insns[-1], name_extract))
+        self.ssarepr.insns.insert(-1, line)
 
     def flatten_list(self, arglist):
         args = []
