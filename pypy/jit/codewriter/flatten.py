@@ -179,7 +179,7 @@ class GraphFlattener(object):
                 else:
                     self.emitline('goto_if_exception_mismatch',
                                   Constant(link.llexitcase,
-                                           lltype.typeOf(link.llexitcase))),
+                                           lltype.typeOf(link.llexitcase)),
                                   TLabel(link))
                     self.make_link(link)
                     self.emitline(Label(link))
