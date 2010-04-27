@@ -132,7 +132,16 @@ class AppTestCpythonExtensionBase:
         cls.space = gettestobjspace(usemodules=['cpyext', 'thread'])
         cls.space.getbuiltinmodule("cpyext")
 
-    def import_module(self, name, init=None, body='', load_it=True):
+    def import_module(self, name, init=None, body='', load_it=True, filename=None):
+        """
+        init specifies the overall template of the module.
+
+        if init is None, the module source will be loaded from a file in this
+        test direcory, give a name given by the filename parameter.
+
+        if filename is None, the module name will be used to construct the
+        filename.
+        """
         if init is not None:
             code = """
             #include <Python.h>
@@ -144,6 +153,8 @@ class AppTestCpythonExtensionBase:
             """ % dict(name=name, init=init, body=body)
             kwds = dict(separate_module_sources=[code])
         else:
+            if filename is not None:
+                name = filename
             filename = py.path.local(autopath.pypydir) / 'module' \
                     / 'cpyext'/ 'test' / (name + ".c")
             kwds = dict(separate_module_files=[filename])
@@ -308,6 +319,18 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         module = self.import_module(name='foo', init=init, body=body)
         assert module.__doc__ == "docstring"
         assert module.return_cookie() == 3.14
+
+
+    def test_InitModule4Dotted(self):
+        """
+        If the module name passed to Py_InitModule4 includes a package, only
+        the module name (the part after the last dot) is considered when
+        computing the name of the module initializer function.
+        """
+        skip("This is not supported at present.")
+        expected_name = "pypy.module.cpyext.test.dotted"
+        module = self.import_module(name=expected_name, filename="dotted")
+        assert module.__name__ == expected_name
 
 
     def test_modinit_func(self):
