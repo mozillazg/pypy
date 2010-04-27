@@ -4782,19 +4782,6 @@ def PyWeakref_CheckProxy(space, ref):
     raise NotImplementedError
 
 @cpython_api([PyObject, PyObject], PyObject)
-def PyWeakref_NewRef(space, ob, callback):
-    """Return a weak reference object for the object ob.  This will always return
-    a new reference, but is not guaranteed to create a new object; an existing
-    reference object may be returned.  The second parameter, callback, can be a
-    callable object that receives notification when ob is garbage collected; it
-    should accept a single parameter, which will be the weak reference object
-    itself. callback may also be None or NULL.  If ob is not a
-    weakly-referencable object, or if callback is not callable, None, or
-    NULL, this will return NULL and raise TypeError.
-    """
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject], PyObject)
 def PyWeakref_NewProxy(space, ob, callback):
     """Return a weak reference proxy object for the object ob.  This will always
     return a new reference, but is not guaranteed to create a new object; an
@@ -4804,13 +4791,6 @@ def PyWeakref_NewProxy(space, ob, callback):
     reference object itself. callback may also be None or NULL.  If ob
     is not a weakly-referencable object, or if callback is not callable,
     None, or NULL, this will return NULL and raise TypeError.
-    """
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject, borrowed=True)
-def PyWeakref_GetObject(space, ref):
-    """Return the referenced object from a weak reference, ref.  If the referent is
-    no longer live, returns None.
     """
     raise NotImplementedError
 
