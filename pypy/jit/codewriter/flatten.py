@@ -172,9 +172,10 @@ class GraphFlattener(object):
             self.make_link(block.exits[0])
             self.emitline(Label(block.exits[0]))
             for link in block.exits[1:]:
-                if (link.exitcase is Exception and (not link.target.operations)
+                if (link.exitcase is Exception and link.target.operations == ()
                     and len(link.target.inputargs) == 2):
-                    # default exit-by-exception block
+                    # default exit-by-exception block, if the link is going
+                    # directly to the except block.
                     self.emitline("reraise")
                 else:
                     self.emitline('goto_if_exception_mismatch',
