@@ -1,7 +1,7 @@
 import py, sys
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
-from pypy.jit.codewriter.flatten import GraphFlattener, ListOfKind
+from pypy.jit.codewriter.flatten import GraphFlattener, ListOfKind, Register
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.jitter import transform_graph
 from pypy.jit.metainterp.history import AbstractDescr
@@ -49,6 +49,8 @@ def test_reorder_renaming_list():
     result = reorder_renaming_list([4, 3, 1, 2, 6], [1, 2, 3, 4, 5])
     assert result == None
 
+def test_repr():
+    assert repr(Register('int', 13)) == '%i13'
 
 class TestFlatten:
 

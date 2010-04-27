@@ -28,6 +28,8 @@ class Register(object):
     def __init__(self, kind, index):
         self.kind = kind          # 'int', 'ref' or 'float'
         self.index = index
+    def __repr__(self):
+        return "%%%s%d" % (self.kind[0], self.index)
 
 class ListOfKind(object):
     # a list of Regs/Consts, all of the same 'kind'.
