@@ -1,4 +1,4 @@
-import py
+import py, sys
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
 from pypy.jit.codewriter.flatten import GraphFlattener, ListOfKind
@@ -335,14 +335,17 @@ class TestFlatten:
                 return 42
             except ZeroDivisionError:
                 return -42
-
+        # 'int_add' and 'int_and' are used to detect the
+        # combination "%i0 = -sys.maxint-1, %i1 = -1".
         self.encoding_test(f, [7, 2], """
             goto_if_not_int_is_true L1, %i1
-            goto_if_div_overflow L2, %i0, %i1
-            int_floordiv %i0, %i1, %i0
-            int_return %i0
+            int_add %i0, $MAXINT, %i2
+            int_and %i2, %i1, %i3
+            goto_if_not_int_ne L2, %i3, $-1
+            int_floordiv %i0, %i1, %i4
+            int_return %i4
             L1:
             int_return $-42
             L2:
             int_return $42
-        """, transform=True)
+        """.replace('MAXINT', str(sys.maxint)), transform=True)
