@@ -243,8 +243,8 @@ class TestFlatten:
                 return 3
 
         self.encoding_test(f, [65], """
-        try_catch L1
         direct_call $<* fn g>, %i0
+        catch_exception L1
         int_return $3
         L1:
         goto_if_exception_mismatch $<* struct object_vtable>, L2
@@ -273,8 +273,8 @@ class TestFlatten:
                 return 4
 
         self.encoding_test(f, [65], """
-        try_catch L1
         residual_call_ir_v $<* fn g>, <Descr>, I[%i0], R[]
+        catch_exception L1
         int_return $4
         L1:
         goto_if_exception_mismatch $<* struct object_vtable>, L2
@@ -307,8 +307,8 @@ class TestFlatten:
                 raise KeyError
 
         self.encoding_test(f, [65], """
-        try_catch L1
         direct_call $<* fn g>, %i0
+        catch_exception L1
         void_return
         L1:
         raise $<* struct object>

@@ -1,17 +1,38 @@
 from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
-from pypy.jit.metainterp.blackhole import BlackholeInterpreter
+from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
 from pypy.jit.codewriter.assembler import JitCode
+from pypy.rpython.lltypesystem import lltype, llmemory
 
+
+class FakeCodeWriter:
+    pass
+class FakeAssembler:
+    pass
+class FakeCPU:
+    def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
+        assert func == 321
+        assert calldescr == "<calldescr>"
+        if args_i[0] < 0:
+            raise KeyError
+        return args_i[0] * 2
+
+def getblackholeinterp(insns, descrs=[]):
+    cw = FakeCodeWriter()
+    cw.cpu = FakeCPU()
+    cw.assembler = FakeAssembler()
+    cw.assembler.insns = insns
+    cw.assembler.descrs = descrs
+    builder = BlackholeInterpBuilder(cw)
+    return builder.acquire_interp()
 
 def test_simple():
     jitcode = JitCode("test")
     jitcode.setup("\x00\x00\x01\x02"
                   "\x01\x02",
                   [])
-    blackholeinterp = BlackholeInterpreter()
-    blackholeinterp.setup_insns({'int_add/iii': 0,
-                                 'int_return/i': 1})
+    blackholeinterp = getblackholeinterp({'int_add/iii': 0,
+                                          'int_return/i': 1})
     blackholeinterp.setarg_i(0, 40)
     blackholeinterp.setarg_i(1, 2)
     blackholeinterp.run(jitcode, 0)
@@ -22,9 +43,8 @@ def test_simple_const():
     jitcode.setup("\x00\x30\x01\x02"
                   "\x01\x02",
                   [])
-    blackholeinterp = BlackholeInterpreter()
-    blackholeinterp.setup_insns({'int_sub/cii': 0,
-                                 'int_return/i': 1})
+    blackholeinterp = getblackholeinterp({'int_sub/cii': 0,
+                                          'int_return/i': 1})
     blackholeinterp.setarg_i(1, 6)
     blackholeinterp.run(jitcode, 0)
     assert blackholeinterp.result_i == 42
@@ -34,9 +54,8 @@ def test_simple_bigconst():
     jitcode.setup("\x00\xFD\x01\x02"
                   "\x01\x02",
                   [666, 666, 10042, 666])
-    blackholeinterp = BlackholeInterpreter()
-    blackholeinterp.setup_insns({'int_sub/iii': 0,
-                                 'int_return/i': 1})
+    blackholeinterp = getblackholeinterp({'int_sub/iii': 0,
+                                          'int_return/i': 1})
     blackholeinterp.setarg_i(1, 10000)
     blackholeinterp.run(jitcode, 0)
     assert blackholeinterp.result_i == 42
@@ -49,16 +68,37 @@ def test_simple_loop():
                   "\x03\x00\x00"          #     goto L1
                   "\x04\x17",             # L2: int_return %i1
                   [])
-    blackholeinterp = BlackholeInterpreter()
-    blackholeinterp.setup_insns({'goto_if_not_int_gt/Lic': 0,
-                                 'int_add/iii': 1,
-                                 'int_sub/ici': 2,
-                                 'goto/L': 3,
-                                 'int_return/i': 4})
+    blackholeinterp = getblackholeinterp({'goto_if_not_int_gt/Lic': 0,
+                                          'int_add/iii': 1,
+                                          'int_sub/ici': 2,
+                                          'goto/L': 3,
+                                          'int_return/i': 4})
     blackholeinterp.setarg_i(0x16, 6)    # %i0
     blackholeinterp.setarg_i(0x17, 100)  # %i1
     blackholeinterp.run(jitcode, 0)
     assert blackholeinterp.result_i == 100+6+5+4+3
+
+def test_simple_exception():
+    jitcode = JitCode("test")
+    jitcode.setup(    # residual_call_ir_i $<* fn g>, <Descr>, I[%i9], R[], %i8
+                  "\x01\xFF\x00\x00\x01\x09\x00\x08"
+                  "\x00\x0D\x00"          #     catch_exception L1
+                  "\x02\x08"              #     int_return %i8
+                  "\x03\x2A",             # L1: int_return $42
+                  [321])   # <-- address of the function g
+    blackholeinterp = getblackholeinterp({'catch_exception/L': 0,
+                                          'residual_call_ir_i/idIRi': 1,
+                                          'int_return/i': 2,
+                                          'int_return/c': 3},
+                                         ["<calldescr>"])
+    #
+    blackholeinterp.setarg_i(0x9, 100)
+    blackholeinterp.run(jitcode, 0)
+    assert blackholeinterp.result_i == 200
+    #
+    blackholeinterp.setarg_i(0x9, -100)
+    blackholeinterp.run(jitcode, 0)
+    assert blackholeinterp.result_i == 42
 
 # ____________________________________________________________
 

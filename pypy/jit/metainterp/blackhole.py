@@ -46,6 +46,7 @@ class BlackholeInterpBuilder(object):
         for key, value in insns.items():
             assert self._insns[value] is None
             self._insns[value] = key
+        self.op_catch_exception = insns.get('catch_exception/L', -1)
         #
         all_funcs = []
         for key in self._insns:
@@ -123,7 +124,14 @@ class BlackholeInterpBuilder(object):
                 else:
                     raise AssertionError("bad argtype: %r" % (argtype,))
                 args += (value,)
-            result = unboundmethod(self, *args)
+            # call the method opimpl_xxx()
+            try:
+                result = unboundmethod(self, *args)
+            except Exception:
+                if resulttype == 'i' or resulttype == 'r' or resulttype == 'f':
+                    position += 1
+                self.exception_pc = position
+                raise
             if resulttype == 'i':
                 # argcode should be 'i' too
                 assert argcodes[next_argcode] == 'i'
@@ -172,9 +180,11 @@ class BlackholeInterpBuilder(object):
 class BlackholeInterpreter(object):
 
     def __init__(self, builder):
-        self.cpu           = builder.cpu
-        self.dispatch_loop = builder.dispatch_loop
-        self.descrs        = builder.descrs
+        self.cpu                = builder.cpu
+        self.dispatch_loop      = builder.dispatch_loop
+        self.descrs             = builder.descrs
+        self.op_catch_exception = builder.op_catch_exception
+        #
         if we_are_translated():
             default_i = 0
             default_r = lltype.nullptr(llmemory.GCREF.TO)
@@ -195,10 +205,28 @@ class BlackholeInterpreter(object):
         self.copy_constants(self.registers_r, jitcode.constants_r)
         self.copy_constants(self.registers_f, jitcode.constants_f)
         code = jitcode.code
-        try:
-            self.dispatch_loop(self, code, position)
-        except LeaveFrame:
-            pass
+        while True:
+            try:
+                self.dispatch_loop(self, code, position)
+            except LeaveFrame:
+                return
+            #except JitException:
+            #    ...
+            except Exception, e:
+                position = self.handle_exception_in_frame(e, code)
+
+    def handle_exception_in_frame(self, e, code):
+        # This frame raises an exception.  First try to see if
+        # the exception is handled in the frame itself.
+        position = self.exception_pc    # <-- just after the insn that raised
+        opcode = ord(code[position])
+        if opcode != self.op_catch_exception:
+            raise e      # no 'catch_exception' insn follows: just reraise
+        else:
+            # else store the exception on 'self', and jump to the handler
+            self.exception_last_value = e
+            target = ord(code[position+1]) | (ord(code[position+2])<<8)
+            return target
 
     # XXX must be specialized
     # XXX the real performance impact of the following loop is unclear
@@ -306,6 +334,13 @@ class BlackholeInterpreter(object):
             return switchdict.dict[switchvalue]
         except KeyError:
             return pc
+
+    @arguments("L")
+    def opimpl_catch_exception(self, target):
+        """This is a no-op when run normally.  When an exception occurs
+        and the instruction that raised is immediately followed by a
+        catch_exception, then the code in handle_exception_in_frame()
+        will capture the exception and jump to 'target'."""
 
     # ----------
     # the following operations are directly implemented by the backend
