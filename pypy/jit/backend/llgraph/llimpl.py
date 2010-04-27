@@ -1352,9 +1352,7 @@ def do_call_pushptr(x):
 def do_call_pushfloat(x):
     _call_args_f.append(x)
 
-def _do_call_common(f, err_result=None):
-    global _last_exception
-    assert _last_exception is None, "exception left behind"
+def _do_call_common(f):
     ptr = llmemory.cast_int_to_adr(f).ptr
     FUNC = lltype.typeOf(ptr).TO
     ARGS = FUNC.ARGS
@@ -1363,30 +1361,27 @@ def _do_call_common(f, err_result=None):
     del _call_args_r[:]
     del _call_args_f[:]
     assert len(ARGS) == len(args)
-    try:
-        if hasattr(ptr._obj, 'graph'):
-            llinterp = _llinterp      # it's a global set here by CPU.__init__()
-            result = llinterp.eval_graph(ptr._obj.graph, args)
-        else:
-            result = ptr._obj._callable(*args)
-    except LLException, e:
-        _last_exception = e
-        result = err_result
+    if hasattr(ptr._obj, 'graph'):
+        llinterp = _llinterp      # it's a global set here by CPU.__init__()
+        result = llinterp.eval_graph(ptr._obj.graph, args)
+        # ^^^ may raise, in which case we get an LLException
+    else:
+        result = ptr._obj._callable(*args)
     return result
 
 def do_call_void(f):
     _do_call_common(f)
 
 def do_call_int(f):
-    x = _do_call_common(f, 0)
+    x = _do_call_common(f)
     return cast_to_int(x)
 
 def do_call_float(f):
-    x = _do_call_common(f, 0)
+    x = _do_call_common(f)
     return cast_to_float(x)
 
 def do_call_ptr(f):
-    x = _do_call_common(f, lltype.nullptr(llmemory.GCREF.TO))
+    x = _do_call_common(f)
     return cast_to_ptr(x)
 
 def cast_call_args(ARGS, args_i, args_r, args_f):
@@ -1432,7 +1427,7 @@ def call_maybe_on_top_of_llinterp(meth, args):
             result = llinterp.eval_graph(mymethod.graph, myargs)
         else:
             result = meth(*args)
-    except LLException, e:
+    except XXX-LLException, e:
         _last_exception = e
         result = get_err_result_for_type(mymethod._TYPE.RESULT)
     return result

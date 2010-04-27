@@ -3,6 +3,7 @@ from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
 from pypy.jit.codewriter.assembler import JitCode
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.llinterp import LLException
 
 
 class FakeCodeWriter:
@@ -14,7 +15,7 @@ class FakeCPU:
         assert func == 321
         assert calldescr == "<calldescr>"
         if args_i[0] < 0:
-            raise KeyError
+            raise LLException("etype", "evalue")
         return args_i[0] * 2
 
 def getblackholeinterp(insns, descrs=[]):
