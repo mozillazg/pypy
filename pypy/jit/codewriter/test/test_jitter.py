@@ -14,6 +14,8 @@ class FakeCPU:
 
 class FakeLink:
     args = []
+    def __init__(self, exitcase):
+        self.exitcase = self.llexitcase = exitcase
 
 def test_optimize_goto_if_not():
     v1 = Variable()
@@ -24,7 +26,7 @@ def test_optimize_goto_if_not():
     block = Block([v1, v2])
     block.operations = [sp1, SpaceOperation('int_gt', [v1, v2], v3), sp2]
     block.exitswitch = v3
-    block.exits = exits = [FakeLink(), FakeLink()]
+    block.exits = exits = [FakeLink(False), FakeLink(True)]
     res = Transformer().optimize_goto_if_not(block)
     assert res == True
     assert block.operations == [sp1, sp2]
@@ -35,7 +37,7 @@ def test_optimize_goto_if_not__incoming():
     v1 = Variable(); v1.concretetype = lltype.Bool
     block = Block([v1])
     block.exitswitch = v1
-    block.exits = [FakeLink(), FakeLink()]
+    block.exits = [FakeLink(False), FakeLink(True)]
     assert not Transformer().optimize_goto_if_not(block)
 
 def test_optimize_goto_if_not__exit():
@@ -45,7 +47,7 @@ def test_optimize_goto_if_not__exit():
     block = Block([v1, v2])
     block.operations = [SpaceOperation('int_gt', [v1, v2], v3)]
     block.exitswitch = v3
-    block.exits = [FakeLink(), FakeLink()]
+    block.exits = [FakeLink(False), FakeLink(True)]
     block.exits[1].args = [v3]
     assert not Transformer().optimize_goto_if_not(block)
 
@@ -54,8 +56,34 @@ def test_optimize_goto_if_not__unknownop():
     block = Block([])
     block.operations = [SpaceOperation('foobar', [], v3)]
     block.exitswitch = v3
-    block.exits = [FakeLink(), FakeLink()]
+    block.exits = [FakeLink(False), FakeLink(True)]
     assert not Transformer().optimize_goto_if_not(block)
+
+def test_optimize_goto_if_not__int_ne():
+    c0 = Constant(0, lltype.Signed)
+    v1 = Variable()
+    v3 = Variable(); v3.concretetype = lltype.Bool
+    for linkcase1 in [False, True]:
+        linkcase2 = not linkcase1
+        for op, args in [('int_ne', [v1, c0]),
+                         ('int_ne', [c0, v1]),
+                         ('int_eq', [v1, c0]),
+                         ('int_eq', [c0, v1])]:
+            block = Block([v1])
+            block.operations = [SpaceOperation(op, args, v3)]
+            block.exitswitch = v3
+            block.exits = exits = [FakeLink(linkcase1), FakeLink(linkcase2)]
+            res = Transformer().optimize_goto_if_not(block)
+            assert res == True
+            assert block.operations == []
+            assert block.exitswitch == ('int_is_true', v1)
+            assert block.exits == exits
+            if op == 'int_ne':
+                assert exits[0].exitcase == exits[0].llexitcase == linkcase1
+                assert exits[1].exitcase == exits[1].llexitcase == linkcase2
+            else:
+                assert exits[0].exitcase == exits[0].llexitcase == linkcase2
+                assert exits[1].exitcase == exits[1].llexitcase == linkcase1
 
 def test_residual_call():
     for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,

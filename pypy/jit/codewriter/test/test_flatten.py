@@ -8,6 +8,7 @@ from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rpython.lltypesystem import lltype, rclass, rstr
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.translator.unsimplify import varoftype
+from pypy.rlib.rarithmetic import ovfcheck
 
 
 class FakeRegAlloc:
@@ -243,17 +244,17 @@ class TestFlatten:
                 return 3
 
         self.encoding_test(f, [65], """
-        direct_call $<* fn g>, %i0
-        catch_exception L1
-        int_return $3
-        L1:
-        goto_if_exception_mismatch $<* struct object_vtable>, L2
-        int_return $1
-        L2:
-        goto_if_exception_mismatch $<* struct object_vtable>, L3
-        int_return $2
-        L3:
-        reraise
+            direct_call $<* fn g>, %i0
+            catch_exception L1
+            int_return $3
+            L1:
+            goto_if_exception_mismatch $<* struct object_vtable>, L2
+            int_return $1
+            L2:
+            goto_if_exception_mismatch $<* struct object_vtable>, L3
+            int_return $2
+            L3:
+            reraise
         """)
 
     def test_exc_exitswitch_2(self):
@@ -273,17 +274,17 @@ class TestFlatten:
                 return 4
 
         self.encoding_test(f, [65], """
-        residual_call_ir_v $<* fn g>, <Descr>, I[%i0], R[]
-        catch_exception L1
-        int_return $4
-        L1:
-        goto_if_exception_mismatch $<* struct object_vtable>, L2
-        last_exc_value %r0
-        ref_copy %r0, %r1
-        getfield_gc_i %r1, <Descr>, %i1
-        int_return %i1
-        L2:
-        int_return $3
+            residual_call_ir_v $<* fn g>, <Descr>, I[%i0], R[]
+            catch_exception L1
+            int_return $4
+            L1:
+            goto_if_exception_mismatch $<* struct object_vtable>, L2
+            last_exc_value %r0
+            ref_copy %r0, %r1
+            getfield_gc_i %r1, <Descr>, %i1
+            int_return %i1
+            L2:
+            int_return $3
         """, transform=True)
 
     def test_exc_raise_1(self):
@@ -307,9 +308,41 @@ class TestFlatten:
                 raise KeyError
 
         self.encoding_test(f, [65], """
-        direct_call $<* fn g>, %i0
-        catch_exception L1
-        void_return
-        L1:
-        raise $<* struct object>
+            direct_call $<* fn g>, %i0
+            catch_exception L1
+            void_return
+            L1:
+            raise $<* struct object>
         """)
+
+    def test_goto_if_not_int_is_true(self):
+        def f(i):
+            return not i
+
+        self.encoding_test(f, [7], """
+            goto_if_not_int_is_true L1, %i0
+            int_return $False
+            L1:
+            int_return $True
+        """, transform=True)
+
+    def test_int_floordiv_ovf_zer(self):
+        py.test.skip("in-progress")
+        def f(i, j):
+            try:
+                return ovfcheck(i // j)
+            except OverflowError:
+                return 42
+            except ZeroDivisionError:
+                return -42
+
+        self.encoding_test(f, [7, 2], """
+            goto_if_not_int_is_true L1, %i1
+            goto_if_div_overflow L2, %i0, %i1
+            int_floordiv %i0, %i1, %i0
+            int_return %i0
+            L1:
+            int_return $-42
+            L2:
+            int_return $42
+        """, transform=True)
