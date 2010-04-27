@@ -172,13 +172,17 @@ class GraphFlattener(object):
             self.make_link(block.exits[0])
             self.emitline(Label(block.exits[0]))
             for link in block.exits[1:]:
-                if (link.exitcase is Exception and link.target.operations == ()
+                if (link.exitcase is Exception and (not link.target.operations)
                     and len(link.target.inputargs) == 2):
                     # default exit-by-exception block
                     self.emitline("reraise")
                 else:
                     self.emitline('goto_if_exception_mismatch',
-                                  Constant(link.llexitcase), TLabel(link))
+                                  Constant(link.llexitcase),
+                                  # XXX should I live concretetype here
+                                  #     or should I just make user do
+                                  #     lltype.typeOf???
+                                  TLabel(link))
                     self.make_link(link)
                     self.emitline(Label(link))
         else:
