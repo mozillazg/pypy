@@ -6,9 +6,9 @@ class DependencyGraph(object):
         self.neighbours = {}
 
     def add_node(self, v):
-        assert v not in self.neighbours, "duplicate vertex %r" % (v,)
-        self._all_nodes.append(v)
-        self.neighbours[v] = set()
+        if v not in self.neighbours:
+            self._all_nodes.append(v)
+            self.neighbours[v] = set()
 
     def add_edge(self, v1, v2):
         assert v1 != v2
