@@ -277,6 +277,18 @@ class BlackholeInterpreter(object):
         return a * b
 
     @arguments("i", "i", returns="i")
+    def opimpl_int_and(self, a, b):
+        return a & b
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_floordiv(self, a, b):
+        return llop.int_floordiv(lltype.Signed, a, b)
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_mod(self, a, b):
+        return llop.int_mod(lltype.Signed, a, b)
+
+    @arguments("i", "i", returns="i")
     def opimpl_uint_floordiv(self, a, b):
         c = llop.uint_floordiv(lltype.Unsigned, r_uint(a), r_uint(b))
         return intmask(c)
@@ -340,6 +352,13 @@ class BlackholeInterpreter(object):
     @arguments("L", "i", "i", "pc", returns="L")
     def opimpl_goto_if_not_int_ge(self, target, a, b, pc):
         if a >= b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "i", "pc", returns="L")
+    def opimpl_goto_if_not_int_is_true(self, target, a, pc):
+        if a:
             return pc
         else:
             return target

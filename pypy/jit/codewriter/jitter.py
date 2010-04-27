@@ -88,7 +88,8 @@ class Transformer(object):
         if len(block.exits) != 2:
             return False
         v = block.exitswitch
-        if isinstance(v, tuple) or v.concretetype != lltype.Bool:
+        if (v == c_last_exception or isinstance(v, tuple)
+            or v.concretetype != lltype.Bool):
             return False
         for link in block.exits:
             if v in link.args:
@@ -132,7 +133,7 @@ class Transformer(object):
         else:
             rewrite(self, op, block)
 
-    def rewrite_exc_op_int_floordiv_ovf_zer(self, op, block):
+    def _rewrite_exc_div_or_mod_ovf_zer(self, op, block):
         # See test_flatten.test_int_floordiv_ovf_zer for the mangling done here
         usedvars = self.list_vars_in_use_at_end(block, op.args, op.result)
         block.operations.pop()
@@ -150,9 +151,13 @@ class Transformer(object):
             ]
         block = self.write_new_condition(block, usedvars, ovf_link,
                                  ('int_ne', v2, Constant(-1, lltype.Signed)))
+        basename = op.opname.split('_')[1]
         block.operations += [
-            SpaceOperation('int_floordiv', op.args, op.result),
+            SpaceOperation('int_' + basename, op.args, op.result),
             ]
+
+    rewrite_exc_op_int_floordiv_ovf_zer = _rewrite_exc_div_or_mod_ovf_zer
+    rewrite_exc_op_int_mod_ovf_zer      = _rewrite_exc_div_or_mod_ovf_zer
 
     def list_vars_in_use_at_end(self, block, extravars=[], exclude=None):
         lists = [extravars]
