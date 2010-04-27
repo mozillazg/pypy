@@ -1,4 +1,4 @@
-from pypy.objspace.flow.model import Variable, Constant
+from pypy.objspace.flow.model import Variable, Constant, c_last_exception
 from pypy.jit.metainterp.history import AbstractDescr, getkind
 from pypy.rpython.lltypesystem import lltype
 
@@ -158,6 +158,29 @@ class GraphFlattener(object):
             self.emitline(Label(linkfalse))
             self.make_link(linkfalse)
         #
+        elif block.exitswitch is c_last_exception:
+            # An exception block. Would create something like:
+            # if exception jump first check
+            # defaultcase
+            # if not exc_1 jmp next check
+            # exc_1 case
+            # if not exc_2 jmp next check
+            # exc_2 case
+            # reraise
+            assert block.exits[0].exitcase is None # is this always True?
+            self.emitline('goto_if_exception', TLabel(block.exits[0]))
+            self.make_link(block.exits[0])
+            self.emitline(Label(block.exits[0]))
+            for link in block.exits[1:]:
+                if (link.exitcase is Exception and link.target.operations == ()
+                    and len(link.target.inputargs) == 2):
+                    # default exit-by-exception block
+                    self.emitline("reraise")
+                else:
+                    self.emitline('goto_if_exception_mismatch',
+                                  Constant(link.llexitcase), TLabel(link))
+                    self.make_link(link)
+                    self.emitline(Label(link))
         else:
             # A switch.
             #

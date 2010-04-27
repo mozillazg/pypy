@@ -53,9 +53,45 @@ class TestFlatten:
         self.assert_format(ssarepr, expected)
 
     def assert_format(self, ssarepr, expected):
+        def replace_struct(s):
+            """ Replace all $<* struct ...> with $STRUCT
+            """
+            while True:
+                i = s.find('$<* struct')
+                if i == -1:
+                    return s
+                count = 1
+                start = i
+                i += 2
+                while True:
+                    if s[i] == '<':
+                        count += 1
+                    if s[i] == '>':
+                        count -= 1
+                        if count == 0:
+                            break
+                    i += 1
+                s = s[:start] + '$STRUCT' + s[i + 1:]
+        
         asm = format_assembler(ssarepr)
         expected = str(py.code.Source(expected)).strip() + '\n'
-        assert asm == expected
+        asmlines = asm.split("\n")
+        explines = expected.split("\n")
+        for asm, exp in zip(asmlines, explines):
+            asm = replace_struct(asm)
+            if asm != exp:
+                print
+                print "Got:      " + asm
+                print "Expected: " + exp
+                lgt = 0
+                for i in range(len(asm)):
+                    if exp[i] == asm[i]:
+                        lgt += 1
+                    else:
+                        break
+                print "          " + " " * lgt + "^^^^"
+                raise AssertionError
+        assert len(asmlines) == len(explines)
 
     def test_simple(self):
         def f(n):
@@ -204,12 +240,8 @@ class TestFlatten:
         """)
 
     def test_exc_exitswitch(self):
-        py.test.skip("not implemented")
         def g(i):
-            if i == 2:
-                raise ValueError
-            elif i == 3:
-                raise KeyError
+            pass
         
         def f(i):
             try:
@@ -222,4 +254,15 @@ class TestFlatten:
                 return 3
 
         self.encoding_test(f, [65], """
+        direct_call $<* fn g>, %i0
+        goto_if_exception L1
+        int_return $3
+        L1:
+        goto_if_exception_mismatch $STRUCT, L2
+        int_return $1
+        L2:
+        goto_if_exception_mismatch $STRUCT, L3
+        int_return $2
+        L3:
+        reraise
         """)
