@@ -24,6 +24,8 @@ class Transformer(object):
     def transform(self, graph):
         self.graph = graph
         for block in graph.iterblocks():
+            if block.operations == ():
+                continue
             rename = {}
             newoperations = []
             if block.exitswitch == c_last_exception:
