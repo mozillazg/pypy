@@ -5,7 +5,8 @@ from pypy.jit.codewriter.flatten import flatten_graph, ListOfKind
 from pypy.jit.codewriter.format import format_assembler
 from pypy.objspace.flow.model import Variable, Constant, SpaceOperation
 from pypy.objspace.flow.model import FunctionGraph, Block, Link
-from pypy.rpython.lltypesystem import lltype
+from pypy.objspace.flow.model import c_last_exception
+from pypy.rpython.lltypesystem import lltype, rclass
 
 
 class TestRegAlloc:
@@ -144,4 +145,34 @@ class TestRegAlloc:
             int_add %i0, $1, %i1
             rescall I[%i0, %i1], %i0
             int_return %i0
+        """)
+
+    def test_regalloc_exitswitch_2(self):
+        v1 = Variable(); v1.concretetype = rclass.CLASSTYPE
+        v2 = Variable(); v2.concretetype = rclass.CLASSTYPE
+        v3 = Variable(); v3.concretetype = rclass.CLASSTYPE
+        v4 = Variable(); v4.concretetype = rclass.CLASSTYPE
+        block = Block([])
+        block.operations = [
+            SpaceOperation('res_call', [], v1),
+            ]
+        graph = FunctionGraph('f', block, v4)
+        exclink = Link([v2], graph.returnblock)
+        exclink.llexitcase = 123     # normally an exception class
+        exclink.last_exception = v2
+        exclink.last_exc_value = "unused"
+        block.exitswitch = c_last_exception
+        block.closeblock(Link([v1], graph.returnblock),
+                         exclink)
+        #
+        self.check_assembler(graph, """
+            try_catch L1
+            res_call %i0
+            int_return %i0
+            L1:
+            goto_if_exception_mismatch $123, L2
+            last_exception %i0
+            int_return %i0
+            L2:
+            reraise
         """)

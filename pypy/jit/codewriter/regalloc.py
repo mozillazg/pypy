@@ -83,6 +83,10 @@ class RegAllocator(object):
             # than the start, given that we resume execution from the
             # middle during blackholing.
             for link in block.exits:
+                if link.last_exception is not None:
+                    self._depgraph.add_node(link.last_exception)
+                if link.last_exc_value is not None:
+                    self._depgraph.add_node(link.last_exc_value)
                 for i, v in enumerate(link.args):
                     self._try_coalesce(v, link.target.inputargs[i])
 
