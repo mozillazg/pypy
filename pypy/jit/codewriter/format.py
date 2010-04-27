@@ -1,5 +1,6 @@
 import py
 from pypy.objspace.flow.model import Constant
+from pypy.rpython.lltypesystem import lltype
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
 from pypy.jit.codewriter.flatten import ListOfKind, SwitchDictDescr
 from pypy.jit.metainterp.history import AbstractDescr
@@ -14,6 +15,9 @@ def format_assembler(ssarepr):
         if isinstance(x, Register):
             return '%%%s%d' % (x.kind[0], x.index)    # e.g. %i1 or %r2 or %f3
         elif isinstance(x, Constant):
+            if (isinstance(x.concretetype, lltype.Ptr) and
+                isinstance(x.concretetype.TO, lltype.Struct)):
+                return '$<* struct %s>' % (x.concretetype.TO._name,)
             return '$%r' % (x.value,)
         elif isinstance(x, TLabel):
             return getlabelname(x)

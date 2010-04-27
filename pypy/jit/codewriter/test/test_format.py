@@ -33,14 +33,28 @@ def test_format_assembler_float():
     """
     assert asm == str(py.code.Source(expected)).strip() + '\n'
 
+def test_format_assembler_const_struct():
+    S = lltype.GcStruct('S', ('x', lltype.Signed))
+    s = lltype.malloc(S)
+    s.x = 123
+    ssarepr = SSARepr("test")
+    ssarepr.insns = [
+        ('foobar', Constant(s, lltype.typeOf(s))),
+        ]
+    asm = format_assembler(ssarepr)
+    expected = """
+        foobar $<* struct S>
+    """
+    assert asm == str(py.code.Source(expected)).strip() + '\n'
+
 def test_format_assembler_loop():
     ssarepr = SSARepr("test")
     i0, i1 = Register('int', 0), Register('int', 1)
     ssarepr.insns = [
         (Label('L1'),),
-        ('goto_if_not_int_gt', TLabel('L2'), i0, Constant(0)),
+        ('goto_if_not_int_gt', TLabel('L2'), i0, Constant(0, lltype.Signed)),
         ('int_add', i1, i0, i1),
-        ('int_sub', i0, Constant(1), i0),
+        ('int_sub', i0, Constant(1, lltype.Signed), i0),
         ('goto', TLabel('L1')),
         (Label('L2'),),
         ('int_return', i1),
