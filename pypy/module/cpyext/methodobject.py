@@ -89,7 +89,6 @@ class W_PyCMethodObject(W_PyCFunctionObject):
     def descr_method_repr(self):
         return self.getrepr(self.space, "built-in method '%s' of '%s' object" % (self.name, self.w_objclass.getname(self.space, '?')))
 
-PyMethod_Check, PyMethod_CheckExact = build_type_checkers("Method", W_PyCMethodObject)
 PyCFunction_Check, PyCFunction_CheckExact = build_type_checkers("CFunction", W_PyCFunctionObject)
 
 class W_PyCWrapperObject(Wrappable):
