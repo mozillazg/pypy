@@ -1111,11 +1111,6 @@ def PyDictProxy_New(space, dict):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject], lltype.Void)
-def PyDict_Clear(space, p):
-    """Empty an existing dictionary of all key-value pairs."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
 def PyDict_Contains(space, p, key):
     """Determine if dictionary p contains key.  If an item in p is matches
