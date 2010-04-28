@@ -442,7 +442,7 @@ def make_wrapper(space, callable):
                     retval = make_ref(space, result, borrowed=borrowed)
                 else:
                     retval = result
-                if borrowed and retval:
+                if borrowed:
                     add_borrowed_object(space, retval)
             elif callable.api_func.restype is not lltype.Void:
                 retval = rffi.cast(callable.api_func.restype, result)
