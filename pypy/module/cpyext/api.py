@@ -254,7 +254,7 @@ SYMBOLS_C = [
     'PyModule_AddObject', 'PyModule_AddIntConstant', 'PyModule_AddStringConstant',
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format', 'PyErr_NewException',
     'PyEval_CallFunction', 'PyEval_CallMethod', 'PyObject_CallFunction',
-    'PyObject_CallMethod',
+    'PyObject_CallMethod', 'PyObject_CallFunctionObjArgs', 'PyObject_CallMethodObjArgs',
     'PyBuffer_FromMemory', 'PyBuffer_New', 'PyBuffer_Type', 'init_bufferobject',
     '_PyArg_NoKeywords',
     'PyObject_AsReadBuffer', 'PyObject_AsWriteBuffer', 'PyObject_CheckReadBuffer',
