@@ -105,28 +105,7 @@ class Transformer(object):
                     return False    # not a supported operation
                 # ok! optimize this case
                 block.operations.remove(op)
-                opname = op.opname
-                args = op.args
-                if op.opname in ('int_ne', 'int_eq'):
-                    if isinstance(args[0], Constant):
-                        args = args[::-1]
-                    if isinstance(args[1], Constant) and args[1].value == 0:
-                        if opname == 'int_eq':
-                            # must invert the two exit links
-                            link = block.exits[0]
-                            link.llexitcase = link.exitcase = not link.exitcase
-                            link = block.exits[1]
-                            link.llexitcase = link.exitcase = not link.exitcase
-                        opname = 'int_is_true'
-                        args = [args[0]]
-                elif op.opname in ('ptr_eq', 'ptr_ne'):
-                    if isinstance(args[0], Constant):
-                        args = args[::-1]
-                    if isinstance(args[1], Constant) and not args[1].value:
-                        opname = {'ptr_eq': 'ptr_iszero',
-                                  'ptr_ne': 'ptr_nonzero'}[op.opname]
-                        args = [args[0]]
-                block.exitswitch = (opname,) + tuple(args)
+                block.exitswitch = (op.opname,) + tuple(op.args)
                 return True
         return False
 
@@ -361,7 +340,7 @@ class Transformer(object):
             sizedescr = self.cpu.sizeof(STRUCT)
             return SpaceOperation('new', [sizedescr], op.result)
 
-    def _rewrite_op_ptr_eq(self, op, opname):
+    def _rewrite_equality(self, op, opname):
         arg0, arg1 = op.args
         if isinstance(arg0, Constant) and not arg0.value:
             return SpaceOperation(opname, [arg1], op.result)
@@ -370,11 +349,17 @@ class Transformer(object):
         else:
             return op
 
+    def rewrite_op_int_eq(self, op):
+        return self._rewrite_equality(op, 'int_is_zero')
+
+    def rewrite_op_int_ne(self, op):
+        return self._rewrite_equality(op, 'int_is_true')
+
     def rewrite_op_ptr_eq(self, op):
-        return self._rewrite_op_ptr_eq(op, 'ptr_iszero')
+        return self._rewrite_equality(op, 'ptr_iszero')
 
     def rewrite_op_ptr_ne(self, op):
-        return self._rewrite_op_ptr_eq(op, 'ptr_nonzero')
+        return self._rewrite_equality(op, 'ptr_nonzero')
 
 # ____________________________________________________________
 

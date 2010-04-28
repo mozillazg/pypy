@@ -69,32 +69,6 @@ def test_optimize_goto_if_not__unknownop():
     block.exits = [FakeLink(False), FakeLink(True)]
     assert not Transformer().optimize_goto_if_not(block)
 
-def test_optimize_goto_if_not__int_ne():
-    c0 = Constant(0, lltype.Signed)
-    v1 = Variable()
-    v3 = Variable(); v3.concretetype = lltype.Bool
-    for linkcase1 in [False, True]:
-        linkcase2 = not linkcase1
-        for op, args in [('int_ne', [v1, c0]),
-                         ('int_ne', [c0, v1]),
-                         ('int_eq', [v1, c0]),
-                         ('int_eq', [c0, v1])]:
-            block = Block([v1])
-            block.operations = [SpaceOperation(op, args, v3)]
-            block.exitswitch = v3
-            block.exits = exits = [FakeLink(linkcase1), FakeLink(linkcase2)]
-            res = Transformer().optimize_goto_if_not(block)
-            assert res == True
-            assert block.operations == []
-            assert block.exitswitch == ('int_is_true', v1)
-            assert block.exits == exits
-            if op == 'int_ne':
-                assert exits[0].exitcase == exits[0].llexitcase == linkcase1
-                assert exits[1].exitcase == exits[1].llexitcase == linkcase2
-            else:
-                assert exits[0].exitcase == exits[0].llexitcase == linkcase2
-                assert exits[1].exitcase == exits[1].llexitcase == linkcase1
-
 def test_optimize_goto_if_not__ptr_eq():
     for opname in ['ptr_eq', 'ptr_ne']:
         v1 = Variable()
@@ -123,25 +97,6 @@ def test_optimize_goto_if_not__ptr_iszero():
         assert block.operations == []
         assert block.exitswitch == (opname, v1)
         assert block.exits == exits
-
-def test_optimize_goto_if_not__ptr_eq_reduced():
-    c0 = Constant(lltype.nullptr(rclass.OBJECT), rclass.OBJECTPTR)
-    for opname, reducedname in [('ptr_eq', 'ptr_iszero'),
-                                ('ptr_ne', 'ptr_nonzero')]:
-        for nullindex in [0, 1]:
-            v1 = Variable()
-            v3 = Variable(); v3.concretetype = lltype.Bool
-            block = Block([v1])
-            args = [v1, v1]
-            args[nullindex] = c0
-            block.operations = [SpaceOperation(opname, args, v3)]
-            block.exitswitch = v3
-            block.exits = exits = [FakeLink(False), FakeLink(True)]
-            res = Transformer().optimize_goto_if_not(block)
-            assert res == True
-            assert block.operations == []
-            assert block.exitswitch == (reducedname, v1)
-            assert block.exits == exits
 
 def test_residual_call():
     for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,
@@ -307,6 +262,29 @@ def test_rename_on_links():
     assert block.exits[0].target is block2
     assert block.exits[0].args == [v1]
 
+def test_int_eq():
+    v1 = varoftype(lltype.Signed)
+    v2 = varoftype(lltype.Signed)
+    v3 = varoftype(lltype.Bool)
+    c0 = Constant(0, lltype.Signed)
+    #
+    for opname, reducedname in [('int_eq', 'int_is_zero'),
+                                ('int_ne', 'int_is_true')]:
+        op = SpaceOperation(opname, [v1, v2], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == opname
+        assert op1.args == [v1, v2]
+        #
+        op = SpaceOperation(opname, [v1, c0], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == reducedname
+        assert op1.args == [v1]
+        #
+        op = SpaceOperation(opname, [c0, v2], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == reducedname
+        assert op1.args == [v2]
+
 def test_ptr_eq():
     v1 = varoftype(rclass.OBJECTPTR)
     v2 = varoftype(rclass.OBJECTPTR)
@@ -315,6 +293,29 @@ def test_ptr_eq():
     #
     for opname, reducedname in [('ptr_eq', 'ptr_iszero'),
                                 ('ptr_ne', 'ptr_nonzero')]:
+        op = SpaceOperation(opname, [v1, v2], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == opname
+        assert op1.args == [v1, v2]
+        #
+        op = SpaceOperation(opname, [v1, c0], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == reducedname
+        assert op1.args == [v1]
+        #
+        op = SpaceOperation(opname, [c0, v2], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == reducedname
+        assert op1.args == [v2]
+
+def test_nongc_ptr_eq():
+    v1 = varoftype(rclass.NONGCOBJECTPTR)
+    v2 = varoftype(rclass.NONGCOBJECTPTR)
+    v3 = varoftype(lltype.Bool)
+    c0 = Constant(lltype.nullptr(rclass.NONGCOBJECT), rclass.NONGCOBJECTPTR)
+    #
+    for opname, reducedname in [('int_eq', 'int_is_zero'),
+                                ('int_ne', 'int_is_true')]:
         op = SpaceOperation(opname, [v1, v2], v3)
         op1 = Transformer().rewrite_operation(op)
         assert op1.opname == opname
