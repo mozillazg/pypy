@@ -3023,19 +3023,6 @@ def PyObject_AsWriteBuffer(space, obj, buffer, buffer_len):
     require changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject], PyObject)
-def PyObject_GetAttr(space, o, attr_name):
-    """Retrieve an attribute named attr_name from object o. Returns the attribute
-    value on success, or NULL on failure.  This is the equivalent of the Python
-    expression o.attr_name."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
-def PyObject_DelAttr(space, o, attr_name):
-    """Delete attribute named attr_name, for object o. Returns -1 on failure.
-    This is the equivalent of the Python statement del o.attr_name."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP], rffi.INT_real, error=-1)
 def PyObject_DelAttrString(space, o, attr_name):
     """Delete attribute named attr_name, for object o. Returns -1 on failure.

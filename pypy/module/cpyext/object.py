@@ -71,6 +71,13 @@ def PyObject_IsTrue(space, w_obj):
 def PyObject_Not(space, w_obj):
     return not space.is_true(w_obj)
 
+@cpython_api([PyObject, PyObject], PyObject)
+def PyObject_GetAttr(space, w_obj, w_name):
+    """Retrieve an attribute named attr_name from object o. Returns the attribute
+    value on success, or NULL on failure.  This is the equivalent of the Python
+    expression o.attr_name."""
+    return space.getattr(w_obj, w_name)
+
 @cpython_api([PyObject, CONST_STRING], PyObject)
 def PyObject_GetAttrString(space, w_obj, name_ptr):
     """Retrieve an attribute named attr_name from object o. Returns the attribute
@@ -105,6 +112,13 @@ def PyObject_SetAttr(space, w_obj, w_name, w_value):
 def PyObject_SetAttrString(space, w_obj, name_ptr, w_value):
     w_name = space.wrap(rffi.charp2str(name_ptr))
     operation.setattr(space, w_obj, w_name, w_value)
+    return 0
+
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
+def PyObject_DelAttr(space, w_obj, w_name):
+    """Delete attribute named attr_name, for object o. Returns -1 on failure.
+    This is the equivalent of the Python statement del o.attr_name."""
+    space.delattr(w_obj, w_name)
     return 0
 
 @cpython_api([PyObject], lltype.Void)
