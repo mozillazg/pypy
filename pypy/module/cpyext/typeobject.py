@@ -506,28 +506,31 @@ def best_base(space, bases_w):
         return None
 
     w_winner = None
-    for w_candidate in bases_w:
-        if isinstance(w_candidate, W_ClassObject):
+    w_base = None
+    for w_base_i in bases_w:
+        if isinstance(w_base_i, W_ClassObject):
             # old-style base
             continue
-        assert isinstance(w_candidate, W_TypeObject)
-        w_candidate = solid_base(space, w_candidate)
+        assert isinstance(w_base_i, W_TypeObject)
+        w_candidate = solid_base(space, w_base_i)
         if not w_winner:
             w_winner = w_candidate
+            w_base = w_base_i
         elif space.abstract_issubclass_w(w_winner, w_candidate):
             pass
         elif space.abstract_issubclass_w(w_candidate, w_winner):
             w_winner = w_candidate
+            w_base = w_base_i
         else:
             raise OperationError(
                 space.w_TypeError,
                 space.wrap("multiple bases have instance lay-out conflict"))
-    if w_winner is None:
+    if w_base is None:
         raise OperationError(
             space.w_TypeError,
                 space.wrap("a new-style class can't have only classic bases"))
 
-    return w_winner
+    return w_base
 
 def inherit_slots(space, pto, w_base):
     # XXX missing: nearly everything
