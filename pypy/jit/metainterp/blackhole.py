@@ -504,3 +504,7 @@ class BlackholeInterpreter(object):
     opimpl_getfield_raw_u_pure = opimpl_getfield_raw_u
     opimpl_getfield_raw_r_pure = opimpl_getfield_raw_r
     opimpl_getfield_raw_f_pure = opimpl_getfield_raw_f
+
+    @arguments("d", returns="r")
+    def opimpl_new_with_vtable(self, descr):
+        return self.cpu.bh_new_with_vtable(descr)

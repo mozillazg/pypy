@@ -24,9 +24,6 @@ class AbstractCPU(object):
     def get_fail_descr_from_number(self, n):
         return self.fail_descr_list[n]
 
-    def set_class_sizes(self, class_sizes):
-        self.class_sizes = class_sizes
-
     def setup_once(self):
         """Called once by the front-end when the program starts."""
         pass
@@ -118,7 +115,7 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     @staticmethod
-    def numof(S):
+    def sizevtableof(S, vtable):
         raise NotImplementedError
 
     @staticmethod
@@ -213,6 +210,9 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def do_new_with_vtable(self, classbox):
+        raise NotImplementedError
+
+    def bh_new_with_vtable(self, sizevtabledescr):
         raise NotImplementedError
 
     def do_new_array(self, lengthbox, arraydescr):
