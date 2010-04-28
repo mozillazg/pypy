@@ -27,3 +27,8 @@ class TestFunctionObject(BaseApiTest):
 
         w_function = space.getattr(w_method, space.wrap("im_func"))
         assert space.is_w(api.PyMethod_Function(w_method), w_function)
+
+        w_class = space.getattr(w_method, space.wrap("im_class"))
+        w_self = space.getattr(w_method, space.wrap("im_self"))
+        w_method2 = api.PyMethod_New(w_function, w_self, w_class)
+        assert space.eq_w(w_method, w_method2)

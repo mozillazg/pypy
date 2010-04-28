@@ -33,6 +33,15 @@ def function_dealloc(space, py_obj):
     from pypy.module.cpyext.object import PyObject_dealloc
     PyObject_dealloc(space, py_obj)
 
+@cpython_api([PyObject, PyObject, PyObject], PyObject)
+def PyMethod_New(space, w_func, w_self, w_cls):
+    """Return a new method object, with func being any callable object; this is the
+    function that will be called when the method is called.  If this method should
+    be bound to an instance, self should be the instance and class should be the
+    class of self, otherwise self should be NULL and class should be the
+    class which provides the unbound method."""
+    return Method(space, w_func, w_self, w_cls)
+
 @cpython_api([PyObject], PyObject, borrowed=True)
 def PyMethod_Function(space, w_method):
     """Return the function object associated with the method meth."""
