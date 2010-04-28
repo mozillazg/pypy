@@ -2968,16 +2968,6 @@ def PyObject_Cmp(space, o1, o2, result):
     the Python statement result = cmp(o1, o2)."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject], rffi.INT_real, error=None)
-def PyObject_Compare(space, o1, o2):
-    """
-    Compare the values of o1 and o2 using a routine provided by o1, if one
-    exists, otherwise with a routine provided by o2.  Returns the result of the
-    comparison on success.  On error, the value returned is undefined; use
-    PyErr_Occurred() to detect an error.  This is equivalent to the Python
-    expression cmp(o1, o2)."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObject)
 def PyObject_Bytes(space, o):
     """
