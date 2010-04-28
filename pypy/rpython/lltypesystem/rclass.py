@@ -72,7 +72,7 @@ OBJECT_VTABLE.become(Struct('object_vtable',
                             hints = {'immutable': True}))
 # non-gc case
 NONGCOBJECT = Struct('nongcobject', ('typeptr', CLASSTYPE))
-NONGCOBJECTPTR = Ptr(OBJECT)
+NONGCOBJECTPTR = Ptr(NONGCOBJECT)
 
 OBJECT_BY_FLAVOR = {'gc': OBJECT,
                     'raw': NONGCOBJECT}
