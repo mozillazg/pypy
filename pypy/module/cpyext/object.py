@@ -2,7 +2,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
         Py_ssize_t, PyVarObject, Py_TPFLAGS_HEAPTYPE,\
         Py_LT, Py_LE, Py_EQ, Py_NE, Py_GT, Py_GE, CONST_STRING
-from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
+from pypy.module.cpyext.pyobject import PyObject, PyObjectP, make_ref, from_ref
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject
@@ -62,6 +62,10 @@ def PyObject_GC_UnTrack(space, op):
     (tp_dealloc handler) should call this for the object before any of
     the fields used by the tp_traverse handler become invalid."""
     pass
+
+@cpython_api([PyObject], PyObjectP, error=CANNOT_FAIL)
+def _PyObject_GetDictPtr(space, op):
+    return lltype.nullptr(PyObjectP.TO)
 
 @cpython_api([PyObject], rffi.INT_real, error=-1)
 def PyObject_IsTrue(space, w_obj):
