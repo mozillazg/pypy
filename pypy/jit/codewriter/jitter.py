@@ -287,7 +287,30 @@ class Transformer(object):
         if self.is_typeptr_getset(op):
             # ignore the operation completely -- instead, it's done by 'new'
             raise NoOp
-        XXX
+        # turn the flow graph 'setfield' operation into our own version
+        [v_inst, c_fieldname, v_value] = op.args
+        RESULT = v_value.concretetype
+        if RESULT is lltype.Void:
+            raise NoOp
+        # check for virtualizable
+        #if self.is_virtualizable_getset(op):
+        #    vinfo = self.codewriter.metainterp_sd.virtualizable_info
+        #    index = vinfo.static_field_to_extra_box[op.args[1].value]
+        #    self.emit('setfield_vable',
+        #              self.var_position(v_inst),
+        #              index,
+        #              self.var_position(v_value))
+        #    return
+        argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
+        descr = self.cpu.fielddescrof(v_inst.concretetype.TO,
+                                      c_fieldname.value)
+        if isinstance(RESULT, lltype.Primitive):
+            kind = primitive_type_size[RESULT]
+        else:
+            kind = getkind(RESULT)[0]
+        return SpaceOperation('setfield_%s_%s' % (argname, kind),
+                              [v_inst, descr, v_value],
+                              None)
 
     def is_typeptr_getset(self, op):
         return (op.args[1].value == 'typeptr' and

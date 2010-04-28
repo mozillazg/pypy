@@ -470,39 +470,63 @@ class LLtypeCPU(BaseCPU):
         assert isinstance(arraydescr, Descr)
         llimpl.do_setarrayitem_gc_ptr(array, index, newvalue)
 
-    def do_setfield_gc(self, structbox, newvaluebox, fielddescr):
-        assert isinstance(fielddescr, Descr)
-        struct = structbox.getref_base()
-        if fielddescr.typeinfo == REF:
-            newvalue = newvaluebox.getref_base()
-            llimpl.do_setfield_gc_ptr(struct, fielddescr.ofs, newvalue)
-        elif fielddescr.typeinfo == INT:
-            newvalue = newvaluebox.getint()
-            llimpl.do_setfield_gc_int(struct, fielddescr.ofs, newvalue,
-                                      self.memo_cast)
-        elif fielddescr.typeinfo == FLOAT:
-            newvalue = newvaluebox.getfloat()
-            llimpl.do_setfield_gc_float(struct, fielddescr.ofs, newvalue)
-        else:
-            raise NotImplementedError
+##    def do_setfield_gc(self, structbox, newvaluebox, fielddescr):
+##        assert isinstance(fielddescr, Descr)
+##        struct = structbox.getref_base()
+##        if fielddescr.typeinfo == REF:
+##            newvalue = newvaluebox.getref_base()
+##            llimpl.do_setfield_gc_ptr(struct, fielddescr.ofs, newvalue)
+##        elif fielddescr.typeinfo == INT:
+##            newvalue = newvaluebox.getint()
+##            llimpl.do_setfield_gc_int(struct, fielddescr.ofs, newvalue,
+##                                      self.memo_cast)
+##        elif fielddescr.typeinfo == FLOAT:
+##            newvalue = newvaluebox.getfloat()
+##            llimpl.do_setfield_gc_float(struct, fielddescr.ofs, newvalue)
+##        else:
+##            raise NotImplementedError
 
-    def do_setfield_raw(self, structbox, newvaluebox, fielddescr):
+    def bh_setfield_gc_i(self, struct, fielddescr, newvalue):
         assert isinstance(fielddescr, Descr)
-        struct = self.cast_int_to_adr(structbox.getint())
-        if fielddescr.typeinfo == REF:
-            newvalue = newvaluebox.getref_base()
-            llimpl.do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue,
-                                       self.memo_cast)
-        elif fielddescr.typeinfo == INT:
-            newvalue = newvaluebox.getint()
-            llimpl.do_setfield_raw_int(struct, fielddescr.ofs, newvalue,
-                                       self.memo_cast)
-        elif fielddescr.typeinfo == FLOAT:
-            newvalue = newvaluebox.getfloat()
-            llimpl.do_setfield_raw_float(struct, fielddescr.ofs, newvalue,
-                                         self.memo_cast)
-        else:
-            raise NotImplementedError
+        llimpl.do_setfield_gc_int(struct, fielddescr.ofs, newvalue)
+    bh_setfield_gc_c = bh_setfield_gc_i
+    bh_setfield_gc_u = bh_setfield_gc_i
+    def bh_setfield_gc_r(self, struct, fielddescr, newvalue):
+        assert isinstance(fielddescr, Descr)
+        llimpl.do_setfield_gc_ptr(struct, fielddescr.ofs, newvalue)
+    def bh_setfield_gc_f(self, struct, fielddescr, newvalue):
+        assert isinstance(fielddescr, Descr)
+        llimpl.do_setfield_gc_float(struct, fielddescr.ofs, newvalue)
+
+##    def do_setfield_raw(self, structbox, newvaluebox, fielddescr):
+##        assert isinstance(fielddescr, Descr)
+##        struct = self.cast_int_to_adr(structbox.getint())
+##        if fielddescr.typeinfo == REF:
+##            newvalue = newvaluebox.getref_base()
+##            llimpl.do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue,
+##                                       self.memo_cast)
+##        elif fielddescr.typeinfo == INT:
+##            newvalue = newvaluebox.getint()
+##            llimpl.do_setfield_raw_int(struct, fielddescr.ofs, newvalue,
+##                                       self.memo_cast)
+##        elif fielddescr.typeinfo == FLOAT:
+##            newvalue = newvaluebox.getfloat()
+##            llimpl.do_setfield_raw_float(struct, fielddescr.ofs, newvalue,
+##                                         self.memo_cast)
+##        else:
+##            raise NotImplementedError
+
+    def bh_setfield_raw_i(self, struct, fielddescr, newvalue):
+        assert isinstance(fielddescr, Descr)
+        llimpl.do_setfield_raw_int(struct, fielddescr.ofs, newvalue)
+    bh_setfield_raw_c = bh_setfield_raw_i
+    bh_setfield_raw_u = bh_setfield_raw_i
+    def bh_setfield_raw_r(self, struct, fielddescr, newvalue):
+        assert isinstance(fielddescr, Descr)
+        llimpl.do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue)
+    def bh_setfield_raw_f(self, struct, fielddescr, newvalue):
+        assert isinstance(fielddescr, Descr)
+        llimpl.do_setfield_raw_float(struct, fielddescr.ofs, newvalue)
 
     def do_same_as(self, box1):
         return box1.clonebox()

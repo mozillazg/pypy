@@ -240,9 +240,31 @@ class AbstractCPU(object):
     def do_setfield_gc(self, structbox, newvaluebox, fielddescr):
         raise NotImplementedError
 
+    def bh_setfield_gc_i(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+    def bh_setfield_gc_c(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+    def bh_setfield_gc_u(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+    def bh_setfield_gc_r(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+    def bh_setfield_gc_f(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+
     def do_setfield_raw(self, structbox, newvaluebox, fielddescr):
         raise NotImplementedError
-        
+
+    def bh_setfield_raw_i(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+    def bh_setfield_raw_c(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+    def bh_setfield_raw_u(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+    def bh_setfield_raw_r(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+    def bh_setfield_raw_f(self, struct, fielddescr, newvalue):
+        raise NotImplementedError
+
     def do_newstr(self, lengthbox):
         raise NotImplementedError
 
