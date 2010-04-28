@@ -1,4 +1,6 @@
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
+from pypy.module.cpyext.test.test_api import BaseApiTest
+from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref
 
 import py
 import sys
@@ -100,3 +102,18 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         assert "groupdict" in dir(m)
         re._cache.clear()
         re._cache_repl.clear()
+
+class TestTypes(BaseApiTest):
+    def test_multiple_inheritance(self, space, api):
+        py.test.skip("This bug causes a crash in wxPython")
+        w_class = space.appexec([], """():
+            class A(object):
+                pass
+            class B(object):
+                pass
+            class C(A, B):
+                pass
+            return C
+            """)
+        ref = make_ref(space, w_class)
+        api.Py_DecRef(ref)
