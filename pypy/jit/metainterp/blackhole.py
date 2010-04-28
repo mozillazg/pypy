@@ -281,6 +281,14 @@ class BlackholeInterpreter(object):
         return a & b
 
     @arguments("i", "i", returns="i")
+    def opimpl_int_or(self, a, b):
+        return a | b
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_xor(self, a, b):
+        return a ^ b
+
+    @arguments("i", "i", returns="i")
     def opimpl_int_floordiv(self, a, b):
         return llop.int_floordiv(lltype.Signed, a, b)
 
@@ -292,6 +300,25 @@ class BlackholeInterpreter(object):
     def opimpl_uint_floordiv(self, a, b):
         c = llop.uint_floordiv(lltype.Unsigned, r_uint(a), r_uint(b))
         return intmask(c)
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_lt(self, a, b):
+        return int(a < b)
+    @arguments("i", "i", returns="i")
+    def opimpl_int_le(self, a, b):
+        return int(a <= b)
+    @arguments("i", "i", returns="i")
+    def opimpl_int_eq(self, a, b):
+        return int(a == b)
+    @arguments("i", "i", returns="i")
+    def opimpl_int_ne(self, a, b):
+        return int(a != b)
+    @arguments("i", "i", returns="i")
+    def opimpl_int_gt(self, a, b):
+        return int(a > b)
+    @arguments("i", "i", returns="i")
+    def opimpl_int_ge(self, a, b):
+        return int(a >= b)
 
     @arguments("i")
     def opimpl_int_return(self, a):
@@ -424,9 +451,9 @@ class BlackholeInterpreter(object):
     @arguments("i", "d", "R", returns="f")
     def opimpl_residual_call_r_f(self, func, calldescr, args_r):
         return self.cpu.bh_call_f(func, calldescr, None, args_r, None)
-    @arguments("i", "d", "R", returns="v")
+    @arguments("i", "d", "R")
     def opimpl_residual_call_r_v(self, func, calldescr, args_r):
-        return self.cpu.bh_call_v(func, calldescr, None, args_r, None)
+        self.cpu.bh_call_v(func, calldescr, None, args_r, None)
 
     @arguments("i", "d", "I", "R", returns="i")
     def opimpl_residual_call_ir_i(self, func, calldescr, args_i, args_r):
@@ -437,9 +464,9 @@ class BlackholeInterpreter(object):
     @arguments("i", "d", "I", "R", returns="f")
     def opimpl_residual_call_ir_f(self, func, calldescr, args_i, args_r):
         return self.cpu.bh_call_f(func, calldescr, args_i, args_r, None)
-    @arguments("i", "d", "I", "R", returns="v")
+    @arguments("i", "d", "I", "R")
     def opimpl_residual_call_ir_v(self, func, calldescr, args_i, args_r):
-        return self.cpu.bh_call_v(func, calldescr, args_i, args_r, None)
+        self.cpu.bh_call_v(func, calldescr, args_i, args_r, None)
 
     @arguments("i", "d", "I", "R", "F", returns="i")
     def opimpl_residual_call_irf_i(self, func, calldescr,args_i,args_r,args_f):
@@ -450,9 +477,9 @@ class BlackholeInterpreter(object):
     @arguments("i", "d", "I", "R", "F", returns="f")
     def opimpl_residual_call_irf_f(self, func, calldescr,args_i,args_r,args_f):
         return self.cpu.bh_call_f(func, calldescr, args_i, args_r, args_f)
-    @arguments("i", "d", "I", "R", "F", returns="v")
+    @arguments("i", "d", "I", "R", "F")
     def opimpl_residual_call_irf_v(self, func, calldescr,args_i,args_r,args_f):
-        return self.cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
+        self.cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
 
     @arguments("d", "i", returns="r")
     def opimpl_new_array(self, arraydescr, length):

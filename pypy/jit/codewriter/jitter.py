@@ -136,6 +136,7 @@ class Transformer(object):
     def rewrite_op_cast_int_to_unichar(self, op): raise NoOp
     def rewrite_op_cast_char_to_int(self, op): raise NoOp
     def rewrite_op_cast_unichar_to_int(self, op): raise NoOp
+    def rewrite_op_cast_bool_to_int(self, op): raise NoOp
     def rewrite_op_cast_pointer(self, op): raise NoOp
 
     def rewrite_op_direct_call(self, op):
