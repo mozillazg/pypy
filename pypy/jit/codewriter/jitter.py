@@ -163,6 +163,10 @@ class Transformer(object):
                               [op.args[0], calldescr] + sublists,
                               op.result)
 
+    def rewrite_op_indirect_call(self, op):
+        op1 = SpaceOperation('direct_call', op.args[:-1], op.result)
+        return self.rewrite_op_direct_call(op1)
+
     def add_in_correct_list(self, v, lst_i, lst_r, lst_f):
         kind = getkind(v.concretetype)
         if kind == 'void': return

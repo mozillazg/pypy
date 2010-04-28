@@ -428,6 +428,10 @@ class LLtypeCPU(BaseCPU):
         assert isinstance(size, Descr)
         return history.BoxPtr(llimpl.do_new(size.ofs))
 
+    def bh_new(self, sizedescr):
+        assert isinstance(sizedescr, Descr)
+        return llimpl.do_new(sizedescr.ofs)
+
     def bh_new_with_vtable(self, sizevtabledescr):
         result = llimpl.do_new(sizevtabledescr.ofs)
         llimpl.do_setfield_gc_int(result, self.fielddescrof_vtable.ofs,
