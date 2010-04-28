@@ -18,12 +18,24 @@ class JitCode(AbstractValue):
         self.called_from = called_from
         self.graph = graph
 
-    def setup(self, code, constants_i=[], constants_r=[], constants_f=[]):
-        self.code = code
+    def setup(self, code, constants_i=[], constants_r=[], constants_f=[],
+              num_regs_r=256):
+        # stick an extra char at the end of self.code, which is the
+        # highest 'r' register used in this code.  It default to 255,
+        # which is always correct.  Also, even if no 'r' register is
+        # used it must be set to 0, which means that register %r0 is
+        # always marked as used.
+        self.code = code + chr((num_regs_r or 1)-1)
         # if the following lists are empty, use a single shared empty list
         self.constants_i = constants_i or self._empty_i
         self.constants_r = constants_r or self._empty_r
         self.constants_f = constants_f or self._empty_f
+
+    def _code(self):
+        return self.code[:-1]   # for testing, without the extra char
+
+    def highest_r_reg(self):
+        return ord(self.code[-1])
 
 
 class Assembler(object):
@@ -50,11 +62,11 @@ class Assembler(object):
         self.label_positions = {}
         self.tlabel_positions = []
         self.switchdictdescrs = []
-        self.highest_regs = dict.fromkeys(KINDS, 0)
+        self.count_regs = dict.fromkeys(KINDS, 0)
 
     def emit_reg(self, reg):
-        if reg.index > self.highest_regs[reg.kind]:
-            self.highest_regs[reg.kind] = reg.index
+        if reg.index >= self.count_regs[reg.kind]:
+            self.count_regs[reg.kind] = reg.index + 1
         self.code.append(chr(reg.index))
 
     def emit_const(self, const, kind, allow_short=False):
@@ -164,14 +176,15 @@ class Assembler(object):
 
     def check_result(self):
         # Limitation of the number of registers, from the single-byte encoding
-        assert self.highest_regs['int'] + len(self.constants_i) <= 256
-        assert self.highest_regs['ref'] + len(self.constants_r) <= 256
-        assert self.highest_regs['float'] + len(self.constants_f) <= 256
+        assert self.count_regs['int'] + len(self.constants_i) <= 256
+        assert self.count_regs['ref'] + len(self.constants_r) <= 256
+        assert self.count_regs['float'] + len(self.constants_f) <= 256
 
     def make_jitcode(self, name):
         jitcode = JitCode(name)
         jitcode.setup(''.join(self.code),
                       self.constants_i,
                       self.constants_r,
-                      self.constants_f)
+                      self.constants_f,
+                      self.count_regs['ref'])
         return jitcode
