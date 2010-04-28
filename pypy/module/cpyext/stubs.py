@@ -2324,15 +2324,6 @@ def PyMarshal_ReadObjectFromString(space, string, len):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject, PyObject], PyObject)
-def PyMethod_New(space, func, self, cls):
-    """Return a new method object, with func being any callable object; this is the
-    function that will be called when the method is called.  If this method should
-    be bound to an instance, self should be the instance and class should be the
-    class of self, otherwise self should be NULL and class should be the
-    class which provides the unbound method.."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObject, borrowed=True)
 def PyMethod_Self(space, meth):
     """Return the instance associated with the method meth if it is bound, otherwise
