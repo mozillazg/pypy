@@ -11,12 +11,14 @@ def PyDict_New(space):
 
 PyDict_Check, PyDict_CheckExact = build_type_checkers("Dict")
 
-@cpython_api([PyObject, PyObject], PyObject)
+@cpython_api([PyObject, PyObject], PyObject, borrowed=True, error=CANNOT_FAIL)
 def PyDict_GetItem(space, w_dict, w_key):
-    if PyDict_Check(space, w_dict):
-        return space.getitem(w_dict, w_key)
-    else:
-        PyErr_BadInternalCall(space)
+    try:
+        w_res = space.getitem(w_dict, w_key)
+    except:
+        return None
+    register_container(space, w_dict)
+    return w_res
 
 @cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)
 def PyDict_SetItem(space, w_dict, w_key, w_obj):
@@ -45,15 +47,16 @@ def PyDict_SetItemString(space, w_dict, key_ptr, w_obj):
     else:
         PyErr_BadInternalCall(space)
 
-@cpython_api([PyObject, CONST_STRING], PyObject, borrowed=True)
+@cpython_api([PyObject, CONST_STRING], PyObject, borrowed=True, error=CANNOT_FAIL)
 def PyDict_GetItemString(space, w_dict, key):
     """This is the same as PyDict_GetItem(), but key is specified as a
     char*, rather than a PyObject*."""
-    if not PyDict_Check(space, w_dict):
-        PyErr_BadInternalCall(space)
-    w_res = space.finditem_str(w_dict, rffi.charp2str(key))
+    try:
+        w_res = space.finditem_str(w_dict, rffi.charp2str(key))
+    except:
+        w_res = None
     if w_res is None:
-        raise OperationError(space.w_KeyError, space.wrap("Key not found"))
+        return None
     register_container(space, w_dict)
     return w_res
 
@@ -63,6 +66,11 @@ def PyDict_Size(space, w_obj):
     Return the number of items in the dictionary.  This is equivalent to
     len(p) on a dictionary."""
     return space.int_w(space.len(w_obj))
+
+@cpython_api([PyObject], lltype.Void)
+def PyDict_Clear(space, w_obj):
+    """Empty an existing dictionary of all key-value pairs."""
+    space.call_method(w_obj, "clear")
 
 @cpython_api([PyObject, Py_ssize_t, PyObjectP, PyObjectP], rffi.INT_real, error=CANNOT_FAIL)
 def PyDict_Next(space, w_obj, ppos, pkey, pvalue):
