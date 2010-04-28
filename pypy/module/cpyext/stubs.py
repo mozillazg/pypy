@@ -2978,18 +2978,6 @@ def PyObject_Bytes(space, o):
     for PyObject_Str()."""
     raise NotImplementedError
 
-@cpython_api([PyObject], PyObject)
-def PyObject_Unicode(space, o):
-    """
-    
-    
-    
-    Compute a Unicode string representation of object o.  Returns the Unicode
-    string representation on success, NULL on failure. This is the equivalent of
-    the Python expression unicode(o).  Called by the unicode() built-in
-    function."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP, ], PyObject)
 def PyObject_CallFunction(space, callable, format, ):
     """

@@ -188,6 +188,14 @@ def PyObject_Repr(space, w_obj):
     by reverse quotes."""
     return space.repr(w_obj)
 
+@cpython_api([PyObject], PyObject)
+def PyObject_Unicode(space, w_obj):
+    """Compute a Unicode string representation of object o.  Returns the Unicode
+    string representation on success, NULL on failure. This is the equivalent of
+    the Python expression unicode(o).  Called by the unicode() built-in
+    function."""
+    return space.call_function(space.w_unicode, w_obj)
+
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
 def PyObject_Compare(space, w_o1, w_o2):
     """
