@@ -291,14 +291,6 @@ def getwithoutbinding(x, name):
         # uh? not found anywhere, fall back (which might raise AttributeError)
         return getattr(x, name)
 
-class LazyObjSpaceGetter(object):
-    def __get__(self, obj, cls=None):
-        space = gettestobjspace()
-        if cls:
-            cls.space = space
-        return space
-
-
 class AppError(Exception):
 
     def __init__(self, excinfo):
