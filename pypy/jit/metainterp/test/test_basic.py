@@ -15,6 +15,7 @@ from pypy.rpython.ootypesystem import ootype
 def _get_jitcodes(CPUClass, func, values, type_system):
     from pypy.jit.codewriter import support, codewriter
 
+    func._jit_unroll_safe_ = True
     rtyper = support.annotate(func, values, type_system=type_system)
     graphs = rtyper.annotator.translator.graphs
     stats = history.Stats()
@@ -44,21 +45,51 @@ def _run_with_blackhole(cw, mainjitcode, args):
     blackholeinterp.run(mainjitcode, 0)
     return blackholeinterp.result_i
 
-def _get_bare_metainterp(func, values, CPUClass, type_system):
-    from pypy.annotation.policy import AnnotatorPolicy
-    from pypy.annotation.model import lltype_to_annotation
-    from pypy.rpython.test.test_llinterp import gengraph
+def _run_with_pyjitpl(cw, mainjitcode, args, testself):
+    from pypy.jit.metainterp import simple_optimize
 
-    rtyper = support.annotate(func, values, type_system=type_system)
+    class DoneWithThisFrame(Exception):
+        pass
 
-    stats = history.Stats()
-    cpu = CPUClass(rtyper, stats, None, False)
-    graphs = rtyper.annotator.translator.graphs
-    opt = history.Options(listops=listops)
-    metainterp_sd = pyjitpl.MetaInterpStaticData(graphs[0], cpu, stats, opt)
+    class DoneWithThisFrameRef(DoneWithThisFrame):
+        def __init__(self, cpu, *args):
+            DoneWithThisFrame.__init__(self, *args)
+
+    class FakeWarmRunnerState:
+        def attach_unoptimized_bridge_from_interp(self, greenkey, newloop):
+            pass
+
+        # pick the optimizer this way
+        optimize_loop = staticmethod(simple_optimize.optimize_loop)
+        optimize_bridge = staticmethod(simple_optimize.optimize_bridge)
+
+        trace_limit = sys.maxint
+        debug_level = 2
+
+    opt = history.Options(listops=True)
+    cpu = cw.cpu
+    metainterp_sd = pyjitpl.MetaInterpStaticData(cw, opt)
     metainterp_sd.finish_setup(optimizer="bogus")
+    metainterp_sd.state = FakeWarmRunnerState()
+    metainterp_sd.state.cpu = metainterp_sd.cpu
     metainterp = pyjitpl.MetaInterp(metainterp_sd)
-    return metainterp, rtyper
+    if hasattr(testself, 'finish_metainterp_for_interp_operations'):
+        testself.finish_metainterp_for_interp_operations(metainterp)
+
+    metainterp_sd.portal_code = mainjitcode
+    metainterp_sd.DoneWithThisFrameInt = DoneWithThisFrame
+    metainterp_sd.DoneWithThisFrameRef = DoneWithThisFrameRef
+    metainterp_sd.DoneWithThisFrameFloat = DoneWithThisFrame
+    testself.metainterp = metainterp
+    try:
+        metainterp.compile_and_run_once(*args)
+    except DoneWithThisFrame, e:
+        #if conftest.option.view:
+        #    metainterp.stats.view()
+        return e.args[0]
+    else:
+        raise Exception("FAILED")
+
 
 class JitMixin:
     basic = True
@@ -99,61 +130,11 @@ class JitMixin:
         cw, mainjitcode = _get_jitcodes(self.CPUClass, f, args,
                                         self.type_system)
         # try to run it with blackhole.py
-        result = _run_with_blackhole(cw, mainjitcode, args)
+        result1 = _run_with_blackhole(cw, mainjitcode, args)
         # try to run it with pyjitpl.py
-        # -- XXX --- missing
-        return result
-
-        from pypy.jit.metainterp import simple_optimize
-
-        class DoneWithThisFrame(Exception):
-            pass
-
-        class DoneWithThisFrameRef(DoneWithThisFrame):
-            def __init__(self, cpu, *args):
-                DoneWithThisFrame.__init__(self, *args)
-        
-        class FakeWarmRunnerState:
-            def attach_unoptimized_bridge_from_interp(self, greenkey, newloop):
-                pass
-
-            # pick the optimizer this way
-            optimize_loop = staticmethod(simple_optimize.optimize_loop)
-            optimize_bridge = staticmethod(simple_optimize.optimize_bridge)
-
-            trace_limit = sys.maxint
-            debug_level = 2
-        
-        metainterp, rtyper = _get_bare_metainterp(f, args, self.CPUClass,
-                                                  self.type_system,
-                                                  **kwds)
-        metainterp.staticdata.state = FakeWarmRunnerState()
-        metainterp.staticdata.state.cpu = metainterp.staticdata.cpu
-        if hasattr(self, 'finish_metainterp_for_interp_operations'):
-            self.finish_metainterp_for_interp_operations(metainterp)
-        portal_graph = rtyper.annotator.translator.graphs[0]
-        cw = codewriter.CodeWriter(rtyper)
-        
-        graphs = cw.find_all_graphs(portal_graph, JitPolicy(),
-                                    self.CPUClass.supports_floats)
-        cw._start(metainterp.staticdata, None)
-        portal_graph.func._jit_unroll_safe_ = True
-        maingraph = cw.make_one_bytecode((portal_graph, None), False)
-        cw.finish_making_bytecodes()
-        metainterp.staticdata.portal_code = maingraph
-        metainterp.staticdata._class_sizes = cw.class_sizes
-        metainterp.staticdata.DoneWithThisFrameInt = DoneWithThisFrame
-        metainterp.staticdata.DoneWithThisFrameRef = DoneWithThisFrameRef
-        metainterp.staticdata.DoneWithThisFrameFloat = DoneWithThisFrame
-        self.metainterp = metainterp
-        try:
-            metainterp.compile_and_run_once(*args)
-        except DoneWithThisFrame, e:
-            #if conftest.option.view:
-            #    metainterp.stats.view()
-            return e.args[0]
-        else:
-            raise Exception("FAILED")
+        result2 = _run_with_pyjitpl(cw, mainjitcode, args, self)
+        assert result1 == result2
+        return result1
 
     def check_history(self, expected=None, **isns):
         # this can be used after calling meta_interp

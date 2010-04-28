@@ -52,6 +52,7 @@ class CodeWriter(object):
         return jitcode
 
     def make_jitcodes(self, maingraph, verbose=False):
+        self.portal_graph = maingraph
         return self.transform_graph_to_jitcode(maingraph, verbose)
 
 
