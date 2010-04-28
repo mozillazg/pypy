@@ -508,3 +508,7 @@ class BlackholeInterpreter(object):
     @arguments("d", returns="r")
     def opimpl_new_with_vtable(self, descr):
         return self.cpu.bh_new_with_vtable(descr)
+
+    @arguments("r", returns="i")
+    def opimpl_classof(self, struct):
+        return self.cpu.bh_classof(struct)

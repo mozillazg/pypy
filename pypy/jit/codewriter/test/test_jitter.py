@@ -171,6 +171,16 @@ def test_getfield():
         assert op1.args == [v_parent, fielddescr]
         assert op1.result == v_result
 
+def test_getfield_typeptr():
+    v_parent = varoftype(rclass.OBJECTPTR)
+    c_name = Constant('typeptr', lltype.Void)
+    v_result = varoftype(rclass.OBJECT.typeptr)
+    op = SpaceOperation('getfield', [v_parent, c_name], v_result)
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == 'classof'
+    assert op1.args == [v_parent]
+    assert op1.result == v_result
+
 def test_malloc_new():
     S = lltype.GcStruct('S')
     v = varoftype(lltype.Ptr(S))

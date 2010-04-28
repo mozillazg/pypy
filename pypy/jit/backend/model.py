@@ -215,6 +215,9 @@ class AbstractCPU(object):
     def bh_new_with_vtable(self, sizevtabledescr):
         raise NotImplementedError
 
+    def bh_classof(self, struct):
+        raise NotImplementedError
+
     def do_new_array(self, lengthbox, arraydescr):
         raise NotImplementedError
 
