@@ -16,3 +16,17 @@ class TestPyCObject(BaseApiTest):
         obj = api.PyCObject_FromVoidPtrAndDesc(ptr, ptr,
                                                lltype.nullptr(destructor_short.TO))
         api.Py_DecRef(obj)
+
+    def test_pycobject_import(self, space, api):
+        ptr = rffi.cast(rffi.VOIDP_real, 1234)
+        obj = api.PyCObject_FromVoidPtr(ptr, lltype.nullptr(destructor_short.TO))
+        space.setattr(space.sys, space.wrap("_cpyext_cobject"), obj)
+
+        charp1 = rffi.str2charp("sys")
+        charp2 = rffi.str2charp("_cpyext_cobject")
+        assert api.PyCObject_Import(charp1, charp2) == ptr
+        rffi.free_charp(charp1)
+        rffi.free_charp(charp2)
+
+        api.Py_DecRef(obj)
+        space.delattr(space.sys, space.wrap("_cpyext_cobject"))
