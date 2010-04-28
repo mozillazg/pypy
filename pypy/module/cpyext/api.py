@@ -250,13 +250,17 @@ FUNCTIONS_STATIC = {}
 SYMBOLS_C = [
     'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
+    '_PyArg_NoKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV',
     'PyModule_AddObject', 'PyModule_AddIntConstant', 'PyModule_AddStringConstant',
     'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format', 'PyErr_NewException',
+
     'PyEval_CallFunction', 'PyEval_CallMethod', 'PyObject_CallFunction',
     'PyObject_CallMethod', 'PyObject_CallFunctionObjArgs', 'PyObject_CallMethodObjArgs',
-    'PyBuffer_FromMemory', 'PyBuffer_New', 'PyBuffer_Type', 'init_bufferobject',
-    '_PyArg_NoKeywords',
+
+    'PyBuffer_FromMemory', 'PyBuffer_FromReadWriteMemory', 'PyBuffer_FromObject',
+    'PyBuffer_FromReadWriteObject', 'PyBuffer_New', 'PyBuffer_Type', 'init_bufferobject',
+
     'PyObject_AsReadBuffer', 'PyObject_AsWriteBuffer', 'PyObject_CheckReadBuffer',
 ]
 TYPES = {}
