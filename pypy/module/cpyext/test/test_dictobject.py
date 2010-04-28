@@ -60,3 +60,14 @@ class TestDictObject(BaseApiTest):
         assert space.eq_w(api.PyDict_Values(w_d), space.wrap(["b"]))
         assert space.eq_w(api.PyDict_Items(w_d), space.wrap([("a", "b")]))
 
+    def test_update(self, space, api):
+        w_d = space.newdict()
+        space.setitem(w_d, space.wrap("a"), space.wrap("b"))
+
+        w_d2 = api.PyDict_Copy(w_d)
+        assert not space.is_w(w_d2, w_d)
+        space.setitem(w_d, space.wrap("c"), space.wrap("d"))
+        space.setitem(w_d2, space.wrap("e"), space.wrap("f"))
+
+        api.PyDict_Update(w_d, w_d2)
+        assert space.unwrap(w_d) == dict(a='b', c='d', e='f')
