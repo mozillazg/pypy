@@ -180,8 +180,12 @@ class BlackholeInterpBuilder(object):
             assert next_argcode == len(argcodes)
             return position
         #
-        verbose = self.verbose
+        # Get the opimpl_xxx method.  If we get an AttributeError here,
+        # it means that either the implementation is missing, or that it
+        # should not appear here at all but instead be transformed away
+        # by codewriter/jitter.py.
         unboundmethod = getattr(BlackholeInterpreter, 'opimpl_' + name)
+        verbose = self.verbose
         argtypes = unrolling_iterable(unboundmethod.argtypes)
         resulttype = unboundmethod.resulttype
         handler = func_with_new_name(handler, 'handler_' + name)

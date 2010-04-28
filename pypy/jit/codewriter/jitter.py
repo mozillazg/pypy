@@ -126,6 +126,8 @@ class Transformer(object):
     def rewrite_op_cast_unichar_to_int(self, op): raise NoOp
     def rewrite_op_cast_bool_to_int(self, op): raise NoOp
     def rewrite_op_cast_pointer(self, op): raise NoOp
+    def rewrite_op_cast_int_to_uint(self, op): raise NoOp
+    def rewrite_op_cast_uint_to_int(self, op): raise NoOp
 
     def rewrite_op_direct_call(self, op):
         """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'

@@ -40,7 +40,7 @@ def _run_with_blackhole(cw, mainjitcode, args):
             blackholeinterp.setarg_f(count_f, value)
             count_f += 1
         else:
-            raise TypeError(value)
+            raise TypeError(T)
     blackholeinterp.run(mainjitcode, 0)
     return blackholeinterp.result_i
 
@@ -246,9 +246,11 @@ class BasicTests:
         from pypy.rlib.rarithmetic import r_uint
         
         def f(a, b):
+            a = r_uint(a)
+            b = r_uint(b)
             return a/b
 
-        res = self.interp_operations(f, [r_uint(4), r_uint(3)])
+        res = self.interp_operations(f, [4, 3])
         assert res == 1
 
     def test_direct_call(self):
@@ -1473,16 +1475,17 @@ class BaseLLtypeTests(BasicTests):
         from pypy.rpython.lltypesystem import lltype
         
         TP = lltype.Struct('x')
-        def f(p1, p2):
+        def f(i1, i2):
+            p1 = prebuilt[i1]
+            p2 = prebuilt[i2]
             a = p1 is p2
             b = p1 is not p2
             c = bool(p1)
             d = not bool(p2)
             return 1000*a + 100*b + 10*c + d
-        x = lltype.malloc(TP, flavor='raw')
-        expected = f(x, x)
-        assert self.interp_operations(f, [x, x]) == expected
-        lltype.free(x, flavor='raw')
+        prebuilt = [lltype.malloc(TP, flavor='raw')] * 2
+        expected = f(0, 1)
+        assert self.interp_operations(f, [0, 1]) == expected
 
     def test_casts(self):
         if not self.basic:
