@@ -38,6 +38,7 @@ class Module(MixedModule):
             state.non_heaptypes[:] = []
 
 # import these modules to register api functions by side-effect
+import pypy.module.cpyext.thread
 import pypy.module.cpyext.pyobject
 import pypy.module.cpyext.boolobject
 import pypy.module.cpyext.floatobject
