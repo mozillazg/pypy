@@ -585,6 +585,9 @@ class LLtypeCPU(BaseCPU):
         return history.BoxInt(llimpl.cast_to_int(ptrbox.getref_base(),
                                                         self.memo_cast))
 
+    def bh_cast_ptr_to_int(self, ptr):
+        return llimpl.cast_to_int(ptr)
+
     def force(self, force_token):
         token = self.cast_int_to_adr(force_token)
         frame = llimpl.get_forced_token_frame(token)

@@ -305,6 +305,9 @@ class AbstractCPU(object):
     def do_cast_ptr_to_int(self, ptrbox):
         raise NotImplementedError
 
+    def bh_cast_ptr_to_int(self, ptr):
+        raise NotImplementedError
+
     def do_call_may_force(self, args, calldescr):
         return self.do_call(args, calldescr)
 

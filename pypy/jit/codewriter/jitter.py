@@ -349,8 +349,11 @@ class Transformer(object):
         else:
             return op
 
+    def _is_gc(self, v):
+        return v.concretetype.TO._gckind == 'gc'
+
     def _rewrite_nongc_ptrs(self, op):
-        if op.args[0].concretetype.TO._gckind == 'gc':
+        if self._is_gc(op.args[0]):
             return op
         else:
             opname = {'ptr_eq': 'int_eq',
@@ -375,6 +378,12 @@ class Transformer(object):
 
     rewrite_op_ptr_iszero = _rewrite_nongc_ptrs
     rewrite_op_ptr_nonzero = _rewrite_nongc_ptrs
+
+    def rewrite_op_cast_ptr_to_int(self, op):
+        if self._is_gc(op.args[0]):
+            return op
+        else:
+            raise NoOp
 
 # ____________________________________________________________
 
