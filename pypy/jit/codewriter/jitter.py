@@ -4,6 +4,7 @@ from pypy.jit.metainterp.history import getkind
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import Block, Link, c_last_exception
 from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.codewriter import support, heaptracker
 
 
 def transform_graph(graph, cpu=None):
@@ -170,20 +171,23 @@ class Transformer(object):
         else: raise AssertionError(kind)
         lst.append(v)
 
-    def _rewrite_with_helper(self, op):
-        from pypy.jit.codewriter.support import builtin_func_for_spec
-        c_func, _ = builtin_func_for_spec(self.cpu.rtyper, op.opname,
-                                          [lltype.Signed, lltype.Signed],
-                                          lltype.Signed)
-        op = SpaceOperation('direct_call', [c_func] + op.args, op.result)
-        return self.rewrite_op_direct_call(op)
+    def _do_builtin_call(self, op, oopspec_name=None, args=None, extra=None):
+        if oopspec_name is None: oopspec_name = op.opname
+        if args is None: args = op.args
+        argtypes = [v.concretetype for v in args]
+        resulttype = op.result.concretetype
+        c_func, TP = support.builtin_func_for_spec(self.cpu.rtyper,
+                                                   oopspec_name, argtypes,
+                                                   resulttype, extra)
+        op1 = SpaceOperation('direct_call', [c_func] + args, op.result)
+        return self.rewrite_op_direct_call(op1)
 
-    rewrite_op_int_floordiv_ovf_zer = _rewrite_with_helper
-    rewrite_op_int_floordiv_ovf     = _rewrite_with_helper
-    rewrite_op_int_floordiv_zer     = _rewrite_with_helper
-    rewrite_op_int_mod_ovf_zer = _rewrite_with_helper
-    rewrite_op_int_mod_ovf     = _rewrite_with_helper
-    rewrite_op_int_mod_zer     = _rewrite_with_helper
+    rewrite_op_int_floordiv_ovf_zer = _do_builtin_call
+    rewrite_op_int_floordiv_ovf     = _do_builtin_call
+    rewrite_op_int_floordiv_zer     = _do_builtin_call
+    rewrite_op_int_mod_ovf_zer = _do_builtin_call
+    rewrite_op_int_mod_ovf     = _do_builtin_call
+    rewrite_op_int_mod_zer     = _do_builtin_call
 
     def rewrite_op_hint(self, op):
         hints = op.args[1].value
@@ -279,6 +283,32 @@ class Transformer(object):
             kind = getkind(RESULT)[0]
         return SpaceOperation('getfield_%s_%s%s' % (argname, kind, pure),
                               [v_inst, descr], op.result)
+
+    def rewrite_op_malloc(self, op):
+        assert op.args[1].value == {'flavor': 'gc'}
+        STRUCT = op.args[0].value
+        vtable = heaptracker.get_vtable_for_gcstruct(self.cpu, STRUCT)
+        if vtable:
+            # do we have a __del__?
+            try:
+                rtti = lltype.getRuntimeTypeInfo(STRUCT)
+            except ValueError:
+                pass
+            else:
+                if hasattr(rtti._obj, 'destructor_funcptr'):
+                    RESULT = lltype.Ptr(STRUCT)
+                    assert RESULT == op.result.concretetype
+                    return self._do_builtin_call(op, 'alloc_with_del',
+                                                 [], extra = (RESULT, vtable))
+            # store the vtable as an address -- that's fine, because the
+            # GC doesn't need to follow them
+            #self.codewriter.register_known_gctype(vtable, STRUCT)
+            sizevtabledescr = self.cpu.sizevtableof(STRUCT, vtable)
+            return SpaceOperation('new_with_vtable', [sizevtabledescr],
+                                  op.result)
+        else:
+            sizedescr = self.cpu.sizeof(STRUCT)
+            return SpaceOperation('new', [sizedescr], op.result)
 
 # ____________________________________________________________
 

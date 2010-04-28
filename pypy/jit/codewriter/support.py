@@ -210,11 +210,12 @@ class LLtypeHelpers:
 
     # ---------- malloc with del ----------
 
-    def _ll_1_alloc_with_del(RESULT, vtable):
-        p = lltype.malloc(RESULT)
-        lltype.cast_pointer(rclass.OBJECTPTR, p).typeptr = vtable
-        return p
-    _ll_1_alloc_with_del.need_result_type = True
+    def build_ll_0_alloc_with_del(RESULT, vtable):
+        def _ll_0_alloc_with_del():
+            p = lltype.malloc(RESULT)
+            lltype.cast_pointer(rclass.OBJECTPTR, p).typeptr = vtable
+            return p
+        return _ll_0_alloc_with_del
 
 
 class OOtypeHelpers:
@@ -294,8 +295,10 @@ class OOtypeHelpers:
 
 # -------------------------------------------------------
 
-def setup_extra_builtin(rtyper, oopspec_name, nb_args):
+def setup_extra_builtin(rtyper, oopspec_name, nb_args, extra=None):
     name = '_ll_%d_%s' % (nb_args, oopspec_name.replace('.', '_'))
+    if extra is not None:
+        name = 'build' + name
     try:
         wrapper = globals()[name]
     except KeyError:
@@ -304,6 +307,8 @@ def setup_extra_builtin(rtyper, oopspec_name, nb_args):
         else:
             Helpers = OOtypeHelpers
         wrapper = getattr(Helpers, name).im_func
+    if extra is not None:
+        wrapper = wrapper(*extra)
     return wrapper
 
 # # ____________________________________________________________
@@ -388,8 +393,8 @@ def decode_builtin_call(op):
     else:
         raise ValueError(op.opname)
 
-def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res):
-    key = (oopspec_name, tuple(ll_args), ll_res)
+def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res, extra=None):
+    key = (oopspec_name, tuple(ll_args), ll_res, extra)
     try:
         return rtyper._builtin_func_for_spec_cache[key]
     except (KeyError, AttributeError):
@@ -400,14 +405,19 @@ def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res):
     else:
         LIST_OR_DICT = ll_args[0]
     s_result = annmodel.lltype_to_annotation(ll_res)
-    impl = setup_extra_builtin(rtyper, oopspec_name, len(args_s))
+    impl = setup_extra_builtin(rtyper, oopspec_name, len(args_s), extra)
     if getattr(impl, 'need_result_type', False):
         bk = rtyper.annotator.bookkeeper
         args_s.insert(0, annmodel.SomePBC([bk.getdesc(deref(ll_res))]))
     #
-    mixlevelann = MixLevelHelperAnnotator(rtyper)
-    c_func = mixlevelann.constfunc(impl, args_s, s_result)
-    mixlevelann.finish()
+    if hasattr(rtyper, 'annotator'):  # regular case
+        mixlevelann = MixLevelHelperAnnotator(rtyper)
+        c_func = mixlevelann.constfunc(impl, args_s, s_result)
+        mixlevelann.finish()
+    else:
+        # for testing only
+        c_func = Constant(oopspec_name,
+                          lltype.Ptr(lltype.FuncType(ll_args, ll_res)))
     #
     if not hasattr(rtyper, '_builtin_func_for_spec_cache'):
         rtyper._builtin_func_for_spec_cache = {}
