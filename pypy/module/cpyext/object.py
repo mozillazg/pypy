@@ -166,6 +166,17 @@ def PyObject_InitVar(space, op, type, size):
     return from_ref(space, rffi.cast(PyObject, op)) # XXX likewise
 
 @cpython_api([PyObject], PyObject)
+def PyObject_Type(space, w_obj):
+    """When o is non-NULL, returns a type object corresponding to the object type
+    of object o. On failure, raises SystemError and returns NULL.  This
+    is equivalent to the Python expression type(o). This function increments the
+    reference count of the return value. There's really no reason to use this
+    function instead of the common expression o->ob_type, which returns a
+    pointer of type PyTypeObject*, except when the incremented reference
+    count is needed."""
+    return space.type(w_obj)
+
+@cpython_api([PyObject], PyObject)
 def PyObject_Str(space, w_obj):
     return space.str(w_obj)
 

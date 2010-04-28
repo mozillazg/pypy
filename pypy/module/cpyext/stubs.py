@@ -2836,27 +2836,6 @@ def PyMethod_New(space, func, self, cls):
     raise NotImplementedError
 
 @cpython_api([PyObject], PyObject, borrowed=True)
-def PyMethod_Class(space, meth):
-    """Return the class object from which the method meth was created; if this was
-    created from an instance, it will be the class of the instance."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject, borrowed=True)
-def PyMethod_GET_CLASS(space, meth):
-    """Macro version of PyMethod_Class() which avoids error checking."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject, borrowed=True)
-def PyMethod_Function(space, meth):
-    """Return the function object associated with the method meth."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject, borrowed=True)
-def PyMethod_GET_FUNCTION(space, meth):
-    """Macro version of PyMethod_Function() which avoids error checking."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject, borrowed=True)
 def PyMethod_Self(space, meth):
     """Return the instance associated with the method meth if it is bound, otherwise
     return NULL."""
@@ -3107,21 +3086,6 @@ def PyObject_HashNotImplemented(space, o):
     allowing a type to explicitly indicate to the interpreter that it is not
     hashable.
     """
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
-def PyObject_Type(space, o):
-    """
-    
-    
-    
-    When o is non-NULL, returns a type object corresponding to the object type
-    of object o. On failure, raises SystemError and returns NULL.  This
-    is equivalent to the Python expression type(o). This function increments the
-    reference count of the return value. There's really no reason to use this
-    function instead of the common expression o->ob_type, which returns a
-    pointer of type PyTypeObject*, except when the incremented reference
-    count is needed."""
     raise NotImplementedError
 
 @cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)

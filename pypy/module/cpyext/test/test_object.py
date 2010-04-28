@@ -164,3 +164,6 @@ class TestObject(BaseApiTest):
         assert (api.PyObject_Hash(space.wrap([])) == -1 and
             api.PyErr_Occurred() is space.w_TypeError)
         api.PyErr_Clear()
+
+    def test_type(self, space, api):
+        assert api.PyObject_Type(space.wrap(72)) is space.w_int
