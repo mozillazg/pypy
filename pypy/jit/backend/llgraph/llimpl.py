@@ -1151,16 +1151,6 @@ def get_forced_token_frame(force_token):
 def get_frame_forced_token(opaque_frame):
     return llmemory.cast_ptr_to_adr(opaque_frame)
 
-class MemoCast(object):
-    def __init__(self):
-        self.addresses = [llmemory.NULL]
-        self.rev_cache = {}
-        self.vtable_to_size = {}
-
-def new_memo_cast():
-    memocast = MemoCast()
-    return _to_opaque(memocast)
-
 ##def cast_adr_to_int(memocast, adr):
 ##    # xxx slow
 ##    assert lltype.typeOf(adr) == llmemory.Address
@@ -1280,11 +1270,11 @@ def do_setarrayitem_gc_ptr(array, index, newvalue):
     newvalue = cast_from_ptr(ITEMTYPE, newvalue)
     array.setitem(index, newvalue)
 
-def do_setfield_gc_int(struct, fieldnum, newvalue, memocast):
+def do_setfield_gc_int(struct, fieldnum, newvalue):
     STRUCT, fieldname = symbolic.TokenToField[fieldnum]
     ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
     FIELDTYPE = getattr(STRUCT, fieldname)
-    newvalue = cast_from_int(FIELDTYPE, newvalue, memocast)
+    newvalue = cast_from_int(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)
 
 def do_setfield_gc_float(struct, fieldnum, newvalue):
@@ -1480,16 +1470,13 @@ def setannotation(func, annotation, specialize_as_constant=False):
 COMPILEDLOOP = lltype.Ptr(lltype.OpaqueType("CompiledLoop"))
 FRAME = lltype.Ptr(lltype.OpaqueType("Frame"))
 OOFRAME = lltype.Ptr(lltype.OpaqueType("OOFrame"))
-MEMOCAST = lltype.Ptr(lltype.OpaqueType("MemoCast"))
 
 _TO_OPAQUE[CompiledLoop] = COMPILEDLOOP.TO
 _TO_OPAQUE[Frame] = FRAME.TO
 _TO_OPAQUE[OOFrame] = OOFRAME.TO
-_TO_OPAQUE[MemoCast] = MEMOCAST.TO
 
 s_CompiledLoop = annmodel.SomePtr(COMPILEDLOOP)
 s_Frame = annmodel.SomePtr(FRAME)
-s_MemoCast = annmodel.SomePtr(MEMOCAST)
 
 setannotation(compile_start, s_CompiledLoop)
 setannotation(compile_start_int_var, annmodel.SomeInteger())
@@ -1529,11 +1516,6 @@ setannotation(get_zero_division_error_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, annmodel.SomeInteger())
 setannotation(get_forced_token_frame, s_Frame)
 setannotation(get_frame_forced_token, annmodel.SomeAddress())
-
-setannotation(new_memo_cast, s_MemoCast)
-##setannotation(cast_adr_to_int, annmodel.SomeInteger())
-##setannotation(cast_int_to_adr, annmodel.SomeAddress())
-setannotation(set_class_size, annmodel.s_None)
 
 setannotation(do_arraylen_gc, annmodel.SomeInteger())
 setannotation(do_strlen, annmodel.SomeInteger())

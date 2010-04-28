@@ -86,11 +86,11 @@ class BaseCPU(model.AbstractCPU):
         self.stats.exec_counters = {}
         self.stats.exec_jumps = 0
         self.stats.exec_conditional_jumps = 0
-        self.memo_cast = llimpl.new_memo_cast()
         llimpl._stats = self.stats
         llimpl._llinterp = LLInterpreter(self.rtyper)
         self._future_values = []
         self._descrs = {}
+        self.class_vtables_as_int = {}
 
     def _freeze_(self):
         assert self.translate_support_code
@@ -104,13 +104,6 @@ class BaseCPU(model.AbstractCPU):
             descr = Descr(ofs, typeinfo, extrainfo, name)
             self._descrs[key] = descr
             return descr
-
-    def set_class_sizes(self, class_sizes):
-        self.class_sizes = class_sizes
-        for vtable, size in class_sizes.items():
-            if not self.is_oo:
-                size = size.ofs
-            llimpl.set_class_size(self.memo_cast, vtable, size)
 
     def compile_bridge(self, faildescr, inputargs, operations):
         c = llimpl.compile_start()
@@ -285,6 +278,14 @@ class BaseCPU(model.AbstractCPU):
         assert not isinstance(S, lltype.Ptr)
         return self.getdescr(symbolic.get_size(S))
 
+    def sizevtableof(self, S, vtable):
+        assert isinstance(S, lltype.GcStruct)
+        descr = self.getdescr(symbolic.get_size(S))
+        vtable_adr = llmemory.cast_ptr_to_adr(vtable)
+        vtable_int = llmemory.cast_adr_to_int(vtable_adr)
+        self.class_vtables_as_int[descr] = vtable_int
+        return descr
+
     def cast_adr_to_int(self, adr):
         return llimpl.cast_adr_to_int(self.memo_cast, adr)
 
@@ -427,13 +428,11 @@ class LLtypeCPU(BaseCPU):
         assert isinstance(size, Descr)
         return history.BoxPtr(llimpl.do_new(size.ofs))
 
-    def do_new_with_vtable(self, vtablebox):
-        vtable = vtablebox.getint()
-        size = self.class_sizes[vtable]
-        result = llimpl.do_new(size.ofs)
+    def bh_new_with_vtable(self, sizevtabledescr):
+        result = llimpl.do_new(sizevtabledescr.ofs)
         llimpl.do_setfield_gc_int(result, self.fielddescrof_vtable.ofs,
-                                  vtable, self.memo_cast)
-        return history.BoxPtr(result)
+                                  self.class_vtables_as_int[sizevtabledescr])
+        return result
 
     def do_new_array(self, countbox, size):
         assert isinstance(size, Descr)
