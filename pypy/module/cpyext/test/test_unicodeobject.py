@@ -94,6 +94,17 @@ class TestUnicode(BaseApiTest):
         b_encoding = rffi.str2charp('cp437')
         assert space.unwrap(
             api.PyUnicode_Decode(b_text, 4, b_encoding, None)) == u'caf\xe9'
+
+        w_text = api.PyUnicode_FromEncodedObject(space.wrap("test"), b_encoding, None)
+        assert space.is_true(space.isinstance(w_text, space.w_unicode))
+        assert space.unwrap(w_text) == "test"
+
+        assert api.PyUnicode_FromEncodedObject(space.wrap(u"test"), b_encoding, None) is None
+        assert api.PyErr_Occurred() is space.w_TypeError
+        assert api.PyUnicode_FromEncodedObject(space.wrap(1), b_encoding, None) is None
+        assert api.PyErr_Occurred() is space.w_TypeError
+        api.PyErr_Clear()
+
         rffi.free_charp(b_text)
         rffi.free_charp(b_encoding)
 
