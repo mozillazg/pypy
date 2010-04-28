@@ -51,7 +51,7 @@ class AppTestApi:
 
 def compile_module(modname, **kwds):
     eci = ExternalCompilationInfo(
-        export_symbols=['init%s' % (modname,)],
+        export_symbols=['init%s' % (modname.split('.')[-1],)],
         include_dirs=api.include_dirs,
         **kwds
         )
