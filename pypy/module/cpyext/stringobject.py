@@ -51,15 +51,12 @@ def string_realize(space, ref):
     return w_str
 
 @cpython_api([PyObject], lltype.Void, external=False)
-def string_dealloc(space, obj):
-    obj = rffi.cast(PyStringObject, obj)
-    pto = obj.c_ob_type
-    if obj.c_buffer:
-        lltype.free(obj.c_buffer, flavor="raw")
-    obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
-    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
-    pto = rffi.cast(PyObject, pto)
-    Py_DecRef(space, pto)
+def string_dealloc(space, py_obj):
+    py_str = rffi.cast(PyStringObject, py_obj)
+    if py_str.c_buffer:
+        lltype.free(py_str.c_buffer, flavor="raw")
+    from pypy.module.cpyext.object import PyObject_dealloc
+    PyObject_dealloc(space, py_obj)
 
 @cpython_api([CONST_STRING, Py_ssize_t], PyObject)
 def PyString_FromStringAndSize(space, char_p, length):

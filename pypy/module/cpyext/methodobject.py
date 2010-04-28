@@ -54,12 +54,8 @@ def cfunction_attach(space, py_obj, w_obj):
 def cfunction_dealloc(space, py_obj):
     py_func = rffi.cast(PyCFunctionObject, py_obj)
     Py_DecRef(space, py_func.c_m_self)
-    # standard dealloc
-    pto = py_obj.c_ob_type
-    obj_voidp = rffi.cast(rffi.VOIDP_real, py_obj)
-    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
-    pto = rffi.cast(PyObject, pto)
-    Py_DecRef(space, pto)
+    from pypy.module.cpyext.object import PyObject_dealloc
+    PyObject_dealloc(space, py_obj)
 
 class W_PyCFunctionObject(Wrappable):
     def __init__(self, space, ml, w_self, doc=None):

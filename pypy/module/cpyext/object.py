@@ -31,11 +31,11 @@ def PyObject_Del(space, obj):
 
 @cpython_api([PyObject], lltype.Void)
 def PyObject_dealloc(space, obj):
-    pto = rffi.cast(PyTypeObjectPtr, obj.c_ob_type)
+    pto = obj.c_ob_type
     obj_voidp = rffi.cast(rffi.VOIDP_real, obj)
     generic_cpy_call(space, pto.c_tp_free, obj_voidp)
     if pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
-        Py_DecRef(space, rffi.cast(PyObject, obj.c_ob_type))
+        Py_DecRef(space, rffi.cast(PyObject, pto))
 
 @cpython_api([PyTypeObjectPtr], PyObject)
 def _PyObject_GC_New(space, type):
