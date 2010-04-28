@@ -181,6 +181,35 @@ def test_getfield_typeptr():
     assert op1.args == [v_parent]
     assert op1.result == v_result
 
+def test_setfield():
+    # XXX a more compact encoding would be possible; see test_getfield()
+    S1 = lltype.Struct('S1')
+    S2 = lltype.GcStruct('S2')
+    S  = lltype.GcStruct('S', ('int', lltype.Signed),
+                              ('ps1', lltype.Ptr(S1)),
+                              ('ps2', lltype.Ptr(S2)),
+                              ('flt', lltype.Float),
+                              ('boo', lltype.Bool),
+                              ('chr', lltype.Char),
+                              ('unc', lltype.UniChar))
+    for name, suffix in [('int', 'i'),
+                         ('ps1', 'i'),
+                         ('ps2', 'r'),
+                         ('flt', 'f'),
+                         ('boo', 'c'),
+                         ('chr', 'c'),
+                         ('unc', 'u')]:
+        v_parent = varoftype(lltype.Ptr(S))
+        c_name = Constant(name, lltype.Void)
+        v_newvalue = varoftype(getattr(S, name))
+        op = SpaceOperation('setfield', [v_parent, c_name, v_newvalue],
+                            varoftype(lltype.Void))
+        op1 = Transformer(FakeCPU()).rewrite_operation(op)
+        assert op1.opname == 'setfield_gc_' + suffix
+        fielddescr = ('fielddescr', S, name)
+        assert op1.args == [v_parent, fielddescr, v_newvalue]
+        assert op1.result is None
+
 def test_malloc_new():
     S = lltype.GcStruct('S')
     v = varoftype(lltype.Ptr(S))

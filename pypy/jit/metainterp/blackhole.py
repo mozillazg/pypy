@@ -505,6 +505,38 @@ class BlackholeInterpreter(object):
     opimpl_getfield_raw_r_pure = opimpl_getfield_raw_r
     opimpl_getfield_raw_f_pure = opimpl_getfield_raw_f
 
+    @arguments("r", "d", "i")
+    def opimpl_setfield_gc_i(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_gc_i(struct, fielddescr, newvalue)
+    @arguments("r", "d", "i")
+    def opimpl_setfield_gc_c(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_gc_c(struct, fielddescr, newvalue)
+    @arguments("r", "d", "i")
+    def opimpl_setfield_gc_u(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_gc_u(struct, fielddescr, newvalue)
+    @arguments("r", "d", "r")
+    def opimpl_setfield_gc_r(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_gc_r(struct, fielddescr, newvalue)
+    @arguments("r", "d", "f")
+    def opimpl_setfield_gc_f(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_gc_f(struct, fielddescr, newvalue)
+
+    @arguments("r", "d", "i")
+    def opimpl_setfield_raw_i(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_raw_i(struct, fielddescr, newvalue)
+    @arguments("r", "d", "i")
+    def opimpl_setfield_raw_c(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_raw_c(struct, fielddescr, newvalue)
+    @arguments("r", "d", "i")
+    def opimpl_setfield_raw_u(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_raw_u(struct, fielddescr, newvalue)
+    @arguments("r", "d", "r")
+    def opimpl_setfield_raw_r(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_raw_r(struct, fielddescr, newvalue)
+    @arguments("r", "d", "f")
+    def opimpl_setfield_raw_f(self, struct, fielddescr, newvalue):
+        self.cpu.bh_setfield_raw_f(struct, fielddescr, newvalue)
+
     @arguments("d", returns="r")
     def opimpl_new_with_vtable(self, descr):
         return self.cpu.bh_new_with_vtable(descr)
