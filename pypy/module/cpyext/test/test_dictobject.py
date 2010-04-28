@@ -1,3 +1,4 @@
+from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.test.test_api import BaseApiTest
 
 class TestDictObject(BaseApiTest):
@@ -19,13 +20,21 @@ class TestDictObject(BaseApiTest):
 
         space.delitem(d, space.wrap("name"))
         assert not api.PyDict_GetItem(d, space.wrap("name"))
-        assert api.PyErr_Occurred() is space.w_KeyError
-        api.PyErr_Clear()
+        assert not api.PyErr_Occurred()
+
+        buf = rffi.str2charp("name")
+        assert not api.PyDict_GetItemString(d, buf)
+        rffi.free_charp(buf)
+        assert not api.PyErr_Occurred()
 
         assert api.PyDict_DelItem(d, space.wrap("c")) == 0
         assert api.PyDict_DelItem(d, space.wrap("name")) < 0
         assert api.PyErr_Occurred() is space.w_KeyError
         api.PyErr_Clear()
+        assert api.PyDict_Size(d) == 0
+
+        d = space.wrap({'a': 'b'})
+        api.PyDict_Clear(d)
         assert api.PyDict_Size(d) == 0
 
     def test_check(self, space, api):
