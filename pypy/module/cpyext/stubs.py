@@ -665,34 +665,15 @@ def PyCell_SET(space, cell, value):
     be a cell object."""
     raise NotImplementedError
 
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyClass_Check(space, o):
-    """Return true if the object o is a class object, including instances of types
-    derived from the standard class object.  Return false in all other cases."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PyClass_IsSubclass(space, klass, base):
     """Return true if klass is a subclass of base. Return false in all other cases."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyInstance_Check(space, obj):
-    """Return true if obj is an instance."""
     raise NotImplementedError
 
 @cpython_api([PyObject, PyObject, PyObject], PyObject)
 def PyInstance_New(space, cls, arg, kw):
     """Create a new instance of a specific class.  The parameters arg and kw are
     used as the positional and keyword parameters to the object's constructor."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject], PyObject)
-def PyInstance_NewRaw(space, cls, dict):
-    """Create a new instance of a specific class without calling its constructor.
-    class is the class of new object.  The dict parameter will be used as the
-    object's __dict__; if NULL, a new dictionary will be created for the
-    instance."""
     raise NotImplementedError
 
 @cpython_api([PyObject], rffi.VOIDP_real, error=lltype.nullptr(rffi.VOIDP.TO))
