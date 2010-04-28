@@ -172,3 +172,9 @@ class TestObject(BaseApiTest):
         assert api.PyObject_Compare(space.wrap(42), space.wrap(72)) == -1
         assert api.PyObject_Compare(space.wrap(72), space.wrap(42)) == 1
         assert api.PyObject_Compare(space.wrap("a"), space.wrap("a")) == 0
+
+    def test_unicode(self, space, api):
+        assert space.unwrap(api.PyObject_Unicode(space.wrap([]))) == u"[]"
+        assert space.unwrap(api.PyObject_Unicode(space.wrap("e"))) == u"e"
+        assert api.PyObject_Unicode(space.wrap("\xe9")) is None
+        api.PyErr_Clear()
