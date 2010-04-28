@@ -54,7 +54,7 @@ class TestObject(BaseApiTest):
         rffi.free_charp(buf)
         assert x.test == 20
 
-    def test_getattr_string(self, space, api):
+    def test_getattr(self, space, api):
         charp1 = rffi.str2charp("__len__")
         charp2 = rffi.str2charp("not_real")
         assert api.PyObject_GetAttrString(space.wrap(""), charp1)
@@ -63,6 +63,10 @@ class TestObject(BaseApiTest):
         api.PyErr_Clear()
         rffi.free_charp(charp1)
         rffi.free_charp(charp2)
+
+        assert api.PyObject_GetAttr(space.wrap(""), space.wrap("__len__"))
+        assert api.PyObject_DelAttr(space.wrap(""), space.wrap("__len__")) == -1
+        api.PyErr_Clear()
 
     def test_getitem(self, space, api):
         w_t = space.wrap((1, 2, 3, 4, 5))
