@@ -51,3 +51,12 @@ class TestDictObject(BaseApiTest):
         i = space.wrap(2)
         assert not api.PyDict_Check(i)
         assert not api.PyDict_CheckExact(i)
+
+    def test_keys(self, space, api):
+        w_d = space.newdict()
+        space.setitem(w_d, space.wrap("a"), space.wrap("b"))
+
+        assert space.eq_w(api.PyDict_Keys(w_d), space.wrap(["a"]))
+        assert space.eq_w(api.PyDict_Values(w_d), space.wrap(["b"]))
+        assert space.eq_w(api.PyDict_Items(w_d), space.wrap([("a", "b")]))
+
