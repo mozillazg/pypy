@@ -811,24 +811,6 @@ def PyDict_DelItemString(space, p, key):
     key.  Return 0 on success or -1 on failure."""
     raise NotImplementedError
 
-@cpython_api([PyObject], PyObject)
-def PyDict_Items(space, p):
-    """Return a PyListObject containing all the items from the
-    dictionary, as in the dictionary method dict.items()."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
-def PyDict_Keys(space, p):
-    """Return a PyListObject containing all the keys from the dictionary,
-    as in the dictionary method dict.keys()."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
-def PyDict_Values(space, p):
-    """Return a PyListObject containing all the values from the
-    dictionary p, as in the dictionary method dict.values()."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject, rffi.INT_real], rffi.INT_real, error=-1)
 def PyDict_Merge(space, a, b, override):
     """Iterate over mapping object b adding key-value pairs to dictionary a.

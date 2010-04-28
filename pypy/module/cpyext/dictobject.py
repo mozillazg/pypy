@@ -72,6 +72,24 @@ def PyDict_Clear(space, w_obj):
     """Empty an existing dictionary of all key-value pairs."""
     space.call_method(w_obj, "clear")
 
+@cpython_api([PyObject], PyObject)
+def PyDict_Keys(space, w_obj):
+    """Return a PyListObject containing all the keys from the dictionary,
+    as in the dictionary method dict.keys()."""
+    return space.call_method(w_obj, "keys")
+
+@cpython_api([PyObject], PyObject)
+def PyDict_Values(space, w_obj):
+    """Return a PyListObject containing all the values from the
+    dictionary p, as in the dictionary method dict.values()."""
+    return space.call_method(w_obj, "values")
+
+@cpython_api([PyObject], PyObject)
+def PyDict_Items(space, w_obj):
+    """Return a PyListObject containing all the items from the
+    dictionary, as in the dictionary method dict.items()."""
+    return space.call_method(w_obj, "items")
+
 @cpython_api([PyObject, Py_ssize_t, PyObjectP, PyObjectP], rffi.INT_real, error=CANNOT_FAIL)
 def PyDict_Next(space, w_obj, ppos, pkey, pvalue):
     """Iterate over all key-value pairs in the dictionary p.  The
