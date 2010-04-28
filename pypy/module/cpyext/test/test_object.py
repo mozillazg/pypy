@@ -167,3 +167,8 @@ class TestObject(BaseApiTest):
 
     def test_type(self, space, api):
         assert api.PyObject_Type(space.wrap(72)) is space.w_int
+
+    def test_compare(self, space, api):
+        assert api.PyObject_Compare(space.wrap(42), space.wrap(72)) == -1
+        assert api.PyObject_Compare(space.wrap(72), space.wrap(42)) == 1
+        assert api.PyObject_Compare(space.wrap("a"), space.wrap("a")) == 0
