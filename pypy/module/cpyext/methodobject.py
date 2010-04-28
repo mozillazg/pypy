@@ -7,11 +7,12 @@ from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.function import BuiltinFunction, Method
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.pyobject import PyObject, from_ref, make_ref
+from pypy.module.cpyext.pyobject import (PyObject, from_ref, make_ref, make_typedescr,
+                                         Py_DecRef)
 from pypy.module.cpyext.api import (
     generic_cpy_call, cpython_api, PyObject, cpython_struct, METH_KEYWORDS,
     METH_O, CONST_STRING, METH_CLASS, METH_STATIC, METH_COEXIST, METH_NOARGS,
-    METH_VARARGS, build_type_checkers)
+    METH_VARARGS, build_type_checkers, PyObjectFields, bootstrap_function)
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyerrors import PyErr_Occurred
 from pypy.rlib.objectmodel import we_are_translated
@@ -28,6 +29,37 @@ PyMethodDef = cpython_struct(
      ('ml_doc', rffi.CCHARP),
      ])
 
+PyCFunctionObjectStruct = cpython_struct(
+    'PyCFunctionObject',
+    PyObjectFields + (
+     ('m_ml', lltype.Ptr(PyMethodDef)),
+     ('m_self', PyObject),
+     ))
+PyCFunctionObject = lltype.Ptr(PyCFunctionObjectStruct)
+
+@bootstrap_function
+def init_methodobject(space):
+    make_typedescr(W_PyCFunctionObject.typedef,
+                   basestruct=PyCFunctionObject.TO,
+                   attach=cfunction_attach,
+                   dealloc=cfunction_dealloc)
+
+def cfunction_attach(space, py_obj, w_obj):
+    py_func = rffi.cast(PyCFunctionObject, py_obj)
+    assert isinstance(w_obj, W_PyCFunctionObject)
+    py_func.c_m_ml = w_obj.ml
+    py_func.c_m_self = make_ref(space, w_obj.w_self)
+
+@cpython_api([PyObject], lltype.Void, external=False)
+def cfunction_dealloc(space, py_obj):
+    py_func = rffi.cast(PyCFunctionObject, py_obj)
+    Py_DecRef(space, py_func.c_m_self)
+    # standard dealloc
+    pto = py_obj.c_ob_type
+    obj_voidp = rffi.cast(rffi.VOIDP_real, py_obj)
+    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
+    pto = rffi.cast(PyObject, pto)
+    Py_DecRef(space, pto)
 
 class W_PyCFunctionObject(Wrappable):
     def __init__(self, space, ml, w_self, doc=None):

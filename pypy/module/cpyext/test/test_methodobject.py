@@ -37,7 +37,8 @@ class AppTestMethodObject(AppTestCpythonExtensionBase):
             ('isCFunction', 'METH_O',
              '''
              if(PyCFunction_Check(args)) {
-                 Py_RETURN_TRUE;
+                 PyCFunctionObject* func = (PyCFunctionObject*)args;
+                 return PyString_FromString(func->m_ml->ml_name);
              }
              else {
                  Py_RETURN_FALSE;
@@ -57,4 +58,4 @@ class AppTestMethodObject(AppTestCpythonExtensionBase):
         assert mod.getarg_OLD() is None
         assert mod.getarg_OLD(1, 2) == (1, 2)
 
-        assert mod.isCFunction(mod.getarg_O)
+        assert mod.isCFunction(mod.getarg_O) == "getarg_O"

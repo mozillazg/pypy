@@ -21,6 +21,13 @@ struct PyMethodDef {
 };
 typedef struct PyMethodDef PyMethodDef;
 
+typedef struct
+{
+    PyObject_HEAD
+    PyMethodDef *m_ml; /* Description of the C function to call */
+    PyObject    *m_self; /* Passed as 'self' arg to the C func, can be NULL */
+} PyCFunctionObject;
+
 /* Flag passed to newmethodobject */
 #define METH_OLDARGS  0x0000
 #define METH_VARARGS  0x0001
@@ -42,7 +49,14 @@ typedef struct PyMethodDef PyMethodDef;
 
 #define METH_COEXIST   0x0040
 
-
+/* Macros for direct access to these values. Type checks are *not*
+   done, so use with care. */
+#define PyCFunction_GET_FUNCTION(func) \
+        (((PyCFunctionObject *)func) -> m_ml -> ml_meth)
+#define PyCFunction_GET_SELF(func) \
+	(((PyCFunctionObject *)func) -> m_self)
+#define PyCFunction_GET_FLAGS(func) \
+	(((PyCFunctionObject *)func) -> m_ml -> ml_flags)
 
 #ifdef __cplusplus
 }
