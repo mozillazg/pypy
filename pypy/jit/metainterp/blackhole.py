@@ -86,12 +86,16 @@ class BlackholeInterpBuilder(object):
                     argcode = argcodes[next_argcode]
                     next_argcode = next_argcode + 1
                     if argcode == 'i':
+                        assert argtype == 'i'
                         value = self.registers_i[ord(code[position])]
                     elif argcode == 'c':
+                        assert argtype == 'i'
                         value = signedord(code[position])
                     elif argcode == 'r':
+                        assert argtype == 'r'
                         value = self.registers_r[ord(code[position])]
                     elif argcode == 'f':
+                        assert argtype == 'f'
                         value = self.registers_f[ord(code[position])]
                     else:
                         raise AssertionError("bad argcode")
@@ -320,6 +324,19 @@ class BlackholeInterpreter(object):
     def opimpl_int_ge(self, a, b):
         return int(a >= b)
 
+    @arguments("r", "r", returns="i")
+    def opimpl_ptr_eq(self, a, b):
+        return int(a == b)
+    @arguments("r", "r", returns="i")
+    def opimpl_ptr_ne(self, a, b):
+        return int(a != b)
+    @arguments("r", returns="i")
+    def opimpl_ptr_iszero(self, a):
+        return int(not a)
+    @arguments("r", returns="i")
+    def opimpl_ptr_nonzero(self, a):
+        return int(bool(a))
+
     @arguments("i")
     def opimpl_int_return(self, a):
         self.result_i = a
@@ -385,6 +402,34 @@ class BlackholeInterpreter(object):
 
     @arguments("L", "i", "pc", returns="L")
     def opimpl_goto_if_not_int_is_true(self, target, a, pc):
+        if a:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "r", "r", "pc", returns="L")
+    def opimpl_goto_if_not_ptr_eq(self, target, a, b, pc):
+        if a == b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "r", "r", "pc", returns="L")
+    def opimpl_goto_if_not_ptr_ne(self, target, a, b, pc):
+        if a != b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "r", "pc", returns="L")
+    def opimpl_goto_if_not_ptr_iszero(self, target, a, pc):
+        if not a:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "r", "pc", returns="L")
+    def opimpl_goto_if_not_ptr_nonzero(self, target, a, pc):
         if a:
             return pc
         else:
@@ -510,19 +555,19 @@ class BlackholeInterpreter(object):
     opimpl_getfield_gc_r_pure = opimpl_getfield_gc_r
     opimpl_getfield_gc_f_pure = opimpl_getfield_gc_f
 
-    @arguments("r", "d", returns="i")
+    @arguments("i", "d", returns="i")
     def opimpl_getfield_raw_i(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_i(struct, fielddescr)
-    @arguments("r", "d", returns="i")
+    @arguments("i", "d", returns="i")
     def opimpl_getfield_raw_c(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_c(struct, fielddescr)
-    @arguments("r", "d", returns="i")
+    @arguments("i", "d", returns="i")
     def opimpl_getfield_raw_u(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_u(struct, fielddescr)
-    @arguments("r", "d", returns="r")
+    @arguments("i", "d", returns="r")
     def opimpl_getfield_raw_r(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_r(struct, fielddescr)
-    @arguments("r", "d", returns="f")
+    @arguments("i", "d", returns="f")
     def opimpl_getfield_raw_f(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_f(struct, fielddescr)
 
@@ -548,19 +593,19 @@ class BlackholeInterpreter(object):
     def opimpl_setfield_gc_f(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_f(struct, fielddescr, newvalue)
 
-    @arguments("r", "d", "i")
+    @arguments("i", "d", "i")
     def opimpl_setfield_raw_i(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_i(struct, fielddescr, newvalue)
-    @arguments("r", "d", "i")
+    @arguments("i", "d", "i")
     def opimpl_setfield_raw_c(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_c(struct, fielddescr, newvalue)
-    @arguments("r", "d", "i")
+    @arguments("i", "d", "i")
     def opimpl_setfield_raw_u(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_u(struct, fielddescr, newvalue)
-    @arguments("r", "d", "r")
+    @arguments("i", "d", "r")
     def opimpl_setfield_raw_r(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_r(struct, fielddescr, newvalue)
-    @arguments("r", "d", "f")
+    @arguments("i", "d", "f")
     def opimpl_setfield_raw_f(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_f(struct, fielddescr, newvalue)
 
