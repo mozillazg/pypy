@@ -30,12 +30,8 @@ def function_attach(space, py_obj, w_obj):
 def function_dealloc(space, py_obj):
     py_func = rffi.cast(PyFunctionObject, py_obj)
     Py_DecRef(space, py_func.c_func_name)
-    # standard dealloc
-    pto = py_obj.c_ob_type
-    obj_voidp = rffi.cast(rffi.VOIDP_real, py_obj)
-    generic_cpy_call(space, pto.c_tp_free, obj_voidp)
-    pto = rffi.cast(PyObject, pto)
-    Py_DecRef(space, pto)
+    from pypy.module.cpyext.object import PyObject_dealloc
+    PyObject_dealloc(space, py_obj)
 
 @cpython_api([PyObject], PyObject, borrowed=True)
 def PyMethod_Function(space, w_method):
