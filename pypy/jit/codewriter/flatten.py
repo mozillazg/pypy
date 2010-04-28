@@ -131,9 +131,14 @@ class GraphFlattener(object):
 
     def make_exception_link(self, link):
         # Like make_link(), but also introduces the 'last_exception' and
-        # 'last_exc_value' as variables if needed
+        # 'last_exc_value' as variables if needed.  Also check if the link
+        # is jumping directly to the re-raising exception block.
         assert link.last_exception is not None
         assert link.last_exc_value is not None
+        if link.target.operations == () and link.args == [link.last_exception,
+                                                          link.last_exc_value]:
+            self.emitline("reraise")
+            return   # done
         if link.last_exception in link.args:
             self.emitline("last_exception", self.getcolor(link.last_exception))
         if link.last_exc_value in link.args:
@@ -157,13 +162,7 @@ class GraphFlattener(object):
             for link in block.exits[1:]:
                 if link.exitcase is Exception:
                     # this link captures all exceptions
-                    if (link.target.operations == ()
-                        and link.args == [link.last_exception,
-                                          link.last_exc_value]):
-                        # the link is going directly to the except block
-                        self.emitline("reraise")
-                    else:
-                        self.make_exception_link(link)
+                    self.make_exception_link(link)
                     break
                 self.emitline('goto_if_exception_mismatch',
                               Constant(link.llexitcase,
