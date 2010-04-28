@@ -119,6 +119,8 @@ class BlackholeInterpBuilder(object):
                         elif argtype == 'F': reg = self.registers_f[index]
                         value.append(reg)
                     position += length
+                elif argtype == 'self':
+                    value = self
                 elif argtype == 'pc':
                     value = position
                 elif argtype == 'd':
@@ -136,7 +138,7 @@ class BlackholeInterpBuilder(object):
 
             # call the method opimpl_xxx()
             try:
-                result = unboundmethod(self, *args)
+                result = unboundmethod(*args)
             except Exception, e:
                 if verbose and not we_are_translated():
                     print '-> %s!' % (e.__class__.__name__,)
@@ -184,7 +186,7 @@ class BlackholeInterpBuilder(object):
         # it means that either the implementation is missing, or that it
         # should not appear here at all but instead be transformed away
         # by codewriter/jitter.py.
-        unboundmethod = getattr(BlackholeInterpreter, 'opimpl_' + name)
+        unboundmethod = getattr(BlackholeInterpreter, 'opimpl_' + name).im_func
         verbose = self.verbose
         argtypes = unrolling_iterable(unboundmethod.argtypes)
         resulttype = unboundmethod.resulttype
@@ -279,95 +281,95 @@ class BlackholeInterpreter(object):
     # ----------
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_add(self, a, b):
+    def opimpl_int_add(a, b):
         return a + b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_sub(self, a, b):
+    def opimpl_int_sub(a, b):
         return a - b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_mul(self, a, b):
+    def opimpl_int_mul(a, b):
         return a * b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_and(self, a, b):
+    def opimpl_int_and(a, b):
         return a & b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_or(self, a, b):
+    def opimpl_int_or(a, b):
         return a | b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_xor(self, a, b):
+    def opimpl_int_xor(a, b):
         return a ^ b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_floordiv(self, a, b):
+    def opimpl_int_floordiv(a, b):
         return llop.int_floordiv(lltype.Signed, a, b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_mod(self, a, b):
+    def opimpl_int_mod(a, b):
         return llop.int_mod(lltype.Signed, a, b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_uint_floordiv(self, a, b):
+    def opimpl_uint_floordiv(a, b):
         c = llop.uint_floordiv(lltype.Unsigned, r_uint(a), r_uint(b))
         return intmask(c)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_lt(self, a, b):
+    def opimpl_int_lt(a, b):
         return int(a < b)
     @arguments("i", "i", returns="i")
-    def opimpl_int_le(self, a, b):
+    def opimpl_int_le(a, b):
         return int(a <= b)
     @arguments("i", "i", returns="i")
-    def opimpl_int_eq(self, a, b):
+    def opimpl_int_eq(a, b):
         return int(a == b)
     @arguments("i", "i", returns="i")
-    def opimpl_int_ne(self, a, b):
+    def opimpl_int_ne(a, b):
         return int(a != b)
     @arguments("i", "i", returns="i")
-    def opimpl_int_gt(self, a, b):
+    def opimpl_int_gt(a, b):
         return int(a > b)
     @arguments("i", "i", returns="i")
-    def opimpl_int_ge(self, a, b):
+    def opimpl_int_ge(a, b):
         return int(a >= b)
     @arguments("i", returns="i")
-    def opimpl_int_is_zero(self, a):
+    def opimpl_int_is_zero(a):
         return int(not a)
     @arguments("i", returns="i")
-    def opimpl_int_is_true(self, a):
+    def opimpl_int_is_true(a):
         return int(bool(a))
 
     @arguments("r", "r", returns="i")
-    def opimpl_ptr_eq(self, a, b):
+    def opimpl_ptr_eq(a, b):
         return int(a == b)
     @arguments("r", "r", returns="i")
-    def opimpl_ptr_ne(self, a, b):
+    def opimpl_ptr_ne(a, b):
         return int(a != b)
     @arguments("r", returns="i")
-    def opimpl_ptr_iszero(self, a):
+    def opimpl_ptr_iszero(a):
         return int(not a)
     @arguments("r", returns="i")
-    def opimpl_ptr_nonzero(self, a):
+    def opimpl_ptr_nonzero(a):
         return int(bool(a))
 
-    @arguments("i")
+    @arguments("self", "i")
     def opimpl_int_return(self, a):
         self.result_i = a
         raise LeaveFrame
 
     @arguments("i", returns="i")
-    def opimpl_int_copy(self, a):
+    def opimpl_int_copy(a):
         return a
 
     @arguments("r", returns="r")
-    def opimpl_ref_copy(self, a):
+    def opimpl_ref_copy(a):
         return a
 
     @arguments("f", returns="f")
-    def opimpl_float_copy(self, a):
+    def opimpl_float_copy(a):
         return a
 
     opimpl_int_guard_value = opimpl_int_copy
@@ -375,95 +377,95 @@ class BlackholeInterpreter(object):
     opimpl_float_guard_value = opimpl_float_copy
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_lt(self, target, a, b, pc):
+    def opimpl_goto_if_not_int_lt(target, a, b, pc):
         if a < b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_le(self, target, a, b, pc):
+    def opimpl_goto_if_not_int_le(target, a, b, pc):
         if a <= b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_eq(self, target, a, b, pc):
+    def opimpl_goto_if_not_int_eq(target, a, b, pc):
         if a == b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_ne(self, target, a, b, pc):
+    def opimpl_goto_if_not_int_ne(target, a, b, pc):
         if a != b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_gt(self, target, a, b, pc):
+    def opimpl_goto_if_not_int_gt(target, a, b, pc):
         if a > b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_ge(self, target, a, b, pc):
+    def opimpl_goto_if_not_int_ge(target, a, b, pc):
         if a >= b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_is_zero(self, target, a, pc):
+    def opimpl_goto_if_not_int_is_zero(target, a, pc):
         if not a:
             return pc
         else:
             return target
 
     @arguments("L", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_is_true(self, target, a, pc):
+    def opimpl_goto_if_not_int_is_true(target, a, pc):
         if a:
             return pc
         else:
             return target
 
     @arguments("L", "r", "r", "pc", returns="L")
-    def opimpl_goto_if_not_ptr_eq(self, target, a, b, pc):
+    def opimpl_goto_if_not_ptr_eq(target, a, b, pc):
         if a == b:
             return pc
         else:
             return target
 
     @arguments("L", "r", "r", "pc", returns="L")
-    def opimpl_goto_if_not_ptr_ne(self, target, a, b, pc):
+    def opimpl_goto_if_not_ptr_ne(target, a, b, pc):
         if a != b:
             return pc
         else:
             return target
 
     @arguments("L", "r", "pc", returns="L")
-    def opimpl_goto_if_not_ptr_iszero(self, target, a, pc):
+    def opimpl_goto_if_not_ptr_iszero(target, a, pc):
         if not a:
             return pc
         else:
             return target
 
     @arguments("L", "r", "pc", returns="L")
-    def opimpl_goto_if_not_ptr_nonzero(self, target, a, pc):
+    def opimpl_goto_if_not_ptr_nonzero(target, a, pc):
         if a:
             return pc
         else:
             return target
 
     @arguments("L", returns="L")
-    def opimpl_goto(self, target):
+    def opimpl_goto(target):
         return target
 
     @arguments("i", "d", "pc", returns="L")
-    def opimpl_switch(self, switchvalue, switchdict, pc):
+    def opimpl_switch(switchvalue, switchdict, pc):
         assert isinstance(switchdict, SwitchDictDescr)
         try:
             return switchdict.dict[switchvalue]
@@ -471,13 +473,13 @@ class BlackholeInterpreter(object):
             return pc
 
     @arguments("L")
-    def opimpl_catch_exception(self, target):
+    def opimpl_catch_exception(target):
         """This is a no-op when run normally.  When an exception occurs
         and the instruction that raised is immediately followed by a
         catch_exception, then the code in handle_exception_in_frame()
         will capture the exception and jump to 'target'."""
 
-    @arguments("i", "L", "pc", returns="L")
+    @arguments("self", "i", "L", "pc", returns="L")
     def opimpl_goto_if_exception_mismatch(self, vtable, target, pc):
         adr = llmemory.cast_int_to_adr(vtable)
         bounding_class = llmemory.cast_adr_to_ptr(adr, rclass.CLASSTYPE)
@@ -488,20 +490,20 @@ class BlackholeInterpreter(object):
         else:
             return target
 
-    @arguments(returns="i")
+    @arguments("self", returns="i")
     def opimpl_last_exception(self):
         real_instance = self.exception_last_value
         assert real_instance
         adr = llmemory.cast_ptr_to_adr(real_instance.typeptr)
         return llmemory.cast_adr_to_int(adr)
 
-    @arguments(returns="r")
+    @arguments("self", returns="r")
     def opimpl_last_exc_value(self):
         real_instance = self.exception_last_value
         assert real_instance
         return lltype.cast_opaque_ptr(llmemory.GCREF, real_instance)
 
-    @arguments()
+    @arguments("self")
     def opimpl_reraise(self):
         real_instance = self.exception_last_value
         assert real_instance
@@ -510,65 +512,65 @@ class BlackholeInterpreter(object):
     # ----------
     # the following operations are directly implemented by the backend
 
-    @arguments("i", "d", "R", returns="i")
+    @arguments("self", "i", "d", "R", returns="i")
     def opimpl_residual_call_r_i(self, func, calldescr, args_r):
         return self.cpu.bh_call_i(func, calldescr, None, args_r, None)
-    @arguments("i", "d", "R", returns="r")
+    @arguments("self", "i", "d", "R", returns="r")
     def opimpl_residual_call_r_r(self, func, calldescr, args_r):
         return self.cpu.bh_call_r(func, calldescr, None, args_r, None)
-    @arguments("i", "d", "R", returns="f")
+    @arguments("self", "i", "d", "R", returns="f")
     def opimpl_residual_call_r_f(self, func, calldescr, args_r):
         return self.cpu.bh_call_f(func, calldescr, None, args_r, None)
-    @arguments("i", "d", "R")
+    @arguments("self", "i", "d", "R")
     def opimpl_residual_call_r_v(self, func, calldescr, args_r):
         self.cpu.bh_call_v(func, calldescr, None, args_r, None)
 
-    @arguments("i", "d", "I", "R", returns="i")
+    @arguments("self", "i", "d", "I", "R", returns="i")
     def opimpl_residual_call_ir_i(self, func, calldescr, args_i, args_r):
         return self.cpu.bh_call_i(func, calldescr, args_i, args_r, None)
-    @arguments("i", "d", "I", "R", returns="r")
+    @arguments("self", "i", "d", "I", "R", returns="r")
     def opimpl_residual_call_ir_r(self, func, calldescr, args_i, args_r):
         return self.cpu.bh_call_r(func, calldescr, args_i, args_r, None)
-    @arguments("i", "d", "I", "R", returns="f")
+    @arguments("self", "i", "d", "I", "R", returns="f")
     def opimpl_residual_call_ir_f(self, func, calldescr, args_i, args_r):
         return self.cpu.bh_call_f(func, calldescr, args_i, args_r, None)
-    @arguments("i", "d", "I", "R")
+    @arguments("self", "i", "d", "I", "R")
     def opimpl_residual_call_ir_v(self, func, calldescr, args_i, args_r):
         self.cpu.bh_call_v(func, calldescr, args_i, args_r, None)
 
-    @arguments("i", "d", "I", "R", "F", returns="i")
+    @arguments("self", "i", "d", "I", "R", "F", returns="i")
     def opimpl_residual_call_irf_i(self, func, calldescr,args_i,args_r,args_f):
         return self.cpu.bh_call_i(func, calldescr, args_i, args_r, args_f)
-    @arguments("i", "d", "I", "R", "F", returns="r")
+    @arguments("self", "i", "d", "I", "R", "F", returns="r")
     def opimpl_residual_call_irf_r(self, func, calldescr,args_i,args_r,args_f):
         return self.cpu.bh_call_r(func, calldescr, args_i, args_r, args_f)
-    @arguments("i", "d", "I", "R", "F", returns="f")
+    @arguments("self", "i", "d", "I", "R", "F", returns="f")
     def opimpl_residual_call_irf_f(self, func, calldescr,args_i,args_r,args_f):
         return self.cpu.bh_call_f(func, calldescr, args_i, args_r, args_f)
-    @arguments("i", "d", "I", "R", "F")
+    @arguments("self", "i", "d", "I", "R", "F")
     def opimpl_residual_call_irf_v(self, func, calldescr,args_i,args_r,args_f):
         self.cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
 
-    @arguments("d", "i", returns="r")
+    @arguments("self", "d", "i", returns="r")
     def opimpl_new_array(self, arraydescr, length):
         return self.cpu.bh_new_array(arraydescr, length)
-    @arguments("d", "r", "i", "r")
+    @arguments("self", "d", "r", "i", "r")
     def opimpl_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
         self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
 
-    @arguments("r", "d", returns="i")
+    @arguments("self", "r", "d", returns="i")
     def opimpl_getfield_gc_i(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_i(struct, fielddescr)
-    @arguments("r", "d", returns="i")
+    @arguments("self", "r", "d", returns="i")
     def opimpl_getfield_gc_c(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_c(struct, fielddescr)
-    @arguments("r", "d", returns="i")
+    @arguments("self", "r", "d", returns="i")
     def opimpl_getfield_gc_u(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_u(struct, fielddescr)
-    @arguments("r", "d", returns="r")
+    @arguments("self", "r", "d", returns="r")
     def opimpl_getfield_gc_r(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_r(struct, fielddescr)
-    @arguments("r", "d", returns="f")
+    @arguments("self", "r", "d", returns="f")
     def opimpl_getfield_gc_f(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_f(struct, fielddescr)
 
@@ -578,19 +580,19 @@ class BlackholeInterpreter(object):
     opimpl_getfield_gc_r_pure = opimpl_getfield_gc_r
     opimpl_getfield_gc_f_pure = opimpl_getfield_gc_f
 
-    @arguments("i", "d", returns="i")
+    @arguments("self", "i", "d", returns="i")
     def opimpl_getfield_raw_i(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_i(struct, fielddescr)
-    @arguments("i", "d", returns="i")
+    @arguments("self", "i", "d", returns="i")
     def opimpl_getfield_raw_c(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_c(struct, fielddescr)
-    @arguments("i", "d", returns="i")
+    @arguments("self", "i", "d", returns="i")
     def opimpl_getfield_raw_u(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_u(struct, fielddescr)
-    @arguments("i", "d", returns="r")
+    @arguments("self", "i", "d", returns="r")
     def opimpl_getfield_raw_r(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_r(struct, fielddescr)
-    @arguments("i", "d", returns="f")
+    @arguments("self", "i", "d", returns="f")
     def opimpl_getfield_raw_f(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_f(struct, fielddescr)
 
@@ -600,50 +602,50 @@ class BlackholeInterpreter(object):
     opimpl_getfield_raw_r_pure = opimpl_getfield_raw_r
     opimpl_getfield_raw_f_pure = opimpl_getfield_raw_f
 
-    @arguments("r", "d", "i")
+    @arguments("self", "r", "d", "i")
     def opimpl_setfield_gc_i(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_i(struct, fielddescr, newvalue)
-    @arguments("r", "d", "i")
+    @arguments("self", "r", "d", "i")
     def opimpl_setfield_gc_c(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_c(struct, fielddescr, newvalue)
-    @arguments("r", "d", "i")
+    @arguments("self", "r", "d", "i")
     def opimpl_setfield_gc_u(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_u(struct, fielddescr, newvalue)
-    @arguments("r", "d", "r")
+    @arguments("self", "r", "d", "r")
     def opimpl_setfield_gc_r(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_r(struct, fielddescr, newvalue)
-    @arguments("r", "d", "f")
+    @arguments("self", "r", "d", "f")
     def opimpl_setfield_gc_f(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_f(struct, fielddescr, newvalue)
 
-    @arguments("i", "d", "i")
+    @arguments("self", "i", "d", "i")
     def opimpl_setfield_raw_i(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_i(struct, fielddescr, newvalue)
-    @arguments("i", "d", "i")
+    @arguments("self", "i", "d", "i")
     def opimpl_setfield_raw_c(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_c(struct, fielddescr, newvalue)
-    @arguments("i", "d", "i")
+    @arguments("self", "i", "d", "i")
     def opimpl_setfield_raw_u(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_u(struct, fielddescr, newvalue)
-    @arguments("i", "d", "r")
+    @arguments("self", "i", "d", "r")
     def opimpl_setfield_raw_r(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_r(struct, fielddescr, newvalue)
-    @arguments("i", "d", "f")
+    @arguments("self", "i", "d", "f")
     def opimpl_setfield_raw_f(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_f(struct, fielddescr, newvalue)
 
-    @arguments("d", returns="r")
+    @arguments("self", "d", returns="r")
     def opimpl_new(self, descr):
         return self.cpu.bh_new(descr)
 
-    @arguments("d", returns="r")
+    @arguments("self", "d", returns="r")
     def opimpl_new_with_vtable(self, descr):
         return self.cpu.bh_new_with_vtable(descr)
 
-    @arguments("r", returns="i")
+    @arguments("self", "r", returns="i")
     def opimpl_classof(self, struct):
         return self.cpu.bh_classof(struct)
 
-    @arguments("r", returns="i")
+    @arguments("self", "r", returns="i")
     def opimpl_cast_ptr_to_int(self, p):
         return self.cpu.bh_cast_ptr_to_int(p)
