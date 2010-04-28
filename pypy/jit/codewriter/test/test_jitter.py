@@ -5,12 +5,22 @@ from pypy.jit.codewriter.jitter import Transformer
 from pypy.jit.metainterp.history import getkind
 from pypy.rpython.lltypesystem import lltype, rclass, rstr
 from pypy.translator.unsimplify import varoftype
+from pypy.jit.codewriter import heaptracker
+
+class FakeRTyper:
+    class type_system: name = 'lltypesystem'
+    instance_reprs = {}
 
 class FakeCPU:
+    rtyper = FakeRTyper()
     def calldescrof(self, FUNC, ARGS, RESULT):
         return ('calldescr', FUNC, ARGS, RESULT)
     def fielddescrof(self, STRUCT, name):
         return ('fielddescr', STRUCT, name)
+    def sizeof(self, STRUCT):
+        return ('sizedescr', STRUCT)
+    def sizevtableof(self, STRUCT, vtable):
+        return ('sizevtabledescr', STRUCT, vtable)
 
 class FakeLink:
     args = []
@@ -160,6 +170,41 @@ def test_getfield():
         fielddescr = ('fielddescr', S, name)
         assert op1.args == [v_parent, fielddescr]
         assert op1.result == v_result
+
+def test_malloc_new():
+    S = lltype.GcStruct('S')
+    v = varoftype(lltype.Ptr(S))
+    op = SpaceOperation('malloc', [Constant(S, lltype.Void),
+                                   Constant({'flavor': 'gc'}, lltype.Void)], v)
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == 'new'
+    assert op1.args == [('sizedescr', S)]
+
+def test_malloc_new_with_vtable():
+    class vtable: pass
+    S = lltype.GcStruct('S', ('parent', rclass.OBJECT))
+    heaptracker.set_testing_vtable_for_gcstruct(S, vtable, 'S')
+    v = varoftype(lltype.Ptr(S))
+    op = SpaceOperation('malloc', [Constant(S, lltype.Void),
+                                   Constant({'flavor': 'gc'}, lltype.Void)], v)
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == 'new_with_vtable'
+    assert op1.args == [('sizevtabledescr', S, vtable)]
+
+def test_malloc_new_with_destructor():
+    class vtable: pass
+    S = lltype.GcStruct('S', ('parent', rclass.OBJECT))
+    DESTRUCTOR = lltype.FuncType([lltype.Ptr(S)], lltype.Void)
+    destructor = lltype.functionptr(DESTRUCTOR, 'destructor')
+    lltype.attachRuntimeTypeInfo(S, destrptr=destructor)
+    heaptracker.set_testing_vtable_for_gcstruct(S, vtable, 'S')
+    v = varoftype(lltype.Ptr(S))
+    op = SpaceOperation('malloc', [Constant(S, lltype.Void),
+                                   Constant({'flavor': 'gc'}, lltype.Void)], v)
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == 'residual_call_r_r'
+    assert op1.args[0].value == 'alloc_with_del'    # pseudo-function as a str
+    assert list(op1.args[2]) == []
 
 def test_rename_on_links():
     v1 = Variable()
