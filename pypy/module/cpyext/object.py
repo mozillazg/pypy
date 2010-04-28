@@ -299,3 +299,10 @@ def PyObject_AsFileDescriptor(space, w_obj):
 
     return rffi.cast(rffi.INT_real, fd)
 
+
+@cpython_api([PyObject], lltype.Signed, error=-1)
+def PyObject_Hash(space, w_obj):
+    """
+    Compute and return the hash value of an object o.  On failure, return -1.
+    This is the equivalent of the Python expression hash(o)."""
+    return space.int_w(space.hash(w_obj))

@@ -157,3 +157,10 @@ class TestObject(BaseApiTest):
             return File""")
         w_f = space.call_function(w_File)
         assert api.PyObject_AsFileDescriptor(w_f) == 42
+    
+    def test_hash(self, space, api):
+        assert api.PyObject_Hash(space.wrap(72)) == 72
+        assert api.PyObject_Hash(space.wrap(-1)) == -1
+        assert (api.PyObject_Hash(space.wrap([])) == -1 and
+            api.PyErr_Occurred() is space.w_TypeError)
+        api.PyErr_Clear()
