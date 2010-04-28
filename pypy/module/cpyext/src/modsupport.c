@@ -592,6 +592,79 @@ PyObject_CallMethod(PyObject *o, char *name, char *format, ...)
 	return retval;
 }
 
+static PyObject *
+objargs_mktuple(va_list va)
+{
+	int i, n = 0;
+	va_list countva;
+	PyObject *result, *tmp;
+
+#ifdef VA_LIST_IS_ARRAY
+	memcpy(countva, va, sizeof(va_list));
+#else
+#ifdef __va_copy
+	__va_copy(countva, va);
+#else
+	countva = va;
+#endif
+#endif
+
+	while (((PyObject *)va_arg(countva, PyObject *)) != NULL)
+		++n;
+	result = PyTuple_New(n);
+	if (result != NULL && n > 0) {
+		for (i = 0; i < n; ++i) {
+			tmp = (PyObject *)va_arg(va, PyObject *);
+			PyTuple_SET_ITEM(result, i, tmp);
+			Py_INCREF(tmp);
+		}
+	}
+	return result;
+}
+
+PyObject *
+PyObject_CallFunctionObjArgs(PyObject *callable, ...)
+{
+	PyObject *args, *tmp;
+	va_list vargs;
+
+	/* count the args */
+	va_start(vargs, callable);
+	args = objargs_mktuple(vargs);
+	va_end(vargs);
+	if (args == NULL)
+		return NULL;
+	tmp = PyObject_Call(callable, args, NULL);
+	Py_DECREF(args);
+
+	return tmp;
+}
+
+PyObject *
+PyObject_CallMethodObjArgs(PyObject *callable, PyObject *name, ...)
+{
+	PyObject *args, *tmp;
+	va_list vargs;
+
+	callable = PyObject_GetAttr(callable, name);
+	if (callable == NULL)
+		return NULL;
+
+	/* count the args */
+	va_start(vargs, name);
+	args = objargs_mktuple(vargs);
+	va_end(vargs);
+	if (args == NULL) {
+		Py_DECREF(callable);
+		return NULL;
+	}
+	tmp = PyObject_Call(callable, args, NULL);
+	Py_DECREF(args);
+	Py_DECREF(callable);
+
+	return tmp;
+}
+
 int
 PyModule_AddObject(PyObject *m, const char *name, PyObject *o)
 {
