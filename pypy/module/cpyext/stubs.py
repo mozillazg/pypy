@@ -2640,16 +2640,6 @@ def PyList_GetSlice(space, list, low, high):
     require changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject], PyObject)
-def PyList_AsTuple(space, list):
-    """
-    
-    
-    
-    Return a new tuple object containing the contents of list; equivalent to
-    tuple(list)."""
-    raise NotImplementedError
-
 @cpython_api([Py_ssize_t], PyObject)
 def PyLong_FromSsize_t(space, v):
     """Return a new PyLongObject object from a C Py_ssize_t, or

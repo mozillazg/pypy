@@ -53,6 +53,11 @@ class TestListObject(BaseApiTest):
         assert api.PyList_Reverse(l) == 0
         assert space.eq_w(l, space.newlist([space.wrap(1), space.wrap(2), space.wrap(3)]))
 
+    def test_list_tuple(self, space, api):
+        w_l = space.newlist([space.wrap(3), space.wrap(2), space.wrap(1)])
+        w_t = api.PyList_AsTuple(w_l)
+        assert space.unwrap(w_t) == (3, 2, 1)
+
 class AppTestListObject(AppTestCpythonExtensionBase):
     def test_listobject(self):
         import sys
