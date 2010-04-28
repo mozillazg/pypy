@@ -68,6 +68,7 @@ import pypy.module.cpyext.datetime
 import pypy.module.cpyext.complexobject
 import pypy.module.cpyext.weakrefobject
 import pypy.module.cpyext.funcobject
+import pypy.module.cpyext.classobject
 
 # now that all rffi_platform.Struct types are registered, configure them
 api.configure_types()
