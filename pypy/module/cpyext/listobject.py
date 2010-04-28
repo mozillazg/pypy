@@ -92,6 +92,12 @@ def PyList_Size(space, ref):
                              space.wrap("expected list object"))
     return PyList_GET_SIZE(space, ref)
 
+@cpython_api([PyObject], PyObject)
+def PyList_AsTuple(space, w_list):
+    """Return a new tuple object containing the contents of list; equivalent to
+    tuple(list)."""
+    return space.call_function(space.w_tuple, w_list)
+
 @cpython_api([PyObject], rffi.INT_real, error=-1)
 def PyList_Sort(space, w_list):
     """Sort the items of list in place.  Return 0 on success, -1 on
