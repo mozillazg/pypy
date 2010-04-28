@@ -102,6 +102,7 @@ typedef PY_LONG_LONG        Py_intptr_t;
 #include "boolobject.h"
 #include "floatobject.h"
 #include "methodobject.h"
+#include "funcobject.h"
 
 #include "modsupport.h"
 #include "pythonrun.h"
