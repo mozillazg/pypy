@@ -565,6 +565,10 @@ class BlackholeInterpreter(object):
         self.cpu.bh_setfield_raw_f(struct, fielddescr, newvalue)
 
     @arguments("d", returns="r")
+    def opimpl_new(self, descr):
+        return self.cpu.bh_new(descr)
+
+    @arguments("d", returns="r")
     def opimpl_new_with_vtable(self, descr):
         return self.cpu.bh_new_with_vtable(descr)
 

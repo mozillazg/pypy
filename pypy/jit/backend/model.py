@@ -209,6 +209,9 @@ class AbstractCPU(object):
     def do_new(self, sizedescr):
         raise NotImplementedError
 
+    def bh_new(self, sizedescr):
+        raise NotImplementedError
+
     def do_new_with_vtable(self, classbox):
         raise NotImplementedError
 
