@@ -305,6 +305,8 @@ def add_borrowed_object(space, obj):
     state = space.fromcache(State)
     container_ptr = state.last_container
     state.last_container = 0
+    if not obj:
+        return
     if not container_ptr:
         raise NullPointerException
     if container_ptr == -1:
