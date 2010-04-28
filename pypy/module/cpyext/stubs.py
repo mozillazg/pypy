@@ -799,12 +799,6 @@ def PyDict_Contains(space, p, key):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject], PyObject)
-def PyDict_Copy(space, p):
-    """Return a new dictionary that contains the same key-value pairs as p.
-    """
-    raise NotImplementedError
-
 @cpython_api([PyObject, rffi.CCHARP], rffi.INT_real, error=-1)
 def PyDict_DelItemString(space, p, key):
     """Remove the entry in dictionary p which has a key specified by the string
@@ -819,13 +813,6 @@ def PyDict_Merge(space, a, b, override):
     will be replaced if a matching key is found in b, otherwise pairs will
     only be added if there is not a matching key in a. Return 0 on
     success or -1 if an exception was raised.
-    """
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
-def PyDict_Update(space, a, b):
-    """This is the same as PyDict_Merge(a, b, 1) in C, or a.update(b) in
-    Python.  Return 0 on success or -1 if an exception was raised.
     """
     raise NotImplementedError
 

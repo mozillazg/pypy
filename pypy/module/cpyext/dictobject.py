@@ -73,6 +73,20 @@ def PyDict_Clear(space, w_obj):
     space.call_method(w_obj, "clear")
 
 @cpython_api([PyObject], PyObject)
+def PyDict_Copy(space, w_obj):
+    """Return a new dictionary that contains the same key-value pairs as p.
+    """
+    return space.call_method(w_obj, "copy")
+
+@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
+def PyDict_Update(space, w_obj, w_other):
+    """This is the same as PyDict_Merge(a, b, 1) in C, or a.update(b) in
+    Python.  Return 0 on success or -1 if an exception was raised.
+    """
+    space.call_method(w_obj, "update", w_other)
+    return 0
+
+@cpython_api([PyObject], PyObject)
 def PyDict_Keys(space, w_obj):
     """Return a PyListObject containing all the keys from the dictionary,
     as in the dictionary method dict.keys()."""
