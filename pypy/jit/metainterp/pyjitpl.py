@@ -4,9 +4,11 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
+from pypy.tool.sourcetools import func_with_new_name
 
 from pypy.jit.metainterp import history, compile, resume
-from pypy.jit.metainterp.history import Const, ConstInt, Box
+from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
+from pypy.jit.metainterp.history import Box
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.logger import Logger
@@ -17,6 +19,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
 from pypy.jit.metainterp.compile import GiveUp
+from pypy.jit.codewriter.assembler import JitCode
 
 # ____________________________________________________________
 
@@ -24,66 +27,11 @@ def check_args(*args):
     for arg in args:
         assert isinstance(arg, (Box, Const))
 
-class arguments(object):
-    def __init__(self, *argtypes):
-        self.argtypes = argtypes
-
-    def __eq__(self, other):
-        if not isinstance(other, arguments):
-            return NotImplemented
-        return self.argtypes == other.argtypes
-
-    def __ne__(self, other):
-        if not isinstance(other, arguments):
-            return NotImplemented
-        return self.argtypes != other.argtypes
-
-    def __call__(self, func):
-        argtypes = unrolling_iterable(self.argtypes)
-        def wrapped(self, orgpc):
-            args = (self, )
-            for argspec in argtypes:
-                if argspec == "box":
-                    box = self.load_arg()
-                    args += (box, )
-                elif argspec == "constbox":
-                    args += (self.load_const_arg(), )
-                elif argspec == "int":
-                    args += (self.load_int(), )
-                elif argspec == "jumptarget":
-                    args += (self.load_3byte(), )
-                elif argspec == "jumptargets":
-                    num = self.load_int()
-                    args += ([self.load_3byte() for i in range(num)], )
-                elif argspec == "varargs":
-                    args += (self.load_varargs(), )
-                elif argspec == "constargs":
-                    args += (self.load_constargs(), )
-                elif argspec == "descr":
-                    descr = self.load_const_arg()
-                    assert isinstance(descr, history.AbstractDescr)
-                    args += (descr, )
-                elif argspec == "bytecode":
-                    bytecode = self.load_const_arg()
-                    assert isinstance(bytecode, codewriter.JitCode)
-                    args += (bytecode, )
-                elif argspec == "orgpc":
-                    args += (orgpc, )
-                elif argspec == "methdescr":
-                    methdescr = self.load_const_arg()
-                    assert isinstance(methdescr,
-                                      history.AbstractMethDescr)
-                    args += (methdescr, )
-                else:
-                    assert 0, "unknown argtype declaration: %r" % (argspec,)
-            val = func(*args)
-            if val is None:
-                val = False
-            return val
-        name = func.func_name
-        wrapped.func_name = "wrap_" + name
-        wrapped.argspec = self
-        return wrapped
+def arguments(*args):
+    def decorate(func):
+        func.argtypes = args
+        return func
+    return decorate
 
 # ____________________________________________________________
 
@@ -95,16 +43,35 @@ class MIFrame(object):
     parent_resumedata_snapshot = None
     parent_resumedata_frame_info_list = None
 
-    def __init__(self, metainterp, jitcode, greenkey=None):
-        assert isinstance(jitcode, codewriter.JitCode)
+    def __init__(self, metainterp):
         self.metainterp = metainterp
+        self.boxes_i = [None] * 256
+        self.boxes_r = [None] * 256
+        self.boxes_f = [None] * 256
+
+    def setup(self, jitcode, greenkey=None):
+        assert isinstance(jitcode, JitCode)
         self.jitcode = jitcode
         self.bytecode = jitcode.code
-        self.constants = jitcode.constants
-        self.exception_target = -1
         self.name = jitcode.name # purely for having name attribute
         # this is not None for frames that are recursive portal calls
         self.greenkey = greenkey
+        # copy the constants in place
+        self.copy_constants(self.boxes_i, jitcode.constants_i, ConstInt)
+        self.copy_constants(self.boxes_r, jitcode.constants_r, ConstPtr)
+        self.copy_constants(self.boxes_f, jitcode.constants_f, ConstFloat)
+
+    def copy_constants(self, boxes, constants, ConstClass):
+        """Copy jitcode.constants[0] to boxes[255],
+                jitcode.constants[1] to boxes[254],
+                jitcode.constants[2] to boxes[253], etc."""
+        i = len(constants) - 1
+        while i >= 0:
+            j = 255 - i
+            assert j >= 0
+            boxes[j] = ConstClass(constants[i])
+            i -= 1
+    copy_constants._annspecialcase_ = 'specialize:arg(3)'
 
     # ------------------------------
     # Decoding of the JitCode
@@ -197,7 +164,7 @@ class MIFrame(object):
         exec py.code.Source('''
             @arguments("box", "box")
             def opimpl_%s(self, b1, b2):
-                self.execute(rop.%s, b1, b2)
+                return self.execute(rop.%s, b1, b2)
         ''' % (_opimpl, _opimpl.upper())).compile()
 
     for _opimpl in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf']:
@@ -219,14 +186,16 @@ class MIFrame(object):
                 self.execute(rop.%s, b)
         ''' % (_opimpl, _opimpl.upper())).compile()
 
-    @arguments()
-    def opimpl_return(self):
-        assert len(self.env) == 1
-        return self.metainterp.finishframe(self.env[0])
+    @arguments("box")
+    def opimpl_any_return(self, box):
+        return self.metainterp.finishframe(box)
+
+    opimpl_int_return = opimpl_any_return
+    opimpl_ref_return = opimpl_any_return
+    opimpl_float_return = opimpl_any_return
 
     @arguments()
     def opimpl_void_return(self):
-        assert len(self.env) == 0
         return self.metainterp.finishframe(None)
 
     @arguments("jumptarget")
@@ -962,16 +931,15 @@ class MIFrame(object):
         # whenever the 'opcode_implementations' (which is one of the 'opimpl_'
         # methods) returns True.  This is the case when the current frame
         # changes, due to a call or a return.
-        while True:
-            pc = self.pc
-            op = ord(self.bytecode[pc])
-            #print self.metainterp.opcode_names[op]
-            self.pc = pc + 1
+        try:
             staticdata = self.metainterp.staticdata
-            stop = staticdata.opcode_implementations[op](self, pc)
-            #self.metainterp.most_recent_mp = None
-            if stop:
-                break
+            while True:
+                pc = self.pc
+                op = ord(self.bytecode[pc])
+                #print staticdata.opcode_names[op]
+                staticdata.opcode_implementations[op](self, pc)
+        except ChangeFrame:
+            pass
 
     def generate_guard(self, pc, opnum, box, extraargs=[]):
         if isinstance(box, Const):    # no need for a guard
@@ -1023,13 +991,11 @@ class MIFrame(object):
 
     @specialize.arg(1)
     def execute(self, opnum, *argboxes):
-        self.execute_with_descr(opnum, None, *argboxes)
+        return self.metainterp.execute_and_record(opnum, None, *argboxes)
 
     @specialize.arg(1)
     def execute_with_descr(self, opnum, descr, *argboxes):
-        resbox = self.metainterp.execute_and_record(opnum, descr, *argboxes)
-        if resbox is not None:
-            self.make_result_box(resbox)
+        return self.metainterp.execute_and_record(opnum, descr, *argboxes)
 
     @specialize.arg(1)
     def execute_varargs(self, opnum, argboxes, descr, exc):
@@ -1068,20 +1034,19 @@ class MetaInterpStaticData(object):
     logger_noopt = None
     logger_ops = None
 
-    def __init__(self, portal_graph, cpu, stats, options,
+    def __init__(self, codewriter, options,
                  ProfilerClass=EmptyProfiler, warmrunnerdesc=None):
-        self.cpu = cpu
-        self.stats = stats
+        self.cpu = codewriter.cpu
+        self.stats = self.cpu.stats
         self.options = options
         self.logger_noopt = Logger(self)
         self.logger_ops = Logger(self, guard_number=True)
 
-        RESULT = portal_graph.getreturnvar().concretetype
+        RESULT = codewriter.portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)
 
-        self.opcode_implementations = []
-        self.opcode_names = []
-        self.opname_to_index = {}
+        self.setup_insns(codewriter.assembler.insns)
+        self.setup_descrs(codewriter.assembler.descrs)
 
         self.profiler = ProfilerClass()
 
@@ -1089,16 +1054,15 @@ class MetaInterpStaticData(object):
         self.indirectcall_values = []
 
         self.warmrunnerdesc = warmrunnerdesc
-        self._op_goto_if_not = self.find_opcode('goto_if_not')
-        self._op_ooisnull    = self.find_opcode('ooisnull')
-        self._op_oononnull   = self.find_opcode('oononnull')
+        #self._op_goto_if_not = self.find_opcode('goto_if_not')
+        #self._op_ooisnull    = self.find_opcode('ooisnull')
+        #self._op_oononnull   = self.find_opcode('oononnull')
 
         backendmodule = self.cpu.__module__
         backendmodule = backendmodule.split('.')[-2]
         self.jit_starting_line = 'JIT starting (%s)' % backendmodule
 
         self.portal_code = None
-        self._class_sizes = None
         self._addr2name_keys = []
         self._addr2name_values = []
 
@@ -1110,13 +1074,18 @@ class MetaInterpStaticData(object):
     def _freeze_(self):
         return True
 
-    def info_from_codewriter(self, portal_code, class_sizes,
-                             list_of_addr2name, portal_runner_ptr):
-        self.portal_code = portal_code
-        self._class_sizes = class_sizes
-        self._addr2name_keys   = [key   for key, value in list_of_addr2name]
-        self._addr2name_values = [value for key, value in list_of_addr2name]
-        self._portal_runner_ptr = portal_runner_ptr
+    def setup_insns(self, insns):
+        self.opcode_names = ['?'] * len(insns)
+        self.opcode_implementations = [None] * len(insns)
+        for key, value in insns.items():
+            assert self.opcode_implementations[value] is None
+            self.opcode_names[value] = key
+            name, argcodes = key.split('/')
+            opimpl = _get_opimpl_method(name, argcodes)
+            self.opcode_implementations[value] = opimpl
+
+    def setup_descrs(self, descrs):
+        self.opcode_descrs = descrs
 
     def finish_setup(self, optimizer=None):
         warmrunnerdesc = self.warmrunnerdesc
@@ -1134,19 +1103,11 @@ class MetaInterpStaticData(object):
         """Runtime setup needed by the various components of the JIT."""
         if not self.globaldata.initialized:
             debug_print(self.jit_starting_line)
-            self._setup_class_sizes()
             self.cpu.setup_once()
             if not self.profiler.initialized:
                 self.profiler.start()
                 self.profiler.initialized = True
             self.globaldata.initialized = True
-
-    def _setup_class_sizes(self):
-        class_sizes = {}
-        for vtable, sizedescr in self._class_sizes:
-            vtable = self.cpu.ts.cast_vtable_to_hashable(self.cpu, vtable)
-            class_sizes[vtable] = sizedescr
-        self.cpu.set_class_sizes(class_sizes)
 
     def get_name_from_address(self, addr):
         # for debugging only
@@ -1195,21 +1156,6 @@ class MetaInterpStaticData(object):
     def _register_indirect_call_target(self, fnaddress, jitcode):
         self.indirectcall_keys.append(fnaddress)
         self.indirectcall_values.append(jitcode)
-
-    def find_opcode(self, name):
-        try:
-            return self.opname_to_index[name]
-        except KeyError:
-            self._register_opcode(name)
-            return self.opname_to_index[name]
-
-    def _register_opcode(self, opname):
-        assert len(self.opcode_implementations) < 256, \
-               "too many implementations of opcodes!"
-        name = "opimpl_" + opname
-        self.opname_to_index[opname] = len(self.opcode_implementations)
-        self.opcode_names.append(opname)
-        self.opcode_implementations.append(getattr(MIFrame, name).im_func)
 
     # ---------------- logging ------------------------
 
@@ -1268,6 +1214,7 @@ class MetaInterp(object):
         self.cpu = staticdata.cpu
         self.portal_trace_positions = []
         self.greenkey_of_huge_function = None
+        self.free_frames_list = []
 
     def is_blackholing(self):
         return self.history is None
@@ -1278,7 +1225,11 @@ class MetaInterp(object):
         if greenkey is not None and not self.is_blackholing():
             self.portal_trace_positions.append(
                     (greenkey, len(self.history.operations)))
-        f = MIFrame(self, jitcode, greenkey)
+        if len(self.free_frames_list) > 0:
+            f = self.free_frames_list.pop()
+        else:
+            f = MIFrame(self)
+        f.setup(jitcode, greenkey)
         self.framestack.append(f)
         return f
 
@@ -1289,10 +1240,13 @@ class MetaInterp(object):
         if frame.greenkey is not None and not self.is_blackholing():
             self.portal_trace_positions.append(
                     (None, len(self.history.operations)))
-        return frame
+        # we save the freed MIFrames to avoid needing to re-create new
+        # MIFrame objects all the time; they are a bit big, with their
+        # 3*256 register entries.
+        self.free_frames_list.append(frame)
 
     def finishframe(self, resultbox):
-        frame = self.popframe()
+        self.popframe()
         if self.framestack:
             if resultbox is not None:
                 self.framestack[-1].make_result_box(resultbox)
@@ -1501,7 +1455,7 @@ class MetaInterp(object):
             except:
                 import sys
                 if sys.exc_info()[0] is not None:
-                    codewriter.log.info(sys.exc_info()[0].__name__)
+                    self.staticdata.log(sys.exc_info()[0].__name__)
                 raise
 
     def compile_and_run_once(self, *args):
@@ -1739,7 +1693,19 @@ class MetaInterp(object):
         self.framestack = []
         f = self.newframe(self.staticdata.portal_code)
         f.pc = 0
-        f.env = original_boxes[:]
+        count_i = count_r = count_f = 0
+        for box in original_boxes:
+            if box.type == history.INT:
+                f.boxes_i[count_i] = box
+                count_i += 1
+            elif box.type == history.REF:
+                f.boxes_r[count_r] = box
+                count_r += 1
+            elif box.type == history.FLOAT:
+                f.boxes_f[count_f] = box
+                count_f += 1
+            else:
+                raise AssertionError(box.type)
         self.virtualref_boxes = []
         self.initialize_virtualizable(original_boxes)
         return original_boxes
@@ -2045,3 +2011,64 @@ class GenerateMergePoint(Exception):
         assert target_loop_token is not None
         self.argboxes = args
         self.target_loop_token = target_loop_token
+
+# ____________________________________________________________
+
+class ChangeFrame(Exception):
+    pass
+
+def _get_opimpl_method(name, argcodes):
+    from pypy.jit.metainterp.blackhole import signedord
+    #
+    def handler(self, position):
+        args = ()
+        next_argcode = 0
+        code = self.bytecode
+        position += 1
+        for argtype in argtypes:
+            if argtype == "box":
+                argcode = argcodes[next_argcode]
+                next_argcode = next_argcode + 1
+                if argcode == 'i':
+                    value = self.boxes_i[ord(code[position])]
+                elif argcode == 'c':
+                    value = ConstInt(signedord(code[position]))
+                elif argcode == 'r':
+                    value = self.boxes_r[ord(code[position])]
+                elif argcode == 'f':
+                    value = self.boxes_f[ord(code[position])]
+                else:
+                    raise AssertionError("bad argcode")
+                position += 1
+            else:
+                raise AssertionError("bad argtype: %r" % (argtype,))
+            args += (value,)
+        #
+        num_return_args = len(argcodes) - next_argcode
+        assert num_return_args == 0 or num_return_args == 1
+        self.pc = position + num_return_args
+        #
+        resultbox = unboundmethod(self, *args)
+        #
+        if num_return_args == 0:
+            assert resultbox is None
+        else:
+            assert resultbox is not None
+            result_argcode = argcodes[next_argcode]
+            target_index = ord(code[position])
+            if result_argcode == 'i':
+                assert resultbox.type == history.INT
+                self.boxes_i[target_index] = resultbox
+            elif result_argcode == 'r':
+                assert resultbox.type == history.REF
+                self.boxes_r[target_index] = resultbox
+            elif result_argcode == 'f':
+                assert resultbox.type == history.FLOAT
+                self.boxes_f[target_index] = resultbox
+            else:
+                raise AssertionError("bad result argcode")
+    #
+    unboundmethod = getattr(MIFrame, 'opimpl_' + name).im_func
+    argtypes = unrolling_iterable(unboundmethod.argtypes)
+    handler = func_with_new_name(handler, 'handler_' + name)
+    return handler
