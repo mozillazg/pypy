@@ -349,6 +349,16 @@ class Transformer(object):
         else:
             return op
 
+    def _rewrite_nongc_ptrs(self, op):
+        if op.args[0].concretetype.TO._gckind == 'gc':
+            return op
+        else:
+            opname = {'ptr_eq': 'int_eq',
+                      'ptr_ne': 'int_ne',
+                      'ptr_iszero': 'int_is_zero',
+                      'ptr_nonzero': 'int_is_true'}[op.opname]
+            return SpaceOperation(opname, op.args, op.result)
+
     def rewrite_op_int_eq(self, op):
         return self._rewrite_equality(op, 'int_is_zero')
 
@@ -356,10 +366,15 @@ class Transformer(object):
         return self._rewrite_equality(op, 'int_is_true')
 
     def rewrite_op_ptr_eq(self, op):
-        return self._rewrite_equality(op, 'ptr_iszero')
+        op1 = self._rewrite_equality(op, 'ptr_iszero')
+        return self._rewrite_nongc_ptrs(op1)
 
     def rewrite_op_ptr_ne(self, op):
-        return self._rewrite_equality(op, 'ptr_nonzero')
+        op1 = self._rewrite_equality(op, 'ptr_nonzero')
+        return self._rewrite_nongc_ptrs(op1)
+
+    rewrite_op_ptr_iszero = _rewrite_nongc_ptrs
+    rewrite_op_ptr_nonzero = _rewrite_nongc_ptrs
 
 # ____________________________________________________________
 
