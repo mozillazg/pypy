@@ -105,7 +105,6 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
 
 class TestTypes(BaseApiTest):
     def test_multiple_inheritance(self, space, api):
-        py.test.skip("This bug causes a crash in wxPython")
         w_class = space.appexec([], """():
             class A(object):
                 pass
