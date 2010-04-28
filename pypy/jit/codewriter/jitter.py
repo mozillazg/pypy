@@ -194,6 +194,8 @@ class Transformer(object):
     rewrite_op_int_mod_ovf     = _do_builtin_call
     rewrite_op_int_mod_zer     = _do_builtin_call
 
+    rewrite_op_gc_identityhash = _do_builtin_call
+
     def rewrite_op_hint(self, op):
         hints = op.args[1].value
         if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
