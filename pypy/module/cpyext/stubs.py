@@ -3101,16 +3101,6 @@ def PyObject_CallMethodObjArgs(space, o, name, ):
     raise NotImplementedError
 
 @cpython_api([PyObject], lltype.Signed, error=-1)
-def PyObject_Hash(space, o):
-    """
-    
-    
-    
-    Compute and return the hash value of an object o.  On failure, return -1.
-    This is the equivalent of the Python expression hash(o)."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], lltype.Signed, error=-1)
 def PyObject_HashNotImplemented(space, o):
     """Set a TypeError indicating that type(o) is not hashable and return -1.
     This function receives special treatment when stored in a tp_hash slot,
