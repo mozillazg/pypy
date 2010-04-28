@@ -34,7 +34,7 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.rlib.rstring import rsplit
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.module.__builtin__.abstractinst import abstract_issubclass_w
-
+from pypy.module.__builtin__.interp_classobj import W_ClassObject
 
 WARN_ABOUT_MISSING_SLOT_FUNCTIONS = False
 
@@ -474,15 +474,12 @@ def type_attach(space, py_obj, w_type):
     # c_tp_print, c_tp_getattr, c_tp_setattr
     # XXX implement
     # c_tp_compare and the following fields (see http://docs.python.org/c-api/typeobj.html )
-    bases_w = w_type.bases_w
-    assert len(bases_w) <= 1
-    pto.c_tp_base = lltype.nullptr(PyTypeObject)
-    pto.c_tp_bases = lltype.nullptr(PyObject.TO)
+    w_base = best_base(space, w_type.bases_w)
+    pto.c_tp_base = rffi.cast(PyTypeObjectPtr, make_ref(space, w_base))
 
-    if bases_w:
-        ref = make_ref(space, bases_w[0])
-        pto.c_tp_base = rffi.cast(PyTypeObjectPtr, ref)
+    pto.c_tp_bases = lltype.nullptr(PyObject.TO)
     PyPyType_Ready(space, pto, w_type)
+
 
     pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)
     if pto.c_tp_base:
@@ -499,6 +496,38 @@ def type_attach(space, py_obj, w_type):
 @cpython_api([PyTypeObjectPtr], rffi.INT_real, error=-1)
 def PyType_Ready(space, pto):
     return PyPyType_Ready(space, pto, None)
+
+def solid_base(space, w_type):
+    typedef = w_type.instancetypedef
+    return space.gettypeobject(typedef)
+
+def best_base(space, bases_w):
+    if not bases_w:
+        return None
+
+    w_winner = None
+    for w_candidate in bases_w:
+        if isinstance(w_candidate, W_ClassObject):
+            # old-style base
+            continue
+        assert isinstance(w_candidate, W_TypeObject)
+        w_candidate = solid_base(space, w_candidate)
+        if not w_winner:
+            w_winner = w_candidate
+        elif space.abstract_issubclass_w(w_winner, w_candidate):
+            pass
+        elif space.abstract_issubclass_w(w_candidate, w_winner):
+            w_winner = w_candidate
+        else:
+            raise OperationError(
+                space.w_TypeError,
+                space.wrap("multiple bases have instance lay-out conflict"))
+    if w_winner is None:
+        raise OperationError(
+            space.w_TypeError,
+                space.wrap("a new-style class can't have only classic bases"))
+
+    return w_winner
 
 def inherit_slots(space, pto, w_base):
     # XXX missing: nearly everything
