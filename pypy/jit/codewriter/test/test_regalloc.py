@@ -180,27 +180,3 @@ class TestRegAlloc:
             L2:
             reraise
         """)
-
-    def test_int_floordiv_ovf_zer(self):
-        def f(i, j):
-            assert i >= 0
-            assert j >= 0
-            try:
-                return ovfcheck(i // j)
-            except OverflowError:
-                return 42
-            except ZeroDivisionError:
-                return -42
-        graph = self.make_graphs(f, [5, 6])[0]
-        self.check_assembler(graph, """
-            goto_if_not_int_is_true L1, %i1
-            int_add %i0, $MAXINT, %i2
-            int_and %i2, %i1, %i2
-            goto_if_not_int_ne L2, %i2, $-1
-            int_floordiv %i0, %i1, %i0
-            int_return %i0
-            L2:
-            int_return $42
-            L1:
-            int_return $-42
-        """.replace('MAXINT', str(sys.maxint)), transform=True)

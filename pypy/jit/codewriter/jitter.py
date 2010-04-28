@@ -35,7 +35,6 @@ class Transformer(object):
         newoperations = []
         if block.exitswitch == c_last_exception:
             op_raising_exception = block.operations[-1]
-            self.rewrite_exception_operation(op_raising_exception, block)
         else:
             op_raising_exception = Ellipsis
         for op in block.operations:
@@ -123,82 +122,6 @@ class Transformer(object):
 
     # ----------
 
-    def rewrite_exception_operation(self, op, block):
-        # mangling of the graph for exception-raising operations that are
-        # not simple calls
-        try:
-            rewrite = _rewrite_exc_ops[op.opname]
-        except KeyError:
-            pass
-        else:
-            rewrite(self, op, block)
-
-    def _rewrite_exc_div_or_mod_ovf_zer(self, op, block):
-        # See test_flatten.test_int_floordiv_ovf_zer for the mangling done here
-        usedvars = self.list_vars_in_use_at_end(block, op.args, op.result)
-        block.operations.pop()
-        [ovf_link, zer_link] = self.extract_exc_links(block, [
-            OverflowError, ZeroDivisionError])
-        block = self.write_new_condition(block, usedvars, zer_link,
-                                         ('int_is_true', op.args[1]))
-        v1 = Variable(); v1.concretetype = lltype.Signed
-        v2 = Variable(); v2.concretetype = lltype.Signed
-        block.operations += [
-            SpaceOperation('int_add', [op.args[0],
-                                       Constant(sys.maxint, lltype.Signed)],
-                           v1),
-            SpaceOperation('int_and', [v1, op.args[1]], v2),
-            ]
-        block = self.write_new_condition(block, usedvars, ovf_link,
-                                 ('int_ne', v2, Constant(-1, lltype.Signed)))
-        basename = op.opname.split('_')[1]
-        block.operations += [
-            SpaceOperation('int_' + basename, op.args, op.result),
-            ]
-
-    rewrite_exc_op_int_floordiv_ovf_zer = _rewrite_exc_div_or_mod_ovf_zer
-    rewrite_exc_op_int_mod_ovf_zer      = _rewrite_exc_div_or_mod_ovf_zer
-
-    def list_vars_in_use_at_end(self, block, extravars=[], exclude=None):
-        lists = [extravars]
-        for link in block.exits:
-            lists.append(link.args)
-        in_use = set()
-        for lst in lists:
-            for v in lst:
-                if isinstance(v, Variable):
-                    in_use.add(v)
-        if exclude in in_use:
-            in_use.remove(exclude)
-        return list(in_use)
-
-    def extract_exc_links(self, block, exceptions):
-        # Remove the exception links from the block.  The exception links must
-        # be catching exactly the listed 'exceptions'.  We return them to the
-        # caller.
-        assert block.exits[0].exitcase is None
-        real_exc_links = dict([(link.exitcase, link)
-                               for link in block.exits[1:]])
-        assert dict.fromkeys(real_exc_links) == dict.fromkeys(exceptions)
-        block.recloseblock(block.exits[0])
-        return [real_exc_links[exc] for exc in exceptions]
-
-    def write_new_condition(self, block, usedvars, exc_link, exitswitch):
-        # Write an exit at the end of the block, going either to a new
-        # block that is the continuation of the current block, or (in case
-        # 'exitswitch' is False) following the given 'exc_link'.
-        newblock = Block(usedvars)
-        normal_link = Link(usedvars, newblock)
-        normal_link.exitcase = normal_link.llexitcase = True
-        exc_link.exitcase    = exc_link.llexitcase    = False
-        block.exitswitch = exitswitch
-        [exit] = block.exits
-        block.recloseblock(normal_link, exc_link)
-        newblock.closeblock(exit)
-        return newblock
-
-    # ----------
-
     def rewrite_operation(self, op):
         try:
             rewrite = _rewrite_ops[op.opname]
@@ -246,6 +169,21 @@ class Transformer(object):
         elif kind == 'float': lst = lst_f
         else: raise AssertionError(kind)
         lst.append(v)
+
+    def _rewrite_with_helper(self, op):
+        from pypy.jit.codewriter.support import builtin_func_for_spec
+        c_func, _ = builtin_func_for_spec(self.cpu.rtyper, op.opname,
+                                          [lltype.Signed, lltype.Signed],
+                                          lltype.Signed)
+        op = SpaceOperation('direct_call', [c_func] + op.args, op.result)
+        return self.rewrite_op_direct_call(op)
+
+    rewrite_op_int_floordiv_ovf_zer = _rewrite_with_helper
+    rewrite_op_int_floordiv_ovf     = _rewrite_with_helper
+    rewrite_op_int_floordiv_zer     = _rewrite_with_helper
+    rewrite_op_int_mod_ovf_zer = _rewrite_with_helper
+    rewrite_op_int_mod_ovf     = _rewrite_with_helper
+    rewrite_op_int_mod_zer     = _rewrite_with_helper
 
     def rewrite_op_hint(self, op):
         hints = op.args[1].value
@@ -351,8 +289,7 @@ def _with_prefix(prefix):
             result[name[len(prefix):]] = getattr(Transformer, name)
     return result
 
-_rewrite_ops     = _with_prefix('rewrite_op_')
-_rewrite_exc_ops = _with_prefix('rewrite_exc_op_')
+_rewrite_ops = _with_prefix('rewrite_op_')
 
 primitive_type_size = {
     lltype.Signed:   'i',

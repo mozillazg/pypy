@@ -26,7 +26,18 @@ class FakeDescr(AbstractDescr):
     def __repr__(self):
         return '<Descr>'
 
+class FakeDict(object):
+    def __getitem__(self, key):
+        F = lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed)
+        f = lltype.functionptr(F, key[0])
+        c_func = Constant(f, lltype.typeOf(f))
+        return c_func, lltype.Signed
+
+class FakeRTyper(object):
+    _builtin_func_for_spec_cache = FakeDict()
+
 class FakeCPU:
+    rtyper = FakeRTyper()
     def calldescrof(self, FUNC, ARGS, RESULT):
         return FakeDescr()
     def fielddescrof(self, STRUCT, name):
@@ -338,17 +349,53 @@ class TestFlatten:
                 return 42
             except ZeroDivisionError:
                 return -42
-        # 'int_add' and 'int_and' are used to detect the
-        # combination "%i0 = -sys.maxint-1, %i1 = -1".
         self.encoding_test(f, [7, 2], """
-            goto_if_not_int_is_true L1, %i1
-            int_add %i0, $MAXINT, %i2
-            int_and %i2, %i1, %i3
-            goto_if_not_int_ne L2, %i3, $-1
-            int_floordiv %i0, %i1, %i4
-            int_return %i4
-            L2:
-            int_return $42
+            residual_call_ir_i $<* fn int_floordiv_ovf_zer>, <Descr>, I[%i0, %i1], R[], %i2
+            catch_exception L1
+            int_return %i2
             L1:
+            goto_if_exception_mismatch $<* struct object_vtable>, L2
+            int_return $42
+            L2:
+            goto_if_exception_mismatch $<* struct object_vtable>, L3
             int_return $-42
-        """.replace('MAXINT', str(sys.maxint)), transform=True)
+            L3:
+            reraise
+        """, transform=True)
+
+    def test_int_mod_ovf(self):
+        def f(i, j):
+            assert i >= 0
+            assert j >= 0
+            try:
+                return ovfcheck(i % j)
+            except OverflowError:
+                return 42
+        # XXX so far, this really produces a int_mod_ovf_zer...
+        self.encoding_test(f, [7, 2], """
+            residual_call_ir_i $<* fn int_mod_ovf_zer>, <Descr>, I[%i0, %i1], R[], %i2
+            catch_exception L1
+            int_return %i2
+            L1:
+            goto_if_exception_mismatch $<* struct object_vtable>, L2
+            int_return $42
+            L2:
+            reraise
+        """, transform=True)
+
+    def test_int_add_ovf(self):
+        def f(i, j):
+            try:
+                return ovfcheck(i + j)
+            except OverflowError:
+                return 42
+        self.encoding_test(f, [7, 2], """
+            int_add_ovf %i0, %i1, %i2
+            catch_exception L1
+            int_return %i2
+            L1:
+            goto_if_exception_mismatch $<* struct object_vtable>, L2
+            int_return $42
+            L2:
+            reraise
+        """, transform=True)
