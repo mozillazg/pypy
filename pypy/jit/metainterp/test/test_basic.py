@@ -9,7 +9,7 @@ from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
 from pypy import conftest
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 
 def _get_jitcodes(CPUClass, func, values, type_system):
@@ -27,8 +27,20 @@ def _run_with_blackhole(cw, mainjitcode, args):
     from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
     blackholeinterpbuilder = BlackholeInterpBuilder(cw)
     blackholeinterp = blackholeinterpbuilder.acquire_interp()
-    for i, value in enumerate(args):
-        blackholeinterp.setarg_i(i, value)
+    count_i = count_r = count_f = 0
+    for value in args:
+        T = lltype.typeOf(value)
+        if T == lltype.Signed:
+            blackholeinterp.setarg_i(count_i, value)
+            count_i += 1
+        elif T == llmemory.GCREF:
+            blackholeinterp.setarg_r(count_r, value)
+            count_r += 1
+        elif T == lltype.Float:
+            blackholeinterp.setarg_f(count_f, value)
+            count_f += 1
+        else:
+            raise TypeError(value)
     blackholeinterp.run(mainjitcode, 0)
     return blackholeinterp.result_i
 
@@ -1477,17 +1489,29 @@ class BaseLLtypeTests(BasicTests):
             py.test.skip("test written in a style that "
                          "means it's frontend only")
         from pypy.rpython.lltypesystem import lltype, llmemory
-        
-        TP = lltype.GcStruct('x')
+
+        TP = lltype.GcStruct('S1')
         def f(p):
             n = lltype.cast_ptr_to_int(p)
             return n
-
         x = lltype.malloc(TP)
-        res = self.interp_operations(f, [x])
-        expected = self.metainterp.cpu.do_cast_ptr_to_int(
-            history.BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, x))).value
-        assert res == expected
+        xref = lltype.cast_opaque_ptr(llmemory.GCREF, x)
+        res = self.interp_operations(f, [xref])
+        y = llmemory.cast_int_to_adr(res)
+        y = llmemory.cast_adr_to_ptr(y, lltype.Ptr(TP))
+        assert x == y
+        #
+        TP = lltype.Struct('S2')
+        prebuilt = [lltype.malloc(TP, immortal=True),
+                    lltype.malloc(TP, immortal=True)]
+        def f(x):
+            p = prebuilt[x]
+            n = lltype.cast_ptr_to_int(p)
+            return n
+        res = self.interp_operations(f, [1])
+        y = llmemory.cast_int_to_adr(res)
+        y = llmemory.cast_adr_to_ptr(y, lltype.Ptr(TP))
+        assert prebuilt[1] == y
 
     def test_collapsing_ptr_eq(self):
         S = lltype.GcStruct('S')

@@ -220,6 +220,12 @@ class BlackholeInterpreter(object):
     def setarg_i(self, index, value):
         self.registers_i[index] = value
 
+    def setarg_r(self, index, value):
+        self.registers_r[index] = value
+
+    def setarg_f(self, index, value):
+        self.registers_f[index] = value
+
     def run(self, jitcode, position):
         self.copy_constants(self.registers_i, jitcode.constants_i)
         self.copy_constants(self.registers_r, jitcode.constants_r)
@@ -323,6 +329,12 @@ class BlackholeInterpreter(object):
     @arguments("i", "i", returns="i")
     def opimpl_int_ge(self, a, b):
         return int(a >= b)
+    @arguments("i", returns="i")
+    def opimpl_int_is_zero(self, a):
+        return int(not a)
+    @arguments("i", returns="i")
+    def opimpl_int_is_true(self, a):
+        return int(bool(a))
 
     @arguments("r", "r", returns="i")
     def opimpl_ptr_eq(self, a, b):
@@ -396,6 +408,13 @@ class BlackholeInterpreter(object):
     @arguments("L", "i", "i", "pc", returns="L")
     def opimpl_goto_if_not_int_ge(self, target, a, b, pc):
         if a >= b:
+            return pc
+        else:
+            return target
+
+    @arguments("L", "i", "pc", returns="L")
+    def opimpl_goto_if_not_int_is_zero(self, target, a, pc):
+        if not a:
             return pc
         else:
             return target
@@ -620,3 +639,7 @@ class BlackholeInterpreter(object):
     @arguments("r", returns="i")
     def opimpl_classof(self, struct):
         return self.cpu.bh_classof(struct)
+
+    @arguments("r", returns="i")
+    def opimpl_cast_ptr_to_int(self, p):
+        return self.cpu.bh_cast_ptr_to_int(p)
