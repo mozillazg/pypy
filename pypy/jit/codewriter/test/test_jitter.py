@@ -95,6 +95,54 @@ def test_optimize_goto_if_not__int_ne():
                 assert exits[0].exitcase == exits[0].llexitcase == linkcase2
                 assert exits[1].exitcase == exits[1].llexitcase == linkcase1
 
+def test_optimize_goto_if_not__ptr_eq():
+    for opname in ['ptr_eq', 'ptr_ne']:
+        v1 = Variable()
+        v2 = Variable()
+        v3 = Variable(); v3.concretetype = lltype.Bool
+        block = Block([v1, v2])
+        block.operations = [SpaceOperation(opname, [v1, v2], v3)]
+        block.exitswitch = v3
+        block.exits = exits = [FakeLink(False), FakeLink(True)]
+        res = Transformer().optimize_goto_if_not(block)
+        assert res == True
+        assert block.operations == []
+        assert block.exitswitch == (opname, v1, v2)
+        assert block.exits == exits
+
+def test_optimize_goto_if_not__ptr_iszero():
+    for opname in ['ptr_iszero', 'ptr_nonzero']:
+        v1 = Variable()
+        v3 = Variable(); v3.concretetype = lltype.Bool
+        block = Block([v1])
+        block.operations = [SpaceOperation(opname, [v1], v3)]
+        block.exitswitch = v3
+        block.exits = exits = [FakeLink(False), FakeLink(True)]
+        res = Transformer().optimize_goto_if_not(block)
+        assert res == True
+        assert block.operations == []
+        assert block.exitswitch == (opname, v1)
+        assert block.exits == exits
+
+def test_optimize_goto_if_not__ptr_eq_reduced():
+    c0 = Constant(lltype.nullptr(rclass.OBJECT), rclass.OBJECTPTR)
+    for opname, reducedname in [('ptr_eq', 'ptr_iszero'),
+                                ('ptr_ne', 'ptr_nonzero')]:
+        for nullindex in [0, 1]:
+            v1 = Variable()
+            v3 = Variable(); v3.concretetype = lltype.Bool
+            block = Block([v1])
+            args = [v1, v1]
+            args[nullindex] = c0
+            block.operations = [SpaceOperation(opname, args, v3)]
+            block.exitswitch = v3
+            block.exits = exits = [FakeLink(False), FakeLink(True)]
+            res = Transformer().optimize_goto_if_not(block)
+            assert res == True
+            assert block.operations == []
+            assert block.exitswitch == (reducedname, v1)
+            assert block.exits == exits
+
 def test_residual_call():
     for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,
                     lltype.Float, lltype.Void]:
@@ -258,3 +306,26 @@ def test_rename_on_links():
     assert block.operations == []
     assert block.exits[0].target is block2
     assert block.exits[0].args == [v1]
+
+def test_ptr_eq():
+    v1 = varoftype(rclass.OBJECTPTR)
+    v2 = varoftype(rclass.OBJECTPTR)
+    v3 = varoftype(lltype.Bool)
+    c0 = Constant(lltype.nullptr(rclass.OBJECT), rclass.OBJECTPTR)
+    #
+    for opname, reducedname in [('ptr_eq', 'ptr_iszero'),
+                                ('ptr_ne', 'ptr_nonzero')]:
+        op = SpaceOperation(opname, [v1, v2], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == opname
+        assert op1.args == [v1, v2]
+        #
+        op = SpaceOperation(opname, [v1, c0], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == reducedname
+        assert op1.args == [v1]
+        #
+        op = SpaceOperation(opname, [c0, v2], v3)
+        op1 = Transformer().rewrite_operation(op)
+        assert op1.opname == reducedname
+        assert op1.args == [v2]
