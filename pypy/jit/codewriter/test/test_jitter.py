@@ -314,11 +314,11 @@ def test_nongc_ptr_eq():
     v3 = varoftype(lltype.Bool)
     c0 = Constant(lltype.nullptr(rclass.NONGCOBJECT), rclass.NONGCOBJECTPTR)
     #
-    for opname, reducedname in [('int_eq', 'int_is_zero'),
-                                ('int_ne', 'int_is_true')]:
+    for opname, reducedname in [('ptr_eq', 'int_is_zero'),
+                                ('ptr_ne', 'int_is_true')]:
         op = SpaceOperation(opname, [v1, v2], v3)
         op1 = Transformer().rewrite_operation(op)
-        assert op1.opname == opname
+        assert op1.opname == opname.replace('ptr_', 'int_')
         assert op1.args == [v1, v2]
         #
         op = SpaceOperation(opname, [v1, c0], v3)
@@ -330,3 +330,13 @@ def test_nongc_ptr_eq():
         op1 = Transformer().rewrite_operation(op)
         assert op1.opname == reducedname
         assert op1.args == [v2]
+    #
+    op = SpaceOperation('ptr_iszero', [v1], v3)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'int_is_zero'
+    assert op1.args == [v1]
+    #
+    op = SpaceOperation('ptr_nonzero', [v1], v3)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'int_is_true'
+    assert op1.args == [v1]
