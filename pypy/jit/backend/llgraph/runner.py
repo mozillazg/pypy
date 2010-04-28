@@ -434,6 +434,12 @@ class LLtypeCPU(BaseCPU):
                                   self.class_vtables_as_int[sizevtabledescr])
         return result
 
+    def bh_classof(self, struct):
+        struct = lltype.cast_opaque_ptr(rclass.OBJECTPTR, struct)
+        result = struct.typeptr
+        result_adr = llmemory.cast_ptr_to_adr(struct.typeptr)
+        return llmemory.cast_adr_to_int(result_adr)
+
     def do_new_array(self, countbox, size):
         assert isinstance(size, Descr)
         count = countbox.getint()

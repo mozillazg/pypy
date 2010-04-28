@@ -240,7 +240,7 @@ class Transformer(object):
 
     def rewrite_op_getfield(self, op):
         if self.is_typeptr_getset(op):
-            XXX
+            return self.handle_getfield_typeptr(op)
         # turn the flow graph 'getfield' operation into our own version
         [v_inst, c_fieldname] = op.args
         RESULT = op.result.concretetype
@@ -292,6 +292,9 @@ class Transformer(object):
     def is_typeptr_getset(self, op):
         return (op.args[1].value == 'typeptr' and
                 op.args[0].concretetype.TO._hints.get('typeptr'))
+
+    def handle_getfield_typeptr(self, op):
+        return SpaceOperation('classof', [op.args[0]], op.result)
 
     def rewrite_op_malloc(self, op):
         assert op.args[1].value == {'flavor': 'gc'}
