@@ -1464,21 +1464,6 @@ def PySignal_SetWakeupFd(space, fd):
     only be called from the main thread."""
     raise NotImplementedError
 
-@cpython_api([rffi.CCHARP, PyObject, PyObject], PyObject)
-def PyErr_NewException(space, name, base, dict):
-    """This utility function creates and returns a new exception object. The name
-    argument must be the name of the new exception, a C string of the form
-    module.class.  The base and dict arguments are normally NULL.  This
-    creates a class object derived from Exception (accessible in C as
-    PyExc_Exception).
-    
-    The __module__ attribute of the new class is set to the first part (up
-    to the last dot) of the name argument, and the class name is set to the last
-    part (after the last dot).  The base argument can be used to specify alternate
-    base classes; it can either be only one class or a tuple of classes. The dict
-    argument can be used to specify a dictionary of class variables and methods."""
-    raise NotImplementedError
-
 @cpython_api([rffi.CCHARP, rffi.CCHARP, PyObject, PyObject], PyObject)
 def PyErr_NewExceptionWithDoc(space, name, doc, base, dict):
     """Same as PyErr_NewException(), except that the new exception class can

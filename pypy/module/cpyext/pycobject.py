@@ -2,8 +2,10 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import TypeDef
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.pyobject import make_ref, make_typedescr
+from pypy.module.cpyext.import_ import PyImport_ImportModule
+from pypy.module.cpyext.object import PyObject_GetAttrString
 from pypy.module.cpyext.api import generic_cpy_call, cpython_api, bootstrap_function, \
-     PyObject, cpython_struct, PyObjectFields, build_type_checkers
+     PyObject, cpython_struct, PyObjectFields, build_type_checkers, CONST_STRING
 
 
 destructor_short = lltype.Ptr(lltype.FuncType([rffi.VOIDP_real], lltype.Void))
@@ -83,3 +85,12 @@ def PyCObject_AsVoidPtr(space, w_obj):
     created with."""
     assert isinstance(w_obj, W_PyCObjectFromVoidPtr)
     return w_obj.pyo.c_cobject
+
+@cpython_api([CONST_STRING, CONST_STRING], rffi.VOIDP_real,
+             error=lltype.nullptr(rffi.VOIDP_real.TO))
+def PyCObject_Import(space, module_name, name):
+    """Return the object void * that the PyCObject self was
+    created with."""
+    w_mod = PyImport_ImportModule(space, module_name)
+    w_obj = PyObject_GetAttrString(space, w_mod, name)
+    return PyCObject_AsVoidPtr(space, w_obj)
