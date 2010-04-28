@@ -243,6 +243,39 @@ def PyUnicode_Decode(space, s, size, encoding, errors):
         w_errors = space.w_None
     return space.call_method(w_str, 'decode', w_encoding, w_errors)
 
+@cpython_api([PyObject, CONST_STRING, CONST_STRING], PyObject)
+def PyUnicode_FromEncodedObject(space, w_obj, encoding, errors):
+    """Coerce an encoded object obj to an Unicode object and return a reference with
+    incremented refcount.
+    
+    String and other char buffer compatible objects are decoded according to the
+    given encoding and using the error handling defined by errors.  Both can be
+    NULL to have the interface use the default values (see the next section for
+    details).
+    
+    All other objects, including Unicode objects, cause a TypeError to be
+    set."""
+    w_encoding = space.wrap(rffi.charp2str(encoding))
+    if errors:
+        w_errors = space.wrap(rffi.charp2str(errors))
+    else:
+        w_errors = space.w_None
+
+    # - unicode is disallowed
+    # - raise TypeError for non-string types
+    if space.is_true(space.isinstance(w_obj, space.w_unicode)):
+        w_meth = None
+    else:
+        try:
+            w_meth = space.getattr(w_obj, space.wrap('decode'))
+        except OperationError, e:
+            if not e.match(space, space.w_AttributeError):
+                raise
+            w_meth = None
+    if w_meth is None:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("decoding Unicode is not supported"))
+    return space.call_function(w_meth, w_encoding, w_errors)
 
 if sys.platform == 'win32':
     @cpython_api([CONST_WSTRING, Py_ssize_t, CONST_STRING], PyObject)

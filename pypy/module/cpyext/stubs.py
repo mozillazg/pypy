@@ -3904,23 +3904,6 @@ def Py_UNICODE_TONUMERIC(space, ch):
     possible.  This macro does not raise exceptions."""
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.CCHARP, rffi.CCHARP], PyObject)
-def PyUnicode_FromEncodedObject(space, obj, encoding, errors):
-    """Coerce an encoded object obj to an Unicode object and return a reference with
-    incremented refcount.
-    
-    String and other char buffer compatible objects are decoded according to the
-    given encoding and using the error handling defined by errors.  Both can be
-    NULL to have the interface use the default values (see the next section for
-    details).
-    
-    All other objects, including Unicode objects, cause a TypeError to be
-    set.
-    
-    The API returns NULL if there was an error.  The caller is responsible for
-    decref'ing the returned objects."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObject)
 def PyUnicode_FromObject(space, obj):
     """Shortcut for PyUnicode_FromEncodedObject(obj, NULL, "strict") which is used
