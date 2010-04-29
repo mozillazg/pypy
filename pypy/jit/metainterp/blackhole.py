@@ -2,7 +2,6 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import intmask, LONG_BIT, r_uint, ovfcheck
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLException
@@ -197,7 +196,7 @@ class BlackholeInterpBuilder(object):
         verbose = self.verbose
         argtypes = unrolling_iterable(unboundmethod.argtypes)
         resulttype = unboundmethod.resulttype
-        handler = func_with_new_name(handler, 'handler_' + name)
+        handler.func_name = 'handler_' + name
         return handler
 
     def acquire_interp(self):

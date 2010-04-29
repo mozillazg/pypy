@@ -6,7 +6,6 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
-from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr
 from pypy.jit.metainterp.history import INT, REF, FLOAT
@@ -39,7 +38,7 @@ def do_call(cpu, argboxes, descr):
             args_i[count_i] = box.getint()
             count_i += 1
         elif box.type == REF:
-            args_r[count_r] = box.getptr_base()
+            args_r[count_r] = box.getref_base()
             count_r += 1
         elif box.type == FLOAT:
             args_f[count_f] = box.getfloat()
@@ -148,7 +147,7 @@ def make_execute_function_with_boxes(name, func):
             argbox = argboxes[0]
             argboxes = argboxes[1:]
             if argtype == 'i':   value = argbox.getint()
-            elif argtype == 'r': value = argbox.getptr_base()
+            elif argtype == 'r': value = argbox.getref_base()
             elif argtype == 'f': value = argbox.getfloat()
             newargs = newargs + (value,)
         assert not argboxes
@@ -160,7 +159,8 @@ def make_execute_function_with_boxes(name, func):
         if resulttype == 'f': return BoxFloat(result)
         return None
     #
-    return func_with_new_name(do, 'do_' + name)
+    do.func_name = 'do_' + name
+    return do
 
 def get_execute_funclist(cpu, num_args):
     # workaround, similar to the next one
