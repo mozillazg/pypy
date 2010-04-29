@@ -34,4 +34,4 @@ def test_integration():
     blackholeinterp.setarg_i(0, 6)
     blackholeinterp.setarg_i(1, 100)
     blackholeinterp.run(jitcode, 0)
-    assert blackholeinterp.result_i == 100+6+5+4+3
+    assert blackholeinterp.get_result_i() == 100+6+5+4+3

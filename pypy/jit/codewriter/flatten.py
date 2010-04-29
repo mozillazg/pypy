@@ -182,13 +182,14 @@ class GraphFlattener(object):
             linkfalse, linktrue = block.exits
             if linkfalse.llexitcase == True:
                 linkfalse, linktrue = linktrue, linkfalse
+            opname = 'goto_if_not'
             if isinstance(block.exitswitch, tuple):
                 # special case produced by jitter.optimize_goto_if_not()
-                opname = 'goto_if_not_' + block.exitswitch[0]
+                if block.exitswitch[0] != 'int_is_true':
+                    opname = 'goto_if_not_' + block.exitswitch[0]
                 opargs = block.exitswitch[1:]
             else:
                 assert block.exitswitch.concretetype == lltype.Bool
-                opname = 'goto_if_not'
                 opargs = [block.exitswitch]
             #
             self.emitline(opname, TLabel(linkfalse),

@@ -162,7 +162,9 @@ class BlackholeInterpBuilder(object):
                 # argcode should be 'i' too
                 assert argcodes[next_argcode] == 'i'
                 next_argcode = next_argcode + 1
-                assert lltype.typeOf(result) == lltype.Signed
+                if lltype.typeOf(result) is lltype.Bool:
+                    result = int(result)
+                assert lltype.typeOf(result) is lltype.Signed
                 self.registers_i[ord(code[position])] = result
                 position += 1
             elif resulttype == 'r':
@@ -176,7 +178,7 @@ class BlackholeInterpBuilder(object):
                 # argcode should be 'f' too
                 assert argcodes[next_argcode] == 'f'
                 next_argcode = next_argcode + 1
-                assert lltype.typeOf(result) == lltype.Float
+                assert lltype.typeOf(result) is lltype.Float
                 self.registers_f[ord(code[position])] = result
                 position += 1
             elif resulttype == 'L':
@@ -272,6 +274,14 @@ class BlackholeInterpreter(object):
 
     def get_result_f(self):
         return self.registers_f[0]
+
+    def _get_result_anytype(self):
+        "NOT_RPYTHON"
+        if self._return_type == 'int': return self.get_result_i()
+        if self._return_type == 'ref': return self.get_result_r()
+        if self._return_type == 'float': return self.get_result_f()
+        if self._return_type == 'void': return None
+        raise ValueError(self._return_type)
 
     def cleanup_registers_r(self):
         # To avoid keeping references alive, this cleans up the registers_r.
@@ -394,70 +404,54 @@ class BlackholeInterpreter(object):
 
     @arguments("i", "i", returns="i")
     def opimpl_int_lt(a, b):
-        return intmask(a < b)
+        return a < b
     @arguments("i", "i", returns="i")
     def opimpl_int_le(a, b):
-        return intmask(a <= b)
+        return a <= b
     @arguments("i", "i", returns="i")
     def opimpl_int_eq(a, b):
-        return intmask(a == b)
+        return a == b
     @arguments("i", "i", returns="i")
     def opimpl_int_ne(a, b):
-        return intmask(a != b)
+        return a != b
     @arguments("i", "i", returns="i")
     def opimpl_int_gt(a, b):
-        return intmask(a > b)
+        return a > b
     @arguments("i", "i", returns="i")
     def opimpl_int_ge(a, b):
-        return intmask(a >= b)
+        return a >= b
     @arguments("i", returns="i")
     def opimpl_int_is_zero(a):
-        return intmask(not a)
+        return not a
     @arguments("i", returns="i")
     def opimpl_int_is_true(a):
-        return intmask(bool(a))
+        return bool(a)
 
     @arguments("i", "i", returns="i")
     def opimpl_uint_lt(a, b):
-        return intmask(r_uint(a) < r_uint(b))
+        return r_uint(a) < r_uint(b)
     @arguments("i", "i", returns="i")
     def opimpl_uint_le(a, b):
-        return intmask(r_uint(a) <= r_uint(b))
+        return r_uint(a) <= r_uint(b)
     @arguments("i", "i", returns="i")
     def opimpl_uint_gt(a, b):
-        return intmask(r_uint(a) > r_uint(b))
+        return r_uint(a) > r_uint(b)
     @arguments("i", "i", returns="i")
     def opimpl_uint_ge(a, b):
-        return intmask(r_uint(a) >= r_uint(b))
+        return r_uint(a) >= r_uint(b)
 
     @arguments("r", "r", returns="i")
     def opimpl_ptr_eq(a, b):
-        return intmask(a == b)
+        return a == b
     @arguments("r", "r", returns="i")
     def opimpl_ptr_ne(a, b):
-        return intmask(a != b)
+        return a != b
     @arguments("r", returns="i")
     def opimpl_ptr_iszero(a):
-        return intmask(not a)
+        return not a
     @arguments("r", returns="i")
     def opimpl_ptr_nonzero(a):
-        return intmask(bool(a))
-
-    @arguments("self", "i")
-    def opimpl_int_return(self, a):
-        self.registers_i[0] = a
-        raise LeaveFrame
-    @arguments("self", "r")
-    def opimpl_ref_return(self, a):
-        self.registers_r[0] = a
-        raise LeaveFrame
-    @arguments("self", "f")
-    def opimpl_float_return(self, a):
-        self.registers_f[0] = a
-        raise LeaveFrame
-    @arguments("self")
-    def opimpl_void_return(self):
-        raise LeaveFrame
+        return bool(a)
 
     @arguments("i", returns="i")
     def opimpl_int_copy(a):
@@ -472,6 +466,98 @@ class BlackholeInterpreter(object):
     opimpl_int_guard_value = opimpl_int_copy
     opimpl_ref_guard_value = opimpl_ref_copy
     opimpl_float_guard_value = opimpl_float_copy
+
+    # ----------
+    # float operations
+
+    @arguments("f", returns="f")
+    def opimpl_float_neg(a):
+        return -a
+    @arguments("f", returns="f")
+    def opimpl_float_abs(a):
+        return abs(a)
+    @arguments("f", returns="i")
+    def opimpl_float_is_true(a):
+        return bool(a)
+
+    @arguments("f", "f", returns="f")
+    def opimpl_float_add(a, b):
+        return a + b
+    @arguments("f", "f", returns="f")
+    def opimpl_float_sub(a, b):
+        return a - b
+    @arguments("f", "f", returns="f")
+    def opimpl_float_mul(a, b):
+        return a * b
+    @arguments("f", "f", returns="f")
+    def opimpl_float_truediv(a, b):
+        return a / b
+
+    @arguments("f", "f", returns="i")
+    def opimpl_float_lt(a, b):
+        return a < b
+    @arguments("f", "f", returns="i")
+    def opimpl_float_le(a, b):
+        return a <= b
+    @arguments("f", "f", returns="i")
+    def opimpl_float_eq(a, b):
+        return a == b
+    @arguments("f", "f", returns="i")
+    def opimpl_float_ne(a, b):
+        return a != b
+    @arguments("f", "f", returns="i")
+    def opimpl_float_gt(a, b):
+        return a > b
+    @arguments("f", "f", returns="i")
+    def opimpl_float_ge(a, b):
+        return a >= b
+
+    @arguments("f", returns="i")
+    def opimpl_cast_float_to_int(a):
+        # note: we need to call int() twice to care for the fact that
+        # int(-2147483648.0) returns a long :-(
+        return int(int(a))
+
+    @arguments("i", returns="f")
+    def opimpl_cast_int_to_float(a):
+        return float(a)
+
+    # ----------
+    # control flow operations
+
+    @arguments("self", "i")
+    def opimpl_int_return(self, a):
+        self.registers_i[0] = a
+        if not we_are_translated():
+            self._return_type = "int"
+        raise LeaveFrame
+
+    @arguments("self", "r")
+    def opimpl_ref_return(self, a):
+        self.registers_r[0] = a
+        if not we_are_translated():
+            self._return_type = "ref"
+        raise LeaveFrame
+
+    @arguments("self", "f")
+    def opimpl_float_return(self, a):
+        self.registers_f[0] = a
+        if not we_are_translated():
+            self._return_type = "float"
+        raise LeaveFrame
+
+    @arguments("self")
+    def opimpl_void_return(self):
+        if not we_are_translated():
+            self._return_type = "void"
+        raise LeaveFrame
+
+    @arguments("L", "i", "pc", returns="L")
+    def opimpl_goto_if_not(target, a, pc):
+        if a:
+            return pc
+        else:
+            return target
 
     @arguments("L", "i", "i", "pc", returns="L")
     def opimpl_goto_if_not_int_lt(target, a, b, pc):
@@ -518,13 +604,6 @@ class BlackholeInterpreter(object):
     @arguments("L", "i", "pc", returns="L")
     def opimpl_goto_if_not_int_is_zero(target, a, pc):
         if not a:
-            return pc
-        else:
-            return target
-
-    @arguments("L", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_is_true(target, a, pc):
-        if a:
             return pc
         else:
             return target
@@ -740,7 +819,7 @@ class BlackholeInterpreter(object):
         return self.cpu.bh_new_with_vtable(descr)
 
     @arguments("self", "r", returns="i")
-    def opimpl_classof(self, struct):
+    def opimpl_guard_class(self, struct):
         return self.cpu.bh_classof(struct)
 
     @arguments("self", "r", returns="i")
