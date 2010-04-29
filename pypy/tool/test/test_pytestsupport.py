@@ -1,5 +1,4 @@
 import autopath
-from py.impl.code import _assertionold as exprinfo
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import app2interp_temp
 from pypy.interpreter.argument import Arguments
@@ -23,8 +22,8 @@ def test_AppFrame(space):
     co = PyCode._from_code(space, somefunc.func_code)
     pyframe = PyFrame(space, co, space.newdict(), None)
     runner = AppFrame(space, pyframe)
-    exprinfo.run("f = lambda x: x+1", runner)
-    msg = exprinfo.interpret("assert isinstance(f(2), float)", runner)
+    py.code.reinterpret_old("f = lambda x: x+1", runner, should_fail=False)
+    msg = py.code.reinterpret_old("assert isinstance(f(2), float)", runner)
     assert msg.startswith("assert isinstance(3, float)\n"
                           " +  where 3 = ")
 
