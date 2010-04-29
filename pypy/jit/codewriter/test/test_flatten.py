@@ -332,8 +332,10 @@ class TestFlatten:
         def f(i):
             return not i
 
+        # note that 'goto_if_not_int_is_true' is actually the same thing
+        # as just 'goto_if_not'.
         self.encoding_test(f, [7], """
-            goto_if_not_int_is_true L1, %i0
+            goto_if_not L1, %i0
             int_return $False
             L1:
             int_return $True

@@ -211,6 +211,10 @@ class MIFrame(object):
     def opimpl_void_return(self):
         self.metainterp.finishframe(None)
 
+    @arguments("label")
+    def opimpl_catch_exception(self, target):
+        pass      # see comment in blackhole.py:opimpl_catch_exception.
+
     @arguments("jumptarget")
     def opimpl_goto(self, target):
         self.pc = target
@@ -2059,6 +2063,11 @@ def _get_opimpl_method(name, argcodes):
                 next_argcode = next_argcode + 1
                 index = ord(code[position]) | (ord(code[position+1])<<8)
                 value = self.metainterp.staticdata.opcode_descrs[index]
+                position += 2
+            elif argtype == "label":
+                assert argcodes[next_argcode] == 'L'
+                next_argcode = next_argcode + 1
+                value = ord(code[position]) | (ord(code[position+1])<<8)
                 position += 2
             elif argtype == "boxes":     # a list of boxes of some type
                 length = ord(code[position])

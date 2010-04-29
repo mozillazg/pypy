@@ -180,7 +180,7 @@ def test_getfield_typeptr():
     v_result = varoftype(rclass.OBJECT.typeptr)
     op = SpaceOperation('getfield', [v_parent, c_name], v_result)
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
-    assert op1.opname == 'classof'
+    assert op1.opname == 'guard_class'
     assert op1.args == [v_parent]
     assert op1.result == v_result
 

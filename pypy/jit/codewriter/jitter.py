@@ -1,4 +1,4 @@
-import sys
+import py, sys
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.jit.metainterp.history import getkind
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
@@ -99,7 +99,8 @@ class Transformer(object):
                 return False   # variable is also used in cur block
             if v is op.result:
                 if op.opname not in ('int_lt', 'int_le', 'int_eq', 'int_ne',
-                                     'int_gt', 'int_ge', 'int_is_true',
+                                     'int_gt', 'int_ge',
+                                     'int_is_zero', 'int_is_true',
                                      'ptr_eq', 'ptr_ne',
                                      'ptr_iszero', 'ptr_nonzero'):
                     return False    # not a supported operation
@@ -314,7 +315,7 @@ class Transformer(object):
                 op.args[0].concretetype.TO._hints.get('typeptr'))
 
     def handle_getfield_typeptr(self, op):
-        return SpaceOperation('classof', [op.args[0]], op.result)
+        return SpaceOperation('guard_class', [op.args[0]], op.result)
 
     def rewrite_op_malloc(self, op):
         assert op.args[1].value == {'flavor': 'gc'}
@@ -387,8 +388,13 @@ class Transformer(object):
         else:
             raise NoOp
 
-    def rewrite_op_bool_not(self, op):
-        return SpaceOperation('int_is_zero', op.args, op.result)
+    for _old, _new in [('bool_not', 'int_is_zero'),
+                       ('cast_bool_to_float', 'cast_int_to_float'),
+                       ]:
+        exec py.code.Source('''
+            def rewrite_op_%s(self, op):
+                return SpaceOperation(%r, op.args, op.result)
+        ''' % (_old, _new)).compile()
 
 # ____________________________________________________________
 

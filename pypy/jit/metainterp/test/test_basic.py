@@ -43,7 +43,7 @@ def _run_with_blackhole(cw, mainjitcode, args):
         else:
             raise TypeError(T)
     blackholeinterp.run(mainjitcode, 0)
-    return blackholeinterp.get_result_i()
+    return blackholeinterp._get_result_anytype()
 
 def _run_with_pyjitpl(cw, mainjitcode, args, testself):
     from pypy.jit.metainterp import simple_optimize
