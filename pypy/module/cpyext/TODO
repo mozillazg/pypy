@@ -26,3 +26,9 @@
  - sort out pypy's buffer protocol. PyPy's buffer right now don't support
    raw memory (except array which supports it in a hackish way), which
    should be fixed in order to make it nicely work with cpyext.
+
+ - Py_InitModule() does not seem to return the correct module when using dotted import.
+   for example: "import wx" imports "wx._core_", which calls Py_InitModule("_core_").
+   This correcly creates and populates sys.modules["wx._core_"], but returns a new empty
+   module sys.modules["_core_"]. So functions go in the correct module, but types and
+   constants go into the wrong one.
