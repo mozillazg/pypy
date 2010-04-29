@@ -2,7 +2,8 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (
     PyObjectFields, generic_cpy_call,
     cpython_api, bootstrap_function, cpython_struct, build_type_checkers)
-from pypy.module.cpyext.pyobject import PyObject, make_ref, from_ref, Py_DecRef, make_typedescr
+from pypy.module.cpyext.pyobject import (
+    PyObject, make_ref, from_ref, Py_DecRef, make_typedescr, register_container)
 from pypy.interpreter.function import Function, Method
 
 PyFunctionObjectStruct = lltype.ForwardReference()
