@@ -141,7 +141,7 @@ class BlackholeInterpBuilder(object):
             if verbose and not we_are_translated():
                 print '\t', name, list(args),
 
-            # call the method opimpl_xxx()
+            # call the method bhimpl_xxx()
             try:
                 result = unboundmethod(*args)
             except Exception, e:
@@ -189,11 +189,11 @@ class BlackholeInterpBuilder(object):
             assert next_argcode == len(argcodes)
             return position
         #
-        # Get the opimpl_xxx method.  If we get an AttributeError here,
+        # Get the bhimpl_xxx method.  If we get an AttributeError here,
         # it means that either the implementation is missing, or that it
         # should not appear here at all but instead be transformed away
         # by codewriter/jitter.py.
-        unboundmethod = getattr(BlackholeInterpreter, 'opimpl_' + name).im_func
+        unboundmethod = getattr(BlackholeInterpreter, 'bhimpl_' + name).im_func
         verbose = self.verbose
         argtypes = unrolling_iterable(unboundmethod.argtypes)
         resulttype = unboundmethod.resulttype
@@ -333,315 +333,315 @@ class BlackholeInterpreter(object):
     # ----------
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_add(a, b):
+    def bhimpl_int_add(a, b):
         return intmask(a + b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_sub(a, b):
+    def bhimpl_int_sub(a, b):
         return intmask(a - b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_mul(a, b):
+    def bhimpl_int_mul(a, b):
         return intmask(a * b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_add_ovf(a, b):
+    def bhimpl_int_add_ovf(a, b):
         return ovfcheck(a + b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_sub_ovf(a, b):
+    def bhimpl_int_sub_ovf(a, b):
         return ovfcheck(a - b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_mul_ovf(a, b):
+    def bhimpl_int_mul_ovf(a, b):
         return ovfcheck(a * b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_floordiv(a, b):
+    def bhimpl_int_floordiv(a, b):
         return llop.int_floordiv(lltype.Signed, a, b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_uint_floordiv(a, b):
+    def bhimpl_uint_floordiv(a, b):
         c = llop.uint_floordiv(lltype.Unsigned, r_uint(a), r_uint(b))
         return intmask(c)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_mod(a, b):
+    def bhimpl_int_mod(a, b):
         return llop.int_mod(lltype.Signed, a, b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_and(a, b):
+    def bhimpl_int_and(a, b):
         return a & b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_or(a, b):
+    def bhimpl_int_or(a, b):
         return a | b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_xor(a, b):
+    def bhimpl_int_xor(a, b):
         return a ^ b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_rshift(a, b):
+    def bhimpl_int_rshift(a, b):
         return a >> b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_lshift(a, b):
+    def bhimpl_int_lshift(a, b):
         return intmask(a << b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_uint_rshift(a, b):
+    def bhimpl_uint_rshift(a, b):
         c = r_uint(a) >> r_uint(b)
         return intmask(c)
 
     @arguments("i", returns="i")
-    def opimpl_int_neg(a):
+    def bhimpl_int_neg(a):
         return intmask(-a)
 
     @arguments("i", returns="i")
-    def opimpl_int_invert(a):
+    def bhimpl_int_invert(a):
         return intmask(~a)
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_lt(a, b):
+    def bhimpl_int_lt(a, b):
         return a < b
     @arguments("i", "i", returns="i")
-    def opimpl_int_le(a, b):
+    def bhimpl_int_le(a, b):
         return a <= b
     @arguments("i", "i", returns="i")
-    def opimpl_int_eq(a, b):
+    def bhimpl_int_eq(a, b):
         return a == b
     @arguments("i", "i", returns="i")
-    def opimpl_int_ne(a, b):
+    def bhimpl_int_ne(a, b):
         return a != b
     @arguments("i", "i", returns="i")
-    def opimpl_int_gt(a, b):
+    def bhimpl_int_gt(a, b):
         return a > b
     @arguments("i", "i", returns="i")
-    def opimpl_int_ge(a, b):
+    def bhimpl_int_ge(a, b):
         return a >= b
     @arguments("i", returns="i")
-    def opimpl_int_is_zero(a):
+    def bhimpl_int_is_zero(a):
         return not a
     @arguments("i", returns="i")
-    def opimpl_int_is_true(a):
+    def bhimpl_int_is_true(a):
         return bool(a)
 
     @arguments("i", "i", returns="i")
-    def opimpl_uint_lt(a, b):
+    def bhimpl_uint_lt(a, b):
         return r_uint(a) < r_uint(b)
     @arguments("i", "i", returns="i")
-    def opimpl_uint_le(a, b):
+    def bhimpl_uint_le(a, b):
         return r_uint(a) <= r_uint(b)
     @arguments("i", "i", returns="i")
-    def opimpl_uint_gt(a, b):
+    def bhimpl_uint_gt(a, b):
         return r_uint(a) > r_uint(b)
     @arguments("i", "i", returns="i")
-    def opimpl_uint_ge(a, b):
+    def bhimpl_uint_ge(a, b):
         return r_uint(a) >= r_uint(b)
 
     @arguments("r", "r", returns="i")
-    def opimpl_ptr_eq(a, b):
+    def bhimpl_ptr_eq(a, b):
         return a == b
     @arguments("r", "r", returns="i")
-    def opimpl_ptr_ne(a, b):
+    def bhimpl_ptr_ne(a, b):
         return a != b
     @arguments("r", returns="i")
-    def opimpl_ptr_iszero(a):
+    def bhimpl_ptr_iszero(a):
         return not a
     @arguments("r", returns="i")
-    def opimpl_ptr_nonzero(a):
+    def bhimpl_ptr_nonzero(a):
         return bool(a)
 
     @arguments("i", returns="i")
-    def opimpl_int_copy(a):
+    def bhimpl_int_copy(a):
         return a
     @arguments("r", returns="r")
-    def opimpl_ref_copy(a):
+    def bhimpl_ref_copy(a):
         return a
     @arguments("f", returns="f")
-    def opimpl_float_copy(a):
+    def bhimpl_float_copy(a):
         return a
 
-    opimpl_int_guard_value = opimpl_int_copy
-    opimpl_ref_guard_value = opimpl_ref_copy
-    opimpl_float_guard_value = opimpl_float_copy
+    bhimpl_int_guard_value = bhimpl_int_copy
+    bhimpl_ref_guard_value = bhimpl_ref_copy
+    bhimpl_float_guard_value = bhimpl_float_copy
 
     # ----------
     # float operations
 
     @arguments("f", returns="f")
-    def opimpl_float_neg(a):
+    def bhimpl_float_neg(a):
         return -a
     @arguments("f", returns="f")
-    def opimpl_float_abs(a):
+    def bhimpl_float_abs(a):
         return abs(a)
     @arguments("f", returns="i")
-    def opimpl_float_is_true(a):
+    def bhimpl_float_is_true(a):
         return bool(a)
 
     @arguments("f", "f", returns="f")
-    def opimpl_float_add(a, b):
+    def bhimpl_float_add(a, b):
         return a + b
     @arguments("f", "f", returns="f")
-    def opimpl_float_sub(a, b):
+    def bhimpl_float_sub(a, b):
         return a - b
     @arguments("f", "f", returns="f")
-    def opimpl_float_mul(a, b):
+    def bhimpl_float_mul(a, b):
         return a * b
     @arguments("f", "f", returns="f")
-    def opimpl_float_truediv(a, b):
+    def bhimpl_float_truediv(a, b):
         return a / b
 
     @arguments("f", "f", returns="i")
-    def opimpl_float_lt(a, b):
+    def bhimpl_float_lt(a, b):
         return a < b
     @arguments("f", "f", returns="i")
-    def opimpl_float_le(a, b):
+    def bhimpl_float_le(a, b):
         return a <= b
     @arguments("f", "f", returns="i")
-    def opimpl_float_eq(a, b):
+    def bhimpl_float_eq(a, b):
         return a == b
     @arguments("f", "f", returns="i")
-    def opimpl_float_ne(a, b):
+    def bhimpl_float_ne(a, b):
         return a != b
     @arguments("f", "f", returns="i")
-    def opimpl_float_gt(a, b):
+    def bhimpl_float_gt(a, b):
         return a > b
     @arguments("f", "f", returns="i")
-    def opimpl_float_ge(a, b):
+    def bhimpl_float_ge(a, b):
         return a >= b
 
     @arguments("f", returns="i")
-    def opimpl_cast_float_to_int(a):
+    def bhimpl_cast_float_to_int(a):
         # note: we need to call int() twice to care for the fact that
         # int(-2147483648.0) returns a long :-(
         return int(int(a))
 
     @arguments("i", returns="f")
-    def opimpl_cast_int_to_float(a):
+    def bhimpl_cast_int_to_float(a):
         return float(a)
 
     # ----------
     # control flow operations
 
     @arguments("self", "i")
-    def opimpl_int_return(self, a):
+    def bhimpl_int_return(self, a):
         self.registers_i[0] = a
         if not we_are_translated():
             self._return_type = "int"
         raise LeaveFrame
 
     @arguments("self", "r")
-    def opimpl_ref_return(self, a):
+    def bhimpl_ref_return(self, a):
         self.registers_r[0] = a
         if not we_are_translated():
             self._return_type = "ref"
         raise LeaveFrame
 
     @arguments("self", "f")
-    def opimpl_float_return(self, a):
+    def bhimpl_float_return(self, a):
         self.registers_f[0] = a
         if not we_are_translated():
             self._return_type = "float"
         raise LeaveFrame
 
     @arguments("self")
-    def opimpl_void_return(self):
+    def bhimpl_void_return(self):
         if not we_are_translated():
             self._return_type = "void"
         raise LeaveFrame
 
     @arguments("L", "i", "pc", returns="L")
-    def opimpl_goto_if_not(target, a, pc):
+    def bhimpl_goto_if_not(target, a, pc):
         if a:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_lt(target, a, b, pc):
+    def bhimpl_goto_if_not_int_lt(target, a, b, pc):
         if a < b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_le(target, a, b, pc):
+    def bhimpl_goto_if_not_int_le(target, a, b, pc):
         if a <= b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_eq(target, a, b, pc):
+    def bhimpl_goto_if_not_int_eq(target, a, b, pc):
         if a == b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_ne(target, a, b, pc):
+    def bhimpl_goto_if_not_int_ne(target, a, b, pc):
         if a != b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_gt(target, a, b, pc):
+    def bhimpl_goto_if_not_int_gt(target, a, b, pc):
         if a > b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_ge(target, a, b, pc):
+    def bhimpl_goto_if_not_int_ge(target, a, b, pc):
         if a >= b:
             return pc
         else:
             return target
 
     @arguments("L", "i", "pc", returns="L")
-    def opimpl_goto_if_not_int_is_zero(target, a, pc):
+    def bhimpl_goto_if_not_int_is_zero(target, a, pc):
         if not a:
             return pc
         else:
             return target
 
     @arguments("L", "r", "r", "pc", returns="L")
-    def opimpl_goto_if_not_ptr_eq(target, a, b, pc):
+    def bhimpl_goto_if_not_ptr_eq(target, a, b, pc):
         if a == b:
             return pc
         else:
             return target
 
     @arguments("L", "r", "r", "pc", returns="L")
-    def opimpl_goto_if_not_ptr_ne(target, a, b, pc):
+    def bhimpl_goto_if_not_ptr_ne(target, a, b, pc):
         if a != b:
             return pc
         else:
             return target
 
     @arguments("L", "r", "pc", returns="L")
-    def opimpl_goto_if_not_ptr_iszero(target, a, pc):
+    def bhimpl_goto_if_not_ptr_iszero(target, a, pc):
         if not a:
             return pc
         else:
             return target
 
     @arguments("L", "r", "pc", returns="L")
-    def opimpl_goto_if_not_ptr_nonzero(target, a, pc):
+    def bhimpl_goto_if_not_ptr_nonzero(target, a, pc):
         if a:
             return pc
         else:
             return target
 
     @arguments("L", returns="L")
-    def opimpl_goto(target):
+    def bhimpl_goto(target):
         return target
 
     @arguments("i", "d", "pc", returns="L")
-    def opimpl_switch(switchvalue, switchdict, pc):
+    def bhimpl_switch(switchvalue, switchdict, pc):
         assert isinstance(switchdict, SwitchDictDescr)
         try:
             return switchdict.dict[switchvalue]
@@ -649,14 +649,14 @@ class BlackholeInterpreter(object):
             return pc
 
     @arguments("L")
-    def opimpl_catch_exception(target):
+    def bhimpl_catch_exception(target):
         """This is a no-op when run normally.  When an exception occurs
         and the instruction that raised is immediately followed by a
         catch_exception, then the code in handle_exception_in_frame()
         will capture the exception and jump to 'target'."""
 
     @arguments("self", "i", "L", "pc", returns="L")
-    def opimpl_goto_if_exception_mismatch(self, vtable, target, pc):
+    def bhimpl_goto_if_exception_mismatch(self, vtable, target, pc):
         adr = llmemory.cast_int_to_adr(vtable)
         bounding_class = llmemory.cast_adr_to_ptr(adr, rclass.CLASSTYPE)
         real_instance = self.exception_last_value
@@ -667,20 +667,20 @@ class BlackholeInterpreter(object):
             return target
 
     @arguments("self", returns="i")
-    def opimpl_last_exception(self):
+    def bhimpl_last_exception(self):
         real_instance = self.exception_last_value
         assert real_instance
         adr = llmemory.cast_ptr_to_adr(real_instance.typeptr)
         return llmemory.cast_adr_to_int(adr)
 
     @arguments("self", returns="r")
-    def opimpl_last_exc_value(self):
+    def bhimpl_last_exc_value(self):
         real_instance = self.exception_last_value
         assert real_instance
         return lltype.cast_opaque_ptr(llmemory.GCREF, real_instance)
 
     @arguments("self")
-    def opimpl_reraise(self):
+    def bhimpl_reraise(self):
         real_instance = self.exception_last_value
         assert real_instance
         raise real_instance
@@ -689,139 +689,139 @@ class BlackholeInterpreter(object):
     # the following operations are directly implemented by the backend
 
     @arguments("self", "i", "d", "R", returns="i")
-    def opimpl_residual_call_r_i(self, func, calldescr, args_r):
+    def bhimpl_residual_call_r_i(self, func, calldescr, args_r):
         return self.cpu.bh_call_i(func, calldescr, None, args_r, None)
     @arguments("self", "i", "d", "R", returns="r")
-    def opimpl_residual_call_r_r(self, func, calldescr, args_r):
+    def bhimpl_residual_call_r_r(self, func, calldescr, args_r):
         return self.cpu.bh_call_r(func, calldescr, None, args_r, None)
     @arguments("self", "i", "d", "R", returns="f")
-    def opimpl_residual_call_r_f(self, func, calldescr, args_r):
+    def bhimpl_residual_call_r_f(self, func, calldescr, args_r):
         return self.cpu.bh_call_f(func, calldescr, None, args_r, None)
     @arguments("self", "i", "d", "R")
-    def opimpl_residual_call_r_v(self, func, calldescr, args_r):
+    def bhimpl_residual_call_r_v(self, func, calldescr, args_r):
         self.cpu.bh_call_v(func, calldescr, None, args_r, None)
 
     @arguments("self", "i", "d", "I", "R", returns="i")
-    def opimpl_residual_call_ir_i(self, func, calldescr, args_i, args_r):
+    def bhimpl_residual_call_ir_i(self, func, calldescr, args_i, args_r):
         return self.cpu.bh_call_i(func, calldescr, args_i, args_r, None)
     @arguments("self", "i", "d", "I", "R", returns="r")
-    def opimpl_residual_call_ir_r(self, func, calldescr, args_i, args_r):
+    def bhimpl_residual_call_ir_r(self, func, calldescr, args_i, args_r):
         return self.cpu.bh_call_r(func, calldescr, args_i, args_r, None)
     @arguments("self", "i", "d", "I", "R", returns="f")
-    def opimpl_residual_call_ir_f(self, func, calldescr, args_i, args_r):
+    def bhimpl_residual_call_ir_f(self, func, calldescr, args_i, args_r):
         return self.cpu.bh_call_f(func, calldescr, args_i, args_r, None)
     @arguments("self", "i", "d", "I", "R")
-    def opimpl_residual_call_ir_v(self, func, calldescr, args_i, args_r):
+    def bhimpl_residual_call_ir_v(self, func, calldescr, args_i, args_r):
         self.cpu.bh_call_v(func, calldescr, args_i, args_r, None)
 
     @arguments("self", "i", "d", "I", "R", "F", returns="i")
-    def opimpl_residual_call_irf_i(self, func, calldescr,args_i,args_r,args_f):
+    def bhimpl_residual_call_irf_i(self, func, calldescr,args_i,args_r,args_f):
         return self.cpu.bh_call_i(func, calldescr, args_i, args_r, args_f)
     @arguments("self", "i", "d", "I", "R", "F", returns="r")
-    def opimpl_residual_call_irf_r(self, func, calldescr,args_i,args_r,args_f):
+    def bhimpl_residual_call_irf_r(self, func, calldescr,args_i,args_r,args_f):
         return self.cpu.bh_call_r(func, calldescr, args_i, args_r, args_f)
     @arguments("self", "i", "d", "I", "R", "F", returns="f")
-    def opimpl_residual_call_irf_f(self, func, calldescr,args_i,args_r,args_f):
+    def bhimpl_residual_call_irf_f(self, func, calldescr,args_i,args_r,args_f):
         return self.cpu.bh_call_f(func, calldescr, args_i, args_r, args_f)
     @arguments("self", "i", "d", "I", "R", "F")
-    def opimpl_residual_call_irf_v(self, func, calldescr,args_i,args_r,args_f):
+    def bhimpl_residual_call_irf_v(self, func, calldescr,args_i,args_r,args_f):
         self.cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
 
     @arguments("self", "d", "i", returns="r")
-    def opimpl_new_array(self, arraydescr, length):
+    def bhimpl_new_array(self, arraydescr, length):
         return self.cpu.bh_new_array(arraydescr, length)
     @arguments("self", "d", "r", "i", "r")
-    def opimpl_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
+    def bhimpl_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
         self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
 
     @arguments("self", "r", "d", returns="i")
-    def opimpl_getfield_gc_i(self, struct, fielddescr):
+    def bhimpl_getfield_gc_i(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_i(struct, fielddescr)
     @arguments("self", "r", "d", returns="i")
-    def opimpl_getfield_gc_c(self, struct, fielddescr):
+    def bhimpl_getfield_gc_c(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_c(struct, fielddescr)
     @arguments("self", "r", "d", returns="i")
-    def opimpl_getfield_gc_u(self, struct, fielddescr):
+    def bhimpl_getfield_gc_u(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_u(struct, fielddescr)
     @arguments("self", "r", "d", returns="r")
-    def opimpl_getfield_gc_r(self, struct, fielddescr):
+    def bhimpl_getfield_gc_r(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_r(struct, fielddescr)
     @arguments("self", "r", "d", returns="f")
-    def opimpl_getfield_gc_f(self, struct, fielddescr):
+    def bhimpl_getfield_gc_f(self, struct, fielddescr):
         return self.cpu.bh_getfield_gc_f(struct, fielddescr)
 
-    opimpl_getfield_gc_i_pure = opimpl_getfield_gc_i
-    opimpl_getfield_gc_c_pure = opimpl_getfield_gc_c
-    opimpl_getfield_gc_u_pure = opimpl_getfield_gc_u
-    opimpl_getfield_gc_r_pure = opimpl_getfield_gc_r
-    opimpl_getfield_gc_f_pure = opimpl_getfield_gc_f
+    bhimpl_getfield_gc_i_pure = bhimpl_getfield_gc_i
+    bhimpl_getfield_gc_c_pure = bhimpl_getfield_gc_c
+    bhimpl_getfield_gc_u_pure = bhimpl_getfield_gc_u
+    bhimpl_getfield_gc_r_pure = bhimpl_getfield_gc_r
+    bhimpl_getfield_gc_f_pure = bhimpl_getfield_gc_f
 
     @arguments("self", "i", "d", returns="i")
-    def opimpl_getfield_raw_i(self, struct, fielddescr):
+    def bhimpl_getfield_raw_i(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_i(struct, fielddescr)
     @arguments("self", "i", "d", returns="i")
-    def opimpl_getfield_raw_c(self, struct, fielddescr):
+    def bhimpl_getfield_raw_c(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_c(struct, fielddescr)
     @arguments("self", "i", "d", returns="i")
-    def opimpl_getfield_raw_u(self, struct, fielddescr):
+    def bhimpl_getfield_raw_u(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_u(struct, fielddescr)
     @arguments("self", "i", "d", returns="r")
-    def opimpl_getfield_raw_r(self, struct, fielddescr):
+    def bhimpl_getfield_raw_r(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_r(struct, fielddescr)
     @arguments("self", "i", "d", returns="f")
-    def opimpl_getfield_raw_f(self, struct, fielddescr):
+    def bhimpl_getfield_raw_f(self, struct, fielddescr):
         return self.cpu.bh_getfield_raw_f(struct, fielddescr)
 
-    opimpl_getfield_raw_i_pure = opimpl_getfield_raw_i
-    opimpl_getfield_raw_c_pure = opimpl_getfield_raw_c
-    opimpl_getfield_raw_u_pure = opimpl_getfield_raw_u
-    opimpl_getfield_raw_r_pure = opimpl_getfield_raw_r
-    opimpl_getfield_raw_f_pure = opimpl_getfield_raw_f
+    bhimpl_getfield_raw_i_pure = bhimpl_getfield_raw_i
+    bhimpl_getfield_raw_c_pure = bhimpl_getfield_raw_c
+    bhimpl_getfield_raw_u_pure = bhimpl_getfield_raw_u
+    bhimpl_getfield_raw_r_pure = bhimpl_getfield_raw_r
+    bhimpl_getfield_raw_f_pure = bhimpl_getfield_raw_f
 
     @arguments("self", "r", "d", "i")
-    def opimpl_setfield_gc_i(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_gc_i(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_i(struct, fielddescr, newvalue)
     @arguments("self", "r", "d", "i")
-    def opimpl_setfield_gc_c(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_gc_c(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_c(struct, fielddescr, newvalue)
     @arguments("self", "r", "d", "i")
-    def opimpl_setfield_gc_u(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_gc_u(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_u(struct, fielddescr, newvalue)
     @arguments("self", "r", "d", "r")
-    def opimpl_setfield_gc_r(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_gc_r(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_r(struct, fielddescr, newvalue)
     @arguments("self", "r", "d", "f")
-    def opimpl_setfield_gc_f(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_gc_f(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_gc_f(struct, fielddescr, newvalue)
 
     @arguments("self", "i", "d", "i")
-    def opimpl_setfield_raw_i(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_raw_i(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_i(struct, fielddescr, newvalue)
     @arguments("self", "i", "d", "i")
-    def opimpl_setfield_raw_c(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_raw_c(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_c(struct, fielddescr, newvalue)
     @arguments("self", "i", "d", "i")
-    def opimpl_setfield_raw_u(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_raw_u(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_u(struct, fielddescr, newvalue)
     @arguments("self", "i", "d", "r")
-    def opimpl_setfield_raw_r(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_raw_r(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_r(struct, fielddescr, newvalue)
     @arguments("self", "i", "d", "f")
-    def opimpl_setfield_raw_f(self, struct, fielddescr, newvalue):
+    def bhimpl_setfield_raw_f(self, struct, fielddescr, newvalue):
         self.cpu.bh_setfield_raw_f(struct, fielddescr, newvalue)
 
     @arguments("self", "d", returns="r")
-    def opimpl_new(self, descr):
+    def bhimpl_new(self, descr):
         return self.cpu.bh_new(descr)
 
     @arguments("self", "d", returns="r")
-    def opimpl_new_with_vtable(self, descr):
+    def bhimpl_new_with_vtable(self, descr):
         return self.cpu.bh_new_with_vtable(descr)
 
     @arguments("self", "r", returns="i")
-    def opimpl_guard_class(self, struct):
+    def bhimpl_guard_class(self, struct):
         return self.cpu.bh_classof(struct)
 
     @arguments("self", "r", returns="i")
-    def opimpl_cast_ptr_to_int(self, p):
+    def bhimpl_cast_ptr_to_int(self, p):
         return self.cpu.bh_cast_ptr_to_int(p)

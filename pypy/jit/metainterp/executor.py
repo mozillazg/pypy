@@ -66,7 +66,7 @@ def make_execute_list(cpuclass):
                 raise Exception("duplicate entry for op number %d" % value)
             if key.endswith('_PURE'):
                 key = key[:-5]
-            name = 'opimpl_' + key.lower()
+            name = 'bhimpl_' + key.lower()
             if hasattr(BlackholeInterpreter, name):
                 func = make_execute_function_with_boxes(
                     key.lower(),
@@ -78,7 +78,7 @@ def make_execute_list(cpuclass):
     cpuclass._execute_by_num_args = execute_by_num_args
 
 def make_execute_function_with_boxes(name, func):
-    # Make a wrapper for 'func'.  The func is a simple opimpl_xxx function
+    # Make a wrapper for 'func'.  The func is a simple bhimpl_xxx function
     # from the BlackholeInterpreter class.  The wrapper is a new function
     # that receives and returns boxed values.
     for argtype in func.argtypes:
