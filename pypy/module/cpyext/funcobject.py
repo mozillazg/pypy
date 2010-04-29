@@ -46,6 +46,7 @@ def PyMethod_New(space, w_func, w_self, w_cls):
 def PyMethod_Function(space, w_method):
     """Return the function object associated with the method meth."""
     assert isinstance(w_method, Method)
+    register_container(space, w_method)
     return w_method.w_function
 
 @cpython_api([PyObject], PyObject, borrowed=True)
@@ -53,5 +54,6 @@ def PyMethod_Class(space, w_method):
     """Return the class object from which the method meth was created; if this was
     created from an instance, it will be the class of the instance."""
     assert isinstance(w_method, Method)
+    register_container(space, w_method)
     return w_method.w_class
 
