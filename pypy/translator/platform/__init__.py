@@ -18,9 +18,9 @@ class CompilationError(Exception):
 
     def __repr__(self):
         if self.err:
-            return "<CompilationError err=%s>" % repr(self.err)
+            return "<CompilationError err=%s>" % py.io.saferepr(self.err)
         else:
-            return "<CompilationError out=%s>" % repr(self.out)
+            return "<CompilationError out=%s>" % py.io.saferepr(self.out)
 
     __str__ = __repr__
 
