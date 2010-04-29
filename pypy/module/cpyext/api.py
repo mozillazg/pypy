@@ -380,6 +380,8 @@ def build_type_checkers(type_name, cls=None):
         return int(space.is_w(w_obj_type, w_type))
     return check, check_exact
 
+pypy_debug_catch_fatal_exception = rffi.llexternal('pypy_debug_catch_fatal_exception', [], lltype.Void)
+
 # Make the wrapper for the cases (1) and (2)
 def make_wrapper(space, callable):
     names = callable.api_func.argnames
@@ -448,11 +450,14 @@ def make_wrapper(space, callable):
                 retval = rffi.cast(callable.api_func.restype, result)
         except NullPointerException:
             print "Container not registered by %s" % callable.__name__
-        except Exception:
+        except Exception, e:
             if not we_are_translated():
                 import traceback
                 traceback.print_exc()
-            print "Fatal exception encountered"
+                print str(e)
+                # we can't do much here, since we're in ctypes, swallow
+            else:
+                pypy_debug_catch_fatal_exception()
         rffi.stackcounter.stacks_counter -= 1
         return retval
     callable._always_inline_ = True
