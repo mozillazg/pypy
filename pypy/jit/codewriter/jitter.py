@@ -387,6 +387,9 @@ class Transformer(object):
         else:
             raise NoOp
 
+    def rewrite_op_bool_not(self, op):
+        return SpaceOperation('int_is_zero', op.args, op.result)
+
 # ____________________________________________________________
 
 def _with_prefix(prefix):

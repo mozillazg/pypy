@@ -155,32 +155,6 @@ class AbstractCPU(object):
     # lltype specific operations
     # --------------------------
     
-    def do_arraylen_gc(self, arraybox, arraydescr):
-        raise NotImplementedError
-
-    def do_strlen(self, stringbox):
-        raise NotImplementedError
-
-    def do_strgetitem(self, stringbox, indexbox):
-        raise NotImplementedError
-
-    def do_unicodelen(self, stringbox):
-        raise NotImplementedError
-
-    def do_unicodegetitem(self, stringbox, indexbox):
-        raise NotImplementedError
-
-    def do_getarrayitem_gc(self, arraybox, indexbox, arraydescr):
-        raise NotImplementedError
-
-    def do_arraycopy(self, calldescr, fnptr, sourcebox, destbox,
-                     source_startbox, dest_startbox, lengthbox, arraydescr):
-        return self.do_call([fnptr, sourcebox, destbox, source_startbox,
-                             dest_startbox, lengthbox], calldescr)
-    
-    def do_getfield_gc(self, structbox, fielddescr):
-        raise NotImplementedError
-
     def bh_getfield_gc_i(self, struct, fielddescr):
         raise NotImplementedError
     def bh_getfield_gc_c(self, struct, fielddescr):
@@ -190,9 +164,6 @@ class AbstractCPU(object):
     def bh_getfield_gc_r(self, struct, fielddescr):
         raise NotImplementedError
     def bh_getfield_gc_f(self, struct, fielddescr):
-        raise NotImplementedError
-
-    def do_getfield_raw(self, structbox, fielddescr):
         raise NotImplementedError
 
     def bh_getfield_raw_i(self, struct, fielddescr):
@@ -206,28 +177,14 @@ class AbstractCPU(object):
     def bh_getfield_raw_f(self, struct, fielddescr):
         raise NotImplementedError
 
-    def do_new(self, sizedescr):
-        raise NotImplementedError
-
     def bh_new(self, sizedescr):
         raise NotImplementedError
-
-    def do_new_with_vtable(self, classbox):
-        raise NotImplementedError
-
     def bh_new_with_vtable(self, sizevtabledescr):
         raise NotImplementedError
-
-    def bh_classof(self, struct):
-        raise NotImplementedError
-
-    def do_new_array(self, lengthbox, arraydescr):
-        raise NotImplementedError
-
     def bh_new_array(self, arraydescr, length):
         raise NotImplementedError
 
-    def do_setarrayitem_gc(self, arraybox, indexbox, newvaluebox, arraydescr):
+    def bh_classof(self, struct):
         raise NotImplementedError
 
     def bh_setarrayitem_gc_i(self, arraydescr, array, index, newvalue):
@@ -235,12 +192,6 @@ class AbstractCPU(object):
     def bh_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
         raise NotImplementedError
     def bh_setarrayitem_gc_f(self, arraydescr, array, index, newvalue):
-        raise NotImplementedError
-
-    def do_setarrayitem_raw(self, arraybox, indexbox, newvaluebox, arraydescr):
-        raise NotImplementedError
-
-    def do_setfield_gc(self, structbox, newvaluebox, fielddescr):
         raise NotImplementedError
 
     def bh_setfield_gc_i(self, struct, fielddescr, newvalue):
@@ -254,9 +205,6 @@ class AbstractCPU(object):
     def bh_setfield_gc_f(self, struct, fielddescr, newvalue):
         raise NotImplementedError
 
-    def do_setfield_raw(self, structbox, newvaluebox, fielddescr):
-        raise NotImplementedError
-
     def bh_setfield_raw_i(self, struct, fielddescr, newvalue):
         raise NotImplementedError
     def bh_setfield_raw_c(self, struct, fielddescr, newvalue):
@@ -268,19 +216,6 @@ class AbstractCPU(object):
     def bh_setfield_raw_f(self, struct, fielddescr, newvalue):
         raise NotImplementedError
 
-    def do_newstr(self, lengthbox):
-        raise NotImplementedError
-
-    def do_newunicode(self, lengthbox):
-        raise NotImplementedError
-
-    def do_strsetitem(self, stringbox, indexbox, charbox):
-        raise NotImplementedError
-
-    def do_unicodesetitem(self, stringbox, indexbox, charbox):
-        raise NotImplementedError
-
-    # blackhole interface
     def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
         raise NotImplementedError
     def bh_call_r(self, func, calldescr, args_i, args_r, args_f):
@@ -290,41 +225,8 @@ class AbstractCPU(object):
     def bh_call_v(self, func, calldescr, args_i, args_r, args_f):
         raise NotImplementedError
 
-    def do_call(self, args, calldescr):
-        raise NotImplementedError
-
-    def do_call_assembler(self, args, token):
-        raise NotImplementedError
-
-    def do_call_loopinvariant(self, args, calldescr):
-        return self.do_call(args, calldescr)
-
-    def do_cond_call_gc_wb(self, args, calldescr):
-        raise NotImplementedError
-
-    def do_cast_ptr_to_int(self, ptrbox):
-        raise NotImplementedError
-
     def bh_cast_ptr_to_int(self, ptr):
         raise NotImplementedError
 
-    def do_call_may_force(self, args, calldescr):
-        return self.do_call(args, calldescr)
-
     def force(self, force_token):
-        raise NotImplementedError
-
-    # ootype specific operations
-    # --------------------------
-
-    def do_runtimenew(self, classbox):
-        raise NotImplementedError
-
-    def do_oosend(self, args, descr):
-        raise NotImplementedError
-
-    def do_instanceof(self, instancebox, typedescr):
-        raise NotImplementedError
-
-    def typedescr2classbox(self, descr):
         raise NotImplementedError

@@ -263,17 +263,6 @@ class BaseCPU(model.AbstractCPU):
 
     # ----------
 
-    def clear_exception(self):
-        llimpl.clear_exception()
-
-    def get_overflow_error(self):
-        return (self.cast_adr_to_int(llimpl.get_overflow_error()),
-                llimpl.get_overflow_error_value())
-
-    def get_zero_division_error(self):
-        return (self.cast_adr_to_int(llimpl.get_zero_division_error()),
-                llimpl.get_zero_division_error_value())
-
     def sizeof(self, S):
         assert not isinstance(S, lltype.Ptr)
         return self.getdescr(symbolic.get_size(S))
@@ -329,42 +318,42 @@ class LLtypeCPU(BaseCPU):
 
     # ---------- the backend-dependent operations ----------
 
-    def do_arraylen_gc(self, arraybox, arraydescr):
-        array = arraybox.getref_base()
-        return history.BoxInt(llimpl.do_arraylen_gc(arraydescr, array))
+##    def do_arraylen_gc(self, arraybox, arraydescr):
+##        array = arraybox.getref_base()
+##        return history.BoxInt(llimpl.do_arraylen_gc(arraydescr, array))
 
-    def do_strlen(self, stringbox):
-        string = stringbox.getref_base()
-        return history.BoxInt(llimpl.do_strlen(0, string))
+##    def do_strlen(self, stringbox):
+##        string = stringbox.getref_base()
+##        return history.BoxInt(llimpl.do_strlen(0, string))
 
-    def do_strgetitem(self, stringbox, indexbox):
-        string = stringbox.getref_base()
-        index = indexbox.getint()
-        return history.BoxInt(llimpl.do_strgetitem(0, string, index))
+##    def do_strgetitem(self, stringbox, indexbox):
+##        string = stringbox.getref_base()
+##        index = indexbox.getint()
+##        return history.BoxInt(llimpl.do_strgetitem(0, string, index))
 
-    def do_unicodelen(self, stringbox):
-        string = stringbox.getref_base()
-        return history.BoxInt(llimpl.do_unicodelen(0, string))
+##    def do_unicodelen(self, stringbox):
+##        string = stringbox.getref_base()
+##        return history.BoxInt(llimpl.do_unicodelen(0, string))
 
-    def do_unicodegetitem(self, stringbox, indexbox):
-        string = stringbox.getref_base()
-        index = indexbox.getint()
-        return history.BoxInt(llimpl.do_unicodegetitem(0, string, index))
+##    def do_unicodegetitem(self, stringbox, indexbox):
+##        string = stringbox.getref_base()
+##        index = indexbox.getint()
+##        return history.BoxInt(llimpl.do_unicodegetitem(0, string, index))
 
-    def do_getarrayitem_gc(self, arraybox, indexbox, arraydescr):
-        assert isinstance(arraydescr, Descr)
-        array = arraybox.getref_base()
-        index = indexbox.getint()
-        if arraydescr.typeinfo == REF:
-            return history.BoxPtr(llimpl.do_getarrayitem_gc_ptr(array, index))
-        elif arraydescr.typeinfo == INT:
-            return history.BoxInt(llimpl.do_getarrayitem_gc_int(array, index,
-                                                               self.memo_cast))
-        elif arraydescr.typeinfo == FLOAT:
-            return history.BoxFloat(llimpl.do_getarrayitem_gc_float(array,
-                                                                    index))
-        else:
-            raise NotImplementedError
+##    def do_getarrayitem_gc(self, arraybox, indexbox, arraydescr):
+##        assert isinstance(arraydescr, Descr)
+##        array = arraybox.getref_base()
+##        index = indexbox.getint()
+##        if arraydescr.typeinfo == REF:
+##            return history.BoxPtr(llimpl.do_getarrayitem_gc_ptr(array, index))
+##        elif arraydescr.typeinfo == INT:
+##            return history.BoxInt(llimpl.do_getarrayitem_gc_int(array, index,
+##                                                               self.memo_cast))
+##        elif arraydescr.typeinfo == FLOAT:
+##            return history.BoxFloat(llimpl.do_getarrayitem_gc_float(array,
+##                                                                    index))
+##        else:
+##            raise NotImplementedError
 
 ##    def do_getfield_gc(self, structbox, fielddescr):
 ##        assert isinstance(fielddescr, Descr)
@@ -424,9 +413,9 @@ class LLtypeCPU(BaseCPU):
         assert isinstance(fielddescr, Descr)
         return llimpl.do_getfield_raw_float(struct, fielddescr.ofs)
 
-    def do_new(self, size):
-        assert isinstance(size, Descr)
-        return history.BoxPtr(llimpl.do_new(size.ofs))
+##    def do_new(self, size):
+##        assert isinstance(size, Descr)
+##        return history.BoxPtr(llimpl.do_new(size.ofs))
 
     def bh_new(self, sizedescr):
         assert isinstance(sizedescr, Descr)
@@ -444,31 +433,31 @@ class LLtypeCPU(BaseCPU):
         result_adr = llmemory.cast_ptr_to_adr(struct.typeptr)
         return llmemory.cast_adr_to_int(result_adr)
 
-    def do_new_array(self, countbox, size):
-        assert isinstance(size, Descr)
-        count = countbox.getint()
-        return history.BoxPtr(llimpl.do_new_array(size.ofs, count))
+##    def do_new_array(self, countbox, size):
+##        assert isinstance(size, Descr)
+##        count = countbox.getint()
+##        return history.BoxPtr(llimpl.do_new_array(size.ofs, count))
 
     def bh_new_array(self, arraydescr, length):
         assert isinstance(arraydescr, Descr)
         return llimpl.do_new_array(arraydescr.ofs, length)
 
-    def do_setarrayitem_gc(self, arraybox, indexbox, newvaluebox, arraydescr):
-        assert isinstance(arraydescr, Descr)
-        array = arraybox.getref_base()
-        index = indexbox.getint()
-        if arraydescr.typeinfo == REF:
-            newvalue = newvaluebox.getref_base()
-            llimpl.do_setarrayitem_gc_ptr(array, index, newvalue)
-        elif arraydescr.typeinfo == INT:
-            newvalue = newvaluebox.getint()
-            llimpl.do_setarrayitem_gc_int(array, index, newvalue,
-                                          self.memo_cast)
-        elif arraydescr.typeinfo == FLOAT:
-            newvalue = newvaluebox.getfloat()
-            llimpl.do_setarrayitem_gc_float(array, index, newvalue)
-        else:
-            raise NotImplementedError
+##    def do_setarrayitem_gc(self, arraybox, indexbox, newvaluebox, arraydescr):
+##        assert isinstance(arraydescr, Descr)
+##        array = arraybox.getref_base()
+##        index = indexbox.getint()
+##        if arraydescr.typeinfo == REF:
+##            newvalue = newvaluebox.getref_base()
+##            llimpl.do_setarrayitem_gc_ptr(array, index, newvalue)
+##        elif arraydescr.typeinfo == INT:
+##            newvalue = newvaluebox.getint()
+##            llimpl.do_setarrayitem_gc_int(array, index, newvalue,
+##                                          self.memo_cast)
+##        elif arraydescr.typeinfo == FLOAT:
+##            newvalue = newvaluebox.getfloat()
+##            llimpl.do_setarrayitem_gc_float(array, index, newvalue)
+##        else:
+##            raise NotImplementedError
 
     def bh_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
         assert isinstance(arraydescr, Descr)
@@ -532,28 +521,28 @@ class LLtypeCPU(BaseCPU):
         assert isinstance(fielddescr, Descr)
         llimpl.do_setfield_raw_float(struct, fielddescr.ofs, newvalue)
 
-    def do_same_as(self, box1):
-        return box1.clonebox()
+##    def do_same_as(self, box1):
+##        return box1.clonebox()
 
-    def do_newstr(self, lengthbox):
-        length = lengthbox.getint()
-        return history.BoxPtr(llimpl.do_newstr(0, length))
+##    def do_newstr(self, lengthbox):
+##        length = lengthbox.getint()
+##        return history.BoxPtr(llimpl.do_newstr(0, length))
 
-    def do_newunicode(self, lengthbox):
-        length = lengthbox.getint()
-        return history.BoxPtr(llimpl.do_newunicode(0, length))
+##    def do_newunicode(self, lengthbox):
+##        length = lengthbox.getint()
+##        return history.BoxPtr(llimpl.do_newunicode(0, length))
 
-    def do_strsetitem(self, stringbox, indexbox, newvaluebox):
-        string = stringbox.getref_base()
-        index = indexbox.getint()
-        newvalue = newvaluebox.getint()
-        llimpl.do_strsetitem(0, string, index, newvalue)
+##    def do_strsetitem(self, stringbox, indexbox, newvaluebox):
+##        string = stringbox.getref_base()
+##        index = indexbox.getint()
+##        newvalue = newvaluebox.getint()
+##        llimpl.do_strsetitem(0, string, index, newvalue)
 
-    def do_unicodesetitem(self, stringbox, indexbox, newvaluebox):
-        string = stringbox.getref_base()
-        index = indexbox.getint()
-        newvalue = newvaluebox.getint()
-        llimpl.do_unicodesetitem(0, string, index, newvalue)
+##    def do_unicodesetitem(self, stringbox, indexbox, newvaluebox):
+##        string = stringbox.getref_base()
+##        index = indexbox.getint()
+##        newvalue = newvaluebox.getint()
+##        llimpl.do_unicodesetitem(0, string, index, newvalue)
 
     def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
         self._prepare_call(INT, calldescr, args_i, args_r, args_f)
@@ -581,9 +570,9 @@ class LLtypeCPU(BaseCPU):
             for x in args_f:
                 llimpl.do_call_pushfloat(x)
 
-    def do_cast_ptr_to_int(self, ptrbox):
-        return history.BoxInt(llimpl.cast_to_int(ptrbox.getref_base(),
-                                                        self.memo_cast))
+##    def do_cast_ptr_to_int(self, ptrbox):
+##        return history.BoxInt(llimpl.cast_to_int(ptrbox.getref_base(),
+##                                                        self.memo_cast))
 
     def bh_cast_ptr_to_int(self, ptr):
         return llimpl.cast_to_int(ptr)
@@ -596,7 +585,7 @@ class LLtypeCPU(BaseCPU):
         return self.get_fail_descr_from_number(fail_index)
 
 
-class OOtypeCPU(BaseCPU):
+class OOtypeCPU_xxx_disabled(BaseCPU):
     is_oo = True
     ts = oohelper
 
@@ -915,4 +904,4 @@ class FieldDescr(OODescr):
 
 import pypy.jit.metainterp.executor
 pypy.jit.metainterp.executor.make_execute_list(LLtypeCPU)
-pypy.jit.metainterp.executor.make_execute_list(OOtypeCPU)
+##pypy.jit.metainterp.executor.make_execute_list(OOtypeCPU)

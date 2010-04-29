@@ -177,10 +177,10 @@ _oplist = [
     'FLOAT_GT/2b',
     'FLOAT_GE/2b',
     #
+    'INT_IS_ZERO/1b',
     'INT_IS_TRUE/1b',
     'INT_NEG/1',
     'INT_INVERT/1',
-    'BOOL_NOT/1b',
     #
     'SAME_AS/1',      # gets a Const or a Box, turns it into another Box
     #

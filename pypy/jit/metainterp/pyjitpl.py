@@ -45,9 +45,9 @@ class MIFrame(object):
 
     def __init__(self, metainterp):
         self.metainterp = metainterp
-        self.boxes_i = [None] * 256
-        self.boxes_r = [None] * 256
-        self.boxes_f = [None] * 256
+        self.registers_i = [None] * 256
+        self.registers_r = [None] * 256
+        self.registers_f = [None] * 256
 
     def setup(self, jitcode, greenkey=None):
         assert isinstance(jitcode, JitCode)
@@ -57,24 +57,37 @@ class MIFrame(object):
         # this is not None for frames that are recursive portal calls
         self.greenkey = greenkey
         # copy the constants in place
-        self.copy_constants(self.boxes_i, jitcode.constants_i, ConstInt)
-        self.copy_constants(self.boxes_r, jitcode.constants_r, ConstPtr)
-        self.copy_constants(self.boxes_f, jitcode.constants_f, ConstFloat)
+        self.copy_constants(self.registers_i, jitcode.constants_i, ConstInt)
+        self.copy_constants(self.registers_r, jitcode.constants_r, ConstPtr)
+        self.copy_constants(self.registers_f, jitcode.constants_f, ConstFloat)
 
-    def copy_constants(self, boxes, constants, ConstClass):
-        """Copy jitcode.constants[0] to boxes[255],
-                jitcode.constants[1] to boxes[254],
-                jitcode.constants[2] to boxes[253], etc."""
+    def copy_constants(self, registers, constants, ConstClass):
+        """Copy jitcode.constants[0] to registers[255],
+                jitcode.constants[1] to registers[254],
+                jitcode.constants[2] to registers[253], etc."""
         i = len(constants) - 1
         while i >= 0:
             j = 255 - i
             assert j >= 0
-            boxes[j] = ConstClass(constants[i])
+            registers[j] = ConstClass(constants[i])
             i -= 1
     copy_constants._annspecialcase_ = 'specialize:arg(3)'
 
     # ------------------------------
     # Decoding of the JitCode
+
+    def prepare_list_of_boxes(self, outvalue, startindex, position, argcode):
+        assert argcode in 'IRF'
+        code = self.bytecode
+        length = ord(code[position])
+        position += 1
+        for i in range(length):
+            index = ord(code[position+i])
+            if   argcode == 'I': reg = self.registers_i[index]
+            elif argcode == 'R': reg = self.registers_r[index]
+            elif argcode == 'F': reg = self.registers_f[index]
+            outvalue[startindex+i] = reg
+    prepare_list_of_boxes._annspecialcase_ = 'specialize:arg(4)'
 
     def load_int(self):
         pc = self.pc
@@ -188,7 +201,7 @@ class MIFrame(object):
 
     @arguments("box")
     def opimpl_any_return(self, box):
-        return self.metainterp.finishframe(box)
+        self.metainterp.finishframe(box)
 
     opimpl_int_return = opimpl_any_return
     opimpl_ref_return = opimpl_any_return
@@ -196,7 +209,7 @@ class MIFrame(object):
 
     @arguments()
     def opimpl_void_return(self):
-        return self.metainterp.finishframe(None)
+        self.metainterp.finishframe(None)
 
     @arguments("jumptarget")
     def opimpl_goto(self, target):
@@ -592,9 +605,9 @@ class MIFrame(object):
     def opimpl_call(self, callee, varargs):
         return self.perform_call(callee, varargs)
 
-    @arguments("descr", "varargs")
-    def opimpl_residual_call(self, calldescr, varargs):
-        return self.do_residual_call(varargs, descr=calldescr, exc=True)
+    @arguments("box", "descr", "boxes2")
+    def opimpl_residual_call_ir_i(self, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
 
     @arguments("descr", "varargs")
     def opimpl_residual_call_loopinvariant(self, calldescr, varargs):
@@ -1008,9 +1021,9 @@ class MIFrame(object):
         else:
             return self.metainterp.assert_no_exception()
 
-    def do_residual_call(self, argboxes, descr, exc):
+    def do_residual_call(self, funcbox, descr, argboxes, exc):
         effectinfo = descr.get_extra_info()
-        if effectinfo is None or effectinfo.forces_virtual_or_virtualizable:
+        if 0:# XXX effectinfo is None or effectinfo.forces_virtual_or_virtualizable:
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.vable_and_vrefs_before_residual_call()
             # xxx do something about code duplication
@@ -1696,13 +1709,13 @@ class MetaInterp(object):
         count_i = count_r = count_f = 0
         for box in original_boxes:
             if box.type == history.INT:
-                f.boxes_i[count_i] = box
+                f.registers_i[count_i] = box
                 count_i += 1
             elif box.type == history.REF:
-                f.boxes_r[count_r] = box
+                f.registers_r[count_r] = box
                 count_r += 1
             elif box.type == history.FLOAT:
-                f.boxes_f[count_f] = box
+                f.registers_f[count_f] = box
                 count_f += 1
             else:
                 raise AssertionError(box.type)
@@ -2021,25 +2034,65 @@ def _get_opimpl_method(name, argcodes):
     from pypy.jit.metainterp.blackhole import signedord
     #
     def handler(self, position):
+        assert position >= 0
         args = ()
         next_argcode = 0
         code = self.bytecode
         position += 1
         for argtype in argtypes:
-            if argtype == "box":
+            if argtype == "box":     # a box, of whatever type
                 argcode = argcodes[next_argcode]
                 next_argcode = next_argcode + 1
                 if argcode == 'i':
-                    value = self.boxes_i[ord(code[position])]
+                    value = self.registers_i[ord(code[position])]
                 elif argcode == 'c':
                     value = ConstInt(signedord(code[position]))
                 elif argcode == 'r':
-                    value = self.boxes_r[ord(code[position])]
+                    value = self.registers_r[ord(code[position])]
                 elif argcode == 'f':
-                    value = self.boxes_f[ord(code[position])]
+                    value = self.registers_f[ord(code[position])]
                 else:
                     raise AssertionError("bad argcode")
                 position += 1
+            elif argtype == "descr":
+                assert argcodes[next_argcode] == 'd'
+                next_argcode = next_argcode + 1
+                index = ord(code[position]) | (ord(code[position+1])<<8)
+                value = self.metainterp.staticdata.opcode_descrs[index]
+                position += 2
+            elif argtype == "boxes":     # a list of boxes of some type
+                length = ord(code[position])
+                value = [None] * length
+                self.prepare_list_of_boxes(value, 0, position,
+                                           argcodes[next_argcode])
+                next_argcode = next_argcode + 1
+                position += 1 + length
+            elif argtype == "boxes2":     # two lists of boxes merged into one
+                length1 = ord(code[position])
+                position2 = position + 1 + length1
+                length2 = ord(code[position2])
+                value = [None] * (length1 + length2)
+                self.prepare_list_of_boxes(value, 0, position,
+                                           argcodes[next_argcode])
+                self.prepare_list_of_boxes(value, length1, position2,
+                                           argcodes[next_argcode + 1])
+                next_argcode = next_argcode + 2
+                position = position2 + 1 + length2
+            elif argtype == "boxes3":    # three lists of boxes merged into one
+                length1 = ord(code[position])
+                position2 = position + 1 + length1
+                length2 = ord(code[position2])
+                position3 = position2 + 1 + length2
+                length3 = ord(code[position3])
+                value = [None] * (length1 + length2 + length3)
+                self.prepare_list_of_boxes(value, 0, position,
+                                           argcodes[next_argcode])
+                self.prepare_list_of_boxes(value, length1, position2,
+                                           argcodes[next_argcode + 1])
+                self.prepare_list_of_boxes(value, length1 + length2, position3,
+                                           argcodes[next_argcode + 2])
+                next_argcode = next_argcode + 3
+                position = position3 + 1 + length3
             else:
                 raise AssertionError("bad argtype: %r" % (argtype,))
             args += (value,)
@@ -2058,13 +2111,13 @@ def _get_opimpl_method(name, argcodes):
             target_index = ord(code[position])
             if result_argcode == 'i':
                 assert resultbox.type == history.INT
-                self.boxes_i[target_index] = resultbox
+                self.registers_i[target_index] = resultbox
             elif result_argcode == 'r':
                 assert resultbox.type == history.REF
-                self.boxes_r[target_index] = resultbox
+                self.registers_r[target_index] = resultbox
             elif result_argcode == 'f':
                 assert resultbox.type == history.FLOAT
-                self.boxes_f[target_index] = resultbox
+                self.registers_f[target_index] = resultbox
             else:
                 raise AssertionError("bad result argcode")
     #
