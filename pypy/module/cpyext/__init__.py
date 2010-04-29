@@ -59,7 +59,6 @@ import pypy.module.cpyext.import_
 import pypy.module.cpyext.mapping
 import pypy.module.cpyext.iterator
 import pypy.module.cpyext.unicodeobject
-import pypy.module.cpyext.pycobject
 import pypy.module.cpyext.sysmodule
 import pypy.module.cpyext.number
 import pypy.module.cpyext.sliceobject
