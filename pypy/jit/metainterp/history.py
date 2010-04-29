@@ -125,6 +125,12 @@ class AbstractDescr(AbstractValue):
     def _clone_if_mutable(self):
         return self
 
+    def get_return_type(self):
+        """ Implement in call descr.
+        Must return INT, REF, FLOAT, or 'v' for void.
+        """
+        raise NotImplementedError
+
     def get_extra_info(self):
         """ Implement in call descr
         """

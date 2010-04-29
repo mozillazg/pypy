@@ -609,9 +609,28 @@ class MIFrame(object):
     def opimpl_call(self, callee, varargs):
         return self.perform_call(callee, varargs)
 
-    @arguments("box", "descr", "boxes2")
-    def opimpl_residual_call_ir_i(self, funcbox, calldescr, argboxes):
+    @arguments("box", "descr", "boxes")
+    def _opimpl_residual_call1(self, funcbox, calldescr, argboxes):
         return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+    @arguments("box", "descr", "boxes2")
+    def _opimpl_residual_call2(self, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+    @arguments("box", "descr", "boxes3")
+    def _opimpl_residual_call3(self, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+
+    opimpl_residual_call_r_i = _opimpl_residual_call1
+    opimpl_residual_call_r_r = _opimpl_residual_call1
+    opimpl_residual_call_r_f = _opimpl_residual_call1
+    opimpl_residual_call_r_v = _opimpl_residual_call1
+    opimpl_residual_call_ir_i = _opimpl_residual_call2
+    opimpl_residual_call_ir_r = _opimpl_residual_call2
+    opimpl_residual_call_ir_f = _opimpl_residual_call2
+    opimpl_residual_call_ir_v = _opimpl_residual_call2
+    opimpl_residual_call_irf_i = _opimpl_residual_call3
+    opimpl_residual_call_irf_r = _opimpl_residual_call3
+    opimpl_residual_call_irf_f = _opimpl_residual_call3
+    opimpl_residual_call_irf_v = _opimpl_residual_call3
 
     @arguments("descr", "varargs")
     def opimpl_residual_call_loopinvariant(self, calldescr, varargs):
@@ -1016,23 +1035,24 @@ class MIFrame(object):
 
     @specialize.arg(1)
     def execute_varargs(self, opnum, argboxes, descr, exc):
-        resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
-                                                            descr=descr)
-        if resbox is not None:
-            self.make_result_box(resbox)
-        if exc:
-            return self.metainterp.handle_exception()
-        else:
-            return self.metainterp.assert_no_exception()
+        return self.metainterp.execute_and_record_varargs(opnum, argboxes,
+                                                          descr=descr)
+##        if resbox is not None:
+##            self.make_result_box(resbox)
+##        if exc:
+##            return self.metainterp.handle_exception()
+##        else:
+##            return self.metainterp.assert_no_exception()
 
     def do_residual_call(self, funcbox, descr, argboxes, exc):
+        allboxes = [funcbox] + argboxes
         effectinfo = descr.get_extra_info()
         if 0:# XXX effectinfo is None or effectinfo.forces_virtual_or_virtualizable:
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.vable_and_vrefs_before_residual_call()
             # xxx do something about code duplication
             resbox = self.metainterp.execute_and_record_varargs(
-                rop.CALL_MAY_FORCE, argboxes, descr=descr)
+                rop.CALL_MAY_FORCE, allboxes, descr=descr)
             self.metainterp.vable_and_vrefs_after_residual_call()
             if resbox is not None:
                 self.make_result_box(resbox)
@@ -1042,7 +1062,7 @@ class MIFrame(object):
             else:
                 return self.metainterp.assert_no_exception()
         else:
-            return self.execute_varargs(rop.CALL, argboxes, descr, exc)
+            return self.execute_varargs(rop.CALL, allboxes, descr, exc)
 
 # ____________________________________________________________
 
