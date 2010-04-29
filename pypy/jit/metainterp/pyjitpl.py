@@ -196,7 +196,7 @@ class MIFrame(object):
         exec py.code.Source('''
             @arguments("box")
             def opimpl_%s(self, b):
-                self.execute(rop.%s, b)
+                return self.execute(rop.%s, b)
         ''' % (_opimpl, _opimpl.upper())).compile()
 
     @arguments("box")
