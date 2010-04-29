@@ -11,30 +11,29 @@ import sys, os
 dn = os.path.dirname
 rootdir = dn(dn(dn(dn(__file__))))
 sys.path.insert(0, rootdir)
+from pypy.tool.udir import udir
 pypydir = os.path.join(rootdir, 'pypy')
-f = open(os.path.join(pypydir, '_interfaces', 'pyconfig.h'), "w")
+f = open(os.path.join(str(udir), 'pyconfig.h'), "w")
 f.write("\n")
 f.close()
 sys.path.insert(0, os.getcwd())
 from distutils import sysconfig
 
-from pypy.tool.udir import udir
 from pypy.conftest import gettestobjspace
-from pypy.module.cpyext.api import setup_library
+from pypy.module.cpyext.api import build_bridge
 space = gettestobjspace(usemodules=['cpyext', 'thread'])
-setup_library(space)
+build_bridge(space)
 
 inc_paths = str(udir)
 
 def get_python_inc(plat_specific=0, prefix=None):
     if plat_specific:
-        return os.path.join(pypydir, '_interfaces')
+        return str(udir)
     return os.path.join(os.path.dirname(__file__), 'include')
 
 def patch_distutils():
     sysconfig.get_python_inc = get_python_inc
 
-# unconditionally, since it's supposed to be run as PYTHONSTARTUP
 patch_distutils()
 
 del sys.argv[0]
