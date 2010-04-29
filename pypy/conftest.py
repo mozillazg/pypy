@@ -196,7 +196,10 @@ def ensure_pytest_builtin_helpers(helpers='skip raises'.split()):
         if not hasattr(__builtin__, helper):
             setattr(__builtin__, helper, getattr(py.test, helper))
 
-class Module(py.test.collect.Module): 
+def pytest_pycollect_makemodule(path, parent):
+    return PyPyModule(path, parent)
+
+class PyPyModule(py.test.collect.Module): 
     """ we take care of collecting classes both at app level 
         and at interp-level (because we need to stick a space 
         at the class) ourselves. 
@@ -204,7 +207,7 @@ class Module(py.test.collect.Module):
     def __init__(self, *args, **kwargs):
         if hasattr(sys, 'pypy_objspaceclass'):
             option.conf_iocapture = "sys" # pypy cannot do FD-based
-        super(Module, self).__init__(*args, **kwargs)
+        super(PyPyModule, self).__init__(*args, **kwargs)
 
     def accept_regular_test(self):
         if option.runappdirect:
@@ -235,7 +238,7 @@ class Module(py.test.collect.Module):
     def setup(self): 
         # stick py.test raise in module globals -- carefully
         ensure_pytest_builtin_helpers() 
-        super(Module, self).setup() 
+        super(PyPyModule, self).setup() 
         #    if hasattr(mod, 'objspacename'): 
         #        mod.space = getttestobjspace(mod.objspacename)
 
@@ -512,9 +515,5 @@ class ExpectClassCollector(py.test.collect.Class):
             py.test.skip("pexpect not found")
 
 
-class Directory(py.test.collect.Directory):
-
-    def recfilter(self, path):
-        # disable recursion in symlinked subdirectories
-        return (py.test.collect.Directory.recfilter(self, path)
-                and path.check(link=0))
+def pytest_ignore_collect_path(path):
+    return path.check(link=1)
