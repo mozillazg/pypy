@@ -136,7 +136,7 @@ class BlackholeInterpBuilder(object):
                     position += 2
                 else:
                     raise AssertionError("bad argtype: %r" % (argtype,))
-                args += (value,)
+                args = args + (value,)
 
             if verbose and not we_are_translated():
                 print '\t', name, list(args),

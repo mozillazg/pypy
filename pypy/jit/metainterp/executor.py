@@ -6,83 +6,34 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
-from pypy.jit.metainterp.history import BoxInt, BoxPtr, ConstInt, check_descr
-from pypy.jit.metainterp.history import INT, REF, ConstFloat
+from pypy.tool.sourcetools import func_with_new_name
+from pypy.rlib.unroll import unrolling_iterable
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
 
-
 # ____________________________________________________________
 
-def do_float_neg(cpu, box1):
-    return ConstFloat(-box1.getfloat())
+##def do_force_token(cpu):
+##    raise NotImplementedError
 
-def do_float_abs(cpu, box1):
-    return ConstFloat(abs(box1.getfloat()))
+##def do_virtual_ref(cpu, box1, box2):
+##    raise NotImplementedError
 
-def do_float_is_true(cpu, box1):
-    return ConstInt(bool(box1.getfloat()))
+##def do_virtual_ref_finish(cpu, box1, box2):
+##    raise NotImplementedError
 
-def do_float_add(cpu, box1, box2):
-    return ConstFloat(box1.getfloat() + box2.getfloat())
-
-def do_float_sub(cpu, box1, box2):
-    return ConstFloat(box1.getfloat() - box2.getfloat())
-
-def do_float_mul(cpu, box1, box2):
-    return ConstFloat(box1.getfloat() * box2.getfloat())
-
-def do_float_truediv(cpu, box1, box2):
-    return ConstFloat(box1.getfloat() / box2.getfloat())
-
-def do_float_lt(cpu, box1, box2):
-    return ConstInt(box1.getfloat() < box2.getfloat())
-
-def do_float_le(cpu, box1, box2):
-    return ConstInt(box1.getfloat() <= box2.getfloat())
-
-def do_float_eq(cpu, box1, box2):
-    return ConstInt(box1.getfloat() == box2.getfloat())
-
-def do_float_ne(cpu, box1, box2):
-    return ConstInt(box1.getfloat() != box2.getfloat())
-
-def do_float_gt(cpu, box1, box2):
-    return ConstInt(box1.getfloat() > box2.getfloat())
-
-def do_float_ge(cpu, box1, box2):
-    return ConstInt(box1.getfloat() >= box2.getfloat())
-
-def do_cast_float_to_int(cpu, box1):
-    # note: we need to call int() twice to care for the fact that
-    # int(-2147483648.0) returns a long :-(
-    return ConstInt(int(int(box1.getfloat())))
-
-def do_cast_int_to_float(cpu, box1):
-    return ConstFloat(float(box1.getint()))
-
-# ____________________________________________________________
-
-def do_force_token(cpu):
-    raise NotImplementedError
-
-def do_virtual_ref(cpu, box1, box2):
-    raise NotImplementedError
-
-def do_virtual_ref_finish(cpu, box1, box2):
-    raise NotImplementedError
-
-def do_debug_merge_point(cpu, box1):
-    from pypy.jit.metainterp.warmspot import get_stats
-    loc = box1._get_str()
-    get_stats().add_merge_point_location(loc)
+##def do_debug_merge_point(cpu, box1):
+##    from pypy.jit.metainterp.warmspot import get_stats
+##    loc = box1._get_str()
+##    get_stats().add_merge_point_location(loc)
 
 # ____________________________________________________________
 
 
 def make_execute_list(cpuclass):
-    return   # XXX
     from pypy.jit.backend.model import AbstractCPU
+    from pypy.jit.metainterp.blackhole import BlackholeInterpreter
     if 0:     # enable this to trace calls to do_xxx
         def wrap(fn):
             def myfn(*args):
@@ -115,15 +66,46 @@ def make_execute_list(cpuclass):
                 raise Exception("duplicate entry for op number %d" % value)
             if key.endswith('_PURE'):
                 key = key[:-5]
-            name = 'do_' + key.lower()
-            if hasattr(cpuclass, name):
-                execute[value] = wrap(getattr(cpuclass, name))
-            elif name in globals():
-                execute[value] = wrap(globals()[name])
-            else:
-                assert hasattr(AbstractCPU, name), name
+            name = 'opimpl_' + key.lower()
+            if hasattr(BlackholeInterpreter, name):
+                func = make_execute_function_with_boxes(
+                    key.lower(),
+                    getattr(BlackholeInterpreter, name).im_func)
+                if func is not None:
+                    execute[value] = func
+                    continue
+            pass   #XXX...
     cpuclass._execute_by_num_args = execute_by_num_args
 
+def make_execute_function_with_boxes(name, func):
+    # Make a wrapper for 'func'.  The func is a simple opimpl_xxx function
+    # from the BlackholeInterpreter class.  The wrapper is a new function
+    # that receives and returns boxed values.
+    for argtype in func.argtypes:
+        if argtype not in ('i', 'r', 'f'):
+            return None
+    if func.resulttype not in ('i', 'r', 'f', None):
+        return None
+    argtypes = unrolling_iterable(func.argtypes)
+    resulttype = func.resulttype
+    #
+    def do(cpu, *argboxes):
+        newargs = ()
+        for argtype in argtypes:
+            argbox = argboxes[0]
+            argboxes = argboxes[1:]
+            if argtype == 'i':   value = argbox.getint()
+            elif argtype == 'r': value = argbox.getptr_base()
+            elif argtype == 'f': value = argbox.getfloat()
+            newargs = newargs + (value,)
+        #
+        result = func(*newargs)
+        #
+        if resulttype == 'i': return BoxInt(result)
+        if resulttype == 'r': return BoxPtr(result)
+        if resulttype == 'f': return BoxFloat(result)
+    #
+    return func_with_new_name(do, 'do_' + name)
 
 def get_execute_funclist(cpu, num_args):
     # workaround, similar to the next one
