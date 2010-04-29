@@ -4,7 +4,6 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
-from pypy.tool.sourcetools import func_with_new_name
 
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
@@ -237,6 +236,13 @@ class MIFrame(object):
         # note about handling self.env explicitly here: it is done in
         # such a way that the 'box' on which we generate the guard is
         # typically not included in the livelist.
+
+    @arguments("label", "box", "box")
+    def opimpl_goto_if_not_int_lt(self, target, box1, box2):
+        if box1.getint() < box2.getint():
+            pass
+        else:
+            self.pc = target
 
     def follow_jump(self):
         _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
@@ -758,10 +764,9 @@ class MIFrame(object):
     def opimpl_residual_oosend_pure(self, methdescr, boxes):
         self.execute_varargs(rop.OOSEND_PURE, boxes, descr=methdescr, exc=False)
 
-    @XXX  #arguments("orgpc", "box")
-    def opimpl_guard_value(self, pc, box):
-        constbox = self.implement_guard_value(pc, box)
-        self.make_result_box(constbox)
+    @arguments("orgpc", "box")
+    def opimpl_int_guard_value(self, pc, box):
+        return self.implement_guard_value(pc, box)
 
     @XXX  #arguments("orgpc", "int")
     def opimpl_guard_green(self, pc, boxindex):
@@ -1259,7 +1264,7 @@ class MetaInterp(object):
         self.free_frames_list = []
 
     def is_blackholing(self):
-        return self.history is None
+        return False       # XXX get rid of this method
 
     def newframe(self, jitcode, greenkey=None):
         if jitcode is self.staticdata.portal_code:
@@ -2067,6 +2072,7 @@ def _get_opimpl_method(name, argcodes):
         args = ()
         next_argcode = 0
         code = self.bytecode
+        orgpc = position
         position += 1
         for argtype in argtypes:
             if argtype == "box":     # a box, of whatever type
@@ -2127,6 +2133,8 @@ def _get_opimpl_method(name, argcodes):
                                            argcodes[next_argcode + 2])
                 next_argcode = next_argcode + 3
                 position = position3 + 1 + length3
+            elif argtype == "orgpc":
+                value = orgpc
             else:
                 raise AssertionError("bad argtype: %r" % (argtype,))
             args += (value,)
@@ -2157,5 +2165,5 @@ def _get_opimpl_method(name, argcodes):
     #
     unboundmethod = getattr(MIFrame, 'opimpl_' + name).im_func
     argtypes = unrolling_iterable(unboundmethod.argtypes)
-    handler = func_with_new_name(handler, 'handler_' + name)
+    handler.func_name = 'handler_' + name
     return handler
