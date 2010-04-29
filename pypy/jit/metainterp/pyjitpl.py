@@ -33,6 +33,11 @@ def arguments(*args):
         return func
     return decorate
 
+def XXX(func):
+    def cannot_call(*args, **kwds):
+        raise Exception('not implemented: %s' % func.__name__)
+    return cannot_call
+
 # ____________________________________________________________
 
 
@@ -182,7 +187,7 @@ class MIFrame(object):
 
     for _opimpl in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf']:
         exec py.code.Source('''
-            @arguments("box", "box")
+            @XXX  #arguments("box", "box")
             def opimpl_%s(self, b1, b2):
                 self.execute(rop.%s, b1, b2)
                 return self.metainterp.handle_overflow_error()
@@ -200,12 +205,12 @@ class MIFrame(object):
         ''' % (_opimpl, _opimpl.upper())).compile()
 
     @arguments("box")
-    def opimpl_any_return(self, box):
+    def _opimpl_any_return(self, box):
         self.metainterp.finishframe(box)
 
-    opimpl_int_return = opimpl_any_return
-    opimpl_ref_return = opimpl_any_return
-    opimpl_float_return = opimpl_any_return
+    opimpl_int_return = _opimpl_any_return
+    opimpl_ref_return = _opimpl_any_return
+    opimpl_float_return = _opimpl_any_return
 
     @arguments()
     def opimpl_void_return(self):
@@ -215,11 +220,11 @@ class MIFrame(object):
     def opimpl_catch_exception(self, target):
         pass      # see comment in blackhole.py:opimpl_catch_exception.
 
-    @arguments("jumptarget")
+    @XXX  #arguments("jumptarget")
     def opimpl_goto(self, target):
         self.pc = target
 
-    @arguments("orgpc", "jumptarget", "box", "varargs")
+    @XXX  #arguments("orgpc", "jumptarget", "box", "varargs")
     def opimpl_goto_if_not(self, pc, target, box, livelist):
         switchcase = box.getint()
         if switchcase:
@@ -267,7 +272,7 @@ class MIFrame(object):
         self.load_int()       # past the 'box' argument
         self.ignore_varargs() # past the 'livelist' argument
 
-    @arguments("orgpc", "box", "constargs", "jumptargets")
+    @XXX  #arguments("orgpc", "box", "constargs", "jumptargets")
     def opimpl_switch(self, pc, valuebox, constargs, jumptargets):
         box = self.implement_guard_value(pc, valuebox)
         for i in range(len(constargs)):
@@ -276,7 +281,7 @@ class MIFrame(object):
                 self.pc = jumptargets[i]
                 break
 
-    @arguments("orgpc", "box", "constbox")
+    @XXX  #arguments("orgpc", "box", "constbox")
     def opimpl_switch_dict(self, pc, valuebox, switchdict):
         box = self.implement_guard_value(pc, valuebox)
         search_value = box.getint()
@@ -286,57 +291,57 @@ class MIFrame(object):
         except KeyError:
             pass
 
-    @arguments("descr")
+    @XXX  #arguments("descr")
     def opimpl_new(self, size):
         self.execute_with_descr(rop.NEW, descr=size)
 
-    @arguments("constbox")
+    @XXX  #arguments("constbox")
     def opimpl_new_with_vtable(self, vtablebox):
         self.execute(rop.NEW_WITH_VTABLE, vtablebox)
 
-    @arguments("box")
+    @XXX  #arguments("box")
     def opimpl_runtimenew(self, classbox):
         self.execute(rop.RUNTIMENEW, classbox)
 
-    @arguments("orgpc", "box", "descr")
+    @XXX  #arguments("orgpc", "box", "descr")
     def opimpl_instanceof(self, pc, objbox, typedescr):
         clsbox = self.cls_of_box(objbox)
         if isinstance(objbox, Box):
             self.generate_guard(pc, rop.GUARD_CLASS, objbox, [clsbox])
         self.execute_with_descr(rop.INSTANCEOF, typedescr, objbox)
 
-    @arguments("box", "box")
+    @XXX  #arguments("box", "box")
     def opimpl_subclassof(self, box1, box2):
         self.execute(rop.SUBCLASSOF, box1, box2)
 
-    @arguments("descr", "box")
+    @XXX  #arguments("descr", "box")
     def opimpl_new_array(self, itemsize, countbox):
         self.execute_with_descr(rop.NEW_ARRAY, itemsize, countbox)
 
-    @arguments("box", "descr", "box")
+    @XXX  #arguments("box", "descr", "box")
     def opimpl_getarrayitem_gc(self, arraybox, arraydesc, indexbox):
         self.execute_with_descr(rop.GETARRAYITEM_GC, arraydesc, arraybox, indexbox)
 
-    @arguments("box", "descr", "box")
+    @XXX  #arguments("box", "descr", "box")
     def opimpl_getarrayitem_gc_pure(self, arraybox, arraydesc, indexbox):
         self.execute_with_descr(rop.GETARRAYITEM_GC_PURE, arraydesc, arraybox, indexbox)
 
-    @arguments("box", "descr", "box", "box")
+    @XXX  #arguments("box", "descr", "box", "box")
     def opimpl_setarrayitem_gc(self, arraybox, arraydesc, indexbox, itembox):
         self.execute_with_descr(rop.SETARRAYITEM_GC, arraydesc, arraybox, indexbox, itembox)
 
-    @arguments("box", "descr")
+    @XXX  #arguments("box", "descr")
     def opimpl_arraylen_gc(self, arraybox, arraydesc):
         self.execute_with_descr(rop.ARRAYLEN_GC, arraydesc, arraybox)
 
-    @arguments("descr", "box", "box", "box", "box", "box", "box", "descr")
+    @XXX  #arguments("descr", "box", "box", "box", "box", "box", "box", "descr")
     def opimpl_arraycopy(self, calldescr, fnptr, sourcebox, destbox,
                          source_startbox, dest_startbox, lengthbox, arraydescr):
         self.execute_with_descr(rop.ARRAYCOPY, arraydescr, calldescr, fnptr,
                                 sourcebox, destbox, source_startbox,
                                 dest_startbox, lengthbox)
 
-    @arguments("orgpc", "box", "descr", "box")
+    @XXX  #arguments("orgpc", "box", "descr", "box")
     def opimpl_check_neg_index(self, pc, arraybox, arraydesc, indexbox):
         negbox = self.metainterp.execute_and_record(
             rop.INT_LT, None, indexbox, ConstInt(0))
@@ -349,7 +354,7 @@ class MIFrame(object):
                 rop.INT_ADD, None, indexbox, lenbox)
         self.make_result_box(indexbox)
 
-    @arguments("descr", "descr", "descr", "descr", "box")
+    @XXX  #arguments("descr", "descr", "descr", "descr", "box")
     def opimpl_newlist(self, structdescr, lengthdescr, itemsdescr, arraydescr,
                        sizebox):
         sbox = self.metainterp.execute_and_record(rop.NEW, structdescr)
@@ -361,20 +366,20 @@ class MIFrame(object):
                                            sbox, abox)
         self.make_result_box(sbox)
 
-    @arguments("box", "descr", "descr", "box")
+    @XXX  #arguments("box", "descr", "descr", "box")
     def opimpl_getlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox):
         arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
                                                       itemsdescr, listbox)
         self.execute_with_descr(rop.GETARRAYITEM_GC, arraydescr, arraybox, indexbox)
 
-    @arguments("box", "descr", "descr", "box", "box")
+    @XXX  #arguments("box", "descr", "descr", "box", "box")
     def opimpl_setlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox,
                               valuebox):
         arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
                                                       itemsdescr, listbox)
         self.execute_with_descr(rop.SETARRAYITEM_GC, arraydescr, arraybox, indexbox, valuebox)
 
-    @arguments("orgpc", "box", "descr", "box")
+    @XXX  #arguments("orgpc", "box", "descr", "box")
     def opimpl_check_resizable_neg_index(self, pc, listbox, lengthdesc,
                                          indexbox):
         negbox = self.metainterp.execute_and_record(
@@ -388,7 +393,7 @@ class MIFrame(object):
                 rop.INT_ADD, None, indexbox, lenbox)
         self.make_result_box(indexbox)
 
-    @arguments("orgpc", "box")
+    @XXX  #arguments("orgpc", "box")
     def opimpl_check_zerodivisionerror(self, pc, box):
         nonzerobox = self.metainterp.execute_and_record(
             rop.INT_NE, None, box, ConstInt(0))
@@ -399,7 +404,7 @@ class MIFrame(object):
             # division by zero!
             return self.metainterp.raise_zero_division_error()
 
-    @arguments("orgpc", "box", "box")
+    @XXX  #arguments("orgpc", "box", "box")
     def opimpl_check_div_overflow(self, pc, box1, box2):
         # detect the combination "box1 = -sys.maxint-1, box2 = -1".
         import sys
@@ -416,11 +421,11 @@ class MIFrame(object):
             # division overflow!
             return self.metainterp.raise_overflow_error()
 
-    @arguments()
+    @XXX  #arguments()
     def opimpl_overflow_error(self):
         return self.metainterp.raise_overflow_error()
 
-    @arguments("orgpc", "box")
+    @XXX  #arguments("orgpc", "box")
     def opimpl_int_abs(self, pc, box):
         nonneg = self.metainterp.execute_and_record(
             rop.INT_GE, None, box, ConstInt(0))
@@ -430,7 +435,7 @@ class MIFrame(object):
         else:
             self.execute(rop.INT_NEG, box)
 
-    @arguments("orgpc", "box")
+    @XXX  #arguments("orgpc", "box")
     def opimpl_oononnull(self, pc, box):
         value = box.nonnull()
         if value:
@@ -442,7 +447,7 @@ class MIFrame(object):
         self.generate_guard(pc, opnum, box, [])
         self.make_result_box(res)
 
-    @arguments("orgpc", "box")
+    @XXX  #arguments("orgpc", "box")
     def opimpl_ooisnull(self, pc, box):
         value = box.nonnull()
         if value:
@@ -454,34 +459,34 @@ class MIFrame(object):
         self.generate_guard(pc, opnum, box, [])
         self.make_result_box(res)
 
-    @arguments("box", "box")
+    @XXX  #arguments("box", "box")
     def opimpl_ptr_eq(self, box1, box2):
         self.execute(rop.OOIS, box1, box2)
 
-    @arguments("box", "box")
+    @XXX  #arguments("box", "box")
     def opimpl_ptr_ne(self, box1, box2):
         self.execute(rop.OOISNOT, box1, box2)
 
     opimpl_oois = opimpl_ptr_eq
     opimpl_ooisnot = opimpl_ptr_ne
 
-    @arguments("box", "descr")
+    @XXX  #arguments("box", "descr")
     def opimpl_getfield_gc(self, box, fielddesc):
         self.execute_with_descr(rop.GETFIELD_GC, fielddesc, box)
-    @arguments("box", "descr")
+    @XXX  #arguments("box", "descr")
     def opimpl_getfield_gc_pure(self, box, fielddesc):
         self.execute_with_descr(rop.GETFIELD_GC_PURE, fielddesc, box)
-    @arguments("box", "descr", "box")
+    @XXX  #arguments("box", "descr", "box")
     def opimpl_setfield_gc(self, box, fielddesc, valuebox):
         self.execute_with_descr(rop.SETFIELD_GC, fielddesc, box, valuebox)
 
-    @arguments("box", "descr")
+    @XXX  #arguments("box", "descr")
     def opimpl_getfield_raw(self, box, fielddesc):
         self.execute_with_descr(rop.GETFIELD_RAW, fielddesc, box)
-    @arguments("box", "descr")
+    @XXX  #arguments("box", "descr")
     def opimpl_getfield_raw_pure(self, box, fielddesc):
         self.execute_with_descr(rop.GETFIELD_RAW_PURE, fielddesc, box)
-    @arguments("box", "descr", "box")
+    @XXX  #arguments("box", "descr", "box")
     def opimpl_setfield_raw(self, box, fielddesc, valuebox):
         self.execute_with_descr(rop.SETFIELD_RAW, fielddesc, box, valuebox)
 
@@ -511,7 +516,7 @@ class MIFrame(object):
         vinfo = self.metainterp.staticdata.virtualizable_info
         return vinfo.array_descrs[index]
 
-    @arguments("orgpc", "box", "int")
+    @XXX  #arguments("orgpc", "box", "int")
     def opimpl_getfield_vable(self, pc, basebox, index):
         if self._nonstandard_virtualizable(pc, basebox):
             self.execute_with_descr(rop.GETFIELD_GC, self._get_virtualizable_field_descr(index), basebox)
@@ -519,7 +524,7 @@ class MIFrame(object):
         self.metainterp.check_synchronized_virtualizable()
         resbox = self.metainterp.virtualizable_boxes[index]
         self.make_result_box(resbox)
-    @arguments("orgpc", "box", "int", "box")
+    @XXX  #arguments("orgpc", "box", "int", "box")
     def opimpl_setfield_vable(self, pc, basebox, index, valuebox):
         if self._nonstandard_virtualizable(pc, basebox):
             self.execute_with_descr(rop.SETFIELD_GC, self._get_virtualizable_field_descr(index), basebox, valuebox)
@@ -539,7 +544,7 @@ class MIFrame(object):
         assert 0 <= index < vinfo.get_array_length(virtualizable, arrayindex)
         return vinfo.get_index_in_array(virtualizable, arrayindex, index)
 
-    @arguments("orgpc", "box", "int", "box")
+    @XXX  #arguments("orgpc", "box", "int", "box")
     def opimpl_getarrayitem_vable(self, pc, basebox, arrayindex, indexbox):
         if self._nonstandard_virtualizable(pc, basebox):
             descr = self._get_virtualizable_array_field_descr(arrayindex)
@@ -553,7 +558,7 @@ class MIFrame(object):
         index = self._get_arrayitem_vable_index(pc, arrayindex, indexbox)
         resbox = self.metainterp.virtualizable_boxes[index]
         self.make_result_box(resbox)
-    @arguments("orgpc", "box", "int", "box", "box")
+    @XXX  #arguments("orgpc", "box", "int", "box", "box")
     def opimpl_setarrayitem_vable(self, pc, basebox, arrayindex, indexbox,
                                   valuebox):
         if self._nonstandard_virtualizable(pc, basebox):
@@ -568,7 +573,7 @@ class MIFrame(object):
         self.metainterp.virtualizable_boxes[index] = valuebox
         self.metainterp.synchronize_virtualizable()
         # XXX only the index'th field needs to be synchronized, really
-    @arguments("orgpc", "box", "int")
+    @XXX  #arguments("orgpc", "box", "int")
     def opimpl_arraylen_vable(self, pc, basebox, arrayindex):
         if self._nonstandard_virtualizable(pc, basebox):
             descr = self._get_virtualizable_array_field_descr(arrayindex)
@@ -605,7 +610,7 @@ class MIFrame(object):
             f.setup_call(varargs)
             return True
 
-    @arguments("bytecode", "varargs")
+    @XXX  #arguments("bytecode", "varargs")
     def opimpl_call(self, callee, varargs):
         return self.perform_call(callee, varargs)
 
@@ -632,11 +637,11 @@ class MIFrame(object):
     opimpl_residual_call_irf_f = _opimpl_residual_call3
     opimpl_residual_call_irf_v = _opimpl_residual_call3
 
-    @arguments("descr", "varargs")
+    @XXX  #arguments("descr", "varargs")
     def opimpl_residual_call_loopinvariant(self, calldescr, varargs):
         return self.execute_varargs(rop.CALL_LOOPINVARIANT, varargs, calldescr, exc=True)
 
-    @arguments("orgpc", "descr", "varargs")
+    @XXX  #arguments("orgpc", "descr", "varargs")
     def opimpl_recursive_call(self, pc, calldescr, varargs):
         warmrunnerstate = self.metainterp.staticdata.state
         token = None
@@ -671,15 +676,15 @@ class MIFrame(object):
                                                   call_position)
         return res
 
-    @arguments("descr", "varargs")
+    @XXX  #arguments("descr", "varargs")
     def opimpl_residual_call_noexception(self, calldescr, varargs):
         self.do_residual_call(varargs, descr=calldescr, exc=False)
 
-    @arguments("descr", "varargs")
+    @XXX  #arguments("descr", "varargs")
     def opimpl_residual_call_pure(self, calldescr, varargs):
         self.execute_varargs(rop.CALL_PURE, varargs, descr=calldescr, exc=False)
 
-    @arguments("orgpc", "descr", "box", "varargs")
+    @XXX  #arguments("orgpc", "descr", "box", "varargs")
     def opimpl_indirect_call(self, pc, calldescr, box, varargs):
         box = self.implement_guard_value(pc, box)
         cpu = self.metainterp.cpu
@@ -693,7 +698,7 @@ class MIFrame(object):
             return self.do_residual_call([box] + varargs,
                                          descr=calldescr, exc=True)
 
-    @arguments("orgpc", "methdescr", "varargs")
+    @XXX  #arguments("orgpc", "methdescr", "varargs")
     def opimpl_oosend(self, pc, methdescr, varargs):
         objbox = varargs[0]
         clsbox = self.cls_of_box(objbox)
@@ -709,56 +714,56 @@ class MIFrame(object):
             return self.execute_varargs(rop.OOSEND, varargs,
                                         descr=methdescr, exc=True)
 
-    @arguments("box")
+    @XXX  #arguments("box")
     def opimpl_strlen(self, str):
         self.execute(rop.STRLEN, str)
 
-    @arguments("box")
+    @XXX  #arguments("box")
     def opimpl_unicodelen(self, str):
         self.execute(rop.UNICODELEN, str)
 
-    @arguments("box", "box")
+    @XXX  #arguments("box", "box")
     def opimpl_strgetitem(self, str, index):
         self.execute(rop.STRGETITEM, str, index)
 
-    @arguments("box", "box")
+    @XXX  #arguments("box", "box")
     def opimpl_unicodegetitem(self, str, index):
         self.execute(rop.UNICODEGETITEM, str, index)
 
-    @arguments("box", "box", "box")
+    @XXX  #arguments("box", "box", "box")
     def opimpl_strsetitem(self, str, index, newchar):
         self.execute(rop.STRSETITEM, str, index, newchar)
 
-    @arguments("box", "box", "box")
+    @XXX  #arguments("box", "box", "box")
     def opimpl_unicodesetitem(self, str, index, newchar):
         self.execute(rop.UNICODESETITEM, str, index, newchar)
 
-    @arguments("box")
+    @XXX  #arguments("box")
     def opimpl_newstr(self, length):
         self.execute(rop.NEWSTR, length)
 
-    @arguments("box")
+    @XXX  #arguments("box")
     def opimpl_newunicode(self, length):
         self.execute(rop.NEWUNICODE, length)
 
-    @arguments("descr", "varargs")
+    @XXX  #arguments("descr", "varargs")
     def opimpl_residual_oosend_canraise(self, methdescr, varargs):
         return self.execute_varargs(rop.OOSEND, varargs, descr=methdescr, exc=True)
 
-    @arguments("descr", "varargs")
+    @XXX  #arguments("descr", "varargs")
     def opimpl_residual_oosend_noraise(self, methdescr, varargs):
         self.execute_varargs(rop.OOSEND, varargs, descr=methdescr, exc=False)
 
-    @arguments("descr", "varargs")
+    @XXX  #arguments("descr", "varargs")
     def opimpl_residual_oosend_pure(self, methdescr, boxes):
         self.execute_varargs(rop.OOSEND_PURE, boxes, descr=methdescr, exc=False)
 
-    @arguments("orgpc", "box")
+    @XXX  #arguments("orgpc", "box")
     def opimpl_guard_value(self, pc, box):
         constbox = self.implement_guard_value(pc, box)
         self.make_result_box(constbox)
 
-    @arguments("orgpc", "int")
+    @XXX  #arguments("orgpc", "int")
     def opimpl_guard_green(self, pc, boxindex):
         """Like guard_value, but overwrites the original box with the const.
         Used to prevent Boxes from showing up in the greenkey of some
@@ -769,24 +774,24 @@ class MIFrame(object):
         constbox = self.implement_guard_value(pc, box)
         self.env[boxindex] = constbox
 
-    @arguments("orgpc", "box")
+    @XXX  #arguments("orgpc", "box")
     def opimpl_guard_class(self, pc, box):
         clsbox = self.cls_of_box(box)
         if isinstance(box, Box):
             self.generate_guard(pc, rop.GUARD_CLASS, box, [clsbox])
         self.make_result_box(clsbox)
 
-##    @arguments("orgpc", "box", "builtin")
+##    @XXX  #arguments("orgpc", "box", "builtin")
 ##    def opimpl_guard_builtin(self, pc, box, builtin):
 ##        self.generate_guard(pc, "guard_builtin", box, [builtin])
 
-##    @arguments("orgpc", "box", "builtin")
+##    @XXX  #arguments("orgpc", "box", "builtin")
 ##    def opimpl_guard_len(self, pc, box, builtin):
 ##        intbox = self.metainterp.cpu.execute_operation(
 ##            'len', [builtin.len_func, box], 'int')
 ##        self.generate_guard(pc, "guard_len", box, [intbox])
 
-    @arguments("box")
+    @XXX  #arguments("box")
     def opimpl_keepalive(self, box):
         pass     # xxx?
 
@@ -816,7 +821,7 @@ class MIFrame(object):
         else:
             raise self.metainterp.staticdata.ContinueRunningNormally(varargs)
 
-    @arguments()
+    @XXX  #arguments()
     def opimpl_can_enter_jit(self):
         # Note: when running with a BlackHole history, this 'can_enter_jit'
         # may be completely skipped by the logic that replaces perform_call
@@ -827,7 +832,7 @@ class MIFrame(object):
             raise CannotInlineCanEnterJit()
         self.metainterp.seen_can_enter_jit = True
 
-    @arguments()
+    @XXX  #arguments()
     def opimpl_jit_merge_point(self):
         if not self.metainterp.is_blackholing():
             self.verify_green_args(self.env)
@@ -854,15 +859,15 @@ class MIFrame(object):
         self.metainterp.history.record(rop.DEBUG_MERGE_POINT,
                                        [constloc], None)
 
-    @arguments("jumptarget")
+    @XXX  #arguments("jumptarget")
     def opimpl_setup_exception_block(self, exception_target):
         self.exception_target = exception_target
 
-    @arguments()
+    @XXX  #arguments()
     def opimpl_teardown_exception_block(self):
         self.exception_target = -1
 
-    @arguments("constbox", "jumptarget", "orgpc")
+    @XXX  #arguments("constbox", "jumptarget", "orgpc")
     def opimpl_goto_if_exception_mismatch(self, vtableref, next_exc_target, pc):
         # XXX used to be:
         # assert isinstance(self.exception_box, Const)    # XXX
@@ -874,27 +879,27 @@ class MIFrame(object):
         if not ts.subclassOf(cpu, self.exception_box, vtableref):
             self.pc = next_exc_target
 
-    @arguments("int")
+    @XXX  #arguments("int")
     def opimpl_put_last_exception(self, index):
         assert index >= 0
         self.env.insert(index, self.exception_box)
 
-    @arguments("int")
+    @XXX  #arguments("int")
     def opimpl_put_last_exc_value(self, index):
         assert index >= 0
         self.env.insert(index, self.exc_value_box)
 
-    @arguments()
+    @XXX  #arguments()
     def opimpl_raise(self):
         assert len(self.env) == 2
         return self.metainterp.finishframe_exception(self.env[0], self.env[1])
 
-    @arguments()
+    @XXX  #arguments()
     def opimpl_reraise(self):
         return self.metainterp.finishframe_exception(self.exception_box,
                                                      self.exc_value_box)
 
-    @arguments("box")
+    @XXX  #arguments("box")
     def opimpl_virtual_ref(self, box):
         # Details on the content of metainterp.virtualref_boxes:
         #
@@ -928,7 +933,7 @@ class MIFrame(object):
         metainterp.virtualref_boxes.append(resbox)
         self.make_result_box(resbox)
 
-    @arguments("box")
+    @XXX  #arguments("box")
     def opimpl_virtual_ref_finish(self, box):
         # virtual_ref_finish() assumes that we have a stack-like, last-in
         # first-out order.
