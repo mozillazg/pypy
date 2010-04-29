@@ -12,128 +12,7 @@ from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
 
 
-# Operations in the _ALWAYS_PURE part of the table of resoperation.py
-# must return a ConstInt or ConstPtr.  Other operations must return
-# a BoxInt or BoxPtr or None.
-
 # ____________________________________________________________
-
-def do_int_add(cpu, box1, box2):
-    return ConstInt(intmask(box1.getint() + box2.getint()))
-
-def do_int_sub(cpu, box1, box2):
-    return ConstInt(intmask(box1.getint() - box2.getint()))
-
-def do_int_mul(cpu, box1, box2):
-    return ConstInt(intmask(box1.getint() * box2.getint()))
-
-def do_int_floordiv(cpu, box1, box2):
-    z = llop.int_floordiv(lltype.Signed, box1.getint(), box2.getint())
-    return ConstInt(z)
-
-def do_uint_floordiv(cpu, box1, box2):
-    z = llop.uint_floordiv(lltype.Unsigned, r_uint(box1.getint()),
-                           r_uint(box2.getint()))
-    return ConstInt(intmask(z))
-
-def do_int_mod(cpu, box1, box2):
-    z = llop.int_mod(lltype.Signed, box1.getint(), box2.getint())
-    return ConstInt(z)
-
-def do_int_and(cpu, box1, box2):
-    return ConstInt(box1.getint() & box2.getint())
-
-def do_int_or(cpu, box1, box2):
-    return ConstInt(box1.getint() | box2.getint())
-
-def do_int_xor(cpu, box1, box2):
-    return ConstInt(box1.getint() ^ box2.getint())
-
-def do_int_rshift(cpu, box1, box2):
-    return ConstInt(box1.getint() >> box2.getint())
-
-def do_int_lshift(cpu, box1, box2):
-    return ConstInt(intmask(box1.getint() << box2.getint()))
-
-def do_uint_rshift(cpu, box1, box2):
-    v = r_uint(box1.getint()) >> r_uint(box2.getint())
-    return ConstInt(intmask(v))
-
-# ----------
-
-def do_int_lt(cpu, box1, box2):
-    return ConstInt(box1.getint() < box2.getint())
-
-def do_int_le(cpu, box1, box2):
-    return ConstInt(box1.getint() <= box2.getint())
-
-def do_int_eq(cpu, box1, box2):
-    return ConstInt(box1.getint() == box2.getint())
-
-def do_int_ne(cpu, box1, box2):
-    return ConstInt(box1.getint() != box2.getint())
-
-def do_int_gt(cpu, box1, box2):
-    return ConstInt(box1.getint() > box2.getint())
-
-def do_int_ge(cpu, box1, box2):
-    return ConstInt(box1.getint() >= box2.getint())
-
-def do_uint_lt(cpu, box1, box2):
-    return ConstInt(r_uint(box1.getint()) < r_uint(box2.getint()))
-
-def do_uint_le(cpu, box1, box2):
-    return ConstInt(r_uint(box1.getint()) <= r_uint(box2.getint()))
-
-def do_uint_gt(cpu, box1, box2):
-    return ConstInt(r_uint(box1.getint()) > r_uint(box2.getint()))
-
-def do_uint_ge(cpu, box1, box2):
-    return ConstInt(r_uint(box1.getint()) >= r_uint(box2.getint()))
-
-# ----------
-
-def do_int_is_true(cpu, box1):
-    return ConstInt(bool(box1.getint()))
-
-def do_int_neg(cpu, box1):
-    return ConstInt(intmask(-box1.getint()))
-
-def do_int_invert(cpu, box1):
-    return ConstInt(~box1.getint())
-
-def do_bool_not(cpu, box1):
-    return ConstInt(not box1.getint())
-
-def do_same_as(cpu, box1):
-    return box1
-
-def do_oois(cpu, box1, box2):
-    tp = box1.type
-    assert tp == box2.type
-    if tp == INT:
-        x = box1.getint() == box2.getint()
-    elif tp == REF:
-        x = box1.getref_base() == box2.getref_base()
-    else:
-        assert False
-    return ConstInt(x)
-
-def do_ooisnot(cpu, box1, box2):
-    tp = box1.type
-    assert tp == box2.type
-    if tp == INT:
-        x = box1.getint() != box2.getint()
-    elif tp == REF:
-        x = box1.getref_base() != box2.getref_base()
-    else:
-        assert False
-    return ConstInt(x)
-
-def do_subclassof(cpu, box1, box2):
-    return ConstInt(cpu.ts.subclassOf(cpu, box1, box2))
-
-# ----------
 
 def do_int_add_ovf(cpu, box1, box2):
     x = box1.getint()
@@ -243,6 +122,7 @@ def do_debug_merge_point(cpu, box1):
 
 
 def make_execute_list(cpuclass):
+    return   # XXX
     from pypy.jit.backend.model import AbstractCPU
     if 0:     # enable this to trace calls to do_xxx
         def wrap(fn):

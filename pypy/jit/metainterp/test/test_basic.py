@@ -43,7 +43,7 @@ def _run_with_blackhole(cw, mainjitcode, args):
         else:
             raise TypeError(T)
     blackholeinterp.run(mainjitcode, 0)
-    return blackholeinterp.result_i
+    return blackholeinterp.get_result_i()
 
 def _run_with_pyjitpl(cw, mainjitcode, args, testself):
     from pypy.jit.metainterp import simple_optimize
@@ -174,7 +174,7 @@ class LLJitMixin(JitMixin):
     
 class OOJitMixin(JitMixin):
     type_system = 'ootype'
-    CPUClass = runner.OOtypeCPU
+    #CPUClass = runner.OOtypeCPU
 
     def setup_class(cls):
         py.test.skip("ootype tests skipped for now")
@@ -537,6 +537,39 @@ class BasicTests:
         assert res == 17
         res = self.interp_operations(f, [15])
         assert res == -1
+
+    def test_int_add_ovf(self):
+        def f(x, y):
+            try:
+                return ovfcheck(x + y)
+            except OverflowError:
+                return -42
+        res = self.interp_operations(f, [-100, 2])
+        assert res == -98
+        res = self.interp_operations(f, [1, sys.maxint])
+        assert res == -42
+
+    def test_int_sub_ovf(self):
+        def f(x, y):
+            try:
+                return ovfcheck(x - y)
+            except OverflowError:
+                return -42
+        res = self.interp_operations(f, [-100, 2])
+        assert res == -102
+        res = self.interp_operations(f, [1, -sys.maxint])
+        assert res == -42
+
+    def test_int_mul_ovf(self):
+        def f(x, y):
+            try:
+                return ovfcheck(x * y)
+            except OverflowError:
+                return -42
+        res = self.interp_operations(f, [-100, 2])
+        assert res == -200
+        res = self.interp_operations(f, [-3, sys.maxint//2])
+        assert res == -42
 
     def test_mod_ovf(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'x', 'y'])

@@ -37,7 +37,7 @@ def test_simple():
     blackholeinterp.setarg_i(0, 40)
     blackholeinterp.setarg_i(1, 2)
     blackholeinterp.run(jitcode, 0)
-    assert blackholeinterp.result_i == 42
+    assert blackholeinterp.get_result_i() == 42
 
 def test_simple_const():
     jitcode = JitCode("test")
@@ -48,7 +48,7 @@ def test_simple_const():
                                           'int_return/i': 1})
     blackholeinterp.setarg_i(1, 6)
     blackholeinterp.run(jitcode, 0)
-    assert blackholeinterp.result_i == 42
+    assert blackholeinterp.get_result_i() == 42
 
 def test_simple_bigconst():
     jitcode = JitCode("test")
@@ -59,7 +59,7 @@ def test_simple_bigconst():
                                           'int_return/i': 1})
     blackholeinterp.setarg_i(1, 10000)
     blackholeinterp.run(jitcode, 0)
-    assert blackholeinterp.result_i == 42
+    assert blackholeinterp.get_result_i() == 42
 
 def test_simple_loop():
     jitcode = JitCode("test")
@@ -77,7 +77,7 @@ def test_simple_loop():
     blackholeinterp.setarg_i(0x16, 6)    # %i0
     blackholeinterp.setarg_i(0x17, 100)  # %i1
     blackholeinterp.run(jitcode, 0)
-    assert blackholeinterp.result_i == 100+6+5+4+3
+    assert blackholeinterp.get_result_i() == 100+6+5+4+3
 
 def test_simple_exception():
     jitcode = JitCode("test")
@@ -95,11 +95,11 @@ def test_simple_exception():
     #
     blackholeinterp.setarg_i(0x9, 100)
     blackholeinterp.run(jitcode, 0)
-    assert blackholeinterp.result_i == 200
+    assert blackholeinterp.get_result_i() == 200
     #
     blackholeinterp.setarg_i(0x9, -100)
     blackholeinterp.run(jitcode, 0)
-    assert blackholeinterp.result_i == 42
+    assert blackholeinterp.get_result_i() == 42
 
 # ____________________________________________________________
 

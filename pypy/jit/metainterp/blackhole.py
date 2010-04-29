@@ -1,6 +1,7 @@
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.rarithmetic import intmask, LONG_BIT, r_uint
+from pypy.rlib.rarithmetic import intmask, LONG_BIT, r_uint, ovfcheck
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.debug import make_sure_not_resized
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -27,6 +28,8 @@ def signedord(c):
     value = ord(c)
     value = intmask(value << (LONG_BIT-8)) >> (LONG_BIT-8)
     return value
+
+NULL = lltype.nullptr(llmemory.GCREF.TO)
 
 
 class BlackholeInterpBuilder(object):
@@ -76,6 +79,7 @@ class BlackholeInterpBuilder(object):
     def _get_method(self, name, argcodes):
         #
         def handler(self, code, position):
+            assert position >= 0
             args = ()
             next_argcode = 0
             for argtype in argtypes:
@@ -118,6 +122,7 @@ class BlackholeInterpBuilder(object):
                         elif argtype == 'R': reg = self.registers_r[index]
                         elif argtype == 'F': reg = self.registers_f[index]
                         value.append(reg)
+                    make_sure_not_resized(value)
                     position += length
                 elif argtype == 'self':
                     value = self
@@ -200,6 +205,7 @@ class BlackholeInterpBuilder(object):
             return BlackholeInterpreter(self)
 
     def release_interp(self, interp):
+        interp.cleanup_registers_r()
         self.blackholeinterps.append(interp)
 
 
@@ -210,10 +216,11 @@ class BlackholeInterpreter(object):
         self.dispatch_loop      = builder.dispatch_loop
         self.descrs             = builder.descrs
         self.op_catch_exception = builder.op_catch_exception
+        self.cleanup_required_in_registers_r = -1
         #
         if we_are_translated():
             default_i = 0
-            default_r = lltype.nullptr(llmemory.GCREF.TO)
+            default_r = NULL
             default_f = 0.0
         else:
             default_i = MissingValue()
@@ -237,6 +244,9 @@ class BlackholeInterpreter(object):
         self.copy_constants(self.registers_r, jitcode.constants_r)
         self.copy_constants(self.registers_f, jitcode.constants_f)
         code = jitcode.code
+        self.cleanup_required_in_registers_r = max(
+            self.cleanup_required_in_registers_r,
+            ord(code[-1]))
         while True:
             try:
                 self.dispatch_loop(self, code, position)
@@ -246,9 +256,33 @@ class BlackholeInterpreter(object):
             #    ...
             except Exception, e:
                 if not we_are_translated():
-                    if not isinstance(e, LLException):
-                        raise
+                    if isinstance(e, LLException):
+                        pass    # ok
+                    elif isinstance(e, OverflowError):
+                        e = self.get_standard_error_exception(OverflowError)
+                    else:
+                        raise   # leave other exceptions be propagated
                 position = self.handle_exception_in_frame(e, code)
+
+    def get_result_i(self):
+        return self.registers_i[0]
+
+    def get_result_r(self):
+        return self.registers_r[0]
+
+    def get_result_f(self):
+        return self.registers_f[0]
+
+    def cleanup_registers_r(self):
+        # To avoid keeping references alive, this cleans up the registers_r.
+        # It does not clear the references set by copy_constants(), but
+        # these are all prebuilt constants anyway.
+        i = self.cleanup_required_in_registers_r
+        self.cleanup_required_in_registers_r = -1
+        while i >= 0:
+            self.registers_r[i] = NULL
+            i -= 1
+        self.exception_last_value = None
 
     def handle_exception_in_frame(self, e, code):
         # This frame raises an exception.  First try to see if
@@ -264,6 +298,14 @@ class BlackholeInterpreter(object):
             self.exception_last_value = e
             target = ord(code[position+1]) | (ord(code[position+2])<<8)
             return target
+
+    def get_standard_error_exception(self, Class):
+        rtyper = self.cpu.rtyper
+        exdata = rtyper.getexceptiondata()
+        clsdef = rtyper.annotator.bookkeeper.getuniqueclassdef(Class)
+        evalue = exdata.get_standard_ll_exc_instance(rtyper, clsdef)
+        etype = rclass.ll_type(evalue)
+        return LLException(etype, evalue)
 
     # XXX must be specialized
     # XXX the real performance impact of the following loop is unclear
@@ -282,15 +324,40 @@ class BlackholeInterpreter(object):
 
     @arguments("i", "i", returns="i")
     def opimpl_int_add(a, b):
-        return a + b
+        return intmask(a + b)
 
     @arguments("i", "i", returns="i")
     def opimpl_int_sub(a, b):
-        return a - b
+        return intmask(a - b)
 
     @arguments("i", "i", returns="i")
     def opimpl_int_mul(a, b):
-        return a * b
+        return intmask(a * b)
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_add_ovf(a, b):
+        return ovfcheck(a + b)
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_sub_ovf(a, b):
+        return ovfcheck(a - b)
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_mul_ovf(a, b):
+        return ovfcheck(a * b)
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_floordiv(a, b):
+        return llop.int_floordiv(lltype.Signed, a, b)
+
+    @arguments("i", "i", returns="i")
+    def opimpl_uint_floordiv(a, b):
+        c = llop.uint_floordiv(lltype.Unsigned, r_uint(a), r_uint(b))
+        return intmask(c)
+
+    @arguments("i", "i", returns="i")
+    def opimpl_int_mod(a, b):
+        return llop.int_mod(lltype.Signed, a, b)
 
     @arguments("i", "i", returns="i")
     def opimpl_int_and(a, b):
@@ -305,69 +372,99 @@ class BlackholeInterpreter(object):
         return a ^ b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_floordiv(a, b):
-        return llop.int_floordiv(lltype.Signed, a, b)
+    def opimpl_int_rshift(a, b):
+        return a >> b
 
     @arguments("i", "i", returns="i")
-    def opimpl_int_mod(a, b):
-        return llop.int_mod(lltype.Signed, a, b)
+    def opimpl_int_lshift(a, b):
+        return intmask(a << b)
 
     @arguments("i", "i", returns="i")
-    def opimpl_uint_floordiv(a, b):
-        c = llop.uint_floordiv(lltype.Unsigned, r_uint(a), r_uint(b))
+    def opimpl_uint_rshift(a, b):
+        c = r_uint(a) >> r_uint(b)
         return intmask(c)
+
+    @arguments("i", returns="i")
+    def opimpl_int_neg(a):
+        return intmask(-a)
+
+    @arguments("i", returns="i")
+    def opimpl_int_invert(a):
+        return intmask(~a)
 
     @arguments("i", "i", returns="i")
     def opimpl_int_lt(a, b):
-        return int(a < b)
+        return intmask(a < b)
     @arguments("i", "i", returns="i")
     def opimpl_int_le(a, b):
-        return int(a <= b)
+        return intmask(a <= b)
     @arguments("i", "i", returns="i")
     def opimpl_int_eq(a, b):
-        return int(a == b)
+        return intmask(a == b)
     @arguments("i", "i", returns="i")
     def opimpl_int_ne(a, b):
-        return int(a != b)
+        return intmask(a != b)
     @arguments("i", "i", returns="i")
     def opimpl_int_gt(a, b):
-        return int(a > b)
+        return intmask(a > b)
     @arguments("i", "i", returns="i")
     def opimpl_int_ge(a, b):
-        return int(a >= b)
+        return intmask(a >= b)
     @arguments("i", returns="i")
     def opimpl_int_is_zero(a):
-        return int(not a)
+        return intmask(not a)
     @arguments("i", returns="i")
     def opimpl_int_is_true(a):
-        return int(bool(a))
+        return intmask(bool(a))
+
+    @arguments("i", "i", returns="i")
+    def opimpl_uint_lt(a, b):
+        return intmask(r_uint(a) < r_uint(b))
+    @arguments("i", "i", returns="i")
+    def opimpl_uint_le(a, b):
+        return intmask(r_uint(a) <= r_uint(b))
+    @arguments("i", "i", returns="i")
+    def opimpl_uint_gt(a, b):
+        return intmask(r_uint(a) > r_uint(b))
+    @arguments("i", "i", returns="i")
+    def opimpl_uint_ge(a, b):
+        return intmask(r_uint(a) >= r_uint(b))
 
     @arguments("r", "r", returns="i")
     def opimpl_ptr_eq(a, b):
-        return int(a == b)
+        return intmask(a == b)
     @arguments("r", "r", returns="i")
     def opimpl_ptr_ne(a, b):
-        return int(a != b)
+        return intmask(a != b)
     @arguments("r", returns="i")
     def opimpl_ptr_iszero(a):
-        return int(not a)
+        return intmask(not a)
     @arguments("r", returns="i")
     def opimpl_ptr_nonzero(a):
-        return int(bool(a))
+        return intmask(bool(a))
 
     @arguments("self", "i")
     def opimpl_int_return(self, a):
-        self.result_i = a
+        self.registers_i[0] = a
+        raise LeaveFrame
+    @arguments("self", "r")
+    def opimpl_ref_return(self, a):
+        self.registers_r[0] = a
+        raise LeaveFrame
+    @arguments("self", "f")
+    def opimpl_float_return(self, a):
+        self.registers_f[0] = a
+        raise LeaveFrame
+    @arguments("self")
+    def opimpl_void_return(self):
         raise LeaveFrame
 
     @arguments("i", returns="i")
     def opimpl_int_copy(a):
         return a
-
     @arguments("r", returns="r")
     def opimpl_ref_copy(a):
         return a
-
     @arguments("f", returns="f")
     def opimpl_float_copy(a):
         return a
