@@ -1,32 +1,29 @@
-import py
+from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 
-from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.test.test_api import BaseApiTest
-from pypy.module.cpyext.pycobject import destructor_short, PyCObject
-
-class TestPyCObject(BaseApiTest):
-    def test_pycobject(self, space, api):
-        ptr = rffi.cast(rffi.VOIDP_real, 1234)
-        obj = api.PyCObject_FromVoidPtr(ptr, lltype.nullptr(destructor_short.TO))
-        assert api.PyCObject_Check(obj)
-        assert api.PyCObject_AsVoidPtr(obj) == ptr
-        assert rffi.cast(PyCObject, obj).c_cobject == ptr
-        api.Py_DecRef(obj)
-
-        obj = api.PyCObject_FromVoidPtrAndDesc(ptr, ptr,
-                                               lltype.nullptr(destructor_short.TO))
-        api.Py_DecRef(obj)
-
-    def test_pycobject_import(self, space, api):
-        ptr = rffi.cast(rffi.VOIDP_real, 1234)
-        obj = api.PyCObject_FromVoidPtr(ptr, lltype.nullptr(destructor_short.TO))
-        space.setattr(space.sys, space.wrap("_cpyext_cobject"), obj)
-
-        charp1 = rffi.str2charp("sys")
-        charp2 = rffi.str2charp("_cpyext_cobject")
-        assert api.PyCObject_Import(charp1, charp2) == ptr
-        rffi.free_charp(charp1)
-        rffi.free_charp(charp2)
-
-        api.Py_DecRef(obj)
-        space.delattr(space.sys, space.wrap("_cpyext_cobject"))
+class AppTestStringObject(AppTestCpythonExtensionBase):
+    def test_pycobject_import(self):
+        module = self.import_extension('foo', [
+            ("set_ptr", "METH_O",
+             """
+                 PyObject *pointer, *module;
+                 void *ptr = PyLong_AsVoidPtr(args);
+                 if (PyErr_Occurred()) return NULL;
+                 pointer = PyCObject_FromVoidPtr(ptr, NULL);
+                 if (PyErr_Occurred()) return NULL;
+                 module = PyImport_ImportModule("foo");
+                 PyModule_AddObject(module, "_ptr", pointer);
+                 Py_DECREF(module);
+                 if (PyErr_Occurred()) return NULL;
+                 Py_RETURN_NONE;
+             """),
+            ("get_ptr", "METH_NOARGS",
+             """
+                 void *ptr = PyCObject_Import("foo", "_ptr");
+                 if (PyErr_Occurred()) return NULL;
+                 return PyLong_FromVoidPtr(ptr);
+             """)])
+        module.set_ptr(1234)
+        assert "PyCObject object" in str(module._ptr)
+        import gc; gc.collect()
+        assert module.get_ptr() == 1234
+        del module._ptr

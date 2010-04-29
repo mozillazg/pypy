@@ -261,6 +261,10 @@ SYMBOLS_C = [
     'PyBuffer_FromMemory', 'PyBuffer_FromReadWriteMemory', 'PyBuffer_FromObject',
     'PyBuffer_FromReadWriteObject', 'PyBuffer_New', 'PyBuffer_Type', 'init_bufferobject',
 
+    'PyCObject_FromVoidPtr', 'PyCObject_FromVoidPtrAndDesc', 'PyCObject_AsVoidPtr',
+    'PyCObject_GetDesc', 'PyCObject_Import', 'PyCObject_SetVoidPtr',
+    'PyCObject_Type', 'init_pycobject',
+
     'PyObject_AsReadBuffer', 'PyObject_AsWriteBuffer', 'PyObject_CheckReadBuffer',
 ]
 TYPES = {}
@@ -476,8 +480,10 @@ def setup_va_functions(eci):
 
 def setup_init_functions(eci):
     init_buffer = rffi.llexternal('init_bufferobject', [], lltype.Void, compilation_info=eci)
+    init_pycobject = rffi.llexternal('init_pycobject', [], lltype.Void, compilation_info=eci)
     INIT_FUNCTIONS.extend([
         lambda space: init_buffer(),
+        lambda space: init_pycobject(),
     ])
 
 def init_function(func):
@@ -690,6 +696,7 @@ def build_eci(building_bridge, export_symbols, code):
                                source_dir / "pythonrun.c",
                                source_dir / "bufferobject.c",
                                source_dir / "object.c",
+                               source_dir / "cobject.c",
                                ],
         separate_module_sources = [code],
         export_symbols=export_symbols_eci,
