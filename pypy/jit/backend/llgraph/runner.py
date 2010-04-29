@@ -29,6 +29,9 @@ class Descr(history.AbstractDescr):
         self.extrainfo = extrainfo
         self.name = name
 
+    def get_return_type(self):
+        return self.typeinfo
+
     def get_extra_info(self):
         return self.extrainfo
 

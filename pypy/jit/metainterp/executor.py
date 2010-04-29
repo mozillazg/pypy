@@ -9,8 +9,58 @@ from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr
+from pypy.jit.metainterp.history import INT, REF, FLOAT
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
+
+# ____________________________________________________________
+
+def do_call(cpu, argboxes, descr):
+    # count the number of arguments of the different types
+    count_i = count_r = count_f = 0
+    for i in range(1, len(argboxes)):
+        type = argboxes[i].type
+        if   type == INT:   count_i += 1
+        elif type == REF:   count_r += 1
+        elif type == FLOAT: count_f += 1
+    # allocate lists for each type that has at least one argument
+    if count_i: args_i = [0] * count_i
+    else:       args_i = None
+    if count_r: args_r = [NULL] * count_r
+    else:       args_r = None
+    if count_f: args_f = [0.0] * count_f
+    else:       args_f = None
+    # fill in the lists
+    count_i = count_r = count_f = 0
+    for i in range(1, len(argboxes)):
+        box = argboxes[i]
+        if   box.type == INT:
+            args_i[count_i] = box.getint()
+            count_i += 1
+        elif box.type == REF:
+            args_r[count_r] = box.getptr_base()
+            count_r += 1
+        elif box.type == FLOAT:
+            args_f[count_f] = box.getfloat()
+            count_f += 1
+    # get the function address as an integer
+    func = argboxes[0].getint()
+    # do the call using the correct function from the cpu
+    rettype = descr.get_return_type()
+    if rettype == INT:
+        result = cpu.bh_call_i(func, descr, args_i, args_r, args_f)
+        return BoxInt(result)
+    if rettype == REF:
+        result = cpu.bh_call_r(func, descr, args_i, args_r, args_f)
+        return BoxPtr(result)
+    if rettype == FLOAT:
+        result = cpu.bh_call_f(func, descr, args_i, args_r, args_f)
+        return BoxFloat(result)
+    if rettype == 'v':   # void
+        cpu.bh_call_v(func, descr, args_i, args_r, args_f)
+        return None
+    raise AssertionError("bad rettype")
 
 # ____________________________________________________________
 
@@ -33,7 +83,6 @@ from pypy.jit.metainterp.resoperation import rop
 
 def make_execute_list(cpuclass):
     from pypy.jit.backend.model import AbstractCPU
-    from pypy.jit.metainterp.blackhole import BlackholeInterpreter
     if 0:     # enable this to trace calls to do_xxx
         def wrap(fn):
             def myfn(*args):
@@ -74,7 +123,11 @@ def make_execute_list(cpuclass):
                 if func is not None:
                     execute[value] = func
                     continue
-            pass   #XXX...
+            name = 'do_' + key.lower()
+            if name in globals():
+                execute[value] = globals()[name]
+                continue
+            pass  # XXX...
     cpuclass._execute_by_num_args = execute_by_num_args
 
 def make_execute_function_with_boxes(name, func):
@@ -98,12 +151,14 @@ def make_execute_function_with_boxes(name, func):
             elif argtype == 'r': value = argbox.getptr_base()
             elif argtype == 'f': value = argbox.getfloat()
             newargs = newargs + (value,)
+        assert not argboxes
         #
         result = func(*newargs)
         #
         if resulttype == 'i': return BoxInt(result)
         if resulttype == 'r': return BoxPtr(result)
         if resulttype == 'f': return BoxFloat(result)
+        return None
     #
     return func_with_new_name(do, 'do_' + name)
 
