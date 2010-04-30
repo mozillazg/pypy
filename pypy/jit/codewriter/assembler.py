@@ -11,12 +11,12 @@ class JitCode(AbstractValue):
     _empty_f = []
 
     def __init__(self, name, cfnptr=None, calldescr=None, called_from=None,
-                 graph=None):
+                 liveness=None):
         self.name = name
-        self.cfnptr = cfnptr
-        self.calldescr = calldescr
-        self.called_from = called_from
-        self.graph = graph
+        #self.cfnptr = cfnptr
+        #self.calldescr = calldescr
+        #self.called_from = called_from
+        self.liveness = liveness
 
     def setup(self, code, constants_i=[], constants_r=[], constants_f=[],
               num_regs_r=256):
@@ -36,6 +36,36 @@ class JitCode(AbstractValue):
 
     def highest_r_reg(self):
         return ord(self.code[-1])
+
+    def enumerate_live_vars(self, pc, callback, arg,
+                            registers_i, registers_r, registers_f):
+        # 'pc' gives a position in this bytecode.  This invokes
+        # 'callback' for each variable that is live across the
+        # instruction which starts at 'pc'.  (It excludes the arguments
+        # of that instruction which are no longer used afterwards, and
+        # also the return value of that instruction.)  More precisely,
+        # this invokes 'callback(arg, box)' where 'box' comes from one
+        # of the three lists of registers.
+        live_i, live_r, live_f = self.liveness[pc]    # XXX compactify!!
+        for c in live_i: callback(arg, registers_i[ord(c)])
+        for c in live_r: callback(arg, registers_r[ord(c)])
+        for c in live_f: callback(arg, registers_f[ord(c)])
+    enumerate_live_vars._annspecialcase_ = 'specialize:arg(2)'
+
+    def _live_vars(self, pc):
+        # for testing only
+        class Names:
+            def __init__(self, kind):
+                self.kind = kind
+            def __getitem__(self, index):
+                return '%%%s%d' % (self.kind, index)
+        def callback(lst, reg):
+            lst.append(reg)
+        lst = []
+        self.enumerate_live_vars(pc, callback, lst,
+                                 Names('i'), Names('r'), Names('f'))
+        lst.sort()
+        return ' '.join(lst)
 
 
 class Assembler(object):
@@ -63,6 +93,7 @@ class Assembler(object):
         self.tlabel_positions = []
         self.switchdictdescrs = []
         self.count_regs = dict.fromkeys(KINDS, 0)
+        self.liveness = {}
 
     def emit_reg(self, reg):
         if reg.index >= self.count_regs[reg.kind]:
@@ -105,6 +136,12 @@ class Assembler(object):
     def write_insn(self, insn):
         if isinstance(insn[0], Label):
             self.label_positions[insn[0].name] = len(self.code)
+            return
+        if insn[0] == '-live-':
+            self.liveness[len(self.code)] = (
+                self.get_liveness_info(insn, 'int'),
+                self.get_liveness_info(insn, 'ref'),
+                self.get_liveness_info(insn, 'float'))
             return
         startposition = len(self.code)
         self.code.append("temporary placeholder")
@@ -160,6 +197,11 @@ class Assembler(object):
         num = self.insns.setdefault(key, len(self.insns))
         self.code[startposition] = chr(num)
 
+    def get_liveness_info(self, insn, kind):
+        lives = [chr(reg.index) for reg in insn[1:] if reg.kind == kind]
+        lives.sort()
+        return ''.join(lives)
+
     def fix_labels(self):
         for name, pos in self.tlabel_positions:
             assert self.code[pos  ] == "temp 1"
@@ -181,7 +223,7 @@ class Assembler(object):
         assert self.count_regs['float'] + len(self.constants_f) <= 256
 
     def make_jitcode(self, name):
-        jitcode = JitCode(name)
+        jitcode = JitCode(name, liveness=self.liveness)
         jitcode.setup(''.join(self.code),
                       self.constants_i,
                       self.constants_r,
