@@ -239,23 +239,18 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
         Py_DecRef(self.space, w_mod)
 
     def teardown_method(self, func):
-        try:
-            for name in self.imported_module_names:
-                self.unimport_module(name)
-            state = self.space.fromcache(State)
-            for w_obj in state.non_heaptypes:
-                Py_DecRef(self.space, w_obj)
-            state.non_heaptypes[:] = []
-            while state.borrowed_objects:
-                addr = state.borrowed_objects.keys()[0]
-                w_obj = state.py_objects_r2w[addr]
-                Py_DecRef(self.space, w_obj)
-            state.borrowed_objects = {}
-            state.borrow_mapping = {}
-        except OperationError:
-            pass
-        except AttributeError:
-            pass
+        for name in self.imported_module_names:
+            self.unimport_module(name)
+        state = self.space.fromcache(State)
+        for w_obj in state.non_heaptypes:
+            Py_DecRef(self.space, w_obj)
+        state.non_heaptypes[:] = []
+        while state.borrowed_objects:
+            addr = state.borrowed_objects.keys()[0]
+            w_obj = state.py_objects_r2w[addr]
+            Py_DecRef(self.space, w_obj)
+        state.borrowed_objects = {}
+        state.borrow_mapping = {}
         if self.check_and_print_leaks():
             assert False, "Test leaks or loses object(s)."
 
