@@ -61,6 +61,21 @@ def do_call(cpu, argboxes, descr):
         return None
     raise AssertionError("bad rettype")
 
+def do_setarrayitem_gc(cpu, arraybox, indexbox, itembox, arraydescr):
+    array = arraybox.getref_base()
+    index = indexbox.getint()
+    if itembox.type == INT:
+        item = itembox.getint()
+        cpu.bh_setarrayitem_gc_i(arraydescr, array, index, item)
+    elif itembox.type == REF:
+        item = itembox.getref_base()
+        cpu.bh_setarrayitem_gc_r(arraydescr, array, index, item)
+    elif itembox.type == FLOAT:
+        item = itembox.getfloat()
+        cpu.bh_setarrayitem_gc_f(arraydescr, array, index, item)
+    else:
+        raise AssertionError("bad itembox.type")
+
 # ____________________________________________________________
 
 ##def do_force_token(cpu):
@@ -114,6 +129,19 @@ def make_execute_list(cpuclass):
                 raise Exception("duplicate entry for op number %d" % value)
             if key.endswith('_PURE'):
                 key = key[:-5]
+            #
+            # Fish for a way for the pyjitpl interpreter to delegate
+            # really running the operation to the blackhole interpreter
+            # or directly to the cpu.  First try the do_xxx() functions
+            # explicitly encoded above:
+            name = 'do_' + key.lower()
+            if name in globals():
+                execute[value] = globals()[name]
+                continue
+            # If missing, fallback to the bhimpl_xxx() method of the
+            # blackhole interpreter.  This only works if there is a
+            # method of the exact same name and it accepts simple
+            # parameters.
             name = 'bhimpl_' + key.lower()
             if hasattr(BlackholeInterpreter, name):
                 func = make_execute_function_with_boxes(
@@ -122,11 +150,7 @@ def make_execute_list(cpuclass):
                 if func is not None:
                     execute[value] = func
                     continue
-            name = 'do_' + key.lower()
-            if name in globals():
-                execute[value] = globals()[name]
-                continue
-            pass  # XXX...
+            print "XXX warning: missing", key
     cpuclass._execute_by_num_args = execute_by_num_args
 
 def make_execute_function_with_boxes(name, func):
@@ -134,7 +158,7 @@ def make_execute_function_with_boxes(name, func):
     # from the BlackholeInterpreter class.  The wrapper is a new function
     # that receives and returns boxed values.
     for argtype in func.argtypes:
-        if argtype not in ('i', 'r', 'f'):
+        if argtype not in ('i', 'r', 'f', 'd', 'cpu'):
             return None
     if func.resulttype not in ('i', 'r', 'f', None):
         return None
@@ -144,11 +168,17 @@ def make_execute_function_with_boxes(name, func):
     def do(cpu, *argboxes):
         newargs = ()
         for argtype in argtypes:
-            argbox = argboxes[0]
-            argboxes = argboxes[1:]
-            if argtype == 'i':   value = argbox.getint()
-            elif argtype == 'r': value = argbox.getref_base()
-            elif argtype == 'f': value = argbox.getfloat()
+            if argtype == 'cpu':
+                value = cpu
+            elif argtype == 'd':
+                value = argboxes[-1]
+                argboxes = argboxes[:-1]
+            else:
+                argbox = argboxes[0]
+                argboxes = argboxes[1:]
+                if argtype == 'i':   value = argbox.getint()
+                elif argtype == 'r': value = argbox.getref_base()
+                elif argtype == 'f': value = argbox.getfloat()
             newargs = newargs + (value,)
         assert not argboxes
         #
@@ -190,7 +220,8 @@ def execute(cpu, opnum, descr, *argboxes):
         assert descr is None
     func = get_execute_function(cpu, opnum, len(argboxes))
     assert func is not None
-    return func(cpu, *argboxes)
+    return func(cpu, *argboxes)     # note that the 'argboxes' tuple
+                                    # optionally ends with the descr
 execute._annspecialcase_ = 'specialize:arg(1)'
 
 def execute_varargs(cpu, opnum, argboxes, descr):

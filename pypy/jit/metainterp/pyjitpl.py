@@ -32,10 +32,11 @@ def arguments(*args):
         return func
     return decorate
 
-def XXX(func):
-    def cannot_call(*args, **kwds):
-        raise Exception('not implemented: %s' % func.__name__)
-    return cannot_call
+class XXX:      # XXX temporary hack
+    def __init__(self, func):
+        self.func = func
+    def __getattr__(self, _):
+        raise Exception("@XXX: " + self.func.__name__)
 
 # ____________________________________________________________
 
@@ -279,9 +280,9 @@ class MIFrame(object):
     def opimpl_subclassof(self, box1, box2):
         self.execute(rop.SUBCLASSOF, box1, box2)
 
-    @XXX  #arguments("descr", "box")
-    def opimpl_new_array(self, itemsize, countbox):
-        self.execute_with_descr(rop.NEW_ARRAY, itemsize, countbox)
+    @arguments("descr", "box")
+    def opimpl_new_array(self, itemsizedescr, countbox):
+        return self.execute_with_descr(rop.NEW_ARRAY, itemsizedescr, countbox)
 
     @XXX  #arguments("box", "descr", "box")
     def opimpl_getarrayitem_gc(self, arraybox, arraydesc, indexbox):
@@ -291,9 +292,14 @@ class MIFrame(object):
     def opimpl_getarrayitem_gc_pure(self, arraybox, arraydesc, indexbox):
         self.execute_with_descr(rop.GETARRAYITEM_GC_PURE, arraydesc, arraybox, indexbox)
 
-    @XXX  #arguments("box", "descr", "box", "box")
-    def opimpl_setarrayitem_gc(self, arraybox, arraydesc, indexbox, itembox):
-        self.execute_with_descr(rop.SETARRAYITEM_GC, arraydesc, arraybox, indexbox, itembox)
+    @arguments("descr", "box", "box", "box")
+    def _opimpl_setarrayitem_gc(self, arraydesc, arraybox, indexbox, itembox):
+        self.execute_with_descr(rop.SETARRAYITEM_GC, arraydesc, arraybox,
+                                indexbox, itembox)
+
+    opimpl_setarrayitem_gc_i = _opimpl_setarrayitem_gc
+    opimpl_setarrayitem_gc_r = _opimpl_setarrayitem_gc
+    opimpl_setarrayitem_gc_f = _opimpl_setarrayitem_gc
 
     @XXX  #arguments("box", "descr")
     def opimpl_arraylen_gc(self, arraybox, arraydesc):
