@@ -1,4 +1,4 @@
-import struct
+import py, struct
 from pypy.jit.codewriter.assembler import Assembler
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
 from pypy.jit.codewriter.flatten import ListOfKind
@@ -150,3 +150,40 @@ def test_highest_r_reg():
     ssarepr.insns = [('foobar', Register('int', 51), Register('ref', 27))]
     jitcode = assembler.assemble(ssarepr)
     assert jitcode.highest_r_reg() == 27
+
+def test_liveness():
+    ssarepr = SSARepr("test")
+    i0, i1, i2 = Register('int', 0), Register('int', 1), Register('int', 2)
+    i3, i4, i5 = Register('int', 3), Register('int', 4), Register('int', 5)
+    ssarepr.insns = [
+        ('-live-', i0),
+        ('int_add', i0, Constant(10, lltype.Signed), i1),
+        ('-live-', i0, i1),
+        ('int_add', i0, Constant(3, lltype.Signed), i2),
+        ('-live-', i0),
+        ('int_mul', i1, i2, i3),
+        ('-live-', i3),
+        ('int_add', i0, Constant(6, lltype.Signed), i4),
+        ('-live-',),
+        ('int_mul', i3, i4, i5),
+        ('int_return', i5),
+        ]
+    assembler = Assembler()
+    jitcode = assembler.assemble(ssarepr)
+    assert jitcode._code() == ("\x00\x00\x0A\x01"
+                               "\x00\x00\x03\x02"
+                               "\x01\x01\x02\x03"
+                               "\x00\x00\x06\x04"
+                               "\x01\x03\x04\x05"
+                               "\x02\x05")
+    assert assembler.insns == {'int_add/ici': 0,
+                               'int_mul/iii': 1,
+                               'int_return/i': 2}
+    py.test.raises(KeyError, jitcode._live_vars, 1)
+    py.test.raises(KeyError, jitcode._live_vars, 3)
+    py.test.raises(KeyError, jitcode._live_vars, 20)
+    assert jitcode._live_vars(0) == '%i0'
+    assert jitcode._live_vars(4) == '%i0 %i1'
+    assert jitcode._live_vars(8) == '%i0'
+    assert jitcode._live_vars(12) == '%i3'
+    assert jitcode._live_vars(16) == ''
