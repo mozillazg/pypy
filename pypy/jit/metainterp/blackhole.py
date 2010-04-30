@@ -266,13 +266,13 @@ class BlackholeInterpreter(object):
                 position = self.handle_exception_in_frame(e, code)
 
     def get_result_i(self):
-        return self.registers_i[0]
+        return self.tmpreg_i
 
     def get_result_r(self):
-        return self.registers_r[0]
+        return self.tmpreg_r
 
     def get_result_f(self):
-        return self.registers_f[0]
+        return self.tmpreg_f
 
     def _get_result_anytype(self):
         "NOT_RPYTHON"
@@ -291,6 +291,7 @@ class BlackholeInterpreter(object):
         while i >= 0:
             self.registers_r[i] = NULL
             i -= 1
+        self.tmpreg_r = NULL
         self.exception_last_value = None
 
     def handle_exception_in_frame(self, e, code):
@@ -466,6 +467,26 @@ class BlackholeInterpreter(object):
     bhimpl_ref_guard_value = bhimpl_ref_copy
     bhimpl_float_guard_value = bhimpl_float_copy
 
+    @arguments("self", "i")
+    def bhimpl_int_push(self, a):
+        self.tmpreg_i = a
+    @arguments("self", "r")
+    def bhimpl_ref_push(self, a):
+        self.tmpreg_r = a
+    @arguments("self", "f")
+    def bhimpl_float_push(self, a):
+        self.tmpreg_f = a
+
+    @arguments("self", returns="i")
+    def bhimpl_int_pop(self):
+        return self.tmpreg_i
+    @arguments("self", returns="r")
+    def bhimpl_ref_pop(self):
+        return self.tmpreg_r
+    @arguments("self", returns="f")
+    def bhimpl_float_pop(self):
+        return self.tmpreg_f
+
     # ----------
     # float operations
 
@@ -526,21 +547,21 @@ class BlackholeInterpreter(object):
 
     @arguments("self", "i")
     def bhimpl_int_return(self, a):
-        self.registers_i[0] = a
+        self.tmpreg_i = a
         if not we_are_translated():
             self._return_type = "int"
         raise LeaveFrame
 
     @arguments("self", "r")
     def bhimpl_ref_return(self, a):
-        self.registers_r[0] = a
+        self.tmpreg_r = a
         if not we_are_translated():
             self._return_type = "ref"
         raise LeaveFrame
 
     @arguments("self", "f")
     def bhimpl_float_return(self, a):
-        self.registers_f[0] = a
+        self.tmpreg_f = a
         if not we_are_translated():
             self._return_type = "float"
         raise LeaveFrame

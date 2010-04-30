@@ -56,9 +56,12 @@ def test_reorder_renaming_list():
     result = reorder_renaming_list([4, 5, 1, 2], [1, 2, 3, 4])
     assert result == [(1, 3), (4, 1), (2, 4), (5, 2)]
     result = reorder_renaming_list([1, 2], [2, 1])
-    assert result == None
-    result = reorder_renaming_list([4, 3, 1, 2, 6], [1, 2, 3, 4, 5])
-    assert result == None
+    assert result == [(1, None), (2, 1), (None, 2)]
+    result = reorder_renaming_list([4, 3, 6, 1, 2, 5, 7],
+                                   [1, 2, 5, 3, 4, 6, 8])
+    assert result == [(7, 8),
+                      (4, None), (2, 4), (3, 2), (1, 3), (None, 1),
+                      (6, None), (5, 6), (None, 5)]
 
 def test_repr():
     assert repr(Register('int', 13)) == '%i13'
