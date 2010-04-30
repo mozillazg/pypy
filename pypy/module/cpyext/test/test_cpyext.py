@@ -365,6 +365,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
 
 
     def test_recursive_package_import(self):
+        skip("not yet")
         """
         If `cherry.date` is an extension module which imports `apple.banana`,
         the latter is added to `sys.modules` for the `"apple.banana"` key.
