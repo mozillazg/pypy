@@ -6,6 +6,8 @@ static PyMethodDef date_functions[] = {
 
 void initdate(void)
 {
+    PyObject *module;
     Py_InitModule("date", date_functions);
-    PyImport_ImportModule("apple.banana");
+    module = PyImport_ImportModule("apple.banana");
+    Py_DECREF(module);
 }
