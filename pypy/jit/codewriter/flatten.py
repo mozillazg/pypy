@@ -155,12 +155,16 @@ class GraphFlattener(object):
         elif block.exitswitch is c_last_exception:
             # An exception block. See test_exc_exitswitch in test_flatten.py
             # for an example of what kind of code this makes.
+            lastopname = block.operations[-1].opname
             assert block.exits[0].exitcase is None # is this always True?
             self.emitline('catch_exception', TLabel(block.exits[0]))
             self.make_link(block.exits[0])
             self.emitline(Label(block.exits[0]))
             for link in block.exits[1:]:
-                if link.exitcase is Exception:
+                if (link.exitcase is Exception or
+                    (link.exitcase is OverflowError and
+                     lastopname.startswith('int_') and
+                     lastopname.endswith('_ovf'))):
                     # this link captures all exceptions
                     self.make_exception_link(link)
                     break

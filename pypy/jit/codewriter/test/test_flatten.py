@@ -399,8 +399,5 @@ class TestFlatten:
             catch_exception L1
             int_return %i2
             L1:
-            goto_if_exception_mismatch $<* struct object_vtable>, L2
             int_return $42
-            L2:
-            reraise
         """, transform=True)
