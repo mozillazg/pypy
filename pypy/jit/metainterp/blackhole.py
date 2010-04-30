@@ -125,6 +125,8 @@ class BlackholeInterpBuilder(object):
                     position += length
                 elif argtype == 'self':
                     value = self
+                elif argtype == 'cpu':
+                    value = self.cpu
                 elif argtype == 'pc':
                     value = position
                 elif argtype == 'd':
@@ -706,67 +708,67 @@ class BlackholeInterpreter(object):
     # ----------
     # the following operations are directly implemented by the backend
 
-    @arguments("self", "i", "d", "R", returns="i")
-    def bhimpl_residual_call_r_i(self, func, calldescr, args_r):
-        return self.cpu.bh_call_i(func, calldescr, None, args_r, None)
-    @arguments("self", "i", "d", "R", returns="r")
-    def bhimpl_residual_call_r_r(self, func, calldescr, args_r):
-        return self.cpu.bh_call_r(func, calldescr, None, args_r, None)
-    @arguments("self", "i", "d", "R", returns="f")
-    def bhimpl_residual_call_r_f(self, func, calldescr, args_r):
-        return self.cpu.bh_call_f(func, calldescr, None, args_r, None)
-    @arguments("self", "i", "d", "R")
-    def bhimpl_residual_call_r_v(self, func, calldescr, args_r):
-        self.cpu.bh_call_v(func, calldescr, None, args_r, None)
+    @arguments("cpu", "i", "d", "R", returns="i")
+    def bhimpl_residual_call_r_i(cpu, func, calldescr, args_r):
+        return cpu.bh_call_i(func, calldescr, None, args_r, None)
+    @arguments("cpu", "i", "d", "R", returns="r")
+    def bhimpl_residual_call_r_r(cpu, func, calldescr, args_r):
+        return cpu.bh_call_r(func, calldescr, None, args_r, None)
+    @arguments("cpu", "i", "d", "R", returns="f")
+    def bhimpl_residual_call_r_f(cpu, func, calldescr, args_r):
+        return cpu.bh_call_f(func, calldescr, None, args_r, None)
+    @arguments("cpu", "i", "d", "R")
+    def bhimpl_residual_call_r_v(cpu, func, calldescr, args_r):
+        cpu.bh_call_v(func, calldescr, None, args_r, None)
 
-    @arguments("self", "i", "d", "I", "R", returns="i")
-    def bhimpl_residual_call_ir_i(self, func, calldescr, args_i, args_r):
-        return self.cpu.bh_call_i(func, calldescr, args_i, args_r, None)
-    @arguments("self", "i", "d", "I", "R", returns="r")
-    def bhimpl_residual_call_ir_r(self, func, calldescr, args_i, args_r):
-        return self.cpu.bh_call_r(func, calldescr, args_i, args_r, None)
-    @arguments("self", "i", "d", "I", "R", returns="f")
-    def bhimpl_residual_call_ir_f(self, func, calldescr, args_i, args_r):
-        return self.cpu.bh_call_f(func, calldescr, args_i, args_r, None)
-    @arguments("self", "i", "d", "I", "R")
-    def bhimpl_residual_call_ir_v(self, func, calldescr, args_i, args_r):
-        self.cpu.bh_call_v(func, calldescr, args_i, args_r, None)
+    @arguments("cpu", "i", "d", "I", "R", returns="i")
+    def bhimpl_residual_call_ir_i(cpu, func, calldescr, args_i, args_r):
+        return cpu.bh_call_i(func, calldescr, args_i, args_r, None)
+    @arguments("cpu", "i", "d", "I", "R", returns="r")
+    def bhimpl_residual_call_ir_r(cpu, func, calldescr, args_i, args_r):
+        return cpu.bh_call_r(func, calldescr, args_i, args_r, None)
+    @arguments("cpu", "i", "d", "I", "R", returns="f")
+    def bhimpl_residual_call_ir_f(cpu, func, calldescr, args_i, args_r):
+        return cpu.bh_call_f(func, calldescr, args_i, args_r, None)
+    @arguments("cpu", "i", "d", "I", "R")
+    def bhimpl_residual_call_ir_v(cpu, func, calldescr, args_i, args_r):
+        cpu.bh_call_v(func, calldescr, args_i, args_r, None)
 
-    @arguments("self", "i", "d", "I", "R", "F", returns="i")
-    def bhimpl_residual_call_irf_i(self, func, calldescr,args_i,args_r,args_f):
-        return self.cpu.bh_call_i(func, calldescr, args_i, args_r, args_f)
-    @arguments("self", "i", "d", "I", "R", "F", returns="r")
-    def bhimpl_residual_call_irf_r(self, func, calldescr,args_i,args_r,args_f):
-        return self.cpu.bh_call_r(func, calldescr, args_i, args_r, args_f)
-    @arguments("self", "i", "d", "I", "R", "F", returns="f")
-    def bhimpl_residual_call_irf_f(self, func, calldescr,args_i,args_r,args_f):
-        return self.cpu.bh_call_f(func, calldescr, args_i, args_r, args_f)
-    @arguments("self", "i", "d", "I", "R", "F")
-    def bhimpl_residual_call_irf_v(self, func, calldescr,args_i,args_r,args_f):
-        self.cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
+    @arguments("cpu", "i", "d", "I", "R", "F", returns="i")
+    def bhimpl_residual_call_irf_i(cpu, func, calldescr,args_i,args_r,args_f):
+        return cpu.bh_call_i(func, calldescr, args_i, args_r, args_f)
+    @arguments("cpu", "i", "d", "I", "R", "F", returns="r")
+    def bhimpl_residual_call_irf_r(cpu, func, calldescr,args_i,args_r,args_f):
+        return cpu.bh_call_r(func, calldescr, args_i, args_r, args_f)
+    @arguments("cpu", "i", "d", "I", "R", "F", returns="f")
+    def bhimpl_residual_call_irf_f(cpu, func, calldescr,args_i,args_r,args_f):
+        return cpu.bh_call_f(func, calldescr, args_i, args_r, args_f)
+    @arguments("cpu", "i", "d", "I", "R", "F")
+    def bhimpl_residual_call_irf_v(cpu, func, calldescr,args_i,args_r,args_f):
+        cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
 
-    @arguments("self", "d", "i", returns="r")
-    def bhimpl_new_array(self, arraydescr, length):
-        return self.cpu.bh_new_array(arraydescr, length)
-    @arguments("self", "d", "r", "i", "r")
-    def bhimpl_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
-        self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
+    @arguments("cpu", "d", "i", returns="r")
+    def bhimpl_new_array(cpu, arraydescr, length):
+        return cpu.bh_new_array(arraydescr, length)
+    @arguments("cpu", "d", "r", "i", "r")
+    def bhimpl_setarrayitem_gc_r(cpu, arraydescr, array, index, newvalue):
+        cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
 
-    @arguments("self", "r", "d", returns="i")
-    def bhimpl_getfield_gc_i(self, struct, fielddescr):
-        return self.cpu.bh_getfield_gc_i(struct, fielddescr)
-    @arguments("self", "r", "d", returns="i")
-    def bhimpl_getfield_gc_c(self, struct, fielddescr):
-        return self.cpu.bh_getfield_gc_c(struct, fielddescr)
-    @arguments("self", "r", "d", returns="i")
-    def bhimpl_getfield_gc_u(self, struct, fielddescr):
-        return self.cpu.bh_getfield_gc_u(struct, fielddescr)
-    @arguments("self", "r", "d", returns="r")
-    def bhimpl_getfield_gc_r(self, struct, fielddescr):
-        return self.cpu.bh_getfield_gc_r(struct, fielddescr)
-    @arguments("self", "r", "d", returns="f")
-    def bhimpl_getfield_gc_f(self, struct, fielddescr):
-        return self.cpu.bh_getfield_gc_f(struct, fielddescr)
+    @arguments("cpu", "r", "d", returns="i")
+    def bhimpl_getfield_gc_i(cpu, struct, fielddescr):
+        return cpu.bh_getfield_gc_i(struct, fielddescr)
+    @arguments("cpu", "r", "d", returns="i")
+    def bhimpl_getfield_gc_c(cpu, struct, fielddescr):
+        return cpu.bh_getfield_gc_c(struct, fielddescr)
+    @arguments("cpu", "r", "d", returns="i")
+    def bhimpl_getfield_gc_u(cpu, struct, fielddescr):
+        return cpu.bh_getfield_gc_u(struct, fielddescr)
+    @arguments("cpu", "r", "d", returns="r")
+    def bhimpl_getfield_gc_r(cpu, struct, fielddescr):
+        return cpu.bh_getfield_gc_r(struct, fielddescr)
+    @arguments("cpu", "r", "d", returns="f")
+    def bhimpl_getfield_gc_f(cpu, struct, fielddescr):
+        return cpu.bh_getfield_gc_f(struct, fielddescr)
 
     bhimpl_getfield_gc_i_pure = bhimpl_getfield_gc_i
     bhimpl_getfield_gc_c_pure = bhimpl_getfield_gc_c
@@ -774,21 +776,21 @@ class BlackholeInterpreter(object):
     bhimpl_getfield_gc_r_pure = bhimpl_getfield_gc_r
     bhimpl_getfield_gc_f_pure = bhimpl_getfield_gc_f
 
-    @arguments("self", "i", "d", returns="i")
-    def bhimpl_getfield_raw_i(self, struct, fielddescr):
-        return self.cpu.bh_getfield_raw_i(struct, fielddescr)
-    @arguments("self", "i", "d", returns="i")
-    def bhimpl_getfield_raw_c(self, struct, fielddescr):
-        return self.cpu.bh_getfield_raw_c(struct, fielddescr)
-    @arguments("self", "i", "d", returns="i")
-    def bhimpl_getfield_raw_u(self, struct, fielddescr):
-        return self.cpu.bh_getfield_raw_u(struct, fielddescr)
-    @arguments("self", "i", "d", returns="r")
-    def bhimpl_getfield_raw_r(self, struct, fielddescr):
-        return self.cpu.bh_getfield_raw_r(struct, fielddescr)
-    @arguments("self", "i", "d", returns="f")
-    def bhimpl_getfield_raw_f(self, struct, fielddescr):
-        return self.cpu.bh_getfield_raw_f(struct, fielddescr)
+    @arguments("cpu", "i", "d", returns="i")
+    def bhimpl_getfield_raw_i(cpu, struct, fielddescr):
+        return cpu.bh_getfield_raw_i(struct, fielddescr)
+    @arguments("cpu", "i", "d", returns="i")
+    def bhimpl_getfield_raw_c(cpu, struct, fielddescr):
+        return cpu.bh_getfield_raw_c(struct, fielddescr)
+    @arguments("cpu", "i", "d", returns="i")
+    def bhimpl_getfield_raw_u(cpu, struct, fielddescr):
+        return cpu.bh_getfield_raw_u(struct, fielddescr)
+    @arguments("cpu", "i", "d", returns="r")
+    def bhimpl_getfield_raw_r(cpu, struct, fielddescr):
+        return cpu.bh_getfield_raw_r(struct, fielddescr)
+    @arguments("cpu", "i", "d", returns="f")
+    def bhimpl_getfield_raw_f(cpu, struct, fielddescr):
+        return cpu.bh_getfield_raw_f(struct, fielddescr)
 
     bhimpl_getfield_raw_i_pure = bhimpl_getfield_raw_i
     bhimpl_getfield_raw_c_pure = bhimpl_getfield_raw_c
@@ -796,50 +798,50 @@ class BlackholeInterpreter(object):
     bhimpl_getfield_raw_r_pure = bhimpl_getfield_raw_r
     bhimpl_getfield_raw_f_pure = bhimpl_getfield_raw_f
 
-    @arguments("self", "r", "d", "i")
-    def bhimpl_setfield_gc_i(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_gc_i(struct, fielddescr, newvalue)
-    @arguments("self", "r", "d", "i")
-    def bhimpl_setfield_gc_c(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_gc_c(struct, fielddescr, newvalue)
-    @arguments("self", "r", "d", "i")
-    def bhimpl_setfield_gc_u(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_gc_u(struct, fielddescr, newvalue)
-    @arguments("self", "r", "d", "r")
-    def bhimpl_setfield_gc_r(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_gc_r(struct, fielddescr, newvalue)
-    @arguments("self", "r", "d", "f")
-    def bhimpl_setfield_gc_f(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_gc_f(struct, fielddescr, newvalue)
+    @arguments("cpu", "r", "d", "i")
+    def bhimpl_setfield_gc_i(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_gc_i(struct, fielddescr, newvalue)
+    @arguments("cpu", "r", "d", "i")
+    def bhimpl_setfield_gc_c(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_gc_c(struct, fielddescr, newvalue)
+    @arguments("cpu", "r", "d", "i")
+    def bhimpl_setfield_gc_u(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_gc_u(struct, fielddescr, newvalue)
+    @arguments("cpu", "r", "d", "r")
+    def bhimpl_setfield_gc_r(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_gc_r(struct, fielddescr, newvalue)
+    @arguments("cpu", "r", "d", "f")
+    def bhimpl_setfield_gc_f(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_gc_f(struct, fielddescr, newvalue)
 
-    @arguments("self", "i", "d", "i")
-    def bhimpl_setfield_raw_i(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_raw_i(struct, fielddescr, newvalue)
-    @arguments("self", "i", "d", "i")
-    def bhimpl_setfield_raw_c(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_raw_c(struct, fielddescr, newvalue)
-    @arguments("self", "i", "d", "i")
-    def bhimpl_setfield_raw_u(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_raw_u(struct, fielddescr, newvalue)
-    @arguments("self", "i", "d", "r")
-    def bhimpl_setfield_raw_r(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_raw_r(struct, fielddescr, newvalue)
-    @arguments("self", "i", "d", "f")
-    def bhimpl_setfield_raw_f(self, struct, fielddescr, newvalue):
-        self.cpu.bh_setfield_raw_f(struct, fielddescr, newvalue)
+    @arguments("cpu", "i", "d", "i")
+    def bhimpl_setfield_raw_i(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_raw_i(struct, fielddescr, newvalue)
+    @arguments("cpu", "i", "d", "i")
+    def bhimpl_setfield_raw_c(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_raw_c(struct, fielddescr, newvalue)
+    @arguments("cpu", "i", "d", "i")
+    def bhimpl_setfield_raw_u(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_raw_u(struct, fielddescr, newvalue)
+    @arguments("cpu", "i", "d", "r")
+    def bhimpl_setfield_raw_r(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_raw_r(struct, fielddescr, newvalue)
+    @arguments("cpu", "i", "d", "f")
+    def bhimpl_setfield_raw_f(cpu, struct, fielddescr, newvalue):
+        cpu.bh_setfield_raw_f(struct, fielddescr, newvalue)
 
-    @arguments("self", "d", returns="r")
-    def bhimpl_new(self, descr):
-        return self.cpu.bh_new(descr)
+    @arguments("cpu", "d", returns="r")
+    def bhimpl_new(cpu, descr):
+        return cpu.bh_new(descr)
 
-    @arguments("self", "d", returns="r")
-    def bhimpl_new_with_vtable(self, descr):
-        return self.cpu.bh_new_with_vtable(descr)
+    @arguments("cpu", "d", returns="r")
+    def bhimpl_new_with_vtable(cpu, descr):
+        return cpu.bh_new_with_vtable(descr)
 
-    @arguments("self", "r", returns="i")
-    def bhimpl_guard_class(self, struct):
-        return self.cpu.bh_classof(struct)
+    @arguments("cpu", "r", returns="i")
+    def bhimpl_guard_class(cpu, struct):
+        return cpu.bh_classof(struct)
 
-    @arguments("self", "r", returns="i")
-    def bhimpl_cast_ptr_to_int(self, p):
-        return self.cpu.bh_cast_ptr_to_int(p)
+    @arguments("cpu", "r", returns="i")
+    def bhimpl_cast_ptr_to_int(cpu, p):
+        return cpu.bh_cast_ptr_to_int(p)
