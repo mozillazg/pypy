@@ -343,7 +343,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         assert module.return_cookie() == 3.14
 
 
-    def test_InitModule4Dotted(self):
+    def test_InitModule4_dotted(self):
         """
         If the module name passed to Py_InitModule4 includes a package, only
         the module name (the part after the last dot) is considered when
@@ -354,7 +354,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         assert module.__name__ == expected_name
 
 
-    def test_InitModuleInPackage(self):
+    def test_InitModule4_in_package(self):
         """
         If `apple.banana` is an extension module which calls Py_InitModule4 with
         only "banana" as a name, the resulting module nevertheless is stored at
@@ -364,7 +364,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         assert module.__name__ == "apple.banana"
 
 
-    def test_recursivePackageImport(self):
+    def test_recursive_package_import(self):
         """
         If `cherry.date` is an extension module which imports `apple.banana`,
         the latter is added to `sys.modules` for the `"apple.banana"` key.
