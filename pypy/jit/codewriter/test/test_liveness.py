@@ -11,9 +11,12 @@ class TestFlatten:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
-    def encoding_test(self, func, args, expected):
+    def encoding_test(self, func, args, expected,
+                      switches_require_liveness=False):
         graphs = self.make_graphs(func, args)
-        compute_liveness(graphs[0], ['int_add', 'int_mul'])
+        compute_liveness(graphs[0],
+                         switches_require_liveness=switches_require_liveness,
+                         opnames_requiring_liveness=['int_add', 'int_mul'])
         ssarepr = flatten_graph(graphs[0], fake_regallocs())
         assert_format(ssarepr, expected)
 
@@ -106,3 +109,17 @@ class TestFlatten:
             int_add %i6, $2, %i7
             int_return %i7
         """)
+
+    def test_switch_require_liveness(self):
+        def f(x, y):
+            if x:
+                return x
+            return y
+        self.encoding_test(f, [5, 6], """
+            int_is_true %i0, %i2
+            -live- %i0, %i1
+            goto_if_not L1, %i2
+            int_return %i0
+            L1:
+            int_return %i1
+        """, switches_require_liveness=True)
