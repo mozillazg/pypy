@@ -1,6 +1,7 @@
 from pypy.jit.metainterp.history import AbstractValue, AbstractDescr, getkind
 from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
 from pypy.jit.codewriter.flatten import ListOfKind, SwitchDictDescr
+from pypy.jit.codewriter.format import format_assembler
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib.objectmodel import we_are_translated
@@ -100,6 +101,7 @@ class Assembler(object):
         self.insns = {}
         self.descrs = []
         self._descr_dict = {}
+        self._count_jitcodes = 0
 
     def assemble(self, ssarepr):
         self.setup()
@@ -107,7 +109,7 @@ class Assembler(object):
             self.write_insn(insn)
         self.fix_labels()
         self.check_result()
-        return self.make_jitcode(ssarepr.name)
+        return self.make_jitcode(ssarepr)
 
     def setup(self):
         self.code = []
@@ -248,8 +250,8 @@ class Assembler(object):
         assert self.count_regs['ref'] + len(self.constants_r) <= 256
         assert self.count_regs['float'] + len(self.constants_f) <= 256
 
-    def make_jitcode(self, name):
-        jitcode = JitCode(name, liveness=self.liveness,
+    def make_jitcode(self, ssarepr):
+        jitcode = JitCode(ssarepr.name, liveness=self.liveness,
                           assembler=self)
         jitcode.setup(''.join(self.code),
                       self.constants_i,
@@ -258,4 +260,7 @@ class Assembler(object):
                       self.count_regs['int'],
                       self.count_regs['ref'],
                       self.count_regs['float'])
+        if self._count_jitcodes < 50:    # stop if we have a lot of them
+            jitcode._dump = format_assembler(ssarepr)
+        self._count_jitcodes += 1
         return jitcode
