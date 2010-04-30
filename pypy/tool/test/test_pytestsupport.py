@@ -22,8 +22,8 @@ def test_AppFrame(space):
     co = PyCode._from_code(space, somefunc.func_code)
     pyframe = PyFrame(space, co, space.newdict(), None)
     runner = AppFrame(space, pyframe)
-    py.code.reinterpret_old("f = lambda x: x+1", runner, should_fail=False)
-    msg = py.code.reinterpret_old("assert isinstance(f(2), float)", runner)
+    py.code._reinterpret_old("f = lambda x: x+1", runner, should_fail=False)
+    msg = py.code._reinterpret_old("assert isinstance(f(2), float)", runner)
     assert msg.startswith("assert isinstance(3, float)\n"
                           " +  where 3 = ")
 
