@@ -10,7 +10,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator import platform
 from pypy.translator.gensupp import uniquemodulename
 from pypy.tool.udir import udir
-from pypy.module.cpyext import api
+from pypy.module.cpyext import api, typeobject
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyobject import Py_DecRef, InvalidPointerException
 from pypy.translator.goal import autopath
@@ -50,8 +50,9 @@ class AppTestApi:
         raises(ImportError, cpyext.load_module, self.libc, "invalid.function")
 
 def compile_module(modname, **kwds):
+    modname = modname.split('.')[-1]
     eci = ExternalCompilationInfo(
-        export_symbols=['init%s' % (modname.split('.')[-1],)],
+        export_symbols=['init%s' % (modname,)],
         include_dirs=api.include_dirs,
         **kwds
         )
@@ -97,7 +98,7 @@ class LeakCheckingTest(object):
             if delta != 0:
                 leaking = True
                 print >>sys.stderr, "Leaking %r: %i references" % (w_obj, delta)
-                lifeline = api.lifeline_dict.get(w_obj)
+                lifeline = typeobject.lifeline_dict.get(w_obj)
                 if lifeline is not None:
                     refcnt = lifeline.pyo.c_ob_refcnt
                     if refcnt > 0:
@@ -133,6 +134,19 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
         cls.space = gettestobjspace(usemodules=['cpyext', 'thread'])
         cls.space.getbuiltinmodule("cpyext")
 
+    def compile_module(self, name, **kwds):
+        state = self.space.fromcache(State)
+        api_library = state.api_lib
+        if sys.platform == 'win32':
+            kwds["libraries"] = [api_library]
+            # '%s' undefined; assuming extern returning int
+            kwds["compile_extra"] = ["/we4013"]
+        else:
+            kwds["link_files"] = [str(api_library + '.so')]
+            kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
+        return compile_module(name, **kwds)
+
+
     def import_module(self, name, init=None, body='', load_it=True, filename=None):
         """
         init specifies the overall template of the module.
@@ -160,20 +174,11 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
                     / 'cpyext'/ 'test' / (filename + ".c")
             kwds = dict(separate_module_files=[filename])
 
-        state = self.space.fromcache(State)
-        api_library = state.api_lib
-        if sys.platform == 'win32':
-            kwds["libraries"] = [api_library]
-            # '%s' undefined; assuming extern returning int
-            kwds["compile_extra"] = ["/we4013"]
-        else:
-            kwds["link_files"] = [str(api_library + '.so')]
-            kwds["compile_extra"] = ["-Werror=implicit-function-declaration"]
-        mod = compile_module(name, **kwds)
+        mod = self.compile_module(name, **kwds)
 
-        self.name = name
         if load_it:
             api.load_extension_module(self.space, mod, name)
+            self.imported_module_names.append(name)
             return self.space.getitem(
                 self.space.sys.get('modules'),
                 self.space.wrap(name))
@@ -204,9 +209,21 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
         init = """Py_InitModule("%s", methods);""" % (modname,)
         return self.import_module(name=modname, init=init, body=body)
 
+    def record_imported_module(self, name):
+        self.imported_module_names.append(name)
+
     def setup_method(self, func):
+        # A list of modules which the test caused to be imported (in
+        # self.space).  These will be cleaned up automatically in teardown.
+        self.imported_module_names = []
         self.w_import_module = self.space.wrap(self.import_module)
         self.w_import_extension = self.space.wrap(self.import_extension)
+        self.w_compile_module = self.space.wrap(self.compile_module)
+        self.w_record_imported_module = self.space.wrap(
+            self.record_imported_module)
+        self.w_here = self.space.wrap(
+            str(py.path.local(autopath.pypydir)) + '/module/cpyext/test/')
+
 
         # create the file lock before we count allocations
         self.space.call_method(self.space.sys.get("stdout"), "flush")
@@ -214,13 +231,17 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
         freeze_refcnts(self)
         #self.check_and_print_leaks()
 
+    def unimport_module(self, name):
+        w_modules = self.space.sys.get('modules')
+        w_name = self.space.wrap(name)
+        w_mod = self.space.getitem(w_modules, w_name)
+        self.space.delitem(w_modules, w_name)
+        Py_DecRef(self.space, w_mod)
+
     def teardown_method(self, func):
         try:
-            w_mod = self.space.getitem(self.space.sys.get('modules'),
-                               self.space.wrap(self.name))
-            self.space.delitem(self.space.sys.get('modules'),
-                               self.space.wrap(self.name))
-            Py_DecRef(self.space, w_mod)
+            for name in self.imported_module_names:
+                self.unimport_module(name)
             state = self.space.fromcache(State)
             for w_obj in state.non_heaptypes:
                 Py_DecRef(self.space, w_obj)
@@ -339,9 +360,37 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         only "banana" as a name, the resulting module nevertheless is stored at
         `sys.modules["apple.banana"]`.
         """
-        skip("About to implement this")
         module = self.import_module(name="apple.banana", filename="banana")
         assert module.__name__ == "apple.banana"
+
+
+    def test_recursivePackageImport(self):
+        """
+        If `cherry.date` is an extension module which imports `apple.banana`,
+        the latter is added to `sys.modules` for the `"apple.banana"` key.
+        """
+        # Build the extensions.
+        banana = self.compile_module(
+            "apple.banana", separate_module_files=[self.here + 'banana.c'])
+        self.record_imported_module("apple.banana")
+        date = self.compile_module(
+            "cherry.date", separate_module_files=[self.here + 'date.c'])
+        self.record_imported_module("cherry.date")
+
+        # Set up some package state so that the extensions can actually be
+        # imported.
+        import sys, types, os
+        cherry = sys.modules['cherry'] = types.ModuleType('cherry')
+        cherry.__path__ = [os.path.dirname(date)]
+
+        apple = sys.modules['apple'] = types.ModuleType('apple')
+        apple.__path__ = [os.path.dirname(banana)]
+
+        import cherry.date
+        import apple.banana
+
+        assert sys.modules['apple.banana'].__name__ == 'apple.banana'
+        assert sys.modules['cherry.date'].__name__ == 'cherry.date'
 
 
     def test_modinit_func(self):
