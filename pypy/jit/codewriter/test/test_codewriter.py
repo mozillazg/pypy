@@ -1,3 +1,4 @@
+import py
 from pypy.jit.codewriter.codewriter import CodeWriter
 
 
@@ -19,6 +20,9 @@ def test_loop():
                                   'int_sub/ici': 2,
                                   'goto/L': 3,
                                   'int_return/i': 4}
+    assert jitcode._live_vars(0) == '%i0 %i1'
+    for i in range(1, len(jitcode._code())):
+        py.test.raises(KeyError, jitcode._live_vars, i)
 
 def test_integration():
     from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
