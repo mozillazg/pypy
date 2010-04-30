@@ -183,27 +183,25 @@ class MIFrame(object):
     def opimpl_goto(self, target):
         self.pc = target
 
-    @XXX  #arguments("orgpc", "jumptarget", "box", "varargs")
-    def opimpl_goto_if_not(self, pc, target, box, livelist):
+    @arguments("orgpc", "label", "box")
+    def opimpl_goto_if_not(self, pc, target, box):
         switchcase = box.getint()
         if switchcase:
             opnum = rop.GUARD_TRUE
         else:
             self.pc = target
             opnum = rop.GUARD_FALSE
-        self.env = livelist
         self.generate_guard(pc, opnum, box)
-        # note about handling self.env explicitly here: it is done in
-        # such a way that the 'box' on which we generate the guard is
-        # typically not included in the livelist.
 
-    @arguments("label", "box", "box")
-    def opimpl_goto_if_not_int_lt(self, target, box1, box2):
-        if box1.getint() < box2.getint():
-            pass
-        else:
-            self.pc = target
-
+    for _opimpl in ['int_lt', 'int_le', 'int_eq', 'int_ne', 'int_gt', 'int_ge',
+                    ]:
+        exec py.code.Source('''
+            @arguments("orgpc", "label", "box", "box")
+            def opimpl_goto_if_not_%s(self, pc, target, b1, b2):
+                condbox = self.execute(rop.%s, b1, b2)
+                self.opimpl_goto_if_not(pc, target, condbox)
+        ''' % (_opimpl, _opimpl.upper())).compile()
+    
     def follow_jump(self):
         _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
         assert ord(self.bytecode[self.pc]) == _op_goto_if_not
