@@ -133,6 +133,8 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['cpyext', 'thread'])
         cls.space.getbuiltinmodule("cpyext")
+        from pypy.module.imp.importing import importhook
+        importhook(cls.space, "os") # warm up reference counts
 
     def compile_module(self, name, **kwds):
         state = self.space.fromcache(State)
@@ -360,7 +362,6 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
 
 
     def test_recursive_package_import(self):
-        skip("not yet")
         """
         If `cherry.date` is an extension module which imports `apple.banana`,
         the latter is added to `sys.modules` for the `"apple.banana"` key.
