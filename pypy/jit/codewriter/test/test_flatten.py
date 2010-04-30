@@ -2,7 +2,7 @@ import py, sys
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
 from pypy.jit.codewriter.flatten import GraphFlattener, ListOfKind, Register
-from pypy.jit.codewriter.format import format_assembler
+from pypy.jit.codewriter.format import assert_format
 from pypy.jit.codewriter.jitter import transform_graph
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rpython.lltypesystem import lltype, rclass, rstr
@@ -77,27 +77,7 @@ class TestFlatten:
         if transform:
             transform_graph(graphs[0], FakeCPU())
         ssarepr = flatten_graph(graphs[0], fake_regallocs())
-        self.assert_format(ssarepr, expected)
-
-    def assert_format(self, ssarepr, expected):
-        asm = format_assembler(ssarepr)
-        expected = str(py.code.Source(expected)).strip() + '\n'
-        asmlines = asm.split("\n")
-        explines = expected.split("\n")
-        for asm, exp in zip(asmlines, explines):
-            if asm != exp:
-                print
-                print "Got:      " + asm
-                print "Expected: " + exp
-                lgt = 0
-                for i in range(len(asm)):
-                    if exp[i] == asm[i]:
-                        lgt += 1
-                    else:
-                        break
-                print "          " + " " * lgt + "^^^^"
-                raise AssertionError
-        assert len(asmlines) == len(explines)
+        assert_format(ssarepr, expected)
 
     def test_simple(self):
         def f(n):
@@ -176,7 +156,7 @@ class TestFlatten:
                             v5)                    # result
         flattener = GraphFlattener(None, fake_regallocs())
         flattener.serialize_op(op)
-        self.assert_format(flattener.ssarepr, """
+        assert_format(flattener.ssarepr, """
             residual_call_ir_f $12345, I[%i0, %i1], R[%r0, %r1], %f0
         """)
 
@@ -196,7 +176,7 @@ class TestFlatten:
         op = SpaceOperation('foobar', [FooDescr()], None)
         flattener = GraphFlattener(None, fake_regallocs())
         flattener.serialize_op(op)
-        self.assert_format(flattener.ssarepr, """
+        assert_format(flattener.ssarepr, """
             foobar hi_there!
         """)
 
