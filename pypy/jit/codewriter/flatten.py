@@ -262,16 +262,18 @@ class GraphFlattener(object):
         for kind in KINDS:
             if kind in renamings:
                 frm, to = renamings[kind]
-                # If there is no cycle among the renamings, produce a series
-                # of %s_copy.  Otherwise, just one %s_rename.
+                # Produce a series of %s_copy.  If there is a cycle, it
+                # is handled with a %s_push to save the first value of
+                # the cycle, some number of %s_copy, and finally a
+                # %s_pop to load the last value.
                 result = reorder_renaming_list(frm, to)
-                if result is not None:
-                    for v, w in result:
+                for v, w in result:
+                    if w is None:
+                        self.emitline('%s_push' % kind, v)
+                    elif v is None:
+                        self.emitline('%s_pop' % kind, w)
+                    else:
                         self.emitline('%s_copy' % kind, v, w)
-                else:
-                    frm = ListOfKind(kind, frm)
-                    to  = ListOfKind(kind, to)
-                    self.emitline('%s_rename' % kind, frm, to)
 
     def emitline(self, *line):
         self.ssarepr.insns.append(line)
@@ -326,6 +328,10 @@ def reorder_renaming_list(frm, to):
             else:
                 still_pending_indices.append(i)
         if len(pending_indices) == len(still_pending_indices):
-            return None    # no progress -- there is a cycle
+            # no progress -- there is a cycle
+            assert None not in not_read
+            result.append((frm[pending_indices[0]], None))
+            frm[pending_indices[0]] = None
+            continue
         pending_indices = still_pending_indices
     return result

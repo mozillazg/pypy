@@ -1389,6 +1389,16 @@ class BasicTests:
         # this checks that the logic triggered by make_a_counter_per_value()
         # works and prevents generating tons of bridges
 
+    def test_swap_values(self):
+        def f(x, y):
+            if x > 5:
+                x, y = y, x
+            return x - y
+        res = self.interp_operations(f, [10, 2])
+        assert res == -8
+        res = self.interp_operations(f, [3, 2])
+        assert res == 1
+
 
 class TestOOtype(BasicTests, OOJitMixin):
 
