@@ -55,8 +55,30 @@ def format_assembler(ssarepr):
         else:
             print >> output, asm[0],
             if len(asm) > 1:
-                print >> output, ', '.join(map(repr, asm[1:]))
+                lst = map(repr, asm[1:])
+                if asm[0] == '-live-': lst.sort()
+                print >> output, ', '.join(lst)
             else:
                 print >> output
     res = output.getvalue()
     return res
+
+def assert_format(ssarepr, expected):
+    asm = format_assembler(ssarepr)
+    expected = str(py.code.Source(expected)).strip() + '\n'
+    asmlines = asm.split("\n")
+    explines = expected.split("\n")
+    for asm, exp in zip(asmlines, explines):
+        if asm != exp:
+            print
+            print "Got:      " + asm
+            print "Expected: " + exp
+            lgt = 0
+            for i in range(len(asm)):
+                if exp[i] == asm[i]:
+                    lgt += 1
+                else:
+                    break
+            print "          " + " " * lgt + "^^^^"
+            raise AssertionError
+    assert len(asmlines) == len(explines)
