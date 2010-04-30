@@ -93,77 +93,36 @@ class MIFrame(object):
             outvalue[startindex+i] = reg
     prepare_list_of_boxes._annspecialcase_ = 'specialize:arg(4)'
 
-    def load_int(self):
-        pc = self.pc
-        result = ord(self.bytecode[pc])
-        self.pc = pc + 1
-        if result > 0x7F:
-            result = self._load_larger_int(result)
-        return result
+    def get_list_of_active_boxes(self):
+        # XXX find a way to avoid needing the temporary 'env' as a
+        # variable-sized list
+        env = []
+        self.jitcode.enumerate_live_vars(
+            self.pc, MIFrame._store_in_env, env,
+            self.registers_i, self.registers_r, self.registers_f)
+        return env[:]
 
-    def _load_larger_int(self, result):    # slow path
-        result = result & 0x7F
-        shift = 7
-        pc = self.pc
-        while 1:
-            byte = ord(self.bytecode[pc])
-            pc += 1
-            result += (byte & 0x7F) << shift
-            shift += 7
-            if not byte & 0x80:
-                break
-        self.pc = pc
-        return intmask(result)
-    _load_larger_int._dont_inline_ = True
+    @staticmethod
+    def _store_in_env(env, box):
+        env.append(box)
 
-    def load_3byte(self):
-        pc = self.pc
-        result = (((ord(self.bytecode[pc + 0])) << 16) |
-                  ((ord(self.bytecode[pc + 1])) <<  8) |
-                  ((ord(self.bytecode[pc + 2])) <<  0))
-        self.pc = pc + 3
-        return result
-
-    def load_bool(self):
-        pc = self.pc
-        result = ord(self.bytecode[pc])
-        self.pc = pc + 1
-        return bool(result)
-
-    def getenv(self, i):
-        assert i >= 0
-        j = i >> 1
-        if i & 1:
-            return self.constants[j]
+    def replace_active_box_in_frame(self, oldbox, newbox):
+        if isinstance(oldbox, history.BoxInt):
+            count = self.jitcode.num_regs_i()
+            registers = self.registers_i
+        elif isinstance(oldbox, history.BoxPtr):
+            count = self.jitcode.num_regs_r()
+            registers = self.registers_r
+        elif isinstance(oldbox, history.BoxFloat):
+            count = self.jitcode.num_regs_f()
+            registers = self.registers_f
         else:
-            assert j < len(self.env)
-            return self.env[j]
-
-    def load_arg(self):
-        return self.getenv(self.load_int())
-
-    def load_const_arg(self):
-        return self.constants[self.load_int()]
-
-    def load_varargs(self):
-        count = self.load_int()
-        return [self.load_arg() for i in range(count)]
-
-    def load_constargs(self):
-        count = self.load_int()
-        return [self.load_const_arg() for i in range(count)]
-
-    def ignore_varargs(self):
-        count = self.load_int()
+            assert 0, repr(oldbox)
         for i in range(count):
-            self.load_int()
-
-    def getvarenv(self, i):
-        return self.env[i]
-
-    def make_result_box(self, box):
-        assert isinstance(box, Box) or isinstance(box, Const)
-        self.env.append(box)
+            if registers[i] is oldbox:
+                registers[i] = newbox
+        if not we_are_translated():
+            assert oldbox not in registers[count:]
 
     # ------------------------------
 
@@ -1999,11 +1958,9 @@ class MetaInterp(object):
         return boxes
 
     def replace_box(self, oldbox, newbox):
+        assert isinstance(oldbox, Box)
         for frame in self.framestack:
-            boxes = frame.env
-            for i in range(len(boxes)):
-                if boxes[i] is oldbox:
-                    boxes[i] = newbox
+            frame.replace_active_box_in_frame(oldbox, newbox)
         boxes = self.virtualref_boxes
         for i in range(len(boxes)):
             if boxes[i] is oldbox:

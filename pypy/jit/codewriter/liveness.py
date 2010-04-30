@@ -12,6 +12,7 @@ def compile_re(opnames):
 # 'switches_require_liveness' to True.
 DEFAULT_OPNAMES_REQUIRING_LIVENESS = [
     'residual_call_',
+    '(int|ref|float)_guard_value',
     ]
 
 # ____________________________________________________________

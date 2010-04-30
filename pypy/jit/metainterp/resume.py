@@ -21,13 +21,12 @@ class Snapshot(object):
         self.boxes = boxes
 
 class FrameInfo(object):
-    __slots__ = ('prev', 'jitcode', 'pc', 'exception_target')
+    __slots__ = ('prev', 'jitcode', 'pc')
 
     def __init__(self, prev, frame):
         self.prev = prev
         self.jitcode = frame.jitcode
         self.pc = frame.pc
-        self.exception_target = frame.exception_target
 
 def _ensure_parent_resumedata(framestack, n):
     target = framestack[n]
@@ -40,7 +39,7 @@ def _ensure_parent_resumedata(framestack, n):
                                          back)
     target.parent_resumedata_snapshot = Snapshot(
                                          back.parent_resumedata_snapshot,
-                                         back.env[:])
+                                         back.get_list_of_active_boxes())
 
 def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
                        storage):
@@ -50,7 +49,8 @@ def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
     frame_info_list = FrameInfo(top.parent_resumedata_frame_info_list,
                                 top)
     storage.rd_frame_info_list = frame_info_list
-    snapshot = Snapshot(top.parent_resumedata_snapshot, top.env[:])
+    snapshot = Snapshot(top.parent_resumedata_snapshot,
+                        top.get_list_of_active_boxes())
     snapshot = Snapshot(snapshot, virtualref_boxes[:]) # xxx for now
     if virtualizable_boxes is not None:
         snapshot = Snapshot(snapshot, virtualizable_boxes[:]) # xxx for now
@@ -576,7 +576,7 @@ def dump_storage(storage, liveboxes):
             except AttributeError:
                 jitcodename = str(compute_unique_id(frameinfo.jitcode))
             debug_print('\tjitcode/pc', jitcodename,
-                        frameinfo.pc, frameinfo.exception_target,
+                        frameinfo.pc,
                         'at', compute_unique_id(frameinfo))
             frameinfo = frameinfo.prev
         numb = storage.rd_numb
