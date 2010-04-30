@@ -3,6 +3,7 @@ from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
 from pypy.jit.codewriter.flatten import ListOfKind, SwitchDictDescr
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rlib.objectmodel import we_are_translated
 
 
 class JitCode(AbstractValue):
@@ -11,31 +12,34 @@ class JitCode(AbstractValue):
     _empty_f = []
 
     def __init__(self, name, cfnptr=None, calldescr=None, called_from=None,
-                 liveness=None):
+                 liveness=None, assembler=None):
         self.name = name
         #self.cfnptr = cfnptr
         #self.calldescr = calldescr
         #self.called_from = called_from
         self.liveness = liveness
+        self._assembler = assembler
 
     def setup(self, code, constants_i=[], constants_r=[], constants_f=[],
-              num_regs_r=256):
-        # stick an extra char at the end of self.code, which is the
-        # highest 'r' register used in this code.  It default to 255,
-        # which is always correct.  Also, even if no 'r' register is
-        # used it must be set to 0, which means that register %r0 is
-        # always marked as used.
-        self.code = code + chr((num_regs_r or 1)-1)
+              num_regs_i=256, num_regs_r=256, num_regs_f=256):
+        self.code = code
         # if the following lists are empty, use a single shared empty list
         self.constants_i = constants_i or self._empty_i
         self.constants_r = constants_r or self._empty_r
         self.constants_f = constants_f or self._empty_f
+        # encode the three num_regs into a single integer
+        self.num_regs_encoded = ((num_regs_i << 18) |
+                                 (num_regs_r << 9) |
+                                 (num_regs_f << 0))
 
-    def _code(self):
-        return self.code[:-1]   # for testing, without the extra char
+    def num_regs_i(self):
+        return self.num_regs_encoded >> 18
 
-    def highest_r_reg(self):
-        return ord(self.code[-1])
+    def num_regs_r(self):
+        return (self.num_regs_encoded >> 9) & 0x1FF
+
+    def num_regs_f(self):
+        return self.num_regs_encoded & 0x1FF
 
     def enumerate_live_vars(self, pc, callback, arg,
                             registers_i, registers_r, registers_f):
@@ -45,11 +49,23 @@ class JitCode(AbstractValue):
         # of that instruction which are no longer used afterwards, and
         # also the return value of that instruction.)  More precisely,
         # this invokes 'callback(arg, box)' where 'box' comes from one
-        # of the three lists of registers.
+        # of the three lists of registers.  If the callback returns a
+        # box, then it is stored back.
+        if not we_are_translated() and pc not in self.liveness:
+            self._missing_liveness(pc)
         live_i, live_r, live_f = self.liveness[pc]    # XXX compactify!!
-        for c in live_i: callback(arg, registers_i[ord(c)])
-        for c in live_r: callback(arg, registers_r[ord(c)])
-        for c in live_f: callback(arg, registers_f[ord(c)])
+        for c in live_i:
+            newbox = callback(arg, registers_i[ord(c)])
+            if newbox is not None:
+                registers_i[ord(c)] = newbox
+        for c in live_r:
+            newbox = callback(arg, registers_r[ord(c)])
+            if newbox is not None:
+                registers_r[ord(c)] = newbox
+        for c in live_f:
+            newbox = callback(arg, registers_f[ord(c)])
+            if newbox is not None:
+                registers_f[ord(c)] = newbox
     enumerate_live_vars._annspecialcase_ = 'specialize:arg(2)'
 
     def _live_vars(self, pc):
@@ -66,6 +82,16 @@ class JitCode(AbstractValue):
                                  Names('i'), Names('r'), Names('f'))
         lst.sort()
         return ' '.join(lst)
+
+    def _missing_liveness(self, pc):
+        opcode = ord(self.code[pc])
+        insn = 'insn %d' % opcode
+        if self._assembler is not None:
+            for name, code in self._assembler.insns.items():
+                if code == opcode:
+                    insn = name
+        raise KeyError("missing liveness[%d], corresponding to %r" % (
+            pc, insn))
 
 
 class Assembler(object):
@@ -223,10 +249,13 @@ class Assembler(object):
         assert self.count_regs['float'] + len(self.constants_f) <= 256
 
     def make_jitcode(self, name):
-        jitcode = JitCode(name, liveness=self.liveness)
+        jitcode = JitCode(name, liveness=self.liveness,
+                          assembler=self)
         jitcode.setup(''.join(self.code),
                       self.constants_i,
                       self.constants_r,
                       self.constants_f,
-                      self.count_regs['ref'])
+                      self.count_regs['int'],
+                      self.count_regs['ref'],
+                      self.count_regs['float'])
         return jitcode

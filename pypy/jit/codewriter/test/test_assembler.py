@@ -17,10 +17,12 @@ def test_assemble_simple():
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
     assert jitcode.code == ("\x00\x00\x01\x02"
-                            "\x01\x02"
-                            "\x00")
+                            "\x01\x02")
     assert assembler.insns == {'int_add/iii': 0,
                                'int_return/i': 1}
+    assert jitcode.num_regs_i() == 3
+    assert jitcode.num_regs_r() == 0
+    assert jitcode.num_regs_f() == 0
 
 def test_assemble_consts():
     ssarepr = SSARepr("test")
@@ -37,8 +39,7 @@ def test_assemble_consts():
                             "\x01\x12"   # use int_return/c for one-byte consts
                             "\x01\xFC"
                             "\x00\xFF"   # use int_return/i for larger consts
-                            "\x00\xFE"
-                            "\x00")      # highest_r_reg
+                            "\x00\xFE")
     assert assembler.insns == {'int_return/i': 0,
                                'int_return/c': 1}
     assert jitcode.constants_i == [128, -129]
@@ -56,8 +57,7 @@ def test_assemble_float_consts():
     assert jitcode.code == ("\x00\x0D"
                             "\x00\xFF"
                             "\x00\xFE"
-                            "\x00\xFD"
-                            "\x00")
+                            "\x00\xFD")
     assert assembler.insns == {'float_return/f': 0}
     assert jitcode.constants_f == [18.0, -4.0, 128.1]
 
@@ -78,8 +78,7 @@ def test_assemble_cast_consts():
     assert jitcode.code == ("\x00\x58"
                             "\x01\xFF"
                             "\x01\xFE"
-                            "\x02\xFF"
-                            "\x00")
+                            "\x02\xFF")
     assert assembler.insns == {'int_return/c': 0,
                                'int_return/i': 1,
                                'ref_return/r': 2}
@@ -106,8 +105,7 @@ def test_assemble_loop():
                             "\x01\x17\x16\x17"
                             "\x02\x16\x01\x16"
                             "\x03\x00\x00"
-                            "\x04\x17"
-                            "\x00")
+                            "\x04\x17")
     assert assembler.insns == {'goto_if_not_int_gt/Lic': 0,
                                'int_add/iii': 1,
                                'int_sub/ici': 2,
@@ -123,7 +121,7 @@ def test_assemble_list():
         ]
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
-    assert jitcode._code() == "\x00\x03\x16\x17\xFF\x00"
+    assert jitcode.code == "\x00\x03\x16\x17\xFF\x00"
     assert assembler.insns == {'foobar/IR': 0}
     assert jitcode.constants_i == [42]
 
@@ -135,21 +133,27 @@ def test_assemble_descr():
     ssarepr.insns = [('foobar', d) for d in descrs[::-1]]
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
-    assert jitcode._code() == ''.join(["\x00" + struct.pack("<H", i)
+    assert jitcode.code == ''.join(["\x00" + struct.pack("<H", i)
                                        for i in range(300)])
     assert assembler.insns == {'foobar/d': 0}
     assert assembler.descrs == descrs[::-1]
 
-def test_highest_r_reg():
+def test_num_regs():
     assembler = Assembler()
     ssarepr = SSARepr("test")
     ssarepr.insns = []
     jitcode = assembler.assemble(ssarepr)
-    assert jitcode.highest_r_reg() == 0
+    assert jitcode.num_regs_i() == 0
+    assert jitcode.num_regs_r() == 0
+    assert jitcode.num_regs_f() == 0
     ssarepr = SSARepr("test")
-    ssarepr.insns = [('foobar', Register('int', 51), Register('ref', 27))]
+    ssarepr.insns = [('foobar', Register('int', 51),
+                                Register('ref', 27),
+                                Register('int', 12))]
     jitcode = assembler.assemble(ssarepr)
-    assert jitcode.highest_r_reg() == 27
+    assert jitcode.num_regs_i() == 52
+    assert jitcode.num_regs_r() == 28
+    assert jitcode.num_regs_f() == 0
 
 def test_liveness():
     ssarepr = SSARepr("test")
@@ -170,7 +174,7 @@ def test_liveness():
         ]
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
-    assert jitcode._code() == ("\x00\x00\x0A\x01"
+    assert jitcode.code == ("\x00\x00\x0A\x01"
                                "\x00\x00\x03\x02"
                                "\x01\x01\x02\x03"
                                "\x00\x00\x06\x04"

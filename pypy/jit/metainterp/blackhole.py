@@ -217,7 +217,7 @@ class BlackholeInterpreter(object):
         self.dispatch_loop      = builder.dispatch_loop
         self.descrs             = builder.descrs
         self.op_catch_exception = builder.op_catch_exception
-        self.cleanup_required_in_registers_r = -1
+        self.cleanup_required_in_registers_r = 0
         #
         if we_are_translated():
             default_i = 0
@@ -247,7 +247,7 @@ class BlackholeInterpreter(object):
         code = jitcode.code
         self.cleanup_required_in_registers_r = max(
             self.cleanup_required_in_registers_r,
-            ord(code[-1]))
+            jitcode.num_regs_r())
         while True:
             try:
                 self.dispatch_loop(self, code, position)
@@ -286,11 +286,9 @@ class BlackholeInterpreter(object):
         # To avoid keeping references alive, this cleans up the registers_r.
         # It does not clear the references set by copy_constants(), but
         # these are all prebuilt constants anyway.
-        i = self.cleanup_required_in_registers_r
-        self.cleanup_required_in_registers_r = -1
-        while i >= 0:
+        for i in range(self.cleanup_required_in_registers_r):
             self.registers_r[i] = NULL
-            i -= 1
+        self.cleanup_required_in_registers_r = 0
         self.tmpreg_r = NULL
         self.exception_last_value = None
 
