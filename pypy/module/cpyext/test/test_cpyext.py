@@ -50,6 +50,16 @@ class AppTestApi:
         raises(ImportError, cpyext.load_module, self.libc, "invalid.function")
 
 def compile_module(modname, **kwds):
+    """
+    Build an extension module and return the filename of the resulting native
+    code file.
+
+    modname is the name of the module, possibly including dots if it is a module
+    inside a package.
+
+    Any extra keyword arguments are passed on to ExternalCompilationInfo to
+    build the module (so specify your source with one of those).
+    """
     modname = modname.split('.')[-1]
     eci = ExternalCompilationInfo(
         export_symbols=['init%s' % (modname,)],
@@ -137,6 +147,9 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
         importhook(cls.space, "os") # warm up reference counts
 
     def compile_module(self, name, **kwds):
+        """
+        Build an extension module linked against the cpyext api library.
+        """
         state = self.space.fromcache(State)
         api_library = state.api_lib
         if sys.platform == 'win32':
@@ -212,12 +225,19 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
         return self.import_module(name=modname, init=init, body=body)
 
     def record_imported_module(self, name):
+        """
+        Record a module imported in a test so that it can be cleaned up in
+        teardown before the check for leaks is done.
+
+        name gives the name of the module in the space's sys.modules.
+        """
         self.imported_module_names.append(name)
 
     def setup_method(self, func):
         # A list of modules which the test caused to be imported (in
         # self.space).  These will be cleaned up automatically in teardown.
         self.imported_module_names = []
+
         self.w_import_module = self.space.wrap(self.import_module)
         self.w_import_extension = self.space.wrap(self.import_extension)
         self.w_compile_module = self.space.wrap(self.compile_module)
@@ -234,6 +254,10 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
         #self.check_and_print_leaks()
 
     def unimport_module(self, name):
+        """
+        Remove the named module from the space's sys.modules and discard the
+        reference (owned by "the test") to it.
+        """
         w_modules = self.space.sys.get('modules')
         w_name = self.space.wrap(name)
         w_mod = self.space.getitem(w_modules, w_name)
