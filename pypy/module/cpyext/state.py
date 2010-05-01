@@ -25,11 +25,10 @@ class State:
         # When importing a package, use this to keep track of its name.  This is
         # necessary because an extension module in a package might not supply
         # its own fully qualified name to Py_InitModule.  If it doesn't, we need
-        # to be able to figure out what module is being initialized.  When a
-        # package import is in progress, this is set to the name of the package.
-        # The rest of the time, it's None.  Packages may be imported
-        # recursively, in which case the outer state is preserved somewhere in
-        # the stack and then restored when the inner import is complete.
+        # to be able to figure out what module is being initialized.  Recursive
+        # imports will clobber this value, which might be confusing, but it
+        # doesn't hurt anything because the code that cares about it will have
+        # already read it by that time.
         self.package_context = None
 
 
