@@ -6,14 +6,14 @@ hook specifications for py.test plugins
 # Command line and configuration 
 # -------------------------------------------------------------------------
 
-def pytest_addoption(parser):
-    """ called before commandline parsing.  """
-
-def pytest_registerhooks(pluginmanager):
-    """ called after commandline parsing before pytest_configure.  """
-
 def pytest_namespace():
-    """ return dict of name->object which will get stored at py.test. namespace"""
+    "return dict of name->object which will get stored at py.test. namespace"
+
+def pytest_addoption(parser):
+    "add optparse-style options via parser.addoption."
+
+def pytest_addhooks(pluginmanager):
+    "add hooks via pluginmanager.registerhooks(module)"
 
 def pytest_configure(config):
     """ called after command line options have been parsed. 
@@ -27,12 +27,12 @@ def pytest_unconfigure(config):
 # collection hooks
 # -------------------------------------------------------------------------
 
-def pytest_ignore_collect_path(path, config):
+def pytest_ignore_collect(path, config):
     """ return true value to prevent considering this path for collection. 
     This hook is consulted for all files and directories prior to considering
     collection hooks. 
     """
-pytest_ignore_collect_path.firstresult = True
+pytest_ignore_collect.firstresult = True
 
 def pytest_collect_directory(path, parent):
     """ return Collection node or None for the given path. """

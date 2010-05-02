@@ -515,5 +515,5 @@ class ExpectClassCollector(py.test.collect.Class):
             py.test.skip("pexpect not found")
 
 
-def pytest_ignore_collect_path(path):
+def pytest_ignore_collect(path):
     return path.check(link=1)
