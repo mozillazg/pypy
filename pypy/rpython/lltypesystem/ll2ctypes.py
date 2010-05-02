@@ -675,7 +675,8 @@ def ctypes2lltype(T, cobj):
     if T is lltype.Void:
         return None
     if isinstance(T, lltype.Ptr):
-        if not cobj:   # NULL pointer
+        if not cobj or not ctypes.cast(cobj, ctypes.c_void_p).value:   # NULL pointer
+            # CFunctionType.__nonzero__ is broken before Python 2.6
             return lltype.nullptr(T.TO)
         if isinstance(T.TO, lltype.Struct):
             REAL_TYPE = T.TO
@@ -963,7 +964,7 @@ def get_ctypes_trampoline(FUNCTYPE, cfunc):
     def invoke_via_ctypes(*argvalues):
         global _callback_exc_info
         cargs = []
-        for i in range(len(FUNCTYPE.ARGS)):
+        for i in range(len(argvalues)):
             if i not in void_arguments:
                 cvalue = lltype2ctypes(argvalues[i])
                 if i in container_arguments:
@@ -1001,7 +1002,7 @@ def force_cast(RESTYPE, value):
     elif isinstance(cvalue, (str, unicode)):
         cvalue = ord(cvalue)     # character -> integer
 
-    if not isinstance(cvalue, (int, long)):
+    if not isinstance(cvalue, (int, long, float)):
         raise NotImplementedError("casting %r to %r" % (TYPE1, RESTYPE))
 
     if isinstance(RESTYPE, lltype.Ptr):
