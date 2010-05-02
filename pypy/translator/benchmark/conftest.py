@@ -1,4 +1,4 @@
 import py
 
-def pytest_ignore_collect_path(path):
+def pytest_ignore_collect(path):
     return path.basename == "test"
