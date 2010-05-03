@@ -190,7 +190,6 @@ class Transformer(object):
     def rewrite_op_hint(self, op):
         hints = op.args[1].value
         if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
-            #self.minimize_variables()
             assert op.args[0].concretetype != lltype.Ptr(rstr.STR)
             kind = getkind(op.args[0].concretetype)
             return SpaceOperation('%s_guard_value' % kind,
@@ -274,10 +273,7 @@ class Transformer(object):
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
         descr = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                       c_fieldname.value)
-        if isinstance(RESULT, lltype.Primitive):
-            kind = primitive_type_size[RESULT]
-        else:
-            kind = getkind(RESULT)[0]
+        kind = getkind(RESULT)[0]
         return SpaceOperation('getfield_%s_%s%s' % (argname, kind, pure),
                               [v_inst, descr], op.result)
 
@@ -302,10 +298,7 @@ class Transformer(object):
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
         descr = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                       c_fieldname.value)
-        if isinstance(RESULT, lltype.Primitive):
-            kind = primitive_type_size[RESULT]
-        else:
-            kind = getkind(RESULT)[0]
+        kind = getkind(RESULT)[0]
         return SpaceOperation('setfield_%s_%s' % (argname, kind),
                               [v_inst, descr, v_value],
                               None)
@@ -406,12 +399,3 @@ def _with_prefix(prefix):
     return result
 
 _rewrite_ops = _with_prefix('rewrite_op_')
-
-primitive_type_size = {
-    lltype.Signed:   'i',
-    lltype.Unsigned: 'i',
-    lltype.Bool:     'c',
-    lltype.Char:     'c',
-    lltype.UniChar:  'u',
-    lltype.Float:    'f',
-    }

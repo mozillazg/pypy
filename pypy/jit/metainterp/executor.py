@@ -12,10 +12,11 @@ from pypy.jit.metainterp.history import INT, REF, FLOAT
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
+from pypy.jit.metainterp.blackhole import get_llexception
 
 # ____________________________________________________________
 
-def do_call(cpu, argboxes, descr):
+def do_call(metainterp, argboxes, descr):
     # count the number of arguments of the different types
     count_i = count_r = count_f = 0
     for i in range(1, len(argboxes)):
@@ -45,23 +46,41 @@ def do_call(cpu, argboxes, descr):
             count_f += 1
     # get the function address as an integer
     func = argboxes[0].getint()
+    cpu = metainterp.cpu
+    metainterp.latest_exception_might_be = 'E'         # any Exception
     # do the call using the correct function from the cpu
     rettype = descr.get_return_type()
     if rettype == INT:
-        result = cpu.bh_call_i(func, descr, args_i, args_r, args_f)
+        try:
+            result = cpu.bh_call_i(func, descr, args_i, args_r, args_f)
+        except Exception, e:
+            metainterp.got_exception = get_llexception(cpu, e)
+            result = 0
         return BoxInt(result)
     if rettype == REF:
-        result = cpu.bh_call_r(func, descr, args_i, args_r, args_f)
+        try:
+            result = cpu.bh_call_r(func, descr, args_i, args_r, args_f)
+        except Exception, e:
+            metainterp.got_exception = get_llexception(cpu, e)
+            result = NULL
         return BoxPtr(result)
     if rettype == FLOAT:
-        result = cpu.bh_call_f(func, descr, args_i, args_r, args_f)
+        try:
+            result = cpu.bh_call_f(func, descr, args_i, args_r, args_f)
+        except Exception, e:
+            metainterp.got_exception = get_llexception(cpu, e)
+            result = 0.0
         return BoxFloat(result)
     if rettype == 'v':   # void
-        cpu.bh_call_v(func, descr, args_i, args_r, args_f)
+        try:
+            cpu.bh_call_v(func, descr, args_i, args_r, args_f)
+        except Exception, e:
+            metainterp.got_exception = get_llexception(cpu, e)
         return None
     raise AssertionError("bad rettype")
 
-def do_setarrayitem_gc(cpu, arraybox, indexbox, itembox, arraydescr):
+def do_setarrayitem_gc(metainterp, arraybox, indexbox, itembox, arraydescr):
+    cpu = metainterp.cpu
     array = arraybox.getref_base()
     index = indexbox.getint()
     if itembox.type == INT:
@@ -75,6 +94,59 @@ def do_setarrayitem_gc(cpu, arraybox, indexbox, itembox, arraydescr):
         cpu.bh_setarrayitem_gc_f(arraydescr, array, index, item)
     else:
         raise AssertionError("bad itembox.type")
+
+def do_getfield_gc(metainterp, structbox, fielddescr):
+    cpu = metainterp.cpu
+    struct = structbox.getref_base()
+    if fielddescr.is_pointer_field():
+        return BoxPtr(cpu.bh_getfield_gc_p(struct, fielddescr))
+    elif fielddescr.is_float_field():
+        return BoxFloat(cpu.bh_getfield_gc_f(struct, fielddescr))
+    else:
+        return BoxInt(cpu.bh_getfield_gc_i(struct, fielddescr))
+
+def do_getfield_raw(metainterp, structbox, fielddescr):
+    cpu = metainterp.cpu
+    struct = structbox.getint()
+    if fielddescr.is_pointer_field():
+        return BoxPtr(cpu.bh_getfield_raw_p(struct, fielddescr))
+    elif fielddescr.is_float_field():
+        return BoxFloat(cpu.bh_getfield_raw_f(struct, fielddescr))
+    else:
+        return BoxInt(cpu.bh_getfield_raw_i(struct, fielddescr))
+
+def do_int_add_ovf(metainterp, box1, box2):
+    metainterp.latest_exception_might_be = 'O'    # only OverflowError
+    a = box1.getint()
+    b = box2.getint()
+    try:
+        z = ovfcheck(a + b)
+    except OverflowError, e:
+        metainterp.got_exception = get_llexception(metainterp.cpu, e)
+        z = 0
+    return BoxInt(z)
+
+def do_int_sub_ovf(metainterp, box1, box2):
+    metainterp.latest_exception_might_be = 'O'    # only OverflowError
+    a = box1.getint()
+    b = box2.getint()
+    try:
+        z = ovfcheck(a - b)
+    except OverflowError, e:
+        metainterp.got_exception = get_llexception(metainterp.cpu, e)
+        z = 0
+    return BoxInt(z)
+
+def do_int_mul_ovf(metainterp, box1, box2):
+    metainterp.latest_exception_might_be = 'O'    # only OverflowError
+    a = box1.getint()
+    b = box2.getint()
+    try:
+        z = ovfcheck(a * b)
+    except OverflowError, e:
+        metainterp.got_exception = get_llexception(metainterp.cpu, e)
+        z = 0
+    return BoxInt(z)
 
 # ____________________________________________________________
 
@@ -165,11 +237,11 @@ def make_execute_function_with_boxes(name, func):
     argtypes = unrolling_iterable(func.argtypes)
     resulttype = func.resulttype
     #
-    def do(cpu, *argboxes):
+    def do(metainterp, *argboxes):
         newargs = ()
         for argtype in argtypes:
             if argtype == 'cpu':
-                value = cpu
+                value = metainterp.cpu
             elif argtype == 'd':
                 value = argboxes[-1]
                 argboxes = argboxes[:-1]
@@ -211,25 +283,25 @@ def has_descr(opnum):
 has_descr._annspecialcase_ = 'specialize:memo'
 
 
-def execute(cpu, opnum, descr, *argboxes):
+def execute(metainterp, opnum, descr, *argboxes):
     # only for opnums with a fixed arity
     if has_descr(opnum):
         check_descr(descr)
         argboxes = argboxes + (descr,)
     else:
         assert descr is None
-    func = get_execute_function(cpu, opnum, len(argboxes))
+    func = get_execute_function(metainterp.cpu, opnum, len(argboxes))
     assert func is not None
-    return func(cpu, *argboxes)     # note that the 'argboxes' tuple
-                                    # optionally ends with the descr
+    return func(metainterp, *argboxes)     # note that the 'argboxes' tuple
+                                           # optionally ends with the descr
 execute._annspecialcase_ = 'specialize:arg(1)'
 
-def execute_varargs(cpu, opnum, argboxes, descr):
+def execute_varargs(metainterp, opnum, argboxes, descr):
     # only for opnums with a variable arity (calls, typically)
     check_descr(descr)
-    func = get_execute_function(cpu, opnum, -1)
+    func = get_execute_function(metainterp.cpu, opnum, -1)
     assert func is not None
-    return func(cpu, argboxes, descr)
+    return func(metainterp, argboxes, descr)
 execute_varargs._annspecialcase_ = 'specialize:arg(1)'
 
 

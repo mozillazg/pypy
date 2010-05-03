@@ -3,6 +3,7 @@ from pypy.jit.metainterp import history, compile
 
 class AbstractCPU(object):
     supports_floats = False
+    _got_exception = None
     # assembler_helper_ptr - a pointer to helper to call after a direct
     #                        assembler call
     portal_calldescr = None
@@ -157,20 +158,12 @@ class AbstractCPU(object):
     
     def bh_getfield_gc_i(self, struct, fielddescr):
         raise NotImplementedError
-    def bh_getfield_gc_c(self, struct, fielddescr):
-        raise NotImplementedError
-    def bh_getfield_gc_u(self, struct, fielddescr):
-        raise NotImplementedError
     def bh_getfield_gc_r(self, struct, fielddescr):
         raise NotImplementedError
     def bh_getfield_gc_f(self, struct, fielddescr):
         raise NotImplementedError
 
     def bh_getfield_raw_i(self, struct, fielddescr):
-        raise NotImplementedError
-    def bh_getfield_raw_c(self, struct, fielddescr):
-        raise NotImplementedError
-    def bh_getfield_raw_u(self, struct, fielddescr):
         raise NotImplementedError
     def bh_getfield_raw_r(self, struct, fielddescr):
         raise NotImplementedError
@@ -196,20 +189,12 @@ class AbstractCPU(object):
 
     def bh_setfield_gc_i(self, struct, fielddescr, newvalue):
         raise NotImplementedError
-    def bh_setfield_gc_c(self, struct, fielddescr, newvalue):
-        raise NotImplementedError
-    def bh_setfield_gc_u(self, struct, fielddescr, newvalue):
-        raise NotImplementedError
     def bh_setfield_gc_r(self, struct, fielddescr, newvalue):
         raise NotImplementedError
     def bh_setfield_gc_f(self, struct, fielddescr, newvalue):
         raise NotImplementedError
 
     def bh_setfield_raw_i(self, struct, fielddescr, newvalue):
-        raise NotImplementedError
-    def bh_setfield_raw_c(self, struct, fielddescr, newvalue):
-        raise NotImplementedError
-    def bh_setfield_raw_u(self, struct, fielddescr, newvalue):
         raise NotImplementedError
     def bh_setfield_raw_r(self, struct, fielddescr, newvalue):
         raise NotImplementedError
