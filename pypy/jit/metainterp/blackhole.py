@@ -30,6 +30,25 @@ def signedord(c):
 
 NULL = lltype.nullptr(llmemory.GCREF.TO)
 
+def get_standard_error_llexception(rtyper, Class):
+    exdata = rtyper.getexceptiondata()
+    clsdef = rtyper.annotator.bookkeeper.getuniqueclassdef(Class)
+    evalue = exdata.get_standard_ll_exc_instance(rtyper, clsdef)
+    etype = rclass.ll_type(evalue)
+    return LLException(etype, evalue)
+
+def get_llexception(cpu, e):
+    if we_are_translated():
+        return e
+    if isinstance(e, LLException):
+        return e    # ok
+    if isinstance(e, OverflowError):
+        return get_standard_error_llexception(cpu.rtyper,
+                                              OverflowError)
+    raise   # leave other exceptions be propagated
+
+# ____________________________________________________________
+
 
 class BlackholeInterpBuilder(object):
     verbose = True
@@ -258,13 +277,7 @@ class BlackholeInterpreter(object):
             #except JitException:
             #    ...
             except Exception, e:
-                if not we_are_translated():
-                    if isinstance(e, LLException):
-                        pass    # ok
-                    elif isinstance(e, OverflowError):
-                        e = self.get_standard_error_exception(OverflowError)
-                    else:
-                        raise   # leave other exceptions be propagated
+                e = get_llexception(self.cpu, e)
                 position = self.handle_exception_in_frame(e, code)
 
     def get_result_i(self):
@@ -308,14 +321,6 @@ class BlackholeInterpreter(object):
             self.exception_last_value = e
             target = ord(code[position+1]) | (ord(code[position+2])<<8)
             return target
-
-    def get_standard_error_exception(self, Class):
-        rtyper = self.cpu.rtyper
-        exdata = rtyper.getexceptiondata()
-        clsdef = rtyper.annotator.bookkeeper.getuniqueclassdef(Class)
-        evalue = exdata.get_standard_ll_exc_instance(rtyper, clsdef)
-        etype = rclass.ll_type(evalue)
-        return LLException(etype, evalue)
 
     # XXX must be specialized
     # XXX the real performance impact of the following loop is unclear
@@ -757,12 +762,6 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "r", "d", returns="i")
     def bhimpl_getfield_gc_i(cpu, struct, fielddescr):
         return cpu.bh_getfield_gc_i(struct, fielddescr)
-    @arguments("cpu", "r", "d", returns="i")
-    def bhimpl_getfield_gc_c(cpu, struct, fielddescr):
-        return cpu.bh_getfield_gc_c(struct, fielddescr)
-    @arguments("cpu", "r", "d", returns="i")
-    def bhimpl_getfield_gc_u(cpu, struct, fielddescr):
-        return cpu.bh_getfield_gc_u(struct, fielddescr)
     @arguments("cpu", "r", "d", returns="r")
     def bhimpl_getfield_gc_r(cpu, struct, fielddescr):
         return cpu.bh_getfield_gc_r(struct, fielddescr)
@@ -771,20 +770,12 @@ class BlackholeInterpreter(object):
         return cpu.bh_getfield_gc_f(struct, fielddescr)
 
     bhimpl_getfield_gc_i_pure = bhimpl_getfield_gc_i
-    bhimpl_getfield_gc_c_pure = bhimpl_getfield_gc_c
-    bhimpl_getfield_gc_u_pure = bhimpl_getfield_gc_u
     bhimpl_getfield_gc_r_pure = bhimpl_getfield_gc_r
     bhimpl_getfield_gc_f_pure = bhimpl_getfield_gc_f
 
     @arguments("cpu", "i", "d", returns="i")
     def bhimpl_getfield_raw_i(cpu, struct, fielddescr):
         return cpu.bh_getfield_raw_i(struct, fielddescr)
-    @arguments("cpu", "i", "d", returns="i")
-    def bhimpl_getfield_raw_c(cpu, struct, fielddescr):
-        return cpu.bh_getfield_raw_c(struct, fielddescr)
-    @arguments("cpu", "i", "d", returns="i")
-    def bhimpl_getfield_raw_u(cpu, struct, fielddescr):
-        return cpu.bh_getfield_raw_u(struct, fielddescr)
     @arguments("cpu", "i", "d", returns="r")
     def bhimpl_getfield_raw_r(cpu, struct, fielddescr):
         return cpu.bh_getfield_raw_r(struct, fielddescr)
@@ -793,20 +784,12 @@ class BlackholeInterpreter(object):
         return cpu.bh_getfield_raw_f(struct, fielddescr)
 
     bhimpl_getfield_raw_i_pure = bhimpl_getfield_raw_i
-    bhimpl_getfield_raw_c_pure = bhimpl_getfield_raw_c
-    bhimpl_getfield_raw_u_pure = bhimpl_getfield_raw_u
     bhimpl_getfield_raw_r_pure = bhimpl_getfield_raw_r
     bhimpl_getfield_raw_f_pure = bhimpl_getfield_raw_f
 
     @arguments("cpu", "r", "d", "i")
     def bhimpl_setfield_gc_i(cpu, struct, fielddescr, newvalue):
         cpu.bh_setfield_gc_i(struct, fielddescr, newvalue)
-    @arguments("cpu", "r", "d", "i")
-    def bhimpl_setfield_gc_c(cpu, struct, fielddescr, newvalue):
-        cpu.bh_setfield_gc_c(struct, fielddescr, newvalue)
-    @arguments("cpu", "r", "d", "i")
-    def bhimpl_setfield_gc_u(cpu, struct, fielddescr, newvalue):
-        cpu.bh_setfield_gc_u(struct, fielddescr, newvalue)
     @arguments("cpu", "r", "d", "r")
     def bhimpl_setfield_gc_r(cpu, struct, fielddescr, newvalue):
         cpu.bh_setfield_gc_r(struct, fielddescr, newvalue)
@@ -817,12 +800,6 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "i", "d", "i")
     def bhimpl_setfield_raw_i(cpu, struct, fielddescr, newvalue):
         cpu.bh_setfield_raw_i(struct, fielddescr, newvalue)
-    @arguments("cpu", "i", "d", "i")
-    def bhimpl_setfield_raw_c(cpu, struct, fielddescr, newvalue):
-        cpu.bh_setfield_raw_c(struct, fielddescr, newvalue)
-    @arguments("cpu", "i", "d", "i")
-    def bhimpl_setfield_raw_u(cpu, struct, fielddescr, newvalue):
-        cpu.bh_setfield_raw_u(struct, fielddescr, newvalue)
     @arguments("cpu", "i", "d", "r")
     def bhimpl_setfield_raw_r(cpu, struct, fielddescr, newvalue):
         cpu.bh_setfield_raw_r(struct, fielddescr, newvalue)

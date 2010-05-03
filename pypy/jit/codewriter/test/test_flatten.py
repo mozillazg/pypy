@@ -3,7 +3,6 @@ from pypy.jit.codewriter import support
 from pypy.jit.codewriter.flatten import flatten_graph, reorder_renaming_list
 from pypy.jit.codewriter.flatten import GraphFlattener, ListOfKind, Register
 from pypy.jit.codewriter.format import assert_format
-from pypy.jit.codewriter.jitter import transform_graph
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rpython.lltypesystem import lltype, rclass, rstr
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
@@ -72,10 +71,15 @@ class TestFlatten:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
-    def encoding_test(self, func, args, expected, transform=False):
+    def encoding_test(self, func, args, expected,
+                      transform=False, liveness=False):
         graphs = self.make_graphs(func, args)
         if transform:
+            from pypy.jit.codewriter.jitter import transform_graph
             transform_graph(graphs[0], FakeCPU())
+        if liveness:
+            from pypy.jit.codewriter.liveness import compute_liveness
+            compute_liveness(graphs[0])
         ssarepr = flatten_graph(graphs[0], fake_regallocs())
         assert_format(ssarepr, expected)
 
@@ -187,6 +191,7 @@ class TestFlatten:
             elif n == 7: return 1212
             else:        return 42
         self.encoding_test(f, [65], """
+            int_guard_value %i0, %i0
             goto_if_not_int_eq L1, %i0, $-5
             int_return $12
             L1:
@@ -376,8 +381,9 @@ class TestFlatten:
                 return 42
         self.encoding_test(f, [7, 2], """
             int_add_ovf %i0, %i1, %i2
+            -live- %i2
             catch_exception L1
             int_return %i2
             L1:
             int_return $42
-        """, transform=True)
+        """, transform=True, liveness=True)

@@ -161,9 +161,9 @@ def test_getfield():
                          ('ps1', 'i'),
                          ('ps2', 'r'),
                          ('flt', 'f'),
-                         ('boo', 'c'),
-                         ('chr', 'c'),
-                         ('unc', 'u')]:
+                         ('boo', 'i'),
+                         ('chr', 'i'),
+                         ('unc', 'i')]:
         v_parent = varoftype(lltype.Ptr(S))
         c_name = Constant(name, lltype.Void)
         v_result = varoftype(getattr(S, name))
@@ -199,9 +199,9 @@ def test_setfield():
                          ('ps1', 'i'),
                          ('ps2', 'r'),
                          ('flt', 'f'),
-                         ('boo', 'c'),
-                         ('chr', 'c'),
-                         ('unc', 'u')]:
+                         ('boo', 'i'),
+                         ('chr', 'i'),
+                         ('unc', 'i')]:
         v_parent = varoftype(lltype.Ptr(S))
         c_name = Constant(name, lltype.Void)
         v_newvalue = varoftype(getattr(S, name))

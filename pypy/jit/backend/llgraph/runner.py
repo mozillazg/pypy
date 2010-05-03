@@ -278,16 +278,6 @@ class BaseCPU(model.AbstractCPU):
         self.class_vtables_as_int[descr] = vtable_int
         return descr
 
-    def cast_adr_to_int(self, adr):
-        return llimpl.cast_adr_to_int(self.memo_cast, adr)
-
-    def cast_int_to_adr(self, int):
-        return llimpl.cast_int_to_adr(self.memo_cast, int)
-
-    def cast_gcref_to_int(self, gcref):
-        return self.cast_adr_to_int(llmemory.cast_ptr_to_adr(gcref))
-
-
 
 class LLtypeCPU(BaseCPU):
     is_oo = False
@@ -377,8 +367,6 @@ class LLtypeCPU(BaseCPU):
     def bh_getfield_gc_i(self, struct, fielddescr):
         assert isinstance(fielddescr, Descr)
         return llimpl.do_getfield_gc_int(struct, fielddescr.ofs)
-    bh_getfield_gc_c = bh_getfield_gc_i
-    bh_getfield_gc_u = bh_getfield_gc_i
     def bh_getfield_gc_r(self, struct, fielddescr):
         assert isinstance(fielddescr, Descr)
         return llimpl.do_getfield_gc_ptr(struct, fielddescr.ofs)
@@ -407,8 +395,6 @@ class LLtypeCPU(BaseCPU):
     def bh_getfield_raw_i(self, struct, fielddescr):
         assert isinstance(fielddescr, Descr)
         return llimpl.do_getfield_raw_int(struct, fielddescr.ofs)
-    bh_getfield_raw_c = bh_getfield_raw_i
-    bh_getfield_raw_u = bh_getfield_raw_i
     def bh_getfield_raw_r(self, struct, fielddescr):
         assert isinstance(fielddescr, Descr)
         return llimpl.do_getfield_raw_ptr(struct, fielddescr.ofs)
@@ -485,8 +471,6 @@ class LLtypeCPU(BaseCPU):
     def bh_setfield_gc_i(self, struct, fielddescr, newvalue):
         assert isinstance(fielddescr, Descr)
         llimpl.do_setfield_gc_int(struct, fielddescr.ofs, newvalue)
-    bh_setfield_gc_c = bh_setfield_gc_i
-    bh_setfield_gc_u = bh_setfield_gc_i
     def bh_setfield_gc_r(self, struct, fielddescr, newvalue):
         assert isinstance(fielddescr, Descr)
         llimpl.do_setfield_gc_ptr(struct, fielddescr.ofs, newvalue)
@@ -515,8 +499,6 @@ class LLtypeCPU(BaseCPU):
     def bh_setfield_raw_i(self, struct, fielddescr, newvalue):
         assert isinstance(fielddescr, Descr)
         llimpl.do_setfield_raw_int(struct, fielddescr.ofs, newvalue)
-    bh_setfield_raw_c = bh_setfield_raw_i
-    bh_setfield_raw_u = bh_setfield_raw_i
     def bh_setfield_raw_r(self, struct, fielddescr, newvalue):
         assert isinstance(fielddescr, Descr)
         llimpl.do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue)

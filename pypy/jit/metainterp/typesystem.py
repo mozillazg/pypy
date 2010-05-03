@@ -74,7 +74,7 @@ class LLTypeHelper(TypeSystemHelper):
     def cls_of_box(self, cpu, box):
         obj = box.getref(lltype.Ptr(rclass.OBJECT))
         cls = llmemory.cast_ptr_to_adr(obj.typeptr)
-        return history.ConstInt(cpu.cast_adr_to_int(cls))
+        return history.ConstInt(llmemory.cast_adr_to_int(cls))
 
     def subclassOf(self, cpu, clsbox1, clsbox2):
         adr = clsbox2.getaddr(cpu)
@@ -120,7 +120,7 @@ class LLTypeHelper(TypeSystemHelper):
 
     def cast_vtable_to_hashable(self, cpu, ptr):
         adr = llmemory.cast_ptr_to_adr(ptr)
-        return cpu.cast_adr_to_int(adr)
+        return llmemory.cast_adr_to_int(adr)
 
     def cast_from_ref(self, TYPE, value):
         return lltype.cast_opaque_ptr(TYPE, value)

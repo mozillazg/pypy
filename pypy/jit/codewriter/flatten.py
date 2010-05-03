@@ -156,6 +156,8 @@ class GraphFlattener(object):
             # An exception block. See test_exc_exitswitch in test_flatten.py
             # for an example of what kind of code this makes.
             lastopname = block.operations[-1].opname
+            if lastopname == '-live-':
+                lastopname = block.operations[-2].opname
             assert block.exits[0].exitcase is None # is this always True?
             self.emitline('catch_exception', TLabel(block.exits[0]))
             self.make_link(block.exits[0])
@@ -238,11 +240,13 @@ class GraphFlattener(object):
                 # A switch with several possible answers, though not too
                 # many of them -- a chain of int_eq comparisons is fine
                 assert kind == 'int'    # XXX
+                color = self.getcolor(block.exitswitch)
+                self.emitline('int_guard_value', color, color)
                 for switch in switches:
                     # make the case described by 'switch'
                     self.emitline('goto_if_not_int_eq',
                                   TLabel(switch),
-                                  self.getcolor(block.exitswitch),
+                                  color,
                                   Constant(switch.llexitcase,
                                            block.exitswitch.concretetype))
                     # emit code for the "taken" path
