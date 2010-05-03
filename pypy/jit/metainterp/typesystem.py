@@ -71,7 +71,7 @@ class LLTypeHelper(TypeSystemHelper):
     def cast_fnptr_to_root(self, fnptr):
         return llmemory.cast_ptr_to_adr(fnptr)
 
-    def cls_of_box(self, cpu, box):
+    def cls_of_box(self, box):
         obj = box.getref(lltype.Ptr(rclass.OBJECT))
         cls = llmemory.cast_ptr_to_adr(obj.typeptr)
         return history.ConstInt(llmemory.cast_adr_to_int(cls))

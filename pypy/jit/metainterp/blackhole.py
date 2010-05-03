@@ -39,13 +39,13 @@ def get_standard_error_llexception(rtyper, Class):
 
 def get_llexception(cpu, e):
     if we_are_translated():
-        return e
+        return XXX(e)
     if isinstance(e, LLException):
         return e    # ok
     if isinstance(e, OverflowError):
         return get_standard_error_llexception(cpu.rtyper,
                                               OverflowError)
-    raise   # leave other exceptions be propagated
+    raise   # leave other exceptions to be propagated
 
 # ____________________________________________________________
 
@@ -274,8 +274,6 @@ class BlackholeInterpreter(object):
                 self.dispatch_loop(self, code, position)
             except LeaveFrame:
                 return
-            #except JitException:
-            #    ...
             except Exception, e:
                 e = get_llexception(self.cpu, e)
                 position = self.handle_exception_in_frame(e, code)
@@ -313,7 +311,8 @@ class BlackholeInterpreter(object):
         position = self.exception_pc    # <-- just after the insn that raised
         opcode = ord(code[position])
         if opcode != self.op_catch_exception:
-            raise e      # no 'catch_exception' insn follows: just reraise
+            # no 'catch_exception' insn follows: just reraise
+            raise Exception, e
         else:
             # else store the exception on 'self', and jump to the handler
             if not we_are_translated():     # get the lltyped exception

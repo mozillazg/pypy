@@ -12,7 +12,6 @@ from pypy.jit.metainterp.history import INT, REF, FLOAT
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
-from pypy.jit.metainterp.blackhole import get_llexception
 
 # ____________________________________________________________
 
@@ -47,35 +46,42 @@ def do_call(metainterp, argboxes, descr):
     # get the function address as an integer
     func = argboxes[0].getint()
     cpu = metainterp.cpu
-    metainterp.latest_exception_might_be = 'E'         # any Exception
     # do the call using the correct function from the cpu
     rettype = descr.get_return_type()
     if rettype == INT:
         try:
             result = cpu.bh_call_i(func, descr, args_i, args_r, args_f)
         except Exception, e:
-            metainterp.got_exception = get_llexception(cpu, e)
+            metainterp.execute_raised(e)
             result = 0
+        else:
+            metainterp.execute_did_not_raise()
         return BoxInt(result)
     if rettype == REF:
         try:
             result = cpu.bh_call_r(func, descr, args_i, args_r, args_f)
         except Exception, e:
-            metainterp.got_exception = get_llexception(cpu, e)
+            metainterp.execute_raised(e)
             result = NULL
+        else:
+            metainterp.execute_did_not_raise()
         return BoxPtr(result)
     if rettype == FLOAT:
         try:
             result = cpu.bh_call_f(func, descr, args_i, args_r, args_f)
         except Exception, e:
-            metainterp.got_exception = get_llexception(cpu, e)
+            metainterp.execute_raised(e)
             result = 0.0
+        else:
+            metainterp.execute_did_not_raise()
         return BoxFloat(result)
     if rettype == 'v':   # void
         try:
             cpu.bh_call_v(func, descr, args_i, args_r, args_f)
         except Exception, e:
-            metainterp.got_exception = get_llexception(cpu, e)
+            metainterp.execute_raised(e)
+        else:
+            metainterp.execute_did_not_raise()
         return None
     raise AssertionError("bad rettype")
 
@@ -116,36 +122,39 @@ def do_getfield_raw(metainterp, structbox, fielddescr):
         return BoxInt(cpu.bh_getfield_raw_i(struct, fielddescr))
 
 def do_int_add_ovf(metainterp, box1, box2):
-    metainterp.latest_exception_might_be = 'O'    # only OverflowError
     a = box1.getint()
     b = box2.getint()
     try:
         z = ovfcheck(a + b)
-    except OverflowError, e:
-        metainterp.got_exception = get_llexception(metainterp.cpu, e)
+    except OverflowError:
+        metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
+    else:
+        metainterp.execute_did_not_raise()
     return BoxInt(z)
 
 def do_int_sub_ovf(metainterp, box1, box2):
-    metainterp.latest_exception_might_be = 'O'    # only OverflowError
     a = box1.getint()
     b = box2.getint()
     try:
         z = ovfcheck(a - b)
-    except OverflowError, e:
-        metainterp.got_exception = get_llexception(metainterp.cpu, e)
+    except OverflowError:
+        metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
+    else:
+        metainterp.execute_did_not_raise()
     return BoxInt(z)
 
 def do_int_mul_ovf(metainterp, box1, box2):
-    metainterp.latest_exception_might_be = 'O'    # only OverflowError
     a = box1.getint()
     b = box2.getint()
     try:
         z = ovfcheck(a * b)
-    except OverflowError, e:
-        metainterp.got_exception = get_llexception(metainterp.cpu, e)
+    except OverflowError:
+        metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
+    else:
+        metainterp.execute_did_not_raise()
     return BoxInt(z)
 
 # ____________________________________________________________

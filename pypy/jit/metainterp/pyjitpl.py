@@ -1,6 +1,7 @@
 import py, os
 from pypy.rpython.lltypesystem import llmemory
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.llinterp import LLException
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
@@ -14,6 +15,7 @@ from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS, ABORT_ESCAPE
 from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE
+from pypy.jit.metainterp.blackhole import get_llexception
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
@@ -43,12 +45,6 @@ class XXX:      # XXX temporary hack
 
 
 class MIFrame(object):
-
-    last_exception = None      # the most recently raised-and-caught exception
-    # ^^^ not to be confused with MetaInterp.got_exception.  The idea is that
-    # got_exception is only briefly != None; as soon as the exception
-    # is caught by opimpl_catch_exception, it is reset to None and
-    # transferred to last_exception here.
 
     # for resume.py operation
     parent_resumedata_snapshot = None
@@ -134,7 +130,6 @@ class MIFrame(object):
     # ------------------------------
 
     for _opimpl in ['int_add', 'int_sub', 'int_mul', 'int_floordiv', 'int_mod',
-                    'int_add_ovf', 'int_sub_ovf', 'int_mul_ovf',
                     'int_lt', 'int_le', 'int_eq',
                     'int_ne', 'int_gt', 'int_ge',
                     'int_and', 'int_or', 'int_xor',
@@ -149,6 +144,15 @@ class MIFrame(object):
             @arguments("box", "box")
             def opimpl_%s(self, b1, b2):
                 return self.execute(rop.%s, b1, b2)
+        ''' % (_opimpl, _opimpl.upper())).compile()
+
+    for _opimpl in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf']:
+        exec py.code.Source('''
+            @arguments("box", "box")
+            def opimpl_%s(self, b1, b2):
+                resbox = self.execute(rop.%s, b1, b2)
+                self.metainterp.handle_possible_overflow_error()
+                return resbox
         ''' % (_opimpl, _opimpl.upper())).compile()
 
     for _opimpl in ['int_is_true', 'int_neg', 'int_invert', 'bool_not',
@@ -200,34 +204,14 @@ class MIFrame(object):
     opimpl_ref_pop   = _opimpl_any_pop
     opimpl_float_pop = _opimpl_any_pop
 
-    @arguments("orgpc", "catched_exception", "label")
-    def opimpl_catch_exception(self, pc, catched_exception, target):
-        if catched_exception is not None:
-            self.last_exception = catched_exception
-            self.pc = target
-        #
-        extraargs = []
-        latest_exception_might_be = self.metainterp.latest_exception_might_be
-        if not we_are_translated():
-            del self.metainterp.latest_exception_might_be
-        if latest_exception_might_be == 'O':
-            # only for int_xxx_ovf operations
-            if catched_exception is None:
-                opnum = rop.GUARD_NO_OVERFLOW
-            else:
-                opnum = rop.GUARD_OVERFLOW
-        else:
-            # for all residual calls
-            if catched_exception is None:
-                opnum = rop.GUARD_NO_EXCEPTION
-            else:
-                etype = catched_exception.typeptr   # XXX use the typesystem
-                etype = llmemory.cast_ptr_to_adr(etype)
-                etype = llmemory.cast_adr_to_int(etype)
-                exception_box = self.metainterp.cpu.ts.get_exception_box(etype)
-                extraargs = [exception_box]
-                opnum = rop.GUARD_EXCEPTION
-        self.generate_guard(pc, opnum, extraargs=extraargs)
+    @arguments("label")
+    def opimpl_catch_exception(self, target):
+        """This is a no-op when run normally.  We can check that
+        last_exc_value_box is None; it should have been set to None
+        by the previous instruction.  If the previous instruction
+        raised instead, finishframe_exception() should have been
+        called and we would not be there."""
+        assert self.metainterp.last_exc_value_box is None
 
     @arguments("label")
     def opimpl_goto(self, target):
@@ -618,26 +602,10 @@ class MIFrame(object):
         self.make_result_box(ConstInt(result))
 
     def perform_call(self, jitcode, varargs, greenkey=None):
-        if (self.metainterp.is_blackholing() and
-            jitcode.calldescr is not None):
-            # when producing only a BlackHole, we can implement this by
-            # calling the subfunction directly instead of interpreting it
-            if jitcode.cfnptr is not None:
-                # for non-oosends
-                varargs = [jitcode.cfnptr] + varargs
-                res = self.execute_varargs(rop.CALL, varargs,
-                                             descr=jitcode.calldescr, exc=True)
-            else:
-                # for oosends (ootype only): calldescr is a MethDescr
-                res = self.execute_varargs(rop.OOSEND, varargs,
-                                             descr=jitcode.calldescr, exc=True)
-            self.metainterp.load_fields_from_virtualizable()
-            return res
-        else:
-            # when tracing, this bytecode causes the subfunction to be entered
-            f = self.metainterp.newframe(jitcode, greenkey)
-            f.setup_call(varargs)
-            return True
+        # when tracing, this bytecode causes the subfunction to be entered
+        f = self.metainterp.newframe(jitcode, greenkey)
+        f.setup_call(varargs)
+        return True
 
     @XXX  #arguments("bytecode", "varargs")
     def opimpl_call(self, callee, varargs):
@@ -886,14 +854,6 @@ class MIFrame(object):
         self.metainterp.history.record(rop.DEBUG_MERGE_POINT,
                                        [constloc], None)
 
-    @XXX  #arguments("jumptarget")
-    def opimpl_setup_exception_block(self, exception_target):
-        self.exception_target = exception_target
-
-    @XXX  #arguments()
-    def opimpl_teardown_exception_block(self):
-        self.exception_target = -1
-
     @arguments("box", "label")
     def opimpl_goto_if_exception_mismatch(self, vtablebox, next_exc_target):
         # XXX use typesystem.py
@@ -904,16 +864,17 @@ class MIFrame(object):
         if not rclass.ll_isinstance(self.last_exception, bounding_class):
             self.pc = next_exc_target
 
-    @XXX  #arguments()
-    def opimpl_raise(self):
-        assert len(self.env) == 2
-        return self.metainterp.finishframe_exception(self.env[0], self.env[1])
+    @arguments("box")
+    def opimpl_raise(self, exc_value_box):
+        self.metainterp.last_exc_value_box = exc_value_box
+        self.metainterp.popframe()
+        self.metainterp.finishframe_exception()
 
     @arguments()
     def opimpl_reraise(self):
-        assert self.last_exception is not None
-        self.metainterp.got_exception = self.last_exception
-        self.metainterp.propagate_exception_out_of_frame()
+        assert self.metainterp.last_exc_value_box is not None
+        self.metainterp.popframe()
+        self.metainterp.finishframe_exception()
 
     @XXX  #arguments("box")
     def opimpl_virtual_ref(self, box):
@@ -972,11 +933,11 @@ class MIFrame(object):
         self.pc = 0
         self.env = argboxes
 
-    def setup_resume_at_op(self, pc, exception_target, env):
+    def setup_resume_at_op(self, pc, env):
         if not we_are_translated():
             check_args(*env)
         self.pc = pc
-        self.exception_target = exception_target
+        xxxxxxxxxxxxxxxxxxxxxxx
         self.env = env
         ##  values = ' '.join([box.repr_rpython() for box in self.env])
         ##  log('setup_resume_at_op  %s:%d [%s] %d' % (self.jitcode.name,
@@ -1044,7 +1005,7 @@ class MIFrame(object):
             return promoted_box
 
     def cls_of_box(self, box):
-        return self.metainterp.cpu.ts.cls_of_box(self.metainterp.cpu, box)
+        return self.metainterp.cpu.ts.cls_of_box(box)
 
     @specialize.arg(1)
     def execute(self, opnum, *argboxes):
@@ -1056,14 +1017,13 @@ class MIFrame(object):
 
     @specialize.arg(1)
     def execute_varargs(self, opnum, argboxes, descr, exc):
-        return self.metainterp.execute_and_record_varargs(opnum, argboxes,
-                                                          descr=descr)
-##        if resbox is not None:
-##            self.make_result_box(resbox)
-##        if exc:
-##            return self.metainterp.handle_exception()
-##        else:
-##            return self.metainterp.assert_no_exception()
+        resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
+                                                            descr=descr)
+        if exc:
+            self.metainterp.handle_possible_exception()
+        else:
+            self.metainterp.assert_no_exception()
+        return resbox
 
     def do_residual_call(self, funcbox, descr, argboxes, exc):
         allboxes = [funcbox] + argboxes
@@ -1112,9 +1072,6 @@ class MetaInterpStaticData(object):
         self.indirectcall_values = []
 
         self.warmrunnerdesc = warmrunnerdesc
-        #self._op_goto_if_not = self.find_opcode('goto_if_not')
-        #self._op_ooisnull    = self.find_opcode('ooisnull')
-        #self._op_oononnull   = self.find_opcode('oononnull')
 
         backendmodule = self.cpu.__module__
         backendmodule = backendmodule.split('.')[-2]
@@ -1141,6 +1098,7 @@ class MetaInterpStaticData(object):
             name, argcodes = key.split('/')
             opimpl = _get_opimpl_method(name, argcodes)
             self.opcode_implementations[value] = opimpl
+        self.op_catch_exception = insns.get('catch_exception/L', -1)
 
     def setup_descrs(self, descrs):
         self.opcode_descrs = descrs
@@ -1265,7 +1223,6 @@ class MetaInterpGlobalData(object):
 
 class MetaInterp(object):
     in_recursion = 0
-    got_exception = None
     _already_allocated_resume_virtuals = None
 
     def __init__(self, staticdata):
@@ -1309,7 +1266,7 @@ class MetaInterp(object):
         if self.framestack:
             if resultbox is not None:
                 self.framestack[-1].make_result_box(resultbox)
-            return True
+            raise ChangeFrame
         else:
             if not self.is_blackholing():
                 try:
@@ -1329,7 +1286,7 @@ class MetaInterp(object):
             else:
                 assert False
 
-    def finishframe_exception(self, exceptionbox, excvaluebox):
+    def finishframe_exception(self):
         # detect and propagate some exceptions early:
         #  - AssertionError
         #  - all subclasses of JitException
@@ -1341,12 +1298,14 @@ class MetaInterp(object):
         #
         while self.framestack:
             frame = self.framestack[-1]
-            if frame.exception_target >= 0:
-                frame.pc = frame.exception_target
-                frame.exception_target = -1
-                frame.exception_box = exceptionbox
-                frame.exc_value_box = excvaluebox
-                return True
+            code = frame.bytecode
+            position = frame.pc    # <-- just after the insn that raised
+            opcode = ord(code[position])
+            if opcode == self.staticdata.op_catch_exception:
+                # found a 'catch_exception' instruction; jump to the handler
+                target = ord(code[position+1]) | (ord(code[position+2])<<8)
+                frame.pc = target
+                raise ChangeFrame
             self.popframe()
         if not self.is_blackholing():
             try:
@@ -1372,18 +1331,6 @@ class MetaInterp(object):
                     print " ",
                 print jitcode.name
             raise Exception
-
-    def raise_overflow_error(self):
-        etype, evalue = self.cpu.get_overflow_error()
-        return self.finishframe_exception(
-            self.cpu.ts.get_exception_box(etype),
-            self.cpu.ts.get_exc_value_box(evalue))
-
-    def raise_zero_division_error(self):
-        etype, evalue = self.cpu.get_zero_division_error()
-        return self.finishframe_exception(
-            self.cpu.ts.get_exception_box(etype),
-            self.cpu.ts.get_exc_value_box(evalue))
 
     def create_empty_history(self):
         warmrunnerstate = self.staticdata.state
@@ -1465,6 +1412,24 @@ class MetaInterp(object):
             and getattr(self, 'framestack', None)):
             op.pc = self.framestack[-1].pc
             op.name = self.framestack[-1].jitcode.name
+
+    def execute_raised(self, exception, constant=False):
+        # Exception handling: when execute.do_call() gets an exception it
+        # calls metainterp.execute_raised(), which puts it into
+        # 'self.last_exc_value_box'.  This is used shortly afterwards
+        # to generate either GUARD_EXCEPTION or GUARD_NO_EXCEPTION, and also
+        # to handle the following opcodes 'goto_if_exception_mismatch'.
+        llexception = get_llexception(self.cpu, exception)
+        if not we_are_translated():
+            llexception = llexception.args[1]
+        llexception = self.cpu.ts.cast_to_ref(llexception)
+        exc_value_box = self.cpu.ts.get_exc_value_box(llexception)
+        if constant:
+            exc_value_box = exc_value_box.constbox()
+        self.last_exc_value_box = exc_value_box
+
+    def execute_did_not_raise(self):
+        self.last_exc_value_box = None
 
     def switch_to_blackhole(self, reason):
         self.staticdata.profiler.count(reason)
@@ -1870,38 +1835,29 @@ class MetaInterp(object):
         # mark by replacing it with ConstPtr(NULL)
         self.virtualref_boxes[i+1] = self.cpu.ts.CONST_NULL
 
-    def handle_exception(self):
-        etype = self.cpu.get_exception()
-        evalue = self.cpu.get_exc_value()
-        assert bool(etype) == bool(evalue)
-        self.cpu.clear_exception()
+    def handle_possible_exception(self):
         frame = self.framestack[-1]
-        if etype:
-            exception_box = self.cpu.ts.get_exception_box(etype)
-            exc_value_box = self.cpu.ts.get_exc_value_box(evalue)
+        if self.last_exc_value_box:
+            exception_box = self.cpu.ts.cls_of_box(self.last_exc_value_box)
             op = frame.generate_guard(frame.pc, rop.GUARD_EXCEPTION,
                                       None, [exception_box])
             if op:
-                op.result = exc_value_box
-            return self.finishframe_exception(exception_box, exc_value_box)
+                op.result = self.last_exc_value_box
+            self.finishframe_exception()
         else:
             frame.generate_guard(frame.pc, rop.GUARD_NO_EXCEPTION, None, [])
-            return False
+
+    def handle_possible_overflow_error(self):
+        frame = self.framestack[-1]
+        if self.last_exc_value_box:
+            frame.generate_guard(frame.pc, rop.GUARD_OVERFLOW, None)
+            assert isinstance(self.last_exc_value_box, Const)
+            self.finishframe_exception()
+        else:
+            frame.generate_guard(frame.pc, rop.GUARD_NO_OVERFLOW, None)
 
     def assert_no_exception(self):
-        assert not self.cpu.get_exception()
-        return False
-
-    def handle_overflow_error(self):
-        xxx
-        frame = self.framestack[-1]
-        if self.cpu._overflow_flag:
-            self.cpu._overflow_flag = False
-            frame.generate_guard(frame.pc, rop.GUARD_OVERFLOW, None, [])
-            return self.raise_overflow_error()
-        else:
-            frame.generate_guard(frame.pc, rop.GUARD_NO_OVERFLOW, None, [])
-            return False
+        assert not self.last_exc_value_box
 
     def rebuild_state_after_failure(self, resumedescr, newboxes):
         vinfo = self.staticdata.virtualizable_info
@@ -2069,7 +2025,8 @@ class GenerateMergePoint(Exception):
 # ____________________________________________________________
 
 class ChangeFrame(Exception):
-    pass
+    """Raised after we mutated metainterp.framestack, in order to force
+    it to reload the current top-of-stack frame that gets interpreted."""
 
 def _get_opimpl_method(name, argcodes):
     from pypy.jit.metainterp.blackhole import signedord
@@ -2142,18 +2099,9 @@ def _get_opimpl_method(name, argcodes):
                 position = position3 + 1 + length3
             elif argtype == "orgpc":
                 value = orgpc
-            elif argtype == "catched_exception":
-                value = self.metainterp.got_exception
-                self.metainterp.got_exception = None
             else:
                 raise AssertionError("bad argtype: %r" % (argtype,))
             args += (value,)
-        #
-        if self.metainterp.got_exception is not None:
-            # the previous operation raised and the current operation
-            # is not catching it.  Propagate it.
-            self.metainterp.propagate_exception_out_of_frame()
-            return
         #
         num_return_args = len(argcodes) - next_argcode
         assert num_return_args == 0 or num_return_args == 1
