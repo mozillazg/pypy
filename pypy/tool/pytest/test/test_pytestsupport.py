@@ -1,4 +1,3 @@
-import autopath
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import app2interp_temp
 from pypy.interpreter.argument import Arguments

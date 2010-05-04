@@ -43,7 +43,8 @@ def pytest_addoption(parser):
            help="set up tests to use specified platform as compile/run target")
 
 def pytest_funcarg__space(request):
-    return gettestobjspace()
+    spaceconfig = getattr(request.cls, 'spaceconfig', {})
+    return gettestobjspace(**spaceconfig)
 
 _SPACECACHE={}
 def gettestobjspace(name=None, **kwds):
@@ -92,6 +93,14 @@ def maketestobjspace(config=None):
     space.raises_w = appsupport.raises_w.__get__(space)
     space.eq_w = appsupport.eq_w.__get__(space)
     return space
+
+def pytest_runtest_setup(item):
+    if isinstance(item, PyPyTestFunction):
+        appclass = item.getparent(PyPyClassCollector)
+        if appclass is not None:
+            spaceconfig = getattr(appclass.obj, 'spaceconfig', None)
+            if spaceconfig:
+                appclass.obj.space = gettestobjspace(**spaceconfig)
 
 class TinyObjSpace(object):
     def __init__(self, **kwds):
@@ -408,11 +417,17 @@ class AppTestMethod(AppTestFunction):
 class PyPyClassCollector(py.test.collect.Class):
     def setup(self):
         cls = self.obj 
-        cls.space = LazyObjSpaceGetter()
+        if not hasattr(cls, 'spaceconfig'):
+            cls.space = LazyObjSpaceGetter() 
+        else:
+            assert hasattr(cls, 'space') # set by pytest_runtest_setup
         super(PyPyClassCollector, self).setup() 
+
+class IntInstanceCollector(py.test.collect.Instance):
+    Function = IntTestFunction 
     
 class IntClassCollector(PyPyClassCollector): 
-    Function = IntTestFunction 
+    Instance = IntInstanceCollector
 
     def _haskeyword(self, keyword):
         return keyword == 'interplevel' or \
