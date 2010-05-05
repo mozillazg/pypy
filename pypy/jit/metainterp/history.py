@@ -98,7 +98,7 @@ class AbstractValue(object):
     def nonconstbox(self):
         raise NotImplementedError
 
-    def getaddr(self, cpu):
+    def getaddr(self):
         raise NotImplementedError
 
     def sort_key(self):
@@ -182,18 +182,13 @@ class Const(AbstractValue):
     __slots__ = ()
 
     @staticmethod
-    def _new(x, cpu):
+    def _new(x):
         "NOT_RPYTHON"
         T = lltype.typeOf(x)
         kind = getkind(T)
         if kind == "int":
             if isinstance(T, lltype.Ptr):
-                if not we_are_translated():
-                    # cannot store integers representing casted addresses
-                    # inside ConstInt() instances that are going through
-                    # translation; must use the special ConstAddr instead.
-                    return ConstAddr(x, cpu)
-                intval = cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+                intval = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
             else:
                 intval = lltype.cast_primitive(lltype.Signed, x)
             return ConstInt(intval)
@@ -256,8 +251,8 @@ class ConstInt(Const):
     def getint(self):
         return self.value
 
-    def getaddr(self, cpu):
-        return cpu.cast_int_to_adr(self.value)
+    def getaddr(self):
+        return llmemory.cast_int_to_adr(self.value)
 
     def _get_hash_(self):
         return self.value
@@ -280,50 +275,6 @@ class ConstInt(Const):
 
 CONST_FALSE = ConstInt(0)
 CONST_TRUE  = ConstInt(1)
-
-class ConstAddr(Const):       # only for constants built before translation
-    type = INT
-    _attrs_ = ('value', 'cpu')
-
-    def __init__(self, adrvalue, cpu):
-        "NOT_RPYTHON"
-        assert not we_are_translated()
-        if isinstance(lltype.typeOf(adrvalue), lltype.Ptr):
-            adrvalue = llmemory.cast_ptr_to_adr(adrvalue)    # convenience
-        else:
-            assert lltype.typeOf(adrvalue) == llmemory.Address
-        self.value = adrvalue
-        self.cpu = cpu
-
-    def clonebox(self):
-        return BoxInt(self.cpu.cast_adr_to_int(self.value))
-
-    nonconstbox = clonebox
-
-    def getint(self):
-        return self.cpu.cast_adr_to_int(self.value)
-
-    def getaddr(self, cpu):
-        return self.value
-
-    def _get_hash_(self):
-        return llmemory.cast_adr_to_int(self.value)
-
-    def set_future_value(self, cpu, j):
-        cpu.set_future_value_int(j, self.getint())
-
-    def same_constant(self, other):
-        assert isinstance(other, Const)
-        return self.value == other.getaddr(self.cpu)
-
-    def nonnull(self):
-        return bool(self.value)
-
-    def _getrepr_(self):
-        return self.value
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'ca')
 
 class ConstFloat(Const):
     type = FLOAT
@@ -388,7 +339,7 @@ class ConstPtr(Const):
         else:
             return 0
 
-    def getaddr(self, cpu):
+    def getaddr(self):
         return llmemory.cast_ptr_to_adr(self.value)
 
     def set_future_value(self, cpu, j):
@@ -441,7 +392,7 @@ class ConstObj(Const):
     def set_future_value(self, cpu, j):
         cpu.set_future_value_ref(j, self.value)
 
-##    def getaddr(self, cpu):
+##    def getaddr(self):
 ##        # so far this is used only when calling
 ##        # CodeWriter.IndirectCallset.bytecode_for_address.  We don't need a
 ##        # real addr, but just a key for the dictionary
@@ -470,7 +421,7 @@ class Box(AbstractValue):
     is_box = True  # hint that we want to make links in graphviz from this
 
     @staticmethod
-    def _new(x, cpu):
+    def _new(x):
         "NOT_RPYTHON"
         kind = getkind(lltype.typeOf(x))
         if kind == "int":
@@ -533,8 +484,8 @@ class BoxInt(Box):
     def getint(self):
         return self.value
 
-    def getaddr(self, cpu):
-        return cpu.cast_int_to_adr(self.value)
+    def getaddr(self):
+        return llmemory.cast_int_to_adr(self.value)
 
     def _get_hash_(self):
         return self.value
@@ -604,7 +555,7 @@ class BoxPtr(Box):
         return lltype.cast_opaque_ptr(PTR, self.getref_base())
     getref._annspecialcase_ = 'specialize:arg(1)'
 
-    def getaddr(self, cpu):
+    def getaddr(self):
         return llmemory.cast_ptr_to_adr(self.value)
 
     def _get_hash_(self):

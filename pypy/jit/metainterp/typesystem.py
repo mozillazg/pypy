@@ -44,7 +44,6 @@ class LLTypeHelper(TypeSystemHelper):
     BASETYPE = llmemory.GCREF
     BoxRef = history.BoxPtr
     ConstRef = history.ConstPtr
-    ConstAddr = history.ConstAddr
     loops_done_with_this_frame_ref = None # patched by compile.py
     CONST_NULL = history.ConstPtr(history.ConstPtr.value)
     CVAL_NULLREF = None # patched by optimizeopt.py
@@ -76,12 +75,11 @@ class LLTypeHelper(TypeSystemHelper):
         cls = llmemory.cast_ptr_to_adr(obj.typeptr)
         return history.ConstInt(llmemory.cast_adr_to_int(cls))
 
-    def subclassOf(self, cpu, clsbox1, clsbox2):
-        adr = clsbox2.getaddr(cpu)
+    def instanceOf(self, instbox, clsbox):
+        adr = clsbox.getaddr()
         bounding_class = llmemory.cast_adr_to_ptr(adr, rclass.CLASSTYPE)
-        adr = clsbox1.getaddr(cpu)
-        real_class = llmemory.cast_adr_to_ptr(adr, rclass.CLASSTYPE)
-        return rclass.ll_issubclass(real_class, bounding_class)
+        real_instance = instbox.getref(rclass.OBJECTPTR)
+        return rclass.ll_isinstance(real_instance, bounding_class)
 
     def get_exception_box(self, etype):
         return history.ConstInt(etype)
@@ -151,7 +149,6 @@ class OOTypeHelper(TypeSystemHelper):
     BASETYPE = ootype.Object
     BoxRef = history.BoxObj
     ConstRef = history.ConstObj
-    ConstAddr = history.ConstObj
     loops_done_with_this_frame_ref = None # patched by compile.py
     CONST_NULL = history.ConstObj(history.ConstObj.value)
     CVAL_NULLREF = None # patched by optimizeopt.py

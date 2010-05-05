@@ -14,6 +14,7 @@ DEFAULT_OPNAMES_REQUIRING_LIVENESS = [
     'residual_call_',
     '(int|ref|float)_guard_value',
     'guard_class',
+    'int_(add|sub|mul)_ovf',
     ]
 
 # ____________________________________________________________
