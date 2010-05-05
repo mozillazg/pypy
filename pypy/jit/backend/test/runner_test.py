@@ -1085,7 +1085,6 @@ class BaseBackendTest(Runner):
                                            operator.truediv, no_zero_divison
         yield nan_and_infinity, rop.FLOAT_NEG, operator.neg, all_cases_unary
         yield nan_and_infinity, rop.FLOAT_ABS, abs,          all_cases_unary
-        yield nan_and_infinity, rop.FLOAT_IS_TRUE, bool,     all_cases_unary
         yield nan_and_infinity, rop.FLOAT_LT,  operator.lt,  all_cases_binary
         yield nan_and_infinity, rop.FLOAT_LE,  operator.le,  all_cases_binary
         yield nan_and_infinity, rop.FLOAT_EQ,  operator.eq,  all_cases_binary

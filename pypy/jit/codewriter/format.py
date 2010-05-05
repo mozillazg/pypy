@@ -74,7 +74,7 @@ def assert_format(ssarepr, expected):
             print "Got:      " + asm
             print "Expected: " + exp
             lgt = 0
-            for i in range(len(asm)):
+            for i in range(min(len(asm), len(exp))):
                 if exp[i] == asm[i]:
                     lgt += 1
                 else:
@@ -82,3 +82,45 @@ def assert_format(ssarepr, expected):
             print "          " + " " * lgt + "^^^^"
             raise AssertionError
     assert len(asmlines) == len(explines)
+
+def unformat_assembler(text, registers=None):
+    # XXX limited to simple assembler right now
+    #
+    def unformat_arg(s):
+        if s[0] == '%':
+            try:
+                return registers[s]
+            except KeyError:
+                num = int(s[2:])
+                if s[1] == 'i': reg = Register('int', num)
+                elif s[1] == 'r': reg = Register('ref', num)
+                elif s[1] == 'f': reg = Register('float', num)
+                else: raise AssertionError("bad register type")
+                registers[s] = reg
+                return reg
+        elif s[0] == '$':
+            intvalue = int(s[1:])
+            return Constant(intvalue, lltype.Signed)
+        elif s[0] == 'L':
+            return TLabel(s)
+        else:
+            raise AssertionError("unsupported argument: %r" % (s,))
+    #
+    if registers is None:
+        registers = {}
+    ssarepr = SSARepr('test')
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith('L') and line.endswith(':'):
+            ssarepr.insns.append((Label(line[:-1]),))
+        else:
+            try:
+                opname, line = line.split(None, 1)
+            except ValueError:
+                opname, line = line, ''
+            line = [s.strip() for s in line.split(',')]
+            insn = [opname] + [unformat_arg(s) for s in line if s]
+            ssarepr.insns.append(tuple(insn))
+    return ssarepr

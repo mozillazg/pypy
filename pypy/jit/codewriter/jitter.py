@@ -121,14 +121,45 @@ class Transformer(object):
             return rewrite(self, op)
 
     def rewrite_op_same_as(self, op): raise NoOp
-    def rewrite_op_cast_int_to_char(self, op): raise NoOp
-    def rewrite_op_cast_int_to_unichar(self, op): raise NoOp
+    def rewrite_op_cast_pointer(self, op): raise NoOp
+    def rewrite_op_cast_primitive(self, op): raise NoOp
+    def rewrite_op_cast_bool_to_int(self, op): raise NoOp
+    def rewrite_op_cast_bool_to_uint(self, op): raise NoOp
     def rewrite_op_cast_char_to_int(self, op): raise NoOp
     def rewrite_op_cast_unichar_to_int(self, op): raise NoOp
-    def rewrite_op_cast_bool_to_int(self, op): raise NoOp
-    def rewrite_op_cast_pointer(self, op): raise NoOp
+    def rewrite_op_cast_int_to_char(self, op): raise NoOp
+    def rewrite_op_cast_int_to_unichar(self, op): raise NoOp
     def rewrite_op_cast_int_to_uint(self, op): raise NoOp
     def rewrite_op_cast_uint_to_int(self, op): raise NoOp
+
+    def _rewrite_symmetric(self, op):
+        """Rewrite 'c1+v2' into 'v2+c1' in an attempt to avoid generating
+        too many variants of the bytecode."""
+        if (isinstance(op.args[0], Constant) and
+            isinstance(op.args[1], Variable)):
+            reversename = {'int_lt': 'int_gt',
+                           'int_le': 'int_ge',
+                           'int_gt': 'int_lt',
+                           'int_ge': 'int_le',
+                           'float_lt': 'float_gt',
+                           'float_le': 'float_ge',
+                           'float_gt': 'float_lt',
+                           'float_ge': 'float_le',
+                           }.get(op.opname, op.opname)
+            return SpaceOperation(reversename,
+                                  [op.args[1], op.args[0]] + op.args[2:],
+                                  op.result)
+        else:
+            return op
+
+    rewrite_op_int_add = _rewrite_symmetric
+    rewrite_op_int_mul = _rewrite_symmetric
+    rewrite_op_int_and = _rewrite_symmetric
+    rewrite_op_int_or  = _rewrite_symmetric
+    rewrite_op_int_xor = _rewrite_symmetric
+
+    rewrite_op_G_int_add_ovf = _rewrite_symmetric
+    rewrite_op_G_int_mul_ovf = _rewrite_symmetric
 
     def rewrite_op_direct_call(self, op):
         """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'
@@ -150,7 +181,7 @@ class Transformer(object):
         FUNC = op.args[0].concretetype.TO
         NONVOIDARGS = tuple([ARG for ARG in FUNC.ARGS if ARG != lltype.Void])
         calldescr = self.cpu.calldescrof(FUNC, NONVOIDARGS, FUNC.RESULT)
-        return SpaceOperation('residual_call_%s_%s' % (kinds, reskind),
+        return SpaceOperation('G_residual_call_%s_%s' % (kinds, reskind),
                               [op.args[0], calldescr] + sublists,
                               op.result)
 
@@ -184,7 +215,7 @@ class Transformer(object):
     rewrite_op_int_mod_ovf_zer = _do_builtin_call
     rewrite_op_int_mod_ovf     = _do_builtin_call
     rewrite_op_int_mod_zer     = _do_builtin_call
-
+    rewrite_op_int_lshift_ovf  = _do_builtin_call
     rewrite_op_gc_identityhash = _do_builtin_call
 
     def rewrite_op_hint(self, op):
@@ -192,7 +223,9 @@ class Transformer(object):
         if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
             assert op.args[0].concretetype != lltype.Ptr(rstr.STR)
             kind = getkind(op.args[0].concretetype)
-            return SpaceOperation('%s_guard_value' % kind,
+            # note: the 'G_' prefix tells that the operation might generate
+            # a guard in pyjitpl (see liveness.py)
+            return SpaceOperation('G_%s_guard_value' % kind,
                                   [op.args[0]], op.result)
         else:
             log.WARNING('ignoring hint %r at %r' % (hints, self.graph))
@@ -308,7 +341,9 @@ class Transformer(object):
                 op.args[0].concretetype.TO._hints.get('typeptr'))
 
     def handle_getfield_typeptr(self, op):
-        return SpaceOperation('guard_class', [op.args[0]], op.result)
+        # note: the 'G_' prefix tells that the operation might generate
+        # a guard in pyjitpl (see liveness.py)
+        return SpaceOperation('G_guard_class', [op.args[0]], op.result)
 
     def rewrite_op_malloc(self, op):
         assert op.args[1].value == {'flavor': 'gc'}
@@ -343,7 +378,7 @@ class Transformer(object):
         elif isinstance(arg1, Constant) and not arg1.value:
             return SpaceOperation(opname, [arg0], op.result)
         else:
-            return op
+            return self._rewrite_symmetric(op)
 
     def _is_gc(self, v):
         return v.concretetype.TO._gckind == 'gc'
@@ -381,13 +416,68 @@ class Transformer(object):
         else:
             raise NoOp
 
+    # ----------
+    # Renames, from the _old opname to the _new one.
+    # The new operation is optionally further processed by rewrite_operation().
     for _old, _new in [('bool_not', 'int_is_zero'),
                        ('cast_bool_to_float', 'cast_int_to_float'),
+                       ('cast_uint_to_float', 'cast_int_to_float'),
+                       ('cast_float_to_uint', 'cast_float_to_int'),
+
+                       ('int_add_ovf',        'G_int_add_ovf'),
+                       ('int_add_nonneg_ovf', 'G_int_add_ovf'),
+                       ('int_sub_ovf',        'G_int_sub_ovf'),
+                       ('int_mul_ovf',        'G_int_mul_ovf'),
+
+                       ('char_lt', 'int_lt'),
+                       ('char_le', 'int_le'),
+                       ('char_eq', 'int_eq'),
+                       ('char_ne', 'int_ne'),
+                       ('char_gt', 'int_gt'),
+                       ('char_ge', 'int_ge'),
+                       ('unichar_eq', 'int_eq'),
+                       ('unichar_ne', 'int_ne'),
+
+                       ('uint_is_true', 'int_is_true'),
+                       ('uint_invert', 'int_invert'),
+                       ('uint_add', 'int_add'),
+                       ('uint_sub', 'int_sub'),
+                       ('uint_mul', 'int_mul'),
+                       ('uint_floordiv', 'int_floordiv'),
+                       ('uint_floordiv_zer', 'int_floordiv_zer'),
+                       ('uint_mod', 'int_mod'),
+                       ('uint_mod_zer', 'int_mod_zer'),
+                       ('uint_lt', 'int_lt'),
+                       ('uint_le', 'int_le'),
+                       ('uint_eq', 'int_eq'),
+                       ('uint_ne', 'int_ne'),
+                       ('uint_gt', 'int_gt'),
+                       ('uint_ge', 'int_ge'),
+                       ('uint_and', 'int_and'),
+                       ('uint_or', 'int_or'),
+                       ('uint_lshift', 'int_lshift'),
+                       ('uint_rshift', 'int_rshift'),
+                       ('uint_xor', 'int_xor'),
+
+                       
                        ]:
         exec py.code.Source('''
             def rewrite_op_%s(self, op):
-                return SpaceOperation(%r, op.args, op.result)
+                op1 = SpaceOperation(%r, op.args, op.result)
+                return self.rewrite_operation(op1)
         ''' % (_old, _new)).compile()
+
+    def rewrite_op_int_neg_ovf(self, op):
+        op1 = SpaceOperation('int_sub_ovf',
+                             [Constant(0, lltype.Signed), op.args[0]],
+                             op.result)
+        return self.rewrite_operation(op1)
+
+    def rewrite_op_float_is_true(self, op):
+        op1 = SpaceOperation('float_ne',
+                             [op.args[0], Constant(0.0, lltype.Float)],
+                             op.result)
+        return self.rewrite_operation(op1)
 
 # ____________________________________________________________
 

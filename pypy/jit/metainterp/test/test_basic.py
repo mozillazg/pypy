@@ -118,7 +118,6 @@ class JitMixin:
         assert get_stats().aborted_count >= count
 
     def meta_interp(self, *args, **kwds):
-        py.test.skip("XXX")
         kwds['CPUClass'] = self.CPUClass
         kwds['type_system'] = self.type_system
         if "backendopt" not in kwds:
@@ -142,7 +141,6 @@ class JitMixin:
 
     def check_operations_history(self, expected=None, **isns):
         # this can be used after interp_operations
-        py.test.skip("XXX")
         self.metainterp.staticdata.stats.check_history(expected, **isns)
 
 

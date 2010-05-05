@@ -156,7 +156,6 @@ _oplist = [
     'FLOAT_TRUEDIV/2',
     'FLOAT_NEG/1',
     'FLOAT_ABS/1',
-    'FLOAT_IS_TRUE/1b',
     'CAST_FLOAT_TO_INT/1',
     'CAST_INT_TO_FLOAT/1',
     #

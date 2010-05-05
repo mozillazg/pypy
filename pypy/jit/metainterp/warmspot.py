@@ -152,9 +152,8 @@ class WarmRunnerDesc(object):
         self.set_translator(translator)
         self.find_portal()
         self.codewriter = codewriter.CodeWriter(self.rtyper)
-        graphs = self.codewriter.find_all_graphs(self.portal_graph,
-                                                 policy,
-                                                 CPUClass.supports_floats)
+        policy.set_supports_floats(CPUClass.supports_floats)
+        graphs = self.codewriter.find_all_graphs(self.portal_graph, policy)
         policy.dump_unsafe_loops()
         self.check_access_directly_sanity(graphs)
         if backendopt:

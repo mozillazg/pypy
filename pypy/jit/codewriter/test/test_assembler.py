@@ -161,15 +161,15 @@ def test_liveness():
     i3, i4, i5 = Register('int', 3), Register('int', 4), Register('int', 5)
     ssarepr.insns = [
         ('-live-', i0),
-        ('int_add', i0, Constant(10, lltype.Signed), i1),
+        ('G_int_add', i0, Constant(10, lltype.Signed), i1),
         ('-live-', i0, i1),
-        ('int_add', i0, Constant(3, lltype.Signed), i2),
+        ('G_int_add', i0, Constant(3, lltype.Signed), i2),
         ('-live-', i0),
-        ('int_mul', i1, i2, i3),
+        ('G_int_mul', i1, i2, i3),
         ('-live-', i3),
-        ('int_add', i0, Constant(6, lltype.Signed), i4),
+        ('G_int_add', i0, Constant(6, lltype.Signed), i4),
         ('-live-',),
-        ('int_mul', i3, i4, i5),
+        ('G_int_mul', i3, i4, i5),
         ('int_return', i5),
         ]
     assembler = Assembler()

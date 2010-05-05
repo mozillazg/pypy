@@ -695,32 +695,6 @@ class Assembler386(object):
         # Following what gcc does: res = x & 0x7FFFFFFFFFFFFFFF
         self.mc.ANDPD(arglocs[0], self.loc_float_const_abs)
 
-    def genop_guard_float_is_true(self, op, guard_op, addr, arglocs, resloc):
-        guard_opnum = guard_op.opnum
-        loc0, loc1 = arglocs
-        self.mc.XORPD(loc0, loc0)
-        self.mc.UCOMISD(loc0, loc1)
-        mc = self.mc._mc
-        if guard_opnum == rop.GUARD_TRUE:
-            mc.JP(rel8(6))
-            mc.JZ(rel32(addr))
-            return mc.tell() - 4
-        else:
-            mc.JP(rel8(2))
-            mc.JZ(rel8(5))
-            return self.implement_guard(addr, mc.JMP)
-
-    def genop_float_is_true(self, op, arglocs, resloc):
-        loc0, loc1 = arglocs
-        self.mc.XORPD(loc0, loc0)
-        self.mc.UCOMISD(loc0, loc1)
-        rl = resloc.lowest8bits()
-        rh = resloc.higher8bits()
-        self.mc.SETNE(rl)
-        self.mc.SETP(rh)
-        self.mc.OR(rl, rh)
-        self.mc.MOVZX(resloc, rl)
-
     def genop_cast_float_to_int(self, op, arglocs, resloc):
         self.mc.CVTTSD2SI(resloc, arglocs[0])
 

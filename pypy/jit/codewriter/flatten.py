@@ -165,7 +165,7 @@ class GraphFlattener(object):
             for link in block.exits[1:]:
                 if (link.exitcase is Exception or
                     (link.exitcase is OverflowError and
-                     lastopname.startswith('int_') and
+                     lastopname.startswith('G_int_') and
                      lastopname.endswith('_ovf'))):
                     # this link captures all exceptions
                     self.make_exception_link(link)
