@@ -8,6 +8,7 @@ from pypy.rpython.lltypesystem import lltype, rclass, rstr
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.translator.unsimplify import varoftype
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.jit import dont_look_inside
 
 
 class FakeRegAlloc:
@@ -261,6 +262,7 @@ class TestFlatten:
     def test_exc_exitswitch_2(self):
         class FooError(Exception):
             pass
+        @dont_look_inside
         def g(i):
             FooError().num = 1
             FooError().num = 2
@@ -275,7 +277,7 @@ class TestFlatten:
                 return 4
 
         self.encoding_test(f, [65], """
-            residual_call_ir_v $<* fn g>, <Descr>, I[%i0], R[]
+            G_residual_call_ir_v $<* fn g>, <Descr>, I[%i0], R[]
             catch_exception L1
             int_return $4
             L1:
@@ -340,7 +342,7 @@ class TestFlatten:
             except ZeroDivisionError:
                 return -42
         self.encoding_test(f, [7, 2], """
-            residual_call_ir_i $<* fn int_floordiv_ovf_zer>, <Descr>, I[%i0, %i1], R[], %i2
+            G_residual_call_ir_i $<* fn int_floordiv_ovf_zer>, <Descr>, I[%i0, %i1], R[], %i2
             catch_exception L1
             int_return %i2
             L1:
@@ -363,7 +365,7 @@ class TestFlatten:
                 return 42
         # XXX so far, this really produces a int_mod_ovf_zer...
         self.encoding_test(f, [7, 2], """
-            residual_call_ir_i $<* fn int_mod_ovf_zer>, <Descr>, I[%i0, %i1], R[], %i2
+            G_residual_call_ir_i $<* fn int_mod_ovf_zer>, <Descr>, I[%i0, %i1], R[], %i2
             catch_exception L1
             int_return %i2
             L1:
@@ -380,10 +382,44 @@ class TestFlatten:
             except OverflowError:
                 return 42
         self.encoding_test(f, [7, 2], """
-            int_add_ovf %i0, %i1, %i2
-            -live- %i2
+            -live-
+            G_int_add_ovf %i0, %i1, %i2
             catch_exception L1
             int_return %i2
             L1:
             int_return $42
+        """, transform=True, liveness=True)
+
+    def test_residual_call_raising(self):
+        @dont_look_inside
+        def g(i, j):
+            return ovfcheck(i + j)
+        def f(i, j):
+            try:
+                return g(i, j)
+            except Exception:
+                return 42 + j
+        self.encoding_test(f, [7, 2], """
+            -live- %i1
+            G_residual_call_ir_i $<* fn g>, <Descr>, I[%i0, %i1], R[], %i2
+            catch_exception L1
+            int_return %i2
+            L1:
+            int_copy %i1, %i3
+            int_add %i3, $42, %i4
+            int_return %i4
+        """, transform=True, liveness=True)
+
+    def test_residual_call_nonraising(self):
+        @dont_look_inside
+        def g(i, j):
+            return i + j
+        def f(i, j):
+            try:
+                return g(i, j)
+            except Exception:
+                return 42 + j
+        self.encoding_test(f, [7, 2], """
+            residual_call_ir_i $<* fn g>, <Descr>, I[%i0, %i1], R[], %i2
+            int_return %i2
         """, transform=True, liveness=True)

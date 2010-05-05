@@ -98,6 +98,23 @@ def test_optimize_goto_if_not__ptr_iszero():
         assert block.exitswitch == (opname, v1)
         assert block.exits == exits
 
+def test_symmetric():
+    ops = {'int_add': 'int_add',
+           'int_gt': 'int_lt',
+           'int_le': 'int_ge'}
+    v3 = varoftype(lltype.Signed)
+    for v1 in [varoftype(lltype.Signed), Constant(42, lltype.Signed)]:
+        for v2 in [varoftype(lltype.Signed), Constant(43, lltype.Signed)]:
+            for name1, name2 in ops.items():
+                op = SpaceOperation(name1, [v1, v2], v3)
+                op1 = Transformer(FakeCPU()).rewrite_operation(op)
+                if isinstance(v1, Constant) and isinstance(v2, Variable):
+                    assert op1.opname == name2
+                    assert op1.args == [v2, v1]
+                    assert op1.result == v3
+                else:
+                    assert op1 is op
+
 def test_residual_call():
     for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,
                     lltype.Float, lltype.Void]:

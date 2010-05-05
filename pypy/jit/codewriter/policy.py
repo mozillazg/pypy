@@ -3,6 +3,12 @@ from pypy.jit.metainterp import history
 from pypy.rpython.lltypesystem import lltype, rclass
 from pypy.tool.udir import udir
 
+import py, sys
+from pypy.tool.ansi_print import ansi_log
+log = py.log.Producer('jitcodewriter')
+py.log.setconsumer('jitcodewriter', ansi_log)
+
+
 class JitPolicy(object):
     def __init__(self):
         self.unsafe_loopy_graphs = set()
@@ -40,9 +46,6 @@ class JitPolicy(object):
         # string builder interface
         if mod == 'pypy.rpython.lltypesystem.rbuilder':
             return True
-        # rweakvaluedict implementation
-        if mod == 'pypy.rlib.rweakrefimpl':
-            return True
         
         return False
 
@@ -76,7 +79,6 @@ def contains_unsupported_variable_type(graph, supports_floats):
                     getkind(v.concretetype, supports_floats)
                 getkind(op.result.concretetype, supports_floats)
     except NotImplementedError, e:
-        from pypy.jit.metainterp.codewriter import log
         log.WARNING('%s, ignoring graph' % (e,))
         log.WARNING('  %s' % (graph,))
         return True

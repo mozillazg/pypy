@@ -1,6 +1,6 @@
 import py
 from pypy.objspace.flow.model import Constant
-from pypy.jit.codewriter.format import format_assembler
+from pypy.jit.codewriter.format import format_assembler, unformat_assembler
 from pypy.jit.codewriter.flatten import Label, TLabel, SSARepr, Register
 from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.jit.metainterp.history import AbstractDescr
@@ -96,3 +96,41 @@ def test_format_assembler_descr():
         foobar hi_there!
     """
     assert asm == str(py.code.Source(expected)).strip() + '\n'
+
+def test_unformat_assembler_simple():
+    input = """
+        int_add %i0, %i1, %i2
+        int_return %i2
+    """
+    regs = {}
+    ssarepr = unformat_assembler(input, regs)
+    assert regs['%i2'].kind == 'int'
+    assert regs['%i2'].index == 2
+    assert ssarepr.insns == [
+        ('int_add', regs['%i0'], regs['%i1'], regs['%i2']),
+        ('int_return', regs['%i2']),
+        ]
+
+def test_unformat_assembler_consts():
+    input = """
+        foo $123
+    """
+    ssarepr = unformat_assembler(input)
+    assert ssarepr.insns == [
+        ('foo', Constant(123, lltype.Signed)),
+        ]
+
+def test_unformat_assembler_label():
+    input = """
+        L1:
+        foo L2
+        L2:
+        bar L1
+    """
+    ssarepr = unformat_assembler(input)
+    assert ssarepr.insns == [
+        (Label('L1'),),
+        ('foo', TLabel('L2')),
+        (Label('L2'),),
+        ('bar', TLabel('L1')),
+        ]

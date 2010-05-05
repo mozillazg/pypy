@@ -42,31 +42,39 @@ class JitCode(AbstractValue):
     def num_regs_f(self):
         return self.num_regs_encoded & 0x1FF
 
+    def has_liveness_info(self, pc):
+        return pc in self.liveness
+
     def enumerate_live_vars(self, pc, callback, arg,
                             registers_i, registers_r, registers_f):
         # 'pc' gives a position in this bytecode.  This invokes
         # 'callback' for each variable that is live across the
         # instruction which starts at 'pc'.  (It excludes the arguments
         # of that instruction which are no longer used afterwards, and
-        # also the return value of that instruction.)  More precisely,
-        # this invokes 'callback(arg, box)' where 'box' comes from one
-        # of the three lists of registers.  If the callback returns a
-        # box, then it is stored back.
+        # excludes the return value of that instruction.)  More precisely,
+        # this invokes 'callback(arg, box, index)' where 'box' comes from one
+        # of the three lists of registers and 'index' is 0, 1, 2...
+        # If the callback returns a box, then it is stored back.
         if not we_are_translated() and pc not in self.liveness:
             self._missing_liveness(pc)
         live_i, live_r, live_f = self.liveness[pc]    # XXX compactify!!
+        index = 0
         for c in live_i:
-            newbox = callback(arg, registers_i[ord(c)])
+            newbox = callback(arg, registers_i[ord(c)], index)
+            index += 1
             if newbox is not None:
                 registers_i[ord(c)] = newbox
         for c in live_r:
-            newbox = callback(arg, registers_r[ord(c)])
+            newbox = callback(arg, registers_r[ord(c)], index)
+            index += 1
             if newbox is not None:
                 registers_r[ord(c)] = newbox
         for c in live_f:
-            newbox = callback(arg, registers_f[ord(c)])
+            newbox = callback(arg, registers_f[ord(c)], index)
+            index += 1
             if newbox is not None:
                 registers_f[ord(c)] = newbox
+        return index
     enumerate_live_vars._annspecialcase_ = 'specialize:arg(2)'
 
     def _live_vars(self, pc):
@@ -76,7 +84,7 @@ class JitCode(AbstractValue):
                 self.kind = kind
             def __getitem__(self, index):
                 return '%%%s%d' % (self.kind, index)
-        def callback(lst, reg):
+        def callback(lst, reg, index):
             lst.append(reg)
         lst = []
         self.enumerate_live_vars(pc, callback, lst,
@@ -221,7 +229,9 @@ class Assembler(object):
             else:
                 raise NotImplementedError(x)
         #
-        key = insn[0] + '/' + ''.join(argcodes)
+        opname = insn[0]
+        if opname.startswith('G_'): opname = opname[2:]
+        key = opname + '/' + ''.join(argcodes)
         num = self.insns.setdefault(key, len(self.insns))
         self.code[startposition] = chr(num)
 

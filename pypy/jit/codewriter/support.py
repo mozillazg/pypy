@@ -157,6 +157,9 @@ def _ll_2_int_mod_ovf(x, y):
 def _ll_2_int_mod_zer(x, y):
     return llop.int_mod_zer(lltype.Signed, x, y)
 
+def _ll_2_int_lshift_ovf(x, y):
+    return llop.int_lshift_ovf(lltype.Signed, x, y)
+
 
 class LLtypeHelpers:
 

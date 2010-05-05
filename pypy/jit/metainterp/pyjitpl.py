@@ -5,6 +5,7 @@ from pypy.rpython.llinterp import LLException
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
+from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
@@ -97,17 +98,23 @@ class MIFrame(object):
     prepare_list_of_boxes._annspecialcase_ = 'specialize:arg(4)'
 
     def get_list_of_active_boxes(self):
-        # XXX find a way to avoid needing the temporary 'env' as a
-        # variable-sized list
-        env = []
+        count = self.jitcode.enumerate_live_vars(
+            self.pc, MIFrame._count_boxes, None,
+            self.registers_i, self.registers_r, self.registers_f)
+        env = [None] * count
         self.jitcode.enumerate_live_vars(
             self.pc, MIFrame._store_in_env, env,
             self.registers_i, self.registers_r, self.registers_f)
-        return env[:]
+        make_sure_not_resized(env)
+        return env
 
     @staticmethod
-    def _store_in_env(env, box):
-        env.append(box)
+    def _count_boxes(_, box, index):
+        pass    # just used to count how many boxes there are
+
+    @staticmethod
+    def _store_in_env(env, box, index):
+        env[index] = box
 
     def replace_active_box_in_frame(self, oldbox, newbox):
         if isinstance(oldbox, history.BoxInt):
@@ -158,7 +165,6 @@ class MIFrame(object):
     for _opimpl in ['int_is_true', 'int_neg', 'int_invert', 'bool_not',
                     'cast_ptr_to_int', 'cast_float_to_int',
                     'cast_int_to_float', 'float_neg', 'float_abs',
-                    'float_is_true',
                     ]:
         exec py.code.Source('''
             @arguments("box")

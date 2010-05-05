@@ -3,6 +3,7 @@ from pypy.jit.codewriter.liveness import compute_liveness
 from pypy.jit.codewriter.test.test_flatten import fake_regallocs
 from pypy.jit.codewriter.flatten import flatten_graph
 from pypy.jit.codewriter.format import assert_format
+from pypy.objspace.flow.model import SpaceOperation
 
 
 class TestFlatten:
@@ -11,12 +12,22 @@ class TestFlatten:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
+    def add_G_prefix(self, graph):
+        """Add a 'G_' prefix to the opnames 'int_add' and 'int_mul'."""
+        def with_prefix(op):
+            if op.opname in ('int_add', 'int_mul'):
+                return SpaceOperation('G_' + op.opname, op.args, op.result)
+            return op
+        #
+        for block in graph.iterblocks():
+            if block.operations:
+                block.operations = map(with_prefix, block.operations)
+
     def encoding_test(self, func, args, expected,
                       switches_require_liveness=False):
         graphs = self.make_graphs(func, args)
-        compute_liveness(graphs[0],
-                         switches_require_liveness=switches_require_liveness,
-                         opnames_requiring_liveness=['int_add', 'int_mul'])
+        self.add_G_prefix(graphs[0])
+        compute_liveness(graphs[0], switches_require_liveness)
         ssarepr = flatten_graph(graphs[0], fake_regallocs())
         assert_format(ssarepr, expected)
 
@@ -25,7 +36,7 @@ class TestFlatten:
             return n + 10
         self.encoding_test(f, [5], """
             -live-
-            int_add %i0, $10, %i1
+            G_int_add %i0, $10, %i1
             int_return %i1
         """)
 
@@ -34,15 +45,15 @@ class TestFlatten:
             return (n + 10) * (n + 3) * (n + 6)
         self.encoding_test(f, [5], """
             -live- %i0
-            int_add %i0, $10, %i1
+            G_int_add %i0, $10, %i1
             -live- %i0, %i1
-            int_add %i0, $3, %i2
+            G_int_add %i0, $3, %i2
             -live- %i0
-            int_mul %i1, %i2, %i3
+            G_int_mul %i1, %i2, %i3
             -live- %i3
-            int_add %i0, $6, %i4
+            G_int_add %i0, $6, %i4
             -live-
-            int_mul %i3, %i4, %i5
+            G_int_mul %i3, %i4, %i5
             int_return %i5
         """)
 
@@ -53,17 +64,17 @@ class TestFlatten:
             return y+2
         self.encoding_test(f, [5, 6], """
             -live- %i0, %i1
-            int_add %i0, $5, %i2
+            G_int_add %i0, $5, %i2
             int_is_true %i2, %i3
             goto_if_not L1, %i3
             int_copy %i0, %i4
             -live-
-            int_add %i4, $1, %i5
+            G_int_add %i4, $1, %i5
             int_return %i5
             L1:
             int_copy %i1, %i6
             -live-
-            int_add %i6, $2, %i7
+            G_int_add %i6, $2, %i7
             int_return %i7
         """)
 
@@ -74,18 +85,18 @@ class TestFlatten:
             return x+2
         self.encoding_test(f, [5, 6], """
             -live- %i0, %i1
-            int_add %i0, $5, %i2
+            G_int_add %i0, $5, %i2
             int_is_true %i2, %i3
             goto_if_not L1, %i3
             int_copy %i0, %i4
             int_copy %i1, %i5
             -live-
-            int_add %i4, %i5, %i6
+            G_int_add %i4, %i5, %i6
             int_return %i6
             L1:
             int_copy %i0, %i7
             -live-
-            int_add %i7, $2, %i8
+            G_int_add %i7, $2, %i8
             int_return %i8
         """)
 
@@ -96,17 +107,17 @@ class TestFlatten:
             return x+2
         self.encoding_test(f, [5, 6], """
             -live- %i0
-            int_add %i0, %i1, %i2
+            G_int_add %i0, %i1, %i2
             int_is_true %i2, %i3
             goto_if_not L1, %i3
             int_copy %i0, %i4
             -live-
-            int_add %i4, $5, %i5
+            G_int_add %i4, $5, %i5
             int_return %i5
             L1:
             int_copy %i0, %i6
             -live-
-            int_add %i6, $2, %i7
+            G_int_add %i6, $2, %i7
             int_return %i7
         """)
 
