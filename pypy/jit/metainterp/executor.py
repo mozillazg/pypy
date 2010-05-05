@@ -85,27 +85,34 @@ def do_call(metainterp, argboxes, descr):
         return None
     raise AssertionError("bad rettype")
 
+def do_getarrayitem_gc(metainterp, arraybox, indexbox, arraydescr):
+    cpu = metainterp.cpu
+    array = arraybox.getref_base()
+    index = indexbox.getint()
+    if arraydescr.is_array_of_pointers():
+        return BoxPtr(cpu.bh_setarrayitem_gc_r(arraydescr, array, index))
+    elif arraydescr.is_array_of_floats():
+        return BoxFloat(cpu.bh_setarrayitem_gc_f(arraydescr, array, index))
+    else:
+        return BoxInt(cpu.bh_setarrayitem_gc_i(arraydescr, array, index))
+
 def do_setarrayitem_gc(metainterp, arraybox, indexbox, itembox, arraydescr):
     cpu = metainterp.cpu
     array = arraybox.getref_base()
     index = indexbox.getint()
-    if itembox.type == INT:
-        item = itembox.getint()
-        cpu.bh_setarrayitem_gc_i(arraydescr, array, index, item)
-    elif itembox.type == REF:
-        item = itembox.getref_base()
-        cpu.bh_setarrayitem_gc_r(arraydescr, array, index, item)
-    elif itembox.type == FLOAT:
-        item = itembox.getfloat()
-        cpu.bh_setarrayitem_gc_f(arraydescr, array, index, item)
+    if arraydescr.is_array_of_pointers():
+        cpu.bh_setarrayitem_gc_r(arraydescr, array, index,
+                                 itembox.getref_base())
+    elif arraydescr.is_array_of_floats():
+        cpu.bh_setarrayitem_gc_f(arraydescr, array, index, itembox.getfloat())
     else:
-        raise AssertionError("bad itembox.type")
+        cpu.bh_setarrayitem_gc_i(arraydescr, array, index, itembox.getint())
 
 def do_getfield_gc(metainterp, structbox, fielddescr):
     cpu = metainterp.cpu
     struct = structbox.getref_base()
     if fielddescr.is_pointer_field():
-        return BoxPtr(cpu.bh_getfield_gc_p(struct, fielddescr))
+        return BoxPtr(cpu.bh_getfield_gc_r(struct, fielddescr))
     elif fielddescr.is_float_field():
         return BoxFloat(cpu.bh_getfield_gc_f(struct, fielddescr))
     else:
@@ -115,11 +122,31 @@ def do_getfield_raw(metainterp, structbox, fielddescr):
     cpu = metainterp.cpu
     struct = structbox.getint()
     if fielddescr.is_pointer_field():
-        return BoxPtr(cpu.bh_getfield_raw_p(struct, fielddescr))
+        return BoxPtr(cpu.bh_getfield_raw_r(struct, fielddescr))
     elif fielddescr.is_float_field():
         return BoxFloat(cpu.bh_getfield_raw_f(struct, fielddescr))
     else:
         return BoxInt(cpu.bh_getfield_raw_i(struct, fielddescr))
+
+def do_setfield_gc(metainterp, structbox, itembox, fielddescr):
+    cpu = metainterp.cpu
+    struct = structbox.getref_base()
+    if fielddescr.is_pointer_field():
+        cpu.bh_setfield_gc_r(struct, fielddescr, itembox.getref_base())
+    elif fielddescr.is_float_field():
+        cpu.bh_setfield_gc_f(struct, fielddescr, itembox.getfloat())
+    else:
+        cpu.bh_setfield_gc_i(struct, fielddescr, itembox.getint())
+
+def do_setfield_raw(metainterp, structbox, itembox, fielddescr):
+    cpu = metainterp.cpu
+    struct = structbox.getint()
+    if fielddescr.is_pointer_field():
+        cpu.bh_setfield_raw_r(struct, fielddescr, itembox.getref_base())
+    elif fielddescr.is_float_field():
+        cpu.bh_setfield_raw_f(struct, fielddescr, itembox.getfloat())
+    else:
+        cpu.bh_setfield_raw_i(struct, fielddescr, itembox.getint())
 
 def do_int_add_ovf(metainterp, box1, box2):
     a = box1.getint()

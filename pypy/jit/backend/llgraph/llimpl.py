@@ -7,7 +7,7 @@ when executing on top of the llinterpreter.
 import sys
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.annotation import model as annmodel
-from pypy.jit.metainterp.history import (ConstInt, ConstPtr, ConstAddr,
+from pypy.jit.metainterp.history import (ConstInt, ConstPtr,
                                          BoxInt, BoxPtr, BoxObj, BoxFloat,
                                          REF, INT, FLOAT)
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr

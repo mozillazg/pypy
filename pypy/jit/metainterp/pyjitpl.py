@@ -148,10 +148,10 @@ class MIFrame(object):
 
     for _opimpl in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf']:
         exec py.code.Source('''
-            @arguments("box", "box")
-            def opimpl_%s(self, b1, b2):
+            @arguments("orgpc", "box", "box")
+            def opimpl_%s(self, pc, b1, b2):
                 resbox = self.execute(rop.%s, b1, b2)
-                self.metainterp.handle_possible_overflow_error()
+                self.metainterp.handle_possible_overflow_error(pc)
                 return resbox
         ''' % (_opimpl, _opimpl.upper())).compile()
 
@@ -280,13 +280,13 @@ class MIFrame(object):
         except KeyError:
             pass
 
-    @XXX  #arguments("descr")
-    def opimpl_new(self, size):
-        self.execute_with_descr(rop.NEW, descr=size)
+    @arguments("descr")
+    def opimpl_new(self, sizedescr):
+        return self.execute_with_descr(rop.NEW, sizedescr)
 
-    @XXX  #arguments("constbox")
-    def opimpl_new_with_vtable(self, vtablebox):
-        self.execute(rop.NEW_WITH_VTABLE, vtablebox)
+    @arguments("descr")
+    def opimpl_new_with_vtable(self, sizevtabledescr):
+        return self.execute_with_descr(rop.NEW_WITH_VTABLE, sizevtabledescr)
 
     @XXX  #arguments("box")
     def opimpl_runtimenew(self, classbox):
@@ -611,15 +611,15 @@ class MIFrame(object):
     def opimpl_call(self, callee, varargs):
         return self.perform_call(callee, varargs)
 
-    @arguments("box", "descr", "boxes")
-    def _opimpl_residual_call1(self, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
-    @arguments("box", "descr", "boxes2")
-    def _opimpl_residual_call2(self, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
-    @arguments("box", "descr", "boxes3")
-    def _opimpl_residual_call3(self, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+    @arguments("orgpc", "box", "descr", "boxes")
+    def _opimpl_residual_call1(self, pc, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc_at=pc)
+    @arguments("orgpc", "box", "descr", "boxes2")
+    def _opimpl_residual_call2(self, pc, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc_at=pc)
+    @arguments("orgpc", "box", "descr", "boxes3")
+    def _opimpl_residual_call3(self, pc, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc_at=pc)
 
     opimpl_residual_call_r_i = _opimpl_residual_call1
     opimpl_residual_call_r_r = _opimpl_residual_call1
@@ -856,12 +856,10 @@ class MIFrame(object):
 
     @arguments("box", "label")
     def opimpl_goto_if_exception_mismatch(self, vtablebox, next_exc_target):
-        # XXX use typesystem.py
-        from pypy.rpython.lltypesystem import rclass
-        assert self.last_exception is not None
-        adr = vtablebox.getaddr(self.metainterp.cpu)
-        bounding_class = llmemory.cast_adr_to_ptr(adr, rclass.CLASSTYPE)
-        if not rclass.ll_isinstance(self.last_exception, bounding_class):
+        metainterp = self.metainterp
+        last_exc_value_box = metainterp.last_exc_value_box
+        assert last_exc_value_box is not None
+        if not metainterp.cpu.ts.instanceOf(last_exc_value_box, vtablebox):
             self.pc = next_exc_target
 
     @arguments("box")
@@ -1016,16 +1014,16 @@ class MIFrame(object):
         return self.metainterp.execute_and_record(opnum, descr, *argboxes)
 
     @specialize.arg(1)
-    def execute_varargs(self, opnum, argboxes, descr, exc):
+    def execute_varargs(self, opnum, argboxes, descr, exc_at):
         resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
                                                             descr=descr)
-        if exc:
-            self.metainterp.handle_possible_exception()
+        if exc_at >= 0:
+            self.metainterp.handle_possible_exception(exc_at)
         else:
             self.metainterp.assert_no_exception()
         return resbox
 
-    def do_residual_call(self, funcbox, descr, argboxes, exc):
+    def do_residual_call(self, funcbox, descr, argboxes, exc_at):
         allboxes = [funcbox] + argboxes
         effectinfo = descr.get_extra_info()
         if 0:# XXX effectinfo is None or effectinfo.forces_virtual_or_virtualizable:
@@ -1043,7 +1041,7 @@ class MIFrame(object):
             else:
                 return self.metainterp.assert_no_exception()
         else:
-            return self.execute_varargs(rop.CALL, allboxes, descr, exc)
+            return self.execute_varargs(rop.CALL, allboxes, descr, exc_at)
 
 # ____________________________________________________________
 
@@ -1835,26 +1833,26 @@ class MetaInterp(object):
         # mark by replacing it with ConstPtr(NULL)
         self.virtualref_boxes[i+1] = self.cpu.ts.CONST_NULL
 
-    def handle_possible_exception(self):
+    def handle_possible_exception(self, pc):
         frame = self.framestack[-1]
         if self.last_exc_value_box:
             exception_box = self.cpu.ts.cls_of_box(self.last_exc_value_box)
-            op = frame.generate_guard(frame.pc, rop.GUARD_EXCEPTION,
+            op = frame.generate_guard(pc, rop.GUARD_EXCEPTION,
                                       None, [exception_box])
             if op:
                 op.result = self.last_exc_value_box
             self.finishframe_exception()
         else:
-            frame.generate_guard(frame.pc, rop.GUARD_NO_EXCEPTION, None, [])
+            frame.generate_guard(pc, rop.GUARD_NO_EXCEPTION, None, [])
 
-    def handle_possible_overflow_error(self):
+    def handle_possible_overflow_error(self, pc):
         frame = self.framestack[-1]
         if self.last_exc_value_box:
-            frame.generate_guard(frame.pc, rop.GUARD_OVERFLOW, None)
+            frame.generate_guard(pc, rop.GUARD_OVERFLOW, None)
             assert isinstance(self.last_exc_value_box, Const)
             self.finishframe_exception()
         else:
-            frame.generate_guard(frame.pc, rop.GUARD_NO_OVERFLOW, None)
+            frame.generate_guard(pc, rop.GUARD_NO_OVERFLOW, None)
 
     def assert_no_exception(self):
         assert not self.last_exc_value_box
