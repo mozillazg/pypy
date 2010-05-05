@@ -227,10 +227,11 @@ def transform_xxxitem(graph):
         if block.operations and block.exitswitch == c_last_exception:
             last_op = block.operations[-1]
             if last_op.opname == 'getitem':
-                postfx = ['idx']
+                postfx = []
                 for exit in block.exits:
-                    #if exit.exitcase is IndexError:
-                    if exit.exitcase is KeyError:
+                    if exit.exitcase is IndexError:
+                        postfx.append('idx')
+                    elif exit.exitcase is KeyError:
                         postfx.append('key')
                 if postfx:
                     last_op.opname = last_op.opname + '_' + '_'.join(postfx)
