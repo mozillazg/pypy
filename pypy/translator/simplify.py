@@ -231,7 +231,7 @@ def transform_xxxitem(graph):
                 for exit in block.exits:
                     #if exit.exitcase is IndexError:
                     postfx.append('idx')
-                    elif exit.exitcase is KeyError:
+                    if exit.exitcase is KeyError:
                         postfx.append('key')
                 if postfx:
                     last_op.opname = last_op.opname + '_' + '_'.join(postfx)
