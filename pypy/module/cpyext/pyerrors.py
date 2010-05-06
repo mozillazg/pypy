@@ -1,12 +1,13 @@
 import os
 
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, CONST_STRING
 from pypy.module.exceptions.interp_exceptions import W_RuntimeWarning
 from pypy.module.cpyext.pyobject import (
-    PyObject, PyObjectP, make_ref, Py_DecRef, register_container)
+    PyObject, PyObjectP, make_ref, Py_DecRef, borrow_from)
 from pypy.module.cpyext.state import State
+from pypy.module.cpyext.import_ import PyImport_Import
 from pypy.rlib.rposix import get_errno
 
 @cpython_api([PyObject, PyObject], lltype.Void)
@@ -14,7 +15,7 @@ def PyErr_SetObject(space, w_type, w_value):
     """This function is similar to PyErr_SetString() but lets you specify an
     arbitrary Python object for the "value" of the exception."""
     state = space.fromcache(State)
-    state.set_exception(w_type, w_value)
+    state.set_exception(OperationError(w_type, w_value))
 
 @cpython_api([PyObject, CONST_STRING], lltype.Void)
 def PyErr_SetString(space, w_type, message_ptr):
@@ -26,11 +27,12 @@ def PyErr_SetNone(space, w_type):
     """This is a shorthand for PyErr_SetObject(type, Py_None)."""
     PyErr_SetObject(space, w_type, space.w_None)
 
-@cpython_api([], PyObject, borrowed=True)
+@cpython_api([], PyObject)
 def PyErr_Occurred(space):
     state = space.fromcache(State)
-    register_container(space, lltype.nullptr(PyObject.TO))
-    return state.exc_type
+    if state.operror is None:
+        return None
+    return borrow_from(None, state.operror.w_type)
 
 @cpython_api([], lltype.Void)
 def PyErr_Clear(space):
@@ -47,10 +49,13 @@ def PyErr_Fetch(space, ptype, pvalue, ptraceback):
     This function is normally only used by code that needs to handle exceptions or
     by code that needs to save and restore the error indicator temporarily."""
     state = space.fromcache(State)
-    ptype[0] = make_ref(space, state.exc_type, steal=True)
-    pvalue[0] = make_ref(space, state.exc_type, steal=True)
-    state.exc_type = None
-    state.exc_value = None
+    operror = state.clear_exception()
+    if operror:
+        ptype[0] = make_ref(space, operror.w_type)
+        pvalue[0] = make_ref(space, operror.get_w_value(space))
+    else:
+        ptype[0] = lltype.nullptr(PyObject.TO)
+        pvalue[0] = lltype.nullptr(PyObject.TO)
     ptraceback[0] = lltype.nullptr(PyObject.TO)
 
 @cpython_api([PyObject, PyObject, PyObject], lltype.Void)
@@ -69,10 +74,10 @@ def PyErr_Restore(space, w_type, w_value, w_traceback):
     error indicator temporarily; use PyErr_Fetch() to save the current
     exception state."""
     state = space.fromcache(State)
-    state.exc_type = w_type
-    state.exc_value = w_value
+    state.set_exception(OperationError(w_type, w_value))
     Py_DecRef(space, w_type)
     Py_DecRef(space, w_value)
+    Py_DecRef(space, w_traceback)
 
 @cpython_api([], lltype.Void)
 def PyErr_BadArgument(space):
@@ -110,9 +115,7 @@ def PyErr_SetFromErrno(space, w_type):
     Return value: always NULL."""
     # XXX Doesn't actually do anything with PyErr_CheckSignals.
     errno = get_errno()
-    errno_w = space.wrap(errno)
-    message_w = space.wrap(os.strerror(errno))
-    PyErr_SetObject(space, w_type, errno_w, message_w)
+    raise wrap_oserror(space, OSError(errno, "PyErr_SetFromErrno"))
 
 @cpython_api([], rffi.INT_real, error=-1)
 def PyErr_CheckSignals(space):
@@ -185,10 +188,14 @@ def PyErr_WarnEx(space, w_category, message_ptr, stacklevel):
     For information about warning control, see the documentation for the
     warnings module and the -W option in the command line
     documentation.  There is no C API for warning control."""
-    message = rffi.charp2str(message_ptr)
     if w_category is None:
-        w_category = space.gettypeobject(W_RuntimeWarning.typedef)
-    os.write(2, "WARNING: " + message + "\n")
+        w_category = space.w_None
+    w_message = space.wrap(rffi.charp2str(message_ptr))
+    w_stacklevel = space.wrap(rffi.cast(lltype.Signed, stacklevel))
+
+    w_module = PyImport_Import(space, space.wrap("warnings"))
+    w_warn = space.getattr(w_module, space.wrap("warn"))
+    space.call_function(w_warn, w_message, w_category, w_stacklevel)
     return 0
 
 @cpython_api([PyObject, CONST_STRING], rffi.INT_real, error=-1)

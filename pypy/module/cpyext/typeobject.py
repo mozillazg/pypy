@@ -6,18 +6,18 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.rweakref import RWeakKeyDictionary
 from pypy.interpreter.gateway import ObjSpace, W_Root, Arguments
 from pypy.interpreter.gateway import interp2app, unwrap_spec
-from pypy.interpreter.baseobjspace import Wrappable, DescrMismatch
+from pypy.interpreter.baseobjspace import DescrMismatch
 from pypy.objspace.std.typeobject import W_TypeObject, _CPYTYPE, call__Type
 from pypy.objspace.std.typetype import _precheck_for_new
-from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
-from pypy.module.cpyext.api import cpython_api, cpython_struct, bootstrap_function, \
-    PyVarObjectFields, Py_ssize_t, Py_TPFLAGS_READYING, generic_cpy_call, \
-    Py_TPFLAGS_READY, Py_TPFLAGS_HEAPTYPE, ADDR, \
-    Py_TPFLAGS_HAVE_CLASS, METH_VARARGS, METH_KEYWORDS, \
-    CANNOT_FAIL, PyBufferProcs, build_type_checkers
-from pypy.module.cpyext.pyobject import PyObject, make_ref, create_ref, from_ref
-from pypy.module.cpyext.pyobject import get_typedescr, make_typedescr, track_reference
+from pypy.module.cpyext.api import (
+    cpython_api, cpython_struct, bootstrap_function, Py_ssize_t,
+    generic_cpy_call, Py_TPFLAGS_READY, Py_TPFLAGS_READYING,
+    Py_TPFLAGS_HEAPTYPE, METH_VARARGS, METH_KEYWORDS, CANNOT_FAIL,
+    PyBufferProcs, build_type_checkers)
+from pypy.module.cpyext.pyobject import (
+    PyObject, make_ref, create_ref, from_ref, get_typedescr, make_typedescr,
+    track_reference, RefcountState)
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import FunctionWithFixedCode, StaticMethod
 from pypy.module.cpyext import structmemberdefs
@@ -106,7 +106,6 @@ def convert_member_defs(space, dict_w, members, w_type):
 
 def update_all_slots(space, w_obj, pto):
     #  XXX fill slots in pto
-    state = space.fromcache(State)
     for method_name, slot_name, slot_func, _, _, _ in slotdefs:
         w_descr = space.lookup(w_obj, method_name)
         if w_descr is None:
@@ -135,7 +134,6 @@ def update_all_slots(space, w_obj, pto):
 
 def add_operators(space, dict_w, pto):
     # XXX support PyObject_HashNotImplemented
-    state = space.fromcache(State)
     for method_name, slot_name, _, wrapper_func, wrapper_func_kwds, doc in slotdefs:
         if method_name in dict_w:
             continue
@@ -158,11 +156,11 @@ def add_operators(space, dict_w, pto):
         add_tp_new_wrapper(space, dict_w, pto)
 
 @cpython_api([PyObject, PyObject, PyObject], PyObject, external=False)
-def tp_new_wrapper(space, w_self, w_args, w_kwds): # XXX untested code
-    args_w = space.listview(w_args)[:]
-    args_w.insert(0, w_self)
-    w_args_new = space.newlist(args_w)
-    return space.call(space.lookup(space.w_type, "__new__"), w_args_new, w_kwds)
+def tp_new_wrapper(space, w_self, w_args, w_kwds):
+    fn = rffi.cast(PyTypeObjectPtr, make_ref(space, w_self)).c_tp_new
+    pyo = make_ref(space, w_self)
+    pto = rffi.cast(PyTypeObjectPtr, pyo)
+    return generic_cpy_call(space, fn, pto, w_args, w_kwds)
 
 @specialize.memo()
 def get_new_method_def(space):
@@ -193,11 +191,12 @@ def add_tp_new_wrapper(space, dict_w, pto):
 def inherit_special(space, pto, base_pto):
     # XXX missing: copy basicsize and flags in a magical way
     flags = rffi.cast(lltype.Signed, pto.c_tp_flags)
-    base_object_pyo = make_ref(space, space.w_object, steal=True)
+    base_object_pyo = make_ref(space, space.w_object)
     base_object_pto = rffi.cast(PyTypeObjectPtr, base_object_pyo)
     if base_pto != base_object_pto or flags & Py_TPFLAGS_HEAPTYPE:
         if not pto.c_tp_new:
             pto.c_tp_new = base_pto.c_tp_new
+    Py_DecRef(space, base_object_pyo)
 
 class PyOLifeline(object):
     def __init__(self, space, pyo):
@@ -219,12 +218,14 @@ def check_descr(space, w_self, w_type):
 
 class GettersAndSetters:
     def getter(self, space, w_self):
+        assert isinstance(self, W_GetSetPropertyEx)
         check_descr(space, w_self, self.w_type)
         return generic_cpy_call(
             space, self.getset.c_get, w_self,
             self.getset.c_closure)
 
     def setter(self, space, w_self, w_value):
+        assert isinstance(self, W_GetSetPropertyEx)
         check_descr(space, w_self, self.w_type)
         res = generic_cpy_call(
             space, self.getset.c_set, w_self, w_value,
@@ -234,14 +235,17 @@ class GettersAndSetters:
             state.check_and_raise_exception()
 
     def member_getter(self, space, w_self):
+        assert isinstance(self, W_MemberDescr)
         check_descr(space, w_self, self.w_type)
         return PyMember_GetOne(space, w_self, self.member)
 
     def member_delete(self, space, w_self):
+        assert isinstance(self, W_MemberDescr)
         check_descr(space, w_self, self.w_type)
         PyMember_SetOne(space, w_self, self.member, None)
 
     def member_setter(self, space, w_self, w_value):
+        assert isinstance(self, W_MemberDescr)
         check_descr(space, w_self, self.w_type)
         PyMember_SetOne(space, w_self, self.member, w_value)
 
@@ -335,11 +339,10 @@ def init_typeobject(space):
     # - object.tp_bases is a tuple
     # - tuple.tp_bases is a tuple
 
-    # insert null placeholders to please make_ref()
-    state = space.fromcache(State)
-    state.py_objects_w2r[space.w_type] = lltype.nullptr(PyObject.TO)
-    state.py_objects_w2r[space.w_object] = lltype.nullptr(PyObject.TO)
-    state.py_objects_w2r[space.w_tuple] = lltype.nullptr(PyObject.TO)
+    # insert null placeholders to please create_ref()
+    track_reference(space, lltype.nullptr(PyObject.TO), space.w_type)
+    track_reference(space, lltype.nullptr(PyObject.TO), space.w_object)
+    track_reference(space, lltype.nullptr(PyObject.TO), space.w_tuple)
 
     # create the objects
     py_type = create_ref(space, space.w_type)
@@ -362,9 +365,9 @@ def init_typeobject(space):
     pto_tuple.c_tp_bases.c_ob_type = pto_tuple
 
     # Restore the mapping
-    track_reference(space, py_type, space.w_type)
-    track_reference(space, py_object, space.w_object)
-    track_reference(space, py_tuple, space.w_tuple)
+    track_reference(space, py_type, space.w_type, replace=True)
+    track_reference(space, py_object, space.w_object, replace=True)
+    track_reference(space, py_tuple, space.w_tuple, replace=True)
 
 
 @cpython_api([PyObject], lltype.Void, external=False)
@@ -409,8 +412,10 @@ def str_getreadbuffer(space, w_str, segment, ref):
     if segment != 0:
         raise OperationError(space.w_SystemError, space.wrap
                              ("accessing non-existent string segment"))
-    pyref = make_ref(space, w_str, steal=True)
+    pyref = make_ref(space, w_str)
     ref[0] = PyString_AsString(space, pyref)
+    # Stolen reference: the object has better exist somewhere else
+    Py_DecRef(space, pyref)
     return space.int_w(space.len(w_str))
 
 def setup_string_buffer_procs(space, pto):
@@ -423,12 +428,12 @@ def setup_string_buffer_procs(space, pto):
 
 @cpython_api([PyObject], lltype.Void, external=False)
 def type_dealloc(space, obj):
-    state = space.fromcache(State)
     obj_pto = rffi.cast(PyTypeObjectPtr, obj)
     type_pto = obj.c_ob_type
     base_pyo = rffi.cast(PyObject, obj_pto.c_tp_base)
     Py_DecRef(space, obj_pto.c_tp_bases)
-    Py_DecRef(space, obj_pto.c_tp_cache) # lets do it like cpython
+    Py_DecRef(space, obj_pto.c_tp_mro)
+    Py_DecRef(space, obj_pto.c_tp_cache) # let's do it like cpython
     if obj_pto.c_tp_flags & Py_TPFLAGS_HEAPTYPE:
         if obj_pto.c_tp_as_buffer:
             lltype.free(obj_pto.c_tp_as_buffer, flavor='raw')
@@ -441,7 +446,9 @@ def type_dealloc(space, obj):
 
 
 def type_attach(space, py_obj, w_type):
-    """ Allocates a PyTypeObject from a w_type which must be a PyPy type. """
+    """
+    Fills a newly allocated PyTypeObject from an existing type.
+    """
     from pypy.module.cpyext.object import PyObject_Del
 
     assert isinstance(w_type, W_TypeObject)
@@ -471,9 +478,8 @@ def type_attach(space, py_obj, w_type):
     w_base = best_base(space, w_type.bases_w)
     pto.c_tp_base = rffi.cast(PyTypeObjectPtr, make_ref(space, w_base))
 
-    pto.c_tp_bases = lltype.nullptr(PyObject.TO)
-    PyPyType_Ready(space, pto, w_type)
-
+    finish_type_1(space, pto)
+    finish_type_2(space, pto, w_type)
 
     pto.c_tp_basicsize = rffi.sizeof(typedescr.basestruct)
     if pto.c_tp_base:
@@ -485,11 +491,21 @@ def type_attach(space, py_obj, w_type):
     if space.is_w(w_type, space.w_object):
         pto.c_tp_new = rffi.cast(newfunc, 1)
     update_all_slots(space, w_type, pto)
+    pto.c_tp_flags |= Py_TPFLAGS_READY
     return pto
 
 @cpython_api([PyTypeObjectPtr], rffi.INT_real, error=-1)
 def PyType_Ready(space, pto):
-    return PyPyType_Ready(space, pto, None)
+    if pto.c_tp_flags & Py_TPFLAGS_READY:
+        return 0
+    assert pto.c_tp_flags & Py_TPFLAGS_READYING == 0
+    pto.c_tp_flags |= Py_TPFLAGS_READYING
+    try:
+        type_realize(space, rffi.cast(PyObject, pto))
+        pto.c_tp_flags |= Py_TPFLAGS_READY
+    finally:
+        pto.c_tp_flags &= ~Py_TPFLAGS_READYING
+    return 0
 
 def solid_base(space, w_type):
     typedef = w_type.instancetypedef
@@ -541,62 +557,68 @@ def inherit_slots(space, pto, w_base):
     finally:
         Py_DecRef(space, base_pyo)
 
-def type_realize(space, ref):
-    PyPyType_Ready(space, rffi.cast(PyTypeObjectPtr, ref), None)
-    return from_ref(space, ref, True)
+def type_realize(space, py_obj):
+    """
+    Creates an interpreter type from a PyTypeObject structure.
+    """
+    # missing:
+    # setting __doc__ if not defined and tp_doc defined
+    # inheriting tp_as_* slots
+    # unsupported:
+    # tp_mro, tp_subclasses
+    py_type = rffi.cast(PyTypeObjectPtr, py_obj)
 
-def PyPyType_Ready(space, pto, w_obj):
-    try:
-        pto.c_tp_dict = lltype.nullptr(PyObject.TO) # not supported
-        if pto.c_tp_flags & Py_TPFLAGS_READY:
-            return 0
-        assert pto.c_tp_flags & Py_TPFLAGS_READYING == 0
-        pto.c_tp_flags |= Py_TPFLAGS_READYING
-        base = pto.c_tp_base
+    if not py_type.c_tp_base:
+        # borrowed reference, but w_object is unlikely to disappear
+        base = make_ref(space, space.w_object)
+        Py_DecRef(space, base)
+        py_type.c_tp_base = rffi.cast(PyTypeObjectPtr, base)
+
+    finish_type_1(space, py_type)
+
+    w_obj = space.allocate_instance(
+        W_PyCTypeObject,
+        space.gettypeobject(W_PyCTypeObject.typedef))
+    track_reference(space, py_obj, w_obj)
+    w_obj.__init__(space, py_type)
+    w_obj.ready()
+
+    finish_type_2(space, py_type, w_obj)
+
+    state = space.fromcache(RefcountState)
+    state.non_heaptypes_w.append(w_obj)
+
+    return w_obj
+
+def finish_type_1(space, pto):
+    """
+    Sets up tp_bases, necessary before creating the interpreter type.
+    """
+    pto.c_tp_dict = lltype.nullptr(PyObject.TO) # not supported
+
+    base = pto.c_tp_base
+    base_pyo = rffi.cast(PyObject, pto.c_tp_base)
+    if base and not base.c_tp_flags & Py_TPFLAGS_READY:
+        type_realize(space, rffi.cast(PyObject, base_pyo))
+    if base and not pto.c_ob_type: # will be filled later
+        pto.c_ob_type = base.c_ob_type
+    if not pto.c_tp_bases:
         if not base:
-            base_pyo = make_ref(space, space.w_object, steal=True)
-            base = pto.c_tp_base = rffi.cast(PyTypeObjectPtr, base_pyo)
+            bases = space.newtuple([])
         else:
-            base_pyo = rffi.cast(PyObject, base)
-        if base and not base.c_tp_flags & Py_TPFLAGS_READY:
-            PyPyType_Ready(space, base, None)
-        if base and not pto.c_ob_type: # will be filled later
-            pto.c_ob_type = base.c_ob_type
-        if not pto.c_tp_bases:
-            if not base:
-                bases = space.newtuple([])
-            else:
-                bases = space.newtuple([from_ref(space, base_pyo)])
-            pto.c_tp_bases = make_ref(space, bases)
-        if w_obj is None:
-            PyPyType_Register(space, pto)
-        if base:
-            inherit_special(space, pto, base)
-        for w_base in space.fixedview(from_ref(space, pto.c_tp_bases)):
-            inherit_slots(space, pto, w_base)
-        # missing:
-        # setting __doc__ if not defined and tp_doc defined
-        # inheriting tp_as_* slots
-        # unsupported:
-        # tp_mro, tp_subclasses
-    finally:
-        pto.c_tp_flags &= ~Py_TPFLAGS_READYING
-    pto.c_tp_flags = (pto.c_tp_flags & ~Py_TPFLAGS_READYING) | Py_TPFLAGS_READY
-    return 0
+            bases = space.newtuple([from_ref(space, base_pyo)])
+        pto.c_tp_bases = make_ref(space, bases)
 
-def PyPyType_Register(space, pto):
-    state = space.fromcache(State)
-    ptr = rffi.cast(ADDR, pto)
-    if ptr not in state.py_objects_r2w:
-        w_obj = space.allocate_instance(W_PyCTypeObject,
-                space.gettypeobject(W_PyCTypeObject.typedef))
-        state.non_heaptypes.append(w_obj)
-        pyo = rffi.cast(PyObject, pto)
-        state.py_objects_r2w[ptr] = w_obj
-        state.py_objects_w2r[w_obj] = pyo
-        w_obj.__init__(space, pto)
-        w_obj.ready()
-    return 1
+def finish_type_2(space, pto, w_obj):
+    """
+    Sets up other attributes, when the interpreter type has been created.
+    """
+    pto.c_tp_mro = make_ref(space, space.newtuple(w_obj.mro_w))
+    base = pto.c_tp_base
+    if base:
+        inherit_special(space, pto, base)
+    for w_base in space.fixedview(from_ref(space, pto.c_tp_bases)):
+        inherit_slots(space, pto, w_base)
 
 @cpython_api([PyTypeObjectPtr, PyTypeObjectPtr], rffi.INT_real, error=CANNOT_FAIL)
 def PyType_IsSubtype(space, a, b):
