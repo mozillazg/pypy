@@ -12,17 +12,17 @@ class JitCode(AbstractValue):
     _empty_r = []
     _empty_f = []
 
-    def __init__(self, name, cfnptr=None, calldescr=None, called_from=None,
-                 liveness=None, assembler=None):
+    def __init__(self, name, fnaddr=None, calldescr=None, called_from=None,
+                 assembler=None):
         self.name = name
-        #self.cfnptr = cfnptr
-        #self.calldescr = calldescr
-        #self.called_from = called_from
-        self.liveness = liveness
-        self._assembler = assembler
+        self.fnaddr = fnaddr
+        self.calldescr = calldescr
+        self._called_from = called_from   # debugging
+        self._assembler = assembler       # debugging
 
     def setup(self, code, constants_i=[], constants_r=[], constants_f=[],
-              num_regs_i=256, num_regs_r=256, num_regs_f=256):
+              num_regs_i=256, num_regs_r=256, num_regs_f=256,
+              liveness=None):
         self.code = code
         # if the following lists are empty, use a single shared empty list
         self.constants_i = constants_i or self._empty_i
@@ -32,6 +32,7 @@ class JitCode(AbstractValue):
         self.num_regs_encoded = ((num_regs_i << 18) |
                                  (num_regs_r << 9) |
                                  (num_regs_f << 0))
+        self.liveness = liveness
 
     def num_regs_i(self):
         return self.num_regs_encoded >> 18
@@ -261,15 +262,15 @@ class Assembler(object):
         assert self.count_regs['float'] + len(self.constants_f) <= 256
 
     def make_jitcode(self, ssarepr):
-        jitcode = JitCode(ssarepr.name, liveness=self.liveness,
-                          assembler=self)
+        jitcode = JitCode(ssarepr.name, assembler=self)
         jitcode.setup(''.join(self.code),
                       self.constants_i,
                       self.constants_r,
                       self.constants_f,
                       self.count_regs['int'],
                       self.count_regs['ref'],
-                      self.count_regs['float'])
+                      self.count_regs['float'],
+                      liveness=self.liveness)
         if self._count_jitcodes < 50:    # stop if we have a lot of them
             jitcode._dump = format_assembler(ssarepr)
         self._count_jitcodes += 1

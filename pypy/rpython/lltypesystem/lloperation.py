@@ -263,7 +263,7 @@ LL_OPERATIONS = {
     'uint_rshift':          LLOp(canfold=True),
     'uint_xor':             LLOp(canfold=True),
 
-    'float_is_true':        LLOp(canfold=True),
+    'float_is_true':        LLOp(canfold=True),  # it really means "x != 0.0"
     'float_neg':            LLOp(canfold=True),
     'float_abs':            LLOp(canfold=True),
 
