@@ -7,12 +7,12 @@ from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.jit.codewriter import support, heaptracker
 
 
-def transform_graph(graph, cpu=None):
+def transform_graph(graph, cpu=None, portal=True):
     """Transform a control flow graph to make it suitable for
     being flattened in a JitCode.
     """
     t = Transformer(cpu)
-    t.transform(graph)
+    t.transform(graph, portal)
 
 
 class NoOp(Exception):
@@ -24,8 +24,9 @@ class Transformer(object):
     def __init__(self, cpu=None):
         self.cpu = cpu
 
-    def transform(self, graph):
+    def transform(self, graph, portal):
         self.graph = graph
+        self.portal = portal
         for block in list(graph.iterblocks()):
             self.optimize_block(block)
 
@@ -157,9 +158,20 @@ class Transformer(object):
     rewrite_op_int_and = _rewrite_symmetric
     rewrite_op_int_or  = _rewrite_symmetric
     rewrite_op_int_xor = _rewrite_symmetric
+    rewrite_op_int_lt  = _rewrite_symmetric
+    rewrite_op_int_le  = _rewrite_symmetric
+    rewrite_op_int_gt  = _rewrite_symmetric
+    rewrite_op_int_ge  = _rewrite_symmetric
 
     rewrite_op_G_int_add_ovf = _rewrite_symmetric
     rewrite_op_G_int_mul_ovf = _rewrite_symmetric
+
+    rewrite_op_float_add = _rewrite_symmetric
+    rewrite_op_float_mul = _rewrite_symmetric
+    rewrite_op_float_lt  = _rewrite_symmetric
+    rewrite_op_float_le  = _rewrite_symmetric
+    rewrite_op_float_gt  = _rewrite_symmetric
+    rewrite_op_float_ge  = _rewrite_symmetric
 
     def rewrite_op_direct_call(self, op):
         """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'

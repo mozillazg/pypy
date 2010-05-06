@@ -100,20 +100,32 @@ def test_optimize_goto_if_not__ptr_iszero():
 
 def test_symmetric():
     ops = {'int_add': 'int_add',
-           'int_gt': 'int_lt',
-           'int_le': 'int_ge'}
+           'int_or': 'int_or',
+           'int_gt': ('int_gt', 'int_lt'),
+           'uint_le': ('int_le', 'int_ge'),
+           'char_ne': 'int_ne',
+           'char_lt': ('int_lt', 'int_gt'),
+           'int_add_nonneg_ovf': 'G_int_add_ovf',
+           'uint_xor': 'int_xor',
+           'float_mul': 'float_mul',
+           'float_gt': ('float_gt', 'float_lt'),
+           }
     v3 = varoftype(lltype.Signed)
     for v1 in [varoftype(lltype.Signed), Constant(42, lltype.Signed)]:
         for v2 in [varoftype(lltype.Signed), Constant(43, lltype.Signed)]:
             for name1, name2 in ops.items():
                 op = SpaceOperation(name1, [v1, v2], v3)
                 op1 = Transformer(FakeCPU()).rewrite_operation(op)
+                if isinstance(name2, str):
+                    name2 = name2, name2
                 if isinstance(v1, Constant) and isinstance(v2, Variable):
-                    assert op1.opname == name2
                     assert op1.args == [v2, v1]
                     assert op1.result == v3
+                    assert op1.opname == name2[1]
                 else:
-                    assert op1 is op
+                    assert op1.args == [v1, v2]
+                    assert op1.result == v3
+                    assert op1.opname == name2[0]
 
 def test_residual_call():
     for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,
@@ -146,7 +158,7 @@ def residual_call_test(argtypes, restype, expectedkind):
     op = get_direct_call_op(argtypes, restype)
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
     reskind = getkind(restype)[0]
-    assert op1.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
+    assert op1.opname == 'G_residual_call_%s_%s' % (expectedkind, reskind)
     assert op1.result == op.result
     assert op1.args[0] == op.args[0]
     FUNC = op.args[0].concretetype.TO
@@ -197,7 +209,7 @@ def test_getfield_typeptr():
     v_result = varoftype(rclass.OBJECT.typeptr)
     op = SpaceOperation('getfield', [v_parent, c_name], v_result)
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
-    assert op1.opname == 'guard_class'
+    assert op1.opname == 'G_guard_class'
     assert op1.args == [v_parent]
     assert op1.result == v_result
 
@@ -261,7 +273,7 @@ def test_malloc_new_with_destructor():
     op = SpaceOperation('malloc', [Constant(S, lltype.Void),
                                    Constant({'flavor': 'gc'}, lltype.Void)], v)
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
-    assert op1.opname == 'residual_call_r_r'
+    assert op1.opname == 'G_residual_call_r_r'
     assert op1.args[0].value == 'alloc_with_del'    # pseudo-function as a str
     assert list(op1.args[2]) == []
 
