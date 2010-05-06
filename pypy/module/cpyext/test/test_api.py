@@ -7,6 +7,7 @@ from pypy.module.cpyext.test.test_cpyext import freeze_refcnts, LeakCheckingTest
 PyObject = api.PyObject
 from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.state import State
+import os
 
 @api.cpython_api([PyObject], lltype.Void)
 def PyPy_GetWrapped(space, w_arg):
@@ -17,8 +18,17 @@ def PyPy_GetReference(space, arg):
 
 class BaseApiTest(LeakCheckingTest):
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['cpyext', 'thread'])
-        cls.space.getbuiltinmodule("cpyext")
+        cls.space = space = gettestobjspace(usemodules=['cpyext', 'thread'])
+
+        # warm up reference counts:
+        # - the posix module allocates a HCRYPTPROV on Windows
+        # - writing to stderr allocates a file lock
+        space.getbuiltinmodule("cpyext")
+        space.getbuiltinmodule(os.name)
+        space.call_function(space.getattr(space.sys.get("stderr"),
+                                          space.wrap("write")),
+                            space.wrap(""))
+
         class CAPI:
             def __getattr__(self, name):
                 return getattr(cls.space, name)
@@ -30,10 +40,10 @@ class BaseApiTest(LeakCheckingTest):
             raise Exception("%s is not callable" % (f,))
         f(*args)
         state = space.fromcache(State)
-        tp = state.exc_type
-        if not tp:
+        operror = state.operror
+        if not operror:
             raise Exception("DID NOT RAISE")
-        if getattr(space, 'w_' + expected_exc.__name__) is not tp:
+        if getattr(space, 'w_' + expected_exc.__name__) is not operror.w_type:
             raise Exception("Wrong exception")
         state.clear_exception()
 

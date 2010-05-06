@@ -104,13 +104,11 @@ CANNOT_FAIL = object()
 #
 
 class ApiFunction:
-    def __init__(self, argtypes, restype, callable,
-                 borrowed=False, error=_NOT_SPECIFIED):
+    def __init__(self, argtypes, restype, callable, error=_NOT_SPECIFIED):
         self.argtypes = argtypes
         self.restype = restype
         self.functype = lltype.Ptr(lltype.FuncType(argtypes, restype))
         self.callable = callable
-        self.borrowed = borrowed
         if error is not _NOT_SPECIFIED:
             self.error_value = error
 
@@ -141,7 +139,7 @@ class ApiFunction:
             wrapper.relax_sig_check = True
         return wrapper
 
-def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
+def cpython_api(argtypes, restype, error=_NOT_SPECIFIED,
                 external=True, name=None):
     if error is _NOT_SPECIFIED:
         if restype is PyObject:
@@ -157,7 +155,7 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
         else:
             func_name = name
             func = func_with_new_name(func, name)
-        api_function = ApiFunction(argtypes, restype, func, borrowed, error)
+        api_function = ApiFunction(argtypes, restype, func, error)
         func.api_func = api_function
 
         assert func_name not in FUNCTIONS
@@ -176,8 +174,10 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
             def unwrapper(space, *args):
                 from pypy.module.cpyext.pyobject import Py_DecRef
                 from pypy.module.cpyext.pyobject import make_ref, from_ref
+                from pypy.module.cpyext.pyobject import BorrowPair
                 newargs = ()
                 to_decref = []
+                assert len(args) == len(api_function.argtypes)
                 for i, (ARG, is_wrapped) in types_names_enum_ui:
                     input_arg = args[i]
                     if is_PyObject(ARG) and not is_wrapped:
@@ -203,23 +203,25 @@ def cpython_api(argtypes, restype, borrowed=False, error=_NOT_SPECIFIED,
                     newargs += (arg, )
                 try:
                     try:
-                        return func(space, *newargs)
+                        res = func(space, *newargs)
                     except OperationError, e:
                         if not catch_exception:
                             raise
                         if not hasattr(api_function, "error_value"):
                             raise
                         state = space.fromcache(State)
-                        e.normalize_exception(space)
-                        state.set_exception(e.w_type, e.get_w_value(space))
+                        state.set_exception(e)
                         if restype is PyObject:
                             return None
                         else:
                             return api_function.error_value
+                    if res is None:
+                        return None
+                    elif isinstance(res, BorrowPair):
+                        return res.w_borrowed
+                    else:
+                        return res
                 finally:
-                    if api_function.borrowed:
-                        state = space.fromcache(State)
-                        state.last_container = 0
                     for arg in to_decref:
                         Py_DecRef(space, arg)
             unwrapper.func = func
@@ -398,7 +400,7 @@ def make_wrapper(space, callable):
     @specialize.ll()
     def wrapper(*args):
         from pypy.module.cpyext.pyobject import make_ref, from_ref
-        from pypy.module.cpyext.pyobject import add_borrowed_object
+        from pypy.module.cpyext.pyobject import BorrowPair
         from pypy.module.cpyext.pyobject import NullPointerException
         # we hope that malloc removal removes the newtuple() that is
         # inserted exactly here by the varargs specializer
@@ -409,6 +411,7 @@ def make_wrapper(space, callable):
         try:
             if not we_are_translated() and DEBUG_WRAPPER:
                 print >>sys.stderr, callable,
+            assert len(args) == len(callable.api_func.argtypes)
             for i, (typ, is_wrapped) in argtypes_enum_ui:
                 arg = args[i]
                 if typ is PyObject and is_wrapped:
@@ -426,11 +429,11 @@ def make_wrapper(space, callable):
                     print >>sys.stderr, " DONE"
             except OperationError, e:
                 failed = True
-                e.normalize_exception(space)
-                state.set_exception(e.w_type, e.get_w_value(space))
+                state.set_exception(e)
             except BaseException, e:
                 failed = True
-                state.set_exception(space.w_SystemError, space.wrap(str(e)))
+                state.set_exception(OperationError(space.w_SystemError,
+                                                   space.wrap(str(e))))
                 if not we_are_translated():
                     import traceback
                     traceback.print_exc()
@@ -445,13 +448,14 @@ def make_wrapper(space, callable):
                 retval = error_value
 
             elif callable.api_func.restype is PyObject:
-                borrowed = callable.api_func.borrowed
-                if not rffi._isllptr(result):
-                    retval = make_ref(space, result, borrowed=borrowed)
+                if result is None:
+                    retval = make_ref(space, None)
+                elif isinstance(result, BorrowPair):
+                    retval = result.get_ref(space)
+                elif not rffi._isllptr(result):
+                    retval = make_ref(space, result)
                 else:
                     retval = result
-                if borrowed:
-                    add_borrowed_object(space, retval)
             elif callable.api_func.restype is not lltype.Void:
                 retval = rffi.cast(callable.api_func.restype, result)
         except NullPointerException:
@@ -818,6 +822,7 @@ def make_generic_cpy_call(FT, decref_args, expect_null):
     def generic_cpy_call(space, func, *args):
         boxed_args = ()
         to_decref = []
+        assert len(args) == len(FT.ARGS)
         for i, ARG in unrolling_arg_types:
             arg = args[i]
             if ARG is PyObject:

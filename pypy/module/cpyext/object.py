@@ -2,9 +2,9 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
         Py_ssize_t, PyVarObject, Py_TPFLAGS_HEAPTYPE,\
         Py_LT, Py_LE, Py_EQ, Py_NE, Py_GT, Py_GE, CONST_STRING
-from pypy.module.cpyext.pyobject import PyObject, PyObjectP, make_ref, from_ref
-from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef
-from pypy.module.cpyext.state import State
+from pypy.module.cpyext.pyobject import (
+    PyObject, PyObjectP, create_ref, from_ref, Py_IncRef, Py_DecRef,
+    track_reference)
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr, W_PyCTypeObject
 from pypy.module.cpyext.pyerrors import PyErr_NoMemory, PyErr_BadInternalCall
 from pypy.objspace.std.objectobject import W_ObjectObject
@@ -22,7 +22,9 @@ def _PyObject_NewVar(space, type, size):
     w_type = from_ref(space, rffi.cast(PyObject, type))
     if isinstance(w_type, W_PyCTypeObject):
         w_obj = space.allocate_instance(W_ObjectObject, w_type)
-        return make_ref(space, w_obj, items=size)
+        py_obj = create_ref(space, w_obj, items=size)
+        track_reference(space, py_obj, w_obj)
+        return py_obj
     assert False, "Please add more cases in _PyObject_New"
 
 @cpython_api([rffi.VOIDP_real], lltype.Void)
@@ -145,7 +147,7 @@ def PyObject_GetItem(space, w_obj, w_key):
     This is the equivalent of the Python expression o[key]."""
     return space.getitem(w_obj, w_key)
 
-@cpython_api([PyObject, PyTypeObjectPtr], PyObject, borrowed=True)
+@cpython_api([PyObject, PyTypeObjectPtr], PyObject)
 def PyObject_Init(space, op, type):
     """Initialize a newly-allocated object op with its type and initial
     reference.  Returns the initialized object.  If type indicates that the
@@ -158,7 +160,7 @@ def PyObject_Init(space, op, type):
     op.c_ob_refcnt = 1
     return from_ref(space, op) # XXX will give an exception
 
-@cpython_api([PyVarObject, PyTypeObjectPtr, Py_ssize_t], PyObject, borrowed=True)
+@cpython_api([PyVarObject, PyTypeObjectPtr, Py_ssize_t], PyObject)
 def PyObject_InitVar(space, op, type, size):
     """This does everything PyObject_Init() does, and also initializes the
     length information for a variable-size object."""

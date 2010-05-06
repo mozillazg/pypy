@@ -50,37 +50,40 @@ class TestExceptions(BaseApiTest):
         api.PyErr_SetObject(space.w_ValueError, space.wrap("a value"))
         assert api.PyErr_Occurred() is space.w_ValueError
         state = space.fromcache(State)
-        assert space.eq_w(state.exc_value, space.wrap("a value"))
+        assert space.eq_w(state.operror.get_w_value(space),
+                          space.wrap("a value"))
 
         api.PyErr_Clear()
 
     def test_SetNone(self, space, api):
         api.PyErr_SetNone(space.w_KeyError)
         state = space.fromcache(State)
-        assert space.eq_w(state.exc_type, space.w_KeyError)
-        assert space.eq_w(state.exc_value, space.w_None)
+        assert space.eq_w(state.operror.w_type, space.w_KeyError)
+        assert space.eq_w(state.operror.get_w_value(space), space.w_None)
         api.PyErr_Clear()
 
         api.PyErr_NoMemory()
-        assert space.eq_w(state.exc_type, space.w_MemoryError)
+        assert space.eq_w(state.operror.w_type, space.w_MemoryError)
         api.PyErr_Clear()
         
     def test_BadArgument(self, space, api):
         api.PyErr_BadArgument()
         state = space.fromcache(State)
-        assert space.eq_w(state.exc_type, space.w_TypeError)
+        assert space.eq_w(state.operror.w_type, space.w_TypeError)
         api.PyErr_Clear()
+
+    def test_Warning(self, space, api, capfd):
+        message = rffi.str2charp("this is a warning")
+        api.PyErr_WarnEx(None, message, 1)
+        out, err = capfd.readouterr()
+        assert ": UserWarning: this is a warning" in err
+        rffi.free_charp(message)
 
 class AppTestFetch(AppTestCpythonExtensionBase):
     def setup_class(cls):
         AppTestCpythonExtensionBase.setup_class.im_func(cls)
         space = cls.space
 
-        def set_errno(num):
-            ll2ctypes.TLS.errno = num
-        
-        cls.w_set_errno = space.wrap(interp2app(set_errno, unwrap_spec=[int]))
-    
     def test_occurred(self):
         module = self.import_extension('foo', [
             ("check_error", "METH_NOARGS",
@@ -92,7 +95,7 @@ class AppTestFetch(AppTestCpythonExtensionBase):
              '''
              ),
             ])
-        module.check_error()
+        assert module.check_error()
 
     def test_fetch_and_restore(self):
         module = self.import_extension('foo', [
@@ -106,8 +109,6 @@ class AppTestFetch(AppTestCpythonExtensionBase):
                  return NULL;
              if (type != PyExc_TypeError)
                  Py_RETURN_FALSE;
-             if (val->ob_type != type)
-                 Py_RETURN_FALSE;
              PyErr_Restore(type, val, tb);
              if (!PyErr_Occurred())
                  Py_RETURN_FALSE;
@@ -116,26 +117,22 @@ class AppTestFetch(AppTestCpythonExtensionBase):
              '''
              ),
             ])
-        module.check_error()
+        assert module.check_error()
 
     def test_SetFromErrno(self):
-        skip("The test does not set the errno in a way which "
-             "untranslated pypy can actually notice")
-
-        import errno
+        import errno, os
 
         module = self.import_extension('foo', [
                 ("set_from_errno", "METH_NOARGS",
                  '''
+                 errno = EBADF;
                  PyErr_SetFromErrno(PyExc_OSError);
                  return NULL;
                  '''),
-                ])
+                ],
+                prologue="#include <errno.h>")
         try:
-            self.set_errno(errno.EBADF)
             module.set_from_errno()
         except OSError, e:
             assert e.errno == errno.EBADF
-            assert e.message == os.strerror(errno.EBADF)
-
-
+            assert e.strerror == os.strerror(errno.EBADF)
