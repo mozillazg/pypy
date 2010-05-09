@@ -44,9 +44,6 @@ class ListOfKind(object):
     def __iter__(self):
         return iter(self.content)
 
-class SwitchDictDescr(AbstractDescr):
-    "Get a 'dict' attribute mapping integer values to bytecode positions."
-
 KINDS = ['int', 'ref', 'float']
 
 # ____________________________________________________________
@@ -222,6 +219,7 @@ class GraphFlattener(object):
             if len(switches) >= 5 and kind == 'int':
                 # A large switch on an integer, implementable efficiently
                 # with the help of a SwitchDictDescr
+                from pypy.jit.codewriter.jitcode import SwitchDictDescr
                 switchdict = SwitchDictDescr()
                 switchdict._labels = []
                 self.emitline('switch', self.getcolor(block.exitswitch),

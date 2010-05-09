@@ -2,7 +2,8 @@ import py
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
-from pypy.jit.codewriter.flatten import ListOfKind, SwitchDictDescr
+from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.codewriter.jitcode import SwitchDictDescr
 from pypy.jit.metainterp.history import AbstractDescr
 
 

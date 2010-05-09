@@ -470,9 +470,8 @@ class Transformer(object):
                        ('uint_lshift', 'int_lshift'),
                        ('uint_rshift', 'int_rshift'),
                        ('uint_xor', 'int_xor'),
-
-                       
                        ]:
+        assert _old not in locals()
         exec py.code.Source('''
             def rewrite_op_%s(self, op):
                 op1 = SpaceOperation(%r, op.args, op.result)

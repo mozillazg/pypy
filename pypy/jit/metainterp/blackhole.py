@@ -5,7 +5,7 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLException
-from pypy.jit.codewriter.flatten import SwitchDictDescr
+from pypy.jit.codewriter.jitcode import SwitchDictDescr
 
 
 def arguments(*argtypes, **kwds):
