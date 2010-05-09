@@ -21,8 +21,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
 from pypy.jit.metainterp.compile import GiveUp
-from pypy.jit.codewriter.assembler import JitCode
-from pypy.jit.codewriter.flatten import SwitchDictDescr
+from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 
 # ____________________________________________________________
 
