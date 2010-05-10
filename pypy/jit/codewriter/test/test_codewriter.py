@@ -1,9 +1,21 @@
 import py
 from pypy.jit.codewriter.codewriter import CodeWriter
 from pypy.jit.codewriter import support
+from pypy.rpython.lltypesystem import lltype, llmemory
+
+class FakeRTyper:
+    class annotator:
+        translator = None
+    class type_system:
+        name = 'lltypesystem'
+    def getcallable(self, graph):
+        F = lltype.FuncType([], lltype.Signed)
+        return lltype.functionptr(F, 'bar')
 
 class FakeCPU:
-    rtyper = None
+    rtyper = FakeRTyper()
+    def calldescrof(self, FUNC, ARGS, RESULT):
+        return ('calldescr', FUNC, ARGS, RESULT)
 
 class FakePolicy:
     def look_inside_graph(self, graph):
@@ -51,6 +63,8 @@ def test_call():
     assert jitcode.name == 'fff'
     assert jitcode2.name == 'ggg'
     assert 'ggg' in jitcode._dump
+    assert lltype.typeOf(jitcode2.fnaddr) == llmemory.Address
+    assert jitcode2.calldescr[0] == 'calldescr'
 
 def test_integration():
     from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder

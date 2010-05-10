@@ -60,7 +60,8 @@ class CodeWriter(object):
         self.assembler.assemble(ssarepr, jitcode)
 
     def make_jitcodes(self, maingraph, policy, verbose=False):
-        self.callcontrol = CallControl(self.cpu.rtyper, maingraph)
+        self.portal_graph = maingraph
+        self.callcontrol = CallControl(self.cpu, maingraph)
         self.callcontrol.find_all_graphs(policy)
         mainjitcode = self.callcontrol.get_jitcode(maingraph)
         for graph, jitcode in self.callcontrol.enum_pending_graphs():

@@ -4,23 +4,25 @@
 #
 
 from pypy.jit.codewriter import support
-from pypy.translator.simplify import get_funcobj
 from pypy.jit.codewriter.jitcode import JitCode
+from pypy.translator.simplify import get_funcobj, get_functype
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 
 class CallControl(object):
 
-    def __init__(self, rtyper=None, portal_graph=None):
-        self.rtyper = rtyper
+    def __init__(self, cpu=None, portal_graph=None):
+        self.cpu = cpu
         self.portal_graph = portal_graph
         self.jitcodes = {}             # map {graph: jitcode}
         self.unfinished_graphs = []    # list of graphs with pending jitcodes
-        if rtyper is not None:
+        if cpu is not None:
             from pypy.jit.metainterp.effectinfo import VirtualizableAnalyzer
             from pypy.translator.backendopt.canraise import RaiseAnalyzer
             from pypy.translator.backendopt.writeanalyze import \
                                                             ReadWriteAnalyzer
-            translator = rtyper.annotator.translator
+            self.rtyper = cpu.rtyper
+            translator = self.rtyper.annotator.translator
             self.raise_analyzer = RaiseAnalyzer(translator)
             self.readwrite_analyzer = ReadWriteAnalyzer(translator)
             self.virtualizable_analyzer = VirtualizableAnalyzer(translator)
@@ -135,7 +137,21 @@ class CallControl(object):
         try:
             return self.jitcodes[graph]
         except KeyError:
-            jitcode = JitCode(graph.name, called_from=called_from)
+            fnaddr, calldescr = self.get_jitcode_calldescr(graph)
+            jitcode = JitCode(graph.name, fnaddr, calldescr,
+                              called_from=called_from)
             self.jitcodes[graph] = jitcode
             self.unfinished_graphs.append(graph)
             return jitcode
+
+    def get_jitcode_calldescr(self, graph):
+        fnptr = self.rtyper.getcallable(graph)
+        FUNC = get_functype(lltype.typeOf(fnptr))
+        if self.rtyper.type_system.name == 'ootypesystem':
+            XXX
+        else:
+            fnaddr = llmemory.cast_ptr_to_adr(fnptr)
+        NON_VOID_ARGS = [ARG for ARG in FUNC.ARGS if ARG is not lltype.Void]
+        calldescr = self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS),
+                                         FUNC.RESULT)
+        return (fnaddr, calldescr)

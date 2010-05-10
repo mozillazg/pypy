@@ -1,5 +1,6 @@
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem import llmemory
 
 
 class JitCode(AbstractDescr):
@@ -15,7 +16,7 @@ class JitCode(AbstractDescr):
 
     def setup(self, code='', constants_i=[], constants_r=[], constants_f=[],
               num_regs_i=256, num_regs_r=256, num_regs_f=256,
-              liveness=None, assembler=None):
+              liveness=None, assembler=None, startpoints=None):
         self.code = code
         # if the following lists are empty, use a single shared empty list
         self.constants_i = constants_i or self._empty_i
@@ -27,6 +28,10 @@ class JitCode(AbstractDescr):
                                  (num_regs_f << 0))
         self.liveness = liveness
         self._assembler = assembler       # debugging
+        self._startpoints = startpoints   # debugging
+
+    def get_fnaddr_as_int(self):
+        return llmemory.cast_adr_to_int(self.fnaddr)
 
     def num_regs_i(self):
         return self.num_regs_encoded >> 18
