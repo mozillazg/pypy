@@ -404,3 +404,27 @@ def test_nongc_ptr_eq():
     op1 = Transformer().rewrite_operation(op)
     assert op1.opname == 'int_is_true'
     assert op1.args == [v1]
+
+def test_str_getinteriorfield():
+    v = varoftype(lltype.Ptr(rstr.STR))
+    v_index = varoftype(lltype.Signed)
+    v_result = varoftype(lltype.Char)
+    op = SpaceOperation('getinteriorfield',
+                        [v, Constant('chars', lltype.Void), v_index],
+                        v_result)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'strgetitem'
+    assert op1.args == [v, v_index]
+    assert op1.result == v_result
+
+def test_unicode_getinteriorfield():
+    v = varoftype(lltype.Ptr(rstr.UNICODE))
+    v_index = varoftype(lltype.Signed)
+    v_result = varoftype(lltype.UniChar)
+    op = SpaceOperation('getinteriorfield',
+                        [v, Constant('chars', lltype.Void), v_index],
+                        v_result)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'unicodegetitem'
+    assert op1.args == [v, v_index]
+    assert op1.result == v_result
