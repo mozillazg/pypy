@@ -50,6 +50,8 @@ class MIFrame(object):
     parent_resumedata_snapshot = None
     parent_resumedata_frame_info_list = None
 
+    env = property(lambda: xxx, lambda x: xxx)     # no read/write!
+
     def __init__(self, metainterp):
         self.metainterp = metainterp
         self.registers_i = [None] * 256
@@ -132,6 +134,17 @@ class MIFrame(object):
                 registers[i] = newbox
         if not we_are_translated():
             assert oldbox not in registers[count:]
+
+    def make_result_of_lastop(self, resultbox):
+        target_index = ord(self.bytecode[self.pc-1])
+        if resultbox.type == history.INT:
+            self.registers_i[target_index] = resultbox
+        elif resultbox.type == history.REF:
+            self.registers_r[target_index] = resultbox
+        elif resultbox.type == history.FLOAT:
+            self.registers_f[target_index] = resultbox
+        else:
+            raise AssertionError("bad result box type")
 
     # ------------------------------
 
@@ -222,23 +235,24 @@ class MIFrame(object):
     def opimpl_goto(self, target):
         self.pc = target
 
-    @arguments("orgpc", "label", "box")
-    def opimpl_goto_if_not(self, pc, target, box):
+    @arguments("label", "box")
+    def opimpl_goto_if_not(self, target, box):
         switchcase = box.getint()
         if switchcase:
             opnum = rop.GUARD_TRUE
         else:
-            self.pc = target
             opnum = rop.GUARD_FALSE
-        self.generate_guard(pc, opnum, box)
+        self.generate_guard(opnum, box)
+        if not switchcase:
+            self.pc = target
 
     for _opimpl in ['int_lt', 'int_le', 'int_eq', 'int_ne', 'int_gt', 'int_ge',
                     ]:
         exec py.code.Source('''
-            @arguments("orgpc", "label", "box", "box")
-            def opimpl_goto_if_not_%s(self, pc, target, b1, b2):
+            @arguments("label", "box", "box")
+            def opimpl_goto_if_not_%s(self, target, b1, b2):
                 condbox = self.execute(rop.%s, b1, b2)
-                self.opimpl_goto_if_not(pc, target, condbox)
+                self.opimpl_goto_if_not(target, condbox)
         ''' % (_opimpl, _opimpl.upper())).compile()
     
     def follow_jump(self):
@@ -606,25 +620,38 @@ class MIFrame(object):
         result = vinfo.get_array_length(virtualizable, arrayindex)
         self.make_result_box(ConstInt(result))
 
-    def perform_call(self, jitcode, varargs, greenkey=None):
-        # when tracing, this bytecode causes the subfunction to be entered
-        f = self.metainterp.newframe(jitcode, greenkey)
-        f.setup_call(varargs)
-        return True
+    @arguments("jitcode", "boxes")
+    def _opimpl_inline_call1(self, jitcode, argboxes):
+        self.metainterp.perform_call(jitcode, argboxes)
+    @arguments("jitcode", "boxes2")
+    def _opimpl_inline_call2(self, jitcode, argboxes):
+        self.metainterp.perform_call(jitcode, argboxes)
+    @arguments("jitcode", "boxes3")
+    def _opimpl_inline_call3(self, jitcode, argboxes):
+        self.metainterp.perform_call(jitcode, argboxes)
 
-    @XXX  #arguments("bytecode", "varargs")
-    def opimpl_call(self, callee, varargs):
-        return self.perform_call(callee, varargs)
+    opimpl_inline_call_r_i = _opimpl_inline_call1
+    opimpl_inline_call_r_r = _opimpl_inline_call1
+    opimpl_inline_call_r_f = _opimpl_inline_call1
+    opimpl_inline_call_r_v = _opimpl_inline_call1
+    opimpl_inline_call_ir_i = _opimpl_inline_call2
+    opimpl_inline_call_ir_r = _opimpl_inline_call2
+    opimpl_inline_call_ir_f = _opimpl_inline_call2
+    opimpl_inline_call_ir_v = _opimpl_inline_call2
+    opimpl_inline_call_irf_i = _opimpl_inline_call3
+    opimpl_inline_call_irf_r = _opimpl_inline_call3
+    opimpl_inline_call_irf_f = _opimpl_inline_call3
+    opimpl_inline_call_irf_v = _opimpl_inline_call3
 
-    @arguments("orgpc", "box", "descr", "boxes")
-    def _opimpl_residual_call1(self, pc, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc_at=pc)
-    @arguments("orgpc", "box", "descr", "boxes2")
-    def _opimpl_residual_call2(self, pc, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc_at=pc)
-    @arguments("orgpc", "box", "descr", "boxes3")
-    def _opimpl_residual_call3(self, pc, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc_at=pc)
+    @arguments("box", "descr", "boxes")
+    def _opimpl_residual_call1(self, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+    @arguments("box", "descr", "boxes2")
+    def _opimpl_residual_call2(self, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+    @arguments("box", "descr", "boxes3")
+    def _opimpl_residual_call3(self, funcbox, calldescr, argboxes):
+        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
 
     opimpl_residual_call_r_i = _opimpl_residual_call1
     opimpl_residual_call_r_r = _opimpl_residual_call1
@@ -931,10 +958,20 @@ class MIFrame(object):
     # ------------------------------
 
     def setup_call(self, argboxes):
-        if not we_are_translated():
-            check_args(*argboxes)
         self.pc = 0
-        self.env = argboxes
+        count_i = count_r = count_f = 0
+        for box in argboxes:
+            if box.type == history.INT:
+                self.registers_i[count_i] = box
+                count_i += 1
+            elif box.type == history.REF:
+                self.registers_r[count_r] = box
+                count_r += 1
+            elif box.type == history.FLOAT:
+                self.registers_f[count_f] = box
+                count_f += 1
+            else:
+                raise AssertionError(box.type)
 
     def setup_resume_at_op(self, pc, env):
         if not we_are_translated():
@@ -962,14 +999,12 @@ class MIFrame(object):
         except ChangeFrame:
             pass
 
-    def generate_guard(self, pc, opnum, box=None, extraargs=[]):
+    def generate_guard(self, opnum, box=None, extraargs=[]):
         if isinstance(box, Const):    # no need for a guard
             return
         metainterp = self.metainterp
         if metainterp.is_blackholing():
             return
-        saved_pc = self.pc
-        self.pc = pc
         if box is not None:
             moreargs = [box] + extraargs
         else:
@@ -992,7 +1027,6 @@ class MIFrame(object):
         self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS)
         # count
         metainterp.attach_debug_info(guard_op)
-        self.pc = saved_pc
         return guard_op
 
     def implement_guard_value(self, pc, box):
@@ -1019,16 +1053,16 @@ class MIFrame(object):
         return self.metainterp.execute_and_record(opnum, descr, *argboxes)
 
     @specialize.arg(1)
-    def execute_varargs(self, opnum, argboxes, descr, exc_at):
+    def execute_varargs(self, opnum, argboxes, descr, exc):
         resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
                                                             descr=descr)
-        if exc_at >= 0:
-            self.metainterp.handle_possible_exception(exc_at)
+        if exc:
+            self.metainterp.handle_possible_exception(self.pc)
         else:
             self.metainterp.assert_no_exception()
         return resbox
 
-    def do_residual_call(self, funcbox, descr, argboxes, exc_at):
+    def do_residual_call(self, funcbox, descr, argboxes, exc):
         allboxes = [funcbox] + argboxes
         effectinfo = descr.get_extra_info()
         if 0:# XXX effectinfo is None or effectinfo.forces_virtual_or_virtualizable:
@@ -1046,7 +1080,7 @@ class MIFrame(object):
             else:
                 return self.metainterp.assert_no_exception()
         else:
-            return self.execute_varargs(rop.CALL, allboxes, descr, exc_at)
+            return self.execute_varargs(rop.CALL, allboxes, descr, exc)
 
 # ____________________________________________________________
 
@@ -1238,6 +1272,12 @@ class MetaInterp(object):
     def is_blackholing(self):
         return False       # XXX get rid of this method
 
+    def perform_call(self, jitcode, boxes, greenkey=None):
+        # when tracing, this bytecode causes the subfunction to be entered
+        f = self.newframe(jitcode, greenkey)
+        f.setup_call(boxes)
+        raise ChangeFrame
+
     def newframe(self, jitcode, greenkey=None):
         if jitcode is self.staticdata.portal_code:
             self.in_recursion += 1
@@ -1268,7 +1308,7 @@ class MetaInterp(object):
         self.popframe()
         if self.framestack:
             if resultbox is not None:
-                self.framestack[-1].make_result_box(resultbox)
+                self.framestack[-1].make_result_of_lastop(resultbox)
             raise ChangeFrame
         else:
             if not self.is_blackholing():
@@ -1715,20 +1755,7 @@ class MetaInterp(object):
         # ----- make a new frame -----
         self.framestack = []
         f = self.newframe(self.staticdata.portal_code)
-        f.pc = 0
-        count_i = count_r = count_f = 0
-        for box in original_boxes:
-            if box.type == history.INT:
-                f.registers_i[count_i] = box
-                count_i += 1
-            elif box.type == history.REF:
-                f.registers_r[count_r] = box
-                count_r += 1
-            elif box.type == history.FLOAT:
-                f.registers_f[count_f] = box
-                count_f += 1
-            else:
-                raise AssertionError(box.type)
+        f.setup_call(original_boxes)
         self.virtualref_boxes = []
         self.initialize_virtualizable(original_boxes)
         return original_boxes
@@ -2056,11 +2083,13 @@ def _get_opimpl_method(name, argcodes):
                 else:
                     raise AssertionError("bad argcode")
                 position += 1
-            elif argtype == "descr":
+            elif argtype == "descr" or argtype == "jitcode":
                 assert argcodes[next_argcode] == 'd'
                 next_argcode = next_argcode + 1
                 index = ord(code[position]) | (ord(code[position+1])<<8)
                 value = self.metainterp.staticdata.opcode_descrs[index]
+                if argtype == "jitcode":
+                    assert isinstance(value, JitCode)
                 position += 2
             elif argtype == "label":
                 assert argcodes[next_argcode] == 'L'
@@ -2110,25 +2139,27 @@ def _get_opimpl_method(name, argcodes):
         assert num_return_args == 0 or num_return_args == 1
         self.pc = position + num_return_args
         #
-        resultbox = unboundmethod(self, *args)
-        #
-        if num_return_args == 0:
-            assert resultbox is None
-        else:
-            assert resultbox is not None
-            result_argcode = argcodes[next_argcode]
-            target_index = ord(code[position])
-            if result_argcode == 'i':
-                assert resultbox.type == history.INT
-                self.registers_i[target_index] = resultbox
-            elif result_argcode == 'r':
-                assert resultbox.type == history.REF
-                self.registers_r[target_index] = resultbox
-            elif result_argcode == 'f':
-                assert resultbox.type == history.FLOAT
-                self.registers_f[target_index] = resultbox
+        if not we_are_translated():
+            print '\tjitcode:', name, list(args),
+            try:
+                resultbox = unboundmethod(self, *args)
+            except Exception, e:
+                print '-> %s!' % e.__class__.__name__
+                raise
+            if num_return_args == 0:
+                print
+                assert resultbox is None
             else:
-                raise AssertionError("bad result argcode")
+                print '->', resultbox
+                result_argcode = argcodes[next_argcode]
+                assert resultbox.type == {'i': history.INT,
+                                          'r': history.REF,
+                                          'f': history.FLOAT}[result_argcode]
+        else:
+            resultbox = unboundmethod(self, *args)
+        #
+        if resultbox is not None:
+            self.make_result_of_lastop(resultbox)
     #
     unboundmethod = getattr(MIFrame, 'opimpl_' + name).im_func
     argtypes = unrolling_iterable(unboundmethod.argtypes)
