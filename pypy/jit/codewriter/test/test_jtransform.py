@@ -405,6 +405,28 @@ def test_nongc_ptr_eq():
     assert op1.opname == 'int_is_true'
     assert op1.args == [v1]
 
+def test_str_getinteriorarraysize():
+    v = varoftype(lltype.Ptr(rstr.STR))
+    v_result = varoftype(lltype.Signed)
+    op = SpaceOperation('getinteriorarraysize',
+                        [v, Constant('chars', lltype.Void)],
+                        v_result)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'strlen'
+    assert op1.args == [v]
+    assert op1.result == v_result
+
+def test_unicode_getinteriorarraysize():
+    v = varoftype(lltype.Ptr(rstr.UNICODE))
+    v_result = varoftype(lltype.Signed)
+    op = SpaceOperation('getinteriorarraysize',
+                        [v, Constant('chars', lltype.Void)],
+                        v_result)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'unicodelen'
+    assert op1.args == [v]
+    assert op1.result == v_result
+
 def test_str_getinteriorfield():
     v = varoftype(lltype.Ptr(rstr.STR))
     v_index = varoftype(lltype.Signed)
