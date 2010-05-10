@@ -303,6 +303,8 @@ def ll_items(l):
     return l.items
 
 def ll_getitem_fast(l, index):
+    if l.length == 0:
+        raise IndexError
     ll_assert(index < l.length, "getitem out of bounds")
     return l.ll_items()[index]
 ll_getitem_fast.oopspec = 'list.getitem(l, index)'
