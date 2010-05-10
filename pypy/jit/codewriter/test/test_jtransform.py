@@ -27,9 +27,14 @@ class FakeLink:
     def __init__(self, exitcase):
         self.exitcase = self.llexitcase = exitcase
 
+class FakeRaiseAnalyzer:
+    def can_raise(self, op):
+        return True
+
 class FakeResidualCallControl:
     def guess_call_kind(self, op):
         return 'residual'
+    raise_analyzer = FakeRaiseAnalyzer()
 
 class FakeRegularCallControl:
     def guess_call_kind(self, op):

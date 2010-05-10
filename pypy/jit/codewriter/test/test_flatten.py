@@ -43,9 +43,17 @@ class FakeCPU:
     def fielddescrof(self, STRUCT, name):
         return FakeDescr()
 
-class FakePolicy:
+class FakeRaiseAnalyzer:
+    def can_raise(self, op):
+        try:
+            return 'cannot_raise' not in op.args[0].value._obj.graph.name
+        except AttributeError:
+            return True
+
+class FakeCallControl:
     def guess_call_kind(self, op):
         return 'residual'
+    raise_analyzer = FakeRaiseAnalyzer()
 
 def fake_regallocs():
     return {'int': FakeRegAlloc(),
@@ -81,11 +89,12 @@ class TestFlatten:
         graphs = self.make_graphs(func, args)
         if transform:
             from pypy.jit.codewriter.jtransform import transform_graph
-            transform_graph(graphs[0], FakeCPU(), FakePolicy())
+            transform_graph(graphs[0], FakeCPU(), FakeCallControl())
         if liveness:
             from pypy.jit.codewriter.liveness import compute_liveness
             compute_liveness(graphs[0])
-        ssarepr = flatten_graph(graphs[0], fake_regallocs())
+        ssarepr = flatten_graph(graphs[0], fake_regallocs(),
+                                _include_all_exc_links=not transform)
         assert_format(ssarepr, expected)
 
     def test_simple(self):
@@ -416,14 +425,14 @@ class TestFlatten:
 
     def test_residual_call_nonraising(self):
         @dont_look_inside
-        def g(i, j):
+        def cannot_raise(i, j):
             return i + j
         def f(i, j):
             try:
-                return g(i, j)
+                return cannot_raise(i, j)
             except Exception:
                 return 42 + j
         self.encoding_test(f, [7, 2], """
-            residual_call_ir_i $<* fn g>, <Descr>, I[%i0, %i1], R[], %i2
+            residual_call_ir_i $<* fn cannot_raise>, <Descr>, I[%i0, %i1], R[], %i2
             int_return %i2
         """, transform=True, liveness=True)
