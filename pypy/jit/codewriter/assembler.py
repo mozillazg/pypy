@@ -13,14 +13,24 @@ class Assembler(object):
         self.insns = {}
         self.descrs = []
         self._descr_dict = {}
+        self._count_jitcodes = 0
 
-    def assemble(self, ssarepr):
+    def assemble(self, ssarepr, jitcode=None):
+        """Take the 'ssarepr' representation of the code and assemble
+        it inside the 'jitcode'.  If jitcode is None, make a new one.
+        """
         self.setup()
         for insn in ssarepr.insns:
             self.write_insn(insn)
         self.fix_labels()
         self.check_result()
-        return self.make_jitcode(ssarepr)
+        if jitcode is None:
+            jitcode = JitCode(ssarepr.name)
+        self.make_jitcode(jitcode)
+        if self._count_jitcodes < 20:    # stop if we have a lot of them
+            jitcode._dump = format_assembler(ssarepr)
+        self._count_jitcodes += 1
+        return jitcode
 
     def setup(self):
         self.code = []
@@ -163,8 +173,7 @@ class Assembler(object):
         assert self.count_regs['ref'] + len(self.constants_r) <= 256
         assert self.count_regs['float'] + len(self.constants_f) <= 256
 
-    def make_jitcode(self, ssarepr):
-        jitcode = JitCode(ssarepr.name, assembler=self)
+    def make_jitcode(self, jitcode):
         jitcode.setup(''.join(self.code),
                       self.constants_i,
                       self.constants_r,
@@ -172,8 +181,5 @@ class Assembler(object):
                       self.count_regs['int'],
                       self.count_regs['ref'],
                       self.count_regs['float'],
-                      liveness=self.liveness)
-        #if self._count_jitcodes < 50:    # stop if we have a lot of them
-        #    jitcode._dump = format_assembler(ssarepr)
-        #self._count_jitcodes += 1
-        return jitcode
+                      liveness=self.liveness,
+                      assembler=self)

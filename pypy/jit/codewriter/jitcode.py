@@ -1,23 +1,21 @@
-from pypy.jit.metainterp.history import AbstractValue, AbstractDescr
+from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rlib.objectmodel import we_are_translated
 
 
-class JitCode(AbstractValue):
+class JitCode(AbstractDescr):
     _empty_i = []
     _empty_r = []
     _empty_f = []
 
-    def __init__(self, name, fnaddr=None, calldescr=None, called_from=None,
-                 assembler=None):
+    def __init__(self, name, fnaddr=None, calldescr=None, called_from=None):
         self.name = name
         self.fnaddr = fnaddr
         self.calldescr = calldescr
         self._called_from = called_from   # debugging
-        self._assembler = assembler       # debugging
 
     def setup(self, code='', constants_i=[], constants_r=[], constants_f=[],
               num_regs_i=256, num_regs_r=256, num_regs_f=256,
-              liveness=None):
+              liveness=None, assembler=None):
         self.code = code
         # if the following lists are empty, use a single shared empty list
         self.constants_i = constants_i or self._empty_i
@@ -28,6 +26,7 @@ class JitCode(AbstractValue):
                                  (num_regs_r << 9) |
                                  (num_regs_f << 0))
         self.liveness = liveness
+        self._assembler = assembler       # debugging
 
     def num_regs_i(self):
         return self.num_regs_encoded >> 18
@@ -98,6 +97,13 @@ class JitCode(AbstractValue):
         raise KeyError("missing liveness[%d], corresponding to %r" % (
             pc, insn))
 
+    def __repr__(self):
+        return '<JitCode %r>' % self.name
+
 
 class SwitchDictDescr(AbstractDescr):
     "Get a 'dict' attribute mapping integer values to bytecode positions."
+
+    def __repr__(self):
+        dict = getattr(self, 'dict', '?')
+        return '<SwitchDictDescr %s>' % (dict,)

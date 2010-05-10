@@ -1,5 +1,13 @@
 import py
 from pypy.jit.codewriter.codewriter import CodeWriter
+from pypy.jit.codewriter import support
+
+class FakeCPU:
+    rtyper = None
+
+class FakePolicy:
+    def look_inside_graph(self, graph):
+        return True
 
 
 def test_loop():
@@ -26,6 +34,23 @@ def test_loop():
     assert jitcode._live_vars(0) == '%i0 %i1'
     for i in range(1, len(jitcode.code)):
         py.test.raises(KeyError, jitcode._live_vars, i)
+
+def test_call():
+    def ggg(x):
+        return x * 2
+    def fff(a, b):
+        return ggg(b) - ggg(a)
+    rtyper = support.annotate(fff, [35, 42])
+    maingraph = rtyper.annotator.translator.graphs[0]
+    cw = CodeWriter(FakeCPU())
+    jitcode = cw.make_jitcodes(maingraph, FakePolicy(), verbose=True)
+    print jitcode._dump
+    [jitcode2] = cw.assembler.descrs
+    print jitcode2._dump
+    assert jitcode is not jitcode2
+    assert jitcode.name == 'fff'
+    assert jitcode2.name == 'ggg'
+    assert 'ggg' in jitcode._dump
 
 def test_integration():
     from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder

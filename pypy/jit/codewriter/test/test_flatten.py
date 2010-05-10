@@ -43,6 +43,10 @@ class FakeCPU:
     def fielddescrof(self, STRUCT, name):
         return FakeDescr()
 
+class FakePolicy:
+    def guess_call_kind(self, op):
+        return 'residual'
+
 def fake_regallocs():
     return {'int': FakeRegAlloc(),
             'ref': FakeRegAlloc(),
@@ -76,8 +80,8 @@ class TestFlatten:
                       transform=False, liveness=False):
         graphs = self.make_graphs(func, args)
         if transform:
-            from pypy.jit.codewriter.jitter import transform_graph
-            transform_graph(graphs[0], FakeCPU())
+            from pypy.jit.codewriter.jtransform import transform_graph
+            transform_graph(graphs[0], FakeCPU(), FakePolicy())
         if liveness:
             from pypy.jit.codewriter.liveness import compute_liveness
             compute_liveness(graphs[0])

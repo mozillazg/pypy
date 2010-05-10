@@ -3,7 +3,6 @@ from pypy.jit.codewriter import support
 from pypy.jit.codewriter.regalloc import perform_register_allocation
 from pypy.jit.codewriter.flatten import flatten_graph, ListOfKind
 from pypy.jit.codewriter.format import format_assembler
-from pypy.jit.codewriter.jitter import transform_graph
 from pypy.objspace.flow.model import Variable, Constant, SpaceOperation
 from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import c_last_exception
@@ -22,6 +21,7 @@ class TestRegAlloc:
         # graphs must first be transformed by jitter.py before they can be
         # subjected to register allocation and flattening.
         if transform:
+            from pypy.jit.codewriter.jtransform import transform_graph
             transform_graph(graph)
         regalloc = perform_register_allocation(graph, 'int')
         ssarepr = flatten_graph(graph, {'int': regalloc})

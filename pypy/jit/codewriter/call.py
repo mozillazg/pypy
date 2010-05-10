@@ -5,19 +5,23 @@
 
 from pypy.jit.codewriter import support
 from pypy.translator.simplify import get_funcobj
+from pypy.jit.codewriter.jitcode import JitCode
 
 
 class CallControl(object):
 
-    def __init__(self, rtyper=None, portal_runner_obj=None):
+    def __init__(self, rtyper=None, portal_graph=None):
         self.rtyper = rtyper
-        self.portal_runner_obj = portal_runner_obj
+        self.portal_graph = portal_graph
+        self.jitcodes = {}             # map {graph: jitcode}
+        self.unfinished_graphs = []    # list of graphs with pending jitcodes
 
-    def find_all_graphs(self, portal_graph, policy):
+    def find_all_graphs(self, policy):
         def is_candidate(graph):
             return policy.look_inside_graph(graph)
-        
-        todo = [portal_graph]
+
+        assert self.portal_graph is not None
+        todo = [self.portal_graph]
         candidate_graphs = set(todo)
 
         def callers():
@@ -94,9 +98,9 @@ class CallControl(object):
             funcobj = get_funcobj(funcptr)
             if getattr(funcobj, 'graph', None) is None:
                 return 'residual'
-            if funcobj is self.portal_runner_obj:
-                return 'recursive'
             targetgraph = funcobj.graph
+            if targetgraph is self.portal_graph:
+                return 'recursive'
             if (hasattr(targetgraph, 'func') and
                 hasattr(targetgraph.func, 'oopspec')):
                 return 'builtin'
@@ -111,3 +115,18 @@ class CallControl(object):
     def is_candidate(self, graph):
         # used only after find_all_graphs()
         return graph in self.candidate_graphs
+
+    def enum_pending_graphs(self):
+        while self.unfinished_graphs:
+            graph = self.unfinished_graphs.pop()
+            yield graph, self.jitcodes[graph]
+
+    def get_jitcode(self, graph, called_from=None):
+        # 'called_from' is only one of the callers, used for debugging.
+        try:
+            return self.jitcodes[graph]
+        except KeyError:
+            jitcode = JitCode(graph.name, called_from=called_from)
+            self.jitcodes[graph] = jitcode
+            self.unfinished_graphs.append(graph)
+            return jitcode
