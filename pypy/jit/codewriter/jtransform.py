@@ -430,6 +430,18 @@ class Transformer(object):
             sizedescr = self.cpu.sizeof(STRUCT)
             return SpaceOperation('new', [sizedescr], op.result)
 
+    def rewrite_op_getinteriorfield(self, op):
+        # only supports strings and unicodes
+        assert len(op.args) == 3
+        assert op.args[1].value == 'chars'
+        optype = op.args[0].concretetype
+        if optype == lltype.Ptr(rstr.STR):
+            opname = "strgetitem"
+        else:
+            assert optype == lltype.Ptr(rstr.UNICODE)
+            opname = "unicodegetitem"
+        return SpaceOperation(opname, [op.args[0], op.args[2]], op.result)
+
     def _rewrite_equality(self, op, opname):
         arg0, arg1 = op.args
         if isinstance(arg0, Constant) and not arg0.value:
