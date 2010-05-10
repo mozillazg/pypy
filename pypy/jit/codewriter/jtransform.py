@@ -454,6 +454,19 @@ class Transformer(object):
             opname = "unicodegetitem"
         return SpaceOperation(opname, [op.args[0], op.args[2]], op.result)
 
+    def rewrite_op_setinteriorfield(self, op):
+        # only supports strings and unicodes
+        assert len(op.args) == 4
+        assert op.args[1].value == 'chars'
+        optype = op.args[0].concretetype
+        if optype == lltype.Ptr(rstr.STR):
+            opname = "strsetitem"
+        else:
+            assert optype == lltype.Ptr(rstr.UNICODE)
+            opname = "unicodesetitem"
+        return SpaceOperation(opname, [op.args[0], op.args[2], op.args[3]],
+                              op.result)
+
     def _rewrite_equality(self, op, opname):
         arg0, arg1 = op.args
         if isinstance(arg0, Constant) and not arg0.value:

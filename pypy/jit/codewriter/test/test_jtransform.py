@@ -450,3 +450,29 @@ def test_unicode_getinteriorfield():
     assert op1.opname == 'unicodegetitem'
     assert op1.args == [v, v_index]
     assert op1.result == v_result
+
+def test_str_setinteriorfield():
+    v = varoftype(lltype.Ptr(rstr.STR))
+    v_index = varoftype(lltype.Signed)
+    v_newchr = varoftype(lltype.Char)
+    v_void = varoftype(lltype.Void)
+    op = SpaceOperation('setinteriorfield',
+                        [v, Constant('chars', lltype.Void), v_index, v_newchr],
+                        v_void)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'strsetitem'
+    assert op1.args == [v, v_index, v_newchr]
+    assert op1.result == v_void
+
+def test_unicode_setinteriorfield():
+    v = varoftype(lltype.Ptr(rstr.UNICODE))
+    v_index = varoftype(lltype.Signed)
+    v_newchr = varoftype(lltype.UniChar)
+    v_void = varoftype(lltype.Void)
+    op = SpaceOperation('setinteriorfield',
+                        [v, Constant('chars', lltype.Void), v_index, v_newchr],
+                        v_void)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'unicodesetitem'
+    assert op1.args == [v, v_index, v_newchr]
+    assert op1.result == v_void
