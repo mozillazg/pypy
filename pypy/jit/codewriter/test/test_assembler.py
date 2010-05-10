@@ -174,20 +174,21 @@ def test_liveness():
         ]
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
-    assert jitcode.code == ("\x00\x00\x0A\x01"
-                               "\x00\x00\x03\x02"
-                               "\x01\x01\x02\x03"
-                               "\x00\x00\x06\x04"
-                               "\x01\x03\x04\x05"
-                               "\x02\x05")
+    assert jitcode.code == ("\x00\x00\x0A\x01"   # ends at 4
+                            "\x00\x00\x03\x02"   # ends at 8
+                            "\x01\x01\x02\x03"   # ends at 12
+                            "\x00\x00\x06\x04"   # ends at 16
+                            "\x01\x03\x04\x05"   # ends at 20
+                            "\x02\x05")
     assert assembler.insns == {'int_add/ici': 0,
                                'int_mul/iii': 1,
                                'int_return/i': 2}
-    py.test.raises(KeyError, jitcode._live_vars, 1)
+    py.test.raises(KeyError, jitcode._live_vars, 0)
     py.test.raises(KeyError, jitcode._live_vars, 3)
-    py.test.raises(KeyError, jitcode._live_vars, 20)
-    assert jitcode._live_vars(0) == '%i0'
-    assert jitcode._live_vars(4) == '%i0 %i1'
-    assert jitcode._live_vars(8) == '%i0'
-    assert jitcode._live_vars(12) == '%i3'
-    assert jitcode._live_vars(16) == ''
+    py.test.raises(KeyError, jitcode._live_vars, 5)
+    py.test.raises(KeyError, jitcode._live_vars, 24)
+    assert jitcode._live_vars(4) == '%i0'
+    assert jitcode._live_vars(8) == '%i0 %i1'
+    assert jitcode._live_vars(12) == '%i0'
+    assert jitcode._live_vars(16) == '%i3'
+    assert jitcode._live_vars(20) == ''

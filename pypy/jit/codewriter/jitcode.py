@@ -16,7 +16,7 @@ class JitCode(AbstractDescr):
 
     def setup(self, code='', constants_i=[], constants_r=[], constants_f=[],
               num_regs_i=256, num_regs_r=256, num_regs_f=256,
-              liveness=None, assembler=None, startpoints=None):
+              liveness=None, startpoints=None):
         self.code = code
         # if the following lists are empty, use a single shared empty list
         self.constants_i = constants_i or self._empty_i
@@ -24,10 +24,9 @@ class JitCode(AbstractDescr):
         self.constants_f = constants_f or self._empty_f
         # encode the three num_regs into a single integer
         self.num_regs_encoded = ((num_regs_i << 18) |
-                                 (num_regs_r << 9) |
-                                 (num_regs_f << 0))
+                                 (num_regs_f << 9) |
+                                 (num_regs_r << 0))
         self.liveness = liveness
-        self._assembler = assembler       # debugging
         self._startpoints = startpoints   # debugging
 
     def get_fnaddr_as_int(self):
@@ -36,10 +35,10 @@ class JitCode(AbstractDescr):
     def num_regs_i(self):
         return self.num_regs_encoded >> 18
 
-    def num_regs_r(self):
+    def num_regs_f(self):
         return (self.num_regs_encoded >> 9) & 0x1FF
 
-    def num_regs_f(self):
+    def num_regs_r(self):
         return self.num_regs_encoded & 0x1FF
 
     def has_liveness_info(self, pc):
@@ -49,7 +48,7 @@ class JitCode(AbstractDescr):
                             registers_i, registers_r, registers_f):
         # 'pc' gives a position in this bytecode.  This invokes
         # 'callback' for each variable that is live across the
-        # instruction which starts at 'pc'.  (It excludes the arguments
+        # instruction which ends at 'pc'.  (It excludes the arguments
         # of that instruction which are no longer used afterwards, and
         # excludes the return value of that instruction.)  More precisely,
         # this invokes 'callback(arg, box, index)' where 'box' comes from one
@@ -93,14 +92,7 @@ class JitCode(AbstractDescr):
         return ' '.join(lst)
 
     def _missing_liveness(self, pc):
-        opcode = ord(self.code[pc])
-        insn = 'insn %d' % opcode
-        if self._assembler is not None:
-            for name, code in self._assembler.insns.items():
-                if code == opcode:
-                    insn = name
-        raise KeyError("missing liveness[%d], corresponding to %r" % (
-            pc, insn))
+        raise KeyError("missing liveness[%d]" % (pc,))
 
     def __repr__(self):
         return '<JitCode %r>' % self.name
