@@ -7,11 +7,11 @@ from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.jit.codewriter import support, heaptracker
 
 
-def transform_graph(graph, cpu=None, portal=True):
+def transform_graph(graph, cpu=None, callcontrol=None, portal=True):
     """Transform a control flow graph to make it suitable for
     being flattened in a JitCode.
     """
-    t = Transformer(cpu)
+    t = Transformer(cpu, callcontrol)
     t.transform(graph, portal)
 
 
@@ -21,8 +21,9 @@ class NoOp(Exception):
 
 class Transformer(object):
 
-    def __init__(self, cpu=None):
+    def __init__(self, cpu=None, callcontrol=None):
         self.cpu = cpu
+        self.callcontrol = callcontrol
 
     def transform(self, graph, portal):
         self.graph = graph
@@ -173,10 +174,21 @@ class Transformer(object):
     rewrite_op_float_gt  = _rewrite_symmetric
     rewrite_op_float_ge  = _rewrite_symmetric
 
+    # ----------
+    # Various kinds of calls
+
     def rewrite_op_direct_call(self, op):
+        kind = self.callcontrol.guess_call_kind(op)
+        return getattr(self, 'handle_%s_call' % kind)(op)
+
+    def rewrite_op_indirect_call(self, op):
+        kind = self.callcontrol.guess_call_kind(op)
+        return getattr(self, 'handle_%s_indirect_call' % kind)(op)
+
+    def rewrite_call(self, op, namebase, initialargs):
         """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'
-           into e.g. 'i0 = residual_call_ir_i(fn, [i1, i2], [ref1, ref2])'.
-           The name is one of 'residual_call_{r,ir,irf}_{i,r,f,v}'."""
+           into 'i0 = xxx_call_ir_i(fn, descr, [i1,i2], [ref1,ref2])'.
+           The name is one of '{residual,direct}_call_{r,ir,irf}_{i,r,f,v}'."""
         args_i = []
         args_r = []
         args_f = []
@@ -190,16 +202,8 @@ class Transformer(object):
         if 'r' in kinds: sublists.append(ListOfKind('ref', args_r))
         if 'f' in kinds: sublists.append(ListOfKind('float', args_f))
         reskind = getkind(op.result.concretetype)[0]
-        FUNC = op.args[0].concretetype.TO
-        NONVOIDARGS = tuple([ARG for ARG in FUNC.ARGS if ARG != lltype.Void])
-        calldescr = self.cpu.calldescrof(FUNC, NONVOIDARGS, FUNC.RESULT)
-        return SpaceOperation('G_residual_call_%s_%s' % (kinds, reskind),
-                              [op.args[0], calldescr] + sublists,
-                              op.result)
-
-    def rewrite_op_indirect_call(self, op):
-        op1 = SpaceOperation('direct_call', op.args[:-1], op.result)
-        return self.rewrite_op_direct_call(op1)
+        return SpaceOperation('G_%s_call_%s_%s' % (namebase, kinds, reskind),
+                              initialargs + sublists, op.result)
 
     def add_in_correct_list(self, v, lst_i, lst_r, lst_f):
         kind = getkind(v.concretetype)
@@ -209,6 +213,25 @@ class Transformer(object):
         elif kind == 'float': lst = lst_f
         else: raise AssertionError(kind)
         lst.append(v)
+
+    def handle_residual_call(self, op):
+        """A direct_call turns into the operation 'residual_call_xxx' if it
+        is calling a function that we don't want to JIT.  The initial args
+        of 'residual_call_xxx' are the constant function to call, and its
+        calldescr."""
+        FUNC = op.args[0].concretetype.TO
+        NONVOIDARGS = tuple([ARG for ARG in FUNC.ARGS if ARG != lltype.Void])
+        calldescr = self.cpu.calldescrof(FUNC, NONVOIDARGS, FUNC.RESULT)
+        return self.rewrite_call(op, 'residual', [op.args[0], calldescr])
+
+    def handle_regular_call(self, op):
+        """A direct_call turns into the operation 'inline_call_xxx' if it
+        is calling a function that we want to JIT.  The initial arg of
+        'inline_call_xxx' is the JitCode of the called function."""
+        [targetgraph] = self.callcontrol.graphs_from(op)
+        jitcode = self.callcontrol.get_jitcode(targetgraph,
+                                               called_from=self.graph)
+        return self.rewrite_call(op, 'inline', [jitcode])
 
     def _do_builtin_call(self, op, oopspec_name=None, args=None, extra=None):
         if oopspec_name is None: oopspec_name = op.opname
@@ -229,6 +252,9 @@ class Transformer(object):
     rewrite_op_int_mod_zer     = _do_builtin_call
     rewrite_op_int_lshift_ovf  = _do_builtin_call
     rewrite_op_gc_identityhash = _do_builtin_call
+
+    # ----------
+    # getfield/setfield/mallocs etc.
 
     def rewrite_op_hint(self, op):
         hints = op.args[1].value

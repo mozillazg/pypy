@@ -2,14 +2,17 @@ from pypy.jit.codewriter import support
 from pypy.jit.codewriter.regalloc import perform_register_allocation
 from pypy.jit.codewriter.flatten import flatten_graph, KINDS
 from pypy.jit.codewriter.assembler import Assembler, JitCode
-from pypy.jit.codewriter.jitter import transform_graph
+from pypy.jit.codewriter.jtransform import transform_graph
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.liveness import compute_liveness
+from pypy.jit.codewriter.call import CallControl
 from pypy.jit.codewriter.policy import log
+from pypy.objspace.flow.model import copygraph
 from pypy.tool.udir import udir
 
 
 class CodeWriter(object):
+    callcontrol = None    # for tests
 
     def __init__(self, cpu=None):
         self.cpu = cpu
@@ -19,17 +22,19 @@ class CodeWriter(object):
         """For testing."""
         rtyper = support.annotate(func, values, type_system=type_system)
         graph = rtyper.annotator.translator.graphs[0]
-        return self.transform_graph_to_jitcode(graph, True, True)
+        jitcode = JitCode("test")
+        self.transform_graph_to_jitcode(graph, jitcode, True, True)
+        return jitcode
 
-    def transform_graph_to_jitcode(self, graph, portal, verbose):
+    def transform_graph_to_jitcode(self, graph, jitcode, portal, verbose):
         """Transform a graph into a JitCode containing the same bytecode
-        in a different format.  Note that the original 'graph' is mangled
-        by the process and should not be used any more.
+        in a different format.
         """
+        graph = copygraph(graph, shallowvars=True)
         #
         # step 1: mangle the graph so that it contains the final instructions
         # that we want in the JitCode, but still as a control flow graph
-        transform_graph(graph, self.cpu, portal)
+        transform_graph(graph, self.cpu, self.callcontrol, portal)
         #
         # step 2a: perform register allocation on it
         regallocs = {}
@@ -52,12 +57,16 @@ class CodeWriter(object):
         # of bytes and lists of constants.  It's during this step that
         # constants are cast to their normalized type (Signed, GCREF or
         # Float).
-        jitcode = self.assembler.assemble(ssarepr)
-        return jitcode
+        self.assembler.assemble(ssarepr, jitcode)
 
-    def make_jitcodes(self, maingraph, verbose=False):
-        self.portal_graph = maingraph
-        return self.transform_graph_to_jitcode(maingraph, True, verbose)
+    def make_jitcodes(self, maingraph, policy, verbose=False):
+        self.callcontrol = CallControl(self.cpu.rtyper, maingraph)
+        self.callcontrol.find_all_graphs(policy)
+        mainjitcode = self.callcontrol.get_jitcode(maingraph)
+        for graph, jitcode in self.callcontrol.enum_pending_graphs():
+            self.transform_graph_to_jitcode(graph, jitcode,
+                                            graph is maingraph, verbose)
+        return mainjitcode
 
     def print_ssa_repr(self, ssarepr, portal, verbose):
         if verbose:

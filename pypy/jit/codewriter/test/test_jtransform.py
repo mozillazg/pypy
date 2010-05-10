@@ -1,7 +1,7 @@
 import random
 from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
-from pypy.jit.codewriter.jitter import Transformer
+from pypy.jit.codewriter.jtransform import Transformer
 from pypy.jit.metainterp.history import getkind
 from pypy.rpython.lltypesystem import lltype, rclass, rstr
 from pypy.translator.unsimplify import varoftype
@@ -26,6 +26,20 @@ class FakeLink:
     args = []
     def __init__(self, exitcase):
         self.exitcase = self.llexitcase = exitcase
+
+class FakeResidualCallControl:
+    def guess_call_kind(self, op):
+        return 'residual'
+
+class FakeRegularCallControl:
+    def guess_call_kind(self, op):
+        return 'regular'
+    def graphs_from(self, op):
+        return ['somegraph']
+    def get_jitcode(self, graph, called_from=None):
+        assert graph == 'somegraph'
+        return 'somejitcode'
+
 
 def test_optimize_goto_if_not():
     v1 = Variable()
@@ -127,7 +141,7 @@ def test_symmetric():
                     assert op1.result == v3
                     assert op1.opname == name2[0]
 
-def test_residual_call():
+def test_calls():
     for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,
                     lltype.Float, lltype.Void]:
       for with_void in [False, True]:
@@ -144,6 +158,7 @@ def test_residual_call():
               elif with_i: expectedkind = 'ir'  # integers and references
               else: expectedkind = 'r'          # only references
               yield residual_call_test, ARGS, RESTYPE, expectedkind
+              yield direct_call_test, ARGS, RESTYPE, expectedkind
 
 def get_direct_call_op(argtypes, restype):
     FUNC = lltype.FuncType(argtypes, restype)
@@ -156,7 +171,8 @@ def get_direct_call_op(argtypes, restype):
 
 def residual_call_test(argtypes, restype, expectedkind):
     op = get_direct_call_op(argtypes, restype)
-    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    tr = Transformer(FakeCPU(), FakeResidualCallControl())
+    op1 = tr.rewrite_operation(op)
     reskind = getkind(restype)[0]
     assert op1.opname == 'G_residual_call_%s_%s' % (expectedkind, reskind)
     assert op1.result == op.result
@@ -166,6 +182,24 @@ def residual_call_test(argtypes, restype, expectedkind):
     assert op1.args[1] == ('calldescr', FUNC, NONVOIDARGS, FUNC.RESULT)
     assert len(op1.args) == 2 + len(expectedkind)
     for sublist, kind1 in zip(op1.args[2:], expectedkind):
+        assert sublist.kind.startswith(kind1)
+        assert list(sublist) == [v for v in op.args[1:]
+                                 if getkind(v.concretetype) == sublist.kind]
+    for v in op.args[1:]:
+        kind = getkind(v.concretetype)
+        assert kind == 'void' or kind[0] in expectedkind
+
+def direct_call_test(argtypes, restype, expectedkind):
+    op = get_direct_call_op(argtypes, restype)
+    tr = Transformer(FakeCPU(), FakeRegularCallControl())
+    tr.graph = 'someinitialgraph'
+    op1 = tr.rewrite_operation(op)
+    reskind = getkind(restype)[0]
+    assert op1.opname == 'G_inline_call_%s_%s' % (expectedkind, reskind)
+    assert op1.result == op.result
+    assert op1.args[0] == 'somejitcode'
+    assert len(op1.args) == 1 + len(expectedkind)
+    for sublist, kind1 in zip(op1.args[1:], expectedkind):
         assert sublist.kind.startswith(kind1)
         assert list(sublist) == [v for v in op.args[1:]
                                  if getkind(v.concretetype) == sublist.kind]
@@ -272,7 +306,8 @@ def test_malloc_new_with_destructor():
     v = varoftype(lltype.Ptr(S))
     op = SpaceOperation('malloc', [Constant(S, lltype.Void),
                                    Constant({'flavor': 'gc'}, lltype.Void)], v)
-    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    tr = Transformer(FakeCPU(), FakeResidualCallControl())
+    op1 = tr.rewrite_operation(op)
     assert op1.opname == 'G_residual_call_r_r'
     assert op1.args[0].value == 'alloc_with_del'    # pseudo-function as a str
     assert list(op1.args[2]) == []
