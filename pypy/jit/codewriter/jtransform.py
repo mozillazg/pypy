@@ -430,6 +430,18 @@ class Transformer(object):
             sizedescr = self.cpu.sizeof(STRUCT)
             return SpaceOperation('new', [sizedescr], op.result)
 
+    def rewrite_op_getinteriorarraysize(self, op):
+        # only supports strings and unicodes
+        assert len(op.args) == 2
+        assert op.args[1].value == 'chars'
+        optype = op.args[0].concretetype
+        if optype == lltype.Ptr(rstr.STR):
+            opname = "strlen"
+        else:
+            assert optype == lltype.Ptr(rstr.UNICODE)
+            opname = "unicodelen"
+        return SpaceOperation(opname, [op.args[0]], op.result)
+
     def rewrite_op_getinteriorfield(self, op):
         # only supports strings and unicodes
         assert len(op.args) == 3
