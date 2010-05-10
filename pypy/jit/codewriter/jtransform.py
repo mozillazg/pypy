@@ -6,6 +6,8 @@ from pypy.objspace.flow.model import Block, Link, c_last_exception
 from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.jit.codewriter import support, heaptracker
 from pypy.translator.simplify import get_funcobj
+from pypy.rlib import objectmodel
+from pypy.rlib.jit import _we_are_jitted
 
 
 def transform_graph(graph, cpu=None, callcontrol=None, portal=True):
@@ -50,9 +52,16 @@ class Transformer(object):
                 if op is op_raising_exception:
                     self.killed_exception_raising_operation(block)
             else:
-                op2 = self.do_renaming(rename, op1)
-                newoperations.append(op2)
+                if isinstance(op1, SpaceOperation):
+                    op2 = self.do_renaming(rename, op1)
+                    newoperations.append(op2)
+                elif isinstance(op1, Constant):
+                    rename[op.result] = op1
+                else:
+                    raise TypeError(repr(op1))
         block.operations = newoperations
+        block.exitswitch = rename.get(block.exitswitch, block.exitswitch)
+        self.follow_constant_exit(block)
         self.optimize_goto_if_not(block)
         for link in block.exits:
             self.do_renaming_on_link(rename, link)
@@ -84,6 +93,19 @@ class Transformer(object):
         block.exitswitch = None
 
     # ----------
+
+    def follow_constant_exit(self, block):
+        v = block.exitswitch
+        if isinstance(v, Constant) and v != c_last_exception:
+            llvalue = v.value
+            for link in block.exits:
+                if link.llexitcase == llvalue:
+                    break
+            else:
+                assert link.exitcase == 'default'
+            block.exitswitch = None
+            link.exitcase = link.llexitcase = None
+            block.recloseblock(link)
 
     def optimize_goto_if_not(self, block):
         """Replace code like 'v = int_gt(x,y); exitswitch = v'
@@ -573,6 +595,19 @@ class Transformer(object):
                              [op.args[0], Constant(0.0, lltype.Float)],
                              op.result)
         return self.rewrite_operation(op1)
+
+    def rewrite_op_int_is_true(self, op):
+        if isinstance(op.args[0], Constant):
+            value = op.args[0].value
+            if value is objectmodel.malloc_zero_filled:
+                value = True
+            elif value is _we_are_jitted:
+                value = True
+            else:
+                raise AssertionError("don't know the truth value of %r"
+                                     % (value,))
+            return Constant(value, lltype.Bool)
+        return op
 
 # ____________________________________________________________
 

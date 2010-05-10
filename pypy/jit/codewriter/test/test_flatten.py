@@ -9,6 +9,7 @@ from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.translator.unsimplify import varoftype
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.jit import dont_look_inside
+from pypy.rlib.jit import _we_are_jitted
 
 
 class FakeRegAlloc:
@@ -434,3 +435,13 @@ class TestFlatten:
             residual_call_ir_i $<* fn cannot_raise>, <Descr>, I[%i0, %i1], R[], %i2
             int_return %i2
         """, transform=True, liveness=True)
+
+    def test_we_are_jitted(self):
+        def f(x):
+            if _we_are_jitted:
+                return 2
+            else:
+                return 3 + x
+        self.encoding_test(f, [5], """
+            int_return $2
+        """, transform=True)
