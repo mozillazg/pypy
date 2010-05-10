@@ -5,7 +5,7 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLException
-from pypy.jit.codewriter.jitcode import SwitchDictDescr
+from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 
 
 def arguments(*argtypes, **kwds):
@@ -80,6 +80,10 @@ class BlackholeInterpBuilder(object):
         #
         def dispatch_loop(self, code, position):
             while True:
+                if not we_are_translated():
+                    assert position in self._current_jitcode._startpoints, (
+                        "the current position %d is in the middle of "
+                        "an instruction!" % position)
                 opcode = ord(code[position])
                 position += 1
                 for i, func in all_funcs:
@@ -148,11 +152,13 @@ class BlackholeInterpBuilder(object):
                     value = self.cpu
                 elif argtype == 'pc':
                     value = position
-                elif argtype == 'd':
+                elif argtype == 'd' or argtype == 'j':
                     assert argcodes[next_argcode] == 'd'
                     next_argcode = next_argcode + 1
                     index = ord(code[position]) | (ord(code[position+1])<<8)
                     value = self.descrs[index]
+                    if argtype == 'j':
+                        assert isinstance(value, JitCode)
                     position += 2
                 else:
                     raise AssertionError("bad argtype: %r" % (argtype,))
@@ -262,6 +268,8 @@ class BlackholeInterpreter(object):
         self.registers_f[index] = value
 
     def run(self, jitcode, position):
+        if not we_are_translated():
+            self._current_jitcode = jitcode
         self.copy_constants(self.registers_i, jitcode.constants_i)
         self.copy_constants(self.registers_r, jitcode.constants_r)
         self.copy_constants(self.registers_f, jitcode.constants_f)
@@ -750,6 +758,16 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "i", "d", "I", "R", "F")
     def bhimpl_residual_call_irf_v(cpu, func, calldescr,args_i,args_r,args_f):
         cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
+
+    @arguments("cpu", "j", "R", returns="i")
+    def bhimpl_inline_call_r_i(cpu, jitcode, args_r):
+        return cpu.bh_call_i(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             None, args_r, None)
+
+    @arguments("cpu", "j", "I", "R", returns="i")
+    def bhimpl_inline_call_ir_i(cpu, jitcode, args_i, args_r):
+        return cpu.bh_call_i(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             args_i, args_r, None)
 
     @arguments("cpu", "d", "i", returns="r")
     def bhimpl_new_array(cpu, arraydescr, length):

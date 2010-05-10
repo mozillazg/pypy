@@ -43,6 +43,7 @@ class Assembler(object):
         self.switchdictdescrs = []
         self.count_regs = dict.fromkeys(KINDS, 0)
         self.liveness = {}
+        self.startpoints = set()
 
     def emit_reg(self, reg):
         if reg.index >= self.count_regs[reg.kind]:
@@ -147,6 +148,7 @@ class Assembler(object):
         key = opname + '/' + ''.join(argcodes)
         num = self.insns.setdefault(key, len(self.insns))
         self.code[startposition] = chr(num)
+        self.startpoints.add(startposition)
 
     def get_liveness_info(self, insn, kind):
         lives = [chr(reg.index) for reg in insn[1:] if reg.kind == kind]
@@ -182,4 +184,5 @@ class Assembler(object):
                       self.count_regs['ref'],
                       self.count_regs['float'],
                       liveness=self.liveness,
-                      assembler=self)
+                      assembler=self,
+                      startpoints=self.startpoints)

@@ -5,7 +5,7 @@ from pypy.rlib.jit import OPTIMIZER_FULL, OPTIMIZER_SIMPLE, loop_invariant
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp import pyjitpl, history
-from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
+from pypy.jit.codewriter.policy import JitPolicy, StopAtXPolicy
 from pypy import conftest
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
@@ -21,7 +21,7 @@ def _get_jitcodes(CPUClass, func, values, type_system):
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, None, False)
     cw = codewriter.CodeWriter(cpu)
-    mainjitcode = cw.make_jitcodes(graphs[0], verbose=True)
+    mainjitcode = cw.make_jitcodes(graphs[0], JitPolicy(), verbose=True)
     return cw, mainjitcode
 
 def _run_with_blackhole(cw, mainjitcode, args):

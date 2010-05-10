@@ -137,7 +137,8 @@ def test_guess_call_kind_and_calls_from_graphs():
 # ____________________________________________________________
 
 def test_get_jitcode():
-    cc = CallControl()
+    from pypy.jit.codewriter.test.test_codewriter import FakeCPU
+    cc = CallControl(FakeCPU())
     class somegraph:
         name = "foo"
     jitcode = cc.get_jitcode(somegraph)
