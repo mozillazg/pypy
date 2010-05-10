@@ -163,7 +163,7 @@ class TestRegAlloc:
         v4 = Variable(); v4.concretetype = rclass.CLASSTYPE
         block = Block([])
         block.operations = [
-            SpaceOperation('res_call', [], v1),
+            SpaceOperation('G_res_call', [], v1),
             ]
         graph = FunctionGraph('f', block, v4)
         exclink = Link([v2], graph.returnblock)
@@ -175,7 +175,7 @@ class TestRegAlloc:
                          exclink)
         #
         self.check_assembler(graph, """
-            res_call %i0
+            G_res_call %i0
             catch_exception L1
             int_return %i0
             L1:

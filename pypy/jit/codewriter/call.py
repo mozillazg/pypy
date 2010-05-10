@@ -15,6 +15,15 @@ class CallControl(object):
         self.portal_graph = portal_graph
         self.jitcodes = {}             # map {graph: jitcode}
         self.unfinished_graphs = []    # list of graphs with pending jitcodes
+        if rtyper is not None:
+            from pypy.jit.metainterp.effectinfo import VirtualizableAnalyzer
+            from pypy.translator.backendopt.canraise import RaiseAnalyzer
+            from pypy.translator.backendopt.writeanalyze import \
+                                                            ReadWriteAnalyzer
+            translator = rtyper.annotator.translator
+            self.raise_analyzer = RaiseAnalyzer(translator)
+            self.readwrite_analyzer = ReadWriteAnalyzer(translator)
+            self.virtualizable_analyzer = VirtualizableAnalyzer(translator)
 
     def find_all_graphs(self, policy):
         def is_candidate(graph):

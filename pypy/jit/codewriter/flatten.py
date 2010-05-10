@@ -48,10 +48,10 @@ KINDS = ['int', 'ref', 'float']
 
 # ____________________________________________________________
 
-def flatten_graph(graph, regallocs):
+def flatten_graph(graph, regallocs, _include_all_exc_links=False):
     """Flatten the graph into an SSARepr, with already-computed register
     allocations.  'regallocs' in a dict {kind: RegAlloc}."""
-    flattener = GraphFlattener(graph, regallocs)
+    flattener = GraphFlattener(graph, regallocs, _include_all_exc_links)
     flattener.enforce_input_args()
     flattener.generate_ssa_form()
     return flattener.ssarepr
@@ -59,9 +59,10 @@ def flatten_graph(graph, regallocs):
 
 class GraphFlattener(object):
 
-    def __init__(self, graph, regallocs):
+    def __init__(self, graph, regallocs, _include_all_exc_links=False):
         self.graph = graph
         self.regallocs = regallocs
+        self._include_all_exc_links = _include_all_exc_links
         self.registers = {}
         if graph:
             name = graph.name
@@ -156,6 +157,12 @@ class GraphFlattener(object):
             if lastopname == '-live-':
                 lastopname = block.operations[-2].opname
             assert block.exits[0].exitcase is None # is this always True?
+            #
+            if not self._include_all_exc_links:
+                if not lastopname.startswith('G_'):  # cannot actually raise
+                    self.make_link(block.exits[0])
+                    return
+            # 
             self.emitline('catch_exception', TLabel(block.exits[0]))
             self.make_link(block.exits[0])
             self.emitline(Label(block.exits[0]))

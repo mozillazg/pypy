@@ -5,6 +5,7 @@ from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import Block, Link, c_last_exception
 from pypy.jit.codewriter.flatten import ListOfKind
 from pypy.jit.codewriter import support, heaptracker
+from pypy.translator.simplify import get_funcobj
 
 
 def transform_graph(graph, cpu=None, callcontrol=None, portal=True):
@@ -202,7 +203,7 @@ class Transformer(object):
         if 'r' in kinds: sublists.append(ListOfKind('ref', args_r))
         if 'f' in kinds: sublists.append(ListOfKind('float', args_f))
         reskind = getkind(op.result.concretetype)[0]
-        return SpaceOperation('G_%s_call_%s_%s' % (namebase, kinds, reskind),
+        return SpaceOperation('%s_%s_%s' % (namebase, kinds, reskind),
                               initialargs + sublists, op.result)
 
     def add_in_correct_list(self, v, lst_i, lst_r, lst_f):
@@ -222,7 +223,34 @@ class Transformer(object):
         FUNC = op.args[0].concretetype.TO
         NONVOIDARGS = tuple([ARG for ARG in FUNC.ARGS if ARG != lltype.Void])
         calldescr = self.cpu.calldescrof(FUNC, NONVOIDARGS, FUNC.RESULT)
-        return self.rewrite_call(op, 'residual', [op.args[0], calldescr])
+        #
+        pure = False
+        loopinvariant = False
+        if op.opname == "direct_call":
+            func = getattr(get_funcobj(op.args[0].value), '_callable', None)
+            pure = getattr(func, "_pure_function_", False)
+            loopinvariant = getattr(func, "_jit_loop_invariant_", False)
+            if pure or loopinvariant:
+                effectinfo = calldescr.get_extra_info()
+                assert (effectinfo is not None and
+                        not effectinfo.forces_virtual_or_virtualizable)
+        try:
+            canraise = self.callcontrol.raise_analyzer.can_raise(op)
+        except lltype.DelayedPointer:
+            canraise = True  # if we need to look into the delayed ptr that is
+                             # the portal, then it's certainly going to raise
+        if loopinvariant:
+            name = 'G_residual_call_loopinvariant'
+            assert not non_void_args, ("arguments not supported for "
+                                       "loop-invariant function!")
+        elif pure:
+            # XXX check what to do about exceptions (also MemoryError?)
+            name = 'residual_call_pure'
+        elif canraise:
+            name = 'G_residual_call'
+        else:
+            name = 'residual_call'
+        return self.rewrite_call(op, name, [op.args[0], calldescr])
 
     def handle_regular_call(self, op):
         """A direct_call turns into the operation 'inline_call_xxx' if it
@@ -231,7 +259,7 @@ class Transformer(object):
         [targetgraph] = self.callcontrol.graphs_from(op)
         jitcode = self.callcontrol.get_jitcode(targetgraph,
                                                called_from=self.graph)
-        return self.rewrite_call(op, 'inline', [jitcode])
+        return self.rewrite_call(op, 'G_inline_call', [jitcode])
 
     def _do_builtin_call(self, op, oopspec_name=None, args=None, extra=None):
         if oopspec_name is None: oopspec_name = op.opname
