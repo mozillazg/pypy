@@ -27,14 +27,11 @@ class FakeLink:
     def __init__(self, exitcase):
         self.exitcase = self.llexitcase = exitcase
 
-class FakeRaiseAnalyzer:
-    def can_raise(self, op):
-        return True
-
 class FakeResidualCallControl:
     def guess_call_kind(self, op):
         return 'residual'
-    raise_analyzer = FakeRaiseAnalyzer()
+    def getcalldescr(self, op):
+        return 'calldescr', True
 
 class FakeRegularCallControl:
     def guess_call_kind(self, op):
@@ -182,9 +179,7 @@ def residual_call_test(argtypes, restype, expectedkind):
     assert op1.opname == 'G_residual_call_%s_%s' % (expectedkind, reskind)
     assert op1.result == op.result
     assert op1.args[0] == op.args[0]
-    FUNC = op.args[0].concretetype.TO
-    NONVOIDARGS = tuple([ARG for ARG in FUNC.ARGS if ARG != lltype.Void])
-    assert op1.args[1] == ('calldescr', FUNC, NONVOIDARGS, FUNC.RESULT)
+    assert op1.args[1] == 'calldescr'
     assert len(op1.args) == 2 + len(expectedkind)
     for sublist, kind1 in zip(op1.args[2:], expectedkind):
         assert sublist.kind.startswith(kind1)

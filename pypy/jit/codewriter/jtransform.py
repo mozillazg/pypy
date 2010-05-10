@@ -220,9 +220,7 @@ class Transformer(object):
         is calling a function that we don't want to JIT.  The initial args
         of 'residual_call_xxx' are the constant function to call, and its
         calldescr."""
-        FUNC = op.args[0].concretetype.TO
-        NONVOIDARGS = tuple([ARG for ARG in FUNC.ARGS if ARG != lltype.Void])
-        calldescr = self.cpu.calldescrof(FUNC, NONVOIDARGS, FUNC.RESULT)
+        calldescr, canraise = self.callcontrol.getcalldescr(op)
         #
         pure = False
         loopinvariant = False
@@ -234,11 +232,6 @@ class Transformer(object):
                 effectinfo = calldescr.get_extra_info()
                 assert (effectinfo is not None and
                         not effectinfo.forces_virtual_or_virtualizable)
-        try:
-            canraise = self.callcontrol.raise_analyzer.can_raise(op)
-        except lltype.DelayedPointer:
-            canraise = True  # if we need to look into the delayed ptr that is
-                             # the portal, then it's certainly going to raise
         if loopinvariant:
             name = 'G_residual_call_loopinvariant'
             assert not non_void_args, ("arguments not supported for "
