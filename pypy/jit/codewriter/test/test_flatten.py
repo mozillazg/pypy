@@ -43,17 +43,15 @@ class FakeCPU:
     def fielddescrof(self, STRUCT, name):
         return FakeDescr()
 
-class FakeRaiseAnalyzer:
-    def can_raise(self, op):
-        try:
-            return 'cannot_raise' not in op.args[0].value._obj.graph.name
-        except AttributeError:
-            return True
-
 class FakeCallControl:
     def guess_call_kind(self, op):
         return 'residual'
-    raise_analyzer = FakeRaiseAnalyzer()
+    def getcalldescr(self, op):
+        try:
+            can_raise = 'cannot_raise' not in op.args[0].value._obj.graph.name
+        except AttributeError:
+            can_raise = True
+        return FakeDescr(), can_raise
 
 def fake_regallocs():
     return {'int': FakeRegAlloc(),

@@ -8,6 +8,11 @@ from pypy.jit.codewriter.jitcode import JitCode
 from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.rpython.lltypesystem import lltype, llmemory
 
+from pypy.translator.backendopt.canraise import RaiseAnalyzer
+from pypy.translator.backendopt.writeanalyze import ReadWriteAnalyzer
+from pypy.jit.metainterp.effectinfo import VirtualizableAnalyzer
+from pypy.jit.metainterp.effectinfo import effectinfo_from_writeanalyze
+
 
 class CallControl(object):
 
@@ -17,10 +22,6 @@ class CallControl(object):
         self.jitcodes = {}             # map {graph: jitcode}
         self.unfinished_graphs = []    # list of graphs with pending jitcodes
         if cpu is not None:
-            from pypy.jit.metainterp.effectinfo import VirtualizableAnalyzer
-            from pypy.translator.backendopt.canraise import RaiseAnalyzer
-            from pypy.translator.backendopt.writeanalyze import \
-                                                            ReadWriteAnalyzer
             self.rtyper = cpu.rtyper
             translator = self.rtyper.annotator.translator
             self.raise_analyzer = RaiseAnalyzer(translator)
@@ -155,3 +156,26 @@ class CallControl(object):
         calldescr = self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS),
                                          FUNC.RESULT)
         return (fnaddr, calldescr)
+
+    def getcalldescr(self, op):
+        NON_VOID_ARGS = [x.concretetype for x in op.args[1:]
+                                        if x.concretetype is not lltype.Void]
+        RESULT = op.result.concretetype
+        # check the number and type of arguments
+        FUNC = get_functype(op.args[0].concretetype)
+        ARGS = FUNC.ARGS
+        assert NON_VOID_ARGS == [T for T in ARGS if T is not lltype.Void]
+        assert RESULT == FUNC.RESULT
+        # ok
+        effectinfo = effectinfo_from_writeanalyze(
+            self.readwrite_analyzer.analyze(op),
+            self.cpu,
+            self.virtualizable_analyzer.analyze(op))
+        calldescr = self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
+                                         effectinfo)
+        try:
+            canraise = self.raise_analyzer.can_raise(op)
+        except lltype.DelayedPointer:
+            canraise = True  # if we need to look into the delayed ptr that is
+                             # the portal, then it's certainly going to raise
+        return calldescr, canraise
