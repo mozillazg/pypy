@@ -21,6 +21,7 @@ class CallControl(object):
         self.portal_graph = portal_graph
         self.jitcodes = {}             # map {graph: jitcode}
         self.unfinished_graphs = []    # list of graphs with pending jitcodes
+        self.jitdriver = None
         if cpu is not None:
             self.rtyper = cpu.rtyper
             translator = self.rtyper.annotator.translator
@@ -29,6 +30,11 @@ class CallControl(object):
             self.virtualizable_analyzer = VirtualizableAnalyzer(translator)
 
     def find_all_graphs(self, policy):
+        try:
+            return self.candidate_graphs
+        except AttributeError:
+            pass
+
         def is_candidate(graph):
             return policy.look_inside_graph(graph)
 
@@ -223,3 +229,9 @@ class CallControl(object):
     def calldescr_canraise(self, calldescr):
         effectinfo = calldescr.get_extra_info()
         return effectinfo is None or effectinfo.extraeffect >= ef.EF_CAN_RAISE
+
+    def found_jitdriver(self, jitdriver):
+        if self.jitdriver is None:
+            self.jitdriver = jitdriver
+        else:
+            assert self.jitdriver is jitdriver

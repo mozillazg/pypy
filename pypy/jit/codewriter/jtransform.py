@@ -608,6 +608,19 @@ class Transformer(object):
             return Constant(value, lltype.Bool)
         return op
 
+    def rewrite_op_jit_marker(self, op):
+        opname = op.args[0].value
+        jitdriver = op.args[1].value
+        self.callcontrol.found_jitdriver(jitdriver)
+        args_i = []
+        args_r = []
+        args_f = []
+        for v in op.args[2:]:
+            self.add_in_correct_list(v, args_i, args_r, args_f)
+        return SpaceOperation(opname, [ListOfKind('int', args_i),
+                                       ListOfKind('ref', args_r),
+                                       ListOfKind('float', args_f)], op.result)
+
 # ____________________________________________________________
 
 def _with_prefix(prefix):

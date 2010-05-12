@@ -20,11 +20,12 @@ def _get_jitcodes(CPUClass, func, values, type_system):
     graphs = rtyper.annotator.translator.graphs
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, None, False)
-    cw = codewriter.CodeWriter(cpu)
-    mainjitcode = cw.make_jitcodes(graphs[0], JitPolicy(), verbose=True)
-    return cw, mainjitcode
+    cw = codewriter.CodeWriter(cpu, graphs[0])
+    cw.find_all_graphs(JitPolicy())
+    cw.make_jitcodes(verbose=True)
+    return cw
 
-def _run_with_blackhole(cw, mainjitcode, args):
+def _run_with_blackhole(cw, args):
     from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
     blackholeinterpbuilder = BlackholeInterpBuilder(cw)
     blackholeinterp = blackholeinterpbuilder.acquire_interp()
@@ -42,10 +43,10 @@ def _run_with_blackhole(cw, mainjitcode, args):
             count_f += 1
         else:
             raise TypeError(T)
-    blackholeinterp.run(mainjitcode, 0)
+    blackholeinterp.run(cw.mainjitcode, 0)
     return blackholeinterp._get_result_anytype()
 
-def _run_with_pyjitpl(cw, mainjitcode, args, testself):
+def _run_with_pyjitpl(cw, args, testself):
     from pypy.jit.metainterp import simple_optimize
 
     class DoneWithThisFrame(Exception):
@@ -67,16 +68,14 @@ def _run_with_pyjitpl(cw, mainjitcode, args, testself):
         debug_level = 2
 
     opt = history.Options(listops=True)
-    cpu = cw.cpu
-    metainterp_sd = pyjitpl.MetaInterpStaticData(cw, opt)
-    metainterp_sd.finish_setup(optimizer="bogus")
+    metainterp_sd = pyjitpl.MetaInterpStaticData(cw.cpu, opt)
+    metainterp_sd.finish_setup(cw, optimizer="bogus")
     metainterp_sd.state = FakeWarmRunnerState()
     metainterp_sd.state.cpu = metainterp_sd.cpu
     metainterp = pyjitpl.MetaInterp(metainterp_sd)
     if hasattr(testself, 'finish_metainterp_for_interp_operations'):
         testself.finish_metainterp_for_interp_operations(metainterp)
 
-    metainterp_sd.portal_code = mainjitcode
     metainterp_sd.DoneWithThisFrameInt = DoneWithThisFrame
     metainterp_sd.DoneWithThisFrameRef = DoneWithThisFrameRef
     metainterp_sd.DoneWithThisFrameFloat = DoneWithThisFrame
@@ -126,12 +125,11 @@ class JitMixin:
 
     def interp_operations(self, f, args, **kwds):
         # get the JitCodes for the function f
-        cw, mainjitcode = _get_jitcodes(self.CPUClass, f, args,
-                                        self.type_system)
+        cw = _get_jitcodes(self.CPUClass, f, args, self.type_system)
         # try to run it with blackhole.py
-        result1 = _run_with_blackhole(cw, mainjitcode, args)
+        result1 = _run_with_blackhole(cw, args)
         # try to run it with pyjitpl.py
-        result2 = _run_with_pyjitpl(cw, mainjitcode, args, self)
+        result2 = _run_with_pyjitpl(cw, args, self)
         assert result1 == result2
         return result1
 

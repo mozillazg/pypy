@@ -8,8 +8,7 @@ from pypy.rpython.lltypesystem import lltype, rclass, rstr
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.translator.unsimplify import varoftype
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rlib.jit import dont_look_inside
-from pypy.rlib.jit import _we_are_jitted
+from pypy.rlib.jit import dont_look_inside, _we_are_jitted, JitDriver
 
 
 class FakeRegAlloc:
@@ -57,6 +56,8 @@ class FakeCallControl:
         return FakeDescr()
     def calldescr_canraise(self, calldescr):
         return calldescr is not self._descr_cannot_raise
+    def found_jitdriver(self, jitdriver):
+        assert isinstance(jitdriver, JitDriver)
 
 def fake_regallocs():
     return {'int': FakeRegAlloc(),
@@ -448,4 +449,15 @@ class TestFlatten:
                 return 3 + x
         self.encoding_test(f, [5], """
             int_return $2
+        """, transform=True)
+
+    def test_jitdriver(self):
+        myjitdriver = JitDriver(greens = ['x'], reds = ['y'])
+        def f(x, y):
+            myjitdriver.jit_merge_point(x=x, y=y)
+            myjitdriver.can_enter_jit(x=y, y=x)
+        self.encoding_test(f, [4, 5], """
+            jit_merge_point I[%i0, %i1], R[], F[]
+            can_enter_jit I[%i1, %i0], R[], F[]
+            void_return
         """, transform=True)

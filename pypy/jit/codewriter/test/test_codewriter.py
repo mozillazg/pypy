@@ -57,15 +57,17 @@ def test_call():
         return ggg(b) - ggg(a)
     rtyper = support.annotate(fff, [35, 42])
     maingraph = rtyper.annotator.translator.graphs[0]
-    cw = CodeWriter(FakeCPU())
-    jitcode = cw.make_jitcodes(maingraph, FakePolicy(), verbose=True)
-    print jitcode._dump
+    cw = CodeWriter(FakeCPU(), maingraph)
+    cw.find_all_graphs(FakePolicy())
+    cw.make_jitcodes(verbose=True)
+    jitcode = cw.mainjitcode
+    print jitcode.dump()
     [jitcode2] = cw.assembler.descrs
-    print jitcode2._dump
+    print jitcode2.dump()
     assert jitcode is not jitcode2
     assert jitcode.name == 'fff'
     assert jitcode2.name == 'ggg'
-    assert 'ggg' in jitcode._dump
+    assert 'ggg' in jitcode.dump()
     assert lltype.typeOf(jitcode2.fnaddr) == llmemory.Address
     assert jitcode2.calldescr[0] == 'calldescr'
 
