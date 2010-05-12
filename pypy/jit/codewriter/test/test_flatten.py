@@ -45,14 +45,18 @@ class FakeCPU:
         return FakeDescr()
 
 class FakeCallControl:
+    _descr_cannot_raise = FakeDescr()
     def guess_call_kind(self, op):
         return 'residual'
     def getcalldescr(self, op):
         try:
-            can_raise = 'cannot_raise' not in op.args[0].value._obj.graph.name
+            if 'cannot_raise' in op.args[0].value._obj.graph.name:
+                return self._descr_cannot_raise
         except AttributeError:
-            can_raise = True
-        return FakeDescr(), can_raise
+            pass
+        return FakeDescr()
+    def calldescr_canraise(self, calldescr):
+        return calldescr is not self._descr_cannot_raise
 
 def fake_regallocs():
     return {'int': FakeRegAlloc(),

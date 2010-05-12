@@ -3,9 +3,8 @@ from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.jit.metainterp.history import getkind
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import Block, Link, c_last_exception
-from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter import support, heaptracker
-from pypy.translator.simplify import get_funcobj
 from pypy.rlib import objectmodel
 from pypy.rlib.jit import _we_are_jitted
 
@@ -217,14 +216,14 @@ class Transformer(object):
         args_f = []
         for v in op.args[1:]:
             self.add_in_correct_list(v, args_i, args_r, args_f)
-        if args_f:   kinds = 'irf'
+        reskind = getkind(op.result.concretetype)[0]
+        if args_f or reskind == 'f': kinds = 'irf'
         elif args_i: kinds = 'ir'
         else:        kinds = 'r'
         sublists = []
         if 'i' in kinds: sublists.append(ListOfKind('int', args_i))
         if 'r' in kinds: sublists.append(ListOfKind('ref', args_r))
         if 'f' in kinds: sublists.append(ListOfKind('float', args_f))
-        reskind = getkind(op.result.concretetype)[0]
         return SpaceOperation('%s_%s_%s' % (namebase, kinds, reskind),
                               initialargs + sublists, op.result)
 
@@ -237,35 +236,16 @@ class Transformer(object):
         else: raise AssertionError(kind)
         lst.append(v)
 
-    def handle_residual_call(self, op):
+    def handle_residual_call(self, op, extraargs=[]):
         """A direct_call turns into the operation 'residual_call_xxx' if it
         is calling a function that we don't want to JIT.  The initial args
-        of 'residual_call_xxx' are the constant function to call, and its
-        calldescr."""
-        calldescr, canraise = self.callcontrol.getcalldescr(op)
-        #
-        pure = False
-        loopinvariant = False
-        if op.opname == "direct_call":
-            func = getattr(get_funcobj(op.args[0].value), '_callable', None)
-            pure = getattr(func, "_pure_function_", False)
-            loopinvariant = getattr(func, "_jit_loop_invariant_", False)
-            if pure or loopinvariant:
-                effectinfo = calldescr.get_extra_info()
-                assert (effectinfo is not None and
-                        not effectinfo.forces_virtual_or_virtualizable)
-        if loopinvariant:
-            name = 'G_residual_call_loopinvariant'
-            assert not non_void_args, ("arguments not supported for "
-                                       "loop-invariant function!")
-        elif pure:
-            # XXX check what to do about exceptions (also MemoryError?)
-            name = 'residual_call_pure'
-        elif canraise:
+        of 'residual_call_xxx' are the function to call, and its calldescr."""
+        calldescr = self.callcontrol.getcalldescr(op)
+        if self.callcontrol.calldescr_canraise(calldescr):
             name = 'G_residual_call'
         else:
             name = 'residual_call'
-        return self.rewrite_call(op, name, [op.args[0], calldescr])
+        return self.rewrite_call(op, name, [op.args[0], calldescr] + extraargs)
 
     def handle_regular_call(self, op):
         """A direct_call turns into the operation 'inline_call_xxx' if it
@@ -275,6 +255,17 @@ class Transformer(object):
         jitcode = self.callcontrol.get_jitcode(targetgraph,
                                                called_from=self.graph)
         return self.rewrite_call(op, 'G_inline_call', [jitcode])
+
+    handle_residual_indirect_call = handle_residual_call
+
+    def handle_regular_indirect_call(self, op):
+        """An indirect call where at least one target has a JitCode."""
+        lst = []
+        for targetgraph in self.callcontrol.graphs_from(op):
+            jitcode = self.callcontrol.get_jitcode(targetgraph,
+                                                   called_from=self.graph)
+            lst.append(jitcode)
+        return self.handle_residual_call(op, [IndirectCallTargets(lst)])
 
     def _do_builtin_call(self, op, oopspec_name=None, args=None, extra=None):
         if oopspec_name is None: oopspec_name = op.opname

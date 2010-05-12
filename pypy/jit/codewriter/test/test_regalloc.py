@@ -18,7 +18,7 @@ class TestRegAlloc:
 
     def check_assembler(self, graph, expected, transform=False):
         # 'transform' can be False only for simple graphs.  More complex
-        # graphs must first be transformed by jitter.py before they can be
+        # graphs must first be transformed by jtransform.py before they can be
         # subjected to register allocation and flattening.
         if transform:
             from pypy.jit.codewriter.jtransform import transform_graph

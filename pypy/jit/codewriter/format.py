@@ -2,7 +2,7 @@ import py
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
-from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter.jitcode import SwitchDictDescr
 from pypy.jit.metainterp.history import AbstractDescr
 
@@ -28,7 +28,7 @@ def format_assembler(ssarepr):
             return '<SwitchDictDescr %s>' % (
                 ', '.join(['%s:%s' % (key, getlabelname(lbl))
                            for key, lbl in x._labels]))
-        elif isinstance(x, AbstractDescr):
+        elif isinstance(x, (AbstractDescr, IndirectCallTargets)):
             return '%r' % (x,)
         else:
             return '<unknown object: %r>' % (x,)

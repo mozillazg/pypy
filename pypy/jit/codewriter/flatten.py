@@ -44,6 +44,12 @@ class ListOfKind(object):
     def __iter__(self):
         return iter(self.content)
 
+class IndirectCallTargets(object):
+    def __init__(self, lst):
+        self.lst = lst       # list of JitCodes
+    def __repr__(self):
+        return '<IndirectCallTargets>'
+
 KINDS = ['int', 'ref', 'float']
 
 # ____________________________________________________________
@@ -194,7 +200,7 @@ class GraphFlattener(object):
                 linkfalse, linktrue = linktrue, linkfalse
             opname = 'goto_if_not'
             if isinstance(block.exitswitch, tuple):
-                # special case produced by jitter.optimize_goto_if_not()
+                # special case produced by jtransform.optimize_goto_if_not()
                 if block.exitswitch[0] != 'int_is_true':
                     opname = 'goto_if_not_' + block.exitswitch[0]
                 opargs = block.exitswitch[1:]
@@ -302,6 +308,8 @@ class GraphFlattener(object):
                 lst = [self.getcolor(x) for x in v]
                 v = ListOfKind(v.kind, lst)
             elif isinstance(v, AbstractDescr):
+                pass
+            elif isinstance(v, IndirectCallTargets):
                 pass
             else:
                 raise NotImplementedError(type(v))
