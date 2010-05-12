@@ -711,6 +711,12 @@ class BlackholeInterpreter(object):
         assert real_instance
         return lltype.cast_opaque_ptr(llmemory.GCREF, real_instance)
 
+    @arguments("self", "r")
+    def bhimpl_raise(self, excvalue):
+        import pdb; pdb.set_trace()
+        XXX
+        raise real_instance
+
     @arguments("self")
     def bhimpl_reraise(self):
         real_instance = self.exception_last_value
