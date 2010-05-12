@@ -247,8 +247,16 @@ class MIFrame(object):
         if not switchcase:
             self.pc = target
 
+    for _opimpl in ['int_is_zero', 'ptr_iszero', 'ptr_nonzero']:
+        exec py.code.Source('''
+            @arguments("label", "box")
+            def opimpl_goto_if_not_%s(self, target, box):
+                condbox = self.execute(rop.%s, box)
+                self.opimpl_goto_if_not(target, condbox)
+        ''' % (_opimpl, _opimpl.upper())).compile()
+
     for _opimpl in ['int_lt', 'int_le', 'int_eq', 'int_ne', 'int_gt', 'int_ge',
-                    ]:
+                    'ptr_eq', 'ptr_ne']:
         exec py.code.Source('''
             @arguments("label", "box", "box")
             def opimpl_goto_if_not_%s(self, target, b1, b2):
