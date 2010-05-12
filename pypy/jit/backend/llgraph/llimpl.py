@@ -1185,19 +1185,19 @@ def do_arraylen_gc(arraydescr, array):
     array = array._obj.container
     return array.getlength()
 
-def do_strlen(_, string):
+def do_strlen(string):
     str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
     return len(str.chars)
 
-def do_strgetitem(_, string, index):
+def do_strgetitem(string, index):
     str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
     return ord(str.chars[index])
 
-def do_unicodelen(_, string):
+def do_unicodelen(string):
     uni = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), string)
     return len(uni.chars)
 
-def do_unicodegetitem(_, string, index):
+def do_unicodegetitem(string, index):
     uni = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), string)
     return ord(uni.chars[index])
 
@@ -1311,18 +1311,18 @@ def do_setfield_raw_ptr(struct, fieldnum, newvalue, memocast):
     newvalue = cast_from_ptr(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)
 
-def do_newstr(_, length):
+def do_newstr(length):
     x = rstr.mallocstr(length)
     return cast_to_ptr(x)
 
-def do_newunicode(_, length):
+def do_newunicode(length):
     return cast_to_ptr(rstr.mallocunicode(length))
 
-def do_strsetitem(_, string, index, newvalue):
+def do_strsetitem(string, index, newvalue):
     str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
     str.chars[index] = chr(newvalue)
 
-def do_unicodesetitem(_, string, index, newvalue):
+def do_unicodesetitem(string, index, newvalue):
     uni = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), string)
     uni.chars[index] = unichr(newvalue)
 

@@ -360,7 +360,11 @@ class ConstPtr(Const):
     def _get_str(self):    # for debugging only
         from pypy.rpython.annlowlevel import hlstr
         from pypy.rpython.lltypesystem import rstr
-        return hlstr(lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), self.value))
+        try:
+            return hlstr(lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR),
+                                                self.value))
+        except lltype.UninitializedMemoryAccess:
+            return '<uninitialized string>'
 
 class ConstObj(Const):
     type = REF

@@ -5,13 +5,13 @@
 
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.jitcode import JitCode
+from pypy.jit.codewriter.effectinfo import VirtualizableAnalyzer
+from pypy.jit.codewriter.effectinfo import effectinfo_from_writeanalyze
+from pypy.jit.codewriter import effectinfo as ef
 from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.rpython.lltypesystem import lltype, llmemory
-
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
 from pypy.translator.backendopt.writeanalyze import ReadWriteAnalyzer
-from pypy.jit.metainterp.effectinfo import VirtualizableAnalyzer
-from pypy.jit.metainterp.effectinfo import effectinfo_from_writeanalyze
 
 
 class CallControl(object):
@@ -146,6 +146,12 @@ class CallControl(object):
             return jitcode
 
     def get_jitcode_calldescr(self, graph):
+        """Return the calldescr that describes calls to the 'graph'.
+        This returns a calldescr that is appropriate to attach to the
+        jitcode corresponding to 'graph'.  It has no extra effectinfo,
+        because it is not needed there; it is only used by the blackhole
+        interp to really do the call corresponding to 'inline_call' ops.
+        """
         fnptr = self.rtyper.getcallable(graph)
         FUNC = get_functype(lltype.typeOf(fnptr))
         if self.rtyper.type_system.name == 'ootypesystem':
@@ -158,6 +164,13 @@ class CallControl(object):
         return (fnaddr, calldescr)
 
     def getcalldescr(self, op):
+        """Return the calldescr that describes all calls done by 'op'.
+        This returns a calldescr that we can put in the corresponding
+        call operation in the calling jitcode.  It gets an effectinfo
+        describing the effect of the call: which field types it may
+        change, whether it can force virtualizables, whether it can
+        raise, etc.
+        """
         NON_VOID_ARGS = [x.concretetype for x in op.args[1:]
                                         if x.concretetype is not lltype.Void]
         RESULT = op.result.concretetype
@@ -167,15 +180,46 @@ class CallControl(object):
         assert NON_VOID_ARGS == [T for T in ARGS if T is not lltype.Void]
         assert RESULT == FUNC.RESULT
         # ok
+        # get the 'pure' and 'loopinvariant' flags from the function object
+        pure = False
+        loopinvariant = False
+        if op.opname == "direct_call":
+            func = getattr(get_funcobj(op.args[0].value), '_callable', None)
+            pure = getattr(func, "_pure_function_", False)
+            loopinvariant = getattr(func, "_jit_loop_invariant_", False)
+            if loopinvariant:
+                assert not NON_VOID_ARGS, ("arguments not supported for "
+                                           "loop-invariant function!")
+        # build the extraeffect
+        if self.virtualizable_analyzer.analyze(op):
+            extraeffect = ef.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+        elif loopinvariant:
+            extraeffect = ef.EF_LOOPINVARIANT
+        elif pure:
+            # XXX check what to do about exceptions (also MemoryError?)
+            extraeffect = ef.EF_PURE
+        elif self._canraise(op):
+            extraeffect = ef.EF_CAN_RAISE
+        else:
+            extraeffect = ef.EF_CANNOT_RAISE
+        #
         effectinfo = effectinfo_from_writeanalyze(
-            self.readwrite_analyzer.analyze(op),
-            self.cpu,
-            self.virtualizable_analyzer.analyze(op))
-        calldescr = self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
-                                         effectinfo)
+            self.readwrite_analyzer.analyze(op), self.cpu, extraeffect)
+        #
+        if pure or loopinvariant:
+            assert effectinfo is not None
+            assert extraeffect != ef.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+        #
+        return self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
+                                    effectinfo)
+
+    def _canraise(self, op):
         try:
-            canraise = self.raise_analyzer.can_raise(op)
+            return self.raise_analyzer.can_raise(op)
         except lltype.DelayedPointer:
-            canraise = True  # if we need to look into the delayed ptr that is
-                             # the portal, then it's certainly going to raise
-        return calldescr, canraise
+            return True  # if we need to look into the delayed ptr that is
+                         # the portal, then it's certainly going to raise
+
+    def calldescr_canraise(self, calldescr):
+        effectinfo = calldescr.get_extra_info()
+        return effectinfo is None or effectinfo.extraeffect >= ef.EF_CAN_RAISE

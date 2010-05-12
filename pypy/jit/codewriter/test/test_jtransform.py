@@ -31,7 +31,9 @@ class FakeResidualCallControl:
     def guess_call_kind(self, op):
         return 'residual'
     def getcalldescr(self, op):
-        return 'calldescr', True
+        return 'calldescr'
+    def calldescr_canraise(self, calldescr):
+        return True
 
 class FakeRegularCallControl:
     def guess_call_kind(self, op):
@@ -41,6 +43,19 @@ class FakeRegularCallControl:
     def get_jitcode(self, graph, called_from=None):
         assert graph == 'somegraph'
         return 'somejitcode'
+
+class FakeIndirectCallControl:
+    def guess_call_kind(self, op):
+        return 'regular'
+    def graphs_from(self, op):
+        return ['somegraph1', 'somegraph2']
+    def getcalldescr(self, op):
+        return 'calldescr'
+    def get_jitcode(self, graph, called_from=None):
+        assert graph in ('somegraph1', 'somegraph2')
+        return 'somejitcode' + graph[-1]
+    def calldescr_canraise(self, calldescr):
+        return True
 
 
 def test_optimize_goto_if_not():
@@ -156,11 +171,13 @@ def test_calls():
               if with_r: ARGS += [rclass.OBJECTPTR, lltype.Ptr(rstr.STR)]
               if with_f: ARGS += [lltype.Float, lltype.Float]
               random.shuffle(ARGS)
+              if RESTYPE == lltype.Float: with_f = True
               if with_f: expectedkind = 'irf'   # all kinds
               elif with_i: expectedkind = 'ir'  # integers and references
               else: expectedkind = 'r'          # only references
               yield residual_call_test, ARGS, RESTYPE, expectedkind
               yield direct_call_test, ARGS, RESTYPE, expectedkind
+              yield indirect_call_test, ARGS, RESTYPE, expectedkind
 
 def get_direct_call_op(argtypes, restype):
     FUNC = lltype.FuncType(argtypes, restype)
@@ -200,6 +217,29 @@ def direct_call_test(argtypes, restype, expectedkind):
     assert op1.args[0] == 'somejitcode'
     assert len(op1.args) == 1 + len(expectedkind)
     for sublist, kind1 in zip(op1.args[1:], expectedkind):
+        assert sublist.kind.startswith(kind1)
+        assert list(sublist) == [v for v in op.args[1:]
+                                 if getkind(v.concretetype) == sublist.kind]
+    for v in op.args[1:]:
+        kind = getkind(v.concretetype)
+        assert kind == 'void' or kind[0] in expectedkind
+
+def indirect_call_test(argtypes, restype, expectedkind):
+    op = get_direct_call_op(argtypes, restype)
+    op.opname = 'indirect_call'
+    op.args[0] = varoftype(op.args[0].concretetype)
+    op.args.append(Constant(['somegraph1', 'somegraph2'], lltype.Void))
+    tr = Transformer(FakeCPU(), FakeIndirectCallControl())
+    tr.graph = 'someinitialgraph'
+    op1 = tr.rewrite_operation(op)
+    reskind = getkind(restype)[0]
+    assert op1.opname == 'G_residual_call_%s_%s' % (expectedkind, reskind)
+    assert op1.result == op.result
+    assert op1.args[0] == op.args[0]
+    assert op1.args[1] == 'calldescr'
+    assert op1.args[2].lst == ['somejitcode1', 'somejitcode2']
+    assert len(op1.args) == 3 + len(expectedkind)
+    for sublist, kind1 in zip(op1.args[3:], expectedkind):
         assert sublist.kind.startswith(kind1)
         assert list(sublist) == [v for v in op.args[1:]
                                  if getkind(v.concretetype) == sublist.kind]

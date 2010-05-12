@@ -2,7 +2,7 @@ from pypy.objspace.flow.model import Variable, SpaceOperation, c_last_exception
 
 
 # Some instruction require liveness information (the ones that can end up
-# in generate_guard() in pyjitpl.py); jitter.py prefixes these opnames
+# in generate_guard() in pyjitpl.py); jtransform.py prefixes these opnames
 # with a 'G_'.  Additionally, boolean and general switches in the flow graph
 # will turn in 'goto_if_not_*' operations, which also require liveness info.
 

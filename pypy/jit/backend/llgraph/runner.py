@@ -315,23 +315,17 @@ class LLtypeCPU(BaseCPU):
 ##        array = arraybox.getref_base()
 ##        return history.BoxInt(llimpl.do_arraylen_gc(arraydescr, array))
 
-##    def do_strlen(self, stringbox):
-##        string = stringbox.getref_base()
-##        return history.BoxInt(llimpl.do_strlen(0, string))
+    def bh_strlen(self, string):
+        return llimpl.do_strlen(string)
 
-##    def do_strgetitem(self, stringbox, indexbox):
-##        string = stringbox.getref_base()
-##        index = indexbox.getint()
-##        return history.BoxInt(llimpl.do_strgetitem(0, string, index))
+    def bh_strgetitem(self, string, index):
+        return llimpl.do_strgetitem(string, index)
 
-##    def do_unicodelen(self, stringbox):
-##        string = stringbox.getref_base()
-##        return history.BoxInt(llimpl.do_unicodelen(0, string))
+    def bh_unicodelen(self, string):
+        return llimpl.do_unicodelen(string)
 
-##    def do_unicodegetitem(self, stringbox, indexbox):
-##        string = stringbox.getref_base()
-##        index = indexbox.getint()
-##        return history.BoxInt(llimpl.do_unicodegetitem(0, string, index))
+    def bh_unicodegetitem(self, string, index):
+        return llimpl.do_unicodegetitem(string, index)
 
 ##    def do_getarrayitem_gc(self, arraybox, indexbox, arraydescr):
 ##        assert isinstance(arraydescr, Descr)
@@ -509,25 +503,17 @@ class LLtypeCPU(BaseCPU):
 ##    def do_same_as(self, box1):
 ##        return box1.clonebox()
 
-##    def do_newstr(self, lengthbox):
-##        length = lengthbox.getint()
-##        return history.BoxPtr(llimpl.do_newstr(0, length))
+    def bh_newstr(self, length):
+        return llimpl.do_newstr(length)
 
-##    def do_newunicode(self, lengthbox):
-##        length = lengthbox.getint()
-##        return history.BoxPtr(llimpl.do_newunicode(0, length))
+    def bh_newunicode(self, length):
+        return llimpl.do_newunicode(length)
 
-##    def do_strsetitem(self, stringbox, indexbox, newvaluebox):
-##        string = stringbox.getref_base()
-##        index = indexbox.getint()
-##        newvalue = newvaluebox.getint()
-##        llimpl.do_strsetitem(0, string, index, newvalue)
+    def bh_strsetitem(self, string, index, newvalue):
+        llimpl.do_strsetitem(string, index, newvalue)
 
-##    def do_unicodesetitem(self, stringbox, indexbox, newvaluebox):
-##        string = stringbox.getref_base()
-##        index = indexbox.getint()
-##        newvalue = newvaluebox.getint()
-##        llimpl.do_unicodesetitem(0, string, index, newvalue)
+    def bh_unicodesetitem(self, string, index, newvalue):
+        llimpl.do_unicodesetitem(string, index, newvalue)
 
     def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
         self._prepare_call(INT, calldescr, args_i, args_r, args_f)

@@ -1,6 +1,6 @@
 from pypy.jit.metainterp.history import AbstractDescr, getkind
 from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
-from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.jitcode import SwitchDictDescr, JitCode
 from pypy.objspace.flow.model import Constant
@@ -12,6 +12,7 @@ class Assembler(object):
     def __init__(self):
         self.insns = {}
         self.descrs = []
+        self.indirectcalltargets = set()    # set of JitCodes
         self._descr_dict = {}
         self._count_jitcodes = 0
 
@@ -26,6 +27,7 @@ class Assembler(object):
         self.check_result()
         if jitcode is None:
             jitcode = JitCode(ssarepr.name)
+        jitcode._ssarepr = ssarepr
         self.make_jitcode(jitcode)
         if self._count_jitcodes < 20:    # stop if we have a lot of them
             jitcode._dump = format_assembler(ssarepr)
@@ -142,6 +144,8 @@ class Assembler(object):
                 self.code.append(chr(num & 0xFF))
                 self.code.append(chr(num >> 8))
                 argcodes.append('d')
+            elif isinstance(x, IndirectCallTargets):
+                self.indirectcalltargets.update(x.lst)
             else:
                 raise NotImplementedError(x)
         #

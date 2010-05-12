@@ -218,7 +218,7 @@ class BlackholeInterpBuilder(object):
         # Get the bhimpl_xxx method.  If we get an AttributeError here,
         # it means that either the implementation is missing, or that it
         # should not appear here at all but instead be transformed away
-        # by codewriter/jitter.py.
+        # by codewriter/jtransform.py.
         unboundmethod = getattr(BlackholeInterpreter, 'bhimpl_' + name).im_func
         verbose = self.verbose
         argtypes = unrolling_iterable(unboundmethod.argtypes)
@@ -726,9 +726,6 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "i", "d", "R", returns="r")
     def bhimpl_residual_call_r_r(cpu, func, calldescr, args_r):
         return cpu.bh_call_r(func, calldescr, None, args_r, None)
-    @arguments("cpu", "i", "d", "R", returns="f")
-    def bhimpl_residual_call_r_f(cpu, func, calldescr, args_r):
-        return cpu.bh_call_f(func, calldescr, None, args_r, None)
     @arguments("cpu", "i", "d", "R")
     def bhimpl_residual_call_r_v(cpu, func, calldescr, args_r):
         cpu.bh_call_v(func, calldescr, None, args_r, None)
@@ -739,9 +736,6 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "i", "d", "I", "R", returns="r")
     def bhimpl_residual_call_ir_r(cpu, func, calldescr, args_i, args_r):
         return cpu.bh_call_r(func, calldescr, args_i, args_r, None)
-    @arguments("cpu", "i", "d", "I", "R", returns="f")
-    def bhimpl_residual_call_ir_f(cpu, func, calldescr, args_i, args_r):
-        return cpu.bh_call_f(func, calldescr, args_i, args_r, None)
     @arguments("cpu", "i", "d", "I", "R")
     def bhimpl_residual_call_ir_v(cpu, func, calldescr, args_i, args_r):
         cpu.bh_call_v(func, calldescr, args_i, args_r, None)
@@ -767,10 +761,6 @@ class BlackholeInterpreter(object):
     def bhimpl_inline_call_r_r(cpu, jitcode, args_r):
         return cpu.bh_call_r(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
                              None, args_r, None)
-    @arguments("cpu", "j", "R", returns="f")
-    def bhimpl_inline_call_r_f(cpu, jitcode, args_r):
-        return cpu.bh_call_f(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
-                             None, args_r, None)
     @arguments("cpu", "j", "R")
     def bhimpl_inline_call_r_v(cpu, jitcode, args_r):
         return cpu.bh_call_v(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
@@ -783,10 +773,6 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "j", "I", "R", returns="r")
     def bhimpl_inline_call_ir_r(cpu, jitcode, args_i, args_r):
         return cpu.bh_call_r(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
-                             args_i, args_r, None)
-    @arguments("cpu", "j", "I", "R", returns="f")
-    def bhimpl_inline_call_ir_f(cpu, jitcode, args_i, args_r):
-        return cpu.bh_call_f(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
                              args_i, args_r, None)
     @arguments("cpu", "j", "I", "R")
     def bhimpl_inline_call_ir_v(cpu, jitcode, args_i, args_r):
@@ -880,3 +866,29 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "r", returns="i")
     def bhimpl_cast_ptr_to_int(cpu, p):
         return cpu.bh_cast_ptr_to_int(p)
+
+    @arguments("cpu", "i", returns="r")
+    def bhimpl_newstr(cpu, length):
+        return cpu.bh_newstr(length)
+    @arguments("cpu", "r", returns="i")
+    def bhimpl_strlen(cpu, string):
+        return cpu.bh_strlen(string)
+    @arguments("cpu", "r", "i", returns="i")
+    def bhimpl_strgetitem(cpu, string, index):
+        return cpu.bh_strgetitem(string, index)
+    @arguments("cpu", "r", "i", "i")
+    def bhimpl_strsetitem(cpu, string, index, newchr):
+        cpu.bh_strsetitem(string, index, newchr)
+
+    @arguments("cpu", "i", returns="r")
+    def bhimpl_newunicode(cpu, length):
+        return cpu.bh_newunicode(length)
+    @arguments("cpu", "r", returns="i")
+    def bhimpl_unicodelen(cpu, unicode):
+        return cpu.bh_unicodelen(unicode)
+    @arguments("cpu", "r", "i", returns="i")
+    def bhimpl_unicodegetitem(cpu, unicode, index):
+        return cpu.bh_unicodegetitem(unicode, index)
+    @arguments("cpu", "r", "i", "i")
+    def bhimpl_unicodesetitem(cpu, unicode, index, newchr):
+        cpu.bh_unicodesetitem(unicode, index, newchr)

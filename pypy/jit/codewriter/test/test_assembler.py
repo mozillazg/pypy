@@ -1,7 +1,8 @@
 import py, struct
 from pypy.jit.codewriter.assembler import Assembler
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
-from pypy.jit.codewriter.flatten import ListOfKind
+from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
+from pypy.jit.codewriter.jitcode import MissingLiveness
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -138,6 +139,16 @@ def test_assemble_descr():
     assert assembler.insns == {'foobar/d': 0}
     assert assembler.descrs == descrs[::-1]
 
+def test_assemble_indirect_call():
+    lst1 = ["somejitcode1", "somejitcode2"]
+    lst2 = ["somejitcode1", "somejitcode3"]
+    ssarepr = SSARepr("test")
+    ssarepr.insns = [('foobar', IndirectCallTargets(lst1)),
+                     ('foobar', IndirectCallTargets(lst2))]
+    assembler = Assembler()
+    assembler.assemble(ssarepr)
+    assert assembler.indirectcalltargets == set(lst1).union(lst2)
+
 def test_num_regs():
     assembler = Assembler()
     ssarepr = SSARepr("test")
@@ -183,10 +194,10 @@ def test_liveness():
     assert assembler.insns == {'int_add/ici': 0,
                                'int_mul/iii': 1,
                                'int_return/i': 2}
-    py.test.raises(KeyError, jitcode._live_vars, 0)
-    py.test.raises(KeyError, jitcode._live_vars, 3)
-    py.test.raises(KeyError, jitcode._live_vars, 5)
-    py.test.raises(KeyError, jitcode._live_vars, 24)
+    py.test.raises(MissingLiveness, jitcode._live_vars, 0)
+    py.test.raises(MissingLiveness, jitcode._live_vars, 3)
+    py.test.raises(MissingLiveness, jitcode._live_vars, 5)
+    py.test.raises(MissingLiveness, jitcode._live_vars, 24)
     assert jitcode._live_vars(4) == '%i0'
     assert jitcode._live_vars(8) == '%i0 %i1'
     assert jitcode._live_vars(12) == '%i0'

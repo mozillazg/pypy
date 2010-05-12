@@ -22,6 +22,7 @@ from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
 from pypy.jit.metainterp.compile import GiveUp
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
+from pypy.jit.codewriter import effectinfo as ef
 
 # ____________________________________________________________
 
@@ -167,10 +168,10 @@ class MIFrame(object):
 
     for _opimpl in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf']:
         exec py.code.Source('''
-            @arguments("orgpc", "box", "box")
-            def opimpl_%s(self, pc, b1, b2):
+            @arguments("box", "box")
+            def opimpl_%s(self, b1, b2):
                 resbox = self.execute(rop.%s, b1, b2)
-                self.metainterp.handle_possible_overflow_error(pc)
+                self.metainterp.handle_possible_overflow_error()
                 return resbox
         ''' % (_opimpl, _opimpl.upper())).compile()
 
@@ -289,9 +290,9 @@ class MIFrame(object):
         self.load_int()       # past the 'box' argument
         self.ignore_varargs() # past the 'livelist' argument
 
-    @arguments("orgpc", "box", "descr")
-    def opimpl_switch(self, pc, valuebox, switchdict):
-        box = self.implement_guard_value(pc, valuebox)
+    @arguments("box", "descr")
+    def opimpl_switch(self, valuebox, switchdict):
+        box = self.implement_guard_value(valuebox)
         switchvalue = box.getint()
         assert isinstance(switchdict, SwitchDictDescr)
         try:
@@ -632,11 +633,9 @@ class MIFrame(object):
 
     opimpl_inline_call_r_i = _opimpl_inline_call1
     opimpl_inline_call_r_r = _opimpl_inline_call1
-    opimpl_inline_call_r_f = _opimpl_inline_call1
     opimpl_inline_call_r_v = _opimpl_inline_call1
     opimpl_inline_call_ir_i = _opimpl_inline_call2
     opimpl_inline_call_ir_r = _opimpl_inline_call2
-    opimpl_inline_call_ir_f = _opimpl_inline_call2
     opimpl_inline_call_ir_v = _opimpl_inline_call2
     opimpl_inline_call_irf_i = _opimpl_inline_call3
     opimpl_inline_call_irf_r = _opimpl_inline_call3
@@ -645,21 +644,19 @@ class MIFrame(object):
 
     @arguments("box", "descr", "boxes")
     def _opimpl_residual_call1(self, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+        return self.do_residual_or_indirect_call(funcbox, calldescr, argboxes)
     @arguments("box", "descr", "boxes2")
     def _opimpl_residual_call2(self, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+        return self.do_residual_or_indirect_call(funcbox, calldescr, argboxes)
     @arguments("box", "descr", "boxes3")
     def _opimpl_residual_call3(self, funcbox, calldescr, argboxes):
-        return self.do_residual_call(funcbox, calldescr, argboxes, exc=True)
+        return self.do_residual_or_indirect_call(funcbox, calldescr, argboxes)
 
     opimpl_residual_call_r_i = _opimpl_residual_call1
     opimpl_residual_call_r_r = _opimpl_residual_call1
-    opimpl_residual_call_r_f = _opimpl_residual_call1
     opimpl_residual_call_r_v = _opimpl_residual_call1
     opimpl_residual_call_ir_i = _opimpl_residual_call2
     opimpl_residual_call_ir_r = _opimpl_residual_call2
-    opimpl_residual_call_ir_f = _opimpl_residual_call2
     opimpl_residual_call_ir_v = _opimpl_residual_call2
     opimpl_residual_call_irf_i = _opimpl_residual_call3
     opimpl_residual_call_irf_r = _opimpl_residual_call3
@@ -705,28 +702,6 @@ class MIFrame(object):
                                                   call_position)
         return res
 
-    @XXX  #arguments("descr", "varargs")
-    def opimpl_residual_call_noexception(self, calldescr, varargs):
-        self.do_residual_call(varargs, descr=calldescr, exc=False)
-
-    @XXX  #arguments("descr", "varargs")
-    def opimpl_residual_call_pure(self, calldescr, varargs):
-        self.execute_varargs(rop.CALL_PURE, varargs, descr=calldescr, exc=False)
-
-    @XXX  #arguments("orgpc", "descr", "box", "varargs")
-    def opimpl_indirect_call(self, pc, calldescr, box, varargs):
-        box = self.implement_guard_value(pc, box)
-        cpu = self.metainterp.cpu
-        key = cpu.ts.getaddr_for_box(cpu, box)
-        jitcode = self.metainterp.staticdata.bytecode_for_address(key)
-        if jitcode is not None:
-            # we should follow calls to this graph
-            return self.perform_call(jitcode, varargs)
-        else:
-            # but we should not follow calls to that graph
-            return self.do_residual_call([box] + varargs,
-                                         descr=calldescr, exc=True)
-
     @XXX  #arguments("orgpc", "methdescr", "varargs")
     def opimpl_oosend(self, pc, methdescr, varargs):
         objbox = varargs[0]
@@ -743,37 +718,37 @@ class MIFrame(object):
             return self.execute_varargs(rop.OOSEND, varargs,
                                         descr=methdescr, exc=True)
 
-    @XXX  #arguments("box")
-    def opimpl_strlen(self, str):
-        self.execute(rop.STRLEN, str)
+    @arguments("box")
+    def opimpl_strlen(self, strbox):
+        return self.execute(rop.STRLEN, strbox)
 
-    @XXX  #arguments("box")
-    def opimpl_unicodelen(self, str):
-        self.execute(rop.UNICODELEN, str)
+    @arguments("box")
+    def opimpl_unicodelen(self, unicodebox):
+        return self.execute(rop.UNICODELEN, unicodebox)
 
-    @XXX  #arguments("box", "box")
-    def opimpl_strgetitem(self, str, index):
-        self.execute(rop.STRGETITEM, str, index)
+    @arguments("box", "box")
+    def opimpl_strgetitem(self, strbox, indexbox):
+        return self.execute(rop.STRGETITEM, strbox, indexbox)
 
-    @XXX  #arguments("box", "box")
-    def opimpl_unicodegetitem(self, str, index):
-        self.execute(rop.UNICODEGETITEM, str, index)
+    @arguments("box", "box")
+    def opimpl_unicodegetitem(self, unicodebox, indexbox):
+        return self.execute(rop.UNICODEGETITEM, unicodebox, indexbox)
 
-    @XXX  #arguments("box", "box", "box")
-    def opimpl_strsetitem(self, str, index, newchar):
-        self.execute(rop.STRSETITEM, str, index, newchar)
+    @arguments("box", "box", "box")
+    def opimpl_strsetitem(self, strbox, indexbox, newcharbox):
+        return self.execute(rop.STRSETITEM, strbox, indexbox, newcharbox)
 
-    @XXX  #arguments("box", "box", "box")
-    def opimpl_unicodesetitem(self, str, index, newchar):
-        self.execute(rop.UNICODESETITEM, str, index, newchar)
+    @arguments("box", "box", "box")
+    def opimpl_unicodesetitem(self, unicodebox, indexbox, newcharbox):
+        self.execute(rop.UNICODESETITEM, unicodebox, indexbox, newcharbox)
 
-    @XXX  #arguments("box")
-    def opimpl_newstr(self, length):
-        self.execute(rop.NEWSTR, length)
+    @arguments("box")
+    def opimpl_newstr(self, lengthbox):
+        return self.execute(rop.NEWSTR, lengthbox)
 
-    @XXX  #arguments("box")
-    def opimpl_newunicode(self, length):
-        self.execute(rop.NEWUNICODE, length)
+    @arguments("box")
+    def opimpl_newunicode(self, lengthbox):
+        return self.execute(rop.NEWUNICODE, lengthbox)
 
     @XXX  #arguments("descr", "varargs")
     def opimpl_residual_oosend_canraise(self, methdescr, varargs):
@@ -787,9 +762,9 @@ class MIFrame(object):
     def opimpl_residual_oosend_pure(self, methdescr, boxes):
         self.execute_varargs(rop.OOSEND_PURE, boxes, descr=methdescr, exc=False)
 
-    @arguments("orgpc", "box")
-    def opimpl_int_guard_value(self, pc, box):
-        return self.implement_guard_value(pc, box)
+    @arguments("box")
+    def opimpl_int_guard_value(self, box):
+        return self.implement_guard_value(box)
 
     @XXX  #arguments("orgpc", "int")
     def opimpl_guard_green(self, pc, boxindex):
@@ -802,10 +777,10 @@ class MIFrame(object):
         constbox = self.implement_guard_value(pc, box)
         self.env[boxindex] = constbox
 
-    @arguments("orgpc", "box")
-    def opimpl_guard_class(self, pc, box):
+    @arguments("box")
+    def opimpl_guard_class(self, box):
         clsbox = self.cls_of_box(box)
-        self.generate_guard(pc, rop.GUARD_CLASS, box, [clsbox])
+        self.generate_guard(rop.GUARD_CLASS, box, [clsbox])
         return clsbox
 
 ##    @XXX  #arguments("orgpc", "box", "builtin")
@@ -1029,7 +1004,7 @@ class MIFrame(object):
         metainterp.attach_debug_info(guard_op)
         return guard_op
 
-    def implement_guard_value(self, pc, box):
+    def implement_guard_value(self, box):
         """Promote the given Box into a Const.  Note: be careful, it's a
         bit unclear what occurs if a single opcode needs to generate
         several ones and/or ones not near the beginning."""
@@ -1037,7 +1012,7 @@ class MIFrame(object):
             return box     # no promotion needed, already a Const
         else:
             promoted_box = box.constbox()
-            self.generate_guard(pc, rop.GUARD_VALUE, box, [promoted_box])
+            self.generate_guard(rop.GUARD_VALUE, box, [promoted_box])
             self.metainterp.replace_box(box, promoted_box)
             return promoted_box
 
@@ -1057,15 +1032,16 @@ class MIFrame(object):
         resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
                                                             descr=descr)
         if exc:
-            self.metainterp.handle_possible_exception(self.pc)
+            self.metainterp.handle_possible_exception()
         else:
             self.metainterp.assert_no_exception()
         return resbox
 
-    def do_residual_call(self, funcbox, descr, argboxes, exc):
+    def do_residual_call(self, funcbox, descr, argboxes):
         allboxes = [funcbox] + argboxes
         effectinfo = descr.get_extra_info()
-        if 0:# XXX effectinfo is None or effectinfo.forces_virtual_or_virtualizable:
+        if (effectinfo is None or
+            effectinfo.extraeffect == ef.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE):
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.vable_and_vrefs_before_residual_call()
             # xxx do something about code duplication
@@ -1080,7 +1056,31 @@ class MIFrame(object):
             else:
                 return self.metainterp.assert_no_exception()
         else:
-            return self.execute_varargs(rop.CALL, allboxes, descr, exc)
+            effect = effectinfo.extraeffect
+            if effect == ef.EF_CANNOT_RAISE:
+                opnum, exc = rop.CALL, False
+            elif effect == ef.EF_PURE:
+                opnum, exc = rop.CALL_PURE, False
+            elif effect == ef.EF_LOOPINVARIANT:
+                opnum, exc = rop.CALL_LOOPINVARIANT, True
+            else:
+                opnum, exc = rop.CALL, True
+            return self.execute_varargs(opnum, allboxes, descr, exc)
+
+    def do_residual_or_indirect_call(self, funcbox, calldescr, argboxes):
+        """The 'residual_call' operation is emitted in two cases:
+        when we have to generate a residual CALL operation, but also
+        to handle an indirect_call that may need to be inlined."""
+        funcbox = self.implement_guard_value(funcbox)
+        sd = self.metainterp.staticdata
+        key = sd.cpu.ts.getaddr_for_box(funcbox)
+        jitcode = sd.bytecode_for_address(key)
+        if jitcode is not None:
+            # we should follow calls to this graph
+            return self.metainterp.perform_call(jitcode, argboxes)
+        else:
+            # but we should not follow calls to that graph
+            return self.do_residual_call(funcbox, calldescr, argboxes)
 
 # ____________________________________________________________
 
@@ -1100,14 +1100,12 @@ class MetaInterpStaticData(object):
         RESULT = codewriter.portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)
 
-        self.setup_insns(codewriter.assembler.insns)
-        self.setup_descrs(codewriter.assembler.descrs)
+        asm = codewriter.assembler
+        self.setup_insns(asm.insns)
+        self.setup_descrs(asm.descrs)
+        self.setup_indirectcalltargets(asm.indirectcalltargets)
 
         self.profiler = ProfilerClass()
-
-        self.indirectcall_keys = []
-        self.indirectcall_values = []
-
         self.warmrunnerdesc = warmrunnerdesc
 
         backendmodule = self.cpu.__module__
@@ -1139,6 +1137,9 @@ class MetaInterpStaticData(object):
 
     def setup_descrs(self, descrs):
         self.opcode_descrs = descrs
+
+    def setup_indirectcalltargets(self, indirectcalltargets):
+        self.indirectcalltargets = list(indirectcalltargets)
 
     def finish_setup(self, optimizer=None):
         warmrunnerdesc = self.warmrunnerdesc
@@ -1192,23 +1193,15 @@ class MetaInterpStaticData(object):
                 # because the keys are function addresses, so they
                 # can change from run to run.
                 d = {}
-                keys = self.indirectcall_keys
-                values = self.indirectcall_values
-                for i in range(len(keys)):
-                    d[keys[i]] = values[i]
+                for jitcode in self.indirectcalltargets:
+                    d[jitcode.fnaddr] = jitcode
                 self.globaldata.indirectcall_dict = d
             return d.get(fnaddress, None)
         else:
-            for i in range(len(self.indirectcall_keys)):
-                if fnaddress == self.indirectcall_keys[i]:
-                    return self.indirectcall_values[i]
+            for jitcode in self.indirectcalltargets:
+                if jitcode.fnaddr == fnaddress:
+                    return jitcode
             return None
-
-    # ---------- construction-time interface ----------
-
-    def _register_indirect_call_target(self, fnaddress, jitcode):
-        self.indirectcall_keys.append(fnaddress)
-        self.indirectcall_values.append(jitcode)
 
     # ---------------- logging ------------------------
 
@@ -1273,7 +1266,7 @@ class MetaInterp(object):
         return False       # XXX get rid of this method
 
     def perform_call(self, jitcode, boxes, greenkey=None):
-        # when tracing, this bytecode causes the subfunction to be entered
+        # causes the metainterp to enter the given subfunction
         f = self.newframe(jitcode, greenkey)
         f.setup_call(boxes)
         raise ChangeFrame
@@ -1865,26 +1858,26 @@ class MetaInterp(object):
         # mark by replacing it with ConstPtr(NULL)
         self.virtualref_boxes[i+1] = self.cpu.ts.CONST_NULL
 
-    def handle_possible_exception(self, pc):
+    def handle_possible_exception(self):
         frame = self.framestack[-1]
         if self.last_exc_value_box:
             exception_box = self.cpu.ts.cls_of_box(self.last_exc_value_box)
-            op = frame.generate_guard(pc, rop.GUARD_EXCEPTION,
+            op = frame.generate_guard(rop.GUARD_EXCEPTION,
                                       None, [exception_box])
             if op:
                 op.result = self.last_exc_value_box
             self.finishframe_exception()
         else:
-            frame.generate_guard(pc, rop.GUARD_NO_EXCEPTION, None, [])
+            frame.generate_guard(rop.GUARD_NO_EXCEPTION, None, [])
 
-    def handle_possible_overflow_error(self, pc):
+    def handle_possible_overflow_error(self):
         frame = self.framestack[-1]
         if self.last_exc_value_box:
-            frame.generate_guard(pc, rop.GUARD_OVERFLOW, None)
+            frame.generate_guard(rop.GUARD_OVERFLOW, None)
             assert isinstance(self.last_exc_value_box, Const)
             self.finishframe_exception()
         else:
-            frame.generate_guard(pc, rop.GUARD_NO_OVERFLOW, None)
+            frame.generate_guard(rop.GUARD_NO_OVERFLOW, None)
 
     def assert_no_exception(self):
         assert not self.last_exc_value_box
@@ -2066,7 +2059,6 @@ def _get_opimpl_method(name, argcodes):
         args = ()
         next_argcode = 0
         code = self.bytecode
-        orgpc = position
         position += 1
         for argtype in argtypes:
             if argtype == "box":     # a box, of whatever type
@@ -2129,8 +2121,6 @@ def _get_opimpl_method(name, argcodes):
                                            argcodes[next_argcode + 2])
                 next_argcode = next_argcode + 3
                 position = position3 + 1 + length3
-            elif argtype == "orgpc":
-                value = orgpc
             else:
                 raise AssertionError("bad argtype: %r" % (argtype,))
             args += (value,)

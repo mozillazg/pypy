@@ -13,6 +13,7 @@ class JitCode(AbstractDescr):
         self.fnaddr = fnaddr
         self.calldescr = calldescr
         self._called_from = called_from   # debugging
+        self._ssarepr     = None          # debugging
 
     def setup(self, code='', constants_i=[], constants_r=[], constants_f=[],
               num_regs_i=256, num_regs_r=256, num_regs_f=256,
@@ -92,10 +93,20 @@ class JitCode(AbstractDescr):
         return ' '.join(lst)
 
     def _missing_liveness(self, pc):
-        raise KeyError("missing liveness[%d]" % (pc,))
+        raise MissingLiveness("missing liveness[%d]\n%s" % (pc, self.dump()))
+
+    def dump(self):
+        if self._ssarepr is None:
+            return '<no dump available>'
+        else:
+            from pypy.jit.codewriter.format import format_assembler
+            return format_assembler(self._ssarepr)
 
     def __repr__(self):
         return '<JitCode %r>' % self.name
+
+class MissingLiveness(Exception):
+    pass
 
 
 class SwitchDictDescr(AbstractDescr):

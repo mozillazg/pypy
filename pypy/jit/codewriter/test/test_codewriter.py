@@ -44,9 +44,11 @@ def test_loop():
     assert jitcode.num_regs_r() == 0
     assert jitcode.num_regs_f() == 0
     assert jitcode._live_vars(5) == '%i0 %i1'
+    #
+    from pypy.jit.codewriter.jitcode import MissingLiveness
     for i in range(len(jitcode.code)+1):
         if i != 5:
-            py.test.raises(KeyError, jitcode._live_vars, i)
+            py.test.raises(MissingLiveness, jitcode._live_vars, i)
 
 def test_call():
     def ggg(x):
