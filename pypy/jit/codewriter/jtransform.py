@@ -256,6 +256,11 @@ class Transformer(object):
                                                called_from=self.graph)
         return self.rewrite_call(op, 'G_inline_call', [jitcode])
 
+    def handle_builtin_call(self, op):
+        oopspec_name, args = support.decode_builtin_call(op)
+        op1 = self._prepare_builtin_call(op, oopspec_name, args)
+        return self.handle_residual_call(op1)
+
     handle_residual_indirect_call = handle_residual_call
 
     def handle_regular_indirect_call(self, op):
@@ -267,15 +272,18 @@ class Transformer(object):
             lst.append(jitcode)
         return self.handle_residual_call(op, [IndirectCallTargets(lst)])
 
-    def _do_builtin_call(self, op, oopspec_name=None, args=None, extra=None):
-        if oopspec_name is None: oopspec_name = op.opname
-        if args is None: args = op.args
+    def _prepare_builtin_call(self, op, oopspec_name, args, extra=None):
         argtypes = [v.concretetype for v in args]
         resulttype = op.result.concretetype
         c_func, TP = support.builtin_func_for_spec(self.cpu.rtyper,
                                                    oopspec_name, argtypes,
                                                    resulttype, extra)
-        op1 = SpaceOperation('direct_call', [c_func] + args, op.result)
+        return SpaceOperation('direct_call', [c_func] + args, op.result)
+
+    def _do_builtin_call(self, op, oopspec_name=None, args=None, extra=None):
+        if oopspec_name is None: oopspec_name = op.opname
+        if args is None: args = op.args
+        op1 = self._prepare_builtin_call(op, oopspec_name, args, extra)
         return self.rewrite_op_direct_call(op1)
 
     rewrite_op_int_floordiv_ovf_zer = _do_builtin_call

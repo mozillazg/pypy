@@ -183,8 +183,10 @@ _oplist = [
     #
     'SAME_AS/1',      # gets a Const or a Box, turns it into another Box
     #
-    'OOIS/2b',
-    'OOISNOT/2b',
+    'PTR_ISZERO/1b',
+    'PTR_NONZERO/1b',
+    'PTR_EQ/2b',
+    'PTR_NE/2b',
     #
     'ARRAYLEN_GC/1d',
     'STRLEN/1',
