@@ -14,9 +14,11 @@ from pypy.tool.udir import udir
 class CodeWriter(object):
     callcontrol = None    # for tests
 
-    def __init__(self, cpu=None):
+    def __init__(self, cpu=None, maingraph=None):
         self.cpu = cpu
         self.assembler = Assembler()
+        self.portal_graph = maingraph
+        self.callcontrol = CallControl(cpu, maingraph)
 
     def transform_func_to_jitcode(self, func, values, type_system='lltype'):
         """For testing."""
@@ -59,15 +61,15 @@ class CodeWriter(object):
         # Float).
         self.assembler.assemble(ssarepr, jitcode)
 
-    def make_jitcodes(self, maingraph, policy, verbose=False):
-        self.portal_graph = maingraph
-        self.callcontrol = CallControl(self.cpu, maingraph)
-        self.callcontrol.find_all_graphs(policy)
-        mainjitcode = self.callcontrol.get_jitcode(maingraph)
+    def make_jitcodes(self, verbose=False):
+        maingraph = self.portal_graph
+        self.mainjitcode = self.callcontrol.get_jitcode(maingraph)
         for graph, jitcode in self.callcontrol.enum_pending_graphs():
             self.transform_graph_to_jitcode(graph, jitcode,
                                             graph is maingraph, verbose)
-        return mainjitcode
+
+    def find_all_graphs(self, policy):
+        return self.callcontrol.find_all_graphs(policy)
 
     def print_ssa_repr(self, ssarepr, portal, verbose):
         if verbose:

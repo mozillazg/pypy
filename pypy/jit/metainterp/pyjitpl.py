@@ -831,8 +831,9 @@ class MIFrame(object):
         else:
             raise self.metainterp.staticdata.ContinueRunningNormally(varargs)
 
-    @XXX  #arguments()
-    def opimpl_can_enter_jit(self):
+    @arguments("boxes3")
+    def opimpl_can_enter_jit(self, boxes):
+        xxx
         # Note: when running with a BlackHole history, this 'can_enter_jit'
         # may be completely skipped by the logic that replaces perform_call
         # with rop.CALL.  But in that case, no-one will check the flag anyway,
@@ -842,8 +843,9 @@ class MIFrame(object):
             raise CannotInlineCanEnterJit()
         self.metainterp.seen_can_enter_jit = True
 
-    @XXX  #arguments()
-    def opimpl_jit_merge_point(self):
+    @arguments("boxes3")
+    def opimpl_jit_merge_point(self, boxes):
+        xxx
         if not self.metainterp.is_blackholing():
             self.verify_green_args(self.env)
             # xxx we may disable the following line in some context later
@@ -1097,21 +1099,13 @@ class MetaInterpStaticData(object):
     logger_noopt = None
     logger_ops = None
 
-    def __init__(self, codewriter, options,
+    def __init__(self, cpu, options,
                  ProfilerClass=EmptyProfiler, warmrunnerdesc=None):
-        self.cpu = codewriter.cpu
+        self.cpu = cpu
         self.stats = self.cpu.stats
         self.options = options
         self.logger_noopt = Logger(self)
         self.logger_ops = Logger(self, guard_number=True)
-
-        RESULT = codewriter.portal_graph.getreturnvar().concretetype
-        self.result_type = history.getkind(RESULT)
-
-        asm = codewriter.assembler
-        self.setup_insns(asm.insns)
-        self.setup_descrs(asm.descrs)
-        self.setup_indirectcalltargets(asm.indirectcalltargets)
 
         self.profiler = ProfilerClass()
         self.warmrunnerdesc = warmrunnerdesc
@@ -1120,7 +1114,6 @@ class MetaInterpStaticData(object):
         backendmodule = backendmodule.split('.')[-2]
         self.jit_starting_line = 'JIT starting (%s)' % backendmodule
 
-        self.portal_code = None
         self._addr2name_keys = []
         self._addr2name_values = []
 
@@ -1149,7 +1142,16 @@ class MetaInterpStaticData(object):
     def setup_indirectcalltargets(self, indirectcalltargets):
         self.indirectcalltargets = list(indirectcalltargets)
 
-    def finish_setup(self, optimizer=None):
+    def finish_setup(self, codewriter, optimizer=None):
+        asm = codewriter.assembler
+        self.setup_insns(asm.insns)
+        self.setup_descrs(asm.descrs)
+        self.setup_indirectcalltargets(asm.indirectcalltargets)
+        #
+        self.portal_code = codewriter.mainjitcode
+        RESULT = codewriter.portal_graph.getreturnvar().concretetype
+        self.result_type = history.getkind(RESULT)
+        #
         warmrunnerdesc = self.warmrunnerdesc
         if warmrunnerdesc is not None:
             self.num_green_args = warmrunnerdesc.num_green_args

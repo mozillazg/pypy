@@ -20,7 +20,7 @@ from pypy.jit.metainterp import history, pyjitpl, gc
 from pypy.jit.metainterp.pyjitpl import MetaInterpStaticData, MetaInterp
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
 from pypy.jit.metainterp.jitprof import Profiler, EmptyProfiler
-from pypy.jit.codewriter import support
+from pypy.jit.codewriter import support, codewriter
 from pypy.jit.codewriter.policy import JitPolicy
 from pypy.rlib.jit import DEBUG_STEPS, DEBUG_DETAILED, DEBUG_OFF, DEBUG_PROFILE
 
@@ -144,22 +144,22 @@ class CannotInlineCanEnterJit(JitException):
 class WarmRunnerDesc(object):
 
     def __init__(self, translator, policy=None, backendopt=True, CPUClass=None,
-                 optimizer=None, **kwds):
-        import py; py.test.skip("XXX")
+                 optimizer=None, ProfilerClass=EmptyProfiler, **kwds):
         pyjitpl._warmrunnerdesc = self   # this is a global for debugging only!
+        self.set_translator(translator)
+        self.build_cpu(CPUClass, **kwds)
+        self.find_portal()
+        self.codewriter = codewriter.CodeWriter(self.cpu, self.portal_graph)
         if policy is None:
             policy = JitPolicy()
-        self.set_translator(translator)
-        self.find_portal()
-        self.codewriter = codewriter.CodeWriter(self.rtyper)
-        policy.set_supports_floats(CPUClass.supports_floats)
-        graphs = self.codewriter.find_all_graphs(self.portal_graph, policy)
+        policy.set_supports_floats(self.cpu.supports_floats)
+        graphs = self.codewriter.find_all_graphs(policy)
         policy.dump_unsafe_loops()
         self.check_access_directly_sanity(graphs)
         if backendopt:
             self.prejit_optimizations(policy, graphs)
 
-        self.build_meta_interp(CPUClass, **kwds)
+        self.build_meta_interp(ProfilerClass)
         self.make_args_specification()
         #
         from pypy.jit.metainterp.virtualref import VirtualRefInfo
@@ -172,16 +172,14 @@ class WarmRunnerDesc(object):
         self.make_driverhook_graphs()
         self.make_enter_function()
         self.rewrite_jit_merge_point(policy)
-                
-        self.codewriter.generate_bytecode(self.metainterp_sd,
-                                          self.portal_graph,
-                                          self.portal_runner_ptr
-                                          )
+
+        verbose = not self.cpu.translate_support_code
+        self.codewriter.make_jitcodes(verbose=verbose)
         self.rewrite_can_enter_jit()
         self.rewrite_set_param()
         self.rewrite_force_virtual()
         self.add_finish()
-        self.metainterp_sd.finish_setup(optimizer=optimizer)
+        self.metainterp_sd.finish_setup(self.codewriter, optimizer=optimizer)
 
     def finish(self):
         vinfo = self.metainterp_sd.virtualizable_info
@@ -244,11 +242,10 @@ class WarmRunnerDesc(object):
                               remove_asserts=True,
                               really_remove_asserts=True)
 
-    def build_meta_interp(self, CPUClass, translate_support_code=False,
-                          view="auto", no_stats=False,
-                          ProfilerClass=EmptyProfiler, **kwds):
+    def build_cpu(self, CPUClass, translate_support_code=False,
+                  no_stats=False, **kwds):
         assert CPUClass is not None
-        opt = history.Options(**kwds)
+        self.opt = history.Options(**kwds)
         if no_stats:
             stats = history.NoStats()
         else:
@@ -259,12 +256,13 @@ class WarmRunnerDesc(object):
             annhelper = self.annhelper
         else:
             annhelper = None
-        cpu = CPUClass(self.translator.rtyper, self.stats, opt,
+        cpu = CPUClass(self.translator.rtyper, self.stats, self.opt,
                        translate_support_code, gcdescr=self.gcdescr)
         self.cpu = cpu
-        self.metainterp_sd = MetaInterpStaticData(self.portal_graph, # xxx
-                                                  cpu,
-                                                  self.stats, opt,
+
+    def build_meta_interp(self, ProfilerClass):
+        self.metainterp_sd = MetaInterpStaticData(self.cpu,
+                                                  self.opt,
                                                   ProfilerClass=ProfilerClass,
                                                   warmrunnerdesc=self)
 

@@ -20,7 +20,8 @@ class VirtualRefInfo:
             'jit_virtual_ref')
         # build some constants
         adr = llmemory.cast_ptr_to_adr(self.jit_virtual_ref_vtable)
-        self.jit_virtual_ref_const_class = history.ConstAddr(adr, self.cpu)
+        adr = llmemory.cast_adr_to_int(adr)
+        self.jit_virtual_ref_const_class = history.ConstInt(adr)
         fielddescrof = self.cpu.fielddescrof
         self.descr_virtual_token = fielddescrof(self.JIT_VIRTUAL_REF,
                                                 'virtual_token')
