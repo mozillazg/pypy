@@ -1,7 +1,7 @@
 from pypy.rlib.rarithmetic import (r_int, r_uint, intmask, r_singlefloat,
                                    r_ulonglong, r_longlong, base_int,
                                    normalizedinttype)
-from pypy.rlib.objectmodel import Symbolic
+from pypy.rlib.objectmodel import Symbolic, specialize
 from pypy.tool.uid import Hashable
 from pypy.tool.tls import tlsobject
 from pypy.lib.identity_dict import identity_dict
@@ -316,7 +316,7 @@ class Array(ContainerType):
     _gckind = 'raw'
     __name__ = 'array'
     _anonym_struct = False
-    
+
     def __init__(self, *fields, **kwds):
         if len(fields) == 1 and isinstance(fields[0], LowLevelType):
             self.OF = fields[0]
@@ -370,6 +370,9 @@ class GcArray(Array):
     def _inline_is_varsize(self, last):
         raise TypeError("cannot inline a GC array inside a structure")
 
+@specialize.memo()
+def new_gc_array(arg):
+    return GcArray(arg)
 
 class FixedSizeArray(Struct):
     # behaves more or less like a Struct with fields item0, item1, ...

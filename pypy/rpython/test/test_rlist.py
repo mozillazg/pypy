@@ -1430,5 +1430,26 @@ class TestLLtype(BaseTestRlist, LLRtypeMixin):
         assert func1.oopspec == 'list.getitem_foldable(l, index)'
         assert func2.oopspec == 'list.getitem(l, index)'
 
+class TestLLtypeChunkedList(BaseRtypingTest, LLRtypeMixin):
+    def setup_class(cls):
+        cls.MIN_CHUNKED_SIZE = ll_rlist.MIN_CHUNKED_SIZE
+        cls.CHUNK_SIZE = ll_rlist.CHUNK_SIZE
+        ll_rlist.MIN_CHUNKED_SIZE = 100
+        ll_rlist.CHUNK_SIZE = 100
+
+    def teardown_class(cls):
+        ll_rlist.MIN_CHUNKED_SIZE = cls.MIN_CHUNKED_SIZE
+        ll_rlist.CHUNK_SIZE = cls.CHUNK_SIZE
+            
+    def test_big_getitem(self):
+        def f(i):
+            l = [0] * (ll_rlist.MIN_CHUNKED_SIZE - 3)
+            for k in range(10):
+                l.append(i)
+            return l[-1]
+
+        res = self.interpret(f, [38])
+        assert res == 38
+
 class TestOOtype(BaseTestRlist, OORtypeMixin):
     rlist = oo_rlist
