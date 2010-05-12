@@ -11,7 +11,7 @@ from pypy.rpython.lltypesystem.lltype import \
      GcForwardReference, Ptr, GcArray, GcStruct, \
      Void, Signed, malloc, typeOf, Primitive, \
      Bool, nullptr, typeMethod
-from pypy.rpython.lltypesystem import rstr
+from pypy.rpython.lltypesystem import rstr, lltype
 from pypy.rpython import robject
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
@@ -19,6 +19,10 @@ from pypy.rpython.lltypesystem import rffi
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib import rgc
+
+MIN_CHUNKED_SIZE = 32*1024 # should be somehow correlated with size of GC
+# structure that gets allocated using raw_malloc in the hybrid gc
+CHUNK_SIZE = MIN_CHUNKED_SIZE
 
 # ____________________________________________________________
 #
@@ -105,6 +109,7 @@ class ListRepr(AbstractListRepr, BaseListRepr):
                                           "ll_newemptylist": ll_newemptylist,
                                           "ll_length": ll_length,
                                           "ll_items": ll_items,
+                                          'll_chunks': ll_chunks,
                                           "ITEM": ITEM,
                                           "ll_getitem_fast": ll_getitem_fast,
                                           "ll_setitem_fast": ll_setitem_fast,
@@ -206,20 +211,48 @@ def _ll_list_resize_really(l, newsize):
             new_allocated = ovfcheck(newsize + some)
         except OverflowError:
             raise MemoryError
-    # XXX consider to have a real realloc
     # new_allocated is a bit more than newsize, enough to ensure an amortized
     # linear complexity for e.g. repeated usage of l.append().
     items = l.items
-    newitems = malloc(typeOf(l).TO.items.TO, new_allocated)
+    ARRAYTP = typeOf(l).TO.items.TO
     before_len = l.length
     if before_len:   # avoids copying GC flags from the prebuilt_empty_array
         if before_len < newsize:
             p = before_len
         else:
             p = newsize
-        rgc.ll_arraycopy(items, newitems, 0, 0, p)
+    else:
+        p = 0
+    if new_allocated > MIN_CHUNKED_SIZE:
+        newarr = malloc(lltype.new_gc_array(lltype.Ptr(ARRAYTP)),
+                        (new_allocated / CHUNK_SIZE) + 1)
+        if before_len <= MIN_CHUNKED_SIZE:
+            # copy unchunked list -> chunked list, always grow
+            i = 0
+            start = 0
+            while i < (new_allocated / CHUNK_SIZE) + 1:
+                newarr[i] = malloc(ARRAYTP, CHUNK_SIZE)
+                if start < before_len:
+                    size = CHUNK_SIZE
+                    if start + size > before_len:
+                        size = before_len - start
+                    rgc.ll_arraycopy(items, newarr[i], start, 0, size)
+                start += CHUNK_SIZE
+                i += 1
+        else:
+            # copy chunked list -> larger chunked list
+            raise NotImplementedError
+        l.length = newsize
+        l.items = rffi.cast(lltype.Ptr(ARRAYTP), newarr)
+    else:
+        if before_len > MIN_CHUNKED_SIZE:
+            # copy chunked list -> unchunked list
+            raise NotImplementedError
+        newitems = malloc(ARRAYTP, new_allocated)
+        if p:
+            rgc.ll_arraycopy(items, newitems, 0, 0, p)
+        l.items = newitems
     l.length = newsize
-    l.items = newitems
 _ll_list_resize_really._annenforceargs_ = (None, int)
 
 # this common case was factored out of _ll_list_resize
@@ -302,16 +335,23 @@ ll_length.oopspec = 'list.len(l)'
 def ll_items(l):
     return l.items
 
+def ll_chunks(l):
+    ARRAYTP = lltype.typeOf(l).TO.items
+    return rffi.cast(Ptr(lltype.new_gc_array(ARRAYTP)), l.items)
+
 def ll_getitem_fast(l, index):
-    if l.length == 0:
-        raise IndexError
     ll_assert(index < l.length, "getitem out of bounds")
+    if l.length > MIN_CHUNKED_SIZE:
+        return l.ll_chunks()[index / CHUNK_SIZE][index % CHUNK_SIZE]
     return l.ll_items()[index]
 ll_getitem_fast.oopspec = 'list.getitem(l, index)'
 
 def ll_setitem_fast(l, index, item):
     ll_assert(index < l.length, "setitem out of bounds")
-    l.ll_items()[index] = item
+    if l.length > MIN_CHUNKED_SIZE:
+        l.ll_chunks()[index / CHUNK_SIZE][index % CHUNK_SIZE] = item
+    else:
+        l.ll_items()[index] = item
 ll_setitem_fast.oopspec = 'list.setitem(l, index, item)'
 
 # fixed size versions
