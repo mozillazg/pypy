@@ -43,6 +43,8 @@ class ListOfKind(object):
         return '%s%s' % (self.kind[0], self.content)
     def __iter__(self):
         return iter(self.content)
+    def __nonzero__(self):
+        return bool(self.content)
 
 class IndirectCallTargets(object):
     def __init__(self, lst):

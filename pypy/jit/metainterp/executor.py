@@ -203,8 +203,7 @@ def do_int_mul_ovf(metainterp, box1, box2):
 # ____________________________________________________________
 
 
-def make_execute_list(cpuclass):
-    from pypy.jit.backend.model import AbstractCPU
+def _make_execute_list():
     if 0:     # enable this to trace calls to do_xxx
         def wrap(fn):
             def myfn(*args):
@@ -259,7 +258,7 @@ def make_execute_list(cpuclass):
                     execute[value] = func
                     continue
             print "XXX warning: missing", key
-    cpuclass._execute_by_num_args = execute_by_num_args
+    return execute_by_num_args
 
 def make_execute_function_with_boxes(name, func):
     # Make a wrapper for 'func'.  The func is a simple bhimpl_xxx function
@@ -300,17 +299,19 @@ def make_execute_function_with_boxes(name, func):
     do.func_name = 'do_' + name
     return do
 
-def get_execute_funclist(cpu, num_args):
+def get_execute_funclist(num_args):
     # workaround, similar to the next one
-    return cpu._execute_by_num_args[num_args]
+    return EXECUTE_BY_NUM_ARGS[num_args]
 get_execute_funclist._annspecialcase_ = 'specialize:memo'
 
-def get_execute_function(cpu, opnum, num_args):
+def get_execute_function(opnum, num_args):
     # workaround for an annotation limitation: putting this code in
     # a specialize:memo function makes sure the following line is
     # constant-folded away.  Only works if opnum and num_args are
     # constants, of course.
-    return cpu._execute_by_num_args[num_args][opnum]
+    func = EXECUTE_BY_NUM_ARGS[num_args][opnum]
+    assert func is not None, "EXECUTE_BY_NUM_ARGS[%s][%s]" % (num_args, opnum)
+    return func
 get_execute_function._annspecialcase_ = 'specialize:memo'
 
 def has_descr(opnum):
@@ -326,8 +327,7 @@ def execute(metainterp, opnum, descr, *argboxes):
         argboxes = argboxes + (descr,)
     else:
         assert descr is None
-    func = get_execute_function(metainterp.cpu, opnum, len(argboxes))
-    assert func is not None
+    func = get_execute_function(opnum, len(argboxes))
     return func(metainterp, *argboxes)     # note that the 'argboxes' tuple
                                            # optionally ends with the descr
 execute._annspecialcase_ = 'specialize:arg(1)'
@@ -335,41 +335,45 @@ execute._annspecialcase_ = 'specialize:arg(1)'
 def execute_varargs(metainterp, opnum, argboxes, descr):
     # only for opnums with a variable arity (calls, typically)
     check_descr(descr)
-    func = get_execute_function(metainterp.cpu, opnum, -1)
-    assert func is not None
+    func = get_execute_function(opnum, -1)
     return func(metainterp, argboxes, descr)
 execute_varargs._annspecialcase_ = 'specialize:arg(1)'
 
 
-def execute_nonspec(cpu, opnum, argboxes, descr=None):
+def execute_nonspec(metainterp, opnum, argboxes, descr=None):
+    assert metainterp.__class__.__name__ == 'MetaInterp'   # XXX kill me
     arity = resoperation.oparity[opnum]
     assert arity == -1 or len(argboxes) == arity
     if resoperation.opwithdescr[opnum]:
         check_descr(descr)
         if arity == -1:
-            func = get_execute_funclist(cpu, -1)[opnum]
-            return func(cpu, argboxes, descr)
+            func = get_execute_funclist(-1)[opnum]
+            return func(metainterp, argboxes, descr)
         if arity == 0:
-            func = get_execute_funclist(cpu, 1)[opnum]
-            return func(cpu, descr)
+            func = get_execute_funclist(1)[opnum]
+            return func(metainterp, descr)
         if arity == 1:
-            func = get_execute_funclist(cpu, 2)[opnum]
-            return func(cpu, argboxes[0], descr)
+            func = get_execute_funclist(2)[opnum]
+            return func(metainterp, argboxes[0], descr)
         if arity == 2:
-            func = get_execute_funclist(cpu, 3)[opnum]
-            return func(cpu, argboxes[0], argboxes[1], descr)
+            func = get_execute_funclist(3)[opnum]
+            return func(metainterp, argboxes[0], argboxes[1], descr)
         if arity == 3:
-            func = get_execute_funclist(cpu, 4)[opnum]
-            return func(cpu, argboxes[0], argboxes[1], argboxes[2], descr)
+            func = get_execute_funclist(4)[opnum]
+            return func(metainterp, argboxes[0], argboxes[1], argboxes[2],
+                        descr)
     else:
         assert descr is None
         if arity == 1:
-            func = get_execute_funclist(cpu, 1)[opnum]
-            return func(cpu, argboxes[0])
+            func = get_execute_funclist(1)[opnum]
+            return func(metainterp, argboxes[0])
         if arity == 2:
-            func = get_execute_funclist(cpu, 2)[opnum]
-            return func(cpu, argboxes[0], argboxes[1])
+            func = get_execute_funclist(2)[opnum]
+            return func(metainterp, argboxes[0], argboxes[1])
         if arity == 3:
-            func = get_execute_funclist(cpu, 3)[opnum]
-            return func(cpu, argboxes[0], argboxes[1], argboxes[2])
+            func = get_execute_funclist(3)[opnum]
+            return func(metainterp, argboxes[0], argboxes[1], argboxes[2])
     raise NotImplementedError
+
+
+EXECUTE_BY_NUM_ARGS = _make_execute_list()

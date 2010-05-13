@@ -209,7 +209,7 @@ class BaseCPU(model.AbstractCPU):
 
     def _execute_token(self, loop_token):
         compiled_version = loop_token._llgraph_compiled_version
-        frame = llimpl.new_frame(self.memo_cast, self.is_oo, self)
+        frame = llimpl.new_frame(self.is_oo, self)
         # setup the frame
         llimpl.frame_clear(frame, compiled_version)
         # run the loop
@@ -869,10 +869,3 @@ class FieldDescr(OODescr):
 
     def __repr__(self):
         return '<FieldDescr %r>' % self.fieldname
-
-
-# ____________________________________________________________
-
-import pypy.jit.metainterp.executor
-pypy.jit.metainterp.executor.make_execute_list(LLtypeCPU)
-##pypy.jit.metainterp.executor.make_execute_list(OOtypeCPU)

@@ -399,10 +399,9 @@ def compile_redirect_fail(old_loop, old_index, new_loop):
 class Frame(object):
     OPHANDLERS = [None] * (rop._LAST+1)
 
-    def __init__(self, memocast, cpu):
+    def __init__(self, cpu):
         self.verbose = False
         self.cpu = cpu
-        self.memocast = memocast
         self.opindex = 1
         self._forced = False
         self._may_force = -1
@@ -529,7 +528,7 @@ class Frame(object):
         return res
 
     def as_int(self, x):
-        return cast_to_int(x, self.memocast)
+        return cast_to_int(x)
 
     def as_ptr(self, x):
         return cast_to_ptr(x)
@@ -553,33 +552,31 @@ class Frame(object):
         try:
             op = getattr(cls, 'op_' + opname.lower())   # op_guard_true etc.
         except AttributeError:
-            name = 'do_' + opname.lower()
             try:
-                impl = globals()[name]                    # do_arraylen_gc etc.
-                def op(self, descr, *args):
-                    return impl(descr, *args)
-                #
+                impl = globals()['do_' + opname.lower()]  # do_arraylen_gc etc.
+                op = staticmethod(impl)
             except KeyError:
-                from pypy.jit.backend.llgraph import llimpl
-                impl = getattr(executor, name)            # do_int_add etc.
-                def _op_default_implementation(self, descr, *args):
-                    # for all operations implemented in execute.py
-                    boxedargs = []
-                    for x in args:
-                        if type(x) is int:
-                            boxedargs.append(BoxInt(x))
-                        elif type(x) is float:
-                            boxedargs.append(BoxFloat(x))
-                        elif isinstance(ootype.typeOf(x), ootype.OOType):
-                            boxedargs.append(BoxObj(ootype.cast_to_object(x)))
-                        else:
-                            boxedargs.append(BoxPtr(x))
-                    # xxx this passes the 'llimpl' module as the CPU argument
-                    resbox = impl(llimpl, *boxedargs)
-                    return getattr(resbox, 'value', None)
-                op = _op_default_implementation
-                #
+                op = cls._make_impl_from_blackhole_interp(opname)
         cls.OPHANDLERS[opnum] = op
+
+    @classmethod
+    def _make_impl_from_blackhole_interp(cls, opname):
+        from pypy.jit.metainterp.blackhole import BlackholeInterpreter
+        name = 'bhimpl_' + opname.lower()
+        func = BlackholeInterpreter.__dict__[name]
+        for argtype in func.argtypes:
+            assert argtype in ('i', 'r', 'f')
+        #
+        def _op_default_implementation(self, descr, *args):
+            # for all operations implemented in the blackhole interpreter
+            return func(*args)
+        #
+        return _op_default_implementation
+
+    def op_debug_merge_point(self, _, value):
+        from pypy.jit.metainterp.warmspot import get_stats
+        loc = ConstPtr(value)._get_str()
+        get_stats().add_merge_point_location(loc)
 
     def op_guard_true(self, _, value):
         if not value:
@@ -800,7 +797,7 @@ class Frame(object):
         return do_new_array(arraydescr.ofs, count)
 
     def op_cast_ptr_to_int(self, descr, ptr):
-        return cast_to_int(ptr, self.memocast)
+        return cast_to_int(ptr)
 
     def op_uint_xor(self, descr, arg1, arg2):
         return arg1 ^ arg2
@@ -1012,11 +1009,11 @@ def cast_from_float(TYPE, x):   # not really a cast, just a type check
     return x
 
 
-def new_frame(memocast, is_oo, cpu):
+def new_frame(is_oo, cpu):
     if is_oo:
-        frame = OOFrame(memocast, cpu)
+        frame = OOFrame(cpu)
     else:
-        frame = Frame(memocast, cpu)
+        frame = Frame(cpu)
     return _to_opaque(frame)
 
 _future_values = []
