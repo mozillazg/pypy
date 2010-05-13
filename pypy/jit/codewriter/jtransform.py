@@ -17,10 +17,6 @@ def transform_graph(graph, cpu=None, callcontrol=None, portal=True):
     t.transform(graph, portal)
 
 
-class NoOp(Exception):
-    pass
-
-
 class Transformer(object):
 
     def __init__(self, cpu=None, callcontrol=None):
@@ -36,36 +32,40 @@ class Transformer(object):
     def optimize_block(self, block):
         if block.operations == ():
             return
-        rename = {}
+        renamings = {}
         newoperations = []
-        if block.exitswitch == c_last_exception:
-            op_raising_exception = block.operations[-1]
-        else:
-            op_raising_exception = Ellipsis
+        #
         for op in block.operations:
-            try:
-                op1 = self.rewrite_operation(op)
-            except NoOp:
-                if op.result is not None:
-                    rename[op.result] = rename.get(op.args[0], op.args[0])
-                if op is op_raising_exception:
-                    self.killed_exception_raising_operation(block)
-            else:
+            oplist = self.rewrite_operation(op)
+            #
+            count_before_last_operation = len(newoperations)
+            if not isinstance(oplist, list):
+                oplist = [oplist]
+            for op1 in oplist:
                 if isinstance(op1, SpaceOperation):
-                    op2 = self.do_renaming(rename, op1)
-                    newoperations.append(op2)
+                    newoperations.append(self._do_renaming(renamings, op1))
+                elif op1 is None:
+                    # rewrite_operation() returns None to mean "has no real
+                    # effect, the result should just be renamed to args[0]"
+                    if op.result is not None:
+                        renamings[op.result] = renamings.get(op.args[0],
+                                                             op.args[0])
                 elif isinstance(op1, Constant):
-                    rename[op.result] = op1
+                    renamings[op.result] = op1
                 else:
                     raise TypeError(repr(op1))
+        #
+        if block.exitswitch == c_last_exception:
+            if len(newoperations) == count_before_last_operation:
+                self._killed_exception_raising_operation(block)
         block.operations = newoperations
-        block.exitswitch = rename.get(block.exitswitch, block.exitswitch)
+        block.exitswitch = renamings.get(block.exitswitch, block.exitswitch)
         self.follow_constant_exit(block)
         self.optimize_goto_if_not(block)
         for link in block.exits:
-            self.do_renaming_on_link(rename, link)
+            self._do_renaming_on_link(renamings, link)
 
-    def do_renaming(self, rename, op):
+    def _do_renaming(self, rename, op):
         op = SpaceOperation(op.opname, op.args[:], op.result)
         for i, v in enumerate(op.args):
             if isinstance(v, Variable):
@@ -80,13 +80,13 @@ class Transformer(object):
                 op.args[i] = ListOfKind(v.kind, newlst)
         return op
 
-    def do_renaming_on_link(self, rename, link):
+    def _do_renaming_on_link(self, rename, link):
         for i, v in enumerate(link.args):
             if isinstance(v, Variable):
                 if v in rename:
                     link.args[i] = rename[v]
 
-    def killed_exception_raising_operation(self, block):
+    def _killed_exception_raising_operation(self, block):
         assert block.exits[0].exitcase is None
         del block.exits[1:]
         block.exitswitch = None
@@ -140,21 +140,21 @@ class Transformer(object):
         try:
             rewrite = _rewrite_ops[op.opname]
         except KeyError:
-            return op
+            return op     # default: keep the operation unchanged
         else:
             return rewrite(self, op)
 
-    def rewrite_op_same_as(self, op): raise NoOp
-    def rewrite_op_cast_pointer(self, op): raise NoOp
-    def rewrite_op_cast_primitive(self, op): raise NoOp
-    def rewrite_op_cast_bool_to_int(self, op): raise NoOp
-    def rewrite_op_cast_bool_to_uint(self, op): raise NoOp
-    def rewrite_op_cast_char_to_int(self, op): raise NoOp
-    def rewrite_op_cast_unichar_to_int(self, op): raise NoOp
-    def rewrite_op_cast_int_to_char(self, op): raise NoOp
-    def rewrite_op_cast_int_to_unichar(self, op): raise NoOp
-    def rewrite_op_cast_int_to_uint(self, op): raise NoOp
-    def rewrite_op_cast_uint_to_int(self, op): raise NoOp
+    def rewrite_op_same_as(self, op): pass
+    def rewrite_op_cast_pointer(self, op): pass
+    def rewrite_op_cast_primitive(self, op): pass
+    def rewrite_op_cast_bool_to_int(self, op): pass
+    def rewrite_op_cast_bool_to_uint(self, op): pass
+    def rewrite_op_cast_char_to_int(self, op): pass
+    def rewrite_op_cast_unichar_to_int(self, op): pass
+    def rewrite_op_cast_int_to_char(self, op): pass
+    def rewrite_op_cast_int_to_unichar(self, op): pass
+    def rewrite_op_cast_int_to_uint(self, op): pass
+    def rewrite_op_cast_uint_to_int(self, op): pass
 
     def _rewrite_symmetric(self, op):
         """Rewrite 'c1+v2' into 'v2+c1' in an attempt to avoid generating
@@ -211,21 +211,27 @@ class Transformer(object):
         """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'
            into 'i0 = xxx_call_ir_i(fn, descr, [i1,i2], [ref1,ref2])'.
            The name is one of '{residual,direct}_call_{r,ir,irf}_{i,r,f,v}'."""
+        lst_i, lst_r, lst_f = self.make_three_lists(op.args[1:])
+        reskind = getkind(op.result.concretetype)[0]
+        if lst_f or reskind == 'f': kinds = 'irf'
+        elif lst_i: kinds = 'ir'
+        else: kinds = 'r'
+        sublists = []
+        if 'i' in kinds: sublists.append(lst_i)
+        if 'r' in kinds: sublists.append(lst_r)
+        if 'f' in kinds: sublists.append(lst_f)
+        return SpaceOperation('%s_%s_%s' % (namebase, kinds, reskind),
+                              initialargs + sublists, op.result)
+
+    def make_three_lists(self, vars):
         args_i = []
         args_r = []
         args_f = []
-        for v in op.args[1:]:
+        for v in vars:
             self.add_in_correct_list(v, args_i, args_r, args_f)
-        reskind = getkind(op.result.concretetype)[0]
-        if args_f or reskind == 'f': kinds = 'irf'
-        elif args_i: kinds = 'ir'
-        else:        kinds = 'r'
-        sublists = []
-        if 'i' in kinds: sublists.append(ListOfKind('int', args_i))
-        if 'r' in kinds: sublists.append(ListOfKind('ref', args_r))
-        if 'f' in kinds: sublists.append(ListOfKind('float', args_f))
-        return SpaceOperation('%s_%s_%s' % (namebase, kinds, reskind),
-                              initialargs + sublists, op.result)
+        return [ListOfKind('int', args_i),
+                ListOfKind('ref', args_r),
+                ListOfKind('float', args_f)]
 
     def add_in_correct_list(self, v, lst_i, lst_r, lst_f):
         kind = getkind(v.concretetype)
@@ -305,11 +311,13 @@ class Transformer(object):
             kind = getkind(op.args[0].concretetype)
             # note: the 'G_' prefix tells that the operation might generate
             # a guard in pyjitpl (see liveness.py)
-            return SpaceOperation('G_%s_guard_value' % kind,
-                                  [op.args[0]], op.result)
+            op = SpaceOperation('G_%s_guard_value' % kind,
+                                [op.args[0]], None)
+            # this special return value forces op.result to be considered
+            # equal to op.args[0]
+            return [op, None]
         else:
             log.WARNING('ignoring hint %r at %r' % (hints, self.graph))
-            raise NoOp
 
     def rewrite_op_malloc_varsize(self, op):
         assert op.args[1].value == {'flavor': 'gc'}
@@ -355,7 +363,7 @@ class Transformer(object):
         [v_inst, c_fieldname] = op.args
         RESULT = op.result.concretetype
         if RESULT is lltype.Void:
-            raise NoOp
+            return
         # check for virtualizable
         #try:
         #    if self.is_virtualizable_getset(op):
@@ -393,12 +401,12 @@ class Transformer(object):
     def rewrite_op_setfield(self, op):
         if self.is_typeptr_getset(op):
             # ignore the operation completely -- instead, it's done by 'new'
-            raise NoOp
+            return
         # turn the flow graph 'setfield' operation into our own version
         [v_inst, c_fieldname, v_value] = op.args
         RESULT = v_value.concretetype
         if RESULT is lltype.Void:
-            raise NoOp
+            return
         # check for virtualizable
         #if self.is_virtualizable_getset(op):
         #    vinfo = self.codewriter.metainterp_sd.virtualizable_info
@@ -530,8 +538,6 @@ class Transformer(object):
     def rewrite_op_cast_ptr_to_int(self, op):
         if self._is_gc(op.args[0]):
             return op
-        else:
-            raise NoOp
 
     # ----------
     # Renames, from the _old opname to the _new one.
@@ -609,17 +615,27 @@ class Transformer(object):
         return op
 
     def rewrite_op_jit_marker(self, op):
-        opname = op.args[0].value
         jitdriver = op.args[1].value
         self.callcontrol.found_jitdriver(jitdriver)
-        args_i = []
-        args_r = []
-        args_f = []
-        for v in op.args[2:]:
-            self.add_in_correct_list(v, args_i, args_r, args_f)
-        return SpaceOperation(opname, [ListOfKind('int', args_i),
-                                       ListOfKind('ref', args_r),
-                                       ListOfKind('float', args_f)], op.result)
+        key = op.args[0].value
+        return getattr(self, 'handle_jit_marker__%s' % key)(op, jitdriver)
+
+    def handle_jit_marker__jit_merge_point(self, op, jitdriver):
+        assert self.portal, "jit_merge_point in non-main graph!"
+        ops = []
+        num_green_args = len(jitdriver.greens)
+        for v in op.args[2:2+num_green_args]:
+            if isinstance(v, Variable) and v.concretetype is not lltype.Void:
+                kind = getkind(v.concretetype)
+                ops.append(SpaceOperation('G_%s_guard_value' % kind,
+                                          [v], None))
+        args = (self.make_three_lists(op.args[2:2+num_green_args]) +
+                self.make_three_lists(op.args[2+num_green_args:]))
+        ops.append(SpaceOperation('jit_merge_point', args, None))
+        return ops
+
+    def handle_jit_marker__can_enter_jit(self, op, jitdriver):
+        return SpaceOperation('can_enter_jit', [], None)
 
 # ____________________________________________________________
 

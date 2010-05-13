@@ -51,7 +51,7 @@ class MIFrame(object):
     parent_resumedata_snapshot = None
     parent_resumedata_frame_info_list = None
 
-    env = property(lambda: xxx, lambda x: xxx)     # no read/write!
+    env = property(lambda: xxx, lambda: xxx)     # temporary: no read/write!
 
     def __init__(self, metainterp):
         self.metainterp = metainterp
@@ -771,19 +771,12 @@ class MIFrame(object):
         self.execute_varargs(rop.OOSEND_PURE, boxes, descr=methdescr, exc=False)
 
     @arguments("box")
-    def opimpl_int_guard_value(self, box):
-        return self.implement_guard_value(box)
+    def _opimpl_guard_value(self, box):
+        self.implement_guard_value(box)
 
-    @XXX  #arguments("orgpc", "int")
-    def opimpl_guard_green(self, pc, boxindex):
-        """Like guard_value, but overwrites the original box with the const.
-        Used to prevent Boxes from showing up in the greenkey of some
-        operations, like jit_merge_point.  The in-place overwriting is
-        convenient for jit_merge_point, which expects self.env to contain
-        not more than the greens+reds described in the jitdriver."""
-        box = self.env[boxindex]
-        constbox = self.implement_guard_value(pc, box)
-        self.env[boxindex] = constbox
+    opimpl_int_guard_value = _opimpl_guard_value
+    opimpl_ref_guard_value = _opimpl_guard_value
+    opimpl_float_guard_value = _opimpl_guard_value
 
     @arguments("box")
     def opimpl_guard_class(self, box):
@@ -831,39 +824,28 @@ class MIFrame(object):
         else:
             raise self.metainterp.staticdata.ContinueRunningNormally(varargs)
 
-    @arguments("boxes3")
-    def opimpl_can_enter_jit(self, boxes):
-        xxx
-        # Note: when running with a BlackHole history, this 'can_enter_jit'
-        # may be completely skipped by the logic that replaces perform_call
-        # with rop.CALL.  But in that case, no-one will check the flag anyway,
-        # so it's fine.
+    @arguments()
+    def opimpl_can_enter_jit(self):
         if self.metainterp.in_recursion:
             from pypy.jit.metainterp.warmspot import CannotInlineCanEnterJit
             raise CannotInlineCanEnterJit()
         self.metainterp.seen_can_enter_jit = True
 
-    @arguments("boxes3")
-    def opimpl_jit_merge_point(self, boxes):
-        xxx
-        if not self.metainterp.is_blackholing():
-            self.verify_green_args(self.env)
-            # xxx we may disable the following line in some context later
-            self.debug_merge_point()
-            if self.metainterp.seen_can_enter_jit:
-                self.metainterp.seen_can_enter_jit = False
-                try:
-                    self.metainterp.reached_can_enter_jit(self.env)
-                except GiveUp:
-                    self.metainterp.switch_to_blackhole(ABORT_BRIDGE)
-        if self.metainterp.is_blackholing():
-            self.blackhole_reached_merge_point(self.env)
-        return True
+    @arguments("boxes3", "boxes3")
+    def opimpl_jit_merge_point(self, greenboxes, redboxes):
+        self.verify_green_args(greenboxes)
+        # xxx we may disable the following line in some context later
+        self.debug_merge_point(greenboxes)
+        if self.metainterp.seen_can_enter_jit:
+            self.metainterp.seen_can_enter_jit = False
+            try:
+                self.metainterp.reached_can_enter_jit(greenboxes, redboxes)
+            except GiveUp:
+                XXX
+                self.metainterp.switch_to_blackhole(ABORT_BRIDGE)
 
-    def debug_merge_point(self):
+    def debug_merge_point(self, greenkey):
         # debugging: produce a DEBUG_MERGE_POINT operation
-        num_green_args = self.metainterp.staticdata.num_green_args
-        greenkey = self.env[:num_green_args]
         sd = self.metainterp.staticdata
         loc = sd.state.get_location_str(greenkey)
         debug_print(loc)
@@ -1583,9 +1565,8 @@ class MetaInterp(object):
                 key.reset_counter_from_failure(self)
             raise
 
-    def remove_consts_and_duplicates(self, boxes, startindex, endindex,
-                                     duplicates):
-        for i in range(startindex, endindex):
+    def remove_consts_and_duplicates(self, boxes, endindex, duplicates):
+        for i in range(endindex):
             box = boxes[i]
             if isinstance(box, Const) or box in duplicates:
                 oldbox = box
@@ -1595,19 +1576,15 @@ class MetaInterp(object):
             else:
                 duplicates[box] = None
 
-    def reached_can_enter_jit(self, live_arg_boxes):
-        num_green_args = self.staticdata.num_green_args
+    def reached_can_enter_jit(self, greenboxes, redboxes):
         duplicates = {}
-        self.remove_consts_and_duplicates(live_arg_boxes,
-                                          num_green_args,
-                                          len(live_arg_boxes),
+        self.remove_consts_and_duplicates(redboxes, len(redboxes),
                                           duplicates)
-        live_arg_boxes = live_arg_boxes[:]
+        live_arg_boxes = greenboxes + redboxes
         if self.staticdata.virtualizable_info is not None:
             # we use ':-1' to remove the last item, which is the virtualizable
             # itself
             self.remove_consts_and_duplicates(self.virtualizable_boxes,
-                                              0,
                                               len(self.virtualizable_boxes)-1,
                                               duplicates)
             live_arg_boxes += self.virtualizable_boxes[:-1]
@@ -2140,7 +2117,7 @@ def _get_opimpl_method(name, argcodes):
         self.pc = position + num_return_args
         #
         if not we_are_translated():
-            print '\tjitcode:', name, list(args),
+            print '\tjitcode: %s(%s)' % (name, ', '.join(map(repr, args))),
             try:
                 resultbox = unboundmethod(self, *args)
             except Exception, e:
@@ -2150,7 +2127,7 @@ def _get_opimpl_method(name, argcodes):
                 print
                 assert resultbox is None
             else:
-                print '->', resultbox
+                print '-> %r' % (resultbox,)
                 result_argcode = argcodes[next_argcode]
                 assert resultbox.type == {'i': history.INT,
                                           'r': history.REF,

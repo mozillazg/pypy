@@ -516,3 +516,34 @@ def test_unicode_setinteriorfield():
     assert op1.opname == 'unicodesetitem'
     assert op1.args == [v, v_index, v_newchr]
     assert op1.result == v_void
+
+def test_promote_1():
+    v1 = varoftype(lltype.Signed)
+    v2 = varoftype(lltype.Signed)
+    op = SpaceOperation('hint',
+                        [v1, Constant({'promote': True}, lltype.Void)],
+                        v2)
+    oplist = Transformer().rewrite_operation(op)
+    assert len(oplist) == 2
+    assert oplist[1] is None
+    assert oplist[0].opname == 'G_int_guard_value'
+    assert oplist[0].args == [v1]
+    assert oplist[0].result is None
+
+def test_promote_2():
+    v1 = varoftype(lltype.Signed)
+    v2 = varoftype(lltype.Signed)
+    op = SpaceOperation('hint',
+                        [v1, Constant({'promote': True}, lltype.Void)],
+                        v2)
+    returnblock = Block([varoftype(lltype.Signed)])
+    returnblock.operations = ()
+    block = Block([v1])
+    block.operations = [op]
+    block.closeblock(Link([v2], returnblock))
+    Transformer().optimize_block(block)
+    assert len(block.operations) == 1
+    assert block.operations[0].opname == 'G_int_guard_value'
+    assert block.operations[0].args == [v1]
+    assert block.operations[0].result is None
+    assert block.exits[0].args == [v1]
