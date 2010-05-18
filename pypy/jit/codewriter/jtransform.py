@@ -33,9 +33,17 @@ class Transformer(object):
         if block.operations == ():
             return
         renamings = {}
+        renamings_constants = {}    # subset of 'renamings', {Var:Const} only
         newoperations = []
         #
+        def do_rename(var, var_or_const):
+            renamings[var] = var_or_const
+            if isinstance(var_or_const, Constant):
+                renamings_constants[var] = var_or_const
+        #
         for op in block.operations:
+            if renamings_constants:
+                op = self._do_renaming(renamings_constants, op)
             oplist = self.rewrite_operation(op)
             #
             count_before_last_operation = len(newoperations)
@@ -48,10 +56,10 @@ class Transformer(object):
                     # rewrite_operation() returns None to mean "has no real
                     # effect, the result should just be renamed to args[0]"
                     if op.result is not None:
-                        renamings[op.result] = renamings.get(op.args[0],
-                                                             op.args[0])
+                        do_rename(op.result, renamings.get(op.args[0],
+                                                           op.args[0]))
                 elif isinstance(op1, Constant):
-                    renamings[op.result] = op1
+                    do_rename(op.result, op1)
                 else:
                     raise TypeError(repr(op1))
         #

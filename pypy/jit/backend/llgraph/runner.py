@@ -21,17 +21,13 @@ class MiniStats:
     pass
 
 
-NO_VTABLE = lltype.nullptr(rclass.CLASSTYPE.TO)
-
 class Descr(history.AbstractDescr):
 
-    def __init__(self, ofs, typeinfo, extrainfo=None, name=None,
-                 vtable=NO_VTABLE):
+    def __init__(self, ofs, typeinfo, extrainfo=None, name=None):
         self.ofs = ofs
         self.typeinfo = typeinfo
         self.extrainfo = extrainfo
         self.name = name
-        self.vtable = vtable
 
     def get_return_type(self):
         return self.typeinfo
@@ -102,13 +98,12 @@ class BaseCPU(model.AbstractCPU):
         assert self.translate_support_code
         return False
 
-    def getdescr(self, ofs, typeinfo='?', extrainfo=None, name=None,
-                 vtable=NO_VTABLE):
-        key = (ofs, typeinfo, extrainfo, name, vtable._obj)
+    def getdescr(self, ofs, typeinfo='?', extrainfo=None, name=None):
+        key = (ofs, typeinfo, extrainfo, name)
         try:
             return self._descrs[key]
         except KeyError:
-            descr = Descr(ofs, typeinfo, extrainfo, name, vtable)
+            descr = Descr(ofs, typeinfo, extrainfo, name)
             self._descrs[key] = descr
             return descr
 
@@ -262,12 +257,9 @@ class BaseCPU(model.AbstractCPU):
 
     # ----------
 
-    def sizeof(self, S, vtable=None):
+    def sizeof(self, S):
         assert not isinstance(S, lltype.Ptr)
-        if vtable is None:
-            return self.getdescr(symbolic.get_size(S))
-        else:
-            return self.getdescr(symbolic.get_size(S), vtable=vtable)
+        return self.getdescr(symbolic.get_size(S))
 
 
 class LLtypeCPU(BaseCPU):
