@@ -766,18 +766,18 @@ class Frame(object):
             raise NotImplementedError
 
     def op_call(self, calldescr, func, *args):
-        _call_args[:] = args
-        if calldescr.typeinfo == 'v':
-            err_result = None
-        elif calldescr.typeinfo == REF:
-            err_result = lltype.nullptr(llmemory.GCREF.TO)
-        elif calldescr.typeinfo == INT:
-            err_result = 0
-        elif calldescr.typeinfo == FLOAT:
-            err_result = 0.0
-        else:
-            raise NotImplementedError
-        return _do_call_common(func, err_result)
+        assert _call_args_i == _call_args_r == _call_args_f == []
+        for x in args:
+            T = lltype.typeOf(x)
+            if T is lltype.Signed:
+                _call_args_i.append(x)
+            elif T == llmemory.GCREF:
+                _call_args_r.append(x)
+            elif T is lltype.Float:
+                _call_args_f.append(x)
+            else:
+                raise TypeError(x)
+        return _do_call_common(func)
 
     op_call_pure = op_call
 

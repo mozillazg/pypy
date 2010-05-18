@@ -32,6 +32,9 @@ class EffectInfo(object):
         cls._cache[key] = result
         return result
 
+    def check_forces_virtual_or_virtualizable(self):
+        return self.extraeffect >= EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+
 def effectinfo_from_writeanalyze(effects, cpu, extraeffect=EF_CAN_RAISE):
     from pypy.translator.backendopt.writeanalyze import top_set
     if effects is top_set:
