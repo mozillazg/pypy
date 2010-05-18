@@ -1091,7 +1091,7 @@ class HeapOpOptimizer(object):
                         del self.cached_arrayitems[arraydescr]
                     except KeyError:
                         pass
-                if effectinfo.forces_virtual_or_virtualizable:
+                if effectinfo.check_forces_virtual_or_virtualizable():
                     vrefinfo = self.optimizer.metainterp_sd.virtualref_info
                     self.force_lazy_setfield(vrefinfo.descr_forced)
                     # ^^^ we only need to force this field; the other fields
