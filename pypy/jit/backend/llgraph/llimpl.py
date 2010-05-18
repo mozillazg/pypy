@@ -230,19 +230,19 @@ def repr0(x):
     else:
         return repr(x)
 
-def repr_list(lst, types, memocast):
+def repr_list(lst, types):
     res_l = []
     if types and types[-1] == 'varargs':
         types = types[:-1] + ('int',) * (len(lst) - len(types) + 1)
     assert len(types) == len(lst)
     for elem, tp in zip(lst, types):
         if isinstance(elem, Constant):
-            res_l.append('(%s)' % repr1(elem, tp, memocast))
+            res_l.append('(%s)' % repr1(elem, tp))
         else:
-            res_l.append(repr1(elem, tp, memocast))
+            res_l.append(repr1(elem, tp))
     return '[%s]' % (', '.join(res_l))
 
-def repr1(x, tp, memocast):
+def repr1(x, tp):
     if tp == "intorptr":
         TYPE = lltype.typeOf(x)
         if isinstance(TYPE, lltype.Ptr) and TYPE.TO._gckind == 'gc':
@@ -258,7 +258,7 @@ def repr1(x, tp, memocast):
             return '(* None)'
         if isinstance(x, int):
             # XXX normalize?
-            ptr = str(cast_int_to_adr(memocast, x))
+            ptr = str(llmemory.cast_int_to_adr(x))
         elif isinstance(ootype.typeOf(x), ootype.OOType):
             return repr(x)
         else:
@@ -520,10 +520,9 @@ class Frame(object):
                 elif res is NotImplemented:
                     resdata = '*fail*'
                 else:
-                    resdata = '-> ' + repr1(res, restype, self.memocast)
+                    resdata = '-> ' + repr1(res, restype)
                 # fish the types
-                log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes,
-                                                          self.memocast),
+                log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes),
                                         resdata))
         return res
 
@@ -592,7 +591,7 @@ class Frame(object):
     def op_guard_class(self, _, value, expected_class):
         value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, value)
         expected_class = llmemory.cast_adr_to_ptr(
-            cast_int_to_adr(self.memocast, expected_class),
+            llmemory.cast_int_to_adr(expected_class),
             rclass.CLASSTYPE)
         if value.typeptr != expected_class:
             raise GuardFailed
@@ -626,7 +625,7 @@ class Frame(object):
 
     def _cast_exception(self, exception):
         return llmemory.cast_adr_to_ptr(
-            cast_int_to_adr(self.memocast, exception),
+            llmemory.cast_int_to_adr(exception),
             rclass.CLASSTYPE)
 
     def _issubclass(self, cls1, cls2):
@@ -692,7 +691,7 @@ class Frame(object):
         if arraydescr.typeinfo == REF:
             return do_getarrayitem_gc_ptr(array, index)
         elif arraydescr.typeinfo == INT:
-            return do_getarrayitem_gc_int(array, index, self.memocast)
+            return do_getarrayitem_gc_int(array, index)
         elif arraydescr.typeinfo == FLOAT:
             return do_getarrayitem_gc_float(array, index)
         else:
@@ -704,7 +703,7 @@ class Frame(object):
         if fielddescr.typeinfo == REF:
             return do_getfield_gc_ptr(struct, fielddescr.ofs)
         elif fielddescr.typeinfo == INT:
-            return do_getfield_gc_int(struct, fielddescr.ofs, self.memocast)
+            return do_getfield_gc_int(struct, fielddescr.ofs)
         elif fielddescr.typeinfo == FLOAT:
             return do_getfield_gc_float(struct, fielddescr.ofs)
         else:
@@ -714,11 +713,11 @@ class Frame(object):
 
     def op_getfield_raw(self, fielddescr, struct):
         if fielddescr.typeinfo == REF:
-            return do_getfield_raw_ptr(struct, fielddescr.ofs, self.memocast)
+            return do_getfield_raw_ptr(struct, fielddescr.ofs)
         elif fielddescr.typeinfo == INT:
-            return do_getfield_raw_int(struct, fielddescr.ofs, self.memocast)
+            return do_getfield_raw_int(struct, fielddescr.ofs)
         elif fielddescr.typeinfo == FLOAT:
-            return do_getfield_raw_float(struct, fielddescr.ofs, self.memocast)
+            return do_getfield_raw_float(struct, fielddescr.ofs)
         else:
             raise NotImplementedError
 
@@ -729,6 +728,7 @@ class Frame(object):
 
     def op_new_with_vtable(self, descr, vtable):
         assert descr is None
+        xxxxxxxxxxxx
         size = get_class_size(self.memocast, vtable)
         result = do_new(size)
         value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, result)
@@ -749,8 +749,7 @@ class Frame(object):
         if fielddescr.typeinfo == REF:
             do_setfield_gc_ptr(struct, fielddescr.ofs, newvalue)
         elif fielddescr.typeinfo == INT:
-            do_setfield_gc_int(struct, fielddescr.ofs, newvalue,
-                               self.memocast)
+            do_setfield_gc_int(struct, fielddescr.ofs, newvalue)
         elif fielddescr.typeinfo == FLOAT:
             do_setfield_gc_float(struct, fielddescr.ofs, newvalue)
         else:
@@ -758,14 +757,11 @@ class Frame(object):
 
     def op_setfield_raw(self, fielddescr, struct, newvalue):
         if fielddescr.typeinfo == REF:
-            do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue,
-                                self.memocast)
+            do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue)
         elif fielddescr.typeinfo == INT:
-            do_setfield_raw_int(struct, fielddescr.ofs, newvalue,
-                                self.memocast)
+            do_setfield_raw_int(struct, fielddescr.ofs, newvalue)
         elif fielddescr.typeinfo == FLOAT:
-            do_setfield_raw_float(struct, fielddescr.ofs, newvalue,
-                                  self.memocast)
+            do_setfield_raw_float(struct, fielddescr.ofs, newvalue)
         else:
             raise NotImplementedError
 
@@ -1185,13 +1181,13 @@ def get_frame_forced_token(opaque_frame):
 ##    assert 0 <= int < len(memocast.addresses)
 ##    return memocast.addresses[int]
 
-def get_class_size(memocast, vtable):
-    memocast = _from_opaque(memocast)
-    return memocast.vtable_to_size[vtable]
+##def get_class_size(memocast, vtable):
+##    memocast = _from_opaque(memocast)
+##    return memocast.vtable_to_size[vtable]
 
-def set_class_size(memocast, vtable, size):
-    memocast = _from_opaque(memocast)
-    memocast.vtable_to_size[vtable] = size
+##def set_class_size(memocast, vtable, size):
+##    memocast = _from_opaque(memocast)
+##    memocast.vtable_to_size[vtable] = size
 
 class GuardFailed(Exception):
     pass
@@ -1219,9 +1215,9 @@ def do_unicodegetitem(string, index):
     uni = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), string)
     return ord(uni.chars[index])
 
-def do_getarrayitem_gc_int(array, index, memocast):
+def do_getarrayitem_gc_int(array, index):
     array = array._obj.container
-    return cast_to_int(array.getitem(index), memocast)
+    return cast_to_int(array.getitem(index))
 
 def do_getarrayitem_gc_float(array, index):
     array = array._obj.container
@@ -1269,10 +1265,10 @@ def do_new_array(arraynum, count):
     x = lltype.malloc(TYPE, count, zero=True)
     return cast_to_ptr(x)
 
-def do_setarrayitem_gc_int(array, index, newvalue, memocast):
+def do_setarrayitem_gc_int(array, index, newvalue):
     array = array._obj.container
     ITEMTYPE = lltype.typeOf(array).OF
-    newvalue = cast_from_int(ITEMTYPE, newvalue, memocast)
+    newvalue = cast_from_int(ITEMTYPE, newvalue)
     array.setitem(index, newvalue)
 
 def do_setarrayitem_gc_float(array, index, newvalue):
@@ -1308,23 +1304,23 @@ def do_setfield_gc_ptr(struct, fieldnum, newvalue):
     newvalue = cast_from_ptr(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)
 
-def do_setfield_raw_int(struct, fieldnum, newvalue, memocast):
+def do_setfield_raw_int(struct, fieldnum, newvalue):
     STRUCT, fieldname = symbolic.TokenToField[fieldnum]
-    ptr = cast_from_int(lltype.Ptr(STRUCT), struct, memocast)
+    ptr = cast_from_int(lltype.Ptr(STRUCT), struct)
     FIELDTYPE = getattr(STRUCT, fieldname)
-    newvalue = cast_from_int(FIELDTYPE, newvalue, memocast)
+    newvalue = cast_from_int(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)
 
-def do_setfield_raw_float(struct, fieldnum, newvalue, memocast):
+def do_setfield_raw_float(struct, fieldnum, newvalue):
     STRUCT, fieldname = symbolic.TokenToField[fieldnum]
-    ptr = cast_from_int(lltype.Ptr(STRUCT), struct, memocast)
+    ptr = cast_from_int(lltype.Ptr(STRUCT), struct)
     FIELDTYPE = getattr(STRUCT, fieldname)
     newvalue = cast_from_float(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)
 
-def do_setfield_raw_ptr(struct, fieldnum, newvalue, memocast):
+def do_setfield_raw_ptr(struct, fieldnum, newvalue):
     STRUCT, fieldname = symbolic.TokenToField[fieldnum]
-    ptr = cast_from_int(lltype.Ptr(STRUCT), struct, memocast)
+    ptr = cast_from_int(lltype.Ptr(STRUCT), struct)
     FIELDTYPE = getattr(STRUCT, fieldname)
     newvalue = cast_from_ptr(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)

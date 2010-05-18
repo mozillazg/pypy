@@ -18,19 +18,18 @@ class TestLLTypeLLGraph(LLtypeBackendTest):
     def setup_method(self, _):
         self.cpu = self.cpu_type(None)
 
-    def test_cast_adr_to_int_and_back(self):
-        cpu = self.cpu
-        X = lltype.Struct('X', ('foo', lltype.Signed))
-        x = lltype.malloc(X, immortal=True)
-        x.foo = 42
-        a = llmemory.cast_ptr_to_adr(x)
-        i = cpu.cast_adr_to_int(a)
-        assert isinstance(i, int)
-        a2 = cpu.cast_int_to_adr(i)
-        assert llmemory.cast_adr_to_ptr(a2, lltype.Ptr(X)) == x
-        assert cpu.cast_adr_to_int(llmemory.NULL) == 0
-        assert cpu.cast_int_to_adr(0) == llmemory.NULL
 
+def test_cast_adr_to_int_and_back():
+    X = lltype.Struct('X', ('foo', lltype.Signed))
+    x = lltype.malloc(X, immortal=True)
+    x.foo = 42
+    a = llmemory.cast_ptr_to_adr(x)
+    i = llmemory.cast_adr_to_int(a)
+    assert lltype.typeOf(i) is lltype.Signed
+    a2 = llmemory.cast_int_to_adr(i)
+    assert llmemory.cast_adr_to_ptr(a2, lltype.Ptr(X)) == x
+    assert llmemory.cast_adr_to_int(llmemory.NULL) == 0
+    assert llmemory.cast_int_to_adr(0) == llmemory.NULL
 
 ## these tests never worked
 ## class TestOOTypeLLGraph(LLGraphTest):
