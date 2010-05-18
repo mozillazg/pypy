@@ -121,7 +121,7 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     @staticmethod
-    def sizeof(S, vtable=None):
+    def sizeof(S):
         raise NotImplementedError
 
     @staticmethod
