@@ -255,7 +255,7 @@ class ConstInt(Const):
         return llmemory.cast_int_to_adr(self.value)
 
     def _get_hash_(self):
-        return self.value
+        return integer_hash(self.value)
 
     def set_future_value(self, cpu, j):
         cpu.set_future_value_int(j, self.value)
@@ -492,7 +492,7 @@ class BoxInt(Box):
         return llmemory.cast_int_to_adr(self.value)
 
     def _get_hash_(self):
-        return self.value
+        return integer_hash(self.value)
 
     def set_future_value(self, cpu, j):
         cpu.set_future_value_int(j, self.value)
@@ -654,6 +654,13 @@ def dc_hash(c):
         return c._get_hash_()
     except lltype.DelayedPointer:
         return -2      # xxx risk of changing hash...
+
+def integer_hash(i):
+    if not we_are_translated() and isinstance(i, llmemory.AddressAsInt):
+        # Warning: such a hash changes at the time of translation
+        adr = llmemory.cast_int_to_adr(i)
+        return lltype.cast_ptr_to_int(adr.ptr)
+    return i
 
 # ____________________________________________________________
 

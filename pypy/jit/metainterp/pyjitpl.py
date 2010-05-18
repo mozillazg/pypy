@@ -159,6 +159,7 @@ class MIFrame(object):
                     'float_add', 'float_sub', 'float_mul', 'float_truediv',
                     'float_lt', 'float_le', 'float_eq',
                     'float_ne', 'float_gt', 'float_ge',
+                    'ptr_eq', 'ptr_ne',
                     ]:
         exec py.code.Source('''
             @arguments("box", "box")
@@ -175,9 +176,10 @@ class MIFrame(object):
                 return resbox
         ''' % (_opimpl, _opimpl.upper())).compile()
 
-    for _opimpl in ['int_is_true', 'int_neg', 'int_invert', 'bool_not',
+    for _opimpl in ['int_is_true', 'int_is_zero', 'int_neg', 'int_invert',
                     'cast_ptr_to_int', 'cast_float_to_int',
                     'cast_int_to_float', 'float_neg', 'float_abs',
+                    'ptr_iszero', 'ptr_nonzero',
                     ]:
         exec py.code.Source('''
             @arguments("box")
@@ -451,48 +453,6 @@ class MIFrame(object):
     @FixME  #arguments()
     def opimpl_overflow_error(self):
         return self.metainterp.raise_overflow_error()
-
-    @FixME  #arguments("orgpc", "box")
-    def opimpl_int_abs(self, pc, box):
-        nonneg = self.metainterp.execute_and_record(
-            rop.INT_GE, None, box, ConstInt(0))
-        nonneg = self.implement_guard_value(pc, nonneg)
-        if nonneg.getint():
-            self.make_result_box(box)
-        else:
-            self.execute(rop.INT_NEG, box)
-
-    @FixME  #arguments("orgpc", "box")
-    def opimpl_oononnull(self, pc, box):
-        value = box.nonnull()
-        if value:
-            opnum = rop.GUARD_NONNULL
-            res = ConstInt(1)
-        else:
-            opnum = rop.GUARD_ISNULL
-            res = ConstInt(0)
-        self.generate_guard(pc, opnum, box, [])
-        self.make_result_box(res)
-
-    @FixME  #arguments("orgpc", "box")
-    def opimpl_ooisnull(self, pc, box):
-        value = box.nonnull()
-        if value:
-            opnum = rop.GUARD_NONNULL
-            res = ConstInt(0)
-        else:
-            opnum = rop.GUARD_ISNULL
-            res = ConstInt(1)
-        self.generate_guard(pc, opnum, box, [])
-        self.make_result_box(res)
-
-    @FixME  #arguments("box", "box")
-    def opimpl_ptr_eq(self, box1, box2):
-        self.execute(rop.OOIS, box1, box2)
-
-    @FixME  #arguments("box", "box")
-    def opimpl_ptr_ne(self, box1, box2):
-        self.execute(rop.OOISNOT, box1, box2)
 
     @arguments("box", "descr")
     def _opimpl_getfield_gc_any(self, box, fielddescr):

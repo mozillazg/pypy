@@ -156,8 +156,6 @@ class BaseCPU(model.AbstractCPU):
                     llimpl.compile_add_int_const(c, x.value)
                 elif isinstance(x, self.ts.ConstRef):
                     llimpl.compile_add_ref_const(c, x.value, self.ts.BASETYPE)
-                elif isinstance(x, history.ConstAddr):
-                    llimpl.compile_add_int_const(c, x.getint())
                 elif isinstance(x, history.ConstFloat):
                     llimpl.compile_add_float_const(c, x.value)
                 else:
