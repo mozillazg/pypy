@@ -254,7 +254,7 @@ class GraphFlattener(object):
                 # many of them -- a chain of int_eq comparisons is fine
                 assert kind == 'int'    # XXX
                 color = self.getcolor(block.exitswitch)
-                self.emitline('int_guard_value', color, color)
+                self.emitline('int_guard_value', color)
                 for switch in switches:
                     # make the case described by 'switch'
                     self.emitline('goto_if_not_int_eq',

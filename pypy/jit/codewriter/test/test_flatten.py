@@ -209,7 +209,7 @@ class TestFlatten:
             elif n == 7: return 1212
             else:        return 42
         self.encoding_test(f, [65], """
-            int_guard_value %i0, %i0
+            int_guard_value %i0
             goto_if_not_int_eq %i0, $-5, L1
             int_return $12
             L1:
