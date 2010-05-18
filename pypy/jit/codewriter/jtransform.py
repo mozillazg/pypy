@@ -303,6 +303,8 @@ class Transformer(object):
                                          extra, extrakey)
         return self.rewrite_op_direct_call(op1)
 
+    # XXX some of the following functions should not become residual calls
+    # but be really compiled
     rewrite_op_int_floordiv_ovf_zer = _do_builtin_call
     rewrite_op_int_floordiv_ovf     = _do_builtin_call
     rewrite_op_int_floordiv_zer     = _do_builtin_call
@@ -310,6 +312,7 @@ class Transformer(object):
     rewrite_op_int_mod_ovf     = _do_builtin_call
     rewrite_op_int_mod_zer     = _do_builtin_call
     rewrite_op_int_lshift_ovf  = _do_builtin_call
+    rewrite_op_int_abs         = _do_builtin_call
     rewrite_op_gc_identityhash = _do_builtin_call
 
     # ----------
