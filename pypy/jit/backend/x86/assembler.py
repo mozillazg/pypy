@@ -1081,13 +1081,8 @@ class Assembler386(object):
                 n = self.CODE_HOLE
             mc.writechr(n)
         mc.writechr(self.CODE_STOP)
-        # preallocate the fail_boxes
-        i = len(failargs) - 1
-        if i >= 0:
-            self.fail_boxes_int.get_addr_for_num(i)
-            self.fail_boxes_ptr.get_addr_for_num(i)
-            if self.cpu.supports_floats:
-                self.fail_boxes_float.get_addr_for_num(i)
+        # assert that the fail_boxes lists are big enough
+        assert len(failargs) <= self.fail_boxes_int.SIZE
 
     def rebuild_faillocs_from_descr(self, bytecode):
         from pypy.jit.backend.x86.regalloc import X86FrameManager

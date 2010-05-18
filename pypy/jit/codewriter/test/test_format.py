@@ -52,7 +52,7 @@ def test_format_assembler_loop():
     i0, i1 = Register('int', 0), Register('int', 1)
     ssarepr.insns = [
         (Label('L1'),),
-        ('goto_if_not_int_gt', TLabel('L2'), i0, Constant(0, lltype.Signed)),
+        ('goto_if_not_int_gt', i0, Constant(0, lltype.Signed), TLabel('L2')),
         ('int_add', i1, i0, i1),
         ('int_sub', i0, Constant(1, lltype.Signed), i0),
         ('goto', TLabel('L1')),
@@ -62,7 +62,7 @@ def test_format_assembler_loop():
     asm = format_assembler(ssarepr)
     expected = """
         L1:
-        goto_if_not_int_gt L2, %i0, $0
+        goto_if_not_int_gt %i0, $0, L2
         int_add %i1, %i0, %i1
         int_sub %i0, $1, %i0
         goto L1

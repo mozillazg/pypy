@@ -210,8 +210,8 @@ class GraphFlattener(object):
                 assert block.exitswitch.concretetype == lltype.Bool
                 opargs = [block.exitswitch]
             #
-            self.emitline(opname, TLabel(linkfalse),
-                          *self.flatten_list(opargs))
+            lst = self.flatten_list(opargs) + [TLabel(linkfalse)]
+            self.emitline(opname, *lst)
             # true path:
             self.make_link(linktrue)
             # false path:
@@ -258,10 +258,10 @@ class GraphFlattener(object):
                 for switch in switches:
                     # make the case described by 'switch'
                     self.emitline('goto_if_not_int_eq',
-                                  TLabel(switch),
                                   color,
                                   Constant(switch.llexitcase,
-                                           block.exitswitch.concretetype))
+                                           block.exitswitch.concretetype),
+                                  TLabel(switch))
                     # emit code for the "taken" path
                     self.make_link(switch)
                     # finally, emit the label for the "non-taken" path

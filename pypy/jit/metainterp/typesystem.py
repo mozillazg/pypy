@@ -45,7 +45,8 @@ class LLTypeHelper(TypeSystemHelper):
     BoxRef = history.BoxPtr
     ConstRef = history.ConstPtr
     loops_done_with_this_frame_ref = None # patched by compile.py
-    CONST_NULL = history.ConstPtr(history.ConstPtr.value)
+    NULLREF = history.ConstPtr.value
+    CONST_NULL = history.ConstPtr(NULLREF)
     CVAL_NULLREF = None # patched by optimizeopt.py
 
     def new_ConstRef(self, x):
@@ -150,7 +151,8 @@ class OOTypeHelper(TypeSystemHelper):
     BoxRef = history.BoxObj
     ConstRef = history.ConstObj
     loops_done_with_this_frame_ref = None # patched by compile.py
-    CONST_NULL = history.ConstObj(history.ConstObj.value)
+    NULLREF = history.ConstObj.value
+    CONST_NULL = history.ConstObj(NULLREF)
     CVAL_NULLREF = None # patched by optimizeopt.py
     
     def new_ConstRef(self, x):

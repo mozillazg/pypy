@@ -43,7 +43,8 @@ def _run_with_blackhole(cw, args):
             count_f += 1
         else:
             raise TypeError(T)
-    blackholeinterp.run(cw.mainjitcode, 0)
+    blackholeinterp.setposition(cw.mainjitcode, 0)
+    blackholeinterp.run()
     return blackholeinterp._get_result_anytype()
 
 def _run_with_pyjitpl(cw, args, testself):

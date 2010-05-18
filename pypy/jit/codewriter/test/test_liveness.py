@@ -66,7 +66,7 @@ class TestFlatten:
             -live- %i0, %i1
             G_int_add %i0, $5, %i2
             int_is_true %i2, %i3
-            goto_if_not L1, %i3
+            goto_if_not %i3, L1
             int_copy %i0, %i4
             -live-
             G_int_add %i4, $1, %i5
@@ -87,7 +87,7 @@ class TestFlatten:
             -live- %i0, %i1
             G_int_add %i0, $5, %i2
             int_is_true %i2, %i3
-            goto_if_not L1, %i3
+            goto_if_not %i3, L1
             int_copy %i0, %i4
             int_copy %i1, %i5
             -live-
@@ -109,7 +109,7 @@ class TestFlatten:
             -live- %i0
             G_int_add %i0, %i1, %i2
             int_is_true %i2, %i3
-            goto_if_not L1, %i3
+            goto_if_not %i3, L1
             int_copy %i0, %i4
             -live-
             G_int_add %i4, $5, %i5
@@ -129,7 +129,7 @@ class TestFlatten:
         self.encoding_test(f, [5, 6], """
             int_is_true %i0, %i2
             -live- %i0, %i1
-            goto_if_not L1, %i2
+            goto_if_not %i2, L1
             int_return %i0
             L1:
             int_return %i1
