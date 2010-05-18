@@ -278,18 +278,21 @@ class Transformer(object):
             lst.append(jitcode)
         return self.handle_residual_call(op, [IndirectCallTargets(lst)])
 
-    def _prepare_builtin_call(self, op, oopspec_name, args, extra=None):
+    def _prepare_builtin_call(self, op, oopspec_name, args,
+                              extra=None, extrakey=None):
         argtypes = [v.concretetype for v in args]
         resulttype = op.result.concretetype
         c_func, TP = support.builtin_func_for_spec(self.cpu.rtyper,
                                                    oopspec_name, argtypes,
-                                                   resulttype, extra)
+                                                   resulttype, extra, extrakey)
         return SpaceOperation('direct_call', [c_func] + args, op.result)
 
-    def _do_builtin_call(self, op, oopspec_name=None, args=None, extra=None):
+    def _do_builtin_call(self, op, oopspec_name=None, args=None,
+                         extra=None, extrakey=None):
         if oopspec_name is None: oopspec_name = op.opname
         if args is None: args = op.args
-        op1 = self._prepare_builtin_call(op, oopspec_name, args, extra)
+        op1 = self._prepare_builtin_call(op, oopspec_name, args,
+                                         extra, extrakey)
         return self.rewrite_op_direct_call(op1)
 
     rewrite_op_int_floordiv_ovf_zer = _do_builtin_call
@@ -447,17 +450,15 @@ class Transformer(object):
                 if hasattr(rtti._obj, 'destructor_funcptr'):
                     RESULT = lltype.Ptr(STRUCT)
                     assert RESULT == op.result.concretetype
-                    return self._do_builtin_call(op, 'alloc_with_del',
-                                                 [], extra = (RESULT, vtable))
-            # store the vtable as an address -- that's fine, because the
-            # GC doesn't need to follow them
-            #self.codewriter.register_known_gctype(vtable, STRUCT)
-            sizevtabledescr = self.cpu.sizevtableof(STRUCT, vtable)
-            return SpaceOperation('new_with_vtable', [sizevtabledescr],
-                                  op.result)
+                    return self._do_builtin_call(op, 'alloc_with_del', [],
+                                                 extra = (RESULT, vtable),
+                                                 extrakey = STRUCT)
+            heaptracker.register_known_gctype(self.cpu, vtable, STRUCT)
+            opname = 'new_with_vtable'
         else:
-            sizedescr = self.cpu.sizeof(STRUCT)
-            return SpaceOperation('new', [sizedescr], op.result)
+            opname = 'new'
+        sizedescr = self.cpu.sizeof(STRUCT)
+        return SpaceOperation(opname, [sizedescr], op.result)
 
     def rewrite_op_getinteriorarraysize(self, op):
         # only supports strings and unicodes

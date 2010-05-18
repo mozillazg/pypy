@@ -309,9 +309,8 @@ class GraphFlattener(object):
             elif isinstance(v, ListOfKind):
                 lst = [self.getcolor(x) for x in v]
                 v = ListOfKind(v.kind, lst)
-            elif isinstance(v, AbstractDescr):
-                pass
-            elif isinstance(v, IndirectCallTargets):
+            elif isinstance(v, (AbstractDescr,
+                                IndirectCallTargets)):
                 pass
             else:
                 raise NotImplementedError(type(v))

@@ -400,8 +400,10 @@ def decode_builtin_call(op):
     else:
         raise ValueError(op.opname)
 
-def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res, extra=None):
-    key = (oopspec_name, tuple(ll_args), ll_res, extra)
+def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res,
+                          extra=None, extrakey=None):
+    assert (extra is None) == (extrakey is None)
+    key = (oopspec_name, tuple(ll_args), ll_res, extrakey)
     try:
         return rtyper._builtin_func_for_spec_cache[key]
     except (KeyError, AttributeError):

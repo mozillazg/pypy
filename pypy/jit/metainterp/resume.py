@@ -388,12 +388,10 @@ class ResumeDataVirtualAdder(object):
 
 
 class AbstractVirtualInfo(object):
-    def allocate(self, metainterp):
-        raise NotImplementedError
+    #def allocate(self, metainterp):
+    #    raise NotImplementedError
     #def setfields(self, decoder, struct):
     #    raise NotImplementedError
-    def bh_allocate(self, cpu):
-        raise NotImplementedError
     def equals(self, fieldnums):
         return tagged_list_eq(self.fieldnums, fieldnums)
     def set_content(self, fieldnums):
@@ -428,9 +426,9 @@ class VirtualInfo(AbstractVirtualStructInfo):
         AbstractVirtualStructInfo.__init__(self, fielddescrs)
         self.known_class = known_class
 
-    def allocate(self, metainterp):
-        return metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
-                                             None, self.known_class)
+    def allocate(self, cpu):
+        from pypy.jit.metainterp.executor import exec_new_with_vtable
+        return exec_new_with_vtable(cpu, self.known_class)
 
     def debug_prints(self):
         debug_print("\tvirtualinfo", self.known_class.repr_rpython())
@@ -617,7 +615,7 @@ class ResumeDataDirectReader(object):
             for i in range(len(virtuals)):
                 vinfo = virtuals[i]
                 if vinfo is not None:
-                    self.virtuals[i] = vinfo.bh_allocate(self.cpu)
+                    self.virtuals[i] = vinfo.allocate(self.cpu)
             for i in range(len(virtuals)):
                 vinfo = virtuals[i]
                 if vinfo is not None:
@@ -632,13 +630,13 @@ class ResumeDataDirectReader(object):
     def setfield(self, descr, struct, fieldnum):
         if descr.is_pointer_field():
             newvalue = self._decode_ref(fieldnum)
-            self.cpu.bh_setfield_gc_r(struct, descr, newfield)
+            self.cpu.bh_setfield_gc_r(struct, descr, newvalue)
         elif descr.is_float_field():
             newvalue = self._decode_float(fieldnum)
-            self.cpu.bh_setfield_gc_f(struct, descr, newfield)
+            self.cpu.bh_setfield_gc_f(struct, descr, newvalue)
         else:
             newvalue = self._decode_int(fieldnum)
-            self.cpu.bh_setfield_gc_i(struct, descr, newfield)
+            self.cpu.bh_setfield_gc_i(struct, descr, newvalue)
 
     def setarrayitem(self, arraydescr, array, index, fieldnum):
         if arraydescr.is_array_of_pointers():
@@ -671,12 +669,12 @@ class ResumeDataDirectReader(object):
         num, tag = untag(tagged)
         if tag == TAGCONST:
             if tagged_eq(tagged, NULLREF):
-                return history.REF
+                return REF
             return self.consts[num].type
         elif tag == TAGVIRTUAL:
-            return history.REF
+            return REF
         elif tag == TAGINT:
-            return history.INT
+            return INT
         else:
             assert tag == TAGBOX
             return self.cpu.get_latest_value_kind(num)

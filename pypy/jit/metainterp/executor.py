@@ -2,13 +2,13 @@
 """
 
 import py
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr
-from pypy.jit.metainterp.history import INT, REF, FLOAT
+from pypy.jit.metainterp.history import INT, REF, FLOAT, AbstractDescr
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
@@ -148,6 +148,18 @@ def do_setfield_raw(metainterp, structbox, itembox, fielddescr):
     else:
         cpu.bh_setfield_raw_i(struct, fielddescr, itembox.getint())
 
+def exec_new_with_vtable(cpu, clsbox):
+    from pypy.jit.codewriter import heaptracker
+    vtable = clsbox.getint()
+    vtableadr = llmemory.cast_int_to_adr(vtable)
+    vtableptr = llmemory.cast_adr_to_ptr(vtableadr, heaptracker.VTABLETYPE)
+    descr = heaptracker.vtable2descr(cpu, vtableptr)
+    return cpu.bh_new_with_vtable(descr, vtable)
+
+def do_new_with_vtable(metainterp, clsbox):
+    cpu = metainterp.cpu
+    return BoxPtr(exec_new_with_vtable(cpu, clsbox))
+
 def do_int_add_ovf(metainterp, box1, box2):
     a = box1.getint()
     b = box2.getint()
@@ -279,6 +291,7 @@ def make_execute_function_with_boxes(name, func):
                 value = metainterp.cpu
             elif argtype == 'd':
                 value = argboxes[-1]
+                assert isinstance(value, AbstractDescr)
                 argboxes = argboxes[:-1]
             else:
                 argbox = argboxes[0]

@@ -17,10 +17,11 @@ class FakeCPU:
         return ('calldescr', FUNC, ARGS, RESULT)
     def fielddescrof(self, STRUCT, name):
         return ('fielddescr', STRUCT, name)
-    def sizeof(self, STRUCT):
-        return ('sizedescr', STRUCT)
-    def sizevtableof(self, STRUCT, vtable):
-        return ('sizevtabledescr', STRUCT, vtable)
+    def sizeof(self, STRUCT, vtable=None):
+        if vtable is None:
+            return ('sizedescr', STRUCT)
+        else:
+            return ('sizedescr', STRUCT, vtable)
 
 class FakeLink:
     args = []
@@ -326,7 +327,7 @@ def test_malloc_new():
     assert op1.args == [('sizedescr', S)]
 
 def test_malloc_new_with_vtable():
-    class vtable: pass
+    vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
     S = lltype.GcStruct('S', ('parent', rclass.OBJECT))
     heaptracker.set_testing_vtable_for_gcstruct(S, vtable, 'S')
     v = varoftype(lltype.Ptr(S))
@@ -334,10 +335,10 @@ def test_malloc_new_with_vtable():
                                    Constant({'flavor': 'gc'}, lltype.Void)], v)
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
     assert op1.opname == 'new_with_vtable'
-    assert op1.args == [('sizevtabledescr', S, vtable)]
+    assert op1.args == [('sizedescr', S, vtable)]
 
 def test_malloc_new_with_destructor():
-    class vtable: pass
+    vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
     S = lltype.GcStruct('S', ('parent', rclass.OBJECT))
     DESTRUCTOR = lltype.FuncType([lltype.Ptr(S)], lltype.Void)
     destructor = lltype.functionptr(DESTRUCTOR, 'destructor')

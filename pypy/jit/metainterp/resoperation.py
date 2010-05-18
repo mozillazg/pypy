@@ -207,7 +207,7 @@ _oplist = [
     'GETFIELD_GC/1d',
     'GETFIELD_RAW/1d',
     'NEW/0d',
-    'NEW_WITH_VTABLE/0d',
+    'NEW_WITH_VTABLE/1',
     'NEW_ARRAY/1d',
     'FORCE_TOKEN/0',
     'VIRTUAL_REF/2',

@@ -313,8 +313,13 @@ class MIFrame(object):
         return self.execute_with_descr(rop.NEW, sizedescr)
 
     @arguments("descr")
-    def opimpl_new_with_vtable(self, sizevtabledescr):
-        return self.execute_with_descr(rop.NEW_WITH_VTABLE, sizevtabledescr)
+    def opimpl_new_with_vtable(self, sizedescr):
+        from pypy.jit.codewriter import heaptracker
+        from pypy.jit.metainterp.warmstate import wrap
+        cpu = self.metainterp.cpu
+        cls = heaptracker.descr2vtable(cpu, sizedescr)
+        clsbox = wrap(cpu, cls, in_const_box=True)
+        return self.execute(rop.NEW_WITH_VTABLE, clsbox)
 
     @FixME  #arguments("box")
     def opimpl_runtimenew(self, classbox):
@@ -2117,7 +2122,7 @@ def _get_opimpl_method(name, argcodes):
         self.pc = position + num_return_args
         #
         if not we_are_translated():
-            print '\tjitcode: %s(%s)' % (name, ', '.join(map(repr, args))),
+            print '\tpyjitpl: %s(%s)' % (name, ', '.join(map(repr, args))),
             try:
                 resultbox = unboundmethod(self, *args)
             except Exception, e:
