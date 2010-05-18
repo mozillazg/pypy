@@ -21,13 +21,17 @@ class MiniStats:
     pass
 
 
+NO_VTABLE = lltype.nullptr(rclass.CLASSTYPE.TO)
+
 class Descr(history.AbstractDescr):
 
-    def __init__(self, ofs, typeinfo, extrainfo=None, name=None):
+    def __init__(self, ofs, typeinfo, extrainfo=None, name=None,
+                 vtable=NO_VTABLE):
         self.ofs = ofs
         self.typeinfo = typeinfo
         self.extrainfo = extrainfo
         self.name = name
+        self.vtable = vtable
 
     def get_return_type(self):
         return self.typeinfo
@@ -93,18 +97,18 @@ class BaseCPU(model.AbstractCPU):
         llimpl._llinterp = LLInterpreter(self.rtyper)
         self._future_values = []
         self._descrs = {}
-        self.class_vtables_as_int = {}
 
     def _freeze_(self):
         assert self.translate_support_code
         return False
 
-    def getdescr(self, ofs, typeinfo='?', extrainfo=None, name=None):
-        key = (ofs, typeinfo, extrainfo, name)
+    def getdescr(self, ofs, typeinfo='?', extrainfo=None, name=None,
+                 vtable=NO_VTABLE):
+        key = (ofs, typeinfo, extrainfo, name, vtable._obj)
         try:
             return self._descrs[key]
         except KeyError:
-            descr = Descr(ofs, typeinfo, extrainfo, name)
+            descr = Descr(ofs, typeinfo, extrainfo, name, vtable)
             self._descrs[key] = descr
             return descr
 
@@ -258,17 +262,12 @@ class BaseCPU(model.AbstractCPU):
 
     # ----------
 
-    def sizeof(self, S):
+    def sizeof(self, S, vtable=None):
         assert not isinstance(S, lltype.Ptr)
-        return self.getdescr(symbolic.get_size(S))
-
-    def sizevtableof(self, S, vtable):
-        assert isinstance(S, lltype.GcStruct)
-        descr = self.getdescr(symbolic.get_size(S))
-        vtable_adr = llmemory.cast_ptr_to_adr(vtable)
-        vtable_int = llmemory.cast_adr_to_int(vtable_adr)
-        self.class_vtables_as_int[descr] = vtable_int
-        return descr
+        if vtable is None:
+            return self.getdescr(symbolic.get_size(S))
+        else:
+            return self.getdescr(symbolic.get_size(S), vtable=vtable)
 
 
 class LLtypeCPU(BaseCPU):
@@ -396,10 +395,10 @@ class LLtypeCPU(BaseCPU):
         assert isinstance(sizedescr, Descr)
         return llimpl.do_new(sizedescr.ofs)
 
-    def bh_new_with_vtable(self, sizevtabledescr):
-        result = llimpl.do_new(sizevtabledescr.ofs)
-        llimpl.do_setfield_gc_int(result, self.fielddescrof_vtable.ofs,
-                                  self.class_vtables_as_int[sizevtabledescr])
+    def bh_new_with_vtable(self, sizedescr, vtable):
+        assert isinstance(sizedescr, Descr)
+        result = llimpl.do_new(sizedescr.ofs)
+        llimpl.do_setfield_gc_int(result, self.fielddescrof_vtable.ofs, vtable)
         return result
 
     def bh_classof(self, struct):

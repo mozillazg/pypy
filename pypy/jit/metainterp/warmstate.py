@@ -54,7 +54,7 @@ def wrap(cpu, value, in_const_box=False):
                 return history.BoxPtr(value)
         else:
             adr = llmemory.cast_ptr_to_adr(value)
-            value = cpu.cast_adr_to_int(adr)
+            value = llmemory.cast_adr_to_int(adr)
             # fall through to the end of the function
     elif isinstance(lltype.typeOf(value), ootype.OOType):
         value = ootype.cast_to_object(value)

@@ -7,6 +7,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLException
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
+from pypy.jit.codewriter import heaptracker
 
 
 def arguments(*argtypes, **kwds):
@@ -56,8 +57,9 @@ class BlackholeInterpBuilder(object):
 
     def __init__(self, codewriter, metainterp_sd=None):
         self.cpu = codewriter.cpu
-        self.setup_insns(codewriter.assembler.insns)
-        self.setup_descrs(codewriter.assembler.descrs)
+        asm = codewriter.assembler
+        self.setup_insns(asm.insns)
+        self.setup_descrs(asm.descrs)
         self.metainterp_sd = metainterp_sd
         self._freeze_()
 
@@ -167,7 +169,7 @@ class BlackholeInterpBuilder(object):
                 args = args + (value,)
 
             if verbose and not we_are_translated():
-                print '\t', name, list(args),
+                print '\tbh:', name, list(args),
 
             # call the method bhimpl_xxx()
             try:
@@ -902,7 +904,9 @@ class BlackholeInterpreter(object):
 
     @arguments("cpu", "d", returns="r")
     def bhimpl_new_with_vtable(cpu, descr):
-        return cpu.bh_new_with_vtable(descr)
+        vtable = heaptracker.descr2vtable(cpu, descr)
+        vtable = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable))
+        return cpu.bh_new_with_vtable(descr, vtable)
 
     @arguments("cpu", "r", returns="i")
     def bhimpl_guard_class(cpu, struct):

@@ -121,11 +121,7 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     @staticmethod
-    def sizeof(S):
-        raise NotImplementedError
-
-    @staticmethod
-    def sizevtableof(S, vtable):
+    def sizeof(S, vtable=None):
         raise NotImplementedError
 
     @staticmethod
@@ -181,7 +177,7 @@ class AbstractCPU(object):
 
     def bh_new(self, sizedescr):
         raise NotImplementedError
-    def bh_new_with_vtable(self, sizevtabledescr):
+    def bh_new_with_vtable(self, sizedescr, vtable):
         raise NotImplementedError
     def bh_new_array(self, arraydescr, length):
         raise NotImplementedError
