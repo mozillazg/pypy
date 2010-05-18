@@ -17,11 +17,11 @@ class FakeCPU:
         return ('calldescr', FUNC, ARGS, RESULT)
     def fielddescrof(self, STRUCT, name):
         return ('fielddescr', STRUCT, name)
-    def sizeof(self, STRUCT, vtable=None):
-        if vtable is None:
-            return ('sizedescr', STRUCT)
-        else:
-            return ('sizedescr', STRUCT, vtable)
+    def sizeof(self, STRUCT):
+        return FakeDescr(('sizedescr', STRUCT))
+
+class FakeDescr(tuple):
+    pass
 
 class FakeLink:
     args = []
@@ -333,9 +333,12 @@ def test_malloc_new_with_vtable():
     v = varoftype(lltype.Ptr(S))
     op = SpaceOperation('malloc', [Constant(S, lltype.Void),
                                    Constant({'flavor': 'gc'}, lltype.Void)], v)
-    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    cpu = FakeCPU()
+    op1 = Transformer(cpu).rewrite_operation(op)
     assert op1.opname == 'new_with_vtable'
-    assert op1.args == [('sizedescr', S, vtable)]
+    assert op1.args == [('sizedescr', S)]
+    #assert heaptracker.descr2vtable(cpu, op1.args[0]) == vtable [type check]
+    assert heaptracker.vtable2descr(cpu, vtable) == op1.args[0]
 
 def test_malloc_new_with_destructor():
     vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
