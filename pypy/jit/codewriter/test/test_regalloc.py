@@ -59,7 +59,7 @@ class TestRegAlloc:
         self.check_assembler(graph, """
             L1:
             int_gt %i0, $0, %i2
-            goto_if_not L2, %i2
+            goto_if_not %i2, L2
             int_add %i1, %i0, %i1
             int_sub %i0, $1, %i0
             goto L1
@@ -76,7 +76,7 @@ class TestRegAlloc:
         self.check_assembler(graph, """
             L1:
             int_gt %i0, $0, %i2
-            goto_if_not L2, %i2
+            goto_if_not %i2, L2
             int_push %i1
             int_copy %i0, %i1
             int_pop %i0
@@ -94,7 +94,7 @@ class TestRegAlloc:
         self.check_assembler(graph, """
             L1:
             int_gt %i0, $0, %i0
-            goto_if_not L2, %i0
+            goto_if_not %i0, L2
             int_copy %i1, %i0
             int_copy $2, %i1
             goto L1
@@ -111,7 +111,7 @@ class TestRegAlloc:
         self.check_assembler(graph, """
             L1:
             int_gt %i0, $0, %i3
-            goto_if_not L2, %i3
+            goto_if_not %i3, L2
             int_push %i1
             int_copy %i2, %i1
             int_copy %i0, %i2
@@ -130,7 +130,7 @@ class TestRegAlloc:
         self.check_assembler(graph, """
             L1:
             int_gt %i0, $0, %i3
-            goto_if_not L2, %i3
+            goto_if_not %i3, L2
             int_copy %i2, %i1
             goto L1
             L2:

@@ -1,10 +1,10 @@
 import sys, os
-from pypy.jit.metainterp.history import Box, Const, ConstInt, INT, REF
+from pypy.jit.metainterp.history import Box, Const, ConstInt, INT, REF, FLOAT
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import jitprof
 from pypy.rpython.lltypesystem import rffi
 from pypy.rlib import rarithmetic
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.debug import have_debug_prints
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 
@@ -390,7 +390,9 @@ class ResumeDataVirtualAdder(object):
 class AbstractVirtualInfo(object):
     def allocate(self, metainterp):
         raise NotImplementedError
-    def setfields(self, metainterp, box, fn_decode_box):
+    #def setfields(self, decoder, struct):
+    #    raise NotImplementedError
+    def bh_allocate(self, cpu):
         raise NotImplementedError
     def equals(self, fieldnums):
         return tagged_list_eq(self.fieldnums, fieldnums)
@@ -405,12 +407,14 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
         self.fielddescrs = fielddescrs
         #self.fieldnums = ...
 
-    def setfields(self, metainterp, box, fn_decode_box):
+    @specialize.argtype(1)
+    def setfields(self, decoder, struct):
         for i in range(len(self.fielddescrs)):
-            fieldbox = fn_decode_box(self.fieldnums[i])
-            metainterp.execute_and_record(rop.SETFIELD_GC,
-                                          self.fielddescrs[i],
-                                          box, fieldbox)
+            descr = self.fielddescrs[i]
+            decoder.setfield(descr, struct, self.fieldnums[i])
+##            fieldbox = fn_decode_box(self.fieldnums[i], kind)
+##            metainterp.execute_and_record(rop.SETFIELD_GC,
+##                                          descr, box, fieldbox)
 
     def debug_prints(self):
         assert len(self.fielddescrs) == len(self.fieldnums)
@@ -455,12 +459,11 @@ class VArrayInfo(AbstractVirtualInfo):
                                              self.arraydescr,
                                              ConstInt(length))
 
-    def setfields(self, metainterp, box, fn_decode_box):
+    @specialize.argtype(1)
+    def setfields(self, decoder, array):
+        arraydescr = self.arraydescr
         for i in range(len(self.fieldnums)):
-            itembox = fn_decode_box(self.fieldnums[i])
-            metainterp.execute_and_record(rop.SETARRAYITEM_GC,
-                                          self.arraydescr,
-                                          box, ConstInt(i), itembox)
+            decoder.setarrayitem(descr, array, i, self.fieldnums[i])
 
     def debug_prints(self):
         debug_print("\tvarrayinfo", self.arraydescr)
@@ -496,7 +499,7 @@ def force_from_resumedata(metainterp, newboxes, storage,
     return virtualizable_boxes, virtualref_boxes, resumereader.virtuals
 
 
-class ResumeDataReader(object):
+class ResumeDataBoxReader(object):
     virtuals = None
 
     def __init__(self, storage, liveboxes, metainterp=None):
@@ -545,7 +548,7 @@ class ResumeDataReader(object):
         self.cur_numb = numb.prev
         return boxes
 
-    def _decode_box(self, tagged):
+    def _decode_box(self, tagged, kind):
         num, tag = untag(tagged)
         if tag == TAGCONST:
             if tagged_eq(tagged, NULLREF):
@@ -560,6 +563,164 @@ class ResumeDataReader(object):
         else:
             assert tag == TAGBOX
             return self.liveboxes[num]
+
+
+def blackhole_from_resumedata(blackholeinterpbuilder, storage,
+                              expects_virtualizables):
+    resumereader = ResumeDataDirectReader(storage, blackholeinterpbuilder.cpu)
+    if expects_virtualizables:
+        XXX
+    #virtualref_boxes = resumereader.consume_boxes()
+    resumereader.consume_one_section(None)     # XXX
+    #
+    # First get a chain of blackhole interpreters whose length is given
+    # by the depth of rd_frame_info_list.  The first one we get must be
+    # the bottom one, i.e. the last one in the chain, in order to make
+    # the comment in BlackholeInterpreter.setposition() valid.
+    nextbh = None
+    frameinfo = storage.rd_frame_info_list
+    while True:
+        curbh = blackholeinterpbuilder.acquire_interp()
+        curbh.nextblackholeinterp = nextbh
+        nextbh = curbh
+        frameinfo = frameinfo.prev
+        if frameinfo is None:
+            break
+    firstbh = nextbh
+    #
+    # Now fill the blackhole interpreters with resume data.
+    curbh = firstbh
+    frameinfo = storage.rd_frame_info_list
+    while True:
+        curbh.setposition(frameinfo.jitcode, frameinfo.pc)
+        resumereader.consume_one_section(curbh)
+        curbh = curbh.nextblackholeinterp
+        frameinfo = frameinfo.prev
+        if frameinfo is None:
+            break
+    resumereader.done()
+    return firstbh
+
+class ResumeDataDirectReader(object):
+    virtuals = None
+
+    def __init__(self, storage, cpu):
+        self.cur_numb = storage.rd_numb
+        self.consts = storage.rd_consts
+        self.cpu = cpu
+        self._prepare_virtuals(storage.rd_virtuals)
+        self._prepare_pendingfields(storage.rd_pendingfields)
+
+    def _prepare_virtuals(self, virtuals):
+        if virtuals:
+            self.virtuals = [None] * len(virtuals)
+            for i in range(len(virtuals)):
+                vinfo = virtuals[i]
+                if vinfo is not None:
+                    self.virtuals[i] = vinfo.bh_allocate(self.cpu)
+            for i in range(len(virtuals)):
+                vinfo = virtuals[i]
+                if vinfo is not None:
+                    vinfo.setfields(self, self.virtuals[i])
+
+    def _prepare_pendingfields(self, pendingfields):
+        if pendingfields is not None:
+            for descr, num, fieldnum in pendingfields:
+                struct = self._decode_ref(num)
+                self.setfield(descr, struct, fieldnum)
+
+    def setfield(self, descr, struct, fieldnum):
+        if descr.is_pointer_field():
+            newvalue = self._decode_ref(fieldnum)
+            self.cpu.bh_setfield_gc_r(struct, descr, newfield)
+        elif descr.is_float_field():
+            newvalue = self._decode_float(fieldnum)
+            self.cpu.bh_setfield_gc_f(struct, descr, newfield)
+        else:
+            newvalue = self._decode_int(fieldnum)
+            self.cpu.bh_setfield_gc_i(struct, descr, newfield)
+
+    def setarrayitem(self, arraydescr, array, index, fieldnum):
+        if arraydescr.is_array_of_pointers():
+            newvalue = self._decode_ref(fieldnum)
+            self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
+        elif arraydescr.is_array_of_floats():
+            newvalue = self._decode_float(fieldnum)
+            self.cpu.bh_setarrayitem_gc_f(arraydescr, array, index, newvalue)
+        else:
+            newvalue = self._decode_int(fieldnum)
+            self.cpu.bh_setarrayitem_gc_i(arraydescr, array, index, newvalue)
+
+    def consume_one_section(self, blackholeinterp):
+        numb = self.cur_numb
+        count_i = count_r = count_f = 0
+        for num in numb.nums:
+            kind = self._decode_kind(num)
+            if kind == INT:
+                blackholeinterp.setarg_i(count_i, self._decode_int(num))
+                count_i += 1
+            elif kind == REF:
+                blackholeinterp.setarg_r(count_r, self._decode_ref(num))
+                count_r += 1
+            elif kind == FLOAT:
+                blackholeinterp.setarg_f(count_f, self._decode_float(num))
+                count_f += 1
+        self.cur_numb = numb.prev
+
+    def _decode_kind(self, tagged):
+        num, tag = untag(tagged)
+        if tag == TAGCONST:
+            if tagged_eq(tagged, NULLREF):
+                return history.REF
+            return self.consts[num].type
+        elif tag == TAGVIRTUAL:
+            return history.REF
+        elif tag == TAGINT:
+            return history.INT
+        else:
+            assert tag == TAGBOX
+            return self.cpu.get_latest_value_kind(num)
+
+    def _decode_int(self, tagged):
+        num, tag = untag(tagged)
+        if tag == TAGCONST:
+            return self.consts[num].getint()
+        elif tag == TAGINT:
+            return num
+        else:
+            assert tag == TAGBOX
+            if num < 0:
+                num += self.cpu.get_latest_value_count()
+            return self.cpu.get_latest_value_int(num)
+
+    def _decode_ref(self, tagged):
+        num, tag = untag(tagged)
+        if tag == TAGCONST:
+            if tagged_eq(tagged, NULLREF):
+                return self.cpu.ts.NULLREF
+            return self.consts[num].getptr_base()
+        elif tag == TAGVIRTUAL:
+            virtuals = self.virtuals
+            assert virtuals is not None
+            return virtuals[num]
+        else:
+            assert tag == TAGBOX
+            if num < 0:
+                num += self.cpu.get_latest_value_count()
+            return self.cpu.get_latest_value_ref(num)
+
+    def _decode_float(self, tagged):
+        num, tag = untag(tagged)
+        if tag == TAGCONST:
+            return self.consts[num].getfloat()
+        else:
+            assert tag == TAGBOX
+            if num < 0:
+                num += self.cpu.get_latest_value_count()
+            return self.cpu.get_latest_value_float(num)
+
+    def done(self):
+        self.cpu.clear_latest_values()
 
 # ____________________________________________________________
 

@@ -243,26 +243,18 @@ class BaseCPU(model.AbstractCPU):
     def get_latest_value_float(self, index):
         return llimpl.frame_float_getvalue(self.latest_frame, index)
 
+    def get_latest_value_kind(self, index):
+        return llimpl.frame_get_value_kind(self.latest_frame, index)
+
+    def get_latest_value_count(self):
+        return llimpl.frame_get_value_count(self.latest_frame)
+
     def get_latest_force_token(self):
         token = llimpl.get_frame_forced_token(self.latest_frame)
         return self.cast_adr_to_int(token)
 
-    def make_boxes_from_latest_values(self, faildescr):
-        inputargs_and_holes = []
-        for i in range(len(faildescr._fail_args_types)):
-            boxtype = faildescr._fail_args_types[i]
-            if boxtype == history.INT:
-                box = history.BoxInt(self.get_latest_value_int(i))
-            elif boxtype == history.REF:
-                box = self.ts.BoxRef(self.get_latest_value_ref(i))
-            elif boxtype == history.FLOAT:
-                box = history.BoxFloat(self.get_latest_value_float(i))
-            elif boxtype == history.HOLE:
-                box = None
-            else:
-                assert False, "bad box type: num=%d" % ord(boxtype)
-            inputargs_and_holes.append(box)
-        return inputargs_and_holes
+    def clear_latest_values(self):
+        llimpl.frame_clear_latest_values(self.latest_frame)
 
     # ----------
 

@@ -16,31 +16,33 @@ class JitCode(AbstractDescr):
         self._ssarepr     = None          # debugging
 
     def setup(self, code='', constants_i=[], constants_r=[], constants_f=[],
-              num_regs_i=256, num_regs_r=256, num_regs_f=256,
-              liveness=None, startpoints=None):
+              num_regs_i=255, num_regs_r=255, num_regs_f=255,
+              liveness=None, startpoints=None, alllabels=None):
         self.code = code
         # if the following lists are empty, use a single shared empty list
         self.constants_i = constants_i or self._empty_i
         self.constants_r = constants_r or self._empty_r
         self.constants_f = constants_f or self._empty_f
         # encode the three num_regs into a single integer
-        self.num_regs_encoded = ((num_regs_i << 18) |
-                                 (num_regs_f << 9) |
+        assert num_regs_i < 256 and num_regs_r < 256 and num_regs_f < 256
+        self.num_regs_encoded = ((num_regs_i << 16) |
+                                 (num_regs_f << 8) |
                                  (num_regs_r << 0))
         self.liveness = liveness
         self._startpoints = startpoints   # debugging
+        self._alllabels = alllabels       # debugging
 
     def get_fnaddr_as_int(self):
         return llmemory.cast_adr_to_int(self.fnaddr)
 
     def num_regs_i(self):
-        return self.num_regs_encoded >> 18
+        return self.num_regs_encoded >> 16
 
     def num_regs_f(self):
-        return (self.num_regs_encoded >> 9) & 0x1FF
+        return (self.num_regs_encoded >> 8) & 0xFF
 
     def num_regs_r(self):
-        return self.num_regs_encoded & 0x1FF
+        return self.num_regs_encoded & 0xFF
 
     def has_liveness_info(self, pc):
         return pc in self.liveness

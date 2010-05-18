@@ -1,6 +1,7 @@
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import intmask, LONG_BIT, r_uint, ovfcheck
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.debug import debug_start, debug_stop
 from pypy.rlib.debug import make_sure_not_resized
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -53,10 +54,11 @@ def get_llexception(cpu, e):
 class BlackholeInterpBuilder(object):
     verbose = True
 
-    def __init__(self, codewriter):
+    def __init__(self, codewriter, metainterp_sd=None):
         self.cpu = codewriter.cpu
         self.setup_insns(codewriter.assembler.insns)
         self.setup_descrs(codewriter.assembler.descrs)
+        self.metainterp_sd = metainterp_sd
         self._freeze_()
 
     def _freeze_(self):
@@ -81,7 +83,7 @@ class BlackholeInterpBuilder(object):
         def dispatch_loop(self, code, position):
             while True:
                 if not we_are_translated():
-                    assert position in self._current_jitcode._startpoints, (
+                    assert position in self.jitcode._startpoints, (
                         "the current position %d is in the middle of "
                         "an instruction!" % position)
                 opcode = ord(code[position])
@@ -233,18 +235,18 @@ class BlackholeInterpBuilder(object):
             return BlackholeInterpreter(self)
 
     def release_interp(self, interp):
-        interp.cleanup_registers_r()
+        interp.cleanup_registers()
         self.blackholeinterps.append(interp)
 
 
 class BlackholeInterpreter(object):
 
     def __init__(self, builder):
+        self.builder            = builder
         self.cpu                = builder.cpu
         self.dispatch_loop      = builder.dispatch_loop
         self.descrs             = builder.descrs
         self.op_catch_exception = builder.op_catch_exception
-        self.cleanup_required_in_registers_r = 0
         #
         if we_are_translated():
             default_i = 0
@@ -257,6 +259,19 @@ class BlackholeInterpreter(object):
         self.registers_i = [default_i] * 256
         self.registers_r = [default_r] * 256
         self.registers_f = [default_f] * 256
+        self.jitcode = None
+
+    def setposition(self, jitcode, position):
+        if jitcode is not self.jitcode:
+            # the real performance impact of the following code is unclear,
+            # but it should be minimized by the fact that a given
+            # BlackholeInterpreter instance is likely to be reused with
+            # exactly the same jitcode, so we don't do the copy again.
+            self.copy_constants(self.registers_i, jitcode.constants_i)
+            self.copy_constants(self.registers_r, jitcode.constants_r)
+            self.copy_constants(self.registers_f, jitcode.constants_f)
+        self.jitcode = jitcode
+        self.position = position
 
     def setarg_i(self, index, value):
         self.registers_i[index] = value
@@ -267,21 +282,14 @@ class BlackholeInterpreter(object):
     def setarg_f(self, index, value):
         self.registers_f[index] = value
 
-    def run(self, jitcode, position):
-        if not we_are_translated():
-            self._current_jitcode = jitcode
-        self.copy_constants(self.registers_i, jitcode.constants_i)
-        self.copy_constants(self.registers_r, jitcode.constants_r)
-        self.copy_constants(self.registers_f, jitcode.constants_f)
-        code = jitcode.code
-        self.cleanup_required_in_registers_r = max(
-            self.cleanup_required_in_registers_r,
-            jitcode.num_regs_r())
+    def run(self):
+        code = self.jitcode.code
+        position = self.position
         while True:
             try:
                 self.dispatch_loop(self, code, position)
             except LeaveFrame:
-                return
+                break
             except Exception, e:
                 e = get_llexception(self.cpu, e)
                 position = self.handle_exception_in_frame(e, code)
@@ -290,7 +298,12 @@ class BlackholeInterpreter(object):
         return self.tmpreg_i
 
     def get_result_r(self):
-        return self.tmpreg_r
+        result = self.tmpreg_r
+        if we_are_translated():
+            self.tmpreg_r = NULL
+        else:
+            del self.tmpreg_r
+        return result
 
     def get_result_f(self):
         return self.tmpreg_f
@@ -303,14 +316,12 @@ class BlackholeInterpreter(object):
         if self._return_type == 'void': return None
         raise ValueError(self._return_type)
 
-    def cleanup_registers_r(self):
+    def cleanup_registers(self):
         # To avoid keeping references alive, this cleans up the registers_r.
         # It does not clear the references set by copy_constants(), but
         # these are all prebuilt constants anyway.
-        for i in range(self.cleanup_required_in_registers_r):
+        for i in range(self.jitcode.num_regs_r()):
             self.registers_r[i] = NULL
-        self.cleanup_required_in_registers_r = 0
-        self.tmpreg_r = NULL
         self.exception_last_value = None
 
     def handle_exception_in_frame(self, e, code):
@@ -330,17 +341,30 @@ class BlackholeInterpreter(object):
             return target
 
     # XXX must be specialized
-    # XXX the real performance impact of the following loop is unclear
     def copy_constants(self, registers, constants):
         """Copy jitcode.constants[0] to registers[255],
                 jitcode.constants[1] to registers[254],
                 jitcode.constants[2] to registers[253], etc."""
+        make_sure_not_resized(registers)
+        make_sure_not_resized(constants)
         i = len(constants) - 1
         while i >= 0:
             j = 255 - i
             assert j >= 0
             registers[j] = constants[i]
             i -= 1
+
+    def follow_jump(self):
+        """Assuming that self.position points just after a bytecode
+        instruction that ends with a label, follow that label."""
+        code = self.jitcode.code
+        position = self.position - 2
+        assert position >= 0
+        if not we_are_translated():
+            assert position in self.jitcode._alllabels
+        labelvalue = ord(code[position]) | (ord(code[position+1])<<8)
+        assert labelvalue < len(code)
+        self.position = labelvalue
 
     # ----------
 
@@ -497,13 +521,13 @@ class BlackholeInterpreter(object):
 
     @arguments("self", returns="i")
     def bhimpl_int_pop(self):
-        return self.tmpreg_i
+        return self.get_result_i()
     @arguments("self", returns="r")
     def bhimpl_ref_pop(self):
-        return self.tmpreg_r
+        return self.get_result_r()
     @arguments("self", returns="f")
     def bhimpl_float_pop(self):
-        return self.tmpreg_f
+        return self.get_result_f()
 
     # ----------
     # float operations
@@ -590,85 +614,85 @@ class BlackholeInterpreter(object):
             self._return_type = "void"
         raise LeaveFrame
 
-    @arguments("L", "i", "pc", returns="L")
-    def bhimpl_goto_if_not(target, a, pc):
+    @arguments("i", "L", "pc", returns="L")
+    def bhimpl_goto_if_not(a, target, pc):
         if a:
             return pc
         else:
             return target
 
-    @arguments("L", "i", "i", "pc", returns="L")
-    def bhimpl_goto_if_not_int_lt(target, a, b, pc):
+    @arguments("i", "i", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_int_lt(a, b, target, pc):
         if a < b:
             return pc
         else:
             return target
 
-    @arguments("L", "i", "i", "pc", returns="L")
-    def bhimpl_goto_if_not_int_le(target, a, b, pc):
+    @arguments("i", "i", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_int_le(a, b, target, pc):
         if a <= b:
             return pc
         else:
             return target
 
-    @arguments("L", "i", "i", "pc", returns="L")
-    def bhimpl_goto_if_not_int_eq(target, a, b, pc):
+    @arguments("i", "i", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_int_eq(a, b, target, pc):
         if a == b:
             return pc
         else:
             return target
 
-    @arguments("L", "i", "i", "pc", returns="L")
-    def bhimpl_goto_if_not_int_ne(target, a, b, pc):
+    @arguments("i", "i", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_int_ne(a, b, target, pc):
         if a != b:
             return pc
         else:
             return target
 
-    @arguments("L", "i", "i", "pc", returns="L")
-    def bhimpl_goto_if_not_int_gt(target, a, b, pc):
+    @arguments("i", "i", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_int_gt(a, b, target, pc):
         if a > b:
             return pc
         else:
             return target
 
-    @arguments("L", "i", "i", "pc", returns="L")
-    def bhimpl_goto_if_not_int_ge(target, a, b, pc):
+    @arguments("i", "i", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_int_ge(a, b, target, pc):
         if a >= b:
             return pc
         else:
             return target
 
-    @arguments("L", "i", "pc", returns="L")
-    def bhimpl_goto_if_not_int_is_zero(target, a, pc):
+    @arguments("i", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_int_is_zero(a, target, pc):
         if not a:
             return pc
         else:
             return target
 
-    @arguments("L", "r", "r", "pc", returns="L")
-    def bhimpl_goto_if_not_ptr_eq(target, a, b, pc):
+    @arguments("r", "r", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_ptr_eq(a, b, target, pc):
         if a == b:
             return pc
         else:
             return target
 
-    @arguments("L", "r", "r", "pc", returns="L")
-    def bhimpl_goto_if_not_ptr_ne(target, a, b, pc):
+    @arguments("r", "r", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_ptr_ne(a, b, target, pc):
         if a != b:
             return pc
         else:
             return target
 
-    @arguments("L", "r", "pc", returns="L")
-    def bhimpl_goto_if_not_ptr_iszero(target, a, pc):
+    @arguments("r", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_ptr_iszero(a, target, pc):
         if not a:
             return pc
         else:
             return target
 
-    @arguments("L", "r", "pc", returns="L")
-    def bhimpl_goto_if_not_ptr_nonzero(target, a, pc):
+    @arguments("r", "L", "pc", returns="L")
+    def bhimpl_goto_if_not_ptr_nonzero(a, target, pc):
         if a:
             return pc
         else:
@@ -728,6 +752,15 @@ class BlackholeInterpreter(object):
         real_instance = self.exception_last_value
         assert real_instance
         raise real_instance
+
+    @arguments()
+    def bhimpl_can_enter_jit():
+        pass
+
+    @arguments("self", "I", "R", "F", "I", "R", "F")
+    def bhimpl_jit_merge_point(self, *results):
+        CRN = self.builder.metainterp_sd.ContinueRunningNormally
+        raise CRN(*results)
 
     # ----------
     # the following operations are directly implemented by the backend
@@ -904,3 +937,60 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "r", "i", "i")
     def bhimpl_unicodesetitem(cpu, unicode, index, newchr):
         cpu.bh_unicodesetitem(unicode, index, newchr)
+
+# ____________________________________________________________
+
+def resume_in_blackhole(metainterp_sd, resumedescr):
+    from pypy.jit.metainterp.resume import blackhole_from_resumedata
+    debug_start('jit-blackhole')
+    metainterp_sd.profiler.start_blackhole()
+    blackholeinterp = blackhole_from_resumedata(
+        metainterp_sd.blackholeinterpbuilder,
+        resumedescr,
+        False)  # XXX
+    # XXX virtualrefs
+    # XXX virtualizable
+    _prepare_resume_from_failure(blackholeinterp, resumedescr.guard_opnum)
+    try:
+        blackholeinterp = _resume_mainloop(
+            metainterp_sd.blackholeinterpbuilder, blackholeinterp)
+    finally:
+        metainterp_sd.profiler.end_blackhole()
+        debug_stop('jit-blackhole')
+    # rare case: we only get there if the blackhole interps all returned
+    # normally (in general we get a ContinueRunningNormally exception).
+    _done_with_this_frame(blackholeinterp)
+
+def _resume_mainloop(blackholeinterpbuilder, blackholeinterp):
+    while True:
+        try:
+            blackholeinterp.run()
+        finally:
+            blackholeinterpbuilder.release_interp(blackholeinterp)
+        #...x.x.x...
+        assert blackholeinterp.nextblackholeinterp is None  # XXX
+        break
+        xxx
+    return blackholeinterp
+
+def _prepare_resume_from_failure(blackholeinterp, opnum):
+    from pypy.jit.metainterp.resoperation import rop
+    if opnum == rop.GUARD_TRUE:      # a goto_if_not_xxx that jumps only now
+        blackholeinterp.follow_jump()
+    elif opnum == rop.GUARD_FALSE:   # a goto_if_not that stops jumping
+        pass
+    else:
+        raise NotImplementedError(opnum)
+
+def _done_with_this_frame(blackholeinterp):
+    sd = blackholeinterp.builder.metainterp_sd
+    if sd.result_type == 'void':
+        raise sd.DoneWithThisFrameVoid()
+    elif sd.result_type == 'int':
+        raise sd.DoneWithThisFrameInt(blackholeinterp.get_result_i())
+    elif sd.result_type == 'ref':
+        raise sd.DoneWithThisFrameRef(blackholeinterp.get_result_r())
+    elif sd.result_type == 'float':
+        raise sd.DoneWithThisFrameFloat(blackholeinterp.get_result_f())
+    else:
+        assert False

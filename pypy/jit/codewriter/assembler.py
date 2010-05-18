@@ -47,6 +47,7 @@ class Assembler(object):
         self.liveness = {}
         self.nextlive = None
         self.startpoints = set()
+        self.alllabels = set()
 
     def emit_reg(self, reg):
         if reg.index >= self.count_regs[reg.kind]:
@@ -113,6 +114,7 @@ class Assembler(object):
                 else:
                     argcodes.append(kind[0])
             elif isinstance(x, TLabel):
+                self.alllabels.add(len(self.code))
                 self.tlabel_positions.append((x.name, len(self.code)))
                 self.code.append("temp 1")
                 self.code.append("temp 2")
@@ -194,4 +196,5 @@ class Assembler(object):
                       self.count_regs['ref'],
                       self.count_regs['float'],
                       liveness=self.liveness,
-                      startpoints=self.startpoints)
+                      startpoints=self.startpoints,
+                      alllabels=self.alllabels)

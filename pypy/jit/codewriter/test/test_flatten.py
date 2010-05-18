@@ -120,7 +120,7 @@ class TestFlatten:
             int_copy %i1, %i3
             L1:
             int_gt %i2, $0, %i4
-            goto_if_not L2, %i4
+            goto_if_not %i4, L2
             int_copy %i2, %i5
             int_copy %i3, %i6
             int_add %i6, %i5, %i7
@@ -142,7 +142,7 @@ class TestFlatten:
             int_copy %i0, %i2
             int_copy %i1, %i3
             L1:
-            goto_if_not_int_gt L2, %i2, $0
+            goto_if_not_int_gt %i2, $0, L2
             int_copy %i2, %i4
             int_copy %i3, %i5
             int_add %i5, %i4, %i6
@@ -210,13 +210,13 @@ class TestFlatten:
             else:        return 42
         self.encoding_test(f, [65], """
             int_guard_value %i0, %i0
-            goto_if_not_int_eq L1, %i0, $-5
+            goto_if_not_int_eq %i0, $-5, L1
             int_return $12
             L1:
-            goto_if_not_int_eq L2, %i0, $2
+            goto_if_not_int_eq %i0, $2, L2
             int_return $51
             L2:
-            goto_if_not_int_eq L3, %i0, $7
+            goto_if_not_int_eq %i0, $7, L3
             int_return $1212
             L3:
             int_return $42
@@ -342,7 +342,7 @@ class TestFlatten:
         # note that 'goto_if_not_int_is_true' is actually the same thing
         # as just 'goto_if_not'.
         self.encoding_test(f, [7], """
-            goto_if_not L1, %i0
+            goto_if_not %i0, L1
             int_return $False
             L1:
             int_return $True

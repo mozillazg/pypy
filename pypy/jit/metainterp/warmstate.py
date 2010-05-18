@@ -17,6 +17,20 @@ from pypy.jit.codewriter import support
 # ____________________________________________________________
 
 @specialize.arg(0)
+def specialize_value(TYPE, x):
+    """'x' must be a Signed, a GCREF or a Float.
+    This function casts it to a more specialized type, like Char or Ptr(..).
+    """
+    INPUT = lltype.typeOf(x)
+    if INPUT is lltype.Signed:
+        return lltype.cast_primitive(TYPE, x)    # XXX missing: Ptr(non-gc)
+    elif INPUT is lltype.Float:
+        assert TYPE is lltype.Float
+        return x
+    else:
+        return lltype.cast_opaque_ptr(TYPE, x)
+
+@specialize.arg(0)
 def unwrap(TYPE, box):
     if TYPE is lltype.Void:
         return None

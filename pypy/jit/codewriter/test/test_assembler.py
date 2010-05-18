@@ -93,7 +93,7 @@ def test_assemble_loop():
     i0, i1 = Register('int', 0x16), Register('int', 0x17)
     ssarepr.insns = [
         (Label('L1'),),
-        ('goto_if_not_int_gt', TLabel('L2'), i0, Constant(4, lltype.Signed)),
+        ('goto_if_not_int_gt', i0, Constant(4, lltype.Signed), TLabel('L2')),
         ('int_add', i1, i0, i1),
         ('int_sub', i0, Constant(1, lltype.Signed), i0),
         ('goto', TLabel('L1')),
@@ -102,12 +102,12 @@ def test_assemble_loop():
         ]
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
-    assert jitcode.code == ("\x00\x10\x00\x16\x04"
+    assert jitcode.code == ("\x00\x16\x04\x10\x00"
                             "\x01\x17\x16\x17"
                             "\x02\x16\x01\x16"
                             "\x03\x00\x00"
                             "\x04\x17")
-    assert assembler.insns == {'goto_if_not_int_gt/Lic': 0,
+    assert assembler.insns == {'goto_if_not_int_gt/icL': 0,
                                'int_add/iii': 1,
                                'int_sub/ici': 2,
                                'goto/L': 3,

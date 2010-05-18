@@ -267,8 +267,7 @@ class WarmRunnerDesc(object):
                                                   warmrunnerdesc=self)
 
     def make_exception_classes(self):
-        portalfunc_ARGS = unrolling_iterable(
-            [(i, 'arg%d' % i, ARG) for i, ARG in enumerate(self.PORTAL_FUNCTYPE.ARGS)])
+
         class DoneWithThisFrameVoid(JitException):
             def __str__(self):
                 return 'DoneWithThisFrameVoid()'
@@ -302,18 +301,19 @@ class WarmRunnerDesc(object):
                 return 'ExitFrameWithExceptionRef(%s)' % (self.value,)
 
         class ContinueRunningNormally(ContinueRunningNormallyBase):
-            def __init__(self, argboxes):
-                # accepts boxes as argument, but unpacks them immediately
-                # before we raise the exception -- the boxes' values will
-                # be modified in a 'finally' by restore_patched_boxes().
-                from pypy.jit.metainterp.warmstate import unwrap
-                for i, name, ARG in portalfunc_ARGS:
-                    v = unwrap(ARG, argboxes[i])
-                    setattr(self, name, v)
-
+            def __init__(self, gi, gr, gf, ri, rr, rf):
+                # the six arguments are: lists of green ints, greens refs,
+                # green floats, red ints, red refs, and red floats.
+                self.green_int = gi
+                self.green_ref = gr
+                self.green_float = gf
+                self.red_int = ri
+                self.red_ref = rr
+                self.red_float = rf
             def __str__(self):
-                return 'ContinueRunningNormally(%s)' % (
-                    ', '.join(map(str, self.args)),)
+                return 'ContinueRunningNormally(%s, %s, %s, %s, %s, %s)' % (
+                    self.green_int, self.green_ref, self.green_float,
+                    self.red_int, self.red_ref, self.red_float)
 
         self.DoneWithThisFrameVoid = DoneWithThisFrameVoid
         self.DoneWithThisFrameInt = DoneWithThisFrameInt
@@ -327,6 +327,7 @@ class WarmRunnerDesc(object):
         self.metainterp_sd.DoneWithThisFrameFloat = DoneWithThisFrameFloat
         self.metainterp_sd.ExitFrameWithExceptionRef = ExitFrameWithExceptionRef
         self.metainterp_sd.ContinueRunningNormally = ContinueRunningNormally
+
     def make_enter_function(self):
         from pypy.jit.metainterp.warmstate import WarmEnterState
         state = WarmEnterState(self)
@@ -497,13 +498,24 @@ class WarmRunnerDesc(object):
         # ____________________________________________________________
         # Prepare the portal_runner() helper
         #
+        from pypy.jit.metainterp.warmstate import specialize_value
         portal_ptr = self.cpu.ts.functionptr(PORTALFUNC, 'portal',
                                          graph = portalgraph)
         self.portal_ptr = portal_ptr
-        portalfunc_ARGS = unrolling_iterable(
-            [(i, 'arg%d' % i, ARG) for i, ARG in enumerate(PORTALFUNC.ARGS)])
-
-
+        #
+        portalfunc_ARGS = []
+        nums = {}
+        for i, ARG in enumerate(PORTALFUNC.ARGS):
+            if i < len(self.jitdriver.greens):
+                color = 'green'
+            else:
+                color = 'red'
+            attrname = '%s_%s' % (color, history.getkind(ARG))
+            count = nums.get(attrname, 0)
+            nums[attrname] = count + 1
+            portalfunc_ARGS.append((ARG, attrname, count))
+        portalfunc_ARGS = unrolling_iterable(portalfunc_ARGS)
+        #
         rtyper = self.translator.rtyper
         RESULT = PORTALFUNC.RESULT
         result_kind = history.getkind(RESULT)
@@ -517,21 +529,22 @@ class WarmRunnerDesc(object):
                                                       portal_ptr)(*args)
                 except self.ContinueRunningNormally, e:
                     args = ()
-                    for _, name, _ in portalfunc_ARGS:
-                        v = getattr(e, name)
-                        args = args + (v,)
+                    for ARGTYPE, attrname, count in portalfunc_ARGS:
+                        x = getattr(e, attrname)[count]
+                        x = specialize_value(ARGTYPE, x)
+                        args = args + (x,)
                 except self.DoneWithThisFrameVoid:
                     assert result_kind == 'void'
                     return
                 except self.DoneWithThisFrameInt, e:
                     assert result_kind == 'int'
-                    return lltype.cast_primitive(RESULT, e.result)
+                    return specialize_value(RESULT, e.result)
                 except self.DoneWithThisFrameRef, e:
                     assert result_kind == 'ref'
-                    return ts.cast_from_ref(RESULT, e.result)
+                    return specialize_value(RESULT, e.result)
                 except self.DoneWithThisFrameFloat, e:
                     assert result_kind == 'float'
-                    return e.result
+                    return specialize_value(RESULT, e.result)
                 except self.ExitFrameWithExceptionRef, e:
                     value = ts.cast_to_baseclass(e.value)
                     if not we_are_translated():
@@ -561,6 +574,7 @@ class WarmRunnerDesc(object):
                     loop_token = fail_descr.handle_fail(self.metainterp_sd)
                     fail_descr = self.cpu.execute_token(loop_token)
                 except self.ContinueRunningNormally, e:
+                    xxxxxxxxx
                     args = ()
                     for _, name, _ in portalfunc_ARGS:
                         v = getattr(e, name)
@@ -571,13 +585,13 @@ class WarmRunnerDesc(object):
                     return
                 except self.DoneWithThisFrameInt, e:
                     assert result_kind == 'int'
-                    return lltype.cast_primitive(RESULT, e.result)
+                    return specialize_value(RESULT, e.result)
                 except self.DoneWithThisFrameRef, e:
                     assert result_kind == 'ref'
-                    return ts.cast_from_ref(RESULT, e.result)
+                    return specialize_value(RESULT, e.result)
                 except self.DoneWithThisFrameFloat, e:
                     assert result_kind == 'float'
-                    return e.result
+                    return specialize_value(RESULT, e.result)
                 except self.ExitFrameWithExceptionRef, e:
                     value = ts.cast_to_baseclass(e.value)
                     if not we_are_translated():

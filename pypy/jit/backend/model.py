@@ -85,15 +85,24 @@ class AbstractCPU(object):
         or from 'args' if it was a FINISH).  Returns a ptr or an obj."""
         raise NotImplementedError
 
+    def get_latest_value_kind(self, index):
+        """Return the kind (history.INT, REF or FLOAT) of the index'th
+        argument to the last executed operation."""
+        raise NotImplementedError
+
+    def get_latest_value_count(self):
+        """Return how many values are ready to be returned by
+        get_latest_value_xxx()."""
+        raise NotImplementedError
+
     def get_latest_force_token(self):
         """After a GUARD_NOT_FORCED fails, this function returns the
         same FORCE_TOKEN result as the one in the just-failed loop."""
         raise NotImplementedError
 
-    def make_boxes_from_latest_value(self, faildescr):
-        """Build a list of Boxes (and None for holes) that contains
-        the current values, as would be returned by calls to
-        get_latest_value_xxx()."""
+    def clear_latest_values(self):
+        """Clear the latest values (at least the ref ones, so that
+        they no longer keep objects alive)."""
         raise NotImplementedError
 
     def get_exception(self):

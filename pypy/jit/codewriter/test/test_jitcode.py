@@ -11,10 +11,10 @@ def test_num_regs():
     assert j.num_regs_i() == 0
     assert j.num_regs_r() == 0
     assert j.num_regs_f() == 0
-    j.setup(num_regs_i=256, num_regs_r=256, num_regs_f=256)
-    assert j.num_regs_i() == 256
-    assert j.num_regs_r() == 256
-    assert j.num_regs_f() == 256
+    j.setup(num_regs_i=255, num_regs_r=255, num_regs_f=255)
+    assert j.num_regs_i() == 255
+    assert j.num_regs_r() == 255
+    assert j.num_regs_f() == 255
 
 def test_liveness():
     j = JitCode("test")
