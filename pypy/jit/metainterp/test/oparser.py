@@ -4,7 +4,7 @@ in a nicer fashion
 """
 
 from pypy.jit.metainterp.history import TreeLoop, BoxInt, ConstInt,\
-     ConstAddr, ConstObj, ConstPtr, Box, BasicFailDescr, BoxFloat, ConstFloat,\
+     ConstObj, ConstPtr, Box, BasicFailDescr, BoxFloat, ConstFloat,\
      LoopToken
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.typesystem import llhelper
@@ -74,8 +74,8 @@ class OpParser(object):
                 return ConstPtr(obj)
             else:
                 assert typ == 'class'
-                return ConstAddr(llmemory.cast_ptr_to_adr(obj),
-                                 self.cpu)
+                return ConstInt(llmemory.cast_adr_to_int(
+                    llmemory.cast_ptr_to_adr(obj)))
         else:
             if typ == 'ptr':
                 return ConstObj(obj)
