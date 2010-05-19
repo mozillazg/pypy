@@ -1538,12 +1538,13 @@ class MetaInterp(object):
                                           duplicates)
         live_arg_boxes = greenboxes + redboxes
         if self.staticdata.virtualizable_info is not None:
-            # we use ':-1' to remove the last item, which is the virtualizable
+            # we use pop() to remove the last item, which is the virtualizable
             # itself
             self.remove_consts_and_duplicates(self.virtualizable_boxes,
                                               len(self.virtualizable_boxes)-1,
                                               duplicates)
-            live_arg_boxes += self.virtualizable_boxes[:-1]
+            live_arg_boxes += self.virtualizable_boxes
+            live_arg_boxes.pop()
         assert len(self.virtualref_boxes) == 0, "missing virtual_ref_finish()?"
         # Called whenever we reach the 'can_enter_jit' hint.
         # First, attempt to make a bridge:

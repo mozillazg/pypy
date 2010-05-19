@@ -69,13 +69,32 @@ def split_before_jit_merge_point(graph, portalblock, portalopindex):
         portalblock = link.target
     portalop = portalblock.operations[0]
     # split again, this time enforcing the order of the live vars
-    # specified by the user in the jit_merge_point() call
+    # specified by decode_hp_hint_args().
     assert portalop.opname == 'jit_marker'
     assert portalop.args[0].value == 'jit_merge_point'
-    livevars = [v for v in portalop.args[2:]
-                  if v.concretetype is not lltype.Void]
-    link = split_block(None, portalblock, 0, livevars)
+    greens_v, reds_v = decode_hp_hint_args(portalop)
+    link = split_block(None, portalblock, 0, greens_v + reds_v)
     return link.target
+
+def decode_hp_hint_args(op):
+    # Returns (list-of-green-vars, list-of-red-vars) without Voids.
+    # Both lists are sorted: first INT, then REF, then FLOAT.
+    assert op.opname == 'jit_marker'
+    jitdriver = op.args[1].value
+    numgreens = len(jitdriver.greens)
+    numreds = len(jitdriver.reds)
+    greens_v = op.args[2:2+numgreens]
+    reds_v = op.args[2+numgreens:]
+    assert len(reds_v) == numreds
+    #
+    def _sort(args_v):
+        from pypy.jit.metainterp.history import getkind
+        lst = [v for v in args_v if v.concretetype is not lltype.Void]
+        _kind2count = {'int': 1, 'ref': 2, 'float': 3}
+        lst.sort(key=lambda v: _kind2count[getkind(v.concretetype)])
+        return lst
+    #
+    return (_sort(greens_v), _sort(reds_v))
 
 def maybe_on_top_of_llinterp(rtyper, fnptr):
     # Run a generated graph on top of the llinterp for testing.
