@@ -303,9 +303,9 @@ class MIFrame(object):
 ##        self.load_int()       # past the 'box' argument
 ##        self.ignore_varargs() # past the 'livelist' argument
 
-    @arguments("box", "descr")
-    def opimpl_switch(self, valuebox, switchdict):
-        box = self.implement_guard_value(valuebox)
+    @arguments("box", "descr", "orgpc")
+    def opimpl_switch(self, valuebox, switchdict, orgpc):
+        box = self.implement_guard_value(orgpc, valuebox)
         switchvalue = box.getint()
         assert isinstance(switchdict, SwitchDictDescr)
         try:
@@ -370,90 +370,6 @@ class MIFrame(object):
         self.execute_with_descr(rop.ARRAYCOPY, arraydescr, calldescr, fnptr,
                                 sourcebox, destbox, source_startbox,
                                 dest_startbox, lengthbox)
-
-    @FixME  #arguments("orgpc", "box", "descr", "box")
-    def opimpl_check_neg_index(self, pc, arraybox, arraydesc, indexbox):
-        negbox = self.metainterp.execute_and_record(
-            rop.INT_LT, None, indexbox, ConstInt(0))
-        negbox = self.implement_guard_value(pc, negbox)
-        if negbox.getint():
-            # the index is < 0; add the array length to it
-            lenbox = self.metainterp.execute_and_record(
-                rop.ARRAYLEN_GC, arraydesc, arraybox)
-            indexbox = self.metainterp.execute_and_record(
-                rop.INT_ADD, None, indexbox, lenbox)
-        self.make_result_box(indexbox)
-
-    @FixME  #arguments("descr", "descr", "descr", "descr", "box")
-    def opimpl_newlist(self, structdescr, lengthdescr, itemsdescr, arraydescr,
-                       sizebox):
-        sbox = self.metainterp.execute_and_record(rop.NEW, structdescr)
-        self.metainterp.execute_and_record(rop.SETFIELD_GC, lengthdescr, 
-                                           sbox, sizebox)
-        abox = self.metainterp.execute_and_record(rop.NEW_ARRAY, arraydescr,
-                                                  sizebox)
-        self.metainterp.execute_and_record(rop.SETFIELD_GC, itemsdescr,
-                                           sbox, abox)
-        self.make_result_box(sbox)
-
-    @FixME  #arguments("box", "descr", "descr", "box")
-    def opimpl_getlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox):
-        arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
-                                                      itemsdescr, listbox)
-        self.execute_with_descr(rop.GETARRAYITEM_GC, arraydescr, arraybox, indexbox)
-
-    @FixME  #arguments("box", "descr", "descr", "box", "box")
-    def opimpl_setlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox,
-                              valuebox):
-        arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
-                                                      itemsdescr, listbox)
-        self.execute_with_descr(rop.SETARRAYITEM_GC, arraydescr, arraybox, indexbox, valuebox)
-
-    @FixME  #arguments("orgpc", "box", "descr", "box")
-    def opimpl_check_resizable_neg_index(self, pc, listbox, lengthdesc,
-                                         indexbox):
-        negbox = self.metainterp.execute_and_record(
-            rop.INT_LT, None, indexbox, ConstInt(0))
-        negbox = self.implement_guard_value(pc, negbox)
-        if negbox.getint():
-            # the index is < 0; add the array length to it
-            lenbox = self.metainterp.execute_and_record(
-                rop.GETFIELD_GC, lengthdesc, listbox)
-            indexbox = self.metainterp.execute_and_record(
-                rop.INT_ADD, None, indexbox, lenbox)
-        self.make_result_box(indexbox)
-
-    @FixME  #arguments("orgpc", "box")
-    def opimpl_check_zerodivisionerror(self, pc, box):
-        nonzerobox = self.metainterp.execute_and_record(
-            rop.INT_NE, None, box, ConstInt(0))
-        nonzerobox = self.implement_guard_value(pc, nonzerobox)
-        if nonzerobox.getint():
-            return False
-        else:
-            # division by zero!
-            return self.metainterp.raise_zero_division_error()
-
-    @FixME  #arguments("orgpc", "box", "box")
-    def opimpl_check_div_overflow(self, pc, box1, box2):
-        # detect the combination "box1 = -sys.maxint-1, box2 = -1".
-        import sys
-        tmp1 = self.metainterp.execute_and_record(    # combination to detect:
-            rop.INT_ADD, None, box1, ConstInt(sys.maxint))    # tmp1=-1, box2=-1
-        tmp2 = self.metainterp.execute_and_record(
-            rop.INT_AND, None, tmp1, box2)                    # tmp2=-1
-        tmp3 = self.metainterp.execute_and_record(
-            rop.INT_EQ, None, tmp2, ConstInt(-1))             # tmp3?
-        tmp4 = self.implement_guard_value(pc, tmp3)       # tmp4?
-        if not tmp4.getint():
-            return False
-        else:
-            # division overflow!
-            return self.metainterp.raise_overflow_error()
-
-    @FixME  #arguments()
-    def opimpl_overflow_error(self):
-        return self.metainterp.raise_overflow_error()
 
     @arguments("box", "descr")
     def _opimpl_getfield_gc_any(self, box, fielddescr):
@@ -736,16 +652,16 @@ class MIFrame(object):
     def opimpl_residual_oosend_pure(self, methdescr, boxes):
         self.execute_varargs(rop.OOSEND_PURE, boxes, descr=methdescr, exc=False)
 
-    @arguments("box")
-    def _opimpl_guard_value(self, box):
-        self.implement_guard_value(box)
+    @arguments("orgpc", "box",)
+    def _opimpl_guard_value(self, orgpc, box):
+        self.implement_guard_value(orgpc, box)
 
     opimpl_int_guard_value = _opimpl_guard_value
     opimpl_ref_guard_value = _opimpl_guard_value
     opimpl_float_guard_value = _opimpl_guard_value
 
-    @arguments("box", "orgpc")
-    def opimpl_guard_class(self, box, orgpc):
+    @arguments("orgpc", "box")
+    def opimpl_guard_class(self, orgpc, box):
         clsbox = self.cls_of_box(box)
         self.generate_guard(rop.GUARD_CLASS, box, [clsbox], resumepc=orgpc)
         return clsbox
@@ -957,7 +873,7 @@ class MIFrame(object):
         metainterp.attach_debug_info(guard_op)
         return guard_op
 
-    def implement_guard_value(self, box):
+    def implement_guard_value(self, orgpc, box):
         """Promote the given Box into a Const.  Note: be careful, it's a
         bit unclear what occurs if a single opcode needs to generate
         several ones and/or ones not near the beginning."""
@@ -965,7 +881,8 @@ class MIFrame(object):
             return box     # no promotion needed, already a Const
         else:
             promoted_box = box.constbox()
-            self.generate_guard(rop.GUARD_VALUE, box, [promoted_box])
+            self.generate_guard(rop.GUARD_VALUE, box, [promoted_box],
+                                resumepc=orgpc)
             self.metainterp.replace_box(box, promoted_box)
             return promoted_box
 
@@ -1024,7 +941,7 @@ class MIFrame(object):
         """The 'residual_call' operation is emitted in two cases:
         when we have to generate a residual CALL operation, but also
         to handle an indirect_call that may need to be inlined."""
-        funcbox = self.implement_guard_value(funcbox)
+        assert isinstance(funcbox, Const)
         sd = self.metainterp.staticdata
         key = sd.cpu.ts.getaddr_for_box(funcbox)
         jitcode = sd.bytecode_for_address(key)

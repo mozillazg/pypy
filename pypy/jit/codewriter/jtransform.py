@@ -284,7 +284,9 @@ class Transformer(object):
             jitcode = self.callcontrol.get_jitcode(targetgraph,
                                                    called_from=self.graph)
             lst.append(jitcode)
-        return self.handle_residual_call(op, [IndirectCallTargets(lst)])
+        op0 = SpaceOperation('G_int_guard_value', [op.args[0]], None)
+        op1 = self.handle_residual_call(op, [IndirectCallTargets(lst)])
+        return [op0, op1]
 
     def _prepare_builtin_call(self, op, oopspec_name, args,
                               extra=None, extrakey=None):
@@ -324,12 +326,14 @@ class Transformer(object):
             assert op.args[0].concretetype != lltype.Ptr(rstr.STR)
             kind = getkind(op.args[0].concretetype)
             # note: the 'G_' prefix tells that the operation might generate
-            # a guard in pyjitpl (see liveness.py)
-            op = SpaceOperation('G_%s_guard_value' % kind,
-                                [op.args[0]], None)
+            # a guard in pyjitpl (see liveness.py).  The following 'keepalive'
+            # is needed to ensure that op.args[0] is restored on guard failure.
+            op1 = SpaceOperation('G_%s_guard_value' % kind,
+                                 [op.args[0]], None)
+            op2 = SpaceOperation('keepalive', [op.args[0]], None)
             # this special return value forces op.result to be considered
             # equal to op.args[0]
-            return [op, None]
+            return [op1, op2, None]
         else:
             log.WARNING('ignoring hint %r at %r' % (hints, self.graph))
 
