@@ -274,11 +274,8 @@ class LLtypeCPU(BaseCPU):
         token = history.getkind(RESULT)
         return self.getdescr(0, token[0], extrainfo=extrainfo)
 
-    def get_exception(self):
-        return self.cast_adr_to_int(llimpl.get_exception())
-
-    def get_exc_value(self):
-        return llimpl.get_exc_value()
+    def grab_exc_value(self):
+        return llimpl.grab_exc_value()
 
     def arraydescrof(self, A):
         assert isinstance(A, lltype.GcArray)

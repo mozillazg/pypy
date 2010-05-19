@@ -1413,8 +1413,6 @@ class MetaInterp(object):
         # to generate either GUARD_EXCEPTION or GUARD_NO_EXCEPTION, and also
         # to handle the following opcodes 'goto_if_exception_mismatch'.
         llexception = get_llexception(self.cpu, exception)
-        if not we_are_translated():
-            llexception = llexception.args[1]
         llexception = self.cpu.ts.cast_to_ref(llexception)
         exc_value_box = self.cpu.ts.get_exc_value_box(llexception)
         if constant:
@@ -1600,7 +1598,12 @@ class MetaInterp(object):
             pass
         elif (opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION
               or opnum == rop.GUARD_NOT_FORCED):
-            xxx #self.handle_exception()
+            exception = self.cpu.grab_exc_value()
+            if exception:
+                self.execute_raised(exception)
+            else:
+                self.execute_did_not_raise()
+            self.handle_possible_exception()
         elif opnum == rop.GUARD_NO_OVERFLOW:   # an overflow now detected
             xxx #self.raise_overflow_error()
         elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:

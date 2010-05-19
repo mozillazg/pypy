@@ -100,19 +100,8 @@ class AbstractCPU(object):
         they no longer keep objects alive)."""
         raise NotImplementedError
 
-    def get_exception(self):
-        raise NotImplementedError
-
-    def get_exc_value(self):
-        raise NotImplementedError
-
-    def clear_exception(self):
-        raise NotImplementedError
-
-    def get_overflow_error(self):
-        raise NotImplementedError
-
-    def get_zero_division_error(self):
+    def grab_exc_value(self):
+        """Return and clear the exception set by the latest execute_token()."""
         raise NotImplementedError
 
     @staticmethod
