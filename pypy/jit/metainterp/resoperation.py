@@ -134,7 +134,7 @@ _oplist = [
 
     '_NOSIDEEFFECT_FIRST', # ----- start of no_side_effect operations -----
     '_ALWAYS_PURE_FIRST', # ----- start of always_pure operations -----
-    'OOSEND_PURE',    # ootype operation
+    #'OOSEND_PURE',    # ootype operation
     'CALL_PURE',
     #
     'CAST_PTR_TO_INT/1',
@@ -198,8 +198,8 @@ _oplist = [
     'UNICODEGETITEM/2',
     #
     # ootype operations
-    'INSTANCEOF/1db',
-    'SUBCLASSOF/2b',
+    #'INSTANCEOF/1db',
+    #'SUBCLASSOF/2b',
     #
     '_ALWAYS_PURE_LAST',  # ----- end of always_pure operations -----
 
@@ -222,7 +222,7 @@ _oplist = [
     'STRSETITEM/3',
     'UNICODESETITEM/3',
     'NEWUNICODE/1',
-    'RUNTIMENEW/1',     # ootype operation
+    #'RUNTIMENEW/1',     # ootype operation
     'COND_CALL_GC_WB',  # [objptr, newvalue]   (for the write barrier)
     'DEBUG_MERGE_POINT/1',      # debugging only
     'VIRTUAL_REF_FINISH/2',
@@ -232,7 +232,7 @@ _oplist = [
     'CALL_ASSEMBLER',
     'CALL_MAY_FORCE',
     'CALL_LOOPINVARIANT',
-    'OOSEND',                     # ootype operation
+    #'OOSEND',                     # ootype operation
     '_CANRAISE_LAST', # ----- end of can_raise operations -----
 
     '_OVF_FIRST', # ----- start of is_ovf operations -----

@@ -1,5 +1,7 @@
 import sys, os
-from pypy.jit.metainterp.history import Box, Const, ConstInt, INT, REF, FLOAT
+from pypy.jit.metainterp.history import Box, Const, ConstInt
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
+from pypy.jit.metainterp.history import INT, REF, FLOAT, HOLE
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import jitprof
 from pypy.rpython.lltypesystem import rffi
@@ -98,6 +100,9 @@ TAGVIRTUAL  = 3
 UNASSIGNED = tag(-1<<13, TAGBOX)
 UNASSIGNEDVIRTUAL = tag(-1<<13, TAGVIRTUAL)
 NULLREF = tag(-1, TAGCONST)
+TYPEBARRIER = tag(-2, TAGCONST)
+                    # nums = [..BoxInts.., TYPEBARRIER, ..BoxPtrs..]
+                    # and optionally an extra [TYPEBARRIER, ..BoxFloats..]
 
 
 class ResumeDataLoopMemo(object):
@@ -161,8 +166,19 @@ class ResumeDataLoopMemo(object):
         numb1, liveboxes, v = self.number(values, snapshot.prev)
         n = len(liveboxes)-v
         boxes = snapshot.boxes
+        #
+        if not we_are_translated():
+            # verifies that 'boxes' are in order: all INTs, then all REFs,
+            # and finally all FLOATs.
+            _kind2count = {INT: 1, REF: 2, FLOAT: 3}
+            kinds = [_kind2count[box.type] for box in boxes]
+            assert kinds == sorted(kinds)
+        #
         length = len(boxes)
-        nums = [UNASSIGNED] * length
+        numslength = length + 1 + (length > 0 and boxes[-1].type == FLOAT)
+        nums = [UNASSIGNED] * numslength
+        prevkind = INT
+        j = 0
         for i in range(length):
             box = boxes[i]
             value = values.get(box, None)
@@ -181,7 +197,23 @@ class ResumeDataLoopMemo(object):
                     tagged = tag(n, TAGBOX)
                     n += 1
                 liveboxes[box] = tagged
-            nums[i] = tagged
+            #
+            if box.type != prevkind:
+                nums[j] = TYPEBARRIER
+                j += 1
+                if prevkind == INT and box.type == FLOAT:
+                    nums[j] = TYPEBARRIER
+                    j += 1
+                prevkind = box.type
+            #
+            nums[j] = tagged
+            j += 1
+        #
+        if j == length:
+            nums[j] = TYPEBARRIER
+            j += 1
+        assert j == numslength
+        #
         numb = Numbering(numb1, nums)
         self.numberings[snapshot] = numb, liveboxes, v
         return numb, liveboxes.copy(), v
@@ -426,9 +458,9 @@ class VirtualInfo(AbstractVirtualStructInfo):
         AbstractVirtualStructInfo.__init__(self, fielddescrs)
         self.known_class = known_class
 
-    def allocate(self, cpu):
-        from pypy.jit.metainterp.executor import exec_new_with_vtable
-        return exec_new_with_vtable(cpu, self.known_class)
+    @specialize.argtype(1)
+    def allocate(self, decoder):
+        return decoder.allocate_with_vtable(self.known_class)
 
     def debug_prints(self):
         debug_print("\tvirtualinfo", self.known_class.repr_rpython())
@@ -468,24 +500,94 @@ class VArrayInfo(AbstractVirtualInfo):
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
+# ____________________________________________________________
 
-def rebuild_from_resumedata(metainterp, newboxes, storage,
+class AbstractResumeDataReader(object):
+    """A base mixin containing the logic to reconstruct virtuals out of
+    guard failure.  There are two implementations of this mixin:
+    ResumeDataBoxReader for when we are compiling (i.e. when we have a
+    metainterp), and ResumeDataDirectReader for when we are merely
+    blackholing and want the best performance.
+    """
+    _mixin_ = True
+    virtuals = None
+
+    def _prepare(self, cpu, storage):
+        self.cpu = cpu
+        self.cur_numb = storage.rd_numb
+        self.consts = storage.rd_consts
+        self._prepare_virtuals(storage.rd_virtuals)
+        self._prepare_pendingfields(storage.rd_pendingfields)
+
+    def _prepare_virtuals(self, virtuals):
+        if virtuals:
+            self.virtuals = [None] * len(virtuals)
+            for i in range(len(virtuals)):
+                vinfo = virtuals[i]
+                if vinfo is not None:
+                    self.virtuals[i] = vinfo.allocate(self)
+            for i in range(len(virtuals)):
+                vinfo = virtuals[i]
+                if vinfo is not None:
+                    vinfo.setfields(self, self.virtuals[i])
+
+    def _prepare_pendingfields(self, pendingfields):
+        if pendingfields is not None:
+            for descr, num, fieldnum in pendingfields:
+                struct = self.decode_ref(num)
+                self.setfield(descr, struct, fieldnum)
+
+    def _prepare_next_section(self):
+        numb = self.cur_numb
+        self.cur_numb = numb.prev
+        nums = numb.nums
+        length = len(nums)
+        count_i = count_r = count_f = 0
+        i = 0
+        while True:
+            num = nums[i]
+            i += 1
+            if tagged_eq(num, TYPEBARRIER):
+                break
+            self.write_an_int(count_i, self.decode_int(num))
+            count_i += 1
+        while i < length:
+            num = nums[i]
+            i += 1
+            if tagged_eq(num, TYPEBARRIER):
+                break
+            self.write_a_ref(count_r, self.decode_ref(num))
+            count_r += 1
+        while i < length:
+            num = nums[i]
+            i += 1
+            assert not tagged_eq(num, TYPEBARRIER)
+            self.write_a_float(count_f, self.decode_float(num))
+            count_f += 1
+
+    def done(self):
+        self.cpu.clear_latest_values()
+
+# ---------- when resuming for pyjitpl.py, make boxes ----------
+
+def rebuild_from_resumedata(metainterp, storage,
                             expects_virtualizables):
-    resumereader = ResumeDataReader(storage, newboxes, metainterp)
+    resumereader = ResumeDataBoxReader(storage, metainterp)
     virtualizable_boxes = None
     if expects_virtualizables:
-        virtualizable_boxes = resumereader.consume_boxes()
-    virtualref_boxes = resumereader.consume_boxes()
+        XXX # virtualizable_boxes = resumereader.consume_boxes()
+    resumereader.consume_boxes([], [], [])     # XXX virtualref
     frameinfo = storage.rd_frame_info_list
     while True:
-        env = resumereader.consume_boxes()
         f = metainterp.newframe(frameinfo.jitcode)
-        f.setup_resume_at_op(frameinfo.pc, frameinfo.exception_target, env)
+        f.setup_resume_at_op(frameinfo.pc)
+        resumereader.consume_boxes(f.registers_i, f.registers_r, f.registers_f)
         frameinfo = frameinfo.prev
         if frameinfo is None:
             break
     metainterp.framestack.reverse()
-    return virtualizable_boxes, virtualref_boxes
+    resumereader.done()
+    return resumereader.liveboxes
 
 def force_from_resumedata(metainterp, newboxes, storage,
                           expects_virtualizables):
@@ -496,57 +598,34 @@ def force_from_resumedata(metainterp, newboxes, storage,
     virtualref_boxes = resumereader.consume_boxes()
     return virtualizable_boxes, virtualref_boxes, resumereader.virtuals
 
+class ResumeDataBoxReader(AbstractResumeDataReader):
 
-class ResumeDataBoxReader(object):
-    virtuals = None
+    def __init__(self, storage, metainterp):
+        self.metainterp = metainterp
+        self.liveboxes = [None] * metainterp.cpu.get_latest_value_count()
+        self._prepare(metainterp.cpu, storage)
 
-    def __init__(self, storage, liveboxes, metainterp=None):
-        self.cur_numb = storage.rd_numb
-        self.consts = storage.rd_consts
-        self.liveboxes = liveboxes
-        self.cpu = metainterp.cpu
-        self._prepare_virtuals(metainterp, storage.rd_virtuals)
-        self._prepare_pendingfields(metainterp, storage.rd_pendingfields)
+    def consume_boxes(self, boxes_i, boxes_r, boxes_f):
+        self.boxes_i = boxes_i
+        self.boxes_r = boxes_r
+        self.boxes_f = boxes_f
+        self._prepare_next_section()
 
-    def _prepare_virtuals(self, metainterp, virtuals):
-        if virtuals:
-            v = metainterp._already_allocated_resume_virtuals
-            if v is not None:
-                self.virtuals = v
-                return
-            self.virtuals = [None] * len(virtuals)
-            for i in range(len(virtuals)):
-                vinfo = virtuals[i]
-                if vinfo is not None:
-                    self.virtuals[i] = vinfo.allocate(metainterp)
-            for i in range(len(virtuals)):
-                vinfo = virtuals[i]
-                if vinfo is not None:
-                    vinfo.setfields(metainterp, self.virtuals[i],
-                                    self._decode_box)
+    def allocate_with_vtable(self, known_class):
+        xxx
+    def setfield(self, descr, struct, fieldnum):
+        xxx
+    def setarrayitem(self, arraydescr, array, index, fieldnum):
+        xxx
 
-    def _prepare_pendingfields(self, metainterp, pendingfields):
-        if pendingfields:
-            if metainterp._already_allocated_resume_virtuals is not None:
-                return
-            for descr, num, fieldnum in pendingfields:
-                box = self._decode_box(num)
-                fieldbox = self._decode_box(fieldnum)
-                metainterp.execute_and_record(rop.SETFIELD_GC,
-                                              descr, box, fieldbox)
+    def decode_int(self, tagged):
+        return self.decode_box(tagged, INT)
+    def decode_ref(self, tagged):
+        return self.decode_box(tagged, REF)
+    def decode_float(self, tagged):
+        return self.decode_box(tagged, FLOAT)
 
-    def consume_boxes(self):
-        numb = self.cur_numb
-        assert numb is not None
-        nums = numb.nums
-        n = len(nums)
-        boxes = [None] * n
-        for i in range(n):
-            boxes[i] = self._decode_box(nums[i])
-        self.cur_numb = numb.prev
-        return boxes
-
-    def _decode_box(self, tagged, kind):
+    def decode_box(self, tagged, kind):
         num, tag = untag(tagged)
         if tag == TAGCONST:
             if tagged_eq(tagged, NULLREF):
@@ -560,16 +639,42 @@ class ResumeDataBoxReader(object):
             return ConstInt(num)
         else:
             assert tag == TAGBOX
-            return self.liveboxes[num]
+            box = self.liveboxes[num]
+            if box is None:
+                box = self.load_box_from_cpu(num, kind)
+            return box
 
+    def load_box_from_cpu(self, num, kind):
+        if num < 0:
+            num += len(self.liveboxes)
+            assert num >= 0
+        if kind == INT:
+            box = BoxInt(self.cpu.get_latest_value_int(num))
+        elif kind == REF:
+            box = BoxPtr(self.cpu.get_latest_value_ref(num))
+        elif kind == FLOAT:
+            box = BoxFloat(self.cpu.get_latest_value_float(num))
+        else:
+            assert 0, "bad kind: %d" % ord(kind)
+        self.liveboxes[num] = box
+        return box
+
+    def write_an_int(self, index, box):
+        self.boxes_i[index] = box
+    def write_a_ref(self, index, box):
+        self.boxes_r[index] = box
+    def write_a_float(self, index, box):
+        self.boxes_f[index] = box
+
+# ---------- when resuming for blackholing, get direct values ----------
 
 def blackhole_from_resumedata(blackholeinterpbuilder, storage,
                               expects_virtualizables):
-    resumereader = ResumeDataDirectReader(storage, blackholeinterpbuilder.cpu)
+    resumereader = ResumeDataDirectReader(blackholeinterpbuilder.cpu, storage)
     if expects_virtualizables:
         XXX
     #virtualref_boxes = resumereader.consume_boxes()
-    resumereader.consume_one_section(None)     # XXX
+    resumereader.consume_one_section(None)     # virtualref XXX
     #
     # First get a chain of blackhole interpreters whose length is given
     # by the depth of rd_frame_info_list.  The first one we get must be
@@ -599,87 +704,42 @@ def blackhole_from_resumedata(blackholeinterpbuilder, storage,
     resumereader.done()
     return firstbh
 
-class ResumeDataDirectReader(object):
-    virtuals = None
+class ResumeDataDirectReader(AbstractResumeDataReader):
 
-    def __init__(self, storage, cpu):
-        self.cur_numb = storage.rd_numb
-        self.consts = storage.rd_consts
-        self.cpu = cpu
-        self._prepare_virtuals(storage.rd_virtuals)
-        self._prepare_pendingfields(storage.rd_pendingfields)
+    def __init__(self, cpu, storage):
+        self._prepare(cpu, storage)
 
-    def _prepare_virtuals(self, virtuals):
-        if virtuals:
-            self.virtuals = [None] * len(virtuals)
-            for i in range(len(virtuals)):
-                vinfo = virtuals[i]
-                if vinfo is not None:
-                    self.virtuals[i] = vinfo.allocate(self.cpu)
-            for i in range(len(virtuals)):
-                vinfo = virtuals[i]
-                if vinfo is not None:
-                    vinfo.setfields(self, self.virtuals[i])
+    def consume_one_section(self, blackholeinterp):
+        self.blackholeinterp = blackholeinterp
+        self._prepare_next_section()
 
-    def _prepare_pendingfields(self, pendingfields):
-        if pendingfields is not None:
-            for descr, num, fieldnum in pendingfields:
-                struct = self._decode_ref(num)
-                self.setfield(descr, struct, fieldnum)
+    def allocate_with_vtable(self, known_class):
+        from pypy.jit.metainterp.executor import exec_new_with_vtable
+        return exec_new_with_vtable(self.cpu, self.known_class)
 
     def setfield(self, descr, struct, fieldnum):
         if descr.is_pointer_field():
-            newvalue = self._decode_ref(fieldnum)
+            newvalue = self.decode_ref(fieldnum)
             self.cpu.bh_setfield_gc_r(struct, descr, newvalue)
         elif descr.is_float_field():
-            newvalue = self._decode_float(fieldnum)
+            newvalue = self.decode_float(fieldnum)
             self.cpu.bh_setfield_gc_f(struct, descr, newvalue)
         else:
-            newvalue = self._decode_int(fieldnum)
+            newvalue = self.decode_int(fieldnum)
             self.cpu.bh_setfield_gc_i(struct, descr, newvalue)
 
     def setarrayitem(self, arraydescr, array, index, fieldnum):
         if arraydescr.is_array_of_pointers():
-            newvalue = self._decode_ref(fieldnum)
+            newvalue = self.decode_ref(fieldnum)
             self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
         elif arraydescr.is_array_of_floats():
-            newvalue = self._decode_float(fieldnum)
+            newvalue = self.decode_float(fieldnum)
             self.cpu.bh_setarrayitem_gc_f(arraydescr, array, index, newvalue)
         else:
-            newvalue = self._decode_int(fieldnum)
+            newvalue = self.decode_int(fieldnum)
             self.cpu.bh_setarrayitem_gc_i(arraydescr, array, index, newvalue)
 
-    def consume_one_section(self, blackholeinterp):
-        numb = self.cur_numb
-        count_i = count_r = count_f = 0
-        for num in numb.nums:
-            kind = self._decode_kind(num)
-            if kind == INT:
-                blackholeinterp.setarg_i(count_i, self._decode_int(num))
-                count_i += 1
-            elif kind == REF:
-                blackholeinterp.setarg_r(count_r, self._decode_ref(num))
-                count_r += 1
-            elif kind == FLOAT:
-                blackholeinterp.setarg_f(count_f, self._decode_float(num))
-                count_f += 1
-        self.cur_numb = numb.prev
-
-    def _decode_kind(self, tagged):
-        num, tag = untag(tagged)
-        if tag == TAGCONST:
-            if tagged_eq(tagged, NULLREF):
-                return REF
-            return self.consts[num].type
-        elif tag == TAGVIRTUAL:
-            return REF
-        elif tag == TAGINT:
-            return INT
-        else:
-            assert tag == TAGBOX
-            return self.cpu.get_latest_value_kind(num)
-
-    def _decode_int(self, tagged):
+    def decode_int(self, tagged):
         num, tag = untag(tagged)
         if tag == TAGCONST:
             return self.consts[num].getint()
@@ -691,7 +751,7 @@ class ResumeDataDirectReader(object):
                 num += self.cpu.get_latest_value_count()
             return self.cpu.get_latest_value_int(num)
 
-    def _decode_ref(self, tagged):
+    def decode_ref(self, tagged):
         num, tag = untag(tagged)
         if tag == TAGCONST:
             if tagged_eq(tagged, NULLREF):
@@ -707,7 +767,7 @@ class ResumeDataDirectReader(object):
                 num += self.cpu.get_latest_value_count()
             return self.cpu.get_latest_value_ref(num)
 
-    def _decode_float(self, tagged):
+    def decode_float(self, tagged):
         num, tag = untag(tagged)
         if tag == TAGCONST:
             return self.consts[num].getfloat()
@@ -717,8 +777,14 @@ class ResumeDataDirectReader(object):
                 num += self.cpu.get_latest_value_count()
             return self.cpu.get_latest_value_float(num)
 
-    def done(self):
-        self.cpu.clear_latest_values()
+    def write_an_int(self, index, int):
+        self.blackholeinterp.setarg_i(index, int)
+
+    def write_a_ref(self, index, ref):
+        self.blackholeinterp.setarg_r(index, ref)
+
+    def write_a_float(self, index, float):
+        self.blackholeinterp.setarg_f(index, float)
 
 # ____________________________________________________________
 

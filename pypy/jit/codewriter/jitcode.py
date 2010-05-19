@@ -97,6 +97,18 @@ class JitCode(AbstractDescr):
     def _missing_liveness(self, pc):
         raise MissingLiveness("missing liveness[%d]\n%s" % (pc, self.dump()))
 
+    def follow_jump(self, position):
+        """Assuming that 'position' points just after a bytecode
+        instruction that ends with a label, follow that label."""
+        code = self.code
+        position -= 2
+        assert position >= 0
+        if not we_are_translated():
+            assert position in self._alllabels
+        labelvalue = ord(code[position]) | (ord(code[position+1])<<8)
+        assert labelvalue < len(code)
+        return labelvalue
+
     def dump(self):
         if self._ssarepr is None:
             return '<no dump available>'

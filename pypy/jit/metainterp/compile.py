@@ -239,12 +239,17 @@ class ResumeGuardDescr(ResumeDescr):
             self._counter = ~i      # use ~(index_of_guarded_box_in_fail_args)
 
     def handle_fail(self, metainterp_sd):
-        from pypy.jit.metainterp.blackhole import resume_in_blackhole
-        return resume_in_blackhole(metainterp_sd, self)
-        XXX
+        if self.must_compile(metainterp_sd):
+            return self._trace_and_compile_from_bridge(metainterp_sd)
+        else:
+            from pypy.jit.metainterp.blackhole import resume_in_blackhole
+            resume_in_blackhole(metainterp_sd, self)
+
+    def _trace_and_compile_from_bridge(self, metainterp_sd):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
         metainterp = MetaInterp(metainterp_sd)
         return metainterp.handle_guard_failure(self)
+    _trace_and_compile_from_bridge._dont_inline_ = True
 
     def must_compile(self, metainterp_sd):
         trace_eagerness = metainterp_sd.state.trace_eagerness
