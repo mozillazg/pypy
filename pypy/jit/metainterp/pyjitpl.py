@@ -744,7 +744,7 @@ class MIFrame(object):
     opimpl_ref_guard_value = _opimpl_guard_value
     opimpl_float_guard_value = _opimpl_guard_value
 
-    @arguments("box")
+    @arguments("box", "force_initial_pc")
     def opimpl_guard_class(self, box):
         clsbox = self.cls_of_box(box)
         self.generate_guard(rop.GUARD_CLASS, box, [clsbox])
@@ -2005,6 +2005,7 @@ def _get_opimpl_method(name, argcodes):
         assert position >= 0
         args = ()
         next_argcode = 0
+        force_initial_pc = False
         code = self.bytecode
         position += 1
         for argtype in argtypes:
@@ -2068,13 +2069,17 @@ def _get_opimpl_method(name, argcodes):
                                            argcodes[next_argcode + 2])
                 next_argcode = next_argcode + 3
                 position = position3 + 1 + length3
+            elif argtype == "force_initial_pc":
+                force_initial_pc = True
+                continue
             else:
                 raise AssertionError("bad argtype: %r" % (argtype,))
             args += (value,)
         #
         num_return_args = len(argcodes) - next_argcode
         assert num_return_args == 0 or num_return_args == 1
-        self.pc = position + num_return_args
+        if not force_initial_pc:
+            self.pc = position + num_return_args
         #
         if not we_are_translated():
             print '\tpyjitpl: %s(%s)' % (name, ', '.join(map(repr, args))),
@@ -2095,6 +2100,8 @@ def _get_opimpl_method(name, argcodes):
         else:
             resultbox = unboundmethod(self, *args)
         #
+        if force_initial_pc:
+            self.pc = position + num_return_args
         if resultbox is not None:
             self.make_result_of_lastop(resultbox)
     #

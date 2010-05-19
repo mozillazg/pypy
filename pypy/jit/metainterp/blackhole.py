@@ -146,6 +146,9 @@ class BlackholeInterpBuilder(object):
                         if   argtype == 'I': reg = self.registers_i[index]
                         elif argtype == 'R': reg = self.registers_r[index]
                         elif argtype == 'F': reg = self.registers_f[index]
+                        if not we_are_translated():
+                            assert not isinstance(reg, MissingValue), (
+                                name, self.jitcode, position)
                         value.append(reg)
                     make_sure_not_resized(value)
                     position += length
@@ -165,6 +168,9 @@ class BlackholeInterpBuilder(object):
                     position += 2
                 else:
                     raise AssertionError("bad argtype: %r" % (argtype,))
+                if not we_are_translated():
+                    assert not isinstance(value, MissingValue), (
+                        name, self.jitcode, position)
                 args = args + (value,)
 
             if verbose and not we_are_translated():
@@ -979,17 +985,19 @@ class BlackholeInterpreter(object):
             pass
         elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
             pass
+        elif opnum == rop.GUARD_CLASS:
+            pass
         else:
             raise NotImplementedError(opnum)
 
     # connect the return of values from the called frame to the
     # 'xxx_call_yyy' instructions from the caller frame
     def _setup_return_value_i(self, result):
-        self.registers_i[ord(self.jitcode.code[position-1])] = result
+        self.registers_i[ord(self.jitcode.code[self.position-1])] = result
     def _setup_return_value_r(self, result):
-        self.registers_r[ord(self.jitcode.code[position-1])] = result
+        self.registers_r[ord(self.jitcode.code[self.position-1])] = result
     def _setup_return_value_f(self, result):
-        self.registers_f[ord(self.jitcode.code[position-1])] = result
+        self.registers_f[ord(self.jitcode.code[self.position-1])] = result
 
     def _exit_frame_with_exception(self, e):
         xxx
