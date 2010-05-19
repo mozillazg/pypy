@@ -4,6 +4,7 @@ from pypy.objspace.flow.model import Constant, Variable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop
 from pypy.conftest import option
+from pypy.tool.sourcetools import func_with_new_name
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import TreeLoop, Box, History, LoopToken
@@ -220,6 +221,11 @@ class ResumeGuardDescr(ResumeDescr):
     rd_virtuals = None
     rd_pendingfields = None
 
+    CNT_INT   = -0x20000000
+    CNT_REF   = -0x40000000
+    CNT_FLOAT = -0x60000000
+    CNT_MASK  =  0x1FFFFFFF
+
     def __init__(self, metainterp_sd, original_greenkey):
         ResumeDescr.__init__(self, original_greenkey)
         self.metainterp_sd = metainterp_sd
@@ -236,7 +242,17 @@ class ResumeGuardDescr(ResumeDescr):
         except ValueError:
             return     # xxx probably very rare
         else:
-            self._counter = ~i      # use ~(index_of_guarded_box_in_fail_args)
+            if box.type == history.INT:
+                cnt = self.CNT_INT
+            elif box.type == history.REF:
+                cnt = self.CNT_REF
+            elif box.type == history.FLOAT:
+                cnt = self.CNT_FLOAT
+            else:
+                assert 0, box.type
+            # we build the following value for _counter, which is always
+            # a negative value
+            self._counter = cnt | i
 
     def handle_fail(self, metainterp_sd):
         if self.must_compile(metainterp_sd):
@@ -257,11 +273,25 @@ class ResumeGuardDescr(ResumeDescr):
             self._counter += 1
             return self._counter >= trace_eagerness
         else:
-            XXX
-            box = inputargs_and_holes[~self._counter]
-            if self._counters is None:
-                self._counters = ResumeGuardCounters()
-            counter = self._counters.see(box)
+            index = self._counter & self.CNT_MASK
+            typetag = self._counter & ~ self.CNT_MASK
+            if typetag == self.CNT_INT:
+                intvalue = metainterp_sd.cpu.get_latest_value_int(index)
+                if self._counters is None:
+                    self._counters = ResumeGuardCountersInt()
+                counter = self._counters.see_int(intvalue)
+            elif typetag == self.CNT_REF:
+                refvalue = metainterp_sd.cpu.get_latest_value_ref(index)
+                if self._counters is None:
+                    self._counters = ResumeGuardCountersRef()
+                counter = self._counters.see_ref(refvalue)
+            elif typetag == self.CNT_FLOAT:
+                floatvalue = metainterp_sd.cpu.get_latest_value_float(index)
+                if self._counters is None:
+                    self._counters = ResumeGuardCountersFloat()
+                counter = self._counters.see_float(floatvalue)
+            else:
+                assert 0, typetag
             return counter >= trace_eagerness
 
     def reset_counter_from_failure(self, metainterp):
@@ -357,50 +387,64 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         return data
 
 
-class ResumeGuardCounters(object):
-    # Completely custom algorithm for now: keep 5 pairs (box, counter),
+class AbstractResumeGuardCounters(object):
+    # Completely custom algorithm for now: keep 5 pairs (value, counter),
     # and when we need more, we discard the middle pair (middle in the
     # current value of the counter).  That way, we tend to keep the
-    # boxes with a high counter, but also we avoid always throwing away
-    # the most recently added box.  **THIS ALGO MUST GO AWAY AT SOME POINT**
+    # values with a high counter, but also we avoid always throwing away
+    # the most recently added value.  **THIS ALGO MUST GO AWAY AT SOME POINT**
+    pass
 
+def _see(self, newvalue):
+    # find and update an existing counter
+    unused = -1
+    for i in range(5):
+        cnt = self.counters[i]
+        if cnt:
+            if self.values[i] == newvalue:
+                cnt += 1
+                self.counters[i] = cnt
+                return cnt
+        else:
+            unused = i
+    # not found.  Use a previously unused entry, if there is one
+    if unused >= 0:
+        self.counters[unused] = 1
+        self.values[unused] = newvalue
+        return 1
+    # no unused entry.  Overwrite the middle one.  Computed with indices
+    # a, b, c meaning the highest, second highest, and third highest
+    # entries.
+    a = 0
+    b = c = -1
+    for i in range(1, 5):
+        if self.counters[i] > self.counters[a]:
+            c = b; b = a; a = i
+        elif b < 0 or self.counters[i] > self.counters[b]:
+            c = b; b = i
+        elif c < 0 or self.counters[i] > self.counters[c]:
+            c = i
+    self.counters[c] = 1
+    self.values[c] = newvalue
+    return 1
+
+class ResumeGuardCountersInt(AbstractResumeGuardCounters):
     def __init__(self):
         self.counters = [0] * 5
-        self.boxes = [None] * 5
+        self.values = [0] * 5
+    see_int = func_with_new_name(_see, 'see_int')
 
-    def see(self, newbox):
-        newbox = newbox.constbox()
-        # find and update an existing counter
-        unused = -1
-        for i in range(5):
-            cnt = self.counters[i]
-            if cnt:
-                if newbox.same_constant(self.boxes[i]):
-                    cnt += 1
-                    self.counters[i] = cnt
-                    return cnt
-            else:
-                unused = i
-        # not found.  Use a previously unused entry, if there is one
-        if unused >= 0:
-            self.counters[unused] = 1
-            self.boxes[unused] = newbox
-            return 1
-        # no unused entry.  Overwrite the middle one.  Computed with indices
-        # a, b, c meaning the highest, second highest, and third highest
-        # entries.
-        a = 0
-        b = c = -1
-        for i in range(1, 5):
-            if self.counters[i] > self.counters[a]:
-                c = b; b = a; a = i
-            elif b < 0 or self.counters[i] > self.counters[b]:
-                c = b; b = i
-            elif c < 0 or self.counters[i] > self.counters[c]:
-                c = i
-        self.counters[c] = 1
-        self.boxes[c] = newbox
-        return 1
+class ResumeGuardCountersRef(AbstractResumeGuardCounters):
+    def __init__(self):
+        self.counters = [0] * 5
+        self.values = [history.ConstPtr.value] * 5
+    see_ref = func_with_new_name(_see, 'see_ref')
+
+class ResumeGuardCountersFloat(AbstractResumeGuardCounters):
+    def __init__(self):
+        self.counters = [0] * 5
+        self.values = [0.0] * 5
+    see_float = func_with_new_name(_see, 'see_float')
 
 
 class ResumeFromInterpDescr(ResumeDescr):
