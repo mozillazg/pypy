@@ -1,7 +1,7 @@
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.liveness import compute_liveness
 from pypy.jit.codewriter.test.test_flatten import fake_regallocs
-from pypy.jit.codewriter.flatten import flatten_graph
+from pypy.jit.codewriter.flatten import flatten_graph, ListOfKind
 from pypy.jit.codewriter.format import assert_format
 from pypy.objspace.flow.model import SpaceOperation
 
@@ -13,10 +13,15 @@ class TestFlatten:
         return self.rtyper.annotator.translator.graphs
 
     def add_G_prefix(self, graph):
-        """Add a 'G_' prefix to the opnames 'int_add' and 'int_mul'."""
+        """Add a 'G_' prefix to the opnames 'int_add' and 'int_mul'.
+        Turn the arguments of float_add into a ListOfKind()."""
         def with_prefix(op):
             if op.opname in ('int_add', 'int_mul'):
                 return SpaceOperation('G_' + op.opname, op.args, op.result)
+            if op.opname == 'float_add':
+                return SpaceOperation(op.opname,
+                                      [ListOfKind('float', op.args)],
+                                      op.result)
             return op
         #
         for block in graph.iterblocks():
@@ -134,3 +139,15 @@ class TestFlatten:
             L1:
             int_return %i1
         """, switches_require_liveness=True)
+
+    def test_list_of_kind(self):
+        def f(x, y, z, t):
+            return (x + y) * (z + t)
+        self.encoding_test(f, [5, 6, 3.2, 4.3], """
+            -live- %f0, %f1
+            G_int_add %i0, %i1, %i2
+            float_add F[%f0, %f1], %f2
+            cast_int_to_float %i2, %f3
+            float_mul %f3, %f2, %f4
+            float_return %f4
+        """)

@@ -1,4 +1,5 @@
 from pypy.objspace.flow.model import Variable, SpaceOperation, c_last_exception
+from pypy.jit.codewriter.flatten import ListOfKind
 
 
 # Some instruction require liveness information (the ones that can end up
@@ -34,7 +35,10 @@ def compute_liveness(graph, switches_require_liveness=True):
             if op.opname.startswith('G_'):
                 block.operations.insert(i, _livespaceop(alive))
             for v in op.args:
-                alive.add(v)
+                if isinstance(v, ListOfKind):
+                    alive.update(v)
+                else:
+                    alive.add(v)
 
 def _livespaceop(alive):
     livevars = [v for v in alive if isinstance(v, Variable)]
