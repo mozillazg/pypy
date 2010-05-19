@@ -409,17 +409,10 @@ class WarmRunnerDesc(object):
     def make_args_specification(self):
         graph, block, index = self.jit_merge_point_pos
         op = block.operations[index]
-        args = op.args[2:]
-        ALLARGS = []
-        self.green_args_spec = []
-        self.red_args_types = []
-        for i, v in enumerate(args):
-            TYPE = v.concretetype
-            ALLARGS.append(TYPE)
-            if i < len(self.jitdriver.greens):
-                self.green_args_spec.append(TYPE)
-            else:
-                self.red_args_types.append(history.getkind(TYPE))
+        greens_v, reds_v = support.decode_hp_hint_args(op)
+        ALLARGS = [v.concretetype for v in (greens_v + reds_v)]
+        self.green_args_spec = [v.concretetype for v in greens_v]
+        self.red_args_types = [history.getkind(v.concretetype) for v in reds_v]
         self.num_green_args = len(self.green_args_spec)
         RESTYPE = graph.getreturnvar().concretetype
         (self.JIT_ENTER_FUNCTYPE,
@@ -441,7 +434,7 @@ class WarmRunnerDesc(object):
                 continue
 
             op = block.operations[index]
-            greens_v, reds_v = decode_hp_hint_args(op)
+            greens_v, reds_v = support.decode_hp_hint_args(op)
             args_v = greens_v + reds_v
 
             vlist = [Constant(jit_enter_fnptr, FUNCPTR)] + args_v
@@ -618,7 +611,7 @@ class WarmRunnerDesc(object):
         op = origblock.operations[origindex]
         assert op.opname == 'jit_marker'
         assert op.args[0].value == 'jit_merge_point'
-        greens_v, reds_v = decode_hp_hint_args(op)
+        greens_v, reds_v = support.decode_hp_hint_args(op)
         vlist = [Constant(self.portal_runner_ptr, self.PTR_PORTAL_FUNCTYPE)]
         vlist += greens_v
         vlist += reds_v
@@ -668,16 +661,3 @@ class WarmRunnerDesc(object):
         all_graphs = self.translator.graphs
         vrefinfo = self.metainterp_sd.virtualref_info
         vrefinfo.replace_force_virtual_with_call(all_graphs)
-
-
-def decode_hp_hint_args(op):
-    # Returns (list-of-green-vars, list-of-red-vars) without Voids.
-    assert op.opname == 'jit_marker'
-    jitdriver = op.args[1].value
-    numgreens = len(jitdriver.greens)
-    numreds = len(jitdriver.reds)
-    greens_v = op.args[2:2+numgreens]
-    reds_v = op.args[2+numgreens:]
-    assert len(reds_v) == numreds
-    return ([v for v in greens_v if v.concretetype is not lltype.Void],
-            [v for v in reds_v if v.concretetype is not lltype.Void])
