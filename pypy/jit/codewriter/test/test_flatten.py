@@ -9,6 +9,7 @@ from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.translator.unsimplify import varoftype
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.jit import dont_look_inside, _we_are_jitted, JitDriver
+from pypy.rlib.objectmodel import keepalive_until_here
 
 
 class FakeRegAlloc:
@@ -461,4 +462,22 @@ class TestFlatten:
             jit_merge_point I[%i0], R[], F[], I[%i1], R[], F[]
             can_enter_jit
             void_return
+        """, transform=True)
+
+    def test_keepalive(self):
+        S = lltype.GcStruct('S')
+        def g():
+            return lltype.malloc(S)
+        def f(x):
+            p = g()
+            q = g()
+            keepalive_until_here(p)
+            keepalive_until_here(q)
+            return x
+        self.encoding_test(f, [5], """
+            G_residual_call_r_r $<* fn g>, <Descr>, R[], %r0
+            G_residual_call_r_r $<* fn g>, <Descr>, R[], %r1
+            keepalive %r0
+            keepalive %r1
+            int_return %i0
         """, transform=True)
