@@ -283,10 +283,13 @@ def test_getfield_typeptr():
     c_name = Constant('typeptr', lltype.Void)
     v_result = varoftype(rclass.OBJECT.typeptr)
     op = SpaceOperation('getfield', [v_parent, c_name], v_result)
-    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    op1, op2 = Transformer(FakeCPU()).rewrite_operation(op)
     assert op1.opname == 'G_guard_class'
     assert op1.args == [v_parent]
     assert op1.result == v_result
+    assert op2.opname == 'keepalive'
+    assert op2.args == [v_parent]
+    assert op2.result == None
 
 def test_setfield():
     # XXX a more compact encoding would be possible; see test_getfield()
