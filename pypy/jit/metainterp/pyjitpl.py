@@ -1609,6 +1609,8 @@ class MetaInterp(object):
             xxx #self.raise_overflow_error()
         elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
             xxx #self.framestack[-1].ignore_next_guard_nullness(opnum)
+        elif opnum == rop.GUARD_CLASS:
+            pass
         else:
             raise NotImplementedError(opnum)
 
