@@ -985,7 +985,7 @@ class BlackholeInterpreter(object):
             pass
         elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
             pass
-        elif opnum == rop.GUARD_CLASS:
+        elif opnum == rop.GUARD_CLASS or opnum == rop.GUARD_VALUE:
             pass
         else:
             raise NotImplementedError(opnum)
