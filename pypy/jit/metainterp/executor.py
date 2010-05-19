@@ -85,6 +85,9 @@ def do_call(metainterp, argboxes, descr):
         return None
     raise AssertionError("bad rettype")
 
+do_call_pure = do_call
+do_call_loopinvariant = do_call
+
 def do_getarrayitem_gc(metainterp, arraybox, indexbox, arraydescr):
     cpu = metainterp.cpu
     array = arraybox.getref_base()

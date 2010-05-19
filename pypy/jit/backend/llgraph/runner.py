@@ -240,9 +240,6 @@ class BaseCPU(model.AbstractCPU):
     def get_latest_value_float(self, index):
         return llimpl.frame_float_getvalue(self.latest_frame, index)
 
-    def get_latest_value_kind(self, index):
-        return llimpl.frame_get_value_kind(self.latest_frame, index)
-
     def get_latest_value_count(self):
         return llimpl.frame_get_value_count(self.latest_frame)
 

@@ -16,7 +16,7 @@ from pypy.jit.metainterp import resume, compile
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype
-from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.history import AbstractDescr, make_hashable_int
 
 def optimize_loop_1(metainterp_sd, loop):
     """Optimize loop.operations to make it match the input of loop.specnodes
@@ -953,7 +953,8 @@ class Optimizer(object):
         if not funcvalue.is_constant():
             self.optimize_default(op)
             return
-        resvalue = self.loop_invariant_results.get(op.args[0].getint(), None)
+        key = make_hashable_int(op.args[0].getint())
+        resvalue = self.loop_invariant_results.get(key, None)
         if resvalue is not None:
             self.make_equal_to(op.result, resvalue)
             return
@@ -962,7 +963,7 @@ class Optimizer(object):
         op.opnum = rop.CALL
         self.optimize_default(op)
         resvalue = self.getvalue(op.result)
-        self.loop_invariant_results[op.args[0].getint()] = resvalue
+        self.loop_invariant_results[key] = resvalue
             
 
 optimize_ops = _findall(Optimizer, 'optimize_')

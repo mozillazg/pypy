@@ -1060,31 +1060,25 @@ def frame_execute(frame):
 def frame_int_getvalue(frame, num):
     frame = _from_opaque(frame)
     assert num >= 0
-    return frame.fail_args[num]
+    x = frame.fail_args[num]
+    assert lltype.typeOf(x) is lltype.Signed
+    return x
 
 def frame_float_getvalue(frame, num):
     frame = _from_opaque(frame)
     assert num >= 0
-    return frame.fail_args[num]
+    x = frame.fail_args[num]
+    assert lltype.typeOf(x) is lltype.Float
+    return x
 
 def frame_ptr_getvalue(frame, num):
     frame = _from_opaque(frame)
     assert num >= 0
-    return frame.fail_args[num]
+    x = frame.fail_args[num]
+    assert lltype.typeOf(x) == llmemory.GCREF
+    return x
 
-def frame_get_value_kind(frame, num):
-    frame = _from_opaque(frame)
-    assert num >= 0
-    TYPE = lltype.typeOf(frame.fail_args[num])
-    if TYPE is lltype.Signed:
-        return INT
-    if TYPE == llmemory.GCREF:
-        return REF
-    if TYPE is lltype.Float:
-        return FLOAT
-    raise TypeError("frame.fail_args[%d] is of type %r" % (num, TYPE))
-
-def get_latest_value_count(frame):
+def frame_get_value_count(frame):
     frame = _from_opaque(frame)
     return len(frame.fail_args)
 

@@ -7,6 +7,7 @@
 import weakref
 from pypy.rlib.objectmodel import Symbolic
 from pypy.rpython.lltypesystem import lltype
+from pypy.tool.uid import uid
 
 class AddressOffset(Symbolic):
 
@@ -507,6 +508,11 @@ class AddressAsInt(Symbolic):
         if isinstance(other, AddressAsInt):
             return cmp(self.adr, other.adr)
         return Symbolic.__cmp__(self, other)
+    def __repr__(self):
+        try:
+            return '<AddressAsInt %s>' % (self.adr.ptr,)
+        except AttributeError:
+            return '<AddressAsInt at 0x%x>' % (uid(self),)
 
 # ____________________________________________________________
 

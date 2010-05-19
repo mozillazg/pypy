@@ -26,10 +26,6 @@ from pypy.jit.codewriter import effectinfo as ef
 
 # ____________________________________________________________
 
-def check_args(*args):
-    for arg in args:
-        assert isinstance(arg, (Box, Const))
-
 def arguments(*args):
     def decorate(func):
         func.argtypes = args
@@ -82,6 +78,13 @@ class MIFrame(object):
             registers[j] = ConstClass(constants[i])
             i -= 1
     copy_constants._annspecialcase_ = 'specialize:arg(3)'
+
+    def cleanup_registers(self):
+        # To avoid keeping references alive, this cleans up the registers_r.
+        # It does not clear the references set by copy_constants(), but
+        # these are all prebuilt constants anyway.
+        for i in range(self.jitcode.num_regs_r()):
+            self.registers_r[i] = None
 
     # ------------------------------
     # Decoding of the JitCode
@@ -266,39 +269,39 @@ class MIFrame(object):
                 self.opimpl_goto_if_not(condbox, target)
         ''' % (_opimpl, _opimpl.upper())).compile()
     
-    def follow_jump(self):
-        _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
-        assert ord(self.bytecode[self.pc]) == _op_goto_if_not
-        self.pc += 1          # past the bytecode for 'goto_if_not'
-        target = self.load_3byte()  # load the 'target' argument
-        self.pc = target      # jump
+##    def follow_jump(self):
+##        _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
+##        assert ord(self.bytecode[self.pc]) == _op_goto_if_not
+##        self.pc += 1          # past the bytecode for 'goto_if_not'
+##        target = self.load_3byte()  # load the 'target' argument
+##        self.pc = target      # jump
 
-    def ignore_next_guard_nullness(self, opnum):
-        _op_ooisnull = self.metainterp.staticdata._op_ooisnull
-        _op_oononnull = self.metainterp.staticdata._op_oononnull
-        bc = ord(self.bytecode[self.pc])
-        if bc == _op_ooisnull:
-            if opnum == rop.GUARD_ISNULL:
-                res = ConstInt(0)
-            else:
-                res = ConstInt(1)
-        else:
-            assert bc == _op_oononnull
-            if opnum == rop.GUARD_ISNULL:
-                res = ConstInt(1)
-            else:
-                res = ConstInt(0)
-        self.pc += 1    # past the bytecode for ptr_iszero/ptr_nonzero
-        self.load_int() # past the 'box' argument
-        self.make_result_box(res)
+##    def ignore_next_guard_nullness(self, opnum):
+##        _op_ooisnull = self.metainterp.staticdata._op_ooisnull
+##        _op_oononnull = self.metainterp.staticdata._op_oononnull
+##        bc = ord(self.bytecode[self.pc])
+##        if bc == _op_ooisnull:
+##            if opnum == rop.GUARD_ISNULL:
+##                res = ConstInt(0)
+##            else:
+##                res = ConstInt(1)
+##        else:
+##            assert bc == _op_oononnull
+##            if opnum == rop.GUARD_ISNULL:
+##                res = ConstInt(1)
+##            else:
+##                res = ConstInt(0)
+##        self.pc += 1    # past the bytecode for ptr_iszero/ptr_nonzero
+##        self.load_int() # past the 'box' argument
+##        self.make_result_box(res)
 
-    def dont_follow_jump(self):
-        _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
-        assert ord(self.bytecode[self.pc]) == _op_goto_if_not
-        self.pc += 1          # past the bytecode for 'goto_if_not'
-        self.load_3byte()     # past the 'target' argument
-        self.load_int()       # past the 'box' argument
-        self.ignore_varargs() # past the 'livelist' argument
+##    def dont_follow_jump(self):
+##        _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
+##        assert ord(self.bytecode[self.pc]) == _op_goto_if_not
+##        self.pc += 1          # past the bytecode for 'goto_if_not'
+##        self.load_3byte()     # past the 'target' argument
+##        self.load_int()       # past the 'box' argument
+##        self.ignore_varargs() # past the 'livelist' argument
 
     @arguments("box", "descr")
     def opimpl_switch(self, valuebox, switchdict):
@@ -905,12 +908,8 @@ class MIFrame(object):
             else:
                 raise AssertionError(box.type)
 
-    def setup_resume_at_op(self, pc, env):
-        if not we_are_translated():
-            check_args(*env)
+    def setup_resume_at_op(self, pc):
         self.pc = pc
-        xxxxxxxxxxxxxxxxxxxxxxx
-        self.env = env
         ##  values = ' '.join([box.repr_rpython() for box in self.env])
         ##  log('setup_resume_at_op  %s:%d [%s] %d' % (self.jitcode.name,
         ##                                             self.pc, values,
@@ -1213,7 +1212,6 @@ class MetaInterpGlobalData(object):
 
 class MetaInterp(object):
     in_recursion = 0
-    _already_allocated_resume_virtuals = None
 
     def __init__(self, staticdata):
         self.staticdata = staticdata
@@ -1255,6 +1253,7 @@ class MetaInterp(object):
         # we save the freed MIFrames to avoid needing to re-create new
         # MIFrame objects all the time; they are a bit big, with their
         # 3*256 register entries.
+        frame.cleanup_registers()
         self.free_frames_list.append(frame)
 
     def finishframe(self, resultbox):
@@ -1516,8 +1515,6 @@ class MetaInterp(object):
         self.current_merge_points = [(original_greenkey, -1)]
         self.resumekey = key
         self.seen_can_enter_jit = False
-        xxx
-        started_as_blackhole = self.is_blackholing()
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
             self.interpret()
@@ -1525,8 +1522,7 @@ class MetaInterp(object):
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
         except ContinueRunningNormallyBase:
-            if not started_as_blackhole:
-                key.reset_counter_from_failure(self)
+            key.reset_counter_from_failure(self)
             raise
 
     def remove_consts_and_duplicates(self, boxes, endindex, duplicates):
@@ -1599,17 +1595,20 @@ class MetaInterp(object):
         return loop_token
 
     def prepare_resume_from_failure(self, opnum):
+        frame = self.framestack[-1]
         if opnum == rop.GUARD_TRUE:     # a goto_if_not that jumps only now
-            self.framestack[-1].follow_jump()
+            frame.pc = frame.jitcode.follow_jump(frame.pc)
         elif opnum == rop.GUARD_FALSE:     # a goto_if_not that stops jumping
-            self.framestack[-1].dont_follow_jump()
+            pass
         elif (opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION
               or opnum == rop.GUARD_NOT_FORCED):
-            self.handle_exception()
+            xxx #self.handle_exception()
         elif opnum == rop.GUARD_NO_OVERFLOW:   # an overflow now detected
-            self.raise_overflow_error()
+            xxx #self.raise_overflow_error()
         elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
-            self.framestack[-1].ignore_next_guard_nullness(opnum)
+            xxx #self.framestack[-1].ignore_next_guard_nullness(opnum)
+        else:
+            raise NotImplementedError(opnum)
 
     def compile(self, original_boxes, live_arg_boxes, start):
         num_green_args = self.staticdata.num_green_args
@@ -1705,23 +1704,13 @@ class MetaInterp(object):
         return original_boxes
 
     def initialize_state_from_guard_failure(self, resumedescr):
-        XXX
         # guard failure: rebuild a complete MIFrame stack
+        debug_start('jit-tracing')
+        self.staticdata.profiler.start_tracing()
         self.in_recursion = -1 # always one portal around
-        inputargs_and_holes = self.cpu.make_boxes_from_latest_values(
-                                                                 resumedescr)
-        must_compile = resumedescr.must_compile(self.staticdata,
-                                                inputargs_and_holes)
-        if must_compile:
-            debug_start('jit-tracing')
-            self.history = history.History()
-            self.history.inputargs = [box for box in inputargs_and_holes if box]
-            self.staticdata.profiler.start_tracing()
-        else:
-            debug_start('jit-blackhole')
-            self.staticdata.profiler.start_blackhole()
-            self.history = None   # this means that is_blackholing() is true
-        self.rebuild_state_after_failure(resumedescr, inputargs_and_holes)
+        self.history = history.History()
+        inputargs_and_holes = self.rebuild_state_after_failure(resumedescr)
+        self.history.inputargs = [box for box in inputargs_and_holes if box]
 
     def initialize_virtualizable(self, original_boxes):
         vinfo = self.staticdata.virtualizable_info
@@ -1834,12 +1823,15 @@ class MetaInterp(object):
     def assert_no_exception(self):
         assert not self.last_exc_value_box
 
-    def rebuild_state_after_failure(self, resumedescr, newboxes):
+    def rebuild_state_after_failure(self, resumedescr):
         vinfo = self.staticdata.virtualizable_info
         self.framestack = []
         expect_virtualizable = vinfo is not None
-        virtualizable_boxes, virtualref_boxes = resume.rebuild_from_resumedata(
-            self, newboxes, resumedescr, expect_virtualizable)
+        boxlists = resume.rebuild_from_resumedata(self, resumedescr,
+                                                  expect_virtualizable)
+        #inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists
+        inputargs_and_holes = boxlists    # XXX
+        virtualref_boxes = []             # XXX
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
         self.virtualref_boxes = virtualref_boxes
@@ -1854,7 +1846,7 @@ class MetaInterp(object):
         # boxes, in whichever direction is appropriate
         if expect_virtualizable:
             self.virtualizable_boxes = virtualizable_boxes
-            if self._already_allocated_resume_virtuals is not None:
+            if 0:  ## self._already_allocated_resume_virtuals is not None:
                 # resuming from a ResumeGuardForcedDescr: load the new values
                 # currently stored on the virtualizable fields
                 self.load_fields_from_virtualizable()
@@ -1866,13 +1858,14 @@ class MetaInterp(object):
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
             assert not virtualizable.vable_token
-            if self._already_allocated_resume_virtuals is not None:
+            if 0:  ## self._already_allocated_resume_virtuals is not None:
                 # resuming from a ResumeGuardForcedDescr: load the new values
                 # currently stored on the virtualizable fields
                 self.load_fields_from_virtualizable()
             else:
                 # normal case: fill the virtualizable with the local boxes
                 self.synchronize_virtualizable()
+        return inputargs_and_holes
 
     def check_synchronized_virtualizable(self):
         if not we_are_translated():

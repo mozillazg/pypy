@@ -85,11 +85,6 @@ class AbstractCPU(object):
         or from 'args' if it was a FINISH).  Returns a ptr or an obj."""
         raise NotImplementedError
 
-    def get_latest_value_kind(self, index):
-        """Return the kind (history.INT, REF or FLOAT) of the index'th
-        argument to the last executed operation."""
-        raise NotImplementedError
-
     def get_latest_value_count(self):
         """Return how many values are ready to be returned by
         get_latest_value_xxx()."""

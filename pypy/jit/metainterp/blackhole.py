@@ -61,6 +61,7 @@ class BlackholeInterpBuilder(object):
         self.setup_insns(asm.insns)
         self.setup_descrs(asm.descrs)
         self.metainterp_sd = metainterp_sd
+        self.num_interpreters = 0
         self._freeze_()
 
     def _freeze_(self):
@@ -234,7 +235,8 @@ class BlackholeInterpBuilder(object):
         if len(self.blackholeinterps) > 0:
             return self.blackholeinterps.pop()
         else:
-            return BlackholeInterpreter(self)
+            self.num_interpreters += 1
+            return BlackholeInterpreter(self, self.num_interpreters)
 
     def release_interp(self, interp):
         interp.cleanup_registers()
@@ -243,12 +245,13 @@ class BlackholeInterpBuilder(object):
 
 class BlackholeInterpreter(object):
 
-    def __init__(self, builder):
+    def __init__(self, builder, count_interpreter):
         self.builder            = builder
         self.cpu                = builder.cpu
         self.dispatch_loop      = builder.dispatch_loop
         self.descrs             = builder.descrs
         self.op_catch_exception = builder.op_catch_exception
+        self.count_interpreter  = count_interpreter
         #
         if we_are_translated():
             default_i = 0
@@ -262,6 +265,9 @@ class BlackholeInterpreter(object):
         self.registers_r = [default_r] * 256
         self.registers_f = [default_f] * 256
         self.jitcode = None
+
+    def __repr__(self):
+        return '<BHInterp #%d>' % self.count_interpreter
 
     def setposition(self, jitcode, position):
         if jitcode is not self.jitcode:
@@ -355,18 +361,6 @@ class BlackholeInterpreter(object):
             assert j >= 0
             registers[j] = constants[i]
             i -= 1
-
-    def follow_jump(self):
-        """Assuming that self.position points just after a bytecode
-        instruction that ends with a label, follow that label."""
-        code = self.jitcode.code
-        position = self.position - 2
-        assert position >= 0
-        if not we_are_translated():
-            assert position in self.jitcode._alllabels
-        labelvalue = ord(code[position]) | (ord(code[position+1])<<8)
-        assert labelvalue < len(code)
-        self.position = labelvalue
 
     # ----------
 
@@ -956,8 +950,7 @@ def resume_in_blackhole(metainterp_sd, resumedescr):
     # XXX virtualizable
     _prepare_resume_from_failure(blackholeinterp, resumedescr.guard_opnum)
     try:
-        blackholeinterp = _resume_mainloop(
-            metainterp_sd.blackholeinterpbuilder, blackholeinterp)
+        blackholeinterp = _resume_mainloop(blackholeinterp)
     finally:
         metainterp_sd.profiler.end_blackhole()
         debug_stop('jit-blackhole')
@@ -965,12 +958,12 @@ def resume_in_blackhole(metainterp_sd, resumedescr):
     # normally (in general we get a ContinueRunningNormally exception).
     _done_with_this_frame(blackholeinterp)
 
-def _resume_mainloop(blackholeinterpbuilder, blackholeinterp):
+def _resume_mainloop(blackholeinterp):
     while True:
         try:
             blackholeinterp.run()
         finally:
-            blackholeinterpbuilder.release_interp(blackholeinterp)
+            blackholeinterp.builder.release_interp(blackholeinterp)
         #...x.x.x...
         assert blackholeinterp.nextblackholeinterp is None  # XXX
         break
@@ -980,7 +973,8 @@ def _resume_mainloop(blackholeinterpbuilder, blackholeinterp):
 def _prepare_resume_from_failure(blackholeinterp, opnum):
     from pypy.jit.metainterp.resoperation import rop
     if opnum == rop.GUARD_TRUE:      # a goto_if_not_xxx that jumps only now
-        blackholeinterp.follow_jump()
+        blackholeinterp.position = blackholeinterp.jitcode.follow_jump(
+            blackholeinterp.position)
     elif opnum == rop.GUARD_FALSE:   # a goto_if_not that stops jumping
         pass
     else:
