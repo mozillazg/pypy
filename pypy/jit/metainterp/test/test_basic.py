@@ -636,10 +636,9 @@ class BasicTests:
         self.check_tree_loop_count(2)      # the loop and the entry path
         # we get:
         #    ENTER             - compile the new loop
-        #    ENTER (BlackHole) - leave
         #    ENTER             - compile the entry bridge
         #    ENTER             - compile the leaving path
-        self.check_enter_count(4)
+        self.check_enter_count(3)
 
     def test_bridge_from_interpreter_2(self):
         # one case for backend - computing of framesize on guard failure

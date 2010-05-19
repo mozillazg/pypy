@@ -10,6 +10,7 @@ from pypy.annotation import model as annmodel
 from pypy.jit.metainterp.history import (ConstInt, ConstPtr,
                                          BoxInt, BoxPtr, BoxObj, BoxFloat,
                                          REF, INT, FLOAT)
+from pypy.jit.codewriter import heaptracker
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.module.support import LLSupport, OOSupport
@@ -728,9 +729,8 @@ class Frame(object):
 
     def op_new_with_vtable(self, descr, vtable):
         assert descr is None
-        xxxxxxxxxxxx
-        size = get_class_size(self.memocast, vtable)
-        result = do_new(size)
+        descr = heaptracker.vtable2descr(self.cpu, vtable)
+        result = do_new(descr.ofs)
         value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, result)
         value.typeptr = cast_from_int(rclass.CLASSTYPE, vtable)
         return result

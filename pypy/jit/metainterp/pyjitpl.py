@@ -320,11 +320,9 @@ class MIFrame(object):
     @arguments("descr")
     def opimpl_new_with_vtable(self, sizedescr):
         from pypy.jit.codewriter import heaptracker
-        from pypy.jit.metainterp.warmstate import wrap
         cpu = self.metainterp.cpu
         cls = heaptracker.descr2vtable(cpu, sizedescr)
-        clsbox = wrap(cpu, cls, in_const_box=True)
-        return self.execute(rop.NEW_WITH_VTABLE, clsbox)
+        return self.execute(rop.NEW_WITH_VTABLE, ConstInt(cls))
 
     @FixME  #arguments("box")
     def opimpl_runtimenew(self, classbox):

@@ -154,9 +154,7 @@ def do_setfield_raw(metainterp, structbox, itembox, fielddescr):
 def exec_new_with_vtable(cpu, clsbox):
     from pypy.jit.codewriter import heaptracker
     vtable = clsbox.getint()
-    vtableadr = llmemory.cast_int_to_adr(vtable)
-    vtableptr = llmemory.cast_adr_to_ptr(vtableadr, heaptracker.VTABLETYPE)
-    descr = heaptracker.vtable2descr(cpu, vtableptr)
+    descr = heaptracker.vtable2descr(cpu, vtable)
     return cpu.bh_new_with_vtable(descr, vtable)
 
 def do_new_with_vtable(metainterp, clsbox):
