@@ -3,7 +3,7 @@ from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.jit.codewriter.jtransform import Transformer
 from pypy.jit.metainterp.history import getkind
-from pypy.rpython.lltypesystem import lltype, rclass, rstr
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.translator.unsimplify import varoftype
 from pypy.jit.codewriter import heaptracker
 
@@ -338,7 +338,8 @@ def test_malloc_new_with_vtable():
     assert op1.opname == 'new_with_vtable'
     assert op1.args == [('sizedescr', S)]
     #assert heaptracker.descr2vtable(cpu, op1.args[0]) == vtable [type check]
-    assert heaptracker.vtable2descr(cpu, vtable) == op1.args[0]
+    vtable_int = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable))
+    assert heaptracker.vtable2descr(cpu, vtable_int) == op1.args[0]
 
 def test_malloc_new_with_destructor():
     vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
