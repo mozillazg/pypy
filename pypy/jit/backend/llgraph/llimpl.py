@@ -554,7 +554,11 @@ class Frame(object):
         except AttributeError:
             try:
                 impl = globals()['do_' + opname.lower()]  # do_arraylen_gc etc.
-                op = staticmethod(impl)
+                def op(self, descr, *args):
+                    if descr is None:
+                        return impl(*args)
+                    else:
+                        return impl(descr, *args)
             except KeyError:
                 op = cls._make_impl_from_blackhole_interp(opname)
         cls.OPHANDLERS[opnum] = op
@@ -1181,6 +1185,9 @@ class GuardFailed(Exception):
 
 # ____________________________________________________________
 
+
+def do_same_as(x):
+    return x
 
 def do_arraylen_gc(arraydescr, array):
     array = array._obj.container
