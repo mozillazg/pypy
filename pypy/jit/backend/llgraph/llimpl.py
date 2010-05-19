@@ -766,6 +766,8 @@ class Frame(object):
             raise NotImplementedError
 
     def op_call(self, calldescr, func, *args):
+        global _last_exception
+        assert _last_exception is None, "exception left behind"
         assert _call_args_i == _call_args_r == _call_args_f == []
         for x in args:
             T = lltype.typeOf(x)
@@ -777,7 +779,15 @@ class Frame(object):
                 _call_args_f.append(x)
             else:
                 raise TypeError(x)
-        return _do_call_common(func)
+        try:
+            return _do_call_common(func)
+        except LLException, lle:
+            _last_exception = lle
+            d = {'v': None,
+                 REF: lltype.nullptr(llmemory.GCREF.TO),
+                 INT: 0,
+                 FLOAT: 0.0}
+            return d[calldescr.typeinfo]
 
     op_call_pure = op_call
 
@@ -1088,55 +1098,38 @@ def frame_clear_latest_values(frame):
 
 _last_exception = None
 
-def get_exception():
-    if _last_exception:
-        return llmemory.cast_ptr_to_adr(_last_exception.args[0])
-    else:
-        return llmemory.NULL
-
-def get_exc_value():
-    if _last_exception:
-        return lltype.cast_opaque_ptr(llmemory.GCREF, _last_exception.args[1])
+def grab_exc_value():
+    global _last_exception
+    if _last_exception is not None:
+        result = _last_exception.args[1]
+        _last_exception = None
+        return  lltype.cast_opaque_ptr(llmemory.GCREF, result)
     else:
         return lltype.nullptr(llmemory.GCREF.TO)
 
-def clear_exception():
-    global _last_exception
-    _last_exception = None
+##_pseudo_exceptions = {}
 
-_pseudo_exceptions = {}
+##def _get_error(Class):
+##    if _llinterp.typer is not None:
+##        llframe = _llinterp.frame_class(None, None, _llinterp)
+##        try:
+##            llframe.make_llexception(Class())
+##        except LLException, e:
+##            return e
+##        else:
+##            assert 0, "should have raised"
+##    else:
+##        # for tests, a random emulated ll_inst will do
+##        if Class not in _pseudo_exceptions:
+##            ll_inst = lltype.malloc(rclass.OBJECT, zero=True)
+##            ll_inst.typeptr = lltype.malloc(rclass.OBJECT_VTABLE,
+##                                            immortal=True)
+##            _pseudo_exceptions[Class] = LLException(ll_inst.typeptr, ll_inst)
+##        return _pseudo_exceptions[Class]
 
-def _get_error(Class):
-    if _llinterp.typer is not None:
-        llframe = _llinterp.frame_class(None, None, _llinterp)
-        try:
-            llframe.make_llexception(Class())
-        except LLException, e:
-            return e
-        else:
-            assert 0, "should have raised"
-    else:
-        # for tests, a random emulated ll_inst will do
-        if Class not in _pseudo_exceptions:
-            ll_inst = lltype.malloc(rclass.OBJECT, zero=True)
-            ll_inst.typeptr = lltype.malloc(rclass.OBJECT_VTABLE,
-                                            immortal=True)
-            _pseudo_exceptions[Class] = LLException(ll_inst.typeptr, ll_inst)
-        return _pseudo_exceptions[Class]
-
-def get_overflow_error():
-    return llmemory.cast_ptr_to_adr(_get_error(OverflowError).args[0])
-
-def get_overflow_error_value():
-    return lltype.cast_opaque_ptr(llmemory.GCREF,
-                                  _get_error(OverflowError).args[1])
-
-def get_zero_division_error():
-    return llmemory.cast_ptr_to_adr(_get_error(ZeroDivisionError).args[0])
-
-def get_zero_division_error_value():
-    return lltype.cast_opaque_ptr(llmemory.GCREF,
-                                  _get_error(ZeroDivisionError).args[1])
+##def get_overflow_error_value():
+##    return lltype.cast_opaque_ptr(llmemory.GCREF,
+##                                  _get_error(OverflowError).args[1])
 
 def force(opaque_frame):
     frame = _from_opaque(opaque_frame)
@@ -1513,13 +1506,7 @@ setannotation(frame_int_getvalue, annmodel.SomeInteger())
 setannotation(frame_ptr_getvalue, annmodel.SomePtr(llmemory.GCREF))
 setannotation(frame_float_getvalue, annmodel.SomeFloat())
 
-setannotation(get_exception, annmodel.SomeAddress())
-setannotation(get_exc_value, annmodel.SomePtr(llmemory.GCREF))
-setannotation(clear_exception, annmodel.s_None)
-setannotation(get_overflow_error, annmodel.SomeAddress())
-setannotation(get_overflow_error_value, annmodel.SomePtr(llmemory.GCREF))
-setannotation(get_zero_division_error, annmodel.SomeAddress())
-setannotation(get_zero_division_error_value, annmodel.SomePtr(llmemory.GCREF))
+setannotation(grab_exc_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, annmodel.SomeInteger())
 setannotation(get_forced_token_frame, s_Frame)
 setannotation(get_frame_forced_token, annmodel.SomeAddress())

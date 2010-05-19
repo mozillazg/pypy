@@ -32,21 +32,19 @@ def signedord(c):
 
 NULL = lltype.nullptr(llmemory.GCREF.TO)
 
-def get_standard_error_llexception(rtyper, Class):
+def _get_standard_error(rtyper, Class):
     exdata = rtyper.getexceptiondata()
     clsdef = rtyper.annotator.bookkeeper.getuniqueclassdef(Class)
     evalue = exdata.get_standard_ll_exc_instance(rtyper, clsdef)
-    etype = rclass.ll_type(evalue)
-    return LLException(etype, evalue)
+    return evalue
 
 def get_llexception(cpu, e):
     if we_are_translated():
         return XXX(e)
     if isinstance(e, LLException):
-        return e    # ok
+        return e.args[1]    # ok
     if isinstance(e, OverflowError):
-        return get_standard_error_llexception(cpu.rtyper,
-                                              OverflowError)
+        return _get_standard_error(cpu.rtyper, OverflowError)
     raise   # leave other exceptions to be propagated
 
 # ____________________________________________________________
@@ -180,7 +178,7 @@ class BlackholeInterpBuilder(object):
                     print '-> %s!' % (e.__class__.__name__,)
                 if resulttype == 'i' or resulttype == 'r' or resulttype == 'f':
                     position += 1
-                self.exception_pc = position
+                self.position = position
                 raise
 
             if verbose and not we_are_translated():
@@ -291,21 +289,21 @@ class BlackholeInterpreter(object):
         self.registers_f[index] = value
 
     def run(self):
-        code = self.jitcode.code
-        position = self.position
         while True:
             try:
-                self.dispatch_loop(self, code, position)
+                self.dispatch_loop(self, self.jitcode.code, self.position)
             except LeaveFrame:
                 break
             except Exception, e:
                 e = get_llexception(self.cpu, e)
-                position = self.handle_exception_in_frame(e, code)
+                self.handle_exception_in_frame(e)
 
     def get_result_i(self):
+        assert self._return_type == 'i'
         return self.tmpreg_i
 
     def get_result_r(self):
+        assert self._return_type == 'r'
         result = self.tmpreg_r
         if we_are_translated():
             self.tmpreg_r = NULL
@@ -314,14 +312,18 @@ class BlackholeInterpreter(object):
         return result
 
     def get_result_f(self):
+        assert self._return_type == 'f'
         return self.tmpreg_f
+
+    def get_result_v(self):
+        assert self._return_type == 'v'
 
     def _get_result_anytype(self):
         "NOT_RPYTHON"
-        if self._return_type == 'int': return self.get_result_i()
-        if self._return_type == 'ref': return self.get_result_r()
-        if self._return_type == 'float': return self.get_result_f()
-        if self._return_type == 'void': return None
+        if self._return_type == 'i': return self.get_result_i()
+        if self._return_type == 'r': return self.get_result_r()
+        if self._return_type == 'f': return self.get_result_f()
+        if self._return_type == 'v': return None
         raise ValueError(self._return_type)
 
     def cleanup_registers(self):
@@ -332,21 +334,24 @@ class BlackholeInterpreter(object):
             self.registers_r[i] = NULL
         self.exception_last_value = None
 
-    def handle_exception_in_frame(self, e, code):
+    def handle_exception_in_frame(self, e):
         # This frame raises an exception.  First try to see if
         # the exception is handled in the frame itself.
-        position = self.exception_pc    # <-- just after the insn that raised
+        code = self.jitcode.code
+        position = self.position
         opcode = ord(code[position])
         if opcode != self.op_catch_exception:
             # no 'catch_exception' insn follows: just reraise
-            raise Exception, e
+            if we_are_translated():
+                raise Exception, e
+            else:
+                etype = rclass.ll_type(e)
+                raise LLException(etype, e)
         else:
             # else store the exception on 'self', and jump to the handler
-            if not we_are_translated():     # get the lltyped exception
-                e = e.args[1]               #   object out of the LLException
             self.exception_last_value = e
             target = ord(code[position+1]) | (ord(code[position+2])<<8)
-            return target
+            self.position = target
 
     # XXX must be specialized
     def copy_constants(self, registers, constants):
@@ -586,28 +591,24 @@ class BlackholeInterpreter(object):
     @arguments("self", "i")
     def bhimpl_int_return(self, a):
         self.tmpreg_i = a
-        if not we_are_translated():
-            self._return_type = "int"
+        self._return_type = 'i'
         raise LeaveFrame
 
     @arguments("self", "r")
     def bhimpl_ref_return(self, a):
         self.tmpreg_r = a
-        if not we_are_translated():
-            self._return_type = "ref"
+        self._return_type = 'r'
         raise LeaveFrame
 
     @arguments("self", "f")
     def bhimpl_float_return(self, a):
         self.tmpreg_f = a
-        if not we_are_translated():
-            self._return_type = "float"
+        self._return_type = 'f'
         raise LeaveFrame
 
     @arguments("self")
     def bhimpl_void_return(self):
-        if not we_are_translated():
-            self._return_type = "void"
+        self._return_type = 'v'
         raise LeaveFrame
 
     @arguments("i", "L", "pc", returns="L")
@@ -935,6 +936,80 @@ class BlackholeInterpreter(object):
     def bhimpl_unicodesetitem(cpu, unicode, index, newchr):
         cpu.bh_unicodesetitem(unicode, index, newchr)
 
+    # ----------
+    # helpers to resume running in blackhole mode when a guard failed
+
+    def _resume_mainloop(self, current_exc):
+        try:
+            # if there is a current exception, raise it now
+            # (it may be caught by a catch_operation in this frame)
+            if current_exc:
+                self.handle_exception_in_frame(current_exc)
+            # unless the call above raised again the exception,
+            # we now proceed to interpret the bytecode in this frame
+            self.run()
+        #
+        except Exception, e:
+            # if we get an exception, return it to the caller frame
+            current_exc = get_llexception(self.cpu, e)
+            if not self.nextblackholeinterp:
+                self._exit_frame_with_exception(current_exc)
+            return current_exc
+        #
+        # pass the frame's return value to the caller
+        caller = self.nextblackholeinterp
+        if not caller:
+            self._done_with_this_frame()
+        kind = self._return_type
+        if kind == 'i':
+            caller._setup_return_value_i(self.get_result_i())
+        elif kind == 'r':
+            caller._setup_return_value_r(self.get_result_r())
+        elif kind == 'f':
+            caller._setup_return_value_f(self.get_result_f())
+        else:
+            assert kind == 'v'
+        return NULL
+
+    def _prepare_resume_from_failure(self, opnum):
+        from pypy.jit.metainterp.resoperation import rop
+        if opnum == rop.GUARD_TRUE:     # a goto_if_not_xxx that jumps only now
+            self.position = self.jitcode.follow_jump(self.position)
+        elif opnum == rop.GUARD_FALSE:  # a goto_if_not that stops jumping
+            pass
+        elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
+            pass
+        else:
+            raise NotImplementedError(opnum)
+
+    # connect the return of values from the called frame to the
+    # 'xxx_call_yyy' instructions from the caller frame
+    def _setup_return_value_i(self, result):
+        self.registers_i[ord(self.jitcode.code[position-1])] = result
+    def _setup_return_value_r(self, result):
+        self.registers_r[ord(self.jitcode.code[position-1])] = result
+    def _setup_return_value_f(self, result):
+        self.registers_f[ord(self.jitcode.code[position-1])] = result
+
+    def _exit_frame_with_exception(self, e):
+        xxx
+
+    def _done_with_this_frame(self):
+        # rare case: we only get there if the blackhole interps all returned
+        # normally (in general we get a ContinueRunningNormally exception).
+        sd = self.builder.metainterp_sd
+        if sd.result_type == 'void':
+            self.get_result_v()
+            raise sd.DoneWithThisFrameVoid()
+        elif sd.result_type == 'int':
+            raise sd.DoneWithThisFrameInt(self.get_result_i())
+        elif sd.result_type == 'ref':
+            raise sd.DoneWithThisFrameRef(self.get_result_r())
+        elif sd.result_type == 'float':
+            raise sd.DoneWithThisFrameFloat(self.get_result_f())
+        else:
+            assert False
+
 # ____________________________________________________________
 
 def resume_in_blackhole(metainterp_sd, resumedescr):
@@ -947,47 +1022,13 @@ def resume_in_blackhole(metainterp_sd, resumedescr):
         False)  # XXX
     # XXX virtualrefs
     # XXX virtualizable
-    _prepare_resume_from_failure(blackholeinterp, resumedescr.guard_opnum)
+    blackholeinterp._prepare_resume_from_failure(resumedescr.guard_opnum)
     try:
-        blackholeinterp = _resume_mainloop(blackholeinterp)
+        current_exc = blackholeinterp.cpu.grab_exc_value()
+        current_exc = lltype.cast_opaque_ptr(rclass.OBJECTPTR, current_exc)
+        while True:
+            current_exc = blackholeinterp._resume_mainloop(current_exc)
+            blackholeinterp = blackholeinterp.nextblackholeinterp
     finally:
         metainterp_sd.profiler.end_blackhole()
         debug_stop('jit-blackhole')
-    # rare case: we only get there if the blackhole interps all returned
-    # normally (in general we get a ContinueRunningNormally exception).
-    _done_with_this_frame(blackholeinterp)
-
-def _resume_mainloop(blackholeinterp):
-    while True:
-        try:
-            blackholeinterp.run()
-        finally:
-            blackholeinterp.builder.release_interp(blackholeinterp)
-        #...x.x.x...
-        assert blackholeinterp.nextblackholeinterp is None  # XXX
-        break
-        xxx
-    return blackholeinterp
-
-def _prepare_resume_from_failure(blackholeinterp, opnum):
-    from pypy.jit.metainterp.resoperation import rop
-    if opnum == rop.GUARD_TRUE:      # a goto_if_not_xxx that jumps only now
-        blackholeinterp.position = blackholeinterp.jitcode.follow_jump(
-            blackholeinterp.position)
-    elif opnum == rop.GUARD_FALSE:   # a goto_if_not that stops jumping
-        pass
-    else:
-        raise NotImplementedError(opnum)
-
-def _done_with_this_frame(blackholeinterp):
-    sd = blackholeinterp.builder.metainterp_sd
-    if sd.result_type == 'void':
-        raise sd.DoneWithThisFrameVoid()
-    elif sd.result_type == 'int':
-        raise sd.DoneWithThisFrameInt(blackholeinterp.get_result_i())
-    elif sd.result_type == 'ref':
-        raise sd.DoneWithThisFrameRef(blackholeinterp.get_result_r())
-    elif sd.result_type == 'float':
-        raise sd.DoneWithThisFrameFloat(blackholeinterp.get_result_f())
-    else:
-        assert False
