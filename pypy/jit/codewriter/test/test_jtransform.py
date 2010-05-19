@@ -45,7 +45,15 @@ class FakeRegularCallControl:
         assert graph == 'somegraph'
         return 'somejitcode'
 
-class FakeIndirectCallControl:
+class FakeResidualIndirectCallControl:
+    def guess_call_kind(self, op):
+        return 'residual'
+    def getcalldescr(self, op):
+        return 'calldescr'
+    def calldescr_canraise(self, calldescr):
+        return True
+
+class FakeRegularIndirectCallControl:
     def guess_call_kind(self, op):
         return 'regular'
     def graphs_from(self, op):
@@ -178,7 +186,8 @@ def test_calls():
               else: expectedkind = 'r'          # only references
               yield residual_call_test, ARGS, RESTYPE, expectedkind
               yield direct_call_test, ARGS, RESTYPE, expectedkind
-              yield indirect_call_test, ARGS, RESTYPE, expectedkind
+              yield indirect_residual_call_test, ARGS, RESTYPE, expectedkind
+              yield indirect_regular_call_test, ARGS, RESTYPE, expectedkind
 
 def get_direct_call_op(argtypes, restype):
     FUNC = lltype.FuncType(argtypes, restype)
@@ -225,12 +234,14 @@ def direct_call_test(argtypes, restype, expectedkind):
         kind = getkind(v.concretetype)
         assert kind == 'void' or kind[0] in expectedkind
 
-def indirect_call_test(argtypes, restype, expectedkind):
+def indirect_residual_call_test(argtypes, restype, expectedkind):
+    # an indirect call that is residual in all cases is very similar to
+    # a residual direct call
     op = get_direct_call_op(argtypes, restype)
     op.opname = 'indirect_call'
     op.args[0] = varoftype(op.args[0].concretetype)
     op.args.append(Constant(['somegraph1', 'somegraph2'], lltype.Void))
-    tr = Transformer(FakeCPU(), FakeIndirectCallControl())
+    tr = Transformer(FakeCPU(), FakeResidualIndirectCallControl())
     tr.graph = 'someinitialgraph'
     op1 = tr.rewrite_operation(op)
     reskind = getkind(restype)[0]
@@ -238,12 +249,43 @@ def indirect_call_test(argtypes, restype, expectedkind):
     assert op1.result == op.result
     assert op1.args[0] == op.args[0]
     assert op1.args[1] == 'calldescr'
+    assert len(op1.args) == 2 + len(expectedkind)
+    for sublist, kind1 in zip(op1.args[2:], expectedkind):
+        assert sublist.kind.startswith(kind1)
+        assert list(sublist) == [v for v in op.args[1:]
+                                 if getkind(v.concretetype)==sublist.kind]
+    for v in op.args[1:]:
+        kind = getkind(v.concretetype)
+        assert kind == 'void' or kind[0] in expectedkind
+
+def indirect_regular_call_test(argtypes, restype, expectedkind):
+    # a regular indirect call is preceded by a guard_value on the
+    # function address, so that pyjitpl can know which jitcode to follow
+    from pypy.jit.codewriter.flatten import IndirectCallTargets
+    op = get_direct_call_op(argtypes, restype)
+    op.opname = 'indirect_call'
+    op.args[0] = varoftype(op.args[0].concretetype)
+    op.args.append(Constant(['somegraph1', 'somegraph2'], lltype.Void))
+    tr = Transformer(FakeCPU(), FakeRegularIndirectCallControl())
+    tr.graph = 'someinitialgraph'
+    op1 = tr.rewrite_operation(op)
+    assert type(op1) is list
+    op0, op1 = op1
+    assert op0.opname == 'G_int_guard_value'
+    assert op0.args[0] == op.args[0]
+    assert op0.result is None
+    reskind = getkind(restype)[0]
+    assert op1.opname == 'G_residual_call_%s_%s' % (expectedkind, reskind)
+    assert op1.result == op.result
+    assert op1.args[0] == op.args[0]
+    assert op1.args[1] == 'calldescr'
+    assert isinstance(op1.args[2], IndirectCallTargets)
     assert op1.args[2].lst == ['somejitcode1', 'somejitcode2']
     assert len(op1.args) == 3 + len(expectedkind)
     for sublist, kind1 in zip(op1.args[3:], expectedkind):
         assert sublist.kind.startswith(kind1)
         assert list(sublist) == [v for v in op.args[1:]
-                                 if getkind(v.concretetype) == sublist.kind]
+                                 if getkind(v.concretetype)==sublist.kind]
     for v in op.args[1:]:
         kind = getkind(v.concretetype)
         assert kind == 'void' or kind[0] in expectedkind
@@ -532,11 +574,13 @@ def test_promote_1():
                         [v1, Constant({'promote': True}, lltype.Void)],
                         v2)
     oplist = Transformer().rewrite_operation(op)
-    assert len(oplist) == 2
-    assert oplist[1] is None
+    assert len(oplist) == 3
     assert oplist[0].opname == 'G_int_guard_value'
     assert oplist[0].args == [v1]
     assert oplist[0].result is None
+    assert oplist[1].opname == 'keepalive'
+    assert oplist[1].args == [v1]
+    assert oplist[2] is None
 
 def test_promote_2():
     v1 = varoftype(lltype.Signed)
@@ -550,8 +594,10 @@ def test_promote_2():
     block.operations = [op]
     block.closeblock(Link([v2], returnblock))
     Transformer().optimize_block(block)
-    assert len(block.operations) == 1
+    assert len(block.operations) == 2
     assert block.operations[0].opname == 'G_int_guard_value'
     assert block.operations[0].args == [v1]
     assert block.operations[0].result is None
+    assert block.operations[1].opname == 'keepalive'
+    assert block.operations[1].args == [v1]
     assert block.exits[0].args == [v1]
