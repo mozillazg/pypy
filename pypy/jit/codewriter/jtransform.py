@@ -444,8 +444,10 @@ class Transformer(object):
 
     def handle_getfield_typeptr(self, op):
         # note: the 'G_' prefix tells that the operation might generate
-        # a guard in pyjitpl (see liveness.py)
-        return SpaceOperation('G_guard_class', [op.args[0]], op.result)
+        # a guard in pyjitpl (see liveness.py).  The following 'keepalive'
+        # is needed to ensure that op.args[0] is restored on guard failure.
+        return [SpaceOperation('G_guard_class', [op.args[0]], op.result),
+                SpaceOperation('keepalive', [op.args[0]], None)]
 
     def rewrite_op_malloc(self, op):
         assert op.args[1].value == {'flavor': 'gc'}

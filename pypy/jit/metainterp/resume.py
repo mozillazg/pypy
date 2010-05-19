@@ -25,10 +25,10 @@ class Snapshot(object):
 class FrameInfo(object):
     __slots__ = ('prev', 'jitcode', 'pc')
 
-    def __init__(self, prev, frame):
+    def __init__(self, prev, jitcode, pc):
         self.prev = prev
-        self.jitcode = frame.jitcode
-        self.pc = frame.pc
+        self.jitcode = jitcode
+        self.pc = pc
 
 def _ensure_parent_resumedata(framestack, n):
     target = framestack[n]
@@ -38,18 +38,19 @@ def _ensure_parent_resumedata(framestack, n):
     back = framestack[n-1]
     target.parent_resumedata_frame_info_list = FrameInfo(
                                          back.parent_resumedata_frame_info_list,
-                                         back)
+                                         back.jitcode,
+                                         back.pc)
     target.parent_resumedata_snapshot = Snapshot(
                                          back.parent_resumedata_snapshot,
                                          back.get_list_of_active_boxes())
 
 def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
-                       storage):
+                       storage, pc):
     n = len(framestack)-1
     top = framestack[n]
     _ensure_parent_resumedata(framestack, n)
     frame_info_list = FrameInfo(top.parent_resumedata_frame_info_list,
-                                top)
+                                top.jitcode, pc)
     storage.rd_frame_info_list = frame_info_list
     snapshot = Snapshot(top.parent_resumedata_snapshot,
                         top.get_list_of_active_boxes())

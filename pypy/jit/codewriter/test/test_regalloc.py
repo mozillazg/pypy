@@ -186,3 +186,25 @@ class TestRegAlloc:
             L2:
             reraise
         """)
+
+    def test_regalloc_lists(self):
+        v1 = Variable(); v1.concretetype = lltype.Signed
+        v2 = Variable(); v2.concretetype = lltype.Signed
+        v3 = Variable(); v3.concretetype = lltype.Signed
+        v4 = Variable(); v4.concretetype = lltype.Signed
+        v5 = Variable(); v5.concretetype = lltype.Signed
+        block = Block([v1])
+        block.operations = [
+            SpaceOperation('int_add', [v1, Constant(1, lltype.Signed)], v2),
+            SpaceOperation('rescall', [ListOfKind('int', [v1, v2])], v5),
+            SpaceOperation('rescall', [ListOfKind('int', [v1, v2])], v3),
+            ]
+        graph = FunctionGraph('f', block, v4)
+        block.closeblock(Link([v3], graph.returnblock))
+        #
+        self.check_assembler(graph, """
+            int_add %i0, $1, %i1
+            rescall I[%i0, %i1], %i2
+            rescall I[%i0, %i1], %i0
+            int_return %i0
+        """)
