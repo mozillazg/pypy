@@ -760,10 +760,6 @@ class MIFrame(object):
 ##            'len', [builtin.len_func, box], 'int')
 ##        self.generate_guard(pc, "guard_len", box, [intbox])
 
-    @FixME  #arguments("box")
-    def opimpl_keepalive(self, box):
-        pass     # xxx?
-
     def verify_green_args(self, varargs):
         num_green_args = self.metainterp.staticdata.num_green_args
         for i in range(num_green_args):

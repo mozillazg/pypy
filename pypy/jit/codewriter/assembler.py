@@ -98,6 +98,12 @@ class Assembler(object):
                 self.get_liveness_info(insn, 'ref'),
                 self.get_liveness_info(insn, 'float'))
             return
+        if insn[0] == 'keepalive':
+            # The 'keepalive' instruction is useful when doing register
+            # allocation, to ensure that the register holding the value is
+            # not overwritten too early.  But it does not need to be
+            # present at all in the final code.
+            return
         startposition = len(self.code)
         self.code.append("temporary placeholder")
         #

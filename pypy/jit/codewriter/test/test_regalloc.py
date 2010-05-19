@@ -8,6 +8,7 @@ from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import c_last_exception
 from pypy.rpython.lltypesystem import lltype, rclass
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.objectmodel import keepalive_until_here
 
 
 class TestRegAlloc:

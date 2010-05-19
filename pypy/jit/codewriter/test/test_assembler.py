@@ -149,6 +149,13 @@ def test_assemble_indirect_call():
     assembler.assemble(ssarepr)
     assert assembler.indirectcalltargets == set(lst1).union(lst2)
 
+def test_assemble_keepalive():
+    ssarepr = SSARepr("test")
+    ssarepr.insns = [('keepalive', Register('ref', 2))]
+    assembler = Assembler()
+    jitcode = assembler.assemble(ssarepr)
+    assert jitcode.code == ""     # the keepalive is removed
+
 def test_num_regs():
     assembler = Assembler()
     ssarepr = SSARepr("test")
