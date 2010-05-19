@@ -895,7 +895,9 @@ class BasicTests:
             return obj.a
         res = self.interp_operations(fn, [1])
         assert res == 1
-        self.check_operations_history(guard_class=0, instanceof=0)
+        self.check_operations_history(guard_class=0)
+        if self.type_system == 'ootype':
+            self.check_operations_history(instanceof=0)
 
     def test_r_dict(self):
         from pypy.rlib.objectmodel import r_dict

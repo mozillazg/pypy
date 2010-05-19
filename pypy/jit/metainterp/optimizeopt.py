@@ -603,7 +603,8 @@ class Optimizer(object):
             else:
                 # all constant arguments: constant-fold away
                 argboxes = [self.get_constant_box(arg) for arg in op.args]
-                resbox = execute_nonspec(self.cpu, op.opnum, argboxes, op.descr)
+                resbox = execute_nonspec(self.cpu, None,
+                                         op.opnum, argboxes, op.descr)
                 self.make_constant(op.result, resbox.constbox())
                 return
 

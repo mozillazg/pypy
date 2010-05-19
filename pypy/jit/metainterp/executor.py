@@ -15,7 +15,7 @@ from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
 
 # ____________________________________________________________
 
-def do_call(metainterp, argboxes, descr):
+def do_call(cpu, metainterp, argboxes, descr):
     # count the number of arguments of the different types
     count_i = count_r = count_f = 0
     for i in range(1, len(argboxes)):
@@ -45,7 +45,6 @@ def do_call(metainterp, argboxes, descr):
             count_f += 1
     # get the function address as an integer
     func = argboxes[0].getint()
-    cpu = metainterp.cpu
     # do the call using the correct function from the cpu
     rettype = descr.get_return_type()
     if rettype == INT:
@@ -88,8 +87,7 @@ def do_call(metainterp, argboxes, descr):
 do_call_pure = do_call
 do_call_loopinvariant = do_call
 
-def do_getarrayitem_gc(metainterp, arraybox, indexbox, arraydescr):
-    cpu = metainterp.cpu
+def do_getarrayitem_gc(cpu, _, arraybox, indexbox, arraydescr):
     array = arraybox.getref_base()
     index = indexbox.getint()
     if arraydescr.is_array_of_pointers():
@@ -99,8 +97,7 @@ def do_getarrayitem_gc(metainterp, arraybox, indexbox, arraydescr):
     else:
         return BoxInt(cpu.bh_setarrayitem_gc_i(arraydescr, array, index))
 
-def do_setarrayitem_gc(metainterp, arraybox, indexbox, itembox, arraydescr):
-    cpu = metainterp.cpu
+def do_setarrayitem_gc(cpu, _, arraybox, indexbox, itembox, arraydescr):
     array = arraybox.getref_base()
     index = indexbox.getint()
     if arraydescr.is_array_of_pointers():
@@ -111,8 +108,7 @@ def do_setarrayitem_gc(metainterp, arraybox, indexbox, itembox, arraydescr):
     else:
         cpu.bh_setarrayitem_gc_i(arraydescr, array, index, itembox.getint())
 
-def do_getfield_gc(metainterp, structbox, fielddescr):
-    cpu = metainterp.cpu
+def do_getfield_gc(cpu, _, structbox, fielddescr):
     struct = structbox.getref_base()
     if fielddescr.is_pointer_field():
         return BoxPtr(cpu.bh_getfield_gc_r(struct, fielddescr))
@@ -121,8 +117,7 @@ def do_getfield_gc(metainterp, structbox, fielddescr):
     else:
         return BoxInt(cpu.bh_getfield_gc_i(struct, fielddescr))
 
-def do_getfield_raw(metainterp, structbox, fielddescr):
-    cpu = metainterp.cpu
+def do_getfield_raw(cpu, _, structbox, fielddescr):
     struct = structbox.getint()
     if fielddescr.is_pointer_field():
         return BoxPtr(cpu.bh_getfield_raw_r(struct, fielddescr))
@@ -131,8 +126,7 @@ def do_getfield_raw(metainterp, structbox, fielddescr):
     else:
         return BoxInt(cpu.bh_getfield_raw_i(struct, fielddescr))
 
-def do_setfield_gc(metainterp, structbox, itembox, fielddescr):
-    cpu = metainterp.cpu
+def do_setfield_gc(cpu, _, structbox, itembox, fielddescr):
     struct = structbox.getref_base()
     if fielddescr.is_pointer_field():
         cpu.bh_setfield_gc_r(struct, fielddescr, itembox.getref_base())
@@ -141,8 +135,7 @@ def do_setfield_gc(metainterp, structbox, itembox, fielddescr):
     else:
         cpu.bh_setfield_gc_i(struct, fielddescr, itembox.getint())
 
-def do_setfield_raw(metainterp, structbox, itembox, fielddescr):
-    cpu = metainterp.cpu
+def do_setfield_raw(cpu, _, structbox, itembox, fielddescr):
     struct = structbox.getint()
     if fielddescr.is_pointer_field():
         cpu.bh_setfield_raw_r(struct, fielddescr, itembox.getref_base())
@@ -157,11 +150,10 @@ def exec_new_with_vtable(cpu, clsbox):
     descr = heaptracker.vtable2descr(cpu, vtable)
     return cpu.bh_new_with_vtable(descr, vtable)
 
-def do_new_with_vtable(metainterp, clsbox):
-    cpu = metainterp.cpu
+def do_new_with_vtable(cpu, _, clsbox):
     return BoxPtr(exec_new_with_vtable(cpu, clsbox))
 
-def do_int_add_ovf(metainterp, box1, box2):
+def do_int_add_ovf(cpu, metainterp, box1, box2):
     a = box1.getint()
     b = box2.getint()
     try:
@@ -173,7 +165,7 @@ def do_int_add_ovf(metainterp, box1, box2):
         metainterp.execute_did_not_raise()
     return BoxInt(z)
 
-def do_int_sub_ovf(metainterp, box1, box2):
+def do_int_sub_ovf(cpu, metainterp, box1, box2):
     a = box1.getint()
     b = box2.getint()
     try:
@@ -185,7 +177,7 @@ def do_int_sub_ovf(metainterp, box1, box2):
         metainterp.execute_did_not_raise()
     return BoxInt(z)
 
-def do_int_mul_ovf(metainterp, box1, box2):
+def do_int_mul_ovf(cpu, metainterp, box1, box2):
     a = box1.getint()
     b = box2.getint()
     try:
@@ -196,6 +188,9 @@ def do_int_mul_ovf(metainterp, box1, box2):
     else:
         metainterp.execute_did_not_raise()
     return BoxInt(z)
+
+def do_same_as(cpu, _, box):
+    return box.clonebox()
 
 # ____________________________________________________________
 
@@ -285,11 +280,11 @@ def make_execute_function_with_boxes(name, func):
     argtypes = unrolling_iterable(func.argtypes)
     resulttype = func.resulttype
     #
-    def do(metainterp, *argboxes):
+    def do(cpu, _, *argboxes):
         newargs = ()
         for argtype in argtypes:
             if argtype == 'cpu':
-                value = metainterp.cpu
+                value = cpu
             elif argtype == 'd':
                 value = argboxes[-1]
                 assert isinstance(value, AbstractDescr)
@@ -334,7 +329,7 @@ def has_descr(opnum):
 has_descr._annspecialcase_ = 'specialize:memo'
 
 
-def execute(metainterp, opnum, descr, *argboxes):
+def execute(cpu, metainterp, opnum, descr, *argboxes):
     # only for opnums with a fixed arity
     if has_descr(opnum):
         check_descr(descr)
@@ -342,51 +337,50 @@ def execute(metainterp, opnum, descr, *argboxes):
     else:
         assert descr is None
     func = get_execute_function(opnum, len(argboxes))
-    return func(metainterp, *argboxes)     # note that the 'argboxes' tuple
-                                           # optionally ends with the descr
+    return func(cpu, metainterp, *argboxes)  # note that the 'argboxes' tuple
+                                             # optionally ends with the descr
 execute._annspecialcase_ = 'specialize:arg(1)'
 
-def execute_varargs(metainterp, opnum, argboxes, descr):
+def execute_varargs(cpu, metainterp, opnum, argboxes, descr):
     # only for opnums with a variable arity (calls, typically)
     check_descr(descr)
     func = get_execute_function(opnum, -1)
-    return func(metainterp, argboxes, descr)
+    return func(cpu, metainterp, argboxes, descr)
 execute_varargs._annspecialcase_ = 'specialize:arg(1)'
 
 
-def execute_nonspec(metainterp, opnum, argboxes, descr=None):
-    assert metainterp.__class__.__name__ == 'MetaInterp'   # XXX kill me
+def execute_nonspec(cpu, metainterp, opnum, argboxes, descr=None):
     arity = resoperation.oparity[opnum]
     assert arity == -1 or len(argboxes) == arity
     if resoperation.opwithdescr[opnum]:
         check_descr(descr)
         if arity == -1:
             func = get_execute_funclist(-1)[opnum]
-            return func(metainterp, argboxes, descr)
+            return func(cpu, metainterp, argboxes, descr)
         if arity == 0:
             func = get_execute_funclist(1)[opnum]
-            return func(metainterp, descr)
+            return func(cpu, metainterp, descr)
         if arity == 1:
             func = get_execute_funclist(2)[opnum]
-            return func(metainterp, argboxes[0], descr)
+            return func(cpu, metainterp, argboxes[0], descr)
         if arity == 2:
             func = get_execute_funclist(3)[opnum]
-            return func(metainterp, argboxes[0], argboxes[1], descr)
+            return func(cpu, metainterp, argboxes[0], argboxes[1], descr)
         if arity == 3:
             func = get_execute_funclist(4)[opnum]
-            return func(metainterp, argboxes[0], argboxes[1], argboxes[2],
+            return func(cpu, metainterp, argboxes[0], argboxes[1], argboxes[2],
                         descr)
     else:
         assert descr is None
         if arity == 1:
             func = get_execute_funclist(1)[opnum]
-            return func(metainterp, argboxes[0])
+            return func(cpu, metainterp, argboxes[0])
         if arity == 2:
             func = get_execute_funclist(2)[opnum]
-            return func(metainterp, argboxes[0], argboxes[1])
+            return func(cpu, metainterp, argboxes[0], argboxes[1])
         if arity == 3:
             func = get_execute_funclist(3)[opnum]
-            return func(metainterp, argboxes[0], argboxes[1], argboxes[2])
+            return func(cpu, metainterp, argboxes[0], argboxes[1], argboxes[2])
     raise NotImplementedError
 
 
