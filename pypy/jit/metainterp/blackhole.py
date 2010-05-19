@@ -899,7 +899,6 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "d", returns="r")
     def bhimpl_new_with_vtable(cpu, descr):
         vtable = heaptracker.descr2vtable(cpu, descr)
-        vtable = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable))
         return cpu.bh_new_with_vtable(descr, vtable)
 
     @arguments("cpu", "r", returns="i")

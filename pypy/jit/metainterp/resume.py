@@ -715,7 +715,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
 
     def allocate_with_vtable(self, known_class):
         from pypy.jit.metainterp.executor import exec_new_with_vtable
-        return exec_new_with_vtable(self.cpu, self.known_class)
+        return exec_new_with_vtable(self.cpu, known_class)
 
     def setfield(self, descr, struct, fieldnum):
         if descr.is_pointer_field():

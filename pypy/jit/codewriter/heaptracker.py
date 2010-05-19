@@ -1,4 +1,4 @@
-from pypy.rpython.lltypesystem import lltype, rclass
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rlib.objectmodel import we_are_translated
 
 
@@ -52,7 +52,9 @@ def register_known_gctype(cpu, vtable, STRUCT):
         sizedescr._corresponding_vtable = vtable
 
 def vtable2descr(cpu, vtable):
-    assert lltype.typeOf(vtable) == VTABLETYPE
+    assert lltype.typeOf(vtable) is lltype.Signed
+    vtable = llmemory.cast_int_to_adr(vtable)
+    vtable = llmemory.cast_adr_to_ptr(vtable, VTABLETYPE)
     if we_are_translated():
         # Build the dict {vtable: sizedescr} at runtime.
         # This is necessary because the 'vtables' are just pointers to
@@ -67,4 +69,7 @@ def vtable2descr(cpu, vtable):
 def descr2vtable(cpu, descr):
     from pypy.jit.metainterp import history
     assert isinstance(descr, history.AbstractDescr)
-    return descr._corresponding_vtable
+    vtable = descr._corresponding_vtable
+    vtable = llmemory.cast_ptr_to_adr(vtable)
+    vtable = llmemory.cast_adr_to_int(vtable)
+    return vtable
