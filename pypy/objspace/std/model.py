@@ -26,6 +26,7 @@ option_to_typename = {
                         "rangeobject.W_RangeIterObject"],
     "withtproxy" : ["proxyobject.W_TransparentList",
                     "proxyobject.W_TransparentDict"],
+    "withmultilist" : ["listmultiobject.W_ListMultiObject"],
 }
 
 class StdTypeModel:
@@ -69,6 +70,7 @@ class StdTypeModel:
         from pypy.objspace.std import smallintobject
         from pypy.objspace.std import tupleobject
         from pypy.objspace.std import listobject
+        from pypy.objspace.std import listmultiobject
         from pypy.objspace.std import dictmultiobject
         from pypy.objspace.std import stringobject
         from pypy.objspace.std import ropeobject

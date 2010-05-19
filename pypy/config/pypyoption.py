@@ -217,6 +217,8 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         BoolOption("withropeunicode", "use ropes for the unicode implementation",
                    default=False,
                    requires=[("objspace.std.withrope", True)]),
+        BoolOption("withmultilist", "use multilist implementation instead"
+                                    " of normal list", default=False),
 
         BoolOption("withcelldict",
                    "use dictionaries that are optimized for being used as module dicts",
