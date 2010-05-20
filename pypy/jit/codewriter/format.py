@@ -56,9 +56,16 @@ def format_assembler(ssarepr):
         else:
             print >> output, asm[0],
             if len(asm) > 1:
-                lst = map(repr, asm[1:])
-                if asm[0] == '-live-': lst.sort()
-                print >> output, ', '.join(lst)
+                if asm[-2] == '->':
+                    if len(asm) == 3:
+                        print >> output, '->', repr(asm[-1])
+                    else:
+                        lst = map(repr, asm[1:-2])
+                        print >> output, ', '.join(lst), '->', repr(asm[-1])
+                else:
+                    lst = map(repr, asm[1:])
+                    if asm[0] == '-live-': lst.sort()
+                    print >> output, ', '.join(lst)
             else:
                 print >> output
     res = output.getvalue()
@@ -71,23 +78,25 @@ def assert_format(ssarepr, expected):
     explines = expected.split("\n")
     for asm, exp in zip(asmlines, explines):
         if asm != exp:
-            print
-            print "Got:      " + asm
-            print "Expected: " + exp
+            msg = [""]
+            msg.append("Got:      " + asm)
+            msg.append("Expected: " + exp)
             lgt = 0
             for i in range(min(len(asm), len(exp))):
                 if exp[i] == asm[i]:
                     lgt += 1
                 else:
                     break
-            print "          " + " " * lgt + "^^^^"
-            raise AssertionError
+            msg.append("          " + " " * lgt + "^^^^")
+            raise AssertionError('\n'.join(msg))
     assert len(asmlines) == len(explines)
 
 def unformat_assembler(text, registers=None):
     # XXX limited to simple assembler right now
     #
     def unformat_arg(s):
+        if s.endswith(','):
+            s = s[:-1].rstrip()
         if s[0] == '%':
             try:
                 return registers[s]
@@ -104,6 +113,21 @@ def unformat_assembler(text, registers=None):
             return Constant(intvalue, lltype.Signed)
         elif s[0] == 'L':
             return TLabel(s)
+        elif s[0] in 'IRF' and s[1] == '[' and s[-1] == ']':
+            items = split_words(s[2:-1])
+            items = map(unformat_arg, items)
+            return ListOfKind({'I': 'int', 'R': 'ref', 'F': 'float'}[s[0]],
+                              items)
+        elif s.startswith('<SwitchDictDescr '):
+            assert s.endswith('>')
+            switchdict = SwitchDictDescr()
+            switchdict._labels = []
+            items = split_words(s[len('<SwitchDictDescr '):-1])
+            for item in items:
+                key, value = item.split(':')
+                value = value.rstrip(',')
+                switchdict._labels.append((int(key), TLabel(value)))
+            return switchdict
         else:
             raise AssertionError("unsupported argument: %r" % (s,))
     #
@@ -121,7 +145,33 @@ def unformat_assembler(text, registers=None):
                 opname, line = line.split(None, 1)
             except ValueError:
                 opname, line = line, ''
-            line = [s.strip() for s in line.split(',')]
-            insn = [opname] + [unformat_arg(s) for s in line if s]
+            words = list(split_words(line))
+            if '->' in words:
+                assert words.index('->') == len(words) - 2
+                extra = ['->', unformat_arg(words[-1])]
+                del words[-2:]
+            else:
+                extra = []
+            insn = [opname] + [unformat_arg(s) for s in words] + extra
             ssarepr.insns.append(tuple(insn))
     return ssarepr
+
+
+def split_words(line):
+    word = ''
+    nested = 0
+    for i, c in enumerate(line):
+        if c == ' ' and nested == 0:
+            if word:
+                yield word
+                word = ''
+        else:
+            word += c
+            if c in '<([':
+                nested += 1
+            if c in '])>' and line[i-2:i+2] != ' -> ':
+                nested -= 1
+                assert nested >= 0
+    if word:
+        yield word
+    assert nested == 0
