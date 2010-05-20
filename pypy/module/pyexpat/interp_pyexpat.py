@@ -17,9 +17,18 @@ if sys.platform == "win32":
     libname = 'libexpat'
 else:
     libname = 'expat'
+
+include_dirs = []
+library_dirs = []
+if sys.platform == "freebsd7":
+    include_dirs = ['/usr/local/include']
+    library_dirs = ['/usr/local/lib']
+
 eci = ExternalCompilationInfo(
     libraries=[libname],
     includes=['expat.h'],
+    include_dirs=include_dirs,
+    library_dirs=library_dirs,
     pre_include_bits=[
     '#define XML_COMBINED_VERSION' +
     ' (10000*XML_MAJOR_VERSION+100*XML_MINOR_VERSION+XML_MICRO_VERSION)',
