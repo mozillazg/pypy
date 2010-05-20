@@ -1,3 +1,6 @@
+from pypy.objspace.std.multimethod import FailedToImplement
+from pypy.interpreter.error import OperationError, operationerrfmt
+
 from pypy.interpreter.argument import Signature
 from pypy.objspace.std.model import registerimplementation, W_Object
 from pypy.interpreter import gateway, baseobjspace
