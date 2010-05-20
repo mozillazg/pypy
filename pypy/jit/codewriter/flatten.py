@@ -105,6 +105,7 @@ class GraphFlattener(object):
             return
         if block in self.seen_blocks:
             self.emitline("goto", TLabel(block))
+            self.emitline("---")
             return
         # inserting a goto not necessary, falling through
         self.seen_blocks[block] = True
@@ -130,6 +131,7 @@ class GraphFlattener(object):
             self.emitline("raise", self.getcolor(args[1]))
         else:
             raise Exception("?")
+        self.emitline("---")
 
     def make_link(self, link):
         if link.target.exits == ():
@@ -167,12 +169,13 @@ class GraphFlattener(object):
             # An exception block. See test_exc_exitswitch in test_flatten.py
             # for an example of what kind of code this makes.
             lastopname = block.operations[-1].opname
-            if lastopname == '-live-':
-                lastopname = block.operations[-2].opname
+            assert lastopname != '-live-'
             assert block.exits[0].exitcase is None # is this always True?
             #
             if not self._include_all_exc_links:
-                if not lastopname.startswith('G_'):  # cannot actually raise
+                if (len(block.operations) == 1 or
+                    block.operations[-2].opname != '-live-'):
+                    # cannot actually raise
                     self.make_link(block.exits[0])
                     return
             # 
@@ -182,7 +185,7 @@ class GraphFlattener(object):
             for link in block.exits[1:]:
                 if (link.exitcase is Exception or
                     (link.exitcase is OverflowError and
-                     lastopname.startswith('G_int_') and
+                     lastopname.startswith('int_') and
                      lastopname.endswith('_ovf'))):
                     # this link captures all exceptions
                     self.make_exception_link(link)
@@ -197,6 +200,7 @@ class GraphFlattener(object):
                 # no link captures all exceptions, so we have to put a reraise
                 # for the other exceptions
                 self.emitline("reraise")
+                self.emitline("---")
         #
         elif len(block.exits) == 2 and (
                 isinstance(block.exitswitch, tuple) or
@@ -230,7 +234,7 @@ class GraphFlattener(object):
                 if block.exits[-1].exitcase == 'default':
                     self.make_link(block.exits[-1])
                 else:
-                    self.emitline('unreachable')
+                    self.emitline("---")
             #
             switches = [link for link in block.exits
                         if link.exitcase != 'default']

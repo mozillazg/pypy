@@ -43,8 +43,9 @@ def _compute_liveness_must_continue(ssarepr, label2alive):
         if insn[0] == '-live-':
             assert prevalive is not None
             for x in insn[1:]:
-                prevalive.discard(x)
-            ssarepr.insns[i] = insn + tuple(prevalive)
+                if isinstance(x, Register):
+                    prevalive.add(x)
+            ssarepr.insns[i] = insn[:1] + tuple(prevalive)
             prevalive = None
             continue
 

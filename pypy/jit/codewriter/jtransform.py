@@ -198,15 +198,23 @@ class Transformer(object):
     rewrite_op_int_gt  = _rewrite_symmetric
     rewrite_op_int_ge  = _rewrite_symmetric
 
-    rewrite_op_G_int_add_ovf = _rewrite_symmetric
-    rewrite_op_G_int_mul_ovf = _rewrite_symmetric
-
     rewrite_op_float_add = _rewrite_symmetric
     rewrite_op_float_mul = _rewrite_symmetric
     rewrite_op_float_lt  = _rewrite_symmetric
     rewrite_op_float_le  = _rewrite_symmetric
     rewrite_op_float_gt  = _rewrite_symmetric
     rewrite_op_float_ge  = _rewrite_symmetric
+
+    def rewrite_op_int_add_ovf(self, op):
+        op0 = SpaceOperation('-live-', op.args[:], None)
+        op1 = self._rewrite_symmetric(op)
+        return [op0, op1]
+
+    rewrite_op_int_mul_ovf = rewrite_op_int_add_ovf
+
+    def rewrite_op_int_sub_ovf(self, op):
+        op0 = SpaceOperation('-live-', op.args[:], None)
+        return [op0, op]
 
     # ----------
     # Various kinds of calls
@@ -259,11 +267,11 @@ class Transformer(object):
         is calling a function that we don't want to JIT.  The initial args
         of 'residual_call_xxx' are the function to call, and its calldescr."""
         calldescr = self.callcontrol.getcalldescr(op)
+        op1 = self.rewrite_call(op, 'residual_call',
+                                [op.args[0], calldescr] + extraargs)
         if self.callcontrol.calldescr_canraise(calldescr):
-            name = 'G_residual_call'
-        else:
-            name = 'residual_call'
-        return self.rewrite_call(op, name, [op.args[0], calldescr] + extraargs)
+            op1 = [SpaceOperation('-live-', [], None), op1]
+        return op1
 
     def handle_regular_call(self, op):
         """A direct_call turns into the operation 'inline_call_xxx' if it
@@ -272,7 +280,9 @@ class Transformer(object):
         [targetgraph] = self.callcontrol.graphs_from(op)
         jitcode = self.callcontrol.get_jitcode(targetgraph,
                                                called_from=self.graph)
-        return self.rewrite_call(op, 'G_inline_call', [jitcode])
+        op0 = SpaceOperation('-live-', [], None)
+        op1 = self.rewrite_call(op, 'inline_call', [jitcode])
+        return [op0, op1]
 
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
@@ -288,9 +298,15 @@ class Transformer(object):
             jitcode = self.callcontrol.get_jitcode(targetgraph,
                                                    called_from=self.graph)
             lst.append(jitcode)
-        op0 = SpaceOperation('G_int_guard_value', [op.args[0]], None)
-        op1 = self.handle_residual_call(op, [IndirectCallTargets(lst)])
-        return [op0, op1]
+        op0 = SpaceOperation('-live-', [op.args[0]], None)
+        op1 = SpaceOperation('int_guard_value', [op.args[0]], None)
+        op2 = self.handle_residual_call(op, [IndirectCallTargets(lst)])
+        result = [op0, op1]
+        if isinstance(op2, list):
+            result += op2
+        else:
+            result.append(op2)
+        return result
 
     def _prepare_builtin_call(self, op, oopspec_name, args,
                               extra=None, extrakey=None):
@@ -329,15 +345,11 @@ class Transformer(object):
         if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
             assert op.args[0].concretetype != lltype.Ptr(rstr.STR)
             kind = getkind(op.args[0].concretetype)
-            # note: the 'G_' prefix tells that the operation might generate
-            # a guard in pyjitpl (see liveness.py).  The following 'keepalive'
-            # is needed to ensure that op.args[0] is restored on guard failure.
-            op1 = SpaceOperation('G_%s_guard_value' % kind,
-                                 [op.args[0]], None)
-            op2 = SpaceOperation('keepalive', [op.args[0]], None)
-            # this special return value forces op.result to be considered
+            op0 = SpaceOperation('-live-', [op.args[0]], None)
+            op1 = SpaceOperation('%s_guard_value' % kind, [op.args[0]], None)
+            # the special return value None forces op.result to be considered
             # equal to op.args[0]
-            return [op1, op2, None]
+            return [op0, op1, None]
         else:
             log.WARNING('ignoring hint %r at %r' % (hints, self.graph))
 
@@ -451,11 +463,9 @@ class Transformer(object):
                 op.args[0].concretetype.TO._hints.get('typeptr'))
 
     def handle_getfield_typeptr(self, op):
-        # note: the 'G_' prefix tells that the operation might generate
-        # a guard in pyjitpl (see liveness.py).  The following 'keepalive'
-        # is needed to ensure that op.args[0] is restored on guard failure.
-        return [SpaceOperation('G_guard_class', [op.args[0]], op.result),
-                SpaceOperation('keepalive', [op.args[0]], None)]
+        op0 = SpaceOperation('-live-', [op.args[0]], None)
+        op1 = SpaceOperation('guard_class', [op.args[0]], op.result)
+        return [op0, op1]
 
     def rewrite_op_malloc(self, op):
         assert op.args[1].value == {'flavor': 'gc'}
@@ -569,10 +579,7 @@ class Transformer(object):
                        ('cast_uint_to_float', 'cast_int_to_float'),
                        ('cast_float_to_uint', 'cast_float_to_int'),
 
-                       ('int_add_ovf',        'G_int_add_ovf'),
-                       ('int_add_nonneg_ovf', 'G_int_add_ovf'),
-                       ('int_sub_ovf',        'G_int_sub_ovf'),
-                       ('int_mul_ovf',        'G_int_mul_ovf'),
+                       ('int_add_nonneg_ovf', 'int_add_ovf'),
 
                        ('char_lt', 'int_lt'),
                        ('char_le', 'int_le'),
@@ -649,7 +656,8 @@ class Transformer(object):
         for v in op.args[2:2+num_green_args]:
             if isinstance(v, Variable) and v.concretetype is not lltype.Void:
                 kind = getkind(v.concretetype)
-                ops.append(SpaceOperation('G_%s_guard_value' % kind,
+                ops.append(SpaceOperation('-live-', [v], None))
+                ops.append(SpaceOperation('%s_guard_value' % kind,
                                           [v], None))
         args = (self.make_three_lists(op.args[2:2+num_green_args]) +
                 self.make_three_lists(op.args[2+num_green_args:]))
