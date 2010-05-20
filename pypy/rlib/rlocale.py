@@ -27,6 +27,8 @@ class CConfig:
         includes += ['windows.h']
     if sys.platform == 'darwin':
         include_dirs += ['/opt/local/include']
+    if sys.platform == 'freebsd7':
+        include_dirs += ['/usr/local/include']
     _compilation_info_ = ExternalCompilationInfo(
         includes=includes,
         include_dirs=include_dirs

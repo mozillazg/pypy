@@ -287,12 +287,12 @@ class LowLevelDatabase(object):
         if self.gctransformer:
             finish_callbacks.append(('GC transformer: finished helpers',
                                      self.gctransformer.finish_helpers))
-        if self.stacklesstransformer:
-            finish_callbacks.append(('Stackless transformer: finished',
-                                     self.stacklesstransformer.finish))
         if self.gctransformer:
             finish_callbacks.append(('GC transformer: finished tables',
                                      self.gctransformer.get_finish_tables()))
+        if self.stacklesstransformer:
+            finish_callbacks.append(('Stackless transformer: finished',
+                                     self.stacklesstransformer.finish))
 
         def add_dependencies(newdependencies):
             for value in newdependencies:
