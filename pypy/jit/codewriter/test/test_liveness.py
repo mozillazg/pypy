@@ -187,3 +187,14 @@ class TestFlatten:
             L2:
             int_return %i3
         """)
+
+    def test_already_some(self):
+        self.liveness_test("""
+            -live- %i0, $52, %i2, %i0
+            foo %i0, %i1, %i2
+            bar %i3, %i4, %i5
+        """, """
+            -live- %i0, %i2, %i3, %i4, %i5
+            foo %i0, %i1, %i2
+            bar %i3, %i4, %i5
+        """)
