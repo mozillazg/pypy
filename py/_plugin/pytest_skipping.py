@@ -82,9 +82,16 @@ Same as with skipif_ you can also selectively expect a failure
 depending on platform::
 
     @py.test.mark.xfail("sys.version_info >= (3,0)")
-
     def test_function():
         ...
+
+To not run a test and still regard it as "xfailed"::
+
+    @py.test.mark.xfail(..., run=False)
+
+To specify an explicit reason to be shown with xfailure detail::
+
+    @py.test.mark.xfail(..., reason="my reason")
 
 
 skipping on a missing import dependency
@@ -115,11 +122,14 @@ within test or setup code.  Example::
             py.test.skip("unsuppored configuration")
 
 """
-# XXX py.test.skip, .importorskip and the Skipped class 
-# should also be defined in this plugin, requires thought/changes
 
 import py
 
+def pytest_addoption(parser):
+    group = parser.getgroup("general")
+    group.addoption('--runxfail', 
+           action="store_true", dest="runxfail", default=False,
+           help="run tests even if they are marked xfail")
 
 class MarkEvaluator:
     def __init__(self, item, name):
@@ -161,27 +171,53 @@ class MarkEvaluator:
         
 
 def pytest_runtest_setup(item):
-    expr, result = evalexpression(item, 'skipif')
-    if result:
-        py.test.skip(expr)
+    if not isinstance(item, py.test.collect.Function):
+        return
+    evalskip = MarkEvaluator(item, 'skipif')
+    if evalskip.istrue():
+        py.test.skip(evalskip.getexplanation())
+    item._evalxfail = MarkEvaluator(item, 'xfail')
+    if not item.config.getvalue("runxfail"):
+        if item._evalxfail.istrue():
+            if not item._evalxfail.get('run', True):
+                py.test.skip("xfail")
 
 def pytest_runtest_makereport(__multicall__, item, call):
-    if call.when != "call":
+    if not isinstance(item, py.test.collect.Function):
         return
-    expr, result = evalexpression(item, 'xfail')
-    rep = __multicall__.execute()
-    if result:
-        if call.excinfo:
-            rep.skipped = True
-            rep.failed = rep.passed = False
+    if not (call.excinfo and 
+        call.excinfo.errisinstance(py.test.xfail.Exception)):
+        evalxfail = getattr(item, '_evalxfail', None)
+        if not evalxfail:
+            return
+    if call.excinfo and call.excinfo.errisinstance(py.test.xfail.Exception):
+        rep = __multicall__.execute()
+        rep.keywords['xfail'] = "reason: " + call.excinfo.value.msg
+        rep.skipped = True
+        rep.failed = False
+        return rep
+    if call.when == "setup":
+        rep = __multicall__.execute()
+        if rep.skipped and evalxfail.istrue():
+            expl = evalxfail.getexplanation()
+            if not evalxfail.get("run", True):
+                expl = "[NOTRUN] " + expl
+            rep.keywords['xfail'] = expl
+        return rep
+    elif call.when == "call":
+        rep = __multicall__.execute()
+        if not item.config.getvalue("runxfail") and evalxfail.istrue():
+            if call.excinfo:
+                rep.skipped = True
+                rep.failed = rep.passed = False
+            else:
+                rep.skipped = rep.passed = False
+                rep.failed = True
+            rep.keywords['xfail'] = evalxfail.getexplanation()
         else:
-            rep.skipped = rep.passed = False
-            rep.failed = True
-        rep.keywords['xfail'] = expr 
-    else:
-        if 'xfail' in rep.keywords:
-            del rep.keywords['xfail']
-    return rep
+            if 'xfail' in rep.keywords:
+                del rep.keywords['xfail']
+        return rep
 
 # called by terminalreporter progress reporting
 def pytest_report_teststatus(report):
@@ -189,7 +225,7 @@ def pytest_report_teststatus(report):
         if report.skipped:
             return "xfailed", "x", "xfail"
         elif report.failed:
-            return "xpassed", "P", "xpass"
+            return "xpassed", "X", "XPASS"
 
 # called by the terminalreporter instance/plugin
 def pytest_terminal_summary(terminalreporter):
@@ -229,13 +265,8 @@ def show_xfailed(terminalreporter, lines):
     xfailed = terminalreporter.stats.get("xfailed")
     if xfailed:
         for rep in xfailed:
-            entry = rep.longrepr.reprcrash
-            modpath = rep.item.getmodpath(includemodule=True)
-            pos = "%s %s:%d: " %(modpath, entry.path, entry.lineno)
-            reason = rep.longrepr.reprcrash.message
-            i = reason.find("\n")
-            if i != -1:
-                reason = reason[:i]
+            pos = terminalreporter.gettestid(rep.item)
+            reason = rep.keywords['xfail']
             lines.append("XFAIL %s %s" %(pos, reason))
 
 def show_xpassed(terminalreporter, lines):
@@ -245,24 +276,6 @@ def show_xpassed(terminalreporter, lines):
             pos = terminalreporter.gettestid(rep.item)
             reason = rep.keywords['xfail']
             lines.append("XPASS %s %s" %(pos, reason))
-
-
-def evalexpression(item, keyword):
-    if isinstance(item, py.test.collect.Function):
-        markholder = getattr(item.obj, keyword, None)
-        result = False
-        if markholder:
-            d = {'os': py.std.os, 'sys': py.std.sys, 'config': item.config}
-            expr, result = None, True
-            for expr in markholder.args:
-                if isinstance(expr, str):
-                    result = cached_eval(item.config, expr, d)
-                else:
-                    result = expr
-                if not result:
-                    break
-            return expr, result
-    return None, False
 
 def cached_eval(config, expr, d):
     if not hasattr(config, '_evalcache'):
