@@ -40,11 +40,14 @@ class ListOfKind(object):
         self.kind = kind
         self.content = tuple(content)
     def __repr__(self):
-        return '%s%s' % (self.kind[0], self.content)
+        return '%s%s' % (self.kind[0].upper(), list(self.content))
     def __iter__(self):
         return iter(self.content)
     def __nonzero__(self):
         return bool(self.content)
+    def __eq__(self, other):
+        return (isinstance(other, ListOfKind) and
+                self.kind == other.kind and self.content == other.content)
 
 class IndirectCallTargets(object):
     def __init__(self, lst):
@@ -146,9 +149,11 @@ class GraphFlattener(object):
             self.emitline("reraise")
             return   # done
         if link.last_exception in link.args:
-            self.emitline("last_exception", self.getcolor(link.last_exception))
+            self.emitline("last_exception",
+                          "->", self.getcolor(link.last_exception))
         if link.last_exc_value in link.args:
-            self.emitline("last_exc_value", self.getcolor(link.last_exc_value))
+            self.emitline("last_exc_value",
+                          "->", self.getcolor(link.last_exc_value))
         self.make_link(link)
 
     def insert_exits(self, block):
@@ -292,9 +297,9 @@ class GraphFlattener(object):
                     if w is None:
                         self.emitline('%s_push' % kind, v)
                     elif v is None:
-                        self.emitline('%s_pop' % kind, w)
+                        self.emitline('%s_pop' % kind, "->", w)
                     else:
-                        self.emitline('%s_copy' % kind, v, w)
+                        self.emitline('%s_copy' % kind, v, "->", w)
 
     def emitline(self, *line):
         self.ssarepr.insns.append(line)
@@ -322,6 +327,7 @@ class GraphFlattener(object):
         if op.result is not None:
             kind = getkind(op.result.concretetype)
             if kind != 'void':
+                args.append("->")
                 args.append(self.getcolor(op.result))
         self.emitline(op.opname, *args)
 
