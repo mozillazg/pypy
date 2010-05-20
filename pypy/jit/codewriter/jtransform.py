@@ -123,9 +123,6 @@ class Transformer(object):
         if (v == c_last_exception or isinstance(v, tuple)
             or v.concretetype != lltype.Bool):
             return False
-        for link in block.exits:
-            if v in link.args:
-                return False   # variable escapes to next block
         for op in block.operations[::-1]:
             if v in op.args:
                 return False   # variable is also used in cur block
@@ -139,6 +136,13 @@ class Transformer(object):
                 # ok! optimize this case
                 block.operations.remove(op)
                 block.exitswitch = (op.opname,) + tuple(op.args)
+                # if the variable escape to the next block along a link,
+                # replace it with a constant, because we know its value
+                for link in block.exits:
+                    while v in link.args:
+                        index = link.args.index(v)
+                        link.args[index] = Constant(link.llexitcase,
+                                                    lltype.Bool)
                 return True
         return False
 

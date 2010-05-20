@@ -91,15 +91,22 @@ def test_optimize_goto_if_not__incoming():
     assert not Transformer().optimize_goto_if_not(block)
 
 def test_optimize_goto_if_not__exit():
+    # this case occurs in practice, e.g. with RPython code like:
+    #     return bool(p) and p.somefield > 0
     v1 = Variable()
     v2 = Variable()
     v3 = Variable(); v3.concretetype = lltype.Bool
     block = Block([v1, v2])
     block.operations = [SpaceOperation('int_gt', [v1, v2], v3)]
     block.exitswitch = v3
-    block.exits = [FakeLink(False), FakeLink(True)]
+    block.exits = exits = [FakeLink(False), FakeLink(True)]
     block.exits[1].args = [v3]
-    assert not Transformer().optimize_goto_if_not(block)
+    res = Transformer().optimize_goto_if_not(block)
+    assert res == True
+    assert block.operations == []
+    assert block.exitswitch == ('int_gt', v1, v2)
+    assert block.exits == exits
+    assert exits[1].args == [Constant(True, lltype.Bool)]
 
 def test_optimize_goto_if_not__unknownop():
     v3 = Variable(); v3.concretetype = lltype.Bool
