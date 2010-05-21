@@ -43,10 +43,6 @@ class FixME:      # XXX temporary hack
 
 class MIFrame(object):
 
-    # for resume.py operation
-    parent_resumedata_snapshot = None
-    parent_resumedata_frame_info_list = None
-
     env = property(lambda: xxx, lambda: xxx)     # temporary: no read/write!
 
     def __init__(self, metainterp):
@@ -67,6 +63,9 @@ class MIFrame(object):
         self.copy_constants(self.registers_r, jitcode.constants_r, ConstPtr)
         self.copy_constants(self.registers_f, jitcode.constants_f, ConstFloat)
         self._result_argcode = 'v'
+        # for resume.py operation
+        self.parent_resumedata_snapshot = None
+        self.parent_resumedata_frame_info_list = None
 
     def copy_constants(self, registers, constants, ConstClass):
         """Copy jitcode.constants[0] to registers[255],
@@ -1548,6 +1547,7 @@ class MetaInterp(object):
                 # raises in case it works -- which is the common case
                 self.compile(original_boxes, live_arg_boxes, start)
                 # creation of the loop was cancelled!
+                self.staticdata.log('cancelled, going on...')
 
         # Otherwise, no loop found so far, so continue tracing.
         start = len(self.history.operations)

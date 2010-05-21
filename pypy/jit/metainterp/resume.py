@@ -757,7 +757,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         if tag == TAGCONST:
             if tagged_eq(tagged, NULLREF):
                 return self.cpu.ts.NULLREF
-            return self.consts[num].getptr_base()
+            return self.consts[num].getref_base()
         elif tag == TAGVIRTUAL:
             virtuals = self.virtuals
             assert virtuals is not None
