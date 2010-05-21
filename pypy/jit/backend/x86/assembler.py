@@ -601,18 +601,17 @@ class Assembler386(object):
             loc = arglocs[i]
             if isinstance(loc, RegLoc):
                 if loc.is_xmm:
-                    mc.MOVSD_mr((esp.value, p), loc.value)
+                    mc.MOVSD_sr(p, loc.value)
                 else:
-                    mc.MOV_mr((esp.value, p), loc.value)
+                    mc.MOV_sr(p, loc.value)
             p += round_up_to_4(loc.width)
         p = 0
         for i in range(start, n):
             loc = arglocs[i]
             if not isinstance(loc, RegLoc):
-                # if isinstance(loc, MODRM64):
-                if False:
+                if loc.width == 8:
                     mc.MOVSD(xmm0, loc)
-                    mc.MOVSD(mem64(esp, p), xmm0)
+                    mc.MOVSD_sr(p, xmm0.value)
                 else:
                     mc.MOV(tmp, loc)
                     mc.MOV_sr(p, tmp.value)
