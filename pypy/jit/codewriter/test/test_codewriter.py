@@ -1,21 +1,33 @@
 import py
 from pypy.jit.codewriter.codewriter import CodeWriter
 from pypy.jit.codewriter import support
+from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rpython.lltypesystem import lltype, llmemory
 
-class FakeRTyper:
-    class annotator:
-        translator = None
-    class type_system:
-        name = 'lltypesystem'
-    def getcallable(self, graph):
-        F = lltype.FuncType([], lltype.Signed)
-        return lltype.functionptr(F, 'bar')
+class FakeCallDescr(AbstractDescr):
+    def __init__(self, FUNC, ARGS, RESULT, effectinfo=None):
+        self.FUNC = FUNC
+        self.ARGS = ARGS
+        self.RESULT = RESULT
+        self.effectinfo = effectinfo
+    def get_extra_info(self):
+        return self.effectinfo
+
+class FakeFieldDescr(AbstractDescr):
+    def __init__(self, STRUCT, fieldname):
+        self.STRUCT = STRUCT
+        self.fieldname = fieldname
+
+class FakeSizeDescr(AbstractDescr):
+    def __init__(self, STRUCT):
+        self.STRUCT = STRUCT
 
 class FakeCPU:
-    rtyper = FakeRTyper()
-    def calldescrof(self, FUNC, ARGS, RESULT):
-        return ('calldescr', FUNC, ARGS, RESULT)
+    def __init__(self, rtyper):
+        self.rtyper = rtyper
+    calldescrof = FakeCallDescr
+    fielddescrof = FakeFieldDescr
+    sizeof = FakeSizeDescr
 
 class FakePolicy:
     def look_inside_graph(self, graph):
@@ -57,7 +69,7 @@ def test_call():
         return ggg(b) - ggg(a)
     rtyper = support.annotate(fff, [35, 42])
     maingraph = rtyper.annotator.translator.graphs[0]
-    cw = CodeWriter(FakeCPU(), maingraph)
+    cw = CodeWriter(FakeCPU(rtyper), maingraph)
     cw.find_all_graphs(FakePolicy())
     cw.make_jitcodes(verbose=True)
     jitcode = cw.mainjitcode
@@ -69,7 +81,7 @@ def test_call():
     assert jitcode2.name == 'ggg'
     assert 'ggg' in jitcode.dump()
     assert lltype.typeOf(jitcode2.fnaddr) == llmemory.Address
-    assert jitcode2.calldescr[0] == 'calldescr'
+    assert isinstance(jitcode2.calldescr, FakeCallDescr)
 
 def test_integration():
     from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
@@ -87,3 +99,31 @@ def test_integration():
     blackholeinterp.setarg_i(1, 100)
     blackholeinterp.run()
     assert blackholeinterp.final_result_i() == 100+6+5+4+3
+
+def test_instantiate():
+    class A1:     id = 651
+    class A2(A1): id = 652
+    class B1:     id = 661
+    class B2(B1): id = 662
+    def f(n):
+        if n > 5:
+            x, y = A1, B1
+        else:
+            x, y = A2, B2
+        n += 1
+        return x().id + y().id + n
+    rtyper = support.annotate(f, [35])
+    maingraph = rtyper.annotator.translator.graphs[0]
+    cw = CodeWriter(FakeCPU(rtyper), maingraph)
+    cw.find_all_graphs(FakePolicy())
+    cw.make_jitcodes(verbose=True)
+    #
+    assert len(cw.assembler.indirectcalltargets) == 4
+    names = [jitcode.name for jitcode in cw.assembler.indirectcalltargets]
+    for expected in ['A1', 'A2', 'B1', 'B2']:
+        for name in names:
+            if name.startswith('instantiate_') and name.endswith(expected):
+                break
+        else:
+            assert 0, "missing instantiate_*_%s in:\n%r" % (expected,
+                                                            names)
