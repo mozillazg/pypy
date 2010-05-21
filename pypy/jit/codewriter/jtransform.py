@@ -293,13 +293,6 @@ class Transformer(object):
         op1 = self._prepare_builtin_call(op, oopspec_name, args)
         return self.handle_residual_call(op1)
 
-    def _handle_virtual_ref_call(self, op, oopspec_name, args):
-        vrefinfo = self.callcontrol.virtualref_info
-        heaptracker.register_known_gctype(self.cpu,
-                                          vrefinfo.jit_virtual_ref_vtable,
-                                          vrefinfo.JIT_VIRTUAL_REF)
-        return SpaceOperation(oopspec_name, list(args), op.result)
-
     handle_residual_indirect_call = handle_residual_call
 
     def handle_regular_indirect_call(self, op):
@@ -678,6 +671,19 @@ class Transformer(object):
 
     def handle_jit_marker__can_enter_jit(self, op, jitdriver):
         return SpaceOperation('can_enter_jit', [], None)
+
+    # ----------
+    # VirtualRefs.
+
+    def _handle_virtual_ref_call(self, op, oopspec_name, args):
+        vrefinfo = self.callcontrol.virtualref_info
+        heaptracker.register_known_gctype(self.cpu,
+                                          vrefinfo.jit_virtual_ref_vtable,
+                                          vrefinfo.JIT_VIRTUAL_REF)
+        return SpaceOperation(oopspec_name, list(args), op.result)
+
+    def rewrite_op_jit_force_virtual(self, op):
+        return self._do_builtin_call(op)
 
 # ____________________________________________________________
 
