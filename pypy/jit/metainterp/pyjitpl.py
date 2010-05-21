@@ -102,24 +102,43 @@ class MIFrame(object):
             outvalue[startindex+i] = reg
     prepare_list_of_boxes._annspecialcase_ = 'specialize:arg(4)'
 
-    def get_list_of_active_boxes(self):
+    def get_list_of_active_boxes(self, in_a_call):
+        if in_a_call:
+            # If we are not the topmost frame, self._result_argcode contains
+            # the type of the result of the call instruction in the bytecode.
+            # We use it to clear the box that will hold the result: this box
+            # is not defined yet.
+            argcode = self._result_argcode
+            index = ord(self.bytecode[self.pc - 1])
+            if   argcode == 'i': self.registers_i[index] = None
+            elif argcode == 'r': self.registers_r[index] = None
+            elif argcode == 'f': self.registers_f[index] = None
+        #
+        self._tmp_count = 0
         count = self.jitcode.enumerate_live_vars(
-            self.pc, MIFrame._count_boxes, None,
+            self.pc, MIFrame._count_boxes, self,
             self.registers_i, self.registers_r, self.registers_f)
-        env = [None] * count
+        #
+        self._tmp_env = [None] * self._tmp_count
+        self._tmp_count = 0
         self.jitcode.enumerate_live_vars(
-            self.pc, MIFrame._store_in_env, env,
+            self.pc, MIFrame._store_in_env, self,
             self.registers_i, self.registers_r, self.registers_f)
+        #
+        env = self._tmp_env
+        self._tmp_env = None
         make_sure_not_resized(env)
         return env
 
-    @staticmethod
-    def _count_boxes(_, box, index):
-        pass    # just used to count how many boxes there are
+    def _count_boxes(self, box):
+        if box is not None:       # just used to count how many boxes there are
+            self._tmp_count += 1
 
-    @staticmethod
-    def _store_in_env(env, box, index):
-        env[index] = box
+    def _store_in_env(self, box):
+        if box is not None:
+            index = self._tmp_count
+            self._tmp_env[index] = box
+            self._tmp_count = index + 1
 
     def replace_active_box_in_frame(self, oldbox, newbox):
         if isinstance(oldbox, history.BoxInt):
@@ -2033,7 +2052,14 @@ def _get_opimpl_method(name, argcodes):
         num_return_args = len(argcodes) - next_argcode
         assert num_return_args == 0 or num_return_args == 2
         if num_return_args:
+            # Save the type of the resulting box.  This is needed if the
+            # operation is an inlined call and we need to get the list of
+            # all alive boxes in it, to know that the result box was not
+            # written yet.
+            self._result_argcode = argcodes[next_argcode + 1]
             position += 1
+        else:
+            self._result_argcode = 'v'
         self.pc = position
         #
         if not we_are_translated():

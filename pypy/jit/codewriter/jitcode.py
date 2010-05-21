@@ -51,32 +51,21 @@ class JitCode(AbstractDescr):
                             registers_i, registers_r, registers_f):
         # 'pc' gives a position in this bytecode.  This invokes
         # 'callback' for each variable that is live across the
-        # instruction which ends at 'pc'.  (It excludes the arguments
-        # of that instruction which are no longer used afterwards, and
-        # excludes the return value of that instruction.)  More precisely,
-        # this invokes 'callback(arg, box, index)' where 'box' comes from one
-        # of the three lists of registers and 'index' is 0, 1, 2...
-        # If the callback returns a box, then it is stored back.
+        # instruction boundary at 'pc'.  More precisely,
+        # this invokes 'callback(arg, box)' where 'box' comes from one
+        # of the three lists of registers.
         if not we_are_translated() and pc not in self.liveness:
             self._missing_liveness(pc)
         live_i, live_r, live_f = self.liveness[pc]    # XXX compactify!!
-        index = 0
         for c in live_i:
-            newbox = callback(arg, registers_i[ord(c)], index)
-            index += 1
-            if newbox is not None:
-                registers_i[ord(c)] = newbox
+            x = callback(arg, registers_i[ord(c)])
+            assert x is None
         for c in live_r:
-            newbox = callback(arg, registers_r[ord(c)], index)
-            index += 1
-            if newbox is not None:
-                registers_r[ord(c)] = newbox
+            x = callback(arg, registers_r[ord(c)])
+            assert x is None
         for c in live_f:
-            newbox = callback(arg, registers_f[ord(c)], index)
-            index += 1
-            if newbox is not None:
-                registers_f[ord(c)] = newbox
-        return index
+            x = callback(arg, registers_f[ord(c)])
+            assert x is None
     enumerate_live_vars._annspecialcase_ = 'specialize:arg(2)'
 
     def _live_vars(self, pc):
@@ -86,10 +75,8 @@ class JitCode(AbstractDescr):
                 self.kind = kind
             def __getitem__(self, index):
                 return '%%%s%d' % (self.kind, index)
-        def callback(lst, reg, index):
-            lst.append(reg)
         lst = []
-        self.enumerate_live_vars(pc, callback, lst,
+        self.enumerate_live_vars(pc, list.append, lst,
                                  Names('i'), Names('r'), Names('f'))
         lst.sort()
         return ' '.join(lst)
