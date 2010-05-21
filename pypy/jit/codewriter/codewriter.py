@@ -68,6 +68,9 @@ class CodeWriter(object):
             self.transform_graph_to_jitcode(graph, jitcode,
                                             graph is maingraph, verbose)
 
+    def setup_vrefinfo(self, vrefinfo):
+        self.callcontrol.virtualref_info = vrefinfo
+
     def find_all_graphs(self, policy):
         return self.callcontrol.find_all_graphs(policy)
 

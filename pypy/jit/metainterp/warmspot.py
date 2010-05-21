@@ -164,6 +164,7 @@ class WarmRunnerDesc(object):
         #
         from pypy.jit.metainterp.virtualref import VirtualRefInfo
         self.metainterp_sd.virtualref_info = VirtualRefInfo(self)
+        self.codewriter.setup_vrefinfo(self.metainterp_sd.virtualref_info)
         if self.jitdriver.virtualizables:
             from pypy.jit.metainterp.virtualizable import VirtualizableInfo
             self.metainterp_sd.virtualizable_info = VirtualizableInfo(self)

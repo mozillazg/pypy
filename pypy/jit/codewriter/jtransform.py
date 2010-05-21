@@ -288,8 +288,17 @@ class Transformer(object):
 
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
+        if oopspec_name.startswith('virtual_ref'):
+            return self._handle_virtual_ref_call(op, oopspec_name, args)
         op1 = self._prepare_builtin_call(op, oopspec_name, args)
         return self.handle_residual_call(op1)
+
+    def _handle_virtual_ref_call(self, op, oopspec_name, args):
+        vrefinfo = self.callcontrol.virtualref_info
+        heaptracker.register_known_gctype(self.cpu,
+                                          vrefinfo.jit_virtual_ref_vtable,
+                                          vrefinfo.JIT_VIRTUAL_REF)
+        return SpaceOperation(oopspec_name, list(args), op.result)
 
     handle_residual_indirect_call = handle_residual_call
 
