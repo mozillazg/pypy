@@ -49,7 +49,10 @@ def format_assembler(ssarepr):
         return 'L%d' % seenlabels[lbl.name]
     #
     output = StringIO()
-    for asm in ssarepr.insns:
+    insns = ssarepr.insns
+    if insns[-1] == ('---',):
+        insns = insns[:-1]
+    for asm in insns:
         if isinstance(asm[0], Label):
             if asm[0].name in seenlabels:
                 print >> output, '%s:' % getlabelname(asm[0])
@@ -169,7 +172,7 @@ def split_words(line):
             word += c
             if c in '<([':
                 nested += 1
-            if c in '])>' and line[i-2:i+2] != ' -> ':
+            if c in '])>' and ('  '+line)[i:i+4] != ' -> ':
                 nested -= 1
                 assert nested >= 0
     if word:

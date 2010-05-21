@@ -121,6 +121,16 @@ def test_unformat_assembler_consts():
         ('foo', Constant(123, lltype.Signed)),
         ]
 
+def test_unformat_assembler_single_return():
+    input = """
+        foo -> %i0
+    """
+    regs = {}
+    ssarepr = unformat_assembler(input, regs)
+    assert ssarepr.insns == [
+        ('foo', '->', regs['%i0']),
+        ]
+
 def test_unformat_assembler_label():
     input = """
         L1:
