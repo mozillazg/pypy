@@ -1,5 +1,6 @@
 import py, sys
 from pypy.rpython.lltypesystem import lltype, rstr
+from pypy.rpython import rlist
 from pypy.jit.metainterp.history import getkind
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import Block, Link, c_last_exception
@@ -8,6 +9,7 @@ from pypy.jit.codewriter import support, heaptracker
 from pypy.jit.metainterp.typesystem import deref, arrayItem
 from pypy.rlib import objectmodel
 from pypy.rlib.jit import _we_are_jitted
+from pypy.translator.simplify import get_funcobj
 
 
 def transform_graph(graph, cpu=None, callcontrol=None, portal=True):
@@ -296,7 +298,7 @@ class Transformer(object):
             prepare = self._handle_virtual_ref_call
         else:
             prepare = self.prepare_builtin_call
-        op1 = prepare(oopspec_name, args, op.result)
+        op1 = prepare(op, oopspec_name, args)
         # If the resulting op1 is still a direct_call, turn it into a
         # residual_call.
         if op1 is None or op1.opname == 'direct_call':
@@ -322,20 +324,20 @@ class Transformer(object):
             result.append(op2)
         return result
 
-    def prepare_builtin_call(self, oopspec_name, args, result,
+    def prepare_builtin_call(self, op, oopspec_name, args,
                               extra=None, extrakey=None):
         argtypes = [v.concretetype for v in args]
-        resulttype = result.concretetype
+        resulttype = op.result.concretetype
         c_func, TP = support.builtin_func_for_spec(self.cpu.rtyper,
                                                    oopspec_name, argtypes,
                                                    resulttype, extra, extrakey)
-        return SpaceOperation('direct_call', [c_func] + args, result)
+        return SpaceOperation('direct_call', [c_func] + args, op.result)
 
     def _do_builtin_call(self, op, oopspec_name=None, args=None,
                          extra=None, extrakey=None):
         if oopspec_name is None: oopspec_name = op.opname
         if args is None: args = op.args
-        op1 = self.prepare_builtin_call(oopspec_name, args, op.result,
+        op1 = self.prepare_builtin_call(op, oopspec_name, args,
                                         extra, extrakey)
         return self.rewrite_op_direct_call(op1)
 
@@ -685,9 +687,9 @@ class Transformer(object):
     # ----------
     # Lists.
 
-    def _handle_list_call(self, oopspec_name, args, result):
+    def _handle_list_call(self, op, oopspec_name, args):
         if oopspec_name.startswith('new'):
-            LIST = deref(result.concretetype)
+            LIST = deref(op.result.concretetype)
         else:
             LIST = deref(args[0].concretetype)
         resizable = isinstance(LIST, lltype.GcStruct)
@@ -699,34 +701,86 @@ class Transformer(object):
             if self._array_of_voids(LIST):
                 return None # arrays of voids: not supported
             arraydescr = self.cpu.arraydescrof(LIST)
+            descrs = (arraydescr,)
         #
         try:
             meth = getattr(self, prefix + oopspec_name.replace('.', '_'))
         except AttributeError:
             return None
         else:
-            return meth(LIST, arraydescr, args, result)
+            return meth(op, args, *descrs)
 
-    def do_fixed_newlist(self, LIST, arraydescr, args, result):
+    def do_fixed_newlist(self, op, args, arraydescr):
         # normalize number of arguments
         if len(args) < 1:
             args.append(Constant(0, lltype.Signed))
         if len(args) > 1:
             v_default = args[1]
+            ARRAY = deref(op.result.concretetype)
             if (not isinstance(v_default, Constant) or
-                v_default.value != arrayItem(LIST)._defl()):
+                v_default.value != arrayItem(ARRAY)._defl()):
                 return None     # variable or non-null initial value
-        return SpaceOperation('new_array', [arraydescr, args[0]], result)
+        return SpaceOperation('new_array', [arraydescr, args[0]], op.result)
+
+    def do_fixed_list_len(self, op, args, arraydescr):
+        return SpaceOperation('arraylen_gc', [args[0], arraydescr], op.result)
+
+    do_fixed_list_len_foldable = do_fixed_list_len
+
+    def _get_list_nonneg_canraise_flags(self, op):
+        # xxx break of abstraction:
+        func = get_funcobj(op.args[0].value)._callable
+        # base hints on the name of the ll function, which is a bit xxx-ish
+        # but which is safe for now
+        assert func.func_name.startswith('ll_')
+        non_negative = '_nonneg' in func.func_name
+        fast = '_fast' in func.func_name
+        if fast:
+            can_raise = False
+            non_negative = True
+        else:
+            tag = op.args[1].value
+            assert tag in (rlist.dum_nocheck, rlist.dum_checkidx)
+            can_raise = tag != rlist.dum_nocheck
+        return non_negative, can_raise
+
+    def _prepare_list_getset(self, op, descr, args, checkname):
+        non_negative, can_raise = self._get_list_nonneg_canraise_flags(op)
+        if can_raise:
+            return None, None
+        if non_negative:
+            return args[1], []
+        else:
+            v_posindex = Variable('posindex')
+            v_posindex.concretetype = lltype.Signed
+            op = SpaceOperation(checkname, [args[0],
+                                            descr, args[1]], v_posindex)
+            return v_posindex, [op]
+
+    def do_fixed_list_getitem(self, op, args, arraydescr, pure=False):
+        v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
+                                                     'check_neg_index')
+        if v_index is None:
+            return None
+        extra = getkind(op.result.concretetype)[0]
+        if pure:
+            extra = 'pure_' + extra
+        op = SpaceOperation('getarrayitem_gc_%s' % extra,
+                            [args[0], arraydescr, v_index], op.result)
+        return extraop + [op]
+
+    def do_fixed_list_getitem_foldable(self, op, args, arraydescr):
+        return self.do_fixed_list_getitem(op, args, arraydescr, pure=True)
 
     # ----------
     # VirtualRefs.
 
-    def _handle_virtual_ref_call(self, oopspec_name, args, result):
+    def _handle_virtual_ref_call(self, op, oopspec_name, args):
         vrefinfo = self.callcontrol.virtualref_info
         heaptracker.register_known_gctype(self.cpu,
                                           vrefinfo.jit_virtual_ref_vtable,
                                           vrefinfo.JIT_VIRTUAL_REF)
-        return SpaceOperation(oopspec_name, list(args), result)
+        return SpaceOperation(oopspec_name, list(args), op.result)
 
     def rewrite_op_jit_force_virtual(self, op):
         return self._do_builtin_call(op)
