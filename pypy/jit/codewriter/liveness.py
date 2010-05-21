@@ -25,6 +25,10 @@ def _compute_liveness_must_continue(ssarepr, label2alive):
     alive = set()
     must_continue = False
 
+    def follow_label(lbl):
+        alive_at_point = label2alive.get(lbl.name, ())
+        alive.update(alive_at_point)
+
     for i in range(len(ssarepr.insns)-1, -1, -1):
         insn = ssarepr.insns[i]
 
@@ -37,10 +41,14 @@ def _compute_liveness_must_continue(ssarepr, label2alive):
             continue
 
         if insn[0] == '-live-':
+            labels = []
             for x in insn[1:]:
                 if isinstance(x, Register):
                     alive.add(x)
-            ssarepr.insns[i] = insn[:1] + tuple(alive)
+                elif isinstance(x, TLabel):
+                    follow_label(x)
+                    labels.append(x)
+            ssarepr.insns[i] = insn[:1] + tuple(alive) + tuple(labels)
             continue
 
         if insn[0] == '---':
@@ -63,11 +71,9 @@ def _compute_liveness_must_continue(ssarepr, label2alive):
                     if isinstance(y, Register):
                         alive.add(y)
             elif isinstance(x, TLabel):
-                alive_at_point = label2alive.get(x.name, ())
-                alive.update(alive_at_point)
+                follow_label(x)
             elif isinstance(x, SwitchDictDescr):
                 for key, label in x._labels:
-                    alive_at_point = label2alive.get(label.name, ())
-                    alive.update(alive_at_point)
+                    follow_label(label)
 
     return must_continue
