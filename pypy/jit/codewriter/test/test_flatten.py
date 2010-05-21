@@ -75,7 +75,13 @@ class FakeCallControlWithVRefInfo:
         jit_virtual_ref_vtable = lltype.malloc(rclass.OBJECT_VTABLE,
                                                immortal=True)
     def guess_call_kind(self, op):
-        return 'builtin'
+        if hasattr(op.args[0].value._obj.graph.func, 'oopspec'):
+            return 'builtin'
+        return 'residual'
+    def getcalldescr(self, op):
+        return FakeDescr()
+    def calldescr_canraise(self, calldescr):
+        return False
 
 # ____________________________________________________________
 
@@ -576,7 +582,6 @@ class TestFlatten:
         """, transform=True, liveness=True)
 
     def test_vref_simple(self):
-        from pypy.jit.codewriter.call import CallControl
         class X:
             pass
         def f():
@@ -585,4 +590,20 @@ class TestFlatten:
             new_with_vtable <Descr> -> %r0
             virtual_ref %r0 -> %r1
             ref_return %r1
+        """, transform=True, cc=FakeCallControlWithVRefInfo())
+
+    def test_vref_forced(self):
+        class X:
+            pass
+        def f():
+            vref = jit.virtual_ref(X())
+            return vref()
+        # The call vref() is a jit_force_virtual operation in the original
+        # graph.  It becomes in the JitCode a residual call to a helper that
+        # contains itself a jit_force_virtual.
+        self.encoding_test(f, [], """
+            new_with_vtable <Descr> -> %r0
+            virtual_ref %r0 -> %r1
+            residual_call_r_r $<* fn _ll_1_jit_force_virtual__objectPtr>, <Descr>, R[%r1] -> %r2
+            ref_return %r2
         """, transform=True, cc=FakeCallControlWithVRefInfo())
