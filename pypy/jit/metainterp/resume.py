@@ -45,12 +45,12 @@ def _ensure_parent_resumedata(framestack, n):
                                          back.get_list_of_active_boxes())
 
 def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
-                       storage, pc):
+                       storage):
     n = len(framestack)-1
     top = framestack[n]
     _ensure_parent_resumedata(framestack, n)
     frame_info_list = FrameInfo(top.parent_resumedata_frame_info_list,
-                                top.jitcode, pc)
+                                top.jitcode, top.pc)
     storage.rd_frame_info_list = frame_info_list
     snapshot = Snapshot(top.parent_resumedata_snapshot,
                         top.get_list_of_active_boxes())

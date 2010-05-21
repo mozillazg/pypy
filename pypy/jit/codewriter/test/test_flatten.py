@@ -506,8 +506,8 @@ class TestFlatten:
             myjitdriver.jit_merge_point(x=x, y=y)
             myjitdriver.can_enter_jit(x=y, y=x)
         self.encoding_test(f, [4, 5], """
-            int_guard_value %i0
             -live- %i0, %i1
+            int_guard_value %i0
             jit_merge_point I[%i0], R[], F[], I[%i1], R[], F[]
             can_enter_jit
             void_return

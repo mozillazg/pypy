@@ -894,11 +894,12 @@ class MIFrame(object):
         virtualizable_boxes = None
         if metainterp.staticdata.virtualizable_info is not None:
             virtualizable_boxes = metainterp.virtualizable_boxes
-        if resumepc < 0:
-            resumepc = self.pc
+        saved_pc = self.pc
+        if resumepc >= 0:
+            self.pc = resumepc
         resume.capture_resumedata(metainterp.framestack, virtualizable_boxes,
-                                  metainterp.virtualref_boxes, resumedescr,
-                                  resumepc)
+                                  metainterp.virtualref_boxes, resumedescr)
+        self.pc = saved_pc
         self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS)
         # count
         metainterp.attach_debug_info(guard_op)
@@ -2030,8 +2031,10 @@ def _get_opimpl_method(name, argcodes):
             args += (value,)
         #
         num_return_args = len(argcodes) - next_argcode
-        assert num_return_args == 0 or num_return_args == 1
-        self.pc = position + num_return_args
+        assert num_return_args == 0 or num_return_args == 2
+        if num_return_args:
+            position += 1
+        self.pc = position
         #
         if not we_are_translated():
             print '\tpyjitpl: %s(%s)' % (name, ', '.join(map(repr, args))),
@@ -2045,7 +2048,8 @@ def _get_opimpl_method(name, argcodes):
                 assert resultbox is None
             else:
                 print '-> %r' % (resultbox,)
-                result_argcode = argcodes[next_argcode]
+                assert argcodes[next_argcode] == '>'
+                result_argcode = argcodes[next_argcode + 1]
                 assert resultbox.type == {'i': history.INT,
                                           'r': history.REF,
                                           'f': history.FLOAT}[result_argcode]
