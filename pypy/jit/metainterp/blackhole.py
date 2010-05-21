@@ -83,7 +83,8 @@ class BlackholeInterpBuilder(object):
         #
         def dispatch_loop(self, code, position):
             while True:
-                if not we_are_translated():
+                if (not we_are_translated()
+                    and self.jitcode._startpoints is not None):
                     assert position in self.jitcode._startpoints, (
                         "the current position %d is in the middle of "
                         "an instruction!" % position)
