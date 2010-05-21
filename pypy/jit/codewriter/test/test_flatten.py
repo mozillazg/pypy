@@ -40,11 +40,9 @@ class FakeDict(object):
         c_func = Constant(f, lltype.typeOf(f))
         return c_func, lltype.Signed
 
-class FakeRTyper(object):
-    _builtin_func_for_spec_cache = FakeDict()
-
 class FakeCPU:
     def __init__(self, rtyper):
+        rtyper._builtin_func_for_spec_cache = FakeDict()
         self.rtyper = rtyper
     def calldescrof(self, FUNC, ARGS, RESULT):
         return FakeDescr()
@@ -75,9 +73,9 @@ class FakeCallControlWithVRefInfo:
         jit_virtual_ref_vtable = lltype.malloc(rclass.OBJECT_VTABLE,
                                                immortal=True)
     def guess_call_kind(self, op):
-        if hasattr(op.args[0].value._obj.graph.func, 'oopspec'):
-            return 'builtin'
-        return 'residual'
+        if op.args[0].value._obj._name == 'jit_force_virtual':
+            return 'residual'
+        return 'builtin'
     def getcalldescr(self, op):
         return FakeDescr()
     def calldescr_canraise(self, calldescr):
@@ -604,6 +602,6 @@ class TestFlatten:
         self.encoding_test(f, [], """
             new_with_vtable <Descr> -> %r0
             virtual_ref %r0 -> %r1
-            residual_call_r_r $<* fn _ll_1_jit_force_virtual__objectPtr>, <Descr>, R[%r1] -> %r2
+            residual_call_r_r $<* fn jit_force_virtual>, <Descr>, R[%r1] -> %r2
             ref_return %r2
         """, transform=True, cc=FakeCallControlWithVRefInfo())
