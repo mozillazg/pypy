@@ -298,8 +298,8 @@ class Transformer(object):
             jitcode = self.callcontrol.get_jitcode(targetgraph,
                                                    called_from=self.graph)
             lst.append(jitcode)
-        op0 = SpaceOperation('int_guard_value', [op.args[0]], None)
-        op1 = SpaceOperation('-live-', [op.args[0]], None)
+        op0 = SpaceOperation('-live-', [], None)
+        op1 = SpaceOperation('int_guard_value', [op.args[0]], None)
         op2 = self.handle_residual_call(op, [IndirectCallTargets(lst)])
         result = [op0, op1]
         if isinstance(op2, list):
@@ -345,8 +345,8 @@ class Transformer(object):
         if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
             assert op.args[0].concretetype != lltype.Ptr(rstr.STR)
             kind = getkind(op.args[0].concretetype)
-            op0 = SpaceOperation('%s_guard_value' % kind, [op.args[0]], None)
-            op1 = SpaceOperation('-live-', [op.args[0]], None)
+            op0 = SpaceOperation('-live-', [], None)
+            op1 = SpaceOperation('%s_guard_value' % kind, [op.args[0]], None)
             # the special return value None forces op.result to be considered
             # equal to op.args[0]
             return [op0, op1, None]
@@ -463,8 +463,8 @@ class Transformer(object):
                 op.args[0].concretetype.TO._hints.get('typeptr'))
 
     def handle_getfield_typeptr(self, op):
-        op0 = SpaceOperation('guard_class', [op.args[0]], op.result)
-        op1 = SpaceOperation('-live-', [op.args[0]], None)
+        op0 = SpaceOperation('-live-', [], None)
+        op1 = SpaceOperation('guard_class', [op.args[0]], op.result)
         return [op0, op1]
 
     def rewrite_op_malloc(self, op):
@@ -657,9 +657,9 @@ class Transformer(object):
         for v in op.args[2:2+num_green_args]:
             if isinstance(v, Variable) and v.concretetype is not lltype.Void:
                 kind = getkind(v.concretetype)
+                ops.append(SpaceOperation('-live-', [], None))
                 ops.append(SpaceOperation('%s_guard_value' % kind,
                                           [v], None))
-                ops.append(SpaceOperation('-live-', [v], None))
         args = (self.make_three_lists(op.args[2:2+num_green_args]) +
                 self.make_three_lists(op.args[2+num_green_args:]))
         ops.append(SpaceOperation('jit_merge_point', args, None))

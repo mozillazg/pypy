@@ -303,11 +303,11 @@ def indirect_regular_call_test(argtypes, restype, expectedkind):
     tr.graph = 'someinitialgraph'
     oplist = tr.rewrite_operation(op)
     op0gv, op1gv, op0, op1 = oplist
-    assert op0gv.opname == 'int_guard_value'
-    assert op0gv.args == [op.args[0]]
-    assert op0gv.result is None
-    assert op1gv.opname == '-live-'
+    assert op0gv.opname == '-live-'
+    assert op0gv.args == []
+    assert op1gv.opname == 'int_guard_value'
     assert op1gv.args == [op.args[0]]
+    assert op1gv.result is None
     #
     reskind = getkind(restype)[0]
     assert op0.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
@@ -364,11 +364,11 @@ def test_getfield_typeptr():
     op = SpaceOperation('getfield', [v_parent, c_name], v_result)
     oplist = Transformer(FakeCPU()).rewrite_operation(op)
     op0, op1 = oplist
-    assert op0.opname == 'guard_class'
-    assert op0.args == [v_parent]
-    assert op0.result == v_result
-    assert op1.opname == '-live-'
+    assert op0.opname == '-live-'
+    assert op0.args == []
+    assert op1.opname == 'guard_class'
     assert op1.args == [v_parent]
+    assert op1.result == v_result
 
 def test_setfield():
     # XXX a more compact encoding would be possible; see test_getfield()
@@ -615,11 +615,11 @@ def test_promote_1():
                         v2)
     oplist = Transformer().rewrite_operation(op)
     op0, op1, op2 = oplist
-    assert op0.opname == 'int_guard_value'
-    assert op0.args == [v1]
-    assert op0.result is None
-    assert op1.opname == '-live-'
+    assert op0.opname == '-live-'
+    assert op0.args == []
+    assert op1.opname == 'int_guard_value'
     assert op1.args == [v1]
+    assert op1.result is None
     assert op2 is None
 
 def test_promote_2():
@@ -635,9 +635,9 @@ def test_promote_2():
     block.closeblock(Link([v2], returnblock))
     Transformer().optimize_block(block)
     assert len(block.operations) == 2
-    assert block.operations[0].opname == 'int_guard_value'
-    assert block.operations[0].args == [v1]
-    assert block.operations[0].result is None
-    assert block.operations[1].opname == '-live-'
+    assert block.operations[0].opname == '-live-'
+    assert block.operations[0].args == []
+    assert block.operations[1].opname == 'int_guard_value'
     assert block.operations[1].args == [v1]
+    assert block.operations[1].result is None
     assert block.exits[0].args == [v1]

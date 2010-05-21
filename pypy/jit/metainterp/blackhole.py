@@ -196,7 +196,7 @@ class BlackholeInterpBuilder(object):
             if resulttype == 'i':
                 # argcode should be 'i' too
                 assert argcodes[next_argcode] == '>'
-                assert argcodes[next_argcode+1] == 'i'
+                assert argcodes[next_argcode + 1] == 'i'
                 next_argcode = next_argcode + 2
                 if lltype.typeOf(result) is lltype.Bool:
                     result = int(result)
@@ -206,7 +206,7 @@ class BlackholeInterpBuilder(object):
             elif resulttype == 'r':
                 # argcode should be 'r' too
                 assert argcodes[next_argcode] == '>'
-                assert argcodes[next_argcode+1] == 'r'
+                assert argcodes[next_argcode + 1] == 'r'
                 next_argcode = next_argcode + 2
                 assert lltype.typeOf(result) == llmemory.GCREF
                 self.registers_r[ord(code[position])] = result
@@ -214,7 +214,7 @@ class BlackholeInterpBuilder(object):
             elif resulttype == 'f':
                 # argcode should be 'f' too
                 assert argcodes[next_argcode] == '>'
-                assert argcodes[next_argcode+1] == 'f'
+                assert argcodes[next_argcode + 1] == 'f'
                 next_argcode = next_argcode + 2
                 assert lltype.typeOf(result) is lltype.Float
                 self.registers_f[ord(code[position])] = result
@@ -307,12 +307,10 @@ class BlackholeInterpreter(object):
                 e = get_llexception(self.cpu, e)
                 self.handle_exception_in_frame(e)
 
-    def get_result_i(self):
-        assert self._return_type == 'i'
+    def get_tmpreg_i(self):
         return self.tmpreg_i
 
-    def get_result_r(self):
-        assert self._return_type == 'r'
+    def get_tmpreg_r(self):
         result = self.tmpreg_r
         if we_are_translated():
             self.tmpreg_r = NULL
@@ -320,19 +318,30 @@ class BlackholeInterpreter(object):
             del self.tmpreg_r
         return result
 
-    def get_result_f(self):
-        assert self._return_type == 'f'
+    def get_tmpreg_f(self):
         return self.tmpreg_f
 
-    def get_result_v(self):
+    def final_result_i(self):
+        assert self._return_type == 'i'
+        return self.get_tmpreg_i()
+
+    def final_result_r(self):
+        assert self._return_type == 'r'
+        return self.get_tmpreg_r()
+
+    def final_result_f(self):
+        assert self._return_type == 'f'
+        return self.get_tmpreg_f()
+
+    def final_result_v(self):
         assert self._return_type == 'v'
 
-    def _get_result_anytype(self):
+    def _final_result_anytype(self):
         "NOT_RPYTHON"
-        if self._return_type == 'i': return self.get_result_i()
-        if self._return_type == 'r': return self.get_result_r()
-        if self._return_type == 'f': return self.get_result_f()
-        if self._return_type == 'v': return None
+        if self._return_type == 'i': return self.final_result_i()
+        if self._return_type == 'r': return self.final_result_r()
+        if self._return_type == 'f': return self.final_result_f()
+        if self._return_type == 'v': return self.final_result_v()
         raise ValueError(self._return_type)
 
     def cleanup_registers(self):
@@ -531,13 +540,13 @@ class BlackholeInterpreter(object):
 
     @arguments("self", returns="i")
     def bhimpl_int_pop(self):
-        return self.get_result_i()
+        return self.get_tmpreg_i()
     @arguments("self", returns="r")
     def bhimpl_ref_pop(self):
-        return self.get_result_r()
+        return self.get_tmpreg_r()
     @arguments("self", returns="f")
     def bhimpl_float_pop(self):
-        return self.get_result_f()
+        return self.get_tmpreg_f()
 
     # ----------
     # float operations
@@ -668,6 +677,8 @@ class BlackholeInterpreter(object):
             return pc
         else:
             return target
+
+    bhimpl_goto_if_not_int_is_true = bhimpl_goto_if_not
 
     @arguments("i", "L", "pc", returns="L")
     def bhimpl_goto_if_not_int_is_zero(a, target, pc):
@@ -971,11 +982,11 @@ class BlackholeInterpreter(object):
             self._done_with_this_frame()
         kind = self._return_type
         if kind == 'i':
-            caller._setup_return_value_i(self.get_result_i())
+            caller._setup_return_value_i(self.final_result_i())
         elif kind == 'r':
-            caller._setup_return_value_r(self.get_result_r())
+            caller._setup_return_value_r(self.final_result_r())
         elif kind == 'f':
-            caller._setup_return_value_f(self.get_result_f())
+            caller._setup_return_value_f(self.final_result_f())
         else:
             assert kind == 'v'
         return NULL
@@ -1028,14 +1039,14 @@ class BlackholeInterpreter(object):
         # normally (in general we get a ContinueRunningNormally exception).
         sd = self.builder.metainterp_sd
         if sd.result_type == 'void':
-            self.get_result_v()
+            self.final_result_v()
             raise sd.DoneWithThisFrameVoid()
         elif sd.result_type == 'int':
-            raise sd.DoneWithThisFrameInt(self.get_result_i())
+            raise sd.DoneWithThisFrameInt(self.final_result_i())
         elif sd.result_type == 'ref':
-            raise sd.DoneWithThisFrameRef(self.get_result_r())
+            raise sd.DoneWithThisFrameRef(self.final_result_r())
         elif sd.result_type == 'float':
-            raise sd.DoneWithThisFrameFloat(self.get_result_f())
+            raise sd.DoneWithThisFrameFloat(self.final_result_f())
         else:
             assert False
 
