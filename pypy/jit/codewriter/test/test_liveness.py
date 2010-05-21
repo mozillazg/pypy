@@ -217,3 +217,18 @@ class TestFlatten:
             bar %i3, %i2 -> %i5
             -live- %i6
         """)
+
+    def test_live_with_label(self):
+        self.liveness_test("""
+            -live- L1
+            foo %i0
+            ---
+            L1:
+            bar %i1
+        """, """
+            -live- %i0, %i1, L1
+            foo %i0
+            ---
+            L1:
+            bar %i1
+        """)
