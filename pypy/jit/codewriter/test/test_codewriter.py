@@ -36,8 +36,8 @@ def test_loop():
                             "\x03\x00\x00"
                             "\x04\x01")
     assert cw.assembler.insns == {'goto_if_not_int_gt/icL': 0,
-                                  'int_add/iii': 1,
-                                  'int_sub/ici': 2,
+                                  'int_add/ii>i': 1,
+                                  'int_sub/ic>i': 2,
                                   'goto/L': 3,
                                   'int_return/i': 4}
     assert jitcode.num_regs_i() == 2

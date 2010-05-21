@@ -366,6 +366,8 @@ class ConstPtr(Const):
         except lltype.UninitializedMemoryAccess:
             return '<uninitialized string>'
 
+CONST_NULL = ConstPtr(ConstPtr.value)
+
 class ConstObj(Const):
     type = REF
     value = ootype.NULL

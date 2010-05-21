@@ -50,7 +50,7 @@ def format_assembler(ssarepr):
     #
     output = StringIO()
     insns = ssarepr.insns
-    if insns[-1] == ('---',):
+    if insns and insns[-1] == ('---',):
         insns = insns[:-1]
     for asm in insns:
         if isinstance(asm[0], Label):

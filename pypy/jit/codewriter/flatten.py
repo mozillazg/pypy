@@ -168,14 +168,18 @@ class GraphFlattener(object):
         elif block.exitswitch is c_last_exception:
             # An exception block. See test_exc_exitswitch in test_flatten.py
             # for an example of what kind of code this makes.
-            lastopname = block.operations[-1].opname
-            assert lastopname != '-live-'
+            index = -1
+            while True:
+                lastopname = block.operations[index].opname
+                if lastopname != '-live-':
+                    break
+                index -= 1
             assert block.exits[0].exitcase is None # is this always True?
             #
             if not self._include_all_exc_links:
-                if (len(block.operations) == 1 or
-                    block.operations[-2].opname != '-live-'):
-                    # cannot actually raise
+                if index == -1:
+                    # cannot raise: the last instruction is not
+                    # actually a '-live-'
                     self.make_link(block.exits[0])
                     return
             # 
@@ -212,8 +216,7 @@ class GraphFlattener(object):
             opname = 'goto_if_not'
             if isinstance(block.exitswitch, tuple):
                 # special case produced by jtransform.optimize_goto_if_not()
-                if block.exitswitch[0] != 'int_is_true':
-                    opname = 'goto_if_not_' + block.exitswitch[0]
+                opname = 'goto_if_not_' + block.exitswitch[0]
                 opargs = block.exitswitch[1:]
             else:
                 assert block.exitswitch.concretetype == lltype.Bool
@@ -221,6 +224,7 @@ class GraphFlattener(object):
             #
             lst = self.flatten_list(opargs) + [TLabel(linkfalse)]
             self.emitline(opname, *lst)
+            self.emitline('-live-', TLabel(linkfalse))
             # true path:
             self.make_link(linktrue)
             # false path:
@@ -236,6 +240,7 @@ class GraphFlattener(object):
                 else:
                     self.emitline("---")
             #
+            self.emitline('-live-')
             switches = [link for link in block.exits
                         if link.exitcase != 'default']
             switches.sort(key=lambda link: link.llexitcase)

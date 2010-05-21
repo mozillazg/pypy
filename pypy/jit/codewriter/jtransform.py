@@ -580,6 +580,7 @@ class Transformer(object):
                        ('cast_float_to_uint', 'cast_float_to_int'),
 
                        ('int_add_nonneg_ovf', 'int_add_ovf'),
+                       ('keepalive', '-live-'),
 
                        ('char_lt', 'int_lt'),
                        ('char_le', 'int_le'),

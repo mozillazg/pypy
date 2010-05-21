@@ -195,8 +195,9 @@ class BlackholeInterpBuilder(object):
 
             if resulttype == 'i':
                 # argcode should be 'i' too
-                assert argcodes[next_argcode] == 'i'
-                next_argcode = next_argcode + 1
+                assert argcodes[next_argcode] == '>'
+                assert argcodes[next_argcode+1] == 'i'
+                next_argcode = next_argcode + 2
                 if lltype.typeOf(result) is lltype.Bool:
                     result = int(result)
                 assert lltype.typeOf(result) is lltype.Signed
@@ -204,15 +205,17 @@ class BlackholeInterpBuilder(object):
                 position += 1
             elif resulttype == 'r':
                 # argcode should be 'r' too
-                assert argcodes[next_argcode] == 'r'
-                next_argcode = next_argcode + 1
+                assert argcodes[next_argcode] == '>'
+                assert argcodes[next_argcode+1] == 'r'
+                next_argcode = next_argcode + 2
                 assert lltype.typeOf(result) == llmemory.GCREF
                 self.registers_r[ord(code[position])] = result
                 position += 1
             elif resulttype == 'f':
                 # argcode should be 'f' too
-                assert argcodes[next_argcode] == 'f'
-                next_argcode = next_argcode + 1
+                assert argcodes[next_argcode] == '>'
+                assert argcodes[next_argcode+1] == 'f'
+                next_argcode = next_argcode + 2
                 assert lltype.typeOf(result) is lltype.Float
                 self.registers_f[ord(code[position])] = result
                 position += 1
@@ -979,16 +982,34 @@ class BlackholeInterpreter(object):
 
     def _prepare_resume_from_failure(self, opnum):
         from pypy.jit.metainterp.resoperation import rop
-        if opnum == rop.GUARD_TRUE:     # a goto_if_not_xxx that jumps only now
+        #
+        if opnum == rop.GUARD_TRUE:
+            # Produced directly by some goto_if_not_xxx() opcode that did not
+            # jump, but which must now jump.  The pc is just after the opcode.
             self.position = self.jitcode.follow_jump(self.position)
-        elif opnum == rop.GUARD_FALSE:  # a goto_if_not that stops jumping
+        #
+        elif opnum == rop.GUARD_FALSE:
+            # Produced directly by some goto_if_not_xxx() opcode that jumped,
+            # but which must no longer jump.  The pc is just after the opcode.
             pass
-        elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
+        #
+        elif opnum == rop.GUARD_VALUE or opnum == rop.GUARD_CLASS:
+            # Produced by guard_class(), xxx_guard_value(), or a few other
+            # opcodes like switch().  The pc is at the start of the opcode
+            # (so it will be redone).
             pass
-        elif opnum == rop.GUARD_CLASS or opnum == rop.GUARD_VALUE:
+        #
+        elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
+            xxx
+        elif (opnum == rop.GUARD_NO_EXCEPTION or
+              opnum == rop.GUARD_EXCEPTION or
+              opnum == rop.GUARD_NOT_FORCED or
+              opnum == rop.GUARD_NO_OVERFLOW or
+              opnum == rop.GUARD_OVERFLOW):
             pass
         else:
-            raise NotImplementedError(opnum)
+            from pypy.jit.metainterp.resoperation import opname
+            raise NotImplementedError(opname[opnum])
 
     # connect the return of values from the called frame to the
     # 'xxx_call_yyy' instructions from the caller frame
