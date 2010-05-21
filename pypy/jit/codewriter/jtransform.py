@@ -5,6 +5,7 @@ from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import Block, Link, c_last_exception
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter import support, heaptracker
+from pypy.jit.metainterp.typesystem import deref, arrayItem
 from pypy.rlib import objectmodel
 from pypy.rlib.jit import _we_are_jitted
 
@@ -288,10 +289,19 @@ class Transformer(object):
 
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
-        if oopspec_name.startswith('virtual_ref'):
-            return self._handle_virtual_ref_call(op, oopspec_name, args)
-        op1 = self._prepare_builtin_call(op, oopspec_name, args)
-        return self.handle_residual_call(op1)
+        # dispatch to various implementations depending on the oopspec_name
+        if oopspec_name.startswith('list.') or oopspec_name == 'newlist':
+            prepare = self._handle_list_call
+        elif oopspec_name.startswith('virtual_ref'):
+            prepare = self._handle_virtual_ref_call
+        else:
+            prepare = self.prepare_builtin_call
+        op1 = prepare(oopspec_name, args, op.result)
+        # If the resulting op1 is still a direct_call, turn it into a
+        # residual_call.
+        if op1 is None or op1.opname == 'direct_call':
+            op1 = self.handle_residual_call(op1 or op)
+        return op1
 
     handle_residual_indirect_call = handle_residual_call
 
@@ -312,21 +322,21 @@ class Transformer(object):
             result.append(op2)
         return result
 
-    def _prepare_builtin_call(self, op, oopspec_name, args,
+    def prepare_builtin_call(self, oopspec_name, args, result,
                               extra=None, extrakey=None):
         argtypes = [v.concretetype for v in args]
-        resulttype = op.result.concretetype
+        resulttype = result.concretetype
         c_func, TP = support.builtin_func_for_spec(self.cpu.rtyper,
                                                    oopspec_name, argtypes,
                                                    resulttype, extra, extrakey)
-        return SpaceOperation('direct_call', [c_func] + args, op.result)
+        return SpaceOperation('direct_call', [c_func] + args, result)
 
     def _do_builtin_call(self, op, oopspec_name=None, args=None,
                          extra=None, extrakey=None):
         if oopspec_name is None: oopspec_name = op.opname
         if args is None: args = op.args
-        op1 = self._prepare_builtin_call(op, oopspec_name, args,
-                                         extra, extrakey)
+        op1 = self.prepare_builtin_call(oopspec_name, args, op.result,
+                                        extra, extrakey)
         return self.rewrite_op_direct_call(op1)
 
     # XXX some of the following functions should not become residual calls
@@ -673,14 +683,50 @@ class Transformer(object):
         return SpaceOperation('can_enter_jit', [], None)
 
     # ----------
+    # Lists.
+
+    def _handle_list_call(self, oopspec_name, args, result):
+        if oopspec_name.startswith('new'):
+            LIST = deref(result.concretetype)
+        else:
+            LIST = deref(args[0].concretetype)
+        resizable = isinstance(LIST, lltype.GcStruct)
+        assert resizable == (not isinstance(LIST, lltype.GcArray))
+        if resizable:
+            prefix = 'do_resizable_'
+        else:
+            prefix = 'do_fixed_'
+            if self._array_of_voids(LIST):
+                return None # arrays of voids: not supported
+            arraydescr = self.cpu.arraydescrof(LIST)
+        #
+        try:
+            meth = getattr(self, prefix + oopspec_name.replace('.', '_'))
+        except AttributeError:
+            return None
+        else:
+            return meth(LIST, arraydescr, args, result)
+
+    def do_fixed_newlist(self, LIST, arraydescr, args, result):
+        # normalize number of arguments
+        if len(args) < 1:
+            args.append(Constant(0, lltype.Signed))
+        if len(args) > 1:
+            v_default = args[1]
+            if (not isinstance(v_default, Constant) or
+                v_default.value != arrayItem(LIST)._defl()):
+                return None     # variable or non-null initial value
+        return SpaceOperation('new_array', [arraydescr, args[0]], result)
+
+    # ----------
     # VirtualRefs.
 
-    def _handle_virtual_ref_call(self, op, oopspec_name, args):
+    def _handle_virtual_ref_call(self, oopspec_name, args, result):
         vrefinfo = self.callcontrol.virtualref_info
         heaptracker.register_known_gctype(self.cpu,
                                           vrefinfo.jit_virtual_ref_vtable,
                                           vrefinfo.JIT_VIRTUAL_REF)
-        return SpaceOperation(oopspec_name, list(args), op.result)
+        return SpaceOperation(oopspec_name, list(args), result)
 
     def rewrite_op_jit_force_virtual(self, op):
         return self._do_builtin_call(op)
