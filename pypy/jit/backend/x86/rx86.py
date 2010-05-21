@@ -377,8 +377,17 @@ class AbstractX86CodeBuilder(object):
 
     IMUL_rr = insn(rex_w, '\x0F\xAF', register(1, 8), register(2), '\xC0')
     IMUL_rb = insn(rex_w, '\x0F\xAF', register(1, 8), stack_bp(2))
-    # XXX: There are more efficient encodings of small immediates
-    IMUL_rri = insn(rex_w, '\x69', register(1, 8), register(2), '\xC0', immediate(3))
+    # 8-bit immediate
+    _IMUL_rri8 = insn(rex_w, '\x6B', register(1, 8), register(2), '\xC0', immediate(3, 'b'))
+    # 32-bit immediate
+    _IMUL_rri32 = insn(rex_w, '\x69', register(1, 8), register(2), '\xC0', immediate(3))
+
+    def IMUL_rri(self, reg1, reg2, immed):
+        if single_byte(immed):
+            self._IMUL_rri8(reg1, reg2, immed)
+        else:
+            assert fits_in_32bits(immed)
+            self._IMUL_rri32(reg1, reg2, immed)
 
     def IMUL_ri(self, reg, immed):
         return self.IMUL_rri(reg, reg, immed)
@@ -405,7 +414,8 @@ class AbstractX86CodeBuilder(object):
     J_il = insn('\x0F', immediate(1,'o'), '\x80', relative(2))
     SET_ir = insn('\x0F', immediate(1,'o'),'\x90', register(2), '\xC0')
 
-    CDQ = insn(rex_w, '\x99')
+    # The 64-bit version of this, CQO, is defined in X86_64_CodeBuilder
+    CDQ = insn(rex_nw, '\x99')
 
     # ------------------------------ SSE2 ------------------------------
 
@@ -461,6 +471,8 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         self.writechar(chr((imm >> 40) & 0xFF))
         self.writechar(chr((imm >> 48) & 0xFF))
         self.writechar(chr((imm >> 56) & 0xFF))
+
+    CQO = insn(rex_w, '\x99')
 
     # MOV_ri from the parent class is not wrong, but here is a better encoding
     # for the common case where the immediate fits in 32 bits

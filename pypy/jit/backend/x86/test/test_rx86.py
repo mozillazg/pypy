@@ -142,6 +142,10 @@ def test_imul_rri():
     s.IMUL_rri(ebx, ecx, 0x01234567)
     assert s.getvalue() == '\x69\xD9\x67\x45\x23\x01'
 
+    s = CodeBuilder32()
+    s.IMUL_rri(ebx, ecx, 0x2A)
+    assert s.getvalue() == '\x6B\xD9\x2A'
+
 class CodeBuilder64(CodeBuilderMixin, X86_64_CodeBuilder):
     pass
 
