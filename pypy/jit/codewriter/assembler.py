@@ -45,7 +45,6 @@ class Assembler(object):
         self.switchdictdescrs = []
         self.count_regs = dict.fromkeys(KINDS, 0)
         self.liveness = {}
-        self.nextlive = None
         self.startpoints = set()
         self.alllabels = set()
 
@@ -88,21 +87,18 @@ class Assembler(object):
         return False
 
     def write_insn(self, insn):
+        if insn[0] == '---':
+            return
         if isinstance(insn[0], Label):
             self.label_positions[insn[0].name] = len(self.code)
             return
         if insn[0] == '-live-':
-            assert self.nextlive is None
-            self.nextlive = (
-                self.get_liveness_info(insn, 'int'),
-                self.get_liveness_info(insn, 'ref'),
-                self.get_liveness_info(insn, 'float'))
-            return
-        if insn[0] == 'keepalive':
-            # The 'keepalive' instruction is useful when doing register
-            # allocation, to ensure that the register holding the value is
-            # not overwritten too early.  But it does not need to be
-            # present at all in the final code.
+            key = len(self.code)
+            live_i, live_r, live_f = self.liveness.get(key, ("", "", ""))
+            live_i = self.get_liveness_info(live_i, insn[1:], 'int')
+            live_r = self.get_liveness_info(live_r, insn[1:], 'ref')
+            live_f = self.get_liveness_info(live_f, insn[1:], 'float')
+            self.liveness[key] = live_i, live_r, live_f
             return
         startposition = len(self.code)
         self.code.append("temporary placeholder")
@@ -154,24 +150,29 @@ class Assembler(object):
                 argcodes.append('d')
             elif isinstance(x, IndirectCallTargets):
                 self.indirectcalltargets.update(x.lst)
+            elif x == '->':
+                assert '>' not in argcodes
+                argcodes.append('>')
             else:
                 raise NotImplementedError(x)
         #
         opname = insn[0]
-        if opname.startswith('G_'): opname = opname[2:]
+        assert '>' not in argcodes or argcodes.index('>') == len(argcodes) - 2
         key = opname + '/' + ''.join(argcodes)
         num = self.insns.setdefault(key, len(self.insns))
         self.code[startposition] = chr(num)
         self.startpoints.add(startposition)
-        #
-        if self.nextlive is not None:
-            self.liveness[len(self.code)] = self.nextlive
-            self.nextlive = None
 
-    def get_liveness_info(self, insn, kind):
-        lives = [chr(reg.index) for reg in insn[1:] if reg.kind == kind]
-        lives.sort()
-        return ''.join(lives)
+    def get_liveness_info(self, prevstring, args, kind):
+        """Return a string whose characters are register numbers.
+        We sort the numbers, too, to increase the chances of duplicate
+        strings (which are collapsed into a single string during translation).
+        """
+        lives = set(prevstring)    # set of characters
+        for reg in args:
+            if isinstance(reg, Register) and reg.kind == kind:
+                lives.add(chr(reg.index))
+        return ''.join(sorted(lives))
 
     def fix_labels(self):
         for name, pos in self.tlabel_positions:

@@ -12,14 +12,14 @@ def test_assemble_simple():
     ssarepr = SSARepr("test")
     i0, i1, i2 = Register('int', 0), Register('int', 1), Register('int', 2)
     ssarepr.insns = [
-        ('int_add', i0, i1, i2),
+        ('int_add', i0, i1, '->', i2),
         ('int_return', i2),
         ]
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
     assert jitcode.code == ("\x00\x00\x01\x02"
                             "\x01\x02")
-    assert assembler.insns == {'int_add/iii': 0,
+    assert assembler.insns == {'int_add/ii>i': 0,
                                'int_return/i': 1}
     assert jitcode.num_regs_i() == 3
     assert jitcode.num_regs_r() == 0
@@ -94,8 +94,8 @@ def test_assemble_loop():
     ssarepr.insns = [
         (Label('L1'),),
         ('goto_if_not_int_gt', i0, Constant(4, lltype.Signed), TLabel('L2')),
-        ('int_add', i1, i0, i1),
-        ('int_sub', i0, Constant(1, lltype.Signed), i0),
+        ('int_add', i1, i0, '->', i1),
+        ('int_sub', i0, Constant(1, lltype.Signed), '->', i0),
         ('goto', TLabel('L1')),
         (Label('L2'),),
         ('int_return', i1),
@@ -108,8 +108,8 @@ def test_assemble_loop():
                             "\x03\x00\x00"
                             "\x04\x17")
     assert assembler.insns == {'goto_if_not_int_gt/icL': 0,
-                               'int_add/iii': 1,
-                               'int_sub/ici': 2,
+                               'int_add/ii>i': 1,
+                               'int_sub/ic>i': 2,
                                'goto/L': 3,
                                'int_return/i': 4}
 
@@ -149,13 +149,6 @@ def test_assemble_indirect_call():
     assembler.assemble(ssarepr)
     assert assembler.indirectcalltargets == set(lst1).union(lst2)
 
-def test_assemble_keepalive():
-    ssarepr = SSARepr("test")
-    ssarepr.insns = [('keepalive', Register('ref', 2))]
-    assembler = Assembler()
-    jitcode = assembler.assemble(ssarepr)
-    assert jitcode.code == ""     # the keepalive is removed
-
 def test_num_regs():
     assembler = Assembler()
     ssarepr = SSARepr("test")
@@ -176,37 +169,20 @@ def test_num_regs():
 def test_liveness():
     ssarepr = SSARepr("test")
     i0, i1, i2 = Register('int', 0), Register('int', 1), Register('int', 2)
-    i3, i4, i5 = Register('int', 3), Register('int', 4), Register('int', 5)
     ssarepr.insns = [
-        ('-live-', i0),
-        ('G_int_add', i0, Constant(10, lltype.Signed), i1),
+        ('int_add', i0, Constant(10, lltype.Signed), '->', i1),
         ('-live-', i0, i1),
-        ('G_int_add', i0, Constant(3, lltype.Signed), i2),
-        ('-live-', i0),
-        ('G_int_mul', i1, i2, i3),
-        ('-live-', i3),
-        ('G_int_add', i0, Constant(6, lltype.Signed), i4),
-        ('-live-',),
-        ('G_int_mul', i3, i4, i5),
-        ('int_return', i5),
+        ('-live-', i1, i2),
+        ('int_add', i0, Constant(3, lltype.Signed), '->', i2),
+        ('-live-', i2),
         ]
     assembler = Assembler()
     jitcode = assembler.assemble(ssarepr)
     assert jitcode.code == ("\x00\x00\x0A\x01"   # ends at 4
-                            "\x00\x00\x03\x02"   # ends at 8
-                            "\x01\x01\x02\x03"   # ends at 12
-                            "\x00\x00\x06\x04"   # ends at 16
-                            "\x01\x03\x04\x05"   # ends at 20
-                            "\x02\x05")
-    assert assembler.insns == {'int_add/ici': 0,
-                               'int_mul/iii': 1,
-                               'int_return/i': 2}
-    py.test.raises(MissingLiveness, jitcode._live_vars, 0)
-    py.test.raises(MissingLiveness, jitcode._live_vars, 3)
-    py.test.raises(MissingLiveness, jitcode._live_vars, 5)
-    py.test.raises(MissingLiveness, jitcode._live_vars, 24)
-    assert jitcode._live_vars(4) == '%i0'
-    assert jitcode._live_vars(8) == '%i0 %i1'
-    assert jitcode._live_vars(12) == '%i0'
-    assert jitcode._live_vars(16) == '%i3'
-    assert jitcode._live_vars(20) == ''
+                            "\x00\x00\x03\x02")  # ends at 8
+    assert assembler.insns == {'int_add/ic>i': 0}
+    for i in range(8):
+        if i != 4:
+            py.test.raises(MissingLiveness, jitcode._live_vars, i)
+    assert jitcode._live_vars(4) == '%i0 %i1 %i2'
+    assert jitcode._live_vars(8) == '%i2'

@@ -182,13 +182,20 @@ class MIFrame(object):
     for _opimpl in ['int_is_true', 'int_is_zero', 'int_neg', 'int_invert',
                     'cast_ptr_to_int', 'cast_float_to_int',
                     'cast_int_to_float', 'float_neg', 'float_abs',
-                    'ptr_iszero', 'ptr_nonzero',
                     ]:
         exec py.code.Source('''
             @arguments("box")
             def opimpl_%s(self, b):
                 return self.execute(rop.%s, b)
         ''' % (_opimpl, _opimpl.upper())).compile()
+
+    @arguments("box")
+    def opimpl_ptr_nonzero(self, box):
+        return self.execute(rop.PTR_NE, box, history.CONST_NULL)
+
+    @arguments("box")
+    def opimpl_ptr_iszero(self, box):
+        return self.execute(rop.PTR_EQ, box, history.CONST_NULL)
 
     @arguments("box")
     def _opimpl_any_return(self, box):
@@ -252,13 +259,15 @@ class MIFrame(object):
         if not switchcase:
             self.pc = target
 
-    for _opimpl in ['int_is_zero', 'ptr_iszero', 'ptr_nonzero']:
-        exec py.code.Source('''
-            @arguments("box", "label")
-            def opimpl_goto_if_not_%s(self, box, target):
-                condbox = self.execute(rop.%s, box)
-                self.opimpl_goto_if_not(condbox, target)
-        ''' % (_opimpl, _opimpl.upper())).compile()
+    @arguments("box", "label")
+    def opimpl_goto_if_not_int_is_true(self, box, target):
+        condbox = self.execute(rop.INT_IS_TRUE, box)
+        self.opimpl_goto_if_not(condbox, target)
+
+    @arguments("box", "label")
+    def opimpl_goto_if_not_int_is_zero(self, box, target):
+        condbox = self.execute(rop.INT_IS_ZERO, box)
+        self.opimpl_goto_if_not(condbox, target)
 
     for _opimpl in ['int_lt', 'int_le', 'int_eq', 'int_ne', 'int_gt', 'int_ge',
                     'ptr_eq', 'ptr_ne']:
@@ -268,7 +277,29 @@ class MIFrame(object):
                 condbox = self.execute(rop.%s, b1, b2)
                 self.opimpl_goto_if_not(condbox, target)
         ''' % (_opimpl, _opimpl.upper())).compile()
-    
+
+    @arguments("box", "label")
+    def opimpl_goto_if_not_ptr_nonzero(self, box, target):
+        value = box.nonnull()
+        if value:
+            opnum = rop.GUARD_NONNULL
+        else:
+            opnum = rop.GUARD_ISNULL
+        self.generate_guard(opnum, box)
+        if not value:
+            self.pc = target
+
+    @arguments("box", "label")
+    def opimpl_goto_if_not_ptr_iszero(self, box, target):
+        value = box.nonnull()
+        if value:
+            opnum = rop.GUARD_NONNULL
+        else:
+            opnum = rop.GUARD_ISNULL
+        self.generate_guard(opnum, box)
+        if value:
+            self.pc = target
+
 ##    def follow_jump(self):
 ##        _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
 ##        assert ord(self.bytecode[self.pc]) == _op_goto_if_not
@@ -1003,6 +1034,9 @@ class MetaInterpStaticData(object):
         self.indirectcalltargets = list(indirectcalltargets)
 
     def finish_setup(self, codewriter, optimizer=None):
+        from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
+        self.blackholeinterpbuilder = BlackholeInterpBuilder(codewriter, self)
+        #
         asm = codewriter.assembler
         self.setup_insns(asm.insns)
         self.setup_descrs(asm.descrs)
@@ -1011,9 +1045,6 @@ class MetaInterpStaticData(object):
         self.portal_code = codewriter.mainjitcode
         RESULT = codewriter.portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)
-        #
-        from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
-        self.blackholeinterpbuilder = BlackholeInterpBuilder(codewriter, self)
         #
         warmrunnerdesc = self.warmrunnerdesc
         if warmrunnerdesc is not None:
@@ -1514,6 +1545,10 @@ class MetaInterp(object):
             frame.pc = frame.jitcode.follow_jump(frame.pc)
         elif opnum == rop.GUARD_FALSE:     # a goto_if_not that stops jumping
             pass
+        elif opnum == rop.GUARD_VALUE or opnum == rop.GUARD_CLASS:
+            pass        # the pc is already set to the *start* of the opcode
+        elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
+            xxx #self.framestack[-1].ignore_next_guard_nullness(opnum)
         elif (opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION
               or opnum == rop.GUARD_NOT_FORCED):
             exception = self.cpu.grab_exc_value()
@@ -1523,13 +1558,13 @@ class MetaInterp(object):
                 self.execute_did_not_raise()
             self.handle_possible_exception()
         elif opnum == rop.GUARD_NO_OVERFLOW:   # an overflow now detected
-            xxx #self.raise_overflow_error()
-        elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
-            xxx #self.framestack[-1].ignore_next_guard_nullness(opnum)
-        elif opnum == rop.GUARD_CLASS or opnum == rop.GUARD_VALUE:
+            self.execute_raised(OverflowError(), constant=True)
+            self.finishframe_exception()
+        elif opnum == rop.GUARD_OVERFLOW:      # no longer overflowing
             pass
         else:
-            raise NotImplementedError(opnum)
+            from pypy.jit.metainterp.resoperation import opname
+            raise NotImplementedError(opname[opnum])
 
     def compile(self, original_boxes, live_arg_boxes, start):
         num_green_args = self.staticdata.num_green_args

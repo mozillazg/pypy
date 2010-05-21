@@ -38,19 +38,19 @@ class CodeWriter(object):
         # that we want in the JitCode, but still as a control flow graph
         transform_graph(graph, self.cpu, self.callcontrol, portal)
         #
-        # step 2a: perform register allocation on it
+        # step 2: perform register allocation on it
         regallocs = {}
         for kind in KINDS:
             regallocs[kind] = perform_register_allocation(graph, kind)
-        #
-        # step 2b: compute the liveness around certain operations
-        compute_liveness(graph)
         #
         # step 3: flatten the graph to produce human-readable "assembler",
         # which means mostly producing a linear list of operations and
         # inserting jumps or conditional jumps.  This is a list of tuples
         # of the shape ("opname", arg1, ..., argN) or (Label(...),).
         ssarepr = flatten_graph(graph, regallocs)
+        #
+        # step 3b: compute the liveness around certain operations
+        compute_liveness(ssarepr)
         #
         # print the resulting assembler
         self.print_ssa_repr(ssarepr, portal, verbose)

@@ -95,18 +95,18 @@ class TestFlatten:
         if transform:
             from pypy.jit.codewriter.jtransform import transform_graph
             transform_graph(graphs[0], FakeCPU(), FakeCallControl())
-        if liveness:
-            from pypy.jit.codewriter.liveness import compute_liveness
-            compute_liveness(graphs[0])
         ssarepr = flatten_graph(graphs[0], fake_regallocs(),
                                 _include_all_exc_links=not transform)
+        if liveness:
+            from pypy.jit.codewriter.liveness import compute_liveness
+            compute_liveness(ssarepr)
         assert_format(ssarepr, expected)
 
     def test_simple(self):
         def f(n):
             return n + 10
         self.encoding_test(f, [5], """
-            int_add %i0, $10, %i1
+            int_add %i0, $10 -> %i1
             int_return %i1
         """)
 
@@ -117,18 +117,20 @@ class TestFlatten:
                 a -= 1
             return b
         self.encoding_test(f, [5, 6], """
-            int_copy %i0, %i2
-            int_copy %i1, %i3
+            int_copy %i0 -> %i2
+            int_copy %i1 -> %i3
             L1:
-            int_gt %i2, $0, %i4
+            int_gt %i2, $0 -> %i4
             goto_if_not %i4, L2
-            int_copy %i2, %i5
-            int_copy %i3, %i6
-            int_add %i6, %i5, %i7
-            int_sub %i5, $1, %i8
-            int_copy %i8, %i2
-            int_copy %i7, %i3
+            -live- L2
+            int_copy %i2 -> %i5
+            int_copy %i3 -> %i6
+            int_add %i6, %i5 -> %i7
+            int_sub %i5, $1 -> %i8
+            int_copy %i8 -> %i2
+            int_copy %i7 -> %i3
             goto L1
+            ---
             L2:
             int_return %i3
         """)
@@ -140,17 +142,19 @@ class TestFlatten:
                 a -= 1
             return b
         self.encoding_test(f, [5, 6], """
-            int_copy %i0, %i2
-            int_copy %i1, %i3
+            int_copy %i0 -> %i2
+            int_copy %i1 -> %i3
             L1:
             goto_if_not_int_gt %i2, $0, L2
-            int_copy %i2, %i4
-            int_copy %i3, %i5
-            int_add %i5, %i4, %i6
-            int_sub %i4, $1, %i7
-            int_copy %i7, %i2
-            int_copy %i6, %i3
+            -live- L2
+            int_copy %i2 -> %i4
+            int_copy %i3 -> %i5
+            int_add %i5, %i4 -> %i6
+            int_sub %i4, $1 -> %i7
+            int_copy %i7 -> %i2
+            int_copy %i6 -> %i3
             goto L1
+            ---
             L2:
             int_return %i3
         """, transform=True)
@@ -159,10 +163,10 @@ class TestFlatten:
         def f(i, f):
             return (i*5) + (f*0.25)
         self.encoding_test(f, [4, 7.5], """
-            int_mul %i0, $5, %i1
-            float_mul %f0, $0.25, %f1
-            cast_int_to_float %i1, %f2
-            float_add %f2, %f1, %f3
+            int_mul %i0, $5 -> %i1
+            float_mul %f0, $0.25 -> %f1
+            cast_int_to_float %i1 -> %f2
+            float_add %f2, %f1 -> %f3
             float_return %f3
         """)
 
@@ -180,7 +184,7 @@ class TestFlatten:
         flattener = GraphFlattener(None, fake_regallocs())
         flattener.serialize_op(op)
         assert_format(flattener.ssarepr, """
-            residual_call_ir_f $12345, I[%i0, %i1], R[%r0, %r1], %f0
+            residual_call_ir_f $12345, I[%i0, %i1], R[%r0, %r1] -> %f0
         """)
 
     def test_same_as_removal(self):
@@ -188,7 +192,7 @@ class TestFlatten:
             b = chr(a)
             return ord(b) + a
         self.encoding_test(f, [65], """
-            int_add %i0, %i0, %i1
+            int_add %i0, %i0 -> %i1
             int_return %i1
         """, transform=True)
 
@@ -210,15 +214,19 @@ class TestFlatten:
             elif n == 7: return 1212
             else:        return 42
         self.encoding_test(f, [65], """
+            -live-
             int_guard_value %i0
             goto_if_not_int_eq %i0, $-5, L1
             int_return $12
+            ---
             L1:
             goto_if_not_int_eq %i0, $2, L2
             int_return $51
+            ---
             L2:
             goto_if_not_int_eq %i0, $7, L3
             int_return $1212
+            ---
             L3:
             int_return $42
         """)
@@ -233,18 +241,25 @@ class TestFlatten:
             elif x == 6: return 54
             return -1
         self.encoding_test(f, [65], """
+            -live-
             switch %i0, <SwitchDictDescr 1:L1, 2:L2, 3:L3, 4:L4, 5:L5, 6:L6>
             int_return $-1
+            ---
             L1:
             int_return $61
+            ---
             L2:
             int_return $511
+            ---
             L3:
             int_return $-22
+            ---
             L4:
             int_return $81
+            ---
             L5:
             int_return $17
+            ---
             L6:
             int_return $54
         """)
@@ -267,12 +282,15 @@ class TestFlatten:
             direct_call $<* fn g>, %i0
             catch_exception L1
             int_return $3
+            ---
             L1:
             goto_if_exception_mismatch $<* struct object_vtable>, L2
             int_return $1
+            ---
             L2:
             goto_if_exception_mismatch $<* struct object_vtable>, L3
             int_return $2
+            ---
             L3:
             reraise
         """)
@@ -295,15 +313,18 @@ class TestFlatten:
                 return 4
 
         self.encoding_test(f, [65], """
-            G_residual_call_ir_v $<* fn g>, <Descr>, I[%i0], R[]
+            residual_call_ir_v $<* fn g>, <Descr>, I[%i0], R[]
+            -live-
             catch_exception L1
             int_return $4
+            ---
             L1:
             goto_if_exception_mismatch $<* struct object_vtable>, L2
-            last_exc_value %r0
-            ref_copy %r0, %r1
-            getfield_gc_i %r1, <Descr>, %i1
+            last_exc_value -> %r0
+            ref_copy %r0 -> %r1
+            getfield_gc_i %r1, <Descr> -> %i1
             int_return %i1
+            ---
             L2:
             int_return $3
         """, transform=True)
@@ -332,6 +353,7 @@ class TestFlatten:
             direct_call $<* fn g>, %i0
             catch_exception L1
             void_return
+            ---
             L1:
             raise $<* struct object>
         """)
@@ -340,11 +362,13 @@ class TestFlatten:
         def f(i):
             return not i
 
-        # note that 'goto_if_not_int_is_true' is actually the same thing
-        # as just 'goto_if_not'.
+        # note that 'goto_if_not_int_is_true' is not the same thing
+        # as just 'goto_if_not', because the last one expects a boolean
         self.encoding_test(f, [7], """
-            goto_if_not %i0, L1
+            goto_if_not_int_is_true %i0, L1
+            -live- L1
             int_return $False
+            ---
             L1:
             int_return $True
         """, transform=True)
@@ -360,15 +384,19 @@ class TestFlatten:
             except ZeroDivisionError:
                 return -42
         self.encoding_test(f, [7, 2], """
-            G_residual_call_ir_i $<* fn int_floordiv_ovf_zer>, <Descr>, I[%i0, %i1], R[], %i2
+            residual_call_ir_i $<* fn int_floordiv_ovf_zer>, <Descr>, I[%i0, %i1], R[] -> %i2
+            -live-
             catch_exception L1
             int_return %i2
+            ---
             L1:
             goto_if_exception_mismatch $<* struct object_vtable>, L2
             int_return $42
+            ---
             L2:
             goto_if_exception_mismatch $<* struct object_vtable>, L3
             int_return $-42
+            ---
             L3:
             reraise
         """, transform=True)
@@ -383,15 +411,33 @@ class TestFlatten:
                 return 42
         # XXX so far, this really produces a int_mod_ovf_zer...
         self.encoding_test(f, [7, 2], """
-            G_residual_call_ir_i $<* fn int_mod_ovf_zer>, <Descr>, I[%i0, %i1], R[], %i2
+            residual_call_ir_i $<* fn int_mod_ovf_zer>, <Descr>, I[%i0, %i1], R[] -> %i2
+            -live-
             catch_exception L1
             int_return %i2
+            ---
             L1:
             goto_if_exception_mismatch $<* struct object_vtable>, L2
             int_return $42
+            ---
             L2:
             reraise
         """, transform=True)
+
+    def test_simple_branch(self):
+        def f(n, m1, m2):
+            if n:
+                return m1
+            else:
+                return m2
+        self.encoding_test(f, [4, 5, 6], """
+            goto_if_not_int_is_true %i0, L1
+            -live- %i1, %i2, L1
+            int_return %i1
+            ---
+            L1:
+            int_return %i2
+        """, transform=True, liveness=True)
 
     def test_int_add_ovf(self):
         def f(i, j):
@@ -400,10 +446,11 @@ class TestFlatten:
             except OverflowError:
                 return 42
         self.encoding_test(f, [7, 2], """
-            -live-
-            G_int_add_ovf %i0, %i1, %i2
+            int_add_ovf %i0, %i1 -> %i2
+            -live- %i2
             catch_exception L1
             int_return %i2
+            ---
             L1:
             int_return $42
         """, transform=True, liveness=True)
@@ -418,13 +465,14 @@ class TestFlatten:
             except Exception:
                 return 42 + j
         self.encoding_test(f, [7, 2], """
-            -live- %i1
-            G_residual_call_ir_i $<* fn g>, <Descr>, I[%i0, %i1], R[], %i2
+            residual_call_ir_i $<* fn g>, <Descr>, I[%i0, %i1], R[] -> %i2
+            -live- %i1, %i2
             catch_exception L1
             int_return %i2
+            ---
             L1:
-            int_copy %i1, %i3
-            int_add %i3, $42, %i4
+            int_copy %i1 -> %i3
+            int_add %i3, $42 -> %i4
             int_return %i4
         """, transform=True, liveness=True)
 
@@ -438,7 +486,7 @@ class TestFlatten:
             except Exception:
                 return 42 + j
         self.encoding_test(f, [7, 2], """
-            residual_call_ir_i $<* fn cannot_raise>, <Descr>, I[%i0, %i1], R[], %i2
+            residual_call_ir_i $<* fn cannot_raise>, <Descr>, I[%i0, %i1], R[] -> %i2
             int_return %i2
         """, transform=True, liveness=True)
 
@@ -458,11 +506,12 @@ class TestFlatten:
             myjitdriver.jit_merge_point(x=x, y=y)
             myjitdriver.can_enter_jit(x=y, y=x)
         self.encoding_test(f, [4, 5], """
-            G_int_guard_value %i0
+            int_guard_value %i0
+            -live- %i0, %i1
             jit_merge_point I[%i0], R[], F[], I[%i1], R[], F[]
             can_enter_jit
             void_return
-        """, transform=True)
+        """, transform=True, liveness=True)
 
     def test_keepalive(self):
         S = lltype.GcStruct('S')
@@ -475,9 +524,20 @@ class TestFlatten:
             keepalive_until_here(q)
             return x
         self.encoding_test(f, [5], """
-            G_residual_call_r_r $<* fn g>, <Descr>, R[], %r0
-            G_residual_call_r_r $<* fn g>, <Descr>, R[], %r1
-            keepalive %r0
-            keepalive %r1
+            residual_call_r_r $<* fn g>, <Descr>, R[] -> %r0
+            -live-
+            residual_call_r_r $<* fn g>, <Descr>, R[] -> %r1
+            -live-
+            -live- %r0
+            -live- %r1
             int_return %i0
         """, transform=True)
+        self.encoding_test(f, [5], """
+            residual_call_r_r $<* fn g>, <Descr>, R[] -> %r0
+            -live- %i0, %r0
+            residual_call_r_r $<* fn g>, <Descr>, R[] -> %r1
+            -live- %i0, %r0, %r1
+            -live- %i0, %r0, %r1
+            -live- %i0, %r1
+            int_return %i0
+        """, transform=True, liveness=True)

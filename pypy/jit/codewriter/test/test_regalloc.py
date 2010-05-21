@@ -59,11 +59,13 @@ class TestRegAlloc:
         graph = self.make_graphs(f, [5, 6])[0]
         self.check_assembler(graph, """
             L1:
-            int_gt %i0, $0, %i2
+            int_gt %i0, $0 -> %i2
             goto_if_not %i2, L2
-            int_add %i1, %i0, %i1
-            int_sub %i0, $1, %i0
+            -live- L2
+            int_add %i1, %i0 -> %i1
+            int_sub %i0, $1 -> %i0
             goto L1
+            ---
             L2:
             int_return %i1
         """)
@@ -76,12 +78,14 @@ class TestRegAlloc:
         graph = self.make_graphs(f, [5, 6])[0]
         self.check_assembler(graph, """
             L1:
-            int_gt %i0, $0, %i2
+            int_gt %i0, $0 -> %i2
             goto_if_not %i2, L2
+            -live- L2
             int_push %i1
-            int_copy %i0, %i1
-            int_pop %i0
+            int_copy %i0 -> %i1
+            int_pop -> %i0
             goto L1
+            ---
             L2:
             int_return %i1
         """)
@@ -94,11 +98,13 @@ class TestRegAlloc:
         graph = self.make_graphs(f, [5, 6])[0]
         self.check_assembler(graph, """
             L1:
-            int_gt %i0, $0, %i0
+            int_gt %i0, $0 -> %i0
             goto_if_not %i0, L2
-            int_copy %i1, %i0
-            int_copy $2, %i1
+            -live- L2
+            int_copy %i1 -> %i0
+            int_copy $2 -> %i1
             goto L1
+            ---
             L2:
             int_return %i1
         """)
@@ -111,13 +117,15 @@ class TestRegAlloc:
         graph = self.make_graphs(f, [5, 6, 7])[0]
         self.check_assembler(graph, """
             L1:
-            int_gt %i0, $0, %i3
+            int_gt %i0, $0 -> %i3
             goto_if_not %i3, L2
+            -live- L2
             int_push %i1
-            int_copy %i2, %i1
-            int_copy %i0, %i2
-            int_pop %i0
+            int_copy %i2 -> %i1
+            int_copy %i0 -> %i2
+            int_pop -> %i0
             goto L1
+            ---
             L2:
             int_return %i1
         """)
@@ -130,10 +138,12 @@ class TestRegAlloc:
         graph = self.make_graphs(f, [5, 6, 7])[0]
         self.check_assembler(graph, """
             L1:
-            int_gt %i0, $0, %i3
+            int_gt %i0, $0 -> %i3
             goto_if_not %i3, L2
-            int_copy %i2, %i1
+            -live- L2
+            int_copy %i2 -> %i1
             goto L1
+            ---
             L2:
             int_return %i1
         """)
@@ -152,8 +162,8 @@ class TestRegAlloc:
         block.closeblock(Link([v3], graph.returnblock))
         #
         self.check_assembler(graph, """
-            int_add %i0, $1, %i1
-            rescall I[%i0, %i1], %i0
+            int_add %i0, $1 -> %i1
+            rescall I[%i0, %i1] -> %i0
             int_return %i0
         """)
 
@@ -164,7 +174,8 @@ class TestRegAlloc:
         v4 = Variable(); v4.concretetype = rclass.CLASSTYPE
         block = Block([])
         block.operations = [
-            SpaceOperation('G_res_call', [], v1),
+            SpaceOperation('res_call', [], v1),
+            SpaceOperation('-live-', [], None),
             ]
         graph = FunctionGraph('f', block, v4)
         exclink = Link([v2], graph.returnblock)
@@ -176,13 +187,16 @@ class TestRegAlloc:
                          exclink)
         #
         self.check_assembler(graph, """
-            G_res_call %i0
+            res_call -> %i0
+            -live-
             catch_exception L1
             int_return %i0
+            ---
             L1:
             goto_if_exception_mismatch $123, L2
-            last_exception %i0
+            last_exception -> %i0
             int_return %i0
+            ---
             L2:
             reraise
         """)
@@ -203,8 +217,8 @@ class TestRegAlloc:
         block.closeblock(Link([v3], graph.returnblock))
         #
         self.check_assembler(graph, """
-            int_add %i0, $1, %i1
-            rescall I[%i0, %i1], %i2
-            rescall I[%i0, %i1], %i0
+            int_add %i0, $1 -> %i1
+            rescall I[%i0, %i1] -> %i2
+            rescall I[%i0, %i1] -> %i0
             int_return %i0
         """)
