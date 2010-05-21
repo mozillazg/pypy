@@ -2,12 +2,13 @@
 import os, sys
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.jit.backend.x86.ri386 import I386CodeBuilder
+from pypy.jit.backend.x86.rx86 import X86_32_CodeBuilder
+from pypy.jit.backend.x86.regloc import LocationCodeBuilder
 from pypy.rlib.rmmap import PTR, alloc, free
 from pypy.rlib.debug import make_sure_not_resized
 
 
-class InMemoryCodeBuilder(I386CodeBuilder):
+class InMemoryCodeBuilder(X86_32_CodeBuilder, LocationCodeBuilder):
     _last_dump_start = 0
 
     def __init__(self, start, end):
@@ -31,12 +32,14 @@ class InMemoryCodeBuilder(I386CodeBuilder):
     def write(self, listofchars):
         self._pos = self.overwrite(self._pos, listofchars)
 
-    def writechr(self, n):
-        # purely for performance: don't make the one-element list [chr(n)]
+    def writechar(self, char):
         pos = self._pos
         assert pos + 1 <= self._size
-        self._data[pos] = chr(n)
+        self._data[pos] = char
         self._pos = pos + 1
+
+    def writechr(self, n):
+        self.writechar(chr(n))
 
     def get_relative_pos(self):
         return self._pos

@@ -339,6 +339,8 @@ class AbstractX86CodeBuilder(object):
     MOV_rr = insn(rex_w, '\x89', register(2,8), register(1), '\xC0')
     MOV_br = insn(rex_w, '\x89', register(2,8), stack_bp(1))
     MOV_rb = insn(rex_w, '\x8B', register(1,8), stack_bp(2))
+    MOV_sr = insn(rex_w, '\x89', register(2,8), stack_sp(1))
+    MOV_rs = insn(rex_w, '\x8B', register(1,8), stack_sp(2))
 
     # "MOV reg1, [reg2+offset]" and the opposite direction
     MOV_rm = insn(rex_w, '\x8B', register(1,8), mem_reg_plus_const(2))
@@ -356,6 +358,11 @@ class AbstractX86CodeBuilder(object):
     MOV_rj = insn(rex_w, '\x8B', register(1,8), '\x05', immediate(2))
     MOV_jr = insn(rex_w, '\x89', register(2,8), '\x05', immediate(1))
 
+    MOV8_mr = insn(rex_w, '\x88', register(2, 8), mem_reg_plus_const(1))
+
+    MOVZX8_rm = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_const(2))
+    MOVZX16_rm = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_const(2))
+
     # ------------------------------ Arithmetic ------------------------------
 
     ADD_ri, ADD_rr, ADD_rb, _, _ = common_modes(0)
@@ -364,6 +371,17 @@ class AbstractX86CodeBuilder(object):
     SUB_ri, SUB_rr, SUB_rb, _, _ = common_modes(5)
     XOR_ri, XOR_rr, XOR_rb, _, _ = common_modes(6)
     CMP_ri, CMP_rr, CMP_rb, CMP_bi, CMP_br = common_modes(7)
+
+    DIV_r = insn(rex_w, '\xF7', register(1), '\xF0')
+    IDIV_r = insn(rex_w, '\xF7', register(1), '\xF8')
+
+    IMUL_rr = insn(rex_w, '\x0F\xAF', register(1, 8), register(2), '\xC0')
+    IMUL_rb = insn(rex_w, '\x0F\xAF', register(1, 8), stack_bp(2))
+    # XXX: There are more efficient encodings of small immediates
+    IMUL_rri = insn(rex_w, '\x69', register(1, 8), register(2), '\xC0', immediate(3))
+
+    def IMUL_ri(self, reg, immed):
+        return self.IMUL_rri(reg, reg, immed)
 
     # ------------------------------ Misc stuff ------------------------------
 
@@ -381,10 +399,13 @@ class AbstractX86CodeBuilder(object):
     CALL_b = insn('\xFF', orbyte(2<<3), stack_bp(1))
 
     XCHG_rm = insn(rex_w, '\x87', register(1,8), mem_reg_plus_const(2))
+    XCHG_rj = insn(rex_w, '\x87', register(1,8), '\x05', immediate(2))
 
     JMP_l = insn('\xE9', relative(1))
     J_il = insn('\x0F', immediate(1,'o'), '\x80', relative(2))
     SET_ir = insn('\x0F', immediate(1,'o'),'\x90', register(2), '\xC0')
+
+    CDQ = insn(rex_w, '\x99')
 
     # ------------------------------ SSE2 ------------------------------
 
@@ -398,6 +419,9 @@ class AbstractX86CodeBuilder(object):
                                                      mem_reg_plus_const(2))
     MOVSD_mr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8),
                                                      mem_reg_plus_const(1))
+
+    MOVSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1, 8), '\x05', immediate(2))
+    MOVSD_jr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2, 8), '\x05', immediate(1))
 
     # ------------------------------------------------------------
 
@@ -463,6 +487,12 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         py.test.skip("MOV_rj unsupported")
     def MOV_jr(self, mem_immed, reg):
         py.test.skip("MOV_jr unsupported")
+    def XCHG_rj(self, reg, mem_immed):
+        py.test.skip("XCGH_rj unsupported")
+    def MOVSD_rj(self, xmm_reg, mem_immed):
+        py.test.skip("MOVSD_rj unsupported")
+    def MOVSD_jr(self, xmm_reg, mem_immed):
+        py.test.skip("MOVSD_jr unsupported")
 
 # ____________________________________________________________
 
