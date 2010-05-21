@@ -541,3 +541,18 @@ class TestFlatten:
             -live- %i0, %r1
             int_return %i0
         """, transform=True, liveness=True)
+
+    def test_ptr_nonzero(self):
+        def f(p):
+            if p:
+                return 12
+            return 34
+        S = lltype.GcStruct('S')
+        self.encoding_test(f, [lltype.malloc(S)], """
+            -live- %r0
+            goto_if_not_ptr_nonzero %r0, L1
+            int_return $12
+            ---
+            L1:
+            int_return $34
+        """, transform=True, liveness=True)

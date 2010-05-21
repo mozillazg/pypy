@@ -1010,8 +1010,13 @@ class BlackholeInterpreter(object):
             # (so it will be redone).
             pass
         #
-        elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
-            xxx
+        elif (opnum == rop.GUARD_NONNULL or
+              opnum == rop.GUARD_ISNULL or
+              opnum == rop.GUARD_NONNULL_CLASS):
+            # Produced by goto_if_not_ptr_{non,is}zero().  The pc is at the
+            # start of the opcode (so it will be redone).  This is needed
+            # because of GUARD_NONNULL_CLASS.
+            pass
         elif (opnum == rop.GUARD_NO_EXCEPTION or
               opnum == rop.GUARD_EXCEPTION or
               opnum == rop.GUARD_NOT_FORCED or

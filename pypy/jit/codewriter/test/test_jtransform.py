@@ -142,7 +142,7 @@ def test_optimize_goto_if_not__ptr_iszero():
         res = Transformer().optimize_goto_if_not(block)
         assert res == True
         assert block.operations == []
-        assert block.exitswitch == (opname, v1)
+        assert block.exitswitch == (opname, v1, '-live-before')
         assert block.exits == exits
 
 def test_symmetric():
