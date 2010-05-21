@@ -23,13 +23,12 @@ def test_liveness():
     assert not j.has_liveness_info(4)
     #
     seen = []
-    def callback(arg, value, index):
+    def callback(arg, value):
         assert arg == "foo"
-        seen.append((value, index))
+        seen.append(value)
     #
-    total = j.enumerate_live_vars(5, callback, "foo",
-                                  {ord(" "): "i10", ord("A"): "i20"},
-                                  {ord("b"): "r30"},
-                                  {ord("C"): "f40", ord("D"): "f50"})
-    assert total == 5
-    assert seen == [("i10", 0), ("i20", 1), ("r30", 2), ("f40", 3), ("f50", 4)]
+    j.enumerate_live_vars(5, callback, "foo",
+                          {ord(" "): "i10", ord("A"): "i20"},
+                          {ord("b"): "r30"},
+                          {ord("C"): "f40", ord("D"): "f50"})
+    assert seen == ["i10", "i20", "r30", "f40", "f50"]

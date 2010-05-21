@@ -42,7 +42,7 @@ def _ensure_parent_resumedata(framestack, n):
                                          back.pc)
     target.parent_resumedata_snapshot = Snapshot(
                                          back.parent_resumedata_snapshot,
-                                         back.get_list_of_active_boxes())
+                                         back.get_list_of_active_boxes(True))
 
 def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
                        storage):
@@ -53,7 +53,7 @@ def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
                                 top.jitcode, top.pc)
     storage.rd_frame_info_list = frame_info_list
     snapshot = Snapshot(top.parent_resumedata_snapshot,
-                        top.get_list_of_active_boxes())
+                        top.get_list_of_active_boxes(False))
     snapshot = Snapshot(snapshot, virtualref_boxes[:]) # xxx for now
     if virtualizable_boxes is not None:
         snapshot = Snapshot(snapshot, virtualizable_boxes[:]) # xxx for now
