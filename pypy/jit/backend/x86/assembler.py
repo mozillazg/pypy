@@ -15,7 +15,8 @@ from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
                                          esp, ebp, esi, edi,
                                          xmm0, xmm1, xmm2, xmm3,
                                          xmm4, xmm5, xmm6, xmm7,
-                                         RegLoc, StackLoc, ImmedLoc, imm)
+                                         RegLoc, StackLoc,
+                                         ImmedLoc, AddressLoc, imm)
 
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import rx86, regloc, codebuf
@@ -828,21 +829,17 @@ class Assembler386(object):
         assert isinstance(resloc, RegLoc)
         size = size_loc.value
 
-        # FIXME: Should be done in one instruction
-        self.mc.PUSH(eax)
-        self.mc.MOV(eax, base_loc)
-        self.mc.ADD(eax, ofs_loc)
+        source_addr = AddressLoc(base_loc, ofs_loc)
         if size == 1:
-            self.mc.MOVZX8_rm(resloc.value, (eax.value, 0))
+            self.mc.MOVZX8(resloc, source_addr)
         elif size == 2:
-            self.mc.MOVZX16_rm(resloc.value, (eax.value, 0))
+            self.mc.MOVZX16(resloc, source_addr)
         elif size == WORD:
-            self.mc.MOV_rm(resloc.value, (eax.value, 0))
+            self.mc.MOV(resloc, source_addr)
         elif size == 8:
-            self.mc.MOVSD_rm(resloc.value, (eax.value, 0))
+            self.mc.MOVSD(resloc, source_addr)
         else:
             raise NotImplementedError("getfield size = %d" % size)
-        self.mc.POP(eax)
 
     genop_getfield_raw = genop_getfield_gc
     genop_getfield_raw_pure = genop_getfield_gc
@@ -872,42 +869,31 @@ class Assembler386(object):
         base_loc, ofs_loc, size_loc, value_loc = arglocs
         assert isinstance(size_loc, ImmedLoc)
         size = size_loc.value
-        # FIXME: Should be done in one instruction
-        self.mc.PUSH(eax)
-        self.mc.PUSH(ebx)
-        self.mc.MOV(eax, base_loc)
-        self.mc.ADD(eax, ofs_loc)
-        self.mc.MOV(ebx, value_loc)
+        dest_addr = AddressLoc(base_loc, ofs_loc)
         if size == WORD * 2:
-            self.mc.MOVSD_mr((eax.value, 0), ebx.value)
+            self.mc.MOVSD(dest_addr, value_loc)
         elif size == WORD:
-            self.mc.MOV_mr((eax.value, 0), ebx.value)
+            self.mc.MOV(dest_addr, value_loc)
         elif size == 2:
-            # XXX: Select 16-bit operand mode in a non-ugly way
-            self.mc.writechar('\x66')
-            self.mc.MOV_mr((eax.value, 0), ebx.value)
+            self.mc.MOV16(dest_addr, value_loc)
         elif size == 1:
-            self.mc.MOV8_mr((eax.value, 0), ebx.lowest8bits())
+            self.mc.MOV8(dest_addr, value_loc.lowest8bits())
         else:
             print "[asmgen]setfield addr size %d" % size
             raise NotImplementedError("Addr size %d" % size)
-        self.mc.POP(ebx)
-        self.mc.POP(eax)
 
     def genop_discard_setarrayitem_gc(self, op, arglocs):
         base_loc, ofs_loc, value_loc, scale_loc, baseofs = arglocs
         assert isinstance(baseofs, ImmedLoc)
         assert isinstance(scale_loc, ImmedLoc)
+        dest_addr = AddressLoc(base_loc, ofs_loc, scale_loc.value, baseofs.value)
         if op.args[2].type == FLOAT:
-            self.mc.MOVSD(addr64_add(base_loc, ofs_loc, baseofs.value,
-                                     scale_loc.value), value_loc)
+            self.mc.MOVSD(dest_addr, value_loc)
         else:
             if scale_loc.value == 2:
-                self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value,
-                                     scale_loc.value), value_loc)
+                self.mc.MOV(dest_addr, value_loc)
             elif scale_loc.value == 0:
-                self.mc.MOV(addr8_add(base_loc, ofs_loc, baseofs.value,
-                                      scale_loc.value), value_loc.lowest8bits())
+                self.mc.MOV8(dest_addr, value_loc.lowest8bits())
             else:
                 raise NotImplementedError("scale = %d" % scale_loc.value)
 
@@ -916,17 +902,17 @@ class Assembler386(object):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
                                               self.cpu.translate_support_code)
         assert itemsize == 1
-        self.mc.MOV(addr8_add(base_loc, ofs_loc, basesize),
-                    val_loc.lowest8bits())
+        dest_addr = AddressLoc(base_loc, ofs_loc, 0, basesize)
+        self.mc.MOV8(dest_addr, val_loc.lowest8bits())
 
     def genop_discard_unicodesetitem(self, op, arglocs):
         base_loc, ofs_loc, val_loc = arglocs
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
                                               self.cpu.translate_support_code)
         if itemsize == 4:
-            self.mc.MOV(addr_add(base_loc, ofs_loc, basesize, 2), val_loc)
+            self.mc.MOV(AddressLoc(base_loc, ofs_loc, 2, basesize), val_loc)
         elif itemsize == 2:
-            self.mc.MOV16(addr_add(base_loc, ofs_loc, basesize, 1), val_loc)
+            self.mc.MOV16(AddressLoc(base_loc, ofs_loc, 1, basesize), val_loc)
         else:
             assert 0, itemsize
 

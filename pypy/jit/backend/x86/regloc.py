@@ -53,7 +53,8 @@ class RegLoc(AssemblerLocation):
     def lowest8bits(self):
         # XXX: Only handling i386 al, cl, dl, bl for now
         assert self.value < 4
-        return self.value
+        assert not self.is_xmm
+        return self
 
     def location_code(self):
         return 'r'
@@ -79,14 +80,14 @@ class AddressLoc(AssemblerLocation):
     _immutable_ = True
 
     # The address is base_loc + (scaled_loc << scale) + static_offset
-    def __init__(self, base_loc, scaled_loc, scale, static_offset):
+    def __init__(self, base_loc, scaled_loc, scale=0, static_offset=0):
         assert 0 <= scale < 4
         assert isinstance(base_loc, ImmedLoc) or isinstance(base_loc, RegLoc)
         assert isinstance(scaled_loc, ImmedLoc) or isinstance(scaled_loc, RegLoc)
 
         if isinstance(base_loc, ImmedLoc):
             if isinstance(scaled_loc, ImmedLoc):
-                self.location_code = 'j'
+                self._location_code = 'j'
                 self.value = base_loc.value + (scaled_loc.value << scale) + static_offset
             else:
                 # FIXME
@@ -94,14 +95,14 @@ class AddressLoc(AssemblerLocation):
         else:
             if isinstance(scaled_loc, ImmedLoc):
                 # FIXME: What if base_loc is ebp or esp?
-                self.location_code = 'm'
+                self._location_code = 'm'
                 self.value = (base_loc.value, (scaled_loc.value << scale) + static_offset)
             else:
-                self.location_code = 'a'
+                self._location_code = 'a'
                 self.value = (base_loc.value, scaled_loc.value, scale, static_offset)
 
     def location_code(self):
-        return self.location_code
+        return self._location_code
 
     def value(self):
         return self.value
@@ -125,12 +126,20 @@ class LocationCodeBuilder(object):
 
     ADD = _binaryop('ADD')
     OR  = _binaryop('OR')
+    XOR = _binaryop('XOR')
+
     AND = _binaryop('AND')
     SUB = _binaryop('SUB')
-    XOR = _binaryop('XOR')
-    MOV = _binaryop('MOV')
-    MOVSD = _binaryop('MOVSD')
     IMUL = _binaryop('IMUL')
+
+    MOV = _binaryop('MOV')
+    MOV8 = _binaryop('MOV8')
+    MOVSD = _binaryop('MOVSD')
+
+    def MOV16(self, dest_loc, src_loc):
+        # Select 16-bit operand mode
+        self.writechar('\x66')
+        self.MOV(dest_loc, src_loc)
 
     def PUSH(self, loc):
         assert isinstance(loc, RegLoc)
