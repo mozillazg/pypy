@@ -504,10 +504,12 @@ class AddressAsInt(Symbolic):
         return model.SomeInteger()
     def lltype(self):
         return lltype.Signed
-    def __cmp__(self, other):
-        if isinstance(other, AddressAsInt):
-            return cmp(self.adr, other.adr)
-        return Symbolic.__cmp__(self, other)
+    def __eq__(self, other):
+        return self.adr == cast_int_to_adr(other)
+    def __ne__(self, other):
+        return self.adr != cast_int_to_adr(other)
+    def __nonzero__(self):
+        return bool(self.adr)
     def __repr__(self):
         try:
             return '<AddressAsInt %s>' % (self.adr.ptr,)
