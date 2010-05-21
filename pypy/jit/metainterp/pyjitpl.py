@@ -66,6 +66,7 @@ class MIFrame(object):
         self.copy_constants(self.registers_i, jitcode.constants_i, ConstInt)
         self.copy_constants(self.registers_r, jitcode.constants_r, ConstPtr)
         self.copy_constants(self.registers_f, jitcode.constants_f, ConstFloat)
+        self._result_argcode = 'v'
 
     def copy_constants(self, registers, constants, ConstClass):
         """Copy jitcode.constants[0] to registers[255],
@@ -113,6 +114,7 @@ class MIFrame(object):
             if   argcode == 'i': self.registers_i[index] = None
             elif argcode == 'r': self.registers_r[index] = None
             elif argcode == 'f': self.registers_f[index] = None
+            self._result_argcode = 'v'     # done
         #
         self._tmp_count = 0
         count = self.jitcode.enumerate_live_vars(
@@ -297,25 +299,25 @@ class MIFrame(object):
                 self.opimpl_goto_if_not(condbox, target)
         ''' % (_opimpl, _opimpl.upper())).compile()
 
-    @arguments("box", "label")
-    def opimpl_goto_if_not_ptr_nonzero(self, box, target):
+    @arguments("orgpc", "box", "label")
+    def opimpl_goto_if_not_ptr_nonzero(self, orgpc, box, target):
         value = box.nonnull()
         if value:
             opnum = rop.GUARD_NONNULL
         else:
             opnum = rop.GUARD_ISNULL
-        self.generate_guard(opnum, box)
+        self.generate_guard(opnum, box, resumepc=orgpc)
         if not value:
             self.pc = target
 
-    @arguments("box", "label")
-    def opimpl_goto_if_not_ptr_iszero(self, box, target):
+    @arguments("orgpc", "box", "label")
+    def opimpl_goto_if_not_ptr_iszero(self, orgpc, box, target):
         value = box.nonnull()
         if value:
             opnum = rop.GUARD_NONNULL
         else:
             opnum = rop.GUARD_ISNULL
-        self.generate_guard(opnum, box)
+        self.generate_guard(opnum, box, resumepc=orgpc)
         if value:
             self.pc = target
 
@@ -1567,8 +1569,10 @@ class MetaInterp(object):
             pass
         elif opnum == rop.GUARD_VALUE or opnum == rop.GUARD_CLASS:
             pass        # the pc is already set to the *start* of the opcode
-        elif opnum == rop.GUARD_NONNULL or opnum == rop.GUARD_ISNULL:
-            xxx #self.framestack[-1].ignore_next_guard_nullness(opnum)
+        elif (opnum == rop.GUARD_NONNULL or
+              opnum == rop.GUARD_ISNULL or
+              opnum == rop.GUARD_NONNULL_CLASS):
+            pass        # the pc is already set to the *start* of the opcode
         elif (opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION
               or opnum == rop.GUARD_NOT_FORCED):
             exception = self.cpu.grab_exc_value()
