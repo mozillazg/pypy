@@ -111,6 +111,36 @@ def test_set_ir():
     s.SET_ir(5, 2)
     assert s.getvalue() == '\x0F\x95\xC2'
 
+def test_xchg_rj():
+    s = CodeBuilder32()
+    s.XCHG_rj(edx, 0x01234567)
+    assert s.getvalue() == '\x87\x15\x67\x45\x23\x01'
+
+def test_movsd_rj():
+    s = CodeBuilder32()
+    s.MOVSD_rj(xmm2, 0x01234567)
+    assert s.getvalue() == '\xF2\x0F\x10\x15\x67\x45\x23\x01'
+
+def test_movzx8_rm():
+    s = CodeBuilder32()
+    s.MOVZX8_rm(ecx, (eax, 16))
+    assert s.getvalue() == '\x0F\xB6\x48\x10'
+
+def test_movzx16_rm():
+    s = CodeBuilder32()
+    s.MOVZX16_rm(ecx, (eax, 16))
+    assert s.getvalue() == '\x0F\xB7\x48\x10'
+
+def test_div():
+    s = CodeBuilder32()
+    s.DIV_r(ecx)
+    assert s.getvalue() == '\xF7\xF1'
+
+def test_imul_rri():
+    s = CodeBuilder32()
+    # Multiply ecx by 0x01234567 and store the result in ebx
+    s.IMUL_rri(ebx, ecx, 0x01234567)
+    assert s.getvalue() == '\x69\xD9\x67\x45\x23\x01'
 
 class CodeBuilder64(CodeBuilderMixin, X86_64_CodeBuilder):
     pass

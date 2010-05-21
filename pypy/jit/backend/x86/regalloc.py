@@ -5,7 +5,7 @@
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
                                          ResOperation, ConstAddr, BoxPtr,
                                          LoopToken, INT, REF, FLOAT)
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86.regloc import *
 from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib import rgc
@@ -108,14 +108,12 @@ class X86FrameManager(FrameManager):
     @staticmethod
     def frame_pos(i, size):
         if size == 1:
-            res = mem(ebp, get_ebp_ofs(i))
+            return StackLoc(i, get_ebp_ofs(i), size)
         elif size == 2:
-            res = mem64(ebp, get_ebp_ofs(i + 1))
+            return StackLoc(i, get_ebp_ofs(i+1), size)
         else:
             print "Unimplemented size %d" % i
             raise NotImplementedError("unimplemented size %d" % i)
-        res.position = i
-        return res
 
 class RegAlloc(object):
     exc = False
@@ -253,13 +251,13 @@ class RegAlloc(object):
             arg = inputargs[i]
             i += 1
             if arg.type == FLOAT:
-                if isinstance(loc, REG):
+                if isinstance(loc, RegLoc):
                     self.xrm.reg_bindings[arg] = loc
                     used[loc] = None
                 else:
                     self.fm.frame_bindings[arg] = loc
             else:
-                if isinstance(loc, REG):
+                if isinstance(loc, RegLoc):
                     self.rm.reg_bindings[arg] = loc
                     used[loc] = None
                 else:
@@ -819,7 +817,7 @@ class RegAlloc(object):
 
     def consider_setfield_gc(self, op):
         ofs_loc, size_loc, ptr = self._unpack_fielddescr(op.descr)
-        assert isinstance(size_loc, IMM32)
+        assert isinstance(size_loc, ImmedLoc)
         if size_loc.value == 1:
             need_lower_byte = True
         else:

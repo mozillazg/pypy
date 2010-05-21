@@ -1,4 +1,4 @@
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86.regloc import *
 from pypy.jit.backend.x86.assembler import Assembler386, MachineCodeBlockWrapper
 from pypy.jit.backend.x86.regalloc import X86FrameManager, get_ebp_ofs
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
@@ -21,7 +21,7 @@ class FakeMC:
         return self.base_address + len(self.content)
     def get_relative_pos(self):
         return len(self.content)
-    def JMP(self, *args):
+    def JMP_l(self, *args):
         self.content.append(("JMP", args))
     def done(self):
         pass
@@ -54,9 +54,9 @@ def test_write_failure_recovery_description():
             Assembler386.DESCR_FLOAT + 4*(8+110),
             Assembler386.CODE_HOLE,
             Assembler386.CODE_HOLE,
-            Assembler386.DESCR_INT   + 4*ebx.op,
-            Assembler386.DESCR_REF   + 4*esi.op,
-            Assembler386.DESCR_FLOAT + 4*xmm2.op]
+            Assembler386.DESCR_INT   + 4*ebx.value,
+            Assembler386.DESCR_REF   + 4*esi.value,
+            Assembler386.DESCR_FLOAT + 4*xmm2.value]
     double_byte_nums = []
     for num in nums[3:6]:
         double_byte_nums.append((num & 0x7F) | 0x80)
@@ -181,9 +181,9 @@ def do_failure_recovery_func(withfloats):
                 value, lo, hi = get_random_float()
                 expected_floats[i] = value
                 kind = Assembler386.DESCR_FLOAT
-                if isinstance(loc, REG):
-                    xmmregisters[2*loc.op] = lo
-                    xmmregisters[2*loc.op+1] = hi
+                if isinstance(loc, RegLoc):
+                    xmmregisters[2*loc.value] = lo
+                    xmmregisters[2*loc.value+1] = hi
                 else:
                     write_in_stack(loc, hi)
                     write_in_stack(loc+1, lo)
@@ -199,13 +199,13 @@ def do_failure_recovery_func(withfloats):
                     value = rffi.cast(rffi.LONG, value)
                 else:
                     assert 0, kind
-                if isinstance(loc, REG):
-                    registers[loc.op] = value
+                if isinstance(loc, RegLoc):
+                    registers[loc.value] = value
                 else:
                     write_in_stack(loc, value)
 
-            if isinstance(loc, REG):
-                num = kind + 4*loc.op
+            if isinstance(loc, RegLoc):
+                num = kind + 4*loc.value
             else:
                 num = kind + 4*(8+loc)
             while num >= 0x80:
@@ -225,7 +225,7 @@ def do_failure_recovery_func(withfloats):
         assert 0 <= descr_bytecode[i] <= 255
         descr_bytes[i] = rffi.cast(rffi.UCHAR, descr_bytecode[i])
     registers[8] = rffi.cast(rffi.LONG, descr_bytes)
-    registers[ebp.op] = rffi.cast(rffi.LONG, stack) + 4*stacklen
+    registers[ebp.value] = rffi.cast(rffi.LONG, stack) + 4*stacklen
 
     # run!
     assembler = Assembler386(FakeCPU())
