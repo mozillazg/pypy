@@ -1,3 +1,4 @@
+import py
 from pypy.objspace.flow.model import SpaceOperation, Constant, Variable
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.unsimplify import varoftype
@@ -137,8 +138,17 @@ def test_guess_call_kind_and_calls_from_graphs():
 # ____________________________________________________________
 
 def test_get_jitcode():
-    from pypy.jit.codewriter.test.test_codewriter import FakeCPU
-    cc = CallControl(FakeCPU())
+    from pypy.jit.codewriter.test.test_flatten import FakeCPU
+    class FakeRTyper:
+        class annotator:
+            translator = None
+        class type_system:
+            name = 'lltypesystem'
+        def getcallable(self, graph):
+            F = lltype.FuncType([], lltype.Signed)
+            return lltype.functionptr(F, 'bar')
+    #
+    cc = CallControl(FakeCPU(FakeRTyper()))
     class somegraph:
         name = "foo"
     jitcode = cc.get_jitcode(somegraph)
