@@ -10,6 +10,7 @@ from pypy.translator.unsimplify import varoftype
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.jit import dont_look_inside, _we_are_jitted, JitDriver
 from pypy.rlib.objectmodel import keepalive_until_here
+from pypy.rlib import jit
 
 
 class FakeRegAlloc:
@@ -22,6 +23,11 @@ class FakeRegAlloc:
             self.seen[v] = self.num_colors
             self.num_colors += 1
         return self.seen[v]
+
+def fake_regallocs():
+    return {'int': FakeRegAlloc(),
+            'ref': FakeRegAlloc(),
+            'float': FakeRegAlloc()}
 
 class FakeDescr(AbstractDescr):
     def __repr__(self):
@@ -38,10 +44,13 @@ class FakeRTyper(object):
     _builtin_func_for_spec_cache = FakeDict()
 
 class FakeCPU:
-    rtyper = FakeRTyper()
+    def __init__(self, rtyper):
+        self.rtyper = rtyper
     def calldescrof(self, FUNC, ARGS, RESULT):
         return FakeDescr()
     def fielddescrof(self, STRUCT, name):
+        return FakeDescr()
+    def sizeof(self, STRUCT):
         return FakeDescr()
 
 class FakeCallControl:
@@ -60,10 +69,15 @@ class FakeCallControl:
     def found_jitdriver(self, jitdriver):
         assert isinstance(jitdriver, JitDriver)
 
-def fake_regallocs():
-    return {'int': FakeRegAlloc(),
-            'ref': FakeRegAlloc(),
-            'float': FakeRegAlloc()}
+class FakeCallControlWithVRefInfo:
+    class virtualref_info:
+        JIT_VIRTUAL_REF = lltype.GcStruct('VREF', ('parent', rclass.OBJECT))
+        jit_virtual_ref_vtable = lltype.malloc(rclass.OBJECT_VTABLE,
+                                               immortal=True)
+    def guess_call_kind(self, op):
+        return 'builtin'
+
+# ____________________________________________________________
 
 def test_reorder_renaming_list():
     result = reorder_renaming_list([], [])
@@ -83,6 +97,9 @@ def test_reorder_renaming_list():
 def test_repr():
     assert repr(Register('int', 13)) == '%i13'
 
+# ____________________________________________________________
+
+
 class TestFlatten:
 
     def make_graphs(self, func, values, type_system='lltype'):
@@ -90,11 +107,12 @@ class TestFlatten:
         return self.rtyper.annotator.translator.graphs
 
     def encoding_test(self, func, args, expected,
-                      transform=False, liveness=False):
+                      transform=False, liveness=False, cc=None):
         graphs = self.make_graphs(func, args)
         if transform:
             from pypy.jit.codewriter.jtransform import transform_graph
-            transform_graph(graphs[0], FakeCPU(), FakeCallControl())
+            cc = cc or FakeCallControl()
+            transform_graph(graphs[0], FakeCPU(self.rtyper), cc)
         ssarepr = flatten_graph(graphs[0], fake_regallocs(),
                                 _include_all_exc_links=not transform)
         if liveness:
@@ -556,3 +574,15 @@ class TestFlatten:
             L1:
             int_return $34
         """, transform=True, liveness=True)
+
+    def test_vref_simple(self):
+        from pypy.jit.codewriter.call import CallControl
+        class X:
+            pass
+        def f():
+            return jit.virtual_ref(X())
+        self.encoding_test(f, [], """
+            new_with_vtable <Descr> -> %r0
+            virtual_ref %r0 -> %r1
+            ref_return %r1
+        """, transform=True, cc=FakeCallControlWithVRefInfo())

@@ -146,3 +146,8 @@ def test_get_jitcode():
     assert jitcode.name == "foo"
     pending = list(cc.enum_pending_graphs())
     assert pending == [(somegraph, jitcode)]
+
+# ____________________________________________________________
+
+def test_jit_force_virtualizable_effectinfo():
+    py.test.skip("XXX add a test for CallControl.getcalldescr() -> EF_xxx")
