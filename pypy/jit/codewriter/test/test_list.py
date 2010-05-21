@@ -97,7 +97,23 @@ def test_fixed_getitem_foldable():
                  lltype.Signed, None)
 
 def test_fixed_setitem():
-    xxx
+    builtin_test('list.setitem/NONNEG', [varoftype(FIXEDLIST),
+                                         varoftype(lltype.Signed),
+                                         varoftype(lltype.Signed)],
+                 lltype.Void, """
+                     setarrayitem_gc_i %r0, <ArrayDescr>, %i0, %i1
+                 """)
+    builtin_test('list.setitem/NEG', [varoftype(FIXEDLIST),
+                                      varoftype(lltype.Signed),
+                                      varoftype(lltype.Signed)],
+                 lltype.Void, """
+                     check_neg_index %r0, <ArrayDescr>, %i0 -> %i1
+                     setarrayitem_gc_i %r0, <ArrayDescr>, %i1, %i2
+                 """)
+    builtin_test('list.setitem/CANRAISE', [varoftype(FIXEDLIST),
+                                           varoftype(lltype.Signed),
+                                           varoftype(lltype.Signed)],
+                 lltype.Void, None)
 
 def test_fixed_len():
     builtin_test('list.len', [varoftype(FIXEDLIST)], lltype.Signed,
