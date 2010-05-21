@@ -772,6 +772,16 @@ class Transformer(object):
     def do_fixed_list_getitem_foldable(self, op, args, arraydescr):
         return self.do_fixed_list_getitem(op, args, arraydescr, pure=True)
 
+    def do_fixed_list_setitem(self, op, args, arraydescr):
+        v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
+                                                     'check_neg_index')
+        if v_index is None:
+            return None
+        kind = getkind(op.args[2].concretetype)[0]
+        op = SpaceOperation('setarrayitem_gc_%s' % kind,
+                            [args[0], arraydescr, v_index, args[2]], None)
+        return extraop + [op]
+
     # ----------
     # VirtualRefs.
 
