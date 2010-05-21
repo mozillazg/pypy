@@ -180,16 +180,16 @@ def test_symmetric_int_add_ovf():
             op = SpaceOperation('int_add_nonneg_ovf', [v1, v2], v3)
             oplist = Transformer(FakeCPU()).rewrite_operation(op)
             op0, op1 = oplist
-            assert op0.opname == '-live-'
-            assert op0.args == [v1, v2]
-            assert op0.result is None
-            assert op1.opname == 'int_add_ovf'
+            assert op0.opname == 'int_add_ovf'
             if isinstance(v1, Constant) and isinstance(v2, Variable):
-                assert op1.args == [v2, v1]
-                assert op1.result == v3
+                assert op0.args == [v2, v1]
+                assert op0.result == v3
             else:
-                assert op1.args == [v1, v2]
-                assert op1.result == v3
+                assert op0.args == [v1, v2]
+                assert op0.result == v3
+            assert op1.opname == '-live-'
+            assert op1.args == []
+            assert op1.result is None
 
 def test_calls():
     for RESTYPE in [lltype.Signed, rclass.OBJECTPTR,
@@ -227,21 +227,21 @@ def residual_call_test(argtypes, restype, expectedkind):
     tr = Transformer(FakeCPU(), FakeResidualCallControl())
     oplist = tr.rewrite_operation(op)
     op0, op1 = oplist
-    assert op0.opname == '-live-'
-    assert op0.args == []
     reskind = getkind(restype)[0]
-    assert op1.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
-    assert op1.result == op.result
-    assert op1.args[0] == op.args[0]
-    assert op1.args[1] == 'calldescr'
-    assert len(op1.args) == 2 + len(expectedkind)
-    for sublist, kind1 in zip(op1.args[2:], expectedkind):
+    assert op0.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
+    assert op0.result == op.result
+    assert op0.args[0] == op.args[0]
+    assert op0.args[1] == 'calldescr'
+    assert len(op0.args) == 2 + len(expectedkind)
+    for sublist, kind1 in zip(op0.args[2:], expectedkind):
         assert sublist.kind.startswith(kind1)
         assert list(sublist) == [v for v in op.args[1:]
                                  if getkind(v.concretetype) == sublist.kind]
     for v in op.args[1:]:
         kind = getkind(v.concretetype)
         assert kind == 'void' or kind[0] in expectedkind
+    assert op1.opname == '-live-'
+    assert op1.args == []
 
 def direct_call_test(argtypes, restype, expectedkind):
     op = get_direct_call_op(argtypes, restype)
@@ -249,20 +249,20 @@ def direct_call_test(argtypes, restype, expectedkind):
     tr.graph = 'someinitialgraph'
     oplist = tr.rewrite_operation(op)
     op0, op1 = oplist
-    assert op0.opname == '-live-'
-    assert op0.args == []
     reskind = getkind(restype)[0]
-    assert op1.opname == 'inline_call_%s_%s' % (expectedkind, reskind)
-    assert op1.result == op.result
-    assert op1.args[0] == 'somejitcode'
-    assert len(op1.args) == 1 + len(expectedkind)
-    for sublist, kind1 in zip(op1.args[1:], expectedkind):
+    assert op0.opname == 'inline_call_%s_%s' % (expectedkind, reskind)
+    assert op0.result == op.result
+    assert op0.args[0] == 'somejitcode'
+    assert len(op0.args) == 1 + len(expectedkind)
+    for sublist, kind1 in zip(op0.args[1:], expectedkind):
         assert sublist.kind.startswith(kind1)
         assert list(sublist) == [v for v in op.args[1:]
                                  if getkind(v.concretetype) == sublist.kind]
     for v in op.args[1:]:
         kind = getkind(v.concretetype)
         assert kind == 'void' or kind[0] in expectedkind
+    assert op1.opname == '-live-'
+    assert op1.args == []
 
 def indirect_residual_call_test(argtypes, restype, expectedkind):
     # an indirect call that is residual in all cases is very similar to
@@ -275,21 +275,21 @@ def indirect_residual_call_test(argtypes, restype, expectedkind):
     tr.graph = 'someinitialgraph'
     oplist = tr.rewrite_operation(op)
     op0, op1 = oplist
-    assert op0.opname == '-live-'
-    assert op0.args == []
     reskind = getkind(restype)[0]
-    assert op1.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
-    assert op1.result == op.result
-    assert op1.args[0] == op.args[0]
-    assert op1.args[1] == 'calldescr'
-    assert len(op1.args) == 2 + len(expectedkind)
-    for sublist, kind1 in zip(op1.args[2:], expectedkind):
+    assert op0.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
+    assert op0.result == op.result
+    assert op0.args[0] == op.args[0]
+    assert op0.args[1] == 'calldescr'
+    assert len(op0.args) == 2 + len(expectedkind)
+    for sublist, kind1 in zip(op0.args[2:], expectedkind):
         assert sublist.kind.startswith(kind1)
         assert list(sublist) == [v for v in op.args[1:]
                                  if getkind(v.concretetype)==sublist.kind]
     for v in op.args[1:]:
         kind = getkind(v.concretetype)
         assert kind == 'void' or kind[0] in expectedkind
+    assert op1.opname == '-live-'
+    assert op1.args == []
 
 def indirect_regular_call_test(argtypes, restype, expectedkind):
     # a regular indirect call is preceded by a guard_value on the
@@ -303,29 +303,29 @@ def indirect_regular_call_test(argtypes, restype, expectedkind):
     tr.graph = 'someinitialgraph'
     oplist = tr.rewrite_operation(op)
     op0gv, op1gv, op0, op1 = oplist
-    assert op0gv.opname == '-live-'
+    assert op0gv.opname == 'int_guard_value'
     assert op0gv.args == [op.args[0]]
-    assert op1gv.opname == 'int_guard_value'
+    assert op0gv.result is None
+    assert op1gv.opname == '-live-'
     assert op1gv.args == [op.args[0]]
-    assert op1gv.result is None
     #
-    assert op0.opname == '-live-'
-    assert op0.args == []
     reskind = getkind(restype)[0]
-    assert op1.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
-    assert op1.result == op.result
-    assert op1.args[0] == op.args[0]
-    assert op1.args[1] == 'calldescr'
-    assert isinstance(op1.args[2], IndirectCallTargets)
-    assert op1.args[2].lst == ['somejitcode1', 'somejitcode2']
-    assert len(op1.args) == 3 + len(expectedkind)
-    for sublist, kind1 in zip(op1.args[3:], expectedkind):
+    assert op0.opname == 'residual_call_%s_%s' % (expectedkind, reskind)
+    assert op0.result == op.result
+    assert op0.args[0] == op.args[0]
+    assert op0.args[1] == 'calldescr'
+    assert isinstance(op0.args[2], IndirectCallTargets)
+    assert op0.args[2].lst == ['somejitcode1', 'somejitcode2']
+    assert len(op0.args) == 3 + len(expectedkind)
+    for sublist, kind1 in zip(op0.args[3:], expectedkind):
         assert sublist.kind.startswith(kind1)
         assert list(sublist) == [v for v in op.args[1:]
                                  if getkind(v.concretetype)==sublist.kind]
     for v in op.args[1:]:
         kind = getkind(v.concretetype)
         assert kind == 'void' or kind[0] in expectedkind
+    assert op1.opname == '-live-'
+    assert op1.args == []
 
 def test_getfield():
     # XXX a more compact encoding would be possible, something along
@@ -364,11 +364,11 @@ def test_getfield_typeptr():
     op = SpaceOperation('getfield', [v_parent, c_name], v_result)
     oplist = Transformer(FakeCPU()).rewrite_operation(op)
     op0, op1 = oplist
-    assert op0.opname == '-live-'
+    assert op0.opname == 'guard_class'
     assert op0.args == [v_parent]
-    assert op1.opname == 'guard_class'
+    assert op0.result == v_result
+    assert op1.opname == '-live-'
     assert op1.args == [v_parent]
-    assert op1.result == v_result
 
 def test_setfield():
     # XXX a more compact encoding would be possible; see test_getfield()
@@ -436,11 +436,11 @@ def test_malloc_new_with_destructor():
     tr = Transformer(FakeCPU(), FakeResidualCallControl())
     oplist = tr.rewrite_operation(op)
     op0, op1 = oplist
-    assert op0.opname == '-live-'
-    assert op0.args == []
-    assert op1.opname == 'residual_call_r_r'
-    assert op1.args[0].value == 'alloc_with_del'    # pseudo-function as a str
-    assert list(op1.args[2]) == []
+    assert op0.opname == 'residual_call_r_r'
+    assert op0.args[0].value == 'alloc_with_del'    # pseudo-function as a str
+    assert list(op0.args[2]) == []
+    assert op1.opname == '-live-'
+    assert op1.args == []
 
 def test_rename_on_links():
     v1 = Variable()
@@ -615,11 +615,11 @@ def test_promote_1():
                         v2)
     oplist = Transformer().rewrite_operation(op)
     op0, op1, op2 = oplist
-    assert op0.opname == '-live-'
+    assert op0.opname == 'int_guard_value'
     assert op0.args == [v1]
-    assert op1.opname == 'int_guard_value'
+    assert op0.result is None
+    assert op1.opname == '-live-'
     assert op1.args == [v1]
-    assert op1.result is None
     assert op2 is None
 
 def test_promote_2():
@@ -635,9 +635,9 @@ def test_promote_2():
     block.closeblock(Link([v2], returnblock))
     Transformer().optimize_block(block)
     assert len(block.operations) == 2
-    assert block.operations[0].opname == '-live-'
+    assert block.operations[0].opname == 'int_guard_value'
     assert block.operations[0].args == [v1]
-    assert block.operations[1].opname == 'int_guard_value'
+    assert block.operations[0].result is None
+    assert block.operations[1].opname == '-live-'
     assert block.operations[1].args == [v1]
-    assert block.operations[1].result is None
     assert block.exits[0].args == [v1]
