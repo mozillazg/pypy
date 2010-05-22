@@ -1,5 +1,4 @@
 import py
-from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rlib.jit import JitDriver, OPTIMIZER_SIMPLE
 
