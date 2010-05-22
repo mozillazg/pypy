@@ -298,10 +298,13 @@ class Transformer(object):
             prepare = self._handle_virtual_ref_call
         else:
             prepare = self.prepare_builtin_call
-        op1 = prepare(op, oopspec_name, args)
+        try:
+            op1 = prepare(op, oopspec_name, args)
+        except NotSupported:
+            op1 = op
         # If the resulting op1 is still a direct_call, turn it into a
         # residual_call.
-        if op1 is None or op1.opname == 'direct_call':
+        if op1.opname == 'direct_call':
             op1 = self.handle_residual_call(op1 or op)
         return op1
 
@@ -688,6 +691,10 @@ class Transformer(object):
     # Lists.
 
     def _handle_list_call(self, op, oopspec_name, args):
+        """Try to transform the call to a list-handling helper.
+        If no transformation is available, raise NotSupported
+        (in which case the original call is written as a residual call).
+        """
         if oopspec_name.startswith('new'):
             LIST = deref(op.result.concretetype)
         else:
@@ -696,20 +703,25 @@ class Transformer(object):
         assert resizable == (not isinstance(LIST, lltype.GcArray))
         if resizable:
             prefix = 'do_resizable_'
+            ARRAY = LIST.items.TO
+            if self._array_of_voids(ARRAY):
+                raise NotSupported("resizable lists of voids")
+            descrs = (self.cpu.arraydescrof(ARRAY),
+                      self.cpu.fielddescrof(LIST, 'length'),
+                      self.cpu.fielddescrof(LIST, 'items'),
+                      self.cpu.sizeof(LIST))
         else:
             prefix = 'do_fixed_'
             if self._array_of_voids(LIST):
-                return None # arrays of voids: not supported
+                raise NotSupported("fixed lists of voids")
             arraydescr = self.cpu.arraydescrof(LIST)
             descrs = (arraydescr,)
         #
         try:
             meth = getattr(self, prefix + oopspec_name.replace('.', '_'))
         except AttributeError:
-            return None
-        else:
-            return meth(op, args, *descrs)
-
+            raise NotSupported(prefix + oopspec_name)
+        return meth(op, args, *descrs)
 
     def _get_list_nonneg_canraise_flags(self, op):
         # xxx break of abstraction:
@@ -731,7 +743,7 @@ class Transformer(object):
     def _prepare_list_getset(self, op, descr, args, checkname):
         non_negative, can_raise = self._get_list_nonneg_canraise_flags(op)
         if can_raise:
-            return None, None
+            raise NotSupported("list operation can raise")
         if non_negative:
             return args[1], []
         else:
@@ -741,19 +753,24 @@ class Transformer(object):
                                             descr, args[1]], v_posindex)
             return v_posindex, [op]
 
-    # ---------- fixed lists ----------
-
-    def do_fixed_newlist(self, op, args, arraydescr):
-        # normalize number of arguments
-        if len(args) < 1:
-            args.append(Constant(0, lltype.Signed))
+    def _get_initial_newlist_length(self, op, args):
+        # normalize number of arguments to the 'newlist' function
         if len(args) > 1:
-            v_default = args[1]
+            v_default = args[1]     # initial value: must be 0 or NULL
             ARRAY = deref(op.result.concretetype)
             if (not isinstance(v_default, Constant) or
                 v_default.value != arrayItem(ARRAY)._defl()):
-                return None     # variable or non-null initial value
-        return SpaceOperation('new_array', [arraydescr, args[0]], op.result)
+                raise NotSupported("variable or non-null initial value")
+        if len(args) >= 1:
+            return args[0]
+        else:
+            return Constant(0, lltype.Signed)     # length: default to 0
+
+    # ---------- fixed lists ----------
+
+    def do_fixed_newlist(self, op, args, arraydescr):
+        v_length = self._get_initial_newlist_length(op, args)
+        return SpaceOperation('new_array', [arraydescr, v_length], op.result)
 
     def do_fixed_list_len(self, op, args, arraydescr):
         return SpaceOperation('arraylen_gc', [args[0], arraydescr], op.result)
@@ -763,8 +780,6 @@ class Transformer(object):
     def do_fixed_list_getitem(self, op, args, arraydescr, pure=False):
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
-        if v_index is None:
-            return None
         extra = getkind(op.result.concretetype)[0]
         if pure:
             extra = 'pure_' + extra
@@ -778,8 +793,6 @@ class Transformer(object):
     def do_fixed_list_setitem(self, op, args, arraydescr):
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
-        if v_index is None:
-            return None
         kind = getkind(op.args[2].concretetype)[0]
         op = SpaceOperation('setarrayitem_gc_%s' % kind,
                             [args[0], arraydescr, v_index, args[2]], None)
@@ -793,7 +806,38 @@ class Transformer(object):
 
     # ---------- resizable lists ----------
 
-    # xxx
+    def do_resizable_newlist(self, op, args, arraydescr, lengthdescr,
+                             itemsdescr, structdescr):
+        v_length = self._get_initial_newlist_length(op, args)
+        return SpaceOperation('newlist',
+                              [structdescr, lengthdescr, itemsdescr,
+                               arraydescr, v_length],
+                              op.result)
+
+    def do_resizable_list_getitem(self, op, args, arraydescr, lengthdescr,
+                                  itemsdescr, structdescr):
+        v_index, extraop = self._prepare_list_getset(op, lengthdescr, args,
+                                                 'check_resizable_neg_index')
+        kind = getkind(op.result.concretetype)[0]
+        op = SpaceOperation('getlistitem_gc_%s' % kind,
+                            [args[0], itemsdescr, arraydescr, v_index],
+                            op.result)
+        return extraop + [op]
+
+    def do_resizable_list_setitem(self, op, args, arraydescr, lengthdescr,
+                                  itemsdescr, structdescr):
+        v_index, extraop = self._prepare_list_getset(op, lengthdescr, args,
+                                                 'check_resizable_neg_index')
+        kind = getkind(op.args[2].concretetype)[0]
+        op = SpaceOperation('setlistitem_gc_%s' % kind,
+                            [args[0], itemsdescr, arraydescr,
+                             v_index, args[2]], None)
+        return extraop + [op]
+
+    def do_resizable_list_len(self, op, args, arraydescr, lengthdescr,
+                              itemsdescr, structdescr):
+        return SpaceOperation('getfield_gc_i',
+                              [args[0], lengthdescr], op.result)
 
     # ----------
     # VirtualRefs.
@@ -809,6 +853,9 @@ class Transformer(object):
         return self._do_builtin_call(op)
 
 # ____________________________________________________________
+
+class NotSupported(Exception):
+    pass
 
 def _with_prefix(prefix):
     result = {}
