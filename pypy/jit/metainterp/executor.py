@@ -91,11 +91,11 @@ def do_getarrayitem_gc(cpu, _, arraybox, indexbox, arraydescr):
     array = arraybox.getref_base()
     index = indexbox.getint()
     if arraydescr.is_array_of_pointers():
-        return BoxPtr(cpu.bh_setarrayitem_gc_r(arraydescr, array, index))
+        return BoxPtr(cpu.bh_getarrayitem_gc_r(arraydescr, array, index))
     elif arraydescr.is_array_of_floats():
-        return BoxFloat(cpu.bh_setarrayitem_gc_f(arraydescr, array, index))
+        return BoxFloat(cpu.bh_getarrayitem_gc_f(arraydescr, array, index))
     else:
-        return BoxInt(cpu.bh_setarrayitem_gc_i(arraydescr, array, index))
+        return BoxInt(cpu.bh_getarrayitem_gc_i(arraydescr, array, index))
 
 def do_setarrayitem_gc(cpu, _, arraybox, indexbox, itembox, arraydescr):
     array = arraybox.getref_base()
@@ -152,6 +152,12 @@ def exec_new_with_vtable(cpu, clsbox):
 
 def do_new_with_vtable(cpu, _, clsbox):
     return BoxPtr(exec_new_with_vtable(cpu, clsbox))
+
+def do_arraycopy(cpu, _, calldescr, funcbox, x1box, x2box,
+                 x3box, x4box, x5box, arraydescr):
+    cpu.bh_call_v(funcbox.getint(), calldescr,
+                  [x3box.getint(), x4box.getint(), x5box.getint()],
+                  [x1box.getref_base(), x2box.getref_base()], None)
 
 def do_int_add_ovf(cpu, metainterp, box1, box2):
     a = box1.getint()
@@ -275,6 +281,8 @@ def make_execute_function_with_boxes(name, func):
     for argtype in func.argtypes:
         if argtype not in ('i', 'r', 'f', 'd', 'cpu'):
             return None
+    if list(func.argtypes).count('d') > 1:
+        return None
     if func.resulttype not in ('i', 'r', 'f', None):
         return None
     argtypes = unrolling_iterable(func.argtypes)
@@ -319,7 +327,8 @@ def get_execute_function(opnum, num_args):
     # constant-folded away.  Only works if opnum and num_args are
     # constants, of course.
     func = EXECUTE_BY_NUM_ARGS[num_args][opnum]
-    assert func is not None, "EXECUTE_BY_NUM_ARGS[%s][%s]" % (num_args, opnum)
+    assert func is not None, "EXECUTE_BY_NUM_ARGS[%s][%s]" % (
+        num_args, resoperation.opname[opnum])
     return func
 get_execute_function._annspecialcase_ = 'specialize:memo'
 

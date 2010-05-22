@@ -394,33 +394,102 @@ class MIFrame(object):
     def opimpl_new_array(self, itemsizedescr, countbox):
         return self.execute_with_descr(rop.NEW_ARRAY, itemsizedescr, countbox)
 
-    @FixME  #arguments("box", "descr", "box")
-    def opimpl_getarrayitem_gc(self, arraybox, arraydesc, indexbox):
-        self.execute_with_descr(rop.GETARRAYITEM_GC, arraydesc, arraybox, indexbox)
+    @arguments("box", "descr", "box")
+    def _opimpl_getarrayitem_gc_any(self, arraybox, arraydescr, indexbox):
+        return self.execute_with_descr(rop.GETARRAYITEM_GC,
+                                       arraydescr, arraybox, indexbox)
 
-    @FixME  #arguments("box", "descr", "box")
-    def opimpl_getarrayitem_gc_pure(self, arraybox, arraydesc, indexbox):
-        self.execute_with_descr(rop.GETARRAYITEM_GC_PURE, arraydesc, arraybox, indexbox)
+    opimpl_getarrayitem_gc_i = _opimpl_getarrayitem_gc_any
+    opimpl_getarrayitem_gc_r = _opimpl_getarrayitem_gc_any
+    opimpl_getarrayitem_gc_f = _opimpl_getarrayitem_gc_any
 
-    @arguments("descr", "box", "box", "box")
-    def _opimpl_setarrayitem_gc(self, arraydesc, arraybox, indexbox, itembox):
-        self.execute_with_descr(rop.SETARRAYITEM_GC, arraydesc, arraybox,
+    @arguments("box", "descr", "box")
+    def _opimpl_getarrayitem_gc_pure_any(self, arraybox, arraydescr, indexbox):
+        return self.execute_with_descr(rop.GETARRAYITEM_GC_PURE,
+                                       arraydescr, arraybox, indexbox)
+
+    opimpl_getarrayitem_gc_pure_i = _opimpl_getarrayitem_gc_pure_any
+    opimpl_getarrayitem_gc_pure_r = _opimpl_getarrayitem_gc_pure_any
+    opimpl_getarrayitem_gc_pure_f = _opimpl_getarrayitem_gc_pure_any
+
+    @arguments("box", "descr", "box", "box")
+    def _opimpl_setarrayitem_gc_any(self, arraybox, arraydescr,
+                                    indexbox, itembox):
+        self.execute_with_descr(rop.SETARRAYITEM_GC, arraydescr, arraybox,
                                 indexbox, itembox)
 
-    opimpl_setarrayitem_gc_i = _opimpl_setarrayitem_gc
-    opimpl_setarrayitem_gc_r = _opimpl_setarrayitem_gc
-    opimpl_setarrayitem_gc_f = _opimpl_setarrayitem_gc
+    opimpl_setarrayitem_gc_i = _opimpl_setarrayitem_gc_any
+    opimpl_setarrayitem_gc_r = _opimpl_setarrayitem_gc_any
+    opimpl_setarrayitem_gc_f = _opimpl_setarrayitem_gc_any
 
-    @FixME  #arguments("box", "descr")
-    def opimpl_arraylen_gc(self, arraybox, arraydesc):
-        self.execute_with_descr(rop.ARRAYLEN_GC, arraydesc, arraybox)
+    @arguments("box", "descr")
+    def opimpl_arraylen_gc(self, arraybox, arraydescr):
+        return self.execute_with_descr(rop.ARRAYLEN_GC, arraydescr, arraybox)
 
-    @FixME  #arguments("descr", "box", "box", "box", "box", "box", "box", "descr")
+    @arguments("descr", "box", "box", "box", "box", "box", "box", "descr")
     def opimpl_arraycopy(self, calldescr, fnptr, sourcebox, destbox,
-                         source_startbox, dest_startbox, lengthbox, arraydescr):
+                         source_startbox, dest_startbox, lengthbox,
+                         arraydescr):
         self.execute_with_descr(rop.ARRAYCOPY, arraydescr, calldescr, fnptr,
                                 sourcebox, destbox, source_startbox,
                                 dest_startbox, lengthbox)
+
+    @arguments("orgpc", "box", "descr", "box")
+    def opimpl_check_neg_index(self, orgpc, arraybox, arraydescr, indexbox):
+        negbox = self.metainterp.execute_and_record(
+            rop.INT_LT, None, indexbox, ConstInt(0))
+        negbox = self.implement_guard_value(orgpc, negbox)
+        if negbox.getint():
+            # the index is < 0; add the array length to it
+            lenbox = self.metainterp.execute_and_record(
+                rop.ARRAYLEN_GC, arraydescr, arraybox)
+            indexbox = self.metainterp.execute_and_record(
+                rop.INT_ADD, None, indexbox, lenbox)
+        return indexbox
+
+    @FixME  #arguments("descr", "descr", "descr", "descr", "box")
+    def opimpl_newlist(self, structdescr, lengthdescr, itemsdescr, arraydescr,
+                       sizebox):
+        sbox = self.metainterp.execute_and_record(rop.NEW, structdescr)
+        self.metainterp.execute_and_record(rop.SETFIELD_GC, lengthdescr, 
+                                           sbox, sizebox)
+        abox = self.metainterp.execute_and_record(rop.NEW_ARRAY, arraydescr,
+                                                  sizebox)
+        self.metainterp.execute_and_record(rop.SETFIELD_GC, itemsdescr,
+                                           sbox, abox)
+        self.make_result_box(sbox)
+
+    @FixME  #arguments("box", "descr", "descr", "box")
+    def opimpl_getlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox):
+        arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
+                                                      itemsdescr, listbox)
+        self.execute_with_descr(rop.GETARRAYITEM_GC, arraydescr, arraybox, indexbox)
+
+    @arguments("box", "descr", "descr", "box", "box")
+    def _opimpl_setlistitem_gc_any(self, listbox, itemsdescr, arraydescr,
+                                   indexbox, valuebox):
+        arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
+                                                      itemsdescr, listbox)
+        self.execute_with_descr(rop.SETARRAYITEM_GC, arraydescr, arraybox,
+                                indexbox, valuebox)
+
+    opimpl_setlistitem_gc_i = _opimpl_setlistitem_gc_any
+    opimpl_setlistitem_gc_r = _opimpl_setlistitem_gc_any
+    opimpl_setlistitem_gc_f = _opimpl_setlistitem_gc_any
+
+    @arguments("orgpc", "box", "descr", "box")
+    def opimpl_check_resizable_neg_index(self, orgpc, listbox, lengthdescr,
+                                         indexbox):
+        negbox = self.metainterp.execute_and_record(
+            rop.INT_LT, None, indexbox, history.CONST_FALSE)
+        negbox = self.implement_guard_value(orgpc, negbox)
+        if negbox.getint():
+            # the index is < 0; add the array length to it
+            lenbox = self.metainterp.execute_and_record(
+                rop.GETFIELD_GC, lengthdescr, listbox)
+            indexbox = self.metainterp.execute_and_record(
+                rop.INT_ADD, None, indexbox, lenbox)
+        return indexbox
 
     @arguments("box", "descr")
     def _opimpl_getfield_gc_any(self, box, fielddescr):

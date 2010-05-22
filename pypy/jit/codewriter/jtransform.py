@@ -6,6 +6,7 @@ from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import Block, Link, c_last_exception
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter import support, heaptracker
+from pypy.jit.codewriter.policy import log
 from pypy.jit.metainterp.typesystem import deref, arrayItem
 from pypy.rlib import objectmodel
 from pypy.rlib.jit import _we_are_jitted
@@ -304,7 +305,7 @@ class Transformer(object):
             op1 = op
         # If the resulting op1 is still a direct_call, turn it into a
         # residual_call.
-        if op1.opname == 'direct_call':
+        if isinstance(op1, SpaceOperation) and op1.opname == 'direct_call':
             op1 = self.handle_residual_call(op1 or op)
         return op1
 
@@ -401,7 +402,8 @@ class Transformer(object):
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.args[2].concretetype)
         return SpaceOperation('setarrayitem_gc_%s' % kind[0],
-                              [arraydescr] + op.args, None)
+                              [op.args[0], arraydescr, op.args[1], op.args[2]],
+                              None)
 
     def _array_of_voids(self, ARRAY):
         #if isinstance(ARRAY, ootype.Array):
@@ -687,6 +689,11 @@ class Transformer(object):
     def handle_jit_marker__can_enter_jit(self, op, jitdriver):
         return SpaceOperation('can_enter_jit', [], None)
 
+    def rewrite_op_debug_assert(self, op):
+        log.WARNING("found debug_assert in %r; should have be removed" %
+                    (self.graph,))
+        return []
+
     # ----------
     # Lists.
 
@@ -793,7 +800,7 @@ class Transformer(object):
     def do_fixed_list_setitem(self, op, args, arraydescr):
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
-        kind = getkind(op.args[2].concretetype)[0]
+        kind = getkind(args[2].concretetype)[0]
         op = SpaceOperation('setarrayitem_gc_%s' % kind,
                             [args[0], arraydescr, v_index, args[2]], None)
         return extraop + [op]

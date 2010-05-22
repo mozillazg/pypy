@@ -781,6 +781,37 @@ class BlackholeInterpreter(object):
         raise CRN(*results)
 
     # ----------
+    # list operations
+
+    @arguments("r", "d", "i", returns="i")
+    def bhimpl_check_neg_index(array, arraydescr, index):
+        xxx
+
+    @arguments("r", "d", "i", returns="i")
+    def bhimpl_check_resizable_neg_index(list, lengthdescr, index):
+        xxx
+
+    @arguments()
+    def bhimpl_getlistitem_gc_i(yyy):
+        xxx
+    @arguments()
+    def bhimpl_getlistitem_gc_r(yyy):
+        xxx
+    @arguments()
+    def bhimpl_getlistitem_gc_f(yyy):
+        xxx
+
+    @arguments()
+    def bhimpl_setlistitem_gc_i(yyy):
+        xxx
+    @arguments()
+    def bhimpl_setlistitem_gc_r(yyy):
+        xxx
+    @arguments()
+    def bhimpl_setlistitem_gc_f(yyy):
+        xxx
+
+    # ----------
     # the following operations are directly implemented by the backend
 
     @arguments("cpu", "i", "d", "R", returns="i")
@@ -862,9 +893,38 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "d", "i", returns="r")
     def bhimpl_new_array(cpu, arraydescr, length):
         return cpu.bh_new_array(arraydescr, length)
-    @arguments("cpu", "d", "r", "i", "r")
-    def bhimpl_setarrayitem_gc_r(cpu, arraydescr, array, index, newvalue):
+
+    @arguments("cpu", "r", "d", "i", returns="i")
+    def bhimpl_getarrayitem_gc_i(cpu, array, arraydescr, index):
+        return cpu.bh_getarrayitem_gc_i(arraydescr, array, index)
+    @arguments("cpu", "r", "d", "i", returns="r")
+    def bhimpl_getarrayitem_gc_r(cpu, array, arraydescr, index):
+        return cpu.bh_getarrayitem_gc_r(arraydescr, array, index)
+    @arguments("cpu", "r", "d", "i", returns="f")
+    def bhimpl_getarrayitem_gc_f(cpu, array, arraydescr, index):
+        return cpu.bh_getarrayitem_gc_f(arraydescr, array, index)
+
+    bhimpl_getarrayitem_gc_pure_i = bhimpl_getarrayitem_gc_i
+    bhimpl_getarrayitem_gc_pure_r = bhimpl_getarrayitem_gc_r
+    bhimpl_getarrayitem_gc_pure_f = bhimpl_getarrayitem_gc_f
+
+    @arguments("cpu", "r", "d", "i", "i")
+    def bhimpl_setarrayitem_gc_i(cpu, array, arraydescr, index, newvalue):
+        cpu.bh_setarrayitem_gc_i(arraydescr, array, index, newvalue)
+    @arguments("cpu", "r", "d", "i", "r")
+    def bhimpl_setarrayitem_gc_r(cpu, array, arraydescr, index, newvalue):
         cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
+    @arguments("cpu", "r", "d", "i", "f")
+    def bhimpl_setarrayitem_gc_f(cpu, array, arraydescr, index, newvalue):
+        cpu.bh_setarrayitem_gc_f(arraydescr, array, index, newvalue)
+
+    @arguments("cpu", "r", "d", returns="i")
+    def bhimpl_arraylen_gc(cpu, array, arraydescr):
+        return cpu.bh_arraylen_gc(arraydescr, array)
+
+    @arguments("cpu", "d", "i", "r", "r", "i", "i", "i", "d")
+    def bhimpl_arraycopy(cpu, calldescr, func, x1, x2, x3, x4, x5, arraydescr):
+        cpu.bh_call_v(func, calldescr, [x3, x4, x5], [x1, x2], None)
 
     @arguments("cpu", "r", "d", returns="i")
     def bhimpl_getfield_gc_i(cpu, struct, fielddescr):

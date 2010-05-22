@@ -144,7 +144,14 @@ class AbstractCPU(object):
 
     # lltype specific operations
     # --------------------------
-    
+
+    def bh_getarrayitem_gc_i(self, arraydescr, array, index):
+        raise NotImplementedError
+    def bh_getarrayitem_gc_r(self, arraydescr, array, index):
+        raise NotImplementedError
+    def bh_getarrayitem_gc_f(self, arraydescr, array, index):
+        raise NotImplementedError
+
     def bh_getfield_gc_i(self, struct, fielddescr):
         raise NotImplementedError
     def bh_getfield_gc_r(self, struct, fielddescr):
@@ -164,6 +171,9 @@ class AbstractCPU(object):
     def bh_new_with_vtable(self, sizedescr, vtable):
         raise NotImplementedError
     def bh_new_array(self, arraydescr, length):
+        raise NotImplementedError
+
+    def bh_arraylen_gc(self, arraydescr, array):
         raise NotImplementedError
 
     def bh_classof(self, struct):
