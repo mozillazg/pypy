@@ -109,6 +109,7 @@ def test_fixed_getitem():
     builtin_test('list.getitem/NEG',
                  [varoftype(FIXEDLIST), varoftype(lltype.Signed)],
                  lltype.Signed, """
+                     -live-
                      check_neg_index %r0, <ArrayDescr>, %i0 -> %i1
                      getarrayitem_gc_i %r0, <ArrayDescr>, %i1 -> %i2
                  """)
@@ -125,6 +126,7 @@ def test_fixed_getitem_foldable():
     builtin_test('list.getitem_foldable/NEG',
                  [varoftype(FIXEDLIST), varoftype(lltype.Signed)],
                  lltype.Signed, """
+                     -live-
                      check_neg_index %r0, <ArrayDescr>, %i0 -> %i1
                      getarrayitem_gc_pure_i %r0, <ArrayDescr>, %i1 -> %i2
                  """)
@@ -143,6 +145,7 @@ def test_fixed_setitem():
                                       varoftype(lltype.Signed),
                                       varoftype(lltype.Signed)],
                  lltype.Void, """
+                     -live-
                      check_neg_index %r0, <ArrayDescr>, %i0 -> %i1
                      setarrayitem_gc_i %r0, <ArrayDescr>, %i1, %i2
                  """)
@@ -190,6 +193,7 @@ def test_resizable_getitem():
     builtin_test('list.getitem/NEG',
                  [varoftype(VARLIST), varoftype(lltype.Signed)],
                  lltype.Signed, """
+        -live-
         check_resizable_neg_index %r0, <FieldDescr length>, %i0 -> %i1
         getlistitem_gc_i %r0, <FieldDescr items>, <ArrayDescr>, %i1 -> %i2
                  """)
@@ -208,6 +212,7 @@ def test_resizable_setitem():
                                       varoftype(lltype.Signed),
                                       varoftype(lltype.Signed)],
                  lltype.Void, """
+        -live-
         check_resizable_neg_index %r0, <FieldDescr length>, %i0 -> %i1
         setlistitem_gc_i %r0, <FieldDescr items>, <ArrayDescr>, %i1, %i2
                  """)
