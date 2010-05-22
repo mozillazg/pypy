@@ -386,24 +386,34 @@ class Transformer(object):
             return SpaceOperation('new_array', [arraydescr, op.args[2]],
                                   op.result)
 
+    def rewrite_op_getarrayitem(self, op):
+        ARRAY = op.args[0].concretetype.TO
+        assert ARRAY._gckind == 'gc'
+        if self._array_of_voids(ARRAY):
+            return []
+        arraydescr = self.cpu.arraydescrof(ARRAY)
+        kind = getkind(op.result.concretetype)
+        return SpaceOperation('getarrayitem_gc_%s' % kind[0],
+                              [op.args[0], arraydescr, op.args[1]],
+                              op.result)
+
     def rewrite_op_setarrayitem(self, op):
         ARRAY = op.args[0].concretetype.TO
         assert ARRAY._gckind == 'gc'
         if self._array_of_voids(ARRAY):
-            return
-##        if op.args[0] in self.vable_array_vars:     # for virtualizables
-##            (v_base, arrayindex) = self.vable_array_vars[op.args[0]]
-##            self.emit('setarrayitem_vable',
-##                      self.var_position(v_base),
-##                      arrayindex,
-##                      self.var_position(op.args[1]),
-##                      self.var_position(op.args[2]))
-##            return
+            return []
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.args[2].concretetype)
         return SpaceOperation('setarrayitem_gc_%s' % kind[0],
                               [op.args[0], arraydescr, op.args[1], op.args[2]],
                               None)
+
+    def rewrite_op_getarraysize(self, op):
+        ARRAY = op.args[0].concretetype.TO
+        assert ARRAY._gckind == 'gc'
+        arraydescr = self.cpu.arraydescrof(ARRAY)
+        return SpaceOperation('arraylen_gc', [op.args[0], arraydescr],
+                              op.result)
 
     def _array_of_voids(self, ARRAY):
         #if isinstance(ARRAY, ootype.Array):
@@ -835,7 +845,7 @@ class Transformer(object):
                                   itemsdescr, structdescr):
         v_index, extraop = self._prepare_list_getset(op, lengthdescr, args,
                                                  'check_resizable_neg_index')
-        kind = getkind(op.args[2].concretetype)[0]
+        kind = getkind(args[2].concretetype)[0]
         op = SpaceOperation('setlistitem_gc_%s' % kind,
                             [args[0], itemsdescr, arraydescr,
                              v_index, args[2]], None)
