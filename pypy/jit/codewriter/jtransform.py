@@ -710,22 +710,6 @@ class Transformer(object):
         else:
             return meth(op, args, *descrs)
 
-    def do_fixed_newlist(self, op, args, arraydescr):
-        # normalize number of arguments
-        if len(args) < 1:
-            args.append(Constant(0, lltype.Signed))
-        if len(args) > 1:
-            v_default = args[1]
-            ARRAY = deref(op.result.concretetype)
-            if (not isinstance(v_default, Constant) or
-                v_default.value != arrayItem(ARRAY)._defl()):
-                return None     # variable or non-null initial value
-        return SpaceOperation('new_array', [arraydescr, args[0]], op.result)
-
-    def do_fixed_list_len(self, op, args, arraydescr):
-        return SpaceOperation('arraylen_gc', [args[0], arraydescr], op.result)
-
-    do_fixed_list_len_foldable = do_fixed_list_len
 
     def _get_list_nonneg_canraise_flags(self, op):
         # xxx break of abstraction:
@@ -757,6 +741,25 @@ class Transformer(object):
                                             descr, args[1]], v_posindex)
             return v_posindex, [op]
 
+    # ---------- fixed lists ----------
+
+    def do_fixed_newlist(self, op, args, arraydescr):
+        # normalize number of arguments
+        if len(args) < 1:
+            args.append(Constant(0, lltype.Signed))
+        if len(args) > 1:
+            v_default = args[1]
+            ARRAY = deref(op.result.concretetype)
+            if (not isinstance(v_default, Constant) or
+                v_default.value != arrayItem(ARRAY)._defl()):
+                return None     # variable or non-null initial value
+        return SpaceOperation('new_array', [arraydescr, args[0]], op.result)
+
+    def do_fixed_list_len(self, op, args, arraydescr):
+        return SpaceOperation('arraylen_gc', [args[0], arraydescr], op.result)
+
+    do_fixed_list_len_foldable = do_fixed_list_len
+
     def do_fixed_list_getitem(self, op, args, arraydescr, pure=False):
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
@@ -781,6 +784,16 @@ class Transformer(object):
         op = SpaceOperation('setarrayitem_gc_%s' % kind,
                             [args[0], arraydescr, v_index, args[2]], None)
         return extraop + [op]
+
+    def do_fixed_list_ll_arraycopy(self, op, args, arraydescr):
+        calldescr = self.callcontrol.getcalldescr(op)
+        return SpaceOperation('arraycopy',
+                              [calldescr, op.args[0]] + args + [arraydescr],
+                              op.result)
+
+    # ---------- resizable lists ----------
+
+    # xxx
 
     # ----------
     # VirtualRefs.
