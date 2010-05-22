@@ -783,33 +783,52 @@ class BlackholeInterpreter(object):
     # ----------
     # list operations
 
-    @arguments("r", "d", "i", returns="i")
-    def bhimpl_check_neg_index(array, arraydescr, index):
-        xxx
+    @arguments("cpu", "r", "d", "i", returns="i")
+    def bhimpl_check_neg_index(cpu, array, arraydescr, index):
+        if index < 0:
+            index += cpu.bh_arraylen_gc(arraydescr, array)
+        return index
 
-    @arguments("r", "d", "i", returns="i")
-    def bhimpl_check_resizable_neg_index(list, lengthdescr, index):
-        xxx
+    @arguments("cpu", "r", "d", "i", returns="i")
+    def bhimpl_check_resizable_neg_index(cpu, lst, lengthdescr, index):
+        if index < 0:
+            index += cpu.bh_getfield_gc_i(lst, lengthdescr)
+        return index
 
-    @arguments()
-    def bhimpl_getlistitem_gc_i(yyy):
-        xxx
-    @arguments()
-    def bhimpl_getlistitem_gc_r(yyy):
-        xxx
-    @arguments()
-    def bhimpl_getlistitem_gc_f(yyy):
-        xxx
+    @arguments("cpu", "d", "d", "d", "d", "i", returns="r")
+    def bhimpl_newlist(cpu, structdescr, lengthdescr, itemsdescr,
+                       arraydescr, length):
+        result = cpu.bh_new(structdescr)
+        cpu.bh_setfield_gc_i(result, lengthdescr, length)
+        items = cpu.bh_new_array(arraydescr, length)
+        cpu.bh_setfield_gc_r(result, itemsdescr, items)
+        return result
 
-    @arguments()
-    def bhimpl_setlistitem_gc_i(yyy):
-        xxx
-    @arguments()
-    def bhimpl_setlistitem_gc_r(yyy):
-        xxx
-    @arguments()
-    def bhimpl_setlistitem_gc_f(yyy):
-        xxx
+    @arguments("cpu", "r", "d", "d", "i", returns="i")
+    def bhimpl_getlistitem_gc_i(cpu, lst, itemsdescr, arraydescr, index):
+        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        return cpu.bh_getarrayitem_gc_i(arraydescr, items, index)
+    @arguments("cpu", "r", "d", "d", "i", returns="r")
+    def bhimpl_getlistitem_gc_r(cpu, lst, itemsdescr, arraydescr, index):
+        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        return cpu.bh_getarrayitem_gc_r(arraydescr, items, index)
+    @arguments("cpu", "r", "d", "d", "i", returns="f")
+    def bhimpl_getlistitem_gc_f(cpu, lst, itemsdescr, arraydescr, index):
+        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        return cpu.bh_getarrayitem_gc_f(arraydescr, items, index)
+
+    @arguments("cpu", "r", "d", "d", "i", "i")
+    def bhimpl_setlistitem_gc_i(cpu, lst, itemsdescr, arraydescr, index, nval):
+        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        cpu.bh_setarrayitem_gc_i(arraydescr, items, index, nval)
+    @arguments("cpu", "r", "d", "d", "i", "r")
+    def bhimpl_setlistitem_gc_r(cpu, lst, itemsdescr, arraydescr, index, nval):
+        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        cpu.bh_setarrayitem_gc_r(arraydescr, items, index, nval)
+    @arguments("cpu", "r", "d", "d", "i", "f")
+    def bhimpl_setlistitem_gc_f(cpu, lst, itemsdescr, arraydescr, index, nval):
+        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        cpu.bh_setarrayitem_gc_f(arraydescr, items, index, nval)
 
     # ----------
     # the following operations are directly implemented by the backend

@@ -437,7 +437,7 @@ class MIFrame(object):
     @arguments("orgpc", "box", "descr", "box")
     def opimpl_check_neg_index(self, orgpc, arraybox, arraydescr, indexbox):
         negbox = self.metainterp.execute_and_record(
-            rop.INT_LT, None, indexbox, ConstInt(0))
+            rop.INT_LT, None, indexbox, history.CONST_FALSE)
         negbox = self.implement_guard_value(orgpc, negbox)
         if negbox.getint():
             # the index is < 0; add the array length to it
@@ -447,7 +447,7 @@ class MIFrame(object):
                 rop.INT_ADD, None, indexbox, lenbox)
         return indexbox
 
-    @FixME  #arguments("descr", "descr", "descr", "descr", "box")
+    @arguments("descr", "descr", "descr", "descr", "box")
     def opimpl_newlist(self, structdescr, lengthdescr, itemsdescr, arraydescr,
                        sizebox):
         sbox = self.metainterp.execute_and_record(rop.NEW, structdescr)
@@ -457,13 +457,19 @@ class MIFrame(object):
                                                   sizebox)
         self.metainterp.execute_and_record(rop.SETFIELD_GC, itemsdescr,
                                            sbox, abox)
-        self.make_result_box(sbox)
+        return sbox
 
-    @FixME  #arguments("box", "descr", "descr", "box")
-    def opimpl_getlistitem_gc(self, listbox, itemsdescr, arraydescr, indexbox):
+    @arguments("box", "descr", "descr", "box")
+    def _opimpl_getlistitem_gc_any(self, listbox, itemsdescr, arraydescr,
+                                   indexbox):
         arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
                                                       itemsdescr, listbox)
-        self.execute_with_descr(rop.GETARRAYITEM_GC, arraydescr, arraybox, indexbox)
+        return self.execute_with_descr(rop.GETARRAYITEM_GC,
+                                       arraydescr, arraybox, indexbox)
+
+    opimpl_getlistitem_gc_i = _opimpl_getlistitem_gc_any
+    opimpl_getlistitem_gc_r = _opimpl_getlistitem_gc_any
+    opimpl_getlistitem_gc_f = _opimpl_getlistitem_gc_any
 
     @arguments("box", "descr", "descr", "box", "box")
     def _opimpl_setlistitem_gc_any(self, listbox, itemsdescr, arraydescr,
