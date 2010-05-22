@@ -50,6 +50,8 @@ class FakeCPU:
         return FakeDescr()
     def sizeof(self, STRUCT):
         return FakeDescr()
+    def arraydescrof(self, ARRAY):
+        return FakeDescr()
 
 class FakeCallControl:
     _descr_cannot_raise = FakeDescr()
@@ -605,3 +607,46 @@ class TestFlatten:
             residual_call_r_r $<* fn jit_force_virtual>, <Descr>, R[%r1] -> %r2
             ref_return %r2
         """, transform=True, cc=FakeCallControlWithVRefInfo())
+
+    def test_array_operations(self):
+        A = lltype.GcArray(lltype.Signed)
+        def f():
+            array = lltype.malloc(A, 5)
+            array[2] = 5
+            return array[2] + len(array)
+        self.encoding_test(f, [], """
+            new_array <Descr>, $5 -> %r0
+            setarrayitem_gc_i %r0, <Descr>, $2, $5
+            getarrayitem_gc_i %r0, <Descr>, $2 -> %i0
+            arraylen_gc %r0, <Descr> -> %i1
+            int_add %i0, %i1 -> %i2
+            int_return %i2
+        """, transform=True)
+
+    def test_void_array_operations(self):
+        A = lltype.GcArray(lltype.Void)
+        def f():
+            array = lltype.malloc(A, 5)
+            array[2] = None
+            x = array[2]
+            return len(array)
+        self.encoding_test(f, [], """
+            new_array <Descr>, $5 -> %r0
+            arraylen_gc %r0, <Descr> -> %i0
+            int_return %i0
+        """, transform=True)
+
+    def test_string_operations(self):
+        from pypy.rpython.lltypesystem import rstr
+        def f(n):
+            s = lltype.malloc(rstr.STR, 2)
+            s.chars[1] = chr(n)
+            return ord(s.chars[1]) + len(s.chars)
+        self.encoding_test(f, [512], """
+            newstr $2 -> %r0
+            strsetitem %r0, $1, %i0
+            strgetitem %r0, $1 -> %i1
+            strlen %r0 -> %i2
+            int_add %i1, %i2 -> %i3
+            int_return %i3
+        """, transform=True)
