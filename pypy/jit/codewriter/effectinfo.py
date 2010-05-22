@@ -4,16 +4,16 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.backendopt.graphanalyze import BoolGraphAnalyzer
 
-# the 'extraeffect' field is one of the following values:
-EF_PURE                            = 0   # pure function (and cannot raise)
-EF_CANNOT_RAISE                    = 1   # a function which cannot raise
-EF_CAN_RAISE                       = 2   # normal function (can raise)
-EF_LOOPINVARIANT                   = 3   # special: call it only once per loop
-EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE = 4   # can raise and force virtualizables
-
 
 class EffectInfo(object):
     _cache = {}
+
+    # the 'extraeffect' field is one of the following values:
+    EF_PURE                            = 0 #pure function (and cannot raise)
+    EF_CANNOT_RAISE                    = 1 #a function which cannot raise
+    EF_CAN_RAISE                       = 2 #normal function (can raise)
+    EF_LOOPINVARIANT                   = 3 #special: call it only once per loop
+    EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE = 4 #can raise and force virtualizables
 
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,
@@ -33,9 +33,10 @@ class EffectInfo(object):
         return result
 
     def check_forces_virtual_or_virtualizable(self):
-        return self.extraeffect >= EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+        return self.extraeffect >= self.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
 
-def effectinfo_from_writeanalyze(effects, cpu, extraeffect=EF_CAN_RAISE):
+def effectinfo_from_writeanalyze(effects, cpu,
+                                 extraeffect=EffectInfo.EF_CAN_RAISE):
     from pypy.translator.backendopt.writeanalyze import top_set
     if effects is top_set:
         return None
