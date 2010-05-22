@@ -472,8 +472,9 @@ class VStructInfo(AbstractVirtualStructInfo):
         AbstractVirtualStructInfo.__init__(self, fielddescrs)
         self.typedescr = typedescr
 
-    def allocate(self, metainterp):
-        return metainterp.execute_and_record(rop.NEW, self.typedescr)
+    @specialize.argtype(1)
+    def allocate(self, decoder):
+        return decoder.allocate_struct(self.typedescr)
 
     def debug_prints(self):
         debug_print("\tvstructinfo", self.typedescr.repr_rpython())
@@ -484,17 +485,16 @@ class VArrayInfo(AbstractVirtualInfo):
         self.arraydescr = arraydescr
         #self.fieldnums = ...
 
-    def allocate(self, metainterp):
+    @specialize.argtype(1)
+    def allocate(self, decoder):
         length = len(self.fieldnums)
-        return metainterp.execute_and_record(rop.NEW_ARRAY,
-                                             self.arraydescr,
-                                             ConstInt(length))
+        return decoder.allocate_array(self.arraydescr, length)
 
     @specialize.argtype(1)
     def setfields(self, decoder, array):
         arraydescr = self.arraydescr
         for i in range(len(self.fieldnums)):
-            decoder.setarrayitem(descr, array, i, self.fieldnums[i])
+            decoder.setarrayitem(arraydescr, array, i, self.fieldnums[i])
 
     def debug_prints(self):
         debug_print("\tvarrayinfo", self.arraydescr)
@@ -614,6 +614,10 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
 
     def allocate_with_vtable(self, known_class):
         xxx
+    def allocate_struct(self, typedescr):
+        xxx
+    def allocate_array(self, arraydescr, length):
+        xxx
     def setfield(self, descr, struct, fieldnum):
         xxx
     def setarrayitem(self, arraydescr, array, index, fieldnum):
@@ -717,6 +721,12 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     def allocate_with_vtable(self, known_class):
         from pypy.jit.metainterp.executor import exec_new_with_vtable
         return exec_new_with_vtable(self.cpu, known_class)
+
+    def allocate_struct(self, typedescr):
+        return self.cpu.bh_new(typedescr)
+
+    def allocate_array(self, arraydescr, length):
+        return self.cpu.bh_new_array(arraydescr, length)
 
     def setfield(self, descr, struct, fieldnum):
         if descr.is_pointer_field():

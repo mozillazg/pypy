@@ -208,14 +208,14 @@ _oplist = [
     'NEW_WITH_VTABLE/1',
     'NEW_ARRAY/1d',
     'FORCE_TOKEN/0',
-    'VIRTUAL_REF/2',
+    'VIRTUAL_REF/2',         # removed before it's passed to the backend
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
     'SETARRAYITEM_GC/3d',
     'SETARRAYITEM_RAW/3d',#only added by backend.llsupport.gc.rewrite_assembler
     'SETFIELD_GC/2d',
     'SETFIELD_RAW/2d',
-    'ARRAYCOPY/7d',
+    'ARRAYCOPY/7d',      # removed before it's passed to the backend
     'NEWSTR/1',
     'STRSETITEM/3',
     'UNICODESETITEM/3',
@@ -223,7 +223,7 @@ _oplist = [
     #'RUNTIMENEW/1',     # ootype operation
     'COND_CALL_GC_WB',  # [objptr, newvalue]   (for the write barrier)
     'DEBUG_MERGE_POINT/1',      # debugging only
-    'VIRTUAL_REF_FINISH/2',
+    'VIRTUAL_REF_FINISH/2',   # removed before it's passed to the backend
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     'CALL',

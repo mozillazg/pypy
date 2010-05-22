@@ -894,7 +894,6 @@ class RegAlloc(object):
         resloc = self.force_allocate_reg(op.result)
         self.Perform(op, [argloc], resloc)
     consider_cast_ptr_to_int = consider_same_as
-    consider_virtual_ref = consider_same_as
 
     def consider_strlen(self, op):
         base_loc = self.rm.make_sure_var_in_reg(op.args[0], op.args)
@@ -952,9 +951,6 @@ class RegAlloc(object):
 
     def consider_debug_merge_point(self, op):
         pass
-
-    def consider_virtual_ref_finish(self, op):
-        self.possibly_free_vars(op.args)
 
     def get_mark_gc_roots(self, gcrootmap):
         shape = gcrootmap.get_basic_shape()
