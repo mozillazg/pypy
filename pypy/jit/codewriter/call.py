@@ -7,7 +7,7 @@ from pypy.jit.codewriter import support
 from pypy.jit.codewriter.jitcode import JitCode
 from pypy.jit.codewriter.effectinfo import VirtualizableAnalyzer
 from pypy.jit.codewriter.effectinfo import effectinfo_from_writeanalyze
-from pypy.jit.codewriter import effectinfo as ef
+from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
@@ -199,23 +199,23 @@ class CallControl(object):
                                            "loop-invariant function!")
         # build the extraeffect
         if self.virtualizable_analyzer.analyze(op):
-            extraeffect = ef.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+            extraeffect = EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
         elif loopinvariant:
-            extraeffect = ef.EF_LOOPINVARIANT
+            extraeffect = EffectInfo.EF_LOOPINVARIANT
         elif pure:
             # XXX check what to do about exceptions (also MemoryError?)
-            extraeffect = ef.EF_PURE
+            extraeffect = EffectInfo.EF_PURE
         elif self._canraise(op):
-            extraeffect = ef.EF_CAN_RAISE
+            extraeffect = EffectInfo.EF_CAN_RAISE
         else:
-            extraeffect = ef.EF_CANNOT_RAISE
+            extraeffect = EffectInfo.EF_CANNOT_RAISE
         #
         effectinfo = effectinfo_from_writeanalyze(
             self.readwrite_analyzer.analyze(op), self.cpu, extraeffect)
         #
         if pure or loopinvariant:
             assert effectinfo is not None
-            assert extraeffect != ef.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+            assert extraeffect != EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
         #
         return self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
                                     effectinfo)
@@ -229,7 +229,8 @@ class CallControl(object):
 
     def calldescr_canraise(self, calldescr):
         effectinfo = calldescr.get_extra_info()
-        return effectinfo is None or effectinfo.extraeffect >= ef.EF_CAN_RAISE
+        return (effectinfo is None or
+                effectinfo.extraeffect >= EffectInfo.EF_CAN_RAISE)
 
     def found_jitdriver(self, jitdriver):
         if self.jitdriver is None:

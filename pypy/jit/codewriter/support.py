@@ -241,7 +241,7 @@ class LLtypeHelpers:
 
     def build_ll_0_alloc_with_del(RESULT, vtable):
         def _ll_0_alloc_with_del():
-            p = lltype.malloc(RESULT)
+            p = lltype.malloc(RESULT.TO)
             lltype.cast_pointer(rclass.OBJECTPTR, p).typeptr = vtable
             return p
         return _ll_0_alloc_with_del

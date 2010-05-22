@@ -22,7 +22,6 @@ from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
 from pypy.jit.metainterp.compile import GiveUp
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
-from pypy.jit.codewriter import effectinfo as ef
 
 # ____________________________________________________________
 
@@ -1037,8 +1036,8 @@ class MIFrame(object):
     def do_residual_call(self, funcbox, descr, argboxes):
         allboxes = [funcbox] + argboxes
         effectinfo = descr.get_extra_info()
-        if (effectinfo is None or
-            effectinfo.extraeffect == ef.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE):
+        if (effectinfo is None or effectinfo.extraeffect ==
+                                effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE):
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.vable_and_vrefs_before_residual_call()
             # xxx do something about code duplication
@@ -1054,11 +1053,11 @@ class MIFrame(object):
                 return self.metainterp.assert_no_exception()
         else:
             effect = effectinfo.extraeffect
-            if effect == ef.EF_CANNOT_RAISE:
+            if effect == effectinfo.EF_CANNOT_RAISE:
                 opnum, exc = rop.CALL, False
-            elif effect == ef.EF_PURE:
+            elif effect == effectinfo.EF_PURE:
                 opnum, exc = rop.CALL_PURE, False
-            elif effect == ef.EF_LOOPINVARIANT:
+            elif effect == effectinfo.EF_LOOPINVARIANT:
                 opnum, exc = rop.CALL_LOOPINVARIANT, True
             else:
                 opnum, exc = rop.CALL, True

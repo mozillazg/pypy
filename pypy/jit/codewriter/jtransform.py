@@ -42,8 +42,11 @@ class Transformer(object):
         #
         def do_rename(var, var_or_const):
             renamings[var] = var_or_const
-            if isinstance(var_or_const, Constant):
-                renamings_constants[var] = var_or_const
+            if (isinstance(var_or_const, Constant)
+                and var.concretetype != lltype.Void):
+                value = var_or_const.value
+                value = lltype._cast_whatever(var.concretetype, value)
+                renamings_constants[var] = Constant(value, var.concretetype)
         #
         for op in block.operations:
             if renamings_constants:
