@@ -766,9 +766,10 @@ class Transformer(object):
         else:
             v_posindex = Variable('posindex')
             v_posindex.concretetype = lltype.Signed
-            op = SpaceOperation(checkname, [args[0],
-                                            descr, args[1]], v_posindex)
-            return v_posindex, [op]
+            op0 = SpaceOperation('-live-', [], None)
+            op1 = SpaceOperation(checkname, [args[0],
+                                             descr, args[1]], v_posindex)
+            return v_posindex, [op0, op1]
 
     def _get_initial_newlist_length(self, op, args):
         # normalize number of arguments to the 'newlist' function
