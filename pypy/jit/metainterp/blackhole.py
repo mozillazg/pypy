@@ -305,8 +305,8 @@ class BlackholeInterpreter(object):
             except LeaveFrame:
                 break
             except Exception, e:
-                e = get_llexception(self.cpu, e)
-                self.handle_exception_in_frame(e)
+                lle = get_llexception(self.cpu, e)
+                self.handle_exception_in_frame(lle)
 
     def get_tmpreg_i(self):
         return self.tmpreg_i
@@ -358,19 +358,20 @@ class BlackholeInterpreter(object):
         # the exception is handled in the frame itself.
         code = self.jitcode.code
         position = self.position
-        opcode = ord(code[position])
-        if opcode != self.op_catch_exception:
-            # no 'catch_exception' insn follows: just reraise
-            if we_are_translated():
-                raise Exception, e
-            else:
-                etype = rclass.ll_type(e)
-                raise LLException(etype, e)
+        if position < len(code):
+            opcode = ord(code[position])
+            if opcode == self.op_catch_exception:
+                # store the exception on 'self', and jump to the handler
+                self.exception_last_value = e
+                target = ord(code[position+1]) | (ord(code[position+2])<<8)
+                self.position = target
+                return
+        # no 'catch_exception' insn follows: just reraise
+        if we_are_translated():
+            raise Exception, e
         else:
-            # else store the exception on 'self', and jump to the handler
-            self.exception_last_value = e
-            target = ord(code[position+1]) | (ord(code[position+2])<<8)
-            self.position = target
+            etype = rclass.ll_type(e)
+            raise LLException(etype, e)
 
     # XXX must be specialized
     def copy_constants(self, registers, constants):
@@ -761,15 +762,23 @@ class BlackholeInterpreter(object):
 
     @arguments("self", "r")
     def bhimpl_raise(self, excvalue):
-        import pdb; pdb.set_trace()
-        XXX
-        raise real_instance
+        e = lltype.cast_opaque_ptr(rclass.OBJECTPTR, excvalue)
+        assert e
+        if we_are_translated():
+            raise Exception, e
+        else:
+            etype = rclass.ll_type(e)
+            raise LLException(etype, e)
 
     @arguments("self")
     def bhimpl_reraise(self):
-        real_instance = self.exception_last_value
-        assert real_instance
-        raise real_instance
+        e = self.exception_last_value
+        assert e
+        if we_are_translated():
+            raise Exception, e
+        else:
+            etype = rclass.ll_type(e)
+            raise LLException(etype, e)
 
     @arguments()
     def bhimpl_can_enter_jit():
@@ -1094,18 +1103,29 @@ class BlackholeInterpreter(object):
               opnum == rop.GUARD_ISNULL or
               opnum == rop.GUARD_NONNULL_CLASS):
             # Produced by goto_if_not_ptr_{non,is}zero().  The pc is at the
-            # start of the opcode (so it will be redone).  This is needed
+            # start of the opcode (so it will be redone); this is needed
             # because of GUARD_NONNULL_CLASS.
             pass
+        #
         elif (opnum == rop.GUARD_NO_EXCEPTION or
               opnum == rop.GUARD_EXCEPTION or
-              opnum == rop.GUARD_NOT_FORCED or
-              opnum == rop.GUARD_NO_OVERFLOW or
-              opnum == rop.GUARD_OVERFLOW):
+              opnum == rop.GUARD_NOT_FORCED):
+            return self.cpu.grab_exc_value()
+        #
+        elif opnum == rop.GUARD_NO_OVERFLOW:
+            # Produced by int_xxx_ovf().  The pc is just after the opcode.
+            # We get here because it did not used to overflow, but now it does.
+            return get_llexception(self.cpu, OverflowError())
+        #
+        elif opnum == rop.GUARD_OVERFLOW:
+            # Produced by int_xxx_ovf().  The pc is just after the opcode.
+            # We get here because it used to overflow, but now it no longer
+            # does.
             pass
         else:
             from pypy.jit.metainterp.resoperation import opname
             raise NotImplementedError(opname[opnum])
+        return NULL
 
     # connect the return of values from the called frame to the
     # 'xxx_call_yyy' instructions from the caller frame
@@ -1115,9 +1135,6 @@ class BlackholeInterpreter(object):
         self.registers_r[ord(self.jitcode.code[self.position-1])] = result
     def _setup_return_value_f(self, result):
         self.registers_f[ord(self.jitcode.code[self.position-1])] = result
-
-    def _exit_frame_with_exception(self, e):
-        xxx
 
     def _done_with_this_frame(self):
         # rare case: we only get there if the blackhole interps all returned
@@ -1135,6 +1152,12 @@ class BlackholeInterpreter(object):
         else:
             assert False
 
+    def _exit_frame_with_exception(self, e):
+        # rare case
+        sd = self.builder.metainterp_sd
+        e = lltype.cast_opaque_ptr(llmemory.GCREF, e)
+        raise sd.ExitFrameWithExceptionRef(self.cpu, e)
+
 # ____________________________________________________________
 
 def resume_in_blackhole(metainterp_sd, resumedescr):
@@ -1147,9 +1170,9 @@ def resume_in_blackhole(metainterp_sd, resumedescr):
         False)  # XXX
     # XXX virtualrefs
     # XXX virtualizable
-    blackholeinterp._prepare_resume_from_failure(resumedescr.guard_opnum)
+    current_exc = blackholeinterp._prepare_resume_from_failure(
+        resumedescr.guard_opnum)
     try:
-        current_exc = blackholeinterp.cpu.grab_exc_value()
         current_exc = lltype.cast_opaque_ptr(rclass.OBJECTPTR, current_exc)
         while True:
             current_exc = blackholeinterp._resume_mainloop(current_exc)

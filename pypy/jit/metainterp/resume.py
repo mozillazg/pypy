@@ -32,10 +32,13 @@ class FrameInfo(object):
 
 def _ensure_parent_resumedata(framestack, n):
     target = framestack[n]
-    if n == 0 or target.parent_resumedata_frame_info_list is not None:
+    if n == 0:
+        return
+    back = framestack[n-1]
+    if target.parent_resumedata_frame_info_list is not None:
+        assert target.parent_resumedata_frame_info_list.pc == back.pc
         return
     _ensure_parent_resumedata(framestack, n-1)
-    back = framestack[n-1]
     target.parent_resumedata_frame_info_list = FrameInfo(
                                          back.parent_resumedata_frame_info_list,
                                          back.jitcode,

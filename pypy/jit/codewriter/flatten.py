@@ -128,6 +128,8 @@ class GraphFlattener(object):
                 self.emitline("%s_return" % kind, self.getcolor(args[0]))
         elif len(args) == 2:
             # exception block, raising an exception from a function
+            if isinstance(args[1], Variable):
+                self.emitline("-live-")     # xxx hack
             self.emitline("raise", self.getcolor(args[1]))
         else:
             raise Exception("?")
