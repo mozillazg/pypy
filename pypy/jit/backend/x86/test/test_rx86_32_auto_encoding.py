@@ -230,13 +230,14 @@ class TestRx86_32(object):
         return X86_CodeBuilder
 
     def complete_test(self, methname):
-        if methname.split('_')[0][-1].isdigit():
-            print "artificial instruction: %r" % (methname,)
-            return
         if '_' in methname:
             instrname, argmodes = methname.split('_')
         else:
             instrname, argmodes = methname, ''
+        if instrname[-1].isdigit() or (argmodes != '' and argmodes[-1].isdigit()):
+            print "artificial instruction: %r" % (methname,)
+            return
+
         print "Testing %s with argmodes=%r" % (instrname, argmodes)
         self.methname = methname
         self.is_xmm_insn = getattr(getattr(rx86.AbstractX86CodeBuilder,

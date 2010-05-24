@@ -189,8 +189,20 @@ def encode_mem_reg_plus_scaled_reg_plus_const(mc,
     # emit "reg1 + (reg2 << scaleshift) + offset"
     assert reg1 != R.ebp and reg2 != R.esp
     assert 0 <= scaleshift < 4
-    reg1 = reg_number_3bits(mc, reg1)
     reg2 = reg_number_3bits(mc, reg2)
+
+    # Special case for no base register
+    if reg1 == None:
+        # modrm
+        mc.writechar(chr(0x04 | orbyte))
+        # SIB
+        mc.writechar(chr((scaleshift<<6) | (reg2<<3) | 5))
+        # We're forced to output a disp32, even if offset == 0
+        mc.writeimm32(offset)
+        return 0
+
+    reg1 = reg_number_3bits(mc, reg1)
+
     SIB = chr((scaleshift<<6) | (reg2<<3) | reg1)
     #
     no_offset = offset == 0
@@ -348,6 +360,7 @@ class AbstractX86CodeBuilder(object):
 
     MOV_ri = insn(rex_w, register(1), '\xB8', immediate(2, 'q'))
     MOV_rr = insn(rex_w, '\x89', register(2,8), register(1), '\xC0')
+    MOV_bi = insn(rex_w, '\xC7', stack_bp(1), immediate(2))
     MOV_br = insn(rex_w, '\x89', register(2,8), stack_bp(1))
     MOV_rb = insn(rex_w, '\x8B', register(1,8), stack_bp(2))
     MOV_sr = insn(rex_w, '\x89', register(2,8), stack_sp(1))
@@ -387,13 +400,13 @@ class AbstractX86CodeBuilder(object):
     XOR_ri, XOR_rr, XOR_rb, _, _ = common_modes(6)
     CMP_ri, CMP_rr, CMP_rb, CMP_bi, CMP_br = common_modes(7)
 
-    _CMP_mi8 = insn(rex_w, '\x83', orbyte(7<<3), mem_reg_plus_const(1), immediate(2, 'b'))
-    _CMP_mi32 = insn(rex_w, '\x81', orbyte(7<<3), mem_reg_plus_const(1), immediate(2))
-    CMP_mi = select_8_or_32_bit_immed(_CMP_mi8, _CMP_mi32)
+    CMP_mi8 = insn(rex_w, '\x83', orbyte(7<<3), mem_reg_plus_const(1), immediate(2, 'b'))
+    CMP_mi32 = insn(rex_w, '\x81', orbyte(7<<3), mem_reg_plus_const(1), immediate(2))
+    CMP_mi = select_8_or_32_bit_immed(CMP_mi8, CMP_mi32)
 
-    _CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
-    _CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
-    CMP_ji = select_8_or_32_bit_immed(_CMP_ji8, _CMP_ji32)
+    CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
+    CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
+    CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
 
     NEG_r = insn(rex_w, '\xF7', register(1), '\xD8')
 
@@ -403,9 +416,9 @@ class AbstractX86CodeBuilder(object):
     IMUL_rr = insn(rex_w, '\x0F\xAF', register(1, 8), register(2), '\xC0')
     IMUL_rb = insn(rex_w, '\x0F\xAF', register(1, 8), stack_bp(2))
 
-    _IMUL_rri8 = insn(rex_w, '\x6B', register(1, 8), register(2), '\xC0', immediate(3, 'b'))
-    _IMUL_rri32 = insn(rex_w, '\x69', register(1, 8), register(2), '\xC0', immediate(3))
-    IMUL_rri = select_8_or_32_bit_immed(_IMUL_rri8, _IMUL_rri32)
+    IMUL_rri8 = insn(rex_w, '\x6B', register(1, 8), register(2), '\xC0', immediate(3, 'b'))
+    IMUL_rri32 = insn(rex_w, '\x69', register(1, 8), register(2), '\xC0', immediate(3))
+    IMUL_rri = select_8_or_32_bit_immed(IMUL_rri8, IMUL_rri32)
 
     def IMUL_ri(self, reg, immed):
         self.IMUL_rri(reg, reg, immed)
@@ -420,6 +433,7 @@ class AbstractX86CodeBuilder(object):
 
     LEA_rb = insn(rex_w, '\x8D', register(1,8), stack_bp(2))
     LEA32_rb = insn(rex_w, '\x8D', register(1,8),stack_bp(2,force_32bits=True))
+    LEA_ra = insn(rex_w, '\x8D', register(1, 8), mem_reg_plus_scaled_reg_plus_const(2))
 
     CALL_l = insn('\xE8', relative(1))
     CALL_r = insn(rex_nw, '\xFF', register(1), chr(0xC0 | (2<<3)))
@@ -429,11 +443,17 @@ class AbstractX86CodeBuilder(object):
     XCHG_rj = insn(rex_w, '\x87', register(1,8), '\x05', immediate(2))
 
     JMP_l = insn('\xE9', relative(1))
+    # FIXME: J_il8 assume the caller will do the appropriate calculation
+    # to find the displacement, but J_il does it for the caller.
+    # We need to be consistent.
+    J_il8 = insn(immediate(1, 'o'), '\x70', immediate(2, 'b'))
     J_il = insn('\x0F', immediate(1,'o'), '\x80', relative(2))
     SET_ir = insn('\x0F', immediate(1,'o'),'\x90', register(2), '\xC0')
 
     # The 64-bit version of this, CQO, is defined in X86_64_CodeBuilder
     CDQ = insn(rex_nw, '\x99')
+
+    TEST_rr = insn(rex_w, '\x85', register(2,8), register(1), '\xC0')
 
     # ------------------------------ SSE2 ------------------------------
 

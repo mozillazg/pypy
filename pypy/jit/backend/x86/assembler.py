@@ -1048,7 +1048,8 @@ class Assembler386(object):
                                         addr, locs, ign_2):
         mc = self._start_block()
         mc.CMP(locs[0], imm8(1))
-        mc.JB(rel8_patched_later)
+        # Patched below
+        mc.J_il8(rx86.Conditions['B'], 0)
         jb_location = mc.get_relative_pos()
         self._cmp_guard_class(mc, locs)
         # patch the JB above
@@ -1592,15 +1593,23 @@ for name, value in Assembler386.__dict__.iteritems():
         num = getattr(rop, opname.upper())
         genop_list[num] = value
 
-def addr_add_const(reg_or_imm1, offset):
-    # XXX: ri386 migration shim
-    return AddressLoc(reg_or_imm1, ImmedLoc(0), 0, offset)
-
-def mem(loc, offset):
-    # XXX: ri386 migration shim
-    return AddressLoc(loc, ImmedLoc(0), (0), offset)
-
 def round_up_to_4(size):
     if size < 4:
         return 4
     return size
+
+# XXX: ri386 migration shims:
+
+def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
+    return AddressLoc(reg_or_imm1, reg_or_imm2, scale, offset)
+
+def addr_add_const(reg_or_imm1, offset):
+    return AddressLoc(reg_or_imm1, ImmedLoc(0), 0, offset)
+
+def mem(loc, offset):
+    return AddressLoc(loc, ImmedLoc(0), 0, offset)
+
+def heap(addr):
+    return AddressLoc(ImmedLoc(addr), ImmedLoc(0), 0, 0)
+
+imm8 = imm
