@@ -17,6 +17,7 @@ from pypy.jit.metainterp.specnode import VirtualArraySpecNode
 from pypy.jit.metainterp.specnode import VirtualStructSpecNode
 from pypy.jit.metainterp.specnode import ConstantSpecNode
 from pypy.jit.codewriter.effectinfo import EffectInfo
+from pypy.jit.codewriter.heaptracker import register_known_gctype
 from pypy.jit.metainterp.test.oparser import parse
 
 def test_sort_descrs():
@@ -129,13 +130,11 @@ class LLtypeMixin(object):
     jit_virtual_ref_vtable = vrefinfo.jit_virtual_ref_vtable
     jvr_vtable_adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)
 
-##    cpu.class_sizes = {
-##        llmemory.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
-##        llmemory.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),
-##        llmemory.cast_adr_to_int(u_vtable_adr): cpu.sizeof(U),
-##        llmemory.cast_adr_to_int(jvr_vtable_adr): cpu.sizeof(
-##                                                   vrefinfo.JIT_VIRTUAL_REF),
-##        }
+    register_known_gctype(cpu, node_vtable,  NODE)
+    register_known_gctype(cpu, node_vtable2, NODE2)
+    register_known_gctype(cpu, u_vtable,     U)
+    register_known_gctype(cpu, jit_virtual_ref_vtable,vrefinfo.JIT_VIRTUAL_REF)
+
     namespace = locals()
 
 class OOtypeMixin_xxx_disabled(object):
@@ -220,9 +219,9 @@ class BaseTest(object):
         #
         def constclass(cls_vtable):
             if self.type_system == 'lltype':
-                XXX
-                return ConstAddr(llmemory.cast_ptr_to_adr(cls_vtable),
-                                 self.cpu)
+                return ConstInt(
+                    llmemory.cast_adr_to_int(
+                        llmemory.cast_ptr_to_adr(cls_vtable)))
             else:
                 return ConstObj(ootype.cast_to_object(cls_vtable))
         def constant(value):
@@ -358,7 +357,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         assert not boxp2.fromstart
 
         assert boxp1.knownclsbox is None
-        assert boxp2.knownclsbox.value == self.node_vtable_adr
+        assert boxp2.knownclsbox.getaddr() == self.node_vtable_adr
 
     def test_find_nodes_new_2(self):
         ops = """
@@ -414,8 +413,8 @@ class BaseTestOptimizeFindNode(BaseTest):
         assert not boxp2.fromstart
         assert not boxp3.fromstart
 
-        assert boxp2.knownclsbox.value == self.node_vtable_adr
-        assert boxp3.knownclsbox.value == self.node_vtable_adr2
+        assert boxp2.knownclsbox.getaddr() == self.node_vtable_adr
+        assert boxp3.knownclsbox.getaddr() == self.node_vtable_adr2
 
     def test_find_nodes_new_aliasing_0(self):
         ops = """
@@ -504,31 +503,31 @@ class BaseTestOptimizeFindNode(BaseTest):
                     nextdescr=Virtual(node_vtable,
                                       nextdescr=Virtual(node_vtable)))''')
 
-    def test_find_nodes_oois(self):
+    def test_find_nodes_ptr_eq(self):
         ops = """
         [p3, p4, p2]
         p0 = new_with_vtable(ConstClass(node_vtable))
         p1 = new_with_vtable(ConstClass(node_vtable))
         guard_nonnull(p0) []
-        i3 = ooisnot(p0, NULL)
+        i3 = ptr_ne(p0, NULL)
         guard_true(i3) []
-        i4 = oois(p0, NULL)
+        i4 = ptr_eq(p0, NULL)
         guard_false(i4) []
-        i5 = ooisnot(NULL, p0)
+        i5 = ptr_ne(NULL, p0)
         guard_true(i5) []
-        i6 = oois(NULL, p0)
+        i6 = ptr_eq(NULL, p0)
         guard_false(i6) []
-        i7 = ooisnot(p0, p1)
+        i7 = ptr_ne(p0, p1)
         guard_true(i7) []
-        i8 = oois(p0, p1)
+        i8 = ptr_eq(p0, p1)
         guard_false(i8) []
-        i9 = ooisnot(p0, p2)
+        i9 = ptr_ne(p0, p2)
         guard_true(i9) []
-        i10 = oois(p0, p2)
+        i10 = ptr_eq(p0, p2)
         guard_false(i10) []
-        i11 = ooisnot(p2, p1)
+        i11 = ptr_ne(p2, p1)
         guard_true(i11) []
-        i12 = oois(p2, p1)
+        i12 = ptr_eq(p2, p1)
         guard_false(i12) []
         jump(p0, p1, p2)
         """
