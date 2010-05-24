@@ -96,7 +96,7 @@ class Profiler(BaseProfiler):
         self.t1 = self.starttime
         self.times = [0, 0]
         self.counters = [0] * ncounters
-        self.calls = [[0, 0], [0, 0], [0, 0]]
+        self.calls = [[0, 0], [0, 0]]
         self.current = []
 
     def finish(self):
@@ -149,10 +149,10 @@ class Profiler(BaseProfiler):
     def count_ops(self, opnum, kind=OPS):
         from pypy.jit.metainterp.resoperation import rop
         self.counters[kind] += 1
-        if opnum == rop.CALL or opnum == rop.OOSEND:
+        if opnum == rop.CALL:  # or opnum == rop.OOSEND:
             self.calls[kind-OPS][0] += 1
-        elif opnum == rop.CALL_PURE or opnum == rop.OOSEND_PURE:
-            self.calls[kind-OPS][1] += 1        
+        elif opnum == rop.CALL_PURE:  # or opnum == rop.OOSEND_PURE:
+            self.calls[kind-OPS][1] += 1
 
     def print_stats(self):
         cnt = self.counters
@@ -171,8 +171,6 @@ class Profiler(BaseProfiler):
         self._print_intline("  calls", calls[1][0])
         self._print_intline("  pure calls", calls[1][1])
         self._print_intline("guards", cnt[GUARDS])
-        self._print_intline("blackholed ops", calls[2][0])
-        self._print_intline("  pure calls", calls[2][1])
         self._print_intline("opt ops", cnt[OPT_OPS])
         self._print_intline("opt guards", cnt[OPT_GUARDS])
         self._print_intline("forcings", cnt[OPT_FORCINGS])
