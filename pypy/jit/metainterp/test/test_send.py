@@ -1,7 +1,6 @@
 import py
 from pypy.rlib.jit import JitDriver, hint, purefunction
-from pypy.jit.metainterp.policy import StopAtXPolicy
-from pypy.rpython.ootypesystem import ootype
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
 
