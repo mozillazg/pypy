@@ -2,7 +2,7 @@ import py, sys
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rlib.jit import JitDriver, OPTIMIZER_SIMPLE
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 
 
 class ExceptionTests:

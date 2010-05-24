@@ -115,6 +115,7 @@ class TestFlatten:
     def encoding_test(self, func, args, expected,
                       transform=False, liveness=False, cc=None):
         graphs = self.make_graphs(func, args)
+        #graphs[0].show()
         if transform:
             from pypy.jit.codewriter.jtransform import transform_graph
             cc = cc or FakeCallControl()
@@ -381,6 +382,37 @@ class TestFlatten:
             L1:
             raise $<* struct object>
         """)
+
+    def test_exc_finally(self):
+        def get_exception(n):
+            if n > 5:
+                raise ValueError
+        class Foo:
+            pass
+        Foo.__module__ = "test"
+        foo = Foo()
+        def f(i):
+            try:
+                get_exception(i)
+            finally:
+                foo.sideeffect = 5
+
+        self.encoding_test(f, [65], """
+        residual_call_ir_v $<* fn get_exception>, <Descr>, I[%i0], R[]
+        -live-
+        catch_exception L1
+        setfield_gc_i $<* struct test.Foo>, <Descr>, $5
+        void_return
+        ---
+        L1:
+        last_exception -> %i1
+        last_exc_value -> %r0
+        int_copy %i1 -> %i2
+        ref_copy %r0 -> %r1
+        setfield_gc_i $<* struct test.Foo>, <Descr>, $5
+        -live-
+        raise %r1
+        """, transform=True)
 
     def test_goto_if_not_int_is_true(self):
         def f(i):
