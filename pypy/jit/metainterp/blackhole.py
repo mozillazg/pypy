@@ -1146,14 +1146,13 @@ class BlackholeInterpreter(object):
         elif sd.result_type == 'int':
             raise sd.DoneWithThisFrameInt(self.final_result_i())
         elif sd.result_type == 'ref':
-            raise sd.DoneWithThisFrameRef(self.final_result_r())
+            raise sd.DoneWithThisFrameRef(self.cpu, self.final_result_r())
         elif sd.result_type == 'float':
             raise sd.DoneWithThisFrameFloat(self.final_result_f())
         else:
             assert False
 
     def _exit_frame_with_exception(self, e):
-        # rare case
         sd = self.builder.metainterp_sd
         e = lltype.cast_opaque_ptr(llmemory.GCREF, e)
         raise sd.ExitFrameWithExceptionRef(self.cpu, e)

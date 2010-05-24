@@ -295,7 +295,8 @@ class GraphFlattener(object):
     def insert_renamings(self, link):
         renamings = {}
         lst = [(self.getcolor(v), self.getcolor(link.target.inputargs[i]))
-               for i, v in enumerate(link.args)]
+               for i, v in enumerate(link.args)
+               if v.concretetype is not lltype.Void]
         lst.sort(key=lambda(v, w): w.index)
         for v, w in lst:
             if v == w:

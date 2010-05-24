@@ -78,7 +78,7 @@ def split_before_jit_merge_point(graph, portalblock, portalopindex):
 
 def decode_hp_hint_args(op):
     # Returns (list-of-green-vars, list-of-red-vars) without Voids.
-    # Both lists are sorted: first INT, then REF, then FLOAT.
+    # Both lists must be sorted: first INT, then REF, then FLOAT.
     assert op.opname == 'jit_marker'
     jitdriver = op.args[1].value
     numgreens = len(jitdriver.greens)
@@ -91,7 +91,11 @@ def decode_hp_hint_args(op):
         from pypy.jit.metainterp.history import getkind
         lst = [v for v in args_v if v.concretetype is not lltype.Void]
         _kind2count = {'int': 1, 'ref': 2, 'float': 3}
-        lst.sort(key=lambda v: _kind2count[getkind(v.concretetype)])
+        lst2 = sorted(lst, key=lambda v: _kind2count[getkind(v.concretetype)])
+        # a crash here means that you have to reorder the variable named in
+        # the JitDriver.  Indeed, greens and reds must both be sorted: first
+        # all INTs, followed by all REFs, followed by all FLOATs.
+        assert lst == lst2
         return lst
     #
     return (_sort(greens_v), _sort(reds_v))
