@@ -16,7 +16,7 @@ from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
                                          xmm0, xmm1, xmm2, xmm3,
                                          xmm4, xmm5, xmm6, xmm7,
                                          RegLoc, StackLoc,
-                                         ImmedLoc, AddressLoc, imm)
+                                         ImmedLoc, AddressLoc, imm, rel32)
 
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import rx86, regloc, codebuf
@@ -527,14 +527,15 @@ class Assembler386(object):
 
     def _cmpop(cond, rev_cond):
         def genop_cmp(self, op, arglocs, result_loc):
+            # Clear high bits
+            self.mc.MOV_ri(result_loc.value, 0)
             rl = result_loc.lowest8bits()
             if isinstance(op.args[0], Const):
                 self.mc.CMP(arglocs[1], arglocs[0])
-                getattr(self.mc, 'SET' + rev_cond)(rl)
+                self.mc.SET_ir(rx86.Conditions[rev_cond], rl.value)
             else:
                 self.mc.CMP(arglocs[0], arglocs[1])
-                getattr(self.mc, 'SET' + cond)(rl)
-            self.mc.MOVZX(result_loc, rl)
+                self.mc.SET_ir(rx86.Conditions[cond], rl.value)
         return genop_cmp
 
     def _cmpop_float(cond, is_ne=False):
@@ -617,11 +618,12 @@ class Assembler386(object):
                     mc.MOV_sr(p, tmp.value)
             p += round_up_to_4(loc.width)
         self._regalloc.reserve_param(p//WORD)
-        mc.CALL_l(x)
+        # x is a location
+        mc.CALL(x)
         self.mark_gc_roots()
         
     def call(self, addr, args, res):
-        self._emit_call(addr, args)
+        self._emit_call(rel32(addr), args)
         assert res is eax
 
     genop_int_neg = _unaryop("NEG")
@@ -940,16 +942,16 @@ class Assembler386(object):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR,
                                              self.cpu.translate_support_code)
         assert itemsize == 1
-        self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc, basesize))
+        self.mc.MOVZX8(resloc, AddressLoc(base_loc, ofs_loc, 0, basesize))
 
     def genop_unicodegetitem(self, op, arglocs, resloc):
         base_loc, ofs_loc = arglocs
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.UNICODE,
                                              self.cpu.translate_support_code)
         if itemsize == 4:
-            self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, basesize, 2))
+            self.mc.MOV(resloc, AddressLoc(base_loc, ofs_loc, 2, basesize))
         elif itemsize == 2:
-            self.mc.MOVZX(resloc, addr_add(base_loc, ofs_loc, basesize, 1))
+            self.mc.MOVZX16(resloc, AddressLoc(base_loc, ofs_loc, 1, basesize))
         else:
             assert 0, itemsize
 
@@ -961,7 +963,7 @@ class Assembler386(object):
 
     def genop_guard_guard_no_exception(self, ign_1, guard_op, addr,
                                        locs, ign_2):
-        self.mc.CMP(heap(self.cpu.pos_exception()), imm(0))
+        self.mc.CMP_ji(self.cpu.pos_exception(), 0)
         return self.implement_guard(addr, 'NZ')
 
     def genop_guard_guard_exception(self, ign_1, guard_op, addr,
@@ -1421,7 +1423,7 @@ class Assembler386(object):
         
         self._emit_call(x, arglocs, 2, tmp=tmp)
 
-        if isinstance(resloc, MODRM64):
+        if isinstance(resloc, StackLoc) and resloc.width == 8:
             self.mc.FSTP(resloc)
         elif size == 1:
             self.mc.AND(eax, imm(0xff))
@@ -1589,6 +1591,14 @@ for name, value in Assembler386.__dict__.iteritems():
         opname = name[len('genop_'):]
         num = getattr(rop, opname.upper())
         genop_list[num] = value
+
+def addr_add_const(reg_or_imm1, offset):
+    # XXX: ri386 migration shim
+    return AddressLoc(reg_or_imm1, ImmedLoc(0), 0, offset)
+
+def mem(loc, offset):
+    # XXX: ri386 migration shim
+    return AddressLoc(loc, ImmedLoc(0), (0), offset)
 
 def round_up_to_4(size):
     if size < 4:

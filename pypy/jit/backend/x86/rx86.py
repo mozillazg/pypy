@@ -310,6 +310,17 @@ def common_modes(group):
 
     return INSN_ri, INSN_rr, INSN_rb, INSN_bi, INSN_br
 
+def select_8_or_32_bit_immed(insn_8, insn_32):
+    def INSN(*args):
+        immed = args[-1]
+        if single_byte(immed):
+            insn_8(*args)
+        else:
+            assert fits_in_32bits(immed)
+            insn_32(*args)
+
+    return INSN
+
 # ____________________________________________________________
 
 
@@ -357,11 +368,15 @@ class AbstractX86CodeBuilder(object):
     # "MOV reg1, [immediate2]" and the opposite direction
     MOV_rj = insn(rex_w, '\x8B', register(1,8), '\x05', immediate(2))
     MOV_jr = insn(rex_w, '\x89', register(2,8), '\x05', immediate(1))
+    MOV_ji = insn(rex_w, '\xC7', '\x05', immediate(1), immediate(2))
 
     MOV8_mr = insn(rex_w, '\x88', register(2, 8), mem_reg_plus_const(1))
 
     MOVZX8_rm = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_const(2))
+    MOVZX8_ra = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
+
     MOVZX16_rm = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_const(2))
+    MOVZX16_ra = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
 
     # ------------------------------ Arithmetic ------------------------------
 
@@ -372,25 +387,28 @@ class AbstractX86CodeBuilder(object):
     XOR_ri, XOR_rr, XOR_rb, _, _ = common_modes(6)
     CMP_ri, CMP_rr, CMP_rb, CMP_bi, CMP_br = common_modes(7)
 
+    _CMP_mi8 = insn(rex_w, '\x83', orbyte(7<<3), mem_reg_plus_const(1), immediate(2, 'b'))
+    _CMP_mi32 = insn(rex_w, '\x81', orbyte(7<<3), mem_reg_plus_const(1), immediate(2))
+    CMP_mi = select_8_or_32_bit_immed(_CMP_mi8, _CMP_mi32)
+
+    _CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
+    _CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
+    CMP_ji = select_8_or_32_bit_immed(_CMP_ji8, _CMP_ji32)
+
+    NEG_r = insn(rex_w, '\xF7', register(1), '\xD8')
+
     DIV_r = insn(rex_w, '\xF7', register(1), '\xF0')
     IDIV_r = insn(rex_w, '\xF7', register(1), '\xF8')
 
     IMUL_rr = insn(rex_w, '\x0F\xAF', register(1, 8), register(2), '\xC0')
     IMUL_rb = insn(rex_w, '\x0F\xAF', register(1, 8), stack_bp(2))
-    # 8-bit immediate
-    _IMUL_rri8 = insn(rex_w, '\x6B', register(1, 8), register(2), '\xC0', immediate(3, 'b'))
-    # 32-bit immediate
-    _IMUL_rri32 = insn(rex_w, '\x69', register(1, 8), register(2), '\xC0', immediate(3))
 
-    def IMUL_rri(self, reg1, reg2, immed):
-        if single_byte(immed):
-            self._IMUL_rri8(reg1, reg2, immed)
-        else:
-            assert fits_in_32bits(immed)
-            self._IMUL_rri32(reg1, reg2, immed)
+    _IMUL_rri8 = insn(rex_w, '\x6B', register(1, 8), register(2), '\xC0', immediate(3, 'b'))
+    _IMUL_rri32 = insn(rex_w, '\x69', register(1, 8), register(2), '\xC0', immediate(3))
+    IMUL_rri = select_8_or_32_bit_immed(_IMUL_rri8, _IMUL_rri32)
 
     def IMUL_ri(self, reg, immed):
-        return self.IMUL_rri(reg, reg, immed)
+        self.IMUL_rri(reg, reg, immed)
 
     # ------------------------------ Misc stuff ------------------------------
 
@@ -432,6 +450,28 @@ class AbstractX86CodeBuilder(object):
 
     MOVSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1, 8), '\x05', immediate(2))
     MOVSD_jr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2, 8), '\x05', immediate(1))
+
+    # Arithmetic
+    ADDSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), register(2), '\xC0')
+    ADDSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), stack_bp(2))
+    ADDSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), '\x05', immediate(2))
+
+    SUBSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), register(2), '\xC0')
+    SUBSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), stack_bp(2))
+    SUBSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), '\x05', immediate(2))
+
+    MULSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), register(2), '\xC0')
+    MULSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), stack_bp(2))
+    MULSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), '\x05', immediate(2))
+
+    DIVSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), register(2), '\xC0')
+    DIVSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), stack_bp(2))
+    DIVSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), '\x05', immediate(2))
+
+    # Comparision
+    UCOMISD_rr = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), register(2), '\xC0')
+    UCOMISD_rb = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), stack_bp(2))
+    UCOMISD_rj = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), '\x05', immediate(2))
 
     # ------------------------------------------------------------
 
@@ -499,12 +539,27 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         py.test.skip("MOV_rj unsupported")
     def MOV_jr(self, mem_immed, reg):
         py.test.skip("MOV_jr unsupported")
+    def MOV_ji(self, mem_immed, immed):
+        py.test.skip("MOV_ji unsupported")
     def XCHG_rj(self, reg, mem_immed):
         py.test.skip("XCGH_rj unsupported")
+    def CMP_ji(self, addr, immed):
+        py.test.skip("CMP_ji unsupported")
     def MOVSD_rj(self, xmm_reg, mem_immed):
         py.test.skip("MOVSD_rj unsupported")
     def MOVSD_jr(self, xmm_reg, mem_immed):
         py.test.skip("MOVSD_jr unsupported")
+    def ADDSD_rj(self, xxm_reg, mem_immed):
+        py.test.skip("ADDSD_rj unsupported")
+    def SUBSD_rj(self, xxm_reg, mem_immed):
+        py.test.skip("SUBSD_rj unsupported")
+    def MULSD_rj(self, xxm_reg, mem_immed):
+        py.test.skip("MULSD_rj unsupported")
+    def DIVSD_rj(self, xxm_reg, mem_immed):
+        py.test.skip("DIVSD_rj unsupported")
+    def UCOMISD_rj(self, xxm_reg, mem_immed):
+        py.test.skip("UCOMISD_rj unsupported")
+
 
 # ____________________________________________________________
 

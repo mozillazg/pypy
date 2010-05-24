@@ -124,6 +124,11 @@ class LocationCodeBuilder(object):
             getattr(self, name + '_' + code1 + code2)(loc1.value, loc2.value)
         return INSN
 
+    def _unaryop(name):
+        def INSN(self, loc):
+            getattr(self, name + '_' + loc.location_code())(loc.value)
+        return INSN
+
     ADD = _binaryop('ADD')
     OR  = _binaryop('OR')
     XOR = _binaryop('XOR')
@@ -131,10 +136,29 @@ class LocationCodeBuilder(object):
     AND = _binaryop('AND')
     SUB = _binaryop('SUB')
     IMUL = _binaryop('IMUL')
+    NEG = _unaryop('NEG')
 
+    CMP = _binaryop('CMP')
     MOV = _binaryop('MOV')
     MOV8 = _binaryop('MOV8')
+    MOVZX8 = _binaryop("MOVZX8")
+    MOVZX16 = _binaryop("MOVZX16")
+
     MOVSD = _binaryop('MOVSD')
+    ADDSD = _binaryop('ADDSD')
+    SUBSD = _binaryop('SUBSD')
+    MULSD = _binaryop('MULSD')
+    DIVSD = _binaryop('DIVSD')
+    UCOMISD = _binaryop('UCOMISD')
+
+
+    def CALL(self, loc):
+        # FIXME: Kludge that works in 32-bit because the "relative" CALL is
+        # actually absolute on i386
+        if loc.location_code() == 'j':
+            self.CALL_l(loc.value)
+        else:
+            getattr(self, 'CALL_' + loc.location_code())(loc.value)
 
     def MOV16(self, dest_loc, src_loc):
         # Select 16-bit operand mode
@@ -148,23 +172,6 @@ class LocationCodeBuilder(object):
     def POP(self, loc):
         assert isinstance(loc, RegLoc)
         self.POP_r(loc.value)
-
-    def CMP(self, loc0, loc1):
-        if isinstance(loc0, RegLoc):
-            val0 = loc0.value
-            if isinstance(loc1, RegLoc):
-                self.CMP_rr(val0, loc1.value)
-            elif isinstance(loc1, StackLoc):
-                self.CMP_rb(val0, loc1.value)
-            else:
-                self.CMP_ri(val0, loc1.getint())
-        else:
-            assert isinstance(loc0, StackLoc)
-            val0 = loc0.value
-            if isinstance(loc1, RegLoc):
-                self.CMP_br(val0, loc1.value)
-            else:
-                self.CMP_bi(val0, loc1.getint())
 
     def CMPi(self, loc0, loc1):
         # like CMP, but optimized for the case of loc1 being a Const
@@ -181,6 +188,10 @@ def imm(x):
         return ImmedLoc(x.getint())
     else:
         return ImmedLoc(x)
+
+def rel32(x):
+    # XXX: ri386 migration shim
+    return AddressLoc(ImmedLoc(x), ImmedLoc(0))
 
 all_extra_instructions = [name for name in LocationCodeBuilder.__dict__
                           if name[0].isupper()]

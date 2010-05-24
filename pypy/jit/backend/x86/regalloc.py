@@ -95,7 +95,7 @@ class X86XMMRegisterManager(RegisterManager):
 
     def convert_to_imm(self, c):
         adr = self.float_constants.record_float(c.getfloat())
-        return heap64(adr)
+        return AddressLoc(ImmedLoc(adr), ImmedLoc(0), 0, 0)
         
     def after_call(self, v):
         # the result is stored in st0, but we don't have this around,
