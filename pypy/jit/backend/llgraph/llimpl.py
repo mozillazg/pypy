@@ -1091,9 +1091,9 @@ def grab_exc_value():
     if _last_exception is not None:
         result = _last_exception.args[1]
         _last_exception = None
-        return  lltype.cast_opaque_ptr(llmemory.GCREF, result)
+        return result
     else:
-        return lltype.nullptr(llmemory.GCREF.TO)
+        return lltype.nullptr(rclass.OBJECTPTR.TO)
 
 ##_pseudo_exceptions = {}
 

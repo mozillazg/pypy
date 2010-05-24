@@ -101,7 +101,9 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def grab_exc_value(self):
-        """Return and clear the exception set by the latest execute_token()."""
+        """Return and clear the exception set by the latest execute_token(),
+        when it exits due to a failure of a GUARD_EXCEPTION or
+        GUARD_NO_EXCEPTION."""        # XXX remove me
         raise NotImplementedError
 
     @staticmethod
@@ -210,6 +212,19 @@ class AbstractCPU(object):
         raise NotImplementedError
 
     def bh_cast_ptr_to_int(self, ptr):
+        raise NotImplementedError
+
+    def bh_strlen(self, string):
+        raise NotImplementedError
+    def bh_strgetitem(self, string, index):
+        raise NotImplementedError
+    def bh_unicodelen(self, string):
+        raise NotImplementedError
+    def bh_unicodegetitem(self, string, index):
+        raise NotImplementedError
+    def bh_strsetitem(self, string, index, newvalue):
+        raise NotImplementedError
+    def bh_unicodesetitem(self, string, index, newvalue):
         raise NotImplementedError
 
     def force(self, force_token):
