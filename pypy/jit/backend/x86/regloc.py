@@ -76,6 +76,9 @@ class ImmedLoc(AssemblerLocation):
     def getint(self):
         return self.value
 
+    def __repr__(self):
+        return "ImmedLoc(%d)" % (self.value)
+
 class AddressLoc(AssemblerLocation):
     _immutable_ = True
 
@@ -90,8 +93,8 @@ class AddressLoc(AssemblerLocation):
                 self._location_code = 'j'
                 self.value = base_loc.value + (scaled_loc.value << scale) + static_offset
             else:
-                # FIXME
-                raise AssertionError("Don't know how to handle this case yet")
+                self._location_code = 'a'
+                self.value = (None, scaled_loc.value, scale, static_offset)
         else:
             if isinstance(scaled_loc, ImmedLoc):
                 # FIXME: What if base_loc is ebp or esp?
@@ -132,6 +135,7 @@ class LocationCodeBuilder(object):
     ADD = _binaryop('ADD')
     OR  = _binaryop('OR')
     XOR = _binaryop('XOR')
+    TEST = _binaryop('TEST')
 
     AND = _binaryop('AND')
     SUB = _binaryop('SUB')
@@ -141,8 +145,10 @@ class LocationCodeBuilder(object):
     CMP = _binaryop('CMP')
     MOV = _binaryop('MOV')
     MOV8 = _binaryop('MOV8')
-    MOVZX8 = _binaryop("MOVZX8")
-    MOVZX16 = _binaryop("MOVZX16")
+    MOVZX8 = _binaryop('MOVZX8')
+    MOVZX16 = _binaryop('MOVZX16')
+
+    LEA = _binaryop('LEA')
 
     MOVSD = _binaryop('MOVSD')
     ADDSD = _binaryop('ADDSD')
