@@ -52,7 +52,7 @@ class Logger(object):
                 addr = arg.getaddr()
                 name = self.metainterp_sd.get_name_from_address(addr)
                 if name:
-                    return 'ConstAddr(' + name + ')'
+                    return 'ConstClass(' + name + ')'
             return str(arg.value)
         elif isinstance(arg, BoxInt):
             return 'i' + str(mv)
