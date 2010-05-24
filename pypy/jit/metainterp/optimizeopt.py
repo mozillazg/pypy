@@ -89,7 +89,7 @@ class OptValue(object):
         if level == LEVEL_KNOWNCLASS:
             return self.known_class
         elif level == LEVEL_CONSTANT:
-            return cpu.ts.cls_of_box(cpu, self.box)
+            return cpu.ts.cls_of_box(self.box)
         else:
             return None
 
@@ -785,10 +785,10 @@ class Optimizer(object):
                     return
             self.optimize_default(op)
 
-    def optimize_OOISNOT(self, op):
+    def optimize_PTR_NE(self, op):
         self._optimize_oois_ooisnot(op, True)
 
-    def optimize_OOIS(self, op):
+    def optimize_PTR_EQ(self, op):
         self._optimize_oois_ooisnot(op, False)
 
     def optimize_VIRTUAL_REF(self, op):

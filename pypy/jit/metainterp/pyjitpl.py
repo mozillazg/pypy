@@ -547,7 +547,7 @@ class MIFrame(object):
         standard_box = self.metainterp.virtualizable_boxes[-1]
         if standard_box is box:
             return False
-        eqbox = self.metainterp.execute_and_record(rop.OOIS, None,
+        eqbox = self.metainterp.execute_and_record(rop.PTR_EQ, None,
                                                    box, standard_box)
         eqbox = self.implement_guard_value(pc, eqbox)
         isstandard = eqbox.getint()

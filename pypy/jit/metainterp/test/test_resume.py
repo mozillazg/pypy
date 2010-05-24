@@ -51,7 +51,9 @@ def test_vinfo():
 class MyMetaInterp:
     _already_allocated_resume_virtuals = None
 
-    def __init__(self, cpu):
+    def __init__(self, cpu=None):
+        if cpu is None:
+            cpu = LLtypeMixin.cpu
         self.cpu = cpu
         self.trace = []
         self.framestack = []
@@ -63,7 +65,7 @@ class MyMetaInterp:
         return frame    
 
     def execute_and_record(self, opnum, descr, *argboxes):
-        resbox = executor.execute(self.cpu, opnum, descr, *argboxes)
+        resbox = executor.execute(self.cpu, None, opnum, descr, *argboxes)
         self.trace.append((opnum,
                            list(argboxes),
                            resbox,
@@ -214,12 +216,12 @@ class FakeFrame(object):
         return "<FF %s %s %s>" % (self.jitcode, self.pc, self._env)
 
 def test_Snapshot_create():
-    l = ['b0', 'b1']
+    l = [BoxInt(), BoxPtr()]
     snap = Snapshot(None, l)
     assert snap.prev is None
     assert snap.boxes is l
 
-    l1 = ['b3']
+    l1 = [BoxInt()]
     snap1 = Snapshot(snap, l1)
     assert snap1.prev is snap
     assert snap1.boxes is l1
@@ -296,7 +298,7 @@ def test_capture_resumedata():
     assert snapshot.prev is None
     assert snapshot.boxes == fs[0]._env
 
-    fs[2]._env = [b2, b3]
+    fs[2]._env = [b3, b2]
     fs[2].pc = 15
     vbs = [b1, b2]
     vrs = [b3]
@@ -765,7 +767,7 @@ def make_storage(b1, b2, b3):
     storage = Storage()
     snapshot = Snapshot(None, [b1, ConstInt(1), b1, b2])
     snapshot = Snapshot(snapshot, [ConstInt(2), ConstInt(3)])
-    snapshot = Snapshot(snapshot, [b1, b2, b3])    
+    snapshot = Snapshot(snapshot, [b1, b3, b2])
     storage.rd_snapshot = snapshot
     storage.rd_frame_info_list = None
     return storage
@@ -779,7 +781,7 @@ def test_virtual_adder_int_constants():
     assert storage.rd_snapshot is None
     cpu = MyCPU([])
     reader = ResumeDataDirectReader(cpu, storage)
-    _next_section(reader, sys.maxint, 2**16, -65)
+    _next_section(reader, sys.maxint, -65, 2**16)
     _next_section(reader, 2, 3)
     _next_section(reader, sys.maxint, 1, sys.maxint, 2**16)
 
@@ -801,8 +803,30 @@ def test_virtual_adder_memo_const_sharing():
     assert storage2.rd_consts is memo.consts
 
 
+class ResumeDataFakeReader(ResumeDataBoxReader):
+    """Another subclass of AbstractResumeDataReader meant for tests."""
+    def __init__(self, storage, newboxes, metainterp):
+        self.liveboxes = newboxes
+        self.metainterp = metainterp
+        self._prepare(metainterp.cpu, storage)
+
+    def consume_boxes(self):
+        self.lst = []
+        self._prepare_next_section()
+        return self.lst
+
+    def write_an_int(self, count_i, box):
+        assert box.type == INT
+        self.lst.append(box)
+    def write_a_ref(self, count_r, box):
+        assert box.type == REF
+        self.lst.append(box)
+    def write_a_float(self, count_f, box):
+        assert box.type == FLOAT
+        self.lst.append(box)
+
+
 def test_virtual_adder_no_op_renaming():
-    py.test.skip("XXX rewrite")
     b1s, b2s, b3s = [BoxInt(1), BoxInt(2), BoxInt(3)]
     storage = make_storage(b1s, b2s, b3s)
     memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
@@ -823,9 +847,9 @@ def test_virtual_adder_no_op_renaming():
     b1t, b3t = [BoxInt(11), BoxInt(33)]
     newboxes = _resume_remap(liveboxes, [b1_2, b3s], b1t, b3t)
     metainterp = MyMetaInterp()
-    reader = ResumeDataReader(storage, newboxes, metainterp)
+    reader = ResumeDataFakeReader(storage, newboxes, metainterp)
     lst = reader.consume_boxes()
-    assert lst == [b1t, b1t, b3t]
+    assert lst == [b1t, b3t, b1t]
     lst = reader.consume_boxes()
     assert lst == [ConstInt(2), ConstInt(3)]
     lst = reader.consume_boxes()
@@ -834,7 +858,6 @@ def test_virtual_adder_no_op_renaming():
 
 
 def test_virtual_adder_make_constant():
-    py.test.skip("XXX rewrite")
     b1s, b2s, b3s = [BoxInt(1), BoxPtr(), BoxInt(3)]
     b1s = ConstInt(111)
     storage = make_storage(b1s, b2s, b3s)
@@ -844,10 +867,10 @@ def test_virtual_adder_make_constant():
     b2t, b3t = [BoxPtr(demo55o), BoxInt(33)]
     newboxes = _resume_remap(liveboxes, [b2s, b3s], b2t, b3t)
     metainterp = MyMetaInterp()
-    reader = ResumeDataReader(storage, newboxes, metainterp)
+    reader = ResumeDataFakeReader(storage, newboxes, metainterp)
     lst = reader.consume_boxes()
     c1t = ConstInt(111)
-    assert lst == [c1t, b2t, b3t]
+    assert lst == [c1t, b3t, b2t]
     lst = reader.consume_boxes()
     assert lst == [ConstInt(2), ConstInt(3)]
     lst = reader.consume_boxes()
@@ -856,7 +879,6 @@ def test_virtual_adder_make_constant():
 
 
 def test_virtual_adder_make_virtual():
-    py.test.skip("XXX rewrite")
     b2s, b3s, b4s, b5s = [BoxPtr(), BoxInt(3), BoxPtr(), BoxPtr()]  
     c1s = ConstInt(111)
     storage = Storage()
@@ -897,10 +919,10 @@ def test_virtual_adder_make_virtual():
                                          b5s], b3t, b5t)
 
     metainterp = MyMetaInterp()
-    reader = ResumeDataReader(storage, newboxes, metainterp)
+    reader = ResumeDataFakeReader(storage, newboxes, metainterp)
     assert len(reader.virtuals) == 2
-    b2t = reader._decode_box(modifier._gettagged(b2s))
-    b4t = reader._decode_box(modifier._gettagged(b4s))
+    b2t = reader.decode_ref(modifier._gettagged(b2s))
+    b4t = reader.decode_ref(modifier._gettagged(b4s))
     trace = metainterp.trace
     b2new = (rop.NEW_WITH_VTABLE, [ConstAddr(LLtypeMixin.node_vtable_adr,
                                          LLtypeMixin.cpu)],
@@ -930,7 +952,6 @@ def test_virtual_adder_make_virtual():
     assert ptr2.parent.next == ptr
 
 def test_virtual_adder_make_varray():
-    py.test.skip("XXX rewrite")
     b2s, b4s = [BoxPtr(), BoxInt(4)]
     c1s = ConstInt(111)
     storage = Storage()
@@ -961,9 +982,9 @@ def test_virtual_adder_make_varray():
                                          b4t)
     # resume
     metainterp = MyMetaInterp()
-    reader = ResumeDataReader(storage, newboxes, metainterp)
+    reader = ResumeDataFakeReader(storage, newboxes, metainterp)
     assert len(reader.virtuals) == 1
-    b2t = reader._decode_box(tag(0, TAGVIRTUAL))
+    b2t = reader.decode_ref(tag(0, TAGVIRTUAL))
     trace = metainterp.trace
     expected = [
         (rop.NEW_ARRAY, [ConstInt(2)], b2t, LLtypeMixin.arraydescr),
@@ -983,7 +1004,6 @@ def test_virtual_adder_make_varray():
 
 
 def test_virtual_adder_make_vstruct():
-    py.test.skip("XXX rewrite")
     b2s, b4s = [BoxPtr(), BoxPtr()]
     c1s = ConstInt(111)
     storage = Storage()
@@ -1007,9 +1027,9 @@ def test_virtual_adder_make_vstruct():
     #
     NULL = ConstPtr.value
     metainterp = MyMetaInterp()
-    reader = ResumeDataReader(storage, newboxes, metainterp)
+    reader = ResumeDataFakeReader(storage, newboxes, metainterp)
     assert len(reader.virtuals) == 1
-    b2t = reader._decode_box(tag(0, TAGVIRTUAL))
+    b2t = reader.decode_ref(tag(0, TAGVIRTUAL))
 
     trace = metainterp.trace
     expected = [
@@ -1027,7 +1047,6 @@ def test_virtual_adder_make_vstruct():
 
 
 def test_virtual_adder_pending_fields():
-    py.test.skip("XXX rewrite")
     b2s, b4s = [BoxPtr(), BoxPtr()]
     storage = Storage()
     memo = ResumeDataLoopMemo(FakeMetaInterpStaticData())
@@ -1055,7 +1074,7 @@ def test_virtual_adder_pending_fields():
     newboxes = _resume_remap(liveboxes, [b2s, b4s], b2t, b4t)
 
     metainterp = MyMetaInterp()
-    reader = ResumeDataReader(storage, newboxes, metainterp)
+    reader = ResumeDataFakeReader(storage, newboxes, metainterp)
     assert reader.virtuals is None
     trace = metainterp.trace
     b2set = (rop.SETFIELD_GC, [b2t, b4t], None, LLtypeMixin.nextdescr)

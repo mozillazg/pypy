@@ -19,6 +19,7 @@ class Snapshot(object):
     __slots__ = ('prev', 'boxes')
 
     def __init__(self, prev, boxes):
+        _assert_order(boxes)
         self.prev = prev
         self.boxes = boxes
 
@@ -170,14 +171,7 @@ class ResumeDataLoopMemo(object):
         numb1, liveboxes, v = self.number(values, snapshot.prev)
         n = len(liveboxes)-v
         boxes = snapshot.boxes
-        #
-        if not we_are_translated():
-            # verifies that 'boxes' are in order: all INTs, then all REFs,
-            # and finally all FLOATs.
-            _kind2count = {INT: 1, REF: 2, FLOAT: 3}
-            kinds = [_kind2count[box.type] for box in boxes]
-            assert kinds == sorted(kinds)
-        #
+        _assert_order(boxes)
         length = len(boxes)
         numslength = length + 1 + (length > 0 and boxes[-1].type == FLOAT)
         nums = [UNASSIGNED] * numslength
@@ -422,6 +416,14 @@ class ResumeDataVirtualAdder(object):
                 return self.liveboxes_from_env[box]
             return self.liveboxes[box]
 
+def _assert_order(boxes):
+    if not we_are_translated():
+        # verifies that 'boxes' are in order: all INTs, then all REFs,
+        # and finally all FLOATs.
+        _kind2count = {INT: 1, REF: 2, FLOAT: 3}
+        kinds = [_kind2count[box.type] for box in boxes]
+        assert kinds == sorted(kinds)
+
 
 class AbstractVirtualInfo(object):
     #def allocate(self, metainterp):
@@ -497,7 +499,7 @@ class VArrayInfo(AbstractVirtualInfo):
         # NB. the check for the kind of array elements is moved out of the loop
         if arraydescr.is_array_of_pointers():
             for i in range(length):
-                decoder.setarrayitem_ptr(arraydescr, array, i,
+                decoder.setarrayitem_ref(arraydescr, array, i,
                                          self.fieldnums[i])
         elif arraydescr.is_array_of_floats():
             for i in range(length):
@@ -632,7 +634,8 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         return self.metainterp.execute_and_record(rop.NEW, typedescr)
 
     def allocate_array(self, arraydescr, length):
-        return metainterp.execute_and_record(rop.NEW_ARRAY, arraydescr, length)
+        return self.metainterp.execute_and_record(rop.NEW_ARRAY,
+                                                  arraydescr, ConstInt(length))
 
     def setfield(self, descr, structbox, fieldnum):
         if descr.is_pointer_field():
@@ -656,9 +659,9 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
 
     def setarrayitem(self, arraydescr, arraybox, index, fieldnum, kind):
         itembox = self.decode_box(fieldnum, kind)
-        metainterp.execute_and_record(rop.SETARRAYITEM_GC,
-                                      arraydescr, arraybox,
-                                      ConstInt(index), itembox)
+        self.metainterp.execute_and_record(rop.SETARRAYITEM_GC,
+                                           arraydescr, arraybox,
+                                           ConstInt(index), itembox)
 
     def decode_int(self, tagged):
         return self.decode_box(tagged, INT)

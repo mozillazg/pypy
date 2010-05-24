@@ -217,15 +217,13 @@ class Const(AbstractValue):
         # to get the other behavior (i.e. using this __eq__).
         if self.__class__ is not other.__class__:
             return False
-        if isinstance(self.value, Symbolic):
-            v1 = "symbolic", id(self.value)
-        else:
-            v1 = self.value
-        if isinstance(other.value, Symbolic):
-            v2 = "symbolic", id(other.value)
-        else:
-            v2 = other.value
-        return v1 == v2
+        try:
+            return self.value == other.value
+        except TypeError:
+            if (isinstance(self.value, Symbolic) and
+                isinstance(other.value, Symbolic)):
+                return self.value is other.value
+            raise
 
     def __ne__(self, other):
         return not (self == other)

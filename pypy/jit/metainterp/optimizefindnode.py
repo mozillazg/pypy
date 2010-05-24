@@ -169,8 +169,8 @@ class NodeFinder(object):
     def find_nodes_no_escape(self, op):
         pass    # for operations that don't escape their arguments
 
-    find_nodes_OOIS          = find_nodes_no_escape
-    find_nodes_OOISNOT       = find_nodes_no_escape
+    find_nodes_PTR_EQ        = find_nodes_no_escape
+    find_nodes_PTR_NE        = find_nodes_no_escape
     find_nodes_INSTANCEOF    = find_nodes_no_escape
     find_nodes_GUARD_NONNULL = find_nodes_no_escape
     find_nodes_GUARD_ISNULL  = find_nodes_no_escape
