@@ -1,7 +1,7 @@
 import py
 from pypy.rlib.jit import JitDriver, we_are_jitted, OPTIMIZER_SIMPLE, hint
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
 from pypy.jit.metainterp.warmspot import CannotInlineCanEnterJit, get_stats
 
@@ -105,11 +105,11 @@ class RecursiveTests:
             def can_inline(*args):
                 return True
         else:
-            def can_inline(code, i):
+            def can_inline(i, code):
                 code = hlstr(code)
                 return not JUMP_BACK in code
 
-        jitdriver = JitDriver(greens = ['code', 'i'], reds = ['n'],
+        jitdriver = JitDriver(greens = ['i', 'code'], reds = ['n'],
                               can_inline = can_inline)
  
         def interpret(codenum, n, i):

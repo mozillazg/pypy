@@ -854,7 +854,7 @@ class BasicTests:
         assert not res
 
     def test_isinstance_2(self):
-        driver = JitDriver(greens = [], reds = ['x', 'n', 'sum'])
+        driver = JitDriver(greens = [], reds = ['n', 'sum', 'x'])
         class A:
             pass
         class B(A):
@@ -1078,10 +1078,10 @@ class BasicTests:
 
     def test_residual_external_call(self):
         import math
-        myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res'])
+        myjitdriver = JitDriver(greens = [], reds = ['y', 'x', 'res'])
         def f(x, y):
             x = float(x)
-            res = 0
+            res = 0.0
             while y > 0:
                 myjitdriver.can_enter_jit(x=x, y=y, res=res)
                 myjitdriver.jit_merge_point(x=x, y=y, res=res)
@@ -1320,7 +1320,7 @@ class BasicTests:
         self.check_loops(call=1)
 
     def test_bug_optimizeopt_mutates_ops(self):
-        myjitdriver = JitDriver(greens = [], reds = ['x', 'res', 'a', 'const'])
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'res', 'const', 'a'])
         class A(object):
             pass
         class B(A):
