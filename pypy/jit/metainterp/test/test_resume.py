@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.jit.metainterp.optimizeopt import VirtualValue, OptValue, VArrayValue
 from pypy.jit.metainterp.optimizeopt import VStructValue
 from pypy.jit.metainterp.resume import *
-from pypy.jit.metainterp.history import BoxInt, BoxPtr, ConstInt, ConstAddr
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, ConstInt
 from pypy.jit.metainterp.history import ConstPtr, ConstFloat
 from pypy.jit.metainterp.test.test_optimizefindnode import LLtypeMixin
 from pypy.jit.metainterp import executor
@@ -74,30 +74,102 @@ class MyMetaInterp:
             self.resboxes.append(resbox)
         return resbox
 
+S = lltype.GcStruct('S')
+gcref1 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
+gcref2 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
+gcrefnull = lltype.nullptr(llmemory.GCREF.TO)
+
+class MyCPU:
+    class ts:
+        NULLREF = gcrefnull
+        CONST_NULL = ConstPtr(gcrefnull)
+    def __init__(self, values):
+        self.values = values
+    def get_latest_value_count(self):
+        return len(self.values)
+    def get_latest_value_int(self, index):
+        return self.values[index]
+    def get_latest_value_ref(self, index):
+        return self.values[index]
+    def get_latest_value_float(self, index):
+        return self.values[index]
+
+class MyBlackholeInterp:
+    def __init__(self):
+        self.written_i = {}
+        self.written_r = {}
+        self.written_f = {}
+
+    def setarg_i(self, index, value):
+        assert index not in self.written_i
+        self.written_i[index] = value
+
+    def setarg_r(self, index, value):
+        assert index not in self.written_r
+        self.written_r[index] = value
+
+    def setarg_f(self, index, value):
+        assert index not in self.written_f
+        self.written_f[index] = value
+
 
 def test_simple_read():
-    b1, b2, b3 = [BoxInt(), BoxPtr(), BoxInt()]
-    c1, c2, c3 = [ConstInt(1), ConstInt(2), ConstInt(3)]
+    #b1, b2, b3 = [BoxInt(), BoxPtr(), BoxInt()]
+    c1, c2, c3 = [ConstInt(111), ConstInt(222), ConstInt(333)]
     storage = Storage()
     storage.rd_consts = [c1, c2, c3]
-    numb = Numbering(None, [tag(0, TAGBOX), tag(1, TAGBOX), tag(2, TAGBOX)])
-    numb = Numbering(numb, [tag(1, TAGCONST), tag(2, TAGCONST)])
+    numb = Numbering(None, [tag(0, TAGBOX), tag(2, TAGBOX), TYPEBARRIER,
+                            tag(1, TAGBOX)])
+    numb = Numbering(numb, [tag(1, TAGCONST), tag(2, TAGCONST), TYPEBARRIER])
     numb = Numbering(numb, [tag(0, TAGBOX),
                             tag(0, TAGCONST),
-                            NULLREF,
                             tag(0, TAGBOX),
+                            TYPEBARRIER,
+                            NULLREF,
                             tag(1, TAGBOX)])
     storage.rd_numb = numb
-
-    b1s, b2s, b3s = [BoxInt(), BoxPtr(), BoxInt()]
-    assert b1s != b3s
-    reader = ResumeDataReader(storage, [b1s, b2s, b3s], MyMetaInterp())
-    lst = reader.consume_boxes()
-    assert lst == [b1s, ConstInt(1), LLtypeMixin.cpu.ts.CONST_NULL, b1s, b2s]
-    lst = reader.consume_boxes()
-    assert lst == [ConstInt(2), ConstInt(3)]
-    lst = reader.consume_boxes()
-    assert lst == [b1s, b2s, b3s]
+    #
+    cpu = MyCPU([42, gcref1, -66])
+    reader = ResumeDataDirectReader(cpu, storage)
+    bh = MyBlackholeInterp()
+    reader.consume_one_section(bh)
+    assert bh.written_i == {0: 42,
+                            1: 111,
+                            2: 42,
+                            }
+    assert bh.written_r == {0: gcrefnull,
+                            1: gcref1,
+                            }
+    bh = MyBlackholeInterp()
+    reader.consume_one_section(bh)
+    assert bh.written_i == {0: 222,
+                            1: 333,
+                            }
+    assert bh.written_r == {}
+    bh = MyBlackholeInterp()
+    reader.consume_one_section(bh)
+    assert bh.written_i == {0: 42,
+                            1: -66,
+                            }
+    assert bh.written_r == {0: gcref1}
+    #
+    metainterp = MyMetaInterp(cpu)
+    reader = ResumeDataBoxReader(storage, metainterp)
+    bi, br, bf = [None]*3, [None]*2, [None]*0
+    reader.consume_boxes(bi, br, bf)
+    b1s = reader.liveboxes[0]
+    b2s = reader.liveboxes[1]
+    assert bi == [b1s, ConstInt(111), b1s]
+    assert br == [ConstPtr(gcrefnull), b2s]
+    bi, br, bf = [None]*2, [None]*0, [None]*0
+    reader.consume_boxes(bi, br, bf)
+    assert bi == [ConstInt(222), ConstInt(333)]
+    bi, br, bf = [None]*2, [None]*1, [None]*0
+    reader.consume_boxes(bi, br, bf)
+    b3s = reader.liveboxes[2]
+    assert bi == [b1s, b3s]
+    assert br == [b2s]
+    #
 
 def test_simple_read_tagged_ints():
     b1, b2, b3 = [BoxInt(), BoxPtr(), BoxInt()]
@@ -378,6 +450,9 @@ class FakeOptimizer_VirtualValue(object):
     class cpu:
         pass
 fakeoptimizer = FakeOptimizer_VirtualValue()
+
+def ConstAddr(addr, cpu=None):   # compatibility
+    return ConstInt(llmemory.cast_adr_to_int(addr))
 
 def virtual_value(keybox, value, next):
     vv = VirtualValue(fakeoptimizer, ConstAddr(LLtypeMixin.node_vtable_adr,
