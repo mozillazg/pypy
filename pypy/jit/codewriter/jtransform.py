@@ -36,6 +36,7 @@ class Transformer(object):
     def optimize_block(self, block):
         if block.operations == ():
             return
+        self.immutable_arrays = {}
         renamings = {}
         renamings_constants = {}    # subset of 'renamings', {Var:Const} only
         newoperations = []
@@ -802,7 +803,7 @@ class Transformer(object):
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
         extra = getkind(op.result.concretetype)[0]
-        if pure:
+        if pure or args[0] in self.immutable_arrays:
             extra = 'pure_' + extra
         op = SpaceOperation('getarrayitem_gc_%s' % extra,
                             [args[0], arraydescr, v_index], op.result)
