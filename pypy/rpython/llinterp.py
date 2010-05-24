@@ -110,16 +110,14 @@ class LLInterpreter(object):
         self.traceback_frames = []
         lines = []
         for frame in frames:
-            logline = frame.graph.name
+            logline = frame.graph.name + "()"
             if frame.curr_block is None:
                 logline += " <not running yet>"
                 lines.append(logline)
                 continue
             try:
-                logline += " " + self.typer.annotator.annotated[frame.curr_block].__module__
+                logline += " " + self.typer.annotator.annotated[frame.curr_block].func.__module__
             except (KeyError, AttributeError):
-                # if the graph is from the GC it was not produced by the same
-                # translator :-(
                 logline += " <unknown module>"
             lines.append(logline)
             for i, operation in enumerate(frame.curr_block.operations):
