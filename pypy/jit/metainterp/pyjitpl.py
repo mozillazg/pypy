@@ -1344,6 +1344,7 @@ class MetaInterp(object):
         # detect and propagate some exceptions early:
         #  - AssertionError
         #  - all subclasses of JitException
+        excvaluebox = self.last_exc_value_box
         if we_are_translated():
             from pypy.jit.metainterp.warmspot import JitException
             e = self.cpu.ts.get_exception_obj(excvaluebox)
@@ -1675,10 +1676,17 @@ class MetaInterp(object):
         elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
             exception = self.cpu.grab_exc_value()
             if exception:
+                if not we_are_translated():
+                    from pypy.rpython.lltypesystem import rclass
+                    etype = rclass.ll_type(exception)
+                    exception = LLException(etype, exception)
                 self.execute_raised(exception)
             else:
                 self.execute_did_not_raise()
-            self.handle_possible_exception()
+            try:
+                self.handle_possible_exception()
+            except ChangeFrame:
+                pass
         elif opnum == rop.GUARD_NO_OVERFLOW:   # an overflow now detected
             self.execute_raised(OverflowError(), constant=True)
             try:
