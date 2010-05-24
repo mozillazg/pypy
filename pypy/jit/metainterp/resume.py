@@ -446,9 +446,6 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
         for i in range(len(self.fielddescrs)):
             descr = self.fielddescrs[i]
             decoder.setfield(descr, struct, self.fieldnums[i])
-##            fieldbox = fn_decode_box(self.fieldnums[i], kind)
-##            metainterp.execute_and_record(rop.SETFIELD_GC,
-##                                          descr, box, fieldbox)
 
     def debug_prints(self):
         assert len(self.fielddescrs) == len(self.fieldnums)
@@ -496,8 +493,20 @@ class VArrayInfo(AbstractVirtualInfo):
     @specialize.argtype(1)
     def setfields(self, decoder, array):
         arraydescr = self.arraydescr
-        for i in range(len(self.fieldnums)):
-            decoder.setarrayitem(arraydescr, array, i, self.fieldnums[i])
+        length = len(self.fieldnums)
+        # NB. the check for the kind of array elements is moved out of the loop
+        if arraydescr.is_array_of_pointers():
+            for i in range(length):
+                decoder.setarrayitem_ptr(arraydescr, array, i,
+                                         self.fieldnums[i])
+        elif arraydescr.is_array_of_floats():
+            for i in range(length):
+                decoder.setarrayitem_float(arraydescr, array, i,
+                                           self.fieldnums[i])
+        else:
+            for i in range(length):
+                decoder.setarrayitem_int(arraydescr, array, i,
+                                         self.fieldnums[i])
 
     def debug_prints(self):
         debug_print("\tvarrayinfo", self.arraydescr)
@@ -616,15 +625,40 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         self._prepare_next_section()
 
     def allocate_with_vtable(self, known_class):
-        xxx
+        return self.metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
+                                                  None, known_class)
+
     def allocate_struct(self, typedescr):
-        xxx
+        return self.metainterp.execute_and_record(rop.NEW, typedescr)
+
     def allocate_array(self, arraydescr, length):
-        xxx
-    def setfield(self, descr, struct, fieldnum):
-        xxx
-    def setarrayitem(self, arraydescr, array, index, fieldnum):
-        xxx
+        return metainterp.execute_and_record(rop.NEW_ARRAY, arraydescr, length)
+
+    def setfield(self, descr, structbox, fieldnum):
+        if descr.is_pointer_field():
+            kind = REF
+        elif descr.is_float_field():
+            kind = FLOAT
+        else:
+            kind = INT
+        fieldbox = self.decode_box(fieldnum, kind)
+        self.metainterp.execute_and_record(rop.SETFIELD_GC, descr,
+                                           structbox, fieldbox)
+
+    def setarrayitem_int(self, arraydescr, arraybox, index, fieldnum):
+        self.setarrayitem(arraydescr, arraybox, index, fieldnum, INT)
+
+    def setarrayitem_ref(self, arraydescr, arraybox, index, fieldnum):
+        self.setarrayitem(arraydescr, arraybox, index, fieldnum, REF)
+
+    def setarrayitem_float(self, arraydescr, arraybox, index, fieldnum):
+        self.setarrayitem(arraydescr, arraybox, index, fieldnum, FLOAT)
+
+    def setarrayitem(self, arraydescr, arraybox, index, fieldnum, kind):
+        itembox = self.decode_box(fieldnum, kind)
+        metainterp.execute_and_record(rop.SETARRAYITEM_GC,
+                                      arraydescr, arraybox,
+                                      ConstInt(index), itembox)
 
     def decode_int(self, tagged):
         return self.decode_box(tagged, INT)
@@ -637,20 +671,22 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         num, tag = untag(tagged)
         if tag == TAGCONST:
             if tagged_eq(tagged, NULLREF):
-                return self.cpu.ts.CONST_NULL
-            return self.consts[num]
+                box = self.cpu.ts.CONST_NULL
+            else:
+                box = self.consts[num]
         elif tag == TAGVIRTUAL:
             virtuals = self.virtuals
             assert virtuals is not None
-            return virtuals[num]
+            box = virtuals[num]
         elif tag == TAGINT:
-            return ConstInt(num)
+            box = ConstInt(num)
         else:
             assert tag == TAGBOX
             box = self.liveboxes[num]
             if box is None:
                 box = self.load_box_from_cpu(num, kind)
-            return box
+        assert box.type == kind
+        return box
 
     def load_box_from_cpu(self, num, kind):
         if num < 0:
@@ -742,16 +778,17 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             newvalue = self.decode_int(fieldnum)
             self.cpu.bh_setfield_gc_i(struct, descr, newvalue)
 
-    def setarrayitem(self, arraydescr, array, index, fieldnum):
-        if arraydescr.is_array_of_pointers():
-            newvalue = self.decode_ref(fieldnum)
-            self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
-        elif arraydescr.is_array_of_floats():
-            newvalue = self.decode_float(fieldnum)
-            self.cpu.bh_setarrayitem_gc_f(arraydescr, array, index, newvalue)
-        else:
-            newvalue = self.decode_int(fieldnum)
-            self.cpu.bh_setarrayitem_gc_i(arraydescr, array, index, newvalue)
+    def setarrayitem_int(self, arraydescr, array, index, fieldnum):
+        newvalue = self.decode_int(fieldnum)
+        self.cpu.bh_setarrayitem_gc_i(arraydescr, array, index, newvalue)
+
+    def setarrayitem_ref(self, arraydescr, array, index, fieldnum):
+        newvalue = self.decode_ref(fieldnum)
+        self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
+
+    def setarrayitem_float(self, arraydescr, array, index, fieldnum):
+        newvalue = self.decode_float(fieldnum)
+        self.cpu.bh_setarrayitem_gc_f(arraydescr, array, index, newvalue)
 
     def decode_int(self, tagged):
         num, tag = untag(tagged)
