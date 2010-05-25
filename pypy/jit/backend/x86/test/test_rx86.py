@@ -16,6 +16,10 @@ class CodeBuilderMixin(object):
     def tell(self):
         return 0x76543210 + len(self.buffer)
 
+def assert_encodes_as(code_builder_cls, insn_name, args, expected_encoding):
+    s = code_builder_cls()
+    getattr(s, insn_name)(*args)
+    assert s.getvalue() == expected_encoding
 
 class CodeBuilder32(CodeBuilderMixin, X86_32_CodeBuilder):
     pass
@@ -154,6 +158,20 @@ def test_imul_rri():
     s = CodeBuilder32()
     s.IMUL_rri(ebx, ecx, 0x2A)
     assert s.getvalue() == '\x6B\xD9\x2A'
+
+def test_shifts():
+    cb = CodeBuilder32
+    assert_encodes_as(cb, 'SHL_ri', (edx, 1), '\xD1\xE2')
+    assert_encodes_as(cb, 'SHL_ri', (edx, 5), '\xC1\xE2\x05')
+    assert_encodes_as(cb, 'SHL_rr', (edx, ecx), '\xD3\xE2')
+
+    assert_encodes_as(cb, 'SHR_ri', (edx, 1), '\xD1\xEA')
+    assert_encodes_as(cb, 'SHR_ri', (edx, 5), '\xC1\xEA\x05')
+    assert_encodes_as(cb, 'SHR_rr', (edx, ecx), '\xD3\xEA')
+
+    assert_encodes_as(cb, 'SAR_ri', (edx, 1), '\xD1\xFA')
+    assert_encodes_as(cb, 'SAR_ri', (edx, 5), '\xC1\xFA\x05')
+    assert_encodes_as(cb, 'SAR_rr', (edx, ecx), '\xD3\xFA')
 
 class CodeBuilder64(CodeBuilderMixin, X86_64_CodeBuilder):
     pass

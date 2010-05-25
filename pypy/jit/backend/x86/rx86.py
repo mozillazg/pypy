@@ -333,6 +333,23 @@ def select_8_or_32_bit_immed(insn_8, insn_32):
 
     return INSN
 
+def shifts(mod_field):
+    modrm = chr(0xC0 | (mod_field << 3))
+    shift_once = insn(rex_w, '\xD1', register(1), modrm)
+    shift_r_by_cl = insn(rex_w, '\xD3', register(1), modrm)
+    shift_ri8 = insn(rex_w, '\xC1', register(1), modrm, immediate(2, 'b'))
+
+    def shift_ri(mc, reg, immed):
+        if immed == 1:
+            shift_once(mc, reg)
+        else:
+            shift_ri8(mc, reg, immed)
+
+    def shift_rr(mc, reg1, reg2):
+        assert reg2 == R.ecx
+        shift_r_by_cl(mc, reg1)
+
+    return (shift_ri, shift_rr)
 # ____________________________________________________________
 
 
@@ -422,6 +439,10 @@ class AbstractX86CodeBuilder(object):
 
     def IMUL_ri(self, reg, immed):
         self.IMUL_rri(reg, reg, immed)
+
+    SHL_ri, SHL_rr = shifts(4)
+    SHR_ri, SHR_rr = shifts(5)
+    SAR_ri, SAR_rr = shifts(7)
 
     # ------------------------------ Misc stuff ------------------------------
 
