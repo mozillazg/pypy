@@ -634,6 +634,9 @@ class Assembler386(object):
     genop_int_and = _binaryop("AND", True)
     genop_int_or  = _binaryop("OR", True)
     genop_int_xor = _binaryop("XOR", True)
+    genop_int_lshift = _binaryop("SHL")
+    genop_int_rshift = _binaryop("SAR")
+    genop_uint_rshift = _binaryop("SHR")
     genop_float_add = _binaryop("ADDSD", True)
     genop_float_sub = _binaryop('SUBSD')
     genop_float_mul = _binaryop('MULSD', True)
@@ -732,24 +735,6 @@ class Assembler386(object):
 
     def genop_cast_int_to_float(self, op, arglocs, resloc):
         self.mc.CVTSI2SD(resloc, arglocs[0])
-
-    def genop_int_lshift(self, op, arglocs, resloc):
-        loc, loc2 = arglocs
-        if loc2 is ecx:
-            loc2 = cl
-        self.mc.SHL(loc, loc2)
-
-    def genop_int_rshift(self, op, arglocs, resloc):
-        loc, loc2 = arglocs
-        if loc2 is ecx:
-            loc2 = cl
-        self.mc.SAR(loc, loc2)
-
-    def genop_uint_rshift(self, op, arglocs, resloc):
-        loc, loc2 = arglocs
-        if loc2 is ecx:
-            loc2 = cl
-        self.mc.SHR(loc, loc2)
 
     def genop_guard_int_is_true(self, op, guard_op, addr, arglocs, resloc):
         guard_opnum = guard_op.opnum
