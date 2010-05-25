@@ -374,7 +374,7 @@ class SendTests:
         self.check_loop_count(2)
 
     def test_behavior_change_after_a_while(self):
-        myjitdriver = JitDriver(greens = [], reds = ['x', 'y'])
+        myjitdriver = JitDriver(greens = [], reds = ['y', 'x'])
         class Base:
             def __init__(self, value):
                 self.value = value
@@ -454,7 +454,7 @@ class SendTests:
         self.check_tree_loop_count(2)
 
     def test_bug1(self):
-        myjitdriver = JitDriver(greens = [], reds = ['node', 'n'])
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
         class Base:
             pass
         class A(Base):
