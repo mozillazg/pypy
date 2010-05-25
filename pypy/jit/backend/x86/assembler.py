@@ -698,16 +698,16 @@ class Assembler386(object):
 
     def genop_float_neg(self, op, arglocs, resloc):
         # Following what gcc does: res = x ^ 0x8000000000000000
-        self.mc.XORPD(arglocs[0], self.loc_float_const_neg)
+        self.mc.XORPD_rj(arglocs[0].value, self.loc_float_const_neg)
 
     def genop_float_abs(self, op, arglocs, resloc):
         # Following what gcc does: res = x & 0x7FFFFFFFFFFFFFFF
-        self.mc.ANDPD(arglocs[0], self.loc_float_const_abs)
+        self.mc.ANDPD_rj(arglocs[0].value, self.loc_float_const_abs)
 
     def genop_guard_float_is_true(self, op, guard_op, addr, arglocs, resloc):
         guard_opnum = guard_op.opnum
         loc0, loc1 = arglocs
-        self.mc.XORPD(loc0, loc0)
+        self.mc.XORPD_rr(loc0.value, loc0.value)
         self.mc.UCOMISD(loc0, loc1)
         mc = self.mc._mc
         if guard_opnum == rop.GUARD_TRUE:
@@ -720,7 +720,7 @@ class Assembler386(object):
             return self.implement_guard(addr)
 
     def genop_float_is_true(self, op, arglocs, resloc):
-        self.mc.XORPD(arglocs[0], arglocs[0])
+        self.mc.XORPD_rr(arglocs[0].value, arglocs[0].value)
         self.genop_float_ne(op, arglocs, resloc)
 
     def genop_cast_float_to_int(self, op, arglocs, resloc):

@@ -161,6 +161,7 @@ class LocationCodeBuilder(object):
     MULSD = _binaryop('MULSD')
     DIVSD = _binaryop('DIVSD')
     UCOMISD = _binaryop('UCOMISD')
+    CVTSI2SD = _binaryop('CVTSI2SD')
 
 
     def CALL(self, loc):
