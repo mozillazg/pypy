@@ -109,10 +109,10 @@ class MIFrame(object):
             # is not defined yet.
             argcode = self._result_argcode
             index = ord(self.bytecode[self.pc - 1])
-            if   argcode == 'i': self.registers_i[index] = None
-            elif argcode == 'r': self.registers_r[index] = None
-            elif argcode == 'f': self.registers_f[index] = None
-            self._result_argcode = 'v'     # done
+            if   argcode == 'i': self.registers_i[index] = history.CONST_FALSE
+            elif argcode == 'r': self.registers_r[index] = history.CONST_NULL
+            elif argcode == 'f': self.registers_f[index] = history.CONST_FZERO
+            self._result_argcode = '?'     # done
         #
         from pypy.jit.codewriter.jitcode import get_register_count_i
         from pypy.jit.codewriter.jitcode import get_register_count_r
@@ -121,17 +121,9 @@ class MIFrame(object):
         from pypy.jit.codewriter.jitcode import get_register_index_r
         from pypy.jit.codewriter.jitcode import get_register_index_f
         info = self.jitcode.get_live_vars_info(self.pc)
-        # first count how many boxes there are, skipping None
-        total = 0
-        for index in range(get_register_count_i(info)):
-            if self.registers_i[get_register_index_i(info, index)] is not None:
-                total += 1
-        for index in range(get_register_count_r(info)):
-            if self.registers_r[get_register_index_r(info, index)] is not None:
-                total += 1
-        for index in range(get_register_count_f(info)):
-            if self.registers_f[get_register_index_f(info, index)] is not None:
-                total += 1
+        total = (get_register_count_i(info) +
+                 get_register_count_r(info) +
+                 get_register_count_f(info))
         # allocate a list of the correct size
         env = [None] * total
         make_sure_not_resized(env)
@@ -139,19 +131,19 @@ class MIFrame(object):
         count = 0
         for index in range(get_register_count_i(info)):
             box = self.registers_i[get_register_index_i(info, index)]
-            if box is not None:
-                env[count] = box
-                count += 1
+            assert box is not None
+            env[count] = box
+            count += 1
         for index in range(get_register_count_r(info)):
             box = self.registers_r[get_register_index_r(info, index)]
-            if box is not None:
-                env[count] = box
-                count += 1
+            assert box is not None
+            env[count] = box
+            count += 1
         for index in range(get_register_count_f(info)):
             box = self.registers_f[get_register_index_f(info, index)]
-            if box is not None:
-                env[count] = box
-                count += 1
+            assert box is not None
+            env[count] = box
+            count += 1
         assert count == total
         return env
 

@@ -310,6 +310,8 @@ class ConstFloat(Const):
     def repr_rpython(self):
         return repr_rpython(self, 'cf')
 
+CONST_FZERO = ConstFloat(0.0)
+
 class ConstPtr(Const):
     type = REF
     value = lltype.nullptr(llmemory.GCREF.TO)
