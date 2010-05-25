@@ -51,10 +51,12 @@ class RegLoc(AssemblerLocation):
             return rx86.R.names[self.value]
 
     def lowest8bits(self):
-        # XXX: Only handling i386 al, cl, dl, bl for now
-        assert self.value < 4
         assert not self.is_xmm
-        return self
+        return RegLoc(rx86.low_byte(self.value), False)
+
+    def higher8bits(self):
+        assert not self.is_xmm
+        return RegLoc(rx86.high_byte(self.value), False)
 
     def location_code(self):
         return 'r'

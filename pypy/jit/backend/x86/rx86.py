@@ -4,9 +4,14 @@ from pypy.rlib.objectmodel import specialize
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.lltypesystem import rffi
 
+BYTE_REG_FLAG = 0x20
+
 class R(object):
     # the following are synonyms for rax, rcx, etc. on 64 bits
     eax, ecx, edx, ebx, esp, ebp, esi, edi = range(8)
+
+    # 8-bit registers
+    al, cl, dl, bl, ah, ch, dh, bh = [reg | BYTE_REG_FLAG for reg in range(8)]
 
     # xmm registers
     xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = range(8)
@@ -15,10 +20,23 @@ class R(object):
     r8, r9, r10, r11, r12, r13, r14, r15 = range(8, 16)
     xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15 = range(8, 16)
 
+    # These replace ah, ch, dh, bh when the REX-prefix is used
+    spl, bpl, sil, dil = ah, ch, dh, bh
+
+    # Low-byte of extra registers
+    r8l, r9l, r10l, r11l, r12l, r13l, r14l, r15l = [reg | BYTE_REG_FLAG for reg in range(8, 16)]
+
     names = ['eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi',
              'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15']
     xmmnames = ['xmm%d' % i for i in range(16)]
 
+def low_byte(reg):
+    assert 0 <= reg < 4
+    return reg | BYTE_REG_FLAG
+
+def high_byte(reg):
+    assert 0 <= reg < 4
+    return (reg + 4) | BYTE_REG_FLAG
 
 def single_byte(value):
     return -128 <= value < 128
@@ -62,6 +80,16 @@ def rex_register(mc, reg, factor):
 def register(argnum, factor=1):
     assert factor in (1, 8)
     return encode_register, argnum, factor, rex_register
+
+@specialize.arg(2)
+def encode_byte_register(mc, reg, factor, orbyte):
+    assert reg & BYTE_REG_FLAG
+    return encode_register(mc, reg & ~BYTE_REG_FLAG, factor, orbyte)
+
+def byte_register(argnum, factor=1):
+    assert factor in (1, 8)
+    return encode_byte_register, argnum, factor, rex_register
+
 
 # ____________________________________________________________
 # Encode a constant in the orbyte
@@ -400,8 +428,9 @@ class AbstractX86CodeBuilder(object):
     MOV_jr = insn(rex_w, '\x89', register(2,8), '\x05', immediate(1))
     MOV_ji = insn(rex_w, '\xC7', '\x05', immediate(1), immediate(2))
 
-    MOV8_mr = insn(rex_w, '\x88', register(2, 8), mem_reg_plus_const(1))
+    MOV8_mr = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_const(1))
 
+    MOVZX8_rr = insn(rex_w, '\x0F\xB6', register(1,8), byte_register(2))
     MOVZX8_rm = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_const(2))
     MOVZX8_ra = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
 
@@ -424,6 +453,10 @@ class AbstractX86CodeBuilder(object):
     CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
     CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
     CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
+
+    AND8_rr = insn(rex_w, '\x20', byte_register(1), byte_register(2,8), '\xC0')
+
+    OR8_rr = insn(rex_w, '\x08', byte_register(1), byte_register(2,8), '\xC0')
 
     NEG_r = insn(rex_w, '\xF7', register(1), '\xD8')
 
@@ -469,7 +502,8 @@ class AbstractX86CodeBuilder(object):
     # We need to be consistent.
     J_il8 = insn(immediate(1, 'o'), '\x70', immediate(2, 'b'))
     J_il = insn('\x0F', immediate(1,'o'), '\x80', relative(2))
-    SET_ir = insn('\x0F', immediate(1,'o'),'\x90', register(2), '\xC0')
+
+    SET_ir = insn('\x0F', immediate(1,'o'),'\x90', byte_register(2), '\xC0')
 
     # The 64-bit version of this, CQO, is defined in X86_64_CodeBuilder
     CDQ = insn(rex_nw, '\x99')
@@ -590,15 +624,15 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         py.test.skip("MOVSD_rj unsupported")
     def MOVSD_jr(self, xmm_reg, mem_immed):
         py.test.skip("MOVSD_jr unsupported")
-    def ADDSD_rj(self, xxm_reg, mem_immed):
+    def ADDSD_rj(self, xmm_reg, mem_immed):
         py.test.skip("ADDSD_rj unsupported")
-    def SUBSD_rj(self, xxm_reg, mem_immed):
+    def SUBSD_rj(self, xmm_reg, mem_immed):
         py.test.skip("SUBSD_rj unsupported")
-    def MULSD_rj(self, xxm_reg, mem_immed):
+    def MULSD_rj(self, xmm_reg, mem_immed):
         py.test.skip("MULSD_rj unsupported")
-    def DIVSD_rj(self, xxm_reg, mem_immed):
+    def DIVSD_rj(self, xmm_reg, mem_immed):
         py.test.skip("DIVSD_rj unsupported")
-    def UCOMISD_rj(self, xxm_reg, mem_immed):
+    def UCOMISD_rj(self, xmm_reg, mem_immed):
         py.test.skip("UCOMISD_rj unsupported")
 
 
