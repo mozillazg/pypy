@@ -59,11 +59,11 @@ class JitCode(AbstractDescr):
         # for testing only
         info = self.get_live_vars_info(pc)
         lst_i = ['%%i%d' % info.get_register_index_i(index)
-                 for index in range(info.get_register_count_i())]
+                 for index in range(info.get_register_count_i()-1, -1, -1)]
         lst_r = ['%%r%d' % info.get_register_index_r(index)
-                 for index in range(info.get_register_count_r())]
+                 for index in range(info.get_register_count_r()-1, -1, -1)]
         lst_f = ['%%f%d' % info.get_register_index_f(index)
-                 for index in range(info.get_register_count_f())]
+                 for index in range(info.get_register_count_f()-1, -1, -1)]
         return ' '.join(lst_i + lst_r + lst_f)
 
     def _missing_liveness(self, pc):
