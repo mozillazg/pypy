@@ -548,6 +548,17 @@ class AbstractX86CodeBuilder(object):
     UCOMISD_rb = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), stack_bp(2))
     UCOMISD_rj = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), '\x05', immediate(2))
 
+    # Conversion
+    # FIXME: Super confusing! The source is a GPR/mem, the destination is an xmm register
+    CVTSI2SD_rr = xmminsn('\xF2', rex_nw, '\x0F\x2A', register(1, 8), register(2), '\xC0')
+    CVTSI2SD_rb = xmminsn('\xF2', rex_nw, '\x0F\x2A', register(1, 8), stack_bp(2))
+
+    # Bitwise
+    ANDPD_rj = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), '\x05', immediate(2))
+
+    XORPD_rr = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), register(2), '\xC0')
+    XORPD_rj = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), '\x05', immediate(2))
+
     # ------------------------------------------------------------
 
 Conditions = {
@@ -634,6 +645,10 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         py.test.skip("DIVSD_rj unsupported")
     def UCOMISD_rj(self, xmm_reg, mem_immed):
         py.test.skip("UCOMISD_rj unsupported")
+    def ANDPD_rj(self, xmm_reg, mem_immed):
+        py.test.skip("ANDPD_rj unsupported")
+    def XORPD_rj(self, xmm_reg, mem_immed):
+        py.test.skip("XORPD_rj unsupported")
 
 
 # ____________________________________________________________

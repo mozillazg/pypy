@@ -225,6 +225,11 @@ class TestRx86_32(object):
             if methname.startswith('SHL') or methname.startswith('SAR') or methname.startswith('SHR'):
                 # XXX: Would be nice to test these automatically
                 py.test.skip('Shifts must be tested manually')
+            if methname.startswith('CVT'):
+                # Can't test automatically right now, we don't know
+                # which register types to use
+                py.test.skip('Skipping CVT instructions for now')
+
             return [args]
 
     def get_code_checker_class(self):
