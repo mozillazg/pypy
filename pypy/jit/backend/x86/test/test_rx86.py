@@ -121,7 +121,7 @@ def test_j_il():
 
 def test_set_ir():
     s = CodeBuilder32()
-    s.SET_ir(5, 2)
+    s.SET_ir(5, dl)
     assert s.getvalue() == '\x0F\x95\xC2'
 
 def test_xchg_rj():
@@ -172,6 +172,12 @@ def test_shifts():
     assert_encodes_as(cb, 'SAR_ri', (edx, 1), '\xD1\xFA')
     assert_encodes_as(cb, 'SAR_ri', (edx, 5), '\xC1\xFA\x05')
     assert_encodes_as(cb, 'SAR_rr', (edx, ecx), '\xD3\xFA')
+
+def test_and8_rr():
+    assert_encodes_as(CodeBuilder32, 'AND8_rr', (bl, bh), '\x20\xFB')
+
+def test_or8_rr():
+    assert_encodes_as(CodeBuilder32, 'OR8_rr', (bl, bh), '\x08\xFB')
 
 class CodeBuilder64(CodeBuilderMixin, X86_64_CodeBuilder):
     pass

@@ -543,14 +543,14 @@ class Assembler386(object):
             self.mc.UCOMISD(arglocs[0], arglocs[1])
             rl = result_loc.lowest8bits()
             rh = result_loc.higher8bits()
-            getattr(self.mc, 'SET' + cond)(rl)
+            self.mc.SET_ir(rx86.Conditions[cond], rl.value)
             if is_ne:
-                self.mc.SETP(rh)
-                self.mc.OR(rl, rh)
+                self.mc.SET_ir(rx86.Conditions['P'], rh.value)
+                self.mc.OR8_rr(rl.value, rh.value)
             else:
-                self.mc.SETNP(rh)
-                self.mc.AND(rl, rh)
-            self.mc.MOVZX(result_loc, rl)
+                self.mc.SET_ir(rx86.Conditions['NP'], rh.value)
+                self.mc.AND8_rr(rl.value, rh.value)
+            self.mc.MOVZX8_rr(result_loc.value, rl.value)
         return genop_cmp
 
     def _cmpop_guard(cond, rev_cond, false_cond, false_rev_cond):
@@ -720,15 +720,8 @@ class Assembler386(object):
             return self.implement_guard(addr)
 
     def genop_float_is_true(self, op, arglocs, resloc):
-        loc0, loc1 = arglocs
-        self.mc.XORPD(loc0, loc0)
-        self.mc.UCOMISD(loc0, loc1)
-        rl = resloc.lowest8bits()
-        rh = resloc.higher8bits()
-        self.mc.SETNE(rl)
-        self.mc.SETP(rh)
-        self.mc.OR(rl, rh)
-        self.mc.MOVZX(resloc, rl)
+        self.mc.XORPD(arglocs[0], arglocs[0])
+        self.genop_float_ne(op, arglocs, resloc)
 
     def genop_cast_float_to_int(self, op, arglocs, resloc):
         self.mc.CVTTSD2SI(resloc, arglocs[0])
