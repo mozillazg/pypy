@@ -789,8 +789,16 @@ class BlackholeInterpreter(object):
 
     @arguments("self", "I", "R", "F", "I", "R", "F")
     def bhimpl_jit_merge_point(self, *results):
-        CRN = self.builder.metainterp_sd.ContinueRunningNormally
-        raise CRN(*results)
+        if self.nextblackholeinterp is None:    # we are the last level
+            CRN = self.builder.metainterp_sd.ContinueRunningNormally
+            raise CRN(*results)
+        else:
+            # This occurs when we reach 'jit_merge_point' in the portal
+            # function called by recursion.  In this case, we can directly
+            # call the interpreter main loop from here, and just return its
+            # result.
+            XXX
+            raise LeaveFrame
 
     # ----------
     # list operations
@@ -1160,7 +1168,28 @@ class BlackholeInterpreter(object):
         e = lltype.cast_opaque_ptr(llmemory.GCREF, e)
         raise sd.ExitFrameWithExceptionRef(self.cpu, e)
 
+    def _copy_data_from_miframe(self, miframe):
+        self.setposition(miframe.jitcode, miframe.pc)
+        for i in range(self.jitcode.num_regs_i()):
+            box = miframe.registers_i[i]
+            if box is not None:
+                self.setarg_i(i, box.getint())
+        for i in range(self.jitcode.num_regs_r()):
+            box = miframe.registers_r[i]
+            if box is not None:
+                self.setarg_r(i, box.getref_base())
+        for i in range(self.jitcode.num_regs_f()):
+            box = miframe.registers_f[i]
+            if box is not None:
+                self.setarg_f(i, box.getfloat())
+
 # ____________________________________________________________
+
+def _run_forever(blackholeinterp, current_exc):
+    current_exc = lltype.cast_opaque_ptr(rclass.OBJECTPTR, current_exc)
+    while True:
+        current_exc = blackholeinterp._resume_mainloop(current_exc)
+        blackholeinterp = blackholeinterp.nextblackholeinterp
 
 def resume_in_blackhole(metainterp_sd, resumedescr):
     from pypy.jit.metainterp.resume import blackhole_from_resumedata
@@ -1175,10 +1204,29 @@ def resume_in_blackhole(metainterp_sd, resumedescr):
     current_exc = blackholeinterp._prepare_resume_from_failure(
         resumedescr.guard_opnum)
     try:
-        current_exc = lltype.cast_opaque_ptr(rclass.OBJECTPTR, current_exc)
-        while True:
-            current_exc = blackholeinterp._resume_mainloop(current_exc)
-            blackholeinterp = blackholeinterp.nextblackholeinterp
+        _run_forever(blackholeinterp, current_exc)
+    finally:
+        metainterp_sd.profiler.end_blackhole()
+        debug_stop('jit-blackhole')
+
+def convert_and_run_from_pyjitpl(metainterp, current_exc=NULL):
+    # Get a chain of blackhole interpreters and fill them by copying
+    # 'metainterp.framestack'.  Note that the order is important: the
+    # first one we get must be the bottom one, in order to make
+    # the comment in BlackholeInterpreter.setposition() valid.
+    debug_start('jit-blackhole')
+    metainterp_sd = metainterp.staticdata
+    metainterp_sd.profiler.start_blackhole()
+    nextbh = None
+    for frame in metainterp.framestack:
+        curbh = metainterp_sd.blackholeinterpbuilder.acquire_interp()
+        curbh._copy_data_from_miframe(frame)
+        curbh.nextblackholeinterp = nextbh
+        nextbh = curbh
+    firstbh = nextbh
+    #
+    try:
+        _run_forever(firstbh, current_exc)
     finally:
         metainterp_sd.profiler.end_blackhole()
         debug_stop('jit-blackhole')

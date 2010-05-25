@@ -1,6 +1,5 @@
 import py, os
-from pypy.rpython.lltypesystem import llmemory
-from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.llinterp import LLException
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
@@ -319,47 +318,13 @@ class MIFrame(object):
         if value:
             self.pc = target
 
-##    def follow_jump(self):
-##        _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
-##        assert ord(self.bytecode[self.pc]) == _op_goto_if_not
-##        self.pc += 1          # past the bytecode for 'goto_if_not'
-##        target = self.load_3byte()  # load the 'target' argument
-##        self.pc = target      # jump
-
-##    def ignore_next_guard_nullness(self, opnum):
-##        _op_ooisnull = self.metainterp.staticdata._op_ooisnull
-##        _op_oononnull = self.metainterp.staticdata._op_oononnull
-##        bc = ord(self.bytecode[self.pc])
-##        if bc == _op_ooisnull:
-##            if opnum == rop.GUARD_ISNULL:
-##                res = ConstInt(0)
-##            else:
-##                res = ConstInt(1)
-##        else:
-##            assert bc == _op_oononnull
-##            if opnum == rop.GUARD_ISNULL:
-##                res = ConstInt(1)
-##            else:
-##                res = ConstInt(0)
-##        self.pc += 1    # past the bytecode for ptr_iszero/ptr_nonzero
-##        self.load_int() # past the 'box' argument
-##        self.make_result_box(res)
-
-##    def dont_follow_jump(self):
-##        _op_goto_if_not = self.metainterp.staticdata._op_goto_if_not
-##        assert ord(self.bytecode[self.pc]) == _op_goto_if_not
-##        self.pc += 1          # past the bytecode for 'goto_if_not'
-##        self.load_3byte()     # past the 'target' argument
-##        self.load_int()       # past the 'box' argument
-##        self.ignore_varargs() # past the 'livelist' argument
-
     @arguments("box", "descr", "orgpc")
     def opimpl_switch(self, valuebox, switchdict, orgpc):
         box = self.implement_guard_value(orgpc, valuebox)
-        switchvalue = box.getint()
+        search_value = box.getint()
         assert isinstance(switchdict, SwitchDictDescr)
         try:
-            self.pc = switchdict.dict[switchvalue]
+            self.pc = switchdict.dict[search_value]
         except KeyError:
             pass
 
@@ -800,26 +765,26 @@ class MIFrame(object):
         for i in range(num_green_args):
             assert isinstance(varargs[i], Const)
 
-    def blackhole_reached_merge_point(self, varargs):
-        if self.metainterp.in_recursion:
-            portal_code = self.metainterp.staticdata.portal_code
-            # small hack: fish for the result box
-            lenenv = len(self.env)
-            raised = self.perform_call(portal_code, varargs)
-            # in general this cannot be assumed, but when blackholing,
-            # perform_call returns True only if an exception is called. In
-            # this case perform_call has called finishframe_exception
-            # already, so we need to return.
-            if raised:
-                return
-            if lenenv == len(self.env):
-                res = None
-            else:
-                assert lenenv == len(self.env) - 1
-                res = self.env.pop()
-            self.metainterp.finishframe(res)
-        else:
-            raise self.metainterp.staticdata.ContinueRunningNormally(varargs)
+##    def blackhole_reached_merge_point(self, varargs):
+##        if self.metainterp.in_recursion:
+##            portal_code = self.metainterp.staticdata.portal_code
+##            # small hack: fish for the result box
+##            lenenv = len(self.env)
+##            raised = self.perform_call(portal_code, varargs)
+##            # in general this cannot be assumed, but when blackholing,
+##            # perform_call returns True only if an exception is called. In
+##            # this case perform_call has called finishframe_exception
+##            # already, so we need to return.
+##            if raised:
+##                return
+##            if lenenv == len(self.env):
+##                res = None
+##            else:
+##                assert lenenv == len(self.env) - 1
+##                res = self.env.pop()
+##            self.metainterp.finishframe(res)
+##        else:
+##            raise self.metainterp.staticdata.ContinueRunningNormally(varargs)
 
     @arguments()
     def opimpl_can_enter_jit(self):
@@ -828,18 +793,21 @@ class MIFrame(object):
             raise CannotInlineCanEnterJit()
         self.metainterp.seen_can_enter_jit = True
 
-    @arguments("boxes3", "boxes3")
-    def opimpl_jit_merge_point(self, greenboxes, redboxes):
+    @arguments("orgpc", "boxes3", "boxes3")
+    def opimpl_jit_merge_point(self, orgpc, greenboxes, redboxes):
         self.verify_green_args(greenboxes)
         # xxx we may disable the following line in some context later
         self.debug_merge_point(greenboxes)
         if self.metainterp.seen_can_enter_jit:
             self.metainterp.seen_can_enter_jit = False
-            try:
-                self.metainterp.reached_can_enter_jit(greenboxes, redboxes)
-            except GiveUp:
-                XXX
-                self.metainterp.switch_to_blackhole(ABORT_BRIDGE)
+            # Set self.pc to point to jit_merge_point instead of just after:
+            # if reached_can_enter_jit() raises SwitchToBlackhole, then the
+            # pc is still at the jit_merge_point, which is a point that is
+            # much less expensive to blackhole out of.
+            saved_pc = self.pc
+            self.pc = orgpc
+            self.metainterp.reached_can_enter_jit(greenboxes, redboxes)
+            self.pc = saved_pc
 
     def debug_merge_point(self, greenkey):
         # debugging: produce a DEBUG_MERGE_POINT operation
@@ -1054,6 +1022,7 @@ class MIFrame(object):
         effectinfo = descr.get_extra_info()
         if (effectinfo is None or effectinfo.extraeffect ==
                                 effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE):
+            XXX
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.vable_and_vrefs_before_residual_call()
             # xxx do something about code duplication
@@ -1273,7 +1242,6 @@ class MetaInterp(object):
         self.staticdata = staticdata
         self.cpu = staticdata.cpu
         self.portal_trace_positions = []
-        self.greenkey_of_huge_function = None
         self.free_frames_list = []
         self.last_exc_value_box = None
 
@@ -1319,11 +1287,10 @@ class MetaInterp(object):
             self.framestack[-1].make_result_of_lastop(resultbox)
             raise ChangeFrame
         else:
-            if not self.is_blackholing():
-                try:
-                    self.compile_done_with_this_frame(resultbox)
-                except GiveUp:
-                    self.switch_to_blackhole(ABORT_BRIDGE)
+            try:
+                self.compile_done_with_this_frame(resultbox)
+            except GiveUp:
+                self.aborted_tracing(ABORT_BRIDGE)
             sd = self.staticdata
             if sd.result_type == 'void':
                 assert resultbox is None
@@ -1361,11 +1328,10 @@ class MetaInterp(object):
                     frame.pc = target
                     raise ChangeFrame
             self.popframe()
-        if not self.is_blackholing():
-            try:
-                self.compile_exit_frame_with_exception(excvaluebox)
-            except GiveUp:
-                self.switch_to_blackhole(ABORT_BRIDGE)
+        try:
+            self.compile_exit_frame_with_exception(excvaluebox)
+        except GiveUp:
+            self.aborted_tracing(ABORT_BRIDGE)
         raise self.staticdata.ExitFrameWithExceptionRef(self.cpu, excvaluebox.getref_base())
 
     def check_recursion_invariant(self):
@@ -1488,41 +1454,32 @@ class MetaInterp(object):
     def execute_did_not_raise(self):
         self.last_exc_value_box = None
 
-    def switch_to_blackhole(self, reason):
-        XXX
+    def aborted_tracing(self, reason):
         self.staticdata.profiler.count(reason)
         debug_print('~~~ ABORTING TRACING')
-        debug_stop('jit-tracing')
-        debug_start('jit-blackhole')
-        self.history = None   # start blackholing
         self.staticdata.stats.aborted()
-        self.staticdata.profiler.end_tracing()
-        self.staticdata.profiler.start_blackhole()
-    switch_to_blackhole._dont_inline_ = True
+        self.resumekey.reset_counter_from_failure()
 
-    def switch_to_blackhole_if_trace_too_long(self):
-        if not self.is_blackholing():
-            warmrunnerstate = self.staticdata.state
-            if len(self.history.operations) > warmrunnerstate.trace_limit:
-                self.greenkey_of_huge_function = self.find_biggest_function()
-                self.portal_trace_positions = None
-                self.switch_to_blackhole(ABORT_TOO_LONG)
+    def blackhole_if_trace_too_long(self):
+        warmrunnerstate = self.staticdata.state
+        if len(self.history.operations) > warmrunnerstate.trace_limit:
+            greenkey_of_huge_function = self.find_biggest_function()
+            self.portal_trace_positions = None
+            if greenkey_of_huge_function is not None:
+                warmrunnerstate = self.staticdata.state
+                warmrunnerstate.disable_noninlinable_function(
+                    greenkey_of_huge_function)
+            raise SwitchToBlackhole(ABORT_TOO_LONG)
 
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
-        # a ContinueRunningNormally, or a GenerateMergePoint exception.
+        # a ExitFrameWithException, or a GenerateMergePoint exception.
         self.staticdata.stats.entered()
-        try:
-            while True:
-                self.framestack[-1].run_one_step()
-                self.switch_to_blackhole_if_trace_too_long()
-                if not we_are_translated():
-                    self.check_recursion_invariant()
-        finally:
-            if self.is_blackholing():
-                self.staticdata.profiler.end_blackhole()
-            else:
-                self.staticdata.profiler.end_tracing()
+        while True:
+            self.framestack[-1].run_one_step()
+            self.blackhole_if_trace_too_long()
+            if not we_are_translated():
+                self.check_recursion_invariant()
 
     def interpret(self):
         if we_are_translated():
@@ -1538,11 +1495,13 @@ class MetaInterp(object):
 
     def compile_and_run_once(self, *args):
         debug_start('jit-tracing')
+        self.staticdata.profiler.start_tracing()
         self.staticdata._setup_once()
         self.create_empty_history()
         try:
             return self._compile_and_run_once(*args)
         finally:
+            self.staticdata.profiler.end_tracing()
             debug_stop('jit-tracing')
 
     def _compile_and_run_once(self, *args):
@@ -1559,17 +1518,21 @@ class MetaInterp(object):
             assert False, "should always raise"
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
+        except SwitchToBlackhole, stb:
+            self.run_blackhole_interp_to_cancel_tracing(stb)
 
     def handle_guard_failure(self, key):
+        debug_start('jit-tracing')
+        self.staticdata.profiler.start_tracing()
         assert isinstance(key, compile.ResumeGuardDescr)
         self.initialize_state_from_guard_failure(key)
         try:
             return self._handle_guard_failure(key)
         finally:
+            self.staticdata.profiler.end_tracing()
             debug_stop('jit-tracing')
 
     def _handle_guard_failure(self, key):
-        from pypy.jit.metainterp.warmspot import ContinueRunningNormallyBase
         original_greenkey = key.original_greenkey
         # notice that here we just put the greenkey
         # use -1 to mark that we will have to give up
@@ -1583,9 +1546,17 @@ class MetaInterp(object):
             assert False, "should always raise"
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
-        except ContinueRunningNormallyBase:
-            key.reset_counter_from_failure(self)
-            raise
+        except SwitchToBlackhole, stb:
+            self.run_blackhole_interp_to_cancel_tracing(stb)
+
+    def run_blackhole_interp_to_cancel_tracing(self, stb):
+        # We got a SwitchToBlackhole exception.  Convert the framestack into
+        # a stack of blackhole interpreters filled with the same values, and
+        # run it.
+        from pypy.jit.metainterp.blackhole import convert_and_run_from_pyjitpl
+        self.aborted_tracing(stb.reason)
+        convert_and_run_from_pyjitpl(self, stb.current_exc)
+        assert False    # ^^^ must raise
 
     def remove_consts_and_duplicates(self, boxes, endindex, duplicates):
         for i in range(endindex):
@@ -1639,7 +1610,7 @@ class MetaInterp(object):
                 # Found!  Compile it as a loop.
                 if start < 0:
                     # we cannot reconstruct the beginning of the proper loop
-                    raise GiveUp
+                    raise SwitchToBlackhole(ABORT_BRIDGE)
 
                 # raises in case it works -- which is the common case
                 self.compile(original_boxes, live_arg_boxes, start)
@@ -1777,7 +1748,6 @@ class MetaInterp(object):
 
     def initialize_state_from_start(self, *args):
         self.in_recursion = -1 # always one portal around
-        self.staticdata.profiler.start_tracing()
         num_green_args = self.staticdata.num_green_args
         original_boxes = []
         self._initialize_from_start(original_boxes, num_green_args, *args)
@@ -1791,8 +1761,6 @@ class MetaInterp(object):
 
     def initialize_state_from_guard_failure(self, resumedescr):
         # guard failure: rebuild a complete MIFrame stack
-        debug_start('jit-tracing')
-        self.staticdata.profiler.start_tracing()
         self.in_recursion = -1 # always one portal around
         self.history = history.History()
         inputargs_and_holes = self.rebuild_state_after_failure(resumedescr)
@@ -1842,36 +1810,25 @@ class MetaInterp(object):
                                 None, descr=vinfo.vable_token_descr)
 
     def vable_and_vrefs_after_residual_call(self):
-        if self.is_blackholing():
-            escapes = True
-        else:
-            escapes = False
-            #
-            vrefinfo = self.staticdata.virtualref_info
-            for i in range(0, len(self.virtualref_boxes), 2):
-                virtualbox = self.virtualref_boxes[i]
-                vrefbox = self.virtualref_boxes[i+1]
-                vref = vrefbox.getref_base()
-                if vrefinfo.tracing_after_residual_call(vref):
-                    # this vref was really a virtual_ref, but it escaped
-                    # during this CALL_MAY_FORCE.  Mark this fact by
-                    # generating a VIRTUAL_REF_FINISH on it and replacing
-                    # it by ConstPtr(NULL).
-                    self.stop_tracking_virtualref(i)
-            #
-            vinfo = self.staticdata.virtualizable_info
-            if vinfo is not None:
-                virtualizable_box = self.virtualizable_boxes[-1]
-                virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
-                if vinfo.tracing_after_residual_call(virtualizable):
-                    # the virtualizable escaped during CALL_MAY_FORCE.
-                    escapes = True
-            #
-            if escapes:
-                self.switch_to_blackhole(ABORT_ESCAPE)
+        vrefinfo = self.staticdata.virtualref_info
+        for i in range(0, len(self.virtualref_boxes), 2):
+            virtualbox = self.virtualref_boxes[i]
+            vrefbox = self.virtualref_boxes[i+1]
+            vref = vrefbox.getref_base()
+            if vrefinfo.tracing_after_residual_call(vref):
+                # this vref was really a virtual_ref, but it escaped
+                # during this CALL_MAY_FORCE.  Mark this fact by
+                # generating a VIRTUAL_REF_FINISH on it and replacing
+                # it by ConstPtr(NULL).
+                self.stop_tracking_virtualref(i)
         #
-        if escapes:
-            self.load_fields_from_virtualizable()
+        vinfo = self.staticdata.virtualizable_info
+        if vinfo is not None:
+            virtualizable_box = self.virtualizable_boxes[-1]
+            virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
+            if vinfo.tracing_after_residual_call(virtualizable):
+                # the virtualizable escaped during CALL_MAY_FORCE.
+                raise XXX-SwitchToBlackhole(ABORT_ESCAPE, yyy)
 
     def stop_tracking_virtualref(self, i):
         virtualbox = self.virtualref_boxes[i]
@@ -2072,17 +2029,24 @@ class MetaInterp(object):
         self.history.record(rop.CALL_ASSEMBLER, args[:], resbox, descr=token)
         self.history.operations += rest
 
+# ____________________________________________________________
+
 class GenerateMergePoint(Exception):
     def __init__(self, args, target_loop_token):
         assert target_loop_token is not None
         self.argboxes = args
         self.target_loop_token = target_loop_token
 
-# ____________________________________________________________
-
 class ChangeFrame(Exception):
     """Raised after we mutated metainterp.framestack, in order to force
     it to reload the current top-of-stack frame that gets interpreted."""
+
+class SwitchToBlackhole(Exception):
+    def __init__(self, reason, current_exc=lltype.nullptr(llmemory.GCREF.TO)):
+        self.reason = reason
+        self.current_exc = current_exc
+
+# ____________________________________________________________
 
 def _get_opimpl_method(name, argcodes):
     from pypy.jit.metainterp.blackhole import signedord
