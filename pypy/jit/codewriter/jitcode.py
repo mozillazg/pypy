@@ -28,7 +28,7 @@ class JitCode(AbstractDescr):
         self.num_regs_encoded = ((num_regs_i << 16) |
                                  (num_regs_f << 8) |
                                  (num_regs_r << 0))
-        self.liveness = liveness
+        self.liveness = make_liveness_cache(liveness)
         self._startpoints = startpoints   # debugging
         self._alllabels = alllabels       # debugging
 
@@ -49,9 +49,8 @@ class JitCode(AbstractDescr):
 
     def get_live_vars_info(self, pc):
         # 'pc' gives a position in this bytecode.  This returns an object
-        # that describes all variables that are live across the instruction
-        # boundary at 'pc'.  To decode the object, use the global functions
-        # 'get_register_{count,index}_{i,r,f}()'.
+        # of class LiveVarsInfo that describes all variables that are live
+        # across the instruction boundary at 'pc'.
         if not we_are_translated() and pc not in self.liveness:
             self._missing_liveness(pc)
         return self.liveness[pc]    # XXX compactify!!
@@ -59,12 +58,12 @@ class JitCode(AbstractDescr):
     def _live_vars(self, pc):
         # for testing only
         info = self.get_live_vars_info(pc)
-        lst_i = ['%%i%d' % get_register_index_i(info, index)
-                 for index in range(get_register_count_i(info))]
-        lst_r = ['%%r%d' % get_register_index_r(info, index)
-                 for index in range(get_register_count_r(info))]
-        lst_f = ['%%f%d' % get_register_index_f(info, index)
-                 for index in range(get_register_count_f(info))]
+        lst_i = ['%%i%d' % info.get_register_index_i(index)
+                 for index in range(info.get_register_count_i())]
+        lst_r = ['%%r%d' % info.get_register_index_r(index)
+                 for index in range(info.get_register_count_r())]
+        lst_f = ['%%f%d' % info.get_register_index_f(index)
+                 for index in range(info.get_register_count_f())]
         return ' '.join(lst_i + lst_r + lst_f)
 
     def _missing_liveness(self, pc):
@@ -104,16 +103,54 @@ class SwitchDictDescr(AbstractDescr):
         return '<SwitchDictDescr %s>' % (dict,)
 
 
-def get_register_count_i((live_i, live_r, live_f)):
-    return len(live_i)
-def get_register_count_r((live_i, live_r, live_f)):
-    return len(live_r)
-def get_register_count_f((live_i, live_r, live_f)):
-    return len(live_f)
+class LiveVarsInfo(object):
+    def __init__(self, live_i, live_r, live_f):
+        self.live_i = live_i
+        self.live_r = live_r
+        self.live_f = live_f
 
-def get_register_index_i((live_i, live_r, live_f), index):
-    return ord(live_i[index])
-def get_register_index_r((live_i, live_r, live_f), index):
-    return ord(live_r[index])
-def get_register_index_f((live_i, live_r, live_f), index):
-    return ord(live_f[index])
+    def get_register_count_i(self):
+        return len(self.live_i)
+    def get_register_count_r(self):
+        return len(self.live_r)
+    def get_register_count_f(self):
+        return len(self.live_f)
+
+    def get_register_index_i(self, index):
+        return ord(self.live_i[index])
+    def get_register_index_r(self, index):
+        return ord(self.live_r[index])
+    def get_register_index_f(self, index):
+        return ord(self.live_f[index])
+
+    def enumerate_vars(self, callback_i, callback_r, callback_f):
+        index = 0
+        for i in range(self.get_register_count_i()):
+            callback_i(index, self.get_register_index_i(i))
+            index += 1
+        for i in range(self.get_register_count_r()):
+            callback_r(index, self.get_register_index_r(i))
+            index += 1
+        for i in range(self.get_register_count_f()):
+            callback_f(index, self.get_register_index_f(i))
+            index += 1
+
+_liveness_cache = {}
+
+def make_liveness_cache(liveness):
+    if liveness is None:
+        return None
+    result = {}
+    for key, (value_i, value_r, value_f) in liveness.items():
+        # Sort the lists to increase the chances of sharing between unrelated
+        # strings that happen to contain the same characters.  We sort in the
+        # reversed order just to reduce the risks of tests passing by chance.
+        value = (''.join(sorted(value_i, reverse=True)),
+                 ''.join(sorted(value_r, reverse=True)),
+                 ''.join(sorted(value_f, reverse=True)))
+        try:
+            info = _liveness_cache[value]
+        except KeyError:
+            info = _liveness_cache[value] = LiveVarsInfo(*value)
+        result[key] = info
+    return result

@@ -21,4 +21,4 @@ def test_liveness():
     j.setup(liveness={5: (" A", "b", "CD")})
     assert j.has_liveness_info(5)
     assert not j.has_liveness_info(4)
-    assert j._live_vars(5) == "%i32 %i65 %r98 %f67 %f68"
+    assert j._live_vars(5) == "%i65 %i32 %r98 %f68 %f67"

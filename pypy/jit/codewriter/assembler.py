@@ -165,16 +165,16 @@ class Assembler(object):
         self.code[startposition] = chr(num)
         self.startpoints.add(startposition)
 
-    def get_liveness_info(self, prevstring, args, kind):
+    def get_liveness_info(self, prevlives, args, kind):
         """Return a string whose characters are register numbers.
         We sort the numbers, too, to increase the chances of duplicate
         strings (which are collapsed into a single string during translation).
         """
-        lives = set(prevstring)    # set of characters
+        lives = set(prevlives)    # set of characters
         for reg in args:
             if isinstance(reg, Register) and reg.kind == kind:
                 lives.add(chr(reg.index))
-        return ''.join(sorted(lives))
+        return lives
 
     def fix_labels(self):
         for name, pos in self.tlabel_positions:

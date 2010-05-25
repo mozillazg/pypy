@@ -101,6 +101,9 @@ class MIFrame(object):
             outvalue[startindex+i] = reg
     prepare_list_of_boxes._annspecialcase_ = 'specialize:arg(4)'
 
+    def get_current_position_info(self):
+        return self.jitcode.get_live_vars_info(self.pc)
+
     def get_list_of_active_boxes(self, in_a_call):
         if in_a_call:
             # If we are not the topmost frame, self._result_argcode contains
@@ -114,37 +117,24 @@ class MIFrame(object):
             elif argcode == 'f': self.registers_f[index] = history.CONST_FZERO
             self._result_argcode = '?'     # done
         #
-        from pypy.jit.codewriter.jitcode import get_register_count_i
-        from pypy.jit.codewriter.jitcode import get_register_count_r
-        from pypy.jit.codewriter.jitcode import get_register_count_f
-        from pypy.jit.codewriter.jitcode import get_register_index_i
-        from pypy.jit.codewriter.jitcode import get_register_index_r
-        from pypy.jit.codewriter.jitcode import get_register_index_f
-        info = self.jitcode.get_live_vars_info(self.pc)
-        total = (get_register_count_i(info) +
-                 get_register_count_r(info) +
-                 get_register_count_f(info))
+        info = self.get_current_position_info()
+        start_i = 0
+        start_r = start_i + info.get_register_count_i()
+        start_f = start_r + info.get_register_count_r()
+        total   = start_f + info.get_register_count_f()
         # allocate a list of the correct size
         env = [None] * total
         make_sure_not_resized(env)
         # fill it now
-        count = 0
-        for index in range(get_register_count_i(info)):
-            box = self.registers_i[get_register_index_i(info, index)]
-            assert box is not None
-            env[count] = box
-            count += 1
-        for index in range(get_register_count_r(info)):
-            box = self.registers_r[get_register_index_r(info, index)]
-            assert box is not None
-            env[count] = box
-            count += 1
-        for index in range(get_register_count_f(info)):
-            box = self.registers_f[get_register_index_f(info, index)]
-            assert box is not None
-            env[count] = box
-            count += 1
-        assert count == total
+        for i in range(info.get_register_count_i()):
+            index = info.get_register_index_i(i)
+            env[start_i + i] = self.registers_i[index]
+        for i in range(info.get_register_count_r()):
+            index = info.get_register_index_r(i)
+            env[start_r + i] = self.registers_r[index]
+        for i in range(info.get_register_count_f()):
+            index = info.get_register_index_f(i)
+            env[start_f + i] = self.registers_f[index]
         return env
 
     def replace_active_box_in_frame(self, oldbox, newbox):

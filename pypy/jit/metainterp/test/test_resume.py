@@ -95,10 +95,26 @@ class MyCPU:
         return self.values[index]
 
 class MyBlackholeInterp:
-    def __init__(self):
+    def __init__(self, ARGS):
         self.written_i = []
         self.written_r = []
         self.written_f = []
+        self.ARGS = ARGS
+
+    def get_current_position_info(self):
+        class MyInfo:
+            def enumerate_vars(_, callback_i, callback_r, callback_f):
+                count_i = count_r = count_f = 0
+                for index, ARG in enumerate(self.ARGS):
+                    if ARG == lltype.Signed:
+                        callback_i(index, count_i); count_i += 1
+                    elif ARG == llmemory.GCREF:
+                        callback_r(index, count_r); count_r += 1
+                    elif ARG == lltype.Float:
+                        callback_f(index, count_f); count_f += 1
+                    else:
+                        assert 0
+        return MyInfo()
 
     def setarg_i(self, index, value):
         assert index == len(self.written_i)
@@ -113,12 +129,14 @@ class MyBlackholeInterp:
         self.written_f.append(value)
 
 def _next_section(reader, *expected):
-    bh = MyBlackholeInterp()
+    bh = MyBlackholeInterp(map(lltype.typeOf, expected))
     reader.consume_one_section(bh)
-    lst_i = bh.written_i
-    lst_r = bh.written_r
-    lst_f = bh.written_f
-    assert lst_i + lst_r + lst_f == list(expected)
+    expected_i = [x for x in expected if lltype.typeOf(x) == lltype.Signed]
+    expected_r = [x for x in expected if lltype.typeOf(x) == llmemory.GCREF]
+    expected_f = [x for x in expected if lltype.typeOf(x) == lltype.Float]
+    assert bh.written_i == expected_i
+    assert bh.written_r == expected_r
+    assert bh.written_f == expected_f
 
 
 def test_simple_read():
@@ -126,36 +144,41 @@ def test_simple_read():
     c1, c2, c3 = [ConstInt(111), ConstInt(222), ConstInt(333)]
     storage = Storage()
     storage.rd_consts = [c1, c2, c3]
-    numb = Numbering(None, [tag(0, TAGBOX), tag(2, TAGBOX), TYPEBARRIER,
-                            tag(1, TAGBOX)])
-    numb = Numbering(numb, [tag(1, TAGCONST), tag(2, TAGCONST), TYPEBARRIER])
+    numb = Numbering(None, [tag(0, TAGBOX), tag(1, TAGBOX), tag(2, TAGBOX)])
+    numb = Numbering(numb, [tag(1, TAGCONST), tag(2, TAGCONST)])
     numb = Numbering(numb, [tag(0, TAGBOX),
                             tag(0, TAGCONST),
-                            tag(0, TAGBOX),
-                            TYPEBARRIER,
                             NULLREF,
+                            tag(0, TAGBOX),
                             tag(1, TAGBOX)])
     storage.rd_numb = numb
     #
     cpu = MyCPU([42, gcref1, -66])
     reader = ResumeDataDirectReader(cpu, storage)
-    _next_section(reader, 42, 111, 42, gcrefnull, gcref1)
+    _next_section(reader, 42, 111, gcrefnull, 42, gcref1)
     _next_section(reader, 222, 333)
-    _next_section(reader, 42, -66, gcref1)
+    _next_section(reader, 42, gcref1, -66)
     #
     metainterp = MyMetaInterp(cpu)
     reader = ResumeDataBoxReader(storage, metainterp)
     bi, br, bf = [None]*3, [None]*2, [None]*0
-    reader.consume_boxes(bi, br, bf)
+    info = MyBlackholeInterp([lltype.Signed, lltype.Signed,
+                              llmemory.GCREF, lltype.Signed,
+                              llmemory.GCREF]).get_current_position_info()
+    reader.consume_boxes(info, bi, br, bf)
     b1s = reader.liveboxes[0]
     b2s = reader.liveboxes[1]
     assert bi == [b1s, ConstInt(111), b1s]
     assert br == [ConstPtr(gcrefnull), b2s]
     bi, br, bf = [None]*2, [None]*0, [None]*0
-    reader.consume_boxes(bi, br, bf)
+    info = MyBlackholeInterp([lltype.Signed,
+                              lltype.Signed]).get_current_position_info()
+    reader.consume_boxes(info, bi, br, bf)
     assert bi == [ConstInt(222), ConstInt(333)]
     bi, br, bf = [None]*2, [None]*1, [None]*0
-    reader.consume_boxes(bi, br, bf)
+    info = MyBlackholeInterp([lltype.Signed, llmemory.GCREF,
+                              lltype.Signed]).get_current_position_info()
+    reader.consume_boxes(info, bi, br, bf)
     b3s = reader.liveboxes[2]
     assert bi == [b1s, b3s]
     assert br == [b2s]
@@ -164,7 +187,7 @@ def test_simple_read():
 def test_simple_read_tagged_ints():
     storage = Storage()
     storage.rd_consts = []
-    numb = Numbering(None, [tag(100, TAGINT), TYPEBARRIER])
+    numb = Numbering(None, [tag(100, TAGINT)])
     storage.rd_numb = numb
     #
     cpu = MyCPU([])
@@ -216,12 +239,12 @@ class FakeFrame(object):
         return "<FF %s %s %s>" % (self.jitcode, self.pc, self._env)
 
 def test_Snapshot_create():
-    l = [BoxInt(), BoxPtr()]
+    l = ['b0', 'b1']
     snap = Snapshot(None, l)
     assert snap.prev is None
     assert snap.boxes is l
 
-    l1 = [BoxInt()]
+    l1 = ['b3']
     snap1 = Snapshot(snap, l1)
     assert snap1.prev is snap
     assert snap1.boxes is l1
@@ -620,9 +643,9 @@ def test_ResumeDataLoopMemo_number():
     assert liveboxes == {b1: tag(0, TAGBOX), b2: tag(1, TAGBOX),
                          b3: tag(2, TAGBOX)}
     assert numb.nums == [tag(3, TAGINT), tag(2, TAGBOX), tag(0, TAGBOX),
-                         tag(1, TAGINT), TYPEBARRIER]
+                         tag(1, TAGINT)]
     assert numb.prev.nums == [tag(0, TAGBOX), tag(1, TAGINT), tag(1, TAGBOX),
-                              tag(0, TAGBOX), tag(2, TAGINT), TYPEBARRIER]
+                              tag(0, TAGBOX), tag(2, TAGINT)]
     assert numb.prev.prev is None
 
     numb2, liveboxes2, v = memo.number({}, snap2)
@@ -632,7 +655,7 @@ def test_ResumeDataLoopMemo_number():
                          b3: tag(2, TAGBOX)}
     assert liveboxes2 is not liveboxes
     assert numb2.nums == [tag(3, TAGINT), tag(2, TAGBOX), tag(0, TAGBOX),
-                         tag(3, TAGINT), TYPEBARRIER]
+                         tag(3, TAGINT)]
     assert numb2.prev is numb.prev
 
     env3 = [c3, b3, b1, c3]
@@ -655,11 +678,11 @@ def test_ResumeDataLoopMemo_number():
     
     assert liveboxes3 == {b1: tag(0, TAGBOX), b2: tag(1, TAGBOX)}
     assert numb3.nums == [tag(3, TAGINT), tag(4, TAGINT), tag(0, TAGBOX),
-                          tag(3, TAGINT), TYPEBARRIER]
+                          tag(3, TAGINT)]
     assert numb3.prev is numb.prev
 
     # virtual
-    env4 = [c3, b1, c3, b4]
+    env4 = [c3, b4, b1, c3]
     snap4 = Snapshot(snap, env4)    
 
     numb4, liveboxes4, v = memo.number({b4: FakeValue(True, b4)}, snap4)
@@ -667,8 +690,8 @@ def test_ResumeDataLoopMemo_number():
     
     assert liveboxes4 == {b1: tag(0, TAGBOX), b2: tag(1, TAGBOX),
                           b4: tag(0, TAGVIRTUAL)}
-    assert numb4.nums == [tag(3, TAGINT), tag(0, TAGBOX),
-                          tag(3, TAGINT), TYPEBARRIER, tag(0, TAGVIRTUAL)]
+    assert numb4.nums == [tag(3, TAGINT), tag(0, TAGVIRTUAL), tag(0, TAGBOX),
+                          tag(3, TAGINT)]
     assert numb4.prev is numb.prev
 
     env5 = [b1, b4, b5]
@@ -680,8 +703,8 @@ def test_ResumeDataLoopMemo_number():
     
     assert liveboxes5 == {b1: tag(0, TAGBOX), b2: tag(1, TAGBOX),
                           b4: tag(0, TAGVIRTUAL), b5: tag(1, TAGVIRTUAL)}
-    assert numb5.nums == [tag(0, TAGBOX), TYPEBARRIER,
-                          tag(0, TAGVIRTUAL), tag(1, TAGVIRTUAL)]
+    assert numb5.nums == [tag(0, TAGBOX), tag(0, TAGVIRTUAL),
+                                          tag(1, TAGVIRTUAL)]
     assert numb5.prev is numb4
 
 def test_ResumeDataLoopMemo_number_boxes():
@@ -767,7 +790,7 @@ def make_storage(b1, b2, b3):
     storage = Storage()
     snapshot = Snapshot(None, [b1, ConstInt(1), b1, b2])
     snapshot = Snapshot(snapshot, [ConstInt(2), ConstInt(3)])
-    snapshot = Snapshot(snapshot, [b1, b3, b2])
+    snapshot = Snapshot(snapshot, [b1, b2, b3])    
     storage.rd_snapshot = snapshot
     storage.rd_frame_info_list = None
     return storage
@@ -781,7 +804,7 @@ def test_virtual_adder_int_constants():
     assert storage.rd_snapshot is None
     cpu = MyCPU([])
     reader = ResumeDataDirectReader(cpu, storage)
-    _next_section(reader, sys.maxint, -65, 2**16)
+    _next_section(reader, sys.maxint, 2**16, -65)
     _next_section(reader, 2, 3)
     _next_section(reader, sys.maxint, 1, sys.maxint, 2**16)
 
@@ -812,7 +835,22 @@ class ResumeDataFakeReader(ResumeDataBoxReader):
 
     def consume_boxes(self):
         self.lst = []
-        self._prepare_next_section()
+        class Whatever:
+            def __eq__(self, other):
+                return True
+        class MyInfo:
+            def enumerate_vars(_, callback_i, callback_r, callback_f):
+                for index, tagged in enumerate(self.cur_numb.nums):
+                    box = self.decode_box(tagged, Whatever())
+                    if box.type == INT:
+                        callback_i(index, index)
+                    elif box.type == REF:
+                        callback_r(index, index)
+                    elif box.type == FLOAT:
+                        callback_f(index, index)
+                    else:
+                        assert 0
+        self._prepare_next_section(MyInfo())
         return self.lst
 
     def write_an_int(self, count_i, box):
@@ -849,7 +887,7 @@ def test_virtual_adder_no_op_renaming():
     metainterp = MyMetaInterp()
     reader = ResumeDataFakeReader(storage, newboxes, metainterp)
     lst = reader.consume_boxes()
-    assert lst == [b1t, b3t, b1t]
+    assert lst == [b1t, b1t, b3t]
     lst = reader.consume_boxes()
     assert lst == [ConstInt(2), ConstInt(3)]
     lst = reader.consume_boxes()
@@ -870,7 +908,7 @@ def test_virtual_adder_make_constant():
     reader = ResumeDataFakeReader(storage, newboxes, metainterp)
     lst = reader.consume_boxes()
     c1t = ConstInt(111)
-    assert lst == [c1t, b3t, b2t]
+    assert lst == [c1t, b2t, b3t]
     lst = reader.consume_boxes()
     assert lst == [ConstInt(2), ConstInt(3)]
     lst = reader.consume_boxes()
