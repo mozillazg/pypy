@@ -1,6 +1,9 @@
+import py
 from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
+from pypy.jit.metainterp.blackhole import convert_and_run_from_pyjitpl
+from pypy.jit.metainterp import history
 from pypy.jit.codewriter.assembler import JitCode
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.llinterp import LLException
@@ -106,3 +109,33 @@ def test_simple_exception():
     blackholeinterp.setarg_i(0x9, -100)
     blackholeinterp.run()
     assert blackholeinterp.final_result_i() == 42
+
+def test_convert_and_run_from_pyjitpl():
+    class MyMIFrame:
+        jitcode = JitCode("test")
+        jitcode.setup("\xFF"               # illegal instruction
+                      "\x00\x00\x01\x02"   # int_add/ii>i
+                      "\x01\x02",          # int_return/i
+                      [],
+                      num_regs_i=3, num_regs_r=0, num_regs_f=0)
+        pc = 1
+        registers_i = [history.BoxInt(40), history.ConstInt(2), None]
+    class MyMetaInterp:
+        class staticdata:
+            result_type = 'int'
+            class profiler:
+                @staticmethod
+                def start_blackhole(): pass
+                @staticmethod
+                def end_blackhole(): pass
+            class DoneWithThisFrameInt(Exception):
+                pass
+        framestack = [MyMIFrame()]
+    MyMetaInterp.staticdata.blackholeinterpbuilder = getblackholeinterp(
+        {'int_add/ii>i': 0, 'int_return/i': 1}).builder
+    MyMetaInterp.staticdata.blackholeinterpbuilder.metainterp_sd = \
+        MyMetaInterp.staticdata
+    #
+    d = py.test.raises(MyMetaInterp.staticdata.DoneWithThisFrameInt,
+                       convert_and_run_from_pyjitpl, MyMetaInterp())
+    assert d.value.args == (42,)

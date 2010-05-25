@@ -294,12 +294,10 @@ class ResumeGuardDescr(ResumeDescr):
                 assert 0, typetag
             return counter >= trace_eagerness
 
-    def reset_counter_from_failure(self, metainterp):
+    def reset_counter_from_failure(self):
         if self._counter >= 0:
             self._counter = 0
         self._counters = None
-        warmrunnerstate = metainterp.staticdata.state
-        warmrunnerstate.disable_noninlinable_function(metainterp)
 
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge.  Attach the new operations
@@ -475,6 +473,9 @@ class ResumeFromInterpDescr(ResumeDescr):
         # it always goes at the end of the list, as it is the most
         # general loop token
         old_loop_tokens.append(new_loop_token)
+
+    def reset_counter_from_failure(self):
+        pass
 
 
 def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
