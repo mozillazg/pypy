@@ -52,7 +52,9 @@ def format_assembler(ssarepr):
     insns = ssarepr.insns
     if insns and insns[-1] == ('---',):
         insns = insns[:-1]
-    for asm in insns:
+    for i, asm in enumerate(insns):
+        if ssarepr._insns_pos:
+            print >> output, '%4d ' % ssarepr._insns_pos[i],
         if isinstance(asm[0], Label):
             if asm[0].name in seenlabels:
                 print >> output, '%s:' % getlabelname(asm[0])

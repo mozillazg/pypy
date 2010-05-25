@@ -21,7 +21,9 @@ class Assembler(object):
         it inside the 'jitcode'.  If jitcode is None, make a new one.
         """
         self.setup()
+        ssarepr._insns_pos = []
         for insn in ssarepr.insns:
+            ssarepr._insns_pos.append(len(self.code))
             self.write_insn(insn)
         self.fix_labels()
         self.check_result()

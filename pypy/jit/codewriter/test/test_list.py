@@ -44,6 +44,7 @@ class FakeCallControl:
 def builtin_test(oopspec_name, args, RESTYPE, expected):
     v_result = varoftype(RESTYPE)
     tr = Transformer(FakeCPU(), FakeCallControl())
+    tr.immutable_arrays = {}
     if '/' in oopspec_name:
         oopspec_name, property = oopspec_name.split('/')
         def force_flags(op):
