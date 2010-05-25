@@ -7,6 +7,7 @@ class SSARepr(object):
     def __init__(self, name):
         self.name = name
         self.insns = []
+        self._insns_pos = None     # after being assembled
 
 class Label(object):
     def __init__(self, name):

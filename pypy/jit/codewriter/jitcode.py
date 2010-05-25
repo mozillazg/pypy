@@ -47,39 +47,25 @@ class JitCode(AbstractDescr):
     def has_liveness_info(self, pc):
         return pc in self.liveness
 
-    def enumerate_live_vars(self, pc, callback, arg,
-                            registers_i, registers_r, registers_f):
-        # 'pc' gives a position in this bytecode.  This invokes
-        # 'callback' for each variable that is live across the
-        # instruction boundary at 'pc'.  More precisely,
-        # this invokes 'callback(arg, box)' where 'box' comes from one
-        # of the three lists of registers.
+    def get_live_vars_info(self, pc):
+        # 'pc' gives a position in this bytecode.  This returns an object
+        # that describes all variables that are live across the instruction
+        # boundary at 'pc'.  To decode the object, use the global functions
+        # 'get_register_{count,index}_{i,r,f}()'.
         if not we_are_translated() and pc not in self.liveness:
             self._missing_liveness(pc)
-        live_i, live_r, live_f = self.liveness[pc]    # XXX compactify!!
-        for c in live_i:
-            x = callback(arg, registers_i[ord(c)])
-            assert x is None
-        for c in live_r:
-            x = callback(arg, registers_r[ord(c)])
-            assert x is None
-        for c in live_f:
-            x = callback(arg, registers_f[ord(c)])
-            assert x is None
-    enumerate_live_vars._annspecialcase_ = 'specialize:arg(2)'
+        return self.liveness[pc]    # XXX compactify!!
 
     def _live_vars(self, pc):
         # for testing only
-        class Names:
-            def __init__(self, kind):
-                self.kind = kind
-            def __getitem__(self, index):
-                return '%%%s%d' % (self.kind, index)
-        lst = []
-        self.enumerate_live_vars(pc, list.append, lst,
-                                 Names('i'), Names('r'), Names('f'))
-        lst.sort()
-        return ' '.join(lst)
+        info = self.get_live_vars_info(pc)
+        lst_i = ['%%i%d' % get_register_index_i(info, index)
+                 for index in range(get_register_count_i(info))]
+        lst_r = ['%%r%d' % get_register_index_r(info, index)
+                 for index in range(get_register_count_r(info))]
+        lst_f = ['%%f%d' % get_register_index_f(info, index)
+                 for index in range(get_register_count_f(info))]
+        return ' '.join(lst_i + lst_r + lst_f)
 
     def _missing_liveness(self, pc):
         raise MissingLiveness("missing liveness[%d]\n%s" % (pc, self.dump()))
@@ -116,3 +102,18 @@ class SwitchDictDescr(AbstractDescr):
     def __repr__(self):
         dict = getattr(self, 'dict', '?')
         return '<SwitchDictDescr %s>' % (dict,)
+
+
+def get_register_count_i((live_i, live_r, live_f)):
+    return len(live_i)
+def get_register_count_r((live_i, live_r, live_f)):
+    return len(live_r)
+def get_register_count_f((live_i, live_r, live_f)):
+    return len(live_f)
+
+def get_register_index_i((live_i, live_r, live_f), index):
+    return ord(live_i[index])
+def get_register_index_r((live_i, live_r, live_f), index):
+    return ord(live_r[index])
+def get_register_index_f((live_i, live_r, live_f), index):
+    return ord(live_f[index])
