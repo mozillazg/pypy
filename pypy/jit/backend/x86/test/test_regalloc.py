@@ -14,7 +14,7 @@ from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import rclass, rstr
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86.rx86 import *
 
 class MockGcDescr(GcCache):
     def get_funcptr_for_new(self):

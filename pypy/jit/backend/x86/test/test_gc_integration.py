@@ -14,7 +14,6 @@ from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import rclass, rstr
-from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.backend.llsupport.gc import GcLLDescr_framework, GcRefList, GcPtrFieldDescr
 
 from pypy.jit.backend.x86.test.test_regalloc import MockAssembler

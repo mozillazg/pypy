@@ -202,16 +202,16 @@ class Assembler386(object):
         self.malloc_fixedsize_slowpath1 = mc.tell()
         if self.cpu.supports_floats:          # save the XMM registers in
             for i in range(8):                # the *caller* frame, from esp+8
-                mc.MOVSD(mem64(esp, 8+8*i), xmm_registers[i])
+                mc.MOVSD_sr(8+8*i, i)
         mc.SUB(edx, eax)                      # compute the size we want
-        mc.MOV(mem(esp, 4), edx)              # save it as the new argument
+        mc.MOV_sr(4, edx.value)               # save it as the new argument
         addr = self.cpu.gc_ll_descr.get_malloc_fixedsize_slowpath_addr()
         mc.JMP_l(addr)                        # tail call to the real malloc
         # ---------- second helper for the slow path of malloc ----------
         self.malloc_fixedsize_slowpath2 = mc.tell()
         if self.cpu.supports_floats:          # restore the XMM registers
             for i in range(8):                # from where they were saved
-                mc.MOVSD(xmm_registers[i], mem64(esp, 8+8*i))
+                mc.MOVSD_rs(i, 8+8*i)
         nursery_free_adr = self.cpu.gc_ll_descr.get_nursery_free_addr()
         mc.MOV(edx, heap(nursery_free_adr))   # load this in EDX
         mc.RET()
@@ -467,19 +467,19 @@ class Assembler386(object):
             self.mc.MOVSD_sr(0, loc.value)
         elif isinstance(loc, StackLoc) and loc.width == 8:
             # XXX evil trick
-            self.mc.PUSH(mem(ebp, get_ebp_ofs(loc.position)))
-            self.mc.PUSH(mem(ebp, get_ebp_ofs(loc.position + 1)))
+            self.mc.PUSH_b(get_ebp_ofs(loc.position))
+            self.mc.PUSH_b(get_ebp_ofs(loc.position + 1))
         else:
             self.mc.PUSH(loc)
 
     def regalloc_pop(self, loc):
-        if isinstance(loc, XMMREG):
-            self.mc.MOVSD(loc, mem64(esp, 0))
+        if isinstance(loc, RegLoc) and loc.is_xmm:
+            self.mc.MOVSD_rs(loc.value, 0)
             self.mc.ADD(esp, imm(2*WORD))
-        elif isinstance(loc, MODRM64):
+        elif isinstance(loc, StackLoc) and loc.width == 8:
             # XXX evil trick
-            self.mc.POP(mem(ebp, get_ebp_ofs(loc.position + 1)))
-            self.mc.POP(mem(ebp, get_ebp_ofs(loc.position)))
+            self.mc.POP_b(get_ebp_ofs(loc.position + 1))
+            self.mc.POP_b(get_ebp_ofs(loc.position))
         else:
             self.mc.POP(loc)
 
@@ -527,8 +527,6 @@ class Assembler386(object):
 
     def _cmpop(cond, rev_cond):
         def genop_cmp(self, op, arglocs, result_loc):
-            # Clear high bits
-            self.mc.MOV_ri(result_loc.value, 0)
             rl = result_loc.lowest8bits()
             if isinstance(op.args[0], Const):
                 self.mc.CMP(arglocs[1], arglocs[0])
@@ -536,6 +534,7 @@ class Assembler386(object):
             else:
                 self.mc.CMP(arglocs[0], arglocs[1])
                 self.mc.SET_ir(rx86.Conditions[cond], rl.value)
+            self.mc.MOVZX8_rr(result_loc.value, rl.value)
         return genop_cmp
 
     def _cmpop_float(cond, is_ne=False):
@@ -740,8 +739,8 @@ class Assembler386(object):
     def genop_int_is_true(self, op, arglocs, resloc):
         self.mc.CMP(arglocs[0], imm(0))
         rl = resloc.lowest8bits()
-        self.mc.SETNE(rl)
-        self.mc.MOVZX(resloc, rl)
+        self.mc.SET_ir(rx86.Conditions['NE'], rl.value)
+        self.mc.MOVZX8(resloc, rl)
 
     def genop_guard_bool_not(self, op, guard_op, addr, arglocs, resloc):
         guard_opnum = guard_op.opnum
@@ -1415,16 +1414,16 @@ class Assembler386(object):
                                    arglocs, result_loc):
         faildescr = guard_op.descr
         fail_index = self.cpu.get_fail_descr_number(faildescr)
-        self.mc.MOV(mem(ebp, FORCE_INDEX_OFS), imm(fail_index))
+        self.mc.MOV_bi(FORCE_INDEX_OFS, fail_index)
         self.genop_call(op, arglocs, result_loc)
-        self.mc.CMP(mem(ebp, FORCE_INDEX_OFS), imm(0))
+        self.mc.CMP_bi(FORCE_INDEX_OFS, 0)
         return self.implement_guard(addr, 'L')
 
     def genop_guard_call_assembler(self, op, guard_op, addr,
                                    arglocs, result_loc):
         faildescr = guard_op.descr
         fail_index = self.cpu.get_fail_descr_number(faildescr)
-        self.mc.MOV(mem(ebp, FORCE_INDEX_OFS), imm(fail_index))
+        self.mc.MOV_bi(FORCE_INDEX_OFS, fail_index)
         descr = op.descr
         assert isinstance(descr, LoopToken)
         assert len(arglocs) - 2 == len(descr._x86_arglocs[0])
@@ -1432,11 +1431,11 @@ class Assembler386(object):
                         tmp=eax)
         mc = self._start_block()
         mc.CMP(eax, imm(self.cpu.done_with_this_frame_int_v))
-        mc.JE(rel8_patched_later)
+        mc.J_il8(rx86.Conditions['E'], 0) # patched later
         je_location = mc.get_relative_pos()
         self._emit_call(rel32(self.assembler_helper_adr), [eax, arglocs[1]], 0,
                         tmp=ecx, force_mc=True, mc=mc)
-        mc.JMP(rel8_patched_later)
+        mc.JMP_l8(0) # patched later
         jmp_location = mc.get_relative_pos()
         offset = jmp_location - je_location
         assert 0 < offset <= 127
@@ -1446,11 +1445,11 @@ class Assembler386(object):
         assert 0 < offset <= 127
         mc.overwrite(jmp_location - 1, [chr(offset)])
         self._stop_block()
-        if isinstance(result_loc, MODRM64):
+        if isinstance(result_loc, StackLoc) and result_loc.width == 8:
             self.mc.FSTP(result_loc)
         else:
             assert result_loc is eax or result_loc is None
-        self.mc.CMP(mem(ebp, FORCE_INDEX_OFS), imm(0))
+        self.mc.CMP_bi(FORCE_INDEX_OFS, 0)
         return self.implement_guard(addr, 'L')
 
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
@@ -1464,7 +1463,7 @@ class Assembler386(object):
         mc = self._start_block()
         mc.TEST(mem8(loc_base, descr.jit_wb_if_flag_byteofs),
                 imm8(descr.jit_wb_if_flag_singlebyte))
-        mc.JZ(rel8_patched_later)
+        mc.J_il8(rx86.Conditions['Z'], 0) # patched later
         jz_location = mc.get_relative_pos()
         # the following is supposed to be the slow path, so whenever possible
         # we choose the most compact encoding over the most efficient one.
@@ -1524,7 +1523,7 @@ class Assembler386(object):
         mc.MOV(eax, heap(nursery_free_adr))
         mc.LEA(edx, addr_add(eax, imm(size)))
         mc.CMP(edx, heap(nursery_top_adr))
-        mc.JNA(rel8_patched_later)
+        mc.J_il8(rx86.Conditions['NA'], 0) # patched later
         jmp_adr = mc.get_relative_pos()
 
         # See comments in _build_malloc_fixedsize_slowpath for the
