@@ -353,6 +353,9 @@ class BlackholeInterpreter(object):
             self.registers_r[i] = NULL
         self.exception_last_value = None
 
+    def get_current_position_info(self):
+        return self.jitcode.get_live_vars_info(self.position)
+
     def handle_exception_in_frame(self, e):
         # This frame raises an exception.  First try to see if
         # the exception is handled in the frame itself.
