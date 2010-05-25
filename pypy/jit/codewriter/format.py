@@ -54,12 +54,14 @@ def format_assembler(ssarepr):
         insns = insns[:-1]
     for i, asm in enumerate(insns):
         if ssarepr._insns_pos:
-            print >> output, '%4d ' % ssarepr._insns_pos[i],
+            prefix = '%4d  ' % ssarepr._insns_pos[i]
+        else:
+            prefix = ''
         if isinstance(asm[0], Label):
             if asm[0].name in seenlabels:
-                print >> output, '%s:' % getlabelname(asm[0])
+                print >> output, prefix + '%s:' % getlabelname(asm[0])
         else:
-            print >> output, asm[0],
+            print >> output, prefix + asm[0],
             if len(asm) > 1:
                 if asm[-2] == '->':
                     if len(asm) == 3:
