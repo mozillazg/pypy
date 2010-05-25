@@ -1,4 +1,4 @@
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86.regloc import *
 from pypy.jit.backend.x86.regalloc import X86FrameManager
 from pypy.jit.backend.x86.jump import remap_frame_layout
 
@@ -25,7 +25,7 @@ class MockAssembler:
                 continue
             assert len(op1) == len(op2)
             for x, y in zip(op1, op2):
-                if isinstance(x, MODRM) and isinstance(y, MODRM):
+                if isinstance(x, StackLoc) and isinstance(y, MODRM):
                     assert x.byte == y.byte
                     assert x.extradata == y.extradata
                 else:

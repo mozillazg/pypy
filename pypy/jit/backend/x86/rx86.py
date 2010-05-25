@@ -430,7 +430,7 @@ class AbstractX86CodeBuilder(object):
 
     MOV8_mr = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_const(1))
 
-    MOVZX8_rr = insn(rex_w, '\x0F\xB6', register(1,8), byte_register(2))
+    MOVZX8_rr = insn(rex_w, '\x0F\xB6', register(1,8), byte_register(2), '\xC0')
     MOVZX8_rm = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_const(2))
     MOVZX8_ra = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
 
@@ -453,6 +453,8 @@ class AbstractX86CodeBuilder(object):
     CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
     CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
     CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
+
+    CMP_rj = insn(rex_w, '\x3B', register(1, 8), '\x05', immediate(2))
 
     AND8_rr = insn(rex_w, '\x20', byte_register(1), byte_register(2,8), '\xC0')
 
@@ -483,11 +485,15 @@ class AbstractX86CodeBuilder(object):
     RET = insn('\xC3')
 
     PUSH_r = insn(rex_nw, register(1), '\x50')
+    PUSH_b = insn(rex_nw, '\xFF', orbyte(6<<3), stack_bp(1))
+
     POP_r = insn(rex_nw, register(1), '\x58')
+    POP_b = insn(rex_nw, '\x8F', orbyte(0<<3), stack_bp(1))
 
     LEA_rb = insn(rex_w, '\x8D', register(1,8), stack_bp(2))
     LEA32_rb = insn(rex_w, '\x8D', register(1,8),stack_bp(2,force_32bits=True))
     LEA_ra = insn(rex_w, '\x8D', register(1, 8), mem_reg_plus_scaled_reg_plus_const(2))
+    LEA_rm = insn(rex_w, '\x8D', register(1, 8), mem_reg_plus_const(2))
 
     CALL_l = insn('\xE8', relative(1))
     CALL_r = insn(rex_nw, '\xFF', register(1), chr(0xC0 | (2<<3)))
@@ -497,9 +503,10 @@ class AbstractX86CodeBuilder(object):
     XCHG_rj = insn(rex_w, '\x87', register(1,8), '\x05', immediate(2))
 
     JMP_l = insn('\xE9', relative(1))
-    # FIXME: J_il8 assume the caller will do the appropriate calculation
-    # to find the displacement, but J_il does it for the caller.
+    # FIXME: J_il8 and JMP_l8 assume the caller will do the appropriate
+    # calculation to find the displacement, but J_il does it for the caller.
     # We need to be consistent.
+    JMP_l8 = insn('\xEB', immediate(1, 'b'))
     J_il8 = insn(immediate(1, 'o'), '\x70', immediate(2, 'b'))
     J_il = insn('\x0F', immediate(1,'o'), '\x80', relative(2))
 
@@ -631,6 +638,8 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         py.test.skip("XCGH_rj unsupported")
     def CMP_ji(self, addr, immed):
         py.test.skip("CMP_ji unsupported")
+    def CMP_rj(self, reg, immed):
+        py.test.skip("CMP_rj unsupported")
     def MOVSD_rj(self, xmm_reg, mem_immed):
         py.test.skip("MOVSD_rj unsupported")
     def MOVSD_jr(self, xmm_reg, mem_immed):

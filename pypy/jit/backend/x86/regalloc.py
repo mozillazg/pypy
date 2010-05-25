@@ -968,7 +968,7 @@ class RegAlloc(object):
         shape = gcrootmap.get_basic_shape()
         for v, val in self.fm.frame_bindings.items():
             if (isinstance(v, BoxPtr) and self.rm.stays_alive(v)):
-                assert isinstance(val, MODRM)
+                assert isinstance(val, StackLoc)
                 gcrootmap.add_ebp_offset(shape, get_ebp_ofs(val.position))
         for v, reg in self.rm.reg_bindings.items():
             if (isinstance(v, BoxPtr) and self.rm.stays_alive(v)):
