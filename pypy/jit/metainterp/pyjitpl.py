@@ -1495,8 +1495,8 @@ class MetaInterp(object):
 
     def compile_and_run_once(self, *args):
         debug_start('jit-tracing')
-        self.staticdata.profiler.start_tracing()
         self.staticdata._setup_once()
+        self.staticdata.profiler.start_tracing()
         self.create_empty_history()
         try:
             return self._compile_and_run_once(*args)
