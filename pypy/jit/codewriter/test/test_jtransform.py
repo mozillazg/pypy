@@ -6,6 +6,7 @@ from pypy.jit.metainterp.history import getkind
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.translator.unsimplify import varoftype
 from pypy.jit.codewriter import heaptracker
+from pypy.jit.codewriter.flatten import Label, TLabel
 
 class FakeRTyper:
     class type_system: name = 'lltypesystem'
@@ -641,3 +642,22 @@ def test_promote_2():
     assert block.operations[1].args == [v1]
     assert block.operations[1].result is None
     assert block.exits[0].args == [v1]
+
+def test_int_abs():
+    v1 = varoftype(lltype.Signed)
+    v2 = varoftype(lltype.Signed)
+    op = SpaceOperation('int_abs', [v1], v2)
+    oplist = Transformer().rewrite_operation(op)
+    assert len(oplist) == 4
+    assert oplist[0].opname == 'int_copy'
+    assert oplist[0].args == [v1]
+    assert oplist[0].result == v2
+    #
+    assert oplist[1].opname == 'goto_if_not_int_lt'
+    assert oplist[1].args == [v1, Constant(0, lltype.Signed), TLabel(v2)]
+    #
+    assert oplist[2].opname == 'int_neg'
+    assert oplist[2].args == [v1]
+    assert oplist[2].result == v2
+    #
+    assert oplist[3] == Label(v2)
