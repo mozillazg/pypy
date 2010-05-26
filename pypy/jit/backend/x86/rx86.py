@@ -429,6 +429,9 @@ class AbstractX86CodeBuilder(object):
     MOV_ji = insn(rex_w, '\xC7', '\x05', immediate(1), immediate(2))
 
     MOV8_mr = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_const(1))
+    MOV8_ar = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_scaled_reg_plus_const(1))
+    MOV8_mi = insn(rex_w, '\xC6', orbyte(0<<3), mem_reg_plus_const(1), immediate(2, 'b'))
+    MOV8_ai = insn(rex_w, '\xC6', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2, 'b'))
 
     MOVZX8_rr = insn(rex_w, '\x0F\xB6', register(1,8), byte_register(2), '\xC0')
     MOVZX8_rm = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_const(2))
@@ -479,6 +482,9 @@ class AbstractX86CodeBuilder(object):
     SHR_ri, SHR_rr = shifts(5)
     SAR_ri, SAR_rr = shifts(7)
 
+    NOT_r = insn(rex_w, '\xF7', register(1), '\xD0')
+    NOT_b = insn(rex_w, '\xF7', orbyte(2<<3), stack_bp(1))
+
     # ------------------------------ Misc stuff ------------------------------
 
     NOP = insn('\x90')
@@ -515,7 +521,11 @@ class AbstractX86CodeBuilder(object):
     # The 64-bit version of this, CQO, is defined in X86_64_CodeBuilder
     CDQ = insn(rex_nw, '\x99')
 
+    TEST8_mi = insn(rex_w, '\xF6', orbyte(0<<3), mem_reg_plus_const(1), immediate(2, 'b'))
     TEST_rr = insn(rex_w, '\x85', register(2,8), register(1), '\xC0')
+
+    # x87 instructions
+    FSTP_b = insn('\xDD', orbyte(3<<3), stack_bp(1))
 
     # ------------------------------ SSE2 ------------------------------
 
@@ -527,8 +537,10 @@ class AbstractX86CodeBuilder(object):
     MOVSD_sr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_sp(1))
     MOVSD_rm = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8),
                                                      mem_reg_plus_const(2))
+    MOVSD_ra = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
     MOVSD_mr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8),
                                                      mem_reg_plus_const(1))
+    MOVSD_ar = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), mem_reg_plus_scaled_reg_plus_const(1))
 
     MOVSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1, 8), '\x05', immediate(2))
     MOVSD_jr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2, 8), '\x05', immediate(1))
@@ -557,8 +569,12 @@ class AbstractX86CodeBuilder(object):
 
     # Conversion
     # FIXME: Super confusing! The source is a GPR/mem, the destination is an xmm register
+    # (and the same goes for SD2SI too)
     CVTSI2SD_rr = xmminsn('\xF2', rex_nw, '\x0F\x2A', register(1, 8), register(2), '\xC0')
     CVTSI2SD_rb = xmminsn('\xF2', rex_nw, '\x0F\x2A', register(1, 8), stack_bp(2))
+
+    CVTTSD2SI_rr = xmminsn('\xF2', rex_nw, '\x0F\x2C', register(1, 8), register(2), '\xC0')
+    CVTTSD2SI_rb = xmminsn('\xF2', rex_nw, '\x0F\x2C', register(1, 8), stack_bp(2))
 
     # Bitwise
     ANDPD_rj = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), '\x05', immediate(2))

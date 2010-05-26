@@ -179,6 +179,14 @@ def test_and8_rr():
 def test_or8_rr():
     assert_encodes_as(CodeBuilder32, 'OR8_rr', (bl, bh), '\x08\xFB')
 
+def test_test8_mi():
+    assert_encodes_as(CodeBuilder32, 'TEST8_mi', ((edx, 16), 99), '\xF6\x42\x10\x63')
+
+def test_mov8():
+    cb = CodeBuilder32
+    assert_encodes_as(cb, 'MOV8_mi', ((edx, 16), 99), '\xC6\x42\x10\x63')
+    assert_encodes_as(cb, 'MOV8_ai', ((ebx, ecx, 2, 16), 99), '\xC6\x44\x8B\x10\x63')
+
 class CodeBuilder64(CodeBuilderMixin, X86_64_CodeBuilder):
     pass
 

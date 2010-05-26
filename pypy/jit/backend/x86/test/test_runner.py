@@ -71,6 +71,9 @@ class TestX86(LLtypeBackendTest):
             return ctypes.cast(buf, ctypes.c_void_p).value
         func = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int)(f)
         addr = ctypes.cast(func, ctypes.c_void_p).value
+        # ctypes produces an unsigned value. We need it to be signed for, eg,
+        # relative addressing to work properly.
+        addr = rffi.cast(lltype.Signed, addr)
         
         self.cpu.assembler.make_sure_mc_exists()
         self.cpu.assembler.malloc_func_addr = addr
