@@ -131,7 +131,7 @@ def test_xchg_rj():
 
 def test_movsd_rj():
     s = CodeBuilder32()
-    s.MOVSD_rj(xmm2, 0x01234567)
+    s.MOVSD_xj(xmm2, 0x01234567)
     assert s.getvalue() == '\xF2\x0F\x10\x15\x67\x45\x23\x01'
 
 def test_movzx8_rm():

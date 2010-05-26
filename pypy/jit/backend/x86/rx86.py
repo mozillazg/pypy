@@ -529,58 +529,56 @@ class AbstractX86CodeBuilder(object):
 
     # ------------------------------ SSE2 ------------------------------
 
-    MOVSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), register(2),
+    MOVSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), register(2),
                                                               '\xC0')
-    MOVSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), stack_bp(2))
-    MOVSD_br = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_bp(1))
-    MOVSD_rs = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), stack_sp(2))
-    MOVSD_sr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_sp(1))
-    MOVSD_rm = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8),
+    MOVSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), stack_bp(2))
+    MOVSD_bx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_bp(1))
+    MOVSD_xs = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), stack_sp(2))
+    MOVSD_sx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_sp(1))
+    MOVSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8),
                                                      mem_reg_plus_const(2))
-    MOVSD_ra = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
-    MOVSD_mr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8),
+    MOVSD_xa = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
+    MOVSD_mx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8),
                                                      mem_reg_plus_const(1))
-    MOVSD_ar = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), mem_reg_plus_scaled_reg_plus_const(1))
+    MOVSD_ax = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), mem_reg_plus_scaled_reg_plus_const(1))
 
-    MOVSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1, 8), '\x05', immediate(2))
-    MOVSD_jr = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2, 8), '\x05', immediate(1))
+    MOVSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1, 8), '\x05', immediate(2))
+    MOVSD_jx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2, 8), '\x05', immediate(1))
 
     # Arithmetic
-    ADDSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), register(2), '\xC0')
-    ADDSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), stack_bp(2))
-    ADDSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), '\x05', immediate(2))
+    ADDSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), register(2), '\xC0')
+    ADDSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), stack_bp(2))
+    ADDSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), '\x05', immediate(2))
 
-    SUBSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), register(2), '\xC0')
-    SUBSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), stack_bp(2))
-    SUBSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), '\x05', immediate(2))
+    SUBSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), register(2), '\xC0')
+    SUBSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), stack_bp(2))
+    SUBSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), '\x05', immediate(2))
 
-    MULSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), register(2), '\xC0')
-    MULSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), stack_bp(2))
-    MULSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), '\x05', immediate(2))
+    MULSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), register(2), '\xC0')
+    MULSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), stack_bp(2))
+    MULSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), '\x05', immediate(2))
 
-    DIVSD_rr = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), register(2), '\xC0')
-    DIVSD_rb = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), stack_bp(2))
-    DIVSD_rj = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), '\x05', immediate(2))
+    DIVSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), register(2), '\xC0')
+    DIVSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), stack_bp(2))
+    DIVSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), '\x05', immediate(2))
 
     # Comparision
-    UCOMISD_rr = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), register(2), '\xC0')
-    UCOMISD_rb = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), stack_bp(2))
-    UCOMISD_rj = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), '\x05', immediate(2))
+    UCOMISD_xx = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), register(2), '\xC0')
+    UCOMISD_xb = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), stack_bp(2))
+    UCOMISD_xj = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), '\x05', immediate(2))
 
     # Conversion
-    # FIXME: Super confusing! The source is a GPR/mem, the destination is an xmm register
-    # (and the same goes for SD2SI too)
-    CVTSI2SD_rr = xmminsn('\xF2', rex_nw, '\x0F\x2A', register(1, 8), register(2), '\xC0')
-    CVTSI2SD_rb = xmminsn('\xF2', rex_nw, '\x0F\x2A', register(1, 8), stack_bp(2))
+    CVTSI2SD_xr = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), register(2), '\xC0')
+    CVTSI2SD_xb = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), stack_bp(2))
 
-    CVTTSD2SI_rr = xmminsn('\xF2', rex_nw, '\x0F\x2C', register(1, 8), register(2), '\xC0')
-    CVTTSD2SI_rb = xmminsn('\xF2', rex_nw, '\x0F\x2C', register(1, 8), stack_bp(2))
+    CVTTSD2SI_rx = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), register(2), '\xC0')
+    CVTTSD2SI_rb = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), stack_bp(2))
 
     # Bitwise
-    ANDPD_rj = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), '\x05', immediate(2))
+    ANDPD_xj = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), '\x05', immediate(2))
 
-    XORPD_rr = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), register(2), '\xC0')
-    XORPD_rj = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), '\x05', immediate(2))
+    XORPD_xx = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), register(2), '\xC0')
+    XORPD_xj = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), '\x05', immediate(2))
 
     # ------------------------------------------------------------
 
@@ -656,23 +654,23 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         py.test.skip("CMP_ji unsupported")
     def CMP_rj(self, reg, immed):
         py.test.skip("CMP_rj unsupported")
-    def MOVSD_rj(self, xmm_reg, mem_immed):
+    def MOVSD_xj(self, xmm_reg, mem_immed):
         py.test.skip("MOVSD_rj unsupported")
-    def MOVSD_jr(self, xmm_reg, mem_immed):
+    def MOVSD_jx(self, xmm_reg, mem_immed):
         py.test.skip("MOVSD_jr unsupported")
-    def ADDSD_rj(self, xmm_reg, mem_immed):
+    def ADDSD_xj(self, xmm_reg, mem_immed):
         py.test.skip("ADDSD_rj unsupported")
-    def SUBSD_rj(self, xmm_reg, mem_immed):
+    def SUBSD_xj(self, xmm_reg, mem_immed):
         py.test.skip("SUBSD_rj unsupported")
-    def MULSD_rj(self, xmm_reg, mem_immed):
+    def MULSD_xj(self, xmm_reg, mem_immed):
         py.test.skip("MULSD_rj unsupported")
-    def DIVSD_rj(self, xmm_reg, mem_immed):
+    def DIVSD_xj(self, xmm_reg, mem_immed):
         py.test.skip("DIVSD_rj unsupported")
-    def UCOMISD_rj(self, xmm_reg, mem_immed):
+    def UCOMISD_xj(self, xmm_reg, mem_immed):
         py.test.skip("UCOMISD_rj unsupported")
-    def ANDPD_rj(self, xmm_reg, mem_immed):
+    def ANDPD_xj(self, xmm_reg, mem_immed):
         py.test.skip("ANDPD_rj unsupported")
-    def XORPD_rj(self, xmm_reg, mem_immed):
+    def XORPD_xj(self, xmm_reg, mem_immed):
         py.test.skip("XORPD_rj unsupported")
 
 
