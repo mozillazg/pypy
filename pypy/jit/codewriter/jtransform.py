@@ -283,11 +283,12 @@ class Transformer(object):
             op1 = [op1, SpaceOperation('-live-', [], None)]
         return op1
 
-    def handle_regular_call(self, op):
+    def handle_regular_call(self, op, targetgraph=None):
         """A direct_call turns into the operation 'inline_call_xxx' if it
         is calling a function that we want to JIT.  The initial arg of
         'inline_call_xxx' is the JitCode of the called function."""
-        [targetgraph] = self.callcontrol.graphs_from(op)
+        if targetgraph is None:
+            [targetgraph] = self.callcontrol.graphs_from(op)
         jitcode = self.callcontrol.get_jitcode(targetgraph,
                                                called_from=self.graph)
         op0 = self.rewrite_call(op, 'inline_call', [jitcode])
@@ -312,6 +313,11 @@ class Transformer(object):
         if isinstance(op1, SpaceOperation) and op1.opname == 'direct_call':
             op1 = self.handle_residual_call(op1 or op)
         return op1
+
+    def handle_recursive_call(self, op):
+        ops = self.promote_greens(op.args[1:])
+        targetgraph = self.callcontrol.portal_graph
+        return ops + self.handle_regular_call(op, targetgraph)
 
     handle_residual_indirect_call = handle_residual_call
 
@@ -682,28 +688,34 @@ class Transformer(object):
             return Constant(value, lltype.Bool)
         return op
 
-    def rewrite_op_jit_marker(self, op):
-        jitdriver = op.args[1].value
-        self.callcontrol.found_jitdriver(jitdriver)
-        key = op.args[0].value
-        return getattr(self, 'handle_jit_marker__%s' % key)(op, jitdriver)
-
-    def handle_jit_marker__jit_merge_point(self, op, jitdriver):
-        assert self.portal, "jit_merge_point in non-main graph!"
+    def promote_greens(self, args):
+        jitdriver = self.callcontrol.jitdriver
+        assert jitdriver is not None, "order dependency issue?"
         ops = []
         num_green_args = len(jitdriver.greens)
-        for v in op.args[2:2+num_green_args]:
+        for v in args[:num_green_args]:
             if isinstance(v, Variable) and v.concretetype is not lltype.Void:
                 kind = getkind(v.concretetype)
                 ops.append(SpaceOperation('-live-', [], None))
                 ops.append(SpaceOperation('%s_guard_value' % kind,
                                           [v], None))
-        args = (self.make_three_lists(op.args[2:2+num_green_args]) +
-                self.make_three_lists(op.args[2+num_green_args:]))
-        ops.append(SpaceOperation('jit_merge_point', args, None))
         return ops
 
-    def handle_jit_marker__can_enter_jit(self, op, jitdriver):
+    def rewrite_op_jit_marker(self, op):
+        self.callcontrol.found_jitdriver(op.args[1].value)
+        key = op.args[0].value
+        return getattr(self, 'handle_jit_marker__%s' % key)(op)
+
+    def handle_jit_marker__jit_merge_point(self, op):
+        assert self.portal, "jit_merge_point in non-main graph!"
+        ops = self.promote_greens(op.args[2:])
+        num_green_args = len(self.callcontrol.jitdriver.greens)
+        args = (self.make_three_lists(op.args[2:2+num_green_args]) +
+                self.make_three_lists(op.args[2+num_green_args:]))
+        op1 = SpaceOperation('jit_merge_point', args, None)
+        return ops + [op1]
+
+    def handle_jit_marker__can_enter_jit(self, op):
         return SpaceOperation('can_enter_jit', [], None)
 
     def rewrite_op_debug_assert(self, op):

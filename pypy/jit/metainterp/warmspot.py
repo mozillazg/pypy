@@ -554,6 +554,7 @@ class WarmRunnerDesc(object):
             self.PTR_PORTAL_FUNCTYPE.TO,
             self.PTR_PORTAL_FUNCTYPE.TO.ARGS,
             self.PTR_PORTAL_FUNCTYPE.TO.RESULT)
+        self.codewriter.setup_portal_runner_ptr(self.portal_runner_ptr)
 
         vinfo = self.metainterp_sd.virtualizable_info
 

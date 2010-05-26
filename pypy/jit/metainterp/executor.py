@@ -86,6 +86,7 @@ def do_call(cpu, metainterp, argboxes, descr):
 
 do_call_pure = do_call
 do_call_loopinvariant = do_call
+do_call_may_force = do_call
 
 def do_getarrayitem_gc(cpu, _, arraybox, indexbox, arraydescr):
     array = arraybox.getref_base()

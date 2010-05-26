@@ -603,13 +603,13 @@ class MIFrame(object):
 
     @arguments("jitcode", "boxes")
     def _opimpl_inline_call1(self, jitcode, argboxes):
-        self.metainterp.perform_call(jitcode, argboxes)
+        return self.metainterp.perform_call(jitcode, argboxes)
     @arguments("jitcode", "boxes2")
     def _opimpl_inline_call2(self, jitcode, argboxes):
-        self.metainterp.perform_call(jitcode, argboxes)
+        return self.metainterp.perform_call(jitcode, argboxes)
     @arguments("jitcode", "boxes3")
     def _opimpl_inline_call3(self, jitcode, argboxes):
-        self.metainterp.perform_call(jitcode, argboxes)
+        return self.metainterp.perform_call(jitcode, argboxes)
 
     opimpl_inline_call_r_i = _opimpl_inline_call1
     opimpl_inline_call_r_r = _opimpl_inline_call1
@@ -760,32 +760,6 @@ class MIFrame(object):
         self.generate_guard(rop.GUARD_CLASS, box, [clsbox], resumepc=orgpc)
         return clsbox
 
-    def verify_green_args(self, varargs):
-        num_green_args = self.metainterp.staticdata.num_green_args
-        for i in range(num_green_args):
-            assert isinstance(varargs[i], Const)
-
-##    def blackhole_reached_merge_point(self, varargs):
-##        if self.metainterp.in_recursion:
-##            portal_code = self.metainterp.staticdata.portal_code
-##            # small hack: fish for the result box
-##            lenenv = len(self.env)
-##            raised = self.perform_call(portal_code, varargs)
-##            # in general this cannot be assumed, but when blackholing,
-##            # perform_call returns True only if an exception is called. In
-##            # this case perform_call has called finishframe_exception
-##            # already, so we need to return.
-##            if raised:
-##                return
-##            if lenenv == len(self.env):
-##                res = None
-##            else:
-##                assert lenenv == len(self.env) - 1
-##                res = self.env.pop()
-##            self.metainterp.finishframe(res)
-##        else:
-##            raise self.metainterp.staticdata.ContinueRunningNormally(varargs)
-
     @arguments()
     def opimpl_can_enter_jit(self):
         if self.metainterp.in_recursion:
@@ -795,7 +769,7 @@ class MIFrame(object):
 
     @arguments("orgpc", "boxes3", "boxes3")
     def opimpl_jit_merge_point(self, orgpc, greenboxes, redboxes):
-        self.verify_green_args(greenboxes)
+        self.metainterp.verify_green_args(greenboxes)
         # xxx we may disable the following line in some context later
         self.debug_merge_point(greenboxes)
         if self.metainterp.seen_can_enter_jit:
@@ -1022,7 +996,6 @@ class MIFrame(object):
         effectinfo = descr.get_extra_info()
         if (effectinfo is None or effectinfo.extraeffect ==
                                 effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE):
-            XXX
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.vable_and_vrefs_before_residual_call()
             # xxx do something about code duplication
@@ -1030,12 +1003,10 @@ class MIFrame(object):
                 rop.CALL_MAY_FORCE, allboxes, descr=descr)
             self.metainterp.vable_and_vrefs_after_residual_call()
             if resbox is not None:
-                self.make_result_box(resbox)
-            self.generate_guard(self.pc, rop.GUARD_NOT_FORCED, None, [])
-            if exc:
-                return self.metainterp.handle_exception()
-            else:
-                return self.metainterp.assert_no_exception()
+                self.make_result_of_lastop(resbox)
+            self.generate_guard(rop.GUARD_NOT_FORCED, None)
+            self.metainterp.handle_possible_exception()
+            return resbox
         else:
             effect = effectinfo.extraeffect
             if effect == effectinfo.EF_CANNOT_RAISE:
@@ -1248,11 +1219,24 @@ class MetaInterp(object):
     def is_blackholing(self):
         return False       # XXX get rid of this method
 
-    def perform_call(self, jitcode, boxes, greenkey=None):
+    def perform_call(self, jitcode, boxes):
         # causes the metainterp to enter the given subfunction
+        # with a special case for recursive portal calls
+        if jitcode is self.staticdata.portal_code:
+            return self.perform_recursive_call_to_portal(boxes)
+        else:
+            self._perform_call(jitcode, boxes)
+            # ^^^ always raises
+
+    def _perform_call(self, jitcode, boxes, greenkey=None):
         f = self.newframe(jitcode, greenkey)
         f.setup_call(boxes)
         raise ChangeFrame
+
+    def verify_green_args(self, varargs):
+        num_green_args = self.staticdata.num_green_args
+        for i in range(num_green_args):
+            assert isinstance(varargs[i], Const)
 
     def newframe(self, jitcode, greenkey=None):
         if jitcode is self.staticdata.portal_code:
@@ -2014,17 +1998,48 @@ class MetaInterp(object):
                 max_key = key
         return max_key
 
-    def direct_assembler_call(self, pc, varargs, token, call_position):
+    def perform_recursive_call_to_portal(self, boxes):
+        warmrunnerstate = self.staticdata.state
+        portal_code = self.staticdata.portal_code
+        token = None
+        if not self.is_blackholing() and warmrunnerstate.inlining:
+            num_green_args = self.staticdata.num_green_args
+            greenkey = boxes[:num_green_args]
+            if warmrunnerstate.can_inline_callable(greenkey):
+                return self._perform_call(portal_code, boxes, greenkey)
+            token = warmrunnerstate.get_assembler_token(greenkey)
+        call_position = 0
+        if token is not None:
+            call_position = len(self.history.operations)
+            # verify that we have all green args, needed to make sure
+            # that assembler that we call is still correct
+            self.verify_green_args(boxes)
+        funcbox = ConstInt(llmemory.cast_adr_to_int(portal_code.fnaddr))
+        frame = self.framestack[-1]
+        resbox = frame.do_residual_call(funcbox, portal_code.calldescr, boxes)
+        if token is not None:
+            # XXX fix the call position, <UGLY!>
+            while True:
+                op = self.history.operations[call_position]
+                if op.opnum == rop.CALL or op.opnum == rop.CALL_MAY_FORCE:
+                    break
+                call_position += 1
+            # </UGLY!>
+            # this will substitute the residual call with assembler call
+            self.direct_assembler_call(boxes, token, call_position)
+        return resbox
+
+    def direct_assembler_call(self, boxes, token, call_position):
         """ Generate a direct call to assembler for portal entry point.
         """
         assert not self.is_blackholing() # XXX
         num_green_args = self.staticdata.num_green_args
-        args = varargs[num_green_args + 1:]
+        args = boxes[num_green_args:]
         resbox = self.history.operations[call_position].result
         rest = self.history.slice_history_at(call_position)
         if self.staticdata.virtualizable_info is not None:
             vindex = self.staticdata.virtualizable_info.index_of_virtualizable
-            vbox = args[vindex - num_green_args]
+            vbox = boxes[vindex]
             args += self.gen_load_from_other_virtualizable(vbox)
         self.history.record(rop.CALL_ASSEMBLER, args[:], resbox, descr=token)
         self.history.operations += rest
