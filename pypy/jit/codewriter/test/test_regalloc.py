@@ -222,3 +222,21 @@ class TestRegAlloc:
             rescall I[%i0, %i1] -> %i0
             int_return %i0
         """)
+
+    def test_regalloc_bug_1(self):
+        def _ll_2_int_lshift_ovf(x, y):
+            result = x << y
+            if (result >> y) != x:
+                raise OverflowError
+            return result
+        graph = self.make_graphs(_ll_2_int_lshift_ovf, [5, 6])[0]
+        self.check_assembler(graph, """
+            int_lshift %i0, %i1 -> %i2
+            int_rshift %i0, %i1 -> %i1
+            goto_if_not_int_ne %i1, %i2, L1
+            -live- L1
+            raise $<* struct object>
+            ---
+            L1:
+            int_return %i2
+        """, transform=True)
