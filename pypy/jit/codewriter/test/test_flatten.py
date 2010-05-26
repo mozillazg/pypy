@@ -682,3 +682,14 @@ class TestFlatten:
             int_add %i1, %i2 -> %i3
             int_return %i3
         """, transform=True)
+
+    def test_int_abs(self):
+        def f(n):
+            return abs(n)
+        self.encoding_test(f, [5], """
+            int_copy %i0 -> %i1
+            goto_if_not_int_lt %i0, $0, L1
+            int_neg %i0 -> %i1
+            L1:
+            int_return %i1
+        """, transform=True)
