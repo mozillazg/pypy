@@ -82,10 +82,10 @@ class ImmedLoc(AssemblerLocation):
         return "ImmedLoc(%d)" % (self.value)
 
     def lowest8bits(self):
-        # XXX: Maybe we could just truncate? But I'm not sure when that
-        # would be the correct behavior.
-        assert rx86.single_byte(self.value)
-        return self
+        val = self.value & 0xFF
+        if val > 0x7F:
+            val -= 0x100
+        return ImmedLoc(val)
 
 class AddressLoc(AssemblerLocation):
     _immutable_ = True
