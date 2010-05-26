@@ -41,6 +41,11 @@ class CallControl(object):
 
         assert self.portal_graph is not None
         todo = [self.portal_graph]
+        for oopspec_name, ll_args, ll_res in support.inline_calls_to:
+            c_func, _ = support.builtin_func_for_spec(self.rtyper,
+                                                      oopspec_name,
+                                                      ll_args, ll_res)
+            todo.append(c_func.value._obj.graph)
         candidate_graphs = set(todo)
 
         def callers():
