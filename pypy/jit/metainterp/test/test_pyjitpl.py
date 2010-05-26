@@ -86,3 +86,13 @@ def test_remove_consts_and_duplicates():
     assert equaloplists(metainterp.history.operations, [
         ResOperation(rop.SAME_AS, [b2], boxes[0]),
         ])
+
+def test_get_name_from_address():
+    class FakeMetaInterpSd(pyjitpl.MetaInterpStaticData):
+        def __init__(self):
+            pass
+    metainterp_sd = FakeMetaInterpSd()
+    metainterp_sd.setup_list_of_addr2name([(123, 'a'), (456, 'b')])
+    assert metainterp_sd.get_name_from_address(123) == 'a'
+    assert metainterp_sd.get_name_from_address(456) == 'b'
+    assert metainterp_sd.get_name_from_address(789) == ''

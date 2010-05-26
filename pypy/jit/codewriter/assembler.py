@@ -4,7 +4,7 @@ from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.jitcode import SwitchDictDescr, JitCode
 from pypy.objspace.flow.model import Constant
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 
 
 class Assembler(object):
@@ -13,8 +13,10 @@ class Assembler(object):
         self.insns = {}
         self.descrs = []
         self.indirectcalltargets = set()    # set of JitCodes
+        self.list_of_addr2name = []
         self._descr_dict = {}
         self._count_jitcodes = 0
+        self._seen_raw_objects = set()
 
     def assemble(self, ssarepr, jitcode=None):
         """Take the 'ssarepr' representation of the code and assemble
@@ -62,6 +64,7 @@ class Assembler(object):
             if kind == 'int':
                 if isinstance(TYPE, lltype.Ptr):
                     assert TYPE.TO._gckind == 'raw'
+                    self.see_raw_object(value)
                     value = llmemory.cast_ptr_to_adr(value)
                     TYPE = llmemory.Address
                 if TYPE == llmemory.Address:
@@ -207,3 +210,16 @@ class Assembler(object):
                       liveness=self.liveness,
                       startpoints=self.startpoints,
                       alllabels=self.alllabels)
+
+    def see_raw_object(self, value):
+        if value._obj not in self._seen_raw_objects:
+            self._seen_raw_objects.add(value._obj)
+            TYPE = lltype.typeOf(value).TO
+            if isinstance(TYPE, lltype.FuncType):
+                name = value._obj._name
+            elif TYPE == rclass.OBJECT_VTABLE:
+                name = ''.join(value.name).rstrip('\x00')
+            else:
+                return
+            addr = llmemory.cast_ptr_to_adr(value)
+            self.list_of_addr2name.append((addr, name))
