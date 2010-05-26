@@ -214,6 +214,8 @@ class Assembler(object):
     def see_raw_object(self, value):
         if value._obj not in self._seen_raw_objects:
             self._seen_raw_objects.add(value._obj)
+            if not value:    # filter out NULL pointers
+                return
             TYPE = lltype.typeOf(value).TO
             if isinstance(TYPE, lltype.FuncType):
                 name = value._obj._name
