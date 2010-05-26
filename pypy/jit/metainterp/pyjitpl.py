@@ -1094,6 +1094,7 @@ class MetaInterpStaticData(object):
         self.setup_indirectcalltargets(asm.indirectcalltargets)
         #
         self.portal_code = codewriter.mainjitcode
+        self._portal_runner_ptr = codewriter.portal_runner_ptr
         RESULT = codewriter.portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)
         #
@@ -2014,9 +2015,12 @@ class MetaInterp(object):
             # verify that we have all green args, needed to make sure
             # that assembler that we call is still correct
             self.verify_green_args(boxes)
-        funcbox = ConstInt(llmemory.cast_adr_to_int(portal_code.fnaddr))
+        #
+        k = llmemory.cast_ptr_to_adr(self.staticdata._portal_runner_ptr)
+        funcbox = ConstInt(llmemory.cast_adr_to_int(k))
         frame = self.framestack[-1]
         resbox = frame.do_residual_call(funcbox, portal_code.calldescr, boxes)
+        #
         if token is not None:
             # XXX fix the call position, <UGLY!>
             while True:
