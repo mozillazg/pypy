@@ -232,8 +232,8 @@ class TestRegAlloc:
         graph = self.make_graphs(_ll_2_int_lshift_ovf, [5, 6])[0]
         self.check_assembler(graph, """
             int_lshift %i0, %i1 -> %i2
-            int_rshift %i0, %i1 -> %i1
-            goto_if_not_int_ne %i1, %i2, L1
+            int_rshift %i2, %i1 -> %i1
+            goto_if_not_int_ne %i1, %i0, L1
             -live- L1
             raise $<* struct object>
             ---
