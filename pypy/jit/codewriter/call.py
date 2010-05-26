@@ -15,7 +15,8 @@ from pypy.translator.backendopt.writeanalyze import ReadWriteAnalyzer
 
 
 class CallControl(object):
-    virtualref_info = None  # optionally set from outside to a VirtualRefInfo()
+    virtualref_info = None     # optionally set from outside
+    portal_runner_ptr = None   # optionally set from outside
 
     def __init__(self, cpu=None, portal_graph=None):
         self.cpu = cpu
@@ -119,12 +120,12 @@ class CallControl(object):
     def guess_call_kind(self, op, is_candidate=None):
         if op.opname == 'direct_call':
             funcptr = op.args[0].value
+            if funcptr is self.portal_runner_ptr:
+                return 'recursive'
             funcobj = get_funcobj(funcptr)
             if getattr(funcobj, 'graph', None) is None:
                 return 'residual'
             targetgraph = funcobj.graph
-            if targetgraph is self.portal_graph:
-                return 'recursive'
             if (hasattr(targetgraph, 'func') and
                 hasattr(targetgraph.func, 'oopspec')):
                 return 'builtin'
@@ -164,8 +165,9 @@ class CallControl(object):
         because it is not needed there; it is only used by the blackhole
         interp to really do the call corresponding to 'inline_call' ops.
         """
-        fnptr = self.rtyper.getcallable(graph)
+        fnptr = self.rtyper.type_system.getcallable(graph)
         FUNC = get_functype(lltype.typeOf(fnptr))
+        assert lltype.Ptr(lltype.PyObject) not in FUNC.ARGS
         if self.rtyper.type_system.name == 'ootypesystem':
             XXX
         else:

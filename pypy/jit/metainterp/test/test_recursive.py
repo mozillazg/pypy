@@ -24,6 +24,7 @@ class RecursiveTests:
                 return 1
         res = self.meta_interp(main, [20], optimizer=OPTIMIZER_SIMPLE)
         assert res == main(20)
+        self.check_history(call=0)
 
     def test_simple_recursion_with_exc(self):
         myjitdriver = JitDriver(greens=[], reds=['n', 'm'])

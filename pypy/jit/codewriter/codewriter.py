@@ -71,6 +71,9 @@ class CodeWriter(object):
     def setup_vrefinfo(self, vrefinfo):
         self.callcontrol.virtualref_info = vrefinfo
 
+    def setup_portal_runner_ptr(self, portal_runner_ptr):
+        self.callcontrol.portal_runner_ptr = portal_runner_ptr
+
     def find_all_graphs(self, policy):
         return self.callcontrol.find_all_graphs(policy)
 
