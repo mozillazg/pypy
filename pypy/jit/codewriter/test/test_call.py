@@ -85,7 +85,8 @@ def test_guess_call_kind_and_calls_from_graphs():
         graph = object()
     g = object()
     g1 = object()
-    cc = CallControl(portal_graph=portal_runner_obj.graph)
+    cc = CallControl()
+    cc.portal_runner_ptr = portal_runner_obj
     cc.candidate_graphs = [g, g1]
 
     op = SpaceOperation('direct_call', [Constant(portal_runner_obj)],
@@ -144,9 +145,10 @@ def test_get_jitcode():
             translator = None
         class type_system:
             name = 'lltypesystem'
-        def getcallable(self, graph):
-            F = lltype.FuncType([], lltype.Signed)
-            return lltype.functionptr(F, 'bar')
+            @staticmethod
+            def getcallable(graph):
+                F = lltype.FuncType([], lltype.Signed)
+                return lltype.functionptr(F, 'bar')
     #
     cc = CallControl(FakeCPU(FakeRTyper()))
     class somegraph:

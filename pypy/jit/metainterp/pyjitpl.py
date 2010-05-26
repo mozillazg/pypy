@@ -1084,6 +1084,10 @@ class MetaInterpStaticData(object):
     def setup_indirectcalltargets(self, indirectcalltargets):
         self.indirectcalltargets = list(indirectcalltargets)
 
+    def setup_list_of_addr2name(self, list_of_addr2name):
+        self._addr2name_keys = [key for key, value in list_of_addr2name]
+        self._addr2name_values = [value for key, value in list_of_addr2name]
+
     def finish_setup(self, codewriter, optimizer=None):
         from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
         self.blackholeinterpbuilder = BlackholeInterpBuilder(codewriter, self)
@@ -1092,9 +1096,10 @@ class MetaInterpStaticData(object):
         self.setup_insns(asm.insns)
         self.setup_descrs(asm.descrs)
         self.setup_indirectcalltargets(asm.indirectcalltargets)
+        self.setup_list_of_addr2name(asm.list_of_addr2name)
         #
         self.portal_code = codewriter.mainjitcode
-        self._portal_runner_ptr = codewriter.portal_runner_ptr
+        self._portal_runner_ptr = codewriter.callcontrol.portal_runner_ptr
         RESULT = codewriter.portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)
         #

@@ -31,7 +31,7 @@ class FakeCPU:
 
 class FakePolicy:
     def look_inside_graph(self, graph):
-        return True
+        return graph.name != 'dont_look'
 
 
 def test_loop():
@@ -105,13 +105,14 @@ def test_instantiate():
     class A2(A1): id = 652
     class B1:     id = 661
     class B2(B1): id = 662
+    def dont_look(n):
+        return n + 1
     def f(n):
         if n > 5:
             x, y = A1, B1
         else:
             x, y = A2, B2
-        n += 1
-        return x().id + y().id + n
+        return x().id + y().id + dont_look(n)
     rtyper = support.annotate(f, [35])
     maingraph = rtyper.annotator.translator.graphs[0]
     cw = CodeWriter(FakeCPU(rtyper), maingraph)
@@ -127,6 +128,15 @@ def test_instantiate():
         else:
             assert 0, "missing instantiate_*_%s in:\n%r" % (expected,
                                                             names)
+    #
+    print cw.assembler.list_of_addr2name
+    names = dict.fromkeys([value
+                           for key, value in cw.assembler.list_of_addr2name])
+    assert 'A1' in names
+    assert 'B1' in names
+    assert 'A2' in names
+    assert 'B2' in names
+    assert 'dont_look' in names
 
 def test_int_abs():
     def f(n):
