@@ -422,6 +422,7 @@ class AbstractX86CodeBuilder(object):
                                  mem_reg_plus_scaled_reg_plus_const(2))
     MOV_ar = insn(rex_w, '\x89', register(2,8),
                                  mem_reg_plus_scaled_reg_plus_const(1))
+    MOV_ai = insn(rex_w, '\xC7', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2))
 
     # "MOV reg1, [immediate2]" and the opposite direction
     MOV_rj = insn(rex_w, '\x8B', register(1,8), '\x05', immediate(2))
@@ -432,10 +433,13 @@ class AbstractX86CodeBuilder(object):
     MOV8_ar = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_scaled_reg_plus_const(1))
     MOV8_mi = insn(rex_w, '\xC6', orbyte(0<<3), mem_reg_plus_const(1), immediate(2, 'b'))
     MOV8_ai = insn(rex_w, '\xC6', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2, 'b'))
+    MOV8_ji = insn(rex_w, '\xC6', orbyte(0<<3), '\x05', immediate(1), immediate(2, 'b'))
+    MOV8_jr = insn(rex_w, '\x88', byte_register(2, 8), '\x05', immediate(1))
 
     MOVZX8_rr = insn(rex_w, '\x0F\xB6', register(1,8), byte_register(2), '\xC0')
     MOVZX8_rm = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_const(2))
     MOVZX8_ra = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
+    MOVZX8_rj = insn(rex_w, '\x0F\xB6', register(1,8), '\x05', immediate(2))
 
     MOVZX16_rm = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_const(2))
     MOVZX16_ra = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
