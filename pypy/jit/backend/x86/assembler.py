@@ -202,7 +202,7 @@ class Assembler386(object):
         self.malloc_fixedsize_slowpath1 = mc.tell()
         if self.cpu.supports_floats:          # save the XMM registers in
             for i in range(8):                # the *caller* frame, from esp+8
-                mc.MOVSD_sr(8+8*i, i)
+                mc.MOVSD_sx(8+8*i, i)
         mc.SUB(edx, eax)                      # compute the size we want
         mc.MOV_sr(4, edx.value)               # save it as the new argument
         addr = self.cpu.gc_ll_descr.get_malloc_fixedsize_slowpath_addr()
@@ -211,7 +211,7 @@ class Assembler386(object):
         self.malloc_fixedsize_slowpath2 = mc.tell()
         if self.cpu.supports_floats:          # restore the XMM registers
             for i in range(8):                # from where they were saved
-                mc.MOVSD_rs(i, 8+8*i)
+                mc.MOVSD_xs(i, 8+8*i)
         nursery_free_adr = self.cpu.gc_ll_descr.get_nursery_free_addr()
         mc.MOV(edx, heap(nursery_free_adr))   # load this in EDX
         mc.RET()
@@ -370,7 +370,7 @@ class Assembler386(object):
             loc = floatlocs[i]
             if isinstance(loc, RegLoc):
                 assert loc.is_xmm
-                self.mc.MOVSD_rb(loc.value, (1 + i) * 2 * WORD)
+                self.mc.MOVSD_xb(loc.value, (1 + i) * 2 * WORD)
         tmp = eax
         xmmtmp = xmm0
         for i in range(len(nonfloatlocs)):
@@ -380,9 +380,9 @@ class Assembler386(object):
                 self.mc.MOV(loc, tmp)
             loc = floatlocs[i]
             if loc is not None and not isinstance(loc, RegLoc):
-                self.mc.MOVSD_rb(xmmtmp.value, (1 + i) * 2 * WORD)
+                self.mc.MOVSD_xb(xmmtmp.value, (1 + i) * 2 * WORD)
                 assert isinstance(loc, StackLoc)
-                self.mc.MOVSD_br(loc.value, xmmtmp.value)
+                self.mc.MOVSD_bx(loc.value, xmmtmp.value)
         self.mc.JMP_l(jmpadr)
         return adr_stackadjust
 
@@ -417,11 +417,11 @@ class Assembler386(object):
                 continue
             adr = self.fail_boxes_float.get_addr_for_num(i)
             if isinstance(loc, RegLoc):
-                self.mc.MOVSD_rj(loc.value, adr)
+                self.mc.MOVSD_xj(loc.value, adr)
             else:
-                self.mc.MOVSD_rj(xmmtmp.value, adr)
+                self.mc.MOVSD_xj(xmmtmp.value, adr)
                 assert isinstance(loc, StackLoc)
-                self.mc.MOVSD_br(loc.value, xmmtmp.value)
+                self.mc.MOVSD_bx(loc.value, xmmtmp.value)
         return adr_stackadjust
 
     def dump(self, text):
@@ -464,7 +464,7 @@ class Assembler386(object):
     def regalloc_push(self, loc):
         if isinstance(loc, RegLoc) and loc.is_xmm:
             self.mc.SUB_ri(esp.value, 2*WORD)
-            self.mc.MOVSD_sr(0, loc.value)
+            self.mc.MOVSD_sx(0, loc.value)
         elif isinstance(loc, StackLoc) and loc.width == 8:
             # XXX evil trick
             self.mc.PUSH_b(get_ebp_ofs(loc.position))
@@ -474,7 +474,7 @@ class Assembler386(object):
 
     def regalloc_pop(self, loc):
         if isinstance(loc, RegLoc) and loc.is_xmm:
-            self.mc.MOVSD_rs(loc.value, 0)
+            self.mc.MOVSD_xs(loc.value, 0)
             self.mc.ADD(esp, imm(2*WORD))
         elif isinstance(loc, StackLoc) and loc.width == 8:
             # XXX evil trick
@@ -600,7 +600,7 @@ class Assembler386(object):
             loc = arglocs[i]
             if isinstance(loc, RegLoc):
                 if loc.is_xmm:
-                    mc.MOVSD_sr(p, loc.value)
+                    mc.MOVSD_sx(p, loc.value)
                 else:
                     mc.MOV_sr(p, loc.value)
             p += round_up_to_4(loc.width)
@@ -610,7 +610,7 @@ class Assembler386(object):
             if not isinstance(loc, RegLoc):
                 if loc.width == 8:
                     mc.MOVSD(xmm0, loc)
-                    mc.MOVSD_sr(p, xmm0.value)
+                    mc.MOVSD_sx(p, xmm0.value)
                 else:
                     mc.MOV(tmp, loc)
                     mc.MOV_sr(p, tmp.value)
@@ -696,16 +696,16 @@ class Assembler386(object):
 
     def genop_float_neg(self, op, arglocs, resloc):
         # Following what gcc does: res = x ^ 0x8000000000000000
-        self.mc.XORPD_rj(arglocs[0].value, self.loc_float_const_neg)
+        self.mc.XORPD_xj(arglocs[0].value, self.loc_float_const_neg)
 
     def genop_float_abs(self, op, arglocs, resloc):
         # Following what gcc does: res = x & 0x7FFFFFFFFFFFFFFF
-        self.mc.ANDPD_rj(arglocs[0].value, self.loc_float_const_abs)
+        self.mc.ANDPD_xj(arglocs[0].value, self.loc_float_const_abs)
 
     def genop_guard_float_is_true(self, op, guard_op, addr, arglocs, resloc):
         guard_opnum = guard_op.opnum
         loc0, loc1 = arglocs
-        self.mc.XORPD_rr(loc0.value, loc0.value)
+        self.mc.XORPD_xx(loc0.value, loc0.value)
         self.mc.UCOMISD(loc0, loc1)
         mc = self.mc._mc
         if guard_opnum == rop.GUARD_TRUE:
@@ -718,7 +718,7 @@ class Assembler386(object):
             return self.implement_guard(addr)
 
     def genop_float_is_true(self, op, arglocs, resloc):
-        self.mc.XORPD_rr(arglocs[0].value, arglocs[0].value)
+        self.mc.XORPD_xx(arglocs[0].value, arglocs[0].value)
         self.genop_float_ne(op, arglocs, resloc)
 
     def genop_cast_float_to_int(self, op, arglocs, resloc):
@@ -1294,7 +1294,7 @@ class Assembler386(object):
         if withfloats:
             mc.SUB_ri(esp.value, 8*8)
             for i in range(8):
-                mc.MOVSD_sr(8*i, i)
+                mc.MOVSD_sx(8*i, i)
 
         # we call a provided function that will
         # - call our on_leave_jitted_hook which will mark
@@ -1335,7 +1335,7 @@ class Assembler386(object):
             if isinstance(loc, RegLoc):
                 if loc.width == 8:
                     adr = self.fail_boxes_float.get_addr_for_num(i)
-                    mc.MOVSD_jr(adr, loc.value)
+                    mc.MOVSD_jx(adr, loc.value)
                 else:
                     if locs_are_ref[i]:
                         adr = self.fail_boxes_ptr.get_addr_for_num(i)
@@ -1347,9 +1347,9 @@ class Assembler386(object):
             if not isinstance(loc, RegLoc):
                 if loc.width == 8:
                     assert isinstance(loc, StackLoc)
-                    mc.MOVSD_rb(xmm0.value, loc.value)
+                    mc.MOVSD_xb(xmm0.value, loc.value)
                     adr = self.fail_boxes_float.get_addr_for_num(i)
-                    mc.MOVSD_jr(adr, xmm0.value)
+                    mc.MOVSD_jx(adr, xmm0.value)
                 else:
                     if locs_are_ref[i]:
                         adr = self.fail_boxes_ptr.get_addr_for_num(i)

@@ -52,6 +52,9 @@ class TestRx86_32(object):
     def reg_tests(self):
         return self.REGS
 
+    def xmm_reg_tests(self):
+        return self.reg_tests()
+
     def stack_bp_tests(self, count=COUNT1):
         return ([0, 4, -4, 124, 128, -128, -132] +
                 [random.randrange(-0x20000000, 0x20000000) * 4
@@ -94,6 +97,7 @@ class TestRx86_32(object):
     def get_all_tests(self):
         return {
             'r': self.reg_tests,
+            'x': self.xmm_reg_tests,
             'b': self.stack_bp_tests,
             's': self.stack_sp_tests,
             'm': self.memory_tests,
@@ -104,10 +108,10 @@ class TestRx86_32(object):
             }
 
     def assembler_operand_reg(self, regnum):
-        if self.is_xmm_insn:
-            return self.XMMREGNAMES[regnum]
-        else:
-            return self.REGNAMES[regnum]
+        return self.REGNAMES[regnum]
+
+    def assembler_operand_xmm_reg(self, regnum):
+        return self.XMMREGNAMES[regnum]
 
     def assembler_operand_stack_bp(self, position):
         return '%d(%s)' % (position, self.REGNAMES[5])
@@ -133,6 +137,7 @@ class TestRx86_32(object):
     def get_all_assembler_operands(self):
         return {
             'r': self.assembler_operand_reg,
+            'x': self.assembler_operand_xmm_reg,
             'b': self.assembler_operand_stack_bp,
             's': self.assembler_operand_stack_sp,
             'm': self.assembler_operand_memory,
@@ -157,6 +162,11 @@ class TestRx86_32(object):
     ##            if m in (i386.MODRM, i386.MODRM8) or all:
     ##                suffix = suffixes[sizes[m]] + suffix
             if argmodes and not self.is_xmm_insn:
+                suffix = suffixes[self.WORD]
+            # Special case: On 64-bit CPUs, rx86 assumes 64-bit integer
+            # operands when converting to/from floating point, so we need to
+            # indicate that with a suffix
+            if (self.WORD == 8) and instrname.startswith('CVT'):
                 suffix = suffixes[self.WORD]
 
             following = ""
@@ -225,10 +235,6 @@ class TestRx86_32(object):
             if methname.startswith('SHL') or methname.startswith('SAR') or methname.startswith('SHR'):
                 # XXX: Would be nice to test these automatically
                 py.test.skip('Shifts must be tested manually')
-            if methname.startswith('CVT'):
-                # Can't test automatically right now, we don't know
-                # which register types to use
-                py.test.skip('Skipping CVT instructions for now')
             if methname == 'FSTP_b':
                 # Doesn't work on 64-bit, skipping for now
                 py.test.skip('Skipping FSTP')

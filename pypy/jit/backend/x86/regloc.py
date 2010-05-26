@@ -59,7 +59,10 @@ class RegLoc(AssemblerLocation):
         return RegLoc(rx86.high_byte(self.value), False)
 
     def location_code(self):
-        return 'r'
+        if self.is_xmm:
+            return 'x'
+        else:
+            return 'r'
 
     # FIXME: This definition of assembler sufficient?
     def assembler(self):
